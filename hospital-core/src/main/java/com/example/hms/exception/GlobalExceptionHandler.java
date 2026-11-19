@@ -1090,7 +1090,7 @@ public class GlobalExceptionHandler {
         log.debug("File upload too large: {}", ex.getMessage());
         return buildErrorResponse(HttpStatus.PAYLOAD_TOO_LARGE,
             localized("error.upload.tooLarge", "File size exceeds the maximum allowed limit of {0}",
-                com.example.hms.service.FileUploadService.MAX_UPLOAD_LABEL), request);
+                com.example.hms.service.FileUploadService.maxUploadLabel()), request);
     }
 
 

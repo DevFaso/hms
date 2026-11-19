@@ -11,6 +11,7 @@ import com.example.hms.model.ImagingReport;
 import com.example.hms.model.ImagingStudyImage;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.imaging.ImagingStudyImageDTO;
+import com.example.hms.payload.dto.imaging.ImagingStudyImageWithdrawalDTO;
 import com.example.hms.repository.ImagingOrderRepository;
 import com.example.hms.repository.ImagingReportRepository;
 import com.example.hms.repository.ImagingStudyImageRepository;
@@ -159,6 +160,8 @@ public class ImagingStudyImageService {
         List<ImagingReport> reports = reportRepository.findByImagingOrder_IdOrderByReportVersionDesc(orderId);
         boolean studyReleased = reports.stream().anyMatch(ImagingReport::isReleasedToPatient);
         return imageRepository.findByImagingOrder_IdOrderByCreatedAtAsc(orderId).stream()
+            // QA D2464: a withdrawn image is kept for the record and shown to no reader.
+            .filter(image -> !image.isWithdrawn())
             .filter(image -> reach == Reach.CLINICAL || released(image, studyReleased))
             .map(image -> reach == Reach.AS_PATIENT ? toPatientDto(image)
                 : toStaffDto(image, reach == Reach.ADMIN, reports))
@@ -172,6 +175,9 @@ public class ImagingStudyImageService {
             .orElseThrow(() -> new ResourceNotFoundException(MSG_IMAGE_NOT_FOUND, imageId));
         ImagingOrder order = image.getImagingOrder();
         Reach reach = reachOf(order, MSG_IMAGE_NOT_FOUND, imageId);
+        if (image.isWithdrawn()) {
+            throw new ResourceNotFoundException(MSG_IMAGE_NOT_FOUND, imageId);
+        }
         if (reach != Reach.CLINICAL) {
             boolean studyReleased = reportRepository.findByImagingOrder_IdOrderByReportVersionDesc(order.getId())
                 .stream().anyMatch(ImagingReport::isReleasedToPatient);
@@ -193,7 +199,7 @@ public class ImagingStudyImageService {
         ImagingStudyImage image = imageRepository.findById(imageId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_IMAGE_NOT_FOUND, imageId));
         ImagingOrder order = image.getImagingOrder();
-        if (!orderInScope(order)) {
+        if (!orderInScope(order) || image.isWithdrawn()) {
             throw new ResourceNotFoundException(MSG_IMAGE_NOT_FOUND, imageId);
         }
         List<ImagingReport> reports = reportRepository.findByImagingOrder_IdOrderByReportVersionDesc(order.getId());
@@ -209,6 +215,113 @@ public class ImagingStudyImageService {
         fileUploadService.deleteStoredFile(key, FileUploadService.IMAGING_IMAGES_PATH);
         audit(AuditEventType.IMAGING_IMAGE_DELETED, order, imageId,
             "Imaging image " + imageId + " removed from imaging order " + order.getId());
+    }
+
+    // ── Withdrawal and caption correction (QA D2464 / D2466, r64) ────────
+
+    /**
+     * Withdraw a locked image (a wrong image, a wrong patient's) with a reason.
+     * The row and the stored file are kept for the record and the audit; every
+     * reader stops seeing it. An unlocked image is removed instead.
+     */
+    @Transactional
+    public void withdraw(UUID imageId, String reason) {
+        ImagingStudyImage image = loadInScope(imageId);
+        // Withdrawn once: a second call never overwrites the reason (QA D1186 class).
+        if (image.isWithdrawn()) {
+            throw new ResourceNotFoundException(MSG_IMAGE_NOT_FOUND, imageId);
+        }
+        String cleanReason = reason == null ? "" : reason.trim();
+        if (cleanReason.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "imaging.image.withdrawReasonRequired");
+        }
+        if (cleanReason.length() > MAX_CAPTION_LENGTH) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "imaging.image.withdrawReasonTooLong",
+                MAX_CAPTION_LENGTH);
+        }
+        List<ImagingReport> reports =
+            reportRepository.findByImagingOrder_IdOrderByReportVersionDesc(image.getImagingOrder().getId());
+        if (!locked(image, reports)) {
+            throw new BusinessException("imaging.image.withdrawNotLocked");
+        }
+        if (!mayWithdraw(image, reports)) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("imaging.image.withdrawNotAllowed"));
+        }
+        image.setWithdrawnAt(java.time.LocalDateTime.now());
+        image.setWithdrawnByUserId(roleValidator.getCurrentUserId());
+        image.setWithdrawalReason(cleanReason);
+        imageRepository.save(image);
+        audit(AuditEventType.IMAGING_IMAGE_WITHDRAWN, image.getImagingOrder(), imageId,
+            "Imaging image " + imageId + " withdrawn from imaging order " + image.getImagingOrder().getId());
+    }
+
+    /** Correct an image's caption (its uploader or a radiologist), audited. */
+    @Transactional
+    public ImagingStudyImageDTO updateCaption(UUID imageId, String caption) {
+        ImagingStudyImage image = loadInScope(imageId);
+        // A withdrawn image is closed to every edit, as it is to every reader.
+        if (image.isWithdrawn()) {
+            throw new ResourceNotFoundException(MSG_IMAGE_NOT_FOUND, imageId);
+        }
+        if (!mayRemove(image)) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("imaging.image.captionNotAllowed"));
+        }
+        image.setCaption(cleanCaption(caption));
+        image.setCaptionUpdatedAt(java.time.LocalDateTime.now());
+        image.setCaptionUpdatedByUserId(roleValidator.getCurrentUserId());
+        ImagingStudyImage saved = imageRepository.save(image);
+        audit(AuditEventType.IMAGING_IMAGE_CAPTION_UPDATED, image.getImagingOrder(), imageId,
+            "Imaging image " + imageId + " caption corrected on imaging order " + image.getImagingOrder().getId());
+        return toStaffDto(saved, false,
+            reportRepository.findByImagingOrder_IdOrderByReportVersionDesc(image.getImagingOrder().getId()));
+    }
+
+    /** An image of a study in the caller's hospital; another hospital's answers as a missing id. */
+    private ImagingStudyImage loadInScope(UUID imageId) {
+        ImagingStudyImage image = imageRepository.findById(imageId)
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_IMAGE_NOT_FOUND, imageId));
+        if (!orderInScope(image.getImagingOrder())) {
+            throw new ResourceNotFoundException(MSG_IMAGE_NOT_FOUND, imageId);
+        }
+        return image;
+    }
+
+    /**
+     * A radiologist, or the clinician who signed the report the image belongs to
+     * (for an image on the study itself, a signed report of the study).
+     */
+    private boolean mayWithdraw(ImagingStudyImage image, List<ImagingReport> studyReports) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (ClinicalActor.holdsOwnRoleQuietly(auth, RADIOLOGIST)) {
+            return true;
+        }
+        UUID caller = roleValidator.getCurrentUserId();
+        if (caller == null) {
+            return false;
+        }
+        List<ImagingReport> signedBy = image.getImagingReport() != null
+            ? List.of(image.getImagingReport())
+            : studyReports;
+        return signedBy.stream()
+            .filter(ImagingReport::isSigned)
+            .map(ImagingReport::getSignedBy)
+            .filter(Objects::nonNull)
+            .anyMatch(signer -> signer.getUser() != null && caller.equals(signer.getUser().getId()));
+    }
+
+    /**
+     * The study's withdrawn images, for the record: when, by whom and why (QA D1225: a stored
+     * reason is read somewhere). Metadata only; the bytes stay unreadable. Hospital-scoped.
+     */
+    @Transactional(readOnly = true)
+    public List<ImagingStudyImageWithdrawalDTO> withdrawn(UUID orderId) {
+        ImagingOrder order = loadOrderInScope(orderId);
+        return imageRepository.findByImagingOrder_IdOrderByCreatedAtAsc(order.getId()).stream()
+            .filter(ImagingStudyImage::isWithdrawn)
+            .map(image -> new ImagingStudyImageWithdrawalDTO(image.getId(), order.getId(), reportIdOf(image),
+                image.getCaption(), image.getWithdrawnAt(), image.getWithdrawnByUserId(),
+                image.getWithdrawalReason()))
+            .toList();
     }
 
     // ── Rules ────────────────────────────────────────────────────────────
@@ -297,15 +410,17 @@ public class ImagingStudyImageService {
     private ImagingStudyImageDTO toStaffDto(ImagingStudyImage image, boolean adminReader, List<ImagingReport> reports) {
         boolean locked = locked(image, reports);
         boolean deletable = !adminReader && !locked && mayRemove(image);
+        boolean captionEditable = !adminReader && mayRemove(image);
+        boolean withdrawable = !adminReader && locked && mayWithdraw(image, reports);
         return new ImagingStudyImageDTO(image.getId(), image.getImagingOrder().getId(), reportIdOf(image),
             image.getContentType(), image.getSizeBytes(), image.getCaption(), image.getCreatedAt(),
-            image.getUploadedByUserId(), locked, deletable);
+            image.getUploadedByUserId(), locked, deletable, captionEditable, withdrawable);
     }
 
     private static ImagingStudyImageDTO toPatientDto(ImagingStudyImage image) {
         return new ImagingStudyImageDTO(image.getId(), image.getImagingOrder().getId(), reportIdOf(image),
             image.getContentType(), image.getSizeBytes(), image.getCaption(), image.getCreatedAt(),
-            null, true, false);
+            null, true, false, false, false);
     }
 
     private static UUID reportIdOf(ImagingStudyImage image) {

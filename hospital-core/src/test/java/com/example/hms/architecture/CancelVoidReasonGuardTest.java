@@ -427,6 +427,8 @@ class CancelVoidReasonGuardTest {
             "NOT A WITHDRAWAL: a temporary reservation of a free slot");
         CLINICAL_HANDLERS.put("PATCH /staff/scheduling/leaves/{leaveId}/cancel",
             "NOT A CLINICAL RECORD: a staff member's own leave request");
+        CLINICAL_HANDLERS.put("POST /imaging/images/{imageId}/withdraw",
+            "WithdrawRequest.reason -> service/imaging/ImagingStudyImageServiceTest#aReasonIsRequiredAndAnUnlockedImageIsRemovedInstead");
         CLINICAL_HANDLERS.put("POST /break-glass/{sessionId}/revoke",
             "NOT A CLINICAL RECORD: ends the caller's own emergency access early; the session's opening reason is required");
         CLINICAL_HANDLERS.put("PUT /api-keys/{keyId}/revoke", "NOT A CLINICAL RECORD: platform integration key");

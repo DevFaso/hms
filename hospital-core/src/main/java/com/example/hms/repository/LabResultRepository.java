@@ -604,5 +604,29 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
           AND COALESCE(r.labOrder.performingHospital.id, r.labOrder.hospital.id) = :hospitalId
     """)
     Page<LabResult> findPendingReleaseHandledBy(@Param("hospitalId") UUID hospitalId, Pageable pageable);
-}
 
+    /**
+     * r63 (imaging completion): the patient's released, current results at one
+     * hospital whose test reads like a creatinine (by LOINC, code or name),
+     * newest first. The caller picks the serum value; nothing is graded here.
+     */
+    @EntityGraph(attributePaths = {
+        "labOrder",
+        "labOrder.labTestDefinition"
+    })
+    @Query("""
+        SELECT r FROM LabResult r
+        WHERE r.labOrder.patient.id = :patientId
+          AND r.labOrder.hospital.id = :hospitalId
+          AND r.released = true
+          AND r.supersededByResultId IS NULL
+          AND (r.labOrder.labTestDefinition.loincCode IN :loincCodes
+               OR LOWER(r.labOrder.labTestDefinition.name) LIKE '%atinin%'
+               OR LOWER(r.labOrder.labTestDefinition.testCode) LIKE 'crea%')
+        ORDER BY r.resultDate DESC
+    """)
+    List<LabResult> findReleasedCreatinineCandidates(@Param("patientId") UUID patientId,
+                                                      @Param("hospitalId") UUID hospitalId,
+                                                      @Param("loincCodes") Collection<String> loincCodes,
+                                                      Pageable pageable);
+}

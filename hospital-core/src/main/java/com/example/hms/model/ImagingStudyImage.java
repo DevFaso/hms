@@ -77,4 +77,28 @@ public class ImagingStudyImage extends BaseEntity {
 
     @Column(name = "uploaded_by_user_id")
     private UUID uploadedByUserId;
+
+    /** QA D2464 (V313): when the image was withdrawn; null while it is shown. */
+    @Column(name = "withdrawn_at")
+    private java.time.LocalDateTime withdrawnAt;
+
+    @Column(name = "withdrawn_by_user_id")
+    private UUID withdrawnByUserId;
+
+    /** Why it was withdrawn; it can name the wrong patient, so it is encrypted. */
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "withdrawal_reason", columnDefinition = "TEXT")
+    private String withdrawalReason;
+
+    /** QA D2466 (V313): the last caption correction. */
+    @Column(name = "caption_updated_at")
+    private java.time.LocalDateTime captionUpdatedAt;
+
+    @Column(name = "caption_updated_by_user_id")
+    private UUID captionUpdatedByUserId;
+
+    /** Withdrawn images are kept for the record and shown to no reader. */
+    public boolean isWithdrawn() {
+        return withdrawnAt != null;
+    }
 }

@@ -132,6 +132,15 @@ public class ImagingStudyViewerService {
         return template;
     }
 
+    /**
+     * QA D2467 (r64): whether the report's hospital has a PACS the viewer can reach, known
+     * without calling the PACS, so the portal offers no « Voir les images » that can only
+     * answer « not enabled ». Scoped as the manifest is (another hospital's report is 404).
+     */
+    public boolean viewerReady(UUID reportId) {
+        return loadScoped(reportId).resolution().ready();
+    }
+
     /** The viewer manifest of a report: its state and, when AVAILABLE, its instances. */
     public ImagingStudyViewerDTO manifest(UUID reportId, UUID actorUserId) {
         Target report = loadScoped(reportId);

@@ -2,6 +2,7 @@ package com.example.hms.architecture;
 
 import com.example.hms.controller.DicomProxyController;
 import com.example.hms.controller.ImagingOrderController;
+import com.example.hms.controller.ImagingReadingContextController;
 import com.example.hms.controller.ImagingResultController;
 import com.example.hms.controller.ImagingStudyImageController;
 import com.example.hms.security.ClinicalActor;
@@ -58,7 +59,7 @@ class ImagingReadRoleGuardTest {
 
     private static final List<Class<?>> IMAGING_CONTROLLERS =
         List.of(ImagingOrderController.class, ImagingResultController.class, DicomProxyController.class,
-            ImagingStudyImageController.class);
+            ImagingStudyImageController.class, ImagingReadingContextController.class);
 
     private static final Set<String> ADMIN_ROLES = Set.of("SUPER_ADMIN", "HOSPITAL_ADMIN", "ADMIN");
 
@@ -74,7 +75,15 @@ class ImagingReadRoleGuardTest {
         "DicomProxyController.viewer",
         "image pixel data (the viewer manifest): a clinical role of the caller's own, see the pixel test",
         "DicomProxyController.renderedFrame",
-        "image pixel data (a rendered frame): a clinical role of the caller's own, see the pixel test");
+        "image pixel data (a rendered frame): a clinical role of the caller's own, see the pixel test",
+        "DicomProxyController.viewerReady",
+        "r64 D2467: whether the pixel viewer can be offered, gated exactly as the viewer it announces",
+        "ImagingResultController.getReportsToSign",
+        "r63 D2306: the reads waiting for the caller's own signature; only an author signs, so only a role that"
+            + " authors reports (createReport's) has a list",
+        "ImagingReadingContextController.getReadingContext",
+        "r63: the patient's creatinine and maternal history beside the order, clinical data outside the"
+            + " 2026-11-14 admin read scope (orders and released reports)");
 
     private static final Pattern QUOTED_ROLE = Pattern.compile("'(?:ROLE_)?([A-Z_]+)'");
     private static final String CLINICAL_GATE =

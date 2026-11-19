@@ -102,4 +102,21 @@ class PacsUrlPolicyTest {
             .isInstanceOf(NullPointerException.class)
             .hasMessage("hospital");
     }
+
+    @Test
+    @DisplayName("QA D2460: a well-formed https address whose host does not resolve is saved, never called")
+    void unresolvedHostSavedNotCalled() {
+        String url = "https://pacs.e-keneya-unresolvable.invalid/dicom-web";
+        assertThatCode(() -> PacsUrlPolicy.requireSavable(url, false)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> PacsUrlPolicy.requireCallable(url, false))
+            .isInstanceOfSatisfying(PacsUrlPolicy.RejectedException.class,
+                ex -> assertThat(ex.messageKey()).isEqualTo(PacsUrlPolicy.HOST_NOT_FOUND));
+        // The fence still holds on save for what does resolve, and for what is not https.
+        assertThatThrownBy(() -> PacsUrlPolicy.requireSavable("https://127.0.0.1/dicom-web", false))
+            .isInstanceOfSatisfying(PacsUrlPolicy.RejectedException.class,
+                ex -> assertThat(ex.messageKey()).isEqualTo(PacsUrlPolicy.PRIVATE_HOST));
+        assertThatThrownBy(() -> PacsUrlPolicy.requireSavable("http://pacs.e-keneya-unresolvable.invalid/x", false))
+            .isInstanceOfSatisfying(PacsUrlPolicy.RejectedException.class,
+                ex -> assertThat(ex.messageKey()).isEqualTo(PacsUrlPolicy.HTTPS_REQUIRED));
+    }
 }
