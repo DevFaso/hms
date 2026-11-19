@@ -31,7 +31,10 @@
           {{ 'IMAGING_PACS.IMAGES_AVAILABLE' | translate: { count: instances().length } }}
         </span>
         @if (manifest()?.linkedBy === 'ACCESSION') {
-          <span class="pacs-viewer-hint">{{ 'IMAGING_PACS.LINKED_BY_ACCESSION' | translate }}</span>
+          {{ ' '
+          }}<span class="pacs-viewer-hint">{{
+            'IMAGING_PACS.LINKED_BY_ACCESSION' | translate
+          }}</span>
         }
         <button type="button" class="btn-link" data-testid="imaging-viewer-close" (click)="close()">
           {{ 'IMAGING_PACS.HIDE_IMAGES' | translate }}
@@ -75,7 +78,7 @@
         <button
           type="button"
           class="btn-secondary"
-          [disabled]="index() === 0"
+          [disabled]="!hasPrev()"
           [attr.aria-label]="'IMAGING_PACS.PREVIOUS_IMAGE' | translate"
           [title]="'IMAGING_PACS.PREVIOUS_IMAGE' | translate"
           (click)="go(-1)"
@@ -98,7 +101,7 @@
         <button
           type="button"
           class="btn-secondary"
-          [disabled]="index() >= lastIndex()"
+          [disabled]="!hasNext()"
           [attr.aria-label]="'IMAGING_PACS.NEXT_IMAGE' | translate"
           [title]="'IMAGING_PACS.NEXT_IMAGE' | translate"
           (click)="go(1)"
@@ -107,14 +110,19 @@
         </button>
         @if (frameCount() > 1) {
           <span class="pacs-frames">
-            <button type="button" class="btn-link" [disabled]="frame() === 1" (click)="goFrame(-1)">
+            <button
+              type="button"
+              class="btn-link"
+              [disabled]="!frameHasPrev()"
+              (click)="goFrame(-1)"
+            >
               {{ 'IMAGING_PACS.PREVIOUS_FRAME' | translate }}
             </button>
             {{ 'IMAGING_PACS.FRAME_POSITION' | translate: { frame: frame(), count: frameCount() } }}
             <button
               type="button"
               class="btn-link"
-              [disabled]="frame() >= frameCount()"
+              [disabled]="!frameHasNext()"
               (click)="goFrame(1)"
             >
               {{ 'IMAGING_PACS.NEXT_FRAME' | translate }}

@@ -64,6 +64,11 @@ export class ImagingStudyViewerComponent {
   );
   /** The last position of the image slider (the manifest is the whole list the server sent). */
   readonly lastIndex = computed(() => Math.max(0, this.instances().length - 1));
+  /** The pager ends: the first/last image, the first/last frame. */
+  readonly hasPrev = computed(() => this.index() > 0);
+  readonly hasNext = computed(() => this.index() < this.lastIndex());
+  readonly frameHasPrev = computed(() => this.frame() > 1);
+  readonly frameHasNext = computed(() => this.frame() < this.frameCount());
   readonly frameCount = computed(() => Math.max(1, this.current()?.numberOfFrames ?? 1));
   readonly imageFilter = computed(
     () =>
