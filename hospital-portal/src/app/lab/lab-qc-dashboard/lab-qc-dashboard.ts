@@ -279,7 +279,9 @@ export class LabQcDashboardComponent implements OnInit {
     const hospitalId = this.roleContext.effectiveHospitalIdForRequest();
     const measured = this.parseNumber(this.qcMeasured());
     if (!hospitalId || measured == null || this.recordIncomplete() || this.savingRun()) return;
-    const expected = this.parseNumber(this.qcExpected());
+    // The expected value is the director's target mean when the field is left blank.
+    const expected =
+      this.parseNumber(this.qcExpected()) ?? this.currentTarget()?.targetMean ?? null;
     this.savingRun.set(true);
     this.recordError.set(null);
     this.labService

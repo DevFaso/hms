@@ -225,7 +225,7 @@ class DeceasedPatientCareGuardTest {
         Map.entry("Hospital", NOT_CARE), Map.entry("HospitalRecordAccessPosture", NOT_CARE),
         Map.entry("HospitalPacsSettings", NOT_CARE), Map.entry("InBasket", NOT_CARE),
         Map.entry("Inventory", NOT_CARE), Map.entry("LabInstrument", NOT_CARE), Map.entry("LabInventory", NOT_CARE),
-        Map.entry("LabQcEvent", NOT_CARE), Map.entry("LabReflexRule", NOT_CARE), Map.entry("LabTestDefinition", NOT_CARE),
+        Map.entry("LabQcEvent", NOT_CARE), Map.entry("LabQcTarget", NOT_CARE), Map.entry("LabReflexRule", NOT_CARE), Map.entry("LabTestDefinition", NOT_CARE),
         Map.entry("LabTestValidationStudy", NOT_CARE), Map.entry("Me", NOT_CARE), Map.entry("MedicationCatalog", NOT_CARE),
         Map.entry("Mfa", NOT_CARE), Map.entry("MllpAllowedSender", NOT_CARE), Map.entry("Notification", NOT_CARE),
         Map.entry("OnCallSchedule", NOT_CARE), Map.entry("Organization", NOT_CARE), Map.entry("OrganizationSecurity", NOT_CARE),

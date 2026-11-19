@@ -28,10 +28,8 @@ public class LabQcEventRequestDTO {
 
     @jakarta.validation.constraints.NotNull(message = "{lab.qc.measuredRequired}")
     private BigDecimal measuredValue;
-    /**
-     * The control's expected value. r63 D2304: optional when the director set a
-     * target for this test and level (the target mean is used); required otherwise.
-     */
+    /** The control's expected value: the director's target mean when one is set (r63 D2304). */
+    @jakarta.validation.constraints.NotNull(message = "{lab.qc.expectedRequired}")
     private BigDecimal expectedValue;
 
     /** r63 D2304: the control material's lot number. */

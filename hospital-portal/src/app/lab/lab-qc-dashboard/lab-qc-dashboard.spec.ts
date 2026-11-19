@@ -261,7 +261,7 @@ describe('LabQcDashboardComponent', () => {
       ).not.toBeNull();
     });
 
-    it('records a rejected run with its lot, using the target mean as the expected value', () => {
+    it('records a rejected run with its lot, sending the target mean as the expected value', () => {
       component.openRecordForm('def-1');
       component.qcMeasured.set('5,7');
       component.qcLot.set(' LOT-9 ');
@@ -278,7 +278,7 @@ describe('LabQcDashboardComponent', () => {
           accepted: false,
         }),
       );
-      expect(lab.recordQcEvent.calls.mostRecent().args[0].expectedValue).toBeUndefined();
+      expect(lab.recordQcEvent.calls.mostRecent().args[0].expectedValue).toBe(5);
     });
 
     it('needs an expected value and a decision when no target is set', () => {

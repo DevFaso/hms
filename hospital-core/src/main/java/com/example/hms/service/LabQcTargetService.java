@@ -48,20 +48,21 @@ public class LabQcTargetService {
     @Transactional
     public LabQcTargetResponseDTO save(LabQcTargetRequestDTO request) {
         UUID hospitalId = requirePinnedHospital();
+        // QA D1355 class: every missing value named in one answer.
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(request.getTestDefinitionId(), "testDefinitionId", "lab.qc.target.testRequired")
+            .requireValue(request.getQcLevel(), "qcLevel", "lab.qc.levelRequired")
+            .requireValue(request.getTargetMean(), "targetMean", "lab.qc.target.meanRequired")
+            .requireValue(request.getTargetSd(), "targetSd", "lab.qc.target.sdRequired")
+            .orThrow();
         LabQcEventLevel level;
         try {
             level = LabQcEventLevel.valueOf(request.getQcLevel().trim().toUpperCase(Locale.ROOT));
         } catch (RuntimeException ex) {
             throw new FieldBusinessException("qcLevel", "lab.qc.unknownLevel", String.valueOf(request.getQcLevel()));
         }
-        if (request.getTargetMean() == null) {
-            throw new FieldBusinessException("targetMean", "lab.qc.target.meanRequired");
-        }
-        if (request.getTargetSd() == null || request.getTargetSd().signum() <= 0) {
+        if (request.getTargetSd().signum() <= 0) {
             throw new FieldBusinessException("targetSd", "lab.qc.target.sdPositive");
-        }
-        if (request.getTestDefinitionId() == null) {
-            throw new FieldBusinessException("testDefinitionId", "lab.qc.target.testRequired");
         }
         LabTestDefinition definition = definitionRepository.findById(request.getTestDefinitionId())
             .orElseThrow(() -> new ResourceNotFoundException("labtestdef.notfound"));

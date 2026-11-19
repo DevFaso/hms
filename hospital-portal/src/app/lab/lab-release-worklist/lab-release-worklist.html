@@ -250,7 +250,7 @@
         </p>
         @if (target.components?.length) {
           <!-- r63 (NFS panels): every component value is released together -->
-          <app-lab-panel-values [components]="target.components ?? []" />
+          <app-lab-panel-values [components]="target.components" />
         }
         @if (isCritical(target)) {
           <!-- r63 D2305: a critical result is released with the laboratory's call recorded -->

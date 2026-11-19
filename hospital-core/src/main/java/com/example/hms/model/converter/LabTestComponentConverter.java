@@ -28,7 +28,7 @@ public class LabTestComponentConverter implements AttributeConverter<List<LabTes
             return OBJECT_MAPPER.writeValueAsString(attribute);
         } catch (JacksonException e) {
             log.error("Failed to serialize lab test components", e);
-            throw new IllegalStateException("Unable to write lab test components", e);
+            throw new IllegalStateException("lab.components.unwritable", e);
         }
     }
 

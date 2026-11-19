@@ -8002,7 +8002,8 @@
         "PATIENT_NOTIFICATION_DELIVERY": "Patient notification send",
         "PAYER": "Payer",
         "PAYER_PLAN": "Payer plan",
-        "HOSPITAL_PACS_SETTINGS": "PACS connection"
+        "HOSPITAL_PACS_SETTINGS": "PACS connection",
+        "LAB_QC_TARGET": "Lab QC target"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",

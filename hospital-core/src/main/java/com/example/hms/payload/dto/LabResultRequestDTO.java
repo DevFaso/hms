@@ -16,6 +16,8 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+/** r63: a single value, or (for a panel test) its component values. */
+@OneOf(fields = {"resultValue", "components"}, message = "{lab.result.value.required}")
 public class LabResultRequestDTO {
 
     private UUID id;

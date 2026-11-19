@@ -17,6 +17,8 @@ public class LabQcTargetRequestDTO {
     private UUID testDefinitionId;
 
     @jakarta.validation.constraints.NotBlank(message = "{lab.qc.levelRequired}")
+    @jakarta.validation.constraints.Pattern(regexp = "(?i)\\s*(LOW_CONTROL|HIGH_CONTROL)\\s*",
+        message = "{lab.qc.levelInvalid}")
     private String qcLevel;
 
     @jakarta.validation.constraints.NotNull(message = "{lab.qc.target.meanRequired}")

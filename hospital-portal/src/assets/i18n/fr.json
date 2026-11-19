@@ -7968,7 +7968,8 @@
         "PATIENT_NOTIFICATION_DELIVERY": "Envoi de notification au patient",
         "PAYER": "Organisme payeur",
         "PAYER_PLAN": "Formule d’organisme payeur",
-        "HOSPITAL_PACS_SETTINGS": "Connexion PACS"
+        "HOSPITAL_PACS_SETTINGS": "Connexion PACS",
+        "LAB_QC_TARGET": "Cible CQ du laboratoire"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",
