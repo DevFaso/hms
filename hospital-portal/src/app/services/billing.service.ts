@@ -51,8 +51,12 @@ export interface BillingInvoiceResponse {
   refundDue?: number;
   /** Billing-money plan PR 8 (QA D1900): what refunds already handed back to the patient. */
   amountRefunded?: number;
+  /** Billing-money plan PR 7: what the payers owe on the invoice ("Part assureur"); 0 when none covers it. */
   insuranceCoverageAmount: number;
+  /** Billing-money plan PR 7: the patient's share of the bill before payments ("Part patient"). */
   patientResponsibilityAmount: number;
+  /** Billing-money plan PR 7: the payers' shares (on GET by id), a rejected one with the payer's reason. */
+  payerShares?: InvoicePayerShare[];
   status: InvoiceStatus;
   notes: string;
   /** QA D1069: why and when (server time) a cancelled invoice was cancelled. */
@@ -64,6 +68,25 @@ export interface BillingInvoiceResponse {
   creditedToInvoiceNumber?: string | null;
   /** QA D936: a copay taken at check-in; credited to the visit invoice once one is issued. */
   checkInCopay?: boolean;
+}
+
+/** Billing-money plan PR 7: the life of a payer's share of an invoice. */
+export type PayerShareStatus = 'OPEN' | 'CLAIMED' | 'PAID' | 'REJECTED' | 'CANCELLED';
+
+/** Billing-money plan PR 7: the decisions recorded on a payer's share (the path segment of each). */
+export type PayerShareDecision = 'claim' | 'paid' | 'reject';
+
+/** Billing-money plan PR 7: what one payer plan owes on an invoice (InvoicePayerShareDTO). */
+export interface InvoicePayerShare {
+  id: string;
+  payerName?: string | null;
+  planName?: string | null;
+  amount: number;
+  coverageYear: number;
+  status: PayerShareStatus;
+  rejectionReason?: string | null;
+  decidedAt?: string | null;
+  createdAt?: string | null;
 }
 
 export interface InvoiceItemResponse {
@@ -494,6 +517,25 @@ export class BillingService {
       responseType: 'blob',
       observe: 'response',
     });
+  }
+
+  /* ── Payer shares (billing-money plan PR 7) ── */
+
+  listPayerShares(invoiceId: string): Observable<InvoicePayerShare[]> {
+    return this.http.get<InvoicePayerShare[]>(`/billing-invoices/${invoiceId}/payer-shares`);
+  }
+
+  /** The payer's decision on its share: sent on a bordereau, settled, or refused with its reason. */
+  decidePayerShare(
+    invoiceId: string,
+    shareId: string,
+    decision: PayerShareDecision,
+    reason?: string,
+  ): Observable<InvoicePayerShare[]> {
+    return this.http.post<InvoicePayerShare[]>(
+      `/billing-invoices/${invoiceId}/payer-shares/${shareId}/${decision}`,
+      decision === 'reject' ? { reason } : {},
+    );
   }
 
   /* ── Refunds (billing-money plan PR 8, QA D1900) ── */

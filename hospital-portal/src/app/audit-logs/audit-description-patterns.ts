@@ -1455,6 +1455,13 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { what: 'phrase:REFUND_EVENT' },
   },
   {
+    // Billing-money plan PR 7: a payer's share of an invoice applied, replaced, cancelled or decided (ids only).
+    key: 'AUDIT.DESC.PAYER_SHARE_EVENT',
+    re: /^(Payer share applied|Payer share applied after a credit note|Payer share replaced after a credit note|Payer share cancelled with its invoice|Payer share claimed|Payer share paid|Payer share rejected): share (\S+) on invoice (\S+)$/,
+    params: ['what', 'share', 'invoice'],
+    localise: { what: 'phrase:PAYER_SHARE_EVENT' },
+  },
+  {
     // Billing-money plan PR 2: the price list (ids only; the label, price and reason stay on the rows).
     key: 'AUDIT.DESC.PRICE_LIST_ITEM_CREATED',
     re: /^Price list item (\S+) created with price version (\S+)$/,

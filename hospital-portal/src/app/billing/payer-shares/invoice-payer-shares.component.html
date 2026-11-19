@@ -1,0 +1,121 @@
+@if (visible()) {
+  <section class="payer-shares" data-testid="payer-shares" aria-labelledby="payer-shares-title">
+    <h4 id="payer-shares-title" class="payer-shares-title">
+      {{ 'BILLING.PAYER_SHARES.TITLE' | translate }}
+    </h4>
+    <dl class="payer-shares-split">
+      <div>
+        <dt>{{ 'BILLING.PAYER_SHARES.PAYER_SHARE' | translate }}</dt>
+        <dd data-testid="payer-share-amount">{{ payerShare() | cfa }}</dd>
+      </div>
+      <div>
+        <dt>{{ 'BILLING.PAYER_SHARES.PATIENT_SHARE' | translate }}</dt>
+        <dd data-testid="patient-share-amount">{{ patientShare() | cfa }}</dd>
+      </div>
+    </dl>
+    @if (loadFailed()) {
+      <p class="payer-shares-error" role="alert">
+        {{ 'BILLING.PAYER_SHARES.LOAD_FAILED' | translate }}
+      </p>
+    }
+    @if (shares().length > 0) {
+      <ul class="payer-shares-list">
+        @for (share of shares(); track share.id) {
+          <li [attr.data-testid]="'payer-share-' + share.id">
+            <span class="payer-shares-name">
+              {{ share.payerName || '—' }}
+              @if (share.planName) {
+                · {{ share.planName }}
+              }
+            </span>
+            <span class="payer-shares-amount">{{ share.amount | cfa }}</span>
+            <span class="payer-shares-status" [attr.data-status]="share.status">{{
+              share.status | keyLabel: 'BILLING.PAYER_SHARES.STATUSES.'
+            }}</span>
+            @if (share.status === 'REJECTED' && share.rejectionReason) {
+              <span
+                class="payer-shares-reason"
+                [attr.data-testid]="'payer-share-reason-' + share.id"
+                >{{
+                  'BILLING.PAYER_SHARES.REJECTED_LINE'
+                    | translate: { reason: share.rejectionReason }
+                }}</span
+              >
+            }
+            <span class="payer-shares-actions">
+              @if (canClaim(share)) {
+                <button
+                  type="button"
+                  class="btn-secondary btn-sm"
+                  [disabled]="busy()"
+                  (click)="decide(share, 'claim')"
+                >
+                  {{ 'BILLING.PAYER_SHARES.CLAIM' | translate }}
+                </button>
+              }
+              @if (canSettle(share)) {
+                <button
+                  type="button"
+                  class="btn-secondary btn-sm"
+                  [disabled]="busy()"
+                  (click)="decide(share, 'paid')"
+                >
+                  {{ 'BILLING.PAYER_SHARES.MARK_PAID' | translate }}
+                </button>
+                <button
+                  type="button"
+                  class="btn-secondary btn-sm"
+                  [disabled]="busy()"
+                  [attr.data-testid]="'payer-share-reject-' + share.id"
+                  (click)="openReject(share)"
+                >
+                  {{ 'BILLING.PAYER_SHARES.REJECT' | translate }}
+                </button>
+              }
+            </span>
+          </li>
+        }
+      </ul>
+    }
+    @if (rejecting(); as share) {
+      <form
+        class="payer-shares-reject"
+        data-testid="payer-share-reject-form"
+        (ngSubmit)="confirmReject()"
+      >
+        <label for="payer-share-reject-reason"
+          >{{ 'BILLING.PAYER_SHARES.REJECT_REASON' | translate }} *</label
+        >
+        <textarea
+          id="payer-share-reject-reason"
+          name="payerShareRejectReason"
+          rows="2"
+          maxlength="500"
+          required
+          aria-describedby="payer-share-reject-hint"
+          [ngModel]="rejectReason()"
+          (ngModelChange)="rejectReason.set($event)"
+          (keydown.escape)="closeReject()"
+        ></textarea>
+        <p id="payer-share-reject-hint" class="payer-shares-hint">
+          {{ 'BILLING.PAYER_SHARES.NO_CARD_NOTICE' | translate }}
+        </p>
+        <div class="payer-shares-reject-actions">
+          <button type="button" class="btn-secondary btn-sm" (click)="closeReject()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="submit"
+            class="btn-primary btn-sm"
+            data-testid="payer-share-reject-submit"
+            [disabled]="busy()"
+          >
+            {{
+              'BILLING.PAYER_SHARES.REJECT_CONFIRM' | translate: { amount: (share.amount | cfa) }
+            }}
+          </button>
+        </div>
+      </form>
+    }
+  </section>
+}
