@@ -351,7 +351,7 @@
     "CANCEL": "Annuler",
     "OPTIONAL": "optionnel",
     "DEFAULT_30_DAYS": "30 jours par défaut",
-    "MFA_HINT": "Code à 6 chiffres de votre authentificateur — requis si MFA activé",
+    "MFA_HINT": "Code à 6 chiffres de votre application d'authentification — requis si la validation en deux étapes est activée",
     "STATE": {
       "ACTIVE": "Actif",
       "SUSPENDED": "Suspendu",
@@ -377,7 +377,7 @@
       "PURGE_REASON": "Motif de purge",
       "PURGED_AT": "Purgé le",
       "TYPE_CODE_TO_CONFIRM": "Saisir le code de l'organisation pour confirmer :",
-      "MFA_CODE": "Code MFA"
+      "MFA_CODE": "Code de validation"
     },
     "PLACEHOLDER": {
       "REASON": "Pourquoi cette action ? (visible dans la piste d'audit)"
@@ -483,7 +483,7 @@
       "AUDIT_SEARCH_TITLE": "Recherche d'audit",
       "AUDIT_SEARCH_DESC": "Recherche d'audit multi-tenant avec filtre d'emprunt d'identité",
       "EMERGENCY_TITLE": "Contrôles d'urgence",
-      "EMERGENCY_DESC": "Déconnexion globale, désactivation de fonctionnalité, ré-enrôlement MFA forcé, diffusion",
+      "EMERGENCY_DESC": "Déconnexion globale, désactivation de fonctionnalité, réinitialisation forcée de la validation en deux étapes, diffusion",
       "SUBSCRIPTIONS_TITLE": "Abonnements",
       "SUBSCRIPTIONS_DESC": "Catalogue de plans et affectation par organisation",
       "REGIONS_TITLE": "Résidence des données",
@@ -612,9 +612,9 @@
   "EMERGENCY": {
     "TITLE": "Contrôles globaux d'urgence",
     "SUBTITLE": "À utiliser uniquement lors d'un incident de sécurité. Chaque action est auditée de manière permanente.",
-    "WARNING": "Ces contrôles s'appliquent immédiatement à toute la plateforme. Validez votre MFA avant chaque clic.",
+    "WARNING": "Ces contrôles s'appliquent immédiatement à toute la plateforme. Confirmez avec votre code de validation avant chaque clic.",
     "REASON": "Motif (audité, ≥ 5 caractères)",
-    "MFA_TOKEN": "Code MFA",
+    "MFA_TOKEN": "Code de validation",
     "CONFIRM_TYPED": "Tapez FORCE LOGOUT ALL pour confirmer",
     "FORCE_LOGOUT": {
       "TITLE": "Déconnecter toutes les sessions",
@@ -631,8 +631,8 @@
     },
     "FORCE_MFA": {
       "CONFIRM": "Réinitialiser le second facteur des {{count}} utilisateur(s) sélectionné(s) ?",
-      "TITLE": "Forcer le ré-enrôlement MFA",
-      "DESC": "Efface l'enrôlement MFA et les codes de secours des utilisateurs sélectionnés. Sans sélection, TOUS les utilisateurs enrôlés sont réinitialisés (éventuellement pour un seul hôpital) — cela exige une confirmation saisie.",
+      "TITLE": "Forcer la réinscription à la validation en deux étapes",
+      "DESC": "Efface la validation en deux étapes et les codes de secours des utilisateurs sélectionnés. Sans sélection, TOUS les utilisateurs inscrits sont réinitialisés (éventuellement pour un seul hôpital) — cela exige une confirmation saisie.",
       "SEARCH_USERS": "Utilisateurs à réinitialiser",
       "SEARCH_PLACEHOLDER": "Saisissez un nom pour rechercher…",
       "NO_RESULTS": "Aucun utilisateur ne correspond à ce nom.",
@@ -640,9 +640,9 @@
       "REMOVE": "Retirer",
       "HOSPITAL_SCOPE": "Périmètre hospitalier",
       "ALL_HOSPITALS": "Toute la plateforme (sans filtre d'hôpital)",
-      "SUMMARY": "Réinitialisera le MFA de {{count}} utilisateur(s) sélectionné(s).",
-      "RESET_ALL_PLATFORM": "Aucun utilisateur sélectionné : ceci réinitialise le MFA de TOUS les utilisateurs enrôlés de la plateforme, vous compris.",
-      "RESET_ALL_AT_HOSPITAL": "Aucun utilisateur sélectionné : ceci réinitialise le MFA de tous les utilisateurs enrôlés affectés à l'hôpital choisi.",
+      "SUMMARY": "Réinitialisera la validation en deux étapes de {{count}} utilisateur(s) sélectionné(s).",
+      "RESET_ALL_PLATFORM": "Aucun utilisateur sélectionné : ceci réinitialise la validation en deux étapes de TOUS les utilisateurs inscrits de la plateforme, vous compris.",
+      "RESET_ALL_AT_HOSPITAL": "Aucun utilisateur sélectionné : ceci réinitialise la validation en deux étapes de tous les utilisateurs inscrits affectés à l'hôpital choisi.",
       "RESET_ALL_CONFIRM": "Tapez RESET ALL MFA pour confirmer la réinitialisation de tout le monde",
       "RESET_ALL_PLACEHOLDER": "RESET ALL MFA",
       "RESET_ALL_CONFIRM_TYPED": "Tapez RESET ALL MFA pour confirmer, ou sélectionnez les utilisateurs à réinitialiser.",
@@ -963,7 +963,7 @@
     "MODAL_WARNING": "Toutes vos actions seront étiquetées avec votre identité réelle. La session expire automatiquement au bout de 30 minutes.",
     "REASON_LABEL": "Motif (requis, conservé dans l'audit)",
     "REASON_PLACEHOLDER": "ex. Validation d'un bug de renouvellement signalé par le patient",
-    "MFA_LABEL": "Code MFA (requis si MFA activée)",
+    "MFA_LABEL": "Code de validation (requis si la validation en deux étapes est activée)",
     "MFA_PLACEHOLDER": "Code à 6 chiffres",
     "START_BUTTON": "Démarrer l'emprunt d'identité",
     "STARTING": "Démarrage…",
@@ -2078,7 +2078,11 @@
       "PAYER_TERMS_ADDED": "Taux et plafonds {{terms}} ajoutés à la formule {{plan}}, en vigueur le {{from}} ; fermés : [{{closed}}] ; remplacés : [{{replaced}}]",
       "PAYER_SHARE_EVENT": "{{what}} : part {{share}} sur la facture {{invoice}}",
       "PACS_SETTINGS_CHANGED": "Paramètres de connexion PACS modifiés",
-      "IMAGING_STUDY_VIEWED": "Examen d'imagerie ouvert dans la visionneuse ({{count}} images)"
+      "IMAGING_STUDY_VIEWED": "Examen d'imagerie ouvert dans la visionneuse ({{count}} images)",
+      "MFA_RESET_BY_ADMIN": "Validation en deux étapes réinitialisée par un administrateur : {{reason}}",
+      "MFA_RESET_REFUSED": "Réinitialisation de la validation en deux étapes refusée : ce compte n’est pas administré par l’auteur",
+      "MFA_REMOVED_BY_USER": "Validation en deux étapes retirée par l’utilisateur",
+      "PATIENT_CHANNEL_CHOICES": "Choix de canaux du patient enregistrés à l’accueil : {{changes}}"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -2743,7 +2747,7 @@
     },
     "PAYERS": {
       "TITLE": "Organismes payeurs",
-      "SUBTITLE": "Les mutuelles, assureurs, employeurs et programmes qui prennent en charge une part des soins, avec leurs formules et leurs règles. Rien n’est encore appliqué aux factures.",
+      "SUBTITLE": "Les mutuelles, assureurs, employeurs et programmes qui prennent en charge une part des soins, avec leurs formules et leurs règles. La formule en vigueur à la date de la facture s’applique quand la facture est émise.",
       "BACK_TO_BILLING": "Retour à la facturation",
       "NEW_PAYER": "Nouvel organisme payeur",
       "EDIT": "Modifier l’organisme payeur",
@@ -2839,8 +2843,13 @@
       "NO_CARD_NUMBER": "Ceci ressemble à un numéro de carte : e-Keneya n’enregistre jamais de données de carte.",
       "DECIDED_TOAST": "La décision de l’assureur est enregistrée.",
       "FAILED": "La décision de l’assureur n’a pas pu être enregistrée.",
-      "LOAD_FAILED": "Les parts assureur n’ont pas pu être chargées."
-    }
+      "LOAD_FAILED": "Les parts assureur n’ont pas pu être chargées.",
+      "PAYER_SHARE_ESTIMATED": "Part assureur (estimation)",
+      "PATIENT_SHARE_ESTIMATED": "Part patient (estimation)",
+      "ESTIMATE_NOTE": "Estimation selon la formule du patient : la part de l'assureur est fixée à l'émission de la facture."
+    },
+    "LINE_SHARES": "Assureur : {{payer}} · Patient : {{patient}}",
+    "LINE_SHARES_ESTIMATED": "Estimation — Assureur : {{payer}} · Patient : {{patient}}"
   },
   "CHAT": {
     "ACCESS_DENIED": "Vous n'avez pas l'autorisation d'accéder à la messagerie.",
@@ -5092,7 +5101,8 @@
     "TYPE_SYSTEM": "Système",
     "UNREAD": "Non lu",
     "UNREAD_COUNT": "{{count}} notifications non lues",
-    "VIEW_ALL": "Voir tout"
+    "VIEW_ALL": "Voir tout",
+    "SETTINGS_SECURITY_NOTE": "Les messages de sécurité de votre compte (réinitialisation du mot de passe, codes de vérification) sont toujours envoyés, quel que soit votre choix."
   },
   "NURSE": {
     "OVERSIGHT": {
@@ -7248,11 +7258,11 @@
         "LOGIN_FAILURE": "Échec de connexion",
         "LOGOUT": "Déconnexion",
         "MEDICATION_DEACTIVATED": "Médicament désactivé",
-        "MFA_BACKUP_USED": "Code de secours MFA utilisé",
-        "MFA_CHALLENGE": "Défi MFA",
-        "MFA_ENROLLED": "MFA activée",
-        "MFA_FAILURE": "Échec MFA",
-        "MFA_VERIFIED": "MFA vérifié",
+        "MFA_BACKUP_USED": "Code de secours utilisé",
+        "MFA_CHALLENGE": "Validation en deux étapes demandée",
+        "MFA_ENROLLED": "Validation en deux étapes configurée",
+        "MFA_FAILURE": "Échec de la validation en deux étapes",
+        "MFA_VERIFIED": "Validation en deux étapes réussie",
         "MTM_INTERVENTION_RECORDED": "Intervention pharmaceutique enregistrée",
         "MTM_REVIEW_STARTED": "Revue de médication démarrée",
         "ORGANIZATION_REGION_UPDATED": "Région de l'organisation modifiée",
@@ -7389,7 +7399,9 @@
         "PATIENT_COVERAGE_PLAN_LINKED": "Couverture du patient liée à une formule",
         "PAYER_SHARE_APPLIED": "Part assureur appliquée à une facture",
         "PAYER_SHARE_DECIDED": "Décision de l’assureur sur sa part enregistrée",
-        "PAYER_SHARE_CANCELLED": "Part assureur annulée"
+        "PAYER_SHARE_CANCELLED": "Part assureur annulée",
+        "MFA_RESET": "Validation en deux étapes réinitialisée",
+        "PATIENT_CHANNEL_PREFERENCES_UPDATED": "Choix SMS / e-mail du patient modifiés"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -8533,7 +8545,7 @@
     "ACTIVITY": "Activité",
     "ACTIVITY_HINT": "Activité récente du compte",
     "ADD_CONTACT": "Ajouter un contact",
-    "ADD_MFA_HINT": "Ajoutez l'authentification multifacteur pour une sécurité renforcée",
+    "ADD_MFA_HINT": "Ajoutez la validation en deux étapes pour mieux protéger votre compte",
     "ADD_RECOVERY_CONTACT": "Ajouter un contact de récupération",
     "ADD_RECOVERY_HINT": "Ajoutez un contact de récupération",
     "AGE_DAY": "{{count}} jour",
@@ -8594,16 +8606,16 @@
     "LOADING_ACTIVITY": "Chargement de l'activité...",
     "LOAD_FAILED": "Impossible de charger le profil. Reconnectez-vous.",
     "MEMBER_SINCE": "Membre depuis",
-    "MFA": "MFA",
+    "MFA": "Validation en deux étapes",
     "MFA_CODE_LENGTH": "Saisissez un code valide à 6 chiffres.",
     "MFA_CODE_REJECTED": "Code invalide. Réessayez.",
-    "MFA_ENROLLED": "Inscription MFA réussie !",
-    "MFA_ENROLL_FAILED": "Échec du démarrage de l'inscription MFA.",
+    "MFA_ENROLLED": "Validation en deux étapes activée !",
+    "MFA_ENROLL_FAILED": "La configuration de la validation en deux étapes n'a pas pu démarrer.",
     "MFA_ENTER_CODE": "Saisissez le code à 6 chiffres de votre application d'authentification pour vérifier :",
     "MFA_MANUAL_SECRET": "Ou saisissez cette clé secrète manuellement :",
-    "MFA_QR_ALT": "Code QR TOTP",
+    "MFA_QR_ALT": "Code QR pour l'application d'authentification",
     "MFA_SCAN_QR": "Scannez ce code QR avec votre application d'authentification (Google Authenticator, Authy, etc.) :",
-    "MFA_STATUS": "Statut MFA",
+    "MFA_STATUS": "Validation en deux étapes",
     "MIN_CHARS": "8 caractères minimum",
     "NEVER": "Jamais",
     "NEW_PASSWORD": "Nouveau mot de passe",
@@ -8611,7 +8623,7 @@
     "NOTIFICATIONS_TAB": "Notifications",
     "NO_ACTIVITY": "Aucune activité récente",
     "NO_EMAIL_ON_FILE": "Aucune adresse e-mail enregistrée.",
-    "NO_MFA": "Aucun MFA configuré",
+    "NO_MFA": "Validation en deux étapes non configurée",
     "NO_RECOVERY_CONTACTS": "Aucun contact de récupération",
     "OLD_PASSWORD": "Ancien mot de passe",
     "OVERVIEW": "Aperçu",
@@ -8723,7 +8735,7 @@
     "MFA_SET_UP": "Configurer une application d'authentification",
     "MFA_COUNTS": "{{enrolled}} inscrit(s), {{verified}} vérifié(s)",
     "RECOVERY_COUNTS": "{{configured}} configuré(s), {{verified}} vérifié(s)",
-    "SET_UP_TOTP": "Configurer TOTP",
+    "SET_UP_TOTP": "Configurer une application d'authentification",
     "CHANGE_PASSWORD_DESC": "Saisissez votre mot de passe actuel, puis choisissez-en un nouveau d’au moins 8 caractères.",
     "PASSWORD_TOO_SHORT": "Le nouveau mot de passe doit comporter au moins 8 caractères.",
     "PASSWORD_SAME_AS_CURRENT": "Le nouveau mot de passe doit être différent de l’actuel.",
@@ -8735,7 +8747,23 @@
     "SAVE_NEW_PASSWORD": "Enregistrer le nouveau mot de passe",
     "FORGOT_PASSWORD_DESC": "Mot de passe actuel oublié ? Nous pouvons vous envoyer un lien de réinitialisation par e-mail.",
     "FORGOT_PASSWORD_DESC_SMS": "Mot de passe actuel oublié ? Nous pouvons vous envoyer un lien de réinitialisation par SMS.",
-    "EMAIL_CANNOT_CLEAR": "Un compte garde son adresse e-mail : saisissez une nouvelle adresse, ou gardez l’adresse actuelle."
+    "EMAIL_CANNOT_CLEAR": "Un compte garde son adresse e-mail : saisissez une nouvelle adresse, ou gardez l’adresse actuelle.",
+    "MFA_METHOD_TOTP": "Application d'authentification",
+    "MFA_METHOD_SMS": "Code par SMS",
+    "MFA_METHOD_EMAIL": "Code par e-mail",
+    "MFA_METHOD_OTHER": "Autre méthode",
+    "MFA_ACTIVE": "Active",
+    "MFA_SETUP_UNFINISHED": "Configuration non terminée",
+    "MFA_STATE_ACTIVE": "Activée",
+    "MFA_STATE_PENDING": "Configuration non terminée",
+    "MFA_STATE_OFF": "Non activée",
+    "MFA_REMOVE": "Retirer la validation en deux étapes",
+    "MFA_REMOVE_INTRO": "Pour retirer votre application d'authentification, saisissez un code actuel de cette application, ou l'un de vos codes de secours inutilisés. Si votre rôle l'exige, vous en configurerez une nouvelle à votre prochaine connexion.",
+    "MFA_REMOVE_CONFIRM": "Retirer",
+    "MFA_REMOVED": "La validation en deux étapes a été retirée de votre compte.",
+    "MFA_REMOVE_FAILED": "La validation en deux étapes n'a pas pu être retirée. Réessayez.",
+    "MFA_LOST_PHONE_HINT": "Téléphone perdu et plus de codes de secours ? Demandez à l'administrateur de votre établissement de réinitialiser votre validation en deux étapes.",
+    "MFA_REMOVE_ASK": "Votre compte ne demandera plus de code à la connexion, sauf si votre rôle l’exige. Continuer ?"
   },
   "RECEPTION": {
     "BOOK_RECALL": "Prendre RDV",
@@ -9489,7 +9517,7 @@
     "PAGE_TITLE": "Paramètres",
     "PRIVACY_DESC": "Consultez la manière dont vos données sont collectées, utilisées et protégées.",
     "PRIVACY_TITLE": "Confidentialité",
-    "SECURITY_DESC": "Modifiez votre mot de passe, gérez la MFA et vérifiez vos contacts de récupération.",
+    "SECURITY_DESC": "Modifiez votre mot de passe, gérez la validation en deux étapes et vérifiez vos contacts de récupération.",
     "SECURITY_TITLE": "Sécurité et connexion"
   },
   "SHELL": {
@@ -9854,7 +9882,20 @@
     "USERS_PLURAL": "Utilisateurs",
     "USER_SINGULAR": "Utilisateur",
     "ROLES_EDIT_HINT": "Les rôles s’attribuent et se retirent par établissement depuis la page des affectations de rôles.",
-    "STAFF_FIELDS_EDIT_HINT": "L’hôpital, la fonction, le type d’emploi, la spécialité et la licence sont ceux enregistrés pour ce membre du personnel. Ils se modifient depuis sa fiche du personnel, pas ici."
+    "STAFF_FIELDS_EDIT_HINT": "L’hôpital, la fonction, le type d’emploi, la spécialité et la licence sont ceux enregistrés pour ce membre du personnel. Ils se modifient depuis sa fiche du personnel, pas ici.",
+    "MFA_RESET": {
+      "ACTION": "Réinitialiser la validation en deux étapes",
+      "TITLE": "Réinitialiser la validation en deux étapes",
+      "INTRO": "L'application d'authentification et les codes de secours de {{name}} seront effacés. Si son rôle l'exige, la personne en configurera une nouvelle à sa prochaine connexion. Faites-le seulement après avoir vérifié son identité.",
+      "REASON": "Motif",
+      "REASON_PLACEHOLDER": "ex. Téléphone perdu, identité vérifiée en personne",
+      "REASON_REQUIRED": "Indiquez le motif de la réinitialisation (5 caractères au moins).",
+      "CODE": "Votre code de validation",
+      "CODE_HINT": "Un code actuel de votre propre application d'authentification, ou l'un de vos codes de secours, si la validation en deux étapes est activée sur votre compte.",
+      "CONFIRM": "Réinitialiser",
+      "DONE": "La validation en deux étapes a été réinitialisée.",
+      "FAILED": "La validation en deux étapes n'a pas pu être réinitialisée."
+    }
   },
   "TRIAGE": {
     "ACUITY": "Niveau de gravité",
@@ -12266,7 +12307,7 @@
     "PT_PASSWORD_POLICY": "Politique de mots de passe",
     "PT_SESSION_MANAGEMENT": "Gestion des sessions",
     "PT_ROLE_MANAGEMENT": "Gestion des rôles",
-    "PT_MULTI_FACTOR_AUTH": "Authentification multifacteur",
+    "PT_MULTI_FACTOR_AUTH": "Validation en deux étapes",
     "PT_API_RATE_LIMITING": "Limitation de débit API",
     "PT_COMPLIANCE": "Conformité",
     "STRICT": "Strict",
@@ -12292,7 +12333,7 @@
     "RT_SESSION_TIMEOUT": "Expiration de session",
     "RT_IP_WHITELIST": "Liste blanche d'IP",
     "RT_API_RATE_LIMIT": "Limite de débit API",
-    "RT_MFA": "MFA",
+    "RT_MFA": "Validation en deux étapes",
     "RT_TWO_FACTOR_AUTH": "Double authentification",
     "RT_AUDIT_REQUIREMENT": "Exigence d'audit",
     "RT_COMPLIANCE_CHECK": "Contrôle de conformité",
@@ -12339,13 +12380,13 @@
     "CREDENTIALS_LOAD_ERROR": "Échec du chargement de la santé des identifiants",
     "CREDENTIALS_EMPTY": "Aucun utilisateur correspondant",
     "LAST_LOGIN": "Dernière connexion",
-    "MFA": "MFA",
+    "MFA": "Validation en deux étapes",
     "RECOVERY": "Récupération",
     "FLAGS": "Indicateurs",
     "FLAG_FORCE_PASSWORD": "Réinitialisation en attente",
     "FLAG_FORCE_USERNAME": "Changement de nom d'utilisateur en attente",
-    "MFA_ENROLLMENTS": "Inscriptions MFA",
-    "NO_MFA": "Aucune inscription MFA",
+    "MFA_ENROLLMENTS": "Inscriptions à la validation en deux étapes",
+    "NO_MFA": "Aucune validation en deux étapes",
     "METHOD": "Méthode",
     "CHANNEL": "Canal",
     "LAST_VERIFIED": "Dernière vérification",
@@ -12388,7 +12429,7 @@
     "TEMPLATE_IMPORTED": "{{count}} règles importées dans le jeu {{code}}",
     "SIMULATE_TITLE": "Simuler : {{title}}",
     "SCENARIO": "Scénario",
-    "SCENARIO_HINT": "ex. Déployer la MFA pour tous les cliniciens",
+    "SCENARIO_HINT": "ex. Déployer la validation en deux étapes pour tous les cliniciens",
     "SIM_RULES_NOTE": "La simulation évalue les {{count}} règles par défaut de ce modèle.",
     "RUN_SIMULATION": "Lancer la simulation",
     "IMPACT_SCORE": "Score d'impact",
@@ -13571,15 +13612,15 @@
     "ENROLL_COPY_CODES": "Copier les codes",
     "ENROLL_DONE": "Terminé — aller à la connexion",
     "ENROLL_ENTER_CODE": "Saisissez le code à 6 chiffres de votre application d'authentification pour valider l'inscription :",
-    "ENROLL_INTRO": "Votre compte exige l'authentification multifacteur. Configurez une application d'authentification TOTP (par exemple Google Authenticator, Authy) pour sécuriser votre compte.",
-    "ENROLL_QR_ALT": "Code QR TOTP",
+    "ENROLL_INTRO": "Votre compte exige la validation en deux étapes. Configurez une application d'authentification (par exemple Google Authenticator, Authy) pour sécuriser votre compte.",
+    "ENROLL_QR_ALT": "Code QR pour l'application d'authentification",
     "ENROLL_SCAN_QR": "Scannez ce code QR avec votre application d'authentification :",
     "ENROLL_SECRET_MANUAL": "Ou saisissez cette clé secrète manuellement :",
     "ENROLL_STARTING": "Configuration en cours…",
-    "ENROLL_TITLE": "Authentification multifacteur",
+    "ENROLL_TITLE": "Validation en deux étapes",
     "ENROLL_VERIFY": "Vérifier",
     "ENROLL_VERIFYING": "Vérification en cours…",
-    "CHALLENGE_INVALID_CODE": "Saisissez un code valide (TOTP à 6 chiffres ou code de secours à 8 caractères).",
+    "CHALLENGE_INVALID_CODE": "Saisissez un code valide (6 chiffres de votre application d'authentification, ou un code de secours de 8 caractères).",
     "ENROLL_INVALID_CODE": "Veuillez saisir un code valide à 6 chiffres.",
     "CHALLENGE_VERIFY_FAILED": "Échec de la vérification.",
     "CHALLENGE_WRONG_CODE": "Code incorrect. Veuillez réessayer.",
@@ -14435,7 +14476,7 @@
     "COL_STATUS": "Statut",
     "COL_ATTEMPTS": "Tentatives",
     "COL_REASON": "Motif",
-    "COL_LAST_ATTEMPT": "Dernière tentative",
+    "COL_LAST_ATTEMPT": "Date",
     "COL_ACTIONS": "Actions",
     "STATUS": {
       "PENDING": "En file",
@@ -14488,7 +14529,13 @@
     },
     "MAYBE_DELIVERED": "Le patient a peut-être déjà reçu ce message.",
     "RETRY_CONFIRM_TITLE": "Renvoyer ce message ?",
-    "RETRY_CONFIRM_MESSAGE": "Le fournisseur n’a pas répondu : le patient a peut-être déjà reçu ce message. Le relancer peut l’envoyer deux fois."
+    "RETRY_CONFIRM_MESSAGE": "Le fournisseur n’a pas répondu : le patient a peut-être déjà reçu ce message. Le relancer peut l’envoyer deux fois.",
+    "HIDDEN_BY_FILTER": "{{count}} autre(s) envoi(s) ne sont pas affichés par ce filtre, dont ceux « Non envoyé » par choix du patient.",
+    "SHOW_ALL": "Afficher tous les statuts",
+    "RECORDED": "Enregistré (aucune tentative)",
+    "SUBJECT_APPOINTMENT": "Rendez-vous du {{date}} à {{time}}",
+    "SUBJECT_INVOICE": "Facture {{number}}",
+    "SUBJECT_LAB_ORDER": "Demande d'examen {{number}}"
   },
   "IMAGING_PACS": {
     "STUDY_LINKED": "Étude liée",
@@ -14572,5 +14619,15 @@
       "CARD_ACTION": "Configurer le PACS",
       "BASE_URL_REQUIRED": "Saisissez l'adresse DICOMweb du PACS pour activer la visionneuse."
     }
+  },
+  "PATIENT_CHANNELS": {
+    "TITLE": "SMS et e-mails au patient",
+    "INTRO": "Ce que le patient accepte de recevoir, par type d'avis. Décochez à sa demande : l'envoi s'arrête et la page « Notifications aux patients » le montre comme « Non envoyé ».",
+    "KIND": "Type d'avis",
+    "SECURITY_NOTE": "Les messages de sécurité du compte (codes, réinitialisation du mot de passe) sont toujours envoyés.",
+    "SAVE": "Enregistrer les choix",
+    "SAVED": "Les choix du patient sont enregistrés.",
+    "SAVE_FAILED": "Les choix du patient n'ont pas pu être enregistrés.",
+    "LOAD_FAILED": "Les choix du patient n'ont pas pu être chargés."
   }
 }

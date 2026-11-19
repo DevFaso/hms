@@ -53,6 +53,11 @@ export interface PatientNotificationDelivery {
   nextAttemptAt?: string | null;
   sentAt?: string | null;
   lastRetriedAt?: string | null;
+  /** QA D2402: the invoice number or the lab order number the notice was about. */
+  subjectReference?: string | null;
+  /** QA D2402: the appointment's day (YYYY-MM-DD) and start time (HH:mm[:ss]). */
+  subjectDate?: string | null;
+  subjectTime?: string | null;
 }
 
 export interface PatientNotificationDeliveryPage {

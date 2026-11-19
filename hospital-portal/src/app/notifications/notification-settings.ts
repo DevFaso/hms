@@ -11,18 +11,10 @@ import { ToastService } from '../core/toast.service';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
-const NOTIFICATION_TYPES = [
-  'APPOINTMENT_REMINDER',
-  'LAB_RESULT',
-  'MEDICATION_REFILL',
-  'BILLING',
-  'DISCHARGE_SUMMARY',
-  'PROXY_ACCESS',
-  'SYSTEM',
-  'GENERAL',
-] as const;
-
-const CHANNELS = ['IN_APP', 'EMAIL', 'SMS', 'PUSH'] as const;
+import { NOTICE_CHANNELS, NOTICE_TYPES } from '../shared/notification-channel-choices';
+// QA D2204: only what a sender reads (shared with the desk's view of a patient).
+const NOTIFICATION_TYPES = NOTICE_TYPES;
+const CHANNELS = NOTICE_CHANNELS;
 
 interface PrefRow {
   notificationType: string;
@@ -55,6 +47,8 @@ interface PrefRow {
         </div>
       } @else {
         <p class="settings-desc">{{ 'NOTIFICATIONS.SETTINGS_DESC' | translate }}</p>
+        <!-- QA r64: account security messages are not a choice. -->
+        <p class="settings-desc">{{ 'NOTIFICATIONS.SETTINGS_SECURITY_NOTE' | translate }}</p>
 
         <div class="table-scroll">
           <table class="pref-table">
@@ -185,7 +179,7 @@ interface PrefRow {
         text-align: center !important;
         width: 100px;
       }
-      /* QA D2345 (r63): five columns fit a phone, so SMS and PUSH stay on screen. */
+      /* QA D2345 (r63): the columns fit a phone, so SMS stays on screen. */
       @media (max-width: 480px) {
         .channel-col {
           width: auto;

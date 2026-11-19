@@ -693,7 +693,12 @@
                   tabindex="-1"
                   appFocusOnRender
                 >
-                  <p>{{ 'PROFILE.MFA_REPLACE_INTRO' | translate }}</p>
+                  <p>
+                    {{
+                      (mfaRemoving() ? 'PROFILE.MFA_REMOVE_INTRO' : 'PROFILE.MFA_REPLACE_INTRO')
+                        | translate
+                    }}
+                  </p>
                   <form (ngSubmit)="submitMfaStepUp()" class="mfa-verify-form">
                     <label for="mfaStepUpCode"
                       >{{ 'PROFILE.MFA_STEPUP_LABEL' | translate }} *</label
@@ -709,8 +714,18 @@
                       class="totp-input"
                       autocomplete="one-time-code"
                     />
-                    <button class="btn-primary" type="submit" [disabled]="mfaLoading()">
-                      {{ 'PROFILE.MFA_REPLACE_CONTINUE' | translate }}
+                    <button
+                      [class]="mfaRemoving() ? 'btn-danger' : 'btn-primary'"
+                      type="submit"
+                      [disabled]="mfaLoading()"
+                      data-testid="mfa-stepup-submit"
+                    >
+                      {{
+                        (mfaRemoving()
+                          ? 'PROFILE.MFA_REMOVE_CONFIRM'
+                          : 'PROFILE.MFA_REPLACE_CONTINUE'
+                        ) | translate
+                      }}
                     </button>
                     <button class="btn-secondary" type="button" (click)="cancelMfaReplacement()">
                       {{ 'COMMON.CANCEL' | translate }}
@@ -813,17 +828,19 @@
                         {{ mfa.method === 'TOTP' ? 'key' : mfa.method === 'SMS' ? 'sms' : 'mail' }}
                       </span>
                       <div class="mfa-details">
-                        <span class="mfa-method">{{ mfa.method }}</span>
+                        <!-- QA D2403: the method in plain words, never « TOTP ». -->
+                        <span class="mfa-method">{{ mfaMethodKey(mfa.method) | translate }}</span>
                         @if (mfa.channel) {
                           <span class="mfa-dest">{{ mfa.channel }}</span>
                         }
                       </div>
                       <div class="mfa-badges">
-                        @if (mfa.lastVerifiedAt) {
-                          <span class="badge-verified">{{ 'PROFILE.VERIFIED' | translate }}</span>
+                        <!-- QA D2403: the summary's rule: active, or set-up not finished. -->
+                        @if (mfa.active) {
+                          <span class="badge-verified">{{ 'PROFILE.MFA_ACTIVE' | translate }}</span>
                         } @else {
                           <span class="badge-unverified">{{
-                            'PROFILE.UNVERIFIED' | translate
+                            'PROFILE.MFA_SETUP_UNFINISHED' | translate
                           }}</span>
                         }
                         @if (mfa.primaryFactor) {
@@ -844,6 +861,17 @@
                     <span class="material-symbols-outlined">sync_lock</span>
                     {{ 'PROFILE.MFA_REPLACE' | translate }}
                   </button>
+                  <!-- QA r64: the user can turn it off with a current code or a backup code. -->
+                  <button
+                    class="btn-secondary mfa-remove-btn"
+                    data-testid="mfa-remove"
+                    (click)="startMfaRemoval()"
+                    [disabled]="mfaLoading()"
+                  >
+                    <span class="material-symbols-outlined">phonelink_erase</span>
+                    {{ 'PROFILE.MFA_REMOVE' | translate }}
+                  </button>
+                  <p class="hint">{{ 'PROFILE.MFA_LOST_PHONE_HINT' | translate }}</p>
                 } @else {
                   <!-- No active authenticator (none confirmed, or disabled): set one up. -->
                   <button
@@ -1136,24 +1164,18 @@
                   <div class="health-item">
                     <span
                       class="health-icon"
-                      [class.good]="credentials()!.verifiedMfaCount > 0"
-                      [class.bad]="credentials()!.verifiedMfaCount === 0"
+                      [class.good]="mfaState() === 'ACTIVE'"
+                      [class.bad]="mfaState() !== 'ACTIVE'"
                     >
                       <span class="material-symbols-outlined">
-                        {{ credentials()!.verifiedMfaCount > 0 ? 'verified_user' : 'gpp_maybe' }}
+                        {{ mfaState() === 'ACTIVE' ? 'verified_user' : 'gpp_maybe' }}
                       </span>
                     </span>
                     <div>
                       <p class="health-title">{{ 'PROFILE.MFA_STATUS' | translate }}</p>
-                      <p class="health-value">
-                        {{
-                          'PROFILE.MFA_COUNTS'
-                            | translate
-                              : {
-                                  enrolled: credentials()!.mfaEnrolledCount,
-                                  verified: credentials()!.verifiedMfaCount,
-                                }
-                        }}
+                      <!-- QA D2403: one status, by the list's rule (no « 0 inscrit(s) » beside a listed row). -->
+                      <p class="health-value" data-testid="mfa-state">
+                        {{ 'PROFILE.MFA_STATE_' + mfaState() | translate }}
                       </p>
                     </div>
                   </div>

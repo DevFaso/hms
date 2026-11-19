@@ -632,7 +632,25 @@
                             </div>
                           }
                         </td>
-                        <td class="amount">{{ formatCurrency(it.totalPrice) }}</td>
+                        <td class="amount">
+                          {{ formatCurrency(it.totalPrice) }}
+                          <!-- QA D2434 / D2437: each line's insurer and patient parts. -->
+                          @if (lineSharesShown()) {
+                            <div class="cell-secondary" [attr.data-testid]="'line-shares-' + it.id">
+                              {{
+                                (it.payerShareEstimated
+                                  ? 'BILLING.LINE_SHARES_ESTIMATED'
+                                  : 'BILLING.LINE_SHARES'
+                                )
+                                  | translate
+                                    : {
+                                        payer: formatCurrency(it.payerShareAmount ?? 0),
+                                        patient: formatCurrency(it.patientShareAmount ?? 0),
+                                      }
+                              }}
+                            </div>
+                          }
+                        </td>
                         @if (canDelete || canEditLines(inv)) {
                           <td class="line-actions">
                             @if (canEditLines(inv)) {

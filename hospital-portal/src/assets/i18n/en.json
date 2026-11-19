@@ -2078,7 +2078,11 @@
       "PAYER_TERMS_ADDED": "Rate and ceilings {{terms}} added to plan {{plan}}, effective {{from}}; closed: [{{closed}}]; replaced: [{{replaced}}]",
       "PAYER_SHARE_EVENT": "{{what}}: share {{share}} on invoice {{invoice}}",
       "PACS_SETTINGS_CHANGED": "PACS connection settings changed",
-      "IMAGING_STUDY_VIEWED": "Imaging study opened in the viewer ({{count}} images)"
+      "IMAGING_STUDY_VIEWED": "Imaging study opened in the viewer ({{count}} images)",
+      "MFA_RESET_BY_ADMIN": "Two-step verification reset by an administrator: {{reason}}",
+      "MFA_RESET_REFUSED": "Two-step verification reset refused: the caller may not administer this account",
+      "MFA_REMOVED_BY_USER": "Two-step verification removed by the user",
+      "PATIENT_CHANNEL_CHOICES": "Patient channel choices recorded at the desk: {{changes}}"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -2743,7 +2747,7 @@
     },
     "PAYERS": {
       "TITLE": "Payers",
-      "SUBTITLE": "The mutuelles, insurers, employers and programmes that pay a share of a visit, with their plans and coverage rules. Nothing is applied to an invoice yet.",
+      "SUBTITLE": "The mutuelles, insurers, employers and programmes that pay a share of a visit, with their plans and coverage rules. The plan in force on the invoice date is applied when the invoice is issued.",
       "BACK_TO_BILLING": "Back to billing",
       "NEW_PAYER": "New payer",
       "EDIT": "Edit the payer",
@@ -2839,8 +2843,13 @@
       "NO_CARD_NUMBER": "This looks like a card number: e-Keneya never records card details.",
       "DECIDED_TOAST": "The insurer's decision is recorded.",
       "FAILED": "The insurer's decision could not be recorded.",
-      "LOAD_FAILED": "The insurer's shares could not be loaded."
-    }
+      "LOAD_FAILED": "The insurer's shares could not be loaded.",
+      "PAYER_SHARE_ESTIMATED": "Insurer's share (estimate)",
+      "PATIENT_SHARE_ESTIMATED": "Patient's share (estimate)",
+      "ESTIMATE_NOTE": "Estimate from the patient's plan: the insurer's share is fixed when the invoice is issued."
+    },
+    "LINE_SHARES": "Insurer: {{payer}} · Patient: {{patient}}",
+    "LINE_SHARES_ESTIMATED": "Estimate — Insurer: {{payer}} · Patient: {{patient}}"
   },
   "CHAT": {
     "ACCESS_DENIED": "You do not have permission to access chat.",
@@ -5092,7 +5101,8 @@
     "TYPE_SYSTEM": "System",
     "UNREAD": "Unread",
     "UNREAD_COUNT": "{{count}} unread notifications",
-    "VIEW_ALL": "View all"
+    "VIEW_ALL": "View all",
+    "SETTINGS_SECURITY_NOTE": "Your account's security messages (password reset, verification codes) are always sent, whatever you choose here."
   },
   "NURSE": {
     "OVERSIGHT": {
@@ -7423,7 +7433,9 @@
         "PATIENT_COVERAGE_PLAN_LINKED": "Patient coverage linked to a plan",
         "PAYER_SHARE_APPLIED": "Insurer share applied to an invoice",
         "PAYER_SHARE_DECIDED": "Insurer's decision on its share recorded",
-        "PAYER_SHARE_CANCELLED": "Insurer share cancelled"
+        "PAYER_SHARE_CANCELLED": "Insurer share cancelled",
+        "MFA_RESET": "Two-step verification reset",
+        "PATIENT_CHANNEL_PREFERENCES_UPDATED": "Patient SMS / e-mail choices changed"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -8533,7 +8545,7 @@
     "ACTIVITY": "Activity",
     "ACTIVITY_HINT": "Recent account activity",
     "ADD_CONTACT": "Add Contact",
-    "ADD_MFA_HINT": "Add multi-factor authentication for enhanced security",
+    "ADD_MFA_HINT": "Add two-step verification to better protect your account",
     "ADD_RECOVERY_CONTACT": "Add Recovery Contact",
     "ADD_RECOVERY_HINT": "Add a recovery contact for account recovery",
     "AGE_DAY": "{{count}} day",
@@ -8594,16 +8606,16 @@
     "LOADING_ACTIVITY": "Loading activity...",
     "LOAD_FAILED": "Unable to load profile. Please log in again.",
     "MEMBER_SINCE": "Member Since",
-    "MFA": "MFA",
+    "MFA": "Two-step verification",
     "MFA_CODE_LENGTH": "Please enter a valid 6-digit code.",
     "MFA_CODE_REJECTED": "Invalid code. Please try again.",
-    "MFA_ENROLLED": "MFA enrolled successfully!",
-    "MFA_ENROLL_FAILED": "Failed to start MFA enrollment.",
+    "MFA_ENROLLED": "Two-step verification is on!",
+    "MFA_ENROLL_FAILED": "Two-step verification set-up could not start.",
     "MFA_ENTER_CODE": "Enter the 6-digit code from your authenticator app to verify:",
     "MFA_MANUAL_SECRET": "Or enter this secret manually:",
-    "MFA_QR_ALT": "TOTP QR Code",
+    "MFA_QR_ALT": "QR code for your authenticator app",
     "MFA_SCAN_QR": "Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.):",
-    "MFA_STATUS": "MFA Status",
+    "MFA_STATUS": "Two-step verification",
     "MIN_CHARS": "Minimum 8 characters",
     "NEVER": "Never",
     "NEW_PASSWORD": "New Password",
@@ -8611,7 +8623,7 @@
     "NOTIFICATIONS_TAB": "Notifications",
     "NO_ACTIVITY": "No recent activity",
     "NO_EMAIL_ON_FILE": "No email address on file.",
-    "NO_MFA": "No MFA configured",
+    "NO_MFA": "Two-step verification is not set up",
     "NO_RECOVERY_CONTACTS": "No recovery contacts",
     "OLD_PASSWORD": "Old Password",
     "OVERVIEW": "Overview",
@@ -8723,7 +8735,7 @@
     "MFA_SET_UP": "Set up an authenticator app",
     "MFA_COUNTS": "{{enrolled}} enrolled, {{verified}} verified",
     "RECOVERY_COUNTS": "{{configured}} configured, {{verified}} verified",
-    "SET_UP_TOTP": "Set Up TOTP",
+    "SET_UP_TOTP": "Set up an authenticator app",
     "CHANGE_PASSWORD_DESC": "Enter your current password, then choose a new one of at least 8 characters.",
     "PASSWORD_TOO_SHORT": "The new password must be at least 8 characters.",
     "PASSWORD_SAME_AS_CURRENT": "The new password must differ from the current one.",
@@ -8735,7 +8747,23 @@
     "SAVE_NEW_PASSWORD": "Save new password",
     "FORGOT_PASSWORD_DESC": "Forgot your current password? We can email you a reset link.",
     "FORGOT_PASSWORD_DESC_SMS": "Forgot your current password? We can text you a reset link.",
-    "EMAIL_CANNOT_CLEAR": "An account keeps its e-mail address: enter a new address, or keep the current one."
+    "EMAIL_CANNOT_CLEAR": "An account keeps its e-mail address: enter a new address, or keep the current one.",
+    "MFA_METHOD_TOTP": "Authenticator app",
+    "MFA_METHOD_SMS": "Code by SMS",
+    "MFA_METHOD_EMAIL": "Code by e-mail",
+    "MFA_METHOD_OTHER": "Other method",
+    "MFA_ACTIVE": "Active",
+    "MFA_SETUP_UNFINISHED": "Set-up not finished",
+    "MFA_STATE_ACTIVE": "On",
+    "MFA_STATE_PENDING": "Set-up not finished",
+    "MFA_STATE_OFF": "Off",
+    "MFA_REMOVE": "Turn off two-step verification",
+    "MFA_REMOVE_INTRO": "To remove your authenticator app, enter a current code from it, or one of your unused backup codes. If your role requires it, you will set up a new one at your next sign-in.",
+    "MFA_REMOVE_CONFIRM": "Turn off",
+    "MFA_REMOVED": "Two-step verification was turned off on your account.",
+    "MFA_REMOVE_FAILED": "Two-step verification could not be turned off. Try again.",
+    "MFA_LOST_PHONE_HINT": "Lost your phone and have no backup codes left? Ask your facility's administrator to reset your two-step verification.",
+    "MFA_REMOVE_ASK": "Your account will no longer ask for a code at sign-in, unless your role requires it. Continue?"
   },
   "RECEPTION": {
     "BOOK_RECALL": "Book",
@@ -9489,7 +9517,7 @@
     "PAGE_TITLE": "Settings",
     "PRIVACY_DESC": "Read how your data is collected, used, and protected.",
     "PRIVACY_TITLE": "Privacy",
-    "SECURITY_DESC": "Change your password, manage MFA, and review recovery contacts.",
+    "SECURITY_DESC": "Change your password, manage two-step verification, and review recovery contacts.",
     "SECURITY_TITLE": "Security & Sign-in"
   },
   "SHELL": {
@@ -9854,7 +9882,20 @@
     "USERS_PLURAL": "Users",
     "USER_SINGULAR": "User",
     "ROLES_EDIT_HINT": "Roles are granted and retired per hospital from the role assignments page.",
-    "STAFF_FIELDS_EDIT_HINT": "Hospital, job title, employment type, specialization and licence are those registered for this staff member. They are changed from the staff record, not here."
+    "STAFF_FIELDS_EDIT_HINT": "Hospital, job title, employment type, specialization and licence are those registered for this staff member. They are changed from the staff record, not here.",
+    "MFA_RESET": {
+      "ACTION": "Reset two-step verification",
+      "TITLE": "Reset two-step verification",
+      "INTRO": "{{name}}'s authenticator app and backup codes will be erased. If their role requires it, they will set up a new one at their next sign-in. Do this only after checking who they are.",
+      "REASON": "Reason",
+      "REASON_PLACEHOLDER": "e.g. Lost phone, identity checked in person",
+      "REASON_REQUIRED": "Give the reason for the reset (at least 5 characters).",
+      "CODE": "Your verification code",
+      "CODE_HINT": "A current code from your own authenticator app, or one of your backup codes, if two-step verification is on for your account.",
+      "CONFIRM": "Reset",
+      "DONE": "Two-step verification was reset.",
+      "FAILED": "Two-step verification could not be reset."
+    }
   },
   "TRIAGE": {
     "ACUITY": "Acuity Level",
@@ -13571,15 +13612,15 @@
     "ENROLL_COPY_CODES": "Copy Codes",
     "ENROLL_DONE": "Done — Go to Login",
     "ENROLL_ENTER_CODE": "Enter the 6-digit code from your authenticator app to verify enrollment:",
-    "ENROLL_INTRO": "Your account requires multi-factor authentication. Set up a TOTP authenticator app (e.g. Google Authenticator, Authy) to secure your account.",
-    "ENROLL_QR_ALT": "TOTP QR Code",
+    "ENROLL_INTRO": "Your account requires two-step verification. Set up an authenticator app (e.g. Google Authenticator, Authy) to secure your account.",
+    "ENROLL_QR_ALT": "QR code for your authenticator app",
     "ENROLL_SCAN_QR": "Scan this QR code with your authenticator app:",
     "ENROLL_SECRET_MANUAL": "Or enter this secret manually:",
     "ENROLL_STARTING": "Setting up…",
-    "ENROLL_TITLE": "Multi-Factor Authentication",
+    "ENROLL_TITLE": "Two-step verification",
     "ENROLL_VERIFY": "Verify",
     "ENROLL_VERIFYING": "Verifying…",
-    "CHALLENGE_INVALID_CODE": "Enter a valid code (6-digit TOTP or 8-character backup code).",
+    "CHALLENGE_INVALID_CODE": "Enter a valid code (6 digits from your authenticator app, or an 8-character backup code).",
     "ENROLL_INVALID_CODE": "Please enter a valid 6-digit code.",
     "CHALLENGE_VERIFY_FAILED": "Verification failed.",
     "CHALLENGE_WRONG_CODE": "Invalid code. Please try again.",
@@ -14435,7 +14476,7 @@
     "COL_STATUS": "Status",
     "COL_ATTEMPTS": "Attempts",
     "COL_REASON": "Reason",
-    "COL_LAST_ATTEMPT": "Last attempt",
+    "COL_LAST_ATTEMPT": "Date",
     "COL_ACTIONS": "Actions",
     "STATUS": {
       "PENDING": "Queued",
@@ -14488,7 +14529,13 @@
     },
     "MAYBE_DELIVERED": "The patient may already have received this message.",
     "RETRY_CONFIRM_TITLE": "Send this message again?",
-    "RETRY_CONFIRM_MESSAGE": "The provider gave no answer, so the patient may already have received this message. Retrying can send it twice."
+    "RETRY_CONFIRM_MESSAGE": "The provider gave no answer, so the patient may already have received this message. Retrying can send it twice.",
+    "HIDDEN_BY_FILTER": "{{count}} other send(s) are not shown by this filter, including those « Not sent » by the patient's choice.",
+    "SHOW_ALL": "Show every status",
+    "RECORDED": "Recorded (no attempt)",
+    "SUBJECT_APPOINTMENT": "Appointment on {{date}} at {{time}}",
+    "SUBJECT_INVOICE": "Invoice {{number}}",
+    "SUBJECT_LAB_ORDER": "Lab order {{number}}"
   },
   "IMAGING_PACS": {
     "STUDY_LINKED": "Study linked",
@@ -14572,5 +14619,15 @@
       "CARD_ACTION": "Configure the PACS",
       "BASE_URL_REQUIRED": "Enter the PACS DICOMweb address to switch the viewer on."
     }
+  },
+  "PATIENT_CHANNELS": {
+    "TITLE": "Texts and e-mails to the patient",
+    "INTRO": "What the patient agrees to receive, by kind of notice. Untick at their request: the send stops and « Patient notifications » shows it as « Not sent ».",
+    "KIND": "Kind of notice",
+    "SECURITY_NOTE": "Account security messages (codes, password reset) are always sent.",
+    "SAVE": "Save the choices",
+    "SAVED": "The patient's choices are saved.",
+    "SAVE_FAILED": "The patient's choices could not be saved.",
+    "LOAD_FAILED": "The patient's choices could not be loaded."
   }
 }
