@@ -3765,6 +3765,20 @@
     </changeSet>
 
     <!-- =================================================================
+         V310 (billing-money plan PR 11, scorecard M2, QA D2430): payment
+         idempotency. client_request_id on billing.payment_transactions,
+         billing.pharmacy_payments and clinical.pharmacy_sales, unique per
+         hospital when present; payment_transactions gains hospital_id,
+         backfilled from its invoice. Plain idempotent DDL, no DO block.
+         ================================================================= -->
+    <changeSet id="V310-payment-client-request-id" author="hms-team" runOnChange="false">
+        <sqlFile path="V310__payment_client_request_id.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
          V313: a key image withdrawn after signing, with its reason, and
          the last caption correction (QA D2464 / D2466, r64). Number
          pre-allocated to wave 1; registered after V317. Additive: five

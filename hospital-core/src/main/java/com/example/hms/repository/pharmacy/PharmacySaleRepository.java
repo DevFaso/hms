@@ -32,4 +32,7 @@ public interface PharmacySaleRepository extends JpaRepository<PharmacySale, UUID
            """)
     boolean existsLiveReference(@org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
                                 @org.springframework.data.repository.query.Param("reference") String reference);
+
+    /** Billing plan PR 11 (QA D2430): the counter sale a client request key already recorded at this hospital. */
+    java.util.Optional<PharmacySale> findByHospital_IdAndClientRequestId(UUID hospitalId, UUID clientRequestId);
 }
