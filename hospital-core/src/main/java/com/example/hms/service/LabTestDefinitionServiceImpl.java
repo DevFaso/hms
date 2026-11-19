@@ -76,6 +76,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
     @Override
     public LabTestDefinitionResponseDTO create(LabTestDefinitionRequestDTO dto) {
         requireOrderedRanges(dto.getReferenceRanges(), REFERENCE_RANGES_FIELD);
+        requireValidComponents(dto.getComponents());
         String username = SecurityUtils.getCurrentUsername();
         if (username == null) {
             throw new AccessDeniedException("Unauthenticated access to lab test creation");
@@ -186,6 +187,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             .expectedResult(current.getExpectedResult())
             .pointOfCare(current.isPointOfCare())
             .referenceRanges(copyRanges(current.getReferenceRanges()))
+            .components(copyComponents(current.getComponents()))
             .assignment(current.getAssignment())
             .hospital(current.getHospital())
             // A DRAFT, not orderable, through the same four-eyes approval.
@@ -204,6 +206,64 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
     }
 
     /** QA D1120: the ranges as independent copies, every field kept, so editing the draft never touches the live ones. */
+    /** r63: a new version carries its own copy of the panel's components and their ranges. */
+    private static List<com.example.hms.model.LabTestComponent> copyComponents(
+            List<com.example.hms.model.LabTestComponent> components) {
+        List<com.example.hms.model.LabTestComponent> copies = new java.util.ArrayList<>();
+        if (components != null) {
+            components.stream().filter(Objects::nonNull).forEach(component -> copies.add(
+                component.toBuilder().referenceRanges(copyRanges(component.getReferenceRanges())).build()));
+        }
+        return copies;
+    }
+
+    /**
+     * r63 (NFS panels): each component's ranges obey the rules a test's own
+     * ranges do, and two components of one panel never share a code.
+     */
+    static void requireValidComponents(List<com.example.hms.payload.dto.LabTestComponentDTO> components) {
+        if (components == null) {
+            return;
+        }
+        java.util.Set<String> codes = new java.util.HashSet<>();
+        for (int i = 0; i < components.size(); i++) {
+            com.example.hms.payload.dto.LabTestComponentDTO component = components.get(i);
+            if (component == null) {
+                continue;
+            }
+            String field = "components[" + i + "]";
+            if (component.getCode() == null || component.getCode().isBlank()) {
+                throw new com.example.hms.exception.FieldBusinessException(field + ".code", "lab.component.codeRequired");
+            }
+            if (component.getName() == null || component.getName().isBlank()) {
+                throw new com.example.hms.exception.FieldBusinessException(field + ".name", "lab.component.nameRequired");
+            }
+            if (!codes.add(component.getCode().trim().toUpperCase(java.util.Locale.ROOT))) {
+                throw new com.example.hms.exception.FieldBusinessException(field + ".code", "lab.component.duplicateCode",
+                    component.getCode().trim());
+            }
+            requireOrderedRanges(component.getReferenceRanges(), field + ".referenceRanges");
+        }
+    }
+
+    /**
+     * r63: a panel's components carry reference ranges, so they lock with the
+     * test's own ranges (QA D159) once the definition is under review.
+     */
+    private void assertComponentsEditable(LabTestDefinition definition,
+                                          List<com.example.hms.model.LabTestComponent> proposed) {
+        if (!RANGES_LOCKED.contains(definition.getApprovalStatus())) {
+            return;
+        }
+        List<com.example.hms.model.LabTestComponent> current = definition.getComponents() == null
+            ? List.of() : definition.getComponents();
+        List<com.example.hms.model.LabTestComponent> next = proposed == null ? List.of() : proposed;
+        if (!current.equals(next)) {
+            throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw(
+                "lab.definition.rangesLocked", statusLabel(definition.getApprovalStatus())));
+        }
+    }
+
     private static List<com.example.hms.model.LabTestReferenceRange> copyRanges(
             List<com.example.hms.model.LabTestReferenceRange> ranges) {
         List<com.example.hms.model.LabTestReferenceRange> copies = new java.util.ArrayList<>();
@@ -284,6 +344,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
     @Override
     public LabTestDefinitionResponseDTO update(UUID id, LabTestDefinitionRequestDTO dto) {
         requireOrderedRanges(dto.getReferenceRanges(), REFERENCE_RANGES_FIELD);
+        requireValidComponents(dto.getComponents());
         String username = SecurityUtils.getCurrentUsername();
         if (username == null) {
             throw new AccessDeniedException("Unauthenticated access to lab test update");
@@ -302,6 +363,9 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         applyAssignmentChange(dto, existing, currentUser);
         if (dto.getReferenceRanges() != null) {
             assertRangesEditable(existing, mapper.mapRangeDtosToEntities(dto.getReferenceRanges()));
+        }
+        if (dto.getComponents() != null) {
+            assertComponentsEditable(existing, mapper.mapComponentDtosToEntities(dto.getComponents()));
         }
         assertClinicalFieldsEditable(existing, dto);
         // QA D1120: a version keeps the code of the test it replaces; any

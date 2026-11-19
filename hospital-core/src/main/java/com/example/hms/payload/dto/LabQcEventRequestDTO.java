@@ -28,8 +28,23 @@ public class LabQcEventRequestDTO {
 
     @jakarta.validation.constraints.NotNull(message = "{lab.qc.measuredRequired}")
     private BigDecimal measuredValue;
-    @jakarta.validation.constraints.NotNull(message = "{lab.qc.expectedRequired}")
+    /**
+     * The control's expected value. r63 D2304: optional when the director set a
+     * target for this test and level (the target mean is used); required otherwise.
+     */
     private BigDecimal expectedValue;
+
+    /** r63 D2304: the control material's lot number. */
+    @jakarta.validation.constraints.Size(max = 100)
+    private String lotNumber;
+
+    /**
+     * r63 D2304: the operator's decision on the run. True accepts it, false
+     * rejects it (results for the test are then held until a passing run or a
+     * documented override). Null keeps the legacy +/-10% computation for API
+     * callers that predate the decision.
+     */
+    private Boolean accepted;
 
     /** Optional timestamp; defaults to now if absent. */
     private LocalDateTime recordedAt;

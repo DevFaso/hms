@@ -1,7 +1,9 @@
 package com.example.hms.mapper;
 
 import com.example.hms.model.LabTestDefinition;
+import com.example.hms.model.LabTestComponent;
 import com.example.hms.model.LabTestReferenceRange;
+import com.example.hms.payload.dto.LabTestComponentDTO;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.LabTestDefinitionRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionResponseDTO;
@@ -39,6 +41,7 @@ public class LabTestDefinitionMapper {
             .active(false)
             .assignment(assignment)
             .referenceRanges(mapRangeDtosToEntities(dto.getReferenceRanges()))
+            .components(mapComponentDtosToEntities(dto.getComponents()))
             .build();
     }
 
@@ -72,6 +75,7 @@ public class LabTestDefinitionMapper {
                 .supersedesDefinitionId(entity.getSupersedesDefinitionId())
                 .versionNumber(entity.getVersionNumber() != null ? entity.getVersionNumber() : 1)
                 .referenceRanges(mapToDtoRanges(entity.getReferenceRanges()))
+                .components(mapToDtoComponents(entity.getComponents()))
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();
@@ -99,6 +103,9 @@ public class LabTestDefinitionMapper {
         }
         if (dto.getReferenceRanges() != null) {
             entity.setReferenceRanges(mapRangeDtosToEntities(dto.getReferenceRanges()));
+        }
+        if (dto.getComponents() != null) {
+            entity.setComponents(mapComponentDtosToEntities(dto.getComponents()));
         }
     }
 
@@ -146,6 +153,38 @@ public class LabTestDefinitionMapper {
                 .criticalHigh(range.getCriticalHigh())
                 .ageUnit(range.getAgeUnit())
                 .source(range.getSource())
+                .build())
+            .collect(Collectors.toCollection(java.util.ArrayList::new));
+    }
+
+    /** r63 (NFS panels): codes are trimmed and upper-cased so a result names them unambiguously. */
+    public List<LabTestComponent> mapComponentDtosToEntities(List<LabTestComponentDTO> components) {
+        if (components == null || components.isEmpty()) {
+            return new java.util.ArrayList<>();
+        }
+        return components.stream()
+            .filter(Objects::nonNull)
+            .map(component -> LabTestComponent.builder()
+                .code(component.getCode() == null ? null
+                    : component.getCode().trim().toUpperCase(java.util.Locale.ROOT))
+                .name(component.getName() == null ? null : component.getName().trim())
+                .unit(component.getUnit() == null || component.getUnit().isBlank() ? null : component.getUnit().trim())
+                .referenceRanges(mapRangeDtosToEntities(component.getReferenceRanges()))
+                .build())
+            .collect(Collectors.toCollection(java.util.ArrayList::new));
+    }
+
+    private List<LabTestComponentDTO> mapToDtoComponents(List<LabTestComponent> components) {
+        if (components == null || components.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return components.stream()
+            .filter(Objects::nonNull)
+            .map(component -> LabTestComponentDTO.builder()
+                .code(component.getCode())
+                .name(component.getName())
+                .unit(component.getUnit())
+                .referenceRanges(mapToDtoRanges(component.getReferenceRanges()))
                 .build())
             .collect(Collectors.toCollection(java.util.ArrayList::new));
     }

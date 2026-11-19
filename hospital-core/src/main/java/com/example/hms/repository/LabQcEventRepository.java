@@ -21,6 +21,16 @@ public interface LabQcEventRepository extends JpaRepository<LabQcEvent, UUID> {
     Page<LabQcEvent> findByTestDefinitionIdAndHospitalId(UUID testDefinitionId, UUID hospitalId, Pageable pageable);
 
     /**
+     * r63 D2304: the latest run of one test at one control level at a
+     * hospital: the run the release gate reads.
+     */
+    java.util.Optional<LabQcEvent> findFirstByHospitalIdAndTestDefinition_IdAndQcLevelOrderByRecordedAtDescCreatedAtDesc(
+        UUID hospitalId, UUID testDefinitionId, com.example.hms.enums.LabQcEventLevel qcLevel);
+
+    /** r63: a single event, only at the caller's hospital. */
+    java.util.Optional<LabQcEvent> findByIdAndHospitalId(UUID id, UUID hospitalId);
+
+    /**
      * Aggregated QC stats per test definition for a given hospital.
      * Returns: [testDefinitionId, testName, totalEvents, passedEvents, failedEvents, lastEventDate]
      */

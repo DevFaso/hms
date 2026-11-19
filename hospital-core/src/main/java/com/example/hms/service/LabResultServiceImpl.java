@@ -111,6 +111,8 @@ public class LabResultServiceImpl implements LabResultService {
     private final InBasketService inBasketService;
     /** QA D938 / D931: the patient's and the clinician's notice of a release or a correction. */
     private final com.example.hms.service.lab.LabResultReleaseNotifier releaseNotifier;
+    /** r63 D2304: no release while the test's latest QC run is rejected, without a documented override. */
+    private final LabQcReleaseGate qcReleaseGate;
 
     /**
      * Whether a normal-range result is released the moment it is saved, with
@@ -232,9 +234,14 @@ public class LabResultServiceImpl implements LabResultService {
         // controller annotation — the annotation runs before the order and
         // its test are loaded.
         labResultEntryGuard.requireMayEnterResult(labOrder.getLabTestDefinition());
+        java.util.List<com.example.hms.model.LabResultComponent> panelValues = null;
         if (!ingested) {
-            checkInteractiveEntry(request, labOrder);
+            panelValues = checkInteractiveEntry(request, labOrder);
+        } else {
+            // r63: components are entered by a person; an analyzer sends one OBX per analyte.
+            request.setComponents(null);
         }
+        requireResultValue(request, panelValues);
 
     UUID currentUserId = authService.getCurrentUserId();
     // Never skipped, including for an unscoped ingest caller. It used to be,
@@ -343,6 +350,12 @@ public class LabResultServiceImpl implements LabResultService {
             result.setAbnormalFlag(LabResultValueRules.flagFor(result.getResultValue(), null, result.getAbnormalFlag()));
             // QA D1095: units come from the test definition; a blank one is the definition's.
             result.setResultUnit(LabResultMapper.unitOrTestUnit(result.getResultUnit(), labOrder.getLabTestDefinition()));
+            if (panelValues != null) {
+                // r63: a panel's values are its components; the summary line carries no unit or flag of its own.
+                result.setComponents(panelValues);
+                result.setResultUnit(null);
+                result.setAbnormalFlag(null);
+            }
         }
         if (superseded != null) {
             result.setSupersedesResultId(superseded.getId());
@@ -879,23 +892,34 @@ public class LabResultServiceImpl implements LabResultService {
             throw new ResourceNotFoundException("laborder.notfound");
         }
         request.setResultDate(plausibleResultDate(request.getResultDate(), labOrder));
-        request.setResultValue(LabResultValueRules.normalizeDecimalComma(request.getResultValue()));
-        LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
-        // QA D1095: as on entry, a blank unit is the test definition's.
-        request.setResultUnit(LabResultMapper.unitOrTestUnit(request.getResultUnit(), labOrder.getLabTestDefinition()));
+        // r63: a panel's values are checked per component and summarised; a single value as before.
+        java.util.List<com.example.hms.model.LabResultComponent> panelValues =
+            LabPanelEntry.componentsFor(request, labOrder.getLabTestDefinition());
+        if (panelValues == null) {
+            request.setResultValue(LabResultValueRules.normalizeDecimalComma(request.getResultValue()));
+            LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
+            // QA D1095: as on entry, a blank unit is the test definition's.
+            request.setResultUnit(LabResultMapper.unitOrTestUnit(request.getResultUnit(), labOrder.getLabTestDefinition()));
+        }
+        requireResultValue(request, panelValues);
     UUID currentUserId = authService.getCurrentUserId();
     validateLabResultAuthor(currentUserId, authorityHospitalId(labOrder, hospital, activeHospitalId));
 
         UserRoleHospitalAssignment assignment =
             requireAssignmentAtActingHospital(request.getAssignmentId(), activeHospitalId);
 
+        java.util.List<com.example.hms.model.LabResultComponent> newComponents =
+            panelValues != null ? panelValues : new java.util.ArrayList<>();
         boolean valueChanged = !Objects.equals(labResult.getResultValue(), request.getResultValue())
             || !Objects.equals(labResult.getResultUnit(), request.getResultUnit())
+            || !Objects.equals(labResult.getComponents() == null ? java.util.List.of() : labResult.getComponents(),
+                newComponents)
             || labResult.getLabOrder() == null
             || !Objects.equals(labResult.getLabOrder().getId(), labOrder.getId());
 
-        labResult.setAbnormalFlag(LabResultValueRules.flagFor(
+        labResult.setAbnormalFlag(panelValues != null ? null : LabResultValueRules.flagFor(
             request.getResultValue(), labResult.getResultValue(), labResult.getAbnormalFlag()));
+        labResult.setComponents(newComponents);
         labResult.setLabOrder(labOrder);
         labResult.setResultValue(request.getResultValue());
         labResult.setResultUnit(request.getResultUnit());
@@ -1051,12 +1075,30 @@ public class LabResultServiceImpl implements LabResultService {
         }
     }
 
-    /** A hand-entered result: the order's patient, a plausible date and a valid value. */
-    private void checkInteractiveEntry(LabResultRequestDTO request, LabOrder labOrder) {
+    /**
+     * A hand-entered result: the order's patient, a plausible date and a valid
+     * value. r63: for a panel test, valid component values; they are returned
+     * (null for a single-value test) and the request's value becomes their summary.
+     */
+    private java.util.List<com.example.hms.model.LabResultComponent> checkInteractiveEntry(
+            LabResultRequestDTO request, LabOrder labOrder) {
         requireOrderPatient(request.getPatientId(), labOrder);
         request.setResultDate(plausibleResultDate(request.getResultDate(), labOrder));
-        request.setResultValue(LabResultValueRules.normalizeDecimalComma(request.getResultValue()));
-        LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
+        java.util.List<com.example.hms.model.LabResultComponent> panelValues =
+            LabPanelEntry.componentsFor(request, labOrder.getLabTestDefinition());
+        if (panelValues == null) {
+            request.setResultValue(LabResultValueRules.normalizeDecimalComma(request.getResultValue()));
+            LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
+        }
+        return panelValues;
+    }
+
+    /** r63: a single value is required once it is no longer a bean constraint (a panel composes its own). */
+    private static void requireResultValue(LabResultRequestDTO request,
+                                           java.util.List<com.example.hms.model.LabResultComponent> panelValues) {
+        if (panelValues == null && (request.getResultValue() == null || request.getResultValue().isBlank())) {
+            throw new com.example.hms.exception.FieldBusinessException("resultValue", "lab.result.value.required");
+        }
     }
 
     /** QA D708: a patient id that is not the order's patient is a wrong request, not a detail to drop. */
@@ -1422,24 +1464,33 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional
     public LabResultResponseDTO releaseLabResult(UUID id, Locale locale) {
-        return doReleaseLabResult(id, false, false);
+        return doReleaseLabResult(id, false, false, null);
     }
 
     @Override
     @Transactional
     public LabResultResponseDTO releaseLabResult(UUID id, boolean selfReleaseConfirmed, Locale locale) {
-        return doReleaseLabResult(id, selfReleaseConfirmed, false);
+        return doReleaseLabResult(id, selfReleaseConfirmed, false, null);
     }
 
     @Override
     @Transactional
     public LabResultResponseDTO releaseLabResult(UUID id, boolean selfReleaseConfirmed, boolean ungradedConfirmed,
                                                  Locale locale) {
-        return doReleaseLabResult(id, selfReleaseConfirmed, ungradedConfirmed);
+        return doReleaseLabResult(id, selfReleaseConfirmed, ungradedConfirmed, null);
+    }
+
+    @Override
+    @Transactional
+    public LabResultResponseDTO releaseLabResult(UUID id, boolean selfReleaseConfirmed, boolean ungradedConfirmed,
+                                                 com.example.hms.payload.dto.LabResultReleaseRequestDTO release,
+                                                 Locale locale) {
+        return doReleaseLabResult(id, selfReleaseConfirmed, ungradedConfirmed, release);
     }
 
     /** The release itself; every public entry point runs it in its own transaction. */
-    private LabResultResponseDTO doReleaseLabResult(UUID id, boolean selfReleaseConfirmed, boolean ungradedConfirmed) {
+    private LabResultResponseDTO doReleaseLabResult(UUID id, boolean selfReleaseConfirmed, boolean ungradedConfirmed,
+                                                    com.example.hms.payload.dto.LabResultReleaseRequestDTO release) {
         LabResult labResult = labResultRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
         // Release was the one write path here without the scope comparison
@@ -1495,6 +1546,10 @@ public class LabResultServiceImpl implements LabResultService {
             }
         }
 
+        // r63 D2304 / D2305: what this release must document, checked before anything is written.
+        documentQcOverride(labResult, release, actorId);
+        documentCriticalCommunication(labResult, release, actorId, hospitalId);
+
         LabResult superseded = null;
         if (labResult.getSupersedesResultId() != null) {
             LabOrder lockedOrder = labOrderRepository.findWithLockById(labResult.getLabOrder().getId())
@@ -1522,6 +1577,65 @@ public class LabResultServiceImpl implements LabResultService {
         enqueueReleasedObservationAfterCommit(labResult);
         announceRelease(labResult, superseded);
         return labResultMapper.toResponseDTO(labResult);
+    }
+
+    /**
+     * r63 D2304: while the test's latest QC run (any control level) is
+     * rejected at the running laboratory, a result is released only with a
+     * documented reason, stamped on the result with who, when and which run.
+     */
+    private void documentQcOverride(LabResult labResult,
+                                    com.example.hms.payload.dto.LabResultReleaseRequestDTO release, UUID actorId) {
+        java.util.Optional<com.example.hms.model.LabQcEvent> blocking = qcReleaseGate.blockingRun(labResult.getLabOrder());
+        if (blocking.isEmpty()) {
+            return;
+        }
+        String reason = release != null && release.getQcOverrideReason() != null
+            ? release.getQcOverrideReason().trim() : "";
+        if (reason.isEmpty()) {
+            LabTestDefinition test = labResult.getLabOrder().getLabTestDefinition();
+            throw new com.example.hms.exception.FieldBusinessException("qcOverrideReason", "lab.qc.releaseBlocked",
+                test != null ? test.getName() : "");
+        }
+        labResult.setQcOverrideReason(reason);
+        labResult.setQcOverrideEventId(blocking.get().getId());
+        labResult.setQcOverrideByUserId(actorId);
+        labResult.setQcOverrideAt(LocalDateTime.now());
+    }
+
+    /**
+     * r63 D2305: releasing a CRITICAL result records the laboratory's call:
+     * who was told, when, and the value they read back. All three are
+     * required, named in one refusal. This is the laboratory's record; the
+     * clinician's acknowledgement and the escalation sweep (C5) are unchanged.
+     */
+    private void documentCriticalCommunication(LabResult labResult,
+                                               com.example.hms.payload.dto.LabResultReleaseRequestDTO release,
+                                               UUID actorId, UUID hospitalId) {
+        if (!labResultMapper.raisesCriticalAlert(severityOf(labResult))) {
+            return;
+        }
+        String to = release != null ? trimToNull(release.getCriticalCommunicatedTo()) : null;
+        LocalDateTime at = release != null ? release.getCriticalCommunicatedAt() : null;
+        String readBack = release != null ? trimToNull(release.getCriticalReadBack()) : null;
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(to, "criticalCommunicatedTo", "lab.result.critical.communicatedToRequired")
+            .requireValue(at, "criticalCommunicatedAt", "lab.result.critical.communicatedAtRequired")
+            .requireValue(readBack, "criticalReadBack", "lab.result.critical.readBackRequired")
+            .orThrow();
+        if (at.isAfter(LocalDateTime.now().plus(RESULT_DATE_SKEW))) {
+            throw new com.example.hms.exception.FieldBusinessException("criticalCommunicatedAt",
+                "lab.result.critical.communicatedAtFuture");
+        }
+        labResult.setCriticalCommunicatedTo(to);
+        labResult.setCriticalCommunicatedAt(at);
+        labResult.setCriticalCommunicationReadBack(readBack);
+        labResult.setCriticalCommunicatedByUserId(actorId);
+        labResult.setCriticalCommunicatedByDisplay(resolveActorDisplay(actorId, hospitalId));
+    }
+
+    private static String trimToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     /**
@@ -1950,7 +2064,8 @@ public class LabResultServiceImpl implements LabResultService {
      * graded, so a person reviews it on the release worklist.
      */
     private void performAutoVerification(LabResult result, String severity) {
-        if (!autoVerificationEnabled || notGradedByAnyRange(result)) {
+        // r63 D2304: a rejected QC run holds the result for a person, who may override with a reason.
+        if (!autoVerificationEnabled || notGradedByAnyRange(result) || qcReleaseGate.isBlocked(result.getLabOrder())) {
             return;
         }
         boolean rangeSaysNormal = "NORMAL".equalsIgnoreCase(severity);

@@ -5,6 +5,7 @@ import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.LabQcEventMapper;
 import com.example.hms.model.LabQcEvent;
+import com.example.hms.model.LabQcTarget;
 import com.example.hms.model.LabTestDefinition;
 import com.example.hms.payload.dto.LabQcEventRequestDTO;
 import com.example.hms.payload.dto.LabQcEventResponseDTO;
@@ -31,6 +32,8 @@ public class LabQcEventServiceImpl implements LabQcEventService {
     private final LabTestDefinitionRepository labTestDefinitionRepository;
     private final LabQcEventMapper qcEventMapper;
     private final RoleValidator roleValidator;
+    private final com.example.hms.repository.LabQcTargetRepository qcTargetRepository;
+    private final com.example.hms.repository.UserRepository userRepository;
 
     @Override
     @Transactional
@@ -40,7 +43,6 @@ public class LabQcEventServiceImpl implements LabQcEventService {
             .requireValue(request.getHospitalId(), "hospitalId", "lab.qc.hospital.required")
             .requireValue(request.getQcLevel(), "qcLevel", "lab.qc.levelRequired")
             .requireValue(request.getMeasuredValue(), "measuredValue", "lab.qc.measuredRequired")
-            .requireValue(request.getExpectedValue(), "expectedValue", "lab.qc.expectedRequired")
             .orThrow();
 
         LabQcEventLevel level;
@@ -53,36 +55,93 @@ public class LabQcEventServiceImpl implements LabQcEventService {
         }
 
         LabTestDefinition testDef = null;
+        LabQcTarget target = null;
         if (request.getTestDefinitionId() != null) {
             testDef = labTestDefinitionRepository.findById(request.getTestDefinitionId())
                 .orElseThrow(() -> new ResourceNotFoundException("labtestdef.notfound"));
+            // r63: the test must be one this hospital can see (its own or a global
+            // definition); another hospital's definition is not found.
+            requireDefinitionVisibleAt(testDef, request.getHospitalId());
+            target = qcTargetRepository.findByHospitalIdAndTestDefinition_IdAndQcLevel(
+                request.getHospitalId(), testDef.getId(), level).orElse(null);
         }
 
-        // Auto-determine pass/fail: within 10% deviation is considered "passed"
-        double measured = request.getMeasuredValue().doubleValue();
-        double expected = request.getExpectedValue().doubleValue();
-        boolean passed = expected != 0 && Math.abs((measured - expected) / expected) <= 0.10;
+        // r63 D2304: the expected value is the director's target mean when one is set.
+        java.math.BigDecimal expectedValue = request.getExpectedValue() != null
+            ? request.getExpectedValue()
+            : (target != null ? target.getTargetMean() : null);
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(expectedValue, "expectedValue", "lab.qc.expectedRequired")
+            .orThrow();
 
+        // r63 D2304: the operator accepts or rejects the run. Without a decision
+        // (an API caller predating it) the legacy +/-10% computation stands.
+        boolean passed;
+        if (request.getAccepted() != null) {
+            passed = request.getAccepted();
+        } else {
+            double measured = request.getMeasuredValue().doubleValue();
+            double expected = expectedValue.doubleValue();
+            passed = expected != 0 && Math.abs((measured - expected) / expected) <= 0.10;
+        }
+
+        java.math.BigDecimal targetMean = target != null ? target.getTargetMean() : null;
+        java.math.BigDecimal targetSd = target != null ? target.getTargetSd() : null;
+        UUID operatorId = roleValidator.getCurrentUserId();
         LabQcEvent event = LabQcEvent.builder()
             .hospitalId(request.getHospitalId())
-            .analyzerId(request.getAnalyzerId())
+            .analyzerId(trimToNull(request.getAnalyzerId()))
             .testDefinition(testDef)
             .qcLevel(level)
             .measuredValue(request.getMeasuredValue())
-            .expectedValue(request.getExpectedValue())
+            .expectedValue(expectedValue)
             .passed(passed)
             .recordedAt(request.getRecordedAt() != null ? request.getRecordedAt() : LocalDateTime.now())
-            .recordedById(roleValidator.getCurrentUserId())
+            .recordedById(operatorId)
+            .recordedByDisplay(operatorDisplay(operatorId))
             .notes(request.getNotes())
+            .lotNumber(trimToNull(request.getLotNumber()))
+            .targetMean(targetMean)
+            .targetSd(targetSd)
+            .sdFlag(LabQcStatistics.sdFlag(request.getMeasuredValue(), targetMean, targetSd))
             .build();
 
         return qcEventMapper.toResponseDTO(qcEventRepository.save(event));
     }
 
+    /** r63: a definition is visible at a hospital when it is that hospital's or global. */
+    static void requireDefinitionVisibleAt(LabTestDefinition definition, UUID hospitalId) {
+        UUID owner = definition.getHospital() != null ? definition.getHospital().getId() : null;
+        if (owner != null && hospitalId != null && !owner.equals(hospitalId)) {
+            throw new ResourceNotFoundException("labtestdef.notfound");
+        }
+    }
+
+    private String operatorDisplay(UUID userId) {
+        if (userId == null) {
+            return null;
+        }
+        return userRepository.findById(userId)
+            .map(u -> {
+                String full = ((u.getFirstName() == null ? "" : u.getFirstName()) + " "
+                    + (u.getLastName() == null ? "" : u.getLastName())).trim();
+                return full.isEmpty() ? u.getUsername() : full;
+            })
+            .orElse(null);
+    }
+
+    private static String trimToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
     @Override
     @Transactional(readOnly = true)
     public LabQcEventResponseDTO getQcEventById(UUID id, Locale locale) {
-        LabQcEvent event = qcEventRepository.findById(id)
+        // r63: a QC event is read at its own hospital only (a super-admin in global view reads any).
+        UUID scopedHospitalId = roleValidator.requireActiveHospitalId();
+        LabQcEvent event = (scopedHospitalId == null
+                ? qcEventRepository.findById(id)
+                : qcEventRepository.findByIdAndHospitalId(id, scopedHospitalId))
             .orElseThrow(() -> new ResourceNotFoundException("labqcevent.notfound"));
         return qcEventMapper.toResponseDTO(event);
     }
@@ -90,9 +149,12 @@ public class LabQcEventServiceImpl implements LabQcEventService {
     @Override
     @Transactional(readOnly = true)
     public Page<LabQcEventResponseDTO> getQcEventsByHospital(UUID hospitalId, Pageable pageable, Locale locale) {
-        UUID scopedHospitalId = hospitalId;
-        if (scopedHospitalId == null) {
-            scopedHospitalId = roleValidator.requireActiveHospitalId();
+        // r63: the hospital filter is a claim; a pinned caller lists its own hospital only.
+        UUID scopedHospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId != null) {
+            com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(
+                hospitalId, "hospital.notFound", hospitalId);
+            scopedHospitalId = hospitalId;
         }
         if (scopedHospitalId == null) {
             // Super-admin: return all

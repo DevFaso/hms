@@ -87,5 +87,14 @@ public class LabTestDefinitionRequestDTO {
     @Valid
     @Builder.Default
     private List<LabTestReferenceRangeDTO> referenceRanges = new ArrayList<>();
+
+    /**
+     * r63 (NFS panels): the analytes of a panel test. Null leaves an existing
+     * definition's components as they are; an empty list makes it a
+     * single-value test.
+     */
+    @Valid
+    @jakarta.validation.constraints.Size(max = 60)
+    private List<LabTestComponentDTO> components;
 }
 

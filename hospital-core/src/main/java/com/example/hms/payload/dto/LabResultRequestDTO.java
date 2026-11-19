@@ -1,6 +1,5 @@
 package com.example.hms.payload.dto;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -30,8 +29,11 @@ public class LabResultRequestDTO {
     @NotNull
     private UUID patientId;
 
-    @NotBlank
-    /** QA D1387 (round 32): within its column, refused by name (not a generic constraint 400). */
+    /**
+     * QA D1387 (round 32): within its column, refused by name (not a generic constraint 400).
+     * r63: required for a single-value test (LabResultServiceImpl names it when missing); for a
+     * panel the service composes it from {@link #components}.
+     */
     @jakarta.validation.constraints.Size(max = 2048)
     private String resultValue;
 
@@ -81,5 +83,10 @@ public class LabResultRequestDTO {
      * corrects. Optional; ignored on the ingest path.
      */
     private UUID supersedesResultId;
+
+    /** r63 (NFS panels): one value per component of a panel test; ignored on the ingest path. */
+    @jakarta.validation.Valid
+    @jakarta.validation.constraints.Size(max = 60)
+    private java.util.List<LabResultComponentValueDTO> components;
 }
 

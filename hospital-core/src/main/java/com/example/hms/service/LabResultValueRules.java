@@ -106,10 +106,21 @@ public final class LabResultValueRules {
      * instead of showing only a toast.
      */
     static void requireValidValue(String rawValue, LabTestDefinition definition) {
-        if (rawValue == null || rawValue.isBlank() || definition == null) {
+        if (definition == null) {
             return;
         }
-        List<LabTestReferenceRange> ranges = definition.getReferenceRanges();
+        requireValidValue(rawValue, definition.getReferenceRanges(), RESULT_VALUE);
+    }
+
+    /**
+     * The same refusal for a value checked against {@code ranges}, named on
+     * {@code field}: r63 uses it for each component of a panel
+     * ({@code components[2].value}) against that component's own ranges.
+     */
+    static void requireValidValue(String rawValue, List<LabTestReferenceRange> ranges, String field) {
+        if (rawValue == null || rawValue.isBlank()) {
+            return;
+        }
         if (ranges == null || ranges.stream().noneMatch(LabResultValueRules::hasNumericLimit)) {
             return;
         }
@@ -119,13 +130,13 @@ public final class LabResultValueRules {
             // comparator: the analyzer's or the method's limit of detection.
             value = Double.parseDouble(CENSOR_PREFIX.matcher(rawValue.trim()).replaceFirst(""));
         } catch (NumberFormatException ex) {
-            throw new FieldBusinessException(RESULT_VALUE, "lab.result.value.notNumeric");
+            throw new FieldBusinessException(field, "lab.result.value.notNumeric");
         }
         if (Double.isNaN(value) || Double.isInfinite(value)) {
-            throw new FieldBusinessException(RESULT_VALUE, "lab.result.value.notNumeric");
+            throw new FieldBusinessException(field, "lab.result.value.notNumeric");
         }
         if (value < 0 && ranges.stream().noneMatch(LabResultValueRules::hasNegativeLimit)) {
-            throw new FieldBusinessException(RESULT_VALUE, "lab.result.value.negative");
+            throw new FieldBusinessException(field, "lab.result.value.negative");
         }
     }
 

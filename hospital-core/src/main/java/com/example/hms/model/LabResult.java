@@ -278,6 +278,58 @@ public class LabResult extends BaseEntity {
     @Column(name = "signature_notes", length = 2048)
     private String signatureNotes;
 
+    /**
+     * r63 (NFS panels): one value per component of a panel test, entered and
+     * released together. Null/empty for a single-value result, whose value is
+     * {@link #resultValue}; for a panel {@link #resultValue} is a summary line.
+     */
+    @jakarta.persistence.Convert(converter = com.example.hms.model.converter.LabResultComponentConverter.class)
+    @Column(name = "components", columnDefinition = "TEXT")
+    @Builder.Default
+    private java.util.List<LabResultComponent> components = new java.util.ArrayList<>();
+
+    /**
+     * r63 D2304: the documented reason this result was released while the
+     * test's latest QC run was rejected, with who, when and which run.
+     */
+    @Column(name = "qc_override_reason", length = 2048)
+    private String qcOverrideReason;
+
+    @Column(name = "qc_override_event_id")
+    private UUID qcOverrideEventId;
+
+    @Column(name = "qc_override_by_user_id")
+    private UUID qcOverrideByUserId;
+
+    @Column(name = "qc_override_at")
+    private LocalDateTime qcOverrideAt;
+
+    /**
+     * r63 D2305: the laboratory's communication of a critical result at
+     * release: who was told, when, and the value they read back. Separate
+     * from the clinician's own read-back ({@link #criticalReadBackValue}),
+     * which drives acknowledgement and escalation and is not changed by this.
+     */
+    @Column(name = "critical_communicated_to", length = 255)
+    private String criticalCommunicatedTo;
+
+    @Column(name = "critical_communicated_at")
+    private LocalDateTime criticalCommunicatedAt;
+
+    @Column(name = "critical_communication_read_back", length = 255)
+    private String criticalCommunicationReadBack;
+
+    @Column(name = "critical_communicated_by_user_id")
+    private UUID criticalCommunicatedByUserId;
+
+    @Column(name = "critical_communicated_by_display", length = 255)
+    private String criticalCommunicatedByDisplay;
+
+    /** r63: true when this result carries panel component values. */
+    public boolean hasComponents() {
+        return components != null && !components.isEmpty();
+    }
+
     @PrePersist
     @PreUpdate
     private void validate() {
