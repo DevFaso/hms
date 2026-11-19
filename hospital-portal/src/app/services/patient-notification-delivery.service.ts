@@ -3,7 +3,8 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 
 /**
- * Patient notification sends (V312, go-live scorecard K3): the SMS and email
+ * Patient notification sends (V312, go-live scorecard K3; QA D2206 adds the opt-out trace of the
+ * messages sent inline: appointment e-mails, visit summary, pharmacy SMS, outreach, invoice): the SMS and email
  * appointment confirmations, reminders and result-available notices the
  * hospital sent its patients, failed ones first, with a manual retry. Mirrors
  * PatientNotificationDeliveryController. Never the message, the number or the
@@ -19,7 +20,21 @@ export type DeliveryEvent =
   | 'APPOINTMENT_REMINDER'
   | 'LAB_RESULT_AVAILABLE'
   | 'IMAGING_RESULT_AVAILABLE'
-  | 'ULTRASOUND_RESULT_AVAILABLE';
+  | 'ULTRASOUND_RESULT_AVAILABLE'
+  | 'APPOINTMENT_RESCHEDULED'
+  | 'APPOINTMENT_CANCELLED'
+  | 'APPOINTMENT_COMPLETED'
+  | 'APPOINTMENT_NO_SHOW'
+  | 'WAITLIST_OFFER'
+  | 'RECALL_DUE'
+  | 'VISIT_SUMMARY'
+  | 'PHARMACY_DISPENSED'
+  | 'PHARMACY_READY'
+  | 'PHARMACY_READY_CANCELLED'
+  | 'PHARMACY_READY_REMINDER'
+  | 'PHARMACY_OUT_OF_STOCK'
+  | 'PHARMACY_REFILL_REMINDER'
+  | 'INVOICE';
 
 export interface PatientNotificationDelivery {
   id: string;

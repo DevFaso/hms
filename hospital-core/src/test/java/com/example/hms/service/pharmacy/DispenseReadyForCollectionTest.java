@@ -398,8 +398,8 @@ class DispenseReadyForCollectionTest {
             verify(dispenseRepository, never()).sumQuantityDispensedForPrescription(any(), any());
             verifyNoInteractions(prescriberNotifier);
             verify(support).logAudit(eq(AuditEventType.DISPENSE_READY), anyString(), anyString(), eq("DISPENSE"));
-            verify(support).notifyReadyForCollection(patient, pharmacy, "Amoxicillin");
-            verify(support, never()).notifyDispensed(any(), any(), any());
+            verify(support).notifyReadyForCollection(any(), eq(patient), eq(pharmacy), eq("Amoxicillin"));
+            verify(support, never()).notifyDispensed(any(), any(), any(), any());
             verify(prescriptionRepository, never()).findById(any());
         }
 
@@ -634,7 +634,7 @@ class DispenseReadyForCollectionTest {
             verify(dispenseRepository, never()).save(any());
             verify(stockLotRepository, never()).save(any());
             verify(stockTransactionRepository, never()).save(any());
-            verify(support, never()).notifyReadyForCollection(any(), any(), any());
+            verify(support, never()).notifyReadyForCollection(any(), any(), any(), any());
         }
     }
 
@@ -710,7 +710,7 @@ class DispenseReadyForCollectionTest {
             verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.DISPENSED);
             verify(refillRequestRepository).findFirstByPrescription_IdAndStatusOrderByUpdatedAtDesc(
                     prescriptionId, RefillStatus.APPROVED);
-            verify(support).notifyDispensed(patient, pharmacy, "Amoxicillin");
+            verify(support).notifyDispensed(any(), eq(patient), eq(pharmacy), eq("Amoxicillin"));
             verify(support).logAudit(eq(AuditEventType.DISPENSE_HANDED_OVER), anyString(),
                     eq(dispenseId.toString()), eq("DISPENSE"));
             // no stock moves at hand-over: it moved at ready
@@ -728,7 +728,7 @@ class DispenseReadyForCollectionTest {
             service.handOver(dispenseId, null);
 
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTIALLY_FILLED);
-            verify(support, never()).notifyDispensed(any(), any(), any());
+            verify(support, never()).notifyDispensed(any(), any(), any(), any());
         }
 
         @Test
@@ -743,7 +743,7 @@ class DispenseReadyForCollectionTest {
             assertThat(result.getStatus()).isEqualTo("COMPLETED");
             verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
             verify(support, never()).logAudit(any(), any(), any(), any());
-            verify(support, never()).notifyDispensed(any(), any(), any());
+            verify(support, never()).notifyDispensed(any(), any(), any(), any());
             verifyNoInteractions(prescriberNotifier);
         }
 
@@ -982,7 +982,7 @@ class DispenseReadyForCollectionTest {
                     .completePreparedFill(any(), any(), any(), any(), any(), any());
             verify(support, times(1)).logAudit(eq(AuditEventType.DISPENSE_HANDED_OVER),
                     anyString(), anyString(), eq("DISPENSE"));
-            verify(support, times(1)).notifyDispensed(any(), any(), any());
+            verify(support, times(1)).notifyDispensed(any(), any(), any(), any());
             verify(prescriberNotifier, times(1)).notifyPrescriber(any(), any());
         }
 
