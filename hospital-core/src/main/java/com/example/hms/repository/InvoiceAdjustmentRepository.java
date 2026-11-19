@@ -29,4 +29,12 @@ public interface InvoiceAdjustmentRepository extends JpaRepository<InvoiceAdjust
     @Query("SELECT COALESCE(SUM(a.amount), 0) FROM InvoiceAdjustment a WHERE a.invoiceItem.id = :itemId"
         + " AND a.reversedAt IS NULL")
     BigDecimal sumByInvoiceItemId(@Param("itemId") UUID itemId);
+
+    /**
+     * Billing-money plan PR 7: the credit notes still in force on a line. The payer's share is computed on the line
+     * less these; a discount or a waiver lowers only the patient's share (owner default D-6).
+     */
+    @Query("SELECT COALESCE(SUM(a.amount), 0) FROM InvoiceAdjustment a WHERE a.invoiceItem.id = :itemId"
+        + " AND a.reversedAt IS NULL AND a.type = com.example.hms.enums.InvoiceAdjustmentType.CREDIT_NOTE")
+    BigDecimal sumCreditNotesByInvoiceItemId(@Param("itemId") UUID itemId);
 }
