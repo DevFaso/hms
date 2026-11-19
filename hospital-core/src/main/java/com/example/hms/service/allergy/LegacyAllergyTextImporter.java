@@ -6,6 +6,7 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.PatientAllergy;
 import com.example.hms.model.Staff;
 import com.example.hms.repository.PatientAllergyRepository;
+import com.example.hms.utility.PatientMatchKeys;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,9 +24,15 @@ import java.util.Objects;
  *
  * <p>Every row is {@code UNCONFIRMED}, carries the source it came from, and
  * keeps the original text in its notes so nothing the clerk typed is lost
- * when the summary column is rewritten. Names already present as active
- * rows are skipped, case-insensitively, so re-importing the same text (or
- * text that repeats what a nurse already recorded) never duplicates.
+ * when the summary column is rewritten. Names the chart already has are
+ * skipped, accents and case aside, so re-importing the same text (or text
+ * that repeats what a nurse already recorded) never duplicates.
+ *
+ * <p>QA D2220: "already has" means ANY row for the allergen, active,
+ * deactivated or entered in error. Free text is a weaker source than the
+ * chart: an allergy a clinician deactivated or marked entered in error must
+ * never come back as an active row because its name is still in old text.
+ * Recording it again by hand is unchanged ({@link ActiveAllergyDuplicates}).
  */
 @Service
 @RequiredArgsConstructor
@@ -62,13 +69,13 @@ public class LegacyAllergyTextImporter {
         if (tokens.isEmpty()) {
             return 0;
         }
-        // QA D1287: the one definition of "the same allergen already active".
+        // Every row the patient has, inactive and entered-in-error included.
         List<PatientAllergy> known = new ArrayList<>(allergyRepository.findByPatient_Id(patient.getId()));
         String notes = notesFor(text);
         LocalDate today = LocalDate.now(clock);
         int created = 0;
         for (String token : tokens) {
-            if (ActiveAllergyDuplicates.find(known, null, token, null).isPresent()) {
+            if (alreadyCharted(known, token)) {
                 continue;
             }
             PatientAllergy row = PatientAllergy.builder()
@@ -88,6 +95,20 @@ public class LegacyAllergyTextImporter {
         }
         summarySync.refresh(patient);
         return created;
+    }
+
+    /**
+     * QA D2220: whether any row, whatever its state, names the same allergen
+     * as {@code token} (accents, case and spacing aside: the
+     * {@link ActiveAllergyDuplicates} name key without its active filter).
+     */
+    static boolean alreadyCharted(List<PatientAllergy> known, String token) {
+        String key = PatientMatchKeys.foldName(token);
+        if (key == null) {
+            return false;
+        }
+        return known.stream()
+            .anyMatch(a -> key.equals(PatientMatchKeys.foldName(a.getAllergenDisplay())));
     }
 
     private static String notesFor(String text) {

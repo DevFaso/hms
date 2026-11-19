@@ -21,6 +21,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -35,6 +36,7 @@ class LegacyAllergyTextBackfillWorkerTest {
     @Mock private HospitalRepository hospitalRepository;
     @Mock private PatientHospitalRegistrationRepository registrationRepository;
     @Mock private LegacyAllergyTextImporter importer;
+    @Mock private LegacyAllergyImportLedger ledger;
 
     @InjectMocks
     private LegacyAllergyTextBackfillWorker worker;
@@ -58,9 +60,11 @@ class LegacyAllergyTextBackfillWorkerTest {
         when(patientRepository.findByIdUnscoped(patient.getId())).thenReturn(Optional.of(patient));
         when(allergyRepository.existsByPatient_IdAndSourceSystem(eq(patient.getId()), anyString())).thenReturn(false);
         when(hospitalRepository.findById(hospital.getId())).thenReturn(Optional.of(hospital));
+        when(importer.importFreeText(patient, hospital, null, "Peanuts, garlic", LegacyAllergyTextImporter.SOURCE_LEGACY))
+            .thenReturn(2);
 
         assertThat(worker.backfillOne(patient.getId())).isEqualTo(LegacyAllergyTextBackfillWorker.Outcome.IMPORTED);
-        verify(importer).importFreeText(patient, hospital, null, "Peanuts, garlic", LegacyAllergyTextImporter.SOURCE_LEGACY);
+        verify(ledger).markDone(patient.getId(), LegacyAllergyTextBackfillWorker.Outcome.IMPORTED, 2);
     }
 
     @Test
@@ -72,6 +76,8 @@ class LegacyAllergyTextBackfillWorkerTest {
         when(patientRepository.findByIdUnscoped(patient.getId())).thenReturn(Optional.of(patient));
         when(allergyRepository.existsByPatient_IdAndSourceSystem(eq(patient.getId()), anyString())).thenReturn(false);
         when(registrationRepository.findByPatientId(patient.getId())).thenReturn(List.of(registration));
+        when(importer.importFreeText(patient, hospital, null, "Latex", LegacyAllergyTextImporter.SOURCE_LEGACY))
+            .thenReturn(1);
 
         assertThat(worker.backfillOne(patient.getId())).isEqualTo(LegacyAllergyTextBackfillWorker.Outcome.IMPORTED);
         verify(importer).importFreeText(patient, hospital, null, "Latex", LegacyAllergyTextImporter.SOURCE_LEGACY);
@@ -86,6 +92,34 @@ class LegacyAllergyTextBackfillWorkerTest {
 
         assertThat(worker.backfillOne(patient.getId())).isEqualTo(LegacyAllergyTextBackfillWorker.Outcome.ALREADY_DONE);
         verify(importer, never()).importFreeText(any(), any(), any(), anyString(), anyString());
+        verify(ledger).markDone(patient.getId(), LegacyAllergyTextBackfillWorker.Outcome.ALREADY_DONE, 0);
+    }
+
+    @Test
+    @DisplayName("D2220: text that names only allergens already charted is NOTHING_NEW, not IMPORTED, and is recorded")
+    void nothingNewWhenNoRowIsCreated() {
+        patient.setAllergies("Peanuts");
+        patient.setHospitalId(hospital.getId());
+        when(patientRepository.findByIdUnscoped(patient.getId())).thenReturn(Optional.of(patient));
+        when(allergyRepository.existsByPatient_IdAndSourceSystem(eq(patient.getId()), anyString())).thenReturn(false);
+        when(hospitalRepository.findById(hospital.getId())).thenReturn(Optional.of(hospital));
+        when(importer.importFreeText(patient, hospital, null, "Peanuts", LegacyAllergyTextImporter.SOURCE_LEGACY))
+            .thenReturn(0);
+
+        assertThat(worker.backfillOne(patient.getId())).isEqualTo(LegacyAllergyTextBackfillWorker.Outcome.NOTHING_NEW);
+        verify(ledger).markDone(patient.getId(), LegacyAllergyTextBackfillWorker.Outcome.NOTHING_NEW, 0);
+    }
+
+    @Test
+    @DisplayName("D2220: a patient the ledger already holds is never processed again, whatever the column says")
+    void ledgerHoldsThePatient() {
+        patient.setAllergies("Peanuts");
+        when(patientRepository.findByIdUnscoped(patient.getId())).thenReturn(Optional.of(patient));
+        when(ledger.isDone(patient.getId())).thenReturn(true);
+
+        assertThat(worker.backfillOne(patient.getId())).isEqualTo(LegacyAllergyTextBackfillWorker.Outcome.ALREADY_DONE);
+        verify(importer, never()).importFreeText(any(), any(), any(), anyString(), anyString());
+        verify(ledger, never()).markDone(any(), any(), anyInt());
     }
 
     @Test
@@ -108,6 +142,8 @@ class LegacyAllergyTextBackfillWorkerTest {
         when(registrationRepository.findByPatientId(patient.getId())).thenReturn(List.of());
 
         assertThat(worker.backfillOne(patient.getId())).isEqualTo(LegacyAllergyTextBackfillWorker.Outcome.NO_HOSPITAL);
+        // Not recorded: retried once the patient has a hospital.
+        verify(ledger, never()).markDone(any(), any(), anyInt());
     }
 
     @Test

@@ -62,7 +62,7 @@ class AllergyActiveReadersGuardTest {
         Map.entry("service/EncounterServiceImpl.java",
             new Reader("ActiveAllergyDuplicates.find", "a duplicate check, which counts active rows only")),
         Map.entry("service/allergy/LegacyAllergyTextImporter.java",
-            new Reader("allergyRepository.save", "an import's dedupe, shows nothing to a reader")),
+            new Reader("alreadyCharted(known", "QA D2220: an import's dedupe over EVERY row on purpose, so a deactivated or entered-in-error allergy is never re-created from old text; shows nothing to a reader")),
         Map.entry("service/AfterVisitSummarySections.java",
             new Reader("filter(PatientAllergy::isActive)", "the after-visit summary's known allergies: active rows only")),
         Map.entry("service/allergy/AllergySharingVisibility.java",
