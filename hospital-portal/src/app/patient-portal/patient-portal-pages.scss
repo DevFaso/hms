@@ -134,8 +134,22 @@
   }
 }
 
+/* QA D2431 (r64): the class of the insured invoice card on a phone. A wide
+   right-hand column (« Part assureur … · Votre part … ») squeezed the body to
+   0 px, one letter per line. The body now asks for 10rem before it shrinks;
+   when the row cannot give it, the right-hand column wraps under it. */
+.portal-list-item {
+  flex-wrap: wrap;
+}
+
+.portal-list-item > :where(.pli-end) {
+  margin-left: auto;
+  max-width: 100%;
+  min-width: 0;
+}
+
 .pli-body {
-  flex: 1;
+  flex: 1 1 10rem;
   display: flex;
   flex-direction: column;
   gap: 2px;

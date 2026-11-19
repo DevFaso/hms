@@ -410,6 +410,27 @@
     padding-top: 20px;
     margin-top: 24px;
   }
+  /* QA D2462 (r64): a 1024 laptop leaves ~714 px beside the sidebar. Tighter
+     page and card padding, and slimmer row buttons, keep every work-queue
+     column (Prescripteur, Statut) out from under the sticky actions. */
+  @media (max-width: 1279px) {
+    .page-container,
+    .drug-interactions-container,
+    .claims,
+    .pharmacy-checkout {
+      padding: 20px 16px;
+    }
+    .section-card,
+    .drug-card,
+    .form-card,
+    .pharmacy-checkout .card {
+      padding: 16px;
+    }
+    .btn-action {
+      padding: 0.375rem 0.5rem;
+      text-align: left;
+    }
+  }
   @media (max-width: 720px) {
     .page-container,
     .drug-interactions-container,

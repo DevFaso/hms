@@ -6,7 +6,7 @@ import { test, expect } from './fixtures/test-fixtures';
 import { routedPages } from './helpers/routed-page-inventory';
 import { installLocalIconFonts } from './helpers/local-icon-fonts';
 import { signInAs, TEST_ID } from './helpers/role-session';
-import { auditAtWidths, formatOffenders } from './helpers/layout-audit';
+import { auditAtWidths, formatOffenders, LAYOUT_WIDTHS } from './helpers/layout-audit';
 
 /**
  * QA D2230 / D2231 (owner screenshots 39–41, 2026-11-18): the invoice drawer
@@ -179,17 +179,23 @@ async function seedBilling(page: Page) {
 }
 
 /** LAYOUT_SHOTS=<dir> [LAYOUT_SHOTS_TAG=before|after]: save the PR's evidence screenshots. */
-async function shoot(page: Page, name: string) {
+async function shoot(
+  page: Page,
+  name: string,
+  widths: readonly number[] = [1366, 390],
+  focus?: string,
+) {
   const dir = process.env['LAYOUT_SHOTS'];
   if (!dir) return;
   const tag = process.env['LAYOUT_SHOTS_TAG'] ?? 'shot';
-  for (const width of [1366, 390]) {
+  for (const width of widths) {
     await page.setViewportSize({ width, height: width < 600 ? 844 : 900 });
     await page.evaluate(() => {
       const backdrop = document.querySelector<HTMLElement>('.sidebar-backdrop');
       if (backdrop && getComputedStyle(backdrop).display !== 'none') backdrop.click();
     });
-    await page.waitForTimeout(150);
+    if (focus) await page.locator(focus).first().scrollIntoViewIfNeeded();
+    await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(dir, `${name}-${width}-${tag}.png`) });
   }
 }
@@ -207,7 +213,7 @@ test.describe('layout overflow: drawers and modals', () => {
     const table = page.locator('.data-table');
     const fits = await table.evaluate((el) => el.scrollWidth <= el.clientWidth + 1);
     expect.soft(fits, 'the invoice table scrolls sideways at 1366px').toBe(true);
-    await shoot(page, 'billing');
+    await shoot(page, 'billing', [1366, 1024, 390]);
 
     await page.setViewportSize({ width: 1366, height: 900 });
     await page.locator('.view-link').first().click();
@@ -216,7 +222,7 @@ test.describe('layout overflow: drawers and modals', () => {
     await expect(drawer.getByText('Tarif essai demo-r61', { exact: false })).toBeVisible();
     found.push(...(await auditAtWidths(page, '/billing invoice drawer')));
     await drawer.locator('.payments-section').scrollIntoViewIfNeeded();
-    await shoot(page, 'invoice-drawer');
+    await shoot(page, 'invoice-drawer', [1366, 1024, 390]);
     expect(found, formatOffenders(found)).toEqual([]);
   });
 });
@@ -392,6 +398,7 @@ test.describe('layout overflow: clinical drawers', () => {
       await page.locator(c.open).click();
       await expect(page.locator(c.drawer)).toBeVisible();
       const found = await auditAtWidths(page, `${c.route} drawer`);
+      await shoot(page, `drawer-${c.route.replace(/\W+/g, '')}`, [1366, 1024]);
       expect(found, formatOffenders(found)).toEqual([]);
     });
   }
@@ -545,6 +552,7 @@ test.describe('layout overflow: admin tables with rows (D2320 / D2321)', () => {
           .first(),
       ).toBeVisible();
       const found = await auditAtWidths(page, c.route);
+      await shoot(page, `table-${c.route.replace(/\W+/g, '')}`, [1024, 390]);
       expect(found, formatOffenders(found)).toEqual([]);
     });
   }
@@ -817,7 +825,283 @@ test.describe('layout overflow: front desk and ward lists (D2241 / D2242 / D2246
         await expect(page.getByText(/Démo-Ouédraogo|MRN-CHWP|sawadogo/i).first()).toBeVisible();
       }
       const found = await auditAtWidths(page, c.label ?? c.route);
+      await shoot(page, `list-${(c.label ?? c.route).replace(/\W+/g, '-')}`, [1024, 768, 390]);
       expect(found, formatOffenders(found)).toEqual([]);
     });
   }
+});
+
+/* ── r64 (QA D2461 / D2431–D2436 / D2400): dialogs and money screens ────────
+   A dialog is never wider than the screen; the money screens' tables fit
+   their card or scroll in place with a cue; the patient's insured invoice card
+   keeps its text readable on a phone. Each case opens the screen QA failed. */
+
+const PAYER_PLAN_ID = `${RECORD_ID.slice(0, -1)}7`;
+const PAYER = {
+  id: RECORD_ID,
+  hospitalId: TEST_ID,
+  code: 'MUT-TEST-A-R64',
+  name: 'Mutuelle des agents de santé du Kadiogo, régime complémentaire',
+  payerType: 'MUTUELLE',
+  active: true,
+  plans: [
+    {
+      id: PAYER_PLAN_ID,
+      payerId: RECORD_ID,
+      code: 'FORMULE-ESSENTIELLE-2026',
+      name: 'Formule essentielle hospitalisation et consultations 2026',
+      defaultCoveragePercent: 80,
+      perInvoiceCeiling: 250_000,
+      annualCeilingPerBeneficiary: 1_500_000,
+      effectiveFrom: '2026-01-01',
+      status: 'IN_FORCE',
+      linkable: true,
+      terms: [1, 2].map((n) => ({
+        id: `terms-${n}`,
+        defaultCoveragePercent: 70 + n * 5,
+        perInvoiceCeiling: 250_000,
+        annualCeilingPerBeneficiary: 1_500_000,
+        effectiveFrom: `202${4 + n}-01-01`,
+        effectiveTo: n === 1 ? '2025-12-31' : null,
+        status: n === 1 ? 'ENDED' : 'IN_FORCE',
+        changeReason: 'Avenant numéro 3 à la convention signé avec le conseil',
+        createdByName: 'Aminata Sawadogo-Kaboré',
+      })),
+      rules: [1, 2].map((n) => ({
+        id: `rule-${n}`,
+        planId: PAYER_PLAN_ID,
+        category: 'LABORATORY',
+        priceListItemCode: `NFS-HEMOGRAMME-COMPLET-${n}`,
+        priceListItemLabel: 'Numération formule sanguine et plaquettes (hémogramme complet)',
+        coveragePercent: 60,
+        excluded: false,
+        perActCeiling: 2_000,
+        effectiveFrom: '2026-01-01',
+        status: 'IN_FORCE',
+        endReason: n === 2 ? 'Remplacée par la règle de la convention 2027' : null,
+      })),
+    },
+  ],
+};
+
+const CASH_CLOSING = {
+  date: '2026-11-19',
+  cashierName: 'Aminata Sawadogo-Kaboré',
+  byMethod: [
+    { source: 'BILLING', method: 'CASH', count: 12, amount: 1_245_500 },
+    {
+      source: 'BILLING',
+      method: 'MOBILE_MONEY',
+      operator: 'ORANGE_MONEY',
+      count: 7,
+      amount: 386_000,
+    },
+    { source: 'BILLING', method: 'CASH', direction: 'OUT', count: 1, amount: 50 },
+  ],
+  entries: [1, 2, 3].map((n) => ({
+    id: `e-${n}`,
+    source: 'BILLING',
+    receivedAt: NOW,
+    document: `CHWF2396-2026-00004${n}`,
+    patientName: LONG_NAME,
+    method: 'MOBILE_MONEY',
+    operator: 'ORANGE_MONEY',
+    reference: 'OM-R53RF-782086-2026',
+    amount: 1_245_500,
+    status: 'CONFIRMED',
+  })),
+  receivedCount: 19,
+  receivedAmount: 1_631_500,
+  reversedCount: 1,
+  reversedAmount: 500,
+  refundedCount: 1,
+  refundedAmount: 50,
+  netAmount: 1_630_950,
+};
+
+const DIALOGS: {
+  label: string;
+  route: string;
+  role: string;
+  seed?: (page: Page) => Promise<unknown>;
+  then: (page: Page) => Promise<void>;
+  /** The part of the screen the PR's evidence shot scrolls to. */
+  focus?: string;
+}[] = [
+  {
+    label: '/referrals [Nouvelle orientation] (D2461)',
+    route: '/referrals',
+    role: 'ROLE_DOCTOR',
+    then: async (p) => {
+      await p
+        .locator('.btn-primary')
+        .filter({ hasText: /Nouvelle orientation|New referral/i })
+        .first()
+        .click();
+      await expect(p.locator('[role="dialog"]').first()).toBeVisible();
+    },
+  },
+  {
+    label: '/billing [Clôture de caisse] (D2432)',
+    route: '/billing',
+    focus: '[data-testid="cash-closing-totals"]',
+    role: 'ROLE_BILLING_SPECIALIST',
+    seed: (p) =>
+      p.route('**/api/billing-invoices/cash-closing**', (r) => r.fulfill({ json: CASH_CLOSING })),
+    then: async (p) => {
+      await p.locator('[data-testid="cash-closing-toggle"]').click();
+      await expect(p.locator('[data-testid="cash-closing-total"]')).toBeVisible();
+    },
+  },
+  {
+    label: '/billing/organismes [payer detail] (D2436)',
+    route: '/billing/organismes',
+    focus: '[data-testid="payers-terms-FORMULE-ESSENTIELLE-2026"]',
+    role: 'ROLE_HOSPITAL_ADMIN',
+    seed: (p) =>
+      p.route('**/api/billing/payers**', (r) =>
+        r.fulfill({ json: r.request().url().includes(RECORD_ID) ? PAYER : [PAYER] }),
+      ),
+    then: async (p) => {
+      await p.locator('[data-testid="payers-row-MUT-TEST-A-R64"] .link-button').click();
+      await expect(
+        p.locator('[data-testid="payers-terms-FORMULE-ESSENTIELLE-2026"]'),
+      ).toBeVisible();
+    },
+  },
+  {
+    label: '/my-billing [insured invoice] (D2431)',
+    route: '/my-billing',
+    role: 'ROLE_PATIENT',
+    seed: (p) =>
+      p.route('**/api/me/patient/billing/invoices**', (r) =>
+        r.fulfill({
+          json: {
+            data: page1(
+              [1, 2].map((n) =>
+                invoice(n, {
+                  status: 'PARTIALLY_PAID',
+                  totalAmount: 3_300,
+                  amountPaid: 0,
+                  balanceDue: 330,
+                  refundDue: 0,
+                  insuranceCoverageAmount: 2_970,
+                  patientResponsibilityAmount: 330,
+                  encounterDate: '2026-11-19',
+                }),
+              ),
+            ),
+          },
+        }),
+      ),
+    then: async (p) => {
+      await expect(p.locator('[data-testid^="payer-share-"]').first()).toBeVisible();
+    },
+  },
+  {
+    label: '/admissions [Attribuer un lit] (D2286)',
+    route: '/admissions',
+    role: 'ROLE_NURSE',
+    seed: async (p) => {
+      const active = DESK_ROWS.map((a) => ({ ...a, status: 'ACTIVE' }));
+      await p.route('**/api/admissions', (r) => r.fulfill({ json: active }));
+      await p.route('**/api/admissions?**', (r) => r.fulfill({ json: active }));
+      await p.route('**/api/beds/available**', (r) =>
+        r.fulfill({
+          json: [1, 2].map((n) => ({
+            id: `bed-${n}`,
+            label: `MED1/M1-0${n}`,
+            wardName: 'Médecine interne B et maladies infectieuses, aile nord',
+            roomNumber: 'Chambre 12 (isolement respiratoire)',
+          })),
+        }),
+      );
+    },
+    then: async (p) => {
+      await p.locator('[data-testid="open-bed-assign"]').first().click();
+      await expect(p.locator('#adm-bed-select')).toBeVisible();
+    },
+  },
+  {
+    label: '/patient-notifications [rows] (D2400)',
+    route: '/patient-notifications',
+    role: 'ROLE_HOSPITAL_ADMIN',
+    seed: (p) =>
+      p.route('**/api/patient-notification-deliveries**', (r) =>
+        r.fulfill({
+          json: {
+            data: {
+              content: DESK_ROWS.map((d) => ({
+                id: d.id,
+                patientId: TEST_ID,
+                patientName: LONG_NAME,
+                eventType: 'APPOINTMENT_REMINDER',
+                channel: 'SMS',
+                status: 'SKIPPED',
+                attempts: 3,
+                errorCode: 'RECIPIENT_NOT_ALLOWLISTED',
+                retryable: true,
+                manualRetries: 0,
+                createdAt: NOW,
+                lastAttemptAt: NOW,
+              })),
+              page: 0,
+              size: 25,
+              totalElements: 3,
+              countsByStatus: { PENDING: 0, RETRYING: 0, SENT: 0, FAILED: 0, SKIPPED: 3 },
+            },
+          },
+        }),
+      ),
+    then: async (p) => {
+      await expect(p.getByText(LONG_NAME).first()).toBeVisible();
+    },
+  },
+];
+
+test.describe('layout overflow: r64 dialogs and money screens', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  for (const c of DIALOGS) {
+    test(`fits: ${c.label}`, async ({ page }, testInfo) => {
+      if (c.seed) await c.seed(page);
+      await open(page, testInfo.project.use.baseURL as string, c.role, c.route);
+      await c.then(page);
+      const found = await auditAtWidths(page, c.label);
+      const name = c.label.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '');
+      await shoot(page, name, LAYOUT_WIDTHS, c.focus);
+      expect(found, formatOffenders(found)).toEqual([]);
+    });
+  }
+
+  test('fits: patient record [Couverture, Lier une assurance] (D2433)', async ({
+    page,
+  }, testInfo) => {
+    await page.route(`**/api/patients/${TEST_ID}`, (r) => r.fulfill({ json: PATIENT }));
+    await page.route(`**/api/patients/${TEST_ID}?**`, (r) => r.fulfill({ json: PATIENT }));
+    // D2433: the « Formule » select lists the hospital's long plan names
+    // (shown when the signed-in role may set a plan).
+    await page.route('**/api/billing/payers**', (r) => r.fulfill({ json: [PAYER] }));
+    const path = `/patients/${TEST_ID}`;
+    await open(page, testInfo.project.use.baseURL as string, 'ROLE_RECEPTIONIST', path);
+    await page.setViewportSize({ width: 1366, height: 900 });
+    await page
+      .locator('.section-tab')
+      .filter({ hasText: /administrati/i })
+      .first()
+      .click();
+    await page
+      .locator('.sub-tabs .tab')
+      .filter({ hasText: /Couverture|Coverage/i })
+      .first()
+      .click();
+    await page
+      .getByRole('button', { name: /Lier une assurance|Link insurance/i })
+      .first()
+      .click();
+    await expect(page.locator('[role="dialog"]').first()).toBeVisible();
+    const found = await auditAtWidths(page, '/patients/:id [Lier une assurance]');
+    await shoot(page, 'coverage-link-dialog', LAYOUT_WIDTHS);
+    expect(found, formatOffenders(found)).toEqual([]);
+  });
 });

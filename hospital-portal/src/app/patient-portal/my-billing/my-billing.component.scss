@@ -38,7 +38,10 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 4px;
-  flex-shrink: 0;
+  /* QA D2431 (r64): may shrink (and wrap its lines) once it sits on its own
+     line under the body on a phone; see patient-portal-pages.scss. */
+  flex-shrink: 1;
+  text-align: right;
 }
 .pli-amount {
   font-size: 15px;

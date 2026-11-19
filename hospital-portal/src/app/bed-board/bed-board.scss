@@ -501,6 +501,15 @@
 
 .modal-body {
   padding: 1rem 1.25rem;
+
+  /* QA D2284 (r64): a label above its field, not the shared two-column grid
+     that put the label in one cell and a small select in the other. */
+  .form-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-bottom: 0.75rem;
+  }
 }
 
 .modal-footer {
