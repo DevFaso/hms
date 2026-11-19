@@ -108,8 +108,9 @@ public class ImagingStudyImageController {
                                   @jakarta.validation.constraints.Size(max = 500) String reason) {
     }
 
-    /** QA D2466 (r64): an image's corrected caption (blank clears it). */
-    public record CaptionRequest(@jakarta.validation.constraints.Size(max = 500) String caption) {
+    /** QA D2466 (r64): an image's corrected caption; required, and an empty one clears it. */
+    public record CaptionRequest(@jakarta.validation.constraints.NotNull
+                                 @jakarta.validation.constraints.Size(max = 500) String caption) {
     }
 
     @GetMapping("/orders/{orderId}/images/withdrawn")
