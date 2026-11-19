@@ -13,6 +13,8 @@ import { TranslateModule } from '@ngx-translate/core';
 import { PortalPrescription } from '../../services/patient-portal.service';
 import { DialogA11yDirective } from '../../shared/a11y/dialog-a11y.directive';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
+import { MedicationRoutePipe } from '../../shared/pipes/medication-route.pipe';
 import { printOnly } from '../../shared/print/print-only';
 
 /**
@@ -25,7 +27,15 @@ import { printOnly } from '../../shared/print/print-only';
 @Component({
   selector: 'app-prescription-document',
   standalone: true,
-  imports: [DatePipe, DecimalPipe, ServerTimePipe, TranslateModule, DialogA11yDirective],
+  imports: [
+    DatePipe,
+    DecimalPipe,
+    ServerTimePipe,
+    DateTimePipe,
+    MedicationRoutePipe,
+    TranslateModule,
+    DialogA11yDirective,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './prescription-document.component.html',
   styleUrl: './prescription-document.component.scss',

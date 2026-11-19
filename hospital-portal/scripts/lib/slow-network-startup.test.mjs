@@ -57,7 +57,7 @@ test('QA D2351: the guard sees each regression', () => {
   const good = read('src/index.html');
   assert.notDeepEqual(iconFontOffenders(good.replace(/display=block/g, 'display=swap')), []);
   assert.notDeepEqual(
-    iconFontOffenders(good.replace('@20..48,400,0,0', '@20..48,100..700,0..1,-50..200')),
+    iconFontOffenders(good.replace('@24,400,0,0', '@20..48,100..700,0..1,-50..200')),
     [],
   );
   assert.notDeepEqual(iconFontOffenders(good.replace(/<div class="boot-screen"/, '<div')), []);

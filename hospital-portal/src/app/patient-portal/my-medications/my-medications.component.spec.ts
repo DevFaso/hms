@@ -658,7 +658,10 @@ describe('MyMedicationsComponent — prescription document (QA D2353)', () => {
             getMyRefills: () => of([]),
           },
         },
-        { provide: ToastService, useValue: { success: () => {}, error: () => {} } },
+        {
+          provide: ToastService,
+          useValue: { success: jasmine.createSpy('success'), error: jasmine.createSpy('error') },
+        },
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(MyMedicationsComponent);

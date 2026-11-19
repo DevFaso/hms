@@ -17,9 +17,10 @@
     <!--
       QA D2351 (r63, slow 3G): the three font stylesheets are render-blocking
       cross-origin requests, so open both Google hosts at once instead of
-      after the HTML. The icon fonts ask only for the axes the portal uses
-      (no FILL, weight or grade variation anywhere): the full variable font
-      took about 85 s on slow 3G. `display=block` keeps an icon's ligature
+      after the HTML. The icon font asks for one fixed instance (24 px optical
+      size, weight 400, no fill or grade: the portal varies none of them):
+      317 kB instead of the 3.9 MB variable font, which took about 85 s on
+      slow 3G. `display=block` keeps an icon's ligature
       name ("check_circle") from showing as words while the font loads; the
       styles below hold each icon to a 1em box and hide it until the font is
       there, so a long name can never cover the menu button.
@@ -31,7 +32,7 @@
       rel="stylesheet"
     />
     <link
-      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,400,0,0&display=block"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=block"
       rel="stylesheet"
     />
     <link

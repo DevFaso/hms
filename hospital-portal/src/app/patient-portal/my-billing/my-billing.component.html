@@ -98,6 +98,17 @@
                 >{{ 'PORTAL.BILLING.DUE' | translate }}
                 {{ inv.dueDate | serverTime | date: 'mediumDate' }}</span
               >
+              @if (isPayable(inv)) {
+                <!-- QA D2355: what to tell the cashier (in the body, which wraps on a phone) -->
+                {{ ' '
+                }}<span
+                  class="pli-meta pay-reference"
+                  [attr.data-testid]="'pay-reference-' + inv.id"
+                  >{{
+                    'PORTAL_PAY_HOWTO.INVOICE_REFERENCE' | translate: { number: inv.invoiceNumber }
+                  }}</span
+                >
+              }
               @if (inv.visitType && inv.facility) {
                 <!-- QA D1413: the title is the visit when it has one; the hospital is always named -->
                 {{ ' '
@@ -115,15 +126,6 @@
                 {{ ' '
                 }}<span class="pli-meta"
                   >{{ 'PORTAL.BILLING.BALANCE_DUE' | translate }} {{ inv.balance | cfa }}</span
-                >
-                <!-- QA D2355: what to tell the cashier -->
-                {{ ' '
-                }}<span
-                  class="pli-meta pay-reference"
-                  [attr.data-testid]="'pay-reference-' + inv.id"
-                  >{{
-                    'PORTAL_PAY_HOWTO.INVOICE_REFERENCE' | translate: { number: inv.invoiceNumber }
-                  }}</span
                 >
               }
               @if (inv.payerShare) {

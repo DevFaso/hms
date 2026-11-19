@@ -188,7 +188,7 @@
                         type="button"
                         class="refill-cancel-btn"
                         [attr.data-testid]="'med-refill-cancel-' + med.id"
-                        [disabled]="cancellingRefill() === open.id"
+                        [disabled]="cancellingRefill() !== null"
                         (click)="cancelRefill(open, $event)"
                       >
                         {{
@@ -450,7 +450,7 @@
                     type="button"
                     class="refill-cancel-btn"
                     [attr.data-testid]="'refill-cancel-' + r.id"
-                    [disabled]="cancellingRefill() === r.id"
+                    [disabled]="cancellingRefill() !== null"
                     (click)="cancelRefill(r, $event)"
                   >
                     {{
