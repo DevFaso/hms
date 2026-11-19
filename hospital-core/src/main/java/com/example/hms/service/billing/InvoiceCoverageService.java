@@ -184,6 +184,32 @@ public class InvoiceCoverageService {
         return result.total();
     }
 
+    /* ---------------------------------------------------------- preview */
+
+    /**
+     * QA D2437: what the patient's coverage would pay on a DRAFT if it were issued now, computed exactly as
+     * {@link #applyAtIssue} would (same coverage, plan, terms, rules, ceiling used so far), but read-only: no lock,
+     * no share written, nothing on the lines. Empty for anything but a draft with lines and an applicable coverage
+     * that pays something. An estimate: the ceiling can be used by another invoice before this one is issued.
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public Optional<CoverageCalculator.Result> previewForDraft(BillingInvoice invoice) {
+        if (invoice == null || invoice.getStatus() != com.example.hms.enums.InvoiceStatus.DRAFT
+                || invoice.isCheckInCopay() || invoice.getPatient() == null || invoice.getHospital() == null
+                || invoice.getId() == null) {
+            return Optional.empty();
+        }
+        UUID hospitalId = invoice.getHospital().getId();
+        List<InvoiceItem> lines = linesOf(invoice);
+        if (lines.isEmpty()) {
+            return Optional.empty();
+        }
+        LocalDate day = serviceDay(invoice);
+        return coverageOn(invoice.getPatient().getId(), hospitalId, day)
+            .map(coverage -> compute(invoice, hospitalId, lines, coverage, day))
+            .filter(result -> result.total().signum() > 0);
+    }
+
     /* ------------------------------------------------------- credit notes */
 
     /**

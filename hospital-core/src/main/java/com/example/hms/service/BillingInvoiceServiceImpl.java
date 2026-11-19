@@ -573,6 +573,11 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         BillingInvoiceResponseDTO dto = invoiceMapper.toBillingInvoiceResponseDTO(invoice);
         // Billing-money plan PR 7: the payers' shares with their history (a rejected one with the payer's reason).
         dto.setPayerShares(payerSharesOf(invoice));
+        // QA D2437: a draft's estimated payer part, so the cashier can tell the patient their share before issuing.
+        if (coverageService != null) {
+            coverageService.previewForDraft(invoice)
+                .ifPresent(preview -> dto.setEstimatedInsuranceCoverageAmount(preview.total()));
+        }
         return dto;
     }
 
