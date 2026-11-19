@@ -2082,7 +2082,9 @@
       "IMAGING_PORTAL_READ_BY_PROXY": "Imaging reports of patient {{patient}} read on the patient portal by a proxy ({{count}} studies)",
       "IMAGING_PORTAL_READ": "Imaging reports of patient {{patient}} read on the patient portal ({{count}} studies)",
       "IMAGING_PORTAL_IMAGE_VIEWED_BY_PROXY": "Image {{image}} of imaging order {{order}} viewed on the patient portal by a proxy",
-      "IMAGING_PORTAL_IMAGE_VIEWED": "Image {{image}} of imaging order {{order}} viewed on the patient portal"
+      "IMAGING_PORTAL_IMAGE_VIEWED": "Image {{image}} of imaging order {{order}} viewed on the patient portal",
+      "IMAGING_IMAGE_WITHDRAWN": "Image {{image}} withdrawn from imaging order {{order}}",
+      "IMAGING_IMAGE_CAPTION_CORRECTED": "Caption of image {{image}} corrected on imaging order {{order}}"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -7428,7 +7430,9 @@
         "PATIENT_COVERAGE_PLAN_LINKED": "Patient coverage linked to a plan",
         "PAYER_SHARE_APPLIED": "Insurer share applied to an invoice",
         "PAYER_SHARE_DECIDED": "Insurer's decision on its share recorded",
-        "PAYER_SHARE_CANCELLED": "Insurer share cancelled"
+        "PAYER_SHARE_CANCELLED": "Insurer share cancelled",
+        "IMAGING_IMAGE_WITHDRAWN": "Imaging image withdrawn",
+        "IMAGING_IMAGE_CAPTION_UPDATED": "Imaging image caption corrected"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -14570,7 +14574,8 @@
         "UNREACHABLE": "The PACS could not be reached (address, network or PACS down).",
         "UNAUTHORIZED": "The PACS refused the user name or password.",
         "REJECTED": "The PACS answered, but not as a DICOMweb server. Check the address (it usually ends in /dicom-web).",
-        "URL_REFUSED": "This address is refused: e-Keneya calls only public https addresses."
+        "URL_REFUSED": "This address is refused: e-Keneya calls only public https addresses.",
+        "HOST_NOT_FOUND": "The PACS address could not be found: its host does not resolve yet. Check the address, or test again once the PACS is online."
       },
       "CARD_TITLE": "PACS connection",
       "CARD_DESC": "Connect the hospital's PACS so clinicians see imaging studies in e-Keneya.",
@@ -14614,6 +14619,20 @@
       "REPORT": "Report",
       "IMAGES": "Images",
       "IMAGE_N": "Image {{n}}"
+    },
+    "MAX_SIZE_LABEL": "10 MB",
+    "IMAGES": {
+      "SEND": "Upload ({{count}})",
+      "SAVE_CAPTION": "Save the caption",
+      "CAPTION_SAVED": "Caption saved",
+      "CAPTION_ERROR": "The caption could not be saved.",
+      "WITHDRAW": "Withdraw the image",
+      "WITHDRAW_TITLE": "Withdraw this image?",
+      "WITHDRAW_MESSAGE": "The image is hidden from every reader, the patient included. The file and this reason are kept for the record.",
+      "WITHDRAWN": "Image withdrawn",
+      "WITHDRAW_ERROR": "The image could not be withdrawn.",
+      "WITHDRAWN_LIST": "Withdrawn images ({{count}})",
+      "WITHDRAW_REASON": "Reason"
     }
   }
 }

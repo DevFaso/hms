@@ -2082,7 +2082,9 @@
       "IMAGING_PORTAL_READ_BY_PROXY": "Comptes rendus d’imagerie du patient {{patient}} consultés sur le portail patient par un mandataire ({{count}} examens)",
       "IMAGING_PORTAL_READ": "Comptes rendus d’imagerie du patient {{patient}} consultés sur le portail patient ({{count}} examens)",
       "IMAGING_PORTAL_IMAGE_VIEWED_BY_PROXY": "Image {{image}} de la demande d’imagerie {{order}} consultée sur le portail patient par un mandataire",
-      "IMAGING_PORTAL_IMAGE_VIEWED": "Image {{image}} de la demande d’imagerie {{order}} consultée sur le portail patient"
+      "IMAGING_PORTAL_IMAGE_VIEWED": "Image {{image}} de la demande d’imagerie {{order}} consultée sur le portail patient",
+      "IMAGING_IMAGE_WITHDRAWN": "Image {{image}} retirée de la demande d’imagerie {{order}}",
+      "IMAGING_IMAGE_CAPTION_CORRECTED": "Légende de l’image {{image}} corrigée sur la demande d’imagerie {{order}}"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -7394,7 +7396,9 @@
         "PATIENT_COVERAGE_PLAN_LINKED": "Couverture du patient liée à une formule",
         "PAYER_SHARE_APPLIED": "Part assureur appliquée à une facture",
         "PAYER_SHARE_DECIDED": "Décision de l’assureur sur sa part enregistrée",
-        "PAYER_SHARE_CANCELLED": "Part assureur annulée"
+        "PAYER_SHARE_CANCELLED": "Part assureur annulée",
+        "IMAGING_IMAGE_WITHDRAWN": "Image d’imagerie retirée",
+        "IMAGING_IMAGE_CAPTION_UPDATED": "Légende d’image d’imagerie corrigée"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -14570,7 +14574,8 @@
         "UNREACHABLE": "Le PACS est injoignable (adresse, réseau ou PACS arrêté).",
         "UNAUTHORIZED": "Le PACS a refusé le nom d'utilisateur ou le mot de passe.",
         "REJECTED": "Le PACS a répondu, mais pas comme un serveur DICOMweb. Vérifiez l'adresse (elle se termine en général par /dicom-web).",
-        "URL_REFUSED": "Cette adresse est refusée : e-Keneya n'appelle que des adresses https publiques."
+        "URL_REFUSED": "Cette adresse est refusée : e-Keneya n'appelle que des adresses https publiques.",
+        "HOST_NOT_FOUND": "L’adresse du PACS est introuvable : son hôte ne répond pas encore au nom. Vérifiez l’adresse, ou testez de nouveau une fois le PACS en service."
       },
       "CARD_TITLE": "Connexion PACS",
       "CARD_DESC": "Connectez le PACS de l'hôpital pour que les cliniciens voient les examens d'imagerie dans e-Keneya.",
@@ -14614,6 +14619,20 @@
       "REPORT": "Compte rendu",
       "IMAGES": "Clichés",
       "IMAGE_N": "Cliché {{n}}"
+    },
+    "MAX_SIZE_LABEL": "10 Mo",
+    "IMAGES": {
+      "SEND": "Envoyer ({{count}})",
+      "SAVE_CAPTION": "Enregistrer la légende",
+      "CAPTION_SAVED": "Légende enregistrée",
+      "CAPTION_ERROR": "La légende n’a pas pu être enregistrée.",
+      "WITHDRAW": "Retirer l’image",
+      "WITHDRAW_TITLE": "Retirer cette image ?",
+      "WITHDRAW_MESSAGE": "L’image est masquée pour tous les lecteurs, patient compris. Le fichier et ce motif sont conservés dans le dossier.",
+      "WITHDRAWN": "Image retirée",
+      "WITHDRAW_ERROR": "L’image n’a pas pu être retirée.",
+      "WITHDRAWN_LIST": "Images retirées ({{count}})",
+      "WITHDRAW_REASON": "Motif"
     }
   }
 }

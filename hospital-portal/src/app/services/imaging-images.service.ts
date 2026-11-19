@@ -21,6 +21,21 @@ export interface ImagingStudyImage {
   locked: boolean;
   /** The caller may remove it now. */
   deletable: boolean;
+  /** QA D2466: the caller may correct its caption (its uploader or a radiologist). */
+  captionEditable?: boolean;
+  /** QA D2464: the caller may withdraw it, with a reason, now that it is locked. */
+  withdrawable?: boolean;
+}
+
+/** QA D2464 (r64): a withdrawn image as the record keeps it (never its bytes). */
+export interface ImagingStudyImageWithdrawal {
+  id: string;
+  imagingOrderId: string;
+  imagingReportId?: string | null;
+  caption?: string | null;
+  withdrawnAt?: string | null;
+  withdrawnByUserId?: string | null;
+  withdrawalReason?: string | null;
 }
 
 /** The types the server accepts, checked before the upload so the refusal is immediate. */
@@ -64,6 +79,25 @@ export class ImagingImagesService {
 
   content(imageId: string): Observable<Blob> {
     return this.http.get(`${this.baseUrl}/images/${imageId}/content`, { responseType: 'blob' });
+  }
+
+  /** QA D2464 (r64): the study's withdrawn images, with when and why. */
+  withdrawn(orderId: string): Observable<ImagingStudyImageWithdrawal[]> {
+    return this.http.get<ImagingStudyImageWithdrawal[]>(
+      `${this.baseUrl}/orders/${orderId}/images/withdrawn`,
+    );
+  }
+
+  /** QA D2464 (r64): withdraw a locked image; the server keeps it for the record. */
+  withdraw(imageId: string, reason: string): Observable<void> {
+    return this.http.post<void>(`${this.baseUrl}/images/${imageId}/withdraw`, { reason });
+  }
+
+  /** QA D2466 (r64): correct an image's caption (audited). */
+  updateCaption(imageId: string, caption: string): Observable<ImagingStudyImage> {
+    return this.http.put<ImagingStudyImage>(`${this.baseUrl}/images/${imageId}/caption`, {
+      caption,
+    });
   }
 
   delete(imageId: string): Observable<void> {

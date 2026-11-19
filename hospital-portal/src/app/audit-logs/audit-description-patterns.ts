@@ -984,6 +984,17 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Imaging image (\S+) removed from imaging order (\S+)$/,
     params: ['image', 'order'],
   },
+  // QA D2464 / D2466 (r64): a key image withdrawn after signing; a caption corrected (ids only).
+  {
+    key: 'AUDIT.DESC.IMAGING_IMAGE_WITHDRAWN',
+    re: /^Imaging image (\S+) withdrawn from imaging order (\S+)$/,
+    params: ['image', 'order'],
+  },
+  {
+    key: 'AUDIT.DESC.IMAGING_IMAGE_CAPTION_CORRECTED',
+    re: /^Imaging image (\S+) caption corrected on imaging order (\S+)$/,
+    params: ['image', 'order'],
+  },
   // QA D2342 (r63): the patient's « Imagerie » page (ids only).
   {
     key: 'AUDIT.DESC.IMAGING_PORTAL_READ_BY_PROXY',

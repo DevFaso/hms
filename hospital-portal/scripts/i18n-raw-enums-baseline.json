@@ -74,6 +74,7 @@
     "src/app/encounters/encounters.html::enc.encounterType",
     "src/app/hospitals/hospital-detail.html::lc.suspensionReason",
     "src/app/hospitals/hospital-list.html::h.state",
+    "src/app/imaging/imaging-images/imaging-images.component.html::w.withdrawalReason",
     "src/app/imaging/imaging.html::d.studyType",
     "src/app/imaging/imaging.html::h.statusReason",
     "src/app/imaging/imaging.html::o.studyType",

@@ -76,6 +76,13 @@ export interface PacsConnectionTest {
 export class ImagingPacsService {
   private readonly http = inject(HttpClient);
 
+  /** QA D2467 (r64): is a PACS connected for this report's hospital? (No PACS is called.) */
+  viewerReady(reportId: string): Observable<{ ready: boolean }> {
+    return this.http.get<{ ready: boolean }>(
+      `/imaging/dicom/reports/${encodeURIComponent(reportId)}/viewer-ready`,
+    );
+  }
+
   viewer(reportId: string): Observable<ImagingStudyViewer> {
     return this.http.get<ImagingStudyViewer>(
       `/imaging/dicom/reports/${encodeURIComponent(reportId)}/viewer`,

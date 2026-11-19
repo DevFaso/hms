@@ -21,13 +21,22 @@ import {
   IMAGING_IMAGE_MAX_BYTES,
   ImagingImagesService,
   ImagingStudyImage,
+  ImagingStudyImageWithdrawal,
 } from '../../services/imaging-images.service';
+import { ReasonDialogComponent } from '../../shared/reason-dialog/reason-dialog.component';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 import { blobRefusalReason } from '../../shared/blob-refusal';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { MeasurePipe } from '../../shared/pipes/measure.pipe';
+
+/** QA D2466 (r64): a picked file waiting to be sent, with its own caption. */
+interface StagedFile {
+  key: number;
+  file: File;
+  caption: string;
+}
 
 /** One file on its way up. */
 interface PendingUpload {
@@ -60,6 +69,7 @@ const PAN_STEP = 40;
     FormsModule,
     TranslateModule,
     ModalDialogDirective,
+    ReasonDialogComponent,
     DateTimePipe,
     ServerTimePipe,
     MeasurePipe,
@@ -88,7 +98,16 @@ export class ImagingImagesComponent implements OnChanges, OnDestroy {
   readonly thumbs = signal<Record<string, SafeUrl>>({});
   readonly uploads = signal<PendingUpload[]>([]);
   readonly dragOver = signal(false);
-  caption = '';
+  /** QA D2466 (r64): the picked files, each with its own caption, until « Envoyer ». */
+  readonly staged = signal<StagedFile[]>([]);
+  /** QA D2466: the caption being corrected in the viewer. */
+  readonly captionDraft = signal('');
+  readonly captionSaving = signal(false);
+  /** QA D2464: the study's withdrawn images, with when and why (never shown as images). */
+  readonly withdrawnImages = signal<ImagingStudyImageWithdrawal[]>([]);
+  /** QA D2464: the image whose withdrawal asks for a reason. */
+  readonly withdrawing = signal<ImagingStudyImage | null>(null);
+  readonly withdrawBusy = signal(false);
 
   readonly viewerIndex = signal<number | null>(null);
   readonly zoom = signal(1);
@@ -144,12 +163,23 @@ export class ImagingImagesComponent implements OnChanges, OnDestroy {
         for (const image of images) {
           if (this.isImage(image)) this.fetchThumb(image);
         }
+        this.loadWithdrawn();
       },
       error: () => {
         this.loading.set(false);
         this.loadFailed.set(true);
       },
     });
+  }
+
+  /** A failed read hides the section only; the strip stays. */
+  private loadWithdrawn(): void {
+    this.subs.add(
+      this.imagesService.withdrawn(this.orderId).subscribe({
+        next: (list) => this.withdrawnImages.set(list ?? []),
+        error: () => this.withdrawnImages.set([]),
+      }),
+    );
   }
 
   isImage(image: ImagingStudyImage): boolean {
@@ -200,42 +230,68 @@ export class ImagingImagesComponent implements OnChanges, OnDestroy {
     return null;
   }
 
+  /**
+   * QA D2466 (r64): a picked file is staged with its own caption; a file the
+   * server would refuse is refused on screen at once and never staged.
+   */
   private uploadFiles(files: File[]): void {
     if (!this.canUpload) return;
-    const caption = this.caption;
     for (const file of files) {
       const key = ++this.uploadKey;
       const refusal = ImagingImagesComponent.refusalOf(file);
-      this.uploads.update((list) => [
-        ...list,
-        {
-          key,
-          name: file.name,
-          progress: 0,
-          error: refusal ? this.translate.instant(refusal, { max: '10 MB' }) : null,
-        },
-      ]);
-      if (refusal) continue;
-      this.subs.add(
-        this.imagesService.upload(this.orderId, file, this.reportId, caption).subscribe({
-          next: (event) => {
-            if (event.type === HttpEventType.UploadProgress && event.total) {
-              this.setUpload(key, { progress: Math.round((100 * event.loaded) / event.total) });
-            } else if (event.type === HttpEventType.Response) {
-              this.uploads.update((list) => list.filter((u) => u.key !== key));
-              this.load();
-            }
+      if (refusal) {
+        this.uploads.update((list) => [
+          ...list,
+          {
+            key,
+            name: file.name,
+            progress: 0,
+            // QA D2465: the limit as the reader writes it (« 10 Mo » in French).
+            error: this.translate.instant(refusal, {
+              max: this.translate.instant('IMAGING_COMPLETION.MAX_SIZE_LABEL'),
+            }),
           },
-          error: (err: unknown) => {
-            this.setUpload(key, {
-              error:
-                this.serverMessage(err) ?? this.translate.instant('IMAGING_IMAGES.ERROR_UPLOAD'),
-            });
-          },
-        }),
-      );
+        ]);
+        continue;
+      }
+      this.staged.update((list) => [...list, { key, file, caption: '' }]);
     }
-    this.caption = '';
+  }
+
+  setStagedCaption(key: number, caption: string): void {
+    this.staged.update((list) => list.map((s) => (s.key === key ? { ...s, caption } : s)));
+  }
+
+  unstage(key: number): void {
+    this.staged.update((list) => list.filter((s) => s.key !== key));
+  }
+
+  /** Sends every staged file, each with its own caption. */
+  sendStaged(): void {
+    const files = this.staged();
+    this.staged.set([]);
+    for (const staged of files) this.send(staged.key, staged.file, staged.caption);
+  }
+
+  private send(key: number, file: File, caption: string): void {
+    this.uploads.update((list) => [...list, { key, name: file.name, progress: 0, error: null }]);
+    this.subs.add(
+      this.imagesService.upload(this.orderId, file, this.reportId, caption || null).subscribe({
+        next: (event) => {
+          if (event.type === HttpEventType.UploadProgress && event.total) {
+            this.setUpload(key, { progress: Math.round((100 * event.loaded) / event.total) });
+          } else if (event.type === HttpEventType.Response) {
+            this.uploads.update((list) => list.filter((u) => u.key !== key));
+            this.load();
+          }
+        },
+        error: (err: unknown) => {
+          this.setUpload(key, {
+            error: this.serverMessage(err) ?? this.translate.instant('IMAGING_IMAGES.ERROR_UPLOAD'),
+          });
+        },
+      }),
+    );
   }
 
   dismissUpload(key: number): void {
@@ -244,6 +300,57 @@ export class ImagingImagesComponent implements OnChanges, OnDestroy {
 
   private setUpload(key: number, patch: Partial<PendingUpload>): void {
     this.uploads.update((list) => list.map((u) => (u.key === key ? { ...u, ...patch } : u)));
+  }
+
+  // ── Caption correction and withdrawal (QA D2466 / D2464, r64) ────────
+
+  saveCaption(image: ImagingStudyImage): void {
+    if (this.captionSaving() || this.captionDraft().trim() === (image.caption ?? '')) return;
+    this.captionSaving.set(true);
+    this.subs.add(
+      this.imagesService.updateCaption(image.id, this.captionDraft().trim()).subscribe({
+        next: (updated) => {
+          this.captionSaving.set(false);
+          this.images.update((list) => list.map((i) => (i.id === updated.id ? updated : i)));
+          this.toast.success(this.translate.instant('IMAGING_COMPLETION.IMAGES.CAPTION_SAVED'));
+        },
+        error: (err: unknown) => {
+          this.captionSaving.set(false);
+          this.toast.error(
+            this.serverMessage(err) ??
+              this.translate.instant('IMAGING_COMPLETION.IMAGES.CAPTION_ERROR'),
+          );
+        },
+      }),
+    );
+  }
+
+  askWithdraw(image: ImagingStudyImage): void {
+    this.withdrawing.set(image);
+  }
+
+  confirmWithdraw(reason: string): void {
+    const image = this.withdrawing();
+    if (!image || this.withdrawBusy()) return;
+    this.withdrawBusy.set(true);
+    this.subs.add(
+      this.imagesService.withdraw(image.id, reason).subscribe({
+        next: () => {
+          this.withdrawBusy.set(false);
+          this.withdrawing.set(null);
+          if (this.viewerIndex() !== null) this.closeViewer();
+          this.toast.success(this.translate.instant('IMAGING_COMPLETION.IMAGES.WITHDRAWN'));
+          this.load();
+        },
+        error: (err: unknown) => {
+          this.withdrawBusy.set(false);
+          this.toast.error(
+            this.serverMessage(err) ??
+              this.translate.instant('IMAGING_COMPLETION.IMAGES.WITHDRAW_ERROR'),
+          );
+        },
+      }),
+    );
   }
 
   // ── Removal ─────────────────────────────────────────────────────────
@@ -382,6 +489,7 @@ export class ImagingImagesComponent implements OnChanges, OnDestroy {
     this.clearViewerUrl();
     const image = this.current();
     if (!image) return;
+    this.captionDraft.set(image.caption ?? '');
     const known = this.objectUrls.get(image.id);
     if (known) {
       this.viewerImage.set(this.sanitizer.bypassSecurityTrustUrl(known));
