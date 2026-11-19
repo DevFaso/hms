@@ -162,6 +162,12 @@
   align-items: flex-start;
   gap: 4px;
   min-width: 11rem;
+
+  /* QA D2462 (r64): at a 1024 laptop the refill notes wrap narrower so
+     Prescripteur stays out from under the sticky actions column. */
+  @media (max-width: 1279px) {
+    min-width: 0;
+  }
 }
 
 .refill-note {

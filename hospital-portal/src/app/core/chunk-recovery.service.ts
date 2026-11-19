@@ -16,6 +16,13 @@ export const CHUNK_RECOVERY_BROWSER = new InjectionToken('CHUNK_RECOVERY_BROWSER
     write: (value: string) => window.sessionStorage.setItem(GUARD, value),
     clear: () => window.sessionStorage.removeItem(GUARD),
     navigate: (url: string) => window.location.assign(url),
+    online: () => window.navigator.onLine !== false,
+    // QA D2352: a phone with signal but no data still says "online"; ask the server.
+    reachable: () =>
+      fetch('/index.html', { method: 'HEAD', cache: 'no-store' }).then(
+        (response) => response.ok,
+        () => false,
+      ),
   }),
 });
 
@@ -25,6 +32,13 @@ export class ChunkRecoveryService {
   private readonly browser = inject(CHUNK_RECOVERY_BROWSER);
   private readonly router = inject(Router);
   readonly failedUrl = signal<string | null>(null);
+  /**
+   * QA D2352 (r63): the page failed because the connection is down, not
+   * because a deploy replaced the file. Reloading then gave the browser's
+   * blank error page, so the reader stays on the page they were on (with
+   * what they typed) and is told so, with a retry.
+   */
+  readonly offline = signal(false);
 
   constructor() {
     this.router.events.pipe(takeUntilDestroyed()).subscribe((event) => {
@@ -38,6 +52,7 @@ export class ChunkRecoveryService {
         /* Storage may be unavailable in privacy-restricted browsers. */
       }
       this.failedUrl.set(null);
+      this.offline.set(false);
     });
   }
 
@@ -53,6 +68,10 @@ export class ChunkRecoveryService {
     if (!error.url.startsWith('/') || error.url.startsWith('//') || error.url.includes('\\'))
       return;
     this.failedUrl.set(error.url);
+    if (!this.browser.online()) {
+      this.offline.set(true);
+      return;
+    }
     try {
       const route = this.routeKey(error.url);
       const attempts = this.attempts();
@@ -62,7 +81,19 @@ export class ChunkRecoveryService {
       // Without a persistent guard, automatic navigation could create a reload loop.
       return;
     }
-    this.browser.navigate(error.url);
+    this.navigateIfReachable(error.url);
+  }
+
+  /** Reload the failed page only when the server answers; otherwise say the connection is down. */
+  private navigateIfReachable(url: string): void {
+    void this.browser.reachable().then((reachable) => {
+      if (reachable) {
+        this.offline.set(false);
+        this.browser.navigate(url);
+      } else {
+        this.offline.set(true);
+      }
+    });
   }
 
   /** Persist configured route patterns only: never actual patient IDs, query strings or URLs. */
@@ -113,6 +144,11 @@ export class ChunkRecoveryService {
 
   reload(): void {
     const url = this.failedUrl();
-    if (url) this.browser.navigate(url);
+    if (!url) return;
+    if (!this.browser.online()) {
+      this.offline.set(true);
+      return;
+    }
+    this.navigateIfReachable(url);
   }
 }

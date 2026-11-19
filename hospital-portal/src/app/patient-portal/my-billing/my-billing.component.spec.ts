@@ -83,6 +83,10 @@ describe('MyBillingComponent', () => {
           PAYMENT_FAILED: 'Le paiement a échoué',
         },
       },
+      PORTAL_PAY_HOWTO: {
+        DECLARE_BUTTON: 'Déclarer un paiement',
+        DECLARE_TITLE: 'Déclarer un paiement déjà effectué',
+      },
     });
   });
 
@@ -103,7 +107,8 @@ describe('MyBillingComponent', () => {
       invoice({ id: 'c', balance: 0, status: 'PAID' }),
     ]);
     expect(host().querySelectorAll('.pay-btn').length).toBe(1);
-    expect(text('.pay-btn')).toContain('Payer');
+    // QA D2355: it declares a payment made at the cashier; it never takes money.
+    expect(text('.pay-btn')).toContain('Déclarer un paiement');
   });
 
   it('QA D202: a cancelled invoice is neither owed nor payable', () => {
@@ -191,7 +196,7 @@ describe('MyBillingComponent', () => {
   it('opens the dialog prefilled with the balance', () => {
     create([invoice({ balance: 75 })]);
     openDialog();
-    expect(text('[role="dialog"] h3')).toContain('Effectuer un paiement');
+    expect(text('[role="dialog"] h3')).toContain('Déclarer un paiement déjà effectué');
     expect(component.payAmount).toBe(75);
   });
 
@@ -340,6 +345,7 @@ describe('MyBillingComponent', () => {
     portal.payInvoice.and.returnValue(throwError(() => ({ status: 500 })));
     create([invoice()]);
     openDialog();
+    component.payMethod = 'CASH';
     component.payReference = 'CARD-1';
     (host().querySelector('.pay-submit-btn') as HTMLElement).click();
     fixture.detectChanges();
@@ -637,5 +643,47 @@ describe('MyBillingComponent', () => {
     });
     expect(mapped.balance).toBe(0);
     expect(mapped.refundDue).toBe(2000);
+  });
+
+  describe('QA D2355: how to pay', () => {
+    beforeEach(() => {
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation('fr', fr);
+    });
+
+    it('tells the patient the balance, where and how to pay, and the reference to give', () => {
+      create([invoice({ id: 'inv1', balance: 1800, amount: 1800 })]);
+      const howto = host().querySelector('[data-testid="pay-howto"]') as HTMLElement;
+      expect(howto).not.toBeNull();
+      const where = text('[data-testid="pay-howto-where"]');
+      expect(where).toContain(formatCfa(1800));
+      expect(where).toContain('caisse');
+      expect(where).toContain('espèces');
+      expect(where).toContain('mobile money');
+      expect(text('[data-testid="pay-howto-reference"]')).toContain('numéro de facture');
+      expect(text('[data-testid="pay-howto-online"]')).toContain('pas disponible');
+      expect(howto.textContent).not.toContain('PORTAL_PAY_HOWTO');
+      expect(text('[data-testid="pay-reference-inv1"]')).toContain(
+        component.invoices()[0].invoiceNumber,
+      );
+    });
+
+    it('says nothing about paying when nothing is owed', () => {
+      create([invoice({ id: 'p', balance: 0, paid: 100, status: 'PAID' })]);
+      expect(host().querySelector('[data-testid="pay-howto"]')).toBeNull();
+    });
+
+    it('the declare dialog says it takes no money and offers no card', () => {
+      create([invoice({ balance: 1800 })]);
+      openDialog();
+      expect(text('[data-testid="pay-declare-only"]')).toContain('aucun argent');
+      const methods = Array.from(
+        host().querySelectorAll<HTMLOptionElement>('#payMethod option'),
+      ).map((o) => o.value);
+      expect(methods).toEqual(['MOBILE_MONEY', 'CASH']);
+      expect(component.payMethod).toBe('MOBILE_MONEY');
+      expect(text('.pay-submit-btn')).toContain('Déclarer');
+      expect(text('.pay-submit-btn')).not.toContain('Payer');
+    });
   });
 });
