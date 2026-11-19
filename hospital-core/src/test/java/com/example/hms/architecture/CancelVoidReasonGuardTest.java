@@ -626,6 +626,8 @@ class CancelVoidReasonGuardTest {
             "NOT A CLINICAL RECORD: subscription plan");
         DELETE_PROOFS.put("DELETE /treatments/{id}",
             "NOT A CLINICAL RECORD: treatment catalogue entry (HOSPITAL_ADMIN)");
+        DELETE_PROOFS.put("DELETE /auth/mfa",
+            "NOT A CLINICAL RECORD: the caller's own authenticator, removed after a current or backup code (QA r64)");
         DELETE_PROOFS.put("DELETE /users/{id}",
             "NOT A CLINICAL RECORD: a user account");
         DELETE_PROOFS.put("DELETE /wards/{wardId}",

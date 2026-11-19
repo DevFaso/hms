@@ -89,6 +89,7 @@ class ClosedRecordWriteGuardTest {
         "PatientEducationServiceImpl#updateQuestion", 1, NO_TERMINAL_STATE,
         "PatientEducationServiceImpl#updateResource", 1, NO_TERMINAL_STATE,
         "PatientGuarantorServiceImpl#update", 1, NO_TERMINAL_STATE,
+        "PatientChannelPreferenceService#update", 1, "QA D2203: a patient's SMS / e-mail choices; turning messages off must stay open whatever the record's state",
         "PatientHospitalRegistrationServiceImpl#updateRegistration", 1, NO_TERMINAL_STATE,
         "PatientInsuranceServiceImpl#updatePatientInsurance", 1, NO_TERMINAL_STATE,
         "PatientPortalServiceImpl#updateMyNotificationPreferences", 1, NO_TERMINAL_STATE,

@@ -40,4 +40,12 @@ public class PatientNotificationDeliveryDTO {
     private LocalDateTime nextAttemptAt;
     private LocalDateTime sentAt;
     private LocalDateTime lastRetriedAt;
+    /**
+     * QA D2402: what the notice was about, so a row (an opt-out above all, which has no attempt) can be traced:
+     * the invoice number, or the lab order number. Null for the other kinds, and when the subject is gone.
+     */
+    private String subjectReference;
+    /** QA D2402: the appointment's day and start time, for an appointment notice. */
+    private java.time.LocalDate subjectDate;
+    private java.time.LocalTime subjectTime;
 }

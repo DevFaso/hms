@@ -133,4 +133,20 @@ public class LabResultResponseDTO {
     private LocalDateTime specimenCollectedAt;
     /** The laboratory the order was sent to, when it was not the ordering hospital's own (B1). */
     private String performingLabName;
+
+    /** r63 (NFS panels): true when this result carries one value per panel component. */
+    private boolean panel;
+    /** r63 (NFS panels): the component values, each graded against its own ranges. */
+    @Builder.Default
+    private List<LabResultComponentResponseDTO> components = java.util.Collections.emptyList();
+
+    /** r63 D2304: why this result was released while the test's QC was rejected, and when. */
+    private String qcOverrideReason;
+    private LocalDateTime qcOverrideAt;
+
+    /** r63 D2305: the laboratory's communication of this critical result at release. */
+    private String criticalCommunicatedTo;
+    private LocalDateTime criticalCommunicatedAt;
+    private String criticalCommunicationReadBack;
+    private String criticalCommunicatedBy;
 }

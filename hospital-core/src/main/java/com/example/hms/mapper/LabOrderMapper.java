@@ -78,6 +78,15 @@ public class LabOrderMapper {
             .labTestCode(labTestDefinition != null ? labTestDefinition.getTestCode() : null)
             // QA D1095: the unit a result of this test is entered in (prefilled on entry).
             .labTestUnit(labTestDefinition != null ? labTestDefinition.getUnit() : null)
+            // r63 D2312 / NFS panels: what result entry needs to warn on a critical
+            // value as it is typed and to offer one field per panel component.
+            .labTestReferenceRanges(labTestDefinition != null && labTestDefinition.getReferenceRanges() != null
+                ? labTestDefinition.getReferenceRanges().stream().filter(java.util.Objects::nonNull)
+                    .map(LabResultMapper::toReferenceRangeDto).toList()
+                : java.util.List.of())
+            .labTestComponents(labTestDefinition != null
+                ? LabTestDefinitionMapper.mapToDtoComponents(labTestDefinition.getComponents())
+                : java.util.List.of())
         .orderDatetime(labOrder.getOrderDatetime())
         .status(status)
             .priority(labOrder.getPriority())

@@ -939,7 +939,7 @@
       "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
     },
     "src/app/profile/profile.html::empty-submit-untested::type=submit": {
-      "count": 5,
+      "count": 4,
       "why": "D1256 class (round 29): not yet driven empty by a spec; standing debt"
     },
     "src/app/profile/profile.html::server-field-errors-unmapped::component": {

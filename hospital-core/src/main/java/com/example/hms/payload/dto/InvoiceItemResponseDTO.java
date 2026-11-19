@@ -48,4 +48,17 @@ public class InvoiceItemResponseDTO {
     /** Why the tariff was overridden ("Prix modifié — motif"), as typed; null when it was not. */
     private String overrideReason;
 
+    /**
+     * QA D2434: what the payer pays on this line ("Part assureur"), from the coverage applied at issue; 0 when no
+     * payer covers it. On a draft (QA D2437) it is the estimate of what the coverage would pay if the invoice were
+     * issued now, and {@link #payerShareEstimated} is true.
+     */
+    private BigDecimal payerShareAmount;
+
+    /** QA D2434: the line total less the payer's part ("Part patient"), before payments. */
+    private BigDecimal patientShareAmount;
+
+    /** QA D2437: the payer's part is an estimate (a draft): it is fixed only when the invoice is issued. */
+    private boolean payerShareEstimated;
+
 }

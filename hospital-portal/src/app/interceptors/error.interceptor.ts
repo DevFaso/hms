@@ -130,6 +130,21 @@ export const CREDENTIAL_CHECK_PATTERNS: readonly RegExp[] = [
 ];
 
 /**
+ * QA D2401: the sign-in steps taken before any session exists. Their 401 is
+ * the answer to what was typed (a wrong password, a wrong or spent MFA code,
+ * an expired challenge), never an expired session: it must reach the page
+ * that asked, with no refresh (which would replay the code and spend another
+ * attempt) and no sign-out (which threw the user from /mfa-challenge to an
+ * empty login page with no word on why). Every auth step that answers a typed
+ * value with 401 is listed here or in CREDENTIAL_CHECK_PATTERNS; the step-up
+ * code (X-Mfa-Token) is told apart by STEP_UP_REQUEST.
+ */
+export const PRE_SESSION_CHECK_PATTERNS: readonly RegExp[] = [
+  /\/auth\/login(?:[/?#]|$)/i,
+  /\/auth\/mfa\/verify(?:[?#]|$)/i,
+];
+
+/**
  * URL+method pairs already reported this session — a background GET that keeps
  * polling a forbidden endpoint must not flood the audit log.
  */
@@ -392,6 +407,9 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         // Its 401 (an already-expired bearer) must not start a refresh, which
         // would mint a new session mid-logout, nor call logout() again.
         if (req.url.includes('/auth/logout')) {
+          return throwError(() => error);
+        }
+        if (PRE_SESSION_CHECK_PATTERNS.some((p) => p.test(req.url))) {
           return throwError(() => error);
         }
         const isRefreshCall = req.url.includes('/auth/token/refresh');

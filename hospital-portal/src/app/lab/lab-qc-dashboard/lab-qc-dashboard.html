@@ -8,7 +8,261 @@
       <h1 id="diagnostics-lab-qc-dashboard-title">{{ 'LAB_QC.TITLE' | translate }}</h1>
       <p>{{ 'LAB_QC.SUBTITLE' | translate }}</p>
     </div>
+    @if (canRecord()) {
+      <div class="header-actions">
+        <button
+          type="button"
+          class="btn-primary"
+          data-testid="qc-record-open"
+          (click)="openRecordForm()"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
+          {{ 'LAB_QC.RECORD.OPEN' | translate }}
+        </button>
+      </div>
+    }
   </section>
+
+  <!-- r63 D2304: the bench records the daily controls here -->
+  @if (showRecordForm()) {
+    <section class="qc-record" aria-labelledby="qc-record-title" data-testid="qc-record-form">
+      <h2 class="section-title" id="qc-record-title">{{ 'LAB_QC.RECORD.TITLE' | translate }}</h2>
+      <p class="section-hint">{{ 'LAB_QC.RECORD.HINT' | translate }}</p>
+      <div data-submit-scope>
+        <div class="qc-form-grid">
+          <label class="qc-field">
+            <span>{{ 'LAB_QC.RECORD.TEST' | translate }} *</span>
+            <select
+              id="qc-test"
+              required
+              data-testid="qc-test"
+              [value]="qcTestId()"
+              (change)="selectTest(inputValue($event))"
+            >
+              <option value="">{{ 'LAB_QC.RECORD.TEST_PLACEHOLDER' | translate }}</option>
+              @for (t of tests(); track t.id) {
+                <option [value]="t.id" [selected]="t.id === qcTestId()">
+                  {{ t.testName }} ({{ t.testCode }})
+                </option>
+              }
+            </select>
+          </label>
+          <label class="qc-field">
+            <span>{{ 'LAB_QC.RECORD.LEVEL' | translate }} *</span>
+            <select
+              id="qc-level"
+              required
+              data-testid="qc-level"
+              (change)="selectLevel(inputValue($event))"
+            >
+              @for (level of levels; track level) {
+                <option [value]="level" [selected]="level === qcLevel()">
+                  {{
+                    (level === 'LOW_CONTROL' ? 'LAB_QC.CHART.LEVEL_LOW' : 'LAB_QC.CHART.LEVEL_HIGH')
+                      | translate
+                  }}
+                </option>
+              }
+            </select>
+          </label>
+          <label class="qc-field">
+            <span>{{ 'LAB_QC.RECORD.ANALYZER' | translate }}</span>
+            <input
+              type="text"
+              maxlength="100"
+              [value]="qcAnalyzer()"
+              (input)="qcAnalyzer.set(inputValue($event))"
+            />
+          </label>
+          <label class="qc-field">
+            <span>{{ 'LAB_QC.RECORD.LOT' | translate }}</span>
+            <input
+              type="text"
+              maxlength="100"
+              id="qc-lot"
+              data-testid="qc-lot"
+              [value]="qcLot()"
+              (input)="qcLot.set(inputValue($event))"
+            />
+          </label>
+          <label class="qc-field">
+            <span>{{ 'LAB_QC.RECORD.MEASURED' | translate }} *</span>
+            <input
+              id="qc-measured"
+              type="text"
+              inputmode="decimal"
+              required
+              data-testid="qc-measured"
+              [value]="qcMeasured()"
+              (input)="qcMeasured.set(inputValue($event))"
+            />
+          </label>
+          <label class="qc-field">
+            <span>{{ 'LAB_QC.RECORD.EXPECTED' | translate }}{{ currentTarget() ? '' : ' *' }}</span>
+            <input
+              id="qc-expected"
+              type="text"
+              inputmode="decimal"
+              [required]="!currentTarget()"
+              data-testid="qc-expected"
+              [value]="qcExpected()"
+              [placeholder]="
+                currentTarget() ? ('LAB_QC.RECORD.EXPECTED_FROM_TARGET' | translate) : ''
+              "
+              (input)="qcExpected.set(inputValue($event))"
+            />
+          </label>
+        </div>
+
+        <!-- Where the value sits against the director's target (standard Levey-Jennings reading) -->
+        <div class="qc-target-readout" data-testid="qc-target-readout">
+          @if (currentTarget(); as target) {
+            <span>
+              {{
+                'LAB_QC.TARGET.CURRENT'
+                  | translate
+                    : { mean: target.targetMean, sd: target.targetSd, lot: target.lotNumber || '—' }
+              }}
+            </span>
+            @if (liveFlag(); as flag) {
+              <span
+                class="qc-flag"
+                [class.qc-flag-ok]="flag === 'WITHIN_2SD'"
+                [class.qc-flag-warn]="flag === 'OUTSIDE_2SD'"
+                [class.qc-flag-fail]="flag === 'OUTSIDE_3SD'"
+                data-testid="qc-live-flag"
+                >{{
+                  'LAB_QC.SD_FLAG.' + flag | translate: { z: (liveZ() | number: '1.1-1') }
+                }}</span
+              >
+            }
+          } @else if (qcTestId()) {
+            <span class="muted">{{ 'LAB_QC.TARGET.NONE' | translate }}</span>
+          }
+        </div>
+
+        <fieldset class="qc-decision">
+          <legend>{{ 'LAB_QC.RECORD.DECISION' | translate }} *</legend>
+          <label class="qc-radio">
+            <input
+              type="radio"
+              name="qc-decision"
+              data-testid="qc-accept"
+              [checked]="qcAccepted() === true"
+              (change)="qcAccepted.set(true)"
+            />
+            {{ 'LAB_QC.RECORD.ACCEPT' | translate }}
+          </label>
+          <label class="qc-radio">
+            <input
+              type="radio"
+              name="qc-decision"
+              data-testid="qc-reject"
+              [checked]="qcAccepted() === false"
+              (change)="qcAccepted.set(false)"
+            />
+            {{ 'LAB_QC.RECORD.REJECT' | translate }}
+          </label>
+          @if (qcAccepted() === false) {
+            <p class="qc-reject-note" role="note">{{ 'LAB_QC.RECORD.REJECT_NOTE' | translate }}</p>
+          }
+        </fieldset>
+        <label class="qc-field qc-notes">
+          <span>{{ 'LAB_QC.RECORD.NOTES' | translate }}</span>
+          <textarea
+            rows="2"
+            maxlength="2048"
+            [value]="qcNotes()"
+            (input)="qcNotes.set(inputValue($event))"
+          ></textarea>
+        </label>
+        @if (recordError(); as message) {
+          <p class="qc-error" role="alert">{{ message }}</p>
+        }
+        <div class="qc-actions">
+          <button type="button" class="btn-secondary" (click)="closeRecordForm()">
+            {{ 'COMMON.CLOSE' | translate }}
+          </button>
+          <button
+            type="button"
+            class="btn-primary"
+            data-testid="qc-record-submit"
+            [disabled]="savingRun()"
+            [appSubmitGuard]="recordGuard()"
+            submitGuardRequired
+            (click)="recordRun()"
+          >
+            {{ 'LAB_QC.RECORD.SUBMIT' | translate }}
+          </button>
+        </div>
+      </div>
+
+      @if (canSetTargets() && qcTestId()) {
+        <!-- The laboratory director sets, and thereby approves, the target for this level -->
+        <fieldset class="qc-target-edit" data-testid="qc-target-edit" data-submit-scope>
+          <legend>{{ 'LAB_QC.TARGET.EDIT_TITLE' | translate }}</legend>
+          <div class="qc-form-grid">
+            <label class="qc-field">
+              <span>{{ 'LAB_QC.TARGET.MEAN' | translate }} *</span>
+              <input
+                id="qc-target-mean"
+                type="text"
+                inputmode="decimal"
+                required
+                data-testid="qc-target-mean"
+                [value]="targetMean()"
+                (input)="targetMean.set(inputValue($event))"
+              />
+            </label>
+            <label class="qc-field">
+              <span>{{ 'LAB_QC.TARGET.SD' | translate }} *</span>
+              <input
+                id="qc-target-sd"
+                type="text"
+                inputmode="decimal"
+                required
+                data-testid="qc-target-sd"
+                [value]="targetSd()"
+                (input)="targetSd.set(inputValue($event))"
+              />
+            </label>
+            <label class="qc-field">
+              <span>{{ 'LAB_QC.RECORD.LOT' | translate }}</span>
+              <input
+                type="text"
+                maxlength="100"
+                [value]="targetLot()"
+                (input)="targetLot.set(inputValue($event))"
+              />
+            </label>
+          </div>
+          @if (currentTarget()?.approvedByDisplay) {
+            <p class="section-hint">
+              {{
+                'LAB_QC.TARGET.APPROVED_BY'
+                  | translate
+                    : {
+                        name: currentTarget()?.approvedByDisplay,
+                        date: (currentTarget()?.approvedAt | serverTime | date: 'short'),
+                      }
+              }}
+            </p>
+          }
+          <button
+            type="button"
+            class="btn-secondary"
+            data-testid="qc-target-save"
+            [disabled]="savingTarget()"
+            [appSubmitGuard]="targetIncomplete()"
+            submitGuardRequired
+            (click)="saveTarget()"
+          >
+            {{ 'LAB_QC.TARGET.SAVE' | translate }}
+          </button>
+        </fieldset>
+      }
+    </section>
+  }
 
   @if (loading()) {
     <div class="loading-spinner">
@@ -38,29 +292,31 @@
         </div>
       </div>
 
-      <div class="summary-card">
-        <div class="icon-box bg-teal">
-          <span class="material-symbols-outlined">biotech</span>
+      @if (canSeeValidation()) {
+        <div class="summary-card">
+          <div class="icon-box bg-teal">
+            <span class="material-symbols-outlined">biotech</span>
+          </div>
+          <div>
+            <div class="value">{{ totalValidationStudies() }}</div>
+            <div class="label">{{ 'LAB_QC.VALIDATION_STUDIES' | translate }}</div>
+          </div>
         </div>
-        <div>
-          <div class="value">{{ totalValidationStudies() }}</div>
-          <div class="label">{{ 'LAB_QC.VALIDATION_STUDIES' | translate }}</div>
-        </div>
-      </div>
 
-      <div class="summary-card">
-        <div
-          class="icon-box"
-          [class.bg-green]="overallPassRate() >= 90"
-          [class.bg-amber]="overallPassRate() < 90"
-        >
-          <span class="material-symbols-outlined">verified</span>
+        <div class="summary-card">
+          <div
+            class="icon-box"
+            [class.bg-green]="overallPassRate() >= 90"
+            [class.bg-amber]="overallPassRate() < 90"
+          >
+            <span class="material-symbols-outlined">verified</span>
+          </div>
+          <div>
+            <div class="value">{{ overallPassRate() | measure: '%' }}</div>
+            <div class="label">{{ 'LAB_QC.VALIDATION_PASS_RATE' | translate }}</div>
+          </div>
         </div>
-        <div>
-          <div class="value">{{ overallPassRate() | measure: '%' }}</div>
-          <div class="label">{{ 'LAB_QC.VALIDATION_PASS_RATE' | translate }}</div>
-        </div>
-      </div>
+      }
     </div>
 
     <!-- ── QC Summary table ────────────────────────────────── -->
@@ -355,6 +611,62 @@
                         </div>
                       }
                     }
+                    @if (recentRuns().length > 0) {
+                      <!-- r63 D2304: the latest runs with their lot, operator and decision -->
+                      <div class="qc-runs" data-testid="qc-recent-runs">
+                        <h3 class="qc-runs-title">{{ 'LAB_QC.RUNS.TITLE' | translate }}</h3>
+                        <table class="data-table qc-runs-table">
+                          <thead>
+                            <tr>
+                              <th>{{ 'LAB_QC.RUNS.DATE' | translate }}</th>
+                              <th>{{ 'LAB_QC.RECORD.LEVEL' | translate }}</th>
+                              <th>{{ 'LAB_QC.RUNS.VALUE' | translate }}</th>
+                              <th>{{ 'LAB_QC.RECORD.LOT' | translate }}</th>
+                              <th>{{ 'LAB_QC.RUNS.OPERATOR' | translate }}</th>
+                              <th>{{ 'LAB_QC.RUNS.FLAG' | translate }}</th>
+                              <th>{{ 'LAB_QC.RUNS.DECISION' | translate }}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (run of recentRuns(); track run.id) {
+                              <tr>
+                                <td>{{ run.recordedAt | serverTime | date: 'short' }}</td>
+                                <td>
+                                  {{
+                                    (run.qcLevel === 'LOW_CONTROL'
+                                      ? 'LAB_QC.CHART.LEVEL_LOW'
+                                      : 'LAB_QC.CHART.LEVEL_HIGH'
+                                    ) | translate
+                                  }}
+                                </td>
+                                <td>{{ run.measuredValue }}</td>
+                                <td>{{ run.lotNumber || '—' }}</td>
+                                <td>{{ run.recordedByDisplay || '—' }}</td>
+                                <td>
+                                  {{
+                                    run.sdFlag
+                                      ? ('LAB_QC.SD_FLAG_SHORT.' + run.sdFlag | translate)
+                                      : '—'
+                                  }}
+                                </td>
+                                <td>
+                                  <span
+                                    class="badge"
+                                    [class.pass]="run.passed"
+                                    [class.fail]="!run.passed"
+                                  >
+                                    {{
+                                      (run.passed ? 'LAB_QC.RUNS.ACCEPTED' : 'LAB_QC.RUNS.REJECTED')
+                                        | translate
+                                    }}
+                                  </span>
+                                </td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      </div>
+                    }
                   </td>
                 </tr>
               }
@@ -365,60 +677,64 @@
     }
 
     <!-- ── Validation Summary table ────────────────────────── -->
-    <h2 class="section-title" id="diagnostics-qc-studies-title">
-      {{ 'LAB_QC.STUDIES_BY_TEST' | translate }}
-    </h2>
-    @if (validationSummary().length === 0) {
-      <div class="empty-state">
-        <span class="material-symbols-outlined">biotech</span>
-        <p>{{ 'LAB_QC.NO_STUDIES' | translate }}</p>
-      </div>
-    } @else {
-      <div
-        class="diagnostics-scroll"
-        tabindex="0"
-        role="region"
-        aria-labelledby="diagnostics-qc-studies-title"
-      >
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>{{ 'LAB_QC.COL.TEST_NAME' | translate }}</th>
-              <th>{{ 'LAB_QC.STUDIES_COL.CODE' | translate }}</th>
-              <th>{{ 'LAB_QC.STUDIES_COL.TOTAL' | translate }}</th>
-              <th>{{ 'LAB_QC.STUDIES_COL.PASSED' | translate }}</th>
-              <th>{{ 'LAB_QC.COL.FAILED' | translate }}</th>
-              <th>{{ 'LAB_QC.STUDIES_COL.PASS_RATE' | translate }}</th>
-              <th>{{ 'LAB_QC.STUDIES_COL.LAST_STUDY' | translate }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (row of validationSummary(); track row.testDefinitionId) {
+    @if (canSeeValidation()) {
+      <h2 class="section-title" id="diagnostics-qc-studies-title">
+        {{ 'LAB_QC.STUDIES_BY_TEST' | translate }}
+      </h2>
+      @if (validationSummary().length === 0) {
+        <div class="empty-state">
+          <span class="material-symbols-outlined">biotech</span>
+          <p>{{ 'LAB_QC.NO_STUDIES' | translate }}</p>
+        </div>
+      } @else {
+        <div
+          class="diagnostics-scroll"
+          tabindex="0"
+          role="region"
+          aria-labelledby="diagnostics-qc-studies-title"
+        >
+          <table class="data-table">
+            <thead>
               <tr>
-                <td>{{ row.testName }}</td>
-                <td>{{ row.testCode }}</td>
-                <td>{{ row.totalStudies }}</td>
-                <td>{{ row.passedStudies }}</td>
-                <td>{{ row.failedStudies }}</td>
-                <td>
-                  <span
-                    class="badge"
-                    [class.pass]="row.passRate >= 90"
-                    [class.fail]="row.passRate < 90"
-                  >
-                    {{ row.passRate | measure: '%' }}
-                  </span>
-                </td>
-                <td>
-                  {{
-                    row.lastStudyDate ? (row.lastStudyDate | serverTime | date: 'mediumDate') : '—'
-                  }}
-                </td>
+                <th>{{ 'LAB_QC.COL.TEST_NAME' | translate }}</th>
+                <th>{{ 'LAB_QC.STUDIES_COL.CODE' | translate }}</th>
+                <th>{{ 'LAB_QC.STUDIES_COL.TOTAL' | translate }}</th>
+                <th>{{ 'LAB_QC.STUDIES_COL.PASSED' | translate }}</th>
+                <th>{{ 'LAB_QC.COL.FAILED' | translate }}</th>
+                <th>{{ 'LAB_QC.STUDIES_COL.PASS_RATE' | translate }}</th>
+                <th>{{ 'LAB_QC.STUDIES_COL.LAST_STUDY' | translate }}</th>
               </tr>
-            }
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              @for (row of validationSummary(); track row.testDefinitionId) {
+                <tr>
+                  <td>{{ row.testName }}</td>
+                  <td>{{ row.testCode }}</td>
+                  <td>{{ row.totalStudies }}</td>
+                  <td>{{ row.passedStudies }}</td>
+                  <td>{{ row.failedStudies }}</td>
+                  <td>
+                    <span
+                      class="badge"
+                      [class.pass]="row.passRate >= 90"
+                      [class.fail]="row.passRate < 90"
+                    >
+                      {{ row.passRate | measure: '%' }}
+                    </span>
+                  </td>
+                  <td>
+                    {{
+                      row.lastStudyDate
+                        ? (row.lastStudyDate | serverTime | date: 'mediumDate')
+                        : '—'
+                    }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
     }
   }
 </div>

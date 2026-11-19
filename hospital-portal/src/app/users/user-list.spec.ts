@@ -4,7 +4,9 @@ import { By } from '@angular/platform-browser';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import fr from '../../assets/i18n/fr.json';
 import es from '../../assets/i18n/es.json';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
+import { expectEmptySubmitRefusal } from '../testing/form-refusal-behaviour';
 
 import { UserListComponent } from './user-list';
 import { UserService, UserDetail } from '../services/user.service';
@@ -625,5 +627,115 @@ describe('UserListComponent — no edit or delete on an account the caller may n
 
   it('shows edit and delete on the manageable row only', () => {
     expect(rowButtons()).toEqual({ edit: 1, del: 1 });
+  });
+});
+
+/** QA r64 (lost phone): an administrator resets a colleague's two-step verification, with a reason. */
+describe('UserListComponent — two-step verification reset', () => {
+  let fixture: ComponentFixture<UserListComponent>;
+  let users: jasmine.SpyObj<UserService>;
+  let toast: jasmine.SpyObj<ToastService>;
+  const colleague = {
+    id: 'u9',
+    firstName: 'Awa',
+    lastName: 'Traoré',
+    username: 'awa',
+    email: 'awa@example.test',
+    active: true,
+    deleted: false,
+    roleName: 'ROLE_NURSE',
+    profileType: 'STAFF',
+    roleCount: 1,
+  };
+
+  beforeEach(() => {
+    const page = { content: [colleague], number: 0, totalPages: 1, totalElements: 1 };
+    users = jasmine.createSpyObj<UserService>('UserService', ['list', 'search', 'resetMfa']);
+    users.list.and.returnValue(of(page) as never);
+    users.search.and.returnValue(of(page) as never);
+    users.resetMfa.and.returnValue(of({ message: 'server says done' }));
+    toast = jasmine.createSpyObj<ToastService>('ToastService', [
+      'success',
+      'error',
+      'warning',
+      'info',
+    ]);
+    TestBed.configureTestingModule({
+      imports: [UserListComponent, TranslateModule.forRoot()],
+      providers: [
+        {
+          provide: AuthService,
+          useValue: { getUserProfile: () => ({ id: 'me' }), getUserId: () => 'me' },
+        },
+        provideRouter([]),
+        { provide: UserService, useValue: users },
+        { provide: RoleService, useValue: { list: () => of([]) } },
+        {
+          provide: HospitalService,
+          useValue: { list: () => of({ content: [] }), getMyHospitalAsResponse: () => of(null) },
+        },
+        { provide: ToastService, useValue: toast },
+        { provide: RoleContextService, useValue: { isSuperAdmin: () => false } },
+        { provide: ImpersonationService, useValue: { active: () => null } },
+      ],
+    });
+    fixture = TestBed.createComponent(UserListComponent);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+  });
+
+  afterEach(() => fixture.nativeElement.remove());
+
+  const el = (selector: string): HTMLElement | null =>
+    (fixture.nativeElement as HTMLElement).querySelector(selector);
+
+  function open(): void {
+    (el('[data-testid="mfa-reset-u9"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+  }
+
+  it('offers the reset on a colleague, never on the signed-in account', () => {
+    expect(el('[data-testid="mfa-reset-u9"]')).not.toBeNull();
+    expect(el('[data-testid="mfa-reset-me"]')).toBeNull();
+  });
+
+  it('an empty reason is refused on its field, and nothing is sent', () => {
+    open();
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="mfa-reset-confirm"]',
+    });
+    expect(marked).toContain('mfa-reset-reason');
+    expect(users.resetMfa).not.toHaveBeenCalled();
+  });
+
+  it('sends the reason and the administrator code, then closes with the server word', () => {
+    open();
+    fixture.componentInstance.mfaResetReason.set('  Téléphone perdu  ');
+    fixture.componentInstance.mfaResetCode.set(' 123456 ');
+    fixture.componentInstance.executeMfaReset();
+    fixture.detectChanges();
+
+    expect(users.resetMfa).toHaveBeenCalledOnceWith('u9', 'Téléphone perdu', '123456');
+    expect(toast.success).toHaveBeenCalledWith('server says done');
+    expect(el('[data-testid="mfa-reset-dialog"]')).toBeNull();
+  });
+
+  it('a refused reset stays open with the server reason', () => {
+    users.resetMfa.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 403,
+            error: { code: 'mfa.stepup.invalid', message: 'Ce code n’a pas été accepté.' },
+          }),
+      ),
+    );
+    open();
+    fixture.componentInstance.mfaResetReason.set('Téléphone perdu');
+    fixture.componentInstance.executeMfaReset();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.mfaResetError()).toBe('Ce code n’a pas été accepté.');
+    expect(el('[data-testid="mfa-reset-dialog"]')).not.toBeNull();
   });
 });

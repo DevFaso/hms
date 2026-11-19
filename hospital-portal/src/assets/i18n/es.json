@@ -2078,7 +2078,11 @@
       "PAYER_TERMS_ADDED": "Rate and ceilings {{terms}} added to plan {{plan}}, effective {{from}}; closed: [{{closed}}]; replaced: [{{replaced}}]",
       "PAYER_SHARE_EVENT": "{{what}}: share {{share}} on invoice {{invoice}}",
       "PACS_SETTINGS_CHANGED": "Configuración de conexión PACS modificada",
-      "IMAGING_STUDY_VIEWED": "Estudio de imagen abierto en el visor ({{count}} imágenes)"
+      "IMAGING_STUDY_VIEWED": "Estudio de imagen abierto en el visor ({{count}} imágenes)",
+      "MFA_RESET_BY_ADMIN": "Verificación en dos pasos restablecida por un administrador: {{reason}}",
+      "MFA_RESET_REFUSED": "Restablecimiento de la verificación en dos pasos rechazado: el autor no administra esta cuenta",
+      "MFA_REMOVED_BY_USER": "Verificación en dos pasos quitada por el usuario",
+      "PATIENT_CHANNEL_CHOICES": "Opciones de canal del paciente registradas en recepción: {{changes}}"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -2743,7 +2747,7 @@
     },
     "PAYERS": {
       "TITLE": "Payers",
-      "SUBTITLE": "The mutuelles, insurers, employers and programmes that pay a share of a visit, with their plans and coverage rules. Nothing is applied to an invoice yet.",
+      "SUBTITLE": "The mutuelles, insurers, employers and programmes that pay a share of a visit, with their plans and coverage rules. The plan in force on the invoice date is applied when the invoice is issued.",
       "BACK_TO_BILLING": "Back to billing",
       "NEW_PAYER": "New payer",
       "EDIT": "Edit the payer",
@@ -2839,8 +2843,13 @@
       "NO_CARD_NUMBER": "This looks like a card number: e-Keneya never records card details.",
       "DECIDED_TOAST": "The insurer's decision is recorded.",
       "FAILED": "The insurer's decision could not be recorded.",
-      "LOAD_FAILED": "The insurer's shares could not be loaded."
-    }
+      "LOAD_FAILED": "The insurer's shares could not be loaded.",
+      "PAYER_SHARE_ESTIMATED": "Parte del asegurador (estimación)",
+      "PATIENT_SHARE_ESTIMATED": "Parte del paciente (estimación)",
+      "ESTIMATE_NOTE": "Estimación según el plan del paciente: la parte del asegurador se fija al emitir la factura."
+    },
+    "LINE_SHARES": "Asegurador: {{payer}} · Paciente: {{patient}}",
+    "LINE_SHARES_ESTIMATED": "Estimación — Asegurador: {{payer}} · Paciente: {{patient}}"
   },
   "CHAT": {
     "ACCESS_DENIED": "No tiene permiso para acceder a la mensajería.",
@@ -4560,7 +4569,26 @@
     "VERSION_LABEL": "v{{version}}",
     "NEW_VERSION": "Nueva versión (sujeta a aprobación)",
     "VERSION_CREATED": "Nueva versión borrador creada. Reemplazará a la activa una vez aprobada y activada.",
-    "VERSION_ERROR": "No se pudo crear la nueva versión."
+    "VERSION_ERROR": "No se pudo crear la nueva versión.",
+    "COMPONENTS": {
+      "TITLE": "Panel components",
+      "HINT": "For a panel such as a full blood count, add each component with its unit and ranges. Leave empty for a single-value test.",
+      "CODE": "Code",
+      "NAME": "Name",
+      "UNIT": "Unit",
+      "REMOVE": "Remove this component",
+      "GENDER": "Sex",
+      "GENDER_ALL": "All",
+      "GENDER_MALE": "Male",
+      "GENDER_FEMALE": "Female",
+      "MIN": "Min",
+      "MAX": "Max",
+      "CRITICAL_LOW": "Critical low",
+      "CRITICAL_HIGH": "Critical high",
+      "REMOVE_RANGE": "Remove this range",
+      "ADD_RANGE": "Add a range",
+      "ADD": "Add a component"
+    }
   },
   "LAB_RESULTS": {
     "QUOTED_READ_BACK_VALUE": "«{{value}}»",
@@ -4673,6 +4701,19 @@
     "CRITICAL_LIMITS": "Valores críticos",
     "NO_INTERVAL": "Sin intervalo",
     "OPEN_REQUEST": "Abrir la solicitud {{code}}",
+    "PANEL_LEGEND": "Panel values",
+    "PANEL_HINT": "Enter each component in its own unit. Leave a component blank if it was not measured.",
+    "CRITICAL_AT_ENTRY": {
+      "CRITICAL_LOW": "Below the critical low limit for this test.",
+      "CRITICAL_HIGH": "Above the critical high limit for this test.",
+      "BANNER": "A value is beyond the critical limits. Check it, then save: releasing it will ask who was told."
+    },
+    "SAVED_CRITICAL": "This result is critical. Release it promptly and record who was told.",
+    "CRITICAL_COMMUNICATED": "Critical result communicated",
+    "CRITICAL_COMMUNICATED_VALUE": "To {{to}}, read back: {{readBack}}",
+    "QC_OVERRIDE": "Released despite rejected QC",
+    "RELEASE_CRITICAL_FROM_WORKLIST": "A critical result is released from the release worklist, where you record who was told.",
+    "RELEASE_FROM_WORKLIST": "Release it from the release worklist.",
     "READ_BACK_CONFIRMED_DETAIL": "Relectura confirmada: {{test}} « {{value}} » — {{patient}}"
   },
   "LAB_RELEASE": {
@@ -4719,7 +4760,16 @@
     "SELF_RELEASE_CONFIRM": "Validarlo yo mismo",
     "CONFIRM_CORRECTION": "Este resultado es una corrección: validarlo sustituye un valor ya validado y comunicado al clínico y al paciente.",
     "GRADE_UNKNOWN_NOTE": "Sin evaluar: {{value}} es un límite que puede estar dentro o fuera del intervalo de referencia, por lo que no se puede emitir una alerta crítica. Al validarlo, confirma que lo revisó; se pedirá al médico que lo solicitó que lo revise.",
-    "UNGRADED_NOTE": "No evaluado: ningún intervalo de referencia está en la unidad de este valor ({{unit}}) ni es convertible, por lo que no puede generarse ninguna alerta crítica. Al validarlo confirma que lo revisó; se pedirá al médico solicitante que lo revise."
+    "UNGRADED_NOTE": "No evaluado: ningún intervalo de referencia está en la unidad de este valor ({{unit}}) ni es convertible, por lo que no puede generarse ninguna alerta crítica. Al validarlo confirma que lo revisó; se pedirá al médico solicitante que lo revise.",
+    "CRITICAL_TITLE": "Critical result",
+    "CRITICAL_HINT": "Call the clinician now and record the call: who you told, when, and the value they read back to you.",
+    "CRITICAL_TO": "Who was told",
+    "CRITICAL_TO_PLACEHOLDER": "Nombre y función (p. ej., Dr. Ouedraogo, de guardia)",
+    "CRITICAL_AT": "When",
+    "CRITICAL_READ_BACK": "Value read back",
+    "CRITICAL_READ_BACK_PLACEHOLDER": "As they repeated it",
+    "QC_OVERRIDE_REASON": "Reason for releasing despite the rejected QC",
+    "QC_BLOCKED": "The latest quality-control run for this test was rejected. Record a passing run, or give the reason for releasing anyway."
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Instrumentos de laboratorio",
@@ -5093,7 +5143,8 @@
     "TYPE_SYSTEM": "Sistema",
     "UNREAD": "No leído",
     "UNREAD_COUNT": "{{count}} notificaciones no leídas",
-    "VIEW_ALL": "Ver todo"
+    "VIEW_ALL": "Ver todo",
+    "SETTINGS_SECURITY_NOTE": "Los mensajes de seguridad de su cuenta (restablecimiento de contraseña, códigos de verificación) se envían siempre, sea cual sea su elección."
   },
   "NURSE": {
     "OVERSIGHT": {
@@ -7424,7 +7475,9 @@
         "PATIENT_COVERAGE_PLAN_LINKED": "Patient coverage linked to a plan",
         "PAYER_SHARE_APPLIED": "Insurer share applied to an invoice",
         "PAYER_SHARE_DECIDED": "Insurer's decision on its share recorded",
-        "PAYER_SHARE_CANCELLED": "Insurer share cancelled"
+        "PAYER_SHARE_CANCELLED": "Insurer share cancelled",
+        "MFA_RESET": "Verificación en dos pasos restablecida",
+        "PATIENT_CHANNEL_PREFERENCES_UPDATED": "Opciones de SMS / correo del paciente modificadas"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -7962,7 +8015,8 @@
         "PATIENT_NOTIFICATION_DELIVERY": "Patient notification send",
         "PAYER": "Payer",
         "PAYER_PLAN": "Payer plan",
-        "HOSPITAL_PACS_SETTINGS": "Conexión PACS"
+        "HOSPITAL_PACS_SETTINGS": "Conexión PACS",
+        "LAB_QC_TARGET": "Objetivo de CC del laboratorio"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Alergia",
@@ -8534,7 +8588,7 @@
     "ACTIVITY": "Actividad",
     "ACTIVITY_HINT": "Actividad reciente de la cuenta",
     "ADD_CONTACT": "Agregar contacto",
-    "ADD_MFA_HINT": "Agregue autenticación multifactor para mayor seguridad",
+    "ADD_MFA_HINT": "Añada la verificación en dos pasos para proteger mejor su cuenta",
     "ADD_RECOVERY_CONTACT": "Agregar un contacto de recuperación",
     "ADD_RECOVERY_HINT": "Agregue un contacto de recuperación",
     "AGE_DAY": "{{count}} día",
@@ -8595,16 +8649,16 @@
     "LOADING_ACTIVITY": "Cargando actividad...",
     "LOAD_FAILED": "No se pudo cargar el perfil. Vuelva a iniciar sesión.",
     "MEMBER_SINCE": "Miembro desde",
-    "MFA": "MFA",
+    "MFA": "Verificación en dos pasos",
     "MFA_CODE_LENGTH": "Introduzca un código válido de 6 dígitos.",
     "MFA_CODE_REJECTED": "Código no válido. Vuelva a intentarlo.",
-    "MFA_ENROLLED": "¡Inscripción MFA completada!",
-    "MFA_ENROLL_FAILED": "Error al iniciar la inscripción MFA.",
+    "MFA_ENROLLED": "¡Verificación en dos pasos activada!",
+    "MFA_ENROLL_FAILED": "No se pudo iniciar la configuración de la verificación en dos pasos.",
     "MFA_ENTER_CODE": "Introduzca el código de 6 dígitos de su aplicación de autenticación para verificar:",
     "MFA_MANUAL_SECRET": "O introduzca esta clave secreta manualmente:",
-    "MFA_QR_ALT": "Código QR TOTP",
+    "MFA_QR_ALT": "Código QR para su aplicación de autenticación",
     "MFA_SCAN_QR": "Escanee este código QR con su aplicación de autenticación (Google Authenticator, Authy, etc.):",
-    "MFA_STATUS": "Estado MFA",
+    "MFA_STATUS": "Verificación en dos pasos",
     "MIN_CHARS": "Mínimo 8 caracteres",
     "NEVER": "Nunca",
     "NEW_PASSWORD": "Nueva contraseña",
@@ -8612,7 +8666,7 @@
     "NOTIFICATIONS_TAB": "Notificaciones",
     "NO_ACTIVITY": "Sin actividad reciente",
     "NO_EMAIL_ON_FILE": "No hay ninguna dirección de correo registrada.",
-    "NO_MFA": "Sin MFA configurado",
+    "NO_MFA": "La verificación en dos pasos no está configurada",
     "NO_RECOVERY_CONTACTS": "Sin contactos de recuperación",
     "OLD_PASSWORD": "Contraseña anterior",
     "OVERVIEW": "Resumen",
@@ -8724,7 +8778,7 @@
     "MFA_SET_UP": "Configurar una aplicación de autenticación",
     "MFA_COUNTS": "{{enrolled}} registrado(s), {{verified}} verificado(s)",
     "RECOVERY_COUNTS": "{{configured}} configurado(s), {{verified}} verificado(s)",
-    "SET_UP_TOTP": "Configurar TOTP",
+    "SET_UP_TOTP": "Configurar una aplicación de autenticación",
     "CHANGE_PASSWORD_DESC": "Introduzca su contraseña actual y elija una nueva de al menos 8 caracteres.",
     "PASSWORD_TOO_SHORT": "La nueva contraseña debe tener al menos 8 caracteres.",
     "PASSWORD_SAME_AS_CURRENT": "La nueva contraseña debe ser distinta de la actual.",
@@ -8736,7 +8790,23 @@
     "SAVE_NEW_PASSWORD": "Guardar la nueva contraseña",
     "FORGOT_PASSWORD_DESC": "¿Olvidó su contraseña actual? Podemos enviarle un enlace de restablecimiento por correo electrónico.",
     "FORGOT_PASSWORD_DESC_SMS": "¿Olvidó su contraseña actual? Podemos enviarle un enlace de restablecimiento por SMS.",
-    "EMAIL_CANNOT_CLEAR": "Una cuenta conserva su dirección de correo electrónico: escriba una nueva dirección o conserve la actual."
+    "EMAIL_CANNOT_CLEAR": "Una cuenta conserva su dirección de correo electrónico: escriba una nueva dirección o conserve la actual.",
+    "MFA_METHOD_TOTP": "Aplicación de autenticación",
+    "MFA_METHOD_SMS": "Código por SMS",
+    "MFA_METHOD_EMAIL": "Código por correo electrónico",
+    "MFA_METHOD_OTHER": "Otro método",
+    "MFA_ACTIVE": "Activa",
+    "MFA_SETUP_UNFINISHED": "Configuración sin terminar",
+    "MFA_STATE_ACTIVE": "Activada",
+    "MFA_STATE_PENDING": "Configuración sin terminar",
+    "MFA_STATE_OFF": "Desactivada",
+    "MFA_REMOVE": "Quitar la verificación en dos pasos",
+    "MFA_REMOVE_INTRO": "Para quitar su aplicación de autenticación, introduzca un código actual de esa aplicación o uno de sus códigos de respaldo sin usar. Si su rol lo exige, configurará una nueva en su próximo inicio de sesión.",
+    "MFA_REMOVE_CONFIRM": "Quitar",
+    "MFA_REMOVED": "La verificación en dos pasos se quitó de su cuenta.",
+    "MFA_REMOVE_FAILED": "No se pudo quitar la verificación en dos pasos. Inténtelo de nuevo.",
+    "MFA_LOST_PHONE_HINT": "¿Perdió su teléfono y no le quedan códigos de respaldo? Pida al administrador de su establecimiento que restablezca su verificación en dos pasos.",
+    "MFA_REMOVE_ASK": "Su cuenta ya no pedirá un código al iniciar sesión, salvo que su rol lo exija. ¿Continuar?"
   },
   "RECEPTION": {
     "BOOK_RECALL": "Reservar cita",
@@ -9492,7 +9562,7 @@
     "PAGE_TITLE": "Configuración",
     "PRIVACY_DESC": "Consulte cómo se recopilan, usan y protegen sus datos.",
     "PRIVACY_TITLE": "Privacidad",
-    "SECURITY_DESC": "Cambie su contraseña, gestione MFA y revise sus contactos de recuperación.",
+    "SECURITY_DESC": "Cambie su contraseña, gestione la verificación en dos pasos y revise sus contactos de recuperación.",
     "SECURITY_TITLE": "Seguridad e inicio de sesión"
   },
   "SHELL": {
@@ -9857,7 +9927,20 @@
     "USERS_PLURAL": "Usuarios",
     "USER_SINGULAR": "Usuario",
     "ROLES_EDIT_HINT": "Los roles se asignan y retiran por hospital desde la página de asignaciones de roles.",
-    "STAFF_FIELDS_EDIT_HINT": "El hospital, el cargo, el tipo de empleo, la especialidad y la licencia son los registrados para este miembro del personal. Se modifican desde su ficha de personal, no aquí."
+    "STAFF_FIELDS_EDIT_HINT": "El hospital, el cargo, el tipo de empleo, la especialidad y la licencia son los registrados para este miembro del personal. Se modifican desde su ficha de personal, no aquí.",
+    "MFA_RESET": {
+      "ACTION": "Restablecer la verificación en dos pasos",
+      "TITLE": "Restablecer la verificación en dos pasos",
+      "INTRO": "Se borrarán la aplicación de autenticación y los códigos de respaldo de {{name}}. Si su rol lo exige, configurará una nueva en su próximo inicio de sesión. Hágalo solo después de comprobar su identidad.",
+      "REASON": "Motivo",
+      "REASON_PLACEHOLDER": "p. ej. Teléfono perdido, identidad comprobada en persona",
+      "REASON_REQUIRED": "Indique el motivo del restablecimiento (al menos 5 caracteres).",
+      "CODE": "Su código de verificación",
+      "CODE_HINT": "Un código actual de su propia aplicación de autenticación, o uno de sus códigos de respaldo, si la verificación en dos pasos está activada en su cuenta.",
+      "CONFIRM": "Restablecer",
+      "DONE": "La verificación en dos pasos se restableció.",
+      "FAILED": "No se pudo restablecer la verificación en dos pasos."
+    }
   },
   "TRIAGE": {
     "ACUITY": "Nivel de gravedad",
@@ -10984,6 +11067,61 @@
     "TOAST": {
       "LOAD_FAILED": "Error al cargar los datos del panel de CC.",
       "CHART_LOAD_FAILED": "Error al cargar los eventos de CC para el gráfico."
+    },
+    "RECORD": {
+      "OPEN": "Record a QC run",
+      "TITLE": "Record a quality-control run",
+      "HINT": "Run the controls before patient samples. A rejected run holds the test’s results until a passing run, or a release with a documented reason.",
+      "TEST": "Test",
+      "TEST_PLACEHOLDER": "Choose a test",
+      "LEVEL": "Control level",
+      "ANALYZER": "Instrument",
+      "LOT": "Control lot",
+      "MEASURED": "Measured value",
+      "EXPECTED": "Expected value",
+      "EXPECTED_FROM_TARGET": "Target mean used",
+      "DECISION": "Decision",
+      "ACCEPT": "Accept the run",
+      "REJECT": "Reject the run",
+      "REJECT_NOTE": "Results for this test will not be released until a passing run is recorded, or a release gives a reason.",
+      "NOTES": "Notes (corrective action)",
+      "SUBMIT": "Record the run",
+      "SAVED_ACCEPTED": "QC run recorded and accepted.",
+      "SAVED_REJECTED": "QC run recorded as rejected. Results for this test are held.",
+      "SAVE_FAILED": "Could not record the QC run.",
+      "TESTS_LOAD_FAILED": "Could not load the list of tests.",
+      "DECISION_REQUIRED": "Choose whether to accept or reject the run."
+    },
+    "TARGET": {
+      "CURRENT": "Target: mean {{mean}}, SD {{sd}} (lot {{lot}})",
+      "NONE": "No target set for this level: the run is recorded without an SD flag.",
+      "EDIT_TITLE": "Target for this level (lab director)",
+      "MEAN": "Target mean",
+      "SD": "Target SD",
+      "APPROVED_BY": "Approved by {{name}} on {{date}}",
+      "SAVE": "Save and approve the target",
+      "SAVED": "QC target saved.",
+      "SAVE_FAILED": "Could not save the QC target."
+    },
+    "SD_FLAG": {
+      "WITHIN_2SD": "Within ±2 SD ({{z}} SD)",
+      "OUTSIDE_2SD": "Outside ±2 SD ({{z}} SD): warning",
+      "OUTSIDE_3SD": "Outside ±3 SD ({{z}} SD)"
+    },
+    "SD_FLAG_SHORT": {
+      "WITHIN_2SD": "Within ±2 SD",
+      "OUTSIDE_2SD": "Outside ±2 SD",
+      "OUTSIDE_3SD": "Outside ±3 SD"
+    },
+    "RUNS": {
+      "TITLE": "Latest runs",
+      "DATE": "Date",
+      "VALUE": "Value",
+      "OPERATOR": "Operator",
+      "FLAG": "SD flag",
+      "DECISION": "Decision",
+      "ACCEPTED": "Accepted",
+      "REJECTED": "Rejected"
     }
   },
   "LAB_APPROVAL": {
@@ -13590,15 +13728,15 @@
     "ENROLL_COPY_CODES": "Copiar los códigos",
     "ENROLL_DONE": "Listo — ir al inicio de sesión",
     "ENROLL_ENTER_CODE": "Introduzca el código de 6 dígitos de su aplicación de autenticación para validar el registro:",
-    "ENROLL_INTRO": "Su cuenta requiere autenticación multifactor. Configure una aplicación de autenticación TOTP (por ejemplo, Google Authenticator, Authy) para proteger su cuenta.",
-    "ENROLL_QR_ALT": "Código QR TOTP",
+    "ENROLL_INTRO": "Su cuenta exige la verificación en dos pasos. Configure una aplicación de autenticación (por ejemplo, Google Authenticator, Authy) para proteger su cuenta.",
+    "ENROLL_QR_ALT": "Código QR para su aplicación de autenticación",
     "ENROLL_SCAN_QR": "Escanee este código QR con su aplicación de autenticación:",
     "ENROLL_SECRET_MANUAL": "O introduzca esta clave secreta manualmente:",
     "ENROLL_STARTING": "Configurando…",
-    "ENROLL_TITLE": "Autenticación multifactor",
+    "ENROLL_TITLE": "Verificación en dos pasos",
     "ENROLL_VERIFY": "Verificar",
     "ENROLL_VERIFYING": "Verificando…",
-    "CHALLENGE_INVALID_CODE": "Introduzca un código válido (TOTP de 6 dígitos o código de respaldo de 8 caracteres).",
+    "CHALLENGE_INVALID_CODE": "Introduzca un código válido (6 dígitos de su aplicación de autenticación o un código de respaldo de 8 caracteres).",
     "ENROLL_INVALID_CODE": "Introduzca un código válido de 6 dígitos.",
     "CHALLENGE_VERIFY_FAILED": "Error de verificación.",
     "CHALLENGE_WRONG_CODE": "Código incorrecto. Inténtelo de nuevo.",
@@ -14454,7 +14592,7 @@
     "COL_STATUS": "Status",
     "COL_ATTEMPTS": "Attempts",
     "COL_REASON": "Reason",
-    "COL_LAST_ATTEMPT": "Last attempt",
+    "COL_LAST_ATTEMPT": "Fecha y hora",
     "COL_ACTIONS": "Actions",
     "STATUS": {
       "PENDING": "Queued",
@@ -14507,7 +14645,13 @@
     },
     "MAYBE_DELIVERED": "The patient may already have received this message.",
     "RETRY_CONFIRM_TITLE": "Send this message again?",
-    "RETRY_CONFIRM_MESSAGE": "The provider gave no answer, so the patient may already have received this message. Retrying can send it twice."
+    "RETRY_CONFIRM_MESSAGE": "The provider gave no answer, so the patient may already have received this message. Retrying can send it twice.",
+    "HIDDEN_BY_FILTER": "{{count}} otro(s) envío(s) no se muestran con este filtro, incluidos los « No enviado » por elección del paciente.",
+    "SHOW_ALL": "Mostrar todos los estados",
+    "RECORDED": "Registrado (sin intento)",
+    "SUBJECT_APPOINTMENT": "Cita del {{date}} a las {{time}}",
+    "SUBJECT_INVOICE": "Factura {{number}}",
+    "SUBJECT_LAB_ORDER": "Solicitud de análisis {{number}}"
   },
   "IMAGING_PACS": {
     "STUDY_LINKED": "Estudio vinculado",
@@ -14592,6 +14736,13 @@
       "BASE_URL_REQUIRED": "Introduzca la dirección DICOMweb del PACS para activar el visor."
     }
   },
+  "LAB_PANEL": {
+    "TITLE": "Panel values",
+    "COL_COMPONENT": "Component",
+    "COL_VALUE": "Value",
+    "COL_RANGE": "Reference range",
+    "COL_FLAG": "Flag"
+  },
   "CONNECTIVITY": {
     "OFFLINE_TITLE": "No Internet connection.",
     "UNREACHABLE_TITLE": "The server is not answering: the connection seems to be down.",
@@ -14645,6 +14796,16 @@
     "DECLARE_TITLE": "Declare a payment already made",
     "DECLARE_ONLY": "This form takes no money: it tells the cashier about a payment you already made.",
     "DECLARE_SUBMIT": "Declare"
+  },
+  "PATIENT_CHANNELS": {
+    "TITLE": "SMS y correos al paciente",
+    "INTRO": "Lo que el paciente acepta recibir, por tipo de aviso. Desmarque a petición suya: el envío se detiene y « Notificaciones a pacientes » lo muestra como « No enviado ».",
+    "KIND": "Tipo de aviso",
+    "SECURITY_NOTE": "Los mensajes de seguridad de la cuenta (códigos, restablecimiento de contraseña) se envían siempre.",
+    "SAVE": "Guardar las opciones",
+    "SAVED": "Las opciones del paciente se guardaron.",
+    "SAVE_FAILED": "No se pudieron guardar las opciones del paciente.",
+    "LOAD_FAILED": "No se pudieron cargar las opciones del paciente."
   },
   "NOTE_ADDENDA": {
     "TITLE": "Adendas ({{count}})",

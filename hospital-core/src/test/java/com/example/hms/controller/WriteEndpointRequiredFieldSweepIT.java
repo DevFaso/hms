@@ -134,6 +134,9 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
      * /pattern". Stale entries fail.
      */
     private static final Map<String, String> NO_REQUIRED_FIELD = Map.ofEntries(
+        Map.entry("POST /lab-results/{id}/release",
+            "r63: the body documents a critical result's call or a QC override, each required by the service only"
+                + " when the result is critical or its QC rejected; a normal release sends none"),
         Map.entry("POST /appointments/search",
             SEARCH_FILTER),
         Map.entry("POST /billing-invoices/{invoiceId}/refunds/{refundId}/pay",

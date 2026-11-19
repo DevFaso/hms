@@ -258,6 +258,36 @@ class InvoiceCoverageServiceTest {
     }
 
     @Test
+    @DisplayName("QA D2437: a draft previews the split issue would apply, per line, writing nothing")
+    void aDraftPreviewsTheSplit() {
+        invoice.setStatus(InvoiceStatus.DRAFT);
+
+        CoverageCalculator.Result preview = service.previewForDraft(invoice).orElseThrow();
+
+        assertThat(preview.total()).isEqualByComparingTo("5600");
+        assertThat(preview.lines()).extracting(CoverageCalculator.LineShare::id)
+            .contains(consultation.getId(), xray.getId());
+        assertThat(preview.lines().stream().filter(l -> l.id().equals(xray.getId())).findFirst().orElseThrow()
+            .share()).isEqualByComparingTo("4000");
+        // Read-only: no lock, no share, nothing on the lines or the invoice, no audit row.
+        verify(insurances, org.mockito.Mockito.never()).lockById(any());
+        assertThat(ledger).isEmpty();
+        assertThat(xray.getPayerShareAmount()).isEqualByComparingTo("0");
+        assertThat(invoice.getPayerShareTotal()).isEqualByComparingTo("0");
+        org.mockito.Mockito.verifyNoInteractions(audit);
+    }
+
+    @Test
+    @DisplayName("QA D2437: no preview on an issued invoice, a copay, or without coverage")
+    void noPreviewOutsideADraft() {
+        assertThat(service.previewForDraft(invoice)).isEmpty();
+        invoice.setStatus(InvoiceStatus.DRAFT);
+        when(insurances.findByPatient_IdAndAssignment_Hospital_Id(invoice.getPatient().getId(), HOSPITAL_A))
+            .thenReturn(List.of());
+        assertThat(service.previewForDraft(invoice)).isEmpty();
+    }
+
+    @Test
     @DisplayName("the annual ceiling: with 148 000 F used this year, the share is capped at 2 000")
     void theAnnualCeilingIsReadForThisCoverageAndYear() {
         when(shares.sumUsedInYear(coverage.getId(), HOSPITAL_A, 2026, invoice.getId()))

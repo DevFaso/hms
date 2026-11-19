@@ -965,3 +965,80 @@
     min-width: 0;
   }
 }
+
+/* r63 (NFS panels): one field per panel component, wrapping on narrow screens */
+.panel-entry {
+  /* r63: a long label or an untranslated word wraps instead of widening the box. */
+  overflow-wrap: anywhere;
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.75rem 1rem 1rem;
+  margin: 0;
+  min-width: 0;
+
+  legend {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #334155;
+    padding: 0 0.35rem;
+  }
+}
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
+  gap: 0.75rem;
+}
+
+.panel-field {
+  min-width: 0;
+}
+
+.panel-code {
+  font-weight: 400;
+  color: #64748b;
+}
+
+.panel-input {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+
+  input {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+.panel-unit {
+  font-size: 0.8rem;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+/* r63 D2312: a value beyond the test's critical limits, said before saving */
+.critical-entry {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.critical-entry-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 600px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+}

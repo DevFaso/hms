@@ -58,6 +58,8 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
     private final com.example.hms.service.CriticalValueNotificationService criticalValueNotificationService;
     /** The one unit-matching rule, so a result in no configured unit is never auto-released. */
     private final com.example.hms.mapper.LabResultMapper labResultMapper;
+    /** r63 D2304: an analyzer's explicit normal is not auto-released while QC is rejected. */
+    private final com.example.hms.service.LabQcReleaseGate qcReleaseGate;
 
     /**
      * QA D938: an observation auto-released here tells the patient, as a
@@ -407,6 +409,10 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
         }
         // QA D1394: nor when a comparator's bound leaves the grade unknown.
         if (labResultMapper.isUngradedForUnitMismatch(result) || labResultMapper.isGradeUnknown(result)) {
+            return;
+        }
+        // r63 D2304: nor while the test's latest QC run is rejected; a person releases it, with a reason.
+        if (qcReleaseGate.isBlocked(order)) {
             return;
         }
         result.setReleased(true);

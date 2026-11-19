@@ -28,6 +28,10 @@ export interface LabOrderResponse {
   labTestDefinitionMissing?: boolean;
   /** QA D1095: the test definition's unit, prefilled when a result is entered. */
   labTestUnit?: string | null;
+  /** r63 D2312: the test's ranges (critical limits included), for the warning at entry. */
+  labTestReferenceRanges?: LabResultReferenceRange[];
+  /** r63 (NFS panels): the test's components; empty for a single-value test. */
+  labTestComponents?: LabTestComponent[];
   orderDatetime: string;
   status: string;
   clinicalIndication: string;
@@ -139,6 +143,38 @@ export interface LabResultResponse {
   specimenCollectedAt?: string | null;
   /** r44, single-result read only: the laboratory an outsourced order was sent to. */
   performingLabName?: string | null;
+  /** r63 (NFS panels): the result carries one value per panel component. */
+  panel?: boolean;
+  /** r63 (NFS panels): each component value, graded against its own range. */
+  components?: LabResultComponent[];
+  /** r63 D2304: why it was released while the test's QC was rejected, and when. */
+  qcOverrideReason?: string | null;
+  qcOverrideAt?: string | null;
+  /** r63 D2305: the laboratory's communication of a critical result at release. */
+  criticalCommunicatedTo?: string | null;
+  criticalCommunicatedAt?: string | null;
+  criticalCommunicationReadBack?: string | null;
+  criticalCommunicatedBy?: string | null;
+}
+
+/** r63 (NFS panels): one component value of a panel result. */
+export interface LabResultComponent {
+  code: string;
+  name: string;
+  value: string;
+  unit: string | null;
+  severityFlag: string | null;
+  referenceRange?: LabResultReferenceRange | null;
+}
+
+/** r63: what a release documents (POST /lab-results/{id}/release body). */
+export interface LabResultReleaseRequest {
+  /** D2305: for a CRITICAL result, who was told, when (ISO local date-time) and the read-back. */
+  criticalCommunicatedTo?: string;
+  criticalCommunicatedAt?: string;
+  criticalReadBack?: string;
+  /** D2304: required while the test's latest QC run is rejected. */
+  qcOverrideReason?: string;
 }
 
 export interface LabResultReferenceRange {
@@ -204,6 +240,16 @@ export interface LabTestDefinition {
   expectedResult?: string | null;
   turnaroundTime: number | null;
   referenceRanges?: LabTestReferenceRange[];
+  /** r63 (NFS panels): the panel's analytes; empty for a single-value test. */
+  components?: LabTestComponent[];
+}
+
+/** r63 (NFS panels): one analyte of a panel test, with its own unit and ranges. */
+export interface LabTestComponent {
+  code: string;
+  name: string;
+  unit: string | null;
+  referenceRanges: LabTestReferenceRange[];
 }
 
 export interface LabTestReferenceRange {
@@ -281,6 +327,50 @@ export interface LabQcEvent {
   recordedById: string | null;
   notes: string | null;
   createdAt: string;
+  /** r63 D2304: the control lot, the operator and the target the run was judged against. */
+  lotNumber?: string | null;
+  recordedByDisplay?: string | null;
+  targetMean?: number | null;
+  targetSd?: number | null;
+  /** WITHIN_2SD, OUTSIDE_2SD or OUTSIDE_3SD; null when no target was set. */
+  sdFlag?: 'WITHIN_2SD' | 'OUTSIDE_2SD' | 'OUTSIDE_3SD' | null;
+  zScore?: number | null;
+}
+
+/** r63 D2304: a QC run as the technician records it (POST /lab-qc-events). */
+export interface LabQcEventRequest {
+  hospitalId: string;
+  testDefinitionId: string;
+  analyzerId?: string;
+  qcLevel: QcEventLevel;
+  measuredValue: number;
+  /** Optional when the director set a target (its mean is used). */
+  expectedValue?: number;
+  lotNumber?: string;
+  /** The operator's decision: true accepts the run, false rejects it. */
+  accepted: boolean;
+  notes?: string;
+}
+
+/** r63 D2304: the lab director's target mean and SD for one test and control level. */
+export interface LabQcTarget {
+  id: string;
+  testDefinitionId: string;
+  testDefinitionName: string | null;
+  qcLevel: QcEventLevel;
+  targetMean: number;
+  targetSd: number;
+  lotNumber: string | null;
+  approvedByDisplay: string | null;
+  approvedAt: string | null;
+}
+
+export interface LabQcTargetRequest {
+  testDefinitionId: string;
+  qcLevel: QcEventLevel;
+  targetMean: number;
+  targetSd: number;
+  lotNumber?: string;
 }
 
 export interface LabQcSummary {
@@ -368,6 +458,8 @@ export interface LabResultRequest {
   notes?: string;
   /** D81: the released result on the same order that this new result corrects. */
   supersedesResultId?: string;
+  /** r63 (NFS panels): one value per component; the server composes resultValue from them. */
+  components?: { code: string; value: string }[];
 }
 
 export interface LabTestDefinitionRequest {
@@ -386,6 +478,8 @@ export interface LabTestDefinitionRequest {
   isActive?: boolean;
   assignmentId?: string;
   referenceRanges?: LabTestReferenceRange[];
+  /** r63 (NFS panels): omitted leaves them as they are; [] makes it a single-value test. */
+  components?: LabTestComponent[];
 }
 
 export type LabSpecimenStatus =
@@ -702,14 +796,16 @@ export class LabService {
     id: string,
     selfRelease = false,
     ungradedConfirmed = false,
+    release: LabResultReleaseRequest = {},
   ): Observable<LabResultResponse> {
     let params = new HttpParams();
     if (selfRelease) params = params.set('selfRelease', 'true');
     // QA D1092: the releaser confirms they reviewed a value no range could grade.
     if (ungradedConfirmed) params = params.set('ungradedConfirmed', 'true');
+    // r63: the body documents a critical result's communication and a QC override.
     return this.http.post<LabResultResponse>(
       `/lab-results/${id}/release`,
-      {},
+      release,
       params.keys().length ? { params } : {},
     );
   }
@@ -802,6 +898,30 @@ export class LabService {
         })
         .pipe(map((res) => res?.data)),
     );
+  }
+
+  /** r63 D2304: record a QC run (control level, value, lot, accept/reject). */
+  recordQcEvent(req: LabQcEventRequest): Observable<LabQcEvent> {
+    return this.http
+      .post<ApiWrapper<LabQcEvent>>('/lab-qc-events', req)
+      .pipe(map((res) => res.data));
+  }
+
+  /** r63 D2304: the acting hospital's QC targets, optionally for one test. */
+  getQcTargets(testDefinitionId?: string): Observable<LabQcTarget[]> {
+    const params = testDefinitionId
+      ? new HttpParams().set('testDefinitionId', testDefinitionId)
+      : new HttpParams();
+    return this.http
+      .get<ApiWrapper<LabQcTarget[]>>('/lab-qc-targets', { params })
+      .pipe(map((res) => res?.data ?? []));
+  }
+
+  /** r63 D2304: set (and thereby approve) a QC target. Lab director only. */
+  saveQcTarget(req: LabQcTargetRequest): Observable<LabQcTarget> {
+    return this.http
+      .put<ApiWrapper<LabQcTarget>>('/lab-qc-targets', req)
+      .pipe(map((res) => res.data));
   }
 
   getQcSummary(): Observable<LabQcSummary[]> {

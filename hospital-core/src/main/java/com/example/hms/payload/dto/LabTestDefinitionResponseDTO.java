@@ -64,6 +64,10 @@ public class LabTestDefinitionResponseDTO {
 
     @Default
     private List<LabTestReferenceRangeDTO> referenceRanges = Collections.emptyList();
+
+    /** r63 (NFS panels): the panel's analytes; empty for a single-value test. */
+    @Default
+    private List<LabTestComponentDTO> components = Collections.emptyList();
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

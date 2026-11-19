@@ -127,6 +127,7 @@ public class PdfInvoiceService {
                     it.getQuantity() != null ? String.valueOf(it.getQuantity()) : "",
                     money(it.getUnitPrice()),
                     money(lineTotal(it)));
+                lineShares(w, t, invoice, it);
             }
 
             for (var adjustment : adjustments) {
@@ -209,6 +210,22 @@ public class PdfInvoiceService {
             w.paragraph(BODY, 10, MARGIN, t.get("pdf.invoice.payerShareRejected", money(share.getAmount()),
                 share.getRejectionReason() == null ? "" : share.getRejectionReason().strip()));
         }
+    }
+
+    /**
+     * QA D2434: under each line of an invoice a payer covers, the payer's part and the patient's part of that line,
+     * so the claim can be checked act by act (a ceiling, an exclusion).
+     */
+    private static void lineShares(Writer w, PdfLabels t, BillingInvoice invoice, InvoiceItem item)
+            throws IOException {
+        if (com.example.hms.utility.InvoiceBalance.payerShareOf(invoice).signum() <= 0) {
+            return;
+        }
+        BigDecimal payer = nz(item.getPayerShareAmount()).max(BigDecimal.ZERO);
+        BigDecimal patient = nz(lineTotal(item)).subtract(payer).max(BigDecimal.ZERO);
+        w.ensureRoom(16);
+        w.down(13);
+        w.paragraph(BODY, 9, MARGIN + 12, t.get("pdf.invoice.lineShares", money(payer), money(patient)));
     }
 
     /**

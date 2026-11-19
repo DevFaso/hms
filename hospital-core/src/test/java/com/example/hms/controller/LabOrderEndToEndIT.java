@@ -89,6 +89,16 @@ class LabOrderEndToEndIT extends BaseIT {
     private static final String LAB_ORDER_SPECIMENS = LAB_ORDERS + "/{id}/specimens";
     private static final String SPECIMEN_RECEIVE = API + "/lab-specimens/{id}/receive";
     private static final String RESULT_RELEASE = LAB_RESULTS + "/{id}/release";
+
+    /**
+     * r63 D2305: a release documents the laboratory's call; required for a
+     * critical result, ignored for any other, so every release here sends it.
+     */
+    private static String criticalCall() {
+        return "{\"criticalCommunicatedTo\":\"Dr On Call\",\"criticalCommunicatedAt\":\""
+            + java.time.LocalDateTime.now().minusMinutes(1).withNano(0)
+            + "\",\"criticalReadBack\":\"as reported\"}";
+    }
     private static final String RESULT_ACKNOWLEDGE = LAB_RESULTS + "/{id}/acknowledge";
     private static final String RESULT_READ_BACK = LAB_RESULTS + "/{id}/critical-read-back";
     private static final String REVIEW_QUEUE = API + "/me/results/review-queue";
@@ -258,7 +268,8 @@ class LabOrderEndToEndIT extends BaseIT {
         //    only result of the order is now released, so the order is
         //    COMPLETED (B2).
         mockMvc.perform(post(RESULT_RELEASE, resultId).contextPath(API).param("selfRelease", "true")
-                .with(signedInAs(scientist)).with(csrf()))
+                .with(signedInAs(scientist)).with(csrf())
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON).content(criticalCall()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.released").value(true))
             .andExpect(jsonPath("$.selfReleased").value(true));
@@ -367,7 +378,8 @@ class LabOrderEndToEndIT extends BaseIT {
         assertThat(labResultRepository.findById(resultId).orElseThrow().isReleased()).isFalse();
 
         mockMvc.perform(post(RESULT_RELEASE, resultId).contextPath(API).param("ungradedConfirmed", "true")
-                .with(signedInAs(director)).with(csrf()))
+                .with(signedInAs(director)).with(csrf())
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON).content(criticalCall()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.gradeUnknown").value(true));
 
@@ -571,7 +583,8 @@ class LabOrderEndToEndIT extends BaseIT {
         collectSpecimen(orderId);
         UUID resultId = idOf(postResult(scientist, orderId, CRITICAL_VALUE).andExpect(status().isCreated())
             .andReturn().getResponse().getContentAsString());
-        mockMvc.perform(post(RESULT_RELEASE, resultId).contextPath(API).with(signedInAs(director)).with(csrf()))
+        mockMvc.perform(post(RESULT_RELEASE, resultId).contextPath(API).with(signedInAs(director)).with(csrf())
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON).content(criticalCall()))
             .andExpect(status().isOk());
         UUID strandedOrderId = placeOrder(LocalDateTime.now().minusHours(1));
         UUID definitionId = testDefinition.getId();
@@ -794,7 +807,8 @@ class LabOrderEndToEndIT extends BaseIT {
 
     /** Releases a result as someone other than its author (no self-release confirmation). */
     private void releaseAs(Actor actor, UUID resultId) throws Exception {
-        mockMvc.perform(post(RESULT_RELEASE, resultId).contextPath(API).with(signedInAs(actor)).with(csrf()))
+        mockMvc.perform(post(RESULT_RELEASE, resultId).contextPath(API).with(signedInAs(actor)).with(csrf())
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON).content(criticalCall()))
             .andExpect(status().isOk());
     }
 
