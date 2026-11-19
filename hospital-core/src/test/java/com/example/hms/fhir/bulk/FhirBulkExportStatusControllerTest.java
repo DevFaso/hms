@@ -6,8 +6,6 @@ import static org.mockito.Mockito.when;
 
 import com.example.hms.model.platform.FhirBulkExportFile;
 import com.example.hms.model.platform.FhirBulkExportJob;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -16,7 +14,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.io.Resource;
@@ -39,9 +36,6 @@ class FhirBulkExportStatusControllerTest {
 
     private UUID jobId;
     private FhirBulkExportJob job;
-
-    @TempDir
-    Path tempDir;
 
     @BeforeEach
     void setUp() {
@@ -145,9 +139,9 @@ class FhirBulkExportStatusControllerTest {
     @Test
     void downloadStreamsACompletedJobsFile() throws Exception {
         job.setStatus(FhirBulkExportJob.Status.COMPLETED);
-        Path file = tempDir.resolve("Patient.ndjson");
-        Files.writeString(file, "{\"resourceType\":\"Patient\"}\n");
-        when(service.resolveOutputFile(job, "Patient.ndjson")).thenReturn(file);
+        byte[] line = "{\"resourceType\":\"Patient\"}\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        when(service.openOutputFile(job, "Patient.ndjson")).thenReturn(
+            new com.example.hms.storage.StoredObject(new java.io.ByteArrayInputStream(line), line.length));
 
         ResponseEntity<Resource> response = controller.download(jobId, "Patient.ndjson");
 
@@ -155,7 +149,7 @@ class FhirBulkExportStatusControllerTest {
         assertThat(response.getHeaders().getContentType().toString())
             .isEqualTo("application/fhir+ndjson");
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().contentLength()).isGreaterThan(0);
+        assertThat(response.getBody().contentLength()).isEqualTo(line.length);
     }
 
     @Test

@@ -5,32 +5,31 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Patient;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.service.PatientPhotoService;
+import com.example.hms.storage.FileStorage;
+import com.example.hms.storage.StorageKeys;
+import com.example.hms.storage.StoredObject;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 /**
- * Filesystem-backed patient photos (P3 #21). A patient photo leaves the
- * server only through the authenticated streaming endpoint: the only upload
- * path served without a token is {@code /uploads/profile-images/**}
- * (WebConfig, SecurityConfig), so the directory may sit under the upload root.
- * QA D1184 (round 22): it does by default ({@code <app.upload.dir>/patient-photos}),
- * because a sibling of the upload root is not on the persistent volume mounted
- * there: the old default, {@code patient-photos} relative to the working
- * directory, was on the container's own disk and lost at every deploy.
+ * Patient photos (P3 #21), kept in {@link FileStorage} under
+ * {@code patient-photos/<name>}: the directory they always had under the
+ * upload root (QA D1184), so the names stored on patient rows resolve in the
+ * local directory and in the bucket alike. A patient photo leaves the server
+ * only through the authenticated streaming endpoint: the only stored class
+ * served without a token is profile images ({@code ProfileImageController},
+ * SecurityConfig). The patient row stores the bare file name.
  * Validation mirrors the profile-image rules (5 MB, image/*, extension allowlist).
  */
 @Slf4j
@@ -42,13 +41,15 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
     private static final Set<String> ALLOWED_EXTENSIONS =
         Set.of(".jpg", ".jpeg", ".png", ".gif", ".webp");
 
-    private final PatientRepository patientRepository;
-    private final Path photoDir;
+    /** The storage prefix of patient photos: the subdirectory they had under the upload root. */
+    static final String PHOTO_PREFIX = "patient-photos/";
 
-    public PatientPhotoServiceImpl(PatientRepository patientRepository,
-                                   @Value("${app.patient-photo.dir:${app.upload.dir:uploads}/patient-photos}") String photoDir) {
+    private final PatientRepository patientRepository;
+    private final FileStorage storage;
+
+    public PatientPhotoServiceImpl(PatientRepository patientRepository, FileStorage storage) {
         this.patientRepository = patientRepository;
-        this.photoDir = Paths.get(photoDir).toAbsolutePath().normalize();
+        this.storage = storage;
     }
 
     @Override
@@ -82,13 +83,14 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
         // stated plainly here and pinned by
         // rapidReplacementsNeverCollideAndNeverLoseTheStoredFile.
         String filename = patientId + "_photo_" + UUID.randomUUID() + extension;
+        String key = keyOf(filename);
+        if (key == null) {
+            throw new BusinessException("patient.photo.invalidName");
+        }
         try {
-            Files.createDirectories(photoDir);
-            Path target = photoDir.resolve(filename).normalize();
-            if (!target.startsWith(photoDir)) {
-                throw new BusinessException("patient.photo.invalidName");
+            try (InputStream in = file.getInputStream()) {
+                storage.put(key, in, file.getSize(), file.getContentType());
             }
-            Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
 
             String previousPath = patient.getPhotoFilePath();
             LocalDateTime now = LocalDateTime.now();
@@ -111,18 +113,21 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
         if (storedName == null || storedName.isBlank()) {
             throw new ResourceNotFoundException("patientPhoto.notFound", patientId);
         }
-        Path path = photoDir.resolve(storedName).normalize();
-        if (!path.startsWith(photoDir)) {
-            throw new ResourceNotFoundException("patientPhoto.notFound", patientId);
-        }
-        if (!Files.exists(path)) {
-            // QA D1184 (round 22): recorded but gone from the disk.
-            log.warn("Patient photo file missing under '{}' (directory present: {})", photoDir, Files.isDirectory(photoDir));
+        String key = keyOf(storedName);
+        if (key == null) {
             throw new ResourceNotFoundException("patientPhoto.notFound", patientId);
         }
         try {
-            return new PhotoPayload(Files.readAllBytes(path),
-                patient.getPhotoContentType() != null ? patient.getPhotoContentType() : "image/jpeg");
+            Optional<StoredObject> stored = storage.get(key);
+            if (stored.isEmpty()) {
+                // QA D1184 (round 22): recorded but no longer stored.
+                log.warn("Patient photo file missing in {}", storage.describe());
+                throw new ResourceNotFoundException("patientPhoto.notFound", patientId);
+            }
+            try (StoredObject object = stored.get()) {
+                return new PhotoPayload(object.content().readAllBytes(),
+                    patient.getPhotoContentType() != null ? patient.getPhotoContentType() : "image/jpeg");
+            }
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to read the patient photo", e);
         }
@@ -179,15 +184,28 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
         return dot >= 0 ? filename.substring(dot).toLowerCase(Locale.ROOT) : "";
     }
 
+    /** The storage key of a stored photo name, or {@code null} when the name is not a plain file name. */
+    private static String keyOf(String storedName) {
+        if (storedName.contains("/")) {
+            return null;
+        }
+        try {
+            return StorageKeys.requireValid(PHOTO_PREFIX + storedName);
+        } catch (IllegalArgumentException invalid) {
+            return null;
+        }
+    }
+
     private void deleteQuietly(String storedName) {
         if (storedName == null || storedName.isBlank()) {
             return;
         }
+        String key = keyOf(storedName);
+        if (key == null) {
+            return;
+        }
         try {
-            Path path = photoDir.resolve(storedName).normalize();
-            if (path.startsWith(photoDir)) {
-                Files.deleteIfExists(path);
-            }
+            storage.delete(key);
         } catch (IOException e) {
             log.warn("Failed to delete previous patient photo {}: {}", storedName, e.getMessage());
         }

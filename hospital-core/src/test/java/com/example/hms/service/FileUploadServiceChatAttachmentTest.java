@@ -28,8 +28,7 @@ class FileUploadServiceChatAttachmentTest {
 
     @BeforeEach
     void setUp() {
-        service = new FileUploadService();
-        ReflectionTestUtils.setField(service, "uploadDir", tempDir.toString());
+        service = new FileUploadService(new com.example.hms.storage.LocalFileStorage(tempDir));
         ReflectionTestUtils.setField(service, "publicBaseUrl", "https://hms.example");
         ReflectionTestUtils.setField(service, "backendBaseUrl", "http://localhost:8081");
     }

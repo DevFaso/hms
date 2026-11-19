@@ -199,10 +199,9 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
         // filePath is the server-assigned storage key from upload time —
         // never client input — and resolveStoredFile pins it inside the
         // patient-documents subdirectory.
-        java.nio.file.Path path = fileUploadService.resolveStoredFile(doc.getFilePath(), "patient-documents");
         String contentType = doc.getMimeType() != null ? doc.getMimeType() : "application/octet-stream";
         String displayName = doc.getDisplayName() != null ? doc.getDisplayName() : "document";
-        return new DocumentPayload(path, contentType, displayName);
+        return new DocumentPayload(openDocument(doc), contentType, displayName);
     }
 
     // ── Staff surface ───────────────────────────────────────────────────
@@ -255,11 +254,19 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
         PatientUploadedDocument doc = requireOwnDocument(patientId, documentId);
         requireIssuedHereOrUploaded(doc, hospitalId, documentId);
         requireTypeVisible(doc, documentId);
-        java.nio.file.Path path = fileUploadService.resolveStoredFile(doc.getFilePath(), "patient-documents");
+        // Opened before the audit (a missing file is a 404 with no download
+        // recorded); the audit never throws, so the stream cannot leak.
+        org.springframework.core.io.Resource resource = openDocument(doc);
         auditStaffDownload(hospitalId, patientId, reach, doc);
         String contentType = doc.getMimeType() != null ? doc.getMimeType() : "application/octet-stream";
         String displayName = doc.getDisplayName() != null ? doc.getDisplayName() : "document";
-        return new DocumentPayload(path, contentType, displayName);
+        return new DocumentPayload(resource, contentType, displayName);
+    }
+
+    /** The stored bytes of a document, opened for one streamed response. */
+    private org.springframework.core.io.Resource openDocument(PatientUploadedDocument doc) {
+        return new com.example.hms.storage.StoredObjectResource(
+            fileUploadService.openStoredFile(doc.getFilePath(), "patient-documents"));
     }
 
     /**
