@@ -2078,7 +2078,11 @@
       "PAYER_TERMS_ADDED": "Rate and ceilings {{terms}} added to plan {{plan}}, effective {{from}}; closed: [{{closed}}]; replaced: [{{replaced}}]",
       "PAYER_SHARE_EVENT": "{{what}}: share {{share}} on invoice {{invoice}}",
       "PACS_SETTINGS_CHANGED": "PACS connection settings changed",
-      "IMAGING_STUDY_VIEWED": "Imaging study opened in the viewer ({{count}} images)"
+      "IMAGING_STUDY_VIEWED": "Imaging study opened in the viewer ({{count}} images)",
+      "IMAGING_PORTAL_READ_BY_PROXY": "Imaging reports of patient {{patient}} read on the patient portal by a proxy ({{count}} studies)",
+      "IMAGING_PORTAL_READ": "Imaging reports of patient {{patient}} read on the patient portal ({{count}} studies)",
+      "IMAGING_PORTAL_IMAGE_VIEWED_BY_PROXY": "Image {{image}} of imaging order {{order}} viewed on the patient portal by a proxy",
+      "IMAGING_PORTAL_IMAGE_VIEWED": "Image {{image}} of imaging order {{order}} viewed on the patient portal"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -5053,7 +5057,8 @@
     "UNSIGNED_NOTES": "Unsigned notes",
     "PRICE_LIST": "Price list",
     "PATIENT_NOTIFICATIONS": "Patient notifications",
-    "PAYERS": "Payers"
+    "PAYERS": "Payers",
+    "MY_IMAGING": "Imaging"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Critical alert",
@@ -14571,6 +14576,44 @@
       "CARD_DESC": "Connect the hospital's PACS so clinicians see imaging studies in e-Keneya.",
       "CARD_ACTION": "Configure the PACS",
       "BASE_URL_REQUIRED": "Enter the PACS DICOMweb address to switch the viewer on."
+    }
+  },
+  "IMAGING_COMPLETION": {
+    "TO_SIGN": "To sign",
+    "ADD_ADDENDUM": "Add an addendum",
+    "PRINT": "Print",
+    "SIGNED_BY_ON": "Signed by {{name}} on {{date}}",
+    "OTHER_VERSIONS": "Other versions of this report",
+    "NOT_SIGNED": "Not signed yet",
+    "OPEN_REPORT": "Open the report",
+    "CONTEXT": {
+      "TITLE": "Patient context",
+      "LOADING": "Loading the patient context…",
+      "LOAD_FAILED": "The patient context could not be loaded.",
+      "AGE": "Age",
+      "AGE_YEARS": "{{n}} years",
+      "SEX": "Sex",
+      "NOT_RECORDED": "Not recorded",
+      "PREGNANCY": "Pregnancy",
+      "PREGNANCY_RECORDED": "Pregnancy recorded, due {{date}}",
+      "PREGNANCY_NONE": "No ongoing pregnancy recorded",
+      "RECORDED_ON": "Maternal history of {{date}}",
+      "PREGNANCY_TEST_REQUESTED": "Pregnancy test requested on the order",
+      "CREATININE": "Latest creatinine",
+      "NO_CREATININE": "No released creatinine result at this hospital",
+      "PRIOR_STUDIES": "Prior imaging studies",
+      "NO_PRIOR": "No prior imaging study at this hospital",
+      "OPEN_REPORT": "Open its report"
+    },
+    "PORTAL": {
+      "TITLE": "Imaging",
+      "LOADING": "Loading your imaging reports…",
+      "LOAD_FAILED": "Your imaging reports could not be loaded.",
+      "EMPTY_TITLE": "No imaging report yet",
+      "EMPTY_DESC": "A report appears here once the radiologist has signed it.",
+      "REPORT": "Report",
+      "IMAGES": "Images",
+      "IMAGE_N": "Image {{n}}"
     }
   }
 }

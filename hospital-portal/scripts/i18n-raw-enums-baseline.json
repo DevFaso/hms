@@ -79,6 +79,7 @@
     "src/app/imaging/imaging.html::o.studyType",
     "src/app/imaging/imaging.html::ord.contrastType",
     "src/app/imaging/imaging.html::ord.studyType",
+    "src/app/imaging/reading-context/imaging-reading-context.component.html::p.studyType",
     "src/app/imaging/imaging.html::rep.criticalEscalationLevel",
     "src/app/imaging/imaging.html::ref.studyType",
     "src/app/lab/lab-approval-queue/lab-approval-queue.html::def.category",

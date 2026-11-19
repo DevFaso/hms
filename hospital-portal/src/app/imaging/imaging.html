@@ -329,7 +329,7 @@
                       <button
                         class="action-link"
                         [attr.data-testid]="'imaging-author-' + o.id"
-                        (click)="openAuthorReport(o, o.status === 'RESULTS_AVAILABLE')"
+                        (click)="authorForOrder(o)"
                         [title]="'IMAGING.AUTHOR_REPORT' | translate"
                         [attr.aria-label]="'IMAGING.AUTHOR_REPORT' | translate"
                       >
@@ -372,12 +372,27 @@
   @if (view() === 'results') {
     <div class="filter-bar">
       <div class="tabs">
+        <!-- QA D2306 (r63): the reads waiting for my signature. -->
+        @if (canSeeToSign) {
+          <button
+            class="tab-btn"
+            data-testid="imaging-to-sign-tab"
+            [class.active]="toSignOnly()"
+            (click)="showToSign()"
+            [attr.aria-pressed]="toSignOnly()"
+          >
+            {{ 'IMAGING_COMPLETION.TO_SIGN' | translate }}
+            @if (toSignCount()) {
+              <span class="tab-count">{{ toSignCount() }}</span>
+            }
+          </button>
+        }
         @for (st of reportStatuses; track st) {
           <button
             class="tab-btn"
-            [class.active]="reportStatusFilter() === st"
+            [class.active]="!toSignOnly() && reportStatusFilter() === st"
             (click)="setReportStatusFilter(st)"
-            [attr.aria-pressed]="reportStatusFilter() === st"
+            [attr.aria-pressed]="!toSignOnly() && reportStatusFilter() === st"
           >
             {{ st | enumLabel: 'imagingReportStatus' }}
           </button>
@@ -502,7 +517,8 @@
                         <span class="material-symbols-outlined">notifications_active</span>
                       </button>
                     }
-                    @if (canUpdateReportStatus) {
+                    <!-- QA D2307 (r63): a signed report is never cancelled; its correction is an addendum. -->
+                    @if (canUpdateReportStatus && !r.signed) {
                       <button
                         class="action-link"
                         (click)="openStatusUpdate(r)"
@@ -530,12 +546,31 @@
         aria-labelledby="imaging-panel-1-title"
         (escaped)="closeReport()"
         class="detail-panel"
+        data-testid="imaging-report-panel"
       >
         <div class="detail-header">
           <h2 id="imaging-panel-1-title">
             {{ rep.reportTitle || rep.reportNumber || ('IMAGING.REPORT' | translate) }}
           </h2>
-          <div class="header-actions">
+          <div class="header-actions no-print">
+            @if (canAddAddendum(rep)) {
+              <button
+                class="btn-secondary"
+                data-testid="imaging-add-addendum"
+                (click)="openAddendum(rep)"
+              >
+                <span class="material-symbols-outlined" aria-hidden="true">post_add</span>
+                {{ 'IMAGING_COMPLETION.ADD_ADDENDUM' | translate }}
+              </button>
+            }
+            <button
+              class="btn-secondary"
+              data-testid="imaging-report-print"
+              (click)="printReport()"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">print</span>
+              {{ 'IMAGING_COMPLETION.PRINT' | translate }}
+            </button>
             @if (canAuthorReports && !rep.signed && !reportOrderCancelled(rep)) {
               <button class="btn-secondary" (click)="openEditReport(rep)">
                 <span class="material-symbols-outlined">edit</span>
@@ -562,6 +597,18 @@
               <span class="material-symbols-outlined">verified</span>
               <span>
                 {{ 'IMAGING.SIGNED_LOCKED' | translate }}
+                <!-- r63: who signed, and when, on the report itself. -->
+                <strong data-testid="imaging-report-signed-by-on">
+                  ·
+                  {{
+                    'IMAGING_COMPLETION.SIGNED_BY_ON'
+                      | translate
+                        : {
+                            name: rep.signedByName || ('COMMON.UNKNOWN' | translate),
+                            date: rep.signedAt ? (rep.signedAt | serverTime | dateTime) : '—',
+                          }
+                  }}
+                </strong>
                 @if (!rep.signatureValue) {
                   · <em>{{ 'IMAGING.SIGNED_UNVERIFIABLE' | translate }}</em>
                 }
@@ -744,6 +791,47 @@
           }
           <!-- V316: the study's key images, for the reader of this report (imaging-images block). -->
           <app-imaging-images [orderId]="rep.imagingOrderId" [canUpload]="false" />
+          <!-- QA D2307 (r63): the study's other versions (original, addenda), read with this one. -->
+          @if (selectedReportVersions().length) {
+            <div class="detail-notes report-versions" data-testid="imaging-report-versions">
+              <span class="field-label">{{ 'IMAGING_COMPLETION.OTHER_VERSIONS' | translate }}</span>
+              @for (v of selectedReportVersions(); track v.id) {
+                <div class="report-version" [attr.data-testid]="'imaging-report-version-' + v.id">
+                  <p class="report-version-head">
+                    <span class="status-badge {{ getReportStatusClass(v.reportStatus) }}">{{
+                      v.reportStatus | enumLabel: 'imagingReportStatus'
+                    }}</span>
+                    {{ 'IMAGING.REPORT_VERSION' | translate }} {{ v.reportVersion }}
+                    @if (v.signed) {
+                      ·
+                      {{
+                        'IMAGING_COMPLETION.SIGNED_BY_ON'
+                          | translate
+                            : {
+                                name: v.signedByName || ('COMMON.UNKNOWN' | translate),
+                                date: v.signedAt ? (v.signedAt | serverTime | dateTime) : '—',
+                              }
+                      }}
+                    } @else {
+                      · {{ 'IMAGING_COMPLETION.NOT_SIGNED' | translate }}
+                    }
+                  </p>
+                  @if (v.findings) {
+                    <p>{{ v.findings }}</p>
+                  }
+                  @if (v.impression) {
+                    <p>
+                      <strong
+                        >{{ 'IMAGING.IMPRESSION' | translate
+                        }}{{ 'COMMON.COLON' | translate }}</strong
+                      >
+                      {{ v.impression }}
+                    </p>
+                  }
+                </div>
+              }
+            </div>
+          }
           @if (rep.statusHistory?.length) {
             <div class="detail-notes">
               <span class="field-label">{{ 'IMAGING.STATUS_HISTORY' | translate }}</span>
@@ -867,6 +955,9 @@
             {{ reportPatient()?.mrn }}
           }
         </p>
+        @if (canSeeReadingContext && reportOrderId(); as ctxOrderId) {
+          <app-imaging-reading-context [orderId]="ctxOrderId" />
+        }
         <div class="field-row">
           <div class="field">
             <label for="rep-title">{{ 'IMAGING.REPORT_TITLE' | translate }}</label>
@@ -1254,6 +1345,15 @@
             </div>
           }
 
+          <!-- r63: age, sex, pregnancy, creatinine and prior studies, read-only. -->
+          @if (canSeeReadingContext) {
+            <app-imaging-reading-context
+              [orderId]="ord.id"
+              [canOpenPrior]="true"
+              (openPriorReport)="openReportById($event)"
+            />
+          }
+
           <!-- V316: key images of the study (imaging-images block). -->
           <app-imaging-images [orderId]="ord.id" [canUpload]="canAddStudyImages(ord)" />
 
@@ -1269,6 +1369,16 @@
                     <span class="report-author">{{
                       rep.interpretingProviderName || rep.performedByName
                     }}</span>
+                    <!-- QA D2306 (r63): the order links to its report. -->
+                    <button
+                      type="button"
+                      class="btn-link"
+                      (click)="openReportById(rep.id)"
+                      [attr.data-testid]="'imaging-open-report-' + rep.id"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">description</span>
+                      {{ 'IMAGING_COMPLETION.OPEN_REPORT' | translate }}
+                    </button>
                     @if (rep.pacsViewerUrl) {
                       <button
                         type="button"

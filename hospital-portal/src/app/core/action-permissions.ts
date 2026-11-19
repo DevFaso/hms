@@ -112,6 +112,16 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'ImagingResultController#acknowledgeCriticalResult',
     roles: ['ROLE_DOCTOR', 'ROLE_RADIOLOGIST'],
   },
+  /** QA D2306 (r63): the « À signer » list of the reads waiting for the caller's signature. */
+  imagingReportsToSign: {
+    endpoint: 'ImagingResultController#getReportsToSign',
+    roles: ['ROLE_RADIOLOGIST', 'ROLE_DOCTOR'],
+  },
+  /** r63: the order's reading context (age, sex, pregnancy, creatinine, prior studies). */
+  imagingReadingContext: {
+    endpoint: 'ImagingReadingContextController#getReadingContext',
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_RADIOLOGIST'],
+  },
   admissionCreate: {
     endpoint: 'AdmissionController#admitPatient',
     // A midwife admits a woman in labour only (policy 2); the form narrows to it.

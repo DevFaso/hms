@@ -802,6 +802,54 @@ const FRONT_DESK: {
         .click();
     },
   },
+  /* QA D2342 (r63): the patient's imaging reports, read on a phone. */
+  {
+    route: '/my-imaging',
+    label: '/my-imaging [reports + addendum + images]',
+    role: 'ROLE_PATIENT',
+    seed: (p) =>
+      p.route('**/api/me/patient/imaging', (r) =>
+        r.fulfill({
+          json: {
+            data: [1, 2].map((n) => ({
+              imagingOrderId: `${RECORD_ID.slice(0, -1)}${n}`,
+              modality: 'XRAY',
+              studyType: 'Radiographie thoracique de face et de profil, contrôle post-opératoire',
+              bodyRegion: 'Thorax — champs pulmonaires et médiastin supérieur',
+              laterality: 'BILATERAL',
+              orderedAt: NOW,
+              hospitalName: 'Centre hospitalier universitaire Yalgado Ouédraogo de Ouagadougou',
+              reports: [
+                {
+                  id: `${RECORD_ID.slice(0, -1)}${n}`,
+                  reportStatus: 'FINAL',
+                  reportVersion: 1,
+                  findings:
+                    'Silhouette cardiaque de taille normale. Absence d’épanchement pleural. Parenchyme pulmonaire sans foyer de condensation systématisé.',
+                  impression: 'Radiographie thoracique sans anomalie décelable.',
+                  signedByName: 'Dr Aminata Sawadogo-Kaboré',
+                  signedAt: NOW,
+                },
+                {
+                  id: `${RECORD_ID.slice(0, -2)}9${n}`,
+                  reportStatus: 'ADDENDUM',
+                  reportVersion: 2,
+                  findings: 'Comparaison avec le cliché du 12/11/2026 : aspect superposable.',
+                  signedByName: 'Dr Aminata Sawadogo-Kaboré',
+                  signedAt: NOW,
+                },
+              ],
+              images: [1, 2, 3, 4, 5].map((i) => ({
+                id: `${RECORD_ID.slice(0, -2)}${n}${i}`,
+                contentType: i === 5 ? 'application/pdf' : 'image/png',
+                sizeBytes: 1024,
+                caption: i === 1 ? 'Incidence de face, inspiration profonde' : null,
+              })),
+            })),
+          },
+        }),
+      ),
+  },
 ];
 
 test.describe('layout overflow: front desk and ward lists (D2241 / D2242 / D2246)', () => {

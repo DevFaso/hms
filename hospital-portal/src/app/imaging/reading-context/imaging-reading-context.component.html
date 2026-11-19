@@ -1,0 +1,120 @@
+<section class="reading-context" data-testid="imaging-reading-context">
+  <h3>{{ 'IMAGING_COMPLETION.CONTEXT.TITLE' | translate }}</h3>
+  @if (loading()) {
+    <p class="muted">{{ 'IMAGING_COMPLETION.CONTEXT.LOADING' | translate }}</p>
+  } @else if (failed()) {
+    <p class="muted" role="status">{{ 'IMAGING_COMPLETION.CONTEXT.LOAD_FAILED' | translate }}</p>
+  } @else if (context(); as ctx) {
+    <dl class="context-grid">
+      <div class="context-item" data-testid="imaging-context-age">
+        <dt>{{ 'IMAGING_COMPLETION.CONTEXT.AGE' | translate }}</dt>
+        <dd>
+          @if (ctx.ageYears !== null && ctx.ageYears !== undefined) {
+            {{ 'IMAGING_COMPLETION.CONTEXT.AGE_YEARS' | translate: { n: ctx.ageYears } }}
+          } @else {
+            {{ 'IMAGING_COMPLETION.CONTEXT.NOT_RECORDED' | translate }}
+          }
+        </dd>
+      </div>
+      <div class="context-item" data-testid="imaging-context-sex">
+        <dt>{{ 'IMAGING_COMPLETION.CONTEXT.SEX' | translate }}</dt>
+        <dd>
+          @if (ctx.sex) {
+            {{ ctx.sex | enumLabel: 'gender' }}
+          } @else {
+            {{ 'IMAGING_COMPLETION.CONTEXT.NOT_RECORDED' | translate }}
+          }
+        </dd>
+      </div>
+      <div class="context-item" data-testid="imaging-context-pregnancy">
+        <dt>{{ 'IMAGING_COMPLETION.CONTEXT.PREGNANCY' | translate }}</dt>
+        <dd>
+          @if (ctx.pregnancy?.ongoing && ctx.pregnancy.estimatedDueDate) {
+            <strong>{{
+              'IMAGING_COMPLETION.CONTEXT.PREGNANCY_RECORDED'
+                | translate
+                  : { date: ctx.pregnancy!.estimatedDueDate | serverTime | date: 'mediumDate' }
+            }}</strong>
+          } @else {
+            {{ 'IMAGING_COMPLETION.CONTEXT.PREGNANCY_NONE' | translate }}
+          }
+          @if (ctx.pregnancy?.recordedAt) {
+            <small class="muted">
+              {{
+                'IMAGING_COMPLETION.CONTEXT.RECORDED_ON'
+                  | translate: { date: ctx.pregnancy!.recordedAt | serverTime | dateTime }
+              }}</small
+            >
+          }
+          @if (ctx.requiresPregnancyTest) {
+            <small class="context-flag">{{
+              'IMAGING_COMPLETION.CONTEXT.PREGNANCY_TEST_REQUESTED' | translate
+            }}</small>
+          }
+        </dd>
+      </div>
+      <div class="context-item" data-testid="imaging-context-creatinine">
+        <dt>{{ 'IMAGING_COMPLETION.CONTEXT.CREATININE' | translate }}</dt>
+        <dd>
+          @if (ctx.creatinine; as cr) {
+            <strong
+              >{{ cr.value }} {{ cr.unit }}
+              <app-lab-correction-badge [corrected]="cr.corrected" audience="staff"
+            /></strong>
+            @if (cr.abnormalFlag && cr.abnormalFlag !== 'NORMAL') {
+              {{ ' '
+              }}<span class="context-flag">{{
+                cr.abnormalFlag | enumLabel: 'labSeverityFlag'
+              }}</span>
+            }
+            @if (cr.resultDate) {
+              {{ ' ' }}<small class="muted">{{ cr.resultDate | serverTime | dateTime }}</small>
+            }
+          } @else {
+            {{ 'IMAGING_COMPLETION.CONTEXT.NO_CREATININE' | translate }}
+          }
+        </dd>
+      </div>
+    </dl>
+
+    <h4>{{ 'IMAGING_COMPLETION.CONTEXT.PRIOR_STUDIES' | translate }}</h4>
+    @if (ctx.priorStudies.length === 0) {
+      <p class="muted" data-testid="imaging-context-no-prior">
+        {{ 'IMAGING_COMPLETION.CONTEXT.NO_PRIOR' | translate }}
+      </p>
+    } @else {
+      <ul class="prior-list" data-testid="imaging-context-prior">
+        @for (p of ctx.priorStudies; track p.imagingOrderId) {
+          <li>
+            <div class="prior-head">
+              <span class="prior-title"
+                >{{ p.studyType || (p.modality | enumLabel: 'imagingModality') }}
+                @if (p.bodyRegion) {
+                  · {{ p.bodyRegion }}
+                }
+              </span>
+              @if (p.orderedAt) {
+                {{ ' ' }}<small class="muted">{{ p.orderedAt | serverTime | dateTime }}</small>
+              }
+            </div>
+            @if (p.impression) {
+              <p class="prior-impression">{{ p.impression }}</p>
+            } @else if (p.status) {
+              <small class="muted">{{ p.status | enumLabel: 'imagingOrderStatus' }}</small>
+            }
+            @if (canOpenPrior && p.reportId) {
+              <button
+                type="button"
+                class="btn-link"
+                (click)="openPriorReport.emit(p.reportId!)"
+                [attr.data-testid]="'imaging-context-open-prior-' + p.imagingOrderId"
+              >
+                {{ 'IMAGING_COMPLETION.CONTEXT.OPEN_REPORT' | translate }}
+              </button>
+            }
+          </li>
+        }
+      </ul>
+    }
+  }
+</section>

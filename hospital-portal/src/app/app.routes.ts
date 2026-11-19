@@ -127,6 +127,16 @@ export const routes: Routes = [
           ),
       },
       {
+        // QA D2342 (r63): the patient's released imaging reports and key images.
+        path: 'my-imaging',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-imaging/my-imaging.component').then(
+            (m) => m.MyImagingComponent,
+          ),
+      },
+      {
         path: 'my-vitals',
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_PATIENT'] },

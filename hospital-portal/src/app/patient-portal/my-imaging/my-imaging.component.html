@@ -1,0 +1,187 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined" aria-hidden="true">radiology</span>
+      {{ 'IMAGING_COMPLETION.PORTAL.TITLE' | translate }}
+    </h1>
+  </div>
+
+  @if (loading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <p>{{ 'IMAGING_COMPLETION.PORTAL.LOADING' | translate }}</p>
+    </div>
+  } @else if (failed()) {
+    <div class="portal-empty" data-testid="my-imaging-failed" role="alert">
+      <span class="material-symbols-outlined" aria-hidden="true">error</span>
+      <p>{{ failureReason() ?? ('IMAGING_COMPLETION.PORTAL.LOAD_FAILED' | translate) }}</p>
+      <button type="button" class="btn-primary" (click)="load()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (empty()) {
+    <div class="portal-empty" data-testid="my-imaging-empty">
+      <span class="material-symbols-outlined" aria-hidden="true">radiology</span>
+      <h3>{{ 'IMAGING_COMPLETION.PORTAL.EMPTY_TITLE' | translate }}</h3>
+      <p>{{ 'IMAGING_COMPLETION.PORTAL.EMPTY_DESC' | translate }}</p>
+    </div>
+  } @else {
+    <section class="portal-section">
+      <ul class="imaging-studies">
+        @for (study of studies(); track study.imagingOrderId) {
+          <li
+            class="imaging-study"
+            [attr.data-study-id]="study.imagingOrderId"
+            data-testid="my-imaging-study"
+          >
+            <div class="study-head">
+              <div class="study-title">
+                <h2>
+                  {{ studyTitle(study) || (study.modality | enumLabel: 'imagingModality') }}
+                </h2>
+                <p class="study-sub">
+                  @if (study.modality) {
+                    <span>{{ study.modality | enumLabel: 'imagingModality' }}</span>
+                  }
+                  @if (study.bodyRegion) {
+                    <span>{{ study.bodyRegion }}</span>
+                  }
+                  @if (study.laterality && study.laterality !== 'NOT_APPLICABLE') {
+                    <span>{{ study.laterality | enumLabel: 'imagingLaterality' }}</span>
+                  }
+                  @if (study.orderedAt) {
+                    <span>{{ study.orderedAt | serverTime | dateTime }}</span>
+                  }
+                  @if (study.hospitalName) {
+                    <span>{{ study.hospitalName }}</span>
+                  }
+                </p>
+              </div>
+              <button
+                type="button"
+                class="btn-secondary study-print no-print"
+                (click)="print(study)"
+                data-testid="my-imaging-print"
+              >
+                <span class="material-symbols-outlined" aria-hidden="true">print</span>
+                {{ 'IMAGING_COMPLETION.PRINT' | translate }}
+              </button>
+            </div>
+
+            @for (rep of study.reports; track rep.id; let i = $index) {
+              <article
+                class="study-report"
+                [class.is-addendum]="isAddendum(rep, i)"
+                data-testid="my-imaging-report"
+              >
+                <h3>
+                  @if (isAddendum(rep, i)) {
+                    {{ rep.reportStatus | enumLabel: 'imagingReportStatus' }}
+                  } @else {
+                    {{ 'IMAGING_COMPLETION.PORTAL.REPORT' | translate }}
+                  }
+                </h3>
+                @if (rep.technique) {
+                  <div class="report-part">
+                    <span class="part-label">{{ 'IMAGING.TECHNIQUE' | translate }}</span>
+                    <p>{{ rep.technique }}</p>
+                  </div>
+                }
+                @if (rep.findings) {
+                  <div class="report-part">
+                    <span class="part-label">{{ 'IMAGING.FINDINGS' | translate }}</span>
+                    <p>{{ rep.findings }}</p>
+                  </div>
+                }
+                @if (rep.impression) {
+                  <div class="report-part report-impression">
+                    <span class="part-label">{{ 'IMAGING.IMPRESSION' | translate }}</span>
+                    <p>{{ rep.impression }}</p>
+                  </div>
+                }
+                @if (rep.recommendations) {
+                  <div class="report-part">
+                    <span class="part-label">{{ 'IMAGING.RECOMMENDATIONS' | translate }}</span>
+                    <p>{{ rep.recommendations }}</p>
+                  </div>
+                }
+                <p class="report-signature" data-testid="my-imaging-signature">
+                  <span class="material-symbols-outlined" aria-hidden="true">verified</span>
+                  {{
+                    'IMAGING_COMPLETION.SIGNED_BY_ON'
+                      | translate
+                        : {
+                            name: rep.signedByName || ('COMMON.UNKNOWN' | translate),
+                            date: rep.signedAt ? (rep.signedAt | serverTime | dateTime) : '—',
+                          }
+                  }}
+                </p>
+              </article>
+            }
+
+            @if (study.images.length) {
+              <div class="study-images" data-testid="my-imaging-images">
+                <span class="part-label">{{ 'IMAGING_COMPLETION.PORTAL.IMAGES' | translate }}</span>
+                <ul class="thumb-list">
+                  @for (image of study.images; track image.id; let n = $index) {
+                    <li>
+                      <button
+                        type="button"
+                        class="thumb"
+                        (click)="openImage(image)"
+                        [attr.aria-label]="
+                          image.caption ||
+                          ('IMAGING_COMPLETION.PORTAL.IMAGE_N' | translate: { n: n + 1 })
+                        "
+                      >
+                        @if (isPicture(image) && thumbs()[image.id]; as src) {
+                          <img
+                            [src]="src"
+                            [alt]="
+                              image.caption ||
+                              ('IMAGING_COMPLETION.PORTAL.IMAGE_N' | translate: { n: n + 1 })
+                            "
+                            loading="lazy"
+                          />
+                        } @else {
+                          <span class="material-symbols-outlined" aria-hidden="true">{{
+                            isPicture(image) ? 'image' : 'picture_as_pdf'
+                          }}</span>
+                        }
+                      </button>
+                      @if (image.caption) {
+                        <small class="thumb-caption">{{ image.caption }}</small>
+                      }
+                    </li>
+                  }
+                </ul>
+              </div>
+            }
+          </li>
+        }
+      </ul>
+    </section>
+  }
+
+  @if (viewer(); as v) {
+    <div
+      class="image-viewer no-print"
+      appDialogA11y
+      [attr.aria-label]="v.caption || ('IMAGING_COMPLETION.PORTAL.IMAGES' | translate)"
+      (dialogClose)="closeViewer()"
+    >
+      <button
+        type="button"
+        class="viewer-close"
+        (click)="closeViewer()"
+        [attr.aria-label]="'COMMON.CLOSE' | translate"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+      </button>
+      <img [src]="v.url" [alt]="v.caption || ('IMAGING_COMPLETION.PORTAL.IMAGES' | translate)" />
+      @if (v.caption) {
+        <p class="viewer-caption">{{ v.caption }}</p>
+      }
+    </div>
+  }
+</div>

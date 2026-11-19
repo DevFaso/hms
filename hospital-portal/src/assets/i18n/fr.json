@@ -2078,7 +2078,11 @@
       "PAYER_TERMS_ADDED": "Taux et plafonds {{terms}} ajoutés à la formule {{plan}}, en vigueur le {{from}} ; fermés : [{{closed}}] ; remplacés : [{{replaced}}]",
       "PAYER_SHARE_EVENT": "{{what}} : part {{share}} sur la facture {{invoice}}",
       "PACS_SETTINGS_CHANGED": "Paramètres de connexion PACS modifiés",
-      "IMAGING_STUDY_VIEWED": "Examen d'imagerie ouvert dans la visionneuse ({{count}} images)"
+      "IMAGING_STUDY_VIEWED": "Examen d'imagerie ouvert dans la visionneuse ({{count}} images)",
+      "IMAGING_PORTAL_READ_BY_PROXY": "Comptes rendus d’imagerie du patient {{patient}} consultés sur le portail patient par un mandataire ({{count}} examens)",
+      "IMAGING_PORTAL_READ": "Comptes rendus d’imagerie du patient {{patient}} consultés sur le portail patient ({{count}} examens)",
+      "IMAGING_PORTAL_IMAGE_VIEWED_BY_PROXY": "Image {{image}} de la demande d’imagerie {{order}} consultée sur le portail patient par un mandataire",
+      "IMAGING_PORTAL_IMAGE_VIEWED": "Image {{image}} de la demande d’imagerie {{order}} consultée sur le portail patient"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -5053,7 +5057,8 @@
     "UNSIGNED_NOTES": "Notes non signées",
     "PRICE_LIST": "Grille tarifaire",
     "PATIENT_NOTIFICATIONS": "Notifications aux patients",
-    "PAYERS": "Organismes payeurs"
+    "PAYERS": "Organismes payeurs",
+    "MY_IMAGING": "Imagerie"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerte critique",
@@ -14571,6 +14576,44 @@
       "CARD_DESC": "Connectez le PACS de l'hôpital pour que les cliniciens voient les examens d'imagerie dans e-Keneya.",
       "CARD_ACTION": "Configurer le PACS",
       "BASE_URL_REQUIRED": "Saisissez l'adresse DICOMweb du PACS pour activer la visionneuse."
+    }
+  },
+  "IMAGING_COMPLETION": {
+    "TO_SIGN": "À signer",
+    "ADD_ADDENDUM": "Ajouter un addendum",
+    "PRINT": "Imprimer",
+    "SIGNED_BY_ON": "Signé par {{name}} le {{date}}",
+    "OTHER_VERSIONS": "Autres versions du compte rendu",
+    "NOT_SIGNED": "Pas encore signé",
+    "OPEN_REPORT": "Ouvrir le compte rendu",
+    "CONTEXT": {
+      "TITLE": "Contexte du patient",
+      "LOADING": "Chargement du contexte du patient…",
+      "LOAD_FAILED": "Le contexte du patient n'a pas pu être chargé.",
+      "AGE": "Âge",
+      "AGE_YEARS": "{{n}} ans",
+      "SEX": "Sexe",
+      "NOT_RECORDED": "Non renseigné",
+      "PREGNANCY": "Grossesse",
+      "PREGNANCY_RECORDED": "Grossesse enregistrée, terme prévu le {{date}}",
+      "PREGNANCY_NONE": "Aucune grossesse en cours enregistrée",
+      "RECORDED_ON": "Antécédents maternels du {{date}}",
+      "PREGNANCY_TEST_REQUESTED": "Test de grossesse demandé sur la demande d'examen",
+      "CREATININE": "Dernière créatinine",
+      "NO_CREATININE": "Aucun résultat de créatinine validé dans cet établissement",
+      "PRIOR_STUDIES": "Examens d'imagerie antérieurs",
+      "NO_PRIOR": "Aucun examen d'imagerie antérieur dans cet établissement",
+      "OPEN_REPORT": "Ouvrir son compte rendu"
+    },
+    "PORTAL": {
+      "TITLE": "Imagerie",
+      "LOADING": "Chargement de vos comptes rendus d'imagerie…",
+      "LOAD_FAILED": "Vos comptes rendus d'imagerie n'ont pas pu être chargés.",
+      "EMPTY_TITLE": "Aucun compte rendu d'imagerie pour l'instant",
+      "EMPTY_DESC": "Un compte rendu apparaît ici dès que le radiologue l'a signé.",
+      "REPORT": "Compte rendu",
+      "IMAGES": "Clichés",
+      "IMAGE_N": "Cliché {{n}}"
     }
   }
 }
