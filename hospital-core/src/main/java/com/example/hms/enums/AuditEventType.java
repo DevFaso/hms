@@ -85,6 +85,10 @@ public enum AuditEventType {
     /** An imaging order placed while a recent order of the same study exists (warned, never blocked; provisional rule 2026-11-15). */
     IMAGING_ORDER_DUPLICATE_PLACED,
     IMAGING_RESULT_UPDATED,
+    /** V316: a key image (or exported PDF) attached to an imaging study or report. */
+    IMAGING_IMAGE_UPLOADED,
+    /** V316: a key image removed from an imaging study before its report was signed. */
+    IMAGING_IMAGE_DELETED,
     // Disease-programme registries (Tier 2 item 35). Care-management
     // writes, not disclosures: none is whitelisted in DisclosureCategory,
     // so keying them by patient serves the internal audit views without
