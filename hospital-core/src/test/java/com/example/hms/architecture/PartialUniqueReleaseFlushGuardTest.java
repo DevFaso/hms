@@ -99,7 +99,10 @@ class PartialUniqueReleaseFlushGuardTest {
         // Billing-money plan PR 4 (V304): a file applies once per hospital; a trace row is never edited.
         Map.entry("price_list_imports", "PriceListImport"),
         // Billing-money plan PR 8 (V307): one refund per client request key and hospital; the key never moves.
-        Map.entry("invoice_refunds", "InvoiceRefund"));
+        Map.entry("invoice_refunds", "InvoiceRefund"),
+        // Billing-money plan PR 7 (V306): one live share per invoice and coverage; a decision (REJECTED, CANCELLED)
+        // releases it through the conditional UPDATE, and the replacement is inserted after it in the same flush order.
+        Map.entry("invoice_payer_shares", "InvoicePayerShare"));
 
     /** Indexes whose rows no setter can release: the slot is the row's own key, not its state. */
     private static final Set<String> KEY_ONLY_ENTITIES =

@@ -445,7 +445,8 @@ public class InvoiceCoverageService {
 
     /** The share's own coverage and plan on {@code day}, or null when the plan no longer has terms that day. */
     private Coverage sameCoverage(InvoicePayerShare share, UUID hospitalId, LocalDate day) {
-        PatientInsurance insurance = insuranceRepository.findById(share.getPatientInsuranceId()).orElse(null);
+        PatientInsurance insurance = insuranceRepository.findByIdAndAssignment_Hospital_Id(share.getPatientInsuranceId(),
+            hospitalId).orElse(null);
         if (insurance == null) {
             return null;
         }

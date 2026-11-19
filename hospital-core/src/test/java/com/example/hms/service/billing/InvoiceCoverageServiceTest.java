@@ -144,7 +144,7 @@ class InvoiceCoverageServiceTest {
         coverage.setId(UUID.randomUUID());
         when(insurances.findByPatient_IdAndAssignment_Hospital_Id(invoice.getPatient().getId(), HOSPITAL_A))
             .thenReturn(List.of(coverage));
-        when(insurances.findById(coverage.getId())).thenReturn(Optional.of(coverage));
+        when(insurances.findByIdAndAssignment_Hospital_Id(coverage.getId(), HOSPITAL_A)).thenReturn(Optional.of(coverage));
         when(insurances.lockById(coverage.getId())).thenReturn(Optional.of(coverage));
 
         // Consultation 2 000 + TDR 1 500 (a lab test of the price list) + X-ray 5 000.
@@ -313,11 +313,11 @@ class InvoiceCoverageServiceTest {
         List<InvoicePayerShareDTO> after = service.reject(invoiceId, shareId, "Bénéficiaire non à jour de cotisation");
 
         assertThat(after).singleElement().satisfies(dto -> {
-            assertThat(dto.status()).isEqualTo("REJECTED");
-            assertThat(dto.amount()).as("the history keeps the original share").isEqualByComparingTo("5600");
-            assertThat(dto.rejectionReason()).isEqualTo("Bénéficiaire non à jour de cotisation");
-            assertThat(dto.payerName()).isEqualTo("RAMU");
-            assertThat(dto.planName()).isEqualTo("Formule Base");
+            assertThat(dto.getStatus()).isEqualTo("REJECTED");
+            assertThat(dto.getAmount()).as("the history keeps the original share").isEqualByComparingTo("5600");
+            assertThat(dto.getRejectionReason()).isEqualTo("Bénéficiaire non à jour de cotisation");
+            assertThat(dto.getPayerName()).isEqualTo("RAMU");
+            assertThat(dto.getPlanName()).isEqualTo("Formule Base");
         });
         assertThat(invoice.getPayerShareTotal()).isEqualByComparingTo("0");
         assertThat(InvoiceBalance.dueOf(invoice)).as("the balance rose by 5 600").isEqualByComparingTo("5600");
@@ -334,9 +334,9 @@ class InvoiceCoverageServiceTest {
         service.applyAtIssue(invoice, BILLING_A);
         UUID shareId = onlyShare().getId();
         assertThat(service.claim(invoice.getId(), shareId)).singleElement()
-            .extracting(InvoicePayerShareDTO::status).isEqualTo("CLAIMED");
+            .extracting(InvoicePayerShareDTO::getStatus).isEqualTo("CLAIMED");
         assertThat(service.markPaid(invoice.getId(), shareId)).singleElement()
-            .extracting(InvoicePayerShareDTO::status).isEqualTo("PAID");
+            .extracting(InvoicePayerShareDTO::getStatus).isEqualTo("PAID");
         assertThat(InvoiceBalance.dueOf(invoice)).isEqualByComparingTo("2900");
         verify(audit, atLeastOnce()).logEvent(any());
     }

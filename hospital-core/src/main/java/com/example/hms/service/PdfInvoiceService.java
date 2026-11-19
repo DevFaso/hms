@@ -201,13 +201,13 @@ public class PdfInvoiceService {
             w.right(BODY, 11, t.get(PATIENT_SHARE, money(com.example.hms.utility.InvoiceBalance.patientShareOf(invoice))));
         }
         for (var share : shares == null ? List.<com.example.hms.payload.dto.billing.InvoicePayerShareDTO>of() : shares) {
-            if (!com.example.hms.enums.PayerShareStatus.REJECTED.name().equals(share.status())) {
+            if (!com.example.hms.enums.PayerShareStatus.REJECTED.name().equals(share.getStatus())) {
                 continue;
             }
             w.ensureRoom(32);
             w.down(16);
-            w.paragraph(BODY, 10, MARGIN, t.get("pdf.invoice.payerShareRejected", money(share.amount()),
-                share.rejectionReason() == null ? "" : share.rejectionReason().strip()));
+            w.paragraph(BODY, 10, MARGIN, t.get("pdf.invoice.payerShareRejected", money(share.getAmount()),
+                share.getRejectionReason() == null ? "" : share.getRejectionReason().strip()));
         }
     }
 
