@@ -218,11 +218,13 @@ public class LabResultMapper {
 
     /** The result's component values, never null. */
     private static List<com.example.hms.model.LabResultComponent> componentsOf(LabResult result) {
-        return result.getComponents() != null ? result.getComponents() : Collections.emptyList();
+        List<com.example.hms.model.LabResultComponent> components = result == null ? null : result.getComponents();
+        return components != null ? components : Collections.emptyList();
     }
 
     private static boolean isPanelResult(LabResult result, OrderContext context) {
-        return result.hasComponents() && context.components() != null && !context.components().isEmpty();
+        return result != null && result.hasComponents() && context.components() != null
+            && !context.components().isEmpty();
     }
 
     private static int panelRank(String flag) {
