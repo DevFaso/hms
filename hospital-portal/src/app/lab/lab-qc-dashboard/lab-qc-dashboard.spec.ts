@@ -12,6 +12,7 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { of, throwError } from 'rxjs';
+import { expectEmptySubmitRefusal } from '../../testing/form-refusal-behaviour';
 
 describe('LabQcDashboardComponent', () => {
   let component: LabQcDashboardComponent;
@@ -312,6 +313,27 @@ describe('LabQcDashboardComponent', () => {
       expect(lab.saveQcTarget).toHaveBeenCalledWith(
         jasmine.objectContaining({ testDefinitionId: 'def-1', targetMean: 4.8, targetSd: 0.25 }),
       );
+    });
+
+    it('QA D1124: an empty run is refused field by field, never sent', () => {
+      component.openRecordForm();
+      fixture.detectChanges();
+      const marked = expectEmptySubmitRefusal(fixture, {
+        button: '[data-testid="qc-record-submit"]',
+        sent: lab.recordQcEvent,
+      });
+      expect(marked).toContain('qc-test');
+    });
+
+    it('QA D1124: an empty target is refused field by field, never sent', () => {
+      lab.getQcTargets.and.returnValue(of([]));
+      component.openRecordForm('def-1');
+      fixture.detectChanges();
+      const marked = expectEmptySubmitRefusal(fixture, {
+        button: '[data-testid="qc-target-save"]',
+        sent: lab.saveQcTarget,
+      });
+      expect(marked).toEqual(jasmine.arrayContaining(['qc-target-mean', 'qc-target-sd']));
     });
 
     it('fits a phone screen (390 px) without a sideways scroll', () => {

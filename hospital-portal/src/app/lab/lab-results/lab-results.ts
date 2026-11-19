@@ -693,7 +693,7 @@ export class LabResultsComponent implements OnInit {
           this.toast.warning(this.translate.instant('LAB_RESULTS.SAVED_NOT_GRADED'));
         }
         // r63 D2312: the saved value graded CRITICAL; releasing it will ask who was told.
-        if (saved?.severityFlag === 'CRITICAL') {
+        if (labSeverityFlag(saved ?? {}) === 'CRITICAL') {
           this.toast.warning(this.translate.instant('LAB_RESULTS.SAVED_CRITICAL'));
         }
         this.closeModal();

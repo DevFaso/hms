@@ -4754,7 +4754,7 @@
     "CRITICAL_TITLE": "Résultat critique",
     "CRITICAL_HINT": "Appelez le clinicien maintenant et notez l’appel : qui vous avez prévenu, quand, et la valeur qu’il vous a relue.",
     "CRITICAL_TO": "Personne prévenue",
-    "CRITICAL_TO_PLACEHOLDER": "Nom et fonction (ex. Dr Ouedraogo, de garde)",
+    "CRITICAL_TO_PLACEHOLDER": "Nom et fonction (ex. le médecin de garde)",
     "CRITICAL_AT": "Quand",
     "CRITICAL_READ_BACK": "Valeur relue",
     "CRITICAL_READ_BACK_PLACEHOLDER": "Telle qu’elle a été répétée",
@@ -11029,7 +11029,8 @@
       "SAVED_ACCEPTED": "Contrôle enregistré et accepté.",
       "SAVED_REJECTED": "Contrôle enregistré comme rejeté. Les résultats de cette analyse sont bloqués.",
       "SAVE_FAILED": "Impossible d’enregistrer le contrôle.",
-      "TESTS_LOAD_FAILED": "Impossible de charger la liste des analyses."
+      "TESTS_LOAD_FAILED": "Impossible de charger la liste des analyses.",
+      "DECISION_REQUIRED": "Indiquez si vous acceptez ou rejetez le contrôle."
     },
     "TARGET": {
       "CURRENT": "Cible : moyenne {{mean}}, ÉT {{sd}} (lot {{lot}})",

@@ -250,7 +250,10 @@
         </p>
         @if (target.components?.length) {
           <!-- r63 (NFS panels): every component value is released together -->
-          <app-lab-panel-values [components]="target.components" />
+          <app-lab-panel-values
+            [components]="target.components"
+            [corrected]="!!target.supersedesResultId"
+          />
         }
         @if (isCritical(target)) {
           <!-- r63 D2305: a critical result is released with the laboratory's call recorded -->
@@ -272,6 +275,7 @@
                   type="text"
                   maxlength="255"
                   required
+                  id="release-critical-to"
                   data-testid="release-critical-to"
                   [value]="criticalTo()"
                   (input)="criticalTo.set(inputValue($event))"
@@ -283,9 +287,10 @@
                 <input
                   type="datetime-local"
                   required
+                  id="release-critical-at"
                   data-testid="release-critical-at"
-                  [value]="criticalAt()"
-                  (input)="criticalAt.set(inputValue($event))"
+                  [value]="criticalAt"
+                  (input)="criticalAt = inputValue($event)"
                 />
               </label>
               <label class="release-field">
@@ -294,6 +299,7 @@
                   type="text"
                   maxlength="255"
                   required
+                  id="release-critical-read-back"
                   data-testid="release-critical-read-back"
                   [value]="criticalReadBack()"
                   (input)="criticalReadBack.set(inputValue($event))"
@@ -313,6 +319,7 @@
                 rows="3"
                 maxlength="2048"
                 required
+                id="release-qc-override-reason"
                 data-testid="release-qc-override-reason"
                 [value]="qcOverrideReason()"
                 (input)="qcOverrideReason.set(inputValue($event))"
@@ -363,9 +370,9 @@
           <button
             class="btn-primary"
             (click)="confirmRelease()"
-            [disabled]="
-              releasingId() !== null || criticalCommunicationMissing(target) || qcOverrideMissing()
-            "
+            [disabled]="releasingId() !== null"
+            [appSubmitGuard]="criticalCommunicationMissing(target) || qcOverrideMissing()"
+            submitGuardRequired
             data-testid="release-confirm-submit"
           >
             @if (releasingId()) {

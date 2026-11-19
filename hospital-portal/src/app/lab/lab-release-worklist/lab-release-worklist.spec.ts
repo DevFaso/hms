@@ -10,6 +10,7 @@ import { LabResultResponse } from '../../services/lab.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { AuthService } from '../../auth/auth.service';
+import { expectEmptySubmitRefusal } from '../../testing/form-refusal-behaviour';
 import { RoleContextStub, roleContextStub } from '../../testing/role-context.stub';
 
 /**
@@ -544,17 +545,14 @@ describe('LabReleaseWorklistComponent', () => {
     component.askRelease(critical);
     fixture.detectChanges();
     expect(host().querySelector('[data-testid="release-critical-block"]')).not.toBeNull();
-    const submit = host().querySelector<HTMLButtonElement>(
-      '[data-testid="release-confirm-submit"]',
-    )!;
-    expect(submit.disabled).toBeTrue();
+    expect(component.criticalCommunicationMissing(critical)).toBeTrue();
     component.confirmRelease();
     httpMock.expectNone((r) => r.method === 'POST');
 
     component.criticalTo.set('Dr Ouedraogo');
     component.criticalReadBack.set('K 6,9');
     fixture.detectChanges();
-    expect(submit.disabled).toBeFalse();
+    expect(component.criticalCommunicationMissing(critical)).toBeFalse();
     component.confirmRelease();
     const release = httpMock.expectOne(
       (r) => r.url === '/lab-results/result-1/release' && r.method === 'POST',
@@ -568,6 +566,24 @@ describe('LabReleaseWorklistComponent', () => {
     expect(release.request.body.criticalCommunicatedAt).toBeTruthy();
     release.flush({ ...critical, released: true });
     flushWorklist([]);
+  });
+
+  it('QA D1124: a critical release with the call left blank is refused field by field, never sent', () => {
+    setup(['ROLE_LAB_DIRECTOR']);
+    fixture.detectChanges();
+    const critical = result({ severityFlag: 'CRITICAL' });
+    flushWorklist([critical]);
+    component.askRelease(critical);
+    component.criticalAt = '';
+    fixture.detectChanges();
+
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="release-confirm-submit"]',
+    });
+    expect(marked).toEqual(
+      jasmine.arrayContaining(['release-critical-to', 'release-critical-read-back']),
+    );
+    httpMock.expectNone((r) => r.method === 'POST');
   });
 
   it('r63 D2304: a release held by a rejected QC run asks for the reason and resends with it', () => {

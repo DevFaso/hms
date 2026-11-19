@@ -11029,7 +11029,8 @@
       "SAVED_ACCEPTED": "QC run recorded and accepted.",
       "SAVED_REJECTED": "QC run recorded as rejected. Results for this test are held.",
       "SAVE_FAILED": "Could not record the QC run.",
-      "TESTS_LOAD_FAILED": "Could not load the list of tests."
+      "TESTS_LOAD_FAILED": "Could not load the list of tests.",
+      "DECISION_REQUIRED": "Choose whether to accept or reject the run."
     },
     "TARGET": {
       "CURRENT": "Target: mean {{mean}}, SD {{sd}} (lot {{lot}})",

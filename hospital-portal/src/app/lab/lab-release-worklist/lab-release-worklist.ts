@@ -1,5 +1,6 @@
 import {
   Component,
+  ElementRef,
   OnInit,
   computed,
   inject,
@@ -23,9 +24,11 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { labSeverityFlag, labReleaseNeedsReview } from '../shared/lab-severity';
 import { LabValuePipe } from '../shared/lab-value.pipe';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { LabPanelValuesComponent } from '../shared/lab-panel-values.component';
 import { nowLocalDatetime, toServerDateTime } from '../../shared/date-utils';
-import { refusalReason } from '../../shared/refusal-reason';
+import { refusalReason, refusedFieldReasons } from '../../shared/refusal-reason';
+import { refuseFields } from '../../shared/forms/invalid-fields';
 
 /**
  * Release worklist (B14).
@@ -55,6 +58,7 @@ import { refusalReason } from '../../shared/refusal-reason';
   selector: 'app-lab-release-worklist',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     LabPanelValuesComponent,
     LabCorrectionBadgeComponent,
     ModalDialogDirective,
@@ -76,6 +80,14 @@ export class LabReleaseWorklistComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  /** r63 D2305: the release fields a refusal can name, by their control. */
+  private static readonly RELEASE_FIELD_IDS: Readonly<Record<string, string>> = {
+    criticalCommunicatedTo: 'release-critical-to',
+    criticalCommunicatedAt: 'release-critical-at',
+    criticalReadBack: 'release-critical-read-back',
+  };
 
   /**
    * POST /lab-results/{id}/release — LabResultAuthority.RELEASE_EXPRESSION.
@@ -112,7 +124,8 @@ export class LabReleaseWorklistComponent implements OnInit {
 
   /** r63 D2305: who was told about a critical result, when, and what they read back. */
   criticalTo = signal('');
-  criticalAt = signal(nowLocalDatetime());
+  /** Wall clock, bound to its datetime-local input; converted when sent. */
+  criticalAt: string = nowLocalDatetime();
   criticalReadBack = signal('');
   /**
    * r63 D2304: the API refused the release because the test's latest QC run
@@ -252,7 +265,7 @@ export class LabReleaseWorklistComponent implements OnInit {
     // a green "X released" would sit beside the red refusal of the next one.
     this.justReleased.set(null);
     this.criticalTo.set('');
-    this.criticalAt.set(nowLocalDatetime());
+    this.criticalAt = nowLocalDatetime();
     this.criticalReadBack.set('');
     this.qcOverrideNotice.set(null);
     this.qcOverrideReason.set('');
@@ -263,7 +276,7 @@ export class LabReleaseWorklistComponent implements OnInit {
   criticalCommunicationMissing(r: LabResultResponse): boolean {
     return (
       this.isCritical(r) &&
-      (!this.criticalTo().trim() || !this.criticalAt() || !this.criticalReadBack().trim())
+      (!this.criticalTo().trim() || !this.criticalAt || !this.criticalReadBack().trim())
     );
   }
 
@@ -321,7 +334,7 @@ export class LabReleaseWorklistComponent implements OnInit {
       ...(this.isCritical(target)
         ? {
             criticalCommunicatedTo: this.criticalTo().trim(),
-            criticalCommunicatedAt: toServerDateTime(this.criticalAt()),
+            criticalCommunicatedAt: toServerDateTime(this.criticalAt),
             criticalReadBack: this.criticalReadBack().trim(),
           }
         : {}),
@@ -360,6 +373,19 @@ export class LabReleaseWorklistComponent implements OnInit {
           if (body?.status === 400 && body.error?.field === 'qcOverrideReason') {
             this.qcOverrideNotice.set(
               refusalReason(err) ?? this.translate.instant('LAB_RELEASE.QC_BLOCKED'),
+            );
+            return;
+          }
+          // r63 D2305: a refusal naming the critical call's fields marks each one.
+          const refused = refusedFieldReasons(err, LabReleaseWorklistComponent.RELEASE_FIELD_IDS);
+          if (refused.length > 0) {
+            refuseFields(
+              this.host.nativeElement,
+              refused.map(([id, message]) => ({ id, message })),
+              Object.values(LabReleaseWorklistComponent.RELEASE_FIELD_IDS),
+            );
+            this.releaseError.set(
+              refusalReason(err) ?? this.translate.instant('LAB_RELEASE.RELEASE_ERROR'),
             );
             return;
           }

@@ -4,6 +4,7 @@ import { LabResultComponent } from '../../services/lab.service';
 import { LabValuePipe } from './lab-value.pipe';
 import { formatLabReferenceRange } from './reference-range-text';
 import { labSeverityFlag, labSeverityTone } from './lab-severity';
+import { LabCorrectionBadgeComponent } from './lab-correction-badge.component';
 
 /**
  * r63 (NFS panels): a panel result's component values, each with its unit,
@@ -13,10 +14,12 @@ import { labSeverityFlag, labSeverityTone } from './lab-severity';
 @Component({
   selector: 'app-lab-panel-values',
   standalone: true,
-  imports: [TranslateModule, LabValuePipe],
+  imports: [TranslateModule, LabValuePipe, LabCorrectionBadgeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="panel-values" role="region" [attr.aria-label]="'LAB_PANEL.TITLE' | translate">
+      <!-- QA D1016: a panel that corrects a released one says so beside its values -->
+      <app-lab-correction-badge [corrected]="corrected()" />
       <table class="panel-values-table">
         <caption class="sr-only">
           {{
@@ -93,6 +96,8 @@ import { labSeverityFlag, labSeverityTone } from './lab-severity';
 })
 export class LabPanelValuesComponent {
   readonly components = input<LabResultComponent[]>([]);
+  /** The result these values belong to corrects a released one (D81). */
+  readonly corrected = input<boolean>(false);
 
   flag(c: LabResultComponent): string {
     return labSeverityFlag({ severityFlag: c.severityFlag });

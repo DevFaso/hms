@@ -1,5 +1,6 @@
 import {
   Component,
+  ElementRef,
   computed,
   inject,
   OnInit,
@@ -19,7 +20,9 @@ import {
   QcEventLevel,
 } from '../../services/lab.service';
 import { RoleContextService } from '../../core/role-context.service';
-import { refusalReason } from '../../shared/refusal-reason';
+import { refusalReason, refusedFieldReasons } from '../../shared/refusal-reason';
+import { refuseFields } from '../../shared/forms/invalid-fields';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { ToastService } from '../../core/toast.service';
 import { currentLocale, formatDecimal } from '../../shared/i18n/app-locale';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
@@ -58,10 +61,23 @@ interface QcChartGroup {
   insufficient: boolean;
 }
 
+/** r63 D2304: the request fields a QC refusal can name, by the control that shows them. */
+const RUN_FIELD_IDS: Readonly<Record<string, string>> = {
+  testDefinitionId: 'qc-test',
+  qcLevel: 'qc-level',
+  measuredValue: 'qc-measured',
+  expectedValue: 'qc-expected',
+  lotNumber: 'qc-lot',
+};
+const TARGET_FIELD_IDS: Readonly<Record<string, string>> = {
+  targetMean: 'qc-target-mean',
+  targetSd: 'qc-target-sd',
+};
+
 @Component({
   selector: 'app-lab-qc-dashboard',
   standalone: true,
-  imports: [MeasurePipe, ServerTimePipe, CommonModule, TranslateModule],
+  imports: [SubmitGuardDirective, MeasurePipe, ServerTimePipe, CommonModule, TranslateModule],
   templateUrl: './lab-qc-dashboard.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-qc-dashboard.scss',
@@ -71,6 +87,7 @@ export class LabQcDashboardComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /** r63 D2304: who may read validation studies (their endpoint's roles); the bench does not. */
   private static readonly VALIDATION_ROLES = [
@@ -275,6 +292,22 @@ export class LabQcDashboardComponent implements OnInit {
     );
   }
 
+  /**
+   * QA D1124: the record button is never disabled for a blank field; the
+   * submit guard names the blank required fields, or says the decision is missing.
+   */
+  recordGuard(): boolean | string {
+    if (
+      this.recordIncomplete() &&
+      this.qcAccepted() === null &&
+      this.qcTestId() &&
+      this.parseNumber(this.qcMeasured()) != null
+    ) {
+      return this.translate.instant('LAB_QC.RECORD.DECISION_REQUIRED');
+    }
+    return this.recordIncomplete();
+  }
+
   recordRun(): void {
     const hospitalId = this.roleContext.effectiveHospitalIdForRequest();
     const measured = this.parseNumber(this.qcMeasured());
@@ -313,6 +346,7 @@ export class LabQcDashboardComponent implements OnInit {
         },
         error: (err: unknown) => {
           this.savingRun.set(false);
+          this.markRefusedFields(err, RUN_FIELD_IDS);
           this.recordError.set(
             refusalReason(err) ?? this.translate.instant('LAB_QC.RECORD.SAVE_FAILED'),
           );
@@ -341,11 +375,24 @@ export class LabQcDashboardComponent implements OnInit {
         },
         error: (err: unknown) => {
           this.savingTarget.set(false);
+          this.markRefusedFields(err, TARGET_FIELD_IDS);
           this.toast.error(
             refusalReason(err) ?? this.translate.instant('LAB_QC.TARGET.SAVE_FAILED'),
           );
         },
       });
+  }
+
+  /** A 400 that names fields marks each one under its control (QA D1245 class). */
+  private markRefusedFields(err: unknown, idByField: Readonly<Record<string, string>>): void {
+    const refused = refusedFieldReasons(err, idByField);
+    if (refused.length > 0) {
+      refuseFields(
+        this.host.nativeElement,
+        refused.map(([id, message]) => ({ id, message })),
+        [...new Set(Object.values(idByField))],
+      );
+    }
   }
 
   targetIncomplete(): boolean {

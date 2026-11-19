@@ -589,6 +589,7 @@
                     <input
                       type="text"
                       maxlength="30"
+                      required
                       [(ngModel)]="c.code"
                       [readonly]="clinicalFieldsLocked()"
                     />
@@ -598,6 +599,7 @@
                     <input
                       type="text"
                       maxlength="120"
+                      required
                       [(ngModel)]="c.name"
                       [readonly]="clinicalFieldsLocked()"
                     />
@@ -719,6 +721,7 @@
           <button
             class="btn-primary"
             data-testid="def-submit"
+            submitGuardRequired
             (click)="submitDefForm()"
             [disabled]="savingDef()"
             [appSubmitGuard]="!defForm.testCode || !defForm.testName || !isLoincValid()"

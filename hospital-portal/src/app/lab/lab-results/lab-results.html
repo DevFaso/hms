@@ -600,7 +600,8 @@
               <!-- r63 D2304: released while the test's QC was rejected, with the reason -->
               <div class="detail-field" data-testid="qc-override">
                 <span class="field-label">{{ 'LAB_RESULTS.QC_OVERRIDE' | translate }}</span>
-                <span class="field-value"
+                {{ ' '
+                }}<span class="field-value"
                   >{{ r.qcOverrideReason }} —
                   {{ r.qcOverrideAt ? (r.qcOverrideAt | serverTime | dateTime) : '—' }}</span
                 >
@@ -609,7 +610,10 @@
           </div>
 
           @if (r.components?.length) {
-            <app-lab-panel-values [components]="r.components" />
+            <app-lab-panel-values
+              [components]="r.components"
+              [corrected]="!!r.supersedesResultId"
+            />
           }
 
           <app-result-range [result]="r" />
@@ -890,7 +894,8 @@
               }
               @if (valueHasComparator()) {
                 <!-- QA D1394: the dialog warned about other units but not about comparators -->
-                <small
+                {{ ' '
+                }}<small
                   id="lr-resultValue-hint"
                   class="field-hint"
                   role="note"
