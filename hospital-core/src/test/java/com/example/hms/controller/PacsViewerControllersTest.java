@@ -135,16 +135,6 @@ class PacsViewerControllersTest {
     }
 
     @Test
-    @DisplayName("a missing switch is a 400")
-    void enabledRequired() throws Exception {
-        HospitalContextHolder.setContext(HospitalContext.builder().activeHospitalId(hospitalId).superAdmin(false).build());
-        mockMvc.perform(put("/hospitals/{id}/pacs-settings", hospitalId)
-                .contentType(MediaType.APPLICATION_JSON).content("{}"))
-            .andExpect(status().isBadRequest());
-        verify(pacsSettingsService, never()).set(any(), any(), any());
-    }
-
-    @Test
     @DisplayName("viewer: the state comes back uncached; a report of another hospital is a 404")
     void viewerStatesAndTenancy() throws Exception {
         when(viewerService.manifest(reportId, userId))

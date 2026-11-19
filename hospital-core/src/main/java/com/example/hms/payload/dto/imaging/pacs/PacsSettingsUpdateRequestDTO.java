@@ -1,7 +1,6 @@
 package com.example.hms.payload.dto.imaging.pacs;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 /**
@@ -12,7 +11,7 @@ import jakarta.validation.constraints.Size;
  * log line or this record's {@code toString}.
  */
 public record PacsSettingsUpdateRequestDTO(
-    @NotNull(message = "{imaging.pacs.enabled.required}")
+    /** Absent means off; on needs {@code dicomwebBaseUrl}. */
     Boolean enabled,
 
     @Size(max = 500, message = "{imaging.pacs.url.tooLong}")

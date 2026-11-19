@@ -48,7 +48,9 @@ describe('PacsSettingsComponent', () => {
       'list',
       'getMyHospitalAsResponse',
     ]);
-    hospitals.getMyHospitalAsResponse.and.returnValue(of({ id: 'h1', name: 'Clinique' } as HospitalResponse));
+    hospitals.getMyHospitalAsResponse.and.returnValue(
+      of({ id: 'h1', name: 'Clinique' } as HospitalResponse),
+    );
     hospitals.list.and.returnValue(of([]));
 
     await TestBed.configureTestingModule({

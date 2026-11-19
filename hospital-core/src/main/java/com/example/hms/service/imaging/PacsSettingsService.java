@@ -3,6 +3,7 @@ package com.example.hms.service.imaging;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.imaging.dicom.PacsConnectionResolver;
 import com.example.hms.imaging.dicom.PacsDicomWebGateway;
@@ -64,15 +65,16 @@ public class PacsSettingsService {
 
     @Transactional
     public PacsSettingsDTO set(UUID hospitalId, PacsSettingsUpdateRequestDTO body, UUID actorUserId) {
-        Hospital hospital = require(hospitalId);
-        boolean enabled = Boolean.TRUE.equals(body.enabled());
         String baseUrl = PacsUrlPolicy.normalise(body.dicomwebBaseUrl());
+        // An absent switch means off; switching on needs the address.
+        boolean enabled = Boolean.TRUE.equals(body.enabled());
+        if (enabled && baseUrl == null) {
+            throw new FieldBusinessException("dicomwebBaseUrl", URL_REQUIRED);
+        }
+        Hospital hospital = require(hospitalId);
         String template = blankToNull(body.viewerUrlTemplate());
         String username = blankToNull(body.authUsername());
 
-        if (enabled && baseUrl == null) {
-            throw new BusinessException(URL_REQUIRED);
-        }
         if (baseUrl != null) {
             try {
                 PacsUrlPolicy.requireCallable(baseUrl, resolver.allowPrivateHosts());
@@ -158,12 +160,12 @@ public class PacsSettingsService {
     /** The refusal in the admin's language; each key literal, so the bundles' guard can follow it. */
     private static BusinessException urlRefusal(PacsUrlPolicy.RejectedException ex) {
         if (PacsUrlPolicy.PRIVATE_HOST.equals(ex.messageKey())) {
-            return new BusinessException("imaging.pacs.url.privateHost");
+            return new FieldBusinessException("dicomwebBaseUrl", "imaging.pacs.url.privateHost");
         }
         if (PacsUrlPolicy.HTTPS_REQUIRED.equals(ex.messageKey())) {
-            return new BusinessException("imaging.pacs.url.httpsOnly");
+            return new FieldBusinessException("dicomwebBaseUrl", "imaging.pacs.url.httpsOnly");
         }
-        return new BusinessException("imaging.pacs.url.invalid");
+        return new FieldBusinessException("dicomwebBaseUrl", "imaging.pacs.url.invalid");
     }
 
     /** The template with sample values must be an http(s) link: the browser opens it, never a script. */
@@ -172,7 +174,7 @@ public class PacsSettingsService {
         try {
             PacsUrlPolicy.requireWebUrl(sample, true);
         } catch (PacsUrlPolicy.RejectedException ex) {
-            throw new BusinessException(VIEWER_TEMPLATE_INVALID);
+            throw new FieldBusinessException("viewerUrlTemplate", VIEWER_TEMPLATE_INVALID);
         }
     }
 

@@ -139,6 +139,9 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
         Map.entry("POST /billing-invoices/{invoiceId}/refunds/{refundId}/pay",
             "a cash hand-over needs nothing; the reference (and mobile-money operator) is required by the service only"
                 + " for the method that sends money (billing-money plan PR 8 review)"),
+        Map.entry("PUT /hospitals/{hospitalId}/pacs-settings",
+            "a settings form: an absent switch means off (V317); switching the viewer on requires the DICOMweb address,"
+                + " refused by name in the service"),
         Map.entry("POST /patients/national-unique-id/check",
             "optional identity read: an absent IU means no duplicate; PostgreSQL empty-query regression checks no patient, alias or audit write"),
         Map.entry("POST /patients/national-unique-id/search",

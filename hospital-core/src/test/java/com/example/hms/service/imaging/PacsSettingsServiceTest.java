@@ -1,6 +1,7 @@
 package com.example.hms.service.imaging;
 
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.imaging.dicom.DicomProxyProperties;
 import com.example.hms.imaging.dicom.PacsConnectionResolver;
 import com.example.hms.imaging.dicom.PacsDicomWebGateway;
@@ -125,6 +126,17 @@ class PacsSettingsServiceTest {
             .isInstanceOfSatisfying(BusinessException.class,
                 ex -> assertThat(ex.getMessageKey()).isEqualTo(PacsSettingsService.VIEWER_TEMPLATE_INVALID));
         verify(hospitals, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("an absent switch means off and needs no address; on without an address names the field")
+    void switchSemantics() {
+        PacsSettingsDTO off = service.set(hospital.getId(),
+            new PacsSettingsUpdateRequestDTO(null, null, null, null, null, null), null);
+        assertThat(off.enabled()).isFalse();
+        assertThatThrownBy(() -> service.set(hospital.getId(), body(true, null, null, null, null, null), null))
+            .isInstanceOfSatisfying(FieldBusinessException.class,
+                ex -> assertThat(ex.getFieldErrors()).containsOnlyKeys("dicomwebBaseUrl"));
     }
 
     @Test
