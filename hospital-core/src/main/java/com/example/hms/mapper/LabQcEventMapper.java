@@ -2,6 +2,7 @@ package com.example.hms.mapper;
 
 import com.example.hms.model.LabQcEvent;
 import com.example.hms.payload.dto.LabQcEventResponseDTO;
+import com.example.hms.service.LabQcStatistics;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -23,6 +24,12 @@ public class LabQcEventMapper {
             .recordedById(event.getRecordedById())
             .notes(event.getNotes())
             .createdAt(event.getCreatedAt())
+            .lotNumber(event.getLotNumber())
+            .recordedByDisplay(event.getRecordedByDisplay())
+            .targetMean(event.getTargetMean())
+            .targetSd(event.getTargetSd())
+            .sdFlag(event.getSdFlag())
+            .zScore(LabQcStatistics.zScore(event.getMeasuredValue(), event.getTargetMean(), event.getTargetSd()))
             .build();
     }
 }

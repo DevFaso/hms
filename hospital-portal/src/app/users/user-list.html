@@ -208,6 +208,21 @@
                       <span class="material-symbols-outlined" aria-hidden="true">delete</span>
                     </button>
                   }
+                  @if (!user.deleted && !isSelf(user) && isManageable(user)) {
+                    <!-- QA r64 (lost phone): reset the colleague's two-step verification. -->
+                    <button
+                      type="button"
+                      class="action-link mfa-reset"
+                      [title]="'USERS.MFA_RESET.ACTION' | translate"
+                      [attr.aria-label]="'USERS.MFA_RESET.ACTION' | translate"
+                      [attr.data-testid]="'mfa-reset-' + user.id"
+                      (click)="openMfaReset(user)"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true"
+                        >phonelink_erase</span
+                      >
+                    </button>
+                  }
                   @if (canImpersonate(user)) {
                     <button
                       type="button"
@@ -715,6 +730,87 @@
             {{ deleting() ? ('COMMON.DELETING' | translate) : ('COMMON.DELETE' | translate) }}
           </button>
         </div>
+      </dialog>
+    </div>
+  }
+
+  <!-- QA r64 (lost phone): reset a colleague's two-step verification -->
+  @if (mfaResetTarget(); as target) {
+    <div
+      class="modal-backdrop"
+      (click)="closeMfaReset()"
+      (keydown.escape)="closeMfaReset()"
+      tabindex="-1"
+    >
+      <dialog
+        aria-labelledby="user-list-mfa-reset-title"
+        aria-modal="true"
+        class="modal"
+        [open]="true"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+        appDialogFocus
+        (dialogDismiss)="closeMfaReset()"
+        tabindex="-1"
+        data-testid="mfa-reset-dialog"
+      >
+        <div class="modal-header">
+          <h2 id="user-list-mfa-reset-title">{{ 'USERS.MFA_RESET.TITLE' | translate }}</h2>
+          <button
+            type="button"
+            class="modal-close"
+            (click)="closeMfaReset()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <form class="modal-body" (ngSubmit)="executeMfaReset()">
+          <p>
+            {{
+              'USERS.MFA_RESET.INTRO'
+                | translate: { name: target.firstName + ' ' + target.lastName }
+            }}
+          </p>
+          @if (mfaResetError()) {
+            <div class="form-error" role="alert">{{ mfaResetError() }}</div>
+          }
+          <label for="mfa-reset-reason">{{ 'USERS.MFA_RESET.REASON' | translate }} *</label>
+          <textarea
+            id="mfa-reset-reason"
+            name="mfaResetReason"
+            required
+            rows="3"
+            maxlength="500"
+            [ngModel]="mfaResetReason()"
+            (ngModelChange)="mfaResetReason.set($event)"
+            [placeholder]="'USERS.MFA_RESET.REASON_PLACEHOLDER' | translate"
+          ></textarea>
+          <label for="mfa-reset-code">{{ 'USERS.MFA_RESET.CODE' | translate }}</label>
+          <input
+            id="mfa-reset-code"
+            name="mfaResetCode"
+            type="text"
+            maxlength="8"
+            autocomplete="one-time-code"
+            [ngModel]="mfaResetCode()"
+            (ngModelChange)="mfaResetCode.set($event)"
+          />
+          <p class="field-hint">{{ 'USERS.MFA_RESET.CODE_HINT' | translate }}</p>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeMfaReset()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
+            <button
+              type="submit"
+              class="btn-danger"
+              [disabled]="mfaResetting()"
+              data-testid="mfa-reset-confirm"
+            >
+              {{ 'USERS.MFA_RESET.CONFIRM' | translate }}
+            </button>
+          </div>
+        </form>
       </dialog>
     </div>
   }

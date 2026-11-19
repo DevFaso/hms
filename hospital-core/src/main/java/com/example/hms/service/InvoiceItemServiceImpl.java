@@ -58,6 +58,17 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     private final ActingScopeResolver actingScopeResolver;
     private final AuditEventLogService auditEventLogService;
 
+    /**
+     * QA D2437: a draft's lines carry the estimate of the payer's part. Optional so the hand-built unit tests keep
+     * working, as in BillingInvoiceServiceImpl.
+     */
+    private com.example.hms.service.billing.InvoiceCoverageService coverageService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setCoverageService(com.example.hms.service.billing.InvoiceCoverageService coverageService) {
+        this.coverageService = coverageService;
+    }
+
     @Override
     @Transactional
     public InvoiceItemResponseDTO createInvoiceItem(InvoiceItemRequestDTO dto, Locale locale) {
@@ -106,9 +117,18 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
                 && !activeHospitalId.equals(invoice.getHospital().getId())) {
             throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND_KEY, invoiceId);
         }
-        return invoiceItemRepository.findByBillingInvoice_Id(invoiceId).stream()
+        List<InvoiceItemResponseDTO> lines = invoiceItemRepository.findByBillingInvoice_Id(invoiceId).stream()
             .map(invoiceItemMapper::toInvoiceItemResponseDTO)
             .toList();
+        // QA D2437: a draft shows what the patient's coverage would pay if it were issued now, marked an estimate.
+        if (coverageService != null) {
+            coverageService.previewForDraft(invoice).ifPresent(preview -> lines.forEach(line ->
+                InvoiceItemMapper.withShares(line, preview.lines().stream()
+                    .filter(share -> share.id().equals(line.getId()))
+                    .map(com.example.hms.service.billing.CoverageCalculator.LineShare::share)
+                    .findFirst().orElse(java.math.BigDecimal.ZERO), true)));
+        }
+        return lines;
     }
 
     @Override

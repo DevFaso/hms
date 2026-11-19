@@ -63,6 +63,9 @@ class MfaControllerTest {
     private MfaService mfaService;
 
     @MockitoBean
+    private com.example.hms.service.MfaResetService mfaResetService;
+
+    @MockitoBean
     private UserRepository userRepository;
 
     @MockitoBean
@@ -225,6 +228,26 @@ class MfaControllerTest {
     }
 
     // ── Enroll ──
+
+    // ── QA r64: the user removes their own authenticator ──
+
+    @Test
+    void removeOwn_passesTheStepUpCodeAndAnswersInTheReadersLanguage() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/auth/mfa")
+                    .header("X-Mfa-Token", "123456").header("Accept-Language", "fr"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("deux étapes")));
+        org.mockito.Mockito.verify(mfaResetService).removeOwn(any(User.class), any(), org.mockito.ArgumentMatchers.eq("123456"));
+    }
+
+    @Test
+    void removeOwn_isRefusedInReadOnlyModeBeforeAnyCodeIsChecked() throws Exception {
+        readOnly();
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/auth/mfa")
+                    .header("X-Mfa-Token", "123456"))
+                .andExpect(status().isServiceUnavailable());
+        verifyNoInteractions(mfaResetService);
+    }
 
     @Test
     void enroll_returnsSecretAndBackupCodes() throws Exception {

@@ -5,14 +5,33 @@
     </h4>
     <dl class="payer-shares-split">
       <div>
-        <dt>{{ 'BILLING.PAYER_SHARES.PAYER_SHARE' | translate }}</dt>
+        <dt>
+          {{
+            (isEstimate()
+              ? 'BILLING.PAYER_SHARES.PAYER_SHARE_ESTIMATED'
+              : 'BILLING.PAYER_SHARES.PAYER_SHARE'
+            ) | translate
+          }}
+        </dt>
         <dd data-testid="payer-share-amount">{{ payerShare() | cfa }}</dd>
       </div>
       <div>
-        <dt>{{ 'BILLING.PAYER_SHARES.PATIENT_SHARE' | translate }}</dt>
+        <dt>
+          {{
+            (isEstimate()
+              ? 'BILLING.PAYER_SHARES.PATIENT_SHARE_ESTIMATED'
+              : 'BILLING.PAYER_SHARES.PATIENT_SHARE'
+            ) | translate
+          }}
+        </dt>
         <dd data-testid="patient-share-amount">{{ patientShare() | cfa }}</dd>
       </div>
     </dl>
+    @if (isEstimate()) {
+      <p class="payer-shares-estimate" data-testid="payer-share-estimate">
+        {{ 'BILLING.PAYER_SHARES.ESTIMATE_NOTE' | translate }}
+      </p>
+    }
     @if (loadFailed()) {
       <p class="payer-shares-error" role="alert">
         {{ 'BILLING.PAYER_SHARES.LOAD_FAILED' | translate }}

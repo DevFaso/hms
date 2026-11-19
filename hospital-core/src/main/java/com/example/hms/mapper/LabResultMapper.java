@@ -46,7 +46,8 @@ public class LabResultMapper {
         null,
         Collections.emptyList(),
         null,
-        null
+        null,
+        Collections.emptyList()
     );
 
 
@@ -57,7 +58,7 @@ public class LabResultMapper {
         List<LabResultReferenceRangeDTO> referenceRanges = toReferenceRangeDtos(context.referenceRanges(),
             demographicsOf(result));
         Grading grading = gradingOf(result, context);
-        String severityFlag = effectiveSeverityFlag(result, grading.range(), context.expectedResult());
+        String severityFlag = severityOf(result, grading, context);
 
         return LabResultResponseDTO.builder()
             .id(result.getId() != null ? result.getId().toString() : null)
@@ -91,7 +92,17 @@ public class LabResultMapper {
             .expectedResult(context.expectedResult())
             .severityFlag(severityFlag)
             .unitMismatch(grading.unitMismatch())
-            .gradeUnknown(gradeUnknown(result, grading, severityFlag))
+            .gradeUnknown(isPanelResult(result, context)
+                ? panelGradeUnknown(result, context)
+                : gradeUnknown(result, grading, severityFlag))
+            .panel(isPanelResult(result, context))
+            .components(componentResponses(result, context))
+            .qcOverrideReason(result.getQcOverrideReason())
+            .qcOverrideAt(result.getQcOverrideAt())
+            .criticalCommunicatedTo(result.getCriticalCommunicatedTo())
+            .criticalCommunicatedAt(result.getCriticalCommunicatedAt())
+            .criticalCommunicationReadBack(result.getCriticalCommunicationReadBack())
+            .criticalCommunicatedBy(result.getCriticalCommunicatedByDisplay())
             .acknowledged(result.isAcknowledged())
             .criticalNotifiedAt(result.getCriticalNotifiedAt())
             .criticalEscalatedAt(result.getCriticalEscalatedAt())
@@ -142,7 +153,7 @@ public class LabResultMapper {
 
         OrderContext context = extractOrderContext(result.getLabOrder());
         Grading grading = gradingOf(result, context);
-        String severityFlag = effectiveSeverityFlag(result, grading.range(), context.expectedResult());
+        String severityFlag = severityOf(result, grading, context);
 
         return LabResultTrendPointDTO.builder()
             .labResultId(result.getId() != null ? result.getId().toString() : null)
@@ -179,8 +190,119 @@ public class LabResultMapper {
             return FLAG_UNSPECIFIED;
         }
         OrderContext context = extractOrderContext(result.getLabOrder());
-        LabTestReferenceRange graded = gradingOf(result, context).range();
-        return effectiveSeverityFlag(result, graded, context.expectedResult());
+        return severityOf(result, gradingOf(result, context), context);
+    }
+
+    /**
+     * r63 (NFS panels): the one severity of a result. A panel result is graded
+     * component by component against each component's own ranges, by the same
+     * rules as a single value, and takes the worst of them: CRITICAL, then
+     * HIGH/LOW, then ABNORMAL, then UNSPECIFIED (a value nothing could grade),
+     * then NORMAL. So a panel reads NORMAL only when every value entered is
+     * normal, and is never auto-released with a value nobody graded.
+     */
+    private static String severityOf(LabResult result, Grading grading, OrderContext context) {
+        if (isPanelResult(result, context)) {
+            String worst = FLAG_NORMAL;
+            LabRangeApplicability.Demographics patient = demographicsOf(result);
+            for (com.example.hms.model.LabResultComponent value : componentsOf(result)) {
+                String flag = componentSeverity(value, context, patient);
+                if (panelRank(flag) > panelRank(worst)) {
+                    worst = flag;
+                }
+            }
+            return worst;
+        }
+        return effectiveSeverityFlag(result, grading.range(), context.expectedResult());
+    }
+
+    /** The result's component values, never null. */
+    private static List<com.example.hms.model.LabResultComponent> componentsOf(LabResult result) {
+        List<com.example.hms.model.LabResultComponent> components = result == null ? null : result.getComponents();
+        return components != null ? components : Collections.emptyList();
+    }
+
+    private static boolean isPanelResult(LabResult result, OrderContext context) {
+        return result != null && result.hasComponents() && context.components() != null
+            && !context.components().isEmpty();
+    }
+
+    private static int panelRank(String flag) {
+        if (FLAG_CRITICAL.equals(flag)) {
+            return 4;
+        }
+        if (FLAG_HIGH.equals(flag) || FLAG_LOW.equals(flag)) {
+            return 3;
+        }
+        if (FLAG_ABNORMAL.equals(flag)) {
+            return 2;
+        }
+        if (FLAG_UNSPECIFIED.equals(flag)) {
+            return 1;
+        }
+        return 0;
+    }
+
+    private static com.example.hms.model.LabTestComponent componentDefinition(String code, OrderContext context) {
+        if (code == null) {
+            return null;
+        }
+        return context.components().stream()
+            .filter(c -> c != null && code.equalsIgnoreCase(c.getCode()))
+            .findFirst()
+            .orElse(null);
+    }
+
+    private static LabTestReferenceRange componentRange(com.example.hms.model.LabResultComponent value,
+                                                        com.example.hms.model.LabTestComponent definition,
+                                                        LabRangeApplicability.Demographics patient) {
+        if (definition == null) {
+            return null;
+        }
+        String unit = value.getUnit() != null ? value.getUnit() : definition.getUnit();
+        return gradingOf(unit, definition.getUnit(), definition.getReferenceRanges(), patient, false).range();
+    }
+
+    private static String componentSeverity(com.example.hms.model.LabResultComponent value, OrderContext context,
+                                            LabRangeApplicability.Demographics patient) {
+        LabTestReferenceRange range = componentRange(value, componentDefinition(value.getCode(), context), patient);
+        return determineSeverityFlag(value.getValue(), range);
+    }
+
+    /** r63: a panel needs a person's review when a value with limits to grade it got no grade. */
+    private static boolean panelGradeUnknown(LabResult result, OrderContext context) {
+        LabRangeApplicability.Demographics patient = demographicsOf(result);
+        for (com.example.hms.model.LabResultComponent value : componentsOf(result)) {
+            LabTestReferenceRange range = componentRange(value, componentDefinition(value.getCode(), context), patient);
+            if (hasLimit(range) && value.getValue() != null && !value.getValue().isBlank()
+                && FLAG_UNSPECIFIED.equals(determineSeverityFlag(value.getValue(), range))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static List<com.example.hms.payload.dto.LabResultComponentResponseDTO> componentResponses(
+            LabResult result, OrderContext context) {
+        if (!result.hasComponents()) {
+            return Collections.emptyList();
+        }
+        LabRangeApplicability.Demographics patient = demographicsOf(result);
+        return componentsOf(result).stream()
+            .filter(Objects::nonNull)
+            .map(value -> {
+                LabTestReferenceRange range = componentRange(value, componentDefinition(value.getCode(), context),
+                    patient);
+                return com.example.hms.payload.dto.LabResultComponentResponseDTO.builder()
+                    .code(value.getCode())
+                    .name(value.getName())
+                    .value(value.getValue())
+                    .unit(value.getUnit())
+                    .severityFlag(determineSeverityFlag(value.getValue(), range))
+                    .referenceRange(range != null ? toReferenceRangeDto(range) : null)
+                    .build();
+            })
+            .toList();
     }
 
     /**
@@ -338,6 +460,9 @@ public class LabResultMapper {
             return false;
         }
         OrderContext context = extractOrderContext(result.getLabOrder());
+        if (isPanelResult(result, context)) {
+            return panelGradeUnknown(result, context);
+        }
         Grading grading = gradingOf(result, context);
         return gradeUnknown(result, grading, effectiveSeverityFlag(result, grading.range(), context.expectedResult()));
     }
@@ -622,7 +747,8 @@ public class LabResultMapper {
             orderedByName,
             labTestMetadata.referenceRanges(),
             labTestMetadata.unit(),
-            labTestMetadata.expectedResult()
+            labTestMetadata.expectedResult(),
+            labTestMetadata.components()
         );
     }
 
@@ -639,13 +765,16 @@ public class LabResultMapper {
             /** The test definition's own unit: what a range with no unit of its own is stated in. */
             String testUnit,
             /** QA D834: the expected answer of a qualitative test. */
-            String expectedResult
+            String expectedResult,
+            /** r63: a panel test's components; empty for a single-value test. */
+            List<com.example.hms.model.LabTestComponent> components
     ) {}
 
     private record PatientInfo(String fullName) {}
 
     private record LabTestMetadata(String name, String testCode, List<LabTestReferenceRange> referenceRanges,
-                                   String unit, String expectedResult) {}
+                                   String unit, String expectedResult,
+                                   List<com.example.hms.model.LabTestComponent> components) {}
 
     private PatientInfo resolvePatientInfo(LabOrder order) {
         Patient patient = order.getPatient();
@@ -722,14 +851,15 @@ public class LabResultMapper {
 
     private LabTestMetadata resolveLabTestMetadata(LabOrder order) {
         if (order.getLabTestDefinition() == null || !Hibernate.isInitialized(order.getLabTestDefinition())) {
-            return new LabTestMetadata(null, null, Collections.emptyList(), null, null);
+            return new LabTestMetadata(null, null, Collections.emptyList(), null, null, Collections.emptyList());
         }
         LabTestDefinition definition = order.getLabTestDefinition();
         List<LabTestReferenceRange> referenceRanges = definition.getReferenceRanges() != null
             ? definition.getReferenceRanges()
             : Collections.emptyList();
         return new LabTestMetadata(definition.getName(), definition.getTestCode(), referenceRanges,
-            definition.getUnit(), definition.getExpectedResult());
+            definition.getUnit(), definition.getExpectedResult(),
+            definition.getComponents() != null ? definition.getComponents() : Collections.emptyList());
     }
 
     private String nullToEmpty(String value) {

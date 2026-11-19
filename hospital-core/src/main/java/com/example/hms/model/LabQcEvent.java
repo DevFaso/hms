@@ -80,4 +80,24 @@ public class LabQcEvent extends BaseEntity {
 
     @Column(name = "notes", length = 2048)
     private String notes;
+
+    /** r63 D2304: the control material's lot number. */
+    @Column(name = "lot_number", length = 100)
+    private String lotNumber;
+
+    /** r63 D2304: the operator's name as shown when the run was recorded. */
+    @Column(name = "recorded_by_display", length = 255)
+    private String recordedByDisplay;
+
+    /** r63 D2304: the director's target mean this run was judged against (null: no target set). */
+    @Column(name = "target_mean", precision = 18, scale = 6)
+    private BigDecimal targetMean;
+
+    /** r63 D2304: the director's target SD this run was judged against (null: no target set). */
+    @Column(name = "target_sd", precision = 18, scale = 6)
+    private BigDecimal targetSd;
+
+    /** r63 D2304: WITHIN_2SD, OUTSIDE_2SD or OUTSIDE_3SD; null when no target was set. */
+    @Column(name = "sd_flag", length = 20)
+    private String sdFlag;
 }

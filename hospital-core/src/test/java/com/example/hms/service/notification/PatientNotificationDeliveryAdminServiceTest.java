@@ -48,6 +48,9 @@ class PatientNotificationDeliveryAdminServiceTest {
     @Mock private PatientRepository patientRepository;
     @Mock private ActingScopeResolver actingScopeResolver;
     @Mock private RoleValidator roleValidator;
+    @Mock private com.example.hms.repository.AppointmentRepository appointmentRepository;
+    @Mock private com.example.hms.repository.BillingInvoiceRepository invoiceRepository;
+    @Mock private com.example.hms.repository.LabOrderRepository labOrderRepository;
 
     private PatientNotificationDeliveryAdminService service;
     private final UUID hospitalId = UUID.randomUUID();
@@ -57,7 +60,8 @@ class PatientNotificationDeliveryAdminServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new PatientNotificationDeliveryAdminService(repository, patientRepository, actingScopeResolver,
+        service = new PatientNotificationDeliveryAdminService(repository, patientRepository, appointmentRepository,
+            invoiceRepository, labOrderRepository, actingScopeResolver,
             roleValidator, Clock.fixed(Instant.parse("2026-11-17T08:00:00Z"), ZoneOffset.UTC));
         lenient().when(actingScopeResolver.requirePinned()).thenReturn(hospitalId);
         lenient().when(roleValidator.getCurrentUserId()).thenReturn(adminId);
@@ -92,6 +96,55 @@ class PatientNotificationDeliveryAdminServiceTest {
             assertThat(dto.isRetryable()).isTrue();
         });
         assertThat(page.getCountsByStatus()).containsEntry("FAILED", 1L).containsEntry("SENT", 0L).hasSize(5);
+    }
+
+    @Test
+    @DisplayName("QA D2402: an opt-out row says what it was about: the appointment, the invoice, at this hospital only")
+    void describesWhatEachRowWasAbout() {
+        com.example.hms.model.Hospital here = new com.example.hms.model.Hospital();
+        here.setId(hospitalId);
+        com.example.hms.model.Hospital elsewhere = new com.example.hms.model.Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        com.example.hms.model.Appointment appointment = new com.example.hms.model.Appointment();
+        appointment.setId(UUID.randomUUID());
+        appointment.setHospital(here);
+        appointment.setAppointmentDate(java.time.LocalDate.of(2026, 11, 20));
+        appointment.setStartTime(java.time.LocalTime.of(10, 30));
+        com.example.hms.model.BillingInvoice ours = new com.example.hms.model.BillingInvoice();
+        ours.setId(UUID.randomUUID());
+        ours.setHospital(here);
+        ours.setInvoiceNumber("CHA-2026-000057");
+        com.example.hms.model.BillingInvoice theirs = new com.example.hms.model.BillingInvoice();
+        theirs.setId(UUID.randomUUID());
+        theirs.setHospital(elsewhere);
+        theirs.setInvoiceNumber("OTHER-1");
+        PatientNotificationDelivery booking = skipped(PatientNotificationEvent.APPOINTMENT_CONFIRMATION, appointment.getId());
+        PatientNotificationDelivery invoice = skipped(PatientNotificationEvent.INVOICE, ours.getId());
+        PatientNotificationDelivery foreign = skipped(PatientNotificationEvent.INVOICE, theirs.getId());
+        when(repository.searchForHospital(eq(hospitalId), any(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(booking, invoice, foreign), PageRequest.of(0, 25), 3));
+        when(repository.countByStatusForHospital(hospitalId)).thenReturn(List.of());
+        when(patientRepository.findAllById(any())).thenReturn(List.of(patient));
+        when(appointmentRepository.findAllById(any())).thenReturn(List.of(appointment));
+        when(invoiceRepository.findAllById(any())).thenReturn(List.of(ours, theirs));
+
+        List<com.example.hms.payload.dto.notification.PatientNotificationDeliveryDTO> rows =
+            service.search("SKIPPED", 0, 25).getContent();
+
+        assertThat(rows.get(0).getSubjectDate()).isEqualTo(java.time.LocalDate.of(2026, 11, 20));
+        assertThat(rows.get(0).getSubjectTime()).isEqualTo(java.time.LocalTime.of(10, 30));
+        assertThat(rows.get(1).getSubjectReference()).isEqualTo("CHA-2026-000057");
+        assertThat(rows.get(2).getSubjectReference()).isNull();
+        assertThat(rows).allSatisfy(row -> assertThat(row.getCreatedAt()).isNotNull());
+    }
+
+    private PatientNotificationDelivery skipped(PatientNotificationEvent event, UUID subjectId) {
+        PatientNotificationDelivery row = PatientNotificationDelivery.builder().hospitalId(hospitalId)
+            .patientId(patient.getId()).eventType(event).channel(NotificationChannel.EMAIL).subjectId(subjectId)
+            .status(NotificationDeliveryStatus.SKIPPED).errorCode("OPTED_OUT").build();
+        row.setId(UUID.randomUUID());
+        row.setCreatedAt(java.time.LocalDateTime.of(2026, 11, 19, 9, 0));
+        return row;
     }
 
     @Test

@@ -55,6 +55,8 @@ export interface BillingInvoiceResponse {
   insuranceCoverageAmount: number;
   /** Billing-money plan PR 7: the patient's share of the bill before payments ("Part patient"). */
   patientResponsibilityAmount: number;
+  /** QA D2437: on a draft's detail, what the coverage would pay if it were issued now (an estimate). */
+  estimatedInsuranceCoverageAmount?: number | null;
   /** Billing-money plan PR 7: the payers' shares (on GET by id), a rejected one with the payer's reason. */
   payerShares?: InvoicePayerShare[];
   status: InvoiceStatus;
@@ -104,6 +106,12 @@ export interface InvoiceItemResponse {
   tariffUnitPrice?: number | null;
   /** Why the price-list price was overridden, as typed. */
   overrideReason?: string | null;
+  /** QA D2434: the payer's part of this line ("Part assureur"); 0 when no payer covers it. */
+  payerShareAmount?: number;
+  /** QA D2434: the line total less the payer's part ("Part patient"). */
+  patientShareAmount?: number;
+  /** QA D2437: on a draft, the payer's part is an estimate, fixed when the invoice is issued. */
+  payerShareEstimated?: boolean;
 }
 
 /** Backend InvoiceLinePriceSource. */

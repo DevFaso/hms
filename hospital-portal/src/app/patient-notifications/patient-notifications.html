@@ -43,6 +43,15 @@
       }
       <option value="ALL">{{ 'PATIENT_NOTIFICATIONS.ALL_STATUSES' | translate }}</option>
     </select>
+    <!-- QA D2402: the filter says what it leaves out, and shows it in one click. -->
+    @if (hiddenByFilter() > 0) {
+      <p class="filter-hidden" data-testid="pn-hidden-by-filter" role="status">
+        {{ 'PATIENT_NOTIFICATIONS.HIDDEN_BY_FILTER' | translate: { count: hiddenByFilter() } }}
+        <button type="button" class="btn-link" (click)="setStatusFilter('ALL')">
+          {{ 'PATIENT_NOTIFICATIONS.SHOW_ALL' | translate }}
+        </button>
+      </p>
+    }
   </div>
 
   @if (loading()) {
@@ -78,7 +87,14 @@
           @for (row of rows(); track row.id) {
             <tr [attr.data-testid]="'pn-row-' + row.id">
               <td>{{ row.patientName || '—' }}</td>
-              <td>{{ eventKey(row.eventType) | translate }}</td>
+              <td>
+                {{ eventKey(row.eventType) | translate }}
+                @if (subject(row); as about) {
+                  <div class="cell-secondary" [attr.data-testid]="'pn-subject-' + row.id">
+                    {{ about.key | translate: about.params }}
+                  </div>
+                }
+              </td>
               <td>{{ channelKey(row.channel) | translate }}</td>
               <td>
                 <span class="status-badge" [attr.data-status]="row.status">
@@ -101,8 +117,14 @@
                   —
                 }
               </td>
-              <td>
-                {{ row.lastAttemptAt ? (row.lastAttemptAt | serverTime | date: 'short') : '—' }}
+              <!-- QA D2402: an opt-out has no attempt: the day it was recorded is shown instead. -->
+              <td [attr.data-testid]="'pn-date-' + row.id">
+                {{ rowDate(row) | serverTime | date: 'short' }}
+                @if (!row.lastAttemptAt) {
+                  <div class="cell-secondary">
+                    {{ 'PATIENT_NOTIFICATIONS.RECORDED' | translate }}
+                  </div>
+                }
               </td>
               <td class="actions-cell">
                 @if (row.retryable) {

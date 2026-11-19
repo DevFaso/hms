@@ -96,8 +96,25 @@ export class InvoicePayerSharesComponent {
   readonly rejecting = signal<InvoicePayerShare | null>(null);
   readonly rejectReason = signal('');
 
-  readonly payerShare = computed(() => Number(this.invoice().insuranceCoverageAmount ?? 0));
-  readonly patientShare = computed(() => Number(this.invoice().patientResponsibilityAmount ?? 0));
+  /**
+   * QA D2437: a draft shows what the coverage would pay if it were issued now, marked an estimate;
+   * the split is fixed only at issue.
+   */
+  readonly isEstimate = computed(
+    () =>
+      this.invoice().status === 'DRAFT' &&
+      Number(this.invoice().estimatedInsuranceCoverageAmount ?? 0) > 0,
+  );
+  readonly payerShare = computed(() =>
+    this.isEstimate()
+      ? Number(this.invoice().estimatedInsuranceCoverageAmount ?? 0)
+      : Number(this.invoice().insuranceCoverageAmount ?? 0),
+  );
+  readonly patientShare = computed(() =>
+    this.isEstimate()
+      ? Math.max(0, Number(this.invoice().totalAmount ?? 0) - this.payerShare())
+      : Number(this.invoice().patientResponsibilityAmount ?? 0),
+  );
   /** Shown when a payer covers part of the bill now, or ever did (a rejected or cancelled share). */
   readonly visible = computed(() => this.payerShare() > 0 || this.shares().length > 0);
 

@@ -4,7 +4,7 @@ import es from '../../../assets/i18n/es.json';
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
-import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { signal } from '@angular/core';
 import {
@@ -1778,6 +1778,126 @@ describe('LabResultsComponent — rendered delete gate and order picker', () => 
         data: { content: [], totalElements: 0, totalPages: 1, number: 0 },
         success: true,
       });
+  });
+
+  it('r63 D2312: warns at entry when a value is beyond the test critical limits', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    flushInit(
+      [],
+      [
+        {
+          id: 'o-k',
+          labOrderCode: 'o-k',
+          patientId: 'patient-1',
+          labTestName: 'Kaliemie',
+          labTestCode: 'K',
+          labTestUnit: 'mmol/L',
+          labTestReferenceRanges: [
+            {
+              minValue: 3.5,
+              maxValue: 5.1,
+              unit: 'mmol/L',
+              ageMin: null,
+              ageMax: null,
+              gender: 'ALL',
+              notes: null,
+              criticalLow: 2.5,
+              criticalHigh: 6.5,
+            },
+          ],
+        },
+      ],
+    );
+    component.openCreate();
+    component.form.labOrderId = 'o-k';
+    component.onOrderChange('o-k');
+    component.form.resultValue = '6,9';
+    fixture.detectChanges();
+
+    expect(component.singleValueCritical()).toBe('CRITICAL_HIGH');
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="critical-entry-warning"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="critical-entry-banner"]')).not.toBeNull();
+
+    component.form.resultValue = '4.2';
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="critical-entry-warning"]')).toBeNull();
+  });
+
+  it('r63 (NFS panels): a panel test is entered component by component in one result', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    const range = (min: number, max: number, critLow: number, critHigh: number) => ({
+      minValue: min,
+      maxValue: max,
+      unit: null,
+      ageMin: null,
+      ageMax: null,
+      gender: 'ALL' as const,
+      notes: null,
+      criticalLow: critLow,
+      criticalHigh: critHigh,
+    });
+    flushInit(
+      [],
+      [
+        {
+          id: 'o-nfs',
+          labOrderCode: 'o-nfs',
+          patientId: 'patient-1',
+          labTestName: 'NFS',
+          labTestCode: 'NFS',
+          labTestComponents: [
+            {
+              code: 'HB',
+              name: 'Hemoglobine',
+              unit: 'g/dL',
+              referenceRanges: [range(12, 16, 7, 20)],
+            },
+            {
+              code: 'WBC',
+              name: 'Leucocytes',
+              unit: '10^9/L',
+              referenceRanges: [range(4, 10, 1, 30)],
+            },
+          ],
+        },
+      ],
+    );
+    component.openCreate();
+    component.form.labOrderId = 'o-nfs';
+    component.onOrderChange('o-nfs');
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="panel-entry"]')).not.toBeNull();
+    expect(host.querySelector('#lr-resultValue')).toBeNull();
+    expect(component.hasPanelValue()).toBeFalse();
+
+    component.panelValues['HB'] = '6,1';
+    component.panelValues['WBC'] = '7.2';
+    fixture.detectChanges();
+    expect(host.querySelectorAll('[data-testid="component-critical-warning"]').length).toBe(1);
+
+    component.form.resultDate = '2026-11-19T08:00';
+    component.submitForm();
+    const req = httpMock.expectOne((r) => r.url === '/lab-results' && r.method === 'POST');
+    expect(req.request.body.components).toEqual([
+      { code: 'HB', value: '6,1' },
+      { code: 'WBC', value: '7.2' },
+    ]);
+    expect(req.request.body.resultValue).toBe('');
+  });
+
+  it('r63 D2305: a critical result is sent to the release worklist, where the call is recorded', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    const critical = mockResult({ severityFlag: 'CRITICAL', enteredByUserId: 'user-2' });
+    flushInit([critical], []);
+    const router = TestBed.inject(Router);
+    const navigate = spyOn(router, 'navigate').and.resolveTo(true);
+
+    component.releaseResult(critical as unknown as LabResultResponse);
+
+    httpMock.expectNone((r) => r.method === 'POST');
+    expect(navigate).toHaveBeenCalledWith(['/lab-release-worklist']);
   });
 });
 

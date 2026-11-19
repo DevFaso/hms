@@ -16,6 +16,8 @@ import { defer, of, throwError } from 'rxjs';
 import {
   errorInterceptor,
   clearReportedSilent403s,
+  CREDENTIAL_CHECK_PATTERNS,
+  PRE_SESSION_CHECK_PATTERNS,
   REFRESH_SUPERSEDED_DELAY_MS,
   REFRESH_SUPERSEDED_RETRIES,
 } from './error.interceptor';
@@ -370,6 +372,60 @@ describe('errorInterceptor', () => {
       expect(error).toBeUndefined();
       expect(auth.logout).not.toHaveBeenCalled();
     });
+  }
+
+  // QA D2401 (class): every auth step whose 401 answers what the user typed.
+  // A new one must be added here AND to one of the two interceptor lists.
+  const TYPED_VALUE_401_STEPS = [
+    '/api/auth/login',
+    '/api/auth/mfa/verify',
+    '/api/auth/verify-password',
+    '/api/auth/me/change-password',
+    '/api/auth/me/change-email',
+  ];
+  it('QA D2401 guard: every auth step that answers a typed value with 401 is exempt from sign-out', () => {
+    const exempt = [...PRE_SESSION_CHECK_PATTERNS, ...CREDENTIAL_CHECK_PATTERNS];
+    for (const url of TYPED_VALUE_401_STEPS) {
+      expect(exempt.some((p) => p.test(url)))
+        .withContext(url)
+        .toBeTrue();
+    }
+    // Session-bound calls keep the session handling.
+    for (const url of [
+      '/api/auth/mfa/verify-enrollment',
+      '/api/auth/token/refresh',
+      '/api/auth/logout',
+    ]) {
+      expect(PRE_SESSION_CHECK_PATTERNS.some((p) => p.test(url)))
+        .withContext(url)
+        .toBeFalse();
+    }
+  });
+
+  for (const url of ['/api/auth/mfa/verify', '/api/auth/login']) {
+    for (const storedSession of [false, true]) {
+      it(`QA D2401: a 401 on ${url} (stored session: ${storedSession}) stays on the page: no refresh, no sign-out`, () => {
+        if (storedSession) {
+          auth.getRefreshToken.and.returnValue('r1');
+          auth.getUserProfile.and.returnValue({ id: 'u1' } as never);
+        }
+        let error: HttpErrorResponse | undefined;
+        http.post(url, { code: '000000' }).subscribe({ error: (e) => (error = e) });
+        httpMock
+          .expectOne(url)
+          .flush(
+            { message: 'Ce code n’a pas été accepté' },
+            { status: 401, statusText: 'Unauthorized' },
+          );
+        httpMock.expectNone(url);
+
+        expect(auth.refreshTokenRequest).not.toHaveBeenCalled();
+        expect(auth.logout).not.toHaveBeenCalled();
+        expect(router.navigate).not.toHaveBeenCalled();
+        expect(error?.status).toBe(401);
+        expect((error?.error as { message: string }).message).toContain('accepté');
+      });
+    }
   }
 
   it('never refreshes or logs out again on the 401 of the logout call itself', () => {

@@ -71,6 +71,11 @@ public class BillingInvoiceResponseDTO {
     /** Billing-money plan PR 7: the patient's share of the bill before payments ("Part patient"). */
     private BigDecimal patientResponsibilityAmount;
     /**
+     * QA D2437: on a draft's detail, what the patient's coverage would pay if it were issued now (an estimate, fixed
+     * at issue); null on an issued invoice, on lists, and when no coverage applies.
+     */
+    private BigDecimal estimatedInsuranceCoverageAmount;
+    /**
      * Billing-money plan PR 7: the payers' shares, oldest first, with their status and, for a rejected one, the
      * payer's reason. Filled on the invoice detail (staff and patient); null on lists.
      */
