@@ -147,9 +147,9 @@ class IdleSessionRefreshIntegrationTest {
         when(jwtTokenProvider.getExpiration(org.mockito.ArgumentMatchers.anyString()))
             .thenReturn(new java.util.Date(4_102_444_800_000L));
         when(tokenBlacklistService.claim(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyLong())).thenReturn(true);
-        when(jwtTokenProvider.generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), org.mockito.ArgumentMatchers.isNull()))
+        when(jwtTokenProvider.generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), org.mockito.ArgumentMatchers.isNull(), any()))
             .thenReturn("cdx-new-access");
-        when(jwtTokenProvider.generateRefreshToken(any(org.springframework.security.core.Authentication.class), org.mockito.ArgumentMatchers.isNull()))
+        when(jwtTokenProvider.generateRefreshToken(any(org.springframework.security.core.Authentication.class), org.mockito.ArgumentMatchers.isNull(), any()))
             .thenReturn("cdx-new-refresh");
         idleSessionGate.touchIfHuman(user.getId(), AuthorityUtils.createAuthorityList("ROLE_NURSE"));
     }
@@ -186,8 +186,8 @@ class IdleSessionRefreshIntegrationTest {
             idleClock.addAndGet(60_000);
         }
         verify(tokenBlacklistService, never()).claim(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyLong());
-        verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), org.mockito.ArgumentMatchers.any());
-        verify(jwtTokenProvider, never()).generateRefreshToken(any(org.springframework.security.core.Authentication.class), org.mockito.ArgumentMatchers.any());
+        verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), org.mockito.ArgumentMatchers.any(), any());
+        verify(jwtTokenProvider, never()).generateRefreshToken(any(org.springframework.security.core.Authentication.class), org.mockito.ArgumentMatchers.any(), any());
         verify(refreshTokenCookieService, never()).write(any(), any(), org.mockito.ArgumentMatchers.anyLong());
         var events = org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
         verify(auditEventLogService, times(2)).logEvent(events.capture());

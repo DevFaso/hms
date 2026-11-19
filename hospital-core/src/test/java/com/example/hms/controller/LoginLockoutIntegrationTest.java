@@ -150,7 +150,7 @@ class LoginLockoutIntegrationTest {
         };
         login(USERNAME, language).andExpect(status().isLocked()).andExpect(jsonPath("$.message").value(expected));
         verify(authenticationManager, times(FAILURE_LIMIT)).authenticate(any());
-        verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class));
+        verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any());
         var audits = org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
         verify(auditEventLogService, times(FAILURE_LIMIT + 1)).logEvent(audits.capture());
         assertThat(audits.getAllValues().subList(0, FAILURE_LIMIT)).allSatisfy(audit -> {
@@ -201,8 +201,8 @@ class LoginLockoutIntegrationTest {
         user.setId(userId);
         user.setUsername(USERNAME);
         when(userRepository.findByUsername(USERNAME)).thenReturn(java.util.Optional.of(user));
-        when(jwtTokenProvider.generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class))).thenReturn("cdx-access-stub");
-        when(jwtTokenProvider.generateRefreshToken(any(com.example.hms.security.TokenUserDescriptor.class))).thenReturn("cdx-refresh-stub");
+        when(jwtTokenProvider.generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any())).thenReturn("cdx-access-stub");
+        when(jwtTokenProvider.generateRefreshToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any())).thenReturn("cdx-refresh-stub");
         login(USERNAME, "en").andExpect(status().isOk()).andExpect(jsonPath("$.accessToken").value("cdx-access-stub"));
         verify(userCredentialLifecycleService).recordSuccessfulLogin(userId);
         org.mockito.Mockito.reset(authenticationManager);

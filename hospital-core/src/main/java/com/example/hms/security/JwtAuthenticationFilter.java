@@ -221,6 +221,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return false;
         }
 
+        // QA D2184: the sign-in session this token belongs to was ended (logout,
+        // lock-screen lockout): every token of it is refused, including an
+        // access token a refresh superseded, which the logout never saw. The
+        // same store as the jti check above, one more lookup.
+        if (tokenBlacklistService.isSessionRevoked(tokenProvider.getSessionId(jwt))) {
+            log.debug("[JWT] Token's session was revoked, rejecting on path={}", path);
+            respondUnauthorized(response);
+            return false;
+        }
+
         // ── Global session revocation gate (MVP-7) ─────────────────────
         // Force-logout-all bumps `globalMinTokenIat` to "now"; any token
         // issued before that instant is rejected. Cached + refreshed every
