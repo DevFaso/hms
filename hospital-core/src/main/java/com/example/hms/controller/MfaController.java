@@ -60,6 +60,8 @@ public class MfaController {
     private static final String PICK_NOT_HONOURED = "auth.mfa.pickNotHonoured";
 
     private final MfaService mfaService;
+    /** QA r64: the user's own removal of their authenticator. */
+    private final com.example.hms.service.MfaResetService mfaResetService;
     private final org.springframework.context.MessageSource messageSource;
     private final UserRepository userRepository;
     private final AuditEventLogService auditEventLogService;
@@ -261,6 +263,25 @@ public class MfaController {
                 .eventDescription("Invalid TOTP code during enrollment verification")
                 .build());
         return ResponseEntity.badRequest().body(new MessageResponse(message("mfa.enrollment.invalidCode")));
+    }
+
+    /**
+     * QA r64: the user removes their own authenticator, after a current code or an unused backup code from it in
+     * {@code X-Mfa-Token} (403 with a reason code otherwise). The enrolment and the backup codes are deleted and the
+     * removal audited ({@code MFA_RESET}); a role that requires two-step verification sets one up again at the next
+     * sign-in.
+     */
+    @org.springframework.web.bind.annotation.DeleteMapping
+    public ResponseEntity<Object> removeOwn(@AuthenticationPrincipal UserDetails principal,
+                                            Authentication authentication,
+                                            @RequestHeader(value = "X-Mfa-Token", required = false) String stepUpCode) {
+        Optional<User> authenticated = resolveFullyAuthenticatedUser(principal);
+        if (authenticated.isEmpty()) return notFullyAuthenticated();
+        User user = authenticated.get();
+        Optional<ResponseEntity<Object>> readOnly = readOnlyRefusal(user, authentication);
+        if (readOnly.isPresent()) return readOnly.get();
+        mfaResetService.removeOwn(user, authentication, stepUpCode);
+        return ResponseEntity.ok(new MessageResponse(message("mfa.remove.done")));
     }
 
     /**

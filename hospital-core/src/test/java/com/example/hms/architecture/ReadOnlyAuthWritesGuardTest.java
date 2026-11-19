@@ -70,6 +70,8 @@ class ReadOnlyAuthWritesGuardTest {
         Map.entry("POST /auth/credentials/recovery/{contactId}/send-code", Kind.REFUSED),
         Map.entry("POST /auth/credentials/recovery/{contactId}/verify", Kind.REFUSED),
         Map.entry("PUT /auth/credentials/mfa", Kind.REFUSED),
+        // QA r64: removing one's own authenticator is an optional change.
+        Map.entry("DELETE /auth/mfa", Kind.REFUSED),
         // Not on the user's lists, kept open and reported in the PR. A forced change on the native
         // apps goes through change-password, and the filter cannot tell it from a voluntary one.
         Map.entry("POST /auth/me/change-password", Kind.OPEN),
