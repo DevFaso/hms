@@ -74,6 +74,8 @@ public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
             "referralSummary", "followUpInstructions", "patientEducationMaterials",
             // User decision 2026-11-12: the summary's content sections; the contact numbers stay.
             "vitalSigns", "orderedTests", "allergies", "currentMedications", "clinicalAssessment", "clinicalPlan",
+            // QA D2260 (r63): the addenda of the signed note are clinical text too.
+            "noteAddenda",
             "medicalHistory", "surgicalHistory", "familyHistory", "socialHistory")),
         Map.entry(BedBoardDTO.OccupantDTO.class, Set.of("primaryDiagnosis")),
         Map.entry(TransferOrderResponseDTO.class, Set.of("reason", "notes", "cancellationReason", "isolationOverrideReason")),
@@ -192,6 +194,7 @@ public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
         summary.setCurrentMedications(null);
         summary.setClinicalAssessment(null);
         summary.setClinicalPlan(null);
+        summary.setNoteAddenda(null);
         summary.setMedicalHistory(null);
         summary.setSurgicalHistory(null);
         summary.setFamilyHistory(null);

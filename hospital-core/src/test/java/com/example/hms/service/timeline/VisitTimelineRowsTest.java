@@ -191,6 +191,31 @@ class VisitTimelineRowsTest {
             .noneMatch(PatientTimelineEntryDTO::isSensitive);
     }
 
+    /** QA D2260 (r63): each addendum to the signed note is a dated row of its own, signed by its author. */
+    @Test
+    void anAddendumToTheSignedNoteIsItsOwnRow() {
+        aFullConsultation();
+        EncounterNote signed = notes.findByEncounter_IdIn(List.of(
+            encounters.findByPatient_IdAndHospital_Id(patientId, here.getId()).get(0).getId())).get(0);
+        com.example.hms.model.encounter.EncounterNoteAddendum addendum = new com.example.hms.model.encounter.EncounterNoteAddendum();
+        addendum.setId(UUID.randomUUID());
+        addendum.setContent("CRP à 85 mg/L, confirme l'infection.");
+        addendum.setAuthorName("Dr Ouédraogo");
+        addendum.setSignedAt(LocalDateTime.now().minusMinutes(10));
+        signed.addAddendum(addendum);
+
+        List<PatientTimelineEntryDTO> visit = rows.collect(patientId, here.getId(), Set.of());
+
+        assertThat(visit).filteredOn(row -> addendum.getId().toString().equals(row.getEntryId()))
+            .singleElement()
+            .satisfies(row -> {
+                assertThat(row.getCategory()).isEqualTo("NOTE");
+                assertThat(row.getSummary()).isEqualTo("Addendum à la note signée — CRP à 85 mg/L, confirme l'infection.");
+                assertThat(row.getOccurredAt()).isEqualTo(addendum.getSignedAt());
+                assertThat(row.getMetadata()).containsEntry("clinician", "Dr Ouédraogo");
+            });
+    }
+
     @Test
     void aNoteAndAnOrderOfASensitiveVisitAreSensitiveRows() {
         aFullConsultation();

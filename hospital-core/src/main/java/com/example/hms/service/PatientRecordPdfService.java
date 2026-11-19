@@ -219,7 +219,28 @@ public class PatientRecordPdfService {
             // QA D1107: the note's title, as the chart review shows it.
             n.getTitle(),
             n.getAuthorName(), t.get(n.isSigned() ? "pdf.record.note.signed" : "pdf.record.note.draft"),
-            n.getPreview());
+            n.getPreview(), addendaOf(n, t));
+    }
+
+    /**
+     * QA D2260 (r63): each addendum prints under its note, dated and signed; a correction to a signed
+     * note the printed record left out was invisible to the reader of the PDF.
+     */
+    private static String addendaOf(ChartReviewDTO.NoteEntryDTO n, PdfLabels t) {
+        if (n.getAddenda() == null || n.getAddenda().isEmpty()) {
+            return null;
+        }
+        StringBuilder out = new StringBuilder();
+        for (ChartReviewDTO.NoteAddendumEntryDTO a : n.getAddenda()) {
+            if (!out.isEmpty()) {
+                out.append(SEPARATOR);
+            }
+            out.append(t.get("pdf.record.note.addendum",
+                t.fmt(com.example.hms.service.support.NoteAddenda.when(a)),
+                a.getAuthorName() != null ? a.getAuthorName() : "—",
+                a.getContent()));
+        }
+        return out.toString();
     }
 
     private static String resultRow(ChartReviewDTO.ResultEntryDTO r, PdfLabels t) {

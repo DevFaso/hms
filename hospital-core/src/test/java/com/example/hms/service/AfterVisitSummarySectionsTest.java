@@ -424,6 +424,40 @@ class AfterVisitSummarySectionsTest {
     }
 
     @Test
+    @DisplayName("QA D2260: the signed note's addenda, oldest first, dated and signed; the desk gets none")
+    void theSignedNotesAddendaFollowIt() {
+        EncounterNote signed = new EncounterNote();
+        signed.setAssessment("Pneumonie");
+        signed.setSignedAt(LocalDateTime.now().minusHours(3));
+        signed.setCreatedAt(LocalDateTime.now().minusHours(4));
+        com.example.hms.model.encounter.EncounterNoteAddendum later = new com.example.hms.model.encounter.EncounterNoteAddendum();
+        later.setContent("Second addendum");
+        later.setAuthorName("Dr B");
+        later.setSignedAt(LocalDateTime.now().minusHours(1));
+        com.example.hms.model.encounter.EncounterNoteAddendum earlier = new com.example.hms.model.encounter.EncounterNoteAddendum();
+        earlier.setContent("Addendum : CRP à 85 mg/L, confirme l'infection.");
+        earlier.setAuthorName("Dr A");
+        earlier.setSignedAt(LocalDateTime.now().minusHours(2));
+        com.example.hms.model.encounter.EncounterNoteAddendum blank = new com.example.hms.model.encounter.EncounterNoteAddendum();
+        blank.setContent("  ");
+        signed.addAddendum(later);
+        signed.addAddendum(earlier);
+        signed.addAddendum(blank);
+        encounter.setEncounterNote(signed);
+
+        AfterVisitSummaryDTO avs = new AfterVisitSummaryDTO();
+        sections.fill(encounter, avs, false);
+        assertThat(avs.getNoteAddenda()).extracting("content")
+            .containsExactly("Addendum : CRP à 85 mg/L, confirme l'infection.", "Second addendum");
+        assertThat(avs.getNoteAddenda()).extracting("authorName").containsExactly("Dr A", "Dr B");
+        assertThat(avs.getNoteAddenda()).allSatisfy(a -> assertThat(a.getSignedAt()).isNotNull());
+
+        AfterVisitSummaryDTO desk = new AfterVisitSummaryDTO();
+        sections.fill(encounter, desk, true);
+        assertThat(desk.getNoteAddenda()).isNull();
+    }
+
+    @Test
     void multiParagraphPlanAppendedByTheMapperIsShownOnlyInItsOwnSection() {
         EncounterNote signed = new EncounterNote();
         signed.setPlan("First plan paragraph\n\nSecond plan paragraph");

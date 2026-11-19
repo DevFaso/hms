@@ -95,6 +95,11 @@ public class AfterVisitSummaryDTO {
     /** The signed note's assessment ("A") and plan ("P"), as the clinician entered them. */
     private String clinicalAssessment;
     private String clinicalPlan;
+    /**
+     * QA D2260 (r63): the addenda filed under that signed note, oldest first, each dated and signed:
+     * a correction to the assessment or plan shown above. Empty when there are none.
+     */
+    private List<com.example.hms.payload.dto.chartreview.ChartReviewDTO.NoteAddendumEntryDTO> noteAddenda;
 
     /** This patient's own recorded history (never a relative's chart). */
     private List<MedicalHistoryEntry> medicalHistory;

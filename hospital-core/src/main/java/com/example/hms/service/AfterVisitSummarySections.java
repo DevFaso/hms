@@ -249,6 +249,8 @@ public class AfterVisitSummarySections {
         boolean shownAsDiagnosis = assessment != null && diagnoses != null && diagnoses.size() == 1
             && assessment.equals(trimToNull(diagnoses.get(0)));
         avs.setClinicalAssessment(shownAsDiagnosis ? null : assessment);
+        // QA D2260 (r63): the corrections filed under the signed note, under it.
+        avs.setNoteAddenda(com.example.hms.service.support.NoteAddenda.of(note));
         String plan = trimToNull(note.getPlan());
         avs.setClinicalPlan(plan);
         if (plan != null) {
