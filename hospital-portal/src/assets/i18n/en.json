@@ -1809,6 +1809,8 @@
       "ACCOUNT_SETUP_REFUSED_LOCKED": "Account setup refused: the account is locked",
       "ACCESS_TOKEN_REVOKED_LOCKOUT": "Access token revoked at the lock-screen lockout",
       "REFRESH_TOKEN_REVOKED_LOCKOUT": "Refresh token revoked at the lock-screen lockout",
+      "SESSION_REVOKED": "Sign-in session ended at sign-out (every token of it revoked)",
+      "SESSION_REVOKED_LOCKOUT": "Sign-in session ended at the lock-screen lockout (every token of it revoked)",
       "TOKEN_PAIR_ROTATED": "Session tokens renewed (previous refresh jti={{jti}})",
       "REFRESH_REFUSED_IDLE": "Session renewal refused: idle for too long",
       "REFRESH_REFUSED_SECOND_FACTOR": "Session renewal refused: the sign-in provider’s second factor is missing or expired",

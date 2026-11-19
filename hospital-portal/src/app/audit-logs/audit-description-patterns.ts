@@ -245,6 +245,16 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     key: 'AUDIT.DESC.REFRESH_TOKEN_REVOKED_LOCKOUT',
     re: /^Refresh token revoked on lock-screen lockout \(jti=[^)]*\)$/,
   },
+  // QA D2184: logout and the lock-screen lockout end the whole sign-in session.
+  // The sid is matched but never shown.
+  {
+    key: 'AUDIT.DESC.SESSION_REVOKED',
+    re: /^Session revoked on logout \(sid=[^)]*\)$/,
+  },
+  {
+    key: 'AUDIT.DESC.SESSION_REVOKED_LOCKOUT',
+    re: /^Session revoked on lock-screen lockout \(sid=[^)]*\)$/,
+  },
   {
     key: 'AUDIT.DESC.TOKEN_PAIR_ROTATED',
     re: /^Token pair rotated \(old refresh jti=([^)]*)\)$/,
