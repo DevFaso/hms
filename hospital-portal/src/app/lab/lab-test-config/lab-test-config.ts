@@ -181,7 +181,10 @@ export class LabTestConfigComponent implements OnInit {
   addComponentRange(index: number): void {
     const component = this.defForm.components?.[index];
     if (component) {
-      component.referenceRanges = [...(component.referenceRanges ?? []), this.emptyComponentRange()];
+      component.referenceRanges = [
+        ...(component.referenceRanges ?? []),
+        this.emptyComponentRange(),
+      ];
     }
   }
 

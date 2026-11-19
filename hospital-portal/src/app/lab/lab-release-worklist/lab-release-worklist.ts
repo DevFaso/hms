@@ -332,48 +332,48 @@ export class LabReleaseWorklistComponent implements OnInit {
     this.labService
       .releaseResult(target.id, selfRelease, labReleaseNeedsReview(target), release)
       .subscribe({
-      next: () => {
-        this.releasingId.set(null);
-        this.releaseTarget.set(null);
-        this.selfReleaseRequiredId.set(null);
-        this.qcOverrideNotice.set(null);
-        this.justReleased.set({ patient: target.patientFullName, test: target.labTestName });
-        this.toast.success(this.translate.instant('LAB_RELEASE.RELEASED'));
-        // Re-read rather than splice the row out locally: the row leaves the
-        // list because the server says it did, and the waiting count and the
-        // paging stay the server's answer too.
-        this.load();
-      },
-      error: (err: unknown) => {
-        // The row stays. A queue that drops a row whose release failed tells
-        // the laboratory a result is signed off when it is not.
-        this.releasingId.set(null);
-        // The localized message, not the backend's. This endpoint's refusals
-        // are hard-coded English sentences, and one of them is a raw message
-        // key ("labresult.notfound") — echoing either into a French modal is
-        // how a fully-translated screen stops being one. The detail is
-        // logged, where a developer can read it and a biologist need not.
-        console.error('Release refused for lab result', err);
-        // r63 D2304: the test's latest QC run is rejected. Keep the dialog open,
-        // say why (the server's sentence names the test), and ask for the reason.
-        const body = (err as { status?: number; error?: { field?: string } } | null) ?? null;
-        if (body?.status === 400 && body.error?.field === 'qcOverrideReason') {
-          this.qcOverrideNotice.set(
-            refusalReason(err) ?? this.translate.instant('LAB_RELEASE.QC_BLOCKED'),
-          );
-          return;
-        }
-        if (!selfRelease && (err as { status?: number } | null)?.status === 409) {
-          // The reader entered this result: keep the dialog open and ask
-          // again, this time as an explicit self-release.
-          this.selfReleaseRequiredId.set(target.id);
-          return;
-        }
-        const message = this.translate.instant('LAB_RELEASE.RELEASE_ERROR');
-        this.releaseError.set(message);
-        this.toast.error(message);
-      },
-    });
+        next: () => {
+          this.releasingId.set(null);
+          this.releaseTarget.set(null);
+          this.selfReleaseRequiredId.set(null);
+          this.qcOverrideNotice.set(null);
+          this.justReleased.set({ patient: target.patientFullName, test: target.labTestName });
+          this.toast.success(this.translate.instant('LAB_RELEASE.RELEASED'));
+          // Re-read rather than splice the row out locally: the row leaves the
+          // list because the server says it did, and the waiting count and the
+          // paging stay the server's answer too.
+          this.load();
+        },
+        error: (err: unknown) => {
+          // The row stays. A queue that drops a row whose release failed tells
+          // the laboratory a result is signed off when it is not.
+          this.releasingId.set(null);
+          // The localized message, not the backend's. This endpoint's refusals
+          // are hard-coded English sentences, and one of them is a raw message
+          // key ("labresult.notfound") — echoing either into a French modal is
+          // how a fully-translated screen stops being one. The detail is
+          // logged, where a developer can read it and a biologist need not.
+          console.error('Release refused for lab result', err);
+          // r63 D2304: the test's latest QC run is rejected. Keep the dialog open,
+          // say why (the server's sentence names the test), and ask for the reason.
+          const body = (err as { status?: number; error?: { field?: string } } | null) ?? null;
+          if (body?.status === 400 && body.error?.field === 'qcOverrideReason') {
+            this.qcOverrideNotice.set(
+              refusalReason(err) ?? this.translate.instant('LAB_RELEASE.QC_BLOCKED'),
+            );
+            return;
+          }
+          if (!selfRelease && (err as { status?: number } | null)?.status === 409) {
+            // The reader entered this result: keep the dialog open and ask
+            // again, this time as an explicit self-release.
+            this.selfReleaseRequiredId.set(target.id);
+            return;
+          }
+          const message = this.translate.instant('LAB_RELEASE.RELEASE_ERROR');
+          this.releaseError.set(message);
+          this.toast.error(message);
+        },
+      });
   }
 
   dismissJustReleased(): void {

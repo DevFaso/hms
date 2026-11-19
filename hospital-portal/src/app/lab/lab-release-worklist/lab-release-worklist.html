@@ -254,8 +254,12 @@
         }
         @if (isCritical(target)) {
           <!-- r63 D2305: a critical result is released with the laboratory's call recorded -->
-          <div class="critical-release" role="group" data-testid="release-critical-block"
-            [attr.aria-label]="'LAB_RELEASE.CRITICAL_TITLE' | translate">
+          <div
+            class="critical-release"
+            role="group"
+            data-testid="release-critical-block"
+            [attr.aria-label]="'LAB_RELEASE.CRITICAL_TITLE' | translate"
+          >
             <p class="critical-release-title">
               <span class="material-symbols-outlined" aria-hidden="true">priority_high</span>
               {{ 'LAB_RELEASE.CRITICAL_TITLE' | translate }}

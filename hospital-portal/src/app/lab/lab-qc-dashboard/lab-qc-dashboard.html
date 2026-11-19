@@ -25,11 +25,7 @@
 
   <!-- r63 D2304: the bench records the daily controls here -->
   @if (showRecordForm()) {
-    <section
-      class="qc-record"
-      aria-labelledby="qc-record-title"
-      data-testid="qc-record-form"
-    >
+    <section class="qc-record" aria-labelledby="qc-record-title" data-testid="qc-record-form">
       <h2 class="section-title" id="qc-record-title">{{ 'LAB_QC.RECORD.TITLE' | translate }}</h2>
       <p class="section-hint">{{ 'LAB_QC.RECORD.HINT' | translate }}</p>
       <div class="qc-form-grid">
@@ -91,15 +87,15 @@
           />
         </label>
         <label class="qc-field">
-          <span
-            >{{ 'LAB_QC.RECORD.EXPECTED' | translate }}{{ currentTarget() ? '' : ' *' }}</span
-          >
+          <span>{{ 'LAB_QC.RECORD.EXPECTED' | translate }}{{ currentTarget() ? '' : ' *' }}</span>
           <input
             type="text"
             inputmode="decimal"
             data-testid="qc-expected"
             [value]="qcExpected()"
-            [placeholder]="currentTarget() ? ('LAB_QC.RECORD.EXPECTED_FROM_TARGET' | translate) : ''"
+            [placeholder]="
+              currentTarget() ? ('LAB_QC.RECORD.EXPECTED_FROM_TARGET' | translate) : ''
+            "
             (input)="qcExpected.set(inputValue($event))"
           />
         </label>
@@ -273,29 +269,29 @@
       </div>
 
       @if (canSeeValidation()) {
-      <div class="summary-card">
-        <div class="icon-box bg-teal">
-          <span class="material-symbols-outlined">biotech</span>
+        <div class="summary-card">
+          <div class="icon-box bg-teal">
+            <span class="material-symbols-outlined">biotech</span>
+          </div>
+          <div>
+            <div class="value">{{ totalValidationStudies() }}</div>
+            <div class="label">{{ 'LAB_QC.VALIDATION_STUDIES' | translate }}</div>
+          </div>
         </div>
-        <div>
-          <div class="value">{{ totalValidationStudies() }}</div>
-          <div class="label">{{ 'LAB_QC.VALIDATION_STUDIES' | translate }}</div>
-        </div>
-      </div>
 
-      <div class="summary-card">
-        <div
-          class="icon-box"
-          [class.bg-green]="overallPassRate() >= 90"
-          [class.bg-amber]="overallPassRate() < 90"
-        >
-          <span class="material-symbols-outlined">verified</span>
+        <div class="summary-card">
+          <div
+            class="icon-box"
+            [class.bg-green]="overallPassRate() >= 90"
+            [class.bg-amber]="overallPassRate() < 90"
+          >
+            <span class="material-symbols-outlined">verified</span>
+          </div>
+          <div>
+            <div class="value">{{ overallPassRate() | measure: '%' }}</div>
+            <div class="label">{{ 'LAB_QC.VALIDATION_PASS_RATE' | translate }}</div>
+          </div>
         </div>
-        <div>
-          <div class="value">{{ overallPassRate() | measure: '%' }}</div>
-          <div class="label">{{ 'LAB_QC.VALIDATION_PASS_RATE' | translate }}</div>
-        </div>
-      </div>
       }
     </div>
 
@@ -630,7 +626,11 @@
                                   }}
                                 </td>
                                 <td>
-                                  <span class="badge" [class.pass]="run.passed" [class.fail]="!run.passed">
+                                  <span
+                                    class="badge"
+                                    [class.pass]="run.passed"
+                                    [class.fail]="!run.passed"
+                                  >
                                     {{
                                       (run.passed ? 'LAB_QC.RUNS.ACCEPTED' : 'LAB_QC.RUNS.REJECTED')
                                         | translate
@@ -654,61 +654,63 @@
 
     <!-- ── Validation Summary table ────────────────────────── -->
     @if (canSeeValidation()) {
-    <h2 class="section-title" id="diagnostics-qc-studies-title">
-      {{ 'LAB_QC.STUDIES_BY_TEST' | translate }}
-    </h2>
-    @if (validationSummary().length === 0) {
-      <div class="empty-state">
-        <span class="material-symbols-outlined">biotech</span>
-        <p>{{ 'LAB_QC.NO_STUDIES' | translate }}</p>
-      </div>
-    } @else {
-      <div
-        class="diagnostics-scroll"
-        tabindex="0"
-        role="region"
-        aria-labelledby="diagnostics-qc-studies-title"
-      >
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>{{ 'LAB_QC.COL.TEST_NAME' | translate }}</th>
-              <th>{{ 'LAB_QC.STUDIES_COL.CODE' | translate }}</th>
-              <th>{{ 'LAB_QC.STUDIES_COL.TOTAL' | translate }}</th>
-              <th>{{ 'LAB_QC.STUDIES_COL.PASSED' | translate }}</th>
-              <th>{{ 'LAB_QC.COL.FAILED' | translate }}</th>
-              <th>{{ 'LAB_QC.STUDIES_COL.PASS_RATE' | translate }}</th>
-              <th>{{ 'LAB_QC.STUDIES_COL.LAST_STUDY' | translate }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (row of validationSummary(); track row.testDefinitionId) {
+      <h2 class="section-title" id="diagnostics-qc-studies-title">
+        {{ 'LAB_QC.STUDIES_BY_TEST' | translate }}
+      </h2>
+      @if (validationSummary().length === 0) {
+        <div class="empty-state">
+          <span class="material-symbols-outlined">biotech</span>
+          <p>{{ 'LAB_QC.NO_STUDIES' | translate }}</p>
+        </div>
+      } @else {
+        <div
+          class="diagnostics-scroll"
+          tabindex="0"
+          role="region"
+          aria-labelledby="diagnostics-qc-studies-title"
+        >
+          <table class="data-table">
+            <thead>
               <tr>
-                <td>{{ row.testName }}</td>
-                <td>{{ row.testCode }}</td>
-                <td>{{ row.totalStudies }}</td>
-                <td>{{ row.passedStudies }}</td>
-                <td>{{ row.failedStudies }}</td>
-                <td>
-                  <span
-                    class="badge"
-                    [class.pass]="row.passRate >= 90"
-                    [class.fail]="row.passRate < 90"
-                  >
-                    {{ row.passRate | measure: '%' }}
-                  </span>
-                </td>
-                <td>
-                  {{
-                    row.lastStudyDate ? (row.lastStudyDate | serverTime | date: 'mediumDate') : '—'
-                  }}
-                </td>
+                <th>{{ 'LAB_QC.COL.TEST_NAME' | translate }}</th>
+                <th>{{ 'LAB_QC.STUDIES_COL.CODE' | translate }}</th>
+                <th>{{ 'LAB_QC.STUDIES_COL.TOTAL' | translate }}</th>
+                <th>{{ 'LAB_QC.STUDIES_COL.PASSED' | translate }}</th>
+                <th>{{ 'LAB_QC.COL.FAILED' | translate }}</th>
+                <th>{{ 'LAB_QC.STUDIES_COL.PASS_RATE' | translate }}</th>
+                <th>{{ 'LAB_QC.STUDIES_COL.LAST_STUDY' | translate }}</th>
               </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-    }
+            </thead>
+            <tbody>
+              @for (row of validationSummary(); track row.testDefinitionId) {
+                <tr>
+                  <td>{{ row.testName }}</td>
+                  <td>{{ row.testCode }}</td>
+                  <td>{{ row.totalStudies }}</td>
+                  <td>{{ row.passedStudies }}</td>
+                  <td>{{ row.failedStudies }}</td>
+                  <td>
+                    <span
+                      class="badge"
+                      [class.pass]="row.passRate >= 90"
+                      [class.fail]="row.passRate < 90"
+                    >
+                      {{ row.passRate | measure: '%' }}
+                    </span>
+                  </td>
+                  <td>
+                    {{
+                      row.lastStudyDate
+                        ? (row.lastStudyDate | serverTime | date: 'mediumDate')
+                        : '—'
+                    }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
     }
   }
 </div>

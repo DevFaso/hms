@@ -588,7 +588,9 @@
                   }}
                   —
                   {{
-                    r.criticalCommunicatedAt ? (r.criticalCommunicatedAt | serverTime | dateTime) : '—'
+                    r.criticalCommunicatedAt
+                      ? (r.criticalCommunicatedAt | serverTime | dateTime)
+                      : '—'
                   }}
                   — {{ r.criticalCommunicatedBy || '—' }}</span
                 >
@@ -858,66 +860,66 @@
             </div>
           </fieldset>
         } @else {
-        <div class="form-row">
-          <div class="field">
-            <label for="lr-resultValue">{{ 'LAB_RESULTS.VALUE' | translate }} *</label>
-            <input
-              id="lr-resultValue"
-              type="text"
-              maxlength="2048"
-              [(ngModel)]="form.resultValue"
-              [placeholder]="'LAB_RESULTS.VALUE_PLACEHOLDER' | translate"
-              required
-              [attr.aria-describedby]="
-                singleValueCritical()
-                  ? 'lr-resultValue-critical'
-                  : valueHasComparator()
-                    ? 'lr-resultValue-hint'
-                    : null
-              "
-            />
-            @if (singleValueCritical(); as verdict) {
-              <!-- r63 D2312: the value is beyond the test's critical limits -->
-              <small
-                id="lr-resultValue-critical"
-                class="field-hint critical-entry"
-                role="alert"
-                data-testid="critical-entry-warning"
-                >{{ 'LAB_RESULTS.CRITICAL_AT_ENTRY.' + verdict | translate }}</small
+          <div class="form-row">
+            <div class="field">
+              <label for="lr-resultValue">{{ 'LAB_RESULTS.VALUE' | translate }} *</label>
+              <input
+                id="lr-resultValue"
+                type="text"
+                maxlength="2048"
+                [(ngModel)]="form.resultValue"
+                [placeholder]="'LAB_RESULTS.VALUE_PLACEHOLDER' | translate"
+                required
+                [attr.aria-describedby]="
+                  singleValueCritical()
+                    ? 'lr-resultValue-critical'
+                    : valueHasComparator()
+                      ? 'lr-resultValue-hint'
+                      : null
+                "
+              />
+              @if (singleValueCritical(); as verdict) {
+                <!-- r63 D2312: the value is beyond the test's critical limits -->
+                <small
+                  id="lr-resultValue-critical"
+                  class="field-hint critical-entry"
+                  role="alert"
+                  data-testid="critical-entry-warning"
+                  >{{ 'LAB_RESULTS.CRITICAL_AT_ENTRY.' + verdict | translate }}</small
+                >
+              }
+              @if (valueHasComparator()) {
+                <!-- QA D1394: the dialog warned about other units but not about comparators -->
+                <small
+                  id="lr-resultValue-hint"
+                  class="field-hint"
+                  role="note"
+                  data-testid="comparator-hint"
+                  >{{ 'LAB_RESULTS.COMPARATOR_HINT' | translate }}</small
+                >
+              }
+            </div>
+            <div class="field">
+              <label for="lr-resultUnit"
+                >{{ 'LAB_RESULTS.UNIT' | translate }}{{ selectedTestUnit() ? ' *' : '' }}</label
               >
-            }
-            @if (valueHasComparator()) {
-              <!-- QA D1394: the dialog warned about other units but not about comparators -->
-              <small
-                id="lr-resultValue-hint"
-                class="field-hint"
-                role="note"
-                data-testid="comparator-hint"
-                >{{ 'LAB_RESULTS.COMPARATOR_HINT' | translate }}</small
-              >
-            }
+              <input
+                id="lr-resultUnit"
+                type="text"
+                maxlength="50"
+                [(ngModel)]="form.resultUnit"
+                [placeholder]="selectedTestUnit() || ('LAB_RESULTS.UNIT_PLACEHOLDER' | translate)"
+                [required]="!!selectedTestUnit()"
+                aria-describedby="lr-resultUnit-hint"
+              />
+              @if (selectedTestUnit(); as testUnit) {
+                <!-- QA D1095 / D1092: the unit the test's ranges grade; another unit may not be graded -->
+                <small id="lr-resultUnit-hint" class="field-hint">{{
+                  'LAB_RESULTS.UNIT_FROM_TEST' | translate: { unit: testUnit }
+                }}</small>
+              }
+            </div>
           </div>
-          <div class="field">
-            <label for="lr-resultUnit"
-              >{{ 'LAB_RESULTS.UNIT' | translate }}{{ selectedTestUnit() ? ' *' : '' }}</label
-            >
-            <input
-              id="lr-resultUnit"
-              type="text"
-              maxlength="50"
-              [(ngModel)]="form.resultUnit"
-              [placeholder]="selectedTestUnit() || ('LAB_RESULTS.UNIT_PLACEHOLDER' | translate)"
-              [required]="!!selectedTestUnit()"
-              aria-describedby="lr-resultUnit-hint"
-            />
-            @if (selectedTestUnit(); as testUnit) {
-              <!-- QA D1095 / D1092: the unit the test's ranges grade; another unit may not be graded -->
-              <small id="lr-resultUnit-hint" class="field-hint">{{
-                'LAB_RESULTS.UNIT_FROM_TEST' | translate: { unit: testUnit }
-              }}</small>
-            }
-          </div>
-        </div>
         }
         @if (anyCriticalEntry()) {
           <p class="critical-entry-banner" role="note" data-testid="critical-entry-banner">

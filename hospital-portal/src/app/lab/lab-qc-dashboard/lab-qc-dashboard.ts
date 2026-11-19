@@ -207,8 +207,10 @@ export class LabQcDashboardComponent implements OnInit {
   }
 
   inputValue(event: Event): string {
-    return (event.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null)
-      ?.value ?? '';
+    return (
+      (event.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null)?.value ??
+      ''
+    );
   }
 
   openRecordForm(testDefinitionId?: string): void {
@@ -337,7 +339,9 @@ export class LabQcDashboardComponent implements OnInit {
         },
         error: (err: unknown) => {
           this.savingTarget.set(false);
-          this.toast.error(refusalReason(err) ?? this.translate.instant('LAB_QC.TARGET.SAVE_FAILED'));
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('LAB_QC.TARGET.SAVE_FAILED'),
+          );
         },
       });
   }

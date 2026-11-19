@@ -544,7 +544,9 @@ describe('LabReleaseWorklistComponent', () => {
     component.askRelease(critical);
     fixture.detectChanges();
     expect(host().querySelector('[data-testid="release-critical-block"]')).not.toBeNull();
-    const submit = host().querySelector<HTMLButtonElement>('[data-testid="release-confirm-submit"]')!;
+    const submit = host().querySelector<HTMLButtonElement>(
+      '[data-testid="release-confirm-submit"]',
+    )!;
     expect(submit.disabled).toBeTrue();
     component.confirmRelease();
     httpMock.expectNone((r) => r.method === 'POST');

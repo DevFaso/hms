@@ -1847,8 +1847,18 @@ describe('LabResultsComponent — rendered delete gate and order picker', () => 
           labTestName: 'NFS',
           labTestCode: 'NFS',
           labTestComponents: [
-            { code: 'HB', name: 'Hemoglobine', unit: 'g/dL', referenceRanges: [range(12, 16, 7, 20)] },
-            { code: 'WBC', name: 'Leucocytes', unit: '10^9/L', referenceRanges: [range(4, 10, 1, 30)] },
+            {
+              code: 'HB',
+              name: 'Hemoglobine',
+              unit: 'g/dL',
+              referenceRanges: [range(12, 16, 7, 20)],
+            },
+            {
+              code: 'WBC',
+              name: 'Leucocytes',
+              unit: '10^9/L',
+              referenceRanges: [range(4, 10, 1, 30)],
+            },
           ],
         },
       ],

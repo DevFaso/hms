@@ -575,7 +575,10 @@
             }}</small>
           </div>
           <!-- r63 (NFS panels): a panel test lists its components, each with its unit and ranges -->
-          <fieldset class="form-group form-group-full panel-components" data-testid="def-components">
+          <fieldset
+            class="form-group form-group-full panel-components"
+            data-testid="def-components"
+          >
             <legend>{{ 'LAB_TEST_CONFIG.COMPONENTS.TITLE' | translate }}</legend>
             <small class="field-hint">{{ 'LAB_TEST_CONFIG.COMPONENTS.HINT' | translate }}</small>
             @for (c of defForm.components ?? []; track $index; let i = $index) {
@@ -624,26 +627,52 @@
                     <label class="component-field">
                       <span>{{ 'LAB_TEST_CONFIG.COMPONENTS.GENDER' | translate }}</span>
                       <select [(ngModel)]="r.gender" [disabled]="clinicalFieldsLocked()">
-                        <option value="ALL">{{ 'LAB_TEST_CONFIG.COMPONENTS.GENDER_ALL' | translate }}</option>
-                        <option value="MALE">{{ 'LAB_TEST_CONFIG.COMPONENTS.GENDER_MALE' | translate }}</option>
-                        <option value="FEMALE">{{ 'LAB_TEST_CONFIG.COMPONENTS.GENDER_FEMALE' | translate }}</option>
+                        <option value="ALL">
+                          {{ 'LAB_TEST_CONFIG.COMPONENTS.GENDER_ALL' | translate }}
+                        </option>
+                        <option value="MALE">
+                          {{ 'LAB_TEST_CONFIG.COMPONENTS.GENDER_MALE' | translate }}
+                        </option>
+                        <option value="FEMALE">
+                          {{ 'LAB_TEST_CONFIG.COMPONENTS.GENDER_FEMALE' | translate }}
+                        </option>
                       </select>
                     </label>
                     <label class="component-field">
                       <span>{{ 'LAB_TEST_CONFIG.COMPONENTS.MIN' | translate }}</span>
-                      <input type="number" step="any" [(ngModel)]="r.minValue" [readonly]="clinicalFieldsLocked()" />
+                      <input
+                        type="number"
+                        step="any"
+                        [(ngModel)]="r.minValue"
+                        [readonly]="clinicalFieldsLocked()"
+                      />
                     </label>
                     <label class="component-field">
                       <span>{{ 'LAB_TEST_CONFIG.COMPONENTS.MAX' | translate }}</span>
-                      <input type="number" step="any" [(ngModel)]="r.maxValue" [readonly]="clinicalFieldsLocked()" />
+                      <input
+                        type="number"
+                        step="any"
+                        [(ngModel)]="r.maxValue"
+                        [readonly]="clinicalFieldsLocked()"
+                      />
                     </label>
                     <label class="component-field">
                       <span>{{ 'LAB_TEST_CONFIG.COMPONENTS.CRITICAL_LOW' | translate }}</span>
-                      <input type="number" step="any" [(ngModel)]="r.criticalLow" [readonly]="clinicalFieldsLocked()" />
+                      <input
+                        type="number"
+                        step="any"
+                        [(ngModel)]="r.criticalLow"
+                        [readonly]="clinicalFieldsLocked()"
+                      />
                     </label>
                     <label class="component-field">
                       <span>{{ 'LAB_TEST_CONFIG.COMPONENTS.CRITICAL_HIGH' | translate }}</span>
-                      <input type="number" step="any" [(ngModel)]="r.criticalHigh" [readonly]="clinicalFieldsLocked()" />
+                      <input
+                        type="number"
+                        step="any"
+                        [(ngModel)]="r.criticalHigh"
+                        [readonly]="clinicalFieldsLocked()"
+                      />
                     </label>
                     @if (!clinicalFieldsLocked()) {
                       <button

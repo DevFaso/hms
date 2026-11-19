@@ -239,7 +239,9 @@ describe('LabQcDashboardComponent', () => {
       lab = mockLabService as unknown as typeof lab;
       lab.listTestDefinitions = jasmine
         .createSpy('listTestDefinitions')
-        .and.returnValue(of([{ id: 'def-1', testName: 'Kaliemie', testCode: 'K', isActive: true }]));
+        .and.returnValue(
+          of([{ id: 'def-1', testName: 'Kaliemie', testCode: 'K', isActive: true }]),
+        );
       lab.getQcTargets = jasmine.createSpy('getQcTargets').and.returnValue(of([target]));
       lab.recordQcEvent = jasmine.createSpy('recordQcEvent').and.returnValue(of({}));
       lab.saveQcTarget = jasmine.createSpy('saveQcTarget').and.returnValue(of(target));

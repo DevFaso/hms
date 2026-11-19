@@ -18,7 +18,11 @@ import { labSeverityFlag, labSeverityTone } from './lab-severity';
   template: `
     <div class="panel-values" role="region" [attr.aria-label]="'LAB_PANEL.TITLE' | translate">
       <table class="panel-values-table">
-        <caption class="sr-only">{{ 'LAB_PANEL.TITLE' | translate }}</caption>
+        <caption class="sr-only">
+          {{
+            'LAB_PANEL.TITLE' | translate
+          }}
+        </caption>
         <thead>
           <tr>
             <th scope="col">{{ 'LAB_PANEL.COL_COMPONENT' | translate }}</th>
@@ -30,7 +34,9 @@ import { labSeverityFlag, labSeverityTone } from './lab-severity';
         <tbody>
           @for (c of components(); track c.code) {
             <tr [class]="'tone-' + tone(c)">
-              <td>{{ c.name }} <span class="code">({{ c.code }})</span></td>
+              <td>
+                {{ c.name }} <span class="code">({{ c.code }})</span>
+              </td>
               <td class="value">{{ c.value | labValue: c.unit }}</td>
               <td>{{ range(c) }}</td>
               <td>{{ 'LAB_RELEASE.FLAG_' + flag(c) | translate }}</td>
