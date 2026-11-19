@@ -666,7 +666,7 @@
 
 .workboard-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
   gap: 1rem;
   padding: 0.5rem 0;
 }
@@ -1637,4 +1637,122 @@
 
 .last-refreshed {
   color: #52667b;
+}
+
+/* Every workboard card, including triage queue siblings, keeps its actions inside. */
+.workboard-card,
+.workboard-card-header,
+.workboard-card-meta,
+.main-content {
+  min-width: 0;
+}
+.workboard-card-header {
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+}
+.workboard-card-header .patient-link {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+.workboard-card-meta .meta-item {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.workboard-card-actions {
+  flex-wrap: wrap;
+}
+.workboard-card-actions .action-btn {
+  flex: 1 1 8rem;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.summary-card {
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.summary-card:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+}
+.board-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: end;
+}
+.board-toolbar label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+.board-toolbar input,
+.board-toolbar select {
+  width: 100%;
+  min-width: 0;
+  padding: 0.65rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+}
+.board-toolbar button {
+  padding: 0.65rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background: white;
+  color: var(--primary-deep);
+}
+.board-toolbar button[aria-pressed='true'] {
+  background: var(--primary-tint);
+  border-color: var(--primary);
+}
+.board-help,
+.oversight-note {
+  color: var(--text-secondary, #53687e);
+}
+.board-table small,
+.board-table td > span {
+  display: block;
+}
+.board-table {
+  min-width: 45rem;
+}
+.filter-bar {
+  flex-wrap: wrap;
+}
+
+.section-tabs {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
+.section-picker {
+  display: none;
+}
+.board-toolbar {
+  padding: 1rem;
+}
+.board-toolbar + p,
+.board-help {
+  margin-inline: 1rem;
+}
+@media (max-width: 640px) {
+  .section-tabs {
+    display: none;
+  }
+  .section-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+  }
+  .section-picker select {
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid #d1d5db;
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    background: white;
+  }
 }

@@ -1,5 +1,8 @@
 <div class="page-container nurse-dashboard">
   <!-- ── Header with Refresh ──────────────────────────────── -->
+  @if (oversightOnly()) {
+    <p class="oversight-note" role="note">{{ 'NURSE.OVERSIGHT.READ_ONLY' | translate }}</p>
+  }
   <div class="page-header">
     <div>
       <p class="dashboard-eyebrow">{{ 'NURSE.WORKSPACE' | translate }}</p>
@@ -34,35 +37,30 @@
     </div>
     <!-- ── Filter Bar ───────────────────────────────────────── -->
     <div class="filter-bar" role="group" [attr.aria-label]="'NURSE.PATIENT_SCOPE' | translate">
-      <button
-        class="filter-btn"
-        [class.active]="filterMode() === 'me'"
-        [attr.aria-pressed]="filterMode() === 'me'"
-        (click)="setFilter('me')"
-      >
-        {{ 'NURSE.MY_PATIENTS' | translate }}
-      </button>
-      <button
-        class="filter-btn"
-        [class.active]="filterMode() === 'unit'"
-        [attr.aria-pressed]="filterMode() === 'unit'"
-        (click)="setFilter('unit')"
-      >
-        {{ 'NURSE.MY_UNIT' | translate }}
-      </button>
+      @if (canDocumentCare()) {
+        <button
+          class="filter-btn"
+          [class.active]="filterMode() === 'me'"
+          [attr.aria-pressed]="filterMode() === 'me'"
+          (click)="setFilter('me')"
+        >
+          {{ 'NURSE.MY_PATIENTS' | translate }}
+        </button>
+      }
+
       <button
         class="filter-btn"
         [class.active]="filterMode() === 'all'"
         [attr.aria-pressed]="filterMode() === 'all'"
         (click)="setFilter('all')"
       >
-        {{ 'COMMON.ALL' | translate }}
+        {{ (oversightOnly() ? 'NURSE.OVERSIGHT.HOSPITAL_PATIENTS' : 'COMMON.ALL') | translate }}
       </button>
     </div>
 
     <!-- ── Summary Cards (backed by summary endpoint) ──────── -->
     <div class="summary-cards">
-      <div class="summary-card">
+      <button type="button" class="summary-card" (click)="setSection('vitals')">
         <span class="material-symbols-outlined card-icon vitals">monitor_heart</span>
         <div class="card-info">
           <span class="card-value">{{
@@ -72,8 +70,8 @@
           }}</span>
           <span class="card-label">{{ 'NURSE.VITALS_DUE' | translate }}</span>
         </div>
-      </div>
-      <div class="summary-card">
+      </button>
+      <button type="button" class="summary-card" (click)="setSection('medications')">
         <span class="material-symbols-outlined card-icon meds">medication</span>
         <div class="card-info">
           <span class="card-value">{{
@@ -89,8 +87,8 @@
             }}</span>
           }
         </div>
-      </div>
-      <div class="summary-card">
+      </button>
+      <button type="button" class="summary-card" (click)="setSection('orders')">
         <span class="material-symbols-outlined card-icon orders">assignment</span>
         <div class="card-info">
           <span class="card-value">{{
@@ -100,8 +98,13 @@
           }}</span>
           <span class="card-label">{{ 'NURSE.ORDERS' | translate }}</span>
         </div>
-      </div>
-      <div class="summary-card" [class.overdue]="medsOverdueCount() > 0">
+      </button>
+      <button
+        type="button"
+        class="summary-card"
+        [class.overdue]="medsOverdueCount() > 0"
+        (click)="showOverdueDoses()"
+      >
         <span class="material-symbols-outlined card-icon overdue-icon">warning</span>
         <div class="card-info">
           <span class="card-value">{{
@@ -111,8 +114,10 @@
           }}</span>
           <span class="card-label">{{ 'NURSE.MEDICATIONS_OVERDUE' | translate }}</span>
         </div>
-      </div>
+      </button>
     </div>
+
+    <p class="board-help">{{ 'NURSE.OVERSIGHT.METRICS_HELP' | translate }}</p>
 
     <!-- QA D769: the triage queue is everyone's job, so it shows on every tab and
        under every filter ("Mes patients" included): a patient just checked in
@@ -134,15 +139,17 @@
                 </span>
               </div>
               <div class="workboard-card-actions">
-                <button
-                  class="action-btn action-triage"
-                  data-testid="awaiting-triage-open"
-                  (click)="openTriageForEncounter(e)"
-                  [title]="'TRIAGE.TITLE' | translate"
-                >
-                  <span class="material-symbols-outlined">emergency</span>
-                  {{ 'TRIAGE.TITLE' | translate }}
-                </button>
+                @if (canTriage()) {
+                  <button
+                    class="action-btn action-triage"
+                    data-testid="awaiting-triage-open"
+                    (click)="openTriageForEncounter(e)"
+                    [title]="'TRIAGE.TITLE' | translate"
+                  >
+                    <span class="material-symbols-outlined">emergency</span>
+                    {{ 'TRIAGE.TITLE' | translate }}
+                  </button>
+                }
                 <!-- QA D954: a patient who leaves before being seen is closed here,
                      with a reason, instead of staying in the queue (QA D1108: the
                      one never-seen rule, core/encounter-start). -->
@@ -171,11 +178,21 @@
   <section class="care-workspace">
     <div class="workspace-heading">
       <div>
-        <h2>{{ sectionLabels[activeSection()] | translate }}</h2>
+        <h2 id="nurse-worklist-title" tabindex="-1">
+          {{ sectionLabels[activeSection()] | translate }}
+        </h2>
         <p>{{ 'NURSE.WORKLIST_HELP' | translate }}</p>
       </div>
       <span class="material-symbols-outlined" aria-hidden="true">clinical_notes</span>
     </div>
+    <label class="section-picker">
+      {{ 'NURSE.WORKBOARD' | translate }}
+      <select [ngModel]="activeSection()" (ngModelChange)="setSection($event)">
+        @for (section of sectionLabels | keyvalue; track section.key) {
+          <option [value]="section.key">{{ section.value | translate }}</option>
+        }
+      </select>
+    </label>
     <div
       class="section-tabs"
       role="group"
@@ -380,13 +397,15 @@
                       <td>
                         <!-- QA D1124: a row with no patient cannot be recorded, so it offers no dead button. -->
                         @if (v.patientId) {
-                          <button
-                            class="action-btn action-record"
-                            (click)="recordVitals(v.patientId, v.patientName)"
-                          >
-                            <span class="material-symbols-outlined">edit_note</span>
-                            {{ 'NURSE.RECORD' | translate }}
-                          </button>
+                          @if (canDocumentCare()) {
+                            <button
+                              class="action-btn action-record"
+                              (click)="recordVitals(v.patientId, v.patientName)"
+                            >
+                              <span class="material-symbols-outlined">edit_note</span>
+                              {{ 'NURSE.RECORD' | translate }}
+                            </button>
+                          }
                         }
                       </td>
                     </tr>
@@ -432,7 +451,7 @@
                  row's action, or to the MAR tab when the row is gone. -->
             <div
               class="data-table"
-              data-focus-return="[data-focus-place=nurse-sections] .tab-btn.active"
+              data-focus-return="#nurse-worklist-title"
               tabindex="0"
               role="region"
               [attr.aria-label]="sectionLabels[activeSection()] | translate"
@@ -573,33 +592,39 @@
                       </td>
                       <td class="action-cell">
                         @if (canRecordDose(m)) {
-                          <button
-                            class="action-btn action-give"
-                            (click)="administerMedication(m.id)"
-                            [disabled]="actionInProgress() === m.id"
-                            [title]="'NURSE.ADMINISTER' | translate"
-                          >
-                            <span class="material-symbols-outlined">check_circle</span>
-                            {{ 'NURSE.GIVE' | translate }}
-                          </button>
-                          <button
-                            class="action-btn action-hold"
-                            (click)="promptHoldRefuse(m.id, 'HELD')"
-                            [disabled]="actionInProgress() === m.id"
-                            [title]="'NURSE.HOLD' | translate"
-                          >
-                            <span class="material-symbols-outlined">pause_circle</span>
-                            {{ 'NURSE.HOLD' | translate }}
-                          </button>
-                          <button
-                            class="action-btn action-refuse"
-                            (click)="promptHoldRefuse(m.id, 'REFUSED')"
-                            [disabled]="actionInProgress() === m.id"
-                            [title]="'NURSE.REFUSE' | translate"
-                          >
-                            <span class="material-symbols-outlined">cancel</span>
-                            {{ 'NURSE.REFUSE' | translate }}
-                          </button>
+                          @if (canDocumentCare()) {
+                            <button
+                              class="action-btn action-give"
+                              (click)="administerMedication(m.id)"
+                              [disabled]="actionInProgress() === m.id"
+                              [title]="'NURSE.ADMINISTER' | translate"
+                            >
+                              <span class="material-symbols-outlined">check_circle</span>
+                              {{ 'NURSE.GIVE' | translate }}
+                            </button>
+                          }
+                          @if (canDocumentCare()) {
+                            <button
+                              class="action-btn action-hold"
+                              (click)="promptHoldRefuse(m.id, 'HELD')"
+                              [disabled]="actionInProgress() === m.id"
+                              [title]="'NURSE.HOLD' | translate"
+                            >
+                              <span class="material-symbols-outlined">pause_circle</span>
+                              {{ 'NURSE.HOLD' | translate }}
+                            </button>
+                          }
+                          @if (canDocumentCare()) {
+                            <button
+                              class="action-btn action-refuse"
+                              (click)="promptHoldRefuse(m.id, 'REFUSED')"
+                              [disabled]="actionInProgress() === m.id"
+                              [title]="'NURSE.REFUSE' | translate"
+                            >
+                              <span class="material-symbols-outlined">cancel</span>
+                              {{ 'NURSE.REFUSE' | translate }}
+                            </button>
+                          }
                         } @else if (m.status === 'UPCOMING') {
                           <span class="action-upcoming">
                             <span class="material-symbols-outlined" aria-hidden="true"
@@ -728,10 +753,12 @@
                   {{ 'NURSE.HANDOFFS_COMPLETED' | translate }}
                 </button>
               </div>
-              <button class="btn-small btn-primary" (click)="openHandoffCreate()">
-                <span class="material-symbols-outlined">add</span>
-                {{ 'NURSE.NEW_HANDOFF' | translate }}
-              </button>
+              @if (canCreateNursing()) {
+                <button class="btn-small btn-primary" (click)="openHandoffCreate()">
+                  <span class="material-symbols-outlined">add</span>
+                  {{ 'NURSE.NEW_HANDOFF' | translate }}
+                </button>
+              }
             </div>
           </div>
           @if (handoffView() === 'COMPLETED' && completedHandoffsLoading()) {
@@ -825,15 +852,17 @@
                       </span>
                     } @else if (canCompleteHandoff(h)) {
                       <!-- QA D776: only the recipient completes (server rule) -->
-                      <button
-                        class="action-btn action-complete"
-                        (click)="completeHandoff(h.id)"
-                        [disabled]="actionInProgress() === h.id"
-                        [title]="'NURSE.COMPLETE_HANDOFF' | translate"
-                      >
-                        <span class="material-symbols-outlined">check_circle</span>
-                        {{ 'NURSE.COMPLETE' | translate }}
-                      </button>
+                      @if (canDocumentCare()) {
+                        <button
+                          class="action-btn action-complete"
+                          (click)="completeHandoff(h.id)"
+                          [disabled]="actionInProgress() === h.id"
+                          [title]="'NURSE.COMPLETE_HANDOFF' | translate"
+                        >
+                          <span class="material-symbols-outlined">check_circle</span>
+                          {{ 'NURSE.COMPLETE' | translate }}
+                        </button>
+                      }
                     }
                   </div>
                 </div>
@@ -844,16 +873,76 @@
 
         <!-- ═══════════ WORKBOARD TAB ═══════════ -->
         @if (!loading() && activeSection() === 'workboard') {
-          @if (workboard().length === 0) {
+          <div class="board-toolbar">
+            <label
+              >{{ 'NURSE.OVERSIGHT.SEARCH' | translate }}
+              <input
+                type="search"
+                [ngModel]="searchTerm()"
+                (ngModelChange)="searchTerm.set($event)"
+              />
+            </label>
+            <label
+              >{{ 'NURSE.OVERSIGHT.DEPARTMENT' | translate }}
+              <select [ngModel]="boardDepartment()" (ngModelChange)="boardDepartment.set($event)">
+                <option value="">{{ 'COMMON.ALL' | translate }}</option>
+                @for (name of boardDepartments(); track name) {
+                  <option [value]="name">{{ name }}</option>
+                }
+              </select>
+            </label>
+            <label
+              >{{ 'NURSE.OVERSIGHT.CLINICIAN' | translate }}
+              <select [ngModel]="boardClinician()" (ngModelChange)="boardClinician.set($event)">
+                <option value="">{{ 'COMMON.ALL' | translate }}</option>
+                @for (name of boardClinicians(); track name) {
+                  <option [value]="name">{{ name }}</option>
+                }
+              </select>
+            </label>
+            <button type="button" (click)="clearBoardFilters()">
+              {{ 'NURSE.CLEAR_FILTERS' | translate }}
+            </button>
+            <button
+              type="button"
+              [attr.aria-pressed]="boardView() === 'cards'"
+              (click)="boardView.set('cards')"
+            >
+              {{ 'NURSE.OVERSIGHT.CARDS' | translate }}
+            </button>
+            <button
+              type="button"
+              [attr.aria-pressed]="boardView() === 'table'"
+              (click)="boardView.set('table')"
+            >
+              {{ 'NURSE.OVERSIGHT.TABLE' | translate }}
+            </button>
+          </div>
+          <p>
+            {{
+              'NURSE.OVERSIGHT.BOARD_HELP'
+                | translate: { shown: visibleWorkboard().length, total: workboard().length }
+            }}
+          </p>
+          <p class="board-help">{{ 'NURSE.OVERSIGHT.ACUITY_HELP' | translate }}</p>
+
+          @if (visibleWorkboard().length === 0) {
             <div class="empty-state">
               <span class="material-symbols-outlined empty-icon">grid_view</span>
-              <h3>{{ 'NURSE.NO_WORKBOARD_PATIENTS' | translate }}</h3>
+              <h3>
+                {{
+                  (workboard().length
+                    ? 'NURSE.OVERSIGHT.NO_MATCHES'
+                    : 'NURSE.NO_WORKBOARD_PATIENTS'
+                  ) | translate
+                }}
+              </h3>
               <p>{{ 'NURSE.ACTIVE_ADMISSIONS_HERE' | translate }}</p>
             </div>
           }
-          @if (workboard().length > 0) {
+          @if (visibleWorkboard().length > 0 && boardView() === 'cards') {
             <div class="workboard-grid">
-              @for (p of workboard(); track p.patientId) {
+              @for (p of visibleWorkboard(); track p.patientId) {
                 <div
                   class="workboard-card"
                   [class.workboard-card-alert]="p.vitalsDue || p.medsDue > 0"
@@ -925,32 +1014,38 @@
                     }
                   </div>
                   <div class="workboard-card-actions">
-                    <button
-                      class="action-btn action-record"
-                      (click)="recordVitals(p.patientId, p.patientName)"
-                      [title]="'NURSE.RECORD_VITALS' | translate"
-                    >
-                      <span class="material-symbols-outlined">edit_note</span>
-                      {{ 'NURSE.VITALS' | translate }}
-                    </button>
-                    <button
-                      class="action-btn action-triage"
-                      (click)="openTriage(p.patientId)"
-                      [disabled]="encounterLookupInProgress()"
-                      [title]="'TRIAGE.TITLE' | translate"
-                    >
-                      <span class="material-symbols-outlined">emergency</span>
-                      {{ 'TRIAGE.TITLE' | translate }}
-                    </button>
-                    <button
-                      class="action-btn action-intake"
-                      (click)="openIntake(p.patientId)"
-                      [disabled]="encounterLookupInProgress()"
-                      [title]="'INTAKE.TITLE' | translate"
-                    >
-                      <span class="material-symbols-outlined">clinical_notes</span>
-                      {{ 'INTAKE.TITLE' | translate }}
-                    </button>
+                    @if (canDocumentCare()) {
+                      <button
+                        class="action-btn action-record"
+                        (click)="recordVitals(p.patientId, p.patientName)"
+                        [title]="'NURSE.RECORD_VITALS' | translate"
+                      >
+                        <span class="material-symbols-outlined">edit_note</span>
+                        {{ 'NURSE.VITALS' | translate }}
+                      </button>
+                    }
+                    @if (canTriage()) {
+                      <button
+                        class="action-btn action-triage"
+                        (click)="openTriage(p.patientId)"
+                        [disabled]="encounterLookupInProgress()"
+                        [title]="'TRIAGE.TITLE' | translate"
+                      >
+                        <span class="material-symbols-outlined">emergency</span>
+                        {{ 'TRIAGE.TITLE' | translate }}
+                      </button>
+                    }
+                    @if (canCreateNursing()) {
+                      <button
+                        class="action-btn action-intake"
+                        (click)="openIntake(p.patientId)"
+                        [disabled]="encounterLookupInProgress()"
+                        [title]="'INTAKE.TITLE' | translate"
+                      >
+                        <span class="material-symbols-outlined">clinical_notes</span>
+                        {{ 'INTAKE.TITLE' | translate }}
+                      </button>
+                    }
                     @if (p.patientId) {
                       <a
                         class="action-btn action-view"
@@ -964,6 +1059,58 @@
                   </div>
                 </div>
               }
+            </div>
+          }
+
+          @if (visibleWorkboard().length > 0 && boardView() === 'table') {
+            <div
+              class="data-table"
+              tabindex="0"
+              role="region"
+              [attr.aria-label]="'NURSE.WORKBOARD' | translate"
+            >
+              <table class="board-table">
+                <thead>
+                  <tr>
+                    <th scope="col">{{ 'PATIENTS.PATIENT' | translate }}</th>
+                    <th scope="col">{{ 'NURSE.OVERSIGHT.DEPARTMENT' | translate }}</th>
+                    <th scope="col">{{ 'NURSE.OVERSIGHT.CLINICIAN' | translate }}</th>
+                    <th scope="col">{{ 'NURSE.OVERSIGHT.PENDING_CARE' | translate }}</th>
+                    <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (p of visibleWorkboard(); track p.patientId) {
+                    <tr>
+                      <td>
+                        <a [routerLink]="['/patients', p.patientId]">{{ p.patientName }}</a
+                        ><small>{{ p.mrn }} · {{ p.roomBed || '—' }}</small>
+                        @if (p.acuityLevel) {
+                          {{ ' '
+                          }}<span class="acuity-badge {{ acuityCssClass(p.acuityLevel) }}">{{
+                            acuityLabel(p.acuityLevel)
+                          }}</span>
+                        }
+                      </td>
+                      <td>{{ p.departmentName || '—' }}</td>
+                      <td>{{ p.attendingDoctor || '—' }}</td>
+                      <td>
+                        @if (p.vitalsDue) {
+                          <span>{{ 'NURSE.VITALS_DUE' | translate }}</span>
+                        }
+                        <span>{{
+                          'NURSE.OVERSIGHT.MEDICATION_COUNT' | translate: { count: p.medsDue }
+                        }}</span>
+                      </td>
+                      <td>
+                        <a class="action-btn" [routerLink]="['/patients', p.patientId]">{{
+                          'NURSE.CHART' | translate
+                        }}</a>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
             </div>
           }
         }
@@ -1198,10 +1345,12 @@
         @if (!loading() && activeSection() === 'tasks') {
           <div class="task-board-header">
             <h3>{{ 'NURSE.TASK_BOARD' | translate }}</h3>
-            <button class="btn-small btn-primary" (click)="openTaskCreate()">
-              <span class="material-symbols-outlined">add_task</span>
-              {{ 'NURSE.NEW_TASK' | translate }}
-            </button>
+            @if (canCreateNursing()) {
+              <button class="btn-small btn-primary" (click)="openTaskCreate()">
+                <span class="material-symbols-outlined">add_task</span>
+                {{ 'NURSE.NEW_TASK' | translate }}
+              </button>
+            }
           </div>
           @if (nursingTasks().length === 0) {
             <div class="empty-state">
@@ -1251,21 +1400,25 @@
                   </div>
                   <div class="task-card-actions">
                     @if (task.status === 'PENDING' || task.status === 'IN_PROGRESS') {
-                      <button
-                        class="btn-small btn-success"
-                        (click)="completeTask(task.id)"
-                        [disabled]="actionInProgress() === task.id"
-                      >
-                        <span class="material-symbols-outlined">check_circle</span>
-                        {{ 'NURSE.COMPLETE' | translate }}
-                      </button>
-                      <button
-                        class="btn-small btn-outline"
-                        (click)="openCareNote(task.patientId, task.patientName)"
-                      >
-                        <span class="material-symbols-outlined">edit_note</span>
-                        {{ 'NURSE.NOTE' | translate }}
-                      </button>
+                      @if (canDocumentCare()) {
+                        <button
+                          class="btn-small btn-success"
+                          (click)="completeTask(task.id)"
+                          [disabled]="actionInProgress() === task.id"
+                        >
+                          <span class="material-symbols-outlined">check_circle</span>
+                          {{ 'NURSE.COMPLETE' | translate }}
+                        </button>
+                      }
+                      @if (canDocumentCare()) {
+                        <button
+                          class="btn-small btn-outline"
+                          (click)="openCareNote(task.patientId, task.patientName)"
+                        >
+                          <span class="material-symbols-outlined">edit_note</span>
+                          {{ 'NURSE.NOTE' | translate }}
+                        </button>
+                      }
                     } @else {
                       <span class="task-completed-info">
                         {{ 'NURSE.COMPLETED_PREFIX' | translate }}

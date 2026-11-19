@@ -5021,6 +5021,21 @@
     "VIEW_ALL": "View all"
   },
   "NURSE": {
+    "OVERSIGHT": {
+      "DEPARTMENT": "Department",
+      "READ_ONLY": "Super-admin oversight · Selected hospital. Clinical documentation requires an active clinical role.",
+      "HOSPITAL_PATIENTS": "All patients in this hospital",
+      "SEARCH": "Search loaded patients by name, record number, bed or clinician",
+      "CLINICIAN": "Clinician",
+      "CARDS": "Cards",
+      "TABLE": "Table",
+      "NO_MATCHES": "No patients match these filters",
+      "BOARD_HELP": "Showing {{shown}} of {{total}} loaded patients in the selected hospital. Filters apply to these workboard rows only.",
+      "ACUITY_HELP": "L1–L5 describes recorded patient acuity. Pending-care indicators describe tasks, not a change in acuity.",
+      "PENDING_CARE": "Pending care",
+      "MEDICATION_COUNT": "{{count}} medication orders",
+      "METRICS_HELP": "Scheduled doses due, overdue doses and as-needed orders are counted separately. Patient-card medication counts describe orders rather than dose times."
+    },
     "AWAITING_TRIAGE": "Awaiting triage",
     "ACTION": "Action",
     "ACTION_PLACEHOLDER": "Enter action...",
