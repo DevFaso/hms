@@ -64,4 +64,13 @@ public interface PharmacyRepository extends JpaRepository<Pharmacy, UUID> {
     /** Active pharmacies of any of the given types (stock-out routing options, G2). */
     List<Pharmacy> findByHospitalIdAndPharmacyTypeInAndActiveTrue(UUID hospitalId,
                                                                    Collection<PharmacyType> pharmacyTypes);
+
+    /**
+     * Billing plan PR 11 (QA D2430): the pharmacy row locked, so two counter sales carrying one client request
+     * key are serialised and the second answers with the first.
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("SELECT p FROM Pharmacy p WHERE p.id = :id AND p.hospital.id = :hospitalId")
+    Optional<Pharmacy> findLockedByIdAndHospitalId(@org.springframework.data.repository.query.Param("id") UUID id,
+                                                  @org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId);
 }
