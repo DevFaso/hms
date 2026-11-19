@@ -234,6 +234,35 @@ services:
       SERVER_PORT: "8080"
       LOG_LEVEL: INFO
 
+  # ── Orthanc PACS (profile: pacs) ──────────────────────────
+  # A local PACS for the in-app image viewer (V317). DICOMweb plugin on,
+  # basic auth on, studies kept in the orthanc_data volume. Modalities (or
+  # storescu) send to AE title ORTHANC on port 4242; e-Keneya reads through
+  # http://localhost:8042/dicom-web. See docs/runbooks/pacs-orthanc.md.
+  #   docker compose --profile pacs up -d orthanc
+  # Dev only: credentials below are placeholders, never reuse them.
+  orthanc:
+    image: orthancteam/orthanc:24.12.1
+    container_name: hms-orthanc
+    profiles: ["pacs"]
+    ports:
+      - "8042:8042"
+      - "4242:4242"
+    environment:
+      ORTHANC__NAME: "e-Keneya dev PACS"
+      ORTHANC__DICOM_AET: "ORTHANC"
+      ORTHANC__DICOM_PORT: "4242"
+      ORTHANC__AUTHENTICATION_ENABLED: "true"
+      ORTHANC__REGISTERED_USERS: '{"hms": "hms-dev-only"}'
+      DICOM_WEB_PLUGIN_ENABLED: "true"
+      ORTHANC__DICOM_WEB__ROOT: "/dicom-web/"
+      ORTHANC__DICOM_WEB__ENABLE_WADO: "true"
+      # The dev PACS accepts a store from any modality; a real one lists them.
+      ORTHANC__DICOM_ALWAYS_ALLOW_STORE: "true"
+      ORTHANC__DICOM_CHECK_CALLED_AE_TITLE: "false"
+    volumes:
+      - orthanc_data:/var/lib/orthanc/db
+
   # ── postgres-exporter (profile: observability) ────────────
   # Scrapes the local Postgres container so the HMS PostgreSQL dashboard has
   # data. DATA_SOURCE_NAME points at the `postgres` service from this compose
@@ -355,4 +384,6 @@ volumes:
   #     - hms_uploads:/app/uploads
   # On Railway, add a Persistent Volume in the backend service settings and
   # set APP_UPLOAD_DIR to the mount path (e.g. /data/uploads).
+  # Orthanc dev PACS storage (profile: pacs).
+  orthanc_data:
   hms_uploads:
