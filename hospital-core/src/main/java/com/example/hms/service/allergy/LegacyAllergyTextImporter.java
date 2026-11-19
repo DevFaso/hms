@@ -75,7 +75,9 @@ public class LegacyAllergyTextImporter {
         LocalDate today = LocalDate.now(clock);
         int created = 0;
         for (String token : tokens) {
-            if (alreadyCharted(known, token)) {
+            // QA D1287's shared active-duplicate check, widened for an import
+            // (QA D2220) to every row whatever its state.
+            if (ActiveAllergyDuplicates.find(known, null, token, null).isPresent() || alreadyCharted(known, token)) {
                 continue;
             }
             PatientAllergy row = PatientAllergy.builder()
