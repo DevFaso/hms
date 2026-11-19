@@ -125,11 +125,29 @@
     text-align: right;
   }
 
+  // A long transport error wraps (full text in the title) instead of pushing
+  // the queue-time and actions columns out of view at laptop widths.
   .error-cell {
-    max-width: 320px;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    min-width: 8rem;
+    max-width: 14rem;
+    font-size: 0.82rem;
     color: #991b1b;
+  }
+
+  // Date over time, and the P/F badge under the message type, when space is short.
+  .date-cell,
+  .type-cell {
+    white-space: normal;
+  }
+
+  .date-cell {
+    min-width: 5.5rem;
+  }
+
+  .type-cell {
+    min-width: 6rem;
   }
 
   .actions-cell {
@@ -259,9 +277,85 @@
   border-radius: 8px;
   padding: 0.75rem;
   font-size: 0.8rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  max-width: 100%;
+  // Each segment on its own line; a long value scrolls sideways instead of
+  // breaking mid-word.
   overflow-x: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
+
+  // As wide as its own text, so the box scrolls rather than the line spilling.
+  .segment {
+    display: block;
+    width: max-content;
+    min-width: 100%;
+    white-space: pre;
+    font-family: inherit;
+  }
+}
+
+.payload-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 0.35rem 1rem;
+  margin: 0 0 0.5rem;
+
+  dt {
+    font-weight: 600;
+    color: var(--color-text-muted, #4b5563);
+  }
+
+  dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .waiting {
+    color: #92400e;
+  }
+}
+
+.muted {
+  color: var(--color-text-muted, #6b7280);
+}
+
+.result-status-badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid currentcolor;
+  color: #374151;
+
+  &[data-result-status='P'] {
+    color: #92400e;
+  }
+
+  &[data-result-status='F'] {
+    color: #065f46;
+  }
+
+  &[data-result-status='C'] {
+    color: #1e40af;
+  }
+}
+
+@media (max-width: 480px) {
+  .summary {
+    grid-template-columns: minmax(0, 1fr);
+
+    dd {
+      margin-bottom: 0.35rem;
+    }
+  }
 }
 
 .siblings {

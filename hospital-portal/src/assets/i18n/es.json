@@ -2082,7 +2082,8 @@
       "MFA_RESET_BY_ADMIN": "Verificación en dos pasos restablecida por un administrador: {{reason}}",
       "MFA_RESET_REFUSED": "Restablecimiento de la verificación en dos pasos rechazado: el autor no administra esta cuenta",
       "MFA_REMOVED_BY_USER": "Verificación en dos pasos quitada por el usuario",
-      "PATIENT_CHANNEL_CHOICES": "Opciones de canal del paciente registradas en recepción: {{changes}}"
+      "PATIENT_CHANNEL_CHOICES": "Opciones de canal del paciente registradas en recepción: {{changes}}",
+      "INSTRUMENT_OUTBOX_VIEWED": "Mensaje {{message}} de la bandeja de salida de instrumentos ({{type}}) consultado"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -4835,7 +4836,34 @@
     "DETAIL_TITLE": "Mensaje de la bandeja de salida",
     "PAYLOAD": "Contenido HL7",
     "SIBLINGS": "Otros mensajes de esta orden",
-    "PAGE_OF": "Página {{page}} de {{total}}"
+    "PAGE_OF": "Página {{page}} de {{total}}",
+    "SUMMARY": "Summary",
+    "SUMMARY_TYPE": "Message",
+    "TYPE_OML": "Order sent to the analyser",
+    "TYPE_ORU": "Result",
+    "SUMMARY_PATIENT": "Patient",
+    "SUMMARY_TEST": "Test",
+    "SUMMARY_VALUE": "Result value",
+    "SUMMARY_FLAG": "Flag",
+    "SUMMARY_RESULT_STATUS": "Result status",
+    "SUMMARY_QUEUED": "Queued",
+    "SUMMARY_WAITING": "Why it is waiting",
+    "WAITING_TRANSPORT_OFF": "Outbound transport is disabled on the server.",
+    "WAITING_LAST_ERROR": "Last error: {{error}}",
+    "WAITING_NEXT_ATTEMPT": "Waiting for the next send attempt.",
+    "UNPARSEABLE": "This message could not be read; the raw text is shown below.",
+    "RESULT_STATUS_F": "Final",
+    "RESULT_STATUS_P": "Preliminary",
+    "RESULT_STATUS_C": "Correction",
+    "FLAG_N": "Normal",
+    "FLAG_A": "Abnormal",
+    "FLAG_L": "Low",
+    "FLAG_H": "High",
+    "FLAG_LL": "Critically low",
+    "FLAG_HH": "Critically high",
+    "COPY": "Copy the message",
+    "COPIED": "Message copied.",
+    "COPY_ERROR": "The message could not be copied."
   },
   "LAB_INVENTORY": {
     "TITLE": "Inventario de laboratorio",
@@ -8015,7 +8043,8 @@
         "PAYER": "Payer",
         "PAYER_PLAN": "Payer plan",
         "HOSPITAL_PACS_SETTINGS": "Conexión PACS",
-        "LAB_QC_TARGET": "Objetivo de CC del laboratorio"
+        "LAB_QC_TARGET": "Objetivo de CC del laboratorio",
+        "INSTRUMENT_OUTBOX_MESSAGE": "Mensaje de la bandeja de salida de instrumentos"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Alergia",
