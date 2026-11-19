@@ -27,6 +27,7 @@ import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 import { blobRefusalReason } from '../../shared/blob-refusal';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { MeasurePipe } from '../../shared/pipes/measure.pipe';
 
 /** One file on its way up. */
 interface PendingUpload {
@@ -55,7 +56,14 @@ const PAN_STEP = 40;
 @Component({
   selector: 'app-imaging-images',
   standalone: true,
-  imports: [FormsModule, TranslateModule, ModalDialogDirective, DateTimePipe, ServerTimePipe],
+  imports: [
+    FormsModule,
+    TranslateModule,
+    ModalDialogDirective,
+    DateTimePipe,
+    ServerTimePipe,
+    MeasurePipe,
+  ],
   templateUrl: './imaging-images.component.html',
   styleUrl: './imaging-images.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

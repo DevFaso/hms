@@ -3996,7 +3996,7 @@
     "PREVIOUS": "Image précédente",
     "NEXT": "Image suivante",
     "ADDED_AT": "Ajoutée le {{date}}",
-    "KEYS_HINT": "Clavier : ← → précédente/suivante (déplacement si zoomé), ↑ ↓ déplacement, + − zoom, 0 réinitialiser, Échap fermer.",
+    "KEYS_HINT": "Clavier : ← → précédente/suivante (déplacement si zoomé), ↑ ↓ déplacement, + − zoom, 0 réinitialiser, touche d’échappement pour fermer.",
     "NEW_REPORT_HINT": "Les images ajoutées maintenant vont sur l’examen. Enregistrez d’abord le compte rendu pour les y joindre."
   },
   "IMAGING": {

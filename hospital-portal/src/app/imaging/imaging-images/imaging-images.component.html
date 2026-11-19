@@ -19,7 +19,7 @@
       (drop)="onDrop($event)"
     >
       <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
-      <span class="drop-hint">{{ 'IMAGING_IMAGES.DROP_HINT' | translate }}</span>
+      {{ ' ' }}<span class="drop-hint">{{ 'IMAGING_IMAGES.DROP_HINT' | translate }}</span>
       <div class="drop-controls">
         <label class="caption-field" [for]="captionId">
           <span>{{ 'IMAGING_IMAGES.CAPTION' | translate }}</span>
@@ -69,7 +69,7 @@
                 [value]="u.progress"
                 [attr.aria-label]="'IMAGING_IMAGES.UPLOADING' | translate: { name: u.name }"
               ></progress>
-              <span class="upload-pct">{{ u.progress }} %</span>
+              <span class="upload-pct">{{ u.progress | measure: '%' }}</span>
             }
           </li>
         }
@@ -160,7 +160,7 @@
             >
               <span class="material-symbols-outlined" aria-hidden="true">zoom_out</span>
             </button>
-            <span class="zoom-level" aria-live="polite">{{ zoom() * 100 }} %</span>
+            <span class="zoom-level" aria-live="polite">{{ zoom() * 100 | measure: '%' }}</span>
             <button
               type="button"
               class="btn-icon"
