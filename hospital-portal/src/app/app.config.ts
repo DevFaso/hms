@@ -11,7 +11,7 @@ import localeFr from '@angular/common/locales/fr';
 import localeEs from '@angular/common/locales/es';
 import { provideRouter, withNavigationErrorHandler, NavigationError } from '@angular/router';
 import { provideHttpClient, withInterceptors, withXhr } from '@angular/common/http';
-import { provideTranslateService } from '@ngx-translate/core';
+import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 import { provideTranslateHttpLoader } from '@ngx-translate/http-loader';
 import { provideOAuthClient } from 'angular-oauth2-oidc';
 
@@ -21,10 +21,12 @@ import { apiPrefixInterceptor } from './interceptors/auth.interceptor';
 import { csrfInterceptor } from './interceptors/csrf.interceptor';
 import { hospitalCacheInterceptor } from './interceptors/hospital-cache.interceptor';
 import { errorInterceptor } from './interceptors/error.interceptor';
+import { connectivityInterceptor } from './interceptors/connectivity.interceptor';
 import { offlineDispenseInterceptor } from './interceptors/offline-dispense.interceptor';
 import { languageInterceptor } from './interceptors/language.interceptor';
 import { patientChartChangeInterceptor } from './interceptors/patient-chart-change.interceptor';
-import { currentLocale } from './shared/i18n/app-locale';
+import { DEFAULT_LANG, currentLocale } from './shared/i18n/app-locale';
+import { translationsReady } from './shared/i18n/translations-ready';
 
 export function handleChunkLoadNavigationError(error: NavigationError): void {
   inject(ChunkRecoveryService).handle(error);
@@ -57,11 +59,16 @@ export const appConfig: ApplicationConfig = {
         // through the auth-refresh / toast path. Order is the chain order.
         offlineDispenseInterceptor,
         errorInterceptor,
+        // QA D2352: innermost, it sees whether a request reached the server at all.
+        connectivityInterceptor,
       ]),
     ),
+    // QA D2351: the fallback is the product language, as AppComponent sets it
+    // at start-up anyway. An English fallback here downloaded en.json (about
+    // 140 kB on a slow phone) before fr.json and showed "Sign In" first.
     provideTranslateService({
-      defaultLanguage: 'fr',
-      fallbackLang: 'en',
+      defaultLanguage: DEFAULT_LANG,
+      fallbackLang: DEFAULT_LANG,
     }),
     // ngx-translate owns the strings; this owns the dates, numbers and
     // currency behind `| date`, `| number` and `| currency`. Without it
@@ -69,6 +76,8 @@ export const appConfig: ApplicationConfig = {
     // Read once at bootstrap — a language switch reloads (see applyLanguage).
     { provide: LOCALE_ID, useFactory: currentLocale },
     provideTranslateHttpLoader({ prefix: './assets/i18n/', suffix: '.json' }),
+    // QA D2351: render once the reader's strings are here (never blank or English labels).
+    provideAppInitializer(() => translationsReady(inject(TranslateService))),
     // KC-2b: Keycloak OIDC PKCE login. Bootstraps the OAuth client and
     // attempts to complete a redirect-back code exchange on app start.
     // Becomes a no-op when `environment.oidc.enabled` is false, so legacy

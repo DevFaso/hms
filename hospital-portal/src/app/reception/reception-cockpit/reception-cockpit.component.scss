@@ -611,7 +611,11 @@
 .reason-cell {
   max-width: 240px;
   white-space: normal;
-  overflow-wrap: anywhere;
+  /* QA D2252 (r64): « anywhere » let the table squeeze Motif to a letter per
+     line at 768 (« Premi ère cons ultati on »). A word now sets the column's
+     minimum; a long one hyphenates. */
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 .flag-chip.warn,
 .flag-chip.danger,

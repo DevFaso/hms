@@ -28,6 +28,9 @@
   display: block;
 }
 .user-email {
+  /* QA D2321 (r64): a long address breaks instead of pushing Statut under the
+     sticky actions column at a 1024 laptop. */
+  overflow-wrap: anywhere;
   font-size: 0.78rem;
   color: var(--text-secondary);
   display: block;

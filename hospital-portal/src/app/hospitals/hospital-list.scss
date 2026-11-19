@@ -27,6 +27,8 @@
 }
 
 .hospital-email {
+  /* QA D2321 (r64): a long address breaks rather than widening the name column. */
+  overflow-wrap: anywhere;
   font-size: 0.78rem;
   color: #64748b;
   display: block;
