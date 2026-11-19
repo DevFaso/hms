@@ -38,6 +38,7 @@ import java.util.UUID;
  * </ul>
  *
  * <p>Both delete the enrolment and the backup codes, as the emergency re-enrolment does, and write one audit row.
+ * Neither is open to a support session impersonating the user.
  */
 @Slf4j
 @Service
@@ -70,6 +71,12 @@ public class MfaResetService {
      */
     @Transactional
     public void resetByAdministrator(UUID targetUserId, String reason, String stepUpCode) {
+        // A support session acts as the administrator: it must not strip a colleague's second factor
+        // (the same rule as the account's own sign-in details, ImpersonationLimits).
+        if (com.example.hms.security.context.ImpersonationContextHolder.isImpersonating()) {
+            throw new ClientSafeAccessDeniedException(
+                MessageUtil.resolve(com.example.hms.security.context.ImpersonationLimits.ACCOUNT_CHANGE_REFUSED));
+        }
         String why = reason == null ? "" : reason.strip();
         if (why.length() < REASON_MIN || why.length() > REASON_MAX) {
             throw new FieldBusinessException("reason", "mfa.reset.reasonRequired", REASON_MIN, REASON_MAX);

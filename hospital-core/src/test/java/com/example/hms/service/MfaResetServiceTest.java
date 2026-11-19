@@ -117,6 +117,20 @@ class MfaResetServiceTest {
     }
 
     @Test
+    void aSupportSessionCannotResetAColleaguesSecondFactor() {
+        when(accountAccess.canAdminister(target)).thenReturn(true);
+        com.example.hms.security.context.ImpersonationContextHolder.set(
+            com.example.hms.security.context.ImpersonationContext.of(UUID.randomUUID(), "support.agent"));
+        try {
+            assertThatThrownBy(() -> service.resetByAdministrator(target.getId(), REASON, "654321"))
+                .isInstanceOf(ClientSafeAccessDeniedException.class);
+        } finally {
+            com.example.hms.security.context.ImpersonationContextHolder.clear();
+        }
+        verifyNoInteractions(mfaService, enrollmentRepository, backupCodeRepository);
+    }
+
+    @Test
     void theReasonIsMandatory_andCheckedBeforeAnythingElse() {
         for (String reason : new String[] {null, "", "   ", "abc", "x".repeat(501)}) {
             assertThatThrownBy(() -> service.resetByAdministrator(target.getId(), reason, "654321"))
