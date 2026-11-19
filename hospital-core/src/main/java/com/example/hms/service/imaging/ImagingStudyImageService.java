@@ -105,6 +105,9 @@ public class ImagingStudyImageService {
             throws IOException {
         ImagingOrder order = loadOrderInScope(orderId);
         CancelledOrders.requireNotCancelled(order.getStatus(), "imaging.order.cancelled.locked");
+        if (order.getHospital() == null) {
+            throw new BusinessException("imaging.report.orderWithoutHospital");
+        }
         List<ImagingReport> reports = reportRepository.findByImagingOrder_IdOrderByReportVersionDesc(orderId);
         ImagingReport report = null;
         if (reportId != null) {
