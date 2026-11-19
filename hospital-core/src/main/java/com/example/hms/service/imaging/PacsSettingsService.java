@@ -83,10 +83,11 @@ public class PacsSettingsService {
         if (changed.isEmpty()) {
             return toDto(hospital);
         }
-        Hospital saved = hospitalRepository.save(hospital);
+        // The entity is managed: save writes it in place, so the DTO reads the instance we hold.
+        hospitalRepository.save(hospital);
         auditAfterCommit(hospitalId, actorUserId, changed, enabled);
         log.info("[pacs] hospital {} PACS settings changed: {}", hospitalId, changed);
-        return toDto(saved == null ? hospital : saved);
+        return toDto(hospital);
     }
 
     /** The DICOMweb URL against the SSRF fence; the viewer link to http(s). */

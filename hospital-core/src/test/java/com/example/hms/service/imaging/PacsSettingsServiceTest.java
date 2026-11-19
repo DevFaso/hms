@@ -140,7 +140,7 @@ class PacsSettingsServiceTest {
     }
 
     @Test
-    @DisplayName("a save that answers null still reports the settings just written (Sonar S2259)")
+    @DisplayName("the response is built from the settings just written, whatever save returns")
     void saveAnsweringNull() {
         when(hospitals.save(any(Hospital.class))).thenReturn(null);
         PacsSettingsDTO dto = service.set(hospital.getId(), body(true, PUBLIC_URL, null, "orthanc", SECRET, null), null);

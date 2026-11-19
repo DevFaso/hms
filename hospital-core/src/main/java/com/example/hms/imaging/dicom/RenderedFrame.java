@@ -20,9 +20,9 @@ public record RenderedFrame(byte[] bytes, String contentType) {
 
     @Override
     public boolean equals(Object other) {
-        return other instanceof RenderedFrame that
-            && Arrays.equals(bytes, that.bytes)
-            && Objects.equals(contentType, that.contentType);
+        return other instanceof RenderedFrame(byte[] otherBytes, String otherType)
+            && Arrays.equals(bytes, otherBytes)
+            && Objects.equals(contentType, otherType);
     }
 
     @Override
