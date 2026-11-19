@@ -257,6 +257,13 @@ export class BillingComponent implements OnInit {
 
   /* ── Invoice lines (detail panel) ── */
   items = signal<InvoiceItemResponse[]>([]);
+  /**
+   * QA D2434: when a payer covers any line, every line says its insurer and patient parts (a line
+   * the payer does not cover shows 0 for the insurer: an exclusion is visible too).
+   */
+  readonly lineSharesShown = computed(() =>
+    this.items().some((line) => Number(line.payerShareAmount ?? 0) > 0),
+  );
   itemsLoading = signal(false);
   itemSaving = signal(false);
   newItemDescription = signal('');

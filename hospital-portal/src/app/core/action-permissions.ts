@@ -388,6 +388,11 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'PatientInsuranceController#setPayerPlan',
     roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_BILLING_SPECIALIST', 'ROLE_RECEPTIONIST'],
   },
+  // QA D2203: the desk records a patient's SMS / e-mail choices.
+  patientChannelPreferencesUpdate: {
+    endpoint: 'PatientChannelPreferenceController#update',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_RECEPTIONIST'],
+  },
 } as const satisfies Record<string, ActionPermission>;
 
 /**

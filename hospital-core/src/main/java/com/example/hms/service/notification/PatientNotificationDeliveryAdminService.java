@@ -54,6 +54,9 @@ public class PatientNotificationDeliveryAdminService {
 
     private final PatientNotificationDeliveryRepository repository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.repository.AppointmentRepository appointmentRepository;
+    private final com.example.hms.repository.BillingInvoiceRepository invoiceRepository;
+    private final com.example.hms.repository.LabOrderRepository labOrderRepository;
     private final ActingScopeResolver actingScopeResolver;
     private final RoleValidator roleValidator;
     private final Clock clock;
@@ -82,8 +85,11 @@ public class PatientNotificationDeliveryAdminService {
             counts.put(((NotificationDeliveryStatus) row[0]).name(), (Long) row[1]);
         }
 
+        List<PatientNotificationDeliveryDTO> content = rows.getContent().stream().map(row -> toDto(row, names))
+            .toList();
+        describeSubjects(rows.getContent(), content, hospitalId);
         return PatientNotificationDeliveryPageDTO.builder()
-            .content(rows.getContent().stream().map(row -> toDto(row, names)).toList())
+            .content(content)
             .page(rows.getNumber())
             .size(rows.getSize())
             .totalElements(rows.getTotalElements())
@@ -118,6 +124,74 @@ public class PatientNotificationDeliveryAdminService {
             .map(p -> Map.of(p.getId(), nameOf(p)))
             .orElse(Map.of());
         return toDto(fresh, names);
+    }
+
+    /**
+     * QA D2402: what each row was about, read in one query per kind for the page, at this hospital only: the
+     * appointment's day and time, the invoice number, the lab order number. Never a test name or a result.
+     */
+    private void describeSubjects(List<PatientNotificationDelivery> rows, List<PatientNotificationDeliveryDTO> dtos,
+                                  UUID hospitalId) {
+        Set<UUID> appointments = new java.util.HashSet<>();
+        Set<UUID> invoices = new java.util.HashSet<>();
+        Set<UUID> labOrders = new java.util.HashSet<>();
+        for (PatientNotificationDelivery row : rows) {
+            if (row.getSubjectId() == null) {
+                continue;
+            }
+            switch (subjectKind(row.getEventType())) {
+                case APPOINTMENT -> appointments.add(row.getSubjectId());
+                case INVOICE -> invoices.add(row.getSubjectId());
+                case LAB_ORDER -> labOrders.add(row.getSubjectId());
+                default -> { /* no reference shown */ }
+            }
+        }
+        Map<UUID, com.example.hms.model.Appointment> appointmentById = appointments.isEmpty() ? Map.of()
+            : appointmentRepository.findAllById(appointments).stream()
+                .filter(a -> a.getHospital() != null && hospitalId.equals(a.getHospital().getId()))
+                .collect(Collectors.toMap(com.example.hms.model.Appointment::getId, Function.identity()));
+        Map<UUID, String> invoiceNumbers = invoices.isEmpty() ? Map.of()
+            : invoiceRepository.findAllById(invoices).stream()
+                .filter(i -> i.getHospital() != null && hospitalId.equals(i.getHospital().getId())
+                    && i.getInvoiceNumber() != null)
+                .collect(Collectors.toMap(com.example.hms.model.BillingInvoice::getId,
+                    com.example.hms.model.BillingInvoice::getInvoiceNumber));
+        Map<UUID, String> orderNumbers = labOrders.isEmpty() ? Map.of()
+            : labOrderRepository.findAllById(labOrders).stream()
+                .filter(o -> o.getHospital() != null && hospitalId.equals(o.getHospital().getId())
+                    && o.getOrderNumber() != null)
+                .collect(Collectors.toMap(com.example.hms.model.LabOrder::getId,
+                    com.example.hms.model.LabOrder::getOrderNumber));
+        for (int i = 0; i < rows.size(); i++) {
+            PatientNotificationDelivery row = rows.get(i);
+            PatientNotificationDeliveryDTO dto = dtos.get(i);
+            if (row.getSubjectId() == null) {
+                continue;
+            }
+            com.example.hms.model.Appointment appointment = appointmentById.get(row.getSubjectId());
+            if (appointment != null) {
+                dto.setSubjectDate(appointment.getAppointmentDate());
+                dto.setSubjectTime(appointment.getStartTime());
+            }
+            String reference = invoiceNumbers.getOrDefault(row.getSubjectId(), orderNumbers.get(row.getSubjectId()));
+            dto.setSubjectReference(reference);
+        }
+    }
+
+    enum SubjectKind { APPOINTMENT, INVOICE, LAB_ORDER, OTHER }
+
+    /** The subject a notice names, by its event (PatientMessageGate.Notice, the ledger's queued events). */
+    static SubjectKind subjectKind(com.example.hms.enums.PatientNotificationEvent event) {
+        if (event == null) {
+            return SubjectKind.OTHER;
+        }
+        return switch (event) {
+            case APPOINTMENT_CONFIRMATION, APPOINTMENT_REMINDER, APPOINTMENT_RESCHEDULED, APPOINTMENT_CANCELLED,
+                 APPOINTMENT_COMPLETED, APPOINTMENT_NO_SHOW -> SubjectKind.APPOINTMENT;
+            case INVOICE -> SubjectKind.INVOICE;
+            case LAB_RESULT_AVAILABLE -> SubjectKind.LAB_ORDER;
+            default -> SubjectKind.OTHER;
+        };
     }
 
     private static String nameOf(Patient patient) {

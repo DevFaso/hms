@@ -1,6 +1,7 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import { stepUpRequestOptions } from '../services/step-up';
 
 /* ── Response DTOs ── */
 
@@ -77,6 +78,14 @@ export class MfaService {
   /** Check current user's MFA status (authenticated). */
   getStatus(): Observable<MfaStatusResponse> {
     return this.http.get<MfaStatusResponse>('/auth/mfa/status');
+  }
+
+  /**
+   * QA r64: remove the caller's own authenticator, with a current code from it or an unused backup
+   * code as the step-up (a refusal is the profile's to show, never a sign-out).
+   */
+  removeOwn(stepUpCode: string): Observable<MessageResponse> {
+    return this.http.delete<MessageResponse>('/auth/mfa', stepUpRequestOptions(stepUpCode));
   }
 
   /** Verify MFA during login flow (unauthenticated — uses mfaToken). */

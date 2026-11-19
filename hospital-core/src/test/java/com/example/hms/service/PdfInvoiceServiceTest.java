@@ -438,6 +438,29 @@ class PdfInvoiceServiceTest {
             .doesNotContain("pdf.invoice.payerShare 5");
     }
 
+    /** QA D2434: each line of an invoice a payer covers prints its insurer part and its patient part. */
+    @Test
+    void anInsuredInvoicePrintsEachLinesSplit_D2434() throws Exception {
+        InvoiceItem covered = InvoiceItem.builder().itemDescription("NFS").itemCategory(ItemCategory.LAB_TEST)
+            .quantity(3).unitPrice(new BigDecimal("3500.00")).totalPrice(new BigDecimal("10500.00"))
+            .payerShareAmount(new BigDecimal("6000.00")).build();
+        InvoiceItem excluded = InvoiceItem.builder().itemDescription("Ticket").itemCategory(ItemCategory.SERVICE)
+            .quantity(1).unitPrice(new BigDecimal("500.00")).totalPrice(new BigDecimal("500.00")).build();
+        invoice.setTotalAmount(new BigDecimal("11000.00"));
+        invoice.setPayerShareTotal(new BigDecimal("6000.00"));
+
+        String text = textOf(service.generateInvoicePdf(invoice, List.of(covered, excluded), List.of(), List.of(),
+            List.of(), Locale.FRENCH));
+
+        assertThat(text).contains("pdf.invoice.lineShares 6", "pdf.invoice.lineShares 0");
+        assertThat(text.replaceAll("[\\s\u00a0\u202f]", "")).contains("pdf.invoice.lineShares6000FCFA4500FCFA");
+
+        // No payer on the invoice: no per-line split is printed.
+        invoice.setPayerShareTotal(BigDecimal.ZERO);
+        assertThat(textOf(service.generateInvoicePdf(invoice, List.of(covered), List.of(), List.of(), List.of(),
+            Locale.FRENCH))).doesNotContain("pdf.invoice.lineShares");
+    }
+
     /** Billing-money plan PR 7: a receipt's balance is the patient's share then, less what was paid then. */
     @Test
     void aReceiptOfAnInsuredInvoiceShowsThePatientsBalanceThen_pr7() throws Exception {

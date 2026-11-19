@@ -96,6 +96,31 @@ describe('InvoicePayerSharesComponent (billing-money plan PR 7)', () => {
     expect(billing.listPayerShares).toHaveBeenCalledWith('inv-bc2');
   });
 
+  it('QA D2437: a draft shows the estimated split, marked an estimate', () => {
+    render(
+      ['ROLE_BILLING_SPECIALIST'],
+      invoice({
+        status: 'DRAFT',
+        insuranceCoverageAmount: 0,
+        patientResponsibilityAmount: 8500,
+        estimatedInsuranceCoverageAmount: 5600,
+      }),
+    );
+
+    expect(fixture.componentInstance.isEstimate()).toBeTrue();
+    expect(fixture.componentInstance.payerShare()).toBe(5600);
+    expect(fixture.componentInstance.patientShare()).toBe(2900);
+    expect(host().querySelector('[data-testid="payer-share-estimate"]')).not.toBeNull();
+    expect(host().textContent).toContain('BILLING.PAYER_SHARES.PAYER_SHARE_ESTIMATED');
+  });
+
+  it('QA D2437: an issued invoice never shows an estimate', () => {
+    render(['ROLE_BILLING_SPECIALIST'], invoice({ estimatedInsuranceCoverageAmount: 9999 }));
+    expect(fixture.componentInstance.isEstimate()).toBeFalse();
+    expect(fixture.componentInstance.payerShare()).toBe(5600);
+    expect(host().querySelector('[data-testid="payer-share-estimate"]')).toBeNull();
+  });
+
   it('shows nothing on an invoice no payer covers', () => {
     render(['ROLE_BILLING_SPECIALIST'], invoice({ insuranceCoverageAmount: 0 }));
     expect(host().querySelector('[data-testid="payer-shares"]')).toBeNull();

@@ -288,6 +288,11 @@
       </div>
     }
 
+    <!-- QA D2203: the patient's SMS / e-mail choices, seen and recorded by the desk. -->
+    @if (activeTab() === 'administration') {
+      <app-patient-channel-preferences [patientId]="p.id" />
+    }
+
     @if (activeTab() === 'administration' && canManageRestriction()) {
       <section class="restriction-card" data-testid="restriction-card" data-submit-scope>
         <h3>{{ 'PATIENTS.CHART_RESTRICTION_TITLE' | translate }}</h3>

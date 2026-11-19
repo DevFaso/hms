@@ -193,6 +193,46 @@ export class PatientNotificationsComponent implements OnInit {
     return ERROR_KEYS[code] ?? 'PATIENT_NOTIFICATIONS.ERROR.SEND_FAILED';
   }
 
+  /**
+   * QA D2402: the statuses the current filter leaves out, with how many rows each holds, so the page
+   * says so (the default « En échec » filter hid every « Non envoyé » row without a word).
+   */
+  readonly hiddenByFilter = computed(() => {
+    const filter = this.statusFilter();
+    if (filter === 'ALL') return 0;
+    return this.statuses
+      .filter((status) => status !== filter)
+      .reduce((sum, status) => sum + this.count(status), 0);
+  });
+
+  /** QA D2402: the date a row shows: its last attempt, or when it was recorded (an opt-out has no attempt). */
+  rowDate(row: PatientNotificationDelivery): string {
+    return row.lastAttemptAt ?? row.createdAt;
+  }
+
+  /** QA D2402: what the notice was about: the appointment, the invoice or the lab order. */
+  subject(
+    row: PatientNotificationDelivery,
+  ): { key: string; params: Record<string, string> } | null {
+    if (row.subjectDate) {
+      return {
+        key: 'PATIENT_NOTIFICATIONS.SUBJECT_APPOINTMENT',
+        params: {
+          date: row.subjectDate.split('-').reverse().join('/'),
+          time: (row.subjectTime ?? '').slice(0, 5),
+        },
+      };
+    }
+    if (!row.subjectReference) return null;
+    return {
+      key:
+        row.eventType === 'INVOICE'
+          ? 'PATIENT_NOTIFICATIONS.SUBJECT_INVOICE'
+          : 'PATIENT_NOTIFICATIONS.SUBJECT_LAB_ORDER',
+      params: { number: row.subjectReference },
+    };
+  }
+
   /** Whether the patient may already have received this message. */
   maybeDelivered(row: PatientNotificationDelivery): boolean {
     return !!row.errorCode && MAYBE_DELIVERED.has(row.errorCode);

@@ -41,6 +41,17 @@ const reportOnly = process.argv.includes('--report-only');
 const DYNAMIC_SUFFIXES = {
   'DRUG_INTERACTIONS.SEVERITY_': ['CONTRAINDICATED', 'MAJOR', 'MODERATE', 'MINOR', 'UNKNOWN'],
   'SLOT_ADMIN.STATUS_': ['OPEN', 'HELD', 'BOOKED', 'BLOCKED'],
+  // QA D2403: the profile's one two-step verification status.
+  'PROFILE.MFA_STATE_': ['ACTIVE', 'PENDING', 'OFF'],
+  // QA D2203: the desk's view of a patient's SMS / e-mail choices.
+  'NOTIFICATIONS.TYPE_': [
+    'APPOINTMENT_REMINDER',
+    'LAB_RESULT',
+    'MEDICATION_REFILL',
+    'BILLING',
+    'DISCHARGE_SUMMARY',
+  ],
+  'NOTIFICATIONS.CHANNEL_': ['IN_APP', 'EMAIL', 'SMS'],
   'SLOT_ADMIN.DAY_': ['1', '2', '3', '4', '5', '6', '7'],
   'RECEPTION.RECALL_STATUS_': ['PENDING', 'NOTIFIED', 'SCHEDULED', 'CLOSED', 'CANCELLED'],
   // QA D807: the newborn assessment's delivery picker labels the mode in code.
