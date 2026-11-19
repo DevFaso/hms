@@ -2216,4 +2216,92 @@ class LabTestDefinitionServiceImplTest {
             assertThat(previous.isActive()).isFalse();
         }
     }
+
+    // ── r63 (NFS panels): components carry ranges, so they follow the ranges' rules ──
+
+    private static com.example.hms.payload.dto.LabTestComponentDTO componentDto(String code, String name) {
+        return com.example.hms.payload.dto.LabTestComponentDTO.builder().code(code).name(name).unit("g/dL")
+            .referenceRanges(new java.util.ArrayList<>()).build();
+    }
+
+    @Test
+    void r63ComponentRules_aCodeAndANameAreRequiredAndACodeIsUniqueInThePanel() {
+        List<com.example.hms.payload.dto.LabTestComponentDTO> noCode = List.of(componentDto(" ", "Hb"));
+        assertThatThrownBy(() -> LabTestDefinitionServiceImpl.requireValidComponents(noCode))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("components[0].code"));
+        List<com.example.hms.payload.dto.LabTestComponentDTO> noName = List.of(componentDto("HB", ""));
+        assertThatThrownBy(() -> LabTestDefinitionServiceImpl.requireValidComponents(noName))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("components[0].name"));
+        List<com.example.hms.payload.dto.LabTestComponentDTO> twice =
+            List.of(componentDto("HB", "Hb"), componentDto("hb ", "Hb bis"));
+        assertThatThrownBy(() -> LabTestDefinitionServiceImpl.requireValidComponents(twice))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("components[1].code"));
+        com.example.hms.payload.dto.LabTestComponentDTO inverted = componentDto("WBC", "Leucocytes");
+        inverted.setReferenceRanges(new java.util.ArrayList<>(List.of(glucoseRangeDto(1.0))));
+        List<com.example.hms.payload.dto.LabTestComponentDTO> invertedRange = List.of(inverted);
+        assertThatThrownBy(() -> LabTestDefinitionServiceImpl.requireValidComponents(invertedRange))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        java.util.ArrayList<com.example.hms.payload.dto.LabTestComponentDTO> withGap = new java.util.ArrayList<>();
+        withGap.add(null);
+        withGap.add(componentDto("PLT", "Plaquettes"));
+        LabTestDefinitionServiceImpl.requireValidComponents(withGap);
+        LabTestDefinitionServiceImpl.requireValidComponents(null);
+    }
+
+    @Test
+    void r63ComponentRules_componentsOfADefinitionUnderReviewAreLocked() {
+        definition.setHospital(null);
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
+        definition.setComponents(new java.util.ArrayList<>(List.of(com.example.hms.model.LabTestComponent.builder()
+            .code("HB").name("Hb").unit("g/dL").build())));
+        User admin = userWithRole("ROLE_SUPER_ADMIN");
+        requestDTO.setComponents(List.of(componentDto("HB", "Hb")));
+        requestDTO.setReferenceRanges(null);
+        requestDTO.setAssignmentId(null);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(admin));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            lenient().when(mapper.mapComponentDtosToEntities(any())).thenReturn(new java.util.ArrayList<>(List.of(
+                com.example.hms.model.LabTestComponent.builder().code("HB").name("Hb").unit("mmol/L").build())));
+
+            assertThatThrownBy(() -> service.update(defId, requestDTO))
+                .isInstanceOf(IllegalStateException.class);
+            verify(repository, never()).save(any());
+        }
+    }
+
+    @Test
+    void r63ComponentRules_aNewVersionCopiesThePanelComponents() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
+        com.example.hms.model.LabTestComponent hb = com.example.hms.model.LabTestComponent.builder()
+            .code("HB").name("Hb").unit("g/dL")
+            .referenceRanges(new java.util.ArrayList<>(List.of(glucoseRange(16.0)))).build();
+        definition.setComponents(new java.util.ArrayList<>(List.of(hb)));
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
+            when(userRepository.findByUsername("admin")).thenReturn(Optional.of(currentUser));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            lenient().when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                eq(currentUser.getId()), eq(hospitalId), anySet())).thenReturn(true);
+            actingAt(hospitalId);
+            when(repository.findBySupersedesDefinitionId(defId)).thenReturn(List.of());
+            when(repository.save(any(LabTestDefinition.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            service.createNewVersion(defId);
+
+            org.mockito.ArgumentCaptor<LabTestDefinition> saved =
+                org.mockito.ArgumentCaptor.forClass(LabTestDefinition.class);
+            verify(repository).save(saved.capture());
+            com.example.hms.model.LabTestComponent copy = saved.getValue().getComponents().get(0);
+            assertThat(copy).isEqualTo(hb).isNotSameAs(hb);
+            assertThat(copy.getReferenceRanges().get(0)).isNotSameAs(hb.getReferenceRanges().get(0));
+            assertThat(saved.getValue().isPanel()).isTrue();
+            assertThat(saved.getValue().hasGradingBasis()).isTrue();
+        }
+    }
 }

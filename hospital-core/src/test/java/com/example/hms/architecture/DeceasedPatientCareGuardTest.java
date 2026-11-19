@@ -166,6 +166,7 @@ class DeceasedPatientCareGuardTest {
         Patient#getDoctorRecord,getDoctorTimeline | reads over POST
         Patient#createPatientAllergy,updatePatientAllergy,deactivatePatientAllergy,createPatientDiagnosis,updatePatientDiagnosis,deletePatientDiagnosis,createPatientChartUpdate | late documentation: a final diagnosis is routinely written after a death
         PatientPanel#end | closes a panel assignment
+        PatientChannelPreference#update | QA D2203: the family can still ask the desk to stop messages; never care
         PatientPortal#updateMyProfile,updateNotificationPreferences,markNotificationRead,markAllNotificationsRead | account housekeeping
         PatientPortal#payMyInvoice | billing and payments
         PatientPortal#cancelMyAppointment,cancelMyRefill | cancels
@@ -173,6 +174,7 @@ class DeceasedPatientCareGuardTest {
         PatientPortal#updateMyEducationProgress,submitMyEducationQuestion | education, not care
         PatientPrimaryCare#update,end,delete | an existing assignment
         PatientRecall#close,cancel,linkAppointment | closes a recall; the booking it links is refused itself
+        UserMfaReset#reset | QA r64: a staff account's second factor, no patient
         Prescription#pharmacistVerify,pediatricDoseReview,allergyReview,requestClarification,resolveClarification,update,delete | an order made before the death: nothing goes out, signing and dispensing it are refused
         ProResponse#acknowledge | closes a response given before the death
         ProcedureOrder#updateProcedureOrder,cancelProcedureOrder | closes an order made before the death
@@ -225,7 +227,7 @@ class DeceasedPatientCareGuardTest {
         Map.entry("Hospital", NOT_CARE), Map.entry("HospitalRecordAccessPosture", NOT_CARE),
         Map.entry("HospitalPacsSettings", NOT_CARE), Map.entry("InBasket", NOT_CARE),
         Map.entry("Inventory", NOT_CARE), Map.entry("LabInstrument", NOT_CARE), Map.entry("LabInventory", NOT_CARE),
-        Map.entry("LabQcEvent", NOT_CARE), Map.entry("LabReflexRule", NOT_CARE), Map.entry("LabTestDefinition", NOT_CARE),
+        Map.entry("LabQcEvent", NOT_CARE), Map.entry("LabQcTarget", NOT_CARE), Map.entry("LabReflexRule", NOT_CARE), Map.entry("LabTestDefinition", NOT_CARE),
         Map.entry("LabTestValidationStudy", NOT_CARE), Map.entry("Me", NOT_CARE), Map.entry("MedicationCatalog", NOT_CARE),
         Map.entry("Mfa", NOT_CARE), Map.entry("MllpAllowedSender", NOT_CARE), Map.entry("Notification", NOT_CARE),
         Map.entry("OnCallSchedule", NOT_CARE), Map.entry("Organization", NOT_CARE), Map.entry("OrganizationSecurity", NOT_CARE),

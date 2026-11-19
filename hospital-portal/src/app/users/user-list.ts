@@ -34,6 +34,7 @@ import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { isStepUpRefusal, stepUpRefusalKey } from '../services/step-up';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
 
 const PATIENT_ROLE_CODES = new Set(['ROLE_PATIENT', 'PATIENT']);
 
@@ -42,6 +43,9 @@ const PHONE_PATTERN = /^\+?[\d\s.()-]{8,20}$/;
 
 /** QA D1306 (round 28): the fields the create/edit form may refuse, so a fixed one loses its mark. */
 const USER_FORM_IDS = ['firstName', 'lastName', 'username', 'email', 'phoneNumber', 'user-roles'];
+/** QA r64 (lost phone): the reset's reason field, and its minimum length (MfaResetService). */
+const MFA_RESET_REASON_IDS = ['mfa-reset-reason'];
+const MFA_RESET_REASON_MIN = 5;
 
 const MEDICAL_ROLE_CODES = new Set([
   'ROLE_DOCTOR',
@@ -169,6 +173,12 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   // Delete
   showDeleteConfirm = signal(false);
+  /** QA r64 (lost phone): the account whose two-step verification is being reset. */
+  readonly mfaResetTarget = signal<UserSummary | null>(null);
+  readonly mfaResetReason = signal('');
+  readonly mfaResetCode = signal('');
+  readonly mfaResetError = signal('');
+  readonly mfaResetting = signal(false);
   deletingUser = signal<UserSummary | null>(null);
   deleting = signal(false);
 
@@ -663,6 +673,49 @@ export class UserListComponent implements OnInit, OnDestroy {
           err?.error?.message ?? this.translate.instant('USERS.TOAST.DELETE_FAILED'),
         );
         this.deleting.set(false);
+      },
+    });
+  }
+
+  /** QA r64 (lost phone): ask why, then reset the colleague's two-step verification. */
+  openMfaReset(user: UserSummary): void {
+    this.mfaResetReason.set('');
+    this.mfaResetCode.set('');
+    this.mfaResetError.set('');
+    this.mfaResetTarget.set(user);
+  }
+
+  closeMfaReset(): void {
+    this.mfaResetTarget.set(null);
+  }
+
+  executeMfaReset(): void {
+    const user = this.mfaResetTarget();
+    if (!user || this.mfaResetting()) return;
+    const reason = this.mfaResetReason().trim();
+    if (reason.length < MFA_RESET_REASON_MIN) {
+      const message = this.translate.instant('USERS.MFA_RESET.REASON_REQUIRED');
+      refuseFields(this.host.nativeElement, MFA_RESET_REASON_IDS, MFA_RESET_REASON_IDS, message);
+      this.mfaResetError.set(message);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], MFA_RESET_REASON_IDS, '');
+    this.mfaResetting.set(true);
+    this.mfaResetError.set('');
+    this.userService.resetMfa(user.id, reason, this.mfaResetCode().trim() || null).subscribe({
+      next: (res) => {
+        this.mfaResetting.set(false);
+        this.mfaResetTarget.set(null);
+        this.toast.success(res?.message ?? this.translate.instant('USERS.MFA_RESET.DONE'));
+      },
+      error: (err: HttpErrorResponse) => {
+        this.mfaResetting.set(false);
+        this.mfaResetError.set(
+          refusalReason(err) ??
+            this.translate.instant(
+              isStepUpRefusal(err) ? stepUpRefusalKey(err) : 'USERS.MFA_RESET.FAILED',
+            ),
+        );
       },
     });
   }

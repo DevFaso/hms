@@ -12,6 +12,8 @@ import { OidcAuthService } from '../auth/oidc-auth.service';
 import { ToastService } from '../core/toast.service';
 import { CredentialHealth, ProfileService, UserProfile } from '../services/profile.service';
 import { PatientPortalService } from '../services/patient-portal.service';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { expectEmptySubmitRefusal } from '../testing/form-refusal-behaviour';
 
 const user: UserProfile = {
   id: 'u1',
@@ -66,6 +68,7 @@ describe('ProfileComponent — replacing the authenticator', () => {
   let component: ProfileComponent;
   let mfa: jasmine.SpyObj<MfaService>;
   let profiles: jasmine.SpyObj<ProfileService>;
+  let confirm: jasmine.SpyObj<ConfirmService>;
 
   async function setUp(verifiedTotp: boolean): Promise<void> {
     profiles = jasmine.createSpyObj<ProfileService>('ProfileService', [
@@ -76,7 +79,13 @@ describe('ProfileComponent — replacing the authenticator', () => {
     profiles.getUserProfile.and.returnValue(of(user));
     profiles.getCredentialHealth.and.returnValue(of(health(verifiedTotp)));
     profiles.getAssignments.and.returnValue(of([]));
-    mfa = jasmine.createSpyObj<MfaService>('MfaService', ['enroll', 'verifyEnrollment']);
+    mfa = jasmine.createSpyObj<MfaService>('MfaService', [
+      'enroll',
+      'verifyEnrollment',
+      'removeOwn',
+    ]);
+    confirm = jasmine.createSpyObj<ConfirmService>('ConfirmService', ['ask']);
+    confirm.ask.and.resolveTo(true);
     const auth = jasmine.createSpyObj<AuthService>('AuthService', [
       'getUserId',
       'getUserProfile',
@@ -99,6 +108,7 @@ describe('ProfileComponent — replacing the authenticator', () => {
         },
         { provide: AuthService, useValue: auth },
         { provide: MfaService, useValue: mfa },
+        { provide: ConfirmService, useValue: confirm },
         { provide: OidcAuthService, useValue: { authenticated: signal(false) } },
         { provide: PatientPortalService, useValue: { updateMyProfile: () => of({}) } },
       ],
@@ -244,5 +254,98 @@ describe('ProfileComponent — replacing the authenticator', () => {
     expect(component.mfaStep()).toBe('idle');
     expect(component.mfaStepUpCode).toBe('');
     expect(component.mfaReplacing()).toBeFalse();
+  });
+  // ── QA r64: the user turns two-step verification off ──
+
+  it('QA r64: turning it off asks for a current code, confirms, then sends it as the step-up', async () => {
+    await setUp(true);
+    mfa.removeOwn.and.returnValue(of({ message: 'ok' }));
+
+    (el('[data-testid="mfa-remove"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(el('[data-testid="mfa-stepup"]')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('PROFILE.MFA_REMOVE_INTRO');
+
+    component.mfaStepUpCode = ' 123456 ';
+    component.submitMfaStepUp();
+    await fixture.whenStable();
+
+    expect(confirm.ask).toHaveBeenCalled();
+    expect(mfa.removeOwn).toHaveBeenCalledOnceWith('123456');
+    expect(mfa.enroll).not.toHaveBeenCalled();
+    expect(component.mfaStep()).toBe('idle');
+  });
+
+  it('QA r64: a declined confirmation removes nothing', async () => {
+    await setUp(true);
+    confirm.ask.and.resolveTo(false);
+    component.startMfaRemoval();
+    component.mfaStepUpCode = '123456';
+
+    component.submitMfaStepUp();
+    await fixture.whenStable();
+
+    expect(mfa.removeOwn).not.toHaveBeenCalled();
+  });
+
+  it('QA r64: a refused code stays on the code field with its reason', async () => {
+    await setUp(true);
+    mfa.removeOwn.and.returnValue(throwError(() => refused('mfa.stepup.invalid')));
+    component.startMfaRemoval();
+    component.mfaStepUpCode = '000000';
+
+    component.submitMfaStepUp();
+    await fixture.whenStable();
+
+    expect(component.mfaError()).toBe('PROFILE.MFA_STEPUP_INVALID');
+    expect(component.mfaStep()).toBe('stepup');
+  });
+
+  it('QA r64: an empty code is refused on its field, never sent', async () => {
+    await setUp(true);
+    document.body.appendChild(fixture.nativeElement);
+    component.startMfaRemoval();
+    fixture.detectChanges();
+
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="mfa-stepup-submit"]',
+    });
+
+    expect(marked).toContain('mfaStepUpCode');
+    expect(mfa.removeOwn).not.toHaveBeenCalled();
+    fixture.nativeElement.remove();
+  });
+
+  // ── QA D2403: plain French, one status ──
+
+  it('QA D2403: the French security tab says « Validation en deux étapes », never MFA or TOTP', async () => {
+    await setUp(true);
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.use('fr');
+    fixture.detectChanges();
+
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Validation en deux étapes');
+    expect(text).toContain("Application d'authentification");
+    expect(text).not.toMatch(/\bMFA\b/);
+    expect(text).not.toContain('TOTP');
+  });
+
+  it('QA D2403: a set-up left unfinished reads the same in the list and the summary', async () => {
+    await setUp(true);
+    const pending = health(true);
+    pending.mfaEnrollments[0].active = false;
+    pending.mfaEnrollments[0].enabled = false;
+    pending.mfaEnrollments[0].lastVerifiedAt = null as never;
+    pending.mfaEnrolledCount = 0;
+    pending.verifiedMfaCount = 0;
+    component.credentials.set(pending);
+    fixture.detectChanges();
+
+    expect(component.mfaState()).toBe('PENDING');
+    expect(el('[data-testid="mfa-state"]')?.textContent).toContain('PROFILE.MFA_STATE_PENDING');
+    expect(fixture.nativeElement.textContent).toContain('PROFILE.MFA_SETUP_UNFINISHED');
+    expect(fixture.nativeElement.textContent).not.toContain('PROFILE.MFA_COUNTS');
   });
 });

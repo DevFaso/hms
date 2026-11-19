@@ -2,6 +2,7 @@ import type { PatientCreateRequest } from './patient.service';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import { stepUpRequestOptions } from './step-up';
 
 export interface UserSummary {
   id: string;
@@ -173,5 +174,17 @@ export class UserService {
 
   restore(id: string): Observable<void> {
     return this.http.patch<void>(`/users/${id}/restore`, {});
+  }
+
+  /**
+   * QA r64 (lost phone): reset a colleague's two-step verification. The reason is required; the
+   * administrator's own code (when they have an authenticator) goes as the step-up.
+   */
+  resetMfa(id: string, reason: string, mfaToken?: string | null): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(
+      `/users/${encodeURIComponent(id)}/mfa/reset`,
+      { reason },
+      stepUpRequestOptions(mfaToken),
+    );
   }
 }

@@ -571,7 +571,50 @@
                 >
               </div>
             }
+            @if (r.criticalCommunicatedTo) {
+              <!-- r63 D2305: who the laboratory told about this critical result, when, and the read-back -->
+              <div class="detail-field" data-testid="critical-communication">
+                <span class="field-label">{{
+                  'LAB_RESULTS.CRITICAL_COMMUNICATED' | translate
+                }}</span>
+                <span class="field-value"
+                  >{{
+                    'LAB_RESULTS.CRITICAL_COMMUNICATED_VALUE'
+                      | translate
+                        : {
+                            to: r.criticalCommunicatedTo,
+                            readBack: r.criticalCommunicationReadBack || '—',
+                          }
+                  }}
+                  —
+                  {{
+                    r.criticalCommunicatedAt
+                      ? (r.criticalCommunicatedAt | serverTime | dateTime)
+                      : '—'
+                  }}
+                  — {{ r.criticalCommunicatedBy || '—' }}</span
+                >
+              </div>
+            }
+            @if (r.qcOverrideReason) {
+              <!-- r63 D2304: released while the test's QC was rejected, with the reason -->
+              <div class="detail-field" data-testid="qc-override">
+                <span class="field-label">{{ 'LAB_RESULTS.QC_OVERRIDE' | translate }}</span>
+                {{ ' '
+                }}<span class="field-value"
+                  >{{ r.qcOverrideReason }} —
+                  {{ r.qcOverrideAt ? (r.qcOverrideAt | serverTime | dateTime) : '—' }}</span
+                >
+              </div>
+            }
           </div>
+
+          @if (r.components?.length) {
+            <app-lab-panel-values
+              [components]="r.components"
+              [corrected]="!!r.supersedesResultId"
+            />
+          }
 
           <app-result-range [result]="r" />
 
@@ -781,50 +824,114 @@
             </div>
           </div>
         }
-        <div class="form-row">
-          <div class="field">
-            <label for="lr-resultValue">{{ 'LAB_RESULTS.VALUE' | translate }} *</label>
-            <input
-              id="lr-resultValue"
-              type="text"
-              maxlength="2048"
-              [(ngModel)]="form.resultValue"
-              [placeholder]="'LAB_RESULTS.VALUE_PLACEHOLDER' | translate"
-              required
-              [attr.aria-describedby]="valueHasComparator() ? 'lr-resultValue-hint' : null"
-            />
-            @if (valueHasComparator()) {
-              <!-- QA D1394: the dialog warned about other units but not about comparators -->
-              <small
-                id="lr-resultValue-hint"
-                class="field-hint"
-                role="note"
-                data-testid="comparator-hint"
-                >{{ 'LAB_RESULTS.COMPARATOR_HINT' | translate }}</small
+        @if (isPanelEntry()) {
+          <!-- r63 (NFS panels): one value per component, entered and released together -->
+          <fieldset class="panel-entry" data-testid="panel-entry">
+            <legend>{{ 'LAB_RESULTS.PANEL_LEGEND' | translate }}</legend>
+            <p class="field-hint">{{ 'LAB_RESULTS.PANEL_HINT' | translate }}</p>
+            <div class="panel-grid">
+              @for (c of panelComponents(); track c.code) {
+                <div class="field panel-field">
+                  <label [for]="'lr-comp-' + c.code"
+                    >{{ c.name }} <span class="panel-code">({{ c.code }})</span></label
+                  >
+                  <div class="panel-input">
+                    <input
+                      [id]="'lr-comp-' + c.code"
+                      type="text"
+                      inputmode="decimal"
+                      maxlength="255"
+                      [(ngModel)]="panelValues[c.code]"
+                      [attr.aria-describedby]="
+                        componentCritical(c) ? 'lr-comp-' + c.code + '-critical' : null
+                      "
+                    />
+                    @if (c.unit) {
+                      <span class="panel-unit">{{ c.unit }}</span>
+                    }
+                  </div>
+                  @if (componentCritical(c); as verdict) {
+                    <small
+                      [id]="'lr-comp-' + c.code + '-critical'"
+                      class="field-hint critical-entry"
+                      role="alert"
+                      data-testid="component-critical-warning"
+                      >{{ 'LAB_RESULTS.CRITICAL_AT_ENTRY.' + verdict | translate }}</small
+                    >
+                  }
+                </div>
+              }
+            </div>
+          </fieldset>
+        } @else {
+          <div class="form-row">
+            <div class="field">
+              <label for="lr-resultValue">{{ 'LAB_RESULTS.VALUE' | translate }} *</label>
+              <input
+                id="lr-resultValue"
+                type="text"
+                maxlength="2048"
+                [(ngModel)]="form.resultValue"
+                [placeholder]="'LAB_RESULTS.VALUE_PLACEHOLDER' | translate"
+                required
+                [attr.aria-describedby]="
+                  singleValueCritical()
+                    ? 'lr-resultValue-critical'
+                    : valueHasComparator()
+                      ? 'lr-resultValue-hint'
+                      : null
+                "
+              />
+              @if (singleValueCritical(); as verdict) {
+                <!-- r63 D2312: the value is beyond the test's critical limits -->
+                <small
+                  id="lr-resultValue-critical"
+                  class="field-hint critical-entry"
+                  role="alert"
+                  data-testid="critical-entry-warning"
+                  >{{ 'LAB_RESULTS.CRITICAL_AT_ENTRY.' + verdict | translate }}</small
+                >
+              }
+              @if (valueHasComparator()) {
+                <!-- QA D1394: the dialog warned about other units but not about comparators -->
+                {{ ' '
+                }}<small
+                  id="lr-resultValue-hint"
+                  class="field-hint"
+                  role="note"
+                  data-testid="comparator-hint"
+                  >{{ 'LAB_RESULTS.COMPARATOR_HINT' | translate }}</small
+                >
+              }
+            </div>
+            <div class="field">
+              <label for="lr-resultUnit"
+                >{{ 'LAB_RESULTS.UNIT' | translate }}{{ selectedTestUnit() ? ' *' : '' }}</label
               >
-            }
+              <input
+                id="lr-resultUnit"
+                type="text"
+                maxlength="50"
+                [(ngModel)]="form.resultUnit"
+                [placeholder]="selectedTestUnit() || ('LAB_RESULTS.UNIT_PLACEHOLDER' | translate)"
+                [required]="!!selectedTestUnit()"
+                aria-describedby="lr-resultUnit-hint"
+              />
+              @if (selectedTestUnit(); as testUnit) {
+                <!-- QA D1095 / D1092: the unit the test's ranges grade; another unit may not be graded -->
+                <small id="lr-resultUnit-hint" class="field-hint">{{
+                  'LAB_RESULTS.UNIT_FROM_TEST' | translate: { unit: testUnit }
+                }}</small>
+              }
+            </div>
           </div>
-          <div class="field">
-            <label for="lr-resultUnit"
-              >{{ 'LAB_RESULTS.UNIT' | translate }}{{ selectedTestUnit() ? ' *' : '' }}</label
-            >
-            <input
-              id="lr-resultUnit"
-              type="text"
-              maxlength="50"
-              [(ngModel)]="form.resultUnit"
-              [placeholder]="selectedTestUnit() || ('LAB_RESULTS.UNIT_PLACEHOLDER' | translate)"
-              [required]="!!selectedTestUnit()"
-              aria-describedby="lr-resultUnit-hint"
-            />
-            @if (selectedTestUnit(); as testUnit) {
-              <!-- QA D1095 / D1092: the unit the test's ranges grade; another unit may not be graded -->
-              <small id="lr-resultUnit-hint" class="field-hint">{{
-                'LAB_RESULTS.UNIT_FROM_TEST' | translate: { unit: testUnit }
-              }}</small>
-            }
-          </div>
-        </div>
+        }
+        @if (anyCriticalEntry()) {
+          <p class="critical-entry-banner" role="note" data-testid="critical-entry-banner">
+            <span class="material-symbols-outlined" aria-hidden="true">priority_high</span>
+            {{ 'LAB_RESULTS.CRITICAL_AT_ENTRY.BANNER' | translate }}
+          </p>
+        }
         <div class="form-row">
           <div class="field">
             <label for="lr-resultDate">{{ 'LAB_RESULTS.RESULT_DATE' | translate }} *</label>
@@ -857,7 +964,9 @@
           (click)="submitForm()"
           [disabled]="saving()"
           [appSubmitGuard]="
-            (!editing() && !form.labOrderId) || !form.resultValue || !form.resultDate
+            (!editing() && !form.labOrderId) ||
+            (isPanelEntry() ? !hasPanelValue() : !form.resultValue) ||
+            !form.resultDate
           "
           [submitGuardFields]="['lr-orderId', 'lr-resultValue', 'lr-resultDate']"
         >

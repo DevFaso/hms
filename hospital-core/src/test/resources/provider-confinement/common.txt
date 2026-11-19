@@ -6,6 +6,7 @@
 # (POST /users/admin-register) carry their reason in CommonProviderConfinement.
 # POST /notifications (create for any recipient) is excluded from the /notifications prefix.
 # GET /users/{id} is reachable for the caller's OWN id only (an own-id entry).
+DELETE /auth/mfa
 GET /auth/bootstrap-status
 GET /auth/credentials/me
 GET /auth/csrf-token

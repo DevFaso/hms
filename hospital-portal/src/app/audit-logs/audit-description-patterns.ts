@@ -1817,6 +1817,26 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: [],
   },
   {
+    key: 'AUDIT.DESC.MFA_RESET_BY_ADMIN',
+    re: /^Two-step verification reset by an administrator: (.*)$/,
+    params: ['reason'],
+  },
+  {
+    key: 'AUDIT.DESC.MFA_RESET_REFUSED',
+    re: /^Two-step verification reset refused: the caller may not administer this account$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.MFA_REMOVED_BY_USER',
+    re: /^Two-step verification removed by the user$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PATIENT_CHANNEL_CHOICES',
+    re: /^Patient channel choices recorded at the desk: (.+)$/,
+    params: ['changes'],
+  },
+  {
     key: 'AUDIT.DESC.STATUS_WAS',
     re: /^(.+) \(was ([A-Z_]+)\)$/,
     params: ['what', 'previous'],

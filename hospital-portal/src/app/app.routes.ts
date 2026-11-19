@@ -777,7 +777,11 @@ export const routes: Routes = [
         canActivate: [RoleGuard],
         data: {
           // ADMIN removed per role audit C1 — the QC backend rejects it.
+          // r63 D2304: the technician runs and records the daily controls, so
+          // the bench roles reach the dashboard (the QC endpoints admit them).
           roles: [
+            'ROLE_LAB_TECHNICIAN',
+            'ROLE_LAB_SCIENTIST',
             'ROLE_LAB_MANAGER',
             'ROLE_LAB_DIRECTOR',
             'ROLE_QUALITY_MANAGER',

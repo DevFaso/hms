@@ -248,6 +248,85 @@
                   }
           }}
         </p>
+        @if (target.components?.length) {
+          <!-- r63 (NFS panels): every component value is released together -->
+          <app-lab-panel-values
+            [components]="target.components"
+            [corrected]="!!target.supersedesResultId"
+          />
+        }
+        @if (isCritical(target)) {
+          <!-- r63 D2305: a critical result is released with the laboratory's call recorded -->
+          <div
+            class="critical-release"
+            role="group"
+            data-testid="release-critical-block"
+            [attr.aria-label]="'LAB_RELEASE.CRITICAL_TITLE' | translate"
+          >
+            <p class="critical-release-title">
+              <span class="material-symbols-outlined" aria-hidden="true">priority_high</span>
+              {{ 'LAB_RELEASE.CRITICAL_TITLE' | translate }}
+            </p>
+            <p class="critical-release-hint">{{ 'LAB_RELEASE.CRITICAL_HINT' | translate }}</p>
+            <div class="critical-release-fields">
+              <label class="release-field">
+                <span>{{ 'LAB_RELEASE.CRITICAL_TO' | translate }} *</span>
+                <input
+                  type="text"
+                  maxlength="255"
+                  required
+                  id="release-critical-to"
+                  data-testid="release-critical-to"
+                  [value]="criticalTo()"
+                  (input)="criticalTo.set(inputValue($event))"
+                  [placeholder]="'LAB_RELEASE.CRITICAL_TO_PLACEHOLDER' | translate"
+                />
+              </label>
+              <label class="release-field">
+                <span>{{ 'LAB_RELEASE.CRITICAL_AT' | translate }} *</span>
+                <input
+                  type="datetime-local"
+                  required
+                  id="release-critical-at"
+                  data-testid="release-critical-at"
+                  [value]="criticalAt"
+                  (input)="criticalAt = inputValue($event)"
+                />
+              </label>
+              <label class="release-field">
+                <span>{{ 'LAB_RELEASE.CRITICAL_READ_BACK' | translate }} *</span>
+                <input
+                  type="text"
+                  maxlength="255"
+                  required
+                  id="release-critical-read-back"
+                  data-testid="release-critical-read-back"
+                  [value]="criticalReadBack()"
+                  (input)="criticalReadBack.set(inputValue($event))"
+                  [placeholder]="'LAB_RELEASE.CRITICAL_READ_BACK_PLACEHOLDER' | translate"
+                />
+              </label>
+            </div>
+          </div>
+        }
+        @if (qcOverrideNotice(); as notice) {
+          <!-- r63 D2304: the test's latest QC run was rejected; a release needs a documented reason -->
+          <div class="qc-override" role="group" data-testid="release-qc-override">
+            <p class="modal-error" role="alert">{{ notice }}</p>
+            <label class="release-field">
+              <span>{{ 'LAB_RELEASE.QC_OVERRIDE_REASON' | translate }} *</span>
+              <textarea
+                rows="3"
+                maxlength="2048"
+                required
+                id="release-qc-override-reason"
+                data-testid="release-qc-override-reason"
+                [value]="qcOverrideReason()"
+                (input)="qcOverrideReason.set(inputValue($event))"
+              ></textarea>
+            </label>
+          </div>
+        }
         @if (target.supersedesResultId) {
           <!-- QA D1016: validating a correction replaces a value already validated -->
           <p class="self-release-note" role="note" data-testid="release-correction-note">
@@ -292,6 +371,8 @@
             class="btn-primary"
             (click)="confirmRelease()"
             [disabled]="releasingId() !== null"
+            [appSubmitGuard]="criticalCommunicationMissing(target) || qcOverrideMissing()"
+            submitGuardRequired
             data-testid="release-confirm-submit"
           >
             @if (releasingId()) {

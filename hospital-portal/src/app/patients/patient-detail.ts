@@ -49,6 +49,7 @@ import { FluidBalanceTabComponent } from './fluid-balance/fluid-balance-tab.comp
 import { MicroTabComponent } from './micro/micro-tab.component';
 import { PatientPhotoComponent } from './patient-photo/patient-photo.component';
 import { PrintLabelService } from '../services/print-label.service';
+import { PatientChannelPreferencesComponent } from './channel-preferences/patient-channel-preferences.component';
 import { CoverageTabComponent } from './coverage-tab/coverage-tab.component';
 import { DocumentsTabComponent } from './documents-tab/documents-tab.component';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
@@ -121,6 +122,7 @@ type TabKey =
     MicroTabComponent,
     PatientPhotoComponent,
     CoverageTabComponent,
+    PatientChannelPreferencesComponent,
     DocumentsTabComponent,
     HospitalScopeChipComponent,
     MedicalHistoryTabComponent,

@@ -321,6 +321,10 @@ public enum AuditEventType {
     STILLBIRTH_CERTIFICATE_CONFLICT,
     /** QA D1802 (provisional): that contradiction ended (certificate amended or voided, or outcome corrected back). */
     STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED,
+    /** QA r64 (lost phone): a user's two-step verification reset by an administrator, or removed by the user. */
+    MFA_RESET,
+    /** QA D2203: a patient's SMS / e-mail choices recorded by the desk. */
+    PATIENT_CHANNEL_PREFERENCES_UPDATED,
     /** QA D2464 (r64, V313): a key image withdrawn after signing, with a reason; the file is kept. */
     IMAGING_IMAGE_WITHDRAWN,
     /** QA D2466 (r64): a key image's caption corrected after upload. */

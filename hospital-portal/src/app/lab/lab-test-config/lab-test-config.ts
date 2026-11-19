@@ -161,6 +161,55 @@ export class LabTestConfigComponent implements OnInit {
       isActive: true,
       assignmentId: this.activeAssignmentId || undefined,
       referenceRanges: [],
+      components: [],
+    };
+  }
+
+  // ── r63 (NFS panels): a panel test's components ─────────────────────
+
+  addComponent(): void {
+    this.defForm.components = [
+      ...(this.defForm.components ?? []),
+      { code: '', name: '', unit: '', referenceRanges: [this.emptyComponentRange()] },
+    ];
+  }
+
+  removeComponent(index: number): void {
+    this.defForm.components = (this.defForm.components ?? []).filter((_, i) => i !== index);
+  }
+
+  addComponentRange(index: number): void {
+    const component = this.defForm.components?.[index];
+    if (component) {
+      component.referenceRanges = [
+        ...(component.referenceRanges ?? []),
+        this.emptyComponentRange(),
+      ];
+    }
+  }
+
+  removeComponentRange(index: number, rangeIndex: number): void {
+    const component = this.defForm.components?.[index];
+    if (component) {
+      component.referenceRanges = (component.referenceRanges ?? []).filter(
+        (_, i) => i !== rangeIndex,
+      );
+    }
+  }
+
+  private emptyComponentRange(): LabTestReferenceRange {
+    return {
+      minValue: null,
+      maxValue: null,
+      unit: null,
+      ageMin: null,
+      ageMax: null,
+      gender: 'ALL',
+      notes: null,
+      criticalLow: null,
+      criticalHigh: null,
+      ageUnit: 'YEARS',
+      source: null,
     };
   }
 
@@ -334,6 +383,11 @@ export class LabTestConfigComponent implements OnInit {
       isActive: def.isActive,
       assignmentId: this.activeAssignmentId || undefined,
       referenceRanges: def.referenceRanges ? def.referenceRanges.map((r) => ({ ...r })) : [],
+      // r63: each component and its ranges are copied, so an edit never mutates the list row.
+      components: (def.components ?? []).map((c) => ({
+        ...c,
+        referenceRanges: (c.referenceRanges ?? []).map((r) => ({ ...r })),
+      })),
     };
     this.editingDefCrud.set(true);
     this.editingDefId.set(def.id);

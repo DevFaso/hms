@@ -1399,6 +1399,25 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/lab-release-worklist',
       });
     }
+    // r63 D2304: the bench records the daily QC, so the technician and the
+    // scientist reach the QC dashboard (not the ops dashboard).
+    if (
+      this.hasAnyRole(['ROLE_LAB_TECHNICIAN', 'ROLE_LAB_SCIENTIST']) &&
+      !this.hasAnyRole([
+        'ROLE_LAB_MANAGER',
+        'ROLE_LAB_DIRECTOR',
+        'ROLE_QUALITY_MANAGER',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push({
+        icon: 'monitoring',
+        label: 'QC Dashboard',
+        translationKey: 'NAV.QC_DASHBOARD',
+        route: '/lab-qc-dashboard',
+      });
+    }
     if (
       // ADMIN removed per role audit C1 — the lab dashboards' backends
       // reject the role on every call.

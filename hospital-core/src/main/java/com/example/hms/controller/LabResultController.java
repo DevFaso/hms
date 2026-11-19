@@ -160,9 +160,14 @@ public class LabResultController {
             @Parameter(description = "QA D1092: true confirms that the caller reviewed a result no reference "
                 + "range can grade (its unit matches none). Without it such a release answers 409.")
             @RequestParam(name = "ungradedConfirmed", defaultValue = "false") boolean ungradedConfirmed,
+            @Parameter(description = "r63: for a CRITICAL result, who was told, when and the read-back (required); "
+                + "while the test's latest QC run is rejected, the override reason (required then).")
+            @jakarta.validation.Valid
+            @org.springframework.web.bind.annotation.RequestBody(required = false)
+            com.example.hms.payload.dto.LabResultReleaseRequestDTO release,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         return ResponseEntity.ok(auditLabResult(com.example.hms.enums.AuditEventType.LAB_RESULT_RELEASED,
-            labResultService.releaseLabResult(id, selfRelease, ungradedConfirmed, locale)));
+            labResultService.releaseLabResult(id, selfRelease, ungradedConfirmed, release, locale)));
     }
 
     @PostMapping("/{id}/sign")
