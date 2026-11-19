@@ -81,6 +81,9 @@
       <form
         class="payer-shares-reject"
         data-testid="payer-share-reject-form"
+        appInlineSubForm
+        #rejectForm="inlineSubForm"
+        (dismissed)="closeReject()"
         (ngSubmit)="confirmReject()"
       >
         <label for="payer-share-reject-reason"
@@ -95,11 +98,11 @@
           aria-describedby="payer-share-reject-hint"
           [ngModel]="rejectReason()"
           (ngModelChange)="rejectReason.set($event)"
-          (keydown.escape)="closeReject()"
         ></textarea>
         <p id="payer-share-reject-hint" class="payer-shares-hint">
           {{ 'BILLING.PAYER_SHARES.NO_CARD_NOTICE' | translate }}
         </p>
+        <app-inline-discard-ask [form]="rejectForm" />
         <div class="payer-shares-reject-actions">
           <button type="button" class="btn-secondary btn-sm" (click)="closeReject()">
             {{ 'COMMON.CANCEL' | translate }}

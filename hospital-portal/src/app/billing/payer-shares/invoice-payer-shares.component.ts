@@ -30,6 +30,8 @@ import { refusalReason } from '../../shared/refusal-reason';
 import { containsCardNumber } from '../../shared/mobile-money-operator';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { markServerFieldErrors } from '../../shared/forms/server-field-errors';
+import { InlineSubFormDirective } from '../../shared/a11y/inline-sub-form.directive';
+import { InlineDiscardAskComponent } from '../../shared/a11y/inline-discard-ask.component';
 
 /** The rejection reason's field id (a refusal marks it). */
 export const PAYER_SHARE_REASON_ID = 'payer-share-reject-reason';
@@ -46,7 +48,15 @@ export const PAYER_SHARE_REASON_ID = 'payer-share-reject-reason';
 @Component({
   selector: 'app-invoice-payer-shares',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, CfaPipe, KeyLabelPipe],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    CfaPipe,
+    KeyLabelPipe,
+    InlineSubFormDirective,
+    InlineDiscardAskComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './invoice-payer-shares.component.html',
   styleUrl: './invoice-payer-shares.component.scss',
