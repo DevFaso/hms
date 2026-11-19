@@ -222,7 +222,9 @@ public class MeController {
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON')")
     public ResponseEntity<ApiResponseWrapper<CriticalStripDTO>> getCriticalStrip(Authentication auth) {
         UUID userId = resolveUserId(auth);
-        CriticalStripDTO strip = doctorWorklistService.getCriticalStrip(userId);
+        // QA D2261: the acting hospital when one is pinned; no refusal here, the strip is the caller's own.
+        UUID hospitalId = actingScopeResolver.current() instanceof ActingScope.Pinned pinned ? pinned.hospitalId() : null;
+        CriticalStripDTO strip = doctorWorklistService.getCriticalStrip(userId, hospitalId);
         return ResponseEntity.ok(ApiResponseWrapper.success(strip));
     }
 

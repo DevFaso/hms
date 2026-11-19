@@ -754,7 +754,7 @@ class MeControllerTest {
                 .unsignedNotesCount(4)
                 .pendingOrderReviewCount(5)
                 .build();
-        when(doctorWorklistService.getCriticalStrip(testUserId)).thenReturn(strip);
+        when(doctorWorklistService.getCriticalStrip(org.mockito.ArgumentMatchers.eq(testUserId), org.mockito.ArgumentMatchers.any())).thenReturn(strip);
 
         ResponseEntity<ApiResponseWrapper<CriticalStripDTO>> response = controller.getCriticalStrip(doctorAuth);
 
@@ -762,7 +762,7 @@ class MeControllerTest {
         ApiResponseWrapper<CriticalStripDTO> body = requireBody(response);
         assertEquals(2, body.getData().getCriticalLabsCount());
         assertEquals(3, body.getData().getPendingConsultsCount());
-        verify(doctorWorklistService).getCriticalStrip(testUserId);
+        verify(doctorWorklistService).getCriticalStrip(org.mockito.ArgumentMatchers.eq(testUserId), org.mockito.ArgumentMatchers.any());
     }
 
     // ========== GET /api/me/worklist ==========

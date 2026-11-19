@@ -513,6 +513,11 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                 .resultedAt(result.getResultDate())
                 .orderingContext(order.getClinicalIndication())
                 .corrected(com.example.hms.service.lab.LabResultCorrections.isCorrection(result))
+                // QA D2263: what the in-basket needs to act on the row and to say where it stands.
+                .labOrderId(order.getId())
+                .acknowledged(result.isAcknowledged())
+                .readBackRequired(result.getCriticalNotifiedAt() != null && result.getCriticalReadBackAt() == null)
+                .readBackAt(result.getCriticalReadBackAt())
                 .build();
     }
 

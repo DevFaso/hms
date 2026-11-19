@@ -31,4 +31,13 @@ public class DoctorResultQueueItemDTO {
     private String orderingContext;
     /** QA D1016: the result corrects a released value the clinician may already have acted on. */
     private boolean corrected;
+    /**
+     * QA D2263 (r63): the row's state and links, so the in-basket can act on it: the order it answers
+     * (to order a follow-up from), whether it was acknowledged, and whether a critical value still
+     * waits for its read-back (the acknowledge is refused until then) or when it was read back.
+     */
+    private UUID labOrderId;
+    private boolean acknowledged;
+    private boolean readBackRequired;
+    private LocalDateTime readBackAt;
 }

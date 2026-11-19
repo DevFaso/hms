@@ -3,7 +3,6 @@ package com.example.hms.service;
 import com.example.hms.enums.ConsultationStatus;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.LabOrderStatus;
-import com.example.hms.enums.SignatureStatus;
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.model.Admission;
 import com.example.hms.model.Appointment;
@@ -16,7 +15,6 @@ import com.example.hms.model.PatientVitalSign;
 import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.AppointmentRepository;
 import com.example.hms.repository.ConsultationRepository;
-import com.example.hms.repository.DigitalSignatureRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabResultRepository;
@@ -65,7 +63,7 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
     private final ConsultationRepository consultationRepository;
     private final LabOrderRepository labOrderRepository;
     private final LabResultRepository labResultRepository;
-    private final DigitalSignatureRepository digitalSignatureRepository;
+    private final com.example.hms.repository.EncounterNoteRepository encounterNoteRepository;
     private final PatientVitalSignRepository patientVitalSignRepository;
     private final AdmissionRepository admissionRepository;
 
@@ -102,6 +100,11 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
 
     @Override
     public CriticalStripDTO getCriticalStrip(UUID userId) {
+        return getCriticalStrip(userId, null);
+    }
+
+    @Override
+    public CriticalStripDTO getCriticalStrip(UUID userId, UUID hospitalId) {
         log.info("Building critical strip for user: {}", userId);
         Optional<Staff> staffOpt = staffRepository.findFirstByUserIdOrderByCreatedAtAsc(userId);
         if (staffOpt.isEmpty()) {
@@ -139,8 +142,14 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
             log.debug("Consultation query unavailable: {}", e.getMessage());
         }
 
-        // Unsigned notes / documents to sign
-        long unsignedNotes = digitalSignatureRepository.countBySignedBy_IdAndStatus(staffId, SignatureStatus.PENDING);
+        // QA D2261 (r63): the doctor's own visit notes still waiting for their signature, as the
+        // in-basket's "note to sign" items count them. The tile used to count digital-signature
+        // requests, so it read 0 while eight closed visits had unsigned notes.
+        long unsignedNotes = (hospitalId != null
+                ? encounterNoteRepository.findUnsignedByAuthorAtHospital(userId, hospitalId)
+                : encounterNoteRepository.findUnsignedByAuthor(userId)).stream()
+                .filter(com.example.hms.model.encounter.EncounterNote::awaitsSignature)
+                .count();
 
         // Orders still with the laboratory, in every state the lifecycle
         // actually produces (see AWAITING_LAB), with NO recency floor: the

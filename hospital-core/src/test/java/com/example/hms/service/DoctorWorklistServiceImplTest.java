@@ -7,7 +7,6 @@ import com.example.hms.enums.ConsultationUrgency;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.EncounterUrgency;
 import com.example.hms.enums.LabOrderStatus;
-import com.example.hms.enums.SignatureStatus;
 import com.example.hms.model.Admission;
 import com.example.hms.model.Appointment;
 import com.example.hms.model.Consultation;
@@ -23,7 +22,6 @@ import com.example.hms.payload.dto.clinical.DoctorWorklistItemDTO;
 import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.AppointmentRepository;
 import com.example.hms.repository.ConsultationRepository;
-import com.example.hms.repository.DigitalSignatureRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabResultRepository;
@@ -54,6 +52,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -67,7 +66,7 @@ class DoctorWorklistServiceImplTest {
     @Mock private ConsultationRepository consultationRepository;
     @Mock private LabOrderRepository labOrderRepository;
     @Mock private LabResultRepository labResultRepository;
-    @Mock private DigitalSignatureRepository digitalSignatureRepository;
+    @Mock private com.example.hms.repository.EncounterNoteRepository encounterNoteRepository;
     @Mock private PatientVitalSignRepository patientVitalSignRepository;
     @Mock private AdmissionRepository admissionRepository;
 
@@ -155,8 +154,17 @@ class DoctorWorklistServiceImplTest {
         when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
                 .thenReturn(List.of(mock(com.example.hms.model.Consultation.class), mock(com.example.hms.model.Consultation.class)));
 
-        // Unsigned notes
-        when(digitalSignatureRepository.countBySignedBy_IdAndStatus(staffId, SignatureStatus.PENDING)).thenReturn(3L);
+        // QA D2261: unsigned notes are the doctor's own visit notes awaiting signature; a blank
+        // shell is not one.
+        com.example.hms.model.encounter.EncounterNote written = new com.example.hms.model.encounter.EncounterNote();
+        written.setAssessment("Pneumonie");
+        com.example.hms.model.encounter.EncounterNote written2 = new com.example.hms.model.encounter.EncounterNote();
+        written2.setPlan("Amoxicilline");
+        com.example.hms.model.encounter.EncounterNote written3 = new com.example.hms.model.encounter.EncounterNote();
+        written3.setSubjective("Toux");
+        com.example.hms.model.encounter.EncounterNote blank = new com.example.hms.model.encounter.EncounterNote();
+        when(encounterNoteRepository.findUnsignedByAuthor(userId))
+                .thenReturn(List.of(written, written2, written3, blank));
 
         // Orders still with the lab: one count over every state the lifecycle
         // produces, not PENDING + IN_PROGRESS (which it barely sets any more).
@@ -170,6 +178,19 @@ class DoctorWorklistServiceImplTest {
         assertEquals(3, result.getUnsignedNotesCount());
         assertEquals(3, result.getPendingOrderReviewCount());
         assertEquals(5, result.getActiveSafetyAlertsCount()); // mirrors criticalLabs
+    }
+
+    @Test
+    void getCriticalStrip_unsignedNotesAreCountedAtTheActingHospital_D2261() {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(UUID.randomUUID()));
+        com.example.hms.model.encounter.EncounterNote written = new com.example.hms.model.encounter.EncounterNote();
+        written.setAssessment("Paludisme");
+        when(encounterNoteRepository.findUnsignedByAuthorAtHospital(userId, hospitalId)).thenReturn(List.of(written));
+
+        assertEquals(1, service.getCriticalStrip(userId, hospitalId).getUnsignedNotesCount());
+        verify(encounterNoteRepository, never()).findUnsignedByAuthor(any());
     }
 
     @Test
@@ -188,7 +209,6 @@ class DoctorWorklistServiceImplTest {
                 .thenReturn(Collections.emptyList());
         when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
                 .thenReturn(Collections.emptyList());
-        when(digitalSignatureRepository.countBySignedBy_IdAndStatus(staffId, SignatureStatus.PENDING)).thenReturn(0L);
 
         // Bracket the call rather than measuring a duration between two
         // LocalDateTimes (Sonar java:S6877 — a duration across zone-less
@@ -227,7 +247,6 @@ class DoctorWorklistServiceImplTest {
                 .thenReturn(Collections.emptyList());
         when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
                 .thenReturn(Collections.emptyList());
-        when(digitalSignatureRepository.countBySignedBy_IdAndStatus(staffId, SignatureStatus.PENDING)).thenReturn(0L);
 
         CriticalStripDTO result = service.getCriticalStrip(userId);
 
@@ -259,7 +278,6 @@ class DoctorWorklistServiceImplTest {
                 .thenReturn(Collections.emptyList());
         when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
                 .thenThrow(new RuntimeException("DB error"));
-        when(digitalSignatureRepository.countBySignedBy_IdAndStatus(staffId, SignatureStatus.PENDING)).thenReturn(0L);
 
         CriticalStripDTO result = service.getCriticalStrip(userId);
 
@@ -1098,7 +1116,6 @@ class DoctorWorklistServiceImplTest {
 
         when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
                 .thenReturn(Collections.emptyList());
-        when(digitalSignatureRepository.countBySignedBy_IdAndStatus(staffId, SignatureStatus.PENDING)).thenReturn(0L);
 
         CriticalStripDTO result = service.getCriticalStrip(userId);
 
