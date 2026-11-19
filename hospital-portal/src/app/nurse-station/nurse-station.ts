@@ -180,6 +180,63 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   private readonly auth = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly roleContext = inject(RoleContextService);
+  /** Administrative oversight never substitutes for a held clinical role. */
+  canDocumentCare(): boolean {
+    return this.roleContext.hasAnyActiveRole(['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR']);
+  }
+
+  canCreateNursing(): boolean {
+    return this.roleContext.hasAnyActiveRole(['ROLE_NURSE', 'ROLE_MIDWIFE']);
+  }
+
+  readonly oversightOnly = computed(
+    () => this.roleContext.isSuperAdmin() && !this.canDocumentCare(),
+  );
+  readonly boardDepartment = signal('');
+  readonly boardClinician = signal('');
+  readonly boardView = signal<'cards' | 'table'>('cards');
+  readonly boardDepartments = computed(() =>
+    [
+      ...new Set(
+        this.workboard()
+          .map((p) => p.departmentName)
+          .filter(Boolean),
+      ),
+    ].sort(),
+  );
+  readonly boardClinicians = computed(() =>
+    [
+      ...new Set(
+        this.workboard()
+          .map((p) => p.attendingDoctor)
+          .filter(Boolean),
+      ),
+    ].sort(),
+  );
+  readonly visibleWorkboard = computed(() => {
+    const term = this.searchTerm().trim().toLocaleLowerCase();
+    return this.workboard().filter(
+      (p) =>
+        (!this.boardDepartment() || p.departmentName === this.boardDepartment()) &&
+        (!this.boardClinician() || p.attendingDoctor === this.boardClinician()) &&
+        (!term ||
+          [p.patientName, p.mrn, p.roomBed, p.departmentName, p.attendingDoctor].some((value) =>
+            value?.toLocaleLowerCase().includes(term),
+          )),
+    );
+  });
+
+  clearBoardFilters(): void {
+    this.searchTerm.set('');
+    this.boardDepartment.set('');
+    this.boardClinician.set('');
+  }
+
+  showOverdueDoses(): void {
+    this.setSection('medications');
+    this.overdueOnly.set(true);
+  }
+
   private fastRequest = 0;
   private slowRequest = 0;
   readonly searchTerm = signal('');
@@ -259,7 +316,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   summary = signal<NurseDashboardSummary | null>(null);
   private pendingLoads = signal(0);
   loading = computed(() => this.pendingLoads() > 0);
-  filterMode = signal<FilterMode>('me');
+  filterMode = signal<FilterMode>(this.roleContext.isSuperAdmin() ? 'all' : 'me');
   lastRefreshed = signal<Date | null>(null);
 
   /* MVP 12 signals */
@@ -561,9 +618,11 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   /* ── Filter ────────────────────────────────────────────── */
 
   setFilter(mode: FilterMode): void {
+    if (this.oversightOnly() && mode !== 'all') return;
     if (this.filterMode() !== mode) {
       this.filterMode.set(mode);
       this.clearTaskFilters();
+      this.clearBoardFilters();
       this.loadAll();
     }
   }
@@ -620,6 +679,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
    * can only fail.
    */
   administerMedication(taskId: string): void {
+    if (!this.canDocumentCare()) return;
     this.reasonPrompt.set({ taskId, action: 'GIVEN' });
     this.reasonText.set('');
     this.witnessUserId.set(null);
@@ -659,6 +719,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   }
 
   promptHoldRefuse(taskId: string, action: 'HELD' | 'REFUSED'): void {
+    if (!this.canDocumentCare()) return;
     this.reasonPrompt.set({ taskId, action });
     this.reasonText.set('');
   }
@@ -699,6 +760,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   }
 
   confirmHoldRefuse(): void {
+    if (!this.canDocumentCare()) return;
     const prompt = this.reasonPrompt();
     if (!prompt) return;
     const reason = this.reasonText().trim();
@@ -773,6 +835,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
 
   /** QA D1210: the same dose again, with the nurse's reason for giving it early. */
   confirmEarlyDose(reason: string): void {
+    if (!this.canDocumentCare()) return;
     const early = this.earlyDose();
     if (!early || this.actionInProgress()) return;
     this.sendAdministration(early.prompt, { ...early.payload, earlyDoseReason: reason });
@@ -848,6 +911,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   /* ── Vitals: open inline capture dialog ────────────────── */
 
   recordVitals(patientId: string, patientName?: string): void {
+    if (!this.canDocumentCare()) return;
     if (!patientId) return;
     // QA D530: the modal and the toast named "Patient" when the row had no
     // name passed; the due-vitals list now passes it, and the fallback is
@@ -966,6 +1030,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   }
 
   submitVitals(): void {
+    if (!this.canDocumentCare()) return;
     const target = this.vitalsCaptureFor();
     if (!target) return;
     // QA D1043: the oxygen box is a yes/no the nurse answers by leaving it
@@ -1087,6 +1152,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   /* ── Handoffs: create + complete ───────────────────────── */
 
   openHandoffCreate(): void {
+    if (!this.canCreateNursing()) return;
     this.handoffForm.set({});
     this.handoffPatient.set(null);
     this.handoffCreateOpen.set(true);
@@ -1116,6 +1182,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   }
 
   submitCreateHandoff(): void {
+    if (!this.canCreateNursing()) return;
     const form = this.handoffForm();
     if (!form.patientId || !form.direction?.trim()) {
       this.toast.error(this.translate.instant('NURSE.TOAST.HANDOFF_REQUIRED'));
@@ -1179,10 +1246,11 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
    * server decides and says so per row); the author is never offered it.
    */
   canCompleteHandoff(h: NurseHandoff): boolean {
-    return h.status === 'PENDING' && h.completableByMe === true;
+    return this.canDocumentCare() && h.status === 'PENDING' && h.completableByMe === true;
   }
 
   completeHandoff(handoffId: string): void {
+    if (!this.canDocumentCare()) return;
     this.actionInProgress.set(handoffId);
     this.nurseService.completeHandoff(handoffId).subscribe({
       next: () => {
@@ -1201,6 +1269,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   /* ── MVP 13: Task Board ─────────────────────────────────────── */
 
   openTaskCreate(): void {
+    if (!this.canCreateNursing()) return;
     this.taskForm.set({});
     this.taskPatient.set(null);
     this.taskCreateOpen.set(true);
@@ -1223,6 +1292,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   }
 
   submitCreateTask(): void {
+    if (!this.canCreateNursing()) return;
     const form = this.taskForm();
     if (!form.patientId || !form.category) {
       this.toast.error(this.translate.instant('NURSE.TOAST.TASK_REQUIRED'));
@@ -1254,6 +1324,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   }
 
   completeTask(taskId: string, note?: string): void {
+    if (!this.canDocumentCare()) return;
     this.actionInProgress.set(taskId);
     this.nurseService
       .completeNursingTask(taskId, note ? { completionNote: note } : undefined)
@@ -1325,6 +1396,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   /* ── MVP 13: Care Notes ────────────────────────────────────── */
 
   openCareNote(patientId: string, patientName: string): void {
+    if (!this.canDocumentCare()) return;
     this.careNoteFor.set({ patientId, patientName });
     this.careNoteForm.set({ template: 'DAR' });
   }
@@ -1364,6 +1436,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   }
 
   submitCareNote(): void {
+    if (!this.canDocumentCare()) return;
     const target = this.careNoteFor();
     if (!target || this.careNoteEmptyReason()) return;
     const form = this.careNoteForm();
@@ -1389,6 +1462,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
    * Look up the most recent non-completed encounter for a patient and open the triage dialog.
    */
   openTriage(patientId: string): void {
+    if (!this.canTriage()) return;
     // QA D179: triage is for the visit waiting to be triaged, not whichever
     // open encounter came first (a hospital stay has one too now).
     this.lookupActiveEncounter(patientId, (enc) => this.triageEncounter.set(enc), [
@@ -1399,7 +1473,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
 
   /** Triage is recorded by a nurse (POST /encounters/{id}/triage). */
   canTriage(): boolean {
-    return this.auth.hasAnyRole(['ROLE_NURSE']);
+    return this.roleContext.hasAnyActiveRole(['ROLE_NURSE']);
   }
 
   /** Outpatient visits waiting to be triaged in the active hospital (D408). */
@@ -1451,11 +1525,12 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
 
   /** QA D929/D949: Give/Hold/Refuse only on a dose that can be recorded now. */
   canRecordDose(m: NurseMedicationTask): boolean {
-    return m.status === 'DUE' || m.status === 'OVERDUE';
+    return this.canDocumentCare() && (m.status === 'DUE' || m.status === 'OVERDUE');
   }
 
   /** Open the triage form on the exact encounter listed (no lookup needed). */
   openTriageForEncounter(encounter: EncounterResponse): void {
+    if (!this.canTriage()) return;
     this.triageEncounter.set(encounter);
   }
 
@@ -1468,6 +1543,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
    * Look up the most recent non-completed encounter for a patient and open the intake dialog.
    */
   openIntake(patientId: string): void {
+    if (!this.canCreateNursing()) return;
     this.lookupActiveEncounter(patientId, (enc) => this.intakeEncounter.set(enc));
   }
 
