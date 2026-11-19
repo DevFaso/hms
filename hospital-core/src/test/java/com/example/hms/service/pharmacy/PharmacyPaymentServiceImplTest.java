@@ -1006,4 +1006,28 @@ class PharmacyPaymentServiceImplTest {
                 .isInstanceOf(com.example.hms.exception.ConflictException.class);
         verify(paymentRepository, never()).saveAndFlush(any());
     }
+
+    /* PR11-idempotency-race */
+    @Test
+    @DisplayName("PR 11 (QA D2430): a key another dispense took meanwhile (V310 index) is a 409, any other violation is not hidden")
+    void d2430_aKeyTakenMeanwhileIsAConflict() {
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+        dto.setClientRequestId(UUID.randomUUID());
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(paymentMapper.toEntity(any(), any(), any(), any(), any())).thenAnswer(inv -> new PharmacyPayment());
+        when(paymentRepository.saveAndFlush(any()))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException(
+                        "duplicate key value violates unique constraint \"uk_pp_hospital_client_request\""))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("fk_pp_patient"));
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    }
 }

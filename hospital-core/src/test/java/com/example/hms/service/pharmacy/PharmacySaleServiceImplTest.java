@@ -521,4 +521,48 @@ class PharmacySaleServiceImplTest {
         assertThat(service.createSale(dto)).isSameAs(answer);
         verify(referenceRegistry, never()).requireUnused(any(), any(), any());
     }
+
+    /* PR11-idempotency-race */
+    private PharmacySaleRequestDTO keyedNewSale(UUID key) {
+        PharmacySaleRequestDTO dto = request(List.of(line(BigDecimal.ONE, BigDecimal.TEN)));
+        dto.setClientRequestId(key);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(pharmacyRepository.findLockedByIdAndHospitalId(pharmacyId, hospitalId)).thenReturn(Optional.of(pharmacy));
+        org.mockito.Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        org.mockito.Mockito.lenient().when(catalogItemRepository.findById(itemId)).thenReturn(Optional.of(item));
+        return dto;
+    }
+
+    @Test
+    @DisplayName("PR 11 (QA D2430): a key another sale took meanwhile (V310 index) is a 409, any other violation is not hidden")
+    void d2430_aKeyTakenMeanwhileIsAConflict() {
+        PharmacySaleRequestDTO dto = keyedNewSale(UUID.randomUUID());
+        when(saleRepository.saveAndFlush(any(PharmacySale.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException(
+                        "duplicate key value violates unique constraint \"uk_psale_hospital_client_request\""))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("fk_psale_patient"));
+
+        assertThatThrownBy(() -> service.createSale(dto))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        assertThatThrownBy(() -> service.createSale(dto))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @DisplayName("PR 11: a new keyed Mobile Money sale still checks its reference")
+    void d2430_aNewKeyedMobileMoneySaleChecksItsReference() {
+        PharmacySaleRequestDTO dto = keyedNewSale(UUID.randomUUID());
+        dto.setPaymentMethod(PharmacyPaymentMethod.MOBILE_MONEY);
+        dto.setMobileMoneyOperator(com.example.hms.enums.MobileMoneyOperator.ORANGE_MONEY);
+        dto.setReferenceNumber("OM-R64-0002");
+        doThrow(new BusinessException("billing.payment.duplicateReference"))
+                .when(referenceRegistry).requireUnused(hospitalId, "OM-R64-0002", "referenceNumber");
+
+        assertThatThrownBy(() -> service.createSale(dto))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("billing.payment.duplicateReference");
+        verify(saleRepository, never()).saveAndFlush(any());
+    }
 }

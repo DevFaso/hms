@@ -333,7 +333,8 @@ class PaymentIdempotencyPostgresIT {
         jdbc.update(insert, UUID.randomUUID(), invoice.getId(), hospital.getId(), key);
         UUID invoiceId = invoice.getId();
         UUID hospitalId = hospital.getId();
-        assertThatThrownBy(() -> jdbc.update(insert, UUID.randomUUID(), invoiceId, hospitalId, key))
+        UUID secondRow = UUID.randomUUID();
+        assertThatThrownBy(() -> jdbc.update(insert, secondRow, invoiceId, hospitalId, key))
             .isInstanceOf(DataIntegrityViolationException.class)
             .hasMessageContaining("uk_pt_hospital_client_request");
         // No key: as many rows as before (the index is partial).
