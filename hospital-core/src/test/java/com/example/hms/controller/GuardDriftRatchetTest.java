@@ -203,6 +203,7 @@ class GuardDriftRatchetTest {
         listed.put("ImagingResultController.acknowledgeCriticalResult", IMAGINGRESULTCONTROLLER_REASON);
         listed.put("ImagingResultController.createReport", IMAGINGRESULTCONTROLLER_REASON);
         listed.put("ImagingResultController.getReportsByHospital", IMAGINGRESULTCONTROLLER_REASON);
+        listed.put("ImagingResultController.getReportsToSign", IMAGINGRESULTCONTROLLER_REASON);
         listed.put("ImagingResultController.signReport", IMAGINGRESULTCONTROLLER_REASON);
         listed.put("ImagingResultController.updateReport", IMAGINGRESULTCONTROLLER_REASON);
         listed.put("ImagingResultController.updateReportStatus", IMAGINGRESULTCONTROLLER_REASON);

@@ -45,7 +45,8 @@ class ClinicalLabResultReadPathGuardTest {
         "com/example/hms/fhir/provider/ObservationFhirResourceProvider.java",
         "com/example/hms/fhir/provider/DiagnosticReportFhirResourceProvider.java",
         "com/example/hms/fhir/bulk/FhirBulkExportRunner.java",
-        "com/example/hms/fhir/everything/PatientEverythingService.java"
+        "com/example/hms/fhir/everything/PatientEverythingService.java",
+        "com/example/hms/service/imaging/ImagingReadingContextService.java" // r63: the radiologist's latest creatinine
     );
 
     /** Paths that see every row, with the reason. */

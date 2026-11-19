@@ -1,6 +1,7 @@
 package com.example.hms.architecture;
 
 import com.example.hms.controller.MeController;
+import com.example.hms.controller.PatientImagingPortalController;
 import com.example.hms.controller.PatientPortalController;
 import com.example.hms.controller.support.ReceptionistResponseShaping;
 import com.example.hms.testsupport.ControllerMappingRegistry;
@@ -270,7 +271,9 @@ class ReceptionistClinicalReadGuardTest {
         for (HandlerMethod handler : handlers().values()) {
             String admits = RoleExpression.admits(handler, RECEPTIONIST);
             boolean ownRecord = PatientPortalController.class.isAssignableFrom(handler.getBeanType())
-                || MeController.class.isAssignableFrom(handler.getBeanType());
+                || MeController.class.isAssignableFrom(handler.getBeanType())
+                // QA D2342: the patient's own imaging, or a grantor's behind the proxy grant check.
+                || PatientImagingPortalController.class.isAssignableFrom(handler.getBeanType());
             if (ownRecord || !(RoleExpression.YES.equals(admits) || RoleExpression.NONE.equals(admits))) {
                 continue;
             }
@@ -302,7 +305,9 @@ class ReceptionistClinicalReadGuardTest {
         for (HandlerMethod handler : handlers().values()) {
             String admits = RoleExpression.admits(handler, RECEPTIONIST);
             boolean ownRecord = PatientPortalController.class.isAssignableFrom(handler.getBeanType())
-                || MeController.class.isAssignableFrom(handler.getBeanType());
+                || MeController.class.isAssignableFrom(handler.getBeanType())
+                // QA D2342: the patient's own imaging, or a grantor's behind the proxy grant check.
+                || PatientImagingPortalController.class.isAssignableFrom(handler.getBeanType());
             if (!ownRecord && (RoleExpression.YES.equals(admits) || RoleExpression.NONE.equals(admits))) {
                 nested(handler.getMethod().getGenericReturnType(), new HashSet<>(), shaped, unreached);
             }

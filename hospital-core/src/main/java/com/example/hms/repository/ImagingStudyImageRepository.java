@@ -19,4 +19,7 @@ public interface ImagingStudyImageRepository extends JpaRepository<ImagingStudyI
     @Query("select i.imagingOrder.id, count(i) from ImagingStudyImage i "
         + "where i.imagingOrder.id in :orderIds group by i.imagingOrder.id")
     List<Object[]> countByOrderIds(@Param("orderIds") Collection<UUID> orderIds);
+
+    /** D2342: the key images of several studies at once (the patient's imaging page). */
+    List<ImagingStudyImage> findByImagingOrder_IdInOrderByCreatedAtAsc(Collection<UUID> imagingOrderIds);
 }

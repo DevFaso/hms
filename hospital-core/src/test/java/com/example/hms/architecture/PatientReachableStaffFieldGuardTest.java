@@ -99,7 +99,9 @@ class PatientReachableStaffFieldGuardTest {
             site("service/impl/ImagingOrderServiceImpl.java#getOrdersByPatient", "PatientSafeView::imagingOrder"))),
         Map.entry("ImagingReportResponseDTO", Rule.projected("D1960: the patient's released imaging report",
             site("service/impl/ImagingReportServiceImpl.java#getReport", "PatientSafeView.imagingReport("),
-            site("service/impl/ImagingReportServiceImpl.java#getLatestReportForOrder", "PatientSafeView.imagingReport("))),
+            site("service/impl/ImagingReportServiceImpl.java#getLatestReportForOrder", "PatientSafeView.imagingReport("),
+            // D2342 (r63): the portal's « Imagerie » page, the patient's and their proxy's.
+            site("service/imaging/PatientImagingPortalService.java#toStudy", "PatientSafeView::imagingReport"))),
         Map.entry("ImagingReportStatusDTO", Rule.projected("D1960: the status trail is left out of the patient's report",
             site("service/support/PatientSafeView.java#imagingReport", ".build()"))),
         Map.entry("ImagingReportMeasurementDTO", Rule.projected("D1960: measurements are left out of the patient's report",

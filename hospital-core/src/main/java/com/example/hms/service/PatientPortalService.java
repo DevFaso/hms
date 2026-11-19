@@ -49,6 +49,12 @@ public interface PatientPortalService {
     /** Resolve the Patient UUID linked to the authenticated user. */
     UUID resolvePatientId(Authentication auth);
 
+    /**
+     * QA D2342: the grantor's patient id, once the caller's active, unexpired
+     * proxy grant covers their records (VIEW_RECORDS or ALL); 403 otherwise.
+     */
+    UUID resolveProxyRecordsPatientId(Authentication auth, UUID patientId);
+
     // ══════════════════════════════════════════════════════════════════════
     // PHASE 1 — Read-only endpoints
     // ══════════════════════════════════════════════════════════════════════
