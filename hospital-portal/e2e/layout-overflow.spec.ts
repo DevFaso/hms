@@ -451,3 +451,373 @@ test.describe('layout overflow: patient record panels', () => {
     expect(found, formatOffenders(found)).toEqual([]);
   });
 });
+
+/* ── Admin tables with rows (QA D2321, r63) ──────────────────────────────────
+   An empty list has no row actions to lose; these pages get three long rows so
+   the row-action rule (helpers/layout-audit.ts) has something to measure. */
+
+const ROW = {
+  id: RECORD_ID,
+  name: 'Centre Hospitalier Universitaire Wend-Panga de Ouagadougou',
+  code: 'CHU-WP-OUAGA-2026',
+  firstName: 'Aminata',
+  lastName: 'Sawadogo-Kaboré',
+  fullName: 'Aminata Sawadogo-Kaboré',
+  username: 'aminata.sawadogo.kabore',
+  email: 'aminata.sawadogo.kabore@wend-panga.example.invalid',
+  phoneNumber: '+226 70 00 00 00',
+  roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_BILLING_SPECIALIST'],
+  roleName: 'ROLE_HOSPITAL_ADMIN',
+  authority: 'ROLE_HOSPITAL_ADMIN',
+  description: 'Administration de l’établissement, facturation et caisse',
+  permissions: [],
+  active: true,
+  status: 'ACTIVE',
+  type: 'HOSPITAL',
+  city: 'Ouagadougou',
+  address: 'Secteur 15, rue 15.234, Ouaga 2000',
+  country: 'Burkina Faso',
+  organizationName: 'Réseau de santé Wend-Panga',
+  hospitalId: TEST_ID,
+  hospitalName: HOSPITAL,
+  departmentName: 'Médecine interne et maladies infectieuses',
+  jobTitle: 'Médecin-chef de service',
+  licenseNumber: 'CNOM-BF-2026-000123',
+  eventType: 'DATA_CREATED',
+  userName: 'aminata.sawadogo.kabore',
+  resourceName: 'Facture CHWF2396-2026-000046',
+  entityType: 'BILLING_INVOICE',
+  ipAddress: '2001:db8:a9af:12::1',
+  eventTimestamp: NOW,
+  createdAt: NOW,
+  updatedAt: NOW,
+};
+const ROWS = [1, 2, 3].map((n) => ({ ...ROW, id: `${RECORD_ID.slice(0, -1)}${n}` }));
+
+const ADMIN_TABLES: { route: string; seed: (page: Page) => Promise<void> }[] = [
+  {
+    route: '/users',
+    seed: (p) => p.route('**/api/users**', (r) => r.fulfill({ json: page1(ROWS) })),
+  },
+  {
+    route: '/staff',
+    seed: async (p) => {
+      await p.route('**/api/staff**', (r) => r.fulfill({ json: ROWS }));
+      await p.route('**/api/staff/hospital/**', (r) => r.fulfill({ json: page1(ROWS) }));
+    },
+  },
+  {
+    route: '/hospitals',
+    seed: (p) => p.route('**/api/hospitals**', (r) => r.fulfill({ json: ROWS })),
+  },
+  {
+    route: '/organizations',
+    seed: (p) => p.route('**/api/organizations**', (r) => r.fulfill({ json: page1(ROWS) })),
+  },
+  {
+    route: '/roles',
+    seed: (p) => p.route('**/api/roles**', (r) => r.fulfill({ json: ROWS })),
+  },
+  {
+    route: '/departments',
+    seed: async (p) => {
+      await p.route('**/api/hospitals**', (r) => r.fulfill({ json: [ROW] }));
+      await p.route('**/api/departments**', (r) => r.fulfill({ json: page1(ROWS) }));
+    },
+  },
+  {
+    route: '/audit-logs',
+    seed: (p) => p.route('**/api/audit-logs?**', (r) => r.fulfill({ json: page1(ROWS) })),
+  },
+];
+
+test.describe('layout overflow: admin tables with rows (D2320 / D2321)', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  for (const c of ADMIN_TABLES) {
+    test(`rows and actions fit: ${c.route}`, async ({ page }, testInfo) => {
+      await c.seed(page);
+      await open(page, testInfo.project.use.baseURL as string, roleFor(c.route), c.route);
+      await expect(
+        page
+          .locator('tbody tr, [class*="card"]')
+          .filter({ hasText: /sawadogo|wend-panga|CHU-WP/i })
+          .first(),
+      ).toBeVisible();
+      const found = await auditAtWidths(page, c.route);
+      expect(found, formatOffenders(found)).toEqual([]);
+    });
+  }
+});
+
+/* ── Front desk and ward lists with rows (QA D2241 / D2242 / D2246, r63) ──── */
+
+const DESK = {
+  ...ROW,
+  id: RECORD_ID,
+  patientId: TEST_ID,
+  patientName: LONG_NAME,
+  patientFullName: LONG_NAME,
+  mrn: 'MRN-CHWP-2026-000123',
+  dateOfBirth: '1988-03-14',
+  gender: 'FEMALE',
+  appointmentId: RECORD_ID,
+  encounterId: RECORD_ID,
+  appointmentDate: '2026-11-19',
+  appointmentTime: '09:30',
+  startTime: '09:30',
+  endTime: '10:00',
+  providerName: 'Dr Aminata Sawadogo-Kaboré',
+  staffName: 'Dr Aminata Sawadogo-Kaboré',
+  departmentName: 'Médecine interne et maladies infectieuses',
+  appointmentReason: 'Première consultation de médecine générale',
+  reason: 'Première consultation de médecine générale',
+  status: 'SCHEDULED',
+  priority: 'ROUTINE',
+  waitMinutes: 42,
+  hasInsuranceIssue: true,
+  hasOutstandingBalance: true,
+  registrationDate: NOW,
+  requestedDateFrom: '2026-11-20',
+  requestedDateTo: '2026-11-27',
+  preferredProviderName: 'Dr Aminata Sawadogo-Kaboré',
+  dueAt: NOW,
+  roomBed: 'Médecine B — chambre 12, lit 2',
+};
+const DESK_ROWS = [1, 2, 3].map((n) => ({ ...DESK, id: `${RECORD_ID.slice(0, -1)}${n}` }));
+
+const FRONT_DESK: {
+  route: string;
+  role: string;
+  seed: (page: Page) => Promise<void>;
+  then?: (page: Page) => Promise<void>;
+  label?: string;
+  /** false: a summary page with no seeded rows to wait for. */
+  rows?: boolean;
+}[] = [
+  {
+    route: '/patients',
+    role: 'ROLE_RECEPTIONIST',
+    seed: async (p) => {
+      await p.route('**/api/patients', (r) => r.fulfill({ json: DESK_ROWS }));
+      await p.route('**/api/patients?**', (r) => r.fulfill({ json: DESK_ROWS }));
+    },
+  },
+  {
+    route: '/appointments',
+    role: 'ROLE_RECEPTIONIST',
+    seed: (p) => p.route('**/api/appointments**', (r) => r.fulfill({ json: DESK_ROWS })),
+  },
+  {
+    route: '/registrations',
+    role: 'ROLE_RECEPTIONIST',
+    seed: (p) => p.route('**/api/registrations**', (r) => r.fulfill({ json: DESK_ROWS })),
+  },
+  {
+    route: '/nurse-station',
+    role: 'ROLE_NURSE',
+    seed: (p) => p.route('**/api/nurse/vitals/due**', (r) => r.fulfill({ json: DESK_ROWS })),
+  },
+  {
+    route: '/reception',
+    role: 'ROLE_RECEPTIONIST',
+    seed: async (p) => {
+      await p.route('**/api/reception/queue**', (r) => r.fulfill({ json: DESK_ROWS }));
+      await p.route('**/api/reception/payments/pending**', (r) => r.fulfill({ json: DESK_ROWS }));
+      await p.route('**/api/reception/waitlist**', (r) =>
+        r.fulfill({ json: DESK_ROWS.map((w) => ({ ...w, status: 'WAITING' })) }),
+      );
+    },
+  },
+  {
+    route: '/reception',
+    label: '/reception [waitlist]',
+    role: 'ROLE_RECEPTIONIST',
+    seed: (p) =>
+      p.route('**/api/reception/waitlist**', (r) =>
+        r.fulfill({ json: DESK_ROWS.map((w) => ({ ...w, status: 'WAITING' })) }),
+      ),
+    then: async (p) => {
+      await p
+        .getByRole('button', { name: /Liste d'attente|Waitlist/i })
+        .first()
+        .click();
+      await expect(p.getByText(/sawadogo/i).first()).toBeVisible();
+    },
+  },
+  {
+    route: '/dashboard',
+    label: '/dashboard [receptionist]',
+    role: 'ROLE_RECEPTIONIST',
+    rows: false,
+    seed: async (p) => {
+      await p.route('**/api/reception/queue**', (r) => r.fulfill({ json: DESK_ROWS }));
+      await p.route('**/api/reception/dashboard/summary**', (r) =>
+        r.fulfill({
+          json: {
+            date: '2026-11-19',
+            hospitalId: TEST_ID,
+            scheduledToday: 1248,
+            arrivedCount: 1036,
+            waitingCount: 357,
+            inProgressCount: 214,
+            noShowCount: 128,
+            completedCount: 1009,
+            walkInCount: 486,
+          },
+        }),
+      );
+    },
+  },
+  /* Ward (QA D2280–D2288, r63): the tablet at 768 is the main ward device. */
+  {
+    route: '/nurse-station',
+    label: '/nurse-station [workboard]',
+    role: 'ROLE_NURSE',
+    seed: (p) => p.route('**/api/nurse/workboard**', (r) => r.fulfill({ json: DESK_ROWS })),
+    then: async (p) => {
+      await p
+        .locator('[data-testid="section-workboard"], button')
+        .filter({ hasText: /Tableau de travail|Workboard/i })
+        .first()
+        .click();
+    },
+  },
+  {
+    route: '/admissions',
+    role: 'ROLE_NURSE',
+    seed: async (p) => {
+      await p.route('**/api/admissions', (r) => r.fulfill({ json: DESK_ROWS }));
+      await p.route('**/api/admissions?**', (r) => r.fulfill({ json: DESK_ROWS }));
+    },
+  },
+  {
+    route: '/bed-board',
+    role: 'ROLE_NURSE',
+    rows: false,
+    seed: (p) =>
+      p.route('**/api/transfers/pending**', (r) =>
+        r.fulfill({
+          json: DESK_ROWS.map((t) => ({
+            ...t,
+            admissionId: RECORD_ID,
+            fromBedLabel: 'MED1/M1-04',
+            fromWardName: 'Médecine interne B — aile nord',
+            toBedLabel: 'URGA/U-01',
+            toWardName: 'Unité des urgences adultes et soins continus',
+            transferType: 'INTRA_HOSPITAL',
+            status: 'PENDING',
+            reason: 'Surveillance rapprochée après dégradation hémodynamique nocturne',
+            requestedByName: 'Inf. Salimata Ouédraogo-Compaoré',
+            requestedAt: NOW,
+          })),
+        }),
+      ),
+  },
+  {
+    route: '/emar',
+    label: '/emar [dose panel]',
+    role: 'ROLE_NURSE',
+    seed: (p) =>
+      p.route('**/api/nurse/medications/mar**', (r) =>
+        r.fulfill({
+          json: DESK_ROWS.map((t) => ({
+            ...t,
+            medication: 'Amoxicilline + acide clavulanique 1 g/125 mg comprimé pelliculé',
+            dose: '1 comprimé',
+            route: 'ORAL',
+            routeCode: 'PO',
+            dueTime: NOW,
+            status: 'PENDING',
+          })),
+        }),
+      ),
+    then: async (p) => {
+      await p
+        .getByText(/Amoxicilline/)
+        .first()
+        .click();
+    },
+  },
+  /* Clinical lists (QA D2262 / D2301, r63): actions on screen at every width. */
+  {
+    route: '/pharmacy/dispensing',
+    role: 'ROLE_PHARMACIST',
+    rows: false,
+    seed: async (p) => {
+      await p.route('**/api/pharmacy-registry**', (r) => r.fulfill({ json: page1([ROW]) }));
+      await p.route('**/api/pharmacy/dispense/work-queue**', (r) =>
+        r.fulfill({
+          json: {
+            data: page1(
+              DESK_ROWS.map((d) => ({
+                ...d,
+                prescriptionId: d.id,
+                medicationName: 'Amoxicilline + acide clavulanique 1 g/125 mg comprimé pelliculé',
+                dosage: '1 comprimé',
+                frequency: 'Toutes les 8 heures',
+                prescriberName: 'Dr Aminata Sawadogo-Kaboré',
+                status: 'SIGNED',
+              })),
+            ),
+          },
+        }),
+      );
+    },
+  },
+  {
+    route: '/discharge',
+    role: 'ROLE_DOCTOR',
+    rows: false,
+    seed: (p) => p.route('**/api/discharge-summaries/**', (r) => r.fulfill({ json: DESK_ROWS })),
+  },
+  /* Patient portal (QA D2345–D2347, r63): the phone is the patient's device. */
+  {
+    route: '/my-family-access',
+    label: '/my-family-access [grant form + tables]',
+    role: 'ROLE_PATIENT',
+    seed: async (p) => {
+      const proxies = DESK_ROWS.map((d) => ({
+        ...d,
+        grantorPatientId: TEST_ID,
+        grantorName: LONG_NAME,
+        proxyUserId: TEST_ID,
+        proxyUsername: 'boureima.demo.ouedraogo',
+        proxyDisplayName: 'Boureima Démo-Ouédraogo',
+        relationship: 'SPOUSE',
+        status: 'ACTIVE',
+        permissions: 'APPOINTMENTS,LAB_RESULTS,MEDICATIONS',
+        expiresAt: '2027-11-19T00:00:00Z',
+      }));
+      await p.route('**/api/me/patient/proxies**', (r) => r.fulfill({ json: { data: proxies } }));
+      await p.route('**/api/me/patient/proxy-access**', (r) =>
+        r.fulfill({ json: { data: proxies } }),
+      );
+    },
+    then: async (p) => {
+      await p
+        .locator('.btn-primary')
+        .filter({ hasText: /Accorder|Grant/i })
+        .first()
+        .click();
+    },
+  },
+];
+
+test.describe('layout overflow: front desk and ward lists (D2241 / D2242 / D2246)', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  for (const c of FRONT_DESK) {
+    test(`rows and actions fit: ${c.label ?? c.route}`, async ({ page }, testInfo) => {
+      await c.seed(page);
+      await open(page, testInfo.project.use.baseURL as string, c.role, c.route);
+      if (c.then) await c.then(page);
+      // The seeded rows are on screen (an empty list has no actions to lose).
+      if (c.rows !== false) {
+        await expect(page.getByText(/Démo-Ouédraogo|MRN-CHWP|sawadogo/i).first()).toBeVisible();
+      }
+      const found = await auditAtWidths(page, c.label ?? c.route);
+      expect(found, formatOffenders(found)).toEqual([]);
+    });
+  }
+});

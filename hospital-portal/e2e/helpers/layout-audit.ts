@@ -17,6 +17,10 @@ import type { Page } from '@playwright/test';
  *  - `text-overflow` text, or a card's content, spills past its own box
  *                    (scrollWidth > clientWidth + 1 on a box that does not
  *                    scroll and is not an intentional ellipsis).
+ *
+ *  A control inside a table row (`td`) is held to more: it must be on screen
+ *  without scrolling its table sideways at all (QA D2321: the invoice list's
+ *  pay / e-mail / edit buttons sat past a scrollbar at the bottom of the rows).
  */
 export interface LayoutOffender {
   kind: 'page-hscroll' | 'clipped' | 'text-overflow';
@@ -104,9 +108,11 @@ export async function auditLayout(page: Page): Promise<LayoutOffender[]> {
       'button, a[href], input:not([type="hidden"]), select, textarea, [role="button"]',
     );
     interactive.forEach((el) => {
-      if (!el.closest(CONTAINER) || !visible(el)) return;
+      const inRow = !!el.closest('td');
+      if ((!el.closest(CONTAINER) && !inRow) || !visible(el)) return;
       const rect = el.getBoundingClientRect();
-      let anc = el.parentElement;
+      let handled = false;
+      let anc: Element | null = getComputedStyle(el).position === 'fixed' ? null : el.parentElement;
       while (anc && anc !== document.body) {
         const style = getComputedStyle(anc);
         const ox = style.overflowX;
@@ -120,6 +126,14 @@ export async function auditLayout(page: Page): Promise<LayoutOffender[]> {
             const buried = anc.scrollHeight > anc.clientHeight + 1;
             if (!scrolls) {
               push('clipped', el, `cut by ${describe(anc)} (overflow-x ${ox})`);
+            } else if (inRow) {
+              // QA D2321: a row's pay / edit / delete control must be on screen
+              // without scrolling the table sideways (sticky actions column).
+              push(
+                'clipped',
+                el,
+                `row control off the side of ${describe(anc)} (needs sideways scroll)`,
+              );
             } else if (buried) {
               push(
                 'clipped',
@@ -127,10 +141,20 @@ export async function auditLayout(page: Page): Promise<LayoutOffender[]> {
                 `off the side of ${describe(anc)}, whose sideways scrollbar is below ${anc.scrollHeight - anc.clientHeight}px of vertical scroll`,
               );
             }
+            handled = true;
             break;
           }
         }
-        anc = anc.parentElement;
+        anc = style.position === 'fixed' ? null : anc.parentElement;
+      }
+      // Nothing between it and a position:fixed box (a drawer) or the page cut
+      // it off: then only the viewport can.
+      if (!handled && (rect.right > window.innerWidth + 1 || rect.left < -1)) {
+        push(
+          'clipped',
+          el,
+          `off the side of the viewport (${Math.round(rect.left)}–${Math.round(rect.right)}px)`,
+        );
       }
     });
 
@@ -191,6 +215,13 @@ export async function auditAtWidths(
       const backdrop = document.querySelector<HTMLElement>('.sidebar-backdrop');
       if (backdrop && getComputedStyle(backdrop).display !== 'none') backdrop.click();
     });
+    // A drawer sliding in is measured where it lands, not mid-flight.
+    await page.evaluate(() =>
+      Promise.race([
+        Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined))),
+        new Promise((r) => setTimeout(r, 1500)),
+      ]),
+    );
     // Two frames: one for the resize, one for any ResizeObserver-driven re-layout.
     await page.evaluate(
       () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
