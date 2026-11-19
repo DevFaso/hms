@@ -1958,7 +1958,7 @@ class ReceptionServiceImplTest {
 
             org.mockito.ArgumentCaptor<Encounter> encounter = org.mockito.ArgumentCaptor.forClass(Encounter.class);
             verify(billingInvoiceService).recordCheckInCopay(encounter.capture(),
-                eq(new java.math.BigDecimal("2000")), any(), any(), any(), any());
+                eq(new java.math.BigDecimal("2000")), any(), any(), any(), any(), any());
             assertThat(encounter.getValue().getId()).isEqualTo(response.getEncounterId());
         }
 
@@ -2063,12 +2063,97 @@ class ReceptionServiceImplTest {
             row.setInvoice(invoice);
             when(billingInvoiceService.recordCheckInCopay(any(), any(),
                 eq(com.example.hms.enums.PaymentMethod.MOBILE_MONEY), eq("OM-778812"),
-                eq(com.example.hms.enums.MobileMoneyOperator.ORANGE_MONEY), any())).thenReturn(row);
+                eq(com.example.hms.enums.MobileMoneyOperator.ORANGE_MONEY), any(), any())).thenReturn(row);
 
             CheckInResponseDTO response = service.checkInPatient(request, hospitalId, "receptionist1");
 
             assertThat(response.getCopayPaymentId()).isEqualTo(row.getId());
             assertThat(response.getCopayInvoiceId()).isEqualTo(invoice.getId());
+        }
+
+        @Test
+        @DisplayName("PR 11 (QA D2430): a check-in retried with its copay key answers with the first, and records nothing again")
+        void checkInRetriedWithItsCopayKeyIsAnsweredAgain_D2430() {
+            Appointment appointment = scheduledAppointment();
+            appointment.setStatus(AppointmentStatus.CHECKED_IN);
+            UUID key = UUID.randomUUID();
+            Encounter encounter = new Encounter();
+            encounter.setId(UUID.randomUUID());
+            encounter.setCode("ENC-1");
+            encounter.setAppointment(appointment);
+            encounter.setPatient(appointment.getPatient());
+            com.example.hms.model.BillingInvoice invoice = new com.example.hms.model.BillingInvoice();
+            invoice.setId(UUID.randomUUID());
+            invoice.setEncounter(encounter);
+            com.example.hms.model.PaymentTransaction row = new com.example.hms.model.PaymentTransaction();
+            row.setId(UUID.randomUUID());
+            row.setInvoice(invoice);
+            row.setAmount(new java.math.BigDecimal("1500"));
+            row.setPaymentMethod(com.example.hms.enums.PaymentMethod.CASH);
+            when(billingInvoiceService.findPaymentByClientRequest(appointment.getHospital().getId(), key))
+                .thenReturn(java.util.Optional.of(row));
+            CheckInRequestDTO retry = CheckInRequestDTO.builder()
+                    .appointmentId(appointment.getId())
+                    .copayAmount(new java.math.BigDecimal("1500"))
+                    .copayMethod(com.example.hms.enums.PaymentMethod.CASH)
+                    .copayClientRequestId(key)
+                    .identityConfirmed(true)
+                    .build();
+
+            CheckInResponseDTO response = service.checkInPatient(retry, hospitalId, "receptionist1");
+
+            assertThat(response.getEncounterId()).isEqualTo(encounter.getId());
+            assertThat(response.getCopayPaymentId()).isEqualTo(row.getId());
+            assertThat(response.getCopayInvoiceId()).isEqualTo(invoice.getId());
+            verify(encounterRepo, never()).save(any(Encounter.class));
+            verify(billingInvoiceService, never()).recordCheckInCopay(any(), any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("PR 11 (QA D2430): a copay key already used for another amount is refused, never answered")
+        void copayKeyOfAnotherCheckInIsRefused_D2430() {
+            Appointment appointment = scheduledAppointment();
+            UUID key = UUID.randomUUID();
+            Encounter encounter = new Encounter();
+            encounter.setAppointment(appointment);
+            com.example.hms.model.BillingInvoice invoice = new com.example.hms.model.BillingInvoice();
+            invoice.setEncounter(encounter);
+            com.example.hms.model.PaymentTransaction row = new com.example.hms.model.PaymentTransaction();
+            row.setInvoice(invoice);
+            row.setAmount(new java.math.BigDecimal("1000"));
+            row.setPaymentMethod(com.example.hms.enums.PaymentMethod.CASH);
+            when(billingInvoiceService.findPaymentByClientRequest(appointment.getHospital().getId(), key))
+                .thenReturn(java.util.Optional.of(row));
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(appointment.getId())
+                    .copayAmount(new java.math.BigDecimal("1500"))
+                    .copayMethod(com.example.hms.enums.PaymentMethod.CASH)
+                    .copayClientRequestId(key)
+                    .identityConfirmed(true)
+                    .build();
+
+            assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
+            verify(encounterRepo, never()).save(any(Encounter.class));
+        }
+
+        @Test
+        @DisplayName("PR 11: a first check-in passes its copay key to the copay it records")
+        void firstCheckInPassesItsCopayKey_D2430() {
+            Appointment appointment = scheduledAppointment();
+            UUID key = UUID.randomUUID();
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(appointment.getId())
+                    .copayAmount(new java.math.BigDecimal("1500"))
+                    .copayMethod(com.example.hms.enums.PaymentMethod.CASH)
+                    .copayClientRequestId(key)
+                    .identityConfirmed(true)
+                    .build();
+
+            service.checkInPatient(request, hospitalId, "receptionist1");
+
+            verify(billingInvoiceService).recordCheckInCopay(any(), eq(new java.math.BigDecimal("1500")),
+                eq(com.example.hms.enums.PaymentMethod.CASH), any(), any(), any(), eq(key));
         }
 
         @Test
@@ -2099,7 +2184,7 @@ class ReceptionServiceImplTest {
 
             service.checkInPatient(request, hospitalId, "receptionist1");
 
-            verify(billingInvoiceService, never()).recordCheckInCopay(any(), any(), any(), any(), any(), any());
+            verify(billingInvoiceService, never()).recordCheckInCopay(any(), any(), any(), any(), any(), any(), any());
         }
 
         @Test

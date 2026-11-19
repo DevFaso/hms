@@ -129,4 +129,7 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
     boolean existsLiveReference(@Param("hospitalId") UUID hospitalId,
                                 @Param("reference") String reference,
                                 @Param("statuses") java.util.Collection<com.example.hms.enums.PaymentStatus> statuses);
+
+    /** Billing plan PR 11 (QA D2430): the payment a client request key already recorded at this hospital. */
+    java.util.Optional<PaymentTransaction> findByHospitalIdAndClientRequestId(UUID hospitalId, UUID clientRequestId);
 }

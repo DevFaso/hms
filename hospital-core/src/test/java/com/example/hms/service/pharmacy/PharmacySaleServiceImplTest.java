@@ -431,4 +431,94 @@ class PharmacySaleServiceImplTest {
         assertThatThrownBy(() -> service.getSale(id))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
+
+    /* PR11-idempotency */
+    @Test
+    @DisplayName("PR 11 (QA D2430): a keyed sale locks its pharmacy, stores the key, and is flushed")
+    void d2430_aKeyedSaleStoresItsKey() {
+        PharmacySaleRequestDTO dto = request(List.of(line(BigDecimal.ONE, BigDecimal.TEN)));
+        UUID key = UUID.randomUUID();
+        dto.setClientRequestId(key);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(pharmacyRepository.findLockedByIdAndHospitalId(pharmacyId, hospitalId)).thenReturn(Optional.of(pharmacy));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(catalogItemRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(saleRepository.saveAndFlush(any(PharmacySale.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(mapper.toResponseDTO(any(PharmacySale.class))).thenReturn(PharmacySaleResponseDTO.builder().build());
+
+        service.createSale(dto);
+
+        ArgumentCaptor<PharmacySale> captor = ArgumentCaptor.forClass(PharmacySale.class);
+        verify(saleRepository).saveAndFlush(captor.capture());
+        assertThat(captor.getValue().getClientRequestId()).isEqualTo(key);
+        verify(pharmacyRepository, never()).findByIdAndHospital_Id(any(), any());
+    }
+
+    @Test
+    @DisplayName("PR 11 (QA D2430): a sale retried with its key answers with the first and records nothing")
+    void d2430_aRetriedSaleIsAnsweredAgain() {
+        PharmacySaleRequestDTO dto = request(List.of(line(BigDecimal.ONE, BigDecimal.TEN)));
+        UUID key = UUID.randomUUID();
+        dto.setClientRequestId(key);
+        PharmacySale first = PharmacySale.builder().pharmacy(pharmacy).hospital(hospital)
+                .paymentMethod(PharmacyPaymentMethod.CASH).clientRequestId(key).totalAmount(BigDecimal.TEN).build();
+        first.addLine(com.example.hms.model.pharmacy.SaleLine.builder().quantity(BigDecimal.ONE).build());
+        PharmacySaleResponseDTO answer = PharmacySaleResponseDTO.builder().build();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(pharmacyRepository.findLockedByIdAndHospitalId(pharmacyId, hospitalId)).thenReturn(Optional.of(pharmacy));
+        when(saleRepository.findByHospital_IdAndClientRequestId(hospitalId, key)).thenReturn(Optional.of(first));
+        when(mapper.toResponseDTO(first)).thenReturn(answer);
+
+        assertThat(service.createSale(dto)).isSameAs(answer);
+
+        verify(saleRepository, never()).save(any());
+        verify(saleRepository, never()).saveAndFlush(any());
+        verify(stockLotRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("PR 11 (QA D2430): the key of another sale (other method) is refused, never answered")
+    void d2430_theKeyOfAnotherSaleIsRefused() {
+        PharmacySaleRequestDTO dto = request(List.of(line(BigDecimal.ONE, BigDecimal.TEN)));
+        UUID key = UUID.randomUUID();
+        dto.setClientRequestId(key);
+        PharmacySale first = PharmacySale.builder().pharmacy(pharmacy).hospital(hospital)
+                .paymentMethod(PharmacyPaymentMethod.MOBILE_MONEY).clientRequestId(key).totalAmount(BigDecimal.TEN).build();
+        first.addLine(com.example.hms.model.pharmacy.SaleLine.builder().quantity(BigDecimal.ONE).build());
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(pharmacyRepository.findLockedByIdAndHospitalId(pharmacyId, hospitalId)).thenReturn(Optional.of(pharmacy));
+        when(saleRepository.findByHospital_IdAndClientRequestId(hospitalId, key)).thenReturn(Optional.of(first));
+
+        assertThatThrownBy(() -> service.createSale(dto))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        verify(saleRepository, never()).saveAndFlush(any());
+    }
+
+    /* PR11-idempotency-mm */
+    @Test
+    @DisplayName("PR 11 (QA D2430): a Mobile Money sale retried with its key is answered, not refused as a reused reference")
+    void d2430_aRetriedMobileMoneySaleIsNotARefusedReference() {
+        PharmacySaleRequestDTO dto = request(List.of(line(BigDecimal.ONE, BigDecimal.TEN)));
+        dto.setPaymentMethod(PharmacyPaymentMethod.MOBILE_MONEY);
+        dto.setMobileMoneyOperator(com.example.hms.enums.MobileMoneyOperator.ORANGE_MONEY);
+        dto.setReferenceNumber("OM-R64-0001");
+        UUID key = UUID.randomUUID();
+        dto.setClientRequestId(key);
+        PharmacySale first = PharmacySale.builder().pharmacy(pharmacy).hospital(hospital)
+                .paymentMethod(PharmacyPaymentMethod.MOBILE_MONEY).clientRequestId(key).totalAmount(BigDecimal.TEN).build();
+        first.addLine(com.example.hms.model.pharmacy.SaleLine.builder().quantity(BigDecimal.ONE).build());
+        PharmacySaleResponseDTO answer = PharmacySaleResponseDTO.builder().build();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(pharmacyRepository.findLockedByIdAndHospitalId(pharmacyId, hospitalId)).thenReturn(Optional.of(pharmacy));
+        when(saleRepository.findByHospital_IdAndClientRequestId(hospitalId, key)).thenReturn(Optional.of(first));
+        when(mapper.toResponseDTO(first)).thenReturn(answer);
+
+        assertThat(service.createSale(dto)).isSameAs(answer);
+        verify(referenceRegistry, never()).requireUnused(any(), any(), any());
+    }
 }
