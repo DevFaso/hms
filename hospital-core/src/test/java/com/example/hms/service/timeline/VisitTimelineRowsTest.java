@@ -203,8 +203,29 @@ class VisitTimelineRowsTest {
         addendum.setAuthorName("Dr Ouédraogo");
         addendum.setSignedAt(LocalDateTime.now().minusMinutes(10));
         signed.addAddendum(addendum);
+        com.example.hms.model.NursingNote nursing = new com.example.hms.model.NursingNote();
+        nursing.setId(UUID.randomUUID());
+        nursing.setHospital(here);
+        nursing.setTemplate(com.example.hms.model.NursingNoteTemplate.DAR);
+        nursing.setDataAssessment("Patient calme");
+        nursing.setDocumentedAt(LocalDateTime.now().minusHours(2));
+        com.example.hms.model.NursingNoteAddendum nursingAddendum = new com.example.hms.model.NursingNoteAddendum();
+        nursingAddendum.setId(UUID.randomUUID());
+        nursingAddendum.setContent("Douleur 2/10 après antalgique");
+        nursingAddendum.setAuthorName("Inf. Kaboré");
+        nursingAddendum.setSignedAt(LocalDateTime.now().minusMinutes(20));
+        nursing.addAddendum(nursingAddendum);
+        when(nursingNotes.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, Set.of(here.getId())))
+            .thenReturn(List.of(nursing));
 
         List<PatientTimelineEntryDTO> visit = rows.collect(patientId, here.getId(), Set.of());
+
+        assertThat(visit).filteredOn(row -> nursingAddendum.getId().toString().equals(row.getEntryId()))
+            .singleElement()
+            .satisfies(row -> {
+                assertThat(row.getCategory()).isEqualTo("NURSING_NOTE");
+                assertThat(row.getSummary()).isEqualTo("Addendum à la note infirmière — Douleur 2/10 après antalgique");
+            });
 
         assertThat(visit).filteredOn(row -> addendum.getId().toString().equals(row.getEntryId()))
             .singleElement()

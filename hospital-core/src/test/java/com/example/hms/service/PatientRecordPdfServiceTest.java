@@ -411,11 +411,15 @@ class PatientRecordPdfServiceTest {
             .content("CRP 85 mg/L, confirme l infection")
             .authorName("Aminata Ouedraogo")
             .signedAt(LocalDateTime.of(2026, 11, 19, 4, 13))
+            .build(), ChartReviewDTO.NoteAddendumEntryDTO.builder()
+            .content("second addendum")
+            .documentedAt(LocalDateTime.of(2026, 11, 19, 5, 0))
             .build()));
         byte[] pdf = PatientRecordPdfService.write(PatientStoryboardDTO.builder().allergies(List.of()).build(), chart,
             null, PdfLabels.of(real, Locale.FRENCH));
         String text = textOf(pdf).replaceAll("\\s+", " ");
-        assertThat(text).contains("Addendum").contains("Aminata Ouedraogo").contains("CRP 85 mg/L, confirme l infection");
+        assertThat(text).contains("Addendum").contains("Aminata Ouedraogo").contains("CRP 85 mg/L, confirme l infection")
+            .contains("second addendum");
     }
 
     @Test
