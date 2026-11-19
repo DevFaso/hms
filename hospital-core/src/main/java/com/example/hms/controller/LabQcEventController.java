@@ -40,7 +40,9 @@ public class LabQcEventController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
-    @Operation(summary = "Record QC Event", description = "Records a new QC calibration event for an analyzer run. Pass/fail is computed automatically (±10% tolerance).")
+    @Operation(summary = "Record QC Event", description = "Records a QC run (test, instrument, control level, value, lot). r63: the operator accepts or rejects it "
+        + "(accepted); without a decision pass/fail falls back to a ±10% tolerance. With a director's target the run is "
+        + "flagged against ±2/±3 SD and the expected value defaults to the target mean.")
     @ApiResponse(responseCode = "201", description = "QC event recorded")
     public ResponseEntity<ApiResponseWrapper<LabQcEventResponseDTO>> recordQcEvent(
         @jakarta.validation.Valid @RequestBody LabQcEventRequestDTO request,
@@ -80,7 +82,7 @@ public class LabQcEventController {
     }
 
     @GetMapping("/summary")
-    @PreAuthorize("hasAnyRole('LAB_DIRECTOR', 'QUALITY_MANAGER', 'LAB_MANAGER', 'HOSPITAL_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'LAB_MANAGER', 'HOSPITAL_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "QC Summary", description = "Aggregated QC stats per test definition for the Lab Director QC Dashboard. Returns total, passed, failed events and pass rate per test.")
     @ApiResponse(responseCode = "200", description = "QC summary retrieved")
     public ResponseEntity<ApiResponseWrapper<List<LabQcSummaryDTO>>> getQcSummary(

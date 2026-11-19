@@ -4569,7 +4569,26 @@
     "VERSION_LABEL": "v{{version}}",
     "NEW_VERSION": "New version (goes through approval)",
     "VERSION_CREATED": "New draft version created. It replaces the active one once approved and activated.",
-    "VERSION_ERROR": "The new version could not be created."
+    "VERSION_ERROR": "The new version could not be created.",
+    "COMPONENTS": {
+      "TITLE": "Panel components",
+      "HINT": "For a panel such as a full blood count, add each component with its unit and ranges. Leave empty for a single-value test.",
+      "CODE": "Code",
+      "NAME": "Name",
+      "UNIT": "Unit",
+      "REMOVE": "Remove this component",
+      "GENDER": "Sex",
+      "GENDER_ALL": "All",
+      "GENDER_MALE": "Male",
+      "GENDER_FEMALE": "Female",
+      "MIN": "Min",
+      "MAX": "Max",
+      "CRITICAL_LOW": "Critical low",
+      "CRITICAL_HIGH": "Critical high",
+      "REMOVE_RANGE": "Remove this range",
+      "ADD_RANGE": "Add a range",
+      "ADD": "Add a component"
+    }
   },
   "LAB_RESULTS": {
     "QUOTED_READ_BACK_VALUE": "“{{value}}”",
@@ -4681,7 +4700,20 @@
     "OTHER_RANGES": "Other ranges ({{count}})",
     "CRITICAL_LIMITS": "Critical values",
     "NO_INTERVAL": "No interval",
-    "OPEN_REQUEST": "Open request {{code}}"
+    "OPEN_REQUEST": "Open request {{code}}",
+    "PANEL_LEGEND": "Panel values",
+    "PANEL_HINT": "Enter each component in its own unit. Leave a component blank if it was not measured.",
+    "CRITICAL_AT_ENTRY": {
+      "CRITICAL_LOW": "Below the critical low limit for this test.",
+      "CRITICAL_HIGH": "Above the critical high limit for this test.",
+      "BANNER": "A value is beyond the critical limits. Check it, then save: releasing it will ask who was told."
+    },
+    "SAVED_CRITICAL": "This result is critical. Release it promptly and record who was told.",
+    "CRITICAL_COMMUNICATED": "Critical result communicated",
+    "CRITICAL_COMMUNICATED_VALUE": "To {{to}}, read back: {{readBack}}",
+    "QC_OVERRIDE": "Released despite rejected QC",
+    "RELEASE_CRITICAL_FROM_WORKLIST": "A critical result is released from the release worklist, where you record who was told.",
+    "RELEASE_FROM_WORKLIST": "Release it from the release worklist."
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Abnormal",
@@ -4727,7 +4759,16 @@
     "SELF_RELEASE_CONFIRM": "Release it myself",
     "CONFIRM_CORRECTION": "This result is a correction: validating it replaces a value already validated and sent to the clinician and the patient.",
     "GRADE_UNKNOWN_NOTE": "Not graded: {{value}} is a limit that could be inside or outside the reference range, so no critical alert can be raised. By releasing it you confirm that you reviewed it; the ordering clinician will be asked to review it.",
-    "UNGRADED_NOTE": "Not graded: no reference range is in this value’s unit ({{unit}}) or converts to it, so no critical alert can be raised. By releasing it you confirm you reviewed it; the ordering clinician will be asked to review it."
+    "UNGRADED_NOTE": "Not graded: no reference range is in this value’s unit ({{unit}}) or converts to it, so no critical alert can be raised. By releasing it you confirm you reviewed it; the ordering clinician will be asked to review it.",
+    "CRITICAL_TITLE": "Critical result",
+    "CRITICAL_HINT": "Call the clinician now and record the call: who you told, when, and the value they read back to you.",
+    "CRITICAL_TO": "Who was told",
+    "CRITICAL_TO_PLACEHOLDER": "Name and role (e.g. Dr Ouedraogo, on call)",
+    "CRITICAL_AT": "When",
+    "CRITICAL_READ_BACK": "Value read back",
+    "CRITICAL_READ_BACK_PLACEHOLDER": "As they repeated it",
+    "QC_OVERRIDE_REASON": "Reason for releasing despite the rejected QC",
+    "QC_BLOCKED": "The latest quality-control run for this test was rejected. Record a passing run, or give the reason for releasing anyway."
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Lab Instruments",
@@ -7973,7 +8014,8 @@
         "PATIENT_NOTIFICATION_DELIVERY": "Patient notification send",
         "PAYER": "Payer",
         "PAYER_PLAN": "Payer plan",
-        "HOSPITAL_PACS_SETTINGS": "PACS connection"
+        "HOSPITAL_PACS_SETTINGS": "PACS connection",
+        "LAB_QC_TARGET": "Lab QC target"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",
@@ -11006,6 +11048,61 @@
     "TOAST": {
       "LOAD_FAILED": "Failed to load QC dashboard data.",
       "CHART_LOAD_FAILED": "Failed to load QC events for chart."
+    },
+    "RECORD": {
+      "OPEN": "Record a QC run",
+      "TITLE": "Record a quality-control run",
+      "HINT": "Run the controls before patient samples. A rejected run holds the test’s results until a passing run, or a release with a documented reason.",
+      "TEST": "Test",
+      "TEST_PLACEHOLDER": "Choose a test",
+      "LEVEL": "Control level",
+      "ANALYZER": "Instrument",
+      "LOT": "Control lot",
+      "MEASURED": "Measured value",
+      "EXPECTED": "Expected value",
+      "EXPECTED_FROM_TARGET": "Target mean used",
+      "DECISION": "Decision",
+      "ACCEPT": "Accept the run",
+      "REJECT": "Reject the run",
+      "REJECT_NOTE": "Results for this test will not be released until a passing run is recorded, or a release gives a reason.",
+      "NOTES": "Notes (corrective action)",
+      "SUBMIT": "Record the run",
+      "SAVED_ACCEPTED": "QC run recorded and accepted.",
+      "SAVED_REJECTED": "QC run recorded as rejected. Results for this test are held.",
+      "SAVE_FAILED": "Could not record the QC run.",
+      "TESTS_LOAD_FAILED": "Could not load the list of tests.",
+      "DECISION_REQUIRED": "Choose whether to accept or reject the run."
+    },
+    "TARGET": {
+      "CURRENT": "Target: mean {{mean}}, SD {{sd}} (lot {{lot}})",
+      "NONE": "No target set for this level: the run is recorded without an SD flag.",
+      "EDIT_TITLE": "Target for this level (lab director)",
+      "MEAN": "Target mean",
+      "SD": "Target SD",
+      "APPROVED_BY": "Approved by {{name}} on {{date}}",
+      "SAVE": "Save and approve the target",
+      "SAVED": "QC target saved.",
+      "SAVE_FAILED": "Could not save the QC target."
+    },
+    "SD_FLAG": {
+      "WITHIN_2SD": "Within ±2 SD ({{z}} SD)",
+      "OUTSIDE_2SD": "Outside ±2 SD ({{z}} SD): warning",
+      "OUTSIDE_3SD": "Outside ±3 SD ({{z}} SD)"
+    },
+    "SD_FLAG_SHORT": {
+      "WITHIN_2SD": "Within ±2 SD",
+      "OUTSIDE_2SD": "Outside ±2 SD",
+      "OUTSIDE_3SD": "Outside ±3 SD"
+    },
+    "RUNS": {
+      "TITLE": "Latest runs",
+      "DATE": "Date",
+      "VALUE": "Value",
+      "OPERATOR": "Operator",
+      "FLAG": "SD flag",
+      "DECISION": "Decision",
+      "ACCEPTED": "Accepted",
+      "REJECTED": "Rejected"
     }
   },
   "LAB_APPROVAL": {
@@ -14619,6 +14716,13 @@
       "CARD_ACTION": "Configure the PACS",
       "BASE_URL_REQUIRED": "Enter the PACS DICOMweb address to switch the viewer on."
     }
+  },
+  "LAB_PANEL": {
+    "TITLE": "Panel values",
+    "COL_COMPONENT": "Component",
+    "COL_VALUE": "Value",
+    "COL_RANGE": "Reference range",
+    "COL_FLAG": "Flag"
   },
   "CONNECTIVITY": {
     "OFFLINE_TITLE": "No Internet connection.",

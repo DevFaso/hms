@@ -81,6 +81,9 @@ class LabResultServiceImplNullScopeTest {
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
 
+    /** r63 D2304: the QC release gate; a mock answers "not blocked". */
+    @Mock private com.example.hms.service.LabQcReleaseGate qcReleaseGate;
+
     @InjectMocks
     private LabResultServiceImpl service;
 

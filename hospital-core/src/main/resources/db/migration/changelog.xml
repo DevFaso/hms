@@ -3750,4 +3750,18 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V314 (wave 1, lab) - lab.qc_targets (director's target mean/SD per
+         test and control level); qc_events lot, operator, target snapshot and
+         SD flag; components on lab_test_definitions and lab_results (panel
+         results such as the NFS); lab_results QC override and critical-result
+         communication log. Additive: IF NOT EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V314-lab-qc-targets-panels-critical-communication" author="hms-team" runOnChange="false">
+        <sqlFile path="V314__lab_qc_targets_panels_critical_communication.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

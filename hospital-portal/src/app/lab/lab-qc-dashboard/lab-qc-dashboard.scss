@@ -408,3 +408,161 @@
   padding: 0;
   max-width: none;
 }
+
+/* ── r63 D2304: recording a QC run ─────────────────────────── */
+.page-header {
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.5rem;
+
+  .btn-primary .material-symbols-outlined {
+    font-size: 1.1rem;
+    background: none;
+    padding: 0;
+    color: inherit;
+  }
+}
+
+.qc-record {
+  /* r63: a long label or an untranslated word wraps instead of widening the box. */
+  overflow-wrap: anywhere;
+  min-width: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+  background: var(--color-surface, #fff);
+  min-width: 0;
+}
+
+.qc-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 0.75rem;
+}
+
+.qc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #475569;
+
+  input,
+  select,
+  textarea {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font: inherit;
+    font-weight: 400;
+  }
+}
+
+.qc-notes {
+  margin-top: 0.75rem;
+}
+
+.qc-target-readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.75rem 0;
+  font-size: 0.85rem;
+  color: #334155;
+
+  .muted {
+    color: #64748b;
+  }
+}
+
+.qc-flag {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.qc-flag-ok {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.qc-flag-warn {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.qc-flag-fail {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.qc-target-edit,
+.qc-decision {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem 0.9rem;
+  margin: 0.75rem 0 0;
+  min-width: 0;
+
+  legend {
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0 0.3rem;
+  }
+
+  .btn-secondary {
+    margin-top: 0.6rem;
+  }
+}
+
+.qc-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-right: 1.25rem;
+  font-size: 0.9rem;
+}
+
+.qc-reject-note {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: #991b1b;
+}
+
+.qc-error {
+  margin: 0.75rem 0 0;
+  padding: 0.5rem 0.7rem;
+  border-radius: 6px;
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.qc-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.qc-runs {
+  margin-top: 1rem;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.qc-runs-title {
+  font-size: 0.9rem;
+  margin: 0 0 0.5rem;
+}

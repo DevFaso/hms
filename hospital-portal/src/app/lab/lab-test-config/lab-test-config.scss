@@ -659,3 +659,60 @@
 }
 
 @include diagnostics.workspace;
+
+/* r63 (NFS panels): the components of a panel test, each with its own ranges */
+.panel-components {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem 0.9rem;
+  margin: 0;
+  min-width: 0;
+
+  legend {
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0 0.3rem;
+  }
+}
+
+.component-card {
+  border-top: 1px solid #f1f5f9;
+  padding: 0.6rem 0;
+  min-width: 0;
+}
+
+.component-head,
+.component-range {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 7.5rem), 1fr)) auto;
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.component-range {
+  margin-top: 0.4rem;
+  padding-left: 0.75rem;
+  border-left: 3px solid #e2e8f0;
+}
+
+.component-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #475569;
+
+  input,
+  select {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 0.4rem 0.55rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font: inherit;
+    font-weight: 400;
+  }
+}

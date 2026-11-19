@@ -312,6 +312,14 @@
     "src/app/staff/staff-list.ts::unmarked-refusal::submitForm::STAFF.USER_AND_HOSPITAL_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
+    },
+    "src/app/lab/lab-results/lab-results.ts::toast-only-refusal::releaseResult::LAB_RESULTS.RELEASE_CRITICAL_FROM_WORKLIST": {
+      "count": 1,
+      "why": "r63 D2305: not a field: a critical result is released from the release worklist, where the call is recorded; the reader is taken there"
+    },
+    "src/app/lab/lab-results/lab-results.ts::toast-only-refusal::sendRelease::LAB_RESULTS.RELEASE_FROM_WORKLIST": {
+      "count": 1,
+      "why": "r63 D2304/D2305: not a field on this screen: the server asked for a QC override reason or a critical call, which the release worklist collects"
     }
   }
 }
