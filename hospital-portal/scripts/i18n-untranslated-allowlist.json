@@ -228,6 +228,8 @@
     "NAV.MESSAGES": "Messages",
     "NAV.NOTIFICATIONS": "Notifications",
     "NAV.PATIENTS": "Patients",
+    "NOTE_ADDENDA.ADDENDUM": "Addendum",
+    "NOTE_ADDENDA.TITLE": "Addenda ({{count}})",
     "NOTIFICATIONS.CHANNEL_PUSH": "Push",
     "NOTIFICATIONS.CHANNEL_SMS": "SMS",
     "NOTIFICATIONS.TITLE": "Notifications",
@@ -475,6 +477,7 @@
     "inBasket.labColPatient": "Patient",
     "inBasket.labNormal": "Normal",
     "inBasket.messages": "Messages",
+    "inBasket.resultActions.column": "Actions",
     "inBasket.urgent": "Urgent"
   },
   "es": {
