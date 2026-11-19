@@ -117,8 +117,7 @@ class LegacyAllergyTextBackfillRerunTest {
         backfill.pass();
 
         List<PatientAllergy> rows = allergyRepository.findByPatient_Id(patient.getId());
-        assertThat(rows).hasSize(2);
-        assertThat(rows).noneMatch(r -> r.isActive()
+        assertThat(rows).hasSize(2).noneMatch(r -> r.isActive()
             && r.getVerificationStatus() != AllergyVerificationStatus.ENTERED_IN_ERROR);
         assertThat(ledgerOutcome(patient)).isEqualTo("IMPORTED");
     }
