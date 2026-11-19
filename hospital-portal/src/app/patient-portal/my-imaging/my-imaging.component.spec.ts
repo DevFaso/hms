@@ -124,7 +124,9 @@ describe('MyImagingComponent (D2342)', () => {
     create();
     let rootDuringPrint: string | undefined;
     spyOn(window, 'print').and.callFake(() => {
-      rootDuringPrint = host().querySelector<HTMLElement>('.' + PRINT_ROOT_CLASS)?.dataset['studyId'];
+      rootDuringPrint = host().querySelector<HTMLElement>('.' + PRINT_ROOT_CLASS)?.dataset[
+        'studyId'
+      ];
     });
     host().querySelector<HTMLButtonElement>('[data-testid="my-imaging-print"]')!.click();
     expect(window.print).toHaveBeenCalledTimes(1);
