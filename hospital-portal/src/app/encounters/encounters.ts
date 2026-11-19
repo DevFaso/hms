@@ -1,3 +1,4 @@
+import { NoteAddendaComponent } from '../shared/note-addenda/note-addenda.component';
 import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { textMatches, rankPeopleByName } from '../shared/person-search';
 import { VisitSummaryDialogComponent } from './visit-summary-dialog/visit-summary-dialog.component';
@@ -27,6 +28,7 @@ import {
   EncounterType,
   EncounterStatus,
   EncounterNoteResponse,
+  EncounterNoteAddendumResponse,
   AfterVisitSummary,
   EncounterNoteRequest,
 } from '../services/encounter.service';
@@ -51,7 +53,13 @@ import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-di
 import { actionRoles, SERVICE_RULE_ROLES } from '../core/action-permissions';
 import { CloseUnseenDialogComponent } from '../reception/close-unseen-dialog/close-unseen-dialog.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { serverInstant, serverLocalDate, toServerDateTime } from '../shared/date-utils';
+import {
+  localDateString,
+  nowLocalDatetime,
+  serverInstant,
+  serverLocalDate,
+  toServerDateTime,
+} from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import {
@@ -69,6 +77,7 @@ import { DateTimePipe } from '../shared/pipes/date-time.pipe';
   selector: 'app-encounters',
   standalone: true,
   imports: [
+    NoteAddendaComponent,
     DateTimePipe,
     ListEscapeDirective,
     SubmitGuardDirective,
@@ -668,6 +677,11 @@ export class EncountersComponent implements OnInit {
     ) {
       return this.editingOriginalDate;
     }
+    // QA D2265 (r63): a visit created today is dated now. Sent as midnight, it
+    // showed a fake « 00:00 » in its detail, the AVS and every visit picker.
+    if (day === localDateString()) {
+      return toServerDateTime(nowLocalDatetime());
+    }
     return toServerDateTime(`${day}T00:00`);
   }
 
@@ -1108,8 +1122,10 @@ export class EncountersComponent implements OnInit {
     this.encounterService
       .addAddendum(enc.id, { content: this.addendumContent.trim(), attestAccuracy: true }, noteId)
       .subscribe({
-        next: () => {
+        next: (addendum) => {
           this.toast.success(this.translate.instant('ENCOUNTERS.ADDENDUM_RECORDED'));
+          // QA D2260: the addendum shows under the entry it corrects at once.
+          this.showAddendumUnder(noteId, addendum);
           this.closeAddendumForm();
           this.addendumSaving.set(false);
           this.loadNoteHistory(enc.id);
@@ -1121,6 +1137,19 @@ export class EncountersComponent implements OnInit {
           this.addendumSaving.set(false);
         },
       });
+  }
+
+  /** QA D2260: files a saved addendum under its entry, as the next read of the visit will. */
+  private showAddendumUnder(
+    noteId: string | undefined,
+    addendum: EncounterNoteAddendumResponse | null | undefined,
+  ): void {
+    if (!noteId || !addendum?.content) return;
+    const add = (note: EncounterNoteResponse): EncounterNoteResponse =>
+      note.id === noteId ? { ...note, addenda: [...(note.addenda ?? []), addendum] } : note;
+    const current = this.noteState();
+    if (current) this.noteState.set(add(current));
+    this.noteEntries.update((entries) => entries.map(add));
   }
 
   /* ── Status transitions ── */

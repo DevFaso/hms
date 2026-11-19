@@ -41,6 +41,8 @@
               <strong>{{ part.labelKey | translate }}</strong> {{ part.text }}
             </p>
           }
+          <!-- QA D2260: the addenda filed under the nursing note. -->
+          <app-note-addenda [addenda]="note.addenda" />
         </li>
       }
     </ul>

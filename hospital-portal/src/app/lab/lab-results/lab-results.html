@@ -47,6 +47,23 @@
     </div>
   </div>
 
+  <!-- QA D2266 (r63): a confirmed read-back says so and stays said; the row
+       leaving the critical tab was the only sign, and a toast is gone in seconds. -->
+  @if (readBackConfirmation(); as done) {
+    <p class="read-back-confirmation" role="status" data-testid="read-back-confirmation">
+      <span class="material-symbols-outlined" aria-hidden="true">task_alt</span>
+      <span>{{ done }}</span>
+      <button
+        type="button"
+        class="btn-icon"
+        (click)="readBackConfirmation.set(null)"
+        [attr.aria-label]="'COMMON.CLOSE' | translate"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+      </button>
+    </p>
+  }
+
   <div class="tabs">
     <button
       class="tab"

@@ -236,6 +236,14 @@ export interface DoctorResultQueueItem {
   orderingContext?: string;
   /** QA D1016: the result corrects a released value the clinician may already have acted on. */
   corrected?: boolean;
+  /** QA D2263: the order the result answers, for a follow-up order from the row. */
+  labOrderId?: string | null;
+  /** QA D2263: the physician has acknowledged the result. */
+  acknowledged?: boolean;
+  /** QA D2263: a critical value still waits for its read-back (acknowledge is refused until then). */
+  readBackRequired?: boolean;
+  /** QA D2263: when the critical value was read back, if it was. */
+  readBackAt?: string | null;
 }
 
 export interface PatientSnapshot {

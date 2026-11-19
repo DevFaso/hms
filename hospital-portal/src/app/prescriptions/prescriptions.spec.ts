@@ -1935,6 +1935,25 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
     expect(component.canReviewAllergy({ ...signed, status: 'CANCELLED' })).toBeFalse();
   });
 
+  it('QA D2264: the allergy review is offered on an allergy override or a conflict the server finds, never on a dose exception', () => {
+    activeRoles = ['ROLE_DOCTOR'];
+    const conflict = jasmine.createSpy('getAllergyConflict');
+    (prescriptionService as unknown as Record<string, unknown>)['getAllergyConflict'] = conflict;
+    const dose = rx('rx-dose', 'SIGNED', { allergyOverride: false, overrideReason: 'dose' });
+    const allergy = rx('rx-allergy', 'SIGNED', { allergyOverride: true, overrideReason: 'known' });
+    const later = rx('rx-later', 'SIGNED', { allergyOverride: false });
+
+    conflict.and.returnValue(of({ conflict: false, cards: [], reviewCurrent: false }));
+    component.viewDetail(dose);
+    expect(component.canReviewAllergy(dose)).toBeFalse();
+
+    expect(component.canReviewAllergy(allergy)).toBeTrue();
+
+    conflict.and.returnValue(of({ conflict: true, cards: [], reviewCurrent: false }));
+    component.viewDetail(later);
+    expect(component.canReviewAllergy(later)).toBeTrue();
+  });
+
   it('surfaces the backend refusal verbatim rather than a generic failure', () => {
     // "A prescription cannot be verified by the clinician who prescribed it"
     // tells a pharmacist to fetch a colleague; "Verification failed" does not.
@@ -2170,8 +2189,13 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     const prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
       'list',
       'page',
+      'getAllergyConflict',
     ]);
     pageFromList(prescriptionService);
+    // QA D2264: opening a doctor's detail asks whether the order meets an allergy conflict now.
+    prescriptionService.getAllergyConflict.and.returnValue(
+      of({ conflict: false, cards: [], reviewCurrent: false }),
+    );
     // QA D1347: `list` reads EVERY page (its own spec proves that), so the
     // page asks for it once, unfiltered.
     prescriptionService.list.and.callFake(() => opts.list$ ?? of(opts.list ?? []));

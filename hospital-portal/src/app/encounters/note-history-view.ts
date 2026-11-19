@@ -1,4 +1,5 @@
 import { EncounterNoteHistoryEntry, EncounterNoteResponse } from '../services/encounter.service';
+import { NoteAddendumView, addendumWhen } from '../shared/note-addenda/note-addendum-view';
 
 /** A note-history row as the encounter panel renders it. */
 export interface NoteHistoryView {
@@ -9,6 +10,8 @@ export interface NoteHistoryView {
   changedAt: string;
   authorName: string | null;
   sections: { labelKey: string; text: string }[];
+  /** QA D2260: on an addendum row, the addendum it records (the newest of the snapshot's). */
+  addenda: NoteAddendumView[];
 }
 
 /** Snapshot field → the label the note form uses for that section, in form order. */
@@ -65,14 +68,39 @@ export function toNoteHistoryView(entry: EncounterNoteHistoryEntry): NoteHistory
   }
   const changeType = entry.changeType ?? null;
   const signer = changeType === 'NOTE_SIGNED' ? text(metadata['signedByName']) : null;
+  const added = changeType === 'NOTE_ADDENDUM' ? newestAddendum(content['addendaEntries']) : null;
   return {
     id: entry.id,
     changeKey: changeType ? (CHANGE_KEYS[changeType] ?? null) : null,
     changeType,
     changedAt: entry.changedAt,
-    authorName: signer ?? text(metadata['authorName']),
+    authorName: text(added?.authorName) ?? signer ?? text(metadata['authorName']),
     sections,
+    addenda: added ? [added] : [],
   };
+}
+
+/**
+ * QA D2260 (r63): the history row of an addendum showed its header and the
+ * unchanged note, never the addendum's text. The snapshot carries every
+ * addendum so far (`addendaEntries`); the row records the newest.
+ */
+function newestAddendum(entries: unknown): NoteAddendumView | null {
+  if (!Array.isArray(entries)) return null;
+  const views: NoteAddendumView[] = entries
+    .filter((e): e is Record<string, unknown> => !!e && typeof e === 'object')
+    .map((e) => ({
+      content: text(e['content']),
+      authorName: text(e['authorName']),
+      authorCredentials: text(e['authorCredentials']),
+      documentedAt: text(e['documentedAt']),
+      signedAt: text(e['signedAt']),
+    }))
+    .filter((entry) => !!entry.content);
+  if (views.length === 0) return null;
+  return views.reduce((newest, v) =>
+    (addendumWhen(v) ?? '') >= (addendumWhen(newest) ?? '') ? v : newest,
+  );
 }
 
 /**

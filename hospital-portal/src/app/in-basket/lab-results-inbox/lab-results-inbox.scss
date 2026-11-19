@@ -244,3 +244,61 @@
     outline-offset: var(--focus-ring-offset);
   }
 }
+
+/* QA D2263 (r63): the row's state and actions. */
+.row-state {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.row-state--done {
+  color: #166534;
+}
+.row-state--todo {
+  color: #b91c1c;
+}
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--primary-deep, #1d4ed8);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+.read-back-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+
+  label {
+    flex: 1 1 100%;
+    font-size: 0.8rem;
+  }
+  input {
+    flex: 1 1 160px;
+    min-width: 0;
+    max-width: 240px;
+  }
+}
+.confirm-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  font-size: 0.85rem;
+}

@@ -4672,7 +4672,8 @@
     "OTHER_RANGES": "Otros intervalos ({{count}})",
     "CRITICAL_LIMITS": "Valores críticos",
     "NO_INTERVAL": "Sin intervalo",
-    "OPEN_REQUEST": "Abrir la solicitud {{code}}"
+    "OPEN_REQUEST": "Abrir la solicitud {{code}}",
+    "READ_BACK_CONFIRMED_DETAIL": "Relectura confirmada: {{test}} « {{value}} » — {{patient}}"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Anormal",
@@ -9197,7 +9198,9 @@
       "UROLOGY": "Urología",
       "VASCULAR_SURGERY": "Cirugía vascular",
       "WOUND_CARE": "Cuidado de heridas"
-    }
+    },
+    "DRAFT_HINT": "La derivación se guarda como borrador. El hospital de destino la recibe solo después de « Enviar la derivación » en la lista.",
+    "CREATED_DRAFT": "Derivación guardada como borrador: aún no enviada. Envíela desde la lista."
   },
   "RESET": {
     "BACK_TO_LOGIN": "Volver al inicio de sesión",
@@ -10139,7 +10142,23 @@
     "emptyCategory": "No hay elementos en esta categoría",
     "emptyCategoryHint": "Elija otra categoría o vea todos los elementos.",
     "showAll": "Ver todos",
-    "summaryLoadFailed": "No se pudieron actualizar los recuentos de elementos no leídos. Actualice la bandeja para reintentar."
+    "summaryLoadFailed": "No se pudieron actualizar los recuentos de elementos no leídos. Actualice la bandeja para reintentar.",
+    "resultActions": {
+      "column": "Acciones",
+      "open": "Abrir el resultado",
+      "acknowledge": "Tomar conocimiento",
+      "acknowledged": "Conocimiento registrado: {{test}} — {{patient}}",
+      "acknowledgedState": "Conocimiento registrado",
+      "acknowledgeFailed": "No se pudo registrar la toma de conocimiento.",
+      "readBack": "Relectura",
+      "readBackLabel": "Repita el valor crítico de {{test}} para {{patient}} tal como se lo comunicaron",
+      "readBackConfirm": "Confirmar la relectura",
+      "readBackConfirmed": "Relectura confirmada: {{test}} — {{patient}}",
+      "readBackFailed": "No se pudo registrar la relectura.",
+      "readBackRequired": "Relectura requerida",
+      "readBackAt": "Releído el {{at}}",
+      "followUp": "Solicitar seguimiento"
+    }
   },
   "common": {
     "loading": "Cargando…"
@@ -14572,5 +14591,11 @@
       "CARD_ACTION": "Configurar el PACS",
       "BASE_URL_REQUIRED": "Introduzca la dirección DICOMweb del PACS para activar el visor."
     }
+  },
+  "NOTE_ADDENDA": {
+    "TITLE": "Adendas ({{count}})",
+    "ADDENDUM": "Adenda",
+    "SIGNED_BY": "firmada por {{name}}",
+    "BY": "por {{name}}"
   }
 }
