@@ -28,6 +28,29 @@
           <span class="bsc-amount">{{ totalBalance() | cfa }}</span>
         </div>
       </div>
+
+      <!--
+        QA D2355 (r63): "Payer" only declared a payment made elsewhere, and
+        nothing said where or how to pay. There is no online payment: the
+        patient pays at the hospital cashier, in cash or by mobile money, with
+        the invoice number as the reference.
+      -->
+      <section class="pay-howto" aria-labelledby="pay-howto-title" data-testid="pay-howto">
+        <h2 id="pay-howto-title" class="pay-howto-title">
+          {{ 'PORTAL_PAY_HOWTO.TITLE' | translate }}
+        </h2>
+        <ol class="pay-howto-steps">
+          <li data-testid="pay-howto-where">
+            {{ 'PORTAL_PAY_HOWTO.WHERE' | translate: { amount: (totalBalance() | cfa) } }}
+          </li>
+          <li data-testid="pay-howto-reference">{{ 'PORTAL_PAY_HOWTO.REFERENCE' | translate }}</li>
+          <li>{{ 'PORTAL_PAY_HOWTO.RECEIPT' | translate }}</li>
+        </ol>
+        <p class="pay-howto-note" data-testid="pay-howto-online">
+          {{ 'PORTAL_PAY_HOWTO.NO_ONLINE' | translate }}
+        </p>
+        <p class="pay-howto-note">{{ 'MOBILE_MONEY.NO_CARD_DETAILS' | translate }}</p>
+      </section>
     }
 
     @if (totalRefundDue() > 0) {
@@ -93,6 +116,15 @@
                 }}<span class="pli-meta"
                   >{{ 'PORTAL.BILLING.BALANCE_DUE' | translate }} {{ inv.balance | cfa }}</span
                 >
+                <!-- QA D2355: what to tell the cashier -->
+                {{ ' '
+                }}<span
+                  class="pli-meta pay-reference"
+                  [attr.data-testid]="'pay-reference-' + inv.id"
+                  >{{
+                    'PORTAL_PAY_HOWTO.INVOICE_REFERENCE' | translate: { number: inv.invoiceNumber }
+                  }}</span
+                >
               }
               @if (inv.payerShare) {
                 <!-- Billing-money plan PR 7: what my insurer pays, and my share -->
@@ -133,8 +165,8 @@
                   [attr.data-testid]="'pay-btn-' + inv.id"
                   (click)="openPayDialog(inv)"
                 >
-                  <span class="material-symbols-outlined">payment</span>
-                  {{ 'PORTAL.BILLING.PAY_NOW' | translate }}
+                  <span class="material-symbols-outlined" aria-hidden="true">payment</span>
+                  {{ 'PORTAL_PAY_HOWTO.DECLARE_BUTTON' | translate }}
                 </button>
               } @else if (isPayable(inv)) {
                 <!--
@@ -335,7 +367,7 @@
         <div class="pay-dialog-header">
           <h3 id="pay-dialog-title-1">
             <span class="material-symbols-outlined" aria-hidden="true">payment</span>
-            {{ 'PORTAL.BILLING.MAKE_PAYMENT' | translate }}
+            {{ 'PORTAL_PAY_HOWTO.DECLARE_TITLE' | translate }}
           </h3>
           <button
             class="pay-dialog-close"
@@ -368,6 +400,10 @@
           }
 
           <p class="pay-label">{{ 'PORTAL.BILLING.PAYMENT_PENDING_NOTE' | translate }}</p>
+          <!-- QA D2355: this form records a payment already made; it takes no money. -->
+          <p class="pay-label" data-testid="pay-declare-only">
+            {{ 'PORTAL_PAY_HOWTO.DECLARE_ONLY' | translate }}
+          </p>
 
           @if (payError()) {
             <div class="pay-error">{{ payError() }}</div>
@@ -394,10 +430,7 @@
             <div class="pay-field">
               <label for="payMethod">{{ 'PORTAL.BILLING.PAYMENT_METHOD' | translate }}</label>
               <select id="payMethod" data-server-field="paymentMethod" [(ngModel)]="payMethod">
-                <option value="CARD">{{ 'PORTAL.BILLING.CARD' | translate }}</option>
-                <option value="BANK_TRANSFER">
-                  {{ 'PORTAL.BILLING.BANK_TRANSFER' | translate }}
-                </option>
+                <!-- QA D2355: the hospital takes cash or mobile money; never a card from here. -->
                 <option value="MOBILE_MONEY">
                   {{ 'PORTAL.BILLING.MOBILE_MONEY' | translate }}
                 </option>
@@ -461,7 +494,7 @@
                 @if (payProcessing()) {
                   <span class="pay-spinner"></span> {{ 'PORTAL.BILLING.PROCESSING' | translate }}
                 } @else {
-                  {{ 'PORTAL.BILLING.PAY' | translate }}
+                  {{ 'PORTAL_PAY_HOWTO.DECLARE_SUBMIT' | translate }}
                   {{ payAmount ? (payAmount | cfa) : '' }}
                 }
               </button>
