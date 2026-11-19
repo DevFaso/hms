@@ -109,6 +109,9 @@
 }
 
 .ip-cell {
+  /* QA D2321 (r64): an IPv6 address breaks at its colons, not past Statut. */
+  overflow-wrap: anywhere;
+  min-width: 9ch;
   font-family: 'SF Mono', monospace;
   font-size: 0.8125rem;
   color: #6b7280;
