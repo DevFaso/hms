@@ -1,7 +1,7 @@
 import { RoleContextService } from '../core/role-context.service';
 import { formatDate } from '@angular/common';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject, Subscription, throwError } from 'rxjs';
 import { localInputToUtcIso, NurseStationComponent } from './nurse-station';
@@ -106,17 +106,24 @@ describe('NurseStationComponent — two-tier polling', () => {
       providers: [
         { provide: NurseTaskService, useValue: nurseServiceSpy },
         { provide: ToastService, useValue: toastSpy },
-        { provide: Router, useValue: routerSpy },
+        provideRouter([]),
         { provide: EncounterService, useValue: encounterSpy },
         { provide: AuthService, useValue: authSpy },
         {
           provide: RoleContextService,
-          useValue: { effectiveHospitalIdForRequest: () => authSpy.getHospitalId() },
+          useValue: {
+            effectiveHospitalIdForRequest: () => authSpy.getHospitalId(),
+            isSuperAdmin: () => false,
+            hasAnyActiveRole: (roles: string[]) =>
+              roles.length === 1 ? authSpy.hasAnyRole(roles) : true,
+          },
         },
         { provide: PatientTrackerWsService, useValue: trackerWsSpy },
       ],
     }).compileComponents();
 
+    routerSpy = TestBed.inject(Router) as jasmine.SpyObj<Router>;
+    spyOn(routerSpy, 'navigate').and.resolveTo(true);
     fixture = TestBed.createComponent(NurseStationComponent);
     component = fixture.componentInstance;
   });
@@ -124,6 +131,115 @@ describe('NurseStationComponent — two-tier polling', () => {
   afterEach(() => {
     // Ensure subscriptions are cleaned up between tests
     component.ngOnDestroy();
+  });
+
+  it('defaults a super-admin-only session to hospital oversight without personal or clinical controls', () => {
+    const context = TestBed.inject(RoleContextService);
+    Object.assign(context, { isSuperAdmin: () => true, hasAnyActiveRole: () => false });
+    fixture.destroy();
+    fixture = TestBed.createComponent(NurseStationComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    expect(component.filterMode()).toBe('all');
+    expect(nurseServiceSpy.getWorkboard).toHaveBeenCalledWith({ assignee: 'all' });
+    component.setFilter('me');
+    expect(component.filterMode()).toBe('all');
+    component.workboard.set([
+      { patientId: 'p1', patientName: 'Awa', mrn: 'CHW0042', medsDue: 2 } as any,
+    ]);
+    component.setSection('workboard');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.oversight-note')).toBeTruthy();
+    expect(fixture.nativeElement.querySelectorAll('.filter-btn').length).toBe(1);
+    expect(fixture.nativeElement.querySelector('.workboard-card .action-record')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.workboard-card .action-triage')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.workboard-card .action-intake')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.workboard-card .action-view')).toBeTruthy();
+    // Hidden controls cannot be invoked directly to open a clinical dialog or write.
+    component.recordVitals('p1');
+    component.submitVitals();
+    component.administerMedication('dose1');
+    component.promptHoldRefuse('dose1', 'HELD');
+    component.openHandoffCreate();
+    component.submitCreateHandoff();
+    component.openTaskCreate();
+    component.submitCreateTask();
+    component.completeTask('task1');
+    component.completeHandoff('handoff1');
+    component.openCareNote('p1', 'Awa');
+    component.submitCareNote();
+    component.openIntake('p1');
+    component.openTriage('p1');
+    expect(component.vitalsCaptureFor()).toBeNull();
+    expect(component.reasonPrompt()).toBeNull();
+    expect(component.taskCreateOpen()).toBeFalse();
+    expect(component.handoffCreateOpen()).toBeFalse();
+    expect(component.careNoteFor()).toBeNull();
+    expect(nurseServiceSpy.captureVitals).not.toHaveBeenCalled();
+    expect(nurseServiceSpy.administerMedication).not.toHaveBeenCalled();
+    expect(nurseServiceSpy.createHandoff).not.toHaveBeenCalled();
+    expect(nurseServiceSpy.completeHandoff).not.toHaveBeenCalled();
+  });
+
+  it('does not infer a nurse role from super-admin inheritance when a doctor role is active', () => {
+    authSpy.hasAnyRole.and.returnValue(true);
+    Object.assign(TestBed.inject(RoleContextService), {
+      isSuperAdmin: () => true,
+      hasAnyActiveRole: (roles: string[]) => roles.includes('ROLE_DOCTOR'),
+    });
+    expect(component.canDocumentCare()).toBeTrue();
+    expect(component.canTriage()).toBeFalse();
+    component.openTriage('p1');
+    expect(component.triageEncounter()).toBeNull();
+  });
+
+  it('mobile section picker uses stable section values and switches the worklist', () => {
+    fixture.detectChanges();
+    const picker = fixture.nativeElement.querySelector(
+      '.section-picker select',
+    ) as HTMLSelectElement;
+    picker.value = 'workboard';
+    picker.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(component.activeSection()).toBe('workboard');
+    expect(fixture.nativeElement.querySelector('.board-toolbar')).not.toBeNull();
+  });
+
+  it('filters loaded workboard cards by record number, service and clinician without changing source totals', () => {
+    component.workboard.set([
+      {
+        patientId: 'p1',
+        patientName: 'Awa',
+        mrn: 'CHW0042',
+        departmentName: 'Maternity',
+        attendingDoctor: 'Aminata',
+      },
+      {
+        patientId: 'p2',
+        patientName: 'Adama',
+        mrn: 'CHW0099',
+        departmentName: 'Medicine',
+        attendingDoctor: 'Bibata',
+      },
+    ] as any);
+    component.searchTerm.set('0042');
+    expect(component.visibleWorkboard().map((p) => p.patientId)).toEqual(['p1']);
+    component.boardDepartment.set('Medicine');
+    expect(component.visibleWorkboard()).toEqual([]);
+    component.clearBoardFilters();
+    component.boardClinician.set('Bibata');
+    expect(component.visibleWorkboard().map((p) => p.patientId)).toEqual(['p2']);
+    expect(component.workboard().length).toBe(2);
+    component.boardView.set('table');
+    expect(component.visibleWorkboard().length).toBe(1);
+  });
+
+  it('opens overdue medication rows from the summary tile without recording a dose', () => {
+    fixture.detectChanges();
+    fixture.nativeElement.querySelectorAll('.summary-card')[3].click();
+    expect(component.activeSection()).toBe('medications');
+    expect(component.overdueOnly()).toBeTrue();
+    expect(nurseServiceSpy.administerMedication).not.toHaveBeenCalled();
   });
 
   it('searches loaded tasks and overdue flags without changing source counts or doses', () => {
