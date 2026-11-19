@@ -2,7 +2,9 @@ package com.example.hms.payload.dto.imaging;
 
 import com.example.hms.enums.ImagingModality;
 import com.example.hms.enums.ImagingReportStatus;
+import com.example.hms.imaging.dicom.DicomUid;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -76,15 +78,18 @@ public class ImagingReportUpsertRequestDTO {
     private ImagingReportStatus reportStatus;
 
     @Size(max = 64)
+    @Pattern(regexp = "^$|" + DicomUid.REGEX, message = "{imaging.pacs.uid.invalid}")
     private String studyInstanceUid;
 
     @Size(max = 64)
+    @Pattern(regexp = "^$|" + DicomUid.REGEX, message = "{imaging.pacs.uid.invalid}")
     private String seriesInstanceUid;
 
     @Size(max = 80)
     private String accessionNumber;
 
     @Size(max = 500)
+    @Pattern(regexp = "^$|^(?i)https?://\\S+$", message = "{imaging.pacs.viewerUrl.invalid}")
     private String pacsViewerUrl;
 
     private ImagingModality modality;

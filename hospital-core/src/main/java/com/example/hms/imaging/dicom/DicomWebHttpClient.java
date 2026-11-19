@@ -88,7 +88,15 @@ public class DicomWebHttpClient implements DicomWebClient {
      * operator gets a "still loading" toast.
      */
     private static SimpleClientHttpRequestFactory buildRequestFactory() {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        // Never follow a redirect: it could lead a vetted URL to an internal one.
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory() {
+            @Override
+            protected void prepareConnection(java.net.HttpURLConnection connection, String httpMethod)
+                throws java.io.IOException {
+                super.prepareConnection(connection, httpMethod);
+                connection.setInstanceFollowRedirects(false);
+            }
+        };
         factory.setConnectTimeout((int) Duration.ofSeconds(5).toMillis());
         factory.setReadTimeout((int) Duration.ofSeconds(30).toMillis());
         return factory;
@@ -96,7 +104,9 @@ public class DicomWebHttpClient implements DicomWebClient {
 
     @Override
     public List<String> qidoListInstances(String studyUid) {
-        if (!isReady() || studyUid == null || studyUid.isBlank()) {
+        // A UID goes into the upstream path: only DICOM UID syntax, so no
+        // caller can add "../", "?" or "#" to it.
+        if (!isReady() || !DicomUid.isValid(studyUid)) {
             return Collections.emptyList();
         }
         String url = baseUrl() + "/studies/" + studyUid + "/instances";
@@ -118,15 +128,14 @@ public class DicomWebHttpClient implements DicomWebClient {
             if (body == null) return Collections.emptyList();
             return extractInstanceUids(body);
         } catch (RuntimeException ex) {
-            log.warn("DICOMweb QIDO-RS failed for study {}: {}", studyUid, ex.toString());
+            log.warn("DICOMweb QIDO-RS failed: {}", ex.getClass().getSimpleName());
             return Collections.emptyList();
         }
     }
 
     @Override
     public byte[] wadoFetchInstance(String studyUid, String instanceUid) {
-        if (!isReady() || studyUid == null || studyUid.isBlank()
-            || instanceUid == null || instanceUid.isBlank()) {
+        if (!isReady() || !DicomUid.isValid(studyUid) || !DicomUid.isValid(instanceUid)) {
             return EMPTY_BYTES;
         }
         String url = baseUrl() + "/studies/" + studyUid + "/instances/" + instanceUid;
@@ -150,7 +159,7 @@ public class DicomWebHttpClient implements DicomWebClient {
         } catch (InstanceNotFoundSentinel notFound) {
             return EMPTY_BYTES;
         } catch (RuntimeException ex) {
-            log.warn("DICOMweb WADO-RS failed for {}/{}: {}", studyUid, instanceUid, ex.toString());
+            log.warn("DICOMweb WADO-RS failed: {}", ex.getClass().getSimpleName());
             return EMPTY_BYTES;
         }
     }

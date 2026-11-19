@@ -3705,4 +3705,19 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V317 (imaging, option B) - hospital.hospitals PACS connection:
+         pacs_enabled, pacs_dicomweb_base_url, pacs_auth_username and
+         pacs_auth_password (AES-GCM ciphertext, never returned by the API).
+         Lets a hospital point the in-app viewer at its own Orthanc /
+         dcm4chee DICOMweb endpoint. Additive: four columns, IF NOT EXISTS,
+         no DO block.
+         ================================================================= -->
+    <changeSet id="V317-hospital-pacs-dicomweb-settings" author="hms-team" runOnChange="false">
+        <sqlFile path="V317__hospital_pacs_dicomweb_settings.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

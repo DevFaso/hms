@@ -37,7 +37,8 @@ public class ImagingReportMapper {
     private String resolvePacsViewerUrl(ImagingReport report) {
         String explicit = report.getPacsViewerUrl();
         if (explicit != null && !explicit.isBlank()) {
-            return explicit;
+            // A link the browser opens: http(s) only, never javascript: or data:.
+            return isWebLink(explicit) ? explicit : null;
         }
         if (report.getHospital() == null) {
             return null;
@@ -46,17 +47,29 @@ public class ImagingReportMapper {
         if (template == null || template.isBlank()) {
             return null;
         }
-        String studyUid = report.getStudyInstanceUid();
-        String accession = report.getAccessionNumber();
+        // Only a well-formed UID goes into the link, and the accession number is
+        // URL-encoded: a value typed on the report cannot add path or query parts.
+        String studyUid = com.example.hms.imaging.dicom.DicomUid.isValid(report.getStudyInstanceUid())
+            ? report.getStudyInstanceUid() : null;
+        String accession = report.getAccessionNumber() == null || report.getAccessionNumber().isBlank()
+            ? null
+            : java.net.URLEncoder.encode(report.getAccessionNumber().trim(), java.nio.charset.StandardCharsets.UTF_8)
+                .replace("+", "%20");
         if (template.contains("{studyInstanceUid}") && (studyUid == null || studyUid.isBlank())) {
             return null;
         }
         if (template.contains("{accessionNumber}") && (accession == null || accession.isBlank())) {
             return null;
         }
-        return template
+        String url = template
                 .replace("{studyInstanceUid}", studyUid != null ? studyUid : "")
                 .replace("{accessionNumber}", accession != null ? accession : "");
+        return isWebLink(url) ? url : null;
+    }
+
+    private static boolean isWebLink(String url) {
+        String lower = url.trim().toLowerCase(java.util.Locale.ROOT);
+        return lower.startsWith("https://") || lower.startsWith("http://");
     }
 
     /** QA D1923: the report's patient is its order's. */

@@ -167,7 +167,7 @@ public class DicomProxyService {
                 .build();
             auditEventLogService.logEvent(request);
         } catch (RuntimeException ex) {
-            log.warn("audit emission failed for DICOM proxy study {}: {}", studyUid, ex.toString());
+            log.warn("audit emission failed for a DICOM proxy lookup: {}", ex.getClass().getSimpleName());
         }
     }
 

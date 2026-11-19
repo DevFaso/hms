@@ -68,7 +68,11 @@ class ImagingReadRoleGuardTest {
         "ImagingResultController.runCriticalEscalation",
         "an operator trigger of the scheduled escalation sweep, not a clinical act on a study",
         "DicomProxyController.listInstances",
-        "image pixel data, not an order or a report: not part of the 2026-11-14 admin read scope");
+        "image pixel data, not an order or a report: not part of the 2026-11-14 admin read scope",
+        "DicomProxyController.viewer",
+        "image pixel data (the viewer manifest): a clinical role of the caller's own, see the pixel test",
+        "DicomProxyController.renderedFrame",
+        "image pixel data (a rendered frame): a clinical role of the caller's own, see the pixel test");
 
     private static final Pattern QUOTED_ROLE = Pattern.compile("'(?:ROLE_)?([A-Z_]+)'");
     private static final String CLINICAL_GATE =
@@ -135,6 +139,35 @@ class ImagingReadRoleGuardTest {
         assertThat(writes).as("the imaging writes were found").isGreaterThanOrEqualTo(10);
         assertThat(offenders).as("an imaging write an administrator can reach (user decision 2026-11-14)"
             + SourceScan.MANDATE).isEmpty();
+    }
+
+    /**
+     * The in-app viewer (V317): pixels are clinical content, so each viewer
+     * endpoint is a ClinicalActor gate over the four clinical imaging roles and
+     * names no admin role, which the super-admin's inherited DOCTOR would pass.
+     */
+    @Test
+    void theViewerReadsPixelsThroughAClinicalRoleOfTheCallersOwn() {
+        List<String> offenders = new ArrayList<>();
+        int viewerEndpoints = 0;
+        for (Method method : DicomProxyController.class.getDeclaredMethods()) {
+            GetMapping get = method.getAnnotation(GetMapping.class);
+            if (get == null || Arrays.stream(get.value()).noneMatch(path -> path.startsWith("/reports/"))) {
+                continue;
+            }
+            viewerEndpoints++;
+            String gate = gate(DicomProxyController.class, method);
+            if (!gate.startsWith(CLINICAL_GATE)) {
+                offenders.add(method.getName() + " is not a ClinicalActor.holdsOwnRole gate: " + gate);
+            }
+            Set<String> roles = roles(DicomProxyController.class, method);
+            if (!roles.equals(Set.of("DOCTOR", "NURSE", "MIDWIFE", "RADIOLOGIST"))) {
+                offenders.add(method.getName() + " admits " + roles);
+            }
+        }
+        assertThat(viewerEndpoints).as("the viewer endpoints were found").isGreaterThanOrEqualTo(2);
+        assertThat(offenders).as("an image-viewer endpoint an administrator alone can reach (user decision"
+            + " 2026-11-14)" + SourceScan.MANDATE).isEmpty();
     }
 
     @Test

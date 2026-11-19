@@ -9,7 +9,10 @@ import com.example.hms.model.embedded.PlatformServiceMetadata;
 import com.example.hms.model.platform.HospitalPlatformServiceLink;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.CascadeType;
+import com.example.hms.security.EncryptedStringConverter;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -121,6 +124,35 @@ public class Hospital extends BaseEntity {
     @Size(max = 500)
     @Column(name = "pacs_viewer_url_template", length = 500)
     private String pacsViewerUrlTemplate;
+
+    /**
+     * V317: the hospital admin's switch for the in-app image viewer. The
+     * platform flag {@code app.imaging.dicom-proxy.enabled} stays the master;
+     * both must be on for this hospital's PACS to be reached.
+     */
+    @Builder.Default
+    @Column(name = "pacs_enabled", nullable = false)
+    private boolean pacsEnabled = false;
+
+    /** V317: the PACS DICOMweb root, e.g. {@code https://pacs.example/dicom-web}. */
+    @Size(max = 500)
+    @Column(name = "pacs_dicomweb_base_url", length = 500)
+    private String pacsDicomwebBaseUrl;
+
+    /** V317: HTTP basic user for the PACS, when it needs one. */
+    @Size(max = 255)
+    @Column(name = "pacs_auth_username", length = 255)
+    private String pacsAuthUsername;
+
+    /**
+     * V317: the PACS password, AES-GCM at rest. Write-only: no API returns
+     * it (the settings read says only whether one is set) and it is never
+     * logged or serialised.
+     */
+    @JsonIgnore
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "pacs_auth_password", columnDefinition = "TEXT")
+    private String pacsAuthPassword;
 
     @Builder.Default
     @Column(nullable = false)

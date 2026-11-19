@@ -46,6 +46,58 @@ public class DicomProxyProperties {
      */
     private String baseUrl = "";
 
+    /**
+     * Platform-wide HTTP basic user for {@link #baseUrl} (the fallback PACS).
+     * A hospital's own PACS carries its own credentials (V317).
+     */
+    private String username = "";
+
+    /** Platform-wide PACS password; env only, never logged or returned. */
+    private String password = "";
+
+    /**
+     * Whether a PACS URL may name a private, loopback or link-local host.
+     * Off in production: a hospital admin types the URL, and the backend
+     * would otherwise call into the platform's own network on their behalf
+     * (SSRF). Turned on for local development against a docker Orthanc.
+     */
+    private boolean allowPrivateHosts = false;
+
+    /** The most instances one viewer manifest lists. */
+    private int maxInstances = 500;
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+    public boolean isAllowPrivateHosts() {
+        return allowPrivateHosts;
+    }
+
+    public void setAllowPrivateHosts(boolean allowPrivateHosts) {
+        this.allowPrivateHosts = allowPrivateHosts;
+    }
+
+    public int getMaxInstances() {
+        return maxInstances;
+    }
+
+    public void setMaxInstances(int maxInstances) {
+        this.maxInstances = maxInstances;
+    }
+
     public boolean isEnabled() {
         return enabled;
     }
