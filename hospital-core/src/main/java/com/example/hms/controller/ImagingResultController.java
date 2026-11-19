@@ -94,6 +94,19 @@ public class ImagingResultController {
 
     // ── Reads ────────────────────────────────────────────────────────────
 
+    /**
+     * QA D2306 (r63): a saved, unsigned read was hard to find again (the
+     * results list opens on « Définitif »). The reads waiting for the caller's
+     * signature, at the active hospital, oldest first.
+     */
+    @GetMapping("/to-sign")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'RADIOLOGIST','DOCTOR')")
+    @Operation(summary = "Imaging reports waiting for my signature",
+               description = "Unsigned, not voided reports the caller filed or interprets, at the active hospital.")
+    public ResponseEntity<List<ImagingReportResponseDTO>> getReportsToSign() {
+        return ResponseEntity.ok(imagingReportService.getReportsAwaitingMySignature());
+    }
+
     @GetMapping("/{reportId}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')")
     @Operation(summary = "Get imaging report by ID",

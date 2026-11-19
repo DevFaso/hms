@@ -32,6 +32,8 @@ GET /me/patient/education/{resourceId}
 GET /me/patient/encounters
 GET /me/patient/family-history
 GET /me/patient/health-summary
+GET /me/patient/imaging
+GET /me/patient/imaging/images/{imageId}/content
 GET /me/patient/immunizations
 GET /me/patient/lab-results
 GET /me/patient/lab-results/count
@@ -52,6 +54,8 @@ GET /me/patient/proxies
 GET /me/patient/proxy-access
 GET /me/patient/proxy-access/{patientId}/appointments
 GET /me/patient/proxy-access/{patientId}/billing
+GET /me/patient/proxy-access/{patientId}/imaging
+GET /me/patient/proxy-access/{patientId}/imaging/images/{imageId}/content
 GET /me/patient/proxy-access/{patientId}/lab-results
 GET /me/patient/proxy-access/{patientId}/lab-results/count
 GET /me/patient/proxy-access/{patientId}/medications

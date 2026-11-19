@@ -984,6 +984,38 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Imaging image (\S+) removed from imaging order (\S+)$/,
     params: ['image', 'order'],
   },
+  // QA D2464 / D2466 (r64): a key image withdrawn after signing; a caption corrected (ids only).
+  {
+    key: 'AUDIT.DESC.IMAGING_IMAGE_WITHDRAWN',
+    re: /^Imaging image (\S+) withdrawn from imaging order (\S+)$/,
+    params: ['image', 'order'],
+  },
+  {
+    key: 'AUDIT.DESC.IMAGING_IMAGE_CAPTION_CORRECTED',
+    re: /^Imaging image (\S+) caption corrected on imaging order (\S+)$/,
+    params: ['image', 'order'],
+  },
+  // QA D2342 (r63): the patient's « Imagerie » page (ids only).
+  {
+    key: 'AUDIT.DESC.IMAGING_PORTAL_READ_BY_PROXY',
+    re: /^Imaging reports of patient (\S+) read on the patient portal by a proxy \((\S+) studies\)$/,
+    params: ['patient', 'count'],
+  },
+  {
+    key: 'AUDIT.DESC.IMAGING_PORTAL_READ',
+    re: /^Imaging reports of patient (\S+) read on the patient portal \((\S+) studies\)$/,
+    params: ['patient', 'count'],
+  },
+  {
+    key: 'AUDIT.DESC.IMAGING_PORTAL_IMAGE_VIEWED_BY_PROXY',
+    re: /^Imaging image (\S+) of imaging order (\S+) viewed on the patient portal by a proxy$/,
+    params: ['image', 'order'],
+  },
+  {
+    key: 'AUDIT.DESC.IMAGING_PORTAL_IMAGE_VIEWED',
+    re: /^Imaging image (\S+) of imaging order (\S+) viewed on the patient portal$/,
+    params: ['image', 'order'],
+  },
   {
     key: 'AUDIT.DESC.LAB_CORRECTION',
     re: /^Correction: result (\S+) supersedes released result (\S+)$/,

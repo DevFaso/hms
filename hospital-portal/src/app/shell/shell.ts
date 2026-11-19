@@ -304,6 +304,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           route: '/my-lab-results',
         },
         {
+          icon: 'radiology',
+          label: 'Imaging',
+          translationKey: 'NAV.MY_IMAGING',
+          route: '/my-imaging',
+        },
+        {
           icon: 'monitor_heart',
           label: 'Vitals',
           translationKey: 'NAV.VITALS',

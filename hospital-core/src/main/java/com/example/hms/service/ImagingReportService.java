@@ -84,4 +84,10 @@ public interface ImagingReportService {
     List<ImagingReportResponseDTO> getReportsByHospitalAndStatus(UUID hospitalId, ImagingReportStatus status);
 
     List<ImagingReportResponseDTO> getReportsByHospitalAndModality(UUID hospitalId, ImagingModality modality);
+
+    /**
+     * QA D2306 (r63): the caller's « À signer » list at the active hospital:
+     * unsigned, live reads they filed or interpret, oldest first.
+     */
+    List<ImagingReportResponseDTO> getReportsAwaitingMySignature();
 }

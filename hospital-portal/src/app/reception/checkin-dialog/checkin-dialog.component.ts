@@ -25,6 +25,11 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { BillingService } from '../../services/billing.service';
 import { refusalReason } from '../../shared/refusal-reason';
+import {
+  newPaymentRequestKey,
+  paymentOutcomeUnknown,
+  retryPaymentWithSameKey,
+} from '../../shared/payment-request-key';
 import { saveResponse } from '../../shared/download-file';
 import { DESK_PAYMENT_METHODS, deskMethodNeedsReference } from '../desk-payment-methods';
 
@@ -103,6 +108,11 @@ export class CheckinDialogComponent {
   consentSignedName = signal('');
   notes = signal('');
   saving = signal(false);
+  /**
+   * Billing plan PR 11 (QA D2430): one key per opening of this dialog (it is created anew each time), sent
+   * with the copay on every press, so a check-in whose answer was lost is answered again, not refused.
+   */
+  readonly copayKey = newPaymentRequestKey();
 
   /**
    * QA D1591: the patient consented to care at pre-check-in; the box shows it
@@ -187,6 +197,7 @@ export class CheckinDialogComponent {
             ...(this.copayIsMobileMoney()
               ? { copayMobileMoneyOperator: this.copayOperator() }
               : {}),
+            ...(this.copayKey ? { copayClientRequestId: this.copayKey } : {}),
           }
         : {}),
       identityConfirmed: this.identityConfirmed(),
@@ -199,21 +210,32 @@ export class CheckinDialogComponent {
       request.consentSignedName = this.consentSignedName().trim() || null;
     }
 
-    this.receptionService.checkInPatient(request).subscribe({
-      next: (response) => {
-        this.saving.set(false);
-        // The server's `message` is English prose; the toast speaks the
-        // user's language instead (D121).
-        this.toast.success(this.translate.instant('RECEPTION.CHECK_IN_SUCCESS'));
-        this.downloadCopayReceipt(response);
-        this.checkedIn.emit(response);
-      },
-      error: (err) => {
-        this.saving.set(false);
-        const msg = refusalReason(err) ?? this.translate.instant('RECEPTION.CHECK_IN_FAILED');
-        this.toast.error(msg);
-      },
-    });
+    // Only a check-in that takes a copay carries a key, so only that one is sent again by itself.
+    const key = request.copayClientRequestId ?? undefined;
+    this.receptionService
+      .checkInPatient(request)
+      .pipe(retryPaymentWithSameKey(key))
+      .subscribe({
+        next: (response) => {
+          this.saving.set(false);
+          // The server's `message` is English prose; the toast speaks the
+          // user's language instead (D121).
+          this.toast.success(this.translate.instant('RECEPTION.CHECK_IN_SUCCESS'));
+          this.downloadCopayReceipt(response);
+          this.checkedIn.emit(response);
+        },
+        error: (err) => {
+          this.saving.set(false);
+          if (key && paymentOutcomeUnknown(err)) {
+            // QA D2430: no answer is not a failure; pressing again with the same key records nothing twice.
+            this.toast.warning(this.translate.instant('PAYMENT_OUTCOME.CHECK_IN_UNKNOWN'));
+          } else {
+            this.toast.error(
+              refusalReason(err) ?? this.translate.instant('RECEPTION.CHECK_IN_FAILED'),
+            );
+          }
+        },
+      });
   }
 
   /** QA D975: the copay's receipt, handed to the patient at the desk. */

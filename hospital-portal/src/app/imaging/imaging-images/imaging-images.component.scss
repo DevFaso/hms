@@ -321,3 +321,66 @@
     color: #9ca3af;
   }
 }
+
+// QA D2466 (r64): the staged files, each with its own caption; the caption editor in the viewer.
+.staged-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 6px 10px;
+    min-width: 0;
+  }
+
+  .caption-field {
+    flex: 1 1 200px;
+    min-width: 0;
+  }
+}
+
+.staged-send {
+  margin-top: 8px;
+}
+
+.caption-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+
+  input {
+    flex: 1 1 200px;
+    min-width: 0;
+  }
+}
+
+// QA D2464 (r64): withdrawn images, kept in the record with their reason.
+.withdrawn-images {
+  margin-top: 8px;
+  font-size: 13px;
+
+  ul {
+    list-style: none;
+    margin: 6px 0 0;
+    padding: 0;
+  }
+
+  li {
+    padding: 4px 0;
+    border-top: 1px solid #e2e8f0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.withdrawn-reason {
+  margin: 2px 0 0;
+  white-space: pre-line;
+}

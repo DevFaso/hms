@@ -278,6 +278,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .orElseThrow(() -> new ResourceNotFoundException("patient.portal.noRecord"));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public UUID resolveProxyRecordsPatientId(Authentication auth, UUID patientId) {
+        return verifyProxyAccess(auth, patientId, PROXY_VIEW_RECORDS).getId();
+    }
+
     // ── Profile ──────────────────────────────────────────────────────────
 
     @Override

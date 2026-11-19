@@ -933,4 +933,101 @@ class PharmacyPaymentServiceImplTest {
                         .isEqualTo("pharmacy.payment.noPrice"));
         verify(paymentRepository, never()).save(any());
     }
+
+    /* PR11-idempotency */
+    @Test
+    @DisplayName("PR 11 (QA D2430): a keyed checkout stores its key and is flushed")
+    void d2430_aKeyedPaymentStoresItsKey() {
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+        UUID key = UUID.randomUUID();
+        dto.setClientRequestId(key);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(paymentMapper.toEntity(any(), any(), any(), any(), any())).thenReturn(new PharmacyPayment());
+        when(paymentRepository.saveAndFlush(any())).thenAnswer(inv -> {
+            PharmacyPayment p = inv.getArgument(0);
+            p.setId(UUID.randomUUID());
+            return p;
+        });
+        when(paymentMapper.toResponseDTO(any())).thenReturn(PharmacyPaymentResponseDTO.builder().build());
+
+        service.createPayment(dto);
+
+        org.mockito.ArgumentCaptor<PharmacyPayment> saved = org.mockito.ArgumentCaptor.forClass(PharmacyPayment.class);
+        verify(paymentRepository).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getClientRequestId()).isEqualTo(key);
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("PR 11 (QA D2430): a checkout retried with its key answers with the first and records nothing")
+    void d2430_aRetriedPaymentIsAnsweredAgain() {
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+        UUID key = UUID.randomUUID();
+        dto.setClientRequestId(key);
+        PharmacyPayment prior = new PharmacyPayment();
+        prior.setId(UUID.randomUUID());
+        prior.setDispense(dispense);
+        prior.setAmount(new BigDecimal("2500"));
+        prior.setPaymentMethod(PharmacyPaymentMethod.CASH);
+        prior.setClientRequestId(key);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(paymentRepository.findByHospital_IdAndClientRequestId(hospitalId, key)).thenReturn(Optional.of(prior));
+        when(paymentMapper.toResponseDTO(prior)).thenReturn(PharmacyPaymentResponseDTO.builder().build());
+
+        assertThat(service.createPayment(dto)).isNotNull();
+        verify(paymentRepository, never()).save(any());
+        verify(paymentRepository, never()).saveAndFlush(any());
+        verify(mobileMoneyGateway, never()).charge(any());
+    }
+
+    @Test
+    @DisplayName("PR 11 (QA D2430): the key of another dispense's payment is refused, never answered")
+    void d2430_theKeyOfAnotherPaymentIsRefused() {
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+        UUID key = UUID.randomUUID();
+        dto.setClientRequestId(key);
+        Dispense other = new Dispense();
+        other.setId(UUID.randomUUID());
+        PharmacyPayment prior = new PharmacyPayment();
+        prior.setDispense(other);
+        prior.setAmount(new BigDecimal("2500"));
+        prior.setPaymentMethod(PharmacyPaymentMethod.CASH);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(paymentRepository.findByHospital_IdAndClientRequestId(hospitalId, key)).thenReturn(Optional.of(prior));
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        verify(paymentRepository, never()).saveAndFlush(any());
+    }
+
+    /* PR11-idempotency-race */
+    @Test
+    @DisplayName("PR 11 (QA D2430): a key another dispense took meanwhile (V310 index) is a 409, any other violation is not hidden")
+    void d2430_aKeyTakenMeanwhileIsAConflict() {
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+        dto.setClientRequestId(UUID.randomUUID());
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(paymentMapper.toEntity(any(), any(), any(), any(), any())).thenAnswer(inv -> new PharmacyPayment());
+        when(paymentRepository.saveAndFlush(any()))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException(
+                        "duplicate key value violates unique constraint \"uk_pp_hospital_client_request\""))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("fk_pp_patient"));
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    }
 }

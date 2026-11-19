@@ -50,6 +50,13 @@ public class CheckInRequestDTO {
      */
     private com.example.hms.enums.MobileMoneyOperator copayMobileMoneyOperator;
 
+    /**
+     * Billing plan PR 11 (QA D2430): the key the desk generates once per check-in dialog for its
+     * copay. A retried check-in carrying the key of a copay already recorded answers with that
+     * check-in instead of refusing it as already checked in. Optional: without it nothing changes.
+     */
+    private java.util.UUID copayClientRequestId;
+
     /** Whether the receptionist confirmed patient identity (photo ID, DOB, etc.). */
     @jakarta.validation.constraints.AssertTrue(message = "{reception.checkin.identityRequired}")
     @Builder.Default

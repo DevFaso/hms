@@ -813,4 +813,29 @@ class ImagingReportServiceImplTest {
             .isInstanceOf(AccessDeniedException.class);
         verify(imagingReportRepository, never()).findByHospital_IdAndReportStatusOrderByPerformedAtDesc(eq(hospitalB), any());
     }
+
+    // ── QA D2306 (r63): the « À signer » list ──────────────────────────
+
+    @Test
+    void toSign_readsTheCallersUnsignedLiveReadsAtTheActiveHospitalOnly() {
+        ImagingReport waiting = persistedReport();
+        when(imagingReportRepository.findAwaitingSignatureBy(eq(hospitalId), eq(callerUserId), any()))
+            .thenReturn(List.of(waiting));
+
+        assertThat(imagingReportService.getReportsAwaitingMySignature()).hasSize(1);
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<java.util.Collection<ImagingReportStatus>> closed =
+            org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(imagingReportRepository).findAwaitingSignatureBy(eq(hospitalId), eq(callerUserId), closed.capture());
+        assertThat(closed.getValue()).containsExactlyInAnyOrder(ImagingReportStatus.CANCELLED, ImagingReportStatus.ERROR);
+    }
+
+    @Test
+    void toSign_aGlobalViewWithNoHospitalHasNothingWaiting() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+
+        assertThat(imagingReportService.getReportsAwaitingMySignature()).isEmpty();
+        verify(imagingReportRepository, never()).findAwaitingSignatureBy(any(), any(), any());
+    }
 }

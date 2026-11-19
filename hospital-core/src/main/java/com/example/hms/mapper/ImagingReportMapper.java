@@ -40,7 +40,9 @@ public class ImagingReportMapper {
             // A link the browser opens: http(s) only, never javascript: or data:.
             return isWebLink(explicit) ? explicit : null;
         }
-        String template = report.getHospital() == null ? null : report.getHospital().getPacsViewerUrlTemplate();
+        // QA D2467 (r64): a hospital with its PACS switched off offers no « Voir dans le PACS ».
+        String template = report.getHospital() == null || !report.getHospital().isPacsEnabled()
+            ? null : report.getHospital().getPacsViewerUrlTemplate();
         if (template == null || template.isBlank()) {
             return null;
         }

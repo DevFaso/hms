@@ -83,16 +83,29 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
         // Billing plan PR 9: Orange Money and Moov Money are totalled apart at the close.
         com.example.hms.enums.MobileMoneyOperator operator = com.example.hms.service.payment.MobileMoneyOperators
                 .require(dto.getPaymentMethod(), dto.getMobileMoneyOperator(), "mobileMoneyOperator");
-        // QA D1129: the same mobile-money transaction is not counted at two tills.
-        if (dto.getPaymentMethod() == com.example.hms.enums.PharmacyPaymentMethod.MOBILE_MONEY) {
+        // QA D1129: the same mobile-money transaction is not counted at two tills. A keyed sale is checked once its
+        // key is known to be new (below): its own retry carries the reference it already recorded.
+        boolean mobileMoney = dto.getPaymentMethod() == com.example.hms.enums.PharmacyPaymentMethod.MOBILE_MONEY;
+        if (mobileMoney && dto.getClientRequestId() == null) {
             referenceRegistry.requireUnused(activeHospitalId, dto.getReferenceNumber(), "referenceNumber");
         }
 
         Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", dto.getHospitalId()));
 
-        Pharmacy pharmacy = pharmacyRepository.findByIdAndHospital_Id(dto.getPharmacyId(), activeHospitalId)
+        // Billing plan PR 11 (QA D2430): a keyed sale locks its pharmacy row, so a second submit with the same
+        // key waits for the first and answers with it. Without a key nothing changes.
+        Pharmacy pharmacy = (dto.getClientRequestId() == null
+                ? pharmacyRepository.findByIdAndHospital_Id(dto.getPharmacyId(), activeHospitalId)
+                : pharmacyRepository.findLockedByIdAndHospitalId(dto.getPharmacyId(), activeHospitalId))
                 .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notfound"));
+        PharmacySale keyed = findKeyedSale(activeHospitalId, pharmacy, dto);
+        if (keyed != null) {
+            return mapper.toResponseDTO(keyed);
+        }
+        if (mobileMoney && dto.getClientRequestId() != null) {
+            referenceRegistry.requireUnused(activeHospitalId, dto.getReferenceNumber(), "referenceNumber");
+        }
 
         Patient patient = null;
         if (dto.getPatientId() != null) {
@@ -115,6 +128,7 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
                 .mobileMoneyOperator(operator)
                 .status(PharmacySaleStatus.COMPLETED)
                 .notes(dto.getNotes())
+                .clientRequestId(dto.getClientRequestId())
                 .totalAmount(BigDecimal.ZERO)
                 .build();
 
@@ -130,10 +144,52 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
         }
         sale.setTotalAmount(runningTotal.setScale(2, RoundingMode.HALF_UP));
 
-        PharmacySale saved = saleRepository.save(sale);
+        PharmacySale saved = saveKeyed(sale);
         log.info("Recorded pharmacy sale {} ({} lines, total {})",
                 saved.getId(), saved.getLines().size(), saved.getTotalAmount());
         return mapper.toResponseDTO(saved);
+    }
+
+    /**
+     * Billing plan PR 11 (QA D2430): the sale this request's key already recorded at this hospital, when it is
+     * the same sale (same pharmacy, payment method, patient and number of lines). The key on another sale is
+     * refused, never answered with the sale it first named.
+     */
+    private PharmacySale findKeyedSale(UUID hospitalId, Pharmacy pharmacy, PharmacySaleRequestDTO dto) {
+        if (dto.getClientRequestId() == null) {
+            return null;
+        }
+        PharmacySale prior = saleRepository.findByHospital_IdAndClientRequestId(hospitalId, dto.getClientRequestId())
+                .orElse(null);
+        if (prior == null) {
+            return null;
+        }
+        UUID priorPatient = prior.getPatient() != null ? prior.getPatient().getId() : null;
+        boolean same = prior.getPharmacy() != null && pharmacy.getId().equals(prior.getPharmacy().getId())
+                && prior.getPaymentMethod() == dto.getPaymentMethod()
+                && java.util.Objects.equals(priorPatient, dto.getPatientId())
+                && prior.getLines().size() == dto.getLines().size();
+        if (!same) {
+            throw new com.example.hms.exception.ConflictException(
+                    com.example.hms.utility.MessageUtil.resolve("billing.payment.clientRequestReused"));
+        }
+        return prior;
+    }
+
+    /** Saves the sale; a keyed one is flushed so a key another sale took is refused here (V310). */
+    private PharmacySale saveKeyed(PharmacySale sale) {
+        if (sale.getClientRequestId() == null) {
+            return saleRepository.save(sale);
+        }
+        try {
+            return saleRepository.saveAndFlush(sale);
+        } catch (org.springframework.dao.DataIntegrityViolationException refused) {
+            if (String.valueOf(refused.getMostSpecificCause().getMessage()).contains("uk_psale_hospital_client_request")) {
+                throw new com.example.hms.exception.ConflictException(
+                        com.example.hms.utility.MessageUtil.resolve("billing.payment.clientRequestReused"));
+            }
+            throw refused;
+        }
     }
 
     /** The quantity each lot gives up across all the lines of a sale (positive quantities only). */

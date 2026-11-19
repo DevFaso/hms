@@ -52,6 +52,13 @@ public class PharmacySaleRequestDTO {
     @com.example.hms.validation.NoCardNumber
     private String notes;
 
+    /**
+     * Billing plan PR 11 (QA D2430): the key the portal generates once per payment dialog and
+     * sends again on a retry. A request carrying a key already recorded at this hospital answers
+     * with that payment instead of recording a second one. Optional: without it nothing changes.
+     */
+    private java.util.UUID clientRequestId;
+
     @Valid
     @NotEmpty(message = "{pharmacySale.lines.required}")
     private List<SaleLineRequestDTO> lines;

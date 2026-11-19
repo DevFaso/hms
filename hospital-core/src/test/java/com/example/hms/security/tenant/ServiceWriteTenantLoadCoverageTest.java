@@ -100,6 +100,8 @@ class ServiceWriteTenantLoadCoverageTest {
 
     /** Class.method#call → why the method needs no tenant check of its own. Frozen: it only shrinks. */
     private static final Map<String, String> RECORDED = Map.ofEntries(
+        Map.entry("PatientImagingPortalService.openImage#findById",
+            "QA D2342: a patient read, owned by patient id (the token's or the proxy grant's), never by hospital; another patient's image is 404"),
         // V312: the patient notification ledger and its sweep run with no request tenant (after commit, or a
         // scheduler thread). The ids come from the action that queued the row, which was tenant-checked
         // itself; the sweep only decides whether to send and never returns the rows to a caller.

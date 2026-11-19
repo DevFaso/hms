@@ -3,6 +3,7 @@ import {
   Component,
   DestroyRef,
   computed,
+  effect,
   inject,
   input,
   signal,
@@ -47,6 +48,12 @@ export class ImagingStudyViewerComponent {
   readonly studyLinked = input(false);
 
   readonly state = signal<ImagingViewerUiState>('IDLE');
+  /**
+   * QA D2467 (r64): whether the report's hospital has a PACS connected, asked
+   * once without calling the PACS. Until it says yes, nothing is shown: no
+   * « Voir les images » that can only answer « not enabled ».
+   */
+  readonly ready = signal(false);
   readonly manifest = signal<ImagingStudyViewer | null>(null);
   readonly index = signal(0);
   readonly frame = signal(1);
@@ -78,9 +85,20 @@ export class ImagingStudyViewerComponent {
 
   private frameSub: Subscription | null = null;
   private manifestSub: Subscription | null = null;
+  private readySub: Subscription | null = null;
 
   constructor() {
+    effect(() => {
+      const reportId = this.reportId();
+      this.readySub?.unsubscribe();
+      this.ready.set(false);
+      this.readySub = this.pacs.viewerReady(reportId).subscribe({
+        next: (answer) => this.ready.set(!!answer?.ready),
+        error: () => this.ready.set(false),
+      });
+    });
     inject(DestroyRef).onDestroy(() => {
+      this.readySub?.unsubscribe();
       this.manifestSub?.unsubscribe();
       this.frameSub?.unsubscribe();
       this.revoke();

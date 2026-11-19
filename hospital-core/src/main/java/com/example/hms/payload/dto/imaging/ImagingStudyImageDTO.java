@@ -12,6 +12,9 @@ import java.util.UUID;
  * @param locked           the report it belongs to is signed (or, for an image on the study,
  *                         the study has a signed report): it can no longer be removed
  * @param deletable        the caller may remove it now (its uploader or a radiologist, while unlocked)
+ * @param captionEditable  the caller may correct its caption (its uploader or a radiologist; QA D2466)
+ * @param withdrawable     the caller may withdraw it, with a reason, now that it is locked (a radiologist
+ *                         or the report's signer; QA D2464)
  */
 public record ImagingStudyImageDTO(
     UUID id,
@@ -23,6 +26,8 @@ public record ImagingStudyImageDTO(
     LocalDateTime uploadedAt,
     UUID uploadedByUserId,
     boolean locked,
-    boolean deletable
+    boolean deletable,
+    boolean captionEditable,
+    boolean withdrawable
 ) {
 }
