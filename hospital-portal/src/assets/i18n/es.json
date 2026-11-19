@@ -1809,6 +1809,8 @@
       "ACCOUNT_SETUP_REFUSED_LOCKED": "Configuración de la cuenta rechazada: la cuenta está bloqueada",
       "ACCESS_TOKEN_REVOKED_LOCKOUT": "Token de acceso revocado por el bloqueo desde la pantalla bloqueada",
       "REFRESH_TOKEN_REVOKED_LOCKOUT": "Token de actualización revocado por el bloqueo desde la pantalla bloqueada",
+      "SESSION_REVOKED": "Sesión terminada al cerrar sesión (todos sus tokens revocados)",
+      "SESSION_REVOKED_LOCKOUT": "Sesión terminada por el bloqueo desde la pantalla bloqueada (todos sus tokens revocados)",
       "TOKEN_PAIR_ROTATED": "Tokens de sesión renovados (jti de renovación anterior={{jti}})",
       "REFRESH_REFUSED_IDLE": "Renovación de sesión rechazada: inactividad demasiado larga",
       "REFRESH_REFUSED_SECOND_FACTOR": "Renovación de sesión rechazada: falta el segundo factor del proveedor de identidad o ha caducado",

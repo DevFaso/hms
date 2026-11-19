@@ -1809,6 +1809,8 @@
       "ACCOUNT_SETUP_REFUSED_LOCKED": "Configuration du compte refusée : le compte est verrouillé",
       "ACCESS_TOKEN_REVOKED_LOCKOUT": "Jeton d'accès révoqué au verrouillage depuis l'écran verrouillé",
       "REFRESH_TOKEN_REVOKED_LOCKOUT": "Jeton de rafraîchissement révoqué au verrouillage depuis l'écran verrouillé",
+      "SESSION_REVOKED": "Session de connexion terminée à la déconnexion (tous ses jetons révoqués)",
+      "SESSION_REVOKED_LOCKOUT": "Session de connexion terminée au verrouillage depuis l'écran verrouillé (tous ses jetons révoqués)",
       "TOKEN_PAIR_ROTATED": "Jetons de session renouvelés (ancien jti de renouvellement={{jti}})",
       "REFRESH_REFUSED_IDLE": "Renouvellement de session refusé : inactivité trop longue",
       "REFRESH_REFUSED_SECOND_FACTOR": "Renouvellement de session refusé : le second facteur du fournisseur d’identité est absent ou expiré",

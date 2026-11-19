@@ -178,4 +178,17 @@ class JwtTokenProviderTokenUseTest {
         assertThatThrownBy(() -> provider.getAuthenticationFromJwt(legacy))
             .isInstanceOf(BadCredentialsException.class);
     }
+
+    @Test
+    @DisplayName("QA D2184: the session id rides both tokens of a pair, and older tokens carry none")
+    void sessionIdRidesThePair() {
+        String sid = JwtTokenProvider.newSessionId();
+        String access = provider.generateAccessToken(descriptor(), null, sid);
+        String refresh = provider.generateRefreshToken(descriptor(), java.time.Instant.now(), sid);
+        assertThat(provider.getSessionId(access)).isEqualTo(sid);
+        assertThat(provider.getSessionId(refresh)).isEqualTo(sid);
+        assertThat(provider.getSessionId(provider.generateAccessToken(descriptor()))).isNull();
+        assertThat(provider.getSessionId("not-a-jwt")).isNull();
+        assertThat(JwtTokenProvider.newSessionId()).isNotEqualTo(sid);
+    }
 }
