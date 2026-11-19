@@ -1270,6 +1270,19 @@ export const routes: Routes = [
         loadComponent: () => import('./imaging/imaging').then((m) => m.ImagingComponent),
       },
 
+      // Imaging PACS connection (V317): the hospital's DICOMweb address and
+      // credentials for the in-app viewer. Hospital admin (own hospital) and
+      // super-admin, as the backend's /hospitals/{id}/pacs-settings.
+      {
+        path: 'imaging-pacs-settings',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./imaging/pacs-settings/pacs-settings.component').then(
+            (m) => m.PacsSettingsComponent,
+          ),
+      },
+
       // Consultations
       {
         path: 'consultations',

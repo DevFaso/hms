@@ -2069,7 +2069,9 @@
       "PAYER_RULE_ENDED": "Règle {{rule}} de la formule {{plan}} terminée, motif enregistré",
       "COVERAGE_PLAN_LINKED": "Couverture du patient {{insurance}} liée à la formule {{plan}}",
       "COVERAGE_PLAN_UNLINKED": "Couverture du patient {{insurance}} détachée de sa formule",
-      "PAYER_TERMS_ADDED": "Taux et plafonds {{terms}} ajoutés à la formule {{plan}}, en vigueur le {{from}} ; fermés : [{{closed}}] ; remplacés : [{{replaced}}]"
+      "PAYER_TERMS_ADDED": "Taux et plafonds {{terms}} ajoutés à la formule {{plan}}, en vigueur le {{from}} ; fermés : [{{closed}}] ; remplacés : [{{replaced}}]",
+      "PACS_SETTINGS_CHANGED": "Paramètres de connexion PACS modifiés",
+      "IMAGING_STUDY_VIEWED": "Examen d'imagerie ouvert dans la visionneuse ({{count}} images)"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -7828,7 +7830,8 @@
         "PRICE_LIST_IMPORT": "Import de grille tarifaire",
         "PATIENT_NOTIFICATION_DELIVERY": "Envoi de notification au patient",
         "PAYER": "Organisme payeur",
-        "PAYER_PLAN": "Formule d’organisme payeur"
+        "PAYER_PLAN": "Formule d’organisme payeur",
+        "HOSPITAL_PACS_SETTINGS": "Connexion PACS"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",
@@ -14390,5 +14393,88 @@
     "MAYBE_DELIVERED": "Le patient a peut-être déjà reçu ce message.",
     "RETRY_CONFIRM_TITLE": "Renvoyer ce message ?",
     "RETRY_CONFIRM_MESSAGE": "Le fournisseur n’a pas répondu : le patient a peut-être déjà reçu ce message. Le relancer peut l’envoyer deux fois."
+  },
+  "IMAGING_PACS": {
+    "STUDY_LINKED": "Étude liée",
+    "SHOW_IMAGES": "Voir les images",
+    "HIDE_IMAGES": "Masquer les images",
+    "LOADING": "Chargement…",
+    "IMAGES": "Images de l'examen",
+    "IMAGES_AVAILABLE": "Images disponibles ({{count}})",
+    "LINKED_BY_ACCESSION": "Étude retrouvée dans le PACS par son numéro d'accession.",
+    "TRUNCATED": "Cette étude compte plus d'images que la visionneuse n'en liste ; ouvrez-la dans le PACS pour toutes les voir.",
+    "VIEWPORT_LABEL": "Visionneuse d'images : les flèches changent d'image, Page préc. / Page suiv. changent de trame",
+    "IMAGE_ALT": "Image {{position}} sur {{count}}",
+    "IMAGE_LOADING": "Chargement de l'image…",
+    "IMAGE_FAILED": "Cette image n'a pas pu être chargée depuis le PACS.",
+    "PREVIOUS_IMAGE": "Image précédente",
+    "NEXT_IMAGE": "Image suivante",
+    "IMAGE_POSITION": "Image n° {{position}} sur {{count}}",
+    "PREVIOUS_FRAME": "Trame précédente",
+    "NEXT_FRAME": "Trame suivante",
+    "FRAME_POSITION": "Trame {{frame}} / {{count}}",
+    "BRIGHTNESS": "Luminosité",
+    "CONTRAST": "Contraste",
+    "INVERT": "Inverser",
+    "ZOOM_IN": "Agrandir",
+    "ZOOM_OUT": "Réduire",
+    "RESET_VIEW": "Réinitialiser l'affichage",
+    "KEYBOARD_HINT": "Clavier : les flèches changent d'image, Page préc. / Page suiv. changent de trame. Images de consultation, pas une console de diagnostic.",
+    "RETRY": "Réessayer",
+    "STUDY_UID": "UID de l'étude (Study Instance UID DICOM)",
+    "STUDY_UID_PLACEHOLDER": "ex. 1.2.840.113619.2.55.3",
+    "STATUS": {
+      "AVAILABLE": "Images disponibles.",
+      "PROXY_DISABLED": "L'affichage des images n'est pas encore activé sur e-Keneya. Adressez-vous à l'administrateur de la plateforme.",
+      "PACS_NOT_CONFIGURED": "Aucun PACS n'est connecté pour cet hôpital. Un administrateur de l'hôpital peut en connecter un dans Paramètres, Connexion PACS.",
+      "NO_STUDY_LINKED": "Aucune étude n'est liée à ce compte rendu. Saisissez son UID d'étude (ou son numéro d'accession) en modifiant le compte rendu.",
+      "STUDY_NOT_FOUND": "Le PACS n'a pas encore d'images pour cette étude.",
+      "ACCESSION_AMBIGUOUS": "Plusieurs études du PACS portent ce numéro d'accession. Saisissez l'UID de l'étude sur le compte rendu.",
+      "PACS_UNREACHABLE": "Le PACS n'a pas répondu. Réessayez dans un instant ou prévenez l'administrateur de l'hôpital.",
+      "ERROR": "Les images n'ont pas pu être chargées."
+    },
+    "SETTINGS": {
+      "TITLE": "Connexion PACS",
+      "SUBTITLE": "Connectez le PACS de l'hôpital (Orthanc, dcm4chee) pour que les cliniciens voient les examens d'imagerie dans e-Keneya. Les images passent par e-Keneya ; le navigateur ne contacte jamais le PACS.",
+      "HOSPITAL": "Hôpital",
+      "CHOOSE_HOSPITAL": "Choisissez un hôpital",
+      "LOAD_FAILED": "Les paramètres PACS n'ont pas pu être chargés.",
+      "STATE": {
+        "READY": "L'affichage des images est prêt pour cet hôpital.",
+        "PROXY_DISABLED": "L'affichage des images est désactivé pour toute la plateforme.",
+        "NOT_CONFIGURED": "Aucun PACS n'est connecté pour cet hôpital."
+      },
+      "SOURCE": {
+        "HOSPITAL": "Les images viennent du PACS propre à cet hôpital.",
+        "PLATFORM": "Les images viennent du PACS partagé de la plateforme."
+      },
+      "PLATFORM_OFF_HINT": "Vous pouvez enregistrer ces paramètres dès maintenant ; les images apparaîtront quand l'administrateur de la plateforme activera l'affichage des images.",
+      "ENABLED": "Utiliser le PACS de cet hôpital pour la visionneuse",
+      "BASE_URL": "Adresse DICOMweb du PACS",
+      "BASE_URL_HINT": "La racine DICOMweb du PACS, en https, par ex. https://pacs.exemple.org/dicom-web (Orthanc : /dicom-web).",
+      "USERNAME": "Nom d'utilisateur du PACS",
+      "PASSWORD": "Mot de passe du PACS",
+      "PASSWORD_KEEP": "Enregistré : laissez vide pour le conserver",
+      "PASSWORD_NONE": "Aucun enregistré",
+      "CLEAR_PASSWORD": "Supprimer le mot de passe enregistré",
+      "VIEWER_TEMPLATE": "Lien vers la visionneuse externe (facultatif)",
+      "VIEWER_TEMPLATE_HINT": "Ouvre l'étude dans la visionneuse du PACS. Variables : {studyInstanceUid}, {accessionNumber}.",
+      "TEST": "Tester la connexion",
+      "SAVED": "Paramètres PACS enregistrés.",
+      "SAVE_FAILED": "Les paramètres PACS n'ont pas pu être enregistrés.",
+      "TEST_RESULT": {
+        "OK": "Connexion réussie : le PACS a répondu.",
+        "PROXY_DISABLED": "L'affichage des images est désactivé pour toute la plateforme : rien n'a été tenté.",
+        "NOT_CONFIGURED": "Aucun PACS n'est connecté : enregistrez une adresse et activez-la d'abord.",
+        "UNREACHABLE": "Le PACS est injoignable (adresse, réseau ou PACS arrêté).",
+        "UNAUTHORIZED": "Le PACS a refusé le nom d'utilisateur ou le mot de passe.",
+        "REJECTED": "Le PACS a répondu, mais pas comme un serveur DICOMweb. Vérifiez l'adresse (elle se termine en général par /dicom-web).",
+        "URL_REFUSED": "Cette adresse est refusée : e-Keneya n'appelle que des adresses https publiques."
+      },
+      "CARD_TITLE": "Connexion PACS",
+      "CARD_DESC": "Connectez le PACS de l'hôpital pour que les cliniciens voient les examens d'imagerie dans e-Keneya.",
+      "CARD_ACTION": "Configurer le PACS",
+      "BASE_URL_REQUIRED": "Saisissez l'adresse DICOMweb du PACS pour activer la visionneuse."
+    }
   }
 }

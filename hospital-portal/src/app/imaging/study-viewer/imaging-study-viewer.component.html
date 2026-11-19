@@ -1,0 +1,199 @@
+<section class="pacs-viewer" [attr.data-testid]="'imaging-viewer-' + reportId()">
+  @switch (state()) {
+    @case ('IDLE') {
+      <div class="pacs-viewer-bar">
+        @if (studyLinked()) {
+          <span class="pacs-chip pacs-chip-linked" data-testid="imaging-viewer-linked">
+            <span class="material-symbols-outlined" aria-hidden="true">link</span>
+            {{ 'IMAGING_PACS.STUDY_LINKED' | translate }}
+          </span>
+        }
+        <button
+          type="button"
+          class="btn-secondary"
+          data-testid="imaging-viewer-open"
+          (click)="open()"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">photo_library</span>
+          {{ 'IMAGING_PACS.SHOW_IMAGES' | translate }}
+        </button>
+      </div>
+    }
+    @case ('LOADING') {
+      <p class="pacs-viewer-note" role="status" aria-live="polite">
+        {{ 'IMAGING_PACS.LOADING' | translate }}
+      </p>
+    }
+    @case ('AVAILABLE') {
+      <div class="pacs-viewer-bar">
+        <span class="pacs-chip pacs-chip-available" data-testid="imaging-viewer-available">
+          <span class="material-symbols-outlined" aria-hidden="true">image</span>
+          {{ 'IMAGING_PACS.IMAGES_AVAILABLE' | translate: { count: instances().length } }}
+        </span>
+        @if (manifest()?.linkedBy === 'ACCESSION') {
+          <span class="pacs-viewer-hint">{{ 'IMAGING_PACS.LINKED_BY_ACCESSION' | translate }}</span>
+        }
+        <button type="button" class="btn-link" data-testid="imaging-viewer-close" (click)="close()">
+          {{ 'IMAGING_PACS.HIDE_IMAGES' | translate }}
+        </button>
+      </div>
+      @if (manifest()?.truncated) {
+        <p class="pacs-viewer-hint">{{ 'IMAGING_PACS.TRUNCATED' | translate }}</p>
+      }
+      <div
+        class="pacs-viewport"
+        tabindex="0"
+        role="group"
+        [attr.aria-label]="'IMAGING_PACS.VIEWPORT_LABEL' | translate"
+        (keydown)="onKey($event)"
+      >
+        @if (imageUrl(); as url) {
+          <img
+            class="pacs-image"
+            data-testid="imaging-viewer-image"
+            [src]="url"
+            [alt]="
+              'IMAGING_PACS.IMAGE_ALT'
+                | translate: { position: index() + 1, count: instances().length }
+            "
+            [style.filter]="imageFilter()"
+            [style.transform]="'scale(' + zoom() + ')'"
+          />
+        }
+        @if (imageLoading()) {
+          <p class="pacs-viewport-note" role="status" aria-live="polite">
+            {{ 'IMAGING_PACS.IMAGE_LOADING' | translate }}
+          </p>
+        }
+        @if (imageFailed()) {
+          <p class="pacs-viewport-note" role="alert" data-testid="imaging-viewer-image-error">
+            {{ 'IMAGING_PACS.IMAGE_FAILED' | translate }}
+          </p>
+        }
+      </div>
+      <div class="pacs-controls">
+        <button
+          type="button"
+          class="btn-secondary"
+          [disabled]="index() === 0"
+          [attr.aria-label]="'IMAGING_PACS.PREVIOUS_IMAGE' | translate"
+          [title]="'IMAGING_PACS.PREVIOUS_IMAGE' | translate"
+          (click)="go(-1)"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
+        </button>
+        <label class="pacs-slider">
+          <span>{{
+            'IMAGING_PACS.IMAGE_POSITION'
+              | translate: { position: index() + 1, count: instances().length }
+          }}</span>
+          <input
+            type="range"
+            min="0"
+            [max]="lastIndex()"
+            [value]="index()"
+            (change)="goTo(+$any($event.target).value)"
+          />
+        </label>
+        <button
+          type="button"
+          class="btn-secondary"
+          [disabled]="index() >= lastIndex()"
+          [attr.aria-label]="'IMAGING_PACS.NEXT_IMAGE' | translate"
+          [title]="'IMAGING_PACS.NEXT_IMAGE' | translate"
+          (click)="go(1)"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
+        </button>
+        @if (frameCount() > 1) {
+          <span class="pacs-frames">
+            <button type="button" class="btn-link" [disabled]="frame() === 1" (click)="goFrame(-1)">
+              {{ 'IMAGING_PACS.PREVIOUS_FRAME' | translate }}
+            </button>
+            {{ 'IMAGING_PACS.FRAME_POSITION' | translate: { frame: frame(), count: frameCount() } }}
+            <button
+              type="button"
+              class="btn-link"
+              [disabled]="frame() >= frameCount()"
+              (click)="goFrame(1)"
+            >
+              {{ 'IMAGING_PACS.NEXT_FRAME' | translate }}
+            </button>
+          </span>
+        }
+      </div>
+      <div class="pacs-controls pacs-adjust">
+        <label class="pacs-slider">
+          <span>{{ 'IMAGING_PACS.BRIGHTNESS' | translate }}</span>
+          <input
+            type="range"
+            min="20"
+            max="300"
+            [value]="brightness()"
+            (input)="setBrightness($any($event.target).value)"
+          />
+        </label>
+        <label class="pacs-slider">
+          <span>{{ 'IMAGING_PACS.CONTRAST' | translate }}</span>
+          <input
+            type="range"
+            min="20"
+            max="300"
+            [value]="contrast()"
+            (input)="setContrast($any($event.target).value)"
+          />
+        </label>
+        <button
+          type="button"
+          class="btn-secondary"
+          [attr.aria-pressed]="invert()"
+          (click)="invert.set(!invert())"
+        >
+          {{ 'IMAGING_PACS.INVERT' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-secondary"
+          [attr.aria-label]="'IMAGING_PACS.ZOOM_OUT' | translate"
+          [title]="'IMAGING_PACS.ZOOM_OUT' | translate"
+          (click)="zoomBy(0.8)"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">zoom_out</span>
+        </button>
+        <button
+          type="button"
+          class="btn-secondary"
+          [attr.aria-label]="'IMAGING_PACS.ZOOM_IN' | translate"
+          [title]="'IMAGING_PACS.ZOOM_IN' | translate"
+          (click)="zoomBy(1.25)"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">zoom_in</span>
+        </button>
+        <button type="button" class="btn-link" (click)="reset()">
+          {{ 'IMAGING_PACS.RESET_VIEW' | translate }}
+        </button>
+      </div>
+      <p class="pacs-viewer-hint">{{ 'IMAGING_PACS.KEYBOARD_HINT' | translate }}</p>
+    }
+    @case ('ERROR') {
+      <div class="pacs-viewer-bar">
+        <p class="pacs-viewer-note" role="alert" data-testid="imaging-viewer-status">
+          {{ 'IMAGING_PACS.STATUS.ERROR' | translate }}
+        </p>
+        <button type="button" class="btn-link" (click)="open()">
+          {{ 'IMAGING_PACS.RETRY' | translate }}
+        </button>
+      </div>
+    }
+    @default {
+      <div class="pacs-viewer-bar">
+        <p class="pacs-viewer-note" role="status" data-testid="imaging-viewer-status">
+          {{ 'IMAGING_PACS.STATUS.' + state() | translate }}
+        </p>
+        <button type="button" class="btn-link" (click)="close()">
+          {{ 'IMAGING_PACS.HIDE_IMAGES' | translate }}
+        </button>
+      </div>
+    }
+  }
+</section>

@@ -1,0 +1,168 @@
+<div class="pacs-settings-page">
+  <header class="pacs-settings-head">
+    <h1>
+      <span class="material-symbols-outlined" aria-hidden="true">radiology</span>
+      {{ 'IMAGING_PACS.SETTINGS.TITLE' | translate }}
+    </h1>
+    <p class="pacs-settings-sub">{{ 'IMAGING_PACS.SETTINGS.SUBTITLE' | translate }}</p>
+  </header>
+
+  @if (isSuperAdmin()) {
+    <div class="pacs-field">
+      <label for="pacs-hospital">{{ 'IMAGING_PACS.SETTINGS.HOSPITAL' | translate }}</label>
+      <select
+        id="pacs-hospital"
+        data-testid="pacs-settings-hospital"
+        [value]="hospitalId()"
+        (change)="selectHospital($any($event.target).value)"
+      >
+        <option value="">{{ 'IMAGING_PACS.SETTINGS.CHOOSE_HOSPITAL' | translate }}</option>
+        @for (h of hospitals(); track h.id) {
+          <option [value]="h.id">{{ h.name }}</option>
+        }
+      </select>
+    </div>
+  }
+
+  @if (loadFailed()) {
+    <p class="pacs-settings-note" role="alert">
+      {{ 'IMAGING_PACS.SETTINGS.LOAD_FAILED' | translate }}
+    </p>
+  }
+  @if (loading()) {
+    <p class="pacs-settings-note" role="status">{{ 'IMAGING_PACS.LOADING' | translate }}</p>
+  }
+
+  @if (settings(); as s) {
+    <section class="pacs-settings-status" data-testid="pacs-settings-state">
+      <strong>{{ 'IMAGING_PACS.SETTINGS.STATE.' + s.state | translate }}</strong>
+      @if (s.effectiveSource) {
+        <span>{{ 'IMAGING_PACS.SETTINGS.SOURCE.' + s.effectiveSource | translate }}</span>
+      }
+      @if (!s.platformProxyEnabled) {
+        <p class="pacs-settings-note">
+          {{ 'IMAGING_PACS.SETTINGS.PLATFORM_OFF_HINT' | translate }}
+        </p>
+      }
+    </section>
+
+    <form class="pacs-settings-form" (ngSubmit)="save()" autocomplete="off">
+      <div class="pacs-field pacs-field-inline">
+        <input
+          id="pacs-enabled"
+          name="enabled"
+          type="checkbox"
+          data-testid="pacs-settings-enabled"
+          [(ngModel)]="form.enabled"
+        />
+        <label for="pacs-enabled">{{ 'IMAGING_PACS.SETTINGS.ENABLED' | translate }}</label>
+      </div>
+
+      <div class="pacs-field">
+        <label for="pacs-base-url"
+          >{{ 'IMAGING_PACS.SETTINGS.BASE_URL' | translate }}{{ form.enabled ? ' *' : '' }}</label
+        >
+        <input
+          id="pacs-base-url"
+          name="dicomwebBaseUrl"
+          type="url"
+          [required]="form.enabled"
+          maxlength="500"
+          placeholder="https://pacs.example.org/dicom-web"
+          data-testid="pacs-settings-base-url"
+          [(ngModel)]="form.dicomwebBaseUrl"
+        />
+        <small>{{ 'IMAGING_PACS.SETTINGS.BASE_URL_HINT' | translate }}</small>
+      </div>
+
+      <div class="pacs-field">
+        <label for="pacs-username">{{ 'IMAGING_PACS.SETTINGS.USERNAME' | translate }}</label>
+        <input
+          id="pacs-username"
+          name="authUsername"
+          type="text"
+          maxlength="255"
+          autocomplete="off"
+          [(ngModel)]="form.authUsername"
+        />
+      </div>
+
+      <div class="pacs-field">
+        <label for="pacs-password">{{ 'IMAGING_PACS.SETTINGS.PASSWORD' | translate }}</label>
+        <input
+          id="pacs-password"
+          name="authPassword"
+          type="password"
+          maxlength="500"
+          autocomplete="new-password"
+          data-testid="pacs-settings-password"
+          [placeholder]="
+            (s.passwordSet
+              ? 'IMAGING_PACS.SETTINGS.PASSWORD_KEEP'
+              : 'IMAGING_PACS.SETTINGS.PASSWORD_NONE'
+            ) | translate
+          "
+          [(ngModel)]="form.authPassword"
+        />
+        @if (s.passwordSet) {
+          <span class="pacs-field-inline">
+            <input
+              id="pacs-clear-password"
+              name="clearPassword"
+              type="checkbox"
+              [(ngModel)]="form.clearPassword"
+            />
+            <label for="pacs-clear-password">{{
+              'IMAGING_PACS.SETTINGS.CLEAR_PASSWORD' | translate
+            }}</label>
+          </span>
+        }
+      </div>
+
+      <div class="pacs-field">
+        <label for="pacs-viewer-template">{{
+          'IMAGING_PACS.SETTINGS.VIEWER_TEMPLATE' | translate
+        }}</label>
+        <input
+          id="pacs-viewer-template"
+          name="viewerUrlTemplate"
+          type="text"
+          maxlength="500"
+          placeholder="https://pacs.example.org/ohif/viewer?StudyInstanceUIDs={studyInstanceUid}"
+          [(ngModel)]="form.viewerUrlTemplate"
+        />
+        <small>{{ 'IMAGING_PACS.SETTINGS.VIEWER_TEMPLATE_HINT' | translate }}</small>
+      </div>
+
+      <div class="pacs-actions">
+        <button
+          type="submit"
+          class="btn-primary"
+          data-testid="pacs-settings-save"
+          [disabled]="saving()"
+        >
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-secondary"
+          data-testid="pacs-settings-test"
+          [disabled]="testing()"
+          (click)="test()"
+        >
+          {{ 'IMAGING_PACS.SETTINGS.TEST' | translate }}
+        </button>
+      </div>
+      @if (testResult(); as r) {
+        <p
+          class="pacs-settings-note"
+          role="status"
+          aria-live="polite"
+          data-testid="pacs-settings-test-result"
+        >
+          {{ 'IMAGING_PACS.SETTINGS.TEST_RESULT.' + r.result | translate }}
+        </p>
+      }
+    </form>
+  }
+</div>
