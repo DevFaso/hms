@@ -332,9 +332,9 @@ class InstrumentOutboxServiceImplTest {
 
     @Test
     void getMessage_refusesTheUnscopedSuperAdminView() {
-        // requireActiveHospitalId() answers null for an unpinned super-admin;
-        // isHandledBy(null) is true, so without this check that view read
-        // every hospital's patient names.
+        // An unpinned super-admin has no active hospital, and an order counts
+        // as handled by "no hospital": without this check that view read every
+        // hospital's patient names.
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
         UUID id = UUID.randomUUID();
 
