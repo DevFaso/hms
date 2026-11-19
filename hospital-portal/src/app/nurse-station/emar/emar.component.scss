@@ -198,13 +198,17 @@
   }
 }
 
+/* QA D2282 (r63): on a phone the scan buttons, « Voie » and « Refus du
+   patient » were cut at the right edge; the rows wrap and the fields shrink. */
 .emar__scan-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
 .emar__input {
   flex: 1;
+  min-width: 0;
   border: 1px solid var(--color-border, #cbd5e0);
   border-radius: 0.375rem;
   padding: 0.5rem 0.75rem;
@@ -321,6 +325,7 @@
 
 .emar__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 
@@ -337,7 +342,8 @@
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  flex: 1;
+  flex: 1 1 10rem;
+  min-width: 0;
 }
 
 .emar__prescribed {
