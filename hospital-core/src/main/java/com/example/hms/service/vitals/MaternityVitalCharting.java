@@ -125,6 +125,9 @@ public class MaternityVitalCharting {
     }
 
     private PatientVitalSign save(PatientVitalSign vital, boolean alerted) {
+        // QA D1077: the measure rules every vitals write holds (these rows carry no child-only measure).
+        com.example.hms.service.support.PatientMeasureRules.requireVitalSignApplicable(
+            vital, null, java.time.LocalDate.now(java.time.ZoneId.systemDefault()));
         vitalSignJudgement.judge(vital);
         if (alerted) {
             vital.setClinicallySignificant(true);
