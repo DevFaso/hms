@@ -65,7 +65,10 @@ import static org.mockito.Mockito.when;
 @DisplayName("D2730: a proxy never reads a sensitive (HIV-tagged) visit's results or medicines")
 class ProxySensitiveRecordsTest {
 
-    private final ProxyRecordFilter filter = new ProxyRecordFilter(new SensitivityClassifierImpl());
+    private final com.example.hms.repository.LabTestDefinitionRepository labTestDefinitionRepository =
+        mock(com.example.hms.repository.LabTestDefinitionRepository.class);
+    private final ProxyRecordFilter filter =
+        new ProxyRecordFilter(new SensitivityClassifierImpl(), labTestDefinitionRepository);
     private final UUID patientId = UUID.randomUUID();
     private final Patient patient = new Patient();
     private final Hospital hospital = new Hospital();
@@ -160,6 +163,148 @@ class ProxySensitiveRecordsTest {
             problem.setSensitivityCategory(SensitivityCategory.HIV);
             assertThat(filter.admits(problem)).isFalse();
             assertThat(filter.admits(new PatientProblem())).isTrue();
+        }
+    }
+
+    /** One version of a hospital's test, as the catalogue holds it. */
+    private LabTestDefinition version(String code, com.example.hms.enums.LabTestDefinitionApprovalStatus status,
+                                      SensitivityCategory tag) {
+        LabTestDefinition definition = new LabTestDefinition();
+        definition.setId(UUID.randomUUID());
+        definition.setTestCode(code);
+        definition.setHospital(hospital);
+        definition.setApprovalStatus(status);
+        definition.setSensitivityCategory(tag);
+        return definition;
+    }
+
+    private LabResult resultOf(LabTestDefinition definition, Encounter visit) {
+        LabResult r = result(definition.getTestCode(), "Positif", visit, null, 1);
+        r.getLabOrder().setLabTestDefinition(definition);
+        return r;
+    }
+
+    @Nested
+    @DisplayName("a test's versions")
+    class TestVersions {
+
+        @Test
+        @DisplayName("version 2 is tagged: the results ordered on the retired version 1 are withheld too")
+        void aNewVersionTagsTheOldVersionsResults() {
+            LabTestDefinition v1 = version("TPHA", com.example.hms.enums.LabTestDefinitionApprovalStatus.RETIRED, null);
+            LabTestDefinition v2 = version("TPHA", com.example.hms.enums.LabTestDefinitionApprovalStatus.ACTIVE,
+                SensitivityCategory.REPRODUCTIVE_HEALTH);
+            when(labTestDefinitionRepository.findLiveByCodeAtHospital("TPHA", hospital.getId())).thenReturn(List.of(v2));
+
+            assertThat(filter.admits(resultOf(v1, generalVisit))).as("a result graded against version 1").isFalse();
+            assertThat(filter.admits(resultOf(v2, generalVisit))).isFalse();
+            assertThat(filter.labResults().test(resultOf(v1, generalVisit))).as("the per-read filter").isFalse();
+        }
+
+        @Test
+        @DisplayName("a tagged draft of the next version changes nothing until it is live")
+        void aDraftVersionDoesNotDecide() {
+            LabTestDefinition v1 = version("NFS", com.example.hms.enums.LabTestDefinitionApprovalStatus.ACTIVE, null);
+            LabTestDefinition draft = version("NFS", com.example.hms.enums.LabTestDefinitionApprovalStatus.DRAFT,
+                SensitivityCategory.HIV);
+            when(labTestDefinitionRepository.findLiveByCodeAtHospital("NFS", hospital.getId()))
+                .thenReturn(List.of(v1, draft));
+
+            assertThat(filter.admits(resultOf(v1, generalVisit))).isTrue();
+        }
+
+        @Test
+        @DisplayName("the live version's tag was removed by the director: the test's results are ordinary again")
+        void theLiveVersionDecidesWhenTheTagIsRemoved() {
+            LabTestDefinition v1 = version("HCG", com.example.hms.enums.LabTestDefinitionApprovalStatus.RETIRED,
+                SensitivityCategory.REPRODUCTIVE_HEALTH);
+            LabTestDefinition v2 = version("HCG", com.example.hms.enums.LabTestDefinitionApprovalStatus.ACTIVE, null);
+            when(labTestDefinitionRepository.findLiveByCodeAtHospital("HCG", hospital.getId())).thenReturn(List.of(v2));
+
+            assertThat(filter.admits(resultOf(v1, generalVisit))).isTrue();
+        }
+
+        @Test
+        @DisplayName("a test with no live version left keeps the tag of the version the order used")
+        void aDiscontinuedTestKeepsItsOwnTag() {
+            LabTestDefinition retired = version("VIH", com.example.hms.enums.LabTestDefinitionApprovalStatus.RETIRED,
+                SensitivityCategory.HIV);
+            when(labTestDefinitionRepository.findLiveByCodeAtHospital("VIH", hospital.getId())).thenReturn(List.of());
+
+            assertThat(filter.admits(resultOf(retired, generalVisit))).isFalse();
+        }
+
+        @Test
+        @DisplayName("one read resolves each test once, however many results it has")
+        void oneLookupPerTestPerRead() {
+            LabTestDefinition v1 = version("GLY", com.example.hms.enums.LabTestDefinitionApprovalStatus.ACTIVE, null);
+            when(labTestDefinitionRepository.findLiveByCodeAtHospital("GLY", hospital.getId())).thenReturn(List.of(v1));
+            java.util.function.Predicate<LabResult> oneRead = filter.labResults();
+
+            assertThat(List.of(resultOf(v1, generalVisit), resultOf(v1, generalVisit), resultOf(v1, generalVisit)))
+                .allMatch(oneRead);
+            org.mockito.Mockito.verify(labTestDefinitionRepository, org.mockito.Mockito.times(1))
+                .findLiveByCodeAtHospital("GLY", hospital.getId());
+        }
+    }
+
+    @Nested
+    @DisplayName("diagnoses and vitals")
+    class DiagnosesAndVitals {
+
+        @Test
+        @DisplayName("« B20 Maladie due au VIH » recorded in the HIV visit is withheld with no tag of its own")
+        void aProblemFollowsTheVisitItWasRecordedIn() {
+            PatientProblem b20 = new PatientProblem();
+            b20.setProblemDisplay("B20 Maladie due au VIH");
+            b20.setSourceEncounter(hivVisit);
+            PatientProblem asthma = new PatientProblem();
+            asthma.setProblemDisplay("Asthme");
+            asthma.setSourceEncounter(generalVisit);
+
+            assertThat(filter.admits(b20)).isFalse();
+            assertThat(filter.admits(asthma)).isTrue();
+        }
+
+        @Test
+        @DisplayName("a vital taken at the HIV visit's hospital on its day is withheld; another day's is not")
+        void aVitalFollowsTheSensitiveVisitItWasTakenDuring() {
+            LocalDateTime visitTime = LocalDateTime.now().minusDays(10);
+            hivVisit.setHospital(hospital);
+            hivVisit.setEncounterDate(visitTime);
+            hivVisit.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+            hivVisit.setCheckoutTimestamp(visitTime.plusHours(1));
+            List<Encounter> sensitive = filter.sensitiveAmong(List.of(hivVisit, generalVisit));
+            assertThat(sensitive).containsExactly(hivVisit);
+
+            assertThat(filter.admits(vital(hospital, visitTime.plusMinutes(5)), sensitive)).isFalse();
+            assertThat(filter.admits(vital(hospital, visitTime.minusDays(3)), sensitive)).isTrue();
+            Hospital elsewhere = new Hospital();
+            elsewhere.setId(UUID.randomUUID());
+            assertThat(filter.admits(vital(elsewhere, visitTime.plusMinutes(5)), sensitive))
+                .as("another hospital's reading that day").isTrue();
+            assertThat(filter.admits(vital(hospital, visitTime.plusMinutes(5)), List.of()))
+                .as("a patient with no sensitive visit").isTrue();
+        }
+
+        @Test
+        @DisplayName("an open sensitive stay withholds every vital taken there since it began")
+        void anOpenSensitiveStayCoversEveryDaySinceItBegan() {
+            hivVisit.setHospital(hospital);
+            hivVisit.setEncounterDate(LocalDateTime.now().minusDays(4));
+            hivVisit.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+            List<Encounter> sensitive = List.of(hivVisit);
+
+            assertThat(filter.admits(vital(hospital, LocalDateTime.now().minusDays(2)), sensitive)).isFalse();
+            assertThat(filter.admits(vital(hospital, LocalDateTime.now().minusDays(6)), sensitive)).isTrue();
+        }
+
+        private com.example.hms.model.PatientVitalSign vital(Hospital at, LocalDateTime recordedAt) {
+            com.example.hms.model.PatientVitalSign vital = new com.example.hms.model.PatientVitalSign();
+            vital.setId(UUID.randomUUID());
+            vital.setHospital(at);
+            vital.setRecordedAt(recordedAt);
+            return vital;
         }
     }
 

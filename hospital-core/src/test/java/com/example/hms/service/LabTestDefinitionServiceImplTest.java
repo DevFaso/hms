@@ -506,6 +506,84 @@ class LabTestDefinitionServiceImplTest {
         }
     }
 
+    // ---- QA D2730: a test's sensitive category ----
+
+    private void updatingAs(User user, MockedStatic<SecurityUtils> sec) {
+        holdsRolesAtHospital(user);
+        sec.when(SecurityUtils::getCurrentUsername).thenReturn(user.getUsername());
+        when(userRepository.findByUsername(user.getUsername())).thenReturn(Optional.of(user));
+        when(repository.findById(defId)).thenReturn(Optional.of(definition));
+        lenient().when(repository.save(definition)).thenReturn(definition);
+        lenient().when(mapper.toDto(definition)).thenReturn(responseDTO);
+        requestDTO.setAssignmentId(null);
+    }
+
+    @Test
+    void d2730_onlyTheLabDirectorTagsATest() {
+        User scientist = userWithRole("ROLE_LAB_SCIENTIST");
+        requestDTO.setSensitivityCategory(com.example.hms.enums.SensitivityCategory.HIV);
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            updatingAs(scientist, sec);
+
+            assertThatThrownBy(() -> service.update(defId, requestDTO))
+                .isInstanceOf(AccessDeniedException.class);
+            assertThat(definition.getSensitivityCategory()).isNull();
+            verify(repository, never()).save(any());
+        }
+    }
+
+    @Test
+    void d2730_theLabDirectorTagsATest_andTheChangeIsAudited() {
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        requestDTO.setSensitivityCategory(com.example.hms.enums.SensitivityCategory.HIV);
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            updatingAs(director, sec);
+
+            service.update(defId, requestDTO);
+
+            assertThat(definition.getSensitivityCategory()).isEqualTo(com.example.hms.enums.SensitivityCategory.HIV);
+            org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+                org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+            verify(auditEventLogService).logEvent(audit.capture());
+            assertThat(audit.getValue().getEventDescription())
+                .isEqualTo("Sensitivity category changed from null to HIV");
+            assertThat(audit.getValue().getEntityType()).isEqualTo("LAB_TEST_DEFINITION_SENSITIVITY");
+        }
+    }
+
+    @Test
+    void d2730_aBodyThatLeavesTheTagOutKeepsIt_whoeverSendsIt() {
+        User scientist = userWithRole("ROLE_LAB_SCIENTIST");
+        definition.setSensitivityCategory(com.example.hms.enums.SensitivityCategory.REPRODUCTIVE_HEALTH);
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            updatingAs(scientist, sec);
+
+            service.update(defId, requestDTO);
+
+            assertThat(definition.getSensitivityCategory()).isEqualTo(com.example.hms.enums.SensitivityCategory.REPRODUCTIVE_HEALTH);
+            verify(auditEventLogService, never()).logEvent(any());
+        }
+    }
+
+    @Test
+    void d2730_theTagIsRemovedOnlyByTheExplicitFlag_andOnlyByTheDirector() {
+        definition.setSensitivityCategory(com.example.hms.enums.SensitivityCategory.HIV);
+        requestDTO.setClearSensitivityCategory(true);
+        User scientist = userWithRole("ROLE_LAB_SCIENTIST");
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            updatingAs(scientist, sec);
+            assertThatThrownBy(() -> service.update(defId, requestDTO))
+                .isInstanceOf(AccessDeniedException.class);
+            assertThat(definition.getSensitivityCategory()).isEqualTo(com.example.hms.enums.SensitivityCategory.HIV);
+        }
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            updatingAs(director, sec);
+            service.update(defId, requestDTO);
+            assertThat(definition.getSensitivityCategory()).isNull();
+        }
+    }
+
     // ---- delete ----
 
     @Test

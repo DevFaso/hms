@@ -109,7 +109,11 @@ class PatientFacingUnfinishedContentGuardTest {
         Map.entry("service/impl/PatientVitalSignServiceImpl.java#getRecentVitalsForPatientPortal",
             new Rule("", "measurements: no author draft state")),
         Map.entry("service/impl/PatientVitalSignServiceImpl.java#getVitalsPageForPatientPortal",
-            new Rule("", "measurements: no author draft state")));
+            new Rule("", "measurements: no author draft state")),
+        Map.entry("service/impl/PatientVitalSignServiceImpl.java#getRecentVitalsForProxy",
+            new Rule("", "D2730: measurements, no author draft state")),
+        Map.entry("service/impl/PatientPortalServiceImpl.java#activeDiagnosesForProxy",
+            new Rule("ProblemStatus.ACTIVE", "D2730: active problem-list entries, no author draft state")));
 
     private static final String NO_VOID_STATE = "the record type has no entered-in-error state";
 
@@ -161,7 +165,11 @@ class PatientFacingUnfinishedContentGuardTest {
         Map.entry("service/impl/PatientVitalSignServiceImpl.java#getRecentVitalsForPatientPortal",
             new Rule("", NO_VOID_STATE)),
         Map.entry("service/impl/PatientVitalSignServiceImpl.java#getVitalsPageForPatientPortal",
-            new Rule("", NO_VOID_STATE)));
+            new Rule("", NO_VOID_STATE)),
+        Map.entry("service/impl/PatientVitalSignServiceImpl.java#getRecentVitalsForProxy",
+            new Rule("", NO_VOID_STATE)),
+        Map.entry("service/impl/PatientPortalServiceImpl.java#activeDiagnosesForProxy",
+            new Rule("ProblemStatus.ACTIVE", "D1240: a diagnosis removed as entered in error is INACTIVE")));
 
     /** Patient-facing record sources outside the read methods above: "file" to the token it must hold. */
     private static final Map<String, Rule> VOIDED_ELSEWHERE = Map.ofEntries(

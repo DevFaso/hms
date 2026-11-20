@@ -117,6 +117,10 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         // QA D1120: a code already live in this catalogue is refused, not
         // silently duplicated; a changed test is a new version of it.
         requireCodeFree(dto.getTestCode(), hospital != null ? hospital.getId() : null, null);
+        // QA D2730: which tests are sensitive is the lab director's decision.
+        if (dto.getSensitivityCategory() != null) {
+            assertMayClassify(currentUser, hospital != null ? hospital.getId() : null);
+        }
         LabTestDefinition entity = mapper.toEntity(dto, assignment);
         entity.setHospital(hospital);
         return mapper.toDto(repository.save(entity));
@@ -385,8 +389,20 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             throw new IllegalStateException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.activateViaApproval"));
         }
+        // QA D2730: the tag a proxy's read obeys. Left out, it stays; a change
+        // (or the explicit clear) is the lab director's, and is on the audit trail.
+        com.example.hms.enums.SensitivityCategory tagBefore = existing.getSensitivityCategory();
+        com.example.hms.enums.SensitivityCategory tagAfter = proposedSensitivity(dto, tagBefore);
+        if (tagAfter != tagBefore) {
+            assertMayClassify(currentUser, hospitalIdOf(existing));
+        }
         mapper.updateEntityFromDto(dto, existing);
-        return mapper.toDto(repository.save(existing));
+        existing.setSensitivityCategory(tagAfter);
+        LabTestDefinition saved = repository.save(existing);
+        if (tagAfter != tagBefore) {
+            auditSensitivityChange(currentUser, saved, tagBefore, tagAfter);
+        }
+        return mapper.toDto(saved);
     }
 
     /**
@@ -537,6 +553,67 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             case "isactive" -> "active";
             default -> property;
         };
+    }
+
+    /** QA D2730: the tag an update asks for - cleared on the explicit flag, kept when the body names none. */
+    private static com.example.hms.enums.SensitivityCategory proposedSensitivity(
+            LabTestDefinitionRequestDTO dto, com.example.hms.enums.SensitivityCategory current) {
+        if (Boolean.TRUE.equals(dto.getClearSensitivityCategory())) {
+            return null;
+        }
+        return dto.getSensitivityCategory() != null ? dto.getSensitivityCategory() : current;
+    }
+
+    /**
+     * QA D2730: tagging a test sensitive (or untagging it) decides what a
+     * family proxy reads of every result of it, at once and for the versions
+     * already retired. It is the lab director's call at the definition's
+     * hospital, or a super-admin's; the other catalogue roles edit the rest.
+     */
+    private void assertMayClassify(User user, UUID hospitalId) {
+        if (isSuperAdmin(user)) {
+            return;
+        }
+        if (hospitalId == null || !assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                user.getId(), hospitalId, Set.of(ROLE_LAB_DIRECTOR))) {
+            throw new AccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.sensitivityDirectorOnly"));
+        }
+    }
+
+    /** QA D2730: category names only, after commit - as the visit and problem tags are audited. */
+    private void auditSensitivityChange(User actor, LabTestDefinition definition,
+                                        com.example.hms.enums.SensitivityCategory before,
+                                        com.example.hms.enums.SensitivityCategory after) {
+        if (auditEventLogService == null) {
+            return;
+        }
+        com.example.hms.model.Hospital hospital = definition.getHospital();
+        java.util.Map<String, Object> details = new java.util.LinkedHashMap<>();
+        details.put("from", String.valueOf(before));
+        details.put("to", String.valueOf(after));
+        details.put("testCode", definition.getTestCode());
+        com.example.hms.payload.dto.AuditEventRequestDTO request = com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+            .eventType(com.example.hms.enums.AuditEventType.CONFIGURATION_CHANGED)
+            .status(com.example.hms.enums.AuditStatus.SUCCESS)
+            .userId(actor.getId())
+            .hospitalName(hospital != null ? hospital.getName() : null)
+            .hospitalId(hospital != null ? hospital.getId() : null)
+            .eventDescription("Sensitivity category changed from " + before + " to " + after)
+            .entityType("LAB_TEST_DEFINITION_SENSITIVITY")
+            .resourceId(definition.getId() != null ? definition.getId().toString() : null)
+            .details(details)
+            .build();
+        UUID definitionId = definition.getId();
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(request);
+            } catch (RuntimeException ex) {
+                org.slf4j.LoggerFactory.getLogger(LabTestDefinitionServiceImpl.class)
+                    .warn("Sensitivity audit not written for definition {}: {}", definitionId,
+                        ex.getClass().getSimpleName());
+            }
+        });
     }
 
     /** D30: authority over a definition is decided at ITS hospital, not by who created it. */

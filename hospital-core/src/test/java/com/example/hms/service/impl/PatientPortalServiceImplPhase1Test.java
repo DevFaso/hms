@@ -131,11 +131,12 @@ class PatientPortalServiceImplPhase1Test {
     private com.example.hms.service.support.IsolatedReads isolatedReads =
         com.example.hms.service.support.IsolatedReadsTestSupport.inline();
 
-    /** QA D2730: the real proxy filter (it has no collaborator but the classifier). */
+    /** QA D2730: the real proxy filter, over the real classifier. */
     @org.mockito.Spy
     private com.example.hms.service.recordaccess.ProxyRecordFilter proxyRecordFilter =
         new com.example.hms.service.recordaccess.ProxyRecordFilter(
-            new com.example.hms.service.recordaccess.SensitivityClassifierImpl());
+            new com.example.hms.service.recordaccess.SensitivityClassifierImpl(),
+            org.mockito.Mockito.mock(com.example.hms.repository.LabTestDefinitionRepository.class));
 
     @InjectMocks
     private PatientPortalServiceImpl service;
@@ -1045,6 +1046,10 @@ class PatientPortalServiceImplPhase1Test {
                 .thenReturn(List.of(new ImmunizationResponseDTO()));
             when(labResultService.countLabResultsForProxy(patientId)).thenReturn(1L);
             when(medicationService.countMedicationsForProxy(patientId)).thenReturn(1L);
+            when(vitalSignService.getRecentVitalsForProxy(patientId, 5))
+                .thenReturn(List.of(new PatientVitalSignResponseDTO()));
+            patient.setAllergies("Pénicilline");
+            patient.setChronicConditions("VIH, Asthme");
 
             HealthSummaryDTO result = service.getProxyRecords(auth, patientId, Locale.FRENCH);
 
@@ -1058,6 +1063,12 @@ class PatientPortalServiceImplPhase1Test {
             verify(medicationService, never()).getMedicationsForPatientPortal(any(), any(), anyInt());
             verify(medicationService, never()).countMedicationsForPatientPortal(any());
             verify(immunizationService, never()).getImmunizationsForPatientPortal(any());
+            assertThat(result.getRecentVitals()).hasSize(1);
+            verify(vitalSignService, never()).getRecentVitalsForPatientPortal(any(), anyInt());
+            // Free text that names diagnoses carries no tag: a proxy gets none of it.
+            assertThat(result.getChronicConditions()).isEmpty();
+            assertThat(result.getProfile().getChronicConditions()).isNull();
+            assertThat(result.getAllergies()).containsExactly("Pénicilline");
         }
     }
 }

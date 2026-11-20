@@ -81,6 +81,13 @@ public class LabTestDefinitionRequestDTO {
      */
     private com.example.hms.enums.SensitivityCategory sensitivityCategory;
 
+    /**
+     * QA D2730: true removes the test's sensitive category. A separate flag
+     * because a body that merely leaves {@code sensitivityCategory} out (an
+     * older client) must keep the tag, never clear it.
+     */
+    private Boolean clearSensitivityCategory;
+
     @Min(1)
     @Max(10080)
     private Integer turnaroundTime;

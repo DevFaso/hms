@@ -85,7 +85,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
     @Override
     @Transactional(readOnly = true)
     public List<PatientLabResultResponseDTO> getLabResultsForProxy(UUID patientId, int limit) {
-        return getLabResults(patientId, null, limit, true, false, proxyRecordFilter::admits);
+        return getLabResults(patientId, null, limit, true, false, proxyRecordFilter.labResults());
     }
 
     /**
@@ -198,7 +198,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
     @Override
     @Transactional(readOnly = true)
     public List<PatientLabResultResponseDTO> getLabResultsForProxy(UUID patientId, int offset, int limit) {
-        return pageOfCurrent(patientId, offset, limit, proxyRecordFilter::admits);
+        return pageOfCurrent(patientId, offset, limit, proxyRecordFilter.labResults());
     }
 
     private List<PatientLabResultResponseDTO> pageOfCurrent(UUID patientId, int offset, int limit,
@@ -239,7 +239,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
     @Override
     @Transactional(readOnly = true)
     public long countLabResultsForProxy(UUID patientId) {
-        return countCurrent(patientId, proxyRecordFilter::admits);
+        return countCurrent(patientId, proxyRecordFilter.labResults());
     }
 
     private long countCurrent(UUID patientId, java.util.function.Predicate<LabResult> shown) {

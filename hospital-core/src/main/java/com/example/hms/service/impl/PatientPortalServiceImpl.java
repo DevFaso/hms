@@ -459,7 +459,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .currentMedications(safeMedications(patientId, hospitalId))
                 .recentVitals(safeVitals(patientId))
                 .immunizations(safeImmunizations(patientId))
-                .activeDiagnoses(activeDiagnosesOf(patientId, problem -> true))
+                .activeDiagnoses(activeDiagnosesOf(patientId))
                 .allergies(splitToList(patient.getAllergies()))
                 .chronicConditions(splitToList(patient.getChronicConditions()))
                 .labResultTotal(safeCount("health summary lab result total",
@@ -478,8 +478,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
      * The patient's own record at every hospital (design Q1): no hospital
      * scope. The display text, the code when there is none; each once.
      */
-    private List<String> activeDiagnosesOf(UUID patientId,
-                                           java.util.function.Predicate<com.example.hms.model.PatientProblem> shown) {
+    private List<String> activeDiagnosesOf(UUID patientId) {
         java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
         // Partial availability, as the other cards of the summary: a failed
         // read is logged, never a broken page — and, QA D1212 (round 24),
@@ -488,7 +487,6 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             if (patientProblemRepository != null) {
                 patientProblemRepository.findByPatient_IdAndStatusOrderByCreatedAtDesc(
                         patientId, com.example.hms.enums.ProblemStatus.ACTIVE).stream()
-                    .filter(shown)
                     .forEach(p -> addDiagnosisLabel(out, p.getProblemDisplay(), p.getProblemCode()));
             }
             if (patientDiagnosisRepository != null) {
@@ -498,6 +496,37 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             }
         });
         return List.copyOf(out);
+    }
+
+    /**
+     * QA D2730 (r65, High): « Pathologies actives » as a proxy reads it. Only
+     * the problem list, and of it only the entries the proxy filter admits (a
+     * problem's own tag, else the visit it was recorded in). The V14-era
+     * {@code patient_diagnoses} rows name a diagnosis with no tag and no visit,
+     * so nothing can say one is ordinary: a proxy gets none of them.
+     */
+    private List<String> activeDiagnosesForProxy(UUID grantorId) {
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        isolatedReads.attempt("proxy records active diagnoses", () -> {
+            if (patientProblemRepository != null) {
+                patientProblemRepository.findByPatient_IdAndStatusOrderByCreatedAtDesc(
+                        grantorId, com.example.hms.enums.ProblemStatus.ACTIVE).stream()
+                    .filter(proxyRecordFilter::admits)
+                    .forEach(p -> addDiagnosisLabel(out, p.getProblemDisplay(), p.getProblemCode()));
+            }
+        });
+        return List.copyOf(out);
+    }
+
+    /**
+     * QA D2730: the grantor's profile as a proxy reads it - who the patient is
+     * and how to reach them. The chronic conditions are free text that names
+     * diagnoses (« VIH », « dépression ») with no tag, so they are left out.
+     */
+    private PatientProfileDTO proxyProfileOf(Patient grantor) {
+        PatientProfileDTO profile = toProfileDTO(grantor);
+        profile.setChronicConditions(null);
+        return profile;
     }
 
     private static void addDiagnosisLabel(java.util.Set<String> out, String display, String code) {
@@ -1572,6 +1601,15 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return out.get();
     }
 
+    /** QA D2730: the proxy view's vitals, filtered by ProxyRecordFilter in the service. */
+    private List<PatientVitalSignResponseDTO> safeProxyVitals(UUID grantorId) {
+        java.util.concurrent.atomic.AtomicReference<List<PatientVitalSignResponseDTO>> out =
+            new java.util.concurrent.atomic.AtomicReference<>(Collections.emptyList());
+        isolatedReads.attempt("proxy records vitals",
+            () -> out.set(vitalSignService.getRecentVitalsForProxy(grantorId, 5)));
+        return out.get();
+    }
+
     private List<PatientVitalSignResponseDTO> safeVitals(UUID patientId) {
         java.util.concurrent.atomic.AtomicReference<List<PatientVitalSignResponseDTO>> out =
             new java.util.concurrent.atomic.AtomicReference<>(Collections.emptyList());
@@ -2065,9 +2103,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
      * QA D2730 (r65, High): the caregiver's « Dossier de santé » view. Every
      * section reads through the proxy variant of its service, so a row from a
      * sensitive visit, test or problem never reaches the proxy
-     * ({@code ProxyRecordFilter}). Allergies, chronic conditions, vitals and
-     * the legacy diagnosis rows carry no sensitivity tag in the data model and
-     * are shown as before.
+     * ({@code ProxyRecordFilter}). A vital names no visit: it is withheld when
+     * taken during a sensitive one. The chronic conditions and the legacy
+     * diagnosis rows are free text that names diagnoses with no tag in the
+     * data model: a proxy gets none. Every field is either filtered or listed
+     * with why it is not, in {@code ProxyReadSensitivityGuardTest}.
      */
     @Override
     @Transactional(readOnly = true)
@@ -2075,14 +2115,14 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_RECORDS);
         UUID grantorId = patient.getId();
         return HealthSummaryDTO.builder()
-                .profile(toProfileDTO(patient))
+                .profile(proxyProfileOf(patient))
                 .recentLabResults(safeProxyLabResults(grantorId))
                 .currentMedications(safeProxyMedications(grantorId))
-                .activeDiagnoses(activeDiagnosesOf(grantorId, proxyRecordFilter::admits))
-                .recentVitals(safeVitals(grantorId))
+                .activeDiagnoses(activeDiagnosesForProxy(grantorId))
+                .recentVitals(safeProxyVitals(grantorId))
                 .immunizations(safeProxyImmunizations(grantorId))
                 .allergies(splitToList(patient.getAllergies()))
-                .chronicConditions(splitToList(patient.getChronicConditions()))
+                .chronicConditions(Collections.emptyList())
                 .labResultTotal(safeCount("proxy records lab result total",
                     () -> labResultService.countLabResultsForProxy(grantorId)))
                 .medicationTotal(safeCount("proxy records medication total",
