@@ -493,4 +493,70 @@ class ImagingStudyImageServiceTest {
                 .isInstanceOf(ClientSafeAccessDeniedException.class);
         }
     }
+
+    /** Policy rule 3 (2026-11-20, provisional): the imaging technician and the study's key images. */
+    @org.junit.jupiter.api.Nested
+    class TheImagingTechnician {
+
+        private static final String TECHNICIAN = "ROLE_IMAGING_TECHNICIAN";
+
+        @Test
+        void attachesToTheStudyAndNeverToAReport() throws IOException {
+            as(TECHNICIAN);
+            ImagingStudyImageDTO onStudy = service.upload(order.getId(), null, png(), "face");
+            assertThat(onStudy.imagingReportId()).isNull();
+
+            ImagingReport draft = report(false, ImagingReportStatus.PRELIMINARY);
+            UUID draftId = draft.getId();
+            assertThatThrownBy(() -> service.upload(order.getId(), draftId, png(), "face"))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        }
+
+        @Test
+        void seesTheStudysImagesBeforeAnyRelease_whateverAdminRoleTheyAlsoHold() {
+            image(null, callerId);
+            as(TECHNICIAN);
+            assertThat(service.list(order.getId())).hasSize(1);
+            as(TECHNICIAN, "ROLE_HOSPITAL_ADMIN");
+            assertThat(service.list(order.getId())).hasSize(1);
+        }
+
+        @Test
+        void correctsTheirCaptionAndRemovesTheirImageUntilTheSignature_thenNeither() throws IOException {
+            ImagingStudyImage own = image(null, callerId);
+            as(TECHNICIAN);
+            assertThat(service.list(order.getId()).get(0).captionEditable()).isTrue();
+            assertThat(service.list(order.getId()).get(0).deletable()).isTrue();
+            UUID ownId = own.getId();
+            service.updateCaption(ownId, "profil");
+            assertThat(own.getCaption()).isEqualTo("profil");
+            // The fixture's save answer re-ids what it saves: keep the id the lookups are stubbed on.
+            own.setId(ownId);
+
+            // A signed report locks the study's images: the caption is the signed record's now.
+            report(true, ImagingReportStatus.FINAL);
+            ImagingStudyImageDTO locked = service.list(order.getId()).get(0);
+            assertThat(locked.captionEditable()).isFalse();
+            assertThat(locked.deletable()).isFalse();
+            assertThat(locked.withdrawable()).isFalse();
+            assertThatThrownBy(() -> service.updateCaption(ownId, "autre"))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            assertThat(own.getCaption()).isEqualTo("profil");
+            assertThatThrownBy(() -> service.delete(ownId)).isInstanceOf(BusinessException.class)
+                .isNotInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+            // Withdrawing after the signature is a radiologist's or the signer's.
+            assertThatThrownBy(() -> service.withdraw(ownId, "mauvaise image"))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            assertThat(own.isWithdrawn()).isFalse();
+        }
+
+        @Test
+        void aDoctorWhoIsAlsoATechnicianKeepsTheUploadersCaptionAfterSigning() {
+            ImagingStudyImage own = image(null, callerId);
+            report(true, ImagingReportStatus.FINAL);
+            as(TECHNICIAN, "ROLE_DOCTOR");
+            service.updateCaption(own.getId(), "corrigée");
+            assertThat(own.getCaption()).isEqualTo("corrigée");
+        }
+    }
 }

@@ -134,6 +134,27 @@ public class ImagingOrderResponseDTO {
     /** When the study was completed (V294); null while it is not. */
     private LocalDateTime completedAt;
 
+    // ── The exam record (policy rule 3, V346) ──
+    private LocalDateTime checkedInAt;
+
+    private String checkedInByName;
+
+    private LocalDateTime examStartedAt;
+
+    private UUID performedByUserId;
+
+    private String performedByName;
+
+    private String examTechnicalNote;
+
+    private Boolean examContrastAdministered;
+
+    private String examContrastDetails;
+
+    private java.math.BigDecimal examRadiationDoseMgy;
+
+    private LocalDateTime examRecordedAt;
+
     private String cancellationReason;
 
     private String cancelledByName;

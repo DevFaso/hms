@@ -838,4 +838,105 @@ class ImagingReportServiceImplTest {
         assertThat(imagingReportService.getReportsAwaitingMySignature()).isEmpty();
         verify(imagingReportRepository, never()).findAwaitingSignatureBy(any(), any(), any());
     }
+
+    // ── Policy rule 3 (2026-11-20, provisional): the imaging technician ──
+
+    @Test
+    void policyRule3_aTechnicianReadsOnlyTheReleasedReportsOfExamsTheyPerformed() {
+        ImagingReport draft = version(2, ImagingReportStatus.DRAFT, false);
+        ImagingReport finalRead = version(1, ImagingReportStatus.FINAL, true);
+        when(imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(orderId))
+            .thenReturn(List.of(draft, finalRead));
+        when(imagingReportRepository.findFirstByImagingOrder_IdAndLatestVersionIsTrue(orderId))
+            .thenReturn(Optional.of(draft));
+        when(imagingReportRepository.findById(draft.getId())).thenReturn(Optional.of(draft));
+        when(imagingReportRepository.findById(finalRead.getId())).thenReturn(Optional.of(finalRead));
+        doAnswer(inv -> ImagingReportResponseDTO.builder().id(((ImagingReport) inv.getArgument(0)).getId()).build())
+            .when(imagingReportMapper).toResponseDTO(any(ImagingReport.class));
+        signIn("ROLE_IMAGING_TECHNICIAN");
+
+        // An exam somebody else performed (or nobody is recorded for): no report at all.
+        imagingOrder.setPerformedByUserId(UUID.randomUUID());
+        assertThat(imagingReportService.getReportsForOrder(orderId)).isEmpty();
+        assertThatThrownBy(() -> imagingReportService.getLatestReportForOrder(orderId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> imagingReportService.getReport(finalRead.getId()))
+            .isInstanceOf(ResourceNotFoundException.class);
+        imagingOrder.setPerformedByUserId(null);
+        assertThatThrownBy(() -> imagingReportService.getReport(finalRead.getId()))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        // Their own exam: the released reads, never the work in progress.
+        imagingOrder.setPerformedByUserId(callerUserId);
+        assertThat(imagingReportService.getReportsForOrder(orderId)).extracting(ImagingReportResponseDTO::getId)
+            .containsExactly(finalRead.getId());
+        assertThat(imagingReportService.getLatestReportForOrder(orderId).getId()).isEqualTo(finalRead.getId());
+        assertThat(imagingReportService.getReport(finalRead.getId()).getId()).isEqualTo(finalRead.getId());
+        assertThatThrownBy(() -> imagingReportService.getReport(draft.getId()))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        // A technician who is also a nurse reads as the care team does.
+        signIn("ROLE_IMAGING_TECHNICIAN", "ROLE_NURSE");
+        imagingOrder.setPerformedByUserId(UUID.randomUUID());
+        assertThat(imagingReportService.getReportsForOrder(orderId)).hasSize(2);
+    }
+
+    @Test
+    void policyRule3_theHospitalListsGiveATechnicianNothingOfAnotherPerformer() {
+        ImagingReport finalRead = version(1, ImagingReportStatus.FINAL, true);
+        when(imagingReportRepository.findByHospital_IdAndReportStatusOrderByPerformedAtDesc(hospitalId,
+            ImagingReportStatus.FINAL)).thenReturn(List.of(finalRead));
+        imagingOrder.setPerformedByUserId(UUID.randomUUID());
+        signIn("ROLE_IMAGING_TECHNICIAN");
+
+        assertThat(imagingReportService.getReportsByHospitalAndStatus(hospitalId, ImagingReportStatus.FINAL)).isEmpty();
+    }
+
+    @Test
+    void policyRule3_aNewReportTakesWhoPerformedTheExamAndItsRecordFromTheOrder() {
+        Staff technician = new Staff();
+        technician.setId(UUID.randomUUID());
+        technician.setHospital(hospital);
+        when(staffRepository.findById(technician.getId())).thenReturn(Optional.of(technician));
+        LocalDateTime started = LocalDateTime.of(2026, 11, 20, 9, 30);
+        imagingOrder.setPerformedByStaffId(technician.getId());
+        imagingOrder.setExamStartedAt(started);
+        imagingOrder.setExamContrastAdministered(true);
+        imagingOrder.setExamContrastDetails("Iode 80 mL IV");
+        imagingOrder.setExamRadiationDoseMgy(new java.math.BigDecimal("0.150"));
+
+        imagingReportService.createReport(ImagingReportUpsertRequestDTO.builder()
+            .imagingOrderId(orderId).findings("Pas d'anomalie.").build());
+
+        ImagingReport created = capturedNewReport();
+        // The "performed by" no screen ever filled.
+        assertThat(created.getPerformedBy()).isSameAs(technician);
+        assertThat(created.getPerformedAt()).isEqualTo(started);
+        // CR-06 class: what was given is only ever what the report's author submits.
+        assertThat(created.getContrastAdministered()).isNull();
+        assertThat(created.getContrastDetails()).isNull();
+        assertThat(created.getRadiationDoseMgy()).isNull();
+    }
+
+    @Test
+    void policyRule3_whatTheAuthorSendsIsKeptOverTheExamRecord_andAStaffOfAnotherHospitalIsNotInherited() {
+        Hospital elsewhere = new Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        Staff foreign = new Staff();
+        foreign.setId(UUID.randomUUID());
+        foreign.setHospital(elsewhere);
+        when(staffRepository.findById(foreign.getId())).thenReturn(Optional.of(foreign));
+        imagingOrder.setPerformedByStaffId(foreign.getId());
+        imagingOrder.setExamContrastAdministered(true);
+        imagingOrder.setExamRadiationDoseMgy(new java.math.BigDecimal("0.150"));
+
+        imagingReportService.createReport(ImagingReportUpsertRequestDTO.builder()
+            .imagingOrderId(orderId).findings("RAS").contrastAdministered(false)
+            .radiationDoseMgy(new java.math.BigDecimal("0.300")).build());
+
+        ImagingReport created = capturedNewReport();
+        assertThat(created.getPerformedBy()).isNull();
+        assertThat(created.getContrastAdministered()).isFalse();
+        assertThat(created.getRadiationDoseMgy()).isEqualByComparingTo("0.300");
+    }
 }

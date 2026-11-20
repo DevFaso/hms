@@ -107,6 +107,9 @@ class GuardDriftRatchetTest {
         "Referrals are addressed to and worked by the receiving provider";
     private static final String IMAGINGORDERCONTROLLER_REASON =
         "The ordering provider's signature and status transitions";
+    private static final String IMAGINGEXAM_REASON =
+        "Policy rule 3: whoever runs the exam (imaging technician, radiologist, doctor) checks the patient in and"
+            + " records how it went; a nurse reads the order";
     private static final String IMAGINGSTUDYIMAGECONTROLLER_REASON =
         "V316: a study's key images are added or removed by those who author its report (radiologist, doctor); a nurse reads them";
     private static final String IMAGINGRESULTCONTROLLER_REASON =
@@ -200,6 +203,8 @@ class GuardDriftRatchetTest {
         // Provisional rule 1: the status endpoint's roles record the pre-authorisation number of a study they may start.
         listed.put("ImagingOrderController.recordAuthorization", IMAGINGORDERCONTROLLER_REASON);
         listed.put("ImagingOrderController.updateStatus", IMAGINGORDERCONTROLLER_REASON);
+        listed.put("ImagingOrderController.checkIn", IMAGINGEXAM_REASON);
+        listed.put("ImagingOrderController.recordExam", IMAGINGEXAM_REASON);
         listed.put("ImagingResultController.acknowledgeCriticalResult", IMAGINGRESULTCONTROLLER_REASON);
         listed.put("ImagingResultController.createReport", IMAGINGRESULTCONTROLLER_REASON);
         listed.put("ImagingResultController.getReportsByHospital", IMAGINGRESULTCONTROLLER_REASON);

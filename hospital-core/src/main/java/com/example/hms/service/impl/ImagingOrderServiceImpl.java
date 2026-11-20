@@ -274,10 +274,17 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         // signed report. A routine study needing pre-authorisation starts with
         // its number; an urgent or STAT one starts without it (provisional rule 1).
         com.example.hms.service.support.ImagingOrderTransitions.require(order.getStatus(), request.getStatus());
+        // Policy rule 3 (provisional): a technician starts, completes or discontinues the exam; the
+        // order itself (its schedule, its pre-authorisation, calling it off before it starts) is not theirs.
+        boolean technician = com.example.hms.security.ClinicalActor.actsOnExamAsTechnician();
+        if (technician) {
+            com.example.hms.service.support.ImagingExamRecord.requireTechnicianStep(order.getStatus(), request);
+        }
         ImagingPreAuthorisationPolicy.requireStartAllowed(request.getStatus(), order.getPriority(),
             request.getRequiresAuthorization() != null ? request.getRequiresAuthorization() : order.getRequiresAuthorization(),
             request.getAuthorizationNumber() != null ? request.getAuthorizationNumber() : order.getAuthorizationNumber());
-        if (cancelling) {
+        if (cancelling && !technician) {
+            // A technician reaches here only to discontinue an exam in progress (requireTechnicianStep).
             requireCancelAuthor(order);
         }
         String cancellationReason = cancelling
@@ -297,6 +304,11 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         com.example.hms.model.User actor = actorId == null ? null : userRepository.findById(actorId).orElse(null);
         order.setStatusUpdatedAt(LocalDateTime.now());
         order.setStatusUpdatedBy(actorId);
+        // Policy rule 3: who performed the exam is whoever starts it, from the session. It fills the
+        // report's "performed by", which no screen ever filled.
+        com.example.hms.service.support.ImagingExamRecord.stampPerformer(order, request.getStatus(), actorId,
+            actor != null ? displayName(actor) : null, staffAt(actorId, order.getHospital()),
+            order.getStatusUpdatedAt());
         if (RESULTED_STATES.contains(request.getStatus())) {
             // r44: the order drawer's "Completed at" was never filled.
             order.markCompletedAt(order.getStatusUpdatedAt());
@@ -511,6 +523,63 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         return imagingOrderMapper.toResponseDTO(saved);
     }
 
+    /** The actor's staff row at the order's hospital, or null (a clinician with none there). */
+    private com.example.hms.model.Staff staffAt(UUID userId, Hospital hospital) {
+        if (userId == null || hospital == null || hospital.getId() == null) {
+            return null;
+        }
+        return staffRepository.findByUserIdAndHospitalId(userId, hospital.getId()).orElse(null);
+    }
+
+    /**
+     * Policy rule 3 (provisional): the patient's arrival at the imaging desk. Recorded once, from
+     * the session; a repeat changes nothing. Open while the order is placed and not yet done.
+     */
+    @Override
+    public ImagingOrderResponseDTO checkInPatient(UUID orderId) {
+        ImagingOrder order = getOrderInScope(orderId);
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
+            IMAGING_ORDER_CANCELLED_LOCKED);
+        com.example.hms.service.support.ImagingExamRecord.requireCheckInOpen(order.getStatus());
+        if (order.getCheckedInAt() != null) {
+            return imagingOrderMapper.toResponseDTO(order);
+        }
+        UUID actorId = com.example.hms.security.CallerIdentity.currentUserId();
+        com.example.hms.model.User actor = actorId == null ? null : userRepository.findById(actorId).orElse(null);
+        order.setCheckedInAt(LocalDateTime.now());
+        order.setCheckedInByUserId(actorId);
+        order.setCheckedInByName(actor != null ? displayName(actor) : null);
+        return imagingOrderMapper.toResponseDTO(imagingOrderRepository.save(order));
+    }
+
+    /**
+     * Policy rule 3 (provisional): how the exam went. The record is replaced as sent (an empty one
+     * is refused); who wrote it and when come from the session. Open from the start of the exam
+     * until a report is signed.
+     */
+    @Override
+    public ImagingOrderResponseDTO recordExam(UUID orderId,
+                                              com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO request) {
+        // Refused at the edge, before any lookup: an exam record with nothing in it.
+        com.example.hms.service.support.ImagingExamRecord.requireSomethingRecorded(request.getTechnicalNote(),
+            request.getContrastAdministered(), request.getContrastDetails(), request.getRadiationDoseMgy());
+        ImagingOrder order = getOrderInScope(orderId);
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
+            IMAGING_ORDER_CANCELLED_LOCKED);
+        com.example.hms.service.support.ImagingExamRecord.requireRecordOpen(order.getStatus());
+        order.setExamTechnicalNote(blankToNull(request.getTechnicalNote()));
+        order.setExamContrastAdministered(request.getContrastAdministered());
+        order.setExamContrastDetails(blankToNull(request.getContrastDetails()));
+        order.setExamRadiationDoseMgy(request.getRadiationDoseMgy());
+        order.setExamRecordedAt(LocalDateTime.now());
+        order.setExamRecordedByUserId(com.example.hms.security.CallerIdentity.currentUserId());
+        return imagingOrderMapper.toResponseDTO(imagingOrderRepository.save(order));
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
     @Override
     @Transactional(readOnly = true)
     public ImagingOrderResponseDTO getOrder(UUID orderId) {
@@ -540,7 +609,9 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         }
         // User decision 2026-11-14: an administrator reads the hospitals they act at, never
         // across on a patient's treatment relationship (that is the care team's).
-        if (com.example.hms.security.ClinicalActor.isAdministrativeImagingReader()) {
+        // Policy rule 3: nor does an imaging technician, who works the worklist of their own hospital.
+        if (com.example.hms.security.ClinicalActor.isAdministrativeImagingReader()
+                || com.example.hms.security.ClinicalActor.isImagingTechnicianReader()) {
             throw new ResourceNotFoundException("imaging.order.notFound", orderId);
         }
         UUID patientId = order.getPatient() != null ? order.getPatient().getId() : null;

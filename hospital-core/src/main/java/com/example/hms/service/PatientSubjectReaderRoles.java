@@ -78,7 +78,9 @@ public final class PatientSubjectReaderRoles {
         SecurityConstants.ROLE_DOCTOR,
         SecurityConstants.ROLE_NURSE,
         SecurityConstants.ROLE_MIDWIFE,
-        SecurityConstants.ROLE_RADIOLOGIST);
+        SecurityConstants.ROLE_RADIOLOGIST,
+        // Policy rule 3 (2026-11-20, provisional): the released reports of exams they performed.
+        SecurityConstants.ROLE_IMAGING_TECHNICIAN);
 
     /**
      * {@code GET /procedure-orders/{orderId}} and

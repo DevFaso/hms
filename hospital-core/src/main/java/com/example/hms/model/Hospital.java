@@ -134,6 +134,15 @@ public class Hospital extends BaseEntity {
     @Column(name = "pacs_enabled", nullable = false)
     private boolean pacsEnabled = false;
 
+    /**
+     * V346 (policy rule 3, provisional): « Échographie : compte rendu par un non-radiologue ».
+     * False (the default) keeps ultrasound reports with physicians. A setting only: no code
+     * opens reporting to a non-physician on it yet.
+     */
+    @Builder.Default
+    @Column(name = "ultrasound_non_physician_reporting", nullable = false)
+    private boolean ultrasoundNonPhysicianReporting = false;
+
     /** V317: the PACS DICOMweb root, e.g. {@code https://pacs.example/dicom-web}. */
     @Size(max = 500)
     @Column(name = "pacs_dicomweb_base_url", length = 500)

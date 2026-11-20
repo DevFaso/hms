@@ -131,6 +131,32 @@ public final class ClinicalActor {
         return admin && own.stream().noneMatch(IMAGING_CLINICAL_ROLES::contains);
     }
 
+    /**
+     * Policy rule 3 (owner 2026-11-20, provisional): the caller reads imaging as a technician
+     * only. They hold {@code ROLE_IMAGING_TECHNICIAN} on their own and none of the clinical imaging
+     * roles: they read the worklist and the study's images of their hospital, and of the reports
+     * only the released ones of exams they performed. Read from the caller's own roles, so it
+     * holds during a support session too.
+     */
+    public static boolean isImagingTechnicianReader() {
+        Set<String> own = ownRoles(SecurityContextHolder.getContext().getAuthentication());
+        return own.contains(SecurityConstants.ROLE_IMAGING_TECHNICIAN)
+            && own.stream().noneMatch(IMAGING_CLINICAL_ROLES::contains);
+    }
+
+    /**
+     * Policy rule 3: the caller acts on an exam as a technician. They hold the technician role on
+     * their own and are neither a doctor nor a radiologist, whose wider reach on a study's status
+     * (scheduling, cancelling an order) would otherwise apply. A nurse or midwife who is also a
+     * technician acts as the technician.
+     */
+    public static boolean actsOnExamAsTechnician() {
+        Set<String> own = ownRoles(SecurityContextHolder.getContext().getAuthentication());
+        return own.contains(SecurityConstants.ROLE_IMAGING_TECHNICIAN)
+            && !own.contains(SecurityConstants.ROLE_DOCTOR)
+            && !own.contains(SecurityConstants.ROLE_RADIOLOGIST);
+    }
+
     static Set<String> ownRoles(Authentication authentication) {
         List<String> authorities = authorities(authentication);
         if (authorities.isEmpty()) {

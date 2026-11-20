@@ -150,6 +150,9 @@ public class SecurityConfig {
     /** V317: a hospital's PACS connection; same admins as the posture, controller narrows further. */
     static final String API_HOSPITAL_PACS_SETTINGS = "/hospitals/*/pacs-settings";
 
+    /** V346 (policy rule 3): a hospital's imaging reporting settings; the same admins as the PACS connection. */
+    static final String API_HOSPITAL_IMAGING_REPORTING_SETTINGS = "/hospitals/*/imaging-reporting-settings";
+
     /**
      * The HAPI FHIR servlet ({@code FhirConfig}, mounted at {@code /fhir/*}).
      * It answers with the whole chart — Encounter, Condition,
@@ -811,6 +814,11 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, API_HOSPITAL_PACS_SETTINGS)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.POST, API_HOSPITAL_PACS_SETTINGS + "/test")
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                // V346 imaging reporting settings: ahead of the /hospitals matchers, as the PACS connection.
+                .requestMatchers(HttpMethod.GET, API_HOSPITAL_IMAGING_REPORTING_SETTINGS)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.PUT, API_HOSPITAL_IMAGING_REPORTING_SETTINGS)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
                 .requestMatchers(HttpMethod.GET, API_HOSPITALS, API_HOSPITALS + "/", API_HOSPITALS_PATTERN)

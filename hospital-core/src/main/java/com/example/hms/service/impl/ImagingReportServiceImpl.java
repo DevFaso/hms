@@ -146,6 +146,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
 
         applyStaffAssociations(report, request, hospital);
         imagingReportMapper.updateReportFromRequest(report, request);
+        inheritExamRecord(report, imagingOrder, hospital);
         applyAuthoredStatus(report, request, imagingOrder, true);
         applyCriticalFlag(report, request);
         requireReportFindings(report);
@@ -164,6 +165,25 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         // contract — a notification failure must not roll back the report.
         criticalNotificationService.notifyIfCritical(saved);
         return imagingReportMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * Policy rule 3 (V346, provisional): a new report takes from the exam record what the author
+     * left blank about WHO acquired the study and WHEN: the "performed by" no screen ever filled,
+     * and the exam's start. A value the author sent is kept. Attribution only: the contrast given
+     * and the dose stay on the order's exam record, and reach a report only when its author
+     * submits them (CR-06 class: nothing records a treatment for the clinician).
+     */
+    private void inheritExamRecord(ImagingReport report, ImagingOrder order, Hospital hospital) {
+        if (report.getPerformedBy() == null && order.getPerformedByStaffId() != null) {
+            staffRepository.findById(order.getPerformedByStaffId())
+                .filter(staff -> staff.getHospital() == null
+                    || Objects.equals(staff.getHospital().getId(), hospital.getId()))
+                .ifPresent(report::setPerformedBy);
+        }
+        if (report.getPerformedAt() == null && order.getExamStartedAt() != null) {
+            report.setPerformedAt(order.getExamStartedAt());
+        }
     }
 
     /**
@@ -389,6 +409,10 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         if (adminReader() && !report.isReleasedToPatient()) {
             throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
         }
+        // Policy rule 3: an imaging technician reads the released reports of exams they performed.
+        if (technicianReader() && !technicianMayRead(report)) {
+            throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
+        }
         return imagingReportMapper.toResponseDTO(report);
     }
 
@@ -413,7 +437,11 @@ public class ImagingReportServiceImpl implements ImagingReportService {
                 throw new ResourceNotFoundException(MSG_ORDER_NOT_FOUND, imagingOrderId);
             }
         }
-        if (!asPatient && adminReader()) {
+        // Policy rule 3: an imaging technician too, and only for an exam they performed.
+        if (!asPatient && !adminReader() && technicianReader() && !performedByCaller(order)) {
+            throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, imagingOrderId);
+        }
+        if (!asPatient && (adminReader() || technicianReader())) {
             // An administrator reads the newest RELEASED version; work in progress is not theirs.
             return imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(imagingOrderId).stream()
                 .filter(ImagingReport::isReleasedToPatient)
@@ -437,8 +465,13 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     @Override
     @Transactional(readOnly = true)
     public List<ImagingReportResponseDTO> getReportsForOrder(UUID imagingOrderId) {
-        loadOrderScoped(imagingOrderId);
-        boolean releasedOnly = adminReader();
+        ImagingOrder order = loadOrderScoped(imagingOrderId);
+        boolean technician = !adminReader() && technicianReader();
+        // Policy rule 3: an exam somebody else performed has no report a technician reads.
+        if (technician && !performedByCaller(order)) {
+            return List.of();
+        }
+        boolean releasedOnly = adminReader() || technician;
         return imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(imagingOrderId).stream()
             .filter(report -> !releasedOnly || report.isReleasedToPatient())
             .map(imagingReportMapper::toResponseDTO)
@@ -500,7 +533,30 @@ public class ImagingReportServiceImpl implements ImagingReportService {
 
     private java.util.function.Predicate<ImagingReport> releasedFilter() {
         boolean releasedOnly = adminReader();
-        return report -> !releasedOnly || report.isReleasedToPatient();
+        // Policy rule 3, belt and braces: the hospital lists do not admit a technician; if one ever
+        // reaches them they get the reports of exams they performed, released, and no others.
+        boolean technician = !releasedOnly && technicianReader();
+        return report -> technician ? technicianMayRead(report) : !releasedOnly || report.isReleasedToPatient();
+    }
+
+    // ── The imaging technician (policy rule 3, 2026-11-20, provisional) ──
+
+    /**
+     * The caller reads imaging as a technician only (no clinical imaging role of their own):
+     * released reports of the exams they performed, never a draft, never another's exam.
+     */
+    boolean technicianReader() {
+        return com.example.hms.security.ClinicalActor.isImagingTechnicianReader();
+    }
+
+    private boolean technicianMayRead(ImagingReport report) {
+        return report.isReleasedToPatient() && performedByCaller(report.getImagingOrder());
+    }
+
+    /** The exam record names the caller as who performed it (stamped from the session at its start). */
+    private boolean performedByCaller(ImagingOrder order) {
+        UUID caller = roleValidator.getCurrentUserId();
+        return caller != null && order != null && caller.equals(order.getPerformedByUserId());
     }
 
     // ── Tenancy ──────────────────────────────────────────────────────────

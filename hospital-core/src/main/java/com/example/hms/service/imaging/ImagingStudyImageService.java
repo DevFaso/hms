@@ -111,6 +111,11 @@ public class ImagingStudyImageService {
         }
         List<ImagingReport> reports = reportRepository.findByImagingOrder_IdOrderByReportVersionDesc(orderId);
         ImagingReport report = null;
+        // Policy rule 3 (provisional): a technician attaches images to the study, never to a
+        // report (they add nothing to a report).
+        if (reportId != null && ClinicalActor.actsOnExamAsTechnician()) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("imaging.image.technicianStudyOnly"));
+        }
         if (reportId != null) {
             report = reports.stream().filter(r -> reportId.equals(r.getId())).findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("imaging.report.notFound", reportId));
@@ -266,6 +271,11 @@ public class ImagingStudyImageService {
         if (!mayRemove(image)) {
             throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("imaging.image.captionNotAllowed"));
         }
+        // Policy rule 3 (provisional): once the image is locked by a signature it belongs to the
+        // signed record; a technician no longer changes its caption (a radiologist does).
+        if (technicianLockedOut(image)) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("imaging.image.technicianCaptionLocked"));
+        }
         image.setCaption(cleanCaption(caption));
         image.setCaptionUpdatedAt(java.time.LocalDateTime.now());
         image.setCaptionUpdatedByUserId(roleValidator.getCurrentUserId());
@@ -347,7 +357,10 @@ public class ImagingStudyImageService {
             }
             return Reach.AS_PATIENT;
         }
-        return ClinicalActor.isAdministrativeImagingReader() ? Reach.ADMIN : Reach.CLINICAL;
+        // Policy rule 3: an imaging technician sees the study's images (their own uploads before
+        // any release included), whatever administrative role they also hold.
+        return ClinicalActor.isAdministrativeImagingReader() && !ClinicalActor.isImagingTechnicianReader()
+            ? Reach.ADMIN : Reach.CLINICAL;
     }
 
     private ImagingOrder loadOrderInScope(UUID orderId) {
@@ -385,6 +398,15 @@ public class ImagingStudyImageService {
         return studyReports.stream().anyMatch(ImagingReport::isSigned);
     }
 
+    /** A technician (acting as one) and an image a signature has locked, or a report's own image. */
+    private boolean technicianLockedOut(ImagingStudyImage image) {
+        if (!ClinicalActor.actsOnExamAsTechnician()) {
+            return false;
+        }
+        return image.getImagingReport() != null || locked(image,
+            reportRepository.findByImagingOrder_IdOrderByReportVersionDesc(image.getImagingOrder().getId()));
+    }
+
     private boolean mayRemove(ImagingStudyImage image) {
         UUID caller = roleValidator.getCurrentUserId();
         if (caller != null && caller.equals(image.getUploadedByUserId())) {
@@ -410,7 +432,10 @@ public class ImagingStudyImageService {
     private ImagingStudyImageDTO toStaffDto(ImagingStudyImage image, boolean adminReader, List<ImagingReport> reports) {
         boolean locked = locked(image, reports);
         boolean deletable = !adminReader && !locked && mayRemove(image);
-        boolean captionEditable = !adminReader && mayRemove(image);
+        // Policy rule 3: a technician's caption edit ends at the signature, and never touches a report's image.
+        boolean technicianClosed = ClinicalActor.actsOnExamAsTechnician()
+            && (locked || image.getImagingReport() != null);
+        boolean captionEditable = !adminReader && !technicianClosed && mayRemove(image);
         boolean withdrawable = !adminReader && locked && mayWithdraw(image, reports);
         return new ImagingStudyImageDTO(image.getId(), image.getImagingOrder().getId(), reportIdOf(image),
             image.getContentType(), image.getSizeBytes(), image.getCaption(), image.getCreatedAt(),

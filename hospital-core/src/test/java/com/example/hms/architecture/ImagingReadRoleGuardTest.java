@@ -93,6 +93,7 @@ class ImagingReadRoleGuardTest {
     @AfterEach
     void clear() {
         HospitalContextHolder.clear();
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
     }
 
     private static boolean isWrite(Method method) {
@@ -247,6 +248,153 @@ class ImagingReadRoleGuardTest {
         assertThat(ClinicalActor.holdsOwnRole(token("ROLE_HOSPITAL_ADMIN", "ROLE_DOCTOR"), "DOCTOR")).isTrue();
         assertThat(ClinicalActor.holdsOwnRole(token("ROLE_MIDWIFE"), "DOCTOR", "RADIOLOGIST")).isFalse();
         assertThat(ClinicalActor.holdsOwnRole(null, "DOCTOR")).isFalse();
+    }
+
+    // ── Policy rule 3 (2026-11-20, provisional): the imaging technician's matrix ──
+
+    private static final String TECHNICIAN = "IMAGING_TECHNICIAN";
+
+    /**
+     * Every endpoint of the platform that admits the imaging technician. They acquire, document
+     * and complete an exam and read the released reports of exams they performed (the service
+     * narrows the reads). Nothing else: no order, no report write, no signature, no withdrawal
+     * after signing, no chart.
+     */
+    private static final Set<String> TECHNICIAN_ENDPOINTS = Set.of(
+        // The worklist of their hospital, with the indication and the safety flags on the order.
+        "ImagingOrderController.getAllOrders",
+        "ImagingOrderController.getOrdersByHospital",
+        "ImagingOrderController.getOrder",
+        // The exam: check-in, start / complete / discontinue, and its record.
+        "ImagingOrderController.checkIn",
+        "ImagingOrderController.updateStatus",
+        "ImagingOrderController.recordExam",
+        // Key images: attach, caption and (before the signature) remove; read the study's images.
+        "ImagingStudyImageController.upload",
+        "ImagingStudyImageController.updateCaption",
+        "ImagingStudyImageController.delete",
+        "ImagingStudyImageController.list",
+        "ImagingStudyImageController.content",
+        // What became of an image they attached: when, by whom and why it was withdrawn (never the bytes).
+        "ImagingStudyImageController.withdrawn",
+        // Released reports of exams they performed (ImagingReportServiceImpl).
+        "ImagingResultController.getReport",
+        "ImagingResultController.getLatestReportForOrder",
+        "ImagingResultController.getAllReportsForOrder");
+
+    /** What the policy forbids, by name, so a widened gate fails with the rule it broke. */
+    private static final Set<String> NEVER_THE_TECHNICIAN = Set.of(
+        "ImagingOrderController.createOrder", "ImagingOrderController.updateOrder",
+        "ImagingOrderController.captureSignature", "ImagingOrderController.getDuplicatePreview",
+        "ImagingOrderController.recordAuthorization", "ImagingOrderController.getOrdersByPatient",
+        "ImagingResultController.createReport", "ImagingResultController.updateReport",
+        "ImagingResultController.signReport", "ImagingResultController.updateReportStatus",
+        "ImagingResultController.acknowledgeCriticalResult", "ImagingResultController.getReportsToSign",
+        "ImagingResultController.getReportsByHospital", "ImagingStudyImageController.withdraw",
+        "ImagingReadingContextController.getReadingContext");
+
+    private static boolean isEndpoint(Method method) {
+        return isWrite(method) || method.isAnnotationPresent(GetMapping.class);
+    }
+
+    /** Every {@code @RestController} of the platform, so the technician cannot appear on an endpoint unnoticed. */
+    private static List<Class<?>> everyController() {
+        org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider scanner =
+            new org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider(false);
+        scanner.addIncludeFilter(new org.springframework.core.type.filter.AnnotationTypeFilter(
+            org.springframework.web.bind.annotation.RestController.class));
+        List<Class<?>> controllers = new ArrayList<>();
+        scanner.findCandidateComponents("com.example.hms").forEach(candidate -> {
+            try {
+                controllers.add(Class.forName(candidate.getBeanClassName()));
+            } catch (ClassNotFoundException e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        return controllers;
+    }
+
+    @Test
+    void theImagingTechnicianIsAdmittedToExactlyTheExamEndpoints() {
+        Set<String> admitted = new TreeSet<>();
+        List<Class<?>> controllers = everyController();
+        assertThat(controllers).as("the controllers were found").hasSizeGreaterThan(100);
+        for (Class<?> controller : controllers) {
+            PreAuthorize classGate = controller.getAnnotation(PreAuthorize.class);
+            for (Method method : controller.getDeclaredMethods()) {
+                if (!isEndpoint(method)) {
+                    continue;
+                }
+                PreAuthorize gate = method.getAnnotation(PreAuthorize.class);
+                String expression = gate != null ? gate.value() : classGate != null ? classGate.value() : "";
+                if (expression.contains(TECHNICIAN)) {
+                    admitted.add(controller.getSimpleName() + "." + method.getName());
+                }
+            }
+        }
+        assertThat(admitted).as("an endpoint the policy forbids the imaging technician (no order, no report"
+            + " write or signature, no withdrawal after signing)" + SourceScan.MANDATE)
+            .doesNotContainAnyElementsOf(NEVER_THE_TECHNICIAN);
+        assertThat(admitted).as("the endpoints that admit the imaging technician (policy rule 3): a new one is"
+            + " added here with its reason, a removed one breaks their work" + SourceScan.MANDATE)
+            .isEqualTo(new TreeSet<>(TECHNICIAN_ENDPOINTS));
+    }
+
+    @Test
+    void theTechniciansWritesAreAClinicalRoleOfTheirOwn_andTheReportReadsStayOnTheStaffReaderSet() {
+        for (Class<?> controller : IMAGING_CONTROLLERS) {
+            for (Method method : controller.getDeclaredMethods()) {
+                String name = controller.getSimpleName() + "." + method.getName();
+                if (isWrite(method) && TECHNICIAN_ENDPOINTS.contains(name)) {
+                    assertThat(gate(controller, method)).as(name + SourceScan.MANDATE).startsWith(CLINICAL_GATE);
+                }
+            }
+        }
+        // A caller who is technician and patient reads as staff, not as the patient of every study.
+        assertThat(com.example.hms.service.PatientSubjectReaderRoles.IMAGING_REPORT_READS)
+            .contains("ROLE_" + TECHNICIAN);
+    }
+
+    @Test
+    void aTechnicianIsNarrowedByTheirOwnRoles_evenBesideAnAdminRoleOrASuperAdminToken() {
+        setAuthentication(token("ROLE_IMAGING_TECHNICIAN"));
+        assertThat(ClinicalActor.isImagingTechnicianReader()).isTrue();
+        assertThat(ClinicalActor.actsOnExamAsTechnician()).isTrue();
+        assertThat(ClinicalActor.isAdministrativeImagingReader()).isFalse();
+
+        // With an admin role: still a technician reader, and an administrative one for reports.
+        setAuthentication(token("ROLE_IMAGING_TECHNICIAN", "ROLE_HOSPITAL_ADMIN"));
+        assertThat(ClinicalActor.isImagingTechnicianReader()).isTrue();
+        assertThat(ClinicalActor.isAdministrativeImagingReader()).isTrue();
+
+        // A clinical imaging role of their own lifts the read narrowing; only a doctor's or a
+        // radiologist's lifts the exam-step narrowing.
+        setAuthentication(token("ROLE_IMAGING_TECHNICIAN", "ROLE_NURSE"));
+        assertThat(ClinicalActor.isImagingTechnicianReader()).isFalse();
+        assertThat(ClinicalActor.actsOnExamAsTechnician()).isTrue();
+        setAuthentication(token("ROLE_IMAGING_TECHNICIAN", "ROLE_RADIOLOGIST"));
+        assertThat(ClinicalActor.actsOnExamAsTechnician()).isFalse();
+        setAuthentication(token("ROLE_IMAGING_TECHNICIAN", "ROLE_DOCTOR"));
+        assertThat(ClinicalActor.actsOnExamAsTechnician()).isFalse();
+
+        // A super-admin's inherited DOCTOR and NURSE are not theirs: a super-admin who is a
+        // technician stays one.
+        String[] superAdminTechnician = Arrays.copyOf(SUPER_ADMIN, SUPER_ADMIN.length + 1);
+        superAdminTechnician[SUPER_ADMIN.length] = "ROLE_IMAGING_TECHNICIAN";
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .assignedRoles(Set.of("ROLE_SUPER_ADMIN", "ROLE_IMAGING_TECHNICIAN")).build());
+        setAuthentication(token(superAdminTechnician));
+        assertThat(ClinicalActor.isImagingTechnicianReader()).isTrue();
+        assertThat(ClinicalActor.actsOnExamAsTechnician()).isTrue();
+
+        // Nobody else is one.
+        setAuthentication(token("ROLE_RADIOLOGIST"));
+        assertThat(ClinicalActor.isImagingTechnicianReader()).isFalse();
+        assertThat(ClinicalActor.actsOnExamAsTechnician()).isFalse();
+    }
+
+    private static void setAuthentication(Authentication authentication) {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 
     private static Method method(Class<?> controller, String name) throws NoSuchMethodException {
