@@ -872,7 +872,12 @@ export class EncountersComponent implements OnInit {
       next: (tag) => {
         if (this.selectedEncounter()?.id === encounterId) this.encounterSensitivity.set(tag);
       },
-      error: () => this.toast.error(this.translate.instant('SENSITIVITY_TAG.LOAD_FAILED')),
+      // A visit this caller may not classify (403/404) simply shows no control.
+      error: (err: { status?: number }) => {
+        if (err?.status !== 403 && err?.status !== 404) {
+          this.toast.error(this.translate.instant('SENSITIVITY_TAG.LOAD_FAILED'));
+        }
+      },
     });
   }
 
