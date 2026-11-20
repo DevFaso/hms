@@ -33,6 +33,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -351,12 +352,99 @@ class MaternalEarlyWarningServiceTest {
         return vitals;
     }
 
+    /**
+     * A page of {@code tier} sent {@code minutesAgo} minutes ago is on record for her: the repository
+     * answers as the query does (one of the levels asked for, paged at or after {@code since}).
+     */
+    private void pagedBefore(com.example.hms.repository.PatientVitalSignRepository vitals, String tier,
+                             int minutesAgo) {
+        // doAnswer: stubbing again (a test moves the page in time) must not run the earlier answer.
+        doAnswer(inv -> {
+            java.util.Collection<String> levels = inv.getArgument(2);
+            LocalDateTime since = inv.getArgument(3);
+            return levels.contains(tier) && !NOW.minusMinutes(minutesAgo).isBefore(since);
+        }).when(vitals).existsByPatient_IdAndHospital_IdAndMewsPagedTierInAndMewsPagedAtGreaterThanEqual(
+            eq(mother.getId()), eq(HERE), any(), any());
+    }
+
+    /** A complete set at the level asked for: low-medium (2), medium (5) or high (8). */
+    private PatientVitalSign setAt(MaternalEarlyWarning.Tier tier) {
+        PatientVitalSign.PatientVitalSignBuilder set = set().heartRateBpm(125);
+        if (tier != MaternalEarlyWarning.Tier.LOW_MEDIUM) {
+            set.respiratoryRateBpm(26).temperatureCelsius(37.4);
+        }
+        if (tier == MaternalEarlyWarning.Tier.HIGH) {
+            set.temperatureCelsius(38.0).spo2Percent(90);
+        }
+        return set.build();
+    }
+
+    private Set<String> page(PatientVitalSign vital, MaternalEarlyWarning.Tier expected) {
+        Score score = service.assess(mother, HERE, vital);
+        assertThat(score.responseTier()).isEqualTo(expected);
+        return service.escalate(vital, score, mother.getId(), HERE, "sf.recorder", null, Set.of());
+    }
+
+    @Test
+    @DisplayName("cool-down decision: low-medium 10 min after a high page pages nobody; so does medium; the score is still computed")
+    void decision_aRecentHigherPageSilencesALowerLevel() {
+        com.example.hms.repository.PatientVitalSignRepository vitals = withTheCoolDown();
+        pagedBefore(vitals, "HIGH", 10);
+        under(News2Applicability.Status.OBSTETRIC, null);
+
+        PatientVitalSign lowMedium = setAt(MaternalEarlyWarning.Tier.LOW_MEDIUM);
+        assertThat(page(lowMedium, MaternalEarlyWarning.Tier.LOW_MEDIUM)).isEmpty();
+        PatientVitalSign medium = setAt(MaternalEarlyWarning.Tier.MEDIUM);
+        assertThat(page(medium, MaternalEarlyWarning.Tier.MEDIUM)).isEmpty();
+
+        verifyNoInteractions(notifications);
+        // Only the page is withheld: neither reading is marked as having paged, and the score stands.
+        assertThat(lowMedium.getMewsPagedTier()).isNull();
+        assertThat(medium.getMewsPagedTier()).isNull();
+        assertThat(service.assess(mother, HERE, lowMedium).total()).isEqualTo(2);
+        // The question asked for a low-medium page is: this level or any above it, in the last 30 minutes.
+        verify(vitals).existsByPatient_IdAndHospital_IdAndMewsPagedTierInAndMewsPagedAtGreaterThanEqual(
+            mother.getId(), HERE, List.of("LOW_MEDIUM", "MEDIUM", "HIGH"), NOW.minusMinutes(30));
+    }
+
+    @Test
+    @DisplayName("cool-down decision: high 5 min after a medium page goes through at once")
+    void decision_aHigherLevelGoesThroughAfterALowerPage() {
+        com.example.hms.repository.PatientVitalSignRepository vitals = withTheCoolDown();
+        pagedBefore(vitals, "MEDIUM", 5);
+        under(News2Applicability.Status.OBSTETRIC, null);
+        PatientVitalSign high = setAt(MaternalEarlyWarning.Tier.HIGH);
+
+        Set<String> reached = page(high, MaternalEarlyWarning.Tier.HIGH);
+
+        assertThat(reached).contains("sf.recorder", "sf.oncall", "dr.oncall");
+        assertThat(high.getMewsPagedTier()).isEqualTo("HIGH");
+        // Nothing is above high: only a recent HIGH page could have held it back.
+        verify(vitals).existsByPatient_IdAndHospital_IdAndMewsPagedTierInAndMewsPagedAtGreaterThanEqual(
+            mother.getId(), HERE, List.of("HIGH"), NOW.minusMinutes(30));
+        // The medium page of 5 minutes ago does silence a medium or a low-medium reading.
+        assertThat(page(setAt(MaternalEarlyWarning.Tier.MEDIUM), MaternalEarlyWarning.Tier.MEDIUM)).isEmpty();
+        assertThat(page(setAt(MaternalEarlyWarning.Tier.LOW_MEDIUM), MaternalEarlyWarning.Tier.LOW_MEDIUM)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("cool-down decision: past the 30 minutes the clock has run out, for the same level and for a lower one")
+    void decision_theWindowEnds() {
+        com.example.hms.repository.PatientVitalSignRepository vitals = withTheCoolDown();
+        under(News2Applicability.Status.OBSTETRIC, null);
+        // Exactly 30 minutes ago is still inside the window; 31 is not.
+        pagedBefore(vitals, "HIGH", 30);
+        assertThat(page(setAt(MaternalEarlyWarning.Tier.LOW_MEDIUM), MaternalEarlyWarning.Tier.LOW_MEDIUM)).isEmpty();
+        pagedBefore(vitals, "HIGH", 31);
+        assertThat(page(setAt(MaternalEarlyWarning.Tier.LOW_MEDIUM), MaternalEarlyWarning.Tier.LOW_MEDIUM)).isNotEmpty();
+        assertThat(page(setAt(MaternalEarlyWarning.Tier.HIGH), MaternalEarlyWarning.Tier.HIGH)).isNotEmpty();
+    }
+
     @Test
     @DisplayName("cool-down: paged at this level within 30 min, the same level pages nobody and the reading is not marked")
     void review1241_theSameLevelIsNotPagedAgainWithinTheCoolDown() {
         com.example.hms.repository.PatientVitalSignRepository vitals = withTheCoolDown();
-        when(vitals.existsByPatient_IdAndHospital_IdAndMewsPagedTierAndMewsPagedAtGreaterThanEqual(
-            mother.getId(), HERE, "LOW_MEDIUM", NOW.minusMinutes(30))).thenReturn(true);
+        pagedBefore(vitals, "LOW_MEDIUM", 10);
         under(News2Applicability.Status.OBSTETRIC, null);
         PatientVitalSign vital = set().heartRateBpm(125).build();
 
@@ -382,20 +470,17 @@ class MaternalEarlyWarningServiceTest {
         assertThat(reached).isNotEmpty();
         assertThat(vital.getMewsPagedTier()).isEqualTo("LOW_MEDIUM");
         assertThat(vital.getMewsPagedAt()).isEqualTo(NOW);
-        // The window is the rule set's 30 minutes, at this hospital, for this woman and this level.
-        verify(vitals).existsByPatient_IdAndHospital_IdAndMewsPagedTierAndMewsPagedAtGreaterThanEqual(
-            mother.getId(), HERE, "LOW_MEDIUM", NOW.minusMinutes(30));
+        // The window is the rule set's 30 minutes, at this hospital, for this woman, this level and above.
+        verify(vitals).existsByPatient_IdAndHospital_IdAndMewsPagedTierInAndMewsPagedAtGreaterThanEqual(
+            mother.getId(), HERE, List.of("LOW_MEDIUM", "MEDIUM", "HIGH"), NOW.minusMinutes(30));
     }
 
     @Test
     @DisplayName("cool-down: a higher level goes through at once, whatever was paged at a lower one")
     void review1241_aHigherLevelAlwaysGoesThrough() {
         com.example.hms.repository.PatientVitalSignRepository vitals = withTheCoolDown();
-        // She was paged at low-medium and at medium a few minutes ago; never at high.
-        when(vitals.existsByPatient_IdAndHospital_IdAndMewsPagedTierAndMewsPagedAtGreaterThanEqual(
-            eq(mother.getId()), eq(HERE), eq("LOW_MEDIUM"), any())).thenReturn(true);
-        when(vitals.existsByPatient_IdAndHospital_IdAndMewsPagedTierAndMewsPagedAtGreaterThanEqual(
-            eq(mother.getId()), eq(HERE), eq("MEDIUM"), any())).thenReturn(true);
+        // She was paged at low-medium a few minutes ago; never at high.
+        pagedBefore(vitals, "LOW_MEDIUM", 3);
         under(News2Applicability.Status.OBSTETRIC, null);
         PatientVitalSign vital = set().heartRateBpm(125).respiratoryRateBpm(26).temperatureCelsius(38.0)
             .spo2Percent(90).build();

@@ -160,9 +160,10 @@ public interface PatientVitalSignRepository extends JpaRepository<PatientVitalSi
                                                                                String source, LocalDateTime recordedAt);
 
     /**
-     * Policy 2026-11-20 (provisional): was this woman paged at this maternal level, here, since
-     * {@code since}? One indexed read on a vitals WRITE that is about to page (never on a ward read).
+     * Policy 2026-11-20 (provisional): was this woman paged at one of these maternal levels, here, since
+     * {@code since}? The caller passes the level about to page and every level above it. One indexed
+     * read on a vitals WRITE that is about to page (never on a ward read).
      */
-    boolean existsByPatient_IdAndHospital_IdAndMewsPagedTierAndMewsPagedAtGreaterThanEqual(
-        UUID patientId, UUID hospitalId, String mewsPagedTier, LocalDateTime since);
+    boolean existsByPatient_IdAndHospital_IdAndMewsPagedTierInAndMewsPagedAtGreaterThanEqual(
+        UUID patientId, UUID hospitalId, java.util.Collection<String> mewsPagedTiers, LocalDateTime since);
 }

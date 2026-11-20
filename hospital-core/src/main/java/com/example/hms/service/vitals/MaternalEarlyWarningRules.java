@@ -205,11 +205,12 @@ public class MaternalEarlyWarningRules {
      * Low-medium (2–4) pages the midwife in charge and the doctor; medium (5–7) and high (8 or more)
      * page all three. The anaesthetic team and the outreach team of the UK chart are not mapped.
      *
-     * <p><b>Cool-down</b> (decision 2026-11-20, provisional): one page per woman and per level in
-     * {@code pageCoolDownMinutes} (30). A woman at the high level is re-observed every 15 minutes; without
-     * it every reading would page the same circle again. Each level has its own clock, so a level she has
-     * not been paged at in that time, a higher one above all, always goes through at once. 0 switches the
-     * cool-down off. The chart, the round and the recorder's on-screen warning are never held back.
+     * <p><b>Cool-down</b> (decisions 2026-11-20, provisional): within {@code pageCoolDownMinutes} (30) of
+     * a page, a page of the same level or of a LOWER one is withheld for that woman: the team already
+     * holds a page at least as serious. A HIGHER level always goes through at once. A woman at the high
+     * level is re-observed every 15 minutes; without it every reading would page the same circle again.
+     * 0 switches the cool-down off. Only the page is withheld: the score, the chart chip, the round and
+     * the recorder's on-screen warning follow every reading.
      */
     @Getter
     @Setter

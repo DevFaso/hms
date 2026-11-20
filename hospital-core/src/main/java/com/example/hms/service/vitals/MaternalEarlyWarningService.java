@@ -50,8 +50,10 @@ import java.util.UUID;
  *   <li>high (8 or more, or a RED add-on alert): the same as medium; immediate review.</li>
  * </ul>
  * A person another notice already reached for this very reading (the severe blood-pressure notice,
- * which carries the score and the level) is not paged a second time. One page per woman and per level
- * in 30 minutes (provisional): a level she was not paged at in that time always goes through at once.
+ * which carries the score and the level) is not paged a second time. Cool-down (30 minutes,
+ * provisional): a page is withheld when she was paged at the same level or a higher one in that time;
+ * a level above every recent page always goes through at once. Only the page is withheld: the score,
+ * the chart, the round and the recorder's on-screen warning follow every reading.
  * It runs in the caller's transaction, like the NEWS2 escalation: if the vital set commits, so do its
  * notifications and the mark the cool-down reads; a notice that cannot be created never fails the set.
  */
@@ -156,8 +158,8 @@ public class MaternalEarlyWarningService {
     /**
      * Pages the level's circle, except anyone in {@code alreadyPaged} (reached by another notice for
      * this reading: the severe-pressure notice, which carries the score and the level). Returns who was
-     * paged. Nobody at the low level, and nobody when she was already paged at this very level within the
-     * cool-down (30 minutes; a level she was not paged at, a higher one above all, goes through at once).
+     * paged. Nobody at the low level, and nobody when she was already paged at this level or a higher
+     * one within the cool-down (30 minutes; a level above every recent page goes through at once).
      * The reading that pages is marked with its level and the time, which is what the cool-down reads.
      */
     public Set<String> escalate(PatientVitalSign saved, Score score, UUID patientId, UUID hospitalId,
@@ -194,14 +196,20 @@ public class MaternalEarlyWarningService {
         return paged;
     }
 
-    /** She was paged at this level, at this hospital, within the cool-down. Never without a repository. */
+    /**
+     * She was paged at this level or a higher one, at this hospital, within the cool-down: the team already
+     * holds a page at least as serious as this one. A level above every recent page is never held back.
+     * Never without a repository.
+     */
     private boolean pagedRecently(UUID patientId, UUID hospitalId, Tier tier) {
         int minutes = rules.getEscalation().getPageCoolDownMinutes();
         if (vitalSignRepository == null || minutes <= 0) {
             return false;
         }
-        return vitalSignRepository.existsByPatient_IdAndHospital_IdAndMewsPagedTierAndMewsPagedAtGreaterThanEqual(
-            patientId, hospitalId, tier.name(), LocalDateTime.now(clock).minusMinutes(minutes));
+        List<String> thisLevelAndAbove = java.util.Arrays.stream(Tier.values())
+            .filter(level -> level.compareTo(tier) >= 0).map(Enum::name).toList();
+        return vitalSignRepository.existsByPatient_IdAndHospital_IdAndMewsPagedTierInAndMewsPagedAtGreaterThanEqual(
+            patientId, hospitalId, thisLevelAndAbove, LocalDateTime.now(clock).minusMinutes(minutes));
     }
 
     private static Set<String> lowerCased(Collection<String> usernames) {
