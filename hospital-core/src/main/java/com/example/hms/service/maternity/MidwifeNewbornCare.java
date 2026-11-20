@@ -45,7 +45,8 @@ import java.util.UUID;
  * <ul>
  *   <li>She admits a newborn registered from a delivery she attended at this
  *       hospital (she delivered or documented it, or opened or documented its
- *       labour episode), as its admitting provider.</li>
+ *       labour episode), as its admitting provider, during the neonatal period
+ *       (born at most 28 days ago).</li>
  *   <li>She assigns and releases beds and cots of MATERNITY wards (the model
  *       has no separate postnatal ward type). A NICU cot, for a newborn stay
  *       only, is assigned too and a physician is asked to review: a task,
@@ -69,6 +70,9 @@ public class MidwifeNewbornCare {
     static final String TITLE_KEY = "newborn.neonatology.doctorTask.title";
     static final String BODY_KEY = "newborn.neonatology.doctorTask.body";
     static final String NOT_HER_NEWBORN_KEY = "admission.midwife.newbornNotHers";
+    static final String TOO_OLD_KEY = "admission.midwife.newbornTooOld";
+    /** The neonatal period: the first 28 days of life. */
+    static final int NEONATAL_PERIOD_DAYS = 28;
     static final String WARD_KEY = "admission.bed.midwifeWards";
     /** {@code AdmissionController#assignBed} and {@code #unassignBed} before policy rule 2. */
     private static final Set<String> BED_ROLES_BEFORE_THIS_RULE = Set.of(
@@ -91,6 +95,35 @@ public class MidwifeNewbornCare {
             && hospitalId.equals(link.getHospital().getId());
         if (!here || !attended(link.getDeliveryRecord(), midwifeUserId)) {
             throw new FieldBusinessException("patientId", NOT_HER_NEWBORN_KEY);
+        }
+        if (pastTheNeonatalPeriod(link.getDeliveryRecord(), baby)) {
+            throw new FieldBusinessException("patientId", TOO_OLD_KEY, NEONATAL_PERIOD_DAYS);
+        }
+    }
+
+    /**
+     * Review of #1243 (coordinator decision 2026-11-20, provisional): her newborn admission is for
+     * the neonatal period, a birth at most {@value #NEONATAL_PERIOD_DAYS} days ago. The birth is
+     * the delivery's; the patient's date of birth when the delivery carries none. A baby she once
+     * delivered and who is older is admitted by a physician. A birth date nobody recorded refuses
+     * nothing.
+     */
+    static boolean pastTheNeonatalPeriod(DeliveryRecord delivery, Patient baby) {
+        java.time.LocalDate born = delivery != null && delivery.getBirthDateTime() != null
+            ? delivery.getBirthDateTime().toLocalDate()
+            : baby.getDateOfBirth();
+        return born != null && born.plusDays(NEONATAL_PERIOD_DAYS)
+            .isBefore(java.time.LocalDate.now(java.time.ZoneId.systemDefault()));
+    }
+
+    /**
+     * The physician's task of a stay is withdrawn when the stay leaves its neonatal cot (and
+     * before a new placement is filed), so a later placement alerts again: the in-basket files one
+     * item per reference and reader, for good.
+     */
+    public void withdrawPhysicianTask(UUID admissionId) {
+        if (admissionId != null) {
+            inBasketService.removeAllItemsForReference(admissionId, REFERENCE_TYPE);
         }
     }
 

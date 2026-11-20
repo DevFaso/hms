@@ -159,6 +159,26 @@ export class AdmissionsComponent implements OnInit {
   protected readonly canDischarge = computed(() => this.can('admissionDischarge'));
   protected readonly canCancelAdmission = computed(() => this.can('admissionCancel'));
 
+  /**
+   * Policy rule 2 (review of #1243): a midwife moves or frees a stay's bed only where the bed it
+   * holds is hers to free (a maternity ward's, or a neonatal cot of a newborn stay); the server
+   * refuses the rest (`MidwifeNewbornCare`). A stay with no bed yet takes one from her picker.
+   */
+  protected canAssignBedFor(a: AdmissionResponse): boolean {
+    return this.canAssignBed() && this.bedIsHersToFree(a);
+  }
+
+  protected canUnassignBedFor(a: AdmissionResponse): boolean {
+    return !!a.bedId && this.canUnassignBed() && this.bedIsHersToFree(a);
+  }
+
+  private bedIsHersToFree(a: AdmissionResponse): boolean {
+    if (!this.midwifeBedsOnly() || !a.bedId) return true;
+    return (
+      a.bedWardType === 'MATERNITY' || (a.bedWardType === 'NICU' && a.admissionType === 'NEWBORN')
+    );
+  }
+
   private can(action: ActionKey): boolean {
     return this.roleContext.hasAnyActiveRole(actionRoles(action));
   }

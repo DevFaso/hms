@@ -63,6 +63,28 @@ public class BedAssignmentService {
     }
 
     /**
+     * Policy rule 2 (review of #1243): the physician's task of a newborn a midwife placed in a NICU
+     * cot ends when the stay leaves that cot. Set after construction through an ObjectProvider, as
+     * {@link #stayEncounters} is, so the callers that build this service by hand keep their constructor.
+     */
+    private org.springframework.beans.factory.ObjectProvider<com.example.hms.service.maternity.MidwifeNewbornCare> newbornCare;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setNewbornCare(
+            org.springframework.beans.factory.ObjectProvider<com.example.hms.service.maternity.MidwifeNewbornCare> newbornCare) {
+        this.newbornCare = newbornCare;
+    }
+
+    /** Every way a stay stops holding a bed comes through here: a move, an unassignment, a discharge. */
+    private void leftBed(Admission admission, Bed bed) {
+        boolean neonatal = bed.getWard() != null
+            && bed.getWard().getWardType() == com.example.hms.enums.WardType.NICU;
+        if (neonatal && newbornCare != null && admission.getId() != null) {
+            newbornCare.ifAvailable(care -> care.withdrawPhysicianTask(admission.getId()));
+        }
+    }
+
+    /**
      * Assign a bed to an admission: the bed must be active, AVAILABLE, and
      * belong to the admission's hospital. Any previously assigned bed is
      * released. The caller saves the admission; the bed rows are saved here.
@@ -119,6 +141,7 @@ public class BedAssignmentService {
 
         if (current != null) {
             markAvailable(current);
+            leftBed(admission, current);
         }
         bed.setStatus(BedStatus.OCCUPIED);
         bedRepository.save(bed);
@@ -204,6 +227,7 @@ public class BedAssignmentService {
             return;
         }
         markAvailable(bed);
+        leftBed(admission, bed);
         admission.setBed(null);
         admission.setRoomBed(null);
         log.info("Bed {} unassigned from admission {}", bedLabel(bed), admission.getId());
@@ -221,6 +245,7 @@ public class BedAssignmentService {
             return;
         }
         markAvailable(bed);
+        leftBed(admission, bed);
         log.info("Bed {} released by admission {}", bedLabel(bed), admission.getId());
     }
 

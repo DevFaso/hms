@@ -317,4 +317,57 @@ class MidwifeNewbornCareTest {
             .thenThrow(new IllegalStateException("database down"));
         assertThatCode(() -> care.askPhysicianAfterCommit(admission)).doesNotThrowAnyException();
     }
+
+    // ── Review of #1243: the neonatal period, and the physician's task ──
+
+    @Test
+    void sheAdmitsHerNewbornDuringItsFirst28DaysAndNotAfter() {
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        // Born 28 days ago: the last day of the neonatal period.
+        linkBabyTo(DeliveryRecord.builder().deliveredByStaff(staff(MIDWIFE)).birthDateTime(now.minusDays(28)).build(),
+            hospital);
+        assertThatCode(() -> care.requireNewbornOfHerDelivery(baby, HOSPITAL, MIDWIFE)).doesNotThrowAnyException();
+
+        // Born 29 days ago: a physician admits.
+        linkBabyTo(DeliveryRecord.builder().deliveredByStaff(staff(MIDWIFE)).birthDateTime(now.minusDays(29)).build(),
+            hospital);
+        assertThatThrownBy(() -> care.requireNewbornOfHerDelivery(baby, HOSPITAL, MIDWIFE))
+            .isInstanceOf(FieldBusinessException.class)
+            .hasMessageContaining("first 28 days")
+            .hasMessageContaining("physician");
+
+        // The 8-month-old and the 3-year-old she once delivered are not hers to admit.
+        for (int days : new int[] {240, 3 * 365}) {
+            linkBabyTo(DeliveryRecord.builder().deliveredByStaff(staff(MIDWIFE)).birthDateTime(now.minusDays(days)).build(),
+                hospital);
+            assertThatThrownBy(() -> care.requireNewbornOfHerDelivery(baby, HOSPITAL, MIDWIFE))
+                .as("born " + days + " days ago").isInstanceOf(FieldBusinessException.class);
+        }
+    }
+
+    @Test
+    void theBirthIsTheDeliverys_thePatientsDateOfBirthWhenTheDeliveryCarriesNone() {
+        linkBabyTo(DeliveryRecord.builder().deliveredByStaff(staff(MIDWIFE)).build(), hospital);
+        baby.setDateOfBirth(java.time.LocalDate.now().minusDays(29));
+        assertThatThrownBy(() -> care.requireNewbornOfHerDelivery(baby, HOSPITAL, MIDWIFE))
+            .isInstanceOf(FieldBusinessException.class);
+        baby.setDateOfBirth(java.time.LocalDate.now().minusDays(28));
+        assertThatCode(() -> care.requireNewbornOfHerDelivery(baby, HOSPITAL, MIDWIFE)).doesNotThrowAnyException();
+
+        // The delivery's birth wins over a date of birth typed wrongly on the baby's record.
+        baby.setDateOfBirth(java.time.LocalDate.now().minusYears(2));
+        linkBabyTo(DeliveryRecord.builder().deliveredByStaff(staff(MIDWIFE))
+            .birthDateTime(java.time.LocalDateTime.now().minusDays(1)).build(), hospital);
+        assertThatCode(() -> care.requireNewbornOfHerDelivery(baby, HOSPITAL, MIDWIFE)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void thePhysiciansTaskIsWithdrawnByItsAdmission() {
+        UUID admissionId = UUID.randomUUID();
+        care.withdrawPhysicianTask(admissionId);
+        verify(inBasketService).removeAllItemsForReference(admissionId, MidwifeNewbornCare.REFERENCE_TYPE);
+
+        care.withdrawPhysicianTask(null);
+        verify(inBasketService, times(1)).removeAllItemsForReference(any(), any());
+    }
 }

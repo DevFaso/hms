@@ -4,7 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -567,5 +570,65 @@ class BedAssignmentServiceTest {
 
         UUID bedId = bed.getId();
         assertThatThrownBy(() -> service.assignBed(admission, bedId)).isInstanceOf(BusinessException.class);
+    }
+
+    // ── Review of #1243: the physician's task ends when the stay leaves its neonatal cot ──
+
+    private com.example.hms.service.maternity.MidwifeNewbornCare wireNewbornCare() {
+        com.example.hms.service.maternity.MidwifeNewbornCare care =
+            mock(com.example.hms.service.maternity.MidwifeNewbornCare.class);
+        @SuppressWarnings("unchecked")
+        org.springframework.beans.factory.ObjectProvider<com.example.hms.service.maternity.MidwifeNewbornCare> provider =
+            mock(org.springframework.beans.factory.ObjectProvider.class);
+        doAnswer(invocation -> {
+            java.util.function.Consumer<com.example.hms.service.maternity.MidwifeNewbornCare> consumer =
+                invocation.getArgument(0);
+            consumer.accept(care);
+            return null;
+        }).when(provider).ifAvailable(any());
+        service.setNewbornCare(provider);
+        return care;
+    }
+
+    private Bed cotIn(WardType type, String number) {
+        Ward other = Ward.builder().hospital(admission.getHospital()).name(type.name()).code(type.name())
+            .wardType(type).build();
+        Bed cot = Bed.builder().ward(other).bedNumber(number).status(BedStatus.OCCUPIED).build();
+        cot.setId(UUID.randomUUID());
+        return cot;
+    }
+
+    @Test
+    void review1243_movingTheBabyOutOfANeonatalCotWithdrawsThePhysiciansTask() {
+        com.example.hms.service.maternity.MidwifeNewbornCare care = wireNewbornCare();
+        com.example.hms.model.Patient baby = new com.example.hms.model.Patient();
+        baby.setDateOfBirth(java.time.LocalDate.now().minusDays(2));
+        admission.setPatient(baby);
+        admission.setBed(cotIn(WardType.NICU, "N1"));
+        Bed maternityCot = bed("M7", BedStatus.AVAILABLE);
+        when(bedRepository.findByIdAndWard_Hospital_Id(maternityCot.getId(), hospitalId))
+            .thenReturn(Optional.of(maternityCot));
+
+        service.assignBed(admission, maternityCot.getId());
+
+        verify(care).withdrawPhysicianTask(admission.getId());
+    }
+
+    @Test
+    void review1243_unassigningOrReleasingANeonatalCotWithdrawsTheTask_aMaternityBedWithdrawsNothing() {
+        com.example.hms.service.maternity.MidwifeNewbornCare care = wireNewbornCare();
+
+        admission.setBed(cotIn(WardType.NICU, "N2"));
+        service.unassignBed(admission);
+        verify(care, times(1)).withdrawPhysicianTask(admission.getId());
+
+        // At discharge the bed is released and kept as history: the task goes too.
+        admission.setBed(cotIn(WardType.NICU, "N3"));
+        service.releaseBed(admission);
+        verify(care, times(2)).withdrawPhysicianTask(admission.getId());
+
+        admission.setBed(cotIn(WardType.MATERNITY, "M8"));
+        service.unassignBed(admission);
+        verify(care, times(2)).withdrawPhysicianTask(any());
     }
 }

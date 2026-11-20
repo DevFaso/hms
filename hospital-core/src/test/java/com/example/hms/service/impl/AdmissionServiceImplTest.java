@@ -36,6 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -1352,6 +1353,29 @@ class AdmissionServiceImplTest {
         service.assignBed(admissionId, bedId);
         verify(care).askPhysicianAfterCommit(admission);
         verify(bedAssignmentService, times(2)).assignBed(admission, bedId);
+        // The maternity placement withdrew nothing here (leaving a NICU cot is BedAssignmentService's).
+        verify(care, times(1)).withdrawPhysicianTask(admissionId);
+    }
+
+    @Test
+    void review1243_aSecondNeonatalPlacementWithdrawsTheEarlierTaskFirst_soThePhysiciansAreAlertedAgain() {
+        com.example.hms.service.maternity.MidwifeNewbornCare care = policyRule2Care();
+        Admission admission = stayInScope(AdmissionStatus.ACTIVE);
+        UUID firstCot = UUID.randomUUID();
+        UUID secondCot = UUID.randomUUID();
+        when(admissionRepository.save(admission)).thenReturn(admission);
+        when(care.requireBedAMidwifeMayAssign(any(), any())).thenReturn(true);
+
+        service.assignBed(admissionId, firstCot);
+        service.assignBed(admissionId, secondCot);
+
+        // Each placement: the task of the earlier one goes (the in-basket files one item per
+        // reference and reader, for good), then a new one is filed.
+        org.mockito.InOrder order = inOrder(care);
+        order.verify(care).withdrawPhysicianTask(admissionId);
+        order.verify(care).askPhysicianAfterCommit(admission);
+        order.verify(care).withdrawPhysicianTask(admissionId);
+        order.verify(care).askPhysicianAfterCommit(admission);
     }
 
     @Test

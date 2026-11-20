@@ -204,6 +204,47 @@ describe('AdmissionsComponent', () => {
       expect(component['midwifeBedsOnly']()).toBeTrue();
     });
 
+    it('Review of #1243: a midwife is offered the bed actions of a stay only where its bed is hers to free', () => {
+      const stay = (bedWardType: string | null, admissionType = 'LABOR_DELIVERY') =>
+        ({
+          id: 'a1',
+          bedId: bedWardType ? 'b1' : null,
+          bedWardType,
+          admissionType,
+        }) as unknown as AdmissionResponse;
+      activeRoles = ['ROLE_MIDWIFE'];
+      // No bed yet: she assigns one from her picker; nothing to free.
+      expect(component['canAssignBedFor'](stay(null))).toBeTrue();
+      expect(component['canUnassignBedFor'](stay(null))).toBeFalse();
+      // A maternity bed, and a neonatal cot of a newborn stay, are hers.
+      expect(component['canAssignBedFor'](stay('MATERNITY'))).toBeTrue();
+      expect(component['canUnassignBedFor'](stay('MATERNITY'))).toBeTrue();
+      expect(component['canAssignBedFor'](stay('NICU', 'NEWBORN'))).toBeTrue();
+      expect(component['canUnassignBedFor'](stay('NICU', 'NEWBORN'))).toBeTrue();
+      // Every other ward's bed, and a neonatal cot of a stay that is not a newborn's: no button.
+      for (const ward of ['GENERAL', 'SURGICAL', 'ICU', 'PEDIATRIC']) {
+        expect(component['canAssignBedFor'](stay(ward)))
+          .withContext(ward)
+          .toBeFalse();
+        expect(component['canUnassignBedFor'](stay(ward)))
+          .withContext(ward)
+          .toBeFalse();
+      }
+      expect(component['canAssignBedFor'](stay('NICU'))).toBeFalse();
+    });
+
+    it('Review of #1243: a nurse, or a midwife who is also one, keeps the bed actions of every stay', () => {
+      activeRoles = ['ROLE_MIDWIFE', 'ROLE_NURSE'];
+      const inSurgery = {
+        id: 'a1',
+        bedId: 'b1',
+        bedWardType: 'SURGICAL',
+        admissionType: 'ELECTIVE',
+      } as unknown as AdmissionResponse;
+      expect(component['canAssignBedFor'](inSurgery)).toBeTrue();
+      expect(component['canUnassignBedFor'](inSurgery)).toBeTrue();
+    });
+
     it('Policy rule 2: a midwife who is also a nurse, and a nurse, keep every ward in the bed picker', () => {
       activeRoles = ['ROLE_MIDWIFE', 'ROLE_NURSE'];
       expect(component['midwifeBedsOnly']()).toBeFalse();

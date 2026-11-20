@@ -528,6 +528,8 @@ public class AdmissionServiceImpl implements AdmissionService {
         bedAssignmentService.assignBed(admission, bedId);
         admission = admissionRepository.save(admission);
         if (askPhysician) {
+            // A new placement alerts again: the task of an earlier one is withdrawn first.
+            midwifeNewbornCare.withdrawPhysicianTask(admission.getId());
             midwifeNewbornCare.askPhysicianAfterCommit(admission);
         }
         return admissionMapper.toResponseDTO(admission);
