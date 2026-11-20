@@ -6872,7 +6872,10 @@
         "OTHER": "Otro",
         "DELIVERY": "Sala de partos",
         "PATIENT_REPORTED": "Informado por el paciente",
-        "MANUAL": "Entrada manual"
+        "MANUAL": "Entrada manual",
+        "LABOR_PARTOGRAPH": "Trabajo de parto (partograma)",
+        "POSTPARTUM": "Control posparto",
+        "NEWBORN_ASSESSMENT": "Evaluación del recién nacido"
       },
       "ENCOUNTER_TYPE": {
         "CONSULTATION": "Consulta",
@@ -13653,7 +13656,9 @@
       "TITLE": "Frecuencia no reconocida",
       "REASON_LABEL": "La hora de la próxima dosis no puede calcularse con esta frecuencia. ¿Por qué administrar esta dosis ahora?",
       "CONFIRM": "Administrar la dosis ahora"
-    }
+    },
+    "CLINICAL_ADVISORY_TITLE": "Controles clínicos para esta dosis",
+    "CLINICAL_ADVISORY_CHIP": "Alerta clínica"
   },
   "CREDENTIALING": {
     "CURRENT_EXPIRY": "Caducidad actual",
@@ -14123,7 +14128,8 @@
     "GLUCOSE": "La glucemia debe estar entre {{min}} y {{max}} mg/dL.",
     "WEIGHT": "El peso debe estar entre {{min}} y {{max}} kg.",
     "HEIGHT": "La talla debe estar entre {{min}} y {{max}} cm.",
-    "HEAD_CIRCUMFERENCE": "El perímetro cefálico debe estar entre {{min}} y {{max}} cm."
+    "HEAD_CIRCUMFERENCE": "El perímetro cefálico debe estar entre {{min}} y {{max}} cm.",
+    "FOR_PATIENT": "{{patient}}:"
   },
   "ORGAN_DAMAGE": {
     "LEGEND": "Signos de daño de órganos (opcional, con una presión arterial elevada)",
@@ -14154,7 +14160,15 @@
     "PLAN": "Plan:",
     "RESPONSE": "Respuesta:",
     "SUBJECTIVE": "Subjetivo:",
-    "TITLE": "Notas de cuidados de enfermería"
+    "TITLE": "Notas de cuidados de enfermería",
+    "ADD_ADDENDUM": "Añadir un complemento",
+    "ADDENDUM_LABEL": "Complemento",
+    "ADDENDUM_ATTEST": "Certifico que este complemento es exacto y no usa abreviaturas",
+    "ADDENDUM_SAVED": "Complemento guardado bajo la nota de cuidados.",
+    "ADDENDUM_FAILED": "No se pudo guardar el complemento.",
+    "EMPTY_PATIENT": "Aún no hay notas de cuidados para este paciente.",
+    "TAB": "Notas de cuidados",
+    "OPEN": "Notas"
   },
   "MEDICAL_CERTIFICATE": {
     "DAYS": "Días de baja",
@@ -14908,5 +14922,35 @@
     "SIGNED_BY": "firmada por {{name}}",
     "BY": "por {{name}}",
     "NOT_ATTESTED": "No atestada"
+  },
+  "WARD_INBOX": {
+    "TITLE": "Notificaciones del servicio",
+    "EMPTY": "Ninguna notificación del servicio.",
+    "FAILED": "No se pudieron cargar las notificaciones del servicio.",
+    "MARK_READ": "Marcar como leído"
+  },
+  "MATERNITY_STAY": {
+    "LOADING": "Comprobando la estancia…",
+    "NOT_ADMITTED": "no ingresado(a): no aparece en el puesto de enfermería ni en el tablero de camas.",
+    "ACUITY": "Nivel de gravedad",
+    "ACUITY_PICK": "Elegir el nivel de gravedad",
+    "ADMIT_MOTHER": "Ingresar en maternidad",
+    "ADMIT_NEWBORN": "Ingresar al recién nacido",
+    "NEWBORN_BY_DOCTOR": "Un médico ingresa al recién nacido.",
+    "BY_CLINICIAN": "Un médico o una matrona la ingresa.",
+    "IN_BED": "en la cama {{bed}}.",
+    "NO_BED": "ingresado(a), sin cama: no aparece en el tablero de camas.",
+    "BED": "Cama",
+    "BED_PICK": "Elegir una cama",
+    "ASSIGN_BED": "Asignar la cama",
+    "NO_FREE_BED": "Ninguna cama libre conviene a este paciente.",
+    "BED_BY_NURSE": "Una enfermera del servicio o un médico asigna la cama:",
+    "OPEN_ADMISSIONS": "Ingresos",
+    "REASON_LABOUR": "Trabajo de parto",
+    "REASON_NEWBORN": "Recién nacido",
+    "ADMITTED": "{{patient}} ingresado(a).",
+    "ADMIT_FAILED": "No se pudo registrar el ingreso.",
+    "BED_ASSIGNED": "Cama {{bed}} asignada.",
+    "BED_FAILED": "No se pudo asignar la cama."
   }
 }

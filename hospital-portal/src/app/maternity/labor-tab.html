@@ -126,6 +126,15 @@
   <!-- ══ Active episode ══ -->
   @if (activeEpisode(); as episode) {
     <div class="view-section action-form">
+      <!-- QA D2594 (r65): the woman in labour has a stay and a bed, so the ward sees her. -->
+      @if (!activeEpisodeForeign() && patient(); as p) {
+        <app-maternity-stay
+          [patientId]="p.id"
+          [patientName]="patientDisplayName()"
+          [admittedAt]="episode.admittedAt"
+          kind="LABOR_DELIVERY"
+        />
+      }
       <div class="filter-bar">
         <!-- QA D811: the heading already says the labour is in progress; a
              second "in labour" badge repeated the status. -->
@@ -339,6 +348,22 @@
           <p class="saved-note" data-testid="delivery-fetal-death-event">
             {{ 'LABOR.FETAL_DEATH_EVENT_RECORDED' | translate }}
           </p>
+        }
+        <!-- QA D2594 (r65): the delivered mother and each newborn have a stay and a bed. -->
+        @if (!isForeign(episode) && patient(); as p) {
+          <app-maternity-stay
+            [patientId]="p.id"
+            [patientName]="patientDisplayName()"
+            [admittedAt]="episode.admittedAt"
+            kind="LABOR_DELIVERY"
+          />
+          @for (baby of record.newborns ?? []; track baby.patientId) {
+            <app-maternity-stay
+              [patientId]="baby.patientId"
+              [patientName]="baby.displayName || ('LABOR.NEWBORN' | translate)"
+              kind="NEWBORN"
+            />
+          }
         }
         <!-- QA D1592: each live-born baby is its own patient, linked to its chart. -->
         @if (record.newborns?.length) {

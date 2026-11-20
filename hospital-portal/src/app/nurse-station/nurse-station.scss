@@ -1759,3 +1759,17 @@
     background: white;
   }
 }
+
+/* QA D2583 (r65): the patient's earlier care notes under the form. */
+.care-note-history {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color, #e2e8f0);
+  min-width: 0;
+}
+
+/* QA D2582 (r65): the in-basket items above the ward notifications. */
+.inbox-in-basket {
+  margin-bottom: 16px;
+  min-width: 0;
+}

@@ -116,6 +116,10 @@ export class EnumLabelService implements OnDestroy {
       DELIVERY: 'Delivery room',
       PATIENT_REPORTED: 'Reported by the patient',
       MANUAL: 'Manual entry',
+      // QA D2580 (r65): maternity readings charted in the vitals (MaternityVitalCharting).
+      LABOR_PARTOGRAPH: 'Labour (partograph)',
+      POSTPARTUM: 'Postpartum check',
+      NEWBORN_ASSESSMENT: 'Newborn assessment',
     },
 
     /* ── Encounter / visit types ──────────────────────────── */

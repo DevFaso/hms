@@ -237,6 +237,10 @@
     "src/app/super-admin/super-admin.ts::fixed-limit::loadAll:getSummary:10": {
       "count": 1,
       "why": "preview: the 10 newest audit events (auditLimit) in a Recent activity strip; the audit pages page the whole log"
+    },
+    "src/app/in-basket/ward-notifications/ward-notifications.component.ts::fixed-size::ngOnInit:getNurseInbox:limit=20": {
+      "count": 1,
+      "why": "D1295/D2582: the server returns EVERY unread row whatever the limit; limit is only the read-history length (NurseTaskController inbox), as on the nurse station"
     }
   }
 }

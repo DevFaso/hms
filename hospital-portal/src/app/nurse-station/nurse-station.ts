@@ -97,6 +97,8 @@ import { offersHeadCircumference } from '../shared/patient-measures';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
+import { NursingNotesPanelComponent } from '../encounters/nursing-notes-panel/nursing-notes-panel.component';
+import { InBasketPanelComponent } from '../dashboard/in-basket-panel/in-basket-panel';
 import {
   announceHypertensionWarning,
   announceNewbornWarning,
@@ -151,6 +153,8 @@ export function localInputToUtcIso(value: string | undefined | null): string | u
     RouterLink,
     TranslateModule,
     TriageFormComponent,
+    NursingNotesPanelComponent,
+    InBasketPanelComponent,
     OrganDamageSymptomsComponent,
     CloseUnseenDialogComponent,
     NursingIntakeFormComponent,
@@ -1066,11 +1070,26 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
           this.translate.instant('NURSE.TOAST.VITALS_RECORDED', { patient: target.patientName }),
         );
         // QA D1564: a newborn's set is judged against the newborn bands; saved, and warned.
-        announceNewbornWarning(response?.newbornAlerts, this.toast, this.translate);
+        announceNewbornWarning(
+          response?.newbornAlerts,
+          this.toast,
+          this.translate,
+          target.patientName,
+        );
         // QA D1890: a mother's severe pressure after birth; saved, and warned (URGENT).
-        announcePostpartumWarning(response?.postpartumAlerts, this.toast, this.translate);
+        announcePostpartumWarning(
+          response?.postpartumAlerts,
+          this.toast,
+          this.translate,
+          target.patientName,
+        );
         // r54: an adult's severe pressure; saved, and warned (a recheck; URGENT with a sign of organ damage).
-        announceHypertensionWarning(response?.hypertensionAlerts, this.toast, this.translate);
+        announceHypertensionWarning(
+          response?.hypertensionAlerts,
+          this.toast,
+          this.translate,
+          target.patientName,
+        );
         this.vitalsCapturing.set(false);
         this.closeVitalsDialog();
         this.loadAll();

@@ -6838,7 +6838,10 @@
         "OTHER": "Autre",
         "DELIVERY": "Salle d’accouchement",
         "PATIENT_REPORTED": "Déclaré par le patient",
-        "MANUAL": "Saisie manuelle"
+        "MANUAL": "Saisie manuelle",
+        "LABOR_PARTOGRAPH": "Travail (partogramme)",
+        "POSTPARTUM": "Surveillance post-partum",
+        "NEWBORN_ASSESSMENT": "Évaluation du nouveau-né"
       },
       "ENCOUNTER_TYPE": {
         "CONSULTATION": "Consultation",
@@ -13653,7 +13656,9 @@
       "TITLE": "Fréquence non reconnue",
       "REASON_LABEL": "L’heure de la prochaine dose ne peut pas être calculée à partir de cette fréquence. Pourquoi donner cette dose maintenant ?",
       "CONFIRM": "Administrer maintenant"
-    }
+    },
+    "CLINICAL_ADVISORY_TITLE": "Contrôles cliniques pour cette dose",
+    "CLINICAL_ADVISORY_CHIP": "Alerte clinique"
   },
   "CREDENTIALING": {
     "CURRENT_EXPIRY": "Expiration actuelle",
@@ -14123,7 +14128,8 @@
     "GLUCOSE": "La glycémie doit être comprise entre {{min}} et {{max}} mg/dL.",
     "WEIGHT": "Le poids doit être compris entre {{min}} et {{max}} kg.",
     "HEIGHT": "La taille doit être comprise entre {{min}} et {{max}} cm.",
-    "HEAD_CIRCUMFERENCE": "Le périmètre crânien doit être compris entre {{min}} et {{max}} cm."
+    "HEAD_CIRCUMFERENCE": "Le périmètre crânien doit être compris entre {{min}} et {{max}} cm.",
+    "FOR_PATIENT": "{{patient}} :"
   },
   "ORGAN_DAMAGE": {
     "LEGEND": "Signes d'atteinte d'organe (facultatif, si la tension est élevée)",
@@ -14154,7 +14160,15 @@
     "PLAN": "Plan :",
     "RESPONSE": "Réponse :",
     "SUBJECTIVE": "Subjectif :",
-    "TITLE": "Notes de soins infirmiers"
+    "TITLE": "Notes de soins infirmiers",
+    "ADD_ADDENDUM": "Ajouter un complément",
+    "ADDENDUM_LABEL": "Complément",
+    "ADDENDUM_ATTEST": "J'atteste que ce complément est exact et sans abréviation",
+    "ADDENDUM_SAVED": "Complément enregistré sous la note de soins.",
+    "ADDENDUM_FAILED": "Le complément n'a pas pu être enregistré.",
+    "EMPTY_PATIENT": "Aucune note de soins pour ce patient.",
+    "TAB": "Notes de soins",
+    "OPEN": "Notes"
   },
   "MEDICAL_CERTIFICATE": {
     "DAYS": "Jours d'arrêt",
@@ -14908,5 +14922,35 @@
     "SIGNED_BY": "signé par {{name}}",
     "BY": "par {{name}}",
     "NOT_ATTESTED": "Non attesté"
+  },
+  "WARD_INBOX": {
+    "TITLE": "Notifications du service",
+    "EMPTY": "Aucune notification du service.",
+    "FAILED": "Les notifications du service n'ont pas pu être chargées.",
+    "MARK_READ": "Marquer comme lu"
+  },
+  "MATERNITY_STAY": {
+    "LOADING": "Vérification du séjour…",
+    "NOT_ADMITTED": "non admis(e) : n'apparaît ni au poste infirmier ni au tableau des lits.",
+    "ACUITY": "Niveau de gravité",
+    "ACUITY_PICK": "Choisir le niveau de gravité",
+    "ADMIT_MOTHER": "Admettre en maternité",
+    "ADMIT_NEWBORN": "Admettre le nouveau-né",
+    "NEWBORN_BY_DOCTOR": "Un médecin admet le nouveau-né.",
+    "BY_CLINICIAN": "Un médecin ou une sage-femme l'admet.",
+    "IN_BED": "au lit {{bed}}.",
+    "NO_BED": "admis(e), sans lit : n'apparaît pas au tableau des lits.",
+    "BED": "Lit",
+    "BED_PICK": "Choisir un lit",
+    "ASSIGN_BED": "Attribuer le lit",
+    "NO_FREE_BED": "Aucun lit libre ne convient à ce patient.",
+    "BED_BY_NURSE": "Un(e) infirmier(ère) du service ou un médecin attribue le lit :",
+    "OPEN_ADMISSIONS": "Admissions",
+    "REASON_LABOUR": "Travail",
+    "REASON_NEWBORN": "Nouveau-né",
+    "ADMITTED": "{{patient}} admis(e).",
+    "ADMIT_FAILED": "L'admission n'a pas pu être enregistrée.",
+    "BED_ASSIGNED": "Lit {{bed}} attribué.",
+    "BED_FAILED": "Le lit n'a pas pu être attribué."
   }
 }
