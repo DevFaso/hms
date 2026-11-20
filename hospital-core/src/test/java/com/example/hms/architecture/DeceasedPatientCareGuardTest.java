@@ -112,6 +112,7 @@ class DeceasedPatientCareGuardTest {
         Reception#offerWaitlistSlot | ReceptionServiceImpl#offerWaitlistSlot
         Reception#acceptWaitlistOffer | ReceptionServiceImpl#acceptWaitlistOffer
         RefillApproval#approve | RefillApprovalServiceImpl#decide
+        RefillApproval#releaseAsPrescribed | RefillApprovalServiceImpl#releaseAsPrescribed
         SlotInventory#book | SlotInventoryServiceImpl#book
         StockOutRouting#routeToPartner | StockOutRoutingServiceImpl#validateRoutableStatus
         StockOutRouting#printForPatient | StockOutRoutingServiceImpl#validateRoutableStatus
@@ -183,6 +184,7 @@ class DeceasedPatientCareGuardTest {
         Reception#declineWaitlistOffer,closeWaitlistEntry,updateEncounterStatus | closes; a closed visit refuses the desk's status write
         Reception#attestEligibility | billing and payments
         RefillApproval#reject,pause | refuses a refill
+        RefillApproval#pharmacistReview,pharmacistRefuse | the pharmacy flags or refuses a refill request: nothing is released
         SafeguardingReview#record | r53: documents the review a past labour admission opened; never new care
         SlotInventory#generate,hold,release,block | the schedule, no patient
         StockOutRouting#partnerRespond,confirmPartnerDispense,partnerNoShow | a partner's outcome of a routing made before the death
@@ -208,6 +210,7 @@ class DeceasedPatientCareGuardTest {
         Map.entry("BillingInvoice", BILLING), Map.entry("Eligibility", BILLING), Map.entry("InvoiceEmail", BILLING),
         Map.entry("InvoiceItem", BILLING), Map.entry("InvoiceRefund", BILLING), Map.entry("InvoicePayerShare", BILLING), Map.entry("PriceList", BILLING), Map.entry("Payer", BILLING), Map.entry("PatientGuarantor", BILLING), Map.entry("PatientInsurance", BILLING),
         Map.entry("PharmacyClaim", BILLING), Map.entry("PharmacyPayment", BILLING), Map.entry("PharmacyRefund", BILLING),
+        Map.entry("DispenseBillingDeferral", BILLING), Map.entry("HospitalBillingPolicy", BILLING),
         Map.entry("CashSession", BILLING),
         Map.entry("DischargeApproval", "discharge and stay close-out"),
         Map.entry("DischargeSummary", "discharge and stay close-out"),

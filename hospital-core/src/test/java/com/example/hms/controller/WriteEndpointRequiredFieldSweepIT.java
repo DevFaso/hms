@@ -144,6 +144,11 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
         Map.entry("POST /billing-invoices/{invoiceId}/refunds/{refundId}/pay",
             "a cash hand-over needs nothing; the reference (and mobile-money operator) is required by the service only"
                 + " for the method that sends money (billing-money plan PR 8 review)"),
+        Map.entry("POST /pharmacy/billing-deferrals/{id}/approve",
+            "policy rule 6: what an approval needs depends on the kind of deferral (the voucher number of a"
+                + " third-party cover, the reason of a credit); the service names it then"),
+        Map.entry("PUT /billing/policy",
+            "policy rules 1 and 6: every field is optional; a field left out keeps its value"),
         Map.entry("POST /pharmacy/refunds/{id}/pay",
             "QA D2676: a cash hand-over needs nothing; the mobile-money reference and operator are required by the"
                 + " service only for that method"),

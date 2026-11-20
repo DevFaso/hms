@@ -27,11 +27,16 @@ public class HandOverRequestDTO {
     private String notes;
 
     /**
-     * QA D2675 (r65): why a fill not paid (nor covered by a claim) is handed over anyway: « à facturer » (billed
-     * later, on the stay's invoice for instance). Required only then, and only a pharmacist or a hospital admin may
-     * give it. Never card data.
+     * Policy rule 6 (V345; QA D2675): the deferral somebody else approved for this prescription, on which a fill
+     * not paid (nor covered by a claim) leaves « à facturer ». The pharmacist executes it; they do not grant it.
+     */
+    private java.util.UUID billingDeferralId;
+
+    /**
+     * Policy rule 6: the reason of a logged « urgence » override, when the fill cannot wait for an approval. Only a
+     * pharmacist or a hospital admin may give it, and finance reviews it afterwards. Never card data.
      */
     @Size(max = 500)
     @com.example.hms.validation.NoCardNumber
-    private String billingDeferredReason;
+    private String billingUrgencyReason;
 }

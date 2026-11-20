@@ -43,14 +43,10 @@ public interface PharmacyClaimRepository extends JpaRepository<PharmacyClaim, UU
             @org.springframework.data.repository.query.Param("dispenseId") UUID dispenseId);
 
     /**
-     * Review of #1239 (unpaid hand-over through a draft claim): what the claims actually sent to the payer ask for
-     * one dispense. A DRAFT claim is a form nobody submitted; it covers nothing at the counter. Only SUBMITTED,
-     * ACCEPTED and PAID count. {@link #sumLiveForDispense} still bounds what may be claimed or paid (D1613).
+     * Policy rule 6 (review of #1244): the claims of one dispense in the given states. The counter no longer adds
+     * up "claims sent": a pharmacist could create and submit one alone and hand the fill over on it. Each claim is
+     * read, and {@code FillClaimCover} decides whether somebody else stands behind it.
      */
-    @org.springframework.data.jpa.repository.Query("SELECT COALESCE(SUM(c.amount), 0) FROM PharmacyClaim c "
-         + "WHERE c.dispense.id = :dispenseId AND c.claimStatus IN ("
-         + "com.example.hms.enums.PharmacyClaimStatus.SUBMITTED, com.example.hms.enums.PharmacyClaimStatus.ACCEPTED, "
-         + "com.example.hms.enums.PharmacyClaimStatus.PAID)")
-    java.math.BigDecimal sumSentForDispense(
-            @org.springframework.data.repository.query.Param("dispenseId") UUID dispenseId);
+    List<PharmacyClaim> findByDispenseIdAndClaimStatusIn(UUID dispenseId,
+                                                         java.util.Collection<PharmacyClaimStatus> statuses);
 }

@@ -1,0 +1,129 @@
+// Policy rule 6: the counter's choice for a fill with money due. Wraps at any width (QA #1224 overflow guard).
+:host {
+  display: block;
+  min-width: 0;
+  // Inherited: a long word (a medicine, a voucher number, a name) wraps instead of widening the dialog.
+  overflow-wrap: anywhere;
+}
+
+label,
+legend,
+strong,
+small,
+em,
+span {
+  min-width: 0;
+}
+
+.deferral-choice {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.deferral-intro,
+.deferral-muted,
+.deferral-note {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.deferral-muted {
+  color: var(--text-muted, #5b6472);
+}
+
+.deferral-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  background: var(--surface-muted, #f1f5f9);
+}
+
+.deferral-options {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-color, #d5dbe3);
+  border-radius: 6px;
+
+  legend {
+    padding: 0 0.25rem;
+    font-weight: 600;
+  }
+}
+
+.deferral-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  min-width: 0;
+
+  input[type='radio'] {
+    flex: 0 0 auto;
+    margin-top: 0.2rem;
+  }
+}
+
+.deferral-option-off {
+  color: var(--text-muted, #5b6472);
+}
+
+.deferral-option-body {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.deferral-pending,
+.deferral-request {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  background: var(--surface-muted, #f1f5f9);
+
+  p {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  button {
+    justify-self: start;
+  }
+}
+
+.deferral-request-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.field {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+
+  select,
+  input,
+  textarea {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+.deferral-hint {
+  color: var(--text-muted, #5b6472);
+  overflow-wrap: anywhere;
+}
+
+.deferral-provisional {
+  font-style: italic;
+}

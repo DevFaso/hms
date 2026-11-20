@@ -155,6 +155,53 @@ export class RefillApprovalListComponent implements OnInit {
     return OPEN_STATUSES.includes(status);
   }
 
+  // ── Policy rule 1 (QA D2308): the pharmacy reviews, flags, refuses and releases; it never approves ──
+
+  /** Forwards the request to its prescriber with the pharmacist's flags. Decides nothing. */
+  protected forward(refill: RefillRequest): void {
+    const note = this.notesFor(refill);
+    if (!note) {
+      this.refuseNotes(refill, 'REFILLS.PHARMACIST_NOTE_REQUIRED_FORWARD');
+      return;
+    }
+    this.dispatch(
+      refill,
+      () => this.service.pharmacistReview(refill.id, note),
+      'REFILLS.TOAST_FORWARDED',
+      'REFILLS.TOAST_FORWARD_FAILED',
+    );
+  }
+
+  /** The pharmacist refuses to dispense, with the reason; the patient and the prescriber are told. */
+  protected async pharmacistRefuse(refill: RefillRequest): Promise<void> {
+    const note = this.notesFor(refill);
+    if (!note) {
+      this.refuseNotes(refill, 'REFILLS.PHARMACIST_NOTE_REQUIRED_REFUSE');
+      return;
+    }
+    const confirmed = await this.confirm.ask({
+      titleKey: 'REFILLS.PHARMACIST_REFUSE_CONFIRM',
+      confirmKey: 'REFILLS.ACTION_PHARMACIST_REFUSE',
+    });
+    if (!confirmed) return;
+    this.dispatch(
+      refill,
+      () => this.service.pharmacistRefuse(refill.id, note),
+      'REFILLS.TOAST_PHARMACIST_REFUSED',
+      'REFILLS.TOAST_DENY_FAILED',
+    );
+  }
+
+  /** A refill the prescriber already wrote: ordinary dispensing, released to the work queue. */
+  protected release(refill: RefillRequest): void {
+    this.dispatch(
+      refill,
+      () => this.service.releaseAsPrescribed(refill.id),
+      'REFILLS.TOAST_RELEASED',
+      'REFILLS.TOAST_RELEASE_FAILED',
+    );
+  }
+
   /** Pausing an already-paused request is a no-op the backend rejects, so hide the button. */
   protected canPause(status: RefillStatus): boolean {
     return status === 'REQUESTED';
@@ -190,7 +237,7 @@ export class RefillApprovalListComponent implements OnInit {
         // the server's reason; any refusal shows the server's reason, never
         // only the generic failure (D1111 class).
         const id = notesFieldId(refill.id);
-        const refused = refusedFieldReasons(err, { providerNotes: id });
+        const refused = refusedFieldReasons(err, { providerNotes: id, pharmacistNote: id });
         if (refused.length > 0) {
           refuseFields(this.host.nativeElement, [id], [id], refused[0][1]);
         }

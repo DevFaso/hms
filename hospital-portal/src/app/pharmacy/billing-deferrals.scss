@@ -1,0 +1,193 @@
+// Policy rule 6: the « à facturer » work list and the hospital's billing policy. Every block wraps and no
+// row has a fixed width, so the page holds at 390 px (QA #1224 overflow guard).
+:host {
+  display: block;
+  min-width: 0;
+  // Inherited: a long word (a medicine, a voucher number, a name) wraps instead of widening the page.
+  overflow-wrap: anywhere;
+}
+
+.muted {
+  color: var(--text-muted, #5b6472);
+}
+
+// The title block shrinks and a long word wraps, so the header never pushes the page wider than the screen.
+.page-header > div:first-child {
+  min-width: 0;
+}
+
+.page-title,
+.page-subtitle,
+.workspace-eyebrow {
+  overflow-wrap: anywhere;
+}
+
+.deferral-provisional {
+  margin: 0.25rem 0 0;
+  font-style: italic;
+  color: var(--text-muted, #5b6472);
+  overflow-wrap: anywhere;
+}
+
+.deferral-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.deferral-card,
+.policy-card {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color, #d5dbe3);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+}
+
+.deferral-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.deferral-status {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--surface-muted, #f1f5f9);
+  font-size: 0.85rem;
+}
+
+.deferral-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 0.5rem 1rem;
+  margin: 0;
+  min-width: 0;
+
+  div {
+    min-width: 0;
+  }
+
+  dt {
+    font-size: 0.8rem;
+    color: var(--text-muted, #5b6472);
+  }
+
+  dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.deferral-meta-wide {
+  grid-column: 1 / -1;
+}
+
+.deferral-actions,
+.deferral-step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.deferral-waiting {
+  color: var(--text-muted, #5b6472);
+  overflow-wrap: anywhere;
+}
+
+.deferral-step {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-color, #d5dbe3);
+}
+
+.field {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+
+  input,
+  textarea {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+.hint {
+  color: var(--text-muted, #5b6472);
+  overflow-wrap: anywhere;
+}
+
+.policy-card {
+  margin-top: 1.5rem;
+}
+
+.policy-title {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.policy-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  min-width: 0;
+
+  input[type='checkbox'] {
+    flex: 0 0 auto;
+    margin-top: 0.2rem;
+  }
+
+  span {
+    display: grid;
+    gap: 0.15rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  small {
+    color: var(--text-muted, #5b6472);
+  }
+}
+
+.policy-row-off {
+  color: var(--text-muted, #5b6472);
+}
+
+// The two lists of the page: the work to do, and the fills that left and still owe money.
+.deferral-views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  min-width: 0;
+}
+
+.deferral-view {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border-color, #d5dbe3);
+  border-radius: 999px;
+  background: var(--surface, #fff);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.deferral-view-on {
+  font-weight: 600;
+  background: var(--surface-muted, #f1f5f9);
+}
+
+.deferral-mrn {
+  color: var(--text-muted, #5b6472);
+}

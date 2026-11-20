@@ -1959,4 +1959,41 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     key: 'AUDIT.DESC.IMAGING_EXAM_RECORD_UPDATED',
     re: /^Imaging exam record updated$/,
   },
+  // Policy rule 6 (V345): « à facturer » asked for, decided by another person, an urgency override and its
+  // review, and an inpatient fill charged to the stay (constant descriptions, ids on the row).
+  {
+    key: 'AUDIT.DESC.DISPENSE_BILLING_DEFERRAL_REQUESTED',
+    re: /^Deferred billing of a fill requested$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.DISPENSE_BILLING_DEFERRAL_APPROVED',
+    re: /^Deferred billing of a fill approved$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.DISPENSE_BILLING_DEFERRAL_REJECTED',
+    re: /^Deferred billing of a fill rejected$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.DISPENSE_BILLING_DEFERRAL_CANCELLED',
+    re: /^Deferred billing of a fill withdrawn$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.DISPENSE_BILLING_URGENCY_OVERRIDE',
+    re: /^Fill handed over unpaid on an urgency override$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.DISPENSE_BILLING_OVERRIDE_REVIEWED',
+    re: /^Urgency override of a fill's billing reviewed$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.DISPENSE_POSTED_TO_ADMISSION_ACCOUNT',
+    re: /^Fill charged to the account of the open stay$/,
+    params: [],
+  },
 ];

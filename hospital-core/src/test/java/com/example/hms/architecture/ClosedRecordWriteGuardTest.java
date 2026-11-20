@@ -67,6 +67,7 @@ class ClosedRecordWriteGuardTest {
         "DepartmentServiceImpl#updateDepartmentHead", 1, NO_TERMINAL_STATE,
         "Dhis2ConfigServiceImpl#updateMapping", 1, NO_TERMINAL_STATE,
         "DrugInteractionAdminServiceImpl#update", 1, NO_TERMINAL_STATE,
+        "HospitalBillingPolicyService#update", 1, NO_TERMINAL_STATE,
         "HospitalServiceImpl#updateHospital", 1, NO_TERMINAL_STATE,
         "InventoryServiceImpl#updateInventoryItem", 1, NO_TERMINAL_STATE,
         "LabInstrumentServiceImpl#update", 1, NO_TERMINAL_STATE,

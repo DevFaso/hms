@@ -56,6 +56,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -147,7 +150,23 @@ class PharmacyReconciliationServiceTest {
                 .thenReturn(payments);
         when(refundRepository.findPaidBetween(eq(hospitalId), eq(pharmacy.getId()), any(), any())).thenReturn(refunds);
         when(stockTransactionRepository.findForDay(eq(pharmacy.getId()), any(), any())).thenReturn(movements);
-        when(claimRepository.sumSentForDispense(any())).thenReturn(BigDecimal.ZERO);
+        when(claimRepository.findByDispenseIdAndClaimStatusIn(any(), any())).thenReturn(List.of());
+    }
+
+    /**
+     * Policy rule 6 (review of #1244): a claim a billing specialist of the hospital stands behind covers the fill.
+     * Review round 2: {@code moneyDesk} is what was RECORDED when the claim was sent; nothing is asked today.
+     */
+    private UUID aClaimSentBy(Dispense fill, String amount, boolean moneyDesk) {
+        UUID sender = UUID.randomUUID();
+        com.example.hms.model.User submitter = new com.example.hms.model.User();
+        submitter.setId(sender);
+        when(claimRepository.findByDispenseIdAndClaimStatusIn(eq(fill.getId()), any())).thenReturn(List.of(
+                com.example.hms.model.pharmacy.PharmacyClaim.builder()
+                        .claimStatus(com.example.hms.enums.PharmacyClaimStatus.SUBMITTED)
+                        .amount(new BigDecimal(amount)).submittedByUser(submitter)
+                        .vouchedBy(moneyDesk ? sender : null).build()));
+        return sender;
     }
 
     private void sale(String quantity, PharmacyPaymentMethod method) {
@@ -275,6 +294,110 @@ class PharmacyReconciliationServiceTest {
     }
 
     @Test
+    @DisplayName("review of #1244: a claim the pharmacy sent alone covers nothing; the fill stays listed with what it owes")
+    void aClaimThePharmacySentAloneIsNotCover() {
+        Dispense unvouched = fill("4", false, true);
+        aClaimSentBy(unvouched, "1000", false);
+        com.example.hms.model.User dispenser = new com.example.hms.model.User();
+        dispenser.setId(UUID.randomUUID());
+        unvouched.setDispensedByUser(dispenser);
+        UUID overrideId = UUID.randomUUID();
+        unvouched.setBillingDeferralId(overrideId);
+        unvouched.setBillingDeferredReason("Crise, caisse fermée");
+        com.example.hms.model.Patient patient = new com.example.hms.model.Patient();
+        patient.setId(UUID.randomUUID());
+        patient.setFirstName("Awa");
+        patient.setLastName("Traoré");
+        unvouched.setPatient(patient);
+        DispenseBillingDeferralService deferrals = mock(DispenseBillingDeferralService.class);
+        UUID stayId = UUID.randomUUID();
+        when(deferrals.byIds(eq(hospitalId), org.mockito.ArgumentMatchers.anyCollection())).thenReturn(java.util.Map.of(
+                overrideId, com.example.hms.payload.dto.pharmacy.DispenseBillingDeferralDTO.builder()
+                        .id(overrideId).kind("URGENCY_OVERRIDE").admissionId(stayId).build()));
+        service.setBillingDeferrals(deferrals);
+
+        PharmacyReconciliationDTO day = service.daily(pharmacy.getId(), DAY);
+
+        assertThat(day.getDeferred()).singleElement().satisfies(f -> {
+            assertThat(f.getDue()).as("the claim covers nothing").isEqualByComparingTo("1000");
+            assertThat(f.getKind()).isEqualTo("URGENCY_OVERRIDE");
+            assertThat(f.getPatientName()).isEqualTo("Awa Traoré");
+            assertThat(f.getAdmissionId()).isEqualTo(stayId);
+        });
+        String csv = new String(service.exportCsv(pharmacy.getId(), DAY), StandardCharsets.UTF_8);
+        assertThat(csv).contains("patient", "dossier", "sejour", "Awa Traoré", stayId.toString());
+    }
+
+    @Test
+    @DisplayName("review round 2: a closed day stays covered when the pharmacist later records the payment, or the clerk leaves")
+    void aClosedDayDoesNotMove() {
+        Dispense covered = fill("4", false, true);
+        com.example.hms.model.User dispenser = new com.example.hms.model.User();
+        dispenser.setId(UUID.randomUUID());
+        covered.setDispensedByUser(dispenser);
+        UUID clerk = UUID.randomUUID();
+        com.example.hms.model.pharmacy.PharmacyClaim claim = com.example.hms.model.pharmacy.PharmacyClaim.builder()
+                .claimStatus(com.example.hms.enums.PharmacyClaimStatus.ACCEPTED).amount(new BigDecimal("1000"))
+                .vouchedBy(clerk).hospital(pharmacy.getHospital()).build();
+        when(claimRepository.findByDispenseIdAndClaimStatusIn(eq(covered.getId()), any())).thenReturn(List.of(claim));
+        assertThat(service.daily(pharmacy.getId(), DAY).getDifferences()).isEmpty();
+
+        // (A) The pharmacist who handed the fill over records the insurer's payment days later.
+        claim.setClaimStatus(com.example.hms.enums.PharmacyClaimStatus.PAID);
+        ClaimVouching.recordVoucher(claim, dispenser.getId(), roleValidator, java.time.LocalDateTime.now(clock));
+        // (B) The clerk's assignment ended: they hold no role at the hospital today.
+        org.mockito.Mockito.lenient().when(roleValidator.vouchesForClaimCover(clerk, hospitalId)).thenReturn(false);
+
+        PharmacyReconciliationDTO day = service.daily(pharmacy.getId(), DAY);
+        assertThat(day.getDifferences()).as("an insurer-paid fill is not an unpaid hand-over").isEmpty();
+        assertThat(day.getDeferred()).isEmpty();
+        assertThat(claim.getVouchedBy()).isEqualTo(clerk);
+        verify(roleValidator, never()).vouchesForClaimCover(clerk, hospitalId);
+    }
+
+    @Test
+    @DisplayName("policy rule 6: every « à facturer » fill names the deferral behind it; one marked before the rule is UNAPPROVED")
+    void deferredFillsNameTheirDeferral() {
+        Dispense legacy = fill("2", false, true);
+        legacy.setBillingDeferredReason("Hospitalisé, facture du séjour");
+        Dispense override = fill("4", false, true);
+        UUID overrideId = UUID.randomUUID();
+        override.setBillingDeferralId(overrideId);
+        override.setBillingDeferredReason("Crise, caisse fermée");
+        Dispense inpatient = fill("6", false, true);
+        UUID stayId = UUID.randomUUID();
+        inpatient.setBillingDeferralId(stayId);
+        DispenseBillingDeferralService deferrals = mock(DispenseBillingDeferralService.class);
+        when(deferrals.byIds(org.mockito.ArgumentMatchers.eq(hospitalId), org.mockito.ArgumentMatchers.anyCollection()))
+                .thenReturn(java.util.Map.of(
+                        overrideId, com.example.hms.payload.dto.pharmacy.DispenseBillingDeferralDTO.builder()
+                                .id(overrideId).kind("URGENCY_OVERRIDE").requestedByName("Awa Pharmacienne")
+                                .executedByName("Awa Pharmacienne").build(),
+                        stayId, com.example.hms.payload.dto.pharmacy.DispenseBillingDeferralDTO.builder()
+                                .id(stayId).kind("ADMISSION_ACCOUNT").executedByName("Awa Pharmacienne").build()));
+        service.setBillingDeferrals(deferrals);
+
+        PharmacyReconciliationDTO day = service.daily(pharmacy.getId(), DAY);
+
+        assertThat(day.getDifferences()).as("a deferred fill is listed apart, never a difference").isEmpty();
+        assertThat(day.getDeferred()).extracting(PharmacyReconciliationDTO.DeferredFill::getKind)
+                .containsExactlyInAnyOrder("UNAPPROVED", "URGENCY_OVERRIDE", "ADMISSION_ACCOUNT");
+        assertThat(day.getDeferred()).filteredOn(f -> "URGENCY_OVERRIDE".equals(f.getKind())).singleElement()
+                .satisfies(f -> {
+                    assertThat(f.getReviewed()).as("not reviewed yet").isFalse();
+                    assertThat(f.getRequestedByName()).isEqualTo("Awa Pharmacienne");
+                    assertThat(f.getApprovedByName()).isNull();
+                });
+        assertThat(day.getMoney().getDeferredTotal()).isEqualByComparingTo("3000");
+        assertThat(day.getMoney().getUrgencyOverrideTotal()).isEqualByComparingTo("1000");
+        assertThat(day.getMoney().getAdmissionAccountTotal()).isEqualByComparingTo("1500");
+
+        String csv = new String(service.exportCsv(pharmacy.getId(), DAY), StandardCharsets.UTF_8);
+        assertThat(csv).contains("a_facturer_urgence", "a_facturer_compte_hospitalisation", "URGENCY_OVERRIDE",
+                "ADMISSION_ACCOUNT", "UNAPPROVED", "Awa Pharmacienne", "demande_par", "approuve_par");
+    }
+
+    @Test
     @DisplayName("PR 13: controlled balances equal the register; a lot that drifted is a difference")
     void controlledBalances() {
         PharmacyReconciliationDTO day = service.daily(pharmacy.getId(), DAY);
@@ -366,7 +489,7 @@ class PharmacyReconciliationServiceTest {
     @DisplayName("a fill with no price, or fully covered by its claim, owes nothing at hand-over")
     void unpricedOrCoveredFillsOweNothing() {
         Dispense covered = fill("4", false, true);
-        when(claimRepository.sumSentForDispense(covered.getId())).thenReturn(new BigDecimal("1000"));
+        aClaimSentBy(covered, "1000", true);
         Dispense unpriced = fill("1", false, true);
         unpriced.setMedicationCatalogItem(null);
 
@@ -384,7 +507,6 @@ class PharmacyReconciliationServiceTest {
         Dispense fill = fill("4", false, true);
         // The claim exists (it bounds what may be claimed) but was never sent to the payer.
         when(claimRepository.sumLiveForDispense(fill.getId())).thenReturn(new BigDecimal("1000"));
-        when(claimRepository.sumSentForDispense(fill.getId())).thenReturn(BigDecimal.ZERO);
 
         PharmacyReconciliationDTO day = service.daily(pharmacy.getId(), DAY);
 

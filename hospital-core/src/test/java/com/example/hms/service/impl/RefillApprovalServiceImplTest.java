@@ -77,6 +77,8 @@ class RefillApprovalServiceImplTest {
         this.endedStayOrders = new com.example.hms.service.EndedStayOrderGuard(admissionRepository);
     }
 
+    @Spy private java.time.Clock clock = java.time.Clock.systemDefaultZone();
+
     @InjectMocks private RefillApprovalServiceImpl service;
 
     private UUID userId;
@@ -120,7 +122,17 @@ class RefillApprovalServiceImplTest {
         prescription.setRefillsAllowed(3);
         prescription.setRefillsRemaining(2);
         prescription.setRefillsUsed(0);
+        // Policy rule 1: the prescription has a hospital, and the caller of the prescriber tests is an authorised
+        // prescriber there (a physician: every list).
+        prescribingHospitalId = UUID.randomUUID();
+        com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+        hospital.setId(prescribingHospitalId);
+        prescription.setHospital(hospital);
+        lenient().when(roleValidator.canApproveRenewal(eq(userId), any(), org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenReturn(true);
     }
+
+    private UUID prescribingHospitalId;
 
     private RefillRequest pendingRefill() {
         RefillRequest r = new RefillRequest();
@@ -188,6 +200,8 @@ class RefillApprovalServiceImplTest {
 
         assertThat(card.getPatientName()).isEqualTo("Alice Patient");
         assertThat(card.getPatientMrn()).isEqualTo("CHW0042");
+        assertThat(card.isPharmacyView()).as("policy rule 1: a pharmacist reads the pharmacy's steps, never a decision")
+            .isTrue();
         prescription.setHospital(null);
         assertThat(RefillApprovalServiceImpl.mrnAtPrescribingHospital(pendingRefill()))
             .as("no hospital, no MRN: never another hospital's").isNull();
@@ -701,5 +715,220 @@ class RefillApprovalServiceImplTest {
         assertThatThrownBy(() -> service.countPendingForProvider(auth))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("patient.refill.decision.noStaffRecord");
+    }
+
+    // ── Policy rule 1 (provisional, QA D2308): a renewal is a prescriber's decision ──────────────
+
+    @org.junit.jupiter.api.Nested
+    @DisplayName("policy rule 1: only an authorised prescriber approves a renewal; the pharmacist reviews, flags, refuses, dispenses")
+    class PolicyRuleOne {
+
+        private final UUID pharmacistId = UUID.randomUUID();
+
+        private void actingAsPharmacist() {
+            when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(pharmacistId));
+            lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(prescribingHospitalId);
+            lenient().when(roleValidator.canReviewRenewalAtPharmacy(pharmacistId, prescribingHospitalId)).thenReturn(true);
+        }
+
+        private RefillRequest stored() {
+            RefillRequest pending = pendingRefill();
+            when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pending));
+            lenient().when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> inv.getArgument(0));
+            return pending;
+        }
+
+        private void thePrescriberReadsTheBell() {
+            User doctor = new User();
+            doctor.setUsername("dr.bob");
+            prescriber.setUser(doctor);
+        }
+
+        @Test
+        @DisplayName("no pharmacist-approved renewal: a caller who is only a pharmacist is refused before any lookup")
+        void aPharmacistNeverDecides() {
+            when(roleValidator.hasAnyAuthority("PHARMACIST")).thenReturn(true);
+            when(roleValidator.hasAnyAuthority("DOCTOR", "NURSE", "MIDWIFE")).thenReturn(false);
+            RefillDecisionRequestDTO notes = RefillDecisionRequestDTO.builder().providerNotes("ok").build();
+
+            assertThatThrownBy(() -> service.approve(auth, refillId, notes))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class)
+                    .hasMessage("patient.refill.decision.prescriberOnly");
+            assertThatThrownBy(() -> service.pause(auth, refillId, notes))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            assertThatThrownBy(() -> service.reject(auth, refillId, notes))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            verify(refillRequestRepository, never()).findById(any());
+            verify(refillRequestRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("the prescription's own author without a prescriber's assignment at its hospital is refused; nothing is released")
+        void anUnauthorisedAuthorIsRefused() {
+            stubStaffResolution();
+            RefillRequest pending = stored();
+            when(roleValidator.canApproveRenewal(eq(userId), any(), org.mockito.ArgumentMatchers.anyBoolean()))
+                    .thenReturn(false);
+
+            assertThatThrownBy(() -> service.approve(auth, refillId, null))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class)
+                    .hasMessage("patient.refill.decision.prescriberOnly");
+            assertThat(pending.getStatus()).isEqualTo(RefillStatus.REQUESTED);
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+            verify(prescriptionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a nurse or a midwife is asked about the drug's list: a controlled drug is checked as controlled")
+        void theListOfTheDrugIsChecked() {
+            stubStaffResolution();
+            stored();
+            when(controlledResolver.isControlled(prescription)).thenReturn(true);
+            when(roleValidator.canApproveRenewal(userId, prescribingHospitalId, true)).thenReturn(false);
+
+            assertThatThrownBy(() -> service.approve(auth, refillId, null))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            verify(roleValidator).canApproveRenewal(userId, prescribingHospitalId, true);
+        }
+
+        @Test
+        @DisplayName("a prescriber's approval records who decided and on what basis")
+        void aPrescriberApprovalIsStamped() {
+            stubStaffResolution();
+            RefillRequest pending = stored();
+
+            MedicationRefillResponseDTO result = service.approve(auth, refillId, null);
+
+            assertThat(result.getStatus()).isEqualTo("APPROVED");
+            assertThat(result.getDecisionBasis()).isEqualTo("PRESCRIBER_DECISION");
+            assertThat(pending.getDecidedBy()).isEqualTo(userId);
+            assertThat(pending.getDecidedAt()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("the pharmacist forwards with flags: the request stays open, the prescriber is told, nothing is released")
+        void thePharmacistForwardsWithFlags() {
+            actingAsPharmacist();
+            thePrescriberReadsTheBell();
+            RefillRequest pending = stored();
+
+            MedicationRefillResponseDTO result = service.pharmacistReview(auth, refillId,
+                    RefillDecisionRequestDTO.builder().pharmacistNote("  Requested 12 days early ").build());
+
+            assertThat(result.getStatus()).isEqualTo("REQUESTED");
+            assertThat(result.getPharmacistNote()).isEqualTo("Requested 12 days early");
+            assertThat(result.isWrittenRefillLeft()).as("two written refills are left").isTrue();
+            assertThat(pending.getPharmacistReviewedBy()).isEqualTo(pharmacistId);
+            assertThat(pending.getDecisionBasis()).isNull();
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+            verify(notificationService).created(org.mockito.ArgumentMatchers.contains("Requested 12 days early"),
+                    eq("dr.bob"), eq("MEDICATION_REFILL"));
+            verify(notificationService, never()).created(anyString(), eq("alice.patient"), anyString());
+        }
+
+        @Test
+        @DisplayName("the pharmacist refuses to dispense, with a reason: denied as a pharmacist's refusal, patient and prescriber told")
+        void thePharmacistRefusesWithAReason() {
+            actingAsPharmacist();
+            thePrescriberReadsTheBell();
+            RefillRequest pending = stored();
+
+            assertThatThrownBy(() -> service.pharmacistRefuse(auth, refillId,
+                    RefillDecisionRequestDTO.builder().pharmacistNote("  ").build()))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .extracting("field").isEqualTo("pharmacistNote");
+
+            MedicationRefillResponseDTO result = service.pharmacistRefuse(auth, refillId,
+                    RefillDecisionRequestDTO.builder().pharmacistNote("Interaction with warfarin").build());
+
+            assertThat(result.getStatus()).isEqualTo("DENIED");
+            assertThat(result.getDecisionBasis()).isEqualTo("PHARMACIST_REFUSAL");
+            assertThat(pending.getDecidedBy()).isEqualTo(pharmacistId);
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+            verify(notificationService).created(anyString(), eq("alice.patient"), eq("MEDICATION_REFILL"));
+            verify(notificationService).created(org.mockito.ArgumentMatchers.contains("Interaction with warfarin"),
+                    eq("dr.bob"), eq("MEDICATION_REFILL"));
+        }
+
+        @Test
+        @DisplayName("a refill already written on the prescription is ordinary dispensing: the pharmacy releases it")
+        void aWrittenRefillIsReleasedByThePharmacy() {
+            actingAsPharmacist();
+            RefillRequest pending = stored();
+
+            MedicationRefillResponseDTO result = service.releaseAsPrescribed(auth, refillId);
+
+            assertThat(result.getStatus()).isEqualTo("APPROVED");
+            assertThat(result.getDecisionBasis()).isEqualTo("ORIGINAL_PRESCRIPTION");
+            assertThat(pending.getDecidedBy()).isEqualTo(pharmacistId);
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+            assertThat(prescription.getRefillsRemaining()).isEqualTo(1);
+            assertThat(prescription.getRefillsUsed()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("no pharmacist-approved renewal: with no written refill left the pharmacy cannot release, only a prescriber approves")
+        void aRenewalBeyondTheWrittenRefillsIsNotThePharmacists() {
+            actingAsPharmacist();
+            RefillRequest pending = stored();
+            prescription.setRefillsRemaining(0);
+
+            assertThatThrownBy(() -> service.releaseAsPrescribed(auth, refillId))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("messageKey").isEqualTo("patient.refill.release.noneLeft");
+            assertThat(pending.getStatus()).isEqualTo(RefillStatus.REQUESTED);
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+            verify(prescriptionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("review of #1244: a request its prescriber put on hold is never released by the pharmacy, written refills or not")
+        void aPrescriberHoldIsNotOverriddenByThePharmacy() {
+            actingAsPharmacist();
+            RefillRequest held = stored();
+            held.setStatus(RefillStatus.PAUSED);
+
+            assertThatThrownBy(() -> service.releaseAsPrescribed(auth, refillId))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("messageKey").isEqualTo("patient.refill.release.onHold");
+            assertThat(held.getStatus()).isEqualTo(RefillStatus.PAUSED);
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+            assertThat(prescription.getRefillsRemaining()).isEqualTo(2);
+            verify(prescriptionRepository, never()).save(any());
+            // The card offers no release on a held request either.
+            when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> inv.getArgument(0));
+            assertThat(service.pharmacistReview(auth, refillId,
+                    RefillDecisionRequestDTO.builder().pharmacistNote("vu").build()).isWrittenRefillLeft()).isFalse();
+        }
+
+        @Test
+        @DisplayName("narcotics and controlled drugs always need a new prescription: a written refill is not released either")
+        void aControlledDrugIsNeverReleased() {
+            actingAsPharmacist();
+            stored();
+            when(controlledResolver.isControlled(prescription)).thenReturn(true);
+
+            assertThatThrownBy(() -> service.releaseAsPrescribed(auth, refillId))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("messageKey").isEqualTo("patient.refill.approveNotRefillable");
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+        }
+
+        @Test
+        @DisplayName("a request of another hospital answers the pharmacist as a missing one; a non-pharmacist is refused")
+        void thePharmacyStepsAreScoped() {
+            actingAsPharmacist();
+            stored();
+            when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+            when(roleValidator.canReviewRenewalAtPharmacy(eq(pharmacistId), any())).thenReturn(true);
+
+            assertThatThrownBy(() -> service.releaseAsPrescribed(auth, refillId))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+
+            when(roleValidator.canReviewRenewalAtPharmacy(eq(pharmacistId), any())).thenReturn(false);
+            assertThatThrownBy(() -> service.pharmacistRefuse(auth, refillId,
+                    RefillDecisionRequestDTO.builder().pharmacistNote("no").build()))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        }
     }
 }

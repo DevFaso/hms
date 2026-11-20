@@ -1392,7 +1392,27 @@
     "TOAST_DENY_FAILED": "No se pudo denegar la solicitud de reposición",
     "TOAST_PAUSED": "Reposición puesta en espera",
     "TOAST_PAUSE_FAILED": "No se pudo poner en espera la solicitud de reposición",
-    "NOTES_REQUIRED_FOR": "(obligatorias para denegar o poner en espera)"
+    "NOTES_REQUIRED_FOR": "(obligatorias para denegar o poner en espera)",
+    "FIELD_PHARMACIST_NOTE": "Pharmacist’s note",
+    "FIELD_DECISION_BASIS": "Decision",
+    "BASIS_PRESCRIBER_DECISION": "Prescriber’s decision",
+    "BASIS_ORIGINAL_PRESCRIPTION": "Refill written on the prescription (released by the pharmacy)",
+    "BASIS_PHARMACIST_REFUSAL": "Pharmacist’s refusal to dispense",
+    "PHARMACY_RULE": "Only the prescriber approves a renewal. You can release a refill already written on the prescription, forward the request with your remarks, or refuse to dispense with a reason.",
+    "PHARMACIST_NOTE_PLACEHOLDER": "Remarks for the prescriber, or the reason for refusing (the patient reads a refusal)",
+    "ACTION_RELEASE": "Release the written refill",
+    "ACTION_FORWARD": "Forward to the prescriber",
+    "ACTION_PHARMACIST_REFUSE": "Refuse to dispense",
+    "NEEDS_PRESCRIBER": "No refill written on the prescription is left: the prescriber must approve this renewal.",
+    "PROVISIONAL": "Provisional rule, pending approval by the pharmacists’ order.",
+    "PHARMACIST_NOTE_REQUIRED_FORWARD": "Write your remarks for the prescriber.",
+    "PHARMACIST_NOTE_REQUIRED_REFUSE": "Give the reason for refusing to dispense: the patient and the prescriber read it.",
+    "PHARMACIST_REFUSE_CONFIRM": "Refuse to dispense this renewal?",
+    "TOAST_FORWARDED": "Request forwarded to the prescriber.",
+    "TOAST_FORWARD_FAILED": "The request could not be forwarded.",
+    "TOAST_PHARMACIST_REFUSED": "Refusal recorded; the patient and the prescriber are told.",
+    "TOAST_RELEASED": "Refill released to the pharmacy queue.",
+    "TOAST_RELEASE_FAILED": "The refill could not be released."
   },
   "ADMISSIONS": {
     "ROOM_BED_HELD_HINT": "La habitación sigue a la cama de esta estancia. Para trasladar al paciente, asigne otra cama o solicite un traslado.",
@@ -2108,7 +2128,14 @@
       "ADOLESCENT_AGE_SET": "Edad de confidencialidad de los adolescentes fijada en {{age}} años",
       "ADOLESCENT_AGE_RESET": "Edad de confidencialidad de los adolescentes devuelta al valor por defecto ({{age}} años)",
       "IMAGING_REPORTING_SETTINGS_CHANGED": "Ajuste de ecografía modificado",
-      "IMAGING_EXAM_RECORD_UPDATED": "Realización del examen de imagen actualizada"
+      "IMAGING_EXAM_RECORD_UPDATED": "Realización del examen de imagen actualizada",
+      "DISPENSE_BILLING_DEFERRAL_REQUESTED": "Deferred billing of a fill requested",
+      "DISPENSE_BILLING_DEFERRAL_APPROVED": "Deferred billing of a fill approved",
+      "DISPENSE_BILLING_DEFERRAL_REJECTED": "Deferred billing of a fill rejected",
+      "DISPENSE_BILLING_DEFERRAL_CANCELLED": "Deferred billing of a fill withdrawn",
+      "DISPENSE_BILLING_URGENCY_OVERRIDE": "Fill handed over unpaid on an urgency override",
+      "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Urgency override of a fill’s billing reviewed",
+      "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -5276,7 +5303,8 @@
     "MY_IMAGING": "Imaging",
     "LAB_CRITICAL_PENDING": "Resultados críticos por repetir",
     "PHARMACY_RECONCILIATION": "Conciliación de farmacia",
-    "PHARMACY_TILL_CLOSE": "Pharmacy till close"
+    "PHARMACY_TILL_CLOSE": "Pharmacy till close",
+    "PHARMACY_BILLING_DEFERRALS": "Deferred billing (pharmacy)"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerta crítica",
@@ -7672,7 +7700,14 @@
         "INVOICE_LINE_PRICED_MANUALLY": "Line priced by hand",
         "SENSITIVE_RESULT_RELEASED_TO_PROXY": "Resultado sensible comunicado a un progenitor",
         "PROXY_RELATIONSHIP_VERIFIED": "Vínculo familiar verificado",
-        "LAB_SENSITIVITY_RECOMMENDATION_APPLIED": "Categoría sensible recomendada aplicada"
+        "LAB_SENSITIVITY_RECOMMENDATION_APPLIED": "Categoría sensible recomendada aplicada",
+        "DISPENSE_BILLING_DEFERRAL_REQUESTED": "Deferred billing of a fill requested",
+        "DISPENSE_BILLING_DEFERRAL_APPROVED": "Deferred billing of a fill approved",
+        "DISPENSE_BILLING_DEFERRAL_REJECTED": "Deferred billing of a fill rejected",
+        "DISPENSE_BILLING_DEFERRAL_CANCELLED": "Deferred billing of a fill withdrawn",
+        "DISPENSE_BILLING_URGENCY_OVERRIDE": "Fill handed over unpaid on an urgency override",
+        "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Urgency override of a fill’s billing reviewed",
+        "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -7804,7 +7839,8 @@
         "PRO_CRITICAL_ITEM_ESCALATION": "Escalamiento — ítem PRO crítico",
         "PRO_SCREEN_POSITIVE": "Cribado PRO positivo",
         "REORDER_ALERT": "Alerta de reabastecimiento",
-        "SEVERE_HYPERTENSION": "Hipertensión grave"
+        "SEVERE_HYPERTENSION": "Hipertensión grave",
+        "PHARMACY_BILLING_DEFERRAL": "Deferred pharmacy billing"
       },
       "ORGANIZATION_TYPE": {
         "ACADEMIC_CENTER": "Centro académico",
@@ -8221,7 +8257,8 @@
         "PROXY_SENSITIVE_RELEASE": "Comunicación de un resultado sensible a un progenitor",
         "PATIENT_PROXY": "Acceso familiar",
         "HOSPITAL_ADOLESCENT_CONFIDENTIALITY_AGE": "Edad de confidencialidad de los adolescentes",
-        "HOSPITAL_IMAGING_REPORTING_SETTINGS": "Ajuste de ecografía"
+        "HOSPITAL_IMAGING_REPORTING_SETTINGS": "Ajuste de ecografía",
+        "DISPENSE_BILLING_DEFERRAL": "Deferred pharmacy billing"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Alergia",
@@ -15112,7 +15149,7 @@
         "PAID": "Paid.",
         "COVERED": "Covered (payment and insurance).",
         "DEFERRED": "Already marked « to be billed ».",
-        "UNPAID": "Not paid: take the payment at the checkout first, or hand it over « to be billed » with a reason."
+        "UNPAID": "Not paid: take the payment at the checkout first, or choose below on what basis it leaves."
       },
       "DEFER_LABEL": "Hand over « to be billed »: reason",
       "DEFER_HINT": "For example: inpatient, on the stay's invoice. Pharmacist or administrator only; the fill appears in the day's reconciliation.",
@@ -15207,7 +15244,12 @@
       "MOVED": "movement: {{n}}",
       "CONTROLLED_TITLE": "Controlled substances: register and stock",
       "CONTROLLED_LINE": "register {{register}}, stock {{stock}}",
-      "DEFERRED_TITLE": "Fills handed over « to be billed »"
+      "DEFERRED_TITLE": "Fills handed over « to be billed »",
+      "DEFERRED_URGENCY": "of which urgency overrides: {{amount}}",
+      "DEFERRED_STAY": "of which hospital stays: {{amount}}",
+      "HANDED_OVER_BY": "handed over by {{name}}",
+      "OVERRIDE_REVIEWED": "Reviewed by accounting",
+      "OVERRIDE_TO_REVIEW": "To be reviewed by accounting"
     },
     "ONESTEP": {
       "DEFER_LABEL": "Hand over « to be billed »: reason",
@@ -15218,6 +15260,102 @@
     "PRICE": {
       "REASON": "Reason for the price change",
       "REASON_REQUIRED": "Give the reason for this price change: it is kept in the price history."
+    },
+    "DEFERRAL": {
+      "PAGE_TITLE": "Deferred pharmacy billing",
+      "PAGE_SUBTITLE": "A fill leaves the pharmacy unpaid only on a deferral somebody else approved, on the account of an open stay, or on a logged urgency override. Approve, reject and review them here.",
+      "PROVISIONAL": "Provisional rule, pending approval by the hospital’s director and finance manager.",
+      "INTRO": "This fill is not paid. The pharmacist does not grant credit: choose on what basis it leaves.",
+      "LEGEND": "Basis for handing over unpaid",
+      "OPEN_STAY": "Patient in hospital: what is due goes on the account of the stay. No approval is needed.",
+      "LOAD_FAILED": "The deferrals could not be loaded.",
+      "USE_APPROVED": "Use the approved deferral",
+      "APPROVED_BY": "approved by {{name}}",
+      "ASKED_BY": "asked by {{name}}",
+      "LIMIT": "Limit: {{amount}}",
+      "COVER_REFERENCE_VALUE": "Claim or voucher: {{ref}}",
+      "OWN_APPROVAL": "You approved this deferral: another person must hand the fill over.",
+      "PENDING": "A request is waiting for its decision.",
+      "REFRESH": "Refresh",
+      "REQUEST_TITLE": "Ask billing or accounting for a deferral",
+      "REQUEST_KIND": "What is asked",
+      "KIND": {
+        "THIRD_PARTY_COVER": "Third-party cover (claim or voucher)",
+        "OUTPATIENT_CREDIT": "Credit to an outpatient",
+        "URGENCY_OVERRIDE": "Urgency override",
+        "ADMISSION_ACCOUNT": "Account of the hospital stay",
+        "UNAPPROVED": "Marked before the rule, nobody approved"
+      },
+      "COVER_REFERENCE": "Claim or voucher number",
+      "REQUEST_REASON": "Why the fill should leave before it is paid",
+      "REQUEST_REASON_REQUIRED": "Say why the fill should leave before it is paid.",
+      "REQUEST_SEND": "Send the request",
+      "REQUEST_HINT": "Billing checks a claim or voucher; accounting or the administrator decides a credit. You cannot approve your own request.",
+      "REQUEST_SENT": "Request sent. It waits for its decision.",
+      "REQUEST_FAILED": "The request could not be sent.",
+      "URGENCY": "Urgency override",
+      "URGENCY_HINT": "When care cannot wait for an approval. It is logged in your name and accounting reviews it afterwards.",
+      "URGENCY_REASON": "Reason of the urgency",
+      "URGENCY_REASON_REQUIRED": "Give the reason of the urgency.",
+      "CHOICE_REQUIRED": "This fill is not paid: take the payment first, use an approved deferral, or record an urgency override.",
+      "ONESTEP_TITLE": "This fill has a price and nothing is paid yet",
+      "NONE": "Nothing to approve or review.",
+      "STATUS": {
+        "REQUESTED": "To decide",
+        "APPROVED": "Approved, not used yet",
+        "REJECTED": "Rejected",
+        "EXECUTED": "Used",
+        "CANCELLED": "Withdrawn",
+        "TO_REVIEW": "To review"
+      },
+      "MEDICATION": "Medicine",
+      "ASKED": "Asked by",
+      "REASON": "Reason",
+      "DECIDED": "Decided by",
+      "LIMIT_LABEL": "Limit (F CFA)",
+      "AMOUNT_DUE": "Amount left unpaid",
+      "APPROVE": "Approve",
+      "REJECT": "Reject",
+      "REVIEW": "Review",
+      "CANCEL": "Withdraw",
+      "WAITING_OTHER": "Waits for another person’s decision.",
+      "WAITING_REVIEW": "Waits for the review by accounting.",
+      "COVER_HINT": "The number of the claim or voucher you checked.",
+      "LIMIT_HINT": "Optional. The most that may leave on this credit.",
+      "CREDIT_REASON": "Reason for granting the credit",
+      "APPROVE_NOTE": "Note (optional)",
+      "REJECT_REASON": "Reason for the rejection",
+      "CANCEL_REASON": "Reason for the withdrawal",
+      "REVIEW_NOTE": "Result of the review",
+      "COVER_REFERENCE_REQUIRED": "Record the number of the claim or voucher you checked.",
+      "CREDIT_REASON_REQUIRED": "Give the reason for granting this credit.",
+      "LIMIT_INVALID": "The limit is a whole amount in F CFA, above zero.",
+      "REJECT_REASON_REQUIRED": "Give the reason for the rejection.",
+      "CANCEL_REASON_REQUIRED": "Give the reason for the withdrawal.",
+      "REVIEW_NOTE_REQUIRED": "Write the result of your review.",
+      "APPROVE_DONE": "Deferral approved.",
+      "REJECT_DONE": "Deferral rejected.",
+      "CANCEL_DONE": "Deferral withdrawn.",
+      "REVIEW_DONE": "Urgency override reviewed.",
+      "STEP_FAILED": "The step could not be recorded.",
+      "REJECT_CONFIRM": "Reject this deferral?",
+      "CANCEL_CONFIRM": "Withdraw this deferral?",
+      "VIEW_WORK": "To handle",
+      "VIEW_DUE": "Left unpaid, still due",
+      "STILL_DUE": "Still due now",
+      "NONE_DUE": "No fill that left unpaid still owes money.",
+      "VIEWS": "Lists of deferrals"
+    },
+    "POLICY": {
+      "TITLE": "Hospital billing policy",
+      "PROVISIONAL": "Provisional rules, pending approval by the hospital’s director and finance manager, and by the pharmacists’ order for renewals.",
+      "AUTO_CONSULTATION": "Bill a consultation by default on planned admissions",
+      "AUTO_CONSULTATION_HINT": "Off (recommended): a planned, day-case, newborn, labour or transfer admission is billed for its stay and the acts recorded, never for a consultation nobody recorded. One consultation is billed per visit where one took place.",
+      "PHARMACIST_RENEWAL": "Exceptional renewal by the pharmacist",
+      "PHARMACIST_RENEWAL_HINT": "Off and not available: no legal text allows it yet. Only an authorised prescriber approves a renewal.",
+      "ADMIN_ONLY": "Only a hospital administrator can change this policy.",
+      "SAVED": "Policy saved.",
+      "FAILED": "The policy could not be saved."
     }
   },
   "WARD_INBOX": {

@@ -115,6 +115,8 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
         claim.setClaimStatus(PharmacyClaimStatus.SUBMITTED);
         claim.setSubmittedAt(LocalDateTime.now());
         claim.setSubmittedByUser(currentUser);
+        // Policy rule 6: a money desk that sends the claim stands behind it, from now on.
+        ClaimVouching.recordVoucher(claim, currentUser.getId(), roleValidator, claim.getSubmittedAt());
         PharmacyClaim saved = claimRepository.save(claim);
 
         support.logAudit(AuditEventType.CLAIM_SUBMITTED,
@@ -168,6 +170,12 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
                     com.example.hms.utility.MessageUtil.resolve("pharmacy.claim.status." + claim.getClaimStatus().name()));
         }
         claim.setClaimStatus(target);
+        // Policy rule 6 (review round 2 of #1244): a money desk that records the payer's acceptance or payment
+        // stands behind the claim, recorded now. Somebody of the pharmacy recording it later erases nobody.
+        if (target != PharmacyClaimStatus.REJECTED) {
+            ClaimVouching.recordVoucher(claim, roleValidator.getCurrentUserId(), roleValidator,
+                    LocalDateTime.now(java.time.ZoneId.systemDefault()));
+        }
         if (notes != null && !notes.isBlank()) {
             claim.setNotes(notes);
         }

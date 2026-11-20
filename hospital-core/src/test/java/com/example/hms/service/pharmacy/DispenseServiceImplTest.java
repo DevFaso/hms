@@ -560,33 +560,51 @@ class DispenseServiceImplTest {
                     .satisfies(e -> {
                         com.example.hms.exception.FieldBusinessException refused =
                                 (com.example.hms.exception.FieldBusinessException) e;
-                        assertThat(refused.getField()).isEqualTo("billingDeferredReason");
+                        assertThat(refused.getField()).isEqualTo("billingDeferralId");
                         assertThat(refused.getMessageKey()).isEqualTo("pharmacy.handOver.unpaid");
                     });
             verify(dispenseRepository, never()).save(any());
         }
 
-        @Test
-        @DisplayName("review of #1239: « à facturer » on a one-step fill is refused from a role that may not defer billing")
-        void aOneStepDeferralNeedsTheRole() {
-            DispenseRequestDTO dto = buildRequest();
-            dto.setBillingDeferredReason("plus tard");
-            stubThePricedOneStepFill(dto);
-            when(roleValidator.canDeferDispenseBilling(userId, hospitalId)).thenReturn(false);
-
-            assertThatThrownBy(() -> service.createDispense(dto))
-                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
-                    .extracting("messageKey").isEqualTo("pharmacy.handOver.deferRoleRequired");
-            verify(dispenseRepository, never()).save(any());
+        /** Policy rule 6 (V345): the real deferral gate over a mocked store, wired into the service under test. */
+        private com.example.hms.repository.pharmacy.DispenseBillingDeferralRepository wireTheDeferralGate() {
+            com.example.hms.repository.pharmacy.DispenseBillingDeferralRepository deferrals =
+                    mock(com.example.hms.repository.pharmacy.DispenseBillingDeferralRepository.class);
+            org.mockito.Mockito.lenient().when(deferrals.save(any(com.example.hms.model.pharmacy.DispenseBillingDeferral.class))).thenAnswer(saved -> {
+                com.example.hms.model.pharmacy.DispenseBillingDeferral row = saved.getArgument(0);
+                row.setId(UUID.randomUUID());
+                return row;
+            });
+            service.setBillingDeferrals(new DispenseBillingDeferralService(deferrals, prescriptionRepository,
+                    mock(com.example.hms.repository.AdmissionRepository.class), userRepository, roleValidator, support,
+                    mock(DispenseBillingDeferralFollowUp.class), auditEventLogService, FIXED_CLOCK));
+            return deferrals;
         }
 
         @Test
-        @DisplayName("review of #1239: a priced one-step fill « à facturer » by a pharmacist is saved with the reason, author and time, and audited")
-        void aPricedOneStepFillIsDeferredWithAReason() {
+        @DisplayName("policy rule 6: an urgency override on a one-step fill is refused from a role that may not make one")
+        void aOneStepUrgencyOverrideNeedsTheRole() {
             DispenseRequestDTO dto = buildRequest();
-            dto.setBillingDeferredReason("  Hospitalisée, sur la facture du séjour ");
+            dto.setBillingUrgencyReason("plus tard");
+            stubThePricedOneStepFill(dto);
+            com.example.hms.repository.pharmacy.DispenseBillingDeferralRepository deferrals = wireTheDeferralGate();
+            when(roleValidator.canOverrideDispenseBillingForUrgency(userId, hospitalId)).thenReturn(false);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.handOver.urgencyRoleRequired");
+            verify(dispenseRepository, never()).save(any());
+            verify(deferrals, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("policy rule 6: a priced one-step fill on an urgency override is saved with the reason, author, time and its deferral, and audited")
+        void aPricedOneStepFillLeavesOnAnUrgencyOverride() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setBillingUrgencyReason("  Crise, caisse fermée ");
             Dispense entity = stubThePricedOneStepFill(dto);
-            when(roleValidator.canDeferDispenseBilling(userId, hospitalId)).thenReturn(true);
+            wireTheDeferralGate();
+            when(roleValidator.canOverrideDispenseBillingForUrgency(userId, hospitalId)).thenReturn(true);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
             when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.TEN);
@@ -594,10 +612,12 @@ class DispenseServiceImplTest {
 
             service.createDispense(dto);
 
-            assertThat(entity.getBillingDeferredReason()).isEqualTo("Hospitalisée, sur la facture du séjour");
+            assertThat(entity.getBillingDeferredReason()).isEqualTo("Crise, caisse fermée");
+            assertThat(entity.getBillingDeferralId()).isNotNull();
             assertThat(entity.getBillingDeferredBy()).isEqualTo(userId);
             assertThat(entity.getBillingDeferredAt()).isNotNull().isEqualTo(entity.getDispensedAt());
-            verify(support).logAudit(eq(AuditEventType.DISPENSE_BILLING_DEFERRED), any(), eq(dispenseId.toString()), any());
+            verify(support).logAudit(eq(AuditEventType.DISPENSE_BILLING_URGENCY_OVERRIDE), any(),
+                    eq(dispenseId.toString()), any());
         }
 
         /** QA D1555: the patient's allergies, read by the real re-check (no catalogue, no audit). */
