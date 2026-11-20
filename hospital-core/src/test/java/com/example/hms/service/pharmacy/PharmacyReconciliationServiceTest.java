@@ -151,16 +151,19 @@ class PharmacyReconciliationServiceTest {
         when(claimRepository.findByDispenseIdAndClaimStatusIn(any(), any())).thenReturn(List.of());
     }
 
-    /** Policy rule 6 (review of #1244): a claim sent by a billing specialist of the hospital covers the fill. */
+    /**
+     * Policy rule 6 (review of #1244): a claim a billing specialist of the hospital stands behind covers the fill.
+     * Review round 2: {@code moneyDesk} is what was RECORDED when the claim was sent; nothing is asked today.
+     */
     private UUID aClaimSentBy(Dispense fill, String amount, boolean moneyDesk) {
         UUID sender = UUID.randomUUID();
         com.example.hms.model.User submitter = new com.example.hms.model.User();
         submitter.setId(sender);
-        when(roleValidator.vouchesForClaimCover(sender, hospitalId)).thenReturn(moneyDesk);
         when(claimRepository.findByDispenseIdAndClaimStatusIn(eq(fill.getId()), any())).thenReturn(List.of(
                 com.example.hms.model.pharmacy.PharmacyClaim.builder()
                         .claimStatus(com.example.hms.enums.PharmacyClaimStatus.SUBMITTED)
-                        .amount(new BigDecimal(amount)).submittedByUser(submitter).build()));
+                        .amount(new BigDecimal(amount)).submittedByUser(submitter)
+                        .vouchedBy(moneyDesk ? sender : null).build()));
         return sender;
     }
 
@@ -321,6 +324,33 @@ class PharmacyReconciliationServiceTest {
         });
         String csv = new String(service.exportCsv(pharmacy.getId(), DAY), StandardCharsets.UTF_8);
         assertThat(csv).contains("patient", "dossier", "sejour", "Awa Traoré", stayId.toString());
+    }
+
+    @Test
+    @DisplayName("review round 2: a closed day stays covered when the pharmacist later records the payment, or the clerk leaves")
+    void aClosedDayDoesNotMove() {
+        Dispense covered = fill("4", false, true);
+        com.example.hms.model.User dispenser = new com.example.hms.model.User();
+        dispenser.setId(UUID.randomUUID());
+        covered.setDispensedByUser(dispenser);
+        UUID clerk = UUID.randomUUID();
+        com.example.hms.model.pharmacy.PharmacyClaim claim = com.example.hms.model.pharmacy.PharmacyClaim.builder()
+                .claimStatus(com.example.hms.enums.PharmacyClaimStatus.ACCEPTED).amount(new BigDecimal("1000"))
+                .vouchedBy(clerk).hospital(pharmacy.getHospital()).build();
+        when(claimRepository.findByDispenseIdAndClaimStatusIn(eq(covered.getId()), any())).thenReturn(List.of(claim));
+        assertThat(service.daily(pharmacy.getId(), DAY).getDifferences()).isEmpty();
+
+        // (A) The pharmacist who handed the fill over records the insurer's payment days later.
+        claim.setClaimStatus(com.example.hms.enums.PharmacyClaimStatus.PAID);
+        ClaimVouching.record(claim, dispenser.getId(), roleValidator, java.time.LocalDateTime.now(clock));
+        // (B) The clerk's assignment ended: they hold no role at the hospital today.
+        org.mockito.Mockito.lenient().when(roleValidator.vouchesForClaimCover(clerk, hospitalId)).thenReturn(false);
+
+        PharmacyReconciliationDTO day = service.daily(pharmacy.getId(), DAY);
+        assertThat(day.getDifferences()).as("an insurer-paid fill is not an unpaid hand-over").isEmpty();
+        assertThat(day.getDeferred()).isEmpty();
+        assertThat(claim.getVouchedBy()).isEqualTo(clerk);
+        org.mockito.Mockito.verify(roleValidator, org.mockito.Mockito.never()).vouchesForClaimCover(clerk, hospitalId);
     }
 
     @Test

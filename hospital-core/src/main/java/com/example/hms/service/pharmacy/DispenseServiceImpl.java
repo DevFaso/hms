@@ -730,8 +730,7 @@ public class DispenseServiceImpl implements DispenseService {
                         BigDecimal.ZERO)
                 : BigDecimal.ZERO;
         BigDecimal claimed = charge.signum() > 0
-                ? FillClaimCover.coveredFor(claimRepository, roleValidator, dispense.getId(),
-                        dispense.getPharmacy().getHospital().getId(), handingOver)
+                ? FillClaimCover.coveredFor(claimRepository, dispense.getId(), handingOver)
                 : BigDecimal.ZERO;
         return new FillSettlement(charge, paid, claimed);
     }

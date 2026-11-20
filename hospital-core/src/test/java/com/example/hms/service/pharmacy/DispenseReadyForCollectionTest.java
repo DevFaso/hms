@@ -747,18 +747,18 @@ class DispenseReadyForCollectionTest {
 
     /** A billing specialist of the hospital, somebody other than the pharmacist at the counter. */
     UUID billingClerk() {
-        UUID clerk = UUID.randomUUID();
-        org.mockito.Mockito.lenient().when(roleValidator.vouchesForClaimCover(clerk, hospitalId)).thenReturn(true);
-        return clerk;
+        return UUID.randomUUID();
     }
 
-    /** The one claim of the fill: who sent it, and who recorded the payer's answer (null while only sent). */
-    void aClaim(com.example.hms.enums.PharmacyClaimStatus status, String amount, UUID submittedBy, UUID decidedBy) {
-        User submitter = new User();
-        submitter.setId(submittedBy);
+    /**
+     * The one claim of the fill, with who was recorded as standing behind it when they sent or answered it (review
+     * round 2: stored facts; the counter asks nobody about roles).
+     */
+    void aClaim(com.example.hms.enums.PharmacyClaimStatus status, String amount, UUID vouchedBy,
+                UUID secondVouchedBy) {
         com.example.hms.model.pharmacy.PharmacyClaim claim = com.example.hms.model.pharmacy.PharmacyClaim.builder()
-                .claimStatus(status).amount(new BigDecimal(amount)).submittedByUser(submitter).decidedBy(decidedBy)
-                .build();
+                .claimStatus(status).amount(new BigDecimal(amount)).vouchedBy(vouchedBy)
+                .secondVouchedBy(secondVouchedBy).build();
         when(claimRepository.findByDispenseIdAndClaimStatusIn(eq(dispenseId), any())).thenReturn(java.util.List.of(claim));
     }
 
@@ -817,8 +817,9 @@ class DispenseReadyForCollectionTest {
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
-            // The whole charge claimed and sent by the person now handing the fill over.
-            aClaim(PharmacyClaimStatus.SUBMITTED, "1000", userId, null);
+            // The whole charge claimed and sent by the person now handing the fill over: a pharmacist, so nobody
+            // was recorded as standing behind it.
+            aClaim(PharmacyClaimStatus.SUBMITTED, "1000", null, null);
 
             assertThatThrownBy(() -> service.handOver(dispenseId, null))
                     .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
@@ -828,28 +829,28 @@ class DispenseReadyForCollectionTest {
         }
 
         @Test
-        @DisplayName("review of #1244: nor does a claim another pharmacist sent, nor one whose acceptance the dispenser recorded")
+        @DisplayName("review of #1244: nor does a claim the pharmacy accepted alone, nor one only the person handing over stands behind")
         void aClaimOnlyThePharmacyTouchedIsNotCover() {
             Dispense d = pricedPreparedFill();
             stubLocked(d);
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
-            UUID colleague = UUID.randomUUID();
-            when(roleValidator.vouchesForClaimCover(colleague, hospitalId)).thenReturn(false);
 
-            // Sent by a colleague of the pharmacy: no money desk stands behind it.
-            aClaim(PharmacyClaimStatus.SUBMITTED, "1000", colleague, null);
+            // Created, sent and accepted inside the pharmacy: no money desk was ever recorded behind it.
+            aClaim(PharmacyClaimStatus.ACCEPTED, "1000", null, null);
             assertThatThrownBy(() -> service.handOver(dispenseId, null))
                     .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
                     .extracting("messageKey").isEqualTo("pharmacy.handOver.unpaid");
 
-            // Sent by billing, but the payer's acceptance was recorded by the person handing over.
-            aClaim(PharmacyClaimStatus.ACCEPTED, "1000", billingClerk(), userId);
+            // The person handing over holds a money desk too and is the only one behind the claim: never the same.
+            aClaim(PharmacyClaimStatus.ACCEPTED, "1000", userId, null);
             assertThatThrownBy(() -> service.handOver(dispenseId, null))
                     .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
                     .extracting("messageKey").isEqualTo("pharmacy.handOver.unpaid");
             verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+            // Review round 2: the counter reads what was recorded, and asks nobody what role they hold today.
+            verify(roleValidator, never()).vouchesForClaimCover(any(), any());
         }
 
         @Test
@@ -859,6 +860,7 @@ class DispenseReadyForCollectionTest {
             stubLocked(d);
             stubHandOverWrites(d);
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            // Sent by the person handing over (who holds a money desk too), accepted by billing: two people.
             aClaim(PharmacyClaimStatus.ACCEPTED, "1000", userId, billingClerk());
 
             assertThat(service.handOver(dispenseId, null).getStatus()).isEqualTo("COMPLETED");

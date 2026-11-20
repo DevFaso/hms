@@ -3,7 +3,6 @@ package com.example.hms.service.pharmacy;
 import com.example.hms.enums.PharmacyClaimStatus;
 import com.example.hms.model.pharmacy.PharmacyClaim;
 import com.example.hms.repository.pharmacy.PharmacyClaimRepository;
-import com.example.hms.utility.RoleValidator;
 
 import java.math.BigDecimal;
 import java.util.EnumSet;
@@ -20,15 +19,15 @@ import java.util.UUID;
  * rule holds as for a deferral: somebody of the money desks stands behind it, and never the person who hands the
  * fill over.
  *
- * <p>A claim counts when it is
- * <ul>
- *   <li>ACCEPTED or PAID, and the payer's answer was recorded ({@code decided_by}) by a money desk or a hospital
- *       admin of the hospital who is not the person handing over. A claim decided before V345 names nobody: its
- *       submitter is then the only person known to stand behind it;</li>
- *   <li>SUBMITTED, by a money desk or a hospital admin of the hospital who is not the person handing over.</li>
- * </ul>
- * Anything else (a draft, a rejected claim, a claim only the pharmacy touched) covers nothing: the fill goes
- * through the deferral gate. No state: both the gate and the reconciliation ask the same question here.
+ * <p>A claim counts when it is SUBMITTED, ACCEPTED or PAID and one of its recorded vouchers
+ * ({@code vouched_by}, {@code second_vouched_by}) is not the person handing over. Anything else (a draft, a rejected
+ * claim, a claim only the pharmacy touched) covers nothing: the fill goes through the deferral gate.
+ *
+ * <p>Review round 2: only STORED facts are read here. Who vouched is recorded when it happens
+ * ({@link ClaimVouching}); this class never asks what role anybody holds today, nor who touched the claim last, so
+ * the cover of a fill handed over on a closed day does not move when a pharmacist later records the payment or when
+ * the billing clerk leaves the hospital ({@code DeferredBillingGuardTest}). No state: the gate, the reconciliation
+ * and the « still due » balance ask the same question here.
  */
 public final class FillClaimCover {
 
@@ -39,39 +38,30 @@ public final class FillClaimCover {
     private FillClaimCover() {
     }
 
-    /**
-     * What the claims of {@code dispenseId} cover for {@code handingOver} at {@code hospitalId}; zero when nobody
-     * else stands behind them.
-     */
-    public static BigDecimal coveredFor(PharmacyClaimRepository claims, RoleValidator roles, UUID dispenseId,
-                                        UUID hospitalId, UUID handingOver) {
+    /** What the claims of {@code dispenseId} cover for {@code handingOver}; zero when nobody else stands behind them. */
+    public static BigDecimal coveredFor(PharmacyClaimRepository claims, UUID dispenseId, UUID handingOver) {
         BigDecimal covered = BigDecimal.ZERO;
         if (claims == null || dispenseId == null) {
             return covered;
         }
         for (PharmacyClaim claim : claims.findByDispenseIdAndClaimStatusIn(dispenseId, SENT)) {
-            if (claim.getAmount() != null && counts(claim, roles, hospitalId, handingOver)) {
+            if (claim.getAmount() != null && counts(claim, handingOver)) {
                 covered = covered.add(claim.getAmount());
             }
         }
         return covered;
     }
 
-    /** Whether somebody of the money desks, other than the person handing over, stands behind the claim. */
-    static boolean counts(PharmacyClaim claim, RoleValidator roles, UUID hospitalId, UUID handingOver) {
+    /** Whether somebody recorded as standing behind the claim is not the person handing over. */
+    static boolean counts(PharmacyClaim claim, UUID handingOver) {
         if (claim.getClaimStatus() == null || !SENT.contains(claim.getClaimStatus())) {
             return false;
         }
-        UUID voucher = voucherOf(claim);
-        return voucher != null && !voucher.equals(handingOver) && roles != null
-                && roles.vouchesForClaimCover(voucher, hospitalId);
+        return isSomebodyElse(claim.getVouchedBy(), handingOver)
+                || isSomebodyElse(claim.getSecondVouchedBy(), handingOver);
     }
 
-    /** Who answers for the claim: whoever recorded the payer's answer, else whoever sent it. */
-    private static UUID voucherOf(PharmacyClaim claim) {
-        if (claim.getClaimStatus() != PharmacyClaimStatus.SUBMITTED && claim.getDecidedBy() != null) {
-            return claim.getDecidedBy();
-        }
-        return claim.getSubmittedByUser() != null ? claim.getSubmittedByUser().getId() : null;
+    private static boolean isSomebodyElse(UUID voucher, UUID handingOver) {
+        return voucher != null && !voucher.equals(handingOver);
     }
 }

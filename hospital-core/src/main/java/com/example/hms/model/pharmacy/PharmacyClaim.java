@@ -106,12 +106,24 @@ public class PharmacyClaim extends BaseEntity {
     private String notes;
 
     /**
-     * Policy rule 6 (V345): who recorded the payer's answer (accepted, rejected or paid), and when. The counter
-     * reads it: an accepted claim covers a fill only when somebody other than the dispenser recorded it.
+     * Policy rule 6 (V345): who stands behind this claim as cover for its fill, recorded WHEN it happened. The
+     * first person who sent the claim or recorded the payer's acceptance or payment while holding a money desk
+     * (billing, claims, accounting) or the hospital admin role at the claim's hospital at that moment. Written
+     * once by {@code ClaimVouching}, never erased: what they do or hold afterwards changes nothing.
      */
-    @Column(name = "decided_by")
-    private java.util.UUID decidedBy;
+    @Column(name = "vouched_by")
+    private java.util.UUID vouchedBy;
 
-    @Column(name = "decided_at")
-    private LocalDateTime decidedAt;
+    @Column(name = "vouched_at")
+    private LocalDateTime vouchedAt;
+
+    /**
+     * The first OTHER person who did the same. With two different people behind a claim, whoever hands the fill
+     * over, somebody else stands behind it. Written once, never erased.
+     */
+    @Column(name = "second_vouched_by")
+    private java.util.UUID secondVouchedBy;
+
+    @Column(name = "second_vouched_at")
+    private LocalDateTime secondVouchedAt;
 }

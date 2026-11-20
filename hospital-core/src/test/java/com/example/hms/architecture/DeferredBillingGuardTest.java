@@ -239,6 +239,56 @@ class DeferredBillingGuardTest {
     }
 
     @Test
+    @DisplayName("review round 2 of #1244: cover reads only what was recorded, never today's roles nor who touched the claim last")
+    void coverReadsOnlyWhatWasRecorded() throws IOException {
+        String cover = SourceScan.stripComments(Files.readString(
+            MAIN.resolve("service/pharmacy/FillClaimCover.java"), StandardCharsets.UTF_8));
+        assertThat(cover).as("the cover reads the vouchers recorded on the claim").contains("getVouchedBy()",
+            "getSecondVouchedBy()");
+        // A billing clerk who left the hospital, or a pharmacist recording the insurer's payment after the
+        // hand-over, turned fills of closed days into unpaid differences: a live fact was read here.
+        for (String live : List.of("RoleValidator", "AssignmentRepository", "vouchesForClaimCover", "hasAnyCode",
+                "getSubmittedByUser", "getUpdatedBy", "getCurrentUserId", "SecurityContextHolder")) {
+            assertThat(cover).as("FillClaimCover reads a live fact (" + live + "): the cover of a closed day would "
+                + "move when a role or the claim's last actor changes; record the fact in ClaimVouching when it "
+                + "happens and read the stored column" + SourceScan.MANDATE).doesNotContain(live);
+        }
+
+        // One place asks the role rule (when somebody acts on a claim), one place writes the vouchers, each once.
+        List<String> askTheRoleRule = new ArrayList<>();
+        List<String> writeAVoucher = new ArrayList<>();
+        for (Path file : javaFiles()) {
+            String code = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+            if (code.contains(".vouchesForClaimCover(")) {
+                askTheRoleRule.add(file.getFileName().toString());
+            }
+            if (Pattern.compile("\\.(?:setVouchedBy|setSecondVouchedBy|setVouchedAt|setSecondVouchedAt|vouchedBy|"
+                    + "secondVouchedBy)\\(").matcher(code).find()) {
+                writeAVoucher.add(file.getFileName().toString());
+            }
+        }
+        assertThat(askTheRoleRule).as("who holds a money desk is asked only when a claim is sent or answered")
+            .containsExactly("ClaimVouching.java");
+        assertThat(writeAVoucher).as("a claim's vouchers are written only by ClaimVouching").containsExactly(
+            "ClaimVouching.java");
+        String vouching = SourceScan.stripComments(Files.readString(
+            MAIN.resolve("service/pharmacy/ClaimVouching.java"), StandardCharsets.UTF_8));
+        assertThat(count(vouching, ".setVouchedBy(")).as("each voucher is written in one place").isEqualTo(1);
+        assertThat(count(vouching, ".setSecondVouchedBy(")).isEqualTo(1);
+        assertThat(vouching).as("a voucher is written only while its slot is empty: nobody is ever erased")
+            .contains("if (claim.getVouchedBy() == null) {")
+            .contains("} else if (claim.getSecondVouchedBy() == null && !claim.getVouchedBy().equals(actorId)) {")
+            .doesNotContain("(null)");
+
+        // Sending a claim and recording its acceptance or payment are the moments it is recorded.
+        String claims = SourceScan.stripComments(Files.readString(
+            MAIN.resolve("service/pharmacy/PharmacyClaimServiceImpl.java"), StandardCharsets.UTF_8));
+        assertThat(count(claims, "ClaimVouching.record(")).isEqualTo(2);
+        assertThat(SourceScan.methodBody(claims, "submitClaim")).contains("ClaimVouching.record(");
+        assertThat(SourceScan.methodBody(claims, "transition")).contains("ClaimVouching.record(");
+    }
+
+    @Test
     @DisplayName("review of #1244: who stands behind a claim as cover is a money desk or a hospital admin, never the pharmacy")
     void thePharmacyStandsBehindNoClaim() {
         UUID user = UUID.randomUUID();

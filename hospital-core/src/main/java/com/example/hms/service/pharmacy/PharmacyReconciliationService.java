@@ -560,11 +560,12 @@ public class PharmacyReconciliationService {
         settled.charges = settled.charges.add(charge);
         // Review of #1239 and #1244: a claim covers a fill only when a money desk, other than whoever handed
         // the fill over, stands behind it (FillClaimCover); a DRAFT or a dispenser's own claim covers nothing.
+        // Stored facts only: a closed day reads the same whatever happened to the claim or to its voucher since.
         UUID handedOverBy = fill.getDispensedByUser() != null ? fill.getDispensedByUser().getId() : null;
         UUID hospitalId = fill.getPharmacy() != null && fill.getPharmacy().getHospital() != null
                 ? fill.getPharmacy().getHospital().getId() : null;
         BigDecimal covered = nz(paymentRepository.sumPostedForDispense(fill.getId()))
-                .add(FillClaimCover.coveredFor(claimRepository, roleValidator, fill.getId(), hospitalId, handedOverBy));
+                .add(FillClaimCover.coveredFor(claimRepository, fill.getId(), handedOverBy));
         BigDecimal due = charge.subtract(covered).max(BigDecimal.ZERO);
         if (due.signum() <= 0) {
             return;

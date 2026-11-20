@@ -7,7 +7,6 @@ import com.example.hms.repository.pharmacy.DispenseRepository;
 import com.example.hms.repository.pharmacy.InventoryItemRepository;
 import com.example.hms.repository.pharmacy.PharmacyClaimRepository;
 import com.example.hms.repository.pharmacy.PharmacyPaymentRepository;
-import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,7 +29,6 @@ public class DeferredFillBalance {
     private final InventoryItemRepository inventoryItemRepository;
     private final PharmacyPaymentRepository paymentRepository;
     private final PharmacyClaimRepository claimRepository;
-    private final RoleValidator roleValidator;
 
     @Transactional(readOnly = true)
     public BigDecimal stillDue(DispenseBillingDeferral deferral) {
@@ -45,8 +43,7 @@ public class DeferredFillBalance {
             BigDecimal charge = DispenseCharge.of(fill, inventoryItemRepository).orElse(BigDecimal.ZERO);
             UUID handedOverBy = fill.getDispensedByUser() != null ? fill.getDispensedByUser().getId() : null;
             BigDecimal covered = Objects.requireNonNullElse(paymentRepository.sumPostedForDispense(fill.getId()),
-                    BigDecimal.ZERO).add(FillClaimCover.coveredFor(claimRepository, roleValidator, fill.getId(),
-                    deferral.getHospitalId(), handedOverBy));
+                    BigDecimal.ZERO).add(FillClaimCover.coveredFor(claimRepository, fill.getId(), handedOverBy));
             due = due.add(charge.subtract(covered).max(BigDecimal.ZERO));
         }
         return due;

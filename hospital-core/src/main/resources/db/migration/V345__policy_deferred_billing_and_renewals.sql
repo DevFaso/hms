@@ -35,11 +35,18 @@
 -- clinical.dispenses.billing_deferred_amount - what this fill still owed when
 --   it left (whole francs). A cancelled fill gives it back to its deferral.
 --
--- billing.pharmacy_claims.decided_by / decided_at - who recorded the payer's
---   answer (accepted, rejected, paid). A claim covers a fill at the counter
---   only when somebody of the money desks, other than the person handing the
---   fill over, stands behind it: its submitter while it is only sent, its
---   decider once the payer answered. Null on a claim decided before V345.
+-- billing.pharmacy_claims.vouched_by / vouched_at, second_vouched_by /
+--   second_vouched_at - who stands behind a claim as cover for its fill,
+--   recorded WHEN it happened: the first person who sent the claim or
+--   recorded the payer's acceptance or payment while holding a money desk
+--   (billing, claims, accounting) or the hospital admin role at the claim's
+--   hospital, and the first other person who did. Written once, never erased:
+--   a later step by somebody of the pharmacy, or an assignment ended since,
+--   changes nothing. A claim covers a fill at the counter only when one of
+--   them is not the person handing the fill over.
+--   Claims sent before this migration: their sender is recorded as the
+--   voucher when they hold such a role at the hospital on the day it runs
+--   (one snapshot; nothing reads the roles afterwards).
 --
 -- clinical.refill_requests - who decided a request and on what basis
 --   (PRESCRIBER_DECISION, ORIGINAL_PRESCRIPTION for a refill the prescriber
@@ -116,8 +123,32 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_dbdef_dispense ON clinical.dispense_billing
 ALTER TABLE clinical.dispenses ADD COLUMN IF NOT EXISTS billing_deferral_id UUID;
 ALTER TABLE clinical.dispenses ADD COLUMN IF NOT EXISTS billing_deferred_amount NUMERIC(12, 2);
 
-ALTER TABLE billing.pharmacy_claims ADD COLUMN IF NOT EXISTS decided_by UUID;
-ALTER TABLE billing.pharmacy_claims ADD COLUMN IF NOT EXISTS decided_at TIMESTAMP;
+ALTER TABLE billing.pharmacy_claims ADD COLUMN IF NOT EXISTS vouched_by UUID;
+ALTER TABLE billing.pharmacy_claims ADD COLUMN IF NOT EXISTS vouched_at TIMESTAMP;
+ALTER TABLE billing.pharmacy_claims ADD COLUMN IF NOT EXISTS second_vouched_by UUID;
+ALTER TABLE billing.pharmacy_claims ADD COLUMN IF NOT EXISTS second_vouched_at TIMESTAMP;
+
+ALTER TABLE billing.pharmacy_claims DROP CONSTRAINT IF EXISTS ck_pc_second_voucher;
+ALTER TABLE billing.pharmacy_claims ADD CONSTRAINT ck_pc_second_voucher
+    CHECK (second_vouched_by IS NULL OR (vouched_by IS NOT NULL AND second_vouched_by <> vouched_by));
+
+UPDATE billing.pharmacy_claims c
+   SET vouched_by = c.submitted_by,
+       vouched_at = COALESCE(c.submitted_at, c.created_at)
+ WHERE c.vouched_by IS NULL
+   AND c.submitted_by IS NOT NULL
+   AND c.claim_status IN ('SUBMITTED', 'ACCEPTED', 'PAID')
+   AND EXISTS (
+       SELECT 1
+         FROM "security".user_role_hospital_assignment a
+         JOIN "security".roles r ON r.id = a.role_id
+        WHERE a.is_active = TRUE
+          AND a.user_id = c.submitted_by
+          AND a.hospital_id = c.hospital_id
+          AND UPPER(r.code) IN ('BILLING_SPECIALIST', 'ROLE_BILLING_SPECIALIST',
+                                'CLAIMS_REVIEWER', 'ROLE_CLAIMS_REVIEWER',
+                                'ACCOUNTANT', 'ROLE_ACCOUNTANT',
+                                'HOSPITAL_ADMIN', 'ROLE_HOSPITAL_ADMIN'));
 
 ALTER TABLE clinical.refill_requests ADD COLUMN IF NOT EXISTS decided_by UUID;
 ALTER TABLE clinical.refill_requests ADD COLUMN IF NOT EXISTS decided_at TIMESTAMP;

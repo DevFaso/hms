@@ -62,7 +62,10 @@ public class ImpersonationLimits implements HandlerInterceptor {
     public static final List<String> MONEY_PATHS = List.of(
         "/billing-invoices/**", "/invoice-items/**", "/billing/price-list/**", "/billing/payers/**",
         "/pharmacy/payments/**",
-        "/pharmacy-sales/**", "/me/patient/billing/invoices/*/pay", "/pharmacy/claims/*/pay",
+        "/pharmacy-sales/**", "/me/patient/billing/invoices/*/pay",
+        // Review round 2 of #1244: a claim sent or answered by a money desk is cover for a fill, so every claim
+        // write is a money write (it was only the settlement).
+        "/pharmacy/claims/**",
         "/pharmacy/refunds/**",
         // PR 10 review: a till's close, reopen and review are four-eyes steps on money counted.
         "/cash-sessions/**",
