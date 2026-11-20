@@ -3,6 +3,7 @@ package com.example.hms.payload.dto.pharmacy;
 import com.example.hms.enums.MobileMoneyOperator;
 import com.example.hms.enums.PharmacyPaymentMethod;
 import com.example.hms.validation.NoCardNumber;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -37,6 +38,7 @@ public class PharmacyRefundRequestDTO {
     @NoCardNumber
     private String reference;
 
+    @NotBlank
     @Size(max = 500)
     @NoCardNumber
     private String reason;

@@ -11,7 +11,6 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
-import { allRows } from '../shared/all-pages';
 import { refusalReason, refusedFieldReasons } from '../shared/refusal-reason';
 import { saveBlob } from '../shared/download-file';
 import { refuseFields } from '../shared/forms/invalid-fields';
@@ -21,7 +20,6 @@ import { KeyLabelPipe } from '../shared/pipes/key-label.pipe';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { DashPipe } from '../shared/pipes/dash.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { PharmacyResponse, PharmacyService } from '../services/pharmacy.service';
 import {
   PharmacyMoneyService,
   PharmacyReconciliation,
@@ -59,14 +57,14 @@ function localIsoDate(d: Date): string {
   styleUrl: './pharmacy-reconciliation.scss',
 })
 export class PharmacyReconciliationComponent implements OnInit {
-  private readonly svc = inject(PharmacyService);
   private readonly money = inject(PharmacyMoneyService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly confirm = inject(ConfirmService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
-  readonly pharmacies = signal<PharmacyResponse[]>([]);
+  /** QA D2673: read from the reconciliation itself, so an accountant (no registry access) can pick one. */
+  readonly pharmacies = signal<{ id: string; name: string }[]>([]);
   readonly pharmaciesLoaded = signal(false);
   readonly selectedPharmacyId = signal('');
   readonly date = signal(localIsoDate(new Date()));
@@ -91,8 +89,9 @@ export class PharmacyReconciliationComponent implements OnInit {
   private loadSeq = 0;
 
   ngOnInit(): void {
-    allRows((page, size) => this.svc.listPharmacies(page, size)).subscribe({
-      next: (list) => {
+    this.money.reconciliationPharmacies().subscribe({
+      next: (res) => {
+        const list = (res?.data ?? []).map((p) => ({ id: p.pharmacyId, name: p.pharmacyName }));
         this.pharmacies.set(list);
         this.pharmaciesLoaded.set(true);
         if (list.length > 0) {

@@ -46,6 +46,13 @@ public class PharmacyReconciliationController {
         return ResponseEntity.ok(ApiResponseWrapper.success(reconciliationService.daily(pharmacyId, date)));
     }
 
+    @GetMapping("/pharmacies")
+    @PreAuthorize(READERS)
+    @Operation(summary = "The pharmacies of the acting hospital the reader may reconcile")
+    public ResponseEntity<ApiResponseWrapper<java.util.List<PharmacyReconciliationDTO>>> pharmacies() {
+        return ResponseEntity.ok(ApiResponseWrapper.success(reconciliationService.pharmacies()));
+    }
+
     @GetMapping("/export")
     @PreAuthorize(READERS)
     @Operation(summary = "The day's reconciliation as a spreadsheet file")

@@ -20,6 +20,7 @@ function money() {
   return jasmine.createSpyObj<PharmacyMoneyService>('PharmacyMoneyService', [
     'dispensePaymentStatus',
     'setPackSize',
+    'reconciliationPharmacies',
     'reconciliation',
     'reconciliationExport',
     'refunds',
@@ -201,11 +202,10 @@ describe('Pharmacy reconciliation page (QA D2673)', () => {
   };
 
   it('shows the money, highlights the difference, and lists open refunds', () => {
-    const svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', ['listPharmacies']);
-    svc.listPharmacies.and.returnValue(
-      of({ content: [{ id: 'ph-1', name: 'Pharmacie' }] }) as never,
-    );
     const m = money();
+    m.reconciliationPharmacies.and.returnValue(
+      of({ data: [{ pharmacyId: 'ph-1', pharmacyName: 'Pharmacie' }] }) as never,
+    );
     m.reconciliation.and.returnValue(of({ data: day }) as never);
     m.refunds.and.returnValue(
       of({
@@ -229,7 +229,6 @@ describe('Pharmacy reconciliation page (QA D2673)', () => {
     TestBed.configureTestingModule({
       imports: [PharmacyReconciliationComponent, TranslateModule.forRoot()],
       providers: [
-        { provide: PharmacyService, useValue: svc },
         { provide: PharmacyMoneyService, useValue: m },
         { provide: ToastService, useValue: toast() },
       ],

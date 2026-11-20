@@ -92,13 +92,28 @@ public class PharmacyReconciliationService {
     private final RoleValidator roleValidator;
     private final Clock clock;
 
+    /** The active pharmacies of the acting hospital, by name: the page's picker (an accountant reads no registry). */
     @Transactional(readOnly = true)
-    public PharmacyReconciliationDTO daily(UUID pharmacyId, LocalDate date) {
+    public List<PharmacyReconciliationDTO> pharmacies() {
+        UUID hospitalId = requireReader();
+        return pharmacyRepository.findByHospitalIdAndActiveTrueOrderByNameAsc(hospitalId).stream()
+                .map(p -> PharmacyReconciliationDTO.builder().pharmacyId(p.getId()).pharmacyName(p.getName()).build())
+                .toList();
+    }
+
+    /** The acting hospital, when the caller is a pharmacist, hospital admin or accountant there. */
+    private UUID requireReader() {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         UUID userId = roleValidator.getCurrentUserId();
         if (hospitalId == null || userId == null || !roleValidator.canReadPharmacyReconciliation(userId, hospitalId)) {
             throw new ClientSafeAccessDeniedException(MessageUtil.resolve("pharmacy.reconciliation.readersOnly"));
         }
+        return hospitalId;
+    }
+
+    @Transactional(readOnly = true)
+    public PharmacyReconciliationDTO daily(UUID pharmacyId, LocalDate date) {
+        UUID hospitalId = requireReader();
         Pharmacy pharmacy = pharmacyRepository.findByIdAndHospital_Id(pharmacyId, hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notfound"));
         LocalDate day = date != null ? date : LocalDate.now(clock);

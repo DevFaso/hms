@@ -152,6 +152,15 @@ export class PharmacyMoneyService {
     );
   }
 
+  /** QA D2673: the pharmacies a reader may reconcile (an accountant cannot read the registry). */
+  reconciliationPharmacies(): Observable<
+    ApiResponse<{ pharmacyId: string; pharmacyName: string }[]>
+  > {
+    return this.http.get<ApiResponse<{ pharmacyId: string; pharmacyName: string }[]>>(
+      '/pharmacy/reconciliation/pharmacies',
+    );
+  }
+
   reconciliation(
     pharmacyId: string,
     date: string,
