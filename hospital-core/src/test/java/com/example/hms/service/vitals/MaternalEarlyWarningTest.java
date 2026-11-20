@@ -290,4 +290,28 @@ class MaternalEarlyWarningTest {
         assertThat(MaternalEarlyWarning.labourAlerts(local, 112, null, null, null))
             .containsExactly(LabourAlert.PULSE_HIGH);
     }
+
+    @Test
+    @DisplayName("review of #1241: switched off, the labour alerts are the earlier ones (38.0 °C, above 120, 140/90) and there is no shock alert")
+    void review1241_switchedOffThePartographAlertsAreTheEarlierOnes() {
+        MaternalEarlyWarningRules off = new MaternalEarlyWarningRules();
+        off.setEnabled(false);
+        // Temperature: 38.0 and more, as before (37.5 to 37.9 raised nothing; no low alert).
+        assertThat(MaternalEarlyWarning.labourAlerts(off, null, null, null, 37.9)).isEmpty();
+        assertThat(MaternalEarlyWarning.labourAlerts(off, null, null, null, 38.0))
+            .containsExactly(LabourAlert.TEMPERATURE_HIGH);
+        assertThat(MaternalEarlyWarning.labourAlerts(off, null, null, null, 34.0)).isEmpty();
+        // Pulse: above 120, as before (120 itself raised nothing; no low alert).
+        assertThat(MaternalEarlyWarning.labourAlerts(off, 120, null, null, null)).isEmpty();
+        assertThat(MaternalEarlyWarning.labourAlerts(off, 121, null, null, null)).containsExactly(LabourAlert.PULSE_HIGH);
+        assertThat(MaternalEarlyWarning.labourAlerts(off, 40, null, null, null)).isEmpty();
+        // Pressure: 140 systolic or 90 diastolic and more, as before; a low pressure raised nothing.
+        assertThat(MaternalEarlyWarning.labourAlerts(off, null, 139, 89, null)).isEmpty();
+        assertThat(MaternalEarlyWarning.labourAlerts(off, null, 140, 90, null))
+            .containsExactly(LabourAlert.SYSTOLIC_HIGH, LabourAlert.DIASTOLIC_HIGH);
+        assertThat(MaternalEarlyWarning.labourAlerts(off, null, 70, null, null)).isEmpty();
+        // No shock-index alert on the maternity screens.
+        assertThat(MaternalEarlyWarning.shockAlert(off, 170, 100)).isNull();
+        assertThat(MaternalEarlyWarning.shockAlert(RULES, 170, 100)).isEqualTo(HardAlert.SEVERE_SHOCK);
+    }
 }

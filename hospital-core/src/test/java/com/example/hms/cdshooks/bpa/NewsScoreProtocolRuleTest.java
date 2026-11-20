@@ -15,6 +15,10 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /** NEWS2 advisory (P3 #25b): explicit-incomplete scoring, home readings excluded. */
@@ -273,5 +277,39 @@ class NewsScoreProtocolRuleTest {
 
         assertThat(cards).hasSize(1);
         assertThat(cards.get(0).detail()).doesNotContain("MEWS");
+    }
+
+    @Test
+    void review1241_aScoreOnAForeignRecordIsAccountedOncePerRead() {
+        when(repo.findByProtocolCodeAndActiveTrue("NEWS2_EWS")).thenReturn(Optional.of(activeProtocol()));
+        com.example.hms.service.vitals.News2Applicability applicability =
+            mock(com.example.hms.service.vitals.News2Applicability.class);
+        com.example.hms.service.vitals.News2Applicability.Applicability known =
+            new com.example.hms.service.vitals.News2Applicability.Applicability(
+                com.example.hms.service.vitals.News2Applicability.Status.OBSTETRIC, null, UUID.randomUUID());
+        when(applicability.applicabilityOf(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any())).thenReturn(known);
+        NewsScoreProtocolRule maternal = new NewsScoreProtocolRule(repo);
+        maternal.setApplicability(applicability);
+        maternal.setMaternalEarlyWarning(new com.example.hms.service.vitals.MaternalEarlyWarningService(
+            new com.example.hms.service.vitals.MaternalEarlyWarningRules(), applicability, null, null, null, null,
+            null, java.time.Clock.systemUTC()));
+        PatientVitalSign set = PatientVitalSign.builder().heartRateBpm(125).systolicBpMmHg(118).diastolicBpMmHg(74)
+            .recordedAt(LocalDateTime.now().minusMinutes(5)).source("NURSE_STATION").build();
+        BpaRuleContext read = context(List.of(set));
+
+        assertThat(maternal.evaluate(read)).hasSize(1);
+
+        // The card shows a score that rests on another hospital's obstetric record: one reach row for this read.
+        verify(applicability, times(1)).accountForeignRecord(read.patient().getId(), read.hospitalId(), known);
+
+        // A set with nothing to score keeps the « NEWS2 non validé » card: no score, nothing accounted.
+        clearInvocations(applicability);
+        PatientVitalSign weightOnly = PatientVitalSign.builder().weightKg(61.0)
+            .recordedAt(LocalDateTime.now().minusMinutes(5)).source("NURSE_STATION").build();
+        assertThat(maternal.evaluate(context(List.of(weightOnly)))).hasSize(1);
+        verify(applicability, never())
+            .accountForeignRecord(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
     }
 }

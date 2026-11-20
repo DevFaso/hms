@@ -124,6 +124,9 @@ public class NewsScoreProtocolRule implements BpaRule {
         MaternalEarlyWarning.Score maternal = maternalEarlyWarning == null ? null
             : maternalEarlyWarning.scoreFor(known, latest);
         if (maternal != null && !maternal.empty()) {
+            // Review of #1241: a score that rests on another hospital's obstetric record is accounted in the
+            // reach ledger, once for this read of the panel.
+            applicability.accountForeignRecord(context.patient().getId(), context.hospitalId(), known);
             return List.of(maternalCard(maternal, readAt));
         }
         // The adult bands mean nothing for a newborn (her own rules alert): never a warning from them.

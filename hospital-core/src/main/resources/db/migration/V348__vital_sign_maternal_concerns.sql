@@ -9,3 +9,14 @@
 
 ALTER TABLE clinical.patient_vital_signs
     ADD COLUMN IF NOT EXISTS maternal_concerns VARCHAR(200);
+
+-- The page cool-down of the same policy (decision 2026-11-20: one page per woman
+-- and per level in 30 minutes): the level a reading paged at (LOW_MEDIUM,
+-- MEDIUM, HIGH) and when. NULL means the reading paged nobody. Never a score:
+-- the score is computed on read. Idempotent.
+
+ALTER TABLE clinical.patient_vital_signs
+    ADD COLUMN IF NOT EXISTS mews_paged_tier VARCHAR(20);
+
+ALTER TABLE clinical.patient_vital_signs
+    ADD COLUMN IF NOT EXISTS mews_paged_at TIMESTAMP;

@@ -869,4 +869,25 @@ class PostpartumCareServiceImplTest {
             });
         }
     }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "switched off, pulse {0} over {1} raises no shock alert")
+    @org.junit.jupiter.params.provider.CsvSource({"90,100", "170,100"})
+    void review1241_switchedOffThereIsNoShockAlertAfterBirth(int pulse, int systolic) {
+        com.example.hms.service.vitals.MaternalEarlyWarningRules off =
+            new com.example.hms.service.vitals.MaternalEarlyWarningRules();
+        off.setEnabled(false);
+        service.setMaternalRules(off);
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.empty());
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now().minusMinutes(5))
+            .pulseBpm(pulse)
+            .systolicBpMmHg(systolic)
+            .build();
+
+        PostpartumObservationResponseDTO response = service.recordObservation(patientId, request, recorderId);
+
+        assertThat(response.getAlerts()).noneMatch(alert -> alert.getCode() != null && alert.getCode().contains("shock"));
+    }
 }

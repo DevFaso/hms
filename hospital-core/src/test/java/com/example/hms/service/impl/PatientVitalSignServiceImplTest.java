@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -848,15 +849,22 @@ class PatientVitalSignServiceImplTest {
             java.util.Set.of(hospitalId), PageRequest.of(0, 2))).thenReturn(List.of(afterTheSwitch, beforeTheSwitch));
         com.example.hms.service.vitals.News2Applicability applicability =
             mock(com.example.hms.service.vitals.News2Applicability.class);
-        when(applicability.applicabilityOf(any(), any(), any())).thenReturn(
+        // Review of #1241: her birth is on record at ANOTHER hospital; the score rests on that record.
+        UUID elsewhere = UUID.randomUUID();
+        com.example.hms.service.vitals.News2Applicability.Applicability known =
             new com.example.hms.service.vitals.News2Applicability.Applicability(
-                com.example.hms.service.vitals.News2Applicability.Status.OBSTETRIC, birth));
+                com.example.hms.service.vitals.News2Applicability.Status.OBSTETRIC, birth, elsewhere);
+        when(applicability.applicabilityOf(any(), any(), any())).thenReturn(known);
         service.setNews2Applicability(applicability);
         service.setMaternalEarlyWarning(new com.example.hms.service.vitals.MaternalEarlyWarningService(
             new com.example.hms.service.vitals.MaternalEarlyWarningRules(), applicability, null, null, null, null,
             null, java.time.Clock.systemUTC()));
 
         List<PatientVitalSignResponseDTO> responses = service.getRecentVitals(patientId, hospitalId, 2);
+
+        // Two rows on two days, one read: the foreign record behind the score is accounted once, at the
+        // hospital the chart is read at.
+        verify(applicability, times(1)).accountForeignRecord(patientId, hospitalId, known);
 
         PatientVitalSignResponseDTO late = responses.get(0);
         assertThat(late.getNewsScore()).as("never a NEWS2 number for her").isNull();
@@ -875,5 +883,44 @@ class PatientVitalSignServiceImplTest {
         assertThat(early.getMewsPostBirthPulse()).isFalse();
         assertThat(early.getMewsTier()).isEqualTo("LOW");
         assertThat(early.getNewsScore()).isNull();
+    }
+
+    @Test
+    void review1241_herOwnPortalReadAccountsNothing_andNoScoreNoAccount() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Patient patient = minimalPatient(patientId);
+        patient.setDateOfBirth(java.time.LocalDate.now().minusYears(28));
+        PatientVitalSign scored = PatientVitalSign.builder().patient(patient).hospital(minimalHospital(hospitalId))
+            .heartRateBpm(125).systolicBpMmHg(118).diastolicBpMmHg(74).recordedAt(LocalDateTime.now()).build();
+        scored.setId(UUID.randomUUID());
+        PatientVitalSign weightOnly = PatientVitalSign.builder().patient(patient).hospital(minimalHospital(hospitalId))
+            .weightKg(61.0).recordedAt(LocalDateTime.now()).build();
+        weightOnly.setId(UUID.randomUUID());
+        com.example.hms.service.vitals.News2Applicability applicability =
+            mock(com.example.hms.service.vitals.News2Applicability.class);
+        when(applicability.applicabilityOf(any(), any(), any())).thenReturn(
+            new com.example.hms.service.vitals.News2Applicability.Applicability(
+                com.example.hms.service.vitals.News2Applicability.Status.OBSTETRIC, null, UUID.randomUUID()));
+        service.setNews2Applicability(applicability);
+        service.setMaternalEarlyWarning(new com.example.hms.service.vitals.MaternalEarlyWarningService(
+            new com.example.hms.service.vitals.MaternalEarlyWarningRules(), applicability, null, null, null, null,
+            null, java.time.Clock.systemUTC()));
+
+        // The patient reads her own record on her portal: she is shown her score, and nothing is disclosed to anyone.
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(vitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(patientId, PageRequest.of(0, 1)))
+            .thenReturn(List.of(scored));
+        assertThat(service.getRecentVitalsForPatientPortal(patientId, 1).get(0).getMewsScore()).isEqualTo(2);
+
+        // A staff read of a set with nothing to score shows no score: there is no score to account for.
+        when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
+        when(recordAccessPolicy.readableHospitalIds(any(), org.mockito.ArgumentMatchers.eq(patientId),
+            org.mockito.ArgumentMatchers.eq(hospitalId))).thenReturn(java.util.Set.of(hospitalId));
+        when(vitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(patientId,
+            java.util.Set.of(hospitalId), PageRequest.of(0, 1))).thenReturn(List.of(weightOnly));
+        assertThat(service.getRecentVitals(patientId, hospitalId, 1).get(0).getMewsTier()).isNull();
+
+        verify(applicability, never()).accountForeignRecord(any(), any(), any());
     }
 }

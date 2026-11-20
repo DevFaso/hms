@@ -3031,4 +3031,31 @@ class LaborServiceImplTest {
             })
             .noneSatisfy(alert -> assertThat(alert.getCode()).isEqualTo("labor-maternal-shock"));
     }
+
+    @Test
+    void review1241_switchedOffThePartographIsAsBeforeThePolicy() {
+        com.example.hms.service.vitals.MaternalEarlyWarningRules off =
+            new com.example.hms.service.vitals.MaternalEarlyWarningRules();
+        off.setEnabled(false);
+        service.setMaternalRules(off);
+
+        // The WHO values raise nothing below the earlier thresholds, and the low values raise nothing at all.
+        assertThat(maternalAlertCodes(120, null, null, 37.6)).isEmpty();
+        assertThat(maternalAlertCodes(56, 78, null, 34.6)).isEmpty();
+        // The earlier thresholds still alert: 38.0 °C and above 120 bpm.
+        assertThat(maternalAlertCodes(121, null, null, 38.0))
+            .containsExactly("labor-maternal-fever", "labor-maternal-tachycardia");
+        // No shock-index alert, yellow or red: pulse 170 over 100 is the earlier tachycardia caution only.
+        PartographEntryRequestDTO request = entryRequest();
+        request.setPulseBpm(170);
+        request.setSystolicBpMmHg(100);
+        PartographEntryResponseDTO response = service.addEntry(patientId, episodeId, recorderUserId, request);
+        assertThat(response.getAlerts()).singleElement().satisfies(alert -> {
+            assertThat(alert.getCode()).isEqualTo("labor-maternal-tachycardia");
+            assertThat(alert.getSeverity()).isEqualTo(LaborAlertSeverity.CAUTION.name());
+        });
+        // The pressure alerts are unchanged either way.
+        assertThat(maternalAlertCodes(null, 145, 92, null)).containsExactly("labor-hypertension");
+        assertThat(maternalAlertCodes(null, 164, 104, null)).containsExactly("labor-severe-hypertension");
+    }
 }

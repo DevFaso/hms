@@ -43,14 +43,17 @@ import java.util.List;
 public class MaternalEarlyWarningRules {
 
     /**
-     * Off, the maternal score is not computed anywhere and the surfaces fall back to the #1237 safety
-     * net: « NEWS2 non validé en grossesse / post-partum », with the NEWS2 page at its usual trigger.
+     * Off, the maternal score is not computed anywhere and every surface is as it was before this
+     * policy: « NEWS2 non validé en grossesse / post-partum » with the NEWS2 page at its usual trigger
+     * (#1237), the partograph's earlier maternal alerts ({@link LabourBeforePolicy}), no shock-index
+     * alert, and a girl under 16 read as a child before her obstetric record is looked at.
      */
     private boolean enabled = true;
 
     private Mews mews = new Mews();
     private Cradle cradle = new Cradle();
     private Labour labour = new Labour();
+    private LabourBeforePolicy labourBeforePolicy = new LabourBeforePolicy();
     private Escalation escalation = new Escalation();
 
     /**
@@ -171,6 +174,21 @@ public class MaternalEarlyWarningRules {
     }
 
     /**
+     * The partograph's maternal alerts as they stood before this policy; they apply only when the rule
+     * set is switched off, so that switching it off restores the earlier behaviour: fever from 38.0 °C,
+     * pulse above 120 bpm, a raised pressure from 140 systolic or 90 diastolic, and nothing for a low
+     * pressure, a slow pulse or a low temperature.
+     */
+    @Getter
+    @Setter
+    public static class LabourBeforePolicy {
+        private double temperatureHighFrom = 38.0;
+        private int pulseHighAbove = 120;
+        private int systolicHighFrom = 140;
+        private int diastolicHighFrom = 90;
+    }
+
+    /**
      * Who is paged at each level of concern. The chart names UK grades and says "staff grades are a
      * guide adaptable to local skill mix"; this is the local mapping, PROVISIONAL until the named
      * obstetric clinician confirms it:
@@ -180,11 +198,18 @@ public class MaternalEarlyWarningRules {
      *   <li><b>doctor</b> (UK: ST1/2 or equivalent) → the stay's responsible physician and the doctors
      *       on call now, else every doctor of the hospital ({@code doctorRoles});</li>
      *   <li><b>senior doctor</b> (UK: ST3+ / consultant or equivalent) → the head of the department
-     *       of the woman's stay when one is named, and every doctor of the hospital
-     *       ({@code seniorDoctorRoles}): no senior grade is recorded on a staff member yet.</li>
+     *       of the woman's stay when one is named, and the doctors on call now; every doctor of the
+     *       hospital only when nobody holding the role is on the rota ({@code seniorDoctorRoles}): no
+     *       senior grade is recorded on a staff member yet.</li>
      * </ul>
      * Low-medium (2–4) pages the midwife in charge and the doctor; medium (5–7) and high (8 or more)
      * page all three. The anaesthetic team and the outreach team of the UK chart are not mapped.
+     *
+     * <p><b>Cool-down</b> (decision 2026-11-20, provisional): one page per woman and per level in
+     * {@code pageCoolDownMinutes} (30). A woman at the high level is re-observed every 15 minutes; without
+     * it every reading would page the same circle again. Each level has its own clock, so a level she has
+     * not been paged at in that time, a higher one above all, always goes through at once. 0 switches the
+     * cool-down off. The chart, the round and the recorder's on-screen warning are never held back.
      */
     @Getter
     @Setter
@@ -192,5 +217,6 @@ public class MaternalEarlyWarningRules {
         private List<String> midwifeInChargeRoles = List.of("ROLE_MIDWIFE");
         private List<String> doctorRoles = List.of("ROLE_DOCTOR");
         private List<String> seniorDoctorRoles = List.of("ROLE_DOCTOR");
+        private int pageCoolDownMinutes = 30;
     }
 }

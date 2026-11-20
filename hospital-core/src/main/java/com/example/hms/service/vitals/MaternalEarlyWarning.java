@@ -226,8 +226,14 @@ public final class MaternalEarlyWarning {
         return alerts;
     }
 
-    /** The shock alert alone (the pressure alert has its own, older, path on the maternity screens). */
+    /**
+     * The shock alert alone (the pressure alert has its own, older, path on the maternity screens).
+     * None with the rule set switched off: the maternity screens had no shock-index alert before it.
+     */
     public static HardAlert shockAlert(MaternalEarlyWarningRules rules, Integer heartRate, Integer systolic) {
+        if (!rules.isEnabled()) {
+            return null;
+        }
         return hardAlerts(rules, heartRate, systolic, null).stream()
             .filter(a -> a != HardAlert.SEVERE_HYPERTENSION).findFirst().orElse(null);
     }
@@ -265,9 +271,15 @@ public final class MaternalEarlyWarning {
         return interval.compareTo(routine) < 0 ? interval : routine;
     }
 
-    /** The WHO Labour Care Guide alert values a labouring woman's reading meets; a missing value never alerts. */
+    /**
+     * The WHO Labour Care Guide alert values a labouring woman's reading meets; a missing value never
+     * alerts. With the rule set switched off, the partograph's alerts as they stood before the policy.
+     */
     public static List<LabourAlert> labourAlerts(MaternalEarlyWarningRules rules, Integer pulse, Integer systolic,
                                                  Integer diastolic, Double temperature) {
+        if (!rules.isEnabled()) {
+            return labourAlertsBeforePolicy(rules.getLabourBeforePolicy(), pulse, systolic, diastolic, temperature);
+        }
         MaternalEarlyWarningRules.Labour labour = rules.getLabour();
         List<LabourAlert> alerts = new ArrayList<>();
         if (pulse != null && pulse < labour.getPulseLowBelow()) {
@@ -289,6 +301,26 @@ public final class MaternalEarlyWarning {
             alerts.add(LabourAlert.TEMPERATURE_LOW);
         }
         if (temperature != null && temperature >= labour.getTemperatureHighFrom()) {
+            alerts.add(LabourAlert.TEMPERATURE_HIGH);
+        }
+        return alerts;
+    }
+
+    /** Before the policy: a fever, a pulse above the limit and a raised pressure; no low value alerted. */
+    private static List<LabourAlert> labourAlertsBeforePolicy(MaternalEarlyWarningRules.LabourBeforePolicy before,
+                                                              Integer pulse, Integer systolic, Integer diastolic,
+                                                              Double temperature) {
+        List<LabourAlert> alerts = new ArrayList<>();
+        if (pulse != null && pulse > before.getPulseHighAbove()) {
+            alerts.add(LabourAlert.PULSE_HIGH);
+        }
+        if (systolic != null && systolic >= before.getSystolicHighFrom()) {
+            alerts.add(LabourAlert.SYSTOLIC_HIGH);
+        }
+        if (diastolic != null && diastolic >= before.getDiastolicHighFrom()) {
+            alerts.add(LabourAlert.DIASTOLIC_HIGH);
+        }
+        if (temperature != null && temperature >= before.getTemperatureHighFrom()) {
             alerts.add(LabourAlert.TEMPERATURE_HIGH);
         }
         return alerts;

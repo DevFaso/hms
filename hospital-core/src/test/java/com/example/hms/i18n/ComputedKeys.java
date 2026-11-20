@@ -303,6 +303,9 @@ final class ComputedKeys {
         // r54: the shared severe-blood-pressure rule's sentence, one per scope and level.
         r.put("com/example/hms/service/vitals/VitalSignJudgement.java|bloodPressure.messageKey()", severeHypertensionMessages());
         // Policy 2026-11-20 (provisional): the maternal early warning's level, alert, concern and vital-sign words.
+        // Review of #1241: the level named in the obstetric pressure notice.
+        r.put("com/example/hms/service/vitals/VitalSignJudgement.java|MEWS_TIER_LABEL_PREFIX + maternal.responseTier().name()",
+            enumValues("cds.bpa.mews.tier.", com.example.hms.service.vitals.MaternalEarlyWarning.Tier.class));
         r.put("com/example/hms/service/vitals/VitalSignJudgement.java|MEWS_MESSAGE_PREFIX + tier.name()",
             values("vitals.alert.msg.mews.", List.of("LOW_MEDIUM", "MEDIUM", "HIGH")));
         r.put("com/example/hms/service/vitals/VitalSignJudgement.java|MATERNAL_ALERT_MESSAGE_PREFIX + alert.name()",

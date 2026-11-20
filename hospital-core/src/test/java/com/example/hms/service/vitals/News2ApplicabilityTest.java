@@ -11,6 +11,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -117,5 +118,23 @@ class News2ApplicabilityTest {
             new News2Applicability.Applicability(News2Applicability.Status.APPLIES, null, elsewhere));
         applicability.accountForeignRecord(mother.getId(), here, null);
         verify(severeHypertension, times(1)).accountForeignRecord(any(), any(), any());
+    }
+
+    @Test
+    void review1241_switchedOffAGirlUnderSixteenIsAChildAndHerObstetricRecordIsNotRead() {
+        MaternalEarlyWarningRules off = new MaternalEarlyWarningRules();
+        off.setEnabled(false);
+        applicability.setMaternalRules(off);
+        Patient girl = born(now.toLocalDate().minusYears(15));
+        when(severeHypertension.obstetricContextOf(any(), any(), any()))
+            .thenReturn(new SevereHypertension.ObstetricContext(SevereHypertension.Scope.PREGNANT, null));
+
+        // As before the policy: the age is asked first, with no lookup of her obstetric record.
+        assertThat(applicability.statusOf(girl, UUID.randomUUID(), now)).isEqualTo(News2Applicability.Status.CHILD);
+        verify(severeHypertension, never()).obstetricContextOf(any(), any(), any());
+
+        // A pregnant adult is still not shown a NEWS2 score, as since #1237.
+        Patient woman = born(now.toLocalDate().minusYears(28));
+        assertThat(applicability.statusOf(woman, UUID.randomUUID(), now)).isEqualTo(News2Applicability.Status.OBSTETRIC);
     }
 }

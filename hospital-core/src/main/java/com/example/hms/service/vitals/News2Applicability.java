@@ -52,6 +52,14 @@ public class News2Applicability {
 
     private final SevereHypertension severeHypertension;
 
+    /** Policy 2026-11-20: the maternal rule set (setter-injected; absent, its defaults: on). */
+    private MaternalEarlyWarningRules maternalRules = new MaternalEarlyWarningRules();
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setMaternalRules(MaternalEarlyWarningRules maternalRules) {
+        this.maternalRules = maternalRules;
+    }
+
     /**
      * Policy 2026-11-20: the status with, for an OBSTETRIC one, the birth that dates the postpartum
      * window (null in pregnancy). The maternal early-warning score reads it to switch its pulse table.
@@ -85,6 +93,11 @@ public class News2Applicability {
         LocalDateTime when = at != null ? at : LocalDateTime.now(ZoneId.systemDefault());
         if (VitalSignJudgement.isNewborn(patient.getDateOfBirth(), when)) {
             return new Applicability(Status.NEWBORN, null);
+        }
+        // Switched off, the age is asked first, as before the policy: a child has no score, and her
+        // obstetric record is not read.
+        if (!maternalRules.isEnabled() && !NewsScoreCalculator.appliesTo(patient)) {
+            return new Applicability(Status.CHILD, null);
         }
         // Policy 2026-11-20 (provisional): the obstetric scope is asked before the age. A girl under 16 who is
         // pregnant or has given birth is an obstetric patient: she had no score at all (the adult NEWS2 never

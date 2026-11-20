@@ -45,12 +45,15 @@ import java.util.UUID;
  *   <li>low (0–1, no concern): nobody;</li>
  *   <li>low-medium (2–4): the recorder, the stay's responsible physician and the visit's clinician
  *       (the circle NEWS2 paged), the midwife in charge and the doctor; review within 30 minutes;</li>
- *   <li>medium (5–7): the same, and the senior doctor; review within 15 minutes;</li>
+ *   <li>medium (5–7): the same, and the senior doctor (the head of her department and the doctors on
+ *       call; every doctor only when nobody is on the rota); review within 15 minutes;</li>
  *   <li>high (8 or more, or a RED add-on alert): the same as medium; immediate review.</li>
  * </ul>
- * A person another notice already reached for this very reading (the severe blood-pressure notice)
- * is not paged a second time. It runs in the caller's transaction, like the NEWS2 escalation: if the
- * vital set commits, so do its notifications; a notice that cannot be created never fails the set.
+ * A person another notice already reached for this very reading (the severe blood-pressure notice,
+ * which carries the score and the level) is not paged a second time. One page per woman and per level
+ * in 30 minutes (provisional): a level she was not paged at in that time always goes through at once.
+ * It runs in the caller's transaction, like the NEWS2 escalation: if the vital set commits, so do its
+ * notifications and the mark the cool-down reads; a notice that cannot be created never fails the set.
  */
 @Slf4j
 @Service
@@ -127,9 +130,9 @@ public class MaternalEarlyWarningService {
      * The score as the chart reads it. A set with nothing to score (a weight alone) is left without one,
      * and the chart then says « NEWS2 non validé » as before.
      */
-    public void describe(Score score, com.example.hms.payload.dto.PatientVitalSignResponseDTO dto) {
+    public boolean describe(Score score, com.example.hms.payload.dto.PatientVitalSignResponseDTO dto) {
         if (score == null || dto == null || score.empty()) {
-            return;
+            return false;
         }
         dto.setMewsScore(score.total());
         dto.setMewsTier(score.responseTier().name());
@@ -139,24 +142,34 @@ public class MaternalEarlyWarningService {
         dto.setMewsAlerts(score.alerts().stream().map(Enum::name).toList());
         dto.setMewsReviewWithinMinutes(MaternalEarlyWarning.reviewWithinMinutes(rules, score.responseTier()));
         dto.setMewsPostBirthPulse(score.postBirthPulse());
+        return true;
+    }
+
+    /** Policy 2026-11-20: the vital sets, read for the page cool-down (setter-injected; absent, no cool-down). */
+    private com.example.hms.repository.PatientVitalSignRepository vitalSignRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setVitalSignRepository(com.example.hms.repository.PatientVitalSignRepository vitalSignRepository) {
+        this.vitalSignRepository = vitalSignRepository;
     }
 
     /**
      * Pages the level's circle, except anyone in {@code alreadyPaged} (reached by another notice for
-     * this reading). Returns who was paged. Nobody at the low level.
+     * this reading: the severe-pressure notice, which carries the score and the level). Returns who was
+     * paged. Nobody at the low level, and nobody when she was already paged at this very level within the
+     * cool-down (30 minutes; a level she was not paged at, a higher one above all, goes through at once).
+     * The reading that pages is marked with its level and the time, which is what the cool-down reads.
      */
     public Set<String> escalate(PatientVitalSign saved, Score score, UUID patientId, UUID hospitalId,
                                 String recorderUsername, String visitPhysicianUsername,
                                 Collection<String> alreadyPaged) {
         Set<String> paged = new LinkedHashSet<>();
-        if (score == null || !score.needsEscalation() || patientId == null || hospitalId == null) {
+        if (score == null || !score.needsEscalation() || patientId == null || hospitalId == null
+            || pagedRecently(patientId, hospitalId, score.responseTier())) {
             return paged;
         }
-        Set<String> skip = new LinkedHashSet<>();
-        if (alreadyPaged != null) {
-            alreadyPaged.stream().filter(java.util.Objects::nonNull)
-                .forEach(u -> skip.add(u.toLowerCase(Locale.ROOT)));
-        }
+        Set<String> skip = lowerCased(alreadyPaged);
+        boolean toldByAnotherNotice = !skip.isEmpty();
         String patientName = saved != null && saved.getPatient() != null ? saved.getPatient().getFullName() : null;
         Object patientArg = patientName == null || patientName.isBlank()
             ? NotificationLocalizer.key("patient.fallback.generic") : patientName;
@@ -174,7 +187,29 @@ public class MaternalEarlyWarningService {
                 log.warn("Maternal early-warning notice not created: {}", ex.getClass().getSimpleName());
             }
         }
+        if (saved != null && (toldByAnotherNotice || !paged.isEmpty())) {
+            saved.setMewsPagedTier(score.responseTier().name());
+            saved.setMewsPagedAt(LocalDateTime.now(clock));
+        }
         return paged;
+    }
+
+    /** She was paged at this level, at this hospital, within the cool-down. Never without a repository. */
+    private boolean pagedRecently(UUID patientId, UUID hospitalId, Tier tier) {
+        int minutes = rules.getEscalation().getPageCoolDownMinutes();
+        if (vitalSignRepository == null || minutes <= 0) {
+            return false;
+        }
+        return vitalSignRepository.existsByPatient_IdAndHospital_IdAndMewsPagedTierAndMewsPagedAtGreaterThanEqual(
+            patientId, hospitalId, tier.name(), LocalDateTime.now(clock).minusMinutes(minutes));
+    }
+
+    private static Set<String> lowerCased(Collection<String> usernames) {
+        Set<String> lower = new LinkedHashSet<>();
+        if (usernames != null) {
+            usernames.stream().filter(java.util.Objects::nonNull).forEach(u -> lower.add(u.toLowerCase(Locale.ROOT)));
+        }
+        return lower;
     }
 
     private static String keyOf(Score score) {
@@ -213,7 +248,8 @@ public class MaternalEarlyWarningService {
         recipients.addAll(onCallElseAll(hospitalId, mapping.getDoctorRoles(), onCall));
         if (tier == Tier.MEDIUM || tier == Tier.HIGH) {
             departmentHeadUsername(patientId, hospitalId).ifPresent(recipients::add);
-            recipients.addAll(holders(hospitalId, mapping.getSeniorDoctorRoles()));
+            // The rota when there is one: every doctor of the hospital only when nobody is on call.
+            recipients.addAll(onCallElseAll(hospitalId, mapping.getSeniorDoctorRoles(), onCall));
         }
         return recipients;
     }

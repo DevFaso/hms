@@ -31,6 +31,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -565,11 +566,20 @@ class VitalSignJudgementTest {
         VitalSignJudgement.Judgement j = judgement.judge(vital);
         judgement.escalate(vital, j, mother.getId(), HERE, "nurse_a", null);
 
-        // The severe-pressure notice reaches the recorder and the responsible physician, as before.
-        verify(notifications).createNotification(eq("postpartum.alert.notification"), any(), eq("nurse_a"),
+        // The severe-pressure notice reaches the recorder and the responsible physician, as before; review of
+        // #1241: it carries her score and the level it is answered at, since they get no second notice.
+        org.mockito.ArgumentCaptor<Object[]> pressureArgs = org.mockito.ArgumentCaptor.forClass(Object[].class);
+        verify(notifications).createNotification(eq("postpartum.alert.notification.mews"), pressureArgs.capture(),
+            eq("nurse_a"), eq("MATERNITY_ALERT"));
+        verify(notifications).createNotification(eq("postpartum.alert.notification.mews"), any(), eq("dr_a"),
             eq("MATERNITY_ALERT"));
-        verify(notifications).createNotification(eq("postpartum.alert.notification"), any(), eq("dr_a"),
-            eq("MATERNITY_ALERT"));
+        assertThat(pressureArgs.getValue()).hasSize(5);
+        assertThat(pressureArgs.getValue()[3]).isEqualTo(4);
+        assertThat(String.valueOf(pressureArgs.getValue()[4])).contains("cds.bpa.mews.tier.HIGH");
+        assertThat(com.example.hms.i18n.TestMessageSources.bundles().getMessage("postpartum.alert.notification.mews",
+            new Object[] {"hypertension sévère", "Awa Sawadogo", "Recontrôler la tension.", 4, "préoccupation élevée"},
+            Locale.FRENCH)).isEqualTo("Alerte post-partum (hypertension sévère) pour Awa Sawadogo : "
+                + "Recontrôler la tension. MEWS 4 (préoccupation élevée), score provisoire.");
         // The maternal page (red: the high circle) reaches only those the notice did not.
         verify(notifications).createNotification(eq("mews.escalation.red"), any(), eq("sf_a"),
             eq(MaternalEarlyWarningService.NOTIFICATION_TYPE));
@@ -645,5 +655,55 @@ class VitalSignJudgementTest {
             assertThat(a.getSeverity()).isEqualTo("URGENT");
             assertThat(a.getMessage()).contains("revue immédiate");
         });
+    }
+
+    // ---- Review of #1241 (eb0e8566) ----
+
+    @Test
+    @DisplayName("review of #1241: FHR 100 with the mother at pulse 124, 92/55, 37.6 °C: her MEWS high page is still sent")
+    void review1241_aFetalUrgentAlertDoesNotSilenceTheMothersPage() {
+        withTheMaternalWarning();
+        Patient mother = motherDeliveredBefore(false);
+        // A partograph row: pulse 2 + systolic 2 + diastolic 2 + temperature 2 = 8, high.
+        PatientVitalSign vital = bpSet(mother).heartRateBpm(124).systolicBpMmHg(92).diastolicBpMmHg(55)
+            .temperatureCelsius(37.6).build();
+        MaternalEarlyWarning.Score score = MaternalEarlyWarning.score(new MaternalEarlyWarningRules(), vital, false);
+        assertThat(score.total()).isEqualTo(8);
+        assertThat(score.responseTier()).isEqualTo(MaternalEarlyWarning.Tier.HIGH);
+        VitalSignJudgement.Judgement charted =
+            new VitalSignJudgement.Judgement(false, List.of(), SevereHypertension.Verdict.NONE, score);
+
+        // The fetal bradycardia paged the team about the baby (any URGENT), not about the mother.
+        judgement.escalate(vital, charted, mother.getId(), HERE, "mw", null,
+            new VitalSignJudgement.MaternityCover(true, false));
+
+        verify(notifications).createNotification(eq("mews.escalation.high"), any(), eq("sf_a"),
+            eq(MaternalEarlyWarningService.NOTIFICATION_TYPE));
+        verify(notifications).createNotification(eq("mews.escalation.high"), any(), eq("dr_b"),
+            eq(MaternalEarlyWarningService.NOTIFICATION_TYPE));
+        verify(news2, never()).escalateIfNeeded(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("review of #1241: an URGENT alert about the mother's own values still covers her page; NEWS2 is covered by any URGENT alert")
+    void review1241_onlyAnAlertAboutTheMotherCoversHerPage() {
+        withTheMaternalWarning();
+        Patient mother = motherDeliveredBefore(false);
+        PatientVitalSign vital = bpSet(mother).heartRateBpm(124).systolicBpMmHg(92).diastolicBpMmHg(55)
+            .temperatureCelsius(37.6).build();
+        VitalSignJudgement.Judgement charted = new VitalSignJudgement.Judgement(false, List.of(),
+            SevereHypertension.Verdict.NONE, MaternalEarlyWarning.score(new MaternalEarlyWarningRules(), vital, false));
+
+        judgement.escalate(vital, charted, mother.getId(), HERE, "mw", null,
+            new VitalSignJudgement.MaternityCover(true, true));
+        verifyNoInteractions(notifications);
+
+        // Without a maternal score (a patient outside the scope, or the rule set off) the NEWS2 page keeps
+        // its #1237 cover: any URGENT maternity alert, a fetal one included.
+        judgement.escalate(vital, null, mother.getId(), HERE, "mw", null,
+            new VitalSignJudgement.MaternityCover(true, false));
+        verify(news2, never()).escalateIfNeeded(any(), any(), any(), any(), any());
+        judgement.escalate(vital, null, mother.getId(), HERE, "mw", null, VitalSignJudgement.MaternityCover.NONE);
+        verify(news2).escalateIfNeeded(vital, mother.getId(), HERE, "mw", null);
     }
 }

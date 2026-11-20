@@ -137,6 +137,32 @@ class MaternalEarlyWarningRulesGuardTest {
         assertThat(rules.getEscalation().getDoctorRoles()).containsExactly("ROLE_DOCTOR");
         assertThat(rules.getEscalation().getSeniorDoctorRoles()).containsExactly("ROLE_DOCTOR");
         assertThat(rules.isEnabled()).isTrue();
+        // Review of #1241: what applies when the rule set is off (the partograph before the policy), and the
+        // page cool-down (decision 2026-11-20, provisional).
+        MaternalEarlyWarningRules.LabourBeforePolicy before = rules.getLabourBeforePolicy();
+        assertThat(before.getTemperatureHighFrom()).isEqualTo(38.0);
+        assertThat(List.of(before.getPulseHighAbove(), before.getSystolicHighFrom(), before.getDiastolicHighFrom()))
+            .containsExactly(120, 140, 90);
+        assertThat(rules.getEscalation().getPageCoolDownMinutes()).isEqualTo(30);
+    }
+
+    /**
+     * Review of #1241: switched off, every surface is as it was before the policy. The three that kept
+     * their new behaviour when the switch was first added (the partograph's alerts, the shock-index alert,
+     * the obstetric scope asked before the age) each ask the switch; the tests of each prove the old values.
+     */
+    @Test
+    void switchedOffEverySurfaceAsksTheSwitch() throws IOException {
+        String calculator = code("service/vitals/MaternalEarlyWarning.java");
+        assertThat(Pattern.compile("shockAlert\\([^)]*\\)\\s*\\{\\s*if \\(!rules\\.isEnabled\\(\\)\\)").matcher(calculator).find())
+            .as("shockAlert returns none when the rule set is off").isTrue();
+        assertThat(Pattern.compile("labourAlerts\\([^)]*\\)\\s*\\{\\s*if \\(!rules\\.isEnabled\\(\\)\\)").matcher(calculator).find())
+            .as("labourAlerts answers with the earlier alerts when the rule set is off").isTrue();
+        assertThat(code("service/vitals/News2Applicability.java")).contains("!maternalRules.isEnabled()");
+        assertThat(code("service/vitals/MaternalEarlyWarningService.java")).contains("!rules.isEnabled()");
+        // The maternity services hold no branch of their own: they ask the calculator, which asks the switch.
+        assertThat(code("service/impl/LaborServiceImpl.java")).doesNotContain("isEnabled()");
+        assertThat(code("service/impl/PostpartumCareServiceImpl.java")).doesNotContain("maternalRules.isEnabled()");
     }
 
     private static void assertBand(Band band, Double twoAtOrBelow, Double oneAtOrBelow, Double oneFrom, Double twoFrom) {
@@ -168,13 +194,17 @@ class MaternalEarlyWarningRulesGuardTest {
         Set<String> silent = new TreeSet<>();
         clinical.forEach((key, value) -> {
             if ((key.startsWith("mews.escalation.") || key.equals("cds.bpa.mews.title")
-                    || key.equals("cds.bpa.mews.provisional")) && !value.toLowerCase().contains("provisoire")) {
+                    || key.equals("cds.bpa.mews.provisional") || key.endsWith(".notification.pregnancy.mews"))
+                    && !value.toLowerCase().contains("provisoire")) {
                 silent.add(key);
             }
         });
         maternity.forEach((key, value) -> {
             if ((key.startsWith("labor.alert.msg.labor-maternal-hypo") || key.startsWith("labor.alert.msg.labor-maternal-brady")
                     || key.contains("-shock")) && key.contains(".msg.") && !value.toLowerCase().contains("provisoire")) {
+                silent.add(key);
+            }
+            if (key.endsWith(".notification.mews") && !value.toLowerCase().contains("provisoire")) {
                 silent.add(key);
             }
         });

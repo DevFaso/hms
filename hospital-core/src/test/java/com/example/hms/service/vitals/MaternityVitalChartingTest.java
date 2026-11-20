@@ -71,7 +71,8 @@ class MaternityVitalChartingTest {
             org.mockito.ArgumentMatchers.eq(mother.getId()), org.mockito.ArgumentMatchers.eq(hospital.getId()),
             org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(),
             // Review of #1237: an URGENT maternity alert already paged for this reading: NEWS2 does not page twice.
-            org.mockito.ArgumentMatchers.eq(true));
+            // Review of #1241: it is about the mother's own values, so it covers her maternal page too.
+            org.mockito.ArgumentMatchers.eq(new VitalSignJudgement.MaternityCover(true, true)));
     }
 
     @Test
@@ -140,7 +141,7 @@ class MaternityVitalChartingTest {
         assertThat(vital.isClinicallySignificant()).isTrue();
         // No URGENT alert covered either reading (a low pressure and fast pulse): the NEWS2 page fires (safety net).
         verify(judgement, times(2)).escalate(any(), org.mockito.ArgumentMatchers.isNull(),
-            any(), any(), any(), any(), org.mockito.ArgumentMatchers.eq(false));
+            any(), any(), any(), any(), org.mockito.ArgumentMatchers.eq(VitalSignJudgement.MaternityCover.NONE));
     }
 
     @Test
@@ -155,7 +156,7 @@ class MaternityVitalChartingTest {
         PatientVitalSign vital = charting.chartNewbornAssessment(assessment, true);
         assertThat(vital.isClinicallySignificant()).isFalse();
         verify(judgement).escalate(org.mockito.ArgumentMatchers.eq(vital), org.mockito.ArgumentMatchers.isNull(),
-            any(), any(), any(), any(), org.mockito.ArgumentMatchers.eq(false));
+            any(), any(), any(), any(), org.mockito.ArgumentMatchers.eq(VitalSignJudgement.MaternityCover.NONE));
     }
 
     @Test
@@ -214,7 +215,7 @@ class MaternityVitalChartingTest {
         assertThat(vital.getRecordedByAssignment()).isNull();
         assertThat(vital.getRecordedAt()).isNotNull();
         verify(judgement).escalate(any(), org.mockito.ArgumentMatchers.isNull(), any(), any(),
-            org.mockito.ArgumentMatchers.eq("midwife.a"), any(), org.mockito.ArgumentMatchers.eq(false));
+            org.mockito.ArgumentMatchers.eq("midwife.a"), any(), org.mockito.ArgumentMatchers.eq(VitalSignJudgement.MaternityCover.NONE));
     }
 
     @Test
@@ -233,10 +234,36 @@ class MaternityVitalChartingTest {
         assertThat(vital.getMaternalConcerns()).isEqualTo("VAGINAL_BLEEDING");
         ArgumentCaptor<VitalSignJudgement.Judgement> passed = ArgumentCaptor.forClass(VitalSignJudgement.Judgement.class);
         verify(judgement).escalate(any(), passed.capture(), any(), any(), any(), any(),
-            org.mockito.ArgumentMatchers.eq(false));
+            org.mockito.ArgumentMatchers.eq(VitalSignJudgement.MaternityCover.NONE));
         // The maternal warning is carried; the severe pressure the postpartum screen already alerted on is not.
         assertThat(passed.getValue().maternal()).isSameAs(score);
         assertThat(passed.getValue().bloodPressure().raised()).isFalse();
         assertThat(passed.getValue().newborn()).isFalse();
+    }
+
+    @Test
+    void review1241_aFetalAlertDoesNotCoverTheMothersMaternalPage() {
+        // FHR 100 raises an URGENT fetal alert; the mother's own values (pulse 124, 92/55, 37.6 °C) raise
+        // only CAUTIONs. The team was paged about the baby, not about her.
+        LaborPartographEntry entry = LaborPartographEntry.builder().patient(mother).hospital(hospital)
+            .observationTime(at).fetalHeartRateBpm(100).pulseBpm(124).systolicBpMmHg(92).diastolicBpMmHg(55)
+            .temperatureCelsius(37.6).build();
+        entry.addAlert(LaborAlertType.FETAL_HEART_RATE, LaborAlertSeverity.URGENT, "labor-fetal-bradycardia", "m", "t");
+        entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.CAUTION, "labor-maternal-tachycardia", "m", "t");
+        entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.CAUTION, "labor-maternal-shock", "m", "t");
+
+        charting.chartLaborPartographEntry(entry);
+
+        // NEWS2 stays covered by any URGENT alert (#1237); her maternal early-warning page is not.
+        verify(judgement).escalate(any(), org.mockito.ArgumentMatchers.isNull(), any(), any(), any(), any(),
+            org.mockito.ArgumentMatchers.eq(new VitalSignJudgement.MaternityCover(true, false)));
+
+        // The action line (labour progress) is not about her values either.
+        LaborPartographEntry slow = LaborPartographEntry.builder().patient(mother).hospital(hospital)
+            .observationTime(at.plusMinutes(30)).pulseBpm(124).build();
+        slow.addAlert(LaborAlertType.LABOR_PROGRESS, LaborAlertSeverity.URGENT, "labor-action-line", "m", "t");
+        charting.chartLaborPartographEntry(slow);
+        verify(judgement, times(2)).escalate(any(), org.mockito.ArgumentMatchers.isNull(), any(), any(), any(), any(),
+            org.mockito.ArgumentMatchers.eq(new VitalSignJudgement.MaternityCover(true, false)));
     }
 }

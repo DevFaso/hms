@@ -68,10 +68,16 @@ public class MaternityVitalCharting {
         vital.setDiastolicBpMmHg(entry.getDiastolicBpMmHg());
         vital.setTemperatureCelsius(entry.getTemperatureCelsius());
         List<LaborAlert> alerts = entry.getAlerts() == null ? List.of() : entry.getAlerts();
+        // Review of #1241: a partograph entry also carries the baby's and the labour's alerts. Only an URGENT
+        // alert about the mother's own values paged for HER; a fetal bradycardia or the action line must not
+        // silence her maternal early-warning page. (Any URGENT alert still covers the NEWS2 page, as before.)
         return save(vital,
             alerts.stream().anyMatch(a -> a.getSeverity() == LaborAlertSeverity.CAUTION
                 || a.getSeverity() == LaborAlertSeverity.URGENT),
-            alerts.stream().anyMatch(a -> a.getSeverity() == LaborAlertSeverity.URGENT));
+            new VitalSignJudgement.MaternityCover(
+                alerts.stream().anyMatch(a -> a.getSeverity() == LaborAlertSeverity.URGENT),
+                alerts.stream().anyMatch(a -> a.getSeverity() == LaborAlertSeverity.URGENT
+                    && a.getType() == com.example.hms.enums.LaborAlertType.MATERNAL_VITALS)));
     }
 
     /** The mother's postpartum vital signs. */
@@ -102,10 +108,12 @@ public class MaternityVitalCharting {
                 List.of(com.example.hms.enums.MaternalConcern.VAGINAL_BLEEDING)));
         }
         List<PostpartumObservationAlert> alerts = observation.getAlerts() == null ? List.of() : observation.getAlerts();
+        // Every postpartum alert is about the mother: an URGENT one covers both pages.
         return save(vital,
             alerts.stream().anyMatch(a -> a.getSeverity() == PostpartumAlertSeverity.CAUTION
                 || a.getSeverity() == PostpartumAlertSeverity.URGENT),
-            alerts.stream().anyMatch(a -> a.getSeverity() == PostpartumAlertSeverity.URGENT));
+            VitalSignJudgement.MaternityCover.of(
+                alerts.stream().anyMatch(a -> a.getSeverity() == PostpartumAlertSeverity.URGENT)));
     }
 
     /**
@@ -136,7 +144,8 @@ public class MaternityVitalCharting {
         return save(vital,
             alerts.stream().anyMatch(a -> a.getSeverity() == NewbornAlertSeverity.CAUTION
                 || a.getSeverity() == NewbornAlertSeverity.URGENT),
-            alerts.stream().anyMatch(a -> a.getSeverity() == NewbornAlertSeverity.URGENT));
+            VitalSignJudgement.MaternityCover.of(
+                alerts.stream().anyMatch(a -> a.getSeverity() == NewbornAlertSeverity.URGENT)));
     }
 
     private PatientVitalSign base(Patient patient, Hospital hospital, PatientHospitalRegistration registration,
@@ -173,10 +182,11 @@ public class MaternityVitalCharting {
 
     /**
      * @param alerted a CAUTION or URGENT maternity alert was raised on this reading (an INFO notice is not)
-     * @param urgentAlerted an URGENT maternity alert was raised on it: the team was already paged for this
-     *                      reading, so NEWS2 does not page a second time (review of #1237)
+     * @param cover which URGENT maternity alert was raised on it: the team was already paged for this
+     *              reading, so NEWS2 does not page a second time (review of #1237), nor the maternal early
+     *              warning when the alert was about the mother's own condition (review of #1241)
      */
-    private PatientVitalSign save(PatientVitalSign vital, boolean alerted, boolean urgentAlerted) {
+    private PatientVitalSign save(PatientVitalSign vital, boolean alerted, VitalSignJudgement.MaternityCover cover) {
         // QA D1077: the measure rules every vitals write holds (these rows carry no child-only measure).
         com.example.hms.service.support.PatientMeasureRules.requireVitalSignApplicable(
             vital, null, java.time.LocalDate.now(java.time.ZoneId.systemDefault()));
@@ -193,7 +203,7 @@ public class MaternityVitalCharting {
         Staff staff = saved.getRecordedByStaff();
         String recorder = staff != null && staff.getUser() != null ? staff.getUser().getUsername() : null;
         vitalSignJudgement.escalate(saved, judged == null ? null : judged.maternalOnly(), saved.getPatient().getId(),
-            saved.getHospital() != null ? saved.getHospital().getId() : null, recorder, null, urgentAlerted);
+            saved.getHospital() != null ? saved.getHospital().getId() : null, recorder, null, cover);
         return saved;
     }
 

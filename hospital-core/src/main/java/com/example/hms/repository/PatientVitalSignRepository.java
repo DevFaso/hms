@@ -158,4 +158,11 @@ public interface PatientVitalSignRepository extends JpaRepository<PatientVitalSi
     /** Review of #1237: the row a maternity record charted at this hospital (to retire it when the record is corrected). */
     List<PatientVitalSign> findByPatient_IdAndHospital_IdAndSourceAndRecordedAt(UUID patientId, UUID hospitalId,
                                                                                String source, LocalDateTime recordedAt);
+
+    /**
+     * Policy 2026-11-20 (provisional): was this woman paged at this maternal level, here, since
+     * {@code since}? One indexed read on a vitals WRITE that is about to page (never on a ward read).
+     */
+    boolean existsByPatient_IdAndHospital_IdAndMewsPagedTierAndMewsPagedAtGreaterThanEqual(
+        UUID patientId, UUID hospitalId, String mewsPagedTier, LocalDateTime since);
 }

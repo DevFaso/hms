@@ -156,7 +156,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
                 vitals.stream().map(v -> CrossHospitalReachRecorder.hospitalIdOf(v.getHospital())).toList(), hospitalId),
             "Cross-hospital vital signs read on the treatment relationship");
         return vitals.stream()
-            .map(responder(hospitalId))
+            .map(responder(hospitalId, true))
             .toList();
     }
 
@@ -238,7 +238,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         Patient patient = requireScopedChart(patientId, hospitalId);
         PageRequest pageable = PageRequest.of(Math.max(page, 0), Math.max(size, 1));
         return vitalSignRepository.findWithinRange(patient.getId(), hospitalId, from, to, pageable).stream()
-            .map(responder(hospitalId))
+            .map(responder(hospitalId, true))
             .toList();
     }
 
@@ -265,8 +265,20 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
      * early warning instead, scored from the row itself (no further query).
      */
     private java.util.function.Function<PatientVitalSign, PatientVitalSignResponseDTO> responder(UUID scopeHospitalId) {
+        return responder(scopeHospitalId, false);
+    }
+
+    /**
+     * {@link #responder(UUID)} for a staff read of the chart. Review of #1241: a maternal score that rests on
+     * another hospital's obstetric record discloses that record to the reader, so it is accounted in the
+     * reach ledger (RECORD_SHARE), once per read and per source hospital, never once per row. Not on the
+     * patient's own portal (she reads her own record) nor on the response of a write (the write accounted it).
+     */
+    private java.util.function.Function<PatientVitalSign, PatientVitalSignResponseDTO> responder(
+            UUID scopeHospitalId, boolean accountForeignRecord) {
         java.util.Map<java.time.LocalDate, com.example.hms.service.vitals.News2Applicability.Applicability> byDay =
             new java.util.HashMap<>();
+        java.util.Set<UUID> accounted = new java.util.HashSet<>();
         return vital -> {
             PatientVitalSignResponseDTO dto = vitalSignMapper.toResponse(vital);
             if (dto == null) {
@@ -282,8 +294,10 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
                 : CrossHospitalReachRecorder.hospitalIdOf(vital.getHospital());
             com.example.hms.service.vitals.News2Applicability.Applicability known = byDay.computeIfAbsent(
                 at.toLocalDate(), day -> news2Applicability.applicabilityOf(vital.getPatient(), readAt, at));
-            if (known != null && known.status().notValidated()) {
-                withoutNews2(vital, dto, known);
+            if (known != null && known.status().notValidated() && withoutNews2(vital, dto, known)
+                    && accountForeignRecord && known.sourceHospitalId() != null
+                    && accounted.add(known.sourceHospitalId())) {
+                news2Applicability.accountForeignRecord(vital.getPatient().getId(), readAt, known);
             }
             return dto;
         };
@@ -302,18 +316,17 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
 
     /**
      * No NEWS2 number for a patient it is not validated for; the pregnant or postpartum woman's reading
-     * carries her maternal early warning instead (policy 2026-11-20, provisional).
+     * carries her maternal early warning instead (policy 2026-11-20, provisional). True when it does.
      */
-    private void withoutNews2(PatientVitalSign vital, PatientVitalSignResponseDTO dto,
-                              com.example.hms.service.vitals.News2Applicability.Applicability known) {
+    private boolean withoutNews2(PatientVitalSign vital, PatientVitalSignResponseDTO dto,
+                                 com.example.hms.service.vitals.News2Applicability.Applicability known) {
         dto.setNewsScore(null);
         dto.setNewsRiskBand(null);
         dto.setNewsComplete(null);
         dto.setNewsMissing(null);
         dto.setNewsNotValidated(known.status().name());
-        if (maternalEarlyWarning != null) {
-            maternalEarlyWarning.describe(maternalEarlyWarning.scoreFor(known, vital), dto);
-        }
+        return maternalEarlyWarning != null
+            && maternalEarlyWarning.describe(maternalEarlyWarning.scoreFor(known, vital), dto);
     }
 
     @Override

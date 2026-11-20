@@ -32,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -191,7 +192,7 @@ class MaternalEarlyWarningServiceTest {
     }
 
     @Test
-    @DisplayName("medium (5-7): the senior doctor too (the head of her department and every doctor), within 15 min")
+    @DisplayName("medium (5-7): the senior doctor too (the head of her department and the doctors on call), within 15 min")
     void mediumAddsTheSeniorDoctor() {
         User headUser = new User();
         headUser.setUsername("dr.head");
@@ -211,8 +212,9 @@ class MaternalEarlyWarningServiceTest {
 
         Set<String> reached = service.escalate(vital, score, mother.getId(), HERE, "sf.recorder", null, Set.of());
 
+        // Review of #1241: with a rota, the doctor who is not on call is not paged.
         assertThat(reached).containsExactlyInAnyOrder("sf.recorder", "dr.attending", "sf.oncall", "dr.oncall",
-            "dr.head", "dr.off");
+            "dr.head");
         verify(notifications).createNotification(eq("mews.escalation.medium"), any(), eq("dr.head"),
             eq(MaternalEarlyWarningService.NOTIFICATION_TYPE));
     }
@@ -228,8 +230,9 @@ class MaternalEarlyWarningServiceTest {
 
         service.escalate(vital, score, mother.getId(), HERE, "sf.recorder", null, Set.of());
 
-        verify(notifications).createNotification(eq("mews.escalation.high"), any(), eq("dr.off"),
+        verify(notifications).createNotification(eq("mews.escalation.high"), any(), eq("dr.oncall"),
             eq(MaternalEarlyWarningService.NOTIFICATION_TYPE));
+        verify(notifications, never()).createNotification(anyString(), any(), eq("dr.off"), anyString());
     }
 
     @Test
@@ -244,9 +247,9 @@ class MaternalEarlyWarningServiceTest {
 
         Set<String> reached = service.escalate(vital, score, mother.getId(), HERE, "sf.recorder", null, Set.of());
 
-        assertThat(reached).contains("dr.off");
+        assertThat(reached).contains("dr.oncall").doesNotContain("dr.off");
         ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);
-        verify(notifications).createNotification(eq("mews.escalation.red"), args.capture(), eq("dr.off"),
+        verify(notifications).createNotification(eq("mews.escalation.red"), args.capture(), eq("dr.oncall"),
             eq(MaternalEarlyWarningService.NOTIFICATION_TYPE));
         assertThat(String.valueOf(args.getValue()[4])).contains("mews.alert.SEVERE_SHOCK");
     }
@@ -323,5 +326,110 @@ class MaternalEarlyWarningServiceTest {
 
         service.assess(mother, HERE, set().heartRateBpm(125).build(), true);
         verify(applicability).accountForeignRecord(mother.getId(), HERE, foreign);
+    }
+
+    // ---- Review of #1241 (eb0e8566): the rota at medium and high, and the page cool-down ----
+
+    @Test
+    @DisplayName("medium with nobody on the rota: every doctor of the hospital is paged (the fallback only)")
+    void review1241_withNoRotaMediumPagesEveryDoctor() {
+        when(onCall.findByHospitalAndWindow(eq(HERE), any(), any())).thenReturn(List.of());
+        under(News2Applicability.Status.OBSTETRIC, null);
+        PatientVitalSign vital = set().heartRateBpm(125).respiratoryRateBpm(26).temperatureCelsius(37.4).build();
+
+        Set<String> reached = service.escalate(vital, service.assess(mother, HERE, vital), mother.getId(), HERE,
+            "sf.recorder", null, Set.of());
+
+        assertThat(reached).containsExactlyInAnyOrder("sf.recorder", "dr.attending", "sf.oncall", "sf.off",
+            "dr.oncall", "dr.off");
+    }
+
+    private com.example.hms.repository.PatientVitalSignRepository withTheCoolDown() {
+        com.example.hms.repository.PatientVitalSignRepository vitals =
+            mock(com.example.hms.repository.PatientVitalSignRepository.class);
+        service.setVitalSignRepository(vitals);
+        return vitals;
+    }
+
+    @Test
+    @DisplayName("cool-down: paged at this level within 30 min, the same level pages nobody and the reading is not marked")
+    void review1241_theSameLevelIsNotPagedAgainWithinTheCoolDown() {
+        com.example.hms.repository.PatientVitalSignRepository vitals = withTheCoolDown();
+        when(vitals.existsByPatient_IdAndHospital_IdAndMewsPagedTierAndMewsPagedAtGreaterThanEqual(
+            mother.getId(), HERE, "LOW_MEDIUM", NOW.minusMinutes(30))).thenReturn(true);
+        under(News2Applicability.Status.OBSTETRIC, null);
+        PatientVitalSign vital = set().heartRateBpm(125).build();
+
+        Set<String> reached = service.escalate(vital, service.assess(mother, HERE, vital), mother.getId(), HERE,
+            "sf.recorder", null, Set.of());
+
+        assertThat(reached).isEmpty();
+        verifyNoInteractions(notifications);
+        assertThat(vital.getMewsPagedTier()).isNull();
+        assertThat(vital.getMewsPagedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("cool-down: a page marks the reading with its level and the time; that is what the next reading reads")
+    void review1241_aPageMarksTheReading() {
+        com.example.hms.repository.PatientVitalSignRepository vitals = withTheCoolDown();
+        under(News2Applicability.Status.OBSTETRIC, null);
+        PatientVitalSign vital = set().heartRateBpm(125).build();
+
+        Set<String> reached = service.escalate(vital, service.assess(mother, HERE, vital), mother.getId(), HERE,
+            "sf.recorder", null, Set.of());
+
+        assertThat(reached).isNotEmpty();
+        assertThat(vital.getMewsPagedTier()).isEqualTo("LOW_MEDIUM");
+        assertThat(vital.getMewsPagedAt()).isEqualTo(NOW);
+        // The window is the rule set's 30 minutes, at this hospital, for this woman and this level.
+        verify(vitals).existsByPatient_IdAndHospital_IdAndMewsPagedTierAndMewsPagedAtGreaterThanEqual(
+            mother.getId(), HERE, "LOW_MEDIUM", NOW.minusMinutes(30));
+    }
+
+    @Test
+    @DisplayName("cool-down: a higher level goes through at once, whatever was paged at a lower one")
+    void review1241_aHigherLevelAlwaysGoesThrough() {
+        com.example.hms.repository.PatientVitalSignRepository vitals = withTheCoolDown();
+        // She was paged at low-medium and at medium a few minutes ago; never at high.
+        when(vitals.existsByPatient_IdAndHospital_IdAndMewsPagedTierAndMewsPagedAtGreaterThanEqual(
+            eq(mother.getId()), eq(HERE), eq("LOW_MEDIUM"), any())).thenReturn(true);
+        when(vitals.existsByPatient_IdAndHospital_IdAndMewsPagedTierAndMewsPagedAtGreaterThanEqual(
+            eq(mother.getId()), eq(HERE), eq("MEDIUM"), any())).thenReturn(true);
+        under(News2Applicability.Status.OBSTETRIC, null);
+        PatientVitalSign vital = set().heartRateBpm(125).respiratoryRateBpm(26).temperatureCelsius(38.0)
+            .spo2Percent(90).build();
+        Score score = service.assess(mother, HERE, vital);
+        assertThat(score.responseTier()).isEqualTo(MaternalEarlyWarning.Tier.HIGH);
+
+        Set<String> reached = service.escalate(vital, score, mother.getId(), HERE, "sf.recorder", null, Set.of());
+
+        assertThat(reached).contains("sf.oncall", "dr.oncall");
+        assertThat(vital.getMewsPagedTier()).isEqualTo("HIGH");
+    }
+
+    @Test
+    @DisplayName("cool-down: the pressure notice that carried the score counts as the page; a low score and a 0 window never read the table")
+    void review1241_whatCountsAsAPageAndWhenTheTableIsRead() {
+        com.example.hms.repository.PatientVitalSignRepository vitals = withTheCoolDown();
+        under(News2Applicability.Status.OBSTETRIC, null);
+        // Everyone the level would page was already told by the pressure notice of this reading.
+        PatientVitalSign told = set().heartRateBpm(125).build();
+        Set<String> reached = service.escalate(told, service.assess(mother, HERE, told), mother.getId(), HERE,
+            "sf.recorder", null, Set.of("sf.recorder", "dr.attending", "sf.oncall", "dr.oncall"));
+        assertThat(reached).isEmpty();
+        assertThat(told.getMewsPagedTier()).isEqualTo("LOW_MEDIUM");
+
+        clearInvocations(vitals);
+        // A low score pages nobody: nothing to hold back, nothing read.
+        PatientVitalSign calm = set().build();
+        service.escalate(calm, service.assess(mother, HERE, calm), mother.getId(), HERE, "sf.recorder", null, Set.of());
+        assertThat(calm.getMewsPagedTier()).isNull();
+        // Switched off (0), every reading pages as before.
+        rules.getEscalation().setPageCoolDownMinutes(0);
+        PatientVitalSign again = set().heartRateBpm(125).build();
+        assertThat(service.escalate(again, service.assess(mother, HERE, again), mother.getId(), HERE, "sf.recorder",
+            null, Set.of())).isNotEmpty();
+        verifyNoInteractions(vitals);
     }
 }
