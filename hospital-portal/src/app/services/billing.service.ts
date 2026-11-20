@@ -195,6 +195,8 @@ export interface StaffPaymentRequest {
   mobileMoneyOperator?: MobileMoneyOperator;
   /** Billing plan PR 11 (QA D2430): one key per payment dialog; a retry with it records nothing twice. */
   clientRequestId?: string;
+  /** QA D2704: the cashier confirms a second same payment just recorded on this invoice (another tab). */
+  confirmDuplicate?: boolean;
 }
 
 export type PaymentStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'REVERSED';
@@ -339,6 +341,8 @@ export interface InvoiceRefund {
   cancelledByName?: string | null;
   cancelledAt?: string | null;
   cancelReason?: string | null;
+  /** QA D2702: set when this refund reverses that payment (asked, approved by another person, paid out). */
+  reversedPaymentId?: string | null;
 }
 
 export interface InvoiceRefundRequest {

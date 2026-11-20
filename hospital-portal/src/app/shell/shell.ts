@@ -1329,6 +1329,15 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/pharmacy/checkout',
       });
     }
+    // Billing-money plan PR 10 (QA r65 D2672): the pharmacist's till close; mirrors the /pharmacy/caisse guard.
+    if (this.hasAnyRole(['ROLE_PHARMACIST'])) {
+      items.push({
+        icon: 'savings',
+        label: 'Pharmacy Till Close',
+        translationKey: 'NAV.PHARMACY_TILL_CLOSE',
+        route: '/pharmacy/caisse',
+      });
+    }
     if (this.hasAnyRole(['ROLE_PHARMACIST', 'ROLE_SUPER_ADMIN'])) {
       items.push({
         icon: 'clinical_notes',

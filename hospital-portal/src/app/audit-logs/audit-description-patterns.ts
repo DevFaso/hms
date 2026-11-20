@@ -1848,4 +1848,24 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Instrument outbox message (\S+) \((\S+)\) viewed$/,
     params: ['message', 'type'],
   },
+  // QA D2702 (V309): a payment reversal asked for, then paid out through the refund approval (ids only).
+  {
+    key: 'AUDIT.DESC.REVERSAL_EVENT',
+    re: /^(Payment reversal requested|Payment reversed): refund (\S+) on invoice (\S+)$/,
+    params: ['what', 'refund', 'invoice'],
+    localise: { what: 'phrase:REVERSAL_EVENT' },
+  },
+  // Billing-money plan PR 10 (V309): a till closed, reopened or reviewed (ids only; a reason is in the details).
+  {
+    key: 'AUDIT.DESC.CASH_SESSION_EVENT',
+    re: /^(Cash session closed|Cash session reopened|Cash session reviewed): session (\S+)$/,
+    params: ['what', 'session'],
+    localise: { what: 'phrase:CASH_SESSION_EVENT' },
+  },
+  // QA D2703: a draft line with no price-list price priced by hand, or set to 0, with a reason (in the details).
+  {
+    key: 'AUDIT.DESC.INVOICE_LINE_PRICED_MANUALLY',
+    re: /^Draft line (\S+) of invoice (\S+) priced by hand$/,
+    params: ['line', 'invoice'],
+  },
 ];

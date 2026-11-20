@@ -677,4 +677,10 @@
       {{ item.linkLabel || item.linkKey }}
     }
   }
+  <!-- QA D2700: a lab test with no active version left prices nothing: say so on the row. -->
+  @if (item.linkRetired) {
+    <span class="link-retired" role="note" data-testid="price-link-retired">
+      {{ 'BILLING.PRICE_LIST.LINK_RETIRED' | translate }}
+    </span>
+  }
 </ng-template>

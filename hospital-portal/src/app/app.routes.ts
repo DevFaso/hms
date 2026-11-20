@@ -597,6 +597,33 @@ export const routes: Routes = [
           import('./billing/payers/payers.component').then((m) => m.PayersComponent),
       },
 
+      // Billing-money plan PR 10 (QA r65 D2326): every till of the hospital on a day, the day report and
+      // the journal. Hospital admin and accountant (the super-admin reads); mirrors CashSessionController.
+      {
+        path: 'billing/caisses',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_SUPER_ADMIN', 'ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+        },
+        loadComponent: () =>
+          import('./billing/cash-session/cash-supervisor.component').then(
+            (m) => m.CashSupervisorComponent,
+          ),
+      },
+
+      // Billing-money plan PR 10 (QA r65 D2672): the pharmacist's own till, counted and closed.
+      {
+        path: 'pharmacy/caisse',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_PHARMACIST'],
+        },
+        loadComponent: () =>
+          import('./billing/cash-session/pharmacy-cash.page').then(
+            (m) => m.PharmacyCashPageComponent,
+          ),
+      },
+
       // Billing
       {
         path: 'billing',

@@ -1,0 +1,94 @@
+.cash-session {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  min-width: 0;
+}
+
+.cash-session-head,
+.session-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.session-card {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color, #e5e7eb);
+  min-width: 0;
+}
+
+.session-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.status-badge {
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: var(--surface-muted, #f3f4f6);
+}
+
+.status-badge[data-status='CLOSED'],
+.status-badge[data-status='REVIEWED'] {
+  background: var(--success-bg, #dcfce7);
+}
+
+.cash-to-count {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.numeric {
+  text-align: right;
+}
+
+.gap {
+  color: var(--danger-text, #b42318);
+  font-weight: 600;
+}
+
+.count-input {
+  width: 7rem;
+  max-width: 100%;
+  text-align: right;
+}
+
+.explanation-input {
+  width: 100%;
+  min-width: 9rem;
+}
+
+.data-table {
+  width: 100%;
+  min-width: 0;
+  margin-top: 0.75rem;
+}
+
+tr.money-out td {
+  color: #9a3412;
+}
+
+.field-error {
+  color: var(--danger-text, #b42318);
+}
+
+.movements,
+.earlier-counts {
+  margin-top: 0.75rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}

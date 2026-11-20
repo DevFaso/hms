@@ -35,7 +35,7 @@ import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { CashClosingComponent } from './cash-closing/cash-closing.component';
+import { CashSessionComponent } from './cash-session/cash-session.component';
 import { InvoiceRefundsComponent } from './refunds/invoice-refunds.component';
 import { InvoicePayerSharesComponent } from './payer-shares/invoice-payer-shares.component';
 import { RefundQueueComponent } from './refunds/refund-queue.component';
@@ -92,6 +92,8 @@ const PAYMENT_FIELD_IDS = ['payment-amount', 'payment-operator', 'payment-refere
 const LINE_PRICE_REQUIRED_KEY = 'BILLING.LINE_UNIT_PRICE_REQUIRED';
 /** QA D1467: the field the server refuses an issue on while lines stand at 0 F CFA. */
 const UNPRICED_LINES_FIELD = 'confirmUnpricedLines';
+/** QA D2704: the field the server refuses a likely second payment on until the cashier confirms it. */
+const DUPLICATE_PAYMENT_FIELD = 'confirmDuplicate';
 
 /**
  * QA D1344 (round 29): what is wrong with a line quantity — blank is
@@ -120,7 +122,7 @@ export function lineQuantityMessageKey(qty: number | string | null | undefined):
     EnumLabelPipe,
     PatientPickerComponent,
     DialogA11yDirective,
-    CashClosingComponent,
+    CashSessionComponent,
     InvoiceRefundsComponent,
     InvoicePayerSharesComponent,
     RefundQueueComponent,
@@ -179,6 +181,12 @@ export class BillingComponent implements OnInit {
     'ROLE_RECEPTIONIST',
   ]);
   /** Billing-money plan PR 2: the /billing/tarifs RoleGuard's reader list (not ROLE_ADMIN). */
+  /** Billing-money plan PR 10: who sees every till of the day (CashSessionController.SUPERVISOR_READERS). */
+  readonly canSuperviseTills = this.roleContext.hasAnyActiveRole([
+    'ROLE_SUPER_ADMIN',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_ACCOUNTANT',
+  ]);
   readonly canReadPriceList = this.roleContext.hasAnyActiveRole([
     'ROLE_SUPER_ADMIN',
     'ROLE_HOSPITAL_ADMIN',
@@ -972,10 +980,22 @@ export class BillingComponent implements OnInit {
     return item.tariffUnitPrice !== null && item.tariffUnitPrice !== undefined;
   }
 
-  /** Whether the price now typed overrides the price list, so a reason is required. */
+  /** QA D2703: a line standing at 0 F CFA with no price-list price; pricing it by hand asks why. */
+  isUnpricedLine(item: InvoiceItemResponse): boolean {
+    return !this.isTariffLine(item) && !(Number(item.unitPrice) > 0);
+  }
+
+  /** The line's price changes only with a reason: a price-list line, or (QA D2703) an unpriced one. */
+  lineNeedsReason(item: InvoiceItemResponse): boolean {
+    return this.isTariffLine(item) || this.isUnpricedLine(item);
+  }
+
+  /** Whether the price now typed overrides the price list, or prices an unpriced line, so a reason is required. */
   overrideReasonRequired(item: InvoiceItemResponse): boolean {
     const price = this.editLineUnitPrice();
-    if (!this.isTariffLine(item) || price === null) return false;
+    if (price === null) return false;
+    if (this.isUnpricedLine(item)) return Number(price) > 0;
+    if (!this.isTariffLine(item)) return false;
     return (
       Number(price) !== Number(item.tariffUnitPrice) && Number(price) !== Number(item.unitPrice)
     );
@@ -1049,7 +1069,7 @@ export class BillingComponent implements OnInit {
         itemCategory: item.itemCategory as InvoiceItemCategory,
         quantity: this.editLineQuantity() ?? 1,
         unitPrice: this.editLineUnitPrice() ?? 0,
-        ...(this.isTariffLine(item)
+        ...(this.lineNeedsReason(item)
           ? { overrideReason: this.editLineOverrideReason().trim() || undefined }
           : {}),
       })
@@ -1218,9 +1238,11 @@ export class BillingComponent implements OnInit {
     op.subscribe({
       next: (updated) => {
         this.paymentActionBusy.set(false);
+        // QA D2702: a reversal is only asked for here; another manager approves it, then the money is handed
+        // back from the refunds section, and only then does the payment count as reversed.
         this.toast.success(
           this.translate.instant(
-            reversing ? 'BILLING.PAYMENT_REVERSED' : 'BILLING.PAYMENT_REJECTED',
+            reversing ? 'BILLING.PAYMENT_REVERSAL_REQUESTED' : 'BILLING.PAYMENT_REJECTED',
           ),
         );
         this.closeReversal();
@@ -1367,6 +1389,18 @@ export class BillingComponent implements OnInit {
     });
   }
 
+  /** QA D2704: the open dialog's « Solde dû » re-read from the server (another tab may have paid since). */
+  private refreshPaymentBalance(invoiceId: string): void {
+    this.billingService.getInvoice(invoiceId).subscribe({
+      next: (fresh) => {
+        if (this.paymentInv()?.id !== invoiceId) return;
+        this.paymentInv.set(fresh);
+        this.invoices.update((list) => list.map((i) => (i.id === fresh.id ? fresh : i)));
+      },
+      error: () => undefined,
+    });
+  }
+
   /** QA D1007: the server refuses these methods without a transaction reference. */
   paymentReferenceRequired(): boolean {
     return ['MOBILE_MONEY', 'BANK_TRANSFER'].includes(this.paymentMethod());
@@ -1377,7 +1411,7 @@ export class BillingComponent implements OnInit {
     this.paymentInv.set(null);
   }
 
-  recordPayment(): void {
+  recordPayment(confirmDuplicate = false): void {
     const inv = this.paymentInv();
     const amount = this.paymentAmount();
     if (!inv) return;
@@ -1403,6 +1437,7 @@ export class BillingComponent implements OnInit {
       reference: reference || undefined,
       ...(operator ? { mobileMoneyOperator: operator } : {}),
       ...(key ? { clientRequestId: key } : {}),
+      ...(confirmDuplicate ? { confirmDuplicate: true } : {}),
     };
     this.billingService
       .recordPayment(inv.id, payment)
@@ -1422,6 +1457,18 @@ export class BillingComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.paymentSaving.set(false);
+          // QA D2704: the same amount, method and reference were just recorded on this invoice (another tab,
+          // another dialog). Recorded again only on the cashier's word; the balance shown is re-read first.
+          const duplicate = serverFieldErrors(err).get(DUPLICATE_PAYMENT_FIELD);
+          if (duplicate) {
+            this.refreshPaymentBalance(inv.id);
+            void this.confirmService
+              .ask({ titleKey: 'BILLING.PAYMENT_DUPLICATE_CONFIRM', message: duplicate })
+              .then((confirmed) => {
+                if (confirmed) this.recordPayment(true);
+              });
+            return;
+          }
           if (paymentOutcomeUnknown(err)) {
             // QA D2430: no answer is not a failure. The dialog stays open with the same key, so pressing
             // again cannot take the money twice; the list below is re-read to show what the server holds.

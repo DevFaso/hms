@@ -336,6 +336,32 @@ describe('BillingComponent', () => {
     expect(toastSpy.success).toHaveBeenCalled();
   });
 
+  it('QA D2704: the same payment just recorded in another tab is asked about, then sent confirmed', fakeAsync(() => {
+    fixture.detectChanges();
+    const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+    billingSpy.getInvoice.and.returnValue(of(mockInvoice({ balanceDue: 2000, totalAmount: 3000 })));
+    billingSpy.recordPayment.and.returnValues(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            error: {
+              message: 'Un paiement de 1 000 F CFA a déjà été enregistré.',
+              fieldErrors: { confirmDuplicate: 'Un paiement de 1 000 F CFA a déjà été enregistré.' },
+            },
+          }),
+      ),
+      of(mockInvoice({ status: 'PAID' })),
+    );
+    component.openPayment(component.invoices()[0]);
+    component.recordPayment();
+    tick();
+    expect(ask).toHaveBeenCalled();
+    expect(billingSpy.getInvoice).toHaveBeenCalledWith('inv-1');
+    expect(billingSpy.recordPayment).toHaveBeenCalledTimes(2);
+    expect(billingSpy.recordPayment.calls.mostRecent().args[1].confirmDuplicate).toBeTrue();
+  }));
+
   it('QA D146: recordPayment sends the chosen method and reference', () => {
     fixture.detectChanges();
     billingSpy.recordPayment.and.returnValue(of(mockInvoice({ status: 'PARTIALLY_PAID' })));
@@ -1409,6 +1435,11 @@ describe('BillingComponent', () => {
       expect(component.editLineUnitPrice()).toBeNull();
       expect(component.canSaveLine()).toBeFalse();
       component.editLineUnitPrice.set(7500);
+      // QA D2703: pricing an unpriced line by hand asks why; nothing is sent without the reason.
+      expect(component.overrideReasonRequired(zeroLine)).toBeTrue();
+      component.saveLine(zeroLine);
+      expect(billingSpy.updateInvoiceItem).not.toHaveBeenCalled();
+      component.editLineOverrideReason.set('Radio du jour, pas de prix dans la grille');
       component.saveLine(zeroLine);
       expect(billingSpy.updateInvoiceItem).toHaveBeenCalledWith('line-0', {
         billingInvoiceId: 'inv-1',
@@ -1416,6 +1447,7 @@ describe('BillingComponent', () => {
         itemCategory: 'SERVICE',
         quantity: 1,
         unitPrice: 7500,
+        overrideReason: 'Radio du jour, pas de prix dans la grille',
       });
       expect(billingSpy.createInvoiceItem).not.toHaveBeenCalled();
       expect(billingSpy.deleteInvoiceItem).not.toHaveBeenCalled();

@@ -1,0 +1,263 @@
+<section class="cash-session" data-testid="cash-session" aria-labelledby="cash-session-title">
+  <div class="cash-session-head">
+    <h2 id="cash-session-title">{{ 'BILLING.CASH_SESSION.TITLE' | translate }}</h2>
+    <div class="page-actions">
+      <label for="cash-session-date">{{ 'BILLING.CASH_CLOSING.DATE' | translate }}</label>
+      <input
+        id="cash-session-date"
+        type="date"
+        [max]="maxDate"
+        [ngModel]="date()"
+        (ngModelChange)="pick($event)"
+      />
+    </div>
+  </div>
+
+  @if (loading()) {
+    <p class="field-hint" role="status">{{ 'BILLING.CASH_CLOSING.LOADING' | translate }}</p>
+  } @else if (failed()) {
+    <p class="field-hint" role="alert">{{ 'BILLING.CASH_CLOSING.LOAD_FAILED' | translate }}</p>
+  } @else if (sessions().length === 0) {
+    <p class="field-hint" data-testid="cash-session-empty">
+      {{ 'BILLING.CASH_SESSION.EMPTY' | translate }}
+    </p>
+  } @else {
+    @for (s of sessions(); track s.id) {
+      <article class="session-card" [attr.data-testid]="'cash-session-' + s.till">
+        <div class="session-head">
+          <h3>
+            {{ s.till | keyLabel: 'BILLING.CASH_SESSION.TILLS.' }}
+            <span class="status-badge" [attr.data-status]="s.status">
+              {{ s.status | keyLabel: 'BILLING.CASH_SESSION.STATUSES.' }}
+            </span>
+          </h3>
+          <!-- QA D2714: the cash in the drawer, never mixed with card or mobile money. -->
+          <p class="cash-to-count" data-testid="cash-to-count">
+            {{ 'BILLING.CASH_SESSION.CASH_TO_COUNT' | translate }}
+            <strong>{{ s.cashToCount | cfa }}</strong>
+          </p>
+        </div>
+        @if (s.status !== 'OPEN' && s.closedAt) {
+          <p class="field-hint" data-testid="cash-session-closed-by">
+            {{
+              'BILLING.CASH_SESSION.CLOSED_BY'
+                | translate
+                  : {
+                      date: (s.closedAt | serverTime | date: 'short'),
+                      name: s.closedByName || '—',
+                    }
+            }}
+          </p>
+        }
+        @if (s.reopenedAt) {
+          <p class="field-hint">
+            {{
+              'BILLING.CASH_SESSION.REOPENED_BY'
+                | translate
+                  : {
+                      date: (s.reopenedAt | serverTime | date: 'short'),
+                      name: s.reopenedByName || '—',
+                      reason: s.reopenReason || '—',
+                    }
+            }}
+          </p>
+        }
+
+        <div class="table-scroll">
+          <table class="data-table" [attr.data-testid]="'cash-session-methods-' + s.till">
+            <caption class="sr-only">
+              {{
+                'BILLING.CASH_SESSION.BY_METHOD' | translate
+              }}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">{{ 'BILLING.PAYMENT_METHOD' | translate }}</th>
+                <th scope="col" class="numeric">{{ 'BILLING.CASH_SESSION.IN' | translate }}</th>
+                <th scope="col" class="numeric">{{ 'BILLING.CASH_SESSION.OUT' | translate }}</th>
+                <th scope="col" class="numeric">
+                  {{ 'BILLING.CASH_SESSION.EXPECTED' | translate }}
+                </th>
+                <th scope="col" class="numeric">
+                  {{ 'BILLING.CASH_SESSION.COUNTED' | translate }}
+                </th>
+                <th scope="col" class="numeric">
+                  {{ 'BILLING.CASH_SESSION.DIFFERENCE' | translate }}
+                </th>
+                <th scope="col">{{ 'BILLING.CASH_SESSION.EXPLANATION' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (line of s.methods; track line.method + (line.operator ?? '')) {
+                <tr>
+                  <th scope="row">
+                    {{ line.method | keyLabel: 'BILLING.PAYMENT_METHODS.' }}
+                    @if (isMobileMoney(line.method)) {
+                      <span class="operator">
+                        — {{ operatorLabelKey(line.operator) | translate }}</span
+                      >
+                    }
+                  </th>
+                  <td class="numeric">{{ line.inAmount | cfa }}</td>
+                  <td class="numeric">
+                    {{ line.outAmount > 0 ? '−' : '' }}{{ line.outAmount | cfa }}
+                  </td>
+                  <td class="numeric" data-testid="cash-line-expected">
+                    {{ line.expected | cfa }}
+                  </td>
+                  @if (canClose(s)) {
+                    <td class="numeric">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        [id]="countId(s, line)"
+                        class="count-input"
+                        [attr.aria-label]="
+                          'BILLING.CASH_SESSION.COUNTED_FOR'
+                            | translate
+                              : { method: (line.method | keyLabel: 'BILLING.PAYMENT_METHODS.') }
+                        "
+                        [attr.data-testid]="
+                          'cash-count-' + line.method + '-' + (line.operator ?? '')
+                        "
+                        [ngModel]="countedOf(s, line)"
+                        (ngModelChange)="setCounted(s, line, $event)"
+                      />
+                    </td>
+                    <td class="numeric" [class.gap]="(differenceOf(s, line) ?? 0) !== 0">
+                      {{ differenceOf(s, line) === null ? '—' : (differenceOf(s, line) | cfa) }}
+                    </td>
+                    <td>
+                      @if ((differenceOf(s, line) ?? 0) !== 0) {
+                        <input
+                          type="text"
+                          maxlength="500"
+                          [id]="explanationId(s, line)"
+                          class="explanation-input"
+                          [attr.aria-label]="'BILLING.CASH_SESSION.EXPLANATION' | translate"
+                          [attr.data-testid]="'cash-explanation-' + line.method"
+                          [placeholder]="'BILLING.CASH_SESSION.EXPLANATION_PLACEHOLDER' | translate"
+                          [ngModel]="explanationOf(s, line)"
+                          (ngModelChange)="setExplanation(s, line, $event)"
+                        />
+                      }
+                    </td>
+                  } @else {
+                    @let count = lastCount(s, line);
+                    <td class="numeric">{{ count ? (count.counted | cfa) : '—' }}</td>
+                    <td class="numeric" [class.gap]="(count?.difference ?? 0) !== 0">
+                      {{ count ? (count.difference | cfa) : '—' }}
+                    </td>
+                    <td>{{ count?.explanation || '' }}</td>
+                  }
+                </tr>
+              }
+            </tbody>
+            <tfoot>
+              <tr>
+                <th scope="row">{{ 'BILLING.CASH_SESSION.TOTAL' | translate }}</th>
+                <td class="numeric">{{ s.totalIn | cfa }}</td>
+                <td class="numeric">{{ s.totalOut > 0 ? '−' : '' }}{{ s.totalOut | cfa }}</td>
+                <td class="numeric">{{ s.totalExpected | cfa }}</td>
+                <td></td>
+                <td class="numeric">
+                  {{
+                    s.totalDifference === null || s.totalDifference === undefined
+                      ? ''
+                      : (s.totalDifference | cfa)
+                  }}
+                </td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        @if (refusals()[s.id]) {
+          <p class="field-error" role="alert" data-testid="cash-session-refusal">
+            {{ refusals()[s.id] }}
+          </p>
+        }
+
+        <div class="page-actions">
+          @if (canClose(s)) {
+            <button
+              type="button"
+              class="btn-primary"
+              [disabled]="busy() === s.id"
+              [attr.data-testid]="'cash-session-close-' + s.till"
+              (click)="close(s)"
+            >
+              {{ 'BILLING.CASH_SESSION.CLOSE' | translate }}
+            </button>
+          }
+          <button type="button" class="btn-secondary" (click)="printSheet(s)">
+            <span class="material-symbols-outlined" aria-hidden="true">print</span>
+            {{ 'BILLING.CASH_SESSION.PRINT_SHEET' | translate }}
+          </button>
+        </div>
+        @if (s.status === 'OPEN' && s.mine) {
+          <p class="field-hint">{{ 'BILLING.CASH_SESSION.CLOSE_HINT' | translate }}</p>
+        }
+
+        @if (earlierCounts(s).length > 0) {
+          <details class="earlier-counts">
+            <summary>{{ 'BILLING.CASH_SESSION.EARLIER_COUNTS' | translate }}</summary>
+            <ul>
+              @for (c of earlierCounts(s); track c.closeRound + c.method + (c.operator ?? '')) {
+                <li>
+                  {{ 'BILLING.CASH_SESSION.ROUND' | translate: { round: c.closeRound } }} —
+                  {{ c.method | keyLabel: 'BILLING.PAYMENT_METHODS.' }} : {{ c.counted | cfa }} ({{
+                    c.difference | cfa
+                  }})
+                  @if (c.explanation) {
+                    — {{ c.explanation }}
+                  }
+                </li>
+              }
+            </ul>
+          </details>
+        }
+
+        <details class="movements">
+          <summary>
+            {{ 'BILLING.CASH_SESSION.MOVEMENTS' | translate: { count: s.movements.length } }}
+          </summary>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th scope="col">{{ 'BILLING.CASH_CLOSING.TIME' | translate }}</th>
+                  <th scope="col">{{ 'BILLING.CASH_SESSION.KIND' | translate }}</th>
+                  <th scope="col">{{ 'BILLING.CASH_CLOSING.DOCUMENT' | translate }}</th>
+                  <th scope="col">{{ 'PHARMACY_CHECKOUT.PATIENT' | translate }}</th>
+                  <th scope="col">{{ 'BILLING.PAYMENT_METHOD' | translate }}</th>
+                  <th scope="col">{{ 'BILLING.CASH_CLOSING.REFERENCE' | translate }}</th>
+                  <th scope="col" class="numeric">
+                    {{ 'BILLING.CASH_CLOSING.AMOUNT' | translate }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (m of s.movements; track m.id + m.kind) {
+                  <tr [class.money-out]="m.direction === 'OUT'">
+                    <td>{{ m.at | serverTime | date: 'shortTime' }}</td>
+                    <td>{{ m.kind | keyLabel: 'BILLING.CASH_SESSION.KINDS.' }}</td>
+                    <td>{{ m.document || '—' }}</td>
+                    <td>{{ m.patientName || '—' }}</td>
+                    <td>{{ methodKey(m) | keyLabel: 'BILLING.PAYMENT_METHODS.' }}</td>
+                    <td>{{ m.reference || '—' }}</td>
+                    <td class="numeric">
+                      {{ m.direction === 'OUT' ? '−' : '' }}{{ m.amount | cfa }}
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </article>
+    }
+  }
+</section>

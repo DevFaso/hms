@@ -2089,7 +2089,10 @@
       "IMAGING_PORTAL_IMAGE_VIEWED": "Image {{image}} of imaging order {{order}} viewed on the patient portal",
       "IMAGING_IMAGE_WITHDRAWN": "Image {{image}} withdrawn from imaging order {{order}}",
       "IMAGING_IMAGE_CAPTION_CORRECTED": "Caption of image {{image}} corrected on imaging order {{order}}",
-      "INSTRUMENT_OUTBOX_VIEWED": "Instrument outbox message {{message}} ({{type}}) viewed"
+      "INSTRUMENT_OUTBOX_VIEWED": "Instrument outbox message {{message}} ({{type}}) viewed",
+      "REVERSAL_EVENT": "{{what}}: reversal {{refund}} on invoice {{invoice}}",
+      "CASH_SESSION_EVENT": "{{what}}: till {{session}}",
+      "INVOICE_LINE_PRICED_MANUALLY": "Draft line {{line}} of invoice {{invoice}} priced by hand"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -2394,6 +2397,15 @@
       "PAYER_SHARE_CLAIMED": "Insurer share claimed",
       "PAYER_SHARE_PAID": "Insurer share paid by the insurer",
       "PAYER_SHARE_REJECTED": "Insurer share rejected by the insurer"
+    },
+    "REVERSAL_EVENT": {
+      "PAYMENT_REVERSAL_REQUESTED": "Payment reversal requested",
+      "PAYMENT_REVERSED": "Payment reversed (money handed back)"
+    },
+    "CASH_SESSION_EVENT": {
+      "CASH_SESSION_CLOSED": "Till closed",
+      "CASH_SESSION_REOPENED": "Till reopened",
+      "CASH_SESSION_REVIEWED": "Till reviewed"
     }
   },
   "BILLING": {
@@ -2525,7 +2537,7 @@
     "RECEIPT": "Receipt",
     "REVERSAL_REASON": "Reason",
     "REVERSAL_REASON_REQUIRED": "A reason is required.",
-    "REVERSAL_NOTE": "The payment stays in the ledger as reversed and the amount paid and the balance are recalculated. Refund the patient by the same means.",
+    "REVERSAL_NOTE": "A reversal is a request: another manager (administrator or accountant) must approve it, then the money is handed back from « Refunds ». The payment stays counted until it is handed back.",
     "PAYMENT_CONFIRMED": "Payment confirmed.",
     "PAYMENT_REVERSED": "Payment reversed.",
     "PAYMENT_REJECTED": "Payment rejected.",
@@ -2699,7 +2711,8 @@
         "WHOLE_ROW": "Whole row",
         "TOO_LARGE": "The file is larger than 1 MB. Split the price list into several files.",
         "CONCURRENT_ERROR": "Someone else has just created this code (or link) in the price list: nothing was applied. Check the file again."
-      }
+      },
+      "LINK_RETIRED": "This test has no active version any more: this price no longer applies. Link it to the current test."
     },
     "REFUNDS": {
       "TITLE": "Refund requests",
@@ -2750,7 +2763,8 @@
       "INVOICE": "Invoice",
       "REFERENCE_AT_HANDOVER": "The transaction reference is asked for at hand-over, when the money is sent.",
       "HAND_OVER_TITLE": "Hand over the refund of {{amount}}",
-      "RECEIPT_NUMBER": "Receipt no. {{number}}"
+      "RECEIPT_NUMBER": "Receipt no. {{number}}",
+      "REVERSAL_TAG": "Payment reversal"
     },
     "PAYERS": {
       "TITLE": "Payers",
@@ -2856,7 +2870,78 @@
       "ESTIMATE_NOTE": "Estimate from the patient's plan: the insurer's share is fixed when the invoice is issued."
     },
     "LINE_SHARES": "Insurer: {{payer}} · Patient: {{patient}}",
-    "LINE_SHARES_ESTIMATED": "Estimate — Insurer: {{payer}} · Patient: {{patient}}"
+    "LINE_SHARES_ESTIMATED": "Estimate — Insurer: {{payer}} · Patient: {{patient}}",
+    "PAYMENT_REVERSAL_REQUESTED": "Reversal requested: another manager must approve it, then hand the money back from « Refunds ». The payment stays counted until then.",
+    "PAYMENT_DUPLICATE_CONFIRM": "Record a second identical payment?",
+    "UNPRICED_LINE_HINT": "Line with no price-list price: say why you price it by hand.",
+    "CASH_SESSION": {
+      "TITLE": "My till today",
+      "EMPTY": "No money taken on this day: your till opens with the first payment you take.",
+      "TILLS": {
+        "BILLING": "Billing till",
+        "RECEPTION": "Reception till",
+        "PHARMACY": "Pharmacy till"
+      },
+      "STATUSES": {
+        "OPEN": "Open",
+        "CLOSED": "Closed",
+        "REVIEWED": "Reviewed"
+      },
+      "CASH_TO_COUNT": "Cash to count:",
+      "CLOSED_BY": "Till closed on {{ date }} by {{ name }}",
+      "REOPENED_BY": "Reopened on {{ date }} by {{ name }} — reason: {{ reason }}",
+      "BY_METHOD": "Expected, counted and difference by payment method",
+      "IN": "In",
+      "OUT": "Out",
+      "EXPECTED": "Expected",
+      "COUNTED": "Counted",
+      "COUNTED_FOR": "Amount counted — {{ method }}",
+      "DIFFERENCE": "Difference",
+      "EXPLANATION": "Explanation of the difference",
+      "EXPLANATION_PLACEHOLDER": "Why does the count differ?",
+      "TOTAL": "Total",
+      "CLOSE": "Close the till",
+      "PRINT_SHEET": "Print the till sheet",
+      "CLOSE_HINT": "Count the cash in the drawer, read the Orange Money and Moov Money balances and the card slips, then close. A closed till takes no more payments.",
+      "EARLIER_COUNTS": "Counts of earlier closes",
+      "ROUND": "Close {{ round }}",
+      "MOVEMENTS": "Till movements ({{ count }})",
+      "KIND": "Type",
+      "KINDS": {
+        "PAYMENT": "Invoice payment",
+        "COPAY": "Copay (reception)",
+        "PHARMACY_PAYMENT": "Dispense payment",
+        "COUNTER_SALE": "Counter sale",
+        "REFUND": "Refund handed back",
+        "REVERSAL": "Reversal handed back"
+      },
+      "CLOSED_TOAST": "Till closed.",
+      "CLOSE_FAILED": "The till could not be closed.",
+      "COUNT_REQUIRED": "Enter the amount counted for {{ method }}.",
+      "COUNT_WHOLE": "The amount counted for {{ method }} must be a whole number of francs, 0 or more.",
+      "EXPLANATION_REQUIRED": "Explain the difference for {{ method }}.",
+      "SUPERVISOR_TITLE": "Tills of the day",
+      "SUPERVISOR_SUBTITLE": "Every till of the hospital: billing, reception and pharmacy. Tills still open are flagged.",
+      "SUPERVISOR_EMPTY": "No till took money on this day.",
+      "SUPERVISOR_LINK": "Tills of the day",
+      "DAY_REPORT": "Day report (PDF)",
+      "JOURNAL": "Journal (CSV)",
+      "TILL": "Till",
+      "CASHIER": "Cashier",
+      "DETAILS": "Details",
+      "REOPEN": "Reopen",
+      "REVIEW": "Mark reviewed",
+      "REOPEN_REASON": "Reason for reopening",
+      "REVIEW_NOTE": "Review note (optional)",
+      "REOPEN_REASON_REQUIRED": "A reason is required to reopen a till.",
+      "REOPENED_TOAST": "Till reopened.",
+      "REVIEWED_TOAST": "Till marked reviewed.",
+      "ACTION_FAILED": "The action on the till could not be saved.",
+      "EXPORT_FAILED": "The journal could not be downloaded.",
+      "EXPLANATION_VALUE": "Explanation of the difference: {{ text }}",
+      "REVIEW_NOTE_VALUE": "Review note: {{ text }}",
+      "PHARMACY_LINK": "Till close"
+    }
   },
   "CHAT": {
     "ACCESS_DENIED": "You do not have permission to access chat.",
@@ -5139,7 +5224,8 @@
     "PRICE_LIST": "Price list",
     "PATIENT_NOTIFICATIONS": "Patient notifications",
     "PAYERS": "Payers",
-    "MY_IMAGING": "Imaging"
+    "MY_IMAGING": "Imaging",
+    "PHARMACY_TILL_CLOSE": "Pharmacy till close"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Critical alert",
@@ -7514,7 +7600,12 @@
         "MFA_RESET": "Two-step verification reset",
         "PATIENT_CHANNEL_PREFERENCES_UPDATED": "Patient SMS / e-mail choices changed",
         "IMAGING_IMAGE_WITHDRAWN": "Imaging image withdrawn",
-        "IMAGING_IMAGE_CAPTION_UPDATED": "Imaging image caption corrected"
+        "IMAGING_IMAGE_CAPTION_UPDATED": "Imaging image caption corrected",
+        "PAYMENT_REVERSAL_REQUESTED": "Payment reversal requested",
+        "CASH_SESSION_CLOSED": "Till closed",
+        "CASH_SESSION_REOPENED": "Till reopened",
+        "CASH_SESSION_REVIEWED": "Till reviewed",
+        "INVOICE_LINE_PRICED_MANUALLY": "Line priced by hand"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
