@@ -379,4 +379,66 @@ class PharmacyRefundServiceTest {
         assertThat(dto.getDispenseId()).isEqualTo(dispense.getId());
         assertThat(dto.getAmount()).isEqualByComparingTo("1000");
     }
+
+    @Test
+    @DisplayName("only the requester or an approver withdraws; a decided request is not decided again")
+    void whoMayCancelAndDecideOnce() {
+        actAs(pharmacist);
+        PharmacyRefund others = stored(PharmacyRefundStatus.REQUESTED, UUID.randomUUID());
+        UUID othersId = others.getId();
+        PharmacyRefundReasonRequestDTO reason = new PharmacyRefundReasonRequestDTO("erreur");
+        assertThatThrownBy(() -> service.cancel(othersId, reason)).isInstanceOf(ClientSafeAccessDeniedException.class);
+
+        actAs(accountant);
+        PharmacyRefund approved = stored(PharmacyRefundStatus.APPROVED, pharmacist);
+        UUID approvedId = approved.getId();
+        assertThatThrownBy(() -> service.approve(approvedId)).isInstanceOf(ConflictException.class);
+        service.cancel(approvedId, reason);
+        assertThat(approved.getStatus()).isEqualTo(PharmacyRefundStatus.CANCELLED);
+    }
+
+    @Test
+    @DisplayName("a mobile-money request checks its reference once across the tills; a return of another pharmacy's sale is refused")
+    void mobileMoneyRequestAndForeignSale() {
+        actAs(pharmacist);
+        PharmacyRefundRequestDTO request = body();
+        request.setMethod(PharmacyPaymentMethod.MOBILE_MONEY);
+        request.setMobileMoneyOperator(com.example.hms.enums.MobileMoneyOperator.MOOV_MONEY);
+        request.setReference("MM-RB-9");
+
+        assertThat(service.request(request).getMobileMoneyOperator()).isEqualTo("MOOV_MONEY");
+        verify(referenceRegistry).requireUnused(hospitalId, "MM-RB-9", "reference");
+
+        Pharmacy other = Pharmacy.builder().hospital(sale.getHospital()).name("Autre").build();
+        other.setId(UUID.randomUUID());
+        sale.setPharmacy(other);
+        when(refundRepository.existsByReturnTransactionIdAndStatusIn(eq(ret.getId()), any())).thenReturn(false);
+        PharmacyRefundRequestDTO again = body();
+        assertThatThrownBy(() -> service.request(again))
+                .isInstanceOf(FieldBusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.refund.returnUnreferenced");
+    }
+
+    @Test
+    @DisplayName("a return that names nothing, or a dispense nobody paid, has nothing to refund")
+    void nothingToRefund() {
+        actAs(pharmacist);
+        ret.setReferenceId(null);
+        PharmacyRefundRequestDTO request = body();
+        assertThatThrownBy(() -> service.request(request))
+                .extracting("messageKey").isEqualTo("pharmacy.refund.returnUnreferenced");
+
+        com.example.hms.model.pharmacy.Dispense dispense = com.example.hms.model.pharmacy.Dispense.builder()
+                .pharmacy(pharmacy).medicationCatalogItem(lot.getInventoryItem().getMedicationCatalogItem()).build();
+        dispense.setId(UUID.randomUUID());
+        ret.setReferenceId(dispense.getId());
+        when(dispenseRepository.findLockedById(dispense.getId())).thenReturn(Optional.of(dispense));
+        when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(any(), any()))
+                .thenReturn(Optional.of(lot.getInventoryItem()));
+        when(paymentRepository.sumPostedForDispense(dispense.getId())).thenReturn(BigDecimal.ZERO);
+        when(refundRepository.sumForDispense(eq(dispense.getId()), any())).thenReturn(BigDecimal.ZERO);
+        PharmacyRefundRequestDTO unpaid = body();
+        assertThatThrownBy(() -> service.request(unpaid))
+                .extracting("messageKey").isEqualTo("pharmacy.refund.nothingPaid");
+    }
 }

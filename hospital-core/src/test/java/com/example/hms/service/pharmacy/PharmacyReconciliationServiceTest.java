@@ -330,4 +330,48 @@ class PharmacyReconciliationServiceTest {
         });
         assertThat(service.dayOf(DAY)).isEqualTo(DAY);
     }
+
+    @Test
+    @DisplayName("a sale line with no lot is counted on its item; the export lists money, stock and differences")
+    void unlottedSaleAndFullExport() {
+        sale("3", PharmacyPaymentMethod.CASH);
+        sales.get(0).getLines().get(0).setStockLot(null);
+        movements.clear();
+        fill("2", true, false);
+        refund("250", "1");
+
+        PharmacyReconciliationDTO day = service.daily(pharmacy.getId(), DAY);
+        assertThat(day.getStock()).extracting(PharmacyReconciliationDTO.StockLine::getLotNumber)
+                .contains((String) null, "LOT-A-R65-1");
+        assertThat(day.getDifferences()).extracting(PharmacyReconciliationDTO.Difference::getType)
+                .contains("SALE_STOCK_MISMATCH", "DISPENSE_STOCK_MISMATCH");
+
+        String csv = new String(service.exportCsv(pharmacy.getId(), DAY), StandardCharsets.UTF_8);
+        assertThat(csv).startsWith("﻿").contains("ventes_CASH", "paiements_CASH", "remboursements",
+                "SALE_STOCK_MISMATCH", "LOT-A-R65-1", "oui");
+    }
+
+    @Test
+    @DisplayName("a controlled item kept without lots compares the register with its stock on hand")
+    void controlledWithoutLots() {
+        when(stockLotRepository.existsByInventoryItemId(morphine.getId())).thenReturn(false);
+        morphine.setQuantityOnHand(new BigDecimal("18"));
+
+        assertThat(service.daily(pharmacy.getId(), DAY).getControlled()).singleElement()
+                .satisfies(c -> assertThat(c.isMatches()).isTrue());
+    }
+
+    @Test
+    @DisplayName("a fill with no price, or fully covered by its claim, owes nothing at hand-over")
+    void unpricedOrCoveredFillsOweNothing() {
+        Dispense covered = fill("4", false, true);
+        when(claimRepository.sumLiveForDispense(covered.getId())).thenReturn(new BigDecimal("1000"));
+        Dispense unpriced = fill("1", false, true);
+        unpriced.setMedicationCatalogItem(null);
+
+        PharmacyReconciliationDTO day = service.daily(pharmacy.getId(), DAY);
+
+        assertThat(day.getDifferences()).isEmpty();
+        assertThat(day.getMoney().getDispenseCharges()).isEqualByComparingTo("1000");
+    }
 }

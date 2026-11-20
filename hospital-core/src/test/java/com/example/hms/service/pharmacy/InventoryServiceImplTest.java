@@ -1378,4 +1378,108 @@ class InventoryServiceImplTest {
                 .extracting("messageKey").isEqualTo("pharmacy.pack.alreadySet");
         verify(stockLotRepository, never()).scaleQuantitiesOfItem(any(), any(), any());
     }
+
+    /* r65-D2674-receipt-in-packs */
+    private StockLotRequestDTO packsReceipt(String packs, String costPerPack, LocalDate expiry) {
+        return StockLotRequestDTO.builder()
+                .inventoryItemId(inventoryItemId)
+                .lotNumber("LOT-PACKS")
+                .expiryDate(expiry)
+                .initialQuantity(new BigDecimal(packs))
+                .remainingQuantity(new BigDecimal(packs))
+                .unitCost(new BigDecimal(costPerPack))
+                .receivedDate(LocalDate.now())
+                .inPacks(true)
+                .build();
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("QA D2674: a receipt in packs is converted to units (quantities ×10, cost ÷10) before it is checked")
+    void receiptInPacksIsConvertedToUnits() {
+        inventoryItem.setUnitsPerPack(10);
+        inventoryItem.setUnit("comprimé");
+        StockLotRequestDTO dto = packsReceipt("40", "2500", LocalDate.now().minusDays(1));
+        when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+        stubHospitalScope();
+
+        // An expired lot is refused by the receipt's own checks, after the conversion.
+        assertThatThrownBy(() -> service.receiveStock(dto)).isInstanceOf(BusinessException.class);
+
+        assertThat(dto.getInitialQuantity()).isEqualByComparingTo("400");
+        assertThat(dto.getRemainingQuantity()).isEqualByComparingTo("400");
+        assertThat(dto.getUnitCost()).isEqualByComparingTo("250");
+        assertThat(dto.getInPacks()).isFalse();
+        verify(stockLotRepository, never()).save(any());
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("QA D2674: a receipt in packs of an item with no pack size is refused")
+    void receiptInPacksNeedsAPackSize() {
+        StockLotRequestDTO dto = packsReceipt("40", "2500", LocalDate.now().plusYears(1));
+        when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+        stubHospitalScope();
+
+        assertThatThrownBy(() -> service.receiveStock(dto))
+                .extracting("messageKey").isEqualTo("pharmacy.pack.noPackSize");
+    }
+
+    private void stubPackSizeLock() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+        when(inventoryItemRepository.lockById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("QA D2674: the pack size names every missing field at once, and refuses a measured unit")
+    void packSizeIsChecked() {
+        stubPackSizeLock();
+        com.example.hms.payload.dto.pharmacy.PackSizeRequestDTO empty =
+                new com.example.hms.payload.dto.pharmacy.PackSizeRequestDTO();
+        assertThatThrownBy(() -> service.setPackSize(inventoryItemId, empty))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+
+        com.example.hms.payload.dto.pharmacy.PackSizeRequestDTO measured = com.example.hms.payload.dto.pharmacy
+                .PackSizeRequestDTO.builder().unitsPerPack(10).unit("ml").reason("flacons").build();
+        assertThatThrownBy(() -> service.setPackSize(inventoryItemId, measured))
+                .extracting("messageKey").isEqualTo("pharmacy.pack.unitMeasured");
+        verify(stockLotRepository, never()).scaleQuantitiesOfItem(any(), any(), any());
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("QA D2674: a controlled item keeps its register as received: no pack size")
+    void packSizeRefusedForAControlledItem() {
+        com.example.hms.model.medication.MedicationCatalogItem morphine =
+                new com.example.hms.model.medication.MedicationCatalogItem();
+        morphine.setId(UUID.randomUUID());
+        morphine.setControlled(true);
+        inventoryItem.setMedicationCatalogItem(morphine);
+        stubPackSizeLock();
+        com.example.hms.payload.dto.pharmacy.PackSizeRequestDTO dto = com.example.hms.payload.dto.pharmacy
+                .PackSizeRequestDTO.builder().unitsPerPack(10).unit("ampoule").reason("x").build();
+
+        assertThatThrownBy(() -> service.setPackSize(inventoryItemId, dto))
+                .extracting("messageKey").isEqualTo("pharmacy.pack.controlledRefused");
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("QA D2674: an item with no lots converts its stock on hand with one item-level ledger row")
+    void packSizeOfAnItemWithoutLots() {
+        inventoryItem.setUnit(null);
+        stubPackSizeLock();
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(stockLotRepository.findAllByInventoryItemIdOrderByExpiryDateAsc(inventoryItemId))
+                .thenReturn(java.util.List.of());
+        when(inventoryItemRepository.save(any(InventoryItem.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.setPackSize(inventoryItemId, com.example.hms.payload.dto.pharmacy.PackSizeRequestDTO.builder()
+                .unitsPerPack(12).unit("gélule").reason("boîtes de 12").build());
+
+        org.mockito.ArgumentCaptor<com.example.hms.model.pharmacy.StockTransaction> tx =
+                org.mockito.ArgumentCaptor.forClass(com.example.hms.model.pharmacy.StockTransaction.class);
+        verify(stockTransactionRepository).save(tx.capture());
+        assertThat(tx.getValue().getStockLot()).isNull();
+        assertThat(tx.getValue().getQuantity()).isEqualByComparingTo("1100");
+        assertThat(inventoryItem.getPackUnit()).isEqualTo("pack");
+    }
 }
