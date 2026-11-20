@@ -347,7 +347,9 @@ describe('BillingComponent', () => {
             status: 400,
             error: {
               message: 'Un paiement de 1 000 F CFA a déjà été enregistré.',
-              fieldErrors: { confirmDuplicate: 'Un paiement de 1 000 F CFA a déjà été enregistré.' },
+              fieldErrors: {
+                confirmDuplicate: 'Un paiement de 1 000 F CFA a déjà été enregistré.',
+              },
             },
           }),
       ),

@@ -565,7 +565,10 @@
                                changing its price asks why; the reason is kept with the line. -->
                           @if (lineNeedsReason(it)) {
                             @if (isTariffLine(it)) {
-                              <div class="cell-secondary" [attr.data-testid]="'line-tariff-' + it.id">
+                              <div
+                                class="cell-secondary"
+                                [attr.data-testid]="'line-tariff-' + it.id"
+                              >
                                 {{
                                   'BILLING.TARIFF_PRICE_VALUE'
                                     | translate: { amount: formatCurrency(it.tariffUnitPrice ?? 0) }
@@ -573,7 +576,10 @@
                               </div>
                             } @else {
                               <!-- QA D2703: an unpriced line priced by hand says why; the day report lists it. -->
-                              <div class="cell-secondary" [attr.data-testid]="'line-unpriced-' + it.id">
+                              <div
+                                class="cell-secondary"
+                                [attr.data-testid]="'line-unpriced-' + it.id"
+                              >
                                 {{ 'BILLING.UNPRICED_LINE_HINT' | translate }}
                               </div>
                             }
@@ -650,7 +656,10 @@
                               }}
                             </div>
                           } @else if (it.overrideReason) {
-                            <div class="cell-secondary" [attr.data-testid]="'line-priced-reason-' + it.id">
+                            <div
+                              class="cell-secondary"
+                              [attr.data-testid]="'line-priced-reason-' + it.id"
+                            >
                               {{
                                 'BILLING.OVERRIDE_REASON_VALUE'
                                   | translate: { reason: it.overrideReason }
