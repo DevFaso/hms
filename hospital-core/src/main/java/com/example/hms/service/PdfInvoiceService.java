@@ -533,7 +533,6 @@ public class PdfInvoiceService {
         }
     }
 
-    /** A cursor over pages: moves down, and opens a new page when the room runs out. */
     /**
      * Billing-money plan PR 10 (QA D2325, D2326, D2714): one cashier's sheet or the hospital's day report. Per till:
      * money in, money out, expected, counted and difference per method; the cash to count; the explanations; then
@@ -698,6 +697,7 @@ public class PdfInvoiceService {
         }
     }
 
+    /** A cursor over pages: moves down, and opens a new page when the room runs out. */
     private static final class Writer {
         /** Line height of a wrapped 10-point line. */
         private static final float LINE = 12f;

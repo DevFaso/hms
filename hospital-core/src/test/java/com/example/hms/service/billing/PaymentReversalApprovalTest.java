@@ -212,9 +212,10 @@ class PaymentReversalApprovalTest {
         actAs(ACCOUNTANT_A);
         InvoiceRefundDTO own = service.requestReversal(invoice.getId(), payment.getId(), "Erreur de saisie");
         UUID invoiceId = invoice.getId();
-        assertThatThrownBy(() -> service.approve(invoiceId, own.getId())).isInstanceOf(ConflictException.class);
+        UUID ownId = own.getId();
+        assertThatThrownBy(() -> service.approve(invoiceId, ownId)).isInstanceOf(ConflictException.class);
         actAs(BILLING_2_A);
-        assertThatThrownBy(() -> service.approve(invoiceId, own.getId()))
+        assertThatThrownBy(() -> service.approve(invoiceId, ownId))
             .isInstanceOf(ClientSafeAccessDeniedException.class);
     }
 
@@ -223,8 +224,9 @@ class PaymentReversalApprovalTest {
     void payoutReversesThePaymentAndCountsMoneyOut() {
         InvoiceRefundDTO reversal = asked();
         UUID invoiceId = invoice.getId();
+        UUID reversalId = reversal.getId();
         actAs(BILLING_A);
-        assertThatThrownBy(() -> service.pay(invoiceId, reversal.getId(), null)).isInstanceOf(ConflictException.class);
+        assertThatThrownBy(() -> service.pay(invoiceId, reversalId, null)).isInstanceOf(ConflictException.class);
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CONFIRMED);
 
         actAs(ACCOUNTANT_A);
@@ -249,11 +251,12 @@ class PaymentReversalApprovalTest {
     void reversedOnce() {
         InvoiceRefundDTO reversal = asked();
         UUID invoiceId = invoice.getId();
+        UUID reversalId = reversal.getId();
         actAs(ACCOUNTANT_A);
         service.approve(invoiceId, reversal.getId());
         payment.setStatus(PaymentStatus.REVERSED);
         actAs(BILLING_A);
-        assertThatThrownBy(() -> service.pay(invoiceId, reversal.getId(), null))
+        assertThatThrownBy(() -> service.pay(invoiceId, reversalId, null))
             .isInstanceOf(ConflictException.class);
         assertThat(invoice.getAmountPaid()).isEqualByComparingTo("2000");
     }
@@ -297,5 +300,42 @@ class PaymentReversalApprovalTest {
         List<AuditEventType> types = events.getAllValues().stream().map(AuditEventRequestDTO::getEventType).toList();
         assertThat(types).containsSubsequence(AuditEventType.PAYMENT_REVERSAL_REQUESTED,
             AuditEventType.REFUND_APPROVED, AuditEventType.PAYMENT_REVERSED, AuditEventType.REFUND_ISSUED);
+    }
+
+    @Test
+    @DisplayName("an approval is refused once the payment is no longer counted; the requester may withdraw it")
+    void approvalChecksThePaymentAndTheRequesterMayWithdraw() {
+        InvoiceRefundDTO reversal = asked();
+        UUID invoiceId = invoice.getId();
+        UUID reversalId = reversal.getId();
+        payment.setStatus(PaymentStatus.REVERSED);
+        actAs(ACCOUNTANT_A);
+        assertThatThrownBy(() -> service.approve(invoiceId, reversalId)).isInstanceOf(ConflictException.class);
+        payment.setStatus(PaymentStatus.CONFIRMED);
+        when(refunds.markCancelled(any(), any(), any(), any(), any(), any())).thenAnswer(call -> {
+            InvoiceRefund r = ledger.get(call.<UUID>getArgument(0));
+            r.setStatus(InvoiceRefundStatus.CANCELLED);
+            return 1;
+        });
+        when(roles.canRequestRefund(BILLING_A, HOSPITAL_A)).thenReturn(true);
+        actAs(BILLING_A);
+        InvoiceRefundDTO withdrawn = service.cancel(invoiceId, reversalId,
+            com.example.hms.payload.dto.billing.InvoiceRefundReasonRequestDTO.builder().reason("Erreur").build());
+        assertThat(withdrawn.getStatus()).isEqualTo("CANCELLED");
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CONFIRMED);
+        // Withdrawn, the payment can be asked about again.
+        assertThat(service.requestReversal(invoiceId, payment.getId(), "Saisie en double").getStatus())
+            .isEqualTo("REQUESTED");
+    }
+
+    @Test
+    @DisplayName("a reversal handed back by a receptionist leaves the reception till")
+    void receptionPayoutLeavesTheReceptionTill() {
+        InvoiceRefundDTO reversal = asked();
+        actAs(ACCOUNTANT_A);
+        service.approve(invoice.getId(), reversal.getId());
+        actAs(RECEPTION_A);
+        service.pay(invoice.getId(), reversal.getId(), null);
+        verify(sessions).stamp(CashTill.RECEPTION, HOSPITAL_A, RECEPTION_A);
     }
 }

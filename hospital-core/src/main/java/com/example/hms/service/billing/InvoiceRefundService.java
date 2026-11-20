@@ -379,9 +379,10 @@ public class InvoiceRefundService {
         }
         Handover handover = handover(refund, body, actor.hospitalId());
         // Billing plan PR 10: the money leaves the payer's till today; a closed till refuses it (nothing written).
-        UUID cashSessionId = cashSessions == null ? null : cashSessions.stamp(
-            roleValidator.paysAtBillingDesk(actor.userId(), actor.hospitalId()) ? CashTill.BILLING : CashTill.RECEPTION,
-            actor.hospitalId(), actor.userId());
+        CashTill till = roleValidator.paysAtBillingDesk(actor.userId(), actor.hospitalId())
+            ? CashTill.BILLING : CashTill.RECEPTION;
+        UUID cashSessionId = cashSessions == null ? null
+            : cashSessions.stamp(till, actor.hospitalId(), actor.userId());
         // PR 8 review: the receipt number is assigned once, here, under the invoice lock, in payout order.
         int receiptSeq = refundRepository.maxReceiptSeq(invoice.getId()) + 1;
         String receiptNumber = invoice.getInvoiceNumber() + "-RB" + receiptSeq;

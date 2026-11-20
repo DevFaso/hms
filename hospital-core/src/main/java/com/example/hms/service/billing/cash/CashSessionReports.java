@@ -49,7 +49,22 @@ public class CashSessionReports {
     }
 
     /** Bytes and the file name they are served under (without its extension). */
-    public record Rendered(byte[] content, String fileName) {
+    public static final class Rendered {
+        private final byte[] content;
+        private final String fileName;
+
+        public Rendered(byte[] content, String fileName) {
+            this.content = content.clone();
+            this.fileName = fileName;
+        }
+
+        public byte[] content() {
+            return content.clone();
+        }
+
+        public String fileName() {
+            return fileName;
+        }
     }
 
     @Transactional(readOnly = true)
@@ -63,7 +78,7 @@ public class CashSessionReports {
     @Transactional(readOnly = true)
     public Rendered dayReportPdf(LocalDate date, Locale locale) {
         CashSessionService.DayReport day = sessions.dayReport(date);
-        List<PricedLine> priced = pricedByHand(day.hospitalId(), day.day(), effective(locale));
+        List<PricedLine> priced = pricedByHand(day.hospitalId(), day.day());
         byte[] pdf = pdfInvoiceService.generateCashReportPdf(new Report(hospitalName(day.hospitalId()), day.day(),
             true, day.sessions(), priced), effective(locale));
         return new Rendered(pdf, "rapport-caisses-" + day.day());
@@ -107,7 +122,7 @@ public class CashSessionReports {
         return "\"" + text.replace("\"", "\"\"") + "\"";
     }
 
-    private List<PricedLine> pricedByHand(UUID hospitalId, LocalDate day, Locale locale) {
+    private List<PricedLine> pricedByHand(UUID hospitalId, LocalDate day) {
         List<PricedLine> lines = new ArrayList<>();
         List<InvoiceItem> rows = invoiceItemRepository.findPricedByHandBetween(hospitalId, day.atStartOfDay(),
             day.plusDays(1).atStartOfDay());

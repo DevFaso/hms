@@ -84,7 +84,9 @@ public class CashSessionService {
     static final int TEXT_MAX = 500;
     static final String IN = "IN";
     static final String OUT = "OUT";
+    private static final String MOBILE_MONEY = "MOBILE_MONEY";
     private static final String FIELD_COUNTS = "counts";
+    private static final String FIELD_COUNTED = "counted";
     private static final String FIELD_NOTE = "note";
 
     private final CashSessionRepository sessionRepository;
@@ -320,7 +322,7 @@ public class CashSessionService {
     /** The key of a method line: the method, and the operator for mobile money. */
     static String key(String method, String operator) {
         String m = method == null ? "" : method.trim().toUpperCase(Locale.ROOT);
-        String o = operator == null || operator.isBlank() || !"MOBILE_MONEY".equals(m) ? ""
+        String o = operator == null || operator.isBlank() || !MOBILE_MONEY.equals(m) ? ""
             : operator.trim().toUpperCase(Locale.ROOT);
         return m + "|" + o;
     }
@@ -351,7 +353,7 @@ public class CashSessionService {
             CashSessionDTO.MethodLine line = lines.computeIfAbsent(key(m.getMethod(), m.getOperator()),
                 k -> CashSessionDTO.MethodLine.builder()
                     .method(m.getMethod())
-                    .operator("MOBILE_MONEY".equals(m.getMethod()) ? m.getOperator() : null)
+                    .operator(MOBILE_MONEY.equals(m.getMethod()) ? m.getOperator() : null)
                     .inAmount(BigDecimal.ZERO).outAmount(BigDecimal.ZERO).expected(BigDecimal.ZERO).build());
             BigDecimal amount = m.getAmount() != null ? m.getAmount() : BigDecimal.ZERO;
             if (OUT.equals(m.getDirection())) {
@@ -422,8 +424,7 @@ public class CashSessionService {
             .kind(r.getReversedPaymentId() != null ? "REVERSAL" : "REFUND")
             .direction(OUT)
             .at(r.getPaidAt())
-            .document(r.getReceiptNumber() != null ? r.getReceiptNumber()
-                : invoice != null ? invoice.getInvoiceNumber() : null)
+            .document(refundDocument(r, invoice))
             .patientName(invoice != null && invoice.getPatient() != null ? invoice.getPatient().getFullName() : null)
             .method(r.getMethod() != null ? r.getMethod().name() : null)
             .operator(r.getMobileMoneyOperator() != null ? r.getMobileMoneyOperator().name() : null)
@@ -433,66 +434,91 @@ public class CashSessionService {
             .build();
     }
 
+    /** The receipt number of a refund paid out, else its invoice's number. */
+    private static String refundDocument(InvoiceRefund r, BillingInvoice invoice) {
+        if (r.getReceiptNumber() != null) {
+            return r.getReceiptNumber();
+        }
+        return invoice != null ? invoice.getInvoiceNumber() : null;
+    }
+
     /** The counted rows of a close: every expected method counted, whole francs, a difference explained. */
     private List<CashSessionCount> countedRows(CashSession session, Figures figures, CashSessionCloseRequestDTO body,
                                                UUID me) {
-        Map<String, CashSessionCloseRequestDTO.CountedLine> given = new LinkedHashMap<>();
-        if (body != null && body.getCounts() != null) {
-            for (CashSessionCloseRequestDTO.CountedLine line : body.getCounts()) {
-                if (line == null || line.getMethod() == null || line.getMethod().isBlank()) {
-                    continue;
-                }
-                // An insurer's share is never money at a till (QA D1611); mobile money names its operator (PR 9).
-                com.example.hms.enums.PaymentMethod method = parseMethod(line.getMethod());
-                com.example.hms.service.payment.TillPaymentMethods.requireReceivedAtTill(method, FIELD_COUNTS);
-                com.example.hms.enums.MobileMoneyOperator op = com.example.hms.service.payment.MobileMoneyOperators
-                    .require(method, line.getOperator(), FIELD_COUNTS);
-                String operator = op != null ? op.name() : null;
-                if (given.put(key(line.getMethod(), operator), line) != null) {
-                    throw new FieldBusinessException(FIELD_COUNTS, "billing.cashSession.countTwice",
-                        methodLabel(line.getMethod(), operator));
-                }
-            }
-        }
+        Map<String, CashSessionCloseRequestDTO.CountedLine> given = givenCounts(body);
         Set<String> keys = new java.util.LinkedHashSet<>(figures.lines().keySet());
         keys.addAll(given.keySet());
         List<CashSessionCount> rows = new ArrayList<>();
         for (String k : keys) {
-            CashSessionDTO.MethodLine line = figures.lines().get(k);
-            CashSessionCloseRequestDTO.CountedLine counted = given.get(k);
-            String method = line != null ? line.getMethod() : counted.getMethod().trim().toUpperCase(Locale.ROOT);
-            String operator = line != null ? line.getOperator()
-                : "MOBILE_MONEY".equals(method) && counted.getOperator() != null
-                    ? counted.getOperator().name() : null;
-            String label = methodLabel(method, operator);
-            if (counted == null || counted.getCounted() == null) {
-                throw new FieldBusinessException(FIELD_COUNTS, "billing.cashSession.countRequired", label);
-            }
-            BigDecimal amount = counted.getCounted();
-            if (amount.signum() < 0 || amount.stripTrailingZeros().scale() > 0) {
-                throw new FieldBusinessException(FIELD_COUNTS, "billing.cashSession.countWhole", label);
-            }
-            BigDecimal expected = line != null ? line.getExpected() : BigDecimal.ZERO;
-            BigDecimal difference = amount.subtract(expected);
-            String explanation = trimToNull(counted.getExplanation());
-            if (difference.signum() != 0 && explanation == null) {
-                throw new FieldBusinessException("explanation", "billing.cashSession.explanationRequired", label);
-            }
-            if (explanation != null) {
-                requireText(explanation, "explanation");
-            }
-            rows.add(CashSessionCount.builder()
-                .sessionId(session.getId())
-                .method(method)
-                .mobileMoneyOperator(operator)
-                .expectedAmount(expected)
-                .countedAmount(amount)
-                .difference(difference)
-                .explanation(explanation)
-                .countedBy(me)
-                .build());
+            rows.add(countRow(session, figures.lines().get(k), given.get(k), me));
         }
         return rows;
+    }
+
+    /** What was counted, by method line; a line counted twice is refused. */
+    private static Map<String, CashSessionCloseRequestDTO.CountedLine> givenCounts(CashSessionCloseRequestDTO body) {
+        Map<String, CashSessionCloseRequestDTO.CountedLine> given = new LinkedHashMap<>();
+        if (body == null || body.getCounts() == null) {
+            return given;
+        }
+        for (CashSessionCloseRequestDTO.CountedLine line : body.getCounts()) {
+            if (line == null || line.getMethod() == null || line.getMethod().isBlank()) {
+                continue;
+            }
+            // An insurer's share is never money at a till (QA D1611); mobile money names its operator (PR 9).
+            com.example.hms.enums.PaymentMethod method = parseMethod(line.getMethod());
+            com.example.hms.service.payment.TillPaymentMethods.requireReceivedAtTill(method, FIELD_COUNTS);
+            com.example.hms.enums.MobileMoneyOperator op = com.example.hms.service.payment.MobileMoneyOperators
+                .require(method, line.getOperator(), FIELD_COUNTS);
+            String operator = op != null ? op.name() : null;
+            if (given.put(key(line.getMethod(), operator), line) != null) {
+                throw new FieldBusinessException(FIELD_COUNTS, "billing.cashSession.countTwice",
+                    methodLabel(line.getMethod(), operator));
+            }
+        }
+        return given;
+    }
+
+    /** One counted line against what the session expects for it (0 for a method it never took). */
+    private static CashSessionCount countRow(CashSession session, CashSessionDTO.MethodLine line,
+                                             CashSessionCloseRequestDTO.CountedLine counted, UUID me) {
+        String method;
+        String operator;
+        if (line != null) {
+            method = line.getMethod();
+            operator = line.getOperator();
+        } else {
+            method = counted.getMethod().trim().toUpperCase(Locale.ROOT);
+            operator = MOBILE_MONEY.equals(method) && counted.getOperator() != null
+                ? counted.getOperator().name() : null;
+        }
+        String label = methodLabel(method, operator);
+        if (counted == null || counted.getCounted() == null) {
+            throw new FieldBusinessException(FIELD_COUNTED, "billing.cashSession.countRequired", label);
+        }
+        BigDecimal amount = counted.getCounted();
+        if (amount.signum() < 0 || amount.stripTrailingZeros().scale() > 0) {
+            throw new FieldBusinessException(FIELD_COUNTED, "billing.cashSession.countWhole", label);
+        }
+        BigDecimal expected = line != null ? line.getExpected() : BigDecimal.ZERO;
+        BigDecimal difference = amount.subtract(expected);
+        String explanation = trimToNull(counted.getExplanation());
+        if (difference.signum() != 0 && explanation == null) {
+            throw new FieldBusinessException("explanation", "billing.cashSession.explanationRequired", label);
+        }
+        if (explanation != null) {
+            requireText(explanation, "explanation");
+        }
+        return CashSessionCount.builder()
+            .sessionId(session.getId())
+            .method(method)
+            .mobileMoneyOperator(operator)
+            .expectedAmount(expected)
+            .countedAmount(amount)
+            .difference(difference)
+            .explanation(explanation)
+            .countedBy(me)
+            .build();
     }
 
     private static com.example.hms.enums.PaymentMethod parseMethod(String raw) {
@@ -506,7 +532,7 @@ public class CashSessionService {
 
     private static String methodLabel(String method, String operator) {
         String m = method == null ? "" : method.trim().toUpperCase(Locale.ROOT);
-        if ("MOBILE_MONEY".equals(m)) {
+        if (MOBILE_MONEY.equals(m)) {
             String o = operator == null || operator.isBlank() ? "NOT_STATED" : operator.trim().toUpperCase(Locale.ROOT);
             return MessageUtil.resolveOrRaw("pdf.payment.operator." + o);
         }

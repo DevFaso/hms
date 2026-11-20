@@ -31,6 +31,7 @@ public class CashSessionCloseRequestDTO {
             message = "{billing.payment.methodUnsupported}")
         private String method;
         private com.example.hms.enums.MobileMoneyOperator operator;
+        @jakarta.validation.constraints.NotNull(message = "{billing.cashSession.countsRequired}")
         private BigDecimal counted;
         @jakarta.validation.constraints.Size(max = 500)
         @com.example.hms.validation.NoCardNumber

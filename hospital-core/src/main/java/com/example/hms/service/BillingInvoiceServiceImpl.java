@@ -1993,6 +1993,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     }
 
     /** The ledger row a cashier reconciles against: one per recorded payment, patient or staff. */
+    @SuppressWarnings("java:S107") // the row's own fields; a parameter object would only rename them
     private PaymentTransaction savePaymentRow(BillingInvoice invoice, BigDecimal amount, Tender tender,
             String notes, UUID recordedBy, PaymentStatus status, UUID clientRequestId,
             com.example.hms.enums.CashTill till) {

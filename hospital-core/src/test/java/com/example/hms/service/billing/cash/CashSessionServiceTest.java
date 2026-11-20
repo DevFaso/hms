@@ -192,7 +192,8 @@ class CashSessionServiceTest {
     void differenceNeedsAnExplanation() {
         actAs(CASHIER);
         UUID id = session.getId();
-        assertThatThrownBy(() -> service.close(id, counted("700", "850", null)))
+        CashSessionCloseRequestDTO body1 = counted("700", "850", null);
+        assertThatThrownBy(() -> service.close(id, body1))
             .isInstanceOf(FieldBusinessException.class);
         assertThat(session.getStatus()).isEqualTo(CashSessionStatus.OPEN);
 
@@ -210,9 +211,11 @@ class CashSessionServiceTest {
     void everyMethodCounted() {
         actAs(CASHIER);
         UUID id = session.getId();
-        assertThatThrownBy(() -> service.close(id, counted("800", null, null)))
+        CashSessionCloseRequestDTO body2 = counted("800", null, null);
+        assertThatThrownBy(() -> service.close(id, body2))
             .isInstanceOf(FieldBusinessException.class);
-        assertThatThrownBy(() -> service.close(id, counted("800.50", "850", "x")))
+        CashSessionCloseRequestDTO body3 = counted("800.50", "850", "x");
+        assertThatThrownBy(() -> service.close(id, body3))
             .isInstanceOf(FieldBusinessException.class);
         verify(countRepo, never()).saveAll(anyList());
     }
@@ -222,10 +225,12 @@ class CashSessionServiceTest {
     void onlyTheCashierCloses() {
         UUID id = session.getId();
         actAs(ACCOUNTANT);
-        assertThatThrownBy(() -> service.close(id, counted("800", "850", null)))
+        CashSessionCloseRequestDTO body4 = counted("800", "850", null);
+        assertThatThrownBy(() -> service.close(id, body4))
             .isInstanceOf(ClientSafeAccessDeniedException.class);
         actAs(UUID.randomUUID());
-        assertThatThrownBy(() -> service.close(id, counted("800", "850", null)))
+        CashSessionCloseRequestDTO body5 = counted("800", "850", null);
+        assertThatThrownBy(() -> service.close(id, body5))
             .isInstanceOf(ResourceNotFoundException.class);
         assertThatThrownBy(() -> service.get(id)).isInstanceOf(ResourceNotFoundException.class);
     }
@@ -285,5 +290,70 @@ class CashSessionServiceTest {
             .thenReturn(List.of(session));
         assertThat(service.list(DAY, null)).hasSize(1);
         assertThat(service.list(DAY, CashTill.PHARMACY)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("review: a supervisor marks another cashier's closed till reviewed, with a note; never an open one")
+    void reviewAClosedTill() {
+        UUID id = session.getId();
+        actAs(ACCOUNTANT);
+        assertThatThrownBy(() -> service.review(id, "ok")).isInstanceOf(ConflictException.class);
+        actAs(CASHIER);
+        service.close(id, counted("800", "850", null));
+        assertThatThrownBy(() -> service.review(id, "ok")).isInstanceOf(ClientSafeAccessDeniedException.class);
+        actAs(ACCOUNTANT);
+        CashSessionDTO reviewed = service.review(id, " Vérifiée avec le relevé Orange ");
+        assertThat(reviewed.getStatus()).isEqualTo("REVIEWED");
+        assertThat(reviewed.getReviewNote()).isEqualTo("Vérifiée avec le relevé Orange");
+        assertThatThrownBy(() -> service.review(id, null)).isInstanceOf(ConflictException.class);
+        // A reviewed till can still be reopened, which clears the review.
+        CashSessionDTO reopened = service.reopen(id, "Erreur de compte");
+        assertThat(reopened.getReviewNote()).isNull();
+        assertThat(reopened.getStatus()).isEqualTo("OPEN");
+        assertThatThrownBy(() -> service.reopen(id, "Encore")).isInstanceOf(ConflictException.class);
+    }
+
+    @Test
+    @DisplayName("a closed till cannot be closed again; a method counted twice or an insurer share is refused")
+    void closeRefusals() {
+        UUID id = session.getId();
+        actAs(CASHIER);
+        CashSessionCloseRequestDTO twice = counted("800", "850", null);
+        twice.getCounts().add(new CashSessionCloseRequestDTO.CountedLine("cash", null, new BigDecimal("800"), null));
+        assertThatThrownBy(() -> service.close(id, twice)).isInstanceOf(FieldBusinessException.class);
+        CashSessionCloseRequestDTO insurance = counted("800", "850", null);
+        insurance.getCounts().add(new CashSessionCloseRequestDTO.CountedLine("INSURANCE", null, BigDecimal.TEN, null));
+        assertThatThrownBy(() -> service.close(id, insurance)).isInstanceOf(FieldBusinessException.class);
+        CashSessionCloseRequestDTO unknown = counted("800", "850", null);
+        unknown.getCounts().add(new CashSessionCloseRequestDTO.CountedLine("TROC", null, BigDecimal.TEN, null));
+        assertThatThrownBy(() -> service.close(id, unknown)).isInstanceOf(FieldBusinessException.class);
+        CashSessionCloseRequestDTO noCounts = new CashSessionCloseRequestDTO(null);
+        assertThatThrownBy(() -> service.close(id, noCounts)).isInstanceOf(FieldBusinessException.class);
+
+        // A method the till never took, counted anyway: expected 0, the gap explained.
+        CashSessionCloseRequestDTO extra = counted("800", "850", null);
+        extra.getCounts().add(new CashSessionCloseRequestDTO.CountedLine("CARD", null, new BigDecimal("2000"),
+            "Ticket de carte trouvé"));
+        CashSessionDTO closed = service.close(id, extra);
+        assertThat(closed.getTotalDifference()).isEqualByComparingTo("2000");
+        CashSessionCloseRequestDTO again = counted("800", "850", null);
+        assertThatThrownBy(() -> service.close(id, again)).isInstanceOf(ConflictException.class);
+    }
+
+    @Test
+    @DisplayName("mine: the cashier's own tills of the day; a till of an unknown cashier or hospital is no session")
+    void mineAndNoSession() {
+        actAs(CASHIER);
+        when(sessionRepo.findByHospitalIdAndCashierUserIdAndBusinessDateOrderByTillAsc(HOSPITAL, CASHIER, DAY))
+            .thenReturn(List.of(session));
+        assertThat(service.mine(null)).singleElement().satisfies(s -> assertThat(s.isMine()).isTrue());
+        assertThat(service.stamp(CashTill.BILLING, null, CASHIER)).isNull();
+        assertThat(service.stamp(CashTill.BILLING, HOSPITAL, null)).isNull();
+        assertThat(service.actingHospital()).isEqualTo(HOSPITAL);
+        actAs(ACCOUNTANT);
+        assertThat(service.get(session.getId()).getMovements()).isNotEmpty();
+        when(sessionRepo.findByHospitalIdAndBusinessDateOrderByTillAscOpenedAtAsc(HOSPITAL, DAY))
+            .thenReturn(List.of(session));
+        assertThat(service.dayReport(DAY).sessions()).hasSize(1);
     }
 }

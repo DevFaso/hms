@@ -797,10 +797,21 @@ class BillingInvoiceServiceImplTest {
         assertEquals("billing.payment.possibleDuplicate", asked.getMessageKey());
         verify(paymentTransactionRepository, never()).saveAndFlush(any());
 
+        // Another reference is another payment: recorded without asking.
+        PaymentTransaction carded = PaymentTransaction.builder().invoice(invoice).amount(new BigDecimal("10"))
+            .paymentMethod(com.example.hms.enums.PaymentMethod.CASH).referenceNumber("TPE 0001")
+            .status(com.example.hms.enums.PaymentStatus.CONFIRMED).build();
+        when(paymentTransactionRepository.findRecentSamePayments(eq(invoice.getId()), any(), any(), any()))
+            .thenReturn(List.of(carded));
+        billingInvoiceService.recordStaffPayment(invoiceId, new com.example.hms.payload.dto.StaffPaymentRequestDTO(
+            new BigDecimal("10"), "CASH", "TPE-0002", null, null, UUID.randomUUID()), null, Locale.FRENCH);
+        verify(paymentTransactionRepository, times(1)).saveAndFlush(any(PaymentTransaction.class));
+        when(paymentTransactionRepository.findRecentSamePayments(eq(invoice.getId()), any(), any(), any()))
+            .thenReturn(List.of(first));
         // A payment the cashier confirms as new is recorded.
         billingInvoiceService.recordStaffPayment(invoiceId, new com.example.hms.payload.dto.StaffPaymentRequestDTO(
             new BigDecimal("10"), "CASH", null, null, null, UUID.randomUUID(), Boolean.TRUE), null, Locale.FRENCH);
-        verify(paymentTransactionRepository, times(1)).saveAndFlush(any(PaymentTransaction.class));
+        verify(paymentTransactionRepository, times(2)).saveAndFlush(any(PaymentTransaction.class));
     }
 
     @Test
