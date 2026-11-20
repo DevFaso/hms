@@ -278,6 +278,8 @@ describe('Pharmacy reconciliation page (QA D2673)', () => {
               due: 1000,
               reason: 'Crise, caisse fermée',
               kind: 'URGENCY_OVERRIDE',
+              patientName: 'Awa Traoré',
+              patientMrn: 'CHW0042',
               handedOverByName: 'Awa Pharmacienne',
               reviewed: false,
             },
@@ -319,6 +321,10 @@ describe('Pharmacy reconciliation page (QA D2673)', () => {
     expect(review.length).toBe(1);
     expect(review[0].textContent).toContain('PHARMACY_MONEY.RECON.OVERRIDE_TO_REVIEW');
     expect(host.querySelector('[data-testid="recon-urgency-total"]')).not.toBeNull();
+    const patient = host.querySelectorAll('[data-testid="recon-deferral-patient"]');
+    expect(patient.length).toBe(1);
+    expect(patient[0].textContent).toContain('Awa Traoré');
+    expect(patient[0].textContent).toContain('CHW0042');
     expect(host.querySelector('[data-testid="recon-stay-total"]')).not.toBeNull();
   });
 });

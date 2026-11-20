@@ -996,6 +996,7 @@ export class EnumLabelService implements OnDestroy {
       PRO_SCREEN_POSITIVE: 'Positive PRO Screen',
       REORDER_ALERT: 'Reorder Alert',
       SEVERE_HYPERTENSION: 'Severe hypertension',
+      PHARMACY_BILLING_DEFERRAL: 'Deferred pharmacy billing',
     },
 
     /* ── Order source (snapshot drawer + nurse station board) ─── */

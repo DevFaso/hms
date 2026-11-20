@@ -7785,7 +7785,8 @@
         "PRO_CRITICAL_ITEM_ESCALATION": "Escalade — élément PRO critique",
         "PRO_SCREEN_POSITIVE": "Dépistage PRO positif",
         "REORDER_ALERT": "Alerte de réapprovisionnement",
-        "SEVERE_HYPERTENSION": "Hypertension sévère"
+        "SEVERE_HYPERTENSION": "Hypertension sévère",
+        "PHARMACY_BILLING_DEFERRAL": "Paiement différé en pharmacie"
       },
       "ORGANIZATION_TYPE": {
         "ACADEMIC_CENTER": "Centre universitaire",
@@ -15313,7 +15314,12 @@
       "REVIEW_DONE": "Dérogation d’urgence revue.",
       "STEP_FAILED": "L’étape n’a pas pu être enregistrée.",
       "REJECT_CONFIRM": "Refuser ce report ?",
-      "CANCEL_CONFIRM": "Retirer ce report ?"
+      "CANCEL_CONFIRM": "Retirer ce report ?",
+      "VIEW_WORK": "À traiter",
+      "VIEW_DUE": "Sorties, encore dues",
+      "STILL_DUE": "Reste dû à ce jour",
+      "NONE_DUE": "Aucune délivrance sortie sans paiement ne reste due.",
+      "VIEWS": "Listes des paiements différés"
     },
     "POLICY": {
       "TITLE": "Politique de facturation de l’établissement",

@@ -64,6 +64,8 @@ export class BillingDeferralsComponent implements OnInit {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly rows = signal<BillingDeferral[]>([]);
+  /** « À traiter » (asked, approved, overrides to review) or « Sorties, encore dues » (executed, still owing). */
+  readonly view = signal<'work' | 'due'>('work');
   readonly loading = signal(false);
   readonly failed = signal(false);
   readonly busy = signal<string | null>(null);
@@ -85,10 +87,19 @@ export class BillingDeferralsComponent implements OnInit {
     });
   }
 
+  /** The work to do (default), or the fills that left unpaid and still owe money. */
+  setView(view: 'work' | 'due'): void {
+    if (this.view() === view) return;
+    this.view.set(view);
+    this.acting.set(null);
+    this.load();
+  }
+
   load(): void {
     this.loading.set(true);
     this.failed.set(false);
-    this.api.list().subscribe({
+    const due = this.view() === 'due';
+    this.api.list(due ? ['EXECUTED'] : [], undefined, due).subscribe({
       next: (res) => {
         this.rows.set(res?.data ?? []);
         this.loading.set(false);

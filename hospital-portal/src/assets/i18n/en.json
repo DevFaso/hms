@@ -7819,7 +7819,8 @@
         "PRO_CRITICAL_ITEM_ESCALATION": "Critical PRO Item Escalation",
         "PRO_SCREEN_POSITIVE": "Positive PRO Screen",
         "REORDER_ALERT": "Reorder Alert",
-        "SEVERE_HYPERTENSION": "Severe hypertension"
+        "SEVERE_HYPERTENSION": "Severe hypertension",
+        "PHARMACY_BILLING_DEFERRAL": "Deferred pharmacy billing"
       },
       "ORGANIZATION_TYPE": {
         "ACADEMIC_CENTER": "Academic Center",
@@ -15313,7 +15314,12 @@
       "REVIEW_DONE": "Urgency override reviewed.",
       "STEP_FAILED": "The step could not be recorded.",
       "REJECT_CONFIRM": "Reject this deferral?",
-      "CANCEL_CONFIRM": "Withdraw this deferral?"
+      "CANCEL_CONFIRM": "Withdraw this deferral?",
+      "VIEW_WORK": "To handle",
+      "VIEW_DUE": "Left unpaid, still due",
+      "STILL_DUE": "Still due now",
+      "NONE_DUE": "No fill that left unpaid still owes money.",
+      "VIEWS": "Lists of deferrals"
     },
     "POLICY": {
       "TITLE": "Hospital billing policy",

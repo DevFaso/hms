@@ -254,6 +254,15 @@
             <li [attr.data-kind]="f.kind">
               <span>{{ f.medicationName | dash }} × {{ f.quantity }}</span>
               <span class="recon-amount">{{ f.due | cfa: 'XOF' }}</span>
+              <!-- Review of #1244: who the fill was for, so finance can bill it. -->
+              @if (f.patientName) {
+                <span class="recon-deferral-who" data-testid="recon-deferral-patient"
+                  >{{ f.patientName }}
+                  @if (f.patientMrn) {
+                    ({{ f.patientMrn }})
+                  }
+                </span>
+              }
               <!-- Policy rule 6: the deferral behind the fill: its kind and who answers for it. -->
               <strong class="recon-deferral-kind" data-testid="recon-deferral-kind">{{
                 f.kind ?? 'UNAPPROVED' | keyLabel: 'PHARMACY_MONEY.DEFERRAL.KIND.'

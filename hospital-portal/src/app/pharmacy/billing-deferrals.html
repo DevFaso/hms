@@ -25,6 +25,33 @@
     </div>
   </div>
 
+  <div
+    class="deferral-views"
+    role="group"
+    [attr.aria-label]="'PHARMACY_MONEY.DEFERRAL.VIEWS' | translate"
+  >
+    <button
+      type="button"
+      class="deferral-view"
+      [class.deferral-view-on]="view() === 'work'"
+      [attr.aria-pressed]="view() === 'work'"
+      data-testid="deferrals-view-work"
+      (click)="setView('work')"
+    >
+      {{ 'PHARMACY_MONEY.DEFERRAL.VIEW_WORK' | translate }}
+    </button>
+    <button
+      type="button"
+      class="deferral-view"
+      [class.deferral-view-on]="view() === 'due'"
+      [attr.aria-pressed]="view() === 'due'"
+      data-testid="deferrals-view-due"
+      (click)="setView('due')"
+    >
+      {{ 'PHARMACY_MONEY.DEFERRAL.VIEW_DUE' | translate }}
+    </button>
+  </div>
+
   @if (loading()) {
     <p class="muted" role="status">{{ 'COMMON.LOADING' | translate }}</p>
   } @else if (failed()) {
@@ -33,7 +60,10 @@
     </p>
   } @else if (rows().length === 0) {
     <p class="muted" data-testid="deferrals-empty">
-      {{ 'PHARMACY_MONEY.DEFERRAL.NONE' | translate }}
+      {{
+        (view() === 'due' ? 'PHARMACY_MONEY.DEFERRAL.NONE_DUE' : 'PHARMACY_MONEY.DEFERRAL.NONE')
+          | translate
+      }}
     </p>
   } @else {
     <ul class="deferral-list" data-testid="deferrals-list">
@@ -49,7 +79,12 @@
           <dl class="deferral-meta">
             <div>
               <dt>{{ 'PATIENTS.PATIENT' | translate }}</dt>
-              <dd>{{ r.patientName | dash }}</dd>
+              <dd>
+                {{ r.patientName | dash }}
+                @if (r.patientMrn) {
+                  <span class="deferral-mrn">({{ r.patientMrn }})</span>
+                }
+              </dd>
             </div>
             <div>
               <dt>{{ 'PHARMACY_MONEY.DEFERRAL.MEDICATION' | translate }}</dt>
@@ -87,6 +122,12 @@
               <div>
                 <dt>{{ 'PHARMACY_MONEY.DEFERRAL.AMOUNT_DUE' | translate }}</dt>
                 <dd>{{ r.amountDue | cfa: 'XOF' }}</dd>
+              </div>
+            }
+            @if (r.stillDue !== null && r.stillDue !== undefined) {
+              <div data-testid="deferral-still-due">
+                <dt>{{ 'PHARMACY_MONEY.DEFERRAL.STILL_DUE' | translate }}</dt>
+                <dd>{{ r.stillDue | cfa: 'XOF' }}</dd>
               </div>
             }
           </dl>

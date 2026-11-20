@@ -145,6 +145,10 @@ export interface PharmacyReconciliation {
     creditLimit?: number | null;
     /** An urgency override only: whether finance reviewed it. */
     reviewed?: boolean | null;
+    /** Review of #1244: who the fill was for (name, MRN at this hospital) and the stay it is charged to. */
+    patientName?: string | null;
+    patientMrn?: string | null;
+    admissionId?: string | null;
   }[];
   /** Review of #1239: every lot over the day, opening + movements against its closing (also in the CSV). */
   lotBalances?: {

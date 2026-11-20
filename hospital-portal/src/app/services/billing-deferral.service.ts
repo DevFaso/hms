@@ -21,6 +21,8 @@ export interface BillingDeferral {
   prescriptionId: string;
   patientId: string;
   patientName?: string | null;
+  /** The patient's MRN at this hospital. */
+  patientMrn?: string | null;
   medicationName?: string | null;
   dispenseId?: string | null;
   kind: BillingDeferralKind;
@@ -36,6 +38,8 @@ export interface BillingDeferral {
   executedByName?: string | null;
   executedAt?: string | null;
   amountDue?: number | null;
+  /** An executed deferral only: what its fills still owe now (paid, covered or cancelled since: nothing). */
+  stillDue?: number | null;
   reviewedByName?: string | null;
   reviewedAt?: string | null;
   reviewNote?: string | null;
@@ -91,10 +95,13 @@ export class BillingDeferralService {
   list(
     statuses: BillingDeferralStatus[] = [],
     prescriptionId?: string,
+    stillDue = false,
   ): Observable<ApiResponse<BillingDeferral[]>> {
     let params = new HttpParams();
     for (const s of statuses) params = params.append('status', s);
     if (prescriptionId) params = params.set('prescriptionId', prescriptionId);
+    // « Sorties, encore dues »: only the executed deferrals whose fills still owe money now.
+    if (stillDue) params = params.set('stillDue', 'true');
     return this.http.get<ApiResponse<BillingDeferral[]>>('/pharmacy/billing-deferrals', { params });
   }
 

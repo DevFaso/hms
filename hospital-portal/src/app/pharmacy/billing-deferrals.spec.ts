@@ -143,6 +143,35 @@ describe('BillingDeferralsComponent (policy rule 6: the work list)', () => {
     expect(host.querySelector('[data-testid="deferral-cancel-d-3"]')).toBeNull();
   });
 
+  it('review of #1244: « sorties, encore dues » lists the executed deferrals that still owe money, with the amount', () => {
+    const host = render([deferral()]);
+    expect(api.list).toHaveBeenCalledWith([], undefined, false);
+    api.list.and.returnValue(
+      of({
+        data: [
+          deferral({
+            id: 'd-9',
+            status: 'EXECUTED',
+            canDecide: false,
+            patientMrn: 'CHW0042',
+            amountDue: 1000,
+            stillDue: 700,
+          }),
+        ],
+      }) as never,
+    );
+    click(host, 'deferrals-view-due');
+    expect(api.list).toHaveBeenCalledWith(['EXECUTED'], undefined, true);
+    expect(host.querySelector('[data-testid="deferral-d-9"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="deferral-still-due"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="deferral-d-9"]')!.textContent).toContain('CHW0042');
+    // An executed deferral is history: nothing to approve, withdraw or review on it here.
+    expect(host.querySelector('[data-testid="deferral-cancel-d-9"]')).toBeNull();
+
+    click(host, 'deferrals-view-work');
+    expect(api.list).toHaveBeenCalledWith([], undefined, false);
+  });
+
   it('an empty step marks its required field and sends nothing', () => {
     const host = render([deferral()]);
     click(host, 'deferral-reject-d-1');
