@@ -163,21 +163,23 @@ export class NursingNotesPanelComponent implements OnChanges {
         },
         error: (err: unknown) => {
           this.addendumSaving.set(false);
-          // The server's own reason at the field it names (NursingNoteAddendumRequestDTO.content).
-          const id = `nn-addendum-${note.id}`;
-          const refused = refusedFieldReasons(err, { content: id });
-          if (refused.length) {
-            refuseFields(
-              this.host.nativeElement,
-              refused.map(([fieldId, message]) => ({ id: fieldId, message })),
-              [id],
-            );
-          }
+          this.markRefused(err, `nn-addendum-${note.id}`);
           this.toast.error(
             refusalReason(err) ?? this.translate.instant('NURSING_NOTES.ADDENDUM_FAILED'),
           );
         },
       });
+  }
+
+  /** The server's own reason at the field it names (NursingNoteAddendumRequestDTO.content). */
+  private markRefused(err: unknown, id: string): void {
+    const refused = refusedFieldReasons(err, { content: id });
+    if (!refused.length) return;
+    refuseFields(
+      this.host.nativeElement,
+      refused.map(([fieldId, message]) => ({ id: fieldId, message })),
+      [id],
+    );
   }
 
   /** The labelled parts of a note: DAR or SOAPIE, then the narrative. */

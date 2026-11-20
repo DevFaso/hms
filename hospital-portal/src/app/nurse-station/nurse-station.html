@@ -1025,7 +1025,7 @@
                       </button>
                     }
                     <!-- QA D2583 (r65): write a care note, and read back the earlier ones. -->
-                    @if (canDocumentCare() && p.patientId) {
+                    @if (canDocumentCare()) {
                       <button
                         class="action-btn action-notes"
                         data-testid="workboard-care-notes"

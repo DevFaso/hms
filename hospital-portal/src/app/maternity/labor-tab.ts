@@ -51,6 +51,7 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { FieldRefusal, refuseFields } from '../shared/forms/invalid-fields';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { MaternityStayComponent } from './maternity-stay.component';
+import { personName } from '../shared/pipes/person-name.pipe';
 /**
  * QA D808: the bounds PartographEntryRequestDTO puts on each number. The
  * server refused a dilation of 15 with a bare "≤ 10"; the form now refuses it
@@ -230,8 +231,7 @@ export class LaborTabComponent {
 
   /** QA D2594: the patient's name on the stay card. */
   readonly patientDisplayName = computed(() => {
-    const p = this.patient();
-    return p ? [p.firstName, p.lastName].filter((part) => !!part).join(' ') : '';
+    return personName(this.patient());
   });
 
   /** Newest ACTIVE episode, if any. */
