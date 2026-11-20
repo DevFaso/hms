@@ -157,7 +157,8 @@ public class MinorResultReleaseServiceImpl implements MinorResultReleaseService 
         audit(AuditEventType.SENSITIVE_RESULT_RELEASED_TO_PROXY, "PROXY_SENSITIVE_RELEASE", labOrderId, patientId,
             hospitalId, actorUserId, "Sensitive result (" + category + ") released to a verified parent or guardian",
             details);
-        log.info("[proxy-release] order {} ({}) released to grant {}", labOrderId, category, grantId);
+        // Ids only: a category next to an order id in a log line would say what the result is about.
+        log.info("[proxy-release] order {} released to grant {}", labOrderId, grantId);
         return overviewOf(patient, hospitalId);
     }
 
@@ -179,7 +180,9 @@ public class MinorResultReleaseServiceImpl implements MinorResultReleaseService 
      */
     private Patient requirePatientInCare(UUID patientId, UUID hospitalId, UUID actorUserId) {
         Patient patient = patientChartAccess.require(patientId, hospitalId);
-        if (treatmentRelationshipResolver.resolve(patientId, hospitalId, actorUserId).isEmpty()) {
+        // A release is signed: with no clinician to name, there is none.
+        if (actorUserId == null
+                || treatmentRelationshipResolver.resolve(patientId, hospitalId, actorUserId).isEmpty()) {
             throw new AccessDeniedException(MessageUtil.resolveOrRaw("proxyRelease.noCareRelationship"));
         }
         return patient;

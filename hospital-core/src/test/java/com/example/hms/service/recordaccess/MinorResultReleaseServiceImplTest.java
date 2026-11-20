@@ -269,6 +269,16 @@ class MinorResultReleaseServiceImplTest {
     }
 
     @Test
+    @DisplayName("a caller who cannot be named releases nothing")
+    void needsANamedClinician() {
+        mother.setRelationshipVerifiedAt(LocalDateTime.now());
+
+        assertThatThrownBy(() -> service.release(minor.getId(), hivOrder.getId(), mother.getId(), REASON, false, null))
+            .isInstanceOf(AccessDeniedException.class);
+        verify(releaseRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("a global view has no hospital to act at: refused")
     void needsAnActingHospital() {
         HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
