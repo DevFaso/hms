@@ -15292,7 +15292,8 @@
       "ALREADY_APPLIED": "Already applied",
       "APPLY": "Apply to the ticked tests ({{count}})",
       "APPLIED": "Categories applied: {{count}}.",
-      "APPLY_FAILED": "Could not apply the recommended categories."
+      "APPLY_FAILED": "Could not apply the recommended categories.",
+      "NOTHING_TICKED": "Tick at least one test to classify."
     },
     "RELEASE": {
       "TITLE": "Results hidden from the family (patient under 18)",
@@ -15321,7 +15322,9 @@
       "VERIFIED_TOAST": "Relationship verified.",
       "VERIFY_FAILED": "Could not record the verification.",
       "RELEASED_TOAST": "Result released to the parent.",
-      "RELEASE_FAILED": "Could not release the result."
+      "RELEASE_FAILED": "Could not release the result.",
+      "REASON_TOO_SHORT": "The reason needs at least {{min}} characters.",
+      "ATTEST_REQUIRED": "Confirm that you verified this person’s relationship to the patient."
     },
     "AGE": {
       "TITLE": "Adolescent confidentiality",
@@ -15332,7 +15335,8 @@
       "USING_DEFAULT": "The provisional default applies: {{age}}.",
       "USING_OWN": "The hospital’s own value applies: {{age}}.",
       "SAVED": "Confidentiality age saved.",
-      "SAVE_FAILED": "Could not save the confidentiality age."
+      "SAVE_FAILED": "Could not save the confidentiality age.",
+      "OUT_OF_RANGE": "Enter an age from 0 to 18."
     },
     "MEDICINE": {
       "LABEL": "Sensitive category of this medicine",

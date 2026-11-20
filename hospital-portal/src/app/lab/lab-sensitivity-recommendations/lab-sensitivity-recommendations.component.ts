@@ -55,10 +55,13 @@ export class LabSensitivityRecommendationsComponent {
   readonly pending = computed(() => this.rows().filter((row) => !row.applied));
   readonly done = computed(() => this.rows().filter((row) => row.applied));
   readonly chosenCount = computed(() => this.chosen().size);
+  /** The button was pressed with nothing ticked: the dialog says so until a box is ticked. */
+  readonly nothingTicked = signal(false);
 
   readonly labelOf = sensitivityLabelKey;
 
   show(): void {
+    this.nothingTicked.set(false);
     this.open.set(true);
     this.load();
   }
@@ -103,6 +106,12 @@ export class LabSensitivityRecommendationsComponent {
     if (checked) next.add(row.definitionId);
     else next.delete(row.definitionId);
     this.chosen.set(next);
+    if (next.size) this.nothingTicked.set(false);
+  }
+
+  /** The label key of the category recommended for a test. */
+  recommendedKey(row: LabSensitivityRecommendation): string {
+    return sensitivityLabelKey(row.recommendedCategory);
   }
 
   matchKey(row: LabSensitivityRecommendation): string {
@@ -114,7 +123,12 @@ export class LabSensitivityRecommendationsComponent {
     const items = this.pending()
       .filter((row) => chosen.has(row.definitionId))
       .map((row) => ({ definitionId: row.definitionId, category: row.recommendedCategory }));
-    if (!items.length || this.saving()) return;
+    if (this.saving()) return;
+    if (!items.length) {
+      this.nothingTicked.set(true);
+      return;
+    }
+    this.nothingTicked.set(false);
     this.saving.set(true);
     this.policy.applyLabRecommendations(items).subscribe({
       next: (rows) => {

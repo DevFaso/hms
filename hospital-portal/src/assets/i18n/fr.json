@@ -15292,7 +15292,8 @@
       "ALREADY_APPLIED": "Déjà appliquées",
       "APPLY": "Appliquer aux examens cochés ({{count}})",
       "APPLIED": "Catégories appliquées : {{count}}.",
-      "APPLY_FAILED": "Impossible d’appliquer les catégories recommandées."
+      "APPLY_FAILED": "Impossible d’appliquer les catégories recommandées.",
+      "NOTHING_TICKED": "Cochez au moins un examen à classer."
     },
     "RELEASE": {
       "TITLE": "Résultats masqués à la famille (patient mineur)",
@@ -15300,7 +15301,7 @@
       "PROVISIONAL": "Règle provisoire, en attente de l’avis d’un juriste. À partir de {{age}} ans, les autres catégories sensibles sont aussi masquées aux parents (âge provisoire, réglable par l’établissement).",
       "GUARDIANS": "Parents et tuteurs disposant d’un accès famille",
       "UNNAMED": "Nom non renseigné",
-      "RELATIONSHIP_PARENT": "Parent",
+      "RELATIONSHIP_PARENT": "Père ou mère",
       "RELATIONSHIP_LEGAL_GUARDIAN": "Tuteur légal",
       "VERIFIED": "Lien vérifié",
       "VERIFY": "J’ai vérifié le lien de parenté",
@@ -15321,7 +15322,9 @@
       "VERIFIED_TOAST": "Lien de parenté vérifié.",
       "VERIFY_FAILED": "Impossible d’enregistrer la vérification.",
       "RELEASED_TOAST": "Résultat communiqué au parent.",
-      "RELEASE_FAILED": "Impossible de communiquer le résultat."
+      "RELEASE_FAILED": "Impossible de communiquer le résultat.",
+      "REASON_TOO_SHORT": "Le motif doit compter au moins {{min}} caractères.",
+      "ATTEST_REQUIRED": "Confirmez que vous avez vérifié le lien de parenté de cette personne."
     },
     "AGE": {
       "TITLE": "Confidentialité des adolescents",
@@ -15332,7 +15335,8 @@
       "USING_DEFAULT": "Valeur provisoire par défaut appliquée : {{age}} ans.",
       "USING_OWN": "Valeur de l’établissement appliquée : {{age}} ans.",
       "SAVED": "Âge de confidentialité enregistré.",
-      "SAVE_FAILED": "Impossible d’enregistrer l’âge de confidentialité."
+      "SAVE_FAILED": "Impossible d’enregistrer l’âge de confidentialité.",
+      "OUT_OF_RANGE": "Saisissez un âge entre 0 et 18 ans."
     },
     "MEDICINE": {
       "LABEL": "Catégorie sensible de ce médicament",

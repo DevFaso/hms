@@ -68,7 +68,7 @@
                   labelOf(result.category) | translate
                 }}</span>
                 @if (result.resultedAt) {
-                  <span>{{ result.resultedAt | dateTime }}</span>
+                  <span>{{ result.resultedAt | serverTime | dateTime }}</span>
                 }
                 @for (release of result.releases; track release.grantId) {
                   <span class="family-release__released" data-testid="result-released">
@@ -79,7 +79,7 @@
                               name:
                                 release.holderName ||
                                 ('SENSITIVE_POLICY.RELEASE.UNNAMED' | translate),
-                              date: release.releasedAt | dateTime,
+                              date: release.releasedAt | serverTime | dateTime,
                             }
                     }}
                   </span>
@@ -106,14 +106,27 @@
               }
             </li>
             @if (releasing()?.labOrderId === result.labOrderId) {
-              <li class="family-release__form" data-testid="family-release-form">
-                <label class="family-release__label" for="family-release-guardian">
-                  {{ 'SENSITIVE_POLICY.RELEASE.TO_WHOM' | translate }}
-                </label>
+              <!-- An inline form opened from the row: it takes the keyboard, keeps Escape, asks
+                   before throwing a typed reason away, and gives focus back to the row's button. -->
+              <li
+                class="family-release__form"
+                data-testid="family-release-form"
+                data-submit-scope
+                appInlineSubForm
+                #releaseForm="inlineSubForm"
+                (dismissed)="cancelRelease()"
+                [inlineSubFormReturn]="
+                  '[data-testid=&quot;result-release-' + result.labOrderId + '&quot;]'
+                "
+              >
+                <label class="family-release__label" for="family-release-guardian"
+                  >{{ 'SENSITIVE_POLICY.RELEASE.TO_WHOM' | translate }} *</label
+                >
                 <select
                   id="family-release-guardian"
                   class="family-release__control"
                   data-testid="release-guardian"
+                  required
                   [disabled]="busy()"
                   (change)="pickGuardian($any($event.target).value)"
                 >
@@ -128,9 +141,9 @@
                   }
                 </select>
 
-                <label class="family-release__label" for="family-release-reason">
-                  {{ 'SENSITIVE_POLICY.RELEASE.REASON' | translate }}
-                </label>
+                <label class="family-release__label" for="family-release-reason"
+                  >{{ 'SENSITIVE_POLICY.RELEASE.REASON' | translate }} *</label
+                >
                 <textarea
                   id="family-release-reason"
                   class="family-release__control"
@@ -162,6 +175,7 @@
                   </label>
                 }
 
+                <app-inline-discard-ask [form]="releaseForm" />
                 <div class="family-release__actions">
                   <button
                     type="button"
@@ -171,11 +185,14 @@
                   >
                     {{ 'COMMON.CANCEL' | translate }}
                   </button>
+                  <!-- Never silently disabled: a click on an incomplete form says what is missing. -->
                   <button
                     type="button"
                     class="family-release__btn family-release__btn--primary"
                     data-testid="release-submit"
-                    [disabled]="!canSubmit()"
+                    [disabled]="busy()"
+                    [appSubmitGuard]="blockedReason()"
+                    submitGuardRequired
                     (click)="submitRelease()"
                   >
                     {{ 'SENSITIVE_POLICY.RELEASE.CONFIRM' | translate }}

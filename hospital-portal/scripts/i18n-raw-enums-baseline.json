@@ -270,7 +270,8 @@
     "src/app/pharmacy/pharmacy-reconciliation.html::f.reason",
     "src/app/pharmacy/pharmacy-reconciliation.html::r.reason",
     "src/app/billing/cash-session/cash-session.component.html::s.reopenReason",
-    "src/app/billing/cash-session/cash-supervisor.component.html::line.reason"
+    "src/app/billing/cash-session/cash-supervisor.component.html::line.reason",
+    "src/app/patients/family-release/family-release.component.html::release.reason"
   ],
   "reasons": {
     "src/app/billing/billing.html::it.overrideReason": "InvoiceItemRequestDTO.overrideReason is a size-bounded String (500 characters), typed in the billing.html input with data-testid line-override-reason-<id> via editLineOverrideReason and submitted by BillingComponent.saveLine. InvoiceItemServiceImpl.applyPrice trims and stores that explanation; InvoiceItemMapper returns it as InvoiceItemResponseDTO.overrideReason. It is the cashier's free text, not an enum token, and must remain as typed.",
@@ -297,6 +298,7 @@
     "src/app/pharmacy/pharmacy-reconciliation.html::f.reason": "QA D2675: the « à facturer » reason a pharmacist typed at hand-over (free text)",
     "src/app/pharmacy/pharmacy-reconciliation.html::r.reason": "QA D2676: the refund reason a pharmacist typed (free text)",
     "src/app/billing/cash-session/cash-session.component.html::s.reopenReason": "CashSessionNoteRequestDTO.note is a size-bounded String (500 characters) a hospital admin or accountant types in cash-supervisor.component.html textarea#cash-supervisor-note; CashSessionService.reopen stores it as CashSession.reopenReason. It is a person's free text (why the till was reopened), not an enum token, and must remain as typed.",
-    "src/app/billing/cash-session/cash-supervisor.component.html::line.reason": "The delete reason is a size-bounded String (500 characters) a cashier types in billing.html input#line-remove-reason; InvoiceItemServiceImpl.deleteInvoiceItem stores it as InvoiceLineRemoval.reason and InvoiceLineRemovalDTO.reason carries it. It is a person's free text (why the line was taken off the invoice), not an enum token, and must remain as typed."
+    "src/app/billing/cash-session/cash-supervisor.component.html::line.reason": "The delete reason is a size-bounded String (500 characters) a cashier types in billing.html input#line-remove-reason; InvoiceItemServiceImpl.deleteInvoiceItem stores it as InvoiceLineRemoval.reason and InvoiceLineRemovalDTO.reason carries it. It is a person's free text (why the line was taken off the invoice), not an enum token, and must remain as typed.",
+    "src/app/patients/family-release/family-release.component.html::release.reason": "Policy 2026-11-20: ProxySensitiveReleaseDTO.reason is the free text a doctor or a midwife typed when releasing a minor's result to a parent (textarea#family-release-reason, 10 to 1000 characters); shown as typed to the clinicians, not a wire token."
   }
 }

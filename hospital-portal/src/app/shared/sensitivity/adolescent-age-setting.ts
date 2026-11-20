@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  effect,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
@@ -7,7 +15,11 @@ import {
   AdolescentConfidentialityAge,
   SensitivePolicyService,
 } from '../../services/sensitive-policy.service';
-import { refusalReason } from '../refusal-reason';
+import { SubmitGuardDirective } from '../forms/submit-guard.directive';
+import { refuseFields } from '../forms/invalid-fields';
+import { refusalReason, refusedFieldReasons } from '../refusal-reason';
+
+const AGE_FIELD_ID = 'adolescent-age-input';
 
 /**
  * Policy 2026-11-20 (provisional): a hospital's adolescent confidentiality
@@ -19,7 +31,7 @@ import { refusalReason } from '../refusal-reason';
 @Component({
   selector: 'app-adolescent-age-setting',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule, SubmitGuardDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './adolescent-age-setting.scss',
   template: `
@@ -27,6 +39,7 @@ import { refusalReason } from '../refusal-reason';
       <section
         class="adolescent-age"
         data-testid="adolescent-age"
+        data-submit-scope
         aria-labelledby="adolescent-age-title"
       >
         <h2 class="adolescent-age__title" id="adolescent-age-title">
@@ -38,13 +51,14 @@ import { refusalReason } from '../refusal-reason';
           {{ 'SENSITIVE_POLICY.AGE.PROVISIONAL' | translate: { age: current.defaultAge } }}
         </p>
         <div class="adolescent-age__row">
-          <label class="adolescent-age__label" for="adolescent-age-input">
-            {{ 'SENSITIVE_POLICY.AGE.LABEL' | translate }}
-          </label>
+          <label class="adolescent-age__label" for="adolescent-age-input"
+            >{{ 'SENSITIVE_POLICY.AGE.LABEL' | translate }} *</label
+          >
           <input
             id="adolescent-age-input"
             class="adolescent-age__input"
             data-testid="adolescent-age-input"
+            required
             type="number"
             inputmode="numeric"
             min="0"
@@ -58,7 +72,9 @@ import { refusalReason } from '../refusal-reason';
             type="button"
             class="adolescent-age__btn adolescent-age__btn--primary"
             data-testid="adolescent-age-save"
-            [disabled]="saving() || !valid() || draft() === current.effectiveAge"
+            [disabled]="saving()"
+            [appSubmitGuard]="outOfRangeReason()"
+            [submitGuardFields]="['adolescent-age-input']"
             (click)="save()"
           >
             {{ 'COMMON.SAVE' | translate }}
@@ -90,6 +106,7 @@ export class AdolescentAgeSettingComponent {
   private readonly policy = inject(SensitivePolicyService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly hospitalId = input.required<string>();
 
@@ -117,9 +134,20 @@ export class AdolescentAgeSettingComponent {
     return typeof age === 'number' && Number.isInteger(age) && age >= 0 && age <= 18;
   }
 
+  /** Said under the button for an age outside 0 to 18; null for a blank field (named by the guard) or a valid age. */
+  outOfRangeReason(): string | null {
+    const age = this.draft();
+    if (age === null || age === undefined || `${age}` === '' || this.valid()) return null;
+    return this.translate.instant('SENSITIVE_POLICY.AGE.OUT_OF_RANGE');
+  }
+
   save(): void {
-    if (!this.valid()) return;
-    this.write(this.draft());
+    // The submit guard has already stopped, and explained, a blank or out-of-range age.
+    const age = this.draft();
+    if (typeof age !== 'number' || this.outOfRangeReason() || !this.valid()) {
+      return;
+    }
+    this.write(age);
   }
 
   reset(): void {
@@ -137,6 +165,15 @@ export class AdolescentAgeSettingComponent {
       },
       error: (err: unknown) => {
         this.saving.set(false);
+        // The server's own reason at the field it names (UpdateAdolescentConfidentialityAgeRequestDTO.age).
+        const refused = refusedFieldReasons(err, { age: AGE_FIELD_ID });
+        if (refused.length) {
+          refuseFields(
+            this.host.nativeElement,
+            refused.map(([id, message]) => ({ id, message })),
+            [AGE_FIELD_ID],
+          );
+        }
         this.toast.error(
           refusalReason(err) ?? this.translate.instant('SENSITIVE_POLICY.AGE.SAVE_FAILED'),
         );

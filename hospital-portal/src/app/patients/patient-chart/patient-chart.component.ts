@@ -57,6 +57,7 @@ import { refusalReason } from '../../shared/refusal-reason';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
+import { serverDateOrInstant } from '../../shared/date-utils';
 import { SensitivitySelectComponent } from '../../shared/sensitivity/sensitivity-select';
 import { FamilyReleaseComponent } from '../family-release/family-release.component';
 import {
@@ -220,7 +221,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
 
   /** Whole years since the date of birth; an unknown date reads as an adult, as on the server. */
   private isUnder18(): boolean {
-    const born = this.patientDateOfBirth ? new Date(this.patientDateOfBirth) : null;
+    const born = this.patientDateOfBirth ? serverDateOrInstant(this.patientDateOfBirth) : null;
     if (!born || Number.isNaN(born.getTime())) return false;
     const today = new Date();
     let age = today.getFullYear() - born.getFullYear();

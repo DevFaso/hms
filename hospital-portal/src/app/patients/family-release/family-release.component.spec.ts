@@ -6,6 +6,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { ToastService } from '../../core/toast.service';
 import { FamilyReleaseOverview } from '../../services/sensitive-policy.service';
+import { expectEmptySubmitRefusal, expectFieldsMarked } from '../../testing/form-refusal-behaviour';
 import { FamilyReleaseComponent } from './family-release.component';
 import fr from '../../../assets/i18n/fr.json';
 
@@ -150,10 +151,19 @@ describe('FamilyReleaseComponent (policy 2026-11-20)', () => {
     fixture.detectChanges();
     pick('g-mother');
 
-    expect(q<HTMLButtonElement>('release-submit')!.disabled).toBeTrue();
-    type('release-reason', 'trop court');
+    // Never silently disabled. No reason: the click is stopped and the field is marked.
+    const submit = q<HTMLButtonElement>('release-submit')!;
+    expect(submit.disabled).toBeFalse();
+    submit.click();
+    fixture.detectChanges();
+    expect(q('release-reason')!.getAttribute('aria-invalid')).toBe('true');
+    // A reason under ten characters: stopped, and the button says why.
     type('release-reason', 'court');
-    expect(q<HTMLButtonElement>('release-submit')!.disabled).toBeTrue();
+    expect(submit.getAttribute('data-submit-blocked')).toBe('true');
+    submit.click();
+    fixture.detectChanges();
+    expect(q('family-release-form')!.textContent).toContain('au moins 10 caractères');
+    httpMock.expectNone(`${URL}/lab-orders/o-hiv`);
     // A verified parent needs no attestation.
     expect(q('release-attest')).toBeNull();
 
@@ -201,7 +211,12 @@ describe('FamilyReleaseComponent (policy 2026-11-20)', () => {
     type('release-reason', REASON);
 
     expect(q('release-attest')).not.toBeNull();
-    expect(q<HTMLButtonElement>('release-submit')!.disabled).toBeTrue();
+    const submit = q<HTMLButtonElement>('release-submit')!;
+    expect(submit.getAttribute('data-submit-blocked')).toBe('true');
+    submit.click();
+    fixture.detectChanges();
+    expect(q('family-release-form')!.textContent).toContain('vérifié le lien de parenté');
+    httpMock.expectNone(`${URL}/lab-orders/o-hiv`);
 
     const attest = q<HTMLInputElement>('release-attest')!;
     attest.checked = true;
@@ -232,6 +247,40 @@ describe('FamilyReleaseComponent (policy 2026-11-20)', () => {
     expect(toast.error).toHaveBeenCalledWith('Le laboratoire n’a pas encore validé ce résultat.');
     expect(q('family-release-form')).not.toBeNull();
     expect(q<HTMLTextAreaElement>('release-reason')!.value).toBe(REASON);
+  });
+
+  it('an empty release is refused at its fields, starred and named, and nothing is sent', () => {
+    load();
+    q<HTMLButtonElement>('result-release-o-hiv')!.click();
+    fixture.detectChanges();
+
+    const marked = expectEmptySubmitRefusal(fixture, { button: '[data-testid="release-submit"]' });
+
+    expect(marked).toContain('family-release-guardian');
+    expect(marked).toContain('family-release-reason');
+    httpMock.expectNone(`${URL}/lab-orders/o-hiv`);
+  });
+
+  it('a reason the server refuses is marked on the reason field, in the server’s words', () => {
+    load();
+    q<HTMLButtonElement>('result-release-o-hiv')!.click();
+    fixture.detectChanges();
+    pick('g-mother');
+    type('release-reason', REASON);
+    q<HTMLButtonElement>('release-submit')!.click();
+    httpMock.expectOne(`${URL}/lab-orders/o-hiv`).flush(
+      {
+        error: 'Validation Failed',
+        message: 'Indiquez le motif.',
+        fieldErrors: { reason: 'Indiquez le motif de la communication de ce résultat.' },
+      },
+      { status: 400, statusText: 'Bad Request' },
+    );
+    fixture.detectChanges();
+
+    expectFieldsMarked(fixture, {
+      'family-release-reason': 'Indiquez le motif de la communication de ce résultat.',
+    });
   });
 
   it('records that a parent’s relationship was verified', () => {

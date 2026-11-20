@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   computed,
   effect,
   inject,
@@ -17,13 +18,23 @@ import {
   FamilyReleaseOverview,
   SensitivePolicyService,
 } from '../../services/sensitive-policy.service';
+import { InlineDiscardAskComponent } from '../../shared/a11y/inline-discard-ask.component';
+import { InlineSubFormDirective } from '../../shared/a11y/inline-sub-form.directive';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
-import { refusalReason } from '../../shared/refusal-reason';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { refuseFields } from '../../shared/forms/invalid-fields';
+import { refusalReason, refusedFieldReasons } from '../../shared/refusal-reason';
 import { sensitivityLabelKey } from '../../shared/sensitivity/sensitivity-category';
 
 /** The shortest reason the server accepts (MinorResultReleaseRequestDTO). */
 export const RELEASE_REASON_MIN = 10;
 export const RELEASE_REASON_MAX = 1000;
+/** The request's fields, by the id of the control that holds each. */
+const RELEASE_FIELD_IDS: Readonly<Record<string, string>> = {
+  grantId: 'family-release-guardian',
+  reason: 'family-release-reason',
+};
 
 /**
  * Policy 2026-11-20 (provisional): the release of a minor's sensitive result
@@ -38,7 +49,15 @@ export const RELEASE_REASON_MAX = 1000;
 @Component({
   selector: 'app-family-release',
   standalone: true,
-  imports: [FormsModule, TranslateModule, DateTimePipe],
+  imports: [
+    FormsModule,
+    TranslateModule,
+    DateTimePipe,
+    ServerTimePipe,
+    InlineSubFormDirective,
+    InlineDiscardAskComponent,
+    SubmitGuardDirective,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './family-release.component.html',
   styleUrl: './family-release.component.scss',
@@ -47,6 +66,7 @@ export class FamilyReleaseComponent {
   private readonly policy = inject(SensitivePolicyService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly patientId = input.required<string>();
 
@@ -71,13 +91,23 @@ export class FamilyReleaseComponent {
     const guardian = this.chosenGuardian();
     return !!guardian && !guardian.verified;
   });
-  readonly canSubmit = computed(
-    () =>
-      !this.busy() &&
-      !!this.chosenGuardian() &&
-      this.reason().trim().length >= RELEASE_REASON_MIN &&
-      (!this.needsAttestation() || this.attested()),
-  );
+  /**
+   * Why the release cannot be sent yet, in words, or null when it can. A
+   * blank parent or reason is named by the submit guard from the fields
+   * themselves; this says what a filled form still lacks.
+   */
+  readonly blockedReason = computed<string | null>(() => {
+    const typed = this.reason().trim().length;
+    if (typed > 0 && typed < RELEASE_REASON_MIN) {
+      return this.translate.instant('SENSITIVE_POLICY.RELEASE.REASON_TOO_SHORT', {
+        min: RELEASE_REASON_MIN,
+      });
+    }
+    if (this.needsAttestation() && !this.attested()) {
+      return this.translate.instant('SENSITIVE_POLICY.RELEASE.ATTEST_REQUIRED');
+    }
+    return null;
+  });
 
   constructor() {
     effect(() => {
@@ -147,7 +177,9 @@ export class FamilyReleaseComponent {
 
   submitRelease(): void {
     const result = this.releasing();
-    if (!result || !this.canSubmit()) return;
+    // The submit guard has already stopped, and explained, an incomplete form.
+    const complete = !!this.chosenGuardian() && this.reason().trim().length >= RELEASE_REASON_MIN;
+    if (!result || this.busy() || !complete || this.blockedReason()) return;
     this.busy.set(true);
     this.policy
       .releaseResult(this.patientId(), result.labOrderId, {
@@ -164,10 +196,22 @@ export class FamilyReleaseComponent {
         },
         error: (err: unknown) => {
           this.busy.set(false);
+          this.markRefused(err);
           this.toast.error(
             refusalReason(err) ?? this.translate.instant('SENSITIVE_POLICY.RELEASE.RELEASE_FAILED'),
           );
         },
       });
+  }
+
+  /** The server's own reason at the field it names (MinorResultReleaseRequestDTO). */
+  private markRefused(err: unknown): void {
+    const refused = refusedFieldReasons(err, RELEASE_FIELD_IDS);
+    if (!refused.length) return;
+    refuseFields(
+      this.host.nativeElement,
+      refused.map(([id, message]) => ({ id, message })),
+      Object.values(RELEASE_FIELD_IDS),
+    );
   }
 }

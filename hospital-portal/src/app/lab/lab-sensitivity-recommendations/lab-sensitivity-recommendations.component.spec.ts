@@ -165,9 +165,15 @@ describe('LabSensitivityRecommendationsComponent (policy 2026-11-20)', () => {
 
   it('applies nothing when nothing is ticked, and nothing when the dialog is closed', () => {
     open([row({ currentCategory: 'STI' })]);
-    expect(q<HTMLButtonElement>('reco-apply')!.disabled).toBeTrue();
+    // Never silently disabled: the button stays pressable and says why nothing is sent.
+    const apply = q<HTMLButtonElement>('reco-apply')!;
+    expect(apply.disabled).toBeFalse();
+    expect(q('reco-nothing-ticked')).toBeNull();
 
-    q<HTMLButtonElement>('reco-apply')!.click();
+    apply.click();
+    fixture.detectChanges();
+    expect(q('reco-nothing-ticked')!.textContent).toContain('Cochez au moins un examen');
+    expect(apply.getAttribute('aria-describedby')).toBe('lab-sensitivity-reco-nothing');
     host.querySelector<HTMLButtonElement>('.reco-close')!.click();
     fixture.detectChanges();
 

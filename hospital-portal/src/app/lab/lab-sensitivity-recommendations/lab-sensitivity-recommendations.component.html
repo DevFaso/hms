@@ -72,7 +72,7 @@
                     <span class="reco-category">
                       {{
                         'SENSITIVE_POLICY.RECO.RECOMMENDED'
-                          | translate: { category: labelOf(row.recommendedCategory) | translate }
+                          | translate: { category: recommendedKey(row) | translate }
                       }}
                     </span>
                     <span class="reco-match">
@@ -105,9 +105,7 @@
                     <span class="reco-test">
                       {{ row.name }} <span class="reco-code">({{ row.testCode }})</span>
                     </span>
-                    <span class="reco-category">{{
-                      labelOf(row.recommendedCategory) | translate
-                    }}</span>
+                    <span class="reco-category">{{ recommendedKey(row) | translate }}</span>
                   </span>
                 </li>
               }
@@ -116,6 +114,17 @@
         }
       </div>
 
+      @if (nothingTicked()) {
+        <!-- Never a silently disabled button: pressed with nothing ticked, it says so. -->
+        <p
+          class="reco-state reco-state--error reco-nothing"
+          id="lab-sensitivity-reco-nothing"
+          role="alert"
+          data-testid="reco-nothing-ticked"
+        >
+          {{ 'SENSITIVE_POLICY.RECO.NOTHING_TICKED' | translate }}
+        </p>
+      }
       <div class="reco-actions">
         <button type="button" class="reco-btn" (click)="close()" [disabled]="saving()">
           {{ 'COMMON.CANCEL' | translate }}
@@ -124,7 +133,8 @@
           type="button"
           class="reco-btn reco-btn--primary"
           data-testid="reco-apply"
-          [disabled]="saving() || !chosenCount()"
+          [disabled]="saving()"
+          [attr.aria-describedby]="nothingTicked() ? 'lab-sensitivity-reco-nothing' : null"
           (click)="apply()"
         >
           {{ 'SENSITIVE_POLICY.RECO.APPLY' | translate: { count: chosenCount() } }}

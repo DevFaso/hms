@@ -6,6 +6,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { ToastService } from '../../core/toast.service';
 import { AdolescentConfidentialityAge } from '../../services/sensitive-policy.service';
+import { expectEmptySubmitRefusal, expectFieldsMarked } from '../../testing/form-refusal-behaviour';
 import { AdolescentAgeSettingComponent } from './adolescent-age-setting';
 import fr from '../../../assets/i18n/fr.json';
 
@@ -74,6 +75,8 @@ describe('AdolescentAgeSettingComponent (policy 2026-11-20)', () => {
   }
 
   async function enter(value: string): Promise<void> {
+    // ngModel writes the loaded age into the field in a microtask: let it land before typing.
+    await fixture.whenStable();
     const input = q<HTMLInputElement>('adolescent-age-input')!;
     input.value = value;
     input.dispatchEvent(new Event('input'));
@@ -92,7 +95,7 @@ describe('AdolescentAgeSettingComponent (policy 2026-11-20)', () => {
     expect(q('adolescent-age-state')!.textContent).toContain('par défaut');
     expect(q<HTMLInputElement>('adolescent-age-input')!.value).toBe('12');
     expect(q('adolescent-age-reset')).toBeNull();
-    expect(q<HTMLButtonElement>('adolescent-age-save')!.disabled).toBeTrue();
+    expect(q<HTMLButtonElement>('adolescent-age-save')!.disabled).toBeFalse();
   });
 
   it('saves the hospital’s own age, then offers the way back to the default', async () => {
@@ -116,11 +119,47 @@ describe('AdolescentAgeSettingComponent (policy 2026-11-20)', () => {
 
   it('refuses an age outside 0 to 18 before any request', async () => {
     load(setting(null));
+    // Never silently disabled: the click is stopped and the button says why.
+    const save = q<HTMLButtonElement>('adolescent-age-save')!;
     await enter('19');
-    expect(q<HTMLButtonElement>('adolescent-age-save')!.disabled).toBeTrue();
+    expect(save.getAttribute('data-submit-blocked')).toBe('true');
+    save.click();
+    fixture.detectChanges();
+    expect(q('adolescent-age')!.textContent).toContain('entre 0 et 18');
     await enter('');
-    expect(q<HTMLButtonElement>('adolescent-age-save')!.disabled).toBeTrue();
+    save.click();
+    fixture.detectChanges();
+    expect(q('adolescent-age-input')!.getAttribute('aria-invalid')).toBe('true');
     httpMock.expectNone(URL);
+  });
+
+  it('a blank age is refused at its field, starred and named, and nothing is sent', async () => {
+    load(setting(null));
+    await enter('');
+
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="adolescent-age-save"]',
+    });
+
+    expect(marked).toEqual(['adolescent-age-input']);
+    httpMock.expectNone(URL);
+  });
+
+  it('an age the server refuses is marked on the field, in the server’s words', async () => {
+    load(setting(null));
+    await enter('15');
+    q<HTMLButtonElement>('adolescent-age-save')!.click();
+    httpMock.expectOne(URL).flush(
+      {
+        error: 'Validation Failed',
+        message: 'doit être inférieur ou égal à 18',
+        fieldErrors: { age: 'doit être inférieur ou égal à 18' },
+      },
+      { status: 400, statusText: 'Bad Request' },
+    );
+    fixture.detectChanges();
+
+    expectFieldsMarked(fixture, { 'adolescent-age-input': 'doit être inférieur ou égal à 18' });
   });
 
   it('shows the server refusal and keeps the stored value', async () => {
