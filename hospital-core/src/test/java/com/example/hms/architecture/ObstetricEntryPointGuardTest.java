@@ -136,7 +136,10 @@ class ObstetricEntryPointGuardTest {
     @DisplayName("the maternity ward keeps the same rule")
     void theMaternityWardKeepsTheRule() throws IOException {
         String beds = read("service/BedAssignmentService.java");
-        assertThat(beds).contains("case MATERNITY -> com.example.hms.utility.ObstetricEligibility.isRecordedMale(patient)")
+        // Policy rule 2 (2026-11-20, provisional): a baby under one year takes a maternity cot; every
+        // other patient is still held to the obstetric rule (not recorded male, not a child).
+        assertThat(beds).contains("case MATERNITY -> !(age != null && age < 1)")
+            .contains("&& (com.example.hms.utility.ObstetricEligibility.isRecordedMale(patient)")
             .contains("ObstetricEligibility.isRecordedChild(patient)");
     }
 

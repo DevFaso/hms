@@ -48,7 +48,10 @@ import java.util.UUID;
 @RequestMapping("/imaging/results")
 @Validated
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','IMAGING_TECHNICIAN','PATIENT')")
+// Policy rule 3 (2026-11-20, provisional): the imaging technician is admitted to the three report
+// reads only, where the service gives them the released reports of exams they performed. No write
+// below names them: they never author, sign, void or acknowledge.
 @Tag(name = "Imaging Results", description = "Author, sign, and read radiology reports; acknowledge critical findings")
 public class ImagingResultController {
 
@@ -108,7 +111,7 @@ public class ImagingResultController {
     }
 
     @GetMapping("/{reportId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','IMAGING_TECHNICIAN','PATIENT')")
     @Operation(summary = "Get imaging report by ID",
                description = "Retrieve full imaging report with findings, impression, and PACS viewer URL")
     public ResponseEntity<ImagingReportResponseDTO> getReport(@PathVariable UUID reportId) {
@@ -117,7 +120,7 @@ public class ImagingResultController {
     }
 
     @GetMapping("/order/{orderId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','IMAGING_TECHNICIAN','PATIENT')")
     @Operation(summary = "Get latest report for imaging order",
                description = "Retrieve the most recent report version for a specific imaging order")
     public ResponseEntity<ImagingReportResponseDTO> getLatestReportForOrder(@PathVariable UUID orderId) {
@@ -134,7 +137,9 @@ public class ImagingResultController {
     // that policy would be a filter on report status, not on this endpoint.
     // QA D856: MIDWIFE too. A midwife orders and lists imaging (ImagingOrderController
     // admits her on both), so the order detail she opens must read its reports.
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','RADIOLOGIST','NURSE','MIDWIFE')")
+    // Policy rule 3 (provisional): the imaging technician too, for the released reports of the
+    // exams they performed only (ImagingReportServiceImpl).
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','RADIOLOGIST','NURSE','MIDWIFE','IMAGING_TECHNICIAN')")
     @Operation(summary = "Get all report versions for imaging order",
                description = "Retrieve complete history of report versions (preliminary, final, addenda)")
     public ResponseEntity<List<ImagingReportResponseDTO>> getAllReportsForOrder(@PathVariable UUID orderId) {

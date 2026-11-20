@@ -53,7 +53,28 @@ export const ACTION_PERMISSIONS = {
   },
   imagingOrderStatus: {
     endpoint: 'ImagingOrderController#updateStatus',
+    // Policy rule 3 (provisional): the imaging technician starts, completes or discontinues the exam.
+    roles: ['ROLE_DOCTOR', 'ROLE_RADIOLOGIST', 'ROLE_IMAGING_TECHNICIAN'],
+  },
+  /** Provisional rule 1: the pre-authorisation number of a study done without it. Never the technician. */
+  imagingOrderAuthorization: {
+    endpoint: 'ImagingOrderController#recordAuthorization',
     roles: ['ROLE_DOCTOR', 'ROLE_RADIOLOGIST'],
+  },
+  /** Policy rule 3 (provisional): whoever runs the exam checks the patient in. */
+  imagingExamCheckIn: {
+    endpoint: 'ImagingOrderController#checkIn',
+    roles: ['ROLE_IMAGING_TECHNICIAN', 'ROLE_RADIOLOGIST', 'ROLE_DOCTOR'],
+  },
+  /** Policy rule 3 (provisional): the exam record (technical note, contrast, dose). */
+  imagingExamRecord: {
+    endpoint: 'ImagingOrderController#recordExam',
+    roles: ['ROLE_IMAGING_TECHNICIAN', 'ROLE_RADIOLOGIST', 'ROLE_DOCTOR'],
+  },
+  /** V316 + policy rule 3: key images on a study; the technician attaches to the study only. */
+  imagingImageUpload: {
+    endpoint: 'ImagingStudyImageController#upload',
+    roles: ['ROLE_RADIOLOGIST', 'ROLE_DOCTOR', 'ROLE_IMAGING_TECHNICIAN'],
   },
   labSpecimenCollect: {
     endpoint: 'LabSpecimenController#collectSpecimen',
@@ -124,7 +145,8 @@ export const ACTION_PERMISSIONS = {
   },
   admissionCreate: {
     endpoint: 'AdmissionController#admitPatient',
-    // A midwife admits a woman in labour only (policy 2); the form narrows to it.
+    // A midwife admits a woman in labour (policy 2) or the newborn of a delivery she attended
+    // (policy rule 2, 2026-11-20, provisional); the form narrows to it.
     roles: ['ROLE_DOCTOR', 'ROLE_MIDWIFE'],
   },
   admissionUpdate: {
@@ -137,11 +159,12 @@ export const ACTION_PERMISSIONS = {
   },
   admissionAssignBed: {
     endpoint: 'AdmissionController#assignBed',
-    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN'],
+    // Policy rule 2 (provisional): a midwife assigns maternity-ward beds and cots (shared/midwife-beds).
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
   },
   admissionUnassignBed: {
     endpoint: 'AdmissionController#unassignBed',
-    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
   },
   admissionDischarge: {
     endpoint: 'AdmissionController#dischargePatient',

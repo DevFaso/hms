@@ -105,6 +105,10 @@
         "description": "Imaging / radiology"
       },
       {
+        "name": "ROLE_IMAGING_TECHNICIAN",
+        "description": "Imaging technician (radiographer)"
+      },
+      {
         "name": "ROLE_SURGEON",
         "description": "Surgeon"
       },

@@ -40,9 +40,11 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.lenient;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -1959,5 +1961,463 @@ class ImagingOrderServiceImplTest {
         assertThat(order.getDuplicateOfRecentOrder()).isFalse();
         assertThat(order.getDuplicateOverride()).isNull();
         assertThat(order.getDuplicateOverrideReason()).isNull();
+    }
+
+    // ═══════════════ Policy rule 3 (2026-11-20, provisional): the imaging technician ═══════════════
+
+    private static final String TECHNICIAN = "ROLE_IMAGING_TECHNICIAN";
+
+    private void signInAs(UUID sessionUserId, String... authorities) {
+        com.example.hms.model.User sessionUser = new com.example.hms.model.User();
+        sessionUser.setId(sessionUserId);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(sessionUser, null,
+                java.util.Arrays.stream(authorities)
+                    .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new).toList()));
+        // Review of #1243: a role counts at the hospital it is held at. The roles named are held
+        // at this test's hospital; tokenOnly() signs in with roles held elsewhere.
+        lenient().when(roleValidator.getCurrentUserId()).thenReturn(sessionUserId);
+        for (String authority : authorities) {
+            lenient().when(roleValidator.hasRole(sessionUserId, hospitalId, authority.substring("ROLE_".length())))
+                .thenReturn(true);
+        }
+    }
+
+    /** A session whose token carries these roles, none of them held at this test's hospital. */
+    private void tokenOnly(UUID sessionUserId, String... authorities) {
+        com.example.hms.model.User sessionUser = new com.example.hms.model.User();
+        sessionUser.setId(sessionUserId);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(sessionUser, null,
+                java.util.Arrays.stream(authorities)
+                    .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new).toList()));
+        lenient().when(roleValidator.getCurrentUserId()).thenReturn(sessionUserId);
+    }
+
+    private ImagingOrder studyOfAnotherProvider(ImagingOrderStatus status) {
+        ImagingOrder order = orderAt(hospital);
+        order.setStatus(status);
+        order.setOrderingProviderUserId(UUID.randomUUID());
+        org.mockito.Mockito.lenient().when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(imagingOrderRepository.save(order)).thenReturn(order);
+        return order;
+    }
+
+    private static ImagingOrderStatusUpdateRequestDTO step(ImagingOrderStatus status) {
+        return ImagingOrderStatusUpdateRequestDTO.builder().status(status).build();
+    }
+
+    @Test
+    void policyRule3_aTechnicianStartsAndCompletesTheExam_andIsRecordedAsWhoPerformedIt() {
+        ImagingOrder order = studyOfAnotherProvider(ImagingOrderStatus.ORDERED);
+        UUID technician = UUID.randomUUID();
+        signer(technician, "Awa", "Kone");
+        com.example.hms.model.Staff staff = new com.example.hms.model.Staff();
+        staff.setId(UUID.randomUUID());
+        when(staffRepository.findByUserIdAndHospitalId(technician, hospitalId)).thenReturn(Optional.of(staff));
+        signInAs(technician, TECHNICIAN);
+
+        imagingOrderService.updateOrderStatus(orderId, step(ImagingOrderStatus.IN_PROGRESS));
+
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.IN_PROGRESS);
+        // The never-filled "performed by": the session user and their staff row, never a request field.
+        assertThat(order.getPerformedByUserId()).isEqualTo(technician);
+        assertThat(order.getPerformedByStaffId()).isEqualTo(staff.getId());
+        assertThat(order.getPerformedByName()).isEqualTo("Awa Kone");
+        assertThat(order.getExamStartedAt()).isNotNull();
+
+        imagingOrderService.updateOrderStatus(orderId, step(ImagingOrderStatus.COMPLETED));
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.COMPLETED);
+        assertThat(order.getCompletedAt()).isNotNull();
+        assertThat(order.getPerformedByUserId()).isEqualTo(technician);
+    }
+
+    @Test
+    void policyRule3_aRequestNamingAnotherPerformerChangesNothing() {
+        ImagingOrder order = studyOfAnotherProvider(ImagingOrderStatus.ORDERED);
+        UUID technician = UUID.randomUUID();
+        signer(technician, "Awa", "Kone");
+        signInAs(technician, TECHNICIAN);
+
+        imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder()
+            .status(ImagingOrderStatus.IN_PROGRESS).performedByUserId(UUID.randomUUID()).performedByName("Dr Autre")
+            .build());
+
+        assertThat(order.getPerformedByUserId()).isEqualTo(technician);
+        assertThat(order.getPerformedByName()).isEqualTo("Awa Kone");
+    }
+
+    @Test
+    void policyRule3_aTechnicianDiscontinuesAStartedExamWithAReason_andNeverCancelsOneNotStarted() {
+        UUID technician = UUID.randomUUID();
+        signer(technician, "Awa", "Kone");
+        signInAs(technician, TECHNICIAN);
+
+        ImagingOrder placed = studyOfAnotherProvider(ImagingOrderStatus.ORDERED);
+        ImagingOrderStatusUpdateRequestDTO cancel = ImagingOrderStatusUpdateRequestDTO.builder()
+            .status(ImagingOrderStatus.CANCELLED).cancellationReason("Patient agité").build();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrderStatus(orderId, cancel))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(placed.getStatus()).isEqualTo(ImagingOrderStatus.ORDERED);
+        verify(imagingOrderRepository, never()).save(any());
+
+        ImagingOrder started = studyOfAnotherProvider(ImagingOrderStatus.IN_PROGRESS);
+        // The reason is still required of them.
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> imagingOrderService.updateOrderStatus(orderId, step(ImagingOrderStatus.CANCELLED)))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        assertThat(started.getStatus()).isEqualTo(ImagingOrderStatus.IN_PROGRESS);
+
+        imagingOrderService.updateOrderStatus(orderId, cancel);
+        assertThat(started.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
+        assertThat(started.getCancellationReason()).isEqualTo("Patient agité");
+        assertThat(started.getCancelledByUserId()).isEqualTo(technician);
+    }
+
+    @Test
+    void policyRule3_aTechnicianNeitherSchedulesNorRecordsAPreAuthorisation() {
+        ImagingOrder order = studyOfAnotherProvider(ImagingOrderStatus.ORDERED);
+        signInAs(UUID.randomUUID(), TECHNICIAN);
+        List<ImagingOrderStatusUpdateRequestDTO> notTheirs = List.of(
+            ImagingOrderStatusUpdateRequestDTO.builder().status(ImagingOrderStatus.SCHEDULED)
+                .scheduledDate(LocalDate.now().plusDays(1)).build(),
+            step(ImagingOrderStatus.PENDING_AUTHORIZATION),
+            ImagingOrderStatusUpdateRequestDTO.builder().status(ImagingOrderStatus.IN_PROGRESS)
+                .authorizationNumber("AUTH-9").build(),
+            ImagingOrderStatusUpdateRequestDTO.builder().status(ImagingOrderStatus.ORDERED)
+                .appointmentLocation("Salle 4").build());
+        for (ImagingOrderStatusUpdateRequestDTO request : notTheirs) {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrderStatus(orderId, request))
+                .as(request.toString())
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        }
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.ORDERED);
+        assertThat(order.getAuthorizationNumber()).isNull();
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void policyRule3_aRadiologistWhoIsAlsoATechnicianKeepsTheRadiologistsReach() {
+        ImagingOrder order = studyOfAnotherProvider(ImagingOrderStatus.ORDERED);
+        UUID both = UUID.randomUUID();
+        signer(both, "Ali", "Sana");
+        signInAs(both, TECHNICIAN, "ROLE_RADIOLOGIST");
+
+        imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder()
+            .status(ImagingOrderStatus.SCHEDULED).scheduledDate(LocalDate.now().plusDays(1)).build());
+
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.SCHEDULED);
+    }
+
+    @Test
+    void policyRule3_thePatientIsCheckedInOnceFromTheSession() {
+        ImagingOrder order = studyOfAnotherProvider(ImagingOrderStatus.SCHEDULED);
+        UUID technician = UUID.randomUUID();
+        signer(technician, "Awa", "Kone");
+        signInAs(technician, TECHNICIAN);
+
+        imagingOrderService.checkInPatient(orderId);
+
+        assertThat(order.getCheckedInAt()).isNotNull();
+        assertThat(order.getCheckedInByUserId()).isEqualTo(technician);
+        assertThat(order.getCheckedInByName()).isEqualTo("Awa Kone");
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.SCHEDULED);
+
+        // A second check-in, by somebody else, changes nothing.
+        LocalDateTime first = order.getCheckedInAt();
+        signInAs(UUID.randomUUID(), TECHNICIAN);
+        imagingOrderService.checkInPatient(orderId);
+        assertThat(order.getCheckedInAt()).isEqualTo(first);
+        assertThat(order.getCheckedInByUserId()).isEqualTo(technician);
+        verify(imagingOrderRepository, times(1)).save(order);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = ImagingOrderStatus.class, names = {"DRAFT", "COMPLETED", "RESULTS_AVAILABLE", "CANCELLED"})
+    void policyRule3_noCheckInOnAnExamThatIsNotPlacedOrAlreadyDone(ImagingOrderStatus status) {
+        ImagingOrder order = studyOfAnotherProvider(status);
+        signInAs(UUID.randomUUID(), TECHNICIAN);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.checkInPatient(orderId))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        assertThat(order.getCheckedInAt()).isNull();
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void policyRule3_theExamRecordIsWrittenFromTheSessionAndReplacedAsSent() {
+        ImagingOrder order = studyOfAnotherProvider(ImagingOrderStatus.IN_PROGRESS);
+        UUID technician = UUID.randomUUID();
+        signInAs(technician, TECHNICIAN);
+
+        imagingOrderService.recordExam(orderId, com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO.builder()
+            .technicalNote("  Thorax face, 110 kV  ").contrastAdministered(true).contrastDetails("Iode 80 mL IV")
+            .radiationDoseMgy(new java.math.BigDecimal("0.150")).build());
+
+        assertThat(order.getExamTechnicalNote()).isEqualTo("Thorax face, 110 kV");
+        assertThat(order.getExamContrastAdministered()).isTrue();
+        assertThat(order.getExamContrastDetails()).isEqualTo("Iode 80 mL IV");
+        assertThat(order.getExamRadiationDoseMgy()).isEqualByComparingTo("0.150");
+        assertThat(order.getExamRecordedByUserId()).isEqualTo(technician);
+        assertThat(order.getExamRecordedAt()).isNotNull();
+        // Recording the exam is not a status change.
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.IN_PROGRESS);
+
+        imagingOrderService.recordExam(orderId, com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO.builder()
+            .technicalNote(" ").contrastAdministered(false).build());
+        assertThat(order.getExamTechnicalNote()).isNull();
+        assertThat(order.getExamContrastAdministered()).isFalse();
+        assertThat(order.getExamContrastDetails()).isNull();
+        assertThat(order.getExamRadiationDoseMgy()).isNull();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = ImagingOrderStatus.class, names = {"DRAFT", "ORDERED", "SCHEDULED", "RESULTS_AVAILABLE",
+        "CANCELLED"})
+    void policyRule3_theExamRecordIsClosedBeforeTheExamStartsAndOnceItIsRead(ImagingOrderStatus status) {
+        ImagingOrder order = studyOfAnotherProvider(status);
+        signInAs(UUID.randomUUID(), TECHNICIAN);
+
+        com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO anExamRecord =
+            com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO.builder().technicalNote("x").build();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.recordExam(orderId, anExamRecord))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        assertThat(order.getExamTechnicalNote()).isNull();
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void policyRule3_theExamRecordAndCheckInOfAnotherHospitalsOrderAnswerAsMissing() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        ImagingOrder foreign = orderAt(other);
+        foreign.setStatus(ImagingOrderStatus.IN_PROGRESS);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(foreign));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        signInAs(UUID.randomUUID(), TECHNICIAN);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.checkInPatient(orderId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO anExamRecord =
+            com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO.builder().technicalNote("x").build();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.recordExam(orderId, anExamRecord))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void policyRule3_aTechnicianNeverReadsAnotherHospitalsOrder_whereTheCareTeamFollowsThePatient() {
+        UUID hospitalB = UUID.randomUUID();
+        ImagingOrder orderAtA = orderAtHospital(orderId, hospital);
+        orderAtA.setStatus(ImagingOrderStatus.ORDERED);
+        when(imagingOrderRepository.findByIdUnscoped(orderId)).thenReturn(Optional.of(orderAtA));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalB);
+        UUID technician = UUID.randomUUID();
+        org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(technician);
+        org.mockito.Mockito.lenient().when(recordAccessPolicy.readableHospitalIds(technician, patientId, hospitalB))
+            .thenReturn(java.util.Set.of(hospitalB, hospitalId));
+        tokenOnly(technician, TECHNICIAN);
+        // A technician of hospital B, where they act.
+        lenient().when(roleValidator.hasRole(technician, hospitalB, "IMAGING_TECHNICIAN")).thenReturn(true);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.getOrder(orderId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(reachRecorder, never()).recordReach(any(), any(), any(), any(), any(), any());
+    }
+
+    // ═══════════════ Review of #1243: the role counts at the order's hospital ═══════════════
+
+    @Test
+    void review1243_aTechnicianOfAnotherHospitalIsRefusedEveryExamWriteAndReadHere() {
+        ImagingOrder order = studyOfAnotherProvider(ImagingOrderStatus.ORDERED);
+        // Their token carries the technician role (held at another hospital) and nothing the imaging endpoints take.
+        tokenOnly(UUID.randomUUID(), TECHNICIAN, "ROLE_RECEPTIONIST");
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        lenient().when(imagingOrderRepository.findByIdUnscoped(orderId)).thenReturn(Optional.of(order));
+        ImagingOrderStatusUpdateRequestDTO start = step(ImagingOrderStatus.IN_PROGRESS);
+        com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO anExamRecord =
+            com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO.builder().technicalNote("x").build();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrderStatus(orderId, start))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.checkInPatient(orderId))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        order.setStatus(ImagingOrderStatus.IN_PROGRESS);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.recordExam(orderId, anExamRecord))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.getOrder(orderId))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.getOrdersByHospital(hospitalId, null))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+
+        assertThat(order.getCheckedInAt()).isNull();
+        assertThat(order.getExamTechnicalNote()).isNull();
+        verify(imagingOrderRepository, never()).save(any());
+        verify(imagingOrderRepository, never()).findByHospital_IdOrderByOrderedAtDesc(any());
+    }
+
+    @Test
+    void review1243_aTechnicianHereWhoIsARadiologistElsewhereIsStillNarrowedHere() {
+        ImagingOrder order = studyOfAnotherProvider(ImagingOrderStatus.ORDERED);
+        UUID caller = UUID.randomUUID();
+        signer(caller, "Ali", "Sana");
+        // The token carries both roles; only the technician's is held at this hospital.
+        tokenOnly(caller, TECHNICIAN, "ROLE_RADIOLOGIST");
+        lenient().when(roleValidator.hasRole(caller, hospitalId, "IMAGING_TECHNICIAN")).thenReturn(true);
+        ImagingOrderStatusUpdateRequestDTO schedule = ImagingOrderStatusUpdateRequestDTO.builder()
+            .status(ImagingOrderStatus.SCHEDULED).scheduledDate(LocalDate.now().plusDays(1)).build();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrderStatus(orderId, schedule))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.ORDERED);
+
+        // The technician's own step still goes through.
+        imagingOrderService.updateOrderStatus(orderId, step(ImagingOrderStatus.IN_PROGRESS));
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.IN_PROGRESS);
+        assertThat(order.getPerformedByUserId()).isEqualTo(caller);
+    }
+
+    // ═══════════════ Owner decision 2026-11-20: who performs an ultrasound ═══════════════
+
+    @Test
+    void ultrasound_aTechnicianIsRefusedTheExamAndItsRecordWhileTheHospitalKeepsItWithPhysicians() {
+        ImagingOrder order = studyOfAnotherProvider(ImagingOrderStatus.ORDERED);
+        order.setModality(ImagingModality.ULTRASOUND);
+        UUID technician = UUID.randomUUID();
+        signer(technician, "Awa", "Kone");
+        signInAs(technician, TECHNICIAN);
+        com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO anExamRecord =
+            com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO.builder().technicalNote("x").build();
+
+        // The default: physicians only.
+        assertThat(hospital.isUltrasoundByNonPhysician()).isFalse();
+        ImagingOrderStatusUpdateRequestDTO start = step(ImagingOrderStatus.IN_PROGRESS);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrderStatus(orderId, start))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        order.setStatus(ImagingOrderStatus.IN_PROGRESS);
+        ImagingOrderStatusUpdateRequestDTO complete = step(ImagingOrderStatus.COMPLETED);
+        ImagingOrderStatusUpdateRequestDTO discontinue = ImagingOrderStatusUpdateRequestDTO.builder()
+            .status(ImagingOrderStatus.CANCELLED).cancellationReason("Patient agité").build();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrderStatus(orderId, complete))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrderStatus(orderId, discontinue))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.recordExam(orderId, anExamRecord))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.IN_PROGRESS);
+        assertThat(order.getPerformedByUserId()).isNull();
+        verify(imagingOrderRepository, never()).save(any());
+
+        // The arrival is not the exam: it is still recorded.
+        imagingOrderService.checkInPatient(orderId);
+        assertThat(order.getCheckedInByUserId()).isEqualTo(technician);
+    }
+
+    @Test
+    void ultrasound_aTechnicianPerformsItOnceTheHospitalAllowsIt_andAnotherModalityAlways() {
+        UUID technician = UUID.randomUUID();
+        signer(technician, "Awa", "Kone");
+        signInAs(technician, TECHNICIAN);
+
+        ImagingOrder ultrasound = studyOfAnotherProvider(ImagingOrderStatus.ORDERED);
+        ultrasound.setModality(ImagingModality.ULTRASOUND);
+        hospital.setUltrasoundByNonPhysician(true);
+        imagingOrderService.updateOrderStatus(orderId, step(ImagingOrderStatus.IN_PROGRESS));
+        assertThat(ultrasound.getStatus()).isEqualTo(ImagingOrderStatus.IN_PROGRESS);
+        assertThat(ultrasound.getPerformedByUserId()).isEqualTo(technician);
+
+        hospital.setUltrasoundByNonPhysician(false);
+        ImagingOrder xray = studyOfAnotherProvider(ImagingOrderStatus.ORDERED);
+        imagingOrderService.updateOrderStatus(orderId, step(ImagingOrderStatus.IN_PROGRESS));
+        assertThat(xray.getStatus()).isEqualTo(ImagingOrderStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void ultrasound_aRadiologistIsNeverHeldToTheSetting() {
+        ImagingOrder order = studyOfAnotherProvider(ImagingOrderStatus.ORDERED);
+        order.setModality(ImagingModality.ULTRASOUND);
+        UUID radiologist = UUID.randomUUID();
+        signer(radiologist, "Ali", "Sana");
+        signInAs(radiologist, "ROLE_RADIOLOGIST");
+
+        imagingOrderService.updateOrderStatus(orderId, step(ImagingOrderStatus.IN_PROGRESS));
+
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.IN_PROGRESS);
+    }
+
+    // ═══════════════ Review of #1243: the performer, and the exam record's audit ═══════════════
+
+    @Test
+    void review1243_aSameStatusWriteOnAStudyInProgressNeverReplacesWhoPerformedIt() {
+        ImagingOrder order = studyOfAnotherProvider(ImagingOrderStatus.IN_PROGRESS);
+        UUID performer = UUID.randomUUID();
+        LocalDateTime started = LocalDateTime.now().minusMinutes(20);
+        order.setPerformedByUserId(performer);
+        order.setPerformedByName("Awa Kone");
+        order.setExamStartedAt(started);
+        UUID radiologist = UUID.randomUUID();
+        signer(radiologist, "Ali", "Sana");
+        signInAs(radiologist, "ROLE_RADIOLOGIST");
+
+        // A radiologist records where the study in progress continues: a same-status write.
+        imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder()
+            .status(ImagingOrderStatus.IN_PROGRESS).appointmentLocation("Salle 2").build());
+
+        assertThat(order.getAppointmentLocation()).isEqualTo("Salle 2");
+        assertThat(order.getPerformedByUserId()).isEqualTo(performer);
+        assertThat(order.getPerformedByName()).isEqualTo("Awa Kone");
+        assertThat(order.getExamStartedAt()).isEqualTo(started);
+    }
+
+    @Test
+    void review1243_anExamRecordWriteIsAuditedWithWhatChanged_neverTheFreeText() {
+        com.example.hms.service.AuditEventLogService audit = mock(com.example.hms.service.AuditEventLogService.class);
+        imagingOrderService.setAuditEventLogService(audit);
+        ImagingOrder order = studyOfAnotherProvider(ImagingOrderStatus.IN_PROGRESS);
+        order.setExamContrastAdministered(false);
+        order.setExamRadiationDoseMgy(new java.math.BigDecimal("0.100"));
+        UUID technician = UUID.randomUUID();
+        signInAs(technician, TECHNICIAN);
+
+        imagingOrderService.recordExam(orderId, com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO.builder()
+            .technicalNote("Patient Awa Kone agitée, thorax face").contrastAdministered(true)
+            .contrastDetails("Iode 80 mL IV").radiationDoseMgy(new java.math.BigDecimal("0.150")).build());
+
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> event =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(audit).logEvent(event.capture());
+        assertThat(event.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.DATA_UPDATE);
+        assertThat(event.getValue().getEntityType()).isEqualTo("IMAGING_ORDER");
+        assertThat(event.getValue().getResourceId()).isEqualTo(orderId.toString());
+        assertThat(event.getValue().getHospitalId()).isEqualTo(hospitalId);
+        assertThat(event.getValue().getPatientId()).isEqualTo(patientId);
+        assertThat(event.getValue().getUserId()).isEqualTo(technician);
+        assertThat(event.getValue().getEventDescription()).isEqualTo("Imaging exam record updated");
+        assertThat(event.getValue().getDetails()).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+            .containsEntry("contrastAdministered", "false -> true")
+            .containsEntry("radiationDoseMgy", "0.1 -> 0.15")
+            .containsEntry("technicalNote", "set")
+            .containsEntry("contrastDetails", "set");
+        assertThat(event.getValue().getDetails().toString()).doesNotContain("Awa").doesNotContain("Iode");
+
+        // The same record again changes nothing: no second row.
+        imagingOrderService.recordExam(orderId, com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO.builder()
+            .technicalNote("Patient Awa Kone agitée, thorax face").contrastAdministered(true)
+            .contrastDetails("Iode 80 mL IV").radiationDoseMgy(new java.math.BigDecimal("0.15")).build());
+        verify(audit, times(1)).logEvent(any());
+    }
+
+    @Test
+    void review1243_aFailedAuditNeverFailsTheExamRecord() {
+        com.example.hms.service.AuditEventLogService audit = mock(com.example.hms.service.AuditEventLogService.class);
+        doThrow(new IllegalStateException("audit down")).when(audit).logEvent(any());
+        imagingOrderService.setAuditEventLogService(audit);
+        ImagingOrder order = studyOfAnotherProvider(ImagingOrderStatus.IN_PROGRESS);
+        signInAs(UUID.randomUUID(), TECHNICIAN);
+
+        imagingOrderService.recordExam(orderId, com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO.builder()
+            .technicalNote("RAS").build());
+
+        assertThat(order.getExamTechnicalNote()).isEqualTo("RAS");
     }
 }

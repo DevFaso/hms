@@ -493,4 +493,159 @@ class ImagingStudyImageServiceTest {
                 .isInstanceOf(ClientSafeAccessDeniedException.class);
         }
     }
+
+    /** Policy rule 3 (2026-11-20, provisional): the imaging technician and the study's key images. */
+    @org.junit.jupiter.api.Nested
+    class TheImagingTechnician {
+
+        private static final String TECHNICIAN = "ROLE_IMAGING_TECHNICIAN";
+
+        /** Review of #1243: the role is held at the study's hospital, where it counts. */
+        @BeforeEach
+        void aTechnicianOfTheStudysHospital() {
+            when(roleValidator.hasRole(callerId, hospitalId, "IMAGING_TECHNICIAN")).thenReturn(true);
+        }
+
+        @Test
+        void aTechnicianOfAnotherHospitalNeitherReadsNorWritesAnImageHere() throws IOException {
+            ImagingStudyImage onStudy = image(null, callerId);
+            UUID imageId = onStudy.getId();
+            when(roleValidator.hasRole(callerId, hospitalId, "IMAGING_TECHNICIAN")).thenReturn(false);
+            as(TECHNICIAN, "ROLE_RECEPTIONIST");
+
+            assertThatThrownBy(() -> service.list(order.getId()))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            assertThatThrownBy(() -> service.readContent(imageId))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            assertThatThrownBy(() -> service.upload(order.getId(), null, png(), "face"))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            assertThatThrownBy(() -> service.updateCaption(imageId, "autre"))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            assertThatThrownBy(() -> service.delete(imageId))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            verify(fileUploadService, never()).uploadImagingImage(any());
+            assertThat(onStudy.getCaption()).isEqualTo("lesion");
+        }
+
+        @Test
+        void aTechnicianHereWhoIsADoctorElsewhereStillNeverAttachesToAReport() {
+            // The token carries the doctor's role from another hospital; here they are a technician.
+            ImagingReport draft = report(false, ImagingReportStatus.PRELIMINARY);
+            UUID draftId = draft.getId();
+            as(TECHNICIAN, "ROLE_DOCTOR");
+
+            assertThatThrownBy(() -> service.upload(order.getId(), draftId, png(), "face"))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        }
+
+        @Test
+        void attachesToTheStudyAndNeverToAReport() throws IOException {
+            as(TECHNICIAN);
+            ImagingStudyImageDTO onStudy = service.upload(order.getId(), null, png(), "face");
+            assertThat(onStudy.imagingReportId()).isNull();
+
+            ImagingReport draft = report(false, ImagingReportStatus.PRELIMINARY);
+            UUID draftId = draft.getId();
+            assertThatThrownBy(() -> service.upload(order.getId(), draftId, png(), "face"))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        }
+
+        @Test
+        void seesTheStudysImagesBeforeAnyRelease_whateverAdminRoleTheyAlsoHold() {
+            image(null, callerId);
+            as(TECHNICIAN);
+            assertThat(service.list(order.getId())).hasSize(1);
+            as(TECHNICIAN, "ROLE_HOSPITAL_ADMIN");
+            assertThat(service.list(order.getId())).hasSize(1);
+        }
+
+        @Test
+        void neverReadsADraftReportsAttachment_norAReleasedOneOfAnExamSomebodyElsePerformed() {
+            // Rex review of #1243 (P1): the technician's reach must not open a report's attachments.
+            ImagingStudyImage onStudy = image(null, UUID.randomUUID());
+            ImagingStudyImage onDraft = image(report(false, ImagingReportStatus.PRELIMINARY), UUID.randomUUID());
+            ImagingStudyImage onFinal = image(report(true, ImagingReportStatus.FINAL), UUID.randomUUID());
+            UUID draftImageId = onDraft.getId();
+            UUID finalImageId = onFinal.getId();
+            as(TECHNICIAN);
+
+            // An exam somebody else performed: the study's own images only.
+            order.setPerformedByUserId(UUID.randomUUID());
+            assertThat(service.list(order.getId())).extracting(ImagingStudyImageDTO::id)
+                .containsExactly(onStudy.getId());
+            assertThatThrownBy(() -> service.readContent(draftImageId)).isInstanceOf(ResourceNotFoundException.class);
+            assertThatThrownBy(() -> service.readContent(finalImageId)).isInstanceOf(ResourceNotFoundException.class);
+            assertThat(service.readContent(onStudy.getId()).imageId()).isEqualTo(onStudy.getId());
+
+            // Their own exam: the released report's image too, never the draft's.
+            order.setPerformedByUserId(callerId);
+            assertThat(service.list(order.getId())).extracting(ImagingStudyImageDTO::id)
+                .containsExactly(onStudy.getId(), onFinal.getId());
+            assertThatThrownBy(() -> service.readContent(draftImageId)).isInstanceOf(ResourceNotFoundException.class);
+            assertThat(service.readContent(finalImageId).imageId()).isEqualTo(finalImageId);
+
+            // Beside an administrative role: any released report's image, still no draft's.
+            order.setPerformedByUserId(UUID.randomUUID());
+            as(TECHNICIAN, "ROLE_HOSPITAL_ADMIN");
+            assertThat(service.list(order.getId())).extracting(ImagingStudyImageDTO::id)
+                .containsExactly(onStudy.getId(), onFinal.getId());
+            assertThatThrownBy(() -> service.readContent(draftImageId)).isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        void readsWhatBecameOfAStudysImage_andOfAReportsOnlyWhereTheyReadTheReport() {
+            ImagingStudyImage onStudy = image(null, callerId);
+            onStudy.setWithdrawnAt(LocalDateTime.now());
+            onStudy.setWithdrawalReason("mauvaise incidence");
+            ImagingStudyImage onFinal = image(report(true, ImagingReportStatus.FINAL), UUID.randomUUID());
+            onFinal.setWithdrawnAt(LocalDateTime.now());
+            onFinal.setWithdrawalReason("mauvais patient");
+            as(TECHNICIAN);
+
+            order.setPerformedByUserId(UUID.randomUUID());
+            assertThat(service.withdrawn(order.getId())).hasSize(1);
+            order.setPerformedByUserId(callerId);
+            assertThat(service.withdrawn(order.getId())).hasSize(2);
+        }
+
+        @Test
+        void correctsTheirCaptionAndRemovesTheirImageUntilTheSignature_thenNeither() {
+            ImagingStudyImage own = image(null, callerId);
+            as(TECHNICIAN);
+            assertThat(service.list(order.getId()).get(0).captionEditable()).isTrue();
+            assertThat(service.list(order.getId()).get(0).deletable()).isTrue();
+            UUID ownId = own.getId();
+            service.updateCaption(ownId, "profil");
+            assertThat(own.getCaption()).isEqualTo("profil");
+            // The fixture's save answer re-ids what it saves: keep the id the lookups are stubbed on.
+            own.setId(ownId);
+
+            // A signed report locks the study's images: the caption is the signed record's now.
+            report(true, ImagingReportStatus.FINAL);
+            ImagingStudyImageDTO locked = service.list(order.getId()).get(0);
+            assertThat(locked.captionEditable()).isFalse();
+            assertThat(locked.deletable()).isFalse();
+            assertThat(locked.withdrawable()).isFalse();
+            assertThatThrownBy(() -> service.updateCaption(ownId, "autre"))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            assertThat(own.getCaption()).isEqualTo("profil");
+            assertThatThrownBy(() -> service.delete(ownId)).isInstanceOf(BusinessException.class)
+                .isNotInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+            // Withdrawing after the signature is a radiologist's or the signer's.
+            assertThatThrownBy(() -> service.withdraw(ownId, "mauvaise image"))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            assertThat(own.isWithdrawn()).isFalse();
+        }
+
+        @Test
+        void aDoctorWhoIsAlsoATechnicianKeepsTheUploadersCaptionAfterSigning() {
+            ImagingStudyImage own = image(null, callerId);
+            report(true, ImagingReportStatus.FINAL);
+            as(TECHNICIAN, "ROLE_DOCTOR");
+            // A doctor at this hospital too: the wider role is held here.
+            when(roleValidator.isDoctor(callerId, hospitalId)).thenReturn(true);
+            service.updateCaption(own.getId(), "corrigée");
+            assertThat(own.getCaption()).isEqualTo("corrigée");
+        }
+    }
 }

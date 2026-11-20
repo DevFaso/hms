@@ -3859,4 +3859,18 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V346: the imaging technician (policy rule 3, 2026-11-20,
+         provisional). One role row, the exam record columns on
+         imaging_orders (check-in, performed by, technical note, contrast,
+         dose) and a per-hospital "ultrasound by a non-physician" setting. Additive:
+         IF NOT EXISTS / ON CONFLICT DO NOTHING, no DO block.
+         ================================================================= -->
+    <changeSet id="V346-imaging-technician-and-exam-record" author="hms-team" runOnChange="false">
+        <sqlFile path="V346__imaging_technician_and_exam_record.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>
