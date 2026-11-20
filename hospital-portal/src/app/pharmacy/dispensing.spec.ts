@@ -12,6 +12,8 @@ import { OfflineDispenseQueueService } from './offline-dispense-queue.service';
 import { By } from '@angular/platform-browser';
 import { BehaviorSubject, of, Subject, throwError } from 'rxjs';
 import { RoleContextService } from '../core/role-context.service';
+import { HttpTestingController } from '@angular/common/http/testing';
+import { BillingDeferralService } from '../services/billing-deferral.service';
 import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
 
 describe('DispensingComponent', () => {
@@ -20,6 +22,8 @@ describe('DispensingComponent', () => {
   let pharmacySvc: jasmine.SpyObj<PharmacyService>;
   let authSvc: jasmine.SpyObj<AuthService>;
   let toastSvc: jasmine.SpyObj<ToastService>;
+  /** Policy rule 6: the deferrals the counter reads before an unpaid fill leaves. */
+  let deferralSvc: jasmine.SpyObj<BillingDeferralService>;
 
   const mockPharmacies = {
     content: [{ id: 'ph-1', name: 'Main Pharmacy' }],
@@ -148,6 +152,8 @@ describe('DispensingComponent', () => {
       currentProfile: () => ({ id: 'user-1' }),
     });
     toastSvc = jasmine.createSpyObj('ToastService', ['success', 'error']);
+    deferralSvc = jasmine.createSpyObj('BillingDeferralService', ['counter', 'request', 'list']);
+    deferralSvc.counter.and.returnValue(of({ data: { onOpenStay: false, open: [] } }) as never);
 
     pharmacySvc.listPharmacies.and.returnValue(of(mockPharmacies as any));
     pharmacySvc.getDispenseWorkQueue.and.returnValue(of(mockWorkQueue as any));
@@ -186,6 +192,7 @@ describe('DispensingComponent', () => {
         { provide: AuthService, useValue: authSvc },
         { provide: ToastService, useValue: toastSvc },
         { provide: OfflineDispenseQueueService, useValue: offlineQueueStub },
+        { provide: BillingDeferralService, useValue: deferralSvc },
       ],
     }).compileComponents();
     // QA D2120: the actions are a pharmacist's (a super-admin only reads the queue).
@@ -582,7 +589,7 @@ describe('DispensingComponent', () => {
     expect(el.querySelector('#fefoReason')!.getAttribute('aria-invalid')).toBe('true');
   });
 
-  it('review of #1239: a priced one-step fill asks for the « à facturer » reason and sends it; « Prête » never does', () => {
+  it('policy rule 6: a priced one-step fill leaves on an approved deferral or an urgency override, never on the pharmacist’s own reason; « Prête » sends neither', () => {
     pharmacySvc.createDispense.and.returnValue(of({ data: { id: 'd-new' } } as any));
     pharmacySvc.markReady.and.returnValue(of({ data: { id: 'd-ready' } } as any));
     component.inventoryItems.set([
@@ -600,44 +607,125 @@ describe('DispensingComponent', () => {
     const el: HTMLElement = fixture.nativeElement;
     expect(component.form.stockLotId).toBeTruthy();
     expect(component.oneStepCharge()).toBe(1000);
-    expect(el.querySelector('#dispDeferReason')).not.toBeNull();
+    // The pharmacist's own « à facturer » reason box is gone; the deferral choice stands in its place.
+    expect(el.querySelector('#dispDeferReason')).toBeNull();
+    expect(el.querySelector('[data-testid="dispense-defer"] app-billing-deferral-choice')).not.toBeNull();
+    expect(deferralSvc.counter).toHaveBeenCalledWith(mockWorkQueue.data.content[0].id);
 
+    // Nothing chosen: the fill does not leave, and the option is marked.
     component.submitDispense();
     fixture.detectChanges();
     expect(pharmacySvc.createDispense).not.toHaveBeenCalled();
-    expect(toastSvc.error).toHaveBeenCalledWith('PHARMACY_MONEY.ONESTEP.DEFER_REQUIRED');
-    expect(el.querySelector('#dispDeferReason')!.getAttribute('aria-invalid')).toBe('true');
+    expect(toastSvc.error).toHaveBeenCalledWith('PHARMACY_MONEY.DEFERRAL.CHOICE_REQUIRED');
+    expect(
+      el.querySelector('#dispense-deferral-mode-urgency')!.getAttribute('aria-invalid'),
+    ).toBe('true');
 
-    component.form.billingDeferredReason = '  Hospitalisée, facture du séjour ';
+    // An urgency override, with its reason.
+    el.querySelector<HTMLInputElement>('[data-testid="deferral-use-urgency"]')!.click();
+    fixture.detectChanges();
+    const reason = el.querySelector<HTMLTextAreaElement>('[data-testid="deferral-urgency-reason"]')!;
+    reason.value = '  Crise, caisse fermée ';
+    reason.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
     component.submitDispense();
-    expect(pharmacySvc.createDispense.calls.mostRecent().args[0].billingDeferredReason).toBe(
-      'Hospitalisée, facture du séjour',
-    );
+    const sent = pharmacySvc.createDispense.calls.mostRecent().args[0] as unknown as Record<string, unknown>;
+    expect(sent['billingUrgencyReason']).toBe('Crise, caisse fermée');
+    expect('billingDeferralId' in sent).toBeFalse();
+    expect('billingDeferredReason' in sent).toBeFalse();
 
-    // A prepared fill is paid or deferred at hand-over: the reason never travels with « Prête ».
+    // A prepared fill is paid or deferred at hand-over: neither travels with « Prête ».
     component.selectPrescription(mockWorkQueue.data.content[0]);
-    component.form.billingDeferredReason = 'x';
     component.submitReady();
-    expect('billingDeferredReason' in pharmacySvc.markReady.calls.mostRecent().args[0]).toBeFalse();
+    const ready = pharmacySvc.markReady.calls.mostRecent().args[0] as unknown as Record<string, unknown>;
+    expect('billingUrgencyReason' in ready).toBeFalse();
+    expect('billingDeferralId' in ready).toBeFalse();
   });
 
-  it('review of #1239: an unpriced one-step fill shows no « à facturer » field, until the server asks for one', () => {
+  it('policy rule 6: a deferral somebody else approved travels with a priced one-step fill', () => {
+    pharmacySvc.createDispense.and.returnValue(of({ data: { id: 'd-new' } } as any));
+    deferralSvc.counter.and.returnValue(
+      of({
+        data: {
+          onOpenStay: false,
+          open: [
+            {
+              id: 'def-1',
+              prescriptionId: 'rx-1',
+              patientId: 'p-1',
+              kind: 'OUTPATIENT_CREDIT',
+              status: 'APPROVED',
+              requestedAt: '2026-11-20T09:00:00',
+              canDecide: false,
+              canReview: false,
+              canExecute: true,
+            },
+          ],
+        },
+      }) as never,
+    );
+    component.inventoryItems.set([
+      {
+        id: 'inv-1',
+        medicationCatalogItemId: 'cat-1',
+        medicationName: 'Amoxicilline',
+        quantityOnHand: 100,
+        unitPrice: 100,
+      } as any,
+    ]);
+    component.selectPrescription(mockWorkQueue.data.content[0]);
+    component.form.quantityDispensed = 10;
+    fixture.detectChanges();
+
+    component.submitDispense();
+
+    const sent = pharmacySvc.createDispense.calls.mostRecent().args[0] as unknown as Record<string, unknown>;
+    expect(sent['billingDeferralId']).toBe('def-1');
+    expect('billingUrgencyReason' in sent).toBeFalse();
+  });
+
+  it('policy rule 6: an inpatient item needs no choice: it goes on the account of the stay', () => {
+    pharmacySvc.createDispense.and.returnValue(of({ data: { id: 'd-new' } } as any));
+    deferralSvc.counter.and.returnValue(of({ data: { onOpenStay: true, open: [] } }) as never);
+    component.inventoryItems.set([
+      {
+        id: 'inv-1',
+        medicationCatalogItemId: 'cat-1',
+        medicationName: 'Amoxicilline',
+        quantityOnHand: 100,
+        unitPrice: 100,
+      } as any,
+    ]);
+    component.selectPrescription(mockWorkQueue.data.content[0]);
+    component.form.quantityDispensed = 10;
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="deferral-open-stay"]')).not.toBeNull();
+
+    component.submitDispense();
+
+    expect(pharmacySvc.createDispense).toHaveBeenCalled();
+    const sent = pharmacySvc.createDispense.calls.mostRecent().args[0] as unknown as Record<string, unknown>;
+    expect('billingDeferralId' in sent).toBeFalse();
+    expect('billingUrgencyReason' in sent).toBeFalse();
+  });
+
+  it('review of #1239: an unpriced one-step fill shows no deferral choice, until the server refuses it as unpaid', () => {
     component.selectPrescription(mockWorkQueue.data.content[0]);
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;
     expect(component.oneStepCharge()).toBe(0);
-    expect(el.querySelector('#dispDeferReason')).toBeNull();
+    expect(el.querySelector('app-billing-deferral-choice')).toBeNull();
 
     pharmacySvc.createDispense.and.returnValue(
       throwError(() => ({
         status: 400,
-        error: { message: 'Non payée', fieldErrors: { billingDeferredReason: 'Non payée' } },
+        error: { message: 'Non payée', fieldErrors: { billingDeferralId: 'Non payée' } },
       })),
     );
     component.submitDispense();
     fixture.detectChanges();
     expect(component.deferReasonAsked()).toBeTrue();
-    expect(el.querySelector('#dispDeferReason')).not.toBeNull();
+    expect(el.querySelector('app-billing-deferral-choice')).not.toBeNull();
   });
 
   it('QA D654: an ordinary lot sends no witness', () => {
@@ -916,6 +1004,44 @@ describe('DispensingComponent', () => {
     component.confirmHandOver();
 
     expect(pharmacySvc.handOver).toHaveBeenCalledWith('d-ready', {});
+  });
+
+  it('policy rule 6: an unpaid hand-over needs an approved deferral or an urgency override, and sends it', () => {
+    pharmacySvc.handOver.and.returnValue(of({ data: {} } as any));
+    component.openHandOver(preparedRow as any);
+    TestBed.inject(HttpTestingController)
+      .expectOne('/pharmacy/dispense/d-ready/payment-status')
+      .flush({
+        data: {
+          dispenseId: 'd-ready',
+          quantity: 10,
+          charge: 1000,
+          paid: 0,
+          claimed: 0,
+          due: 1000,
+          status: 'UNPAID',
+        },
+      });
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    // The pharmacist's own « à facturer » reason box is gone.
+    expect(el.querySelector('[data-testid="hand-over-defer-reason"]')).toBeNull();
+    expect(el.querySelector('#hand-over-deferral-mode-urgency')).not.toBeNull();
+
+    component.confirmHandOver();
+    expect(pharmacySvc.handOver).not.toHaveBeenCalled();
+    expect(toastSvc.error).toHaveBeenCalledWith('PHARMACY_MONEY.DEFERRAL.CHOICE_REQUIRED');
+
+    el.querySelector<HTMLInputElement>('[data-testid="deferral-use-urgency"]')!.click();
+    fixture.detectChanges();
+    const reason = el.querySelector<HTMLTextAreaElement>('[data-testid="deferral-urgency-reason"]')!;
+    reason.value = 'Crise, caisse fermée';
+    reason.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    component.confirmHandOver();
+    expect(pharmacySvc.handOver).toHaveBeenCalledWith('d-ready', {
+      billingUrgencyReason: 'Crise, caisse fermée',
+    });
   });
 
   it('shows the server refusal when a hand-over fails', () => {

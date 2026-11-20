@@ -369,10 +369,12 @@ export interface DispenseRequest {
    */
   cdsOverrideReason?: string;
   /**
-   * Review of #1239 (QA D2675): a one-step fill leaves the counter before it can be paid. When it has
-   * a price, this is why it is handed over « à facturer » (a pharmacist or a hospital admin only).
+   * Policy rule 6 (review of #1239, QA D2675): a one-step fill leaves the counter before it can be paid.
+   * When it has a price, it names the deferral somebody else approved for the prescription…
    */
-  billingDeferredReason?: string;
+  billingDeferralId?: string;
+  /** …or carries the reason of a logged urgency override, which finance reviews afterwards. */
+  billingUrgencyReason?: string;
   /**
    * Roadmap row 4 / T-68 — optional client-supplied idempotency key the
    * offline-dispense queue mints when the user clicks Dispense. Allows the
@@ -1247,8 +1249,10 @@ export class PharmacyService {
     body: {
       patientScanValue?: string;
       notes?: string;
-      /** QA D2675: why an unpaid fill is handed over « à facturer ». */
-      billingDeferredReason?: string;
+      /** Policy rule 6 (QA D2675): the deferral somebody else approved for the prescription… */
+      billingDeferralId?: string;
+      /** …or the reason of a logged urgency override. */
+      billingUrgencyReason?: string;
     } = {},
   ): Observable<ApiResponse<DispenseResponse>> {
     return this.http.post<ApiResponse<DispenseResponse>>(

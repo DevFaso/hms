@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { MobileMoneyOperator } from '../shared/mobile-money-operator';
 import { ApiResponse, InventoryItemResponse } from './pharmacy.service';
+import { BillingDeferralKind } from './billing-deferral.service';
 
 /* QA r65 D2673–D2676: pharmacy money and stock (reconciliation, refunds, pack size, payment status). */
 
@@ -20,6 +21,8 @@ export interface DispensePaymentStatus {
   status: DispensePaymentState;
   billingDeferredReason?: string | null;
   billingDeferredAt?: string | null;
+  /** Policy rule 6: an inpatient item; what is due goes on the account of the open stay. */
+  onOpenStay?: boolean;
 }
 
 /** QA D2674: set once, the stock is counted in `unit`, `unitsPerPack` to a pack. */
@@ -88,6 +91,10 @@ export interface PharmacyReconciliation {
     netCollected: number;
     dispenseCharges: number;
     deferredTotal: number;
+    /** Policy rule 6: of the « à facturer » total, what left on an urgency override… */
+    urgencyOverrideTotal?: number;
+    /** …and what went on the account of an open stay. */
+    admissionAccountTotal?: number;
     unpaidTotal: number;
   };
   stock: {
@@ -127,8 +134,17 @@ export interface PharmacyReconciliation {
     medicationName?: string | null;
     quantity: number;
     due: number;
-    reason: string;
+    reason?: string | null;
     deferredAt?: string | null;
+    /** Policy rule 6: the deferral behind the fill; UNAPPROVED when it was marked before the rule. */
+    kind?: BillingDeferralKind | 'UNAPPROVED' | null;
+    requestedByName?: string | null;
+    approvedByName?: string | null;
+    handedOverByName?: string | null;
+    coverReference?: string | null;
+    creditLimit?: number | null;
+    /** An urgency override only: whether finance reviewed it. */
+    reviewed?: boolean | null;
   }[];
   /** Review of #1239: every lot over the day, opening + movements against its closing (also in the CSV). */
   lotBalances?: {

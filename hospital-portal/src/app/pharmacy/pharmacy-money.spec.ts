@@ -252,4 +252,66 @@ describe('Pharmacy reconciliation page (QA D2673)', () => {
     });
     host.remove();
   });
+
+  it('policy rule 6: each « à facturer » fill names the deferral behind it, and an override says if it was reviewed', () => {
+    const m = money();
+    m.reconciliationPharmacies.and.returnValue(
+      of({ data: [{ pharmacyId: 'ph-1', pharmacyName: 'Pharmacie' }] }) as never,
+    );
+    m.refunds.and.returnValue(of({ data: [] }) as never);
+    m.reconciliation.and.returnValue(
+      of({
+        data: {
+          ...day,
+          differences: [],
+          money: { ...day.money, deferredTotal: 3000, urgencyOverrideTotal: 1000, admissionAccountTotal: 1500 },
+          deferred: [
+            {
+              dispenseId: 'd-1',
+              medicationName: 'Paracétamol',
+              quantity: 4,
+              due: 1000,
+              reason: 'Crise, caisse fermée',
+              kind: 'URGENCY_OVERRIDE',
+              handedOverByName: 'Awa Pharmacienne',
+              reviewed: false,
+            },
+            { dispenseId: 'd-2', medicationName: 'Paracétamol', quantity: 6, due: 1500, kind: 'ADMISSION_ACCOUNT' },
+            {
+              dispenseId: 'd-3',
+              medicationName: 'Paracétamol',
+              quantity: 2,
+              due: 500,
+              reason: 'Hospitalisé',
+              kind: 'UNAPPROVED',
+            },
+          ],
+        },
+      }) as never,
+    );
+    TestBed.configureTestingModule({
+      imports: [PharmacyReconciliationComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: PharmacyMoneyService, useValue: m },
+        { provide: ToastService, useValue: toast() },
+      ],
+    });
+    const fixture = TestBed.createComponent(PharmacyReconciliationComponent);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const kinds = Array.from(host.querySelectorAll('[data-testid="recon-deferral-kind"]')).map((e) =>
+      e.textContent?.trim(),
+    );
+    // The label pipe falls back to the code where no translation is loaded (as here).
+    expect(kinds).toEqual([
+      'URGENCY_OVERRIDE',
+      'ADMISSION_ACCOUNT',
+      'UNAPPROVED',
+    ]);
+    const review = host.querySelectorAll('[data-testid="recon-override-review"]');
+    expect(review.length).toBe(1);
+    expect(review[0].textContent).toContain('PHARMACY_MONEY.RECON.OVERRIDE_TO_REVIEW');
+    expect(host.querySelector('[data-testid="recon-urgency-total"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="recon-stay-total"]')).not.toBeNull();
+  });
 });

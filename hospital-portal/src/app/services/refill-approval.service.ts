@@ -24,6 +24,15 @@ export interface RefillRequest {
   providerNotes: string | null;
   requestedAt: string | null;
   updatedAt: string | null;
+  /** Policy rule 1 (QA D2308): the pharmacist's flags for the prescriber, or the reason of a refusal. */
+  pharmacistNote?: string | null;
+  pharmacistReviewedAt?: string | null;
+  /** On what authority the request was decided. */
+  decisionBasis?: 'PRESCRIBER_APPROVAL' | 'ORIGINAL_PRESCRIPTION' | 'PHARMACIST_REFUSAL' | null;
+  /** A refill the prescriber already wrote is still unused: the pharmacy may release it. */
+  writtenRefillLeft?: boolean;
+  /** The server answered a pharmacist: the card shows the pharmacy's steps, never a decision. */
+  pharmacyView?: boolean;
 }
 
 export interface RefillDecisionRequest {
@@ -84,6 +93,27 @@ export class RefillApprovalService {
   pause(refillId: string, decision: Required<RefillDecisionRequest>): Observable<RefillRequest> {
     return this.http
       .put<ApiWrapper<RefillRequest>>(`${this.base}/${refillId}/pause`, decision)
+      .pipe(map((r) => r.data));
+  }
+
+  /** Policy rule 1: the pharmacist forwards the request to its prescriber with flags; decides nothing. */
+  pharmacistReview(refillId: string, pharmacistNote: string): Observable<RefillRequest> {
+    return this.http
+      .put<ApiWrapper<RefillRequest>>(`${this.base}/${refillId}/pharmacist-review`, { pharmacistNote })
+      .pipe(map((r) => r.data));
+  }
+
+  /** Policy rule 1: the pharmacist refuses to dispense, with the reason; the prescriber is told. */
+  pharmacistRefuse(refillId: string, pharmacistNote: string): Observable<RefillRequest> {
+    return this.http
+      .put<ApiWrapper<RefillRequest>>(`${this.base}/${refillId}/pharmacist-refuse`, { pharmacistNote })
+      .pipe(map((r) => r.data));
+  }
+
+  /** Policy rule 1: a refill already written on the prescription is released as ordinary dispensing. */
+  releaseAsPrescribed(refillId: string): Observable<RefillRequest> {
+    return this.http
+      .put<ApiWrapper<RefillRequest>>(`${this.base}/${refillId}/release-as-prescribed`, {})
       .pipe(map((r) => r.data));
   }
 }

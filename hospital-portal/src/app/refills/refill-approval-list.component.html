@@ -80,8 +80,81 @@
                 <dd>{{ r.providerNotes }}</dd>
               </div>
             }
+            <!-- Policy rule 1 (QA D2308): the pharmacist's flags or refusal, and on what authority it was decided. -->
+            @if (r.pharmacistNote) {
+              <div data-testid="refill-pharmacist-note">
+                <dt>{{ 'REFILLS.FIELD_PHARMACIST_NOTE' | translate }}</dt>
+                <dd>{{ r.pharmacistNote }}</dd>
+              </div>
+            }
+            @if (r.decisionBasis) {
+              <div data-testid="refill-decision-basis">
+                <dt>{{ 'REFILLS.FIELD_DECISION_BASIS' | translate }}</dt>
+                <dd>{{ 'REFILLS.BASIS_' + r.decisionBasis | translate }}</dd>
+              </div>
+            }
           </dl>
-          @if (isOpen(r.status)) {
+          @if (isOpen(r.status) && r.pharmacyView) {
+            <!-- Policy rule 1: the pharmacy reviews, flags, refuses to dispense and releases a refill the
+                 prescriber already wrote. It never approves a renewal. -->
+            <div class="refill-card__actions" data-testid="refill-pharmacy-actions">
+              <p class="refill-card__rule" data-testid="refill-pharmacy-rule">
+                {{ 'REFILLS.PHARMACY_RULE' | translate }}
+              </p>
+              <label class="refill-card__notes">
+                <span>{{ 'REFILLS.FIELD_PHARMACIST_NOTE' | translate }}</span>
+                <textarea
+                  [id]="notesFieldId(r.id)"
+                  rows="2"
+                  maxlength="1000"
+                  [(ngModel)]="decisionNotes[r.id]"
+                  [name]="'notes-' + r.id"
+                  [attr.data-testid]="'refill-notes-' + r.id"
+                  [placeholder]="'REFILLS.PHARMACIST_NOTE_PLACEHOLDER' | translate"
+                ></textarea>
+              </label>
+              <div class="refill-card__buttons">
+                @if (r.writtenRefillLeft) {
+                  <button
+                    type="button"
+                    class="btn-primary"
+                    [disabled]="busyId() !== null"
+                    (click)="release(r)"
+                    [attr.data-testid]="'refill-release-' + r.id"
+                  >
+                    {{ 'REFILLS.ACTION_RELEASE' | translate }}
+                  </button>
+                }
+                <button
+                  type="button"
+                  class="btn-secondary"
+                  [disabled]="busyId() !== null"
+                  (click)="forward(r)"
+                  [attr.data-testid]="'refill-forward-' + r.id"
+                >
+                  {{ 'REFILLS.ACTION_FORWARD' | translate }}
+                </button>
+                <button
+                  type="button"
+                  class="btn-danger"
+                  [disabled]="busyId() !== null"
+                  (click)="pharmacistRefuse(r)"
+                  [attr.data-testid]="'refill-pharmacist-refuse-' + r.id"
+                >
+                  {{ 'REFILLS.ACTION_PHARMACIST_REFUSE' | translate }}
+                </button>
+              </div>
+              @if (!r.writtenRefillLeft) {
+                <p class="refill-card__rule" data-testid="refill-needs-prescriber">
+                  {{ 'REFILLS.NEEDS_PRESCRIBER' | translate }}
+                </p>
+              }
+              <p class="refill-card__rule refill-card__provisional">
+                {{ 'REFILLS.PROVISIONAL' | translate }}
+              </p>
+            </div>
+          }
+          @if (isOpen(r.status) && !r.pharmacyView) {
             <div class="refill-card__actions">
               <!-- QA D1305: required to refuse or pause only, so the label says
                    so in words (a star would claim approval needs it too). -->

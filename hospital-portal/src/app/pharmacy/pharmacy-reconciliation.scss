@@ -172,3 +172,14 @@
 .refund-meta span {
   margin-left: 0.5rem;
 }
+
+// Policy rule 6: the deferral behind an « à facturer » fill (its kind, who approved, who handed over).
+.recon-deferral-kind,
+.recon-deferral-who {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.recon-deferral-open {
+  font-weight: 600;
+}

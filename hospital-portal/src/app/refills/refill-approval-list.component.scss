@@ -202,3 +202,14 @@
     color: #1a73e8;
   }
 }
+
+// Policy rule 1 (QA D2308): what the pharmacy may do with a renewal request, said on the card.
+.refill-card__rule {
+  margin: 0;
+  color: #555;
+  overflow-wrap: anywhere;
+}
+
+.refill-card__provisional {
+  font-style: italic;
+}

@@ -66,6 +66,9 @@ describe('RefillApprovalListComponent', () => {
       'approve',
       'reject',
       'pause',
+      'pharmacistReview',
+      'pharmacistRefuse',
+      'releaseAsPrescribed',
     ]);
     service.list.and.returnValue(page([]));
     service.approve.and.returnValue(of(refill({ status: 'APPROVED' })));
@@ -256,5 +259,118 @@ describe('RefillApprovalListComponent', () => {
     await api().reject(refill());
     expect(ask).toHaveBeenCalledTimes(1);
     expect(service.reject).not.toHaveBeenCalled();
+  });
+
+  // ── Policy rule 1 (provisional, QA D2308): only a prescriber approves a renewal ─────────────
+
+  describe('policy rule 1: the pharmacy reviews, flags, refuses and releases; it never approves', () => {
+    function renderFor(items: RefillRequest[]): HTMLElement {
+      service.list.and.returnValue(page(items));
+      (component as unknown as { setFilter(v: RefillStatus | 'ALL'): void }).setFilter('REQUESTED');
+      fixture.detectChanges();
+      return fixture.nativeElement as HTMLElement;
+    }
+
+    interface PharmacyApi {
+      forward(r: RefillRequest): void;
+      release(r: RefillRequest): void;
+      pharmacistRefuse(r: RefillRequest): Promise<void>;
+      decisionNotes: Record<string, string>;
+    }
+
+    function pharmacy(): PharmacyApi {
+      return component as unknown as PharmacyApi;
+    }
+
+    let confirmAsk: jasmine.Spy;
+
+    beforeEach(() => {
+      confirmAsk = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+    });
+
+    it('no pharmacist-approved renewal: a pharmacist sees no Approve, Hold or Refuse-as-prescriber', () => {
+      const host = renderFor([refill({ pharmacyView: true, writtenRefillLeft: false })]);
+      expect(host.querySelector('[data-testid="refill-approve-r1"]')).toBeNull();
+      expect(host.querySelector('[data-testid="refill-pause-r1"]')).toBeNull();
+      expect(host.querySelector('[data-testid="refill-reject-r1"]')).toBeNull();
+      expect(host.querySelector('[data-testid="refill-forward-r1"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="refill-pharmacist-refuse-r1"]')).not.toBeNull();
+      // No written refill is left: the pharmacy cannot release it either, and the card says who can.
+      expect(host.querySelector('[data-testid="refill-release-r1"]')).toBeNull();
+      expect(host.querySelector('[data-testid="refill-needs-prescriber"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="refill-pharmacy-rule"]')).not.toBeNull();
+    });
+
+    it('a prescriber keeps the three decisions and gets none of the pharmacy steps', () => {
+      const host = renderFor([refill({ pharmacyView: false, writtenRefillLeft: true })]);
+      expect(host.querySelector('[data-testid="refill-approve-r1"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="refill-pause-r1"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="refill-reject-r1"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="refill-release-r1"]')).toBeNull();
+      expect(host.querySelector('[data-testid="refill-forward-r1"]')).toBeNull();
+    });
+
+    it('a refill already written on the prescription is released as ordinary dispensing', () => {
+      const item = refill({ pharmacyView: true, writtenRefillLeft: true });
+      const host = renderFor([item]);
+      service.releaseAsPrescribed.and.returnValue(of(item));
+      expect(host.querySelector('[data-testid="refill-release-r1"]')).not.toBeNull();
+      pharmacy().release(item);
+      expect(service.releaseAsPrescribed).toHaveBeenCalledOnceWith('r1');
+      expect(service.approve).not.toHaveBeenCalled();
+    });
+
+    it('forwarding needs the remarks of the pharmacist, marked on the card, and sends them to the prescriber', () => {
+      const item = refill({ pharmacyView: true });
+      const host = renderFor([item]);
+      service.pharmacistReview.and.returnValue(of(item));
+      pharmacy().forward(item);
+      expect(service.pharmacistReview).not.toHaveBeenCalled();
+      expect(host.querySelector('#refill-notes-r1')!.getAttribute('aria-invalid')).toBe('true');
+
+      pharmacy().decisionNotes['r1'] = '  Demandé 12 jours trop tôt ';
+      pharmacy().forward(item);
+      expect(service.pharmacistReview).toHaveBeenCalledOnceWith('r1', 'Demandé 12 jours trop tôt');
+    });
+
+    it('a refusal to dispense needs its reason and asks first; a no sends nothing', async () => {
+      const item = refill({ pharmacyView: true });
+      renderFor([item]);
+      service.pharmacistRefuse.and.returnValue(of(item));
+      await pharmacy().pharmacistRefuse(item);
+      expect(service.pharmacistRefuse).not.toHaveBeenCalled();
+
+      pharmacy().decisionNotes['r1'] = 'Interaction avec la warfarine';
+      confirmAsk.and.resolveTo(false);
+      await pharmacy().pharmacistRefuse(item);
+      expect(service.pharmacistRefuse).not.toHaveBeenCalled();
+
+      confirmAsk.and.resolveTo(true);
+      await pharmacy().pharmacistRefuse(item);
+      expect(service.pharmacistRefuse).toHaveBeenCalledOnceWith('r1', 'Interaction avec la warfarine');
+    });
+
+    it('a decided card shows the note of the pharmacist and on what authority it was decided', () => {
+      service.list.and.returnValue(
+        page([
+          refill({
+            status: 'DENIED',
+            pharmacyView: true,
+            pharmacistNote: 'Interaction avec la warfarine',
+            decisionBasis: 'PHARMACIST_REFUSAL',
+          }),
+        ]),
+      );
+      (component as unknown as { setFilter(v: RefillStatus | 'ALL'): void }).setFilter('DENIED');
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('[data-testid="refill-pharmacist-note"]')!.textContent).toContain(
+        'Interaction avec la warfarine',
+      );
+      expect(host.querySelector('[data-testid="refill-decision-basis"]')!.textContent).toContain(
+        'REFILLS.BASIS_PHARMACIST_REFUSAL',
+      );
+      expect(host.querySelector('[data-testid="refill-pharmacy-actions"]')).toBeNull();
+    });
   });
 });
