@@ -2089,7 +2089,14 @@
       "IMAGING_PORTAL_IMAGE_VIEWED": "Image {{image}} de la demande d’imagerie {{order}} consultée sur le portail patient",
       "IMAGING_IMAGE_WITHDRAWN": "Image {{image}} retirée de la demande d’imagerie {{order}}",
       "IMAGING_IMAGE_CAPTION_CORRECTED": "Légende de l’image {{image}} corrigée sur la demande d’imagerie {{order}}",
-      "INSTRUMENT_OUTBOX_VIEWED": "Message {{message}} de la boîte d’envoi des instruments ({{type}}) consulté"
+      "INSTRUMENT_OUTBOX_VIEWED": "Message {{message}} de la boîte d’envoi des instruments ({{type}}) consulté",
+      "PHARMACY_FILL_DEFERRED": "Délivrance remise non payée, « à facturer »",
+      "PHARMACY_REFUND_REQUESTED": "Remboursement pharmacie demandé",
+      "PHARMACY_REFUND_APPROVED": "Remboursement pharmacie approuvé",
+      "PHARMACY_REFUND_REJECTED": "Remboursement pharmacie refusé",
+      "PHARMACY_REFUND_PAID": "Remboursement pharmacie remis au patient",
+      "PHARMACY_REFUND_CANCELLED": "Remboursement pharmacie annulé",
+      "PHARMACY_PACK_SIZE_SET": "Conditionnement fixé sur un article d’inventaire"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -5139,7 +5146,8 @@
     "PRICE_LIST": "Grille tarifaire",
     "PATIENT_NOTIFICATIONS": "Notifications aux patients",
     "PAYERS": "Organismes payeurs",
-    "MY_IMAGING": "Imagerie"
+    "MY_IMAGING": "Imagerie",
+    "PHARMACY_RECONCILIATION": "Rapprochement pharmacie"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerte critique",
@@ -7480,7 +7488,13 @@
         "MFA_RESET": "Validation en deux étapes réinitialisée",
         "PATIENT_CHANNEL_PREFERENCES_UPDATED": "Choix SMS / e-mail du patient modifiés",
         "IMAGING_IMAGE_WITHDRAWN": "Image d’imagerie retirée",
-        "IMAGING_IMAGE_CAPTION_UPDATED": "Légende d’image d’imagerie corrigée"
+        "IMAGING_IMAGE_CAPTION_UPDATED": "Légende d’image d’imagerie corrigée",
+        "DISPENSE_BILLING_DEFERRED": "Délivrance remise « à facturer »",
+        "PHARMACY_REFUND_REQUESTED": "Remboursement pharmacie demandé",
+        "PHARMACY_REFUND_APPROVED": "Remboursement pharmacie approuvé",
+        "PHARMACY_REFUND_REJECTED": "Remboursement pharmacie refusé",
+        "PHARMACY_REFUND_PAID": "Remboursement pharmacie remis",
+        "PHARMACY_REFUND_CANCELLED": "Remboursement pharmacie annulé"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -7854,7 +7868,8 @@
         "DISPENSE": "Dispensation",
         "ADJUSTMENT": "Ajustement",
         "TRANSFER": "Transfert",
-        "RETURN": "Retour"
+        "RETURN": "Retour",
+        "SALE": "Vente au comptoir"
       },
       "INVOICE_ITEM_CATEGORY": {
         "SERVICE": "Prestation",
@@ -8020,7 +8035,8 @@
         "PAYER_PLAN": "Formule d’organisme payeur",
         "HOSPITAL_PACS_SETTINGS": "Connexion PACS",
         "LAB_QC_TARGET": "Cible CQ du laboratoire",
-        "INSTRUMENT_OUTBOX_MESSAGE": "Message de la boîte d’envoi des instruments"
+        "INSTRUMENT_OUTBOX_MESSAGE": "Message de la boîte d’envoi des instruments",
+        "PHARMACY_REFUND": "Remboursement pharmacie"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",
@@ -14908,5 +14924,118 @@
     "SIGNED_BY": "signé par {{name}}",
     "BY": "par {{name}}",
     "NOT_ATTESTED": "Non attesté"
+  },
+  "PHARMACY_MONEY": {
+    "HANDOVER": {
+      "TITLE": "Paiement de la délivrance",
+      "QUANTITY": "Quantité remise",
+      "CHARGE": "Montant",
+      "PAID": "Payé",
+      "CLAIMED": "Pris en charge (assurance)",
+      "DUE": "Reste à payer",
+      "STATUS": {
+        "NO_CHARGE": "Aucun prix fixé : rien à encaisser.",
+        "PAID": "Payée.",
+        "COVERED": "Couverte (paiement et prise en charge).",
+        "DEFERRED": "Déjà marquée « à facturer ».",
+        "UNPAID": "Non payée : encaissez-la d’abord à la caisse, ou remettez-la « à facturer » avec un motif."
+      },
+      "DEFER_LABEL": "Remettre « à facturer » : motif",
+      "DEFER_HINT": "Par exemple : patient hospitalisé, sur la facture du séjour. Réservé au pharmacien ou à l’administrateur ; la délivrance apparaît dans le rapprochement du jour.",
+      "DEFER_REQUIRED": "Cette délivrance n’est pas payée : indiquez le motif « à facturer » ou encaissez-la d’abord.",
+      "LOAD_FAILED": "Le statut de paiement n’a pas pu être chargé ; le serveur vérifiera le paiement à la remise."
+    },
+    "PACK": {
+      "TITLE": "Conditionnement : {{name}}",
+      "EXPLAIN": "Le stock reçu en conditionnements sera compté désormais à l’unité de prescription (par exemple 1 plaquette = 10 comprimés). Les lots, le stock, les seuils et le prix unitaire sont convertis une seule fois.",
+      "PACK_UNIT": "Nom du conditionnement",
+      "UNITS_PER_PACK": "Unités par conditionnement",
+      "UNIT": "Unité de délivrance",
+      "UNIT_PLACEHOLDER": "comprimé",
+      "REASON": "Motif",
+      "SAVE": "Convertir le stock",
+      "INVALID": "Indiquez le nombre d’unités par conditionnement (2 à 10 000), l’unité de délivrance et un motif.",
+      "SAVED": "Conditionnement enregistré : le stock est compté à l’unité.",
+      "FAILED": "Le conditionnement n’a pas pu être enregistré.",
+      "BREAKDOWN": "{{packs}} {{packUnit}} + {{loose}} {{unit}}",
+      "SIZE": "1 {{packUnit}} = {{n}} {{unit}}",
+      "SET": "Conditionnement"
+    },
+    "REFUND": {
+      "TITLE": "Remboursements de retours à traiter",
+      "PROMPT_TITLE": "Rembourser ce retour ?",
+      "PROMPT_TEXT": "Le montant est calculé par le serveur à partir du prix payé. Un administrateur ou un comptable, autre que vous, devra l’approuver avant qu’il soit remis au patient.",
+      "REASON": "Motif du remboursement",
+      "REASON_REQUIRED": "Indiquez le motif.",
+      "NO_REFUND": "Pas de remboursement",
+      "REQUEST": "Demander le remboursement",
+      "REQUESTED": "Remboursement de {{amount}} F CFA demandé ; il attend l’approbation.",
+      "FAILED": "L’opération sur le remboursement a échoué.",
+      "LOAD_FAILED": "Les remboursements n’ont pas pu être chargés.",
+      "NONE": "Aucun remboursement en attente.",
+      "STATUS": {
+        "REQUESTED": "À approuver",
+        "APPROVED": "Approuvé, à remettre",
+        "REJECTED": "Refusé",
+        "PAID": "Remis",
+        "CANCELLED": "Annulé"
+      },
+      "APPROVE": "Approuver",
+      "REJECT": "Refuser",
+      "REJECT_REASON": "Motif du refus",
+      "PAY": "Remettre au patient",
+      "APPROVED": "Remboursement approuvé.",
+      "REJECTED": "Remboursement refusé.",
+      "PAID": "Remboursement remis au patient.",
+      "REJECT_CONFIRM": "Refuser ce remboursement ?"
+    },
+    "RECON": {
+      "TITLE": "Rapprochement de la pharmacie",
+      "SUBTITLE": "Ventes, délivrances, retours, réceptions et ajustements du jour, face aux mouvements de stock et à l’argent encaissé.",
+      "EXPORT": "Exporter (CSV)",
+      "EXPORT_FAILED": "L’export n’a pas pu être produit.",
+      "DATE": "Jour",
+      "LOAD_FAILED": "Le rapprochement n’a pas pu être chargé.",
+      "RECONCILED": "Journée rapprochée : aucun écart.",
+      "DIFFERENCES": "{{count}} écart(s) à examiner.",
+      "MONEY": "Argent du jour",
+      "SALES": "Ventes au comptoir",
+      "COUNT": "{{count}} opération(s)",
+      "DISPENSE_PAYMENTS": "Paiements des délivrances",
+      "REFUNDS": "Remboursements remis",
+      "NET": "Net encaissé",
+      "DEFERRED": "Remis « à facturer »",
+      "UNPAID": "Remis non payés",
+      "DIFFERENCES_TITLE": "Écarts",
+      "COL_KIND": "Écart",
+      "COL_LOT": "Lot",
+      "COL_EXPECTED": "Attendu",
+      "COL_ACTUAL": "Constaté",
+      "COL_AMOUNT": "Montant",
+      "KIND": {
+        "SALE_STOCK_MISMATCH": "Vente sans mouvement de stock correspondant",
+        "DISPENSE_STOCK_MISMATCH": "Délivrance sans mouvement de stock correspondant",
+        "PRICE_NOT_LIST": "Vente à un prix différent du tarif",
+        "UNPAID_HANDED_OVER": "Délivrance remise non payée",
+        "CONTROLLED_BALANCE": "Solde du registre des stupéfiants différent du stock"
+      },
+      "STOCK_TITLE": "Stock par médicament et par lot",
+      "NO_MOVEMENT": "Aucun mouvement ce jour.",
+      "COL_RECEIVED": "Reçu",
+      "COL_SOLD": "Vendu",
+      "COL_DISPENSED": "Délivré",
+      "COL_RETURNED": "Retourné",
+      "COL_ADJUSTED": "Ajusté",
+      "COL_TRANSFERRED": "Transféré",
+      "MOVED": "mouvement : {{n}}",
+      "CONTROLLED_TITLE": "Stupéfiants : registre et stock",
+      "CONTROLLED_LINE": "registre {{register}}, stock {{stock}}",
+      "DEFERRED_TITLE": "Délivrances remises « à facturer »"
+    },
+    "METHOD": {
+      "CASH": "Espèces",
+      "MOBILE_MONEY": "Mobile Money",
+      "INSURANCE": "Assurance"
+    }
   }
 }

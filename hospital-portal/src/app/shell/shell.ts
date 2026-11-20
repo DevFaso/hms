@@ -1242,6 +1242,15 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           ],
         },
         {
+          // QA D2673 (r65): mirrors the /pharmacy/reconciliation RoleGuard.
+          icon: 'balance',
+          label: 'Pharmacy reconciliation',
+          translationKey: 'NAV.PHARMACY_RECONCILIATION',
+          route: '/pharmacy/reconciliation',
+          roles: ['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+        },
+
+        {
           icon: 'medication',
           label: 'Dispensing',
           translationKey: 'NAV.DISPENSING',

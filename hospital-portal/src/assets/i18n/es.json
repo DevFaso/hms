@@ -2089,7 +2089,14 @@
       "IMAGING_PORTAL_IMAGE_VIEWED": "Image {{image}} of imaging order {{order}} viewed on the patient portal",
       "IMAGING_IMAGE_WITHDRAWN": "Image {{image}} withdrawn from imaging order {{order}}",
       "IMAGING_IMAGE_CAPTION_CORRECTED": "Caption of image {{image}} corrected on imaging order {{order}}",
-      "INSTRUMENT_OUTBOX_VIEWED": "Mensaje {{message}} de la bandeja de salida de instrumentos ({{type}}) consultado"
+      "INSTRUMENT_OUTBOX_VIEWED": "Mensaje {{message}} de la bandeja de salida de instrumentos ({{type}}) consultado",
+      "PHARMACY_FILL_DEFERRED": "Fill handed over unpaid, to be billed",
+      "PHARMACY_REFUND_REQUESTED": "Pharmacy refund requested",
+      "PHARMACY_REFUND_APPROVED": "Pharmacy refund approved",
+      "PHARMACY_REFUND_REJECTED": "Pharmacy refund rejected",
+      "PHARMACY_REFUND_PAID": "Pharmacy refund paid out",
+      "PHARMACY_REFUND_CANCELLED": "Pharmacy refund cancelled",
+      "PHARMACY_PACK_SIZE_SET": "Pack size set on an inventory item"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -5139,7 +5146,8 @@
     "PRICE_LIST": "Lista de precios",
     "PATIENT_NOTIFICATIONS": "Patient notifications",
     "PAYERS": "Payers",
-    "MY_IMAGING": "Imaging"
+    "MY_IMAGING": "Imaging",
+    "PHARMACY_RECONCILIATION": "Conciliación de farmacia"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerta crítica",
@@ -7514,7 +7522,13 @@
         "MFA_RESET": "Verificación en dos pasos restablecida",
         "PATIENT_CHANNEL_PREFERENCES_UPDATED": "Opciones de SMS / correo del paciente modificadas",
         "IMAGING_IMAGE_WITHDRAWN": "Imaging image withdrawn",
-        "IMAGING_IMAGE_CAPTION_UPDATED": "Imaging image caption corrected"
+        "IMAGING_IMAGE_CAPTION_UPDATED": "Imaging image caption corrected",
+        "DISPENSE_BILLING_DEFERRED": "Fill handed over to be billed",
+        "PHARMACY_REFUND_REQUESTED": "Pharmacy refund requested",
+        "PHARMACY_REFUND_APPROVED": "Pharmacy refund approved",
+        "PHARMACY_REFUND_REJECTED": "Pharmacy refund rejected",
+        "PHARMACY_REFUND_PAID": "Pharmacy refund paid out",
+        "PHARMACY_REFUND_CANCELLED": "Pharmacy refund cancelled"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -7888,7 +7902,8 @@
         "DISPENSE": "Dispensación",
         "ADJUSTMENT": "Ajuste",
         "TRANSFER": "Traslado",
-        "RETURN": "Devolución"
+        "RETURN": "Devolución",
+        "SALE": "Counter sale"
       },
       "INVOICE_ITEM_CATEGORY": {
         "SERVICE": "Servicio",
@@ -8054,7 +8069,8 @@
         "PAYER_PLAN": "Payer plan",
         "HOSPITAL_PACS_SETTINGS": "Conexión PACS",
         "LAB_QC_TARGET": "Objetivo de CC del laboratorio",
-        "INSTRUMENT_OUTBOX_MESSAGE": "Mensaje de la bandeja de salida de instrumentos"
+        "INSTRUMENT_OUTBOX_MESSAGE": "Mensaje de la bandeja de salida de instrumentos",
+        "PHARMACY_REFUND": "Pharmacy refund"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Alergia",
@@ -14908,5 +14924,118 @@
     "SIGNED_BY": "firmada por {{name}}",
     "BY": "por {{name}}",
     "NOT_ATTESTED": "No atestada"
+  },
+  "PHARMACY_MONEY": {
+    "HANDOVER": {
+      "TITLE": "Payment of the fill",
+      "QUANTITY": "Quantity handed over",
+      "CHARGE": "Amount",
+      "PAID": "Paid",
+      "CLAIMED": "Covered (insurance)",
+      "DUE": "Still due",
+      "STATUS": {
+        "NO_CHARGE": "No price set: nothing to collect.",
+        "PAID": "Paid.",
+        "COVERED": "Covered (payment and insurance).",
+        "DEFERRED": "Already marked « to be billed ».",
+        "UNPAID": "Not paid: take the payment at the checkout first, or hand it over « to be billed » with a reason."
+      },
+      "DEFER_LABEL": "Hand over « to be billed »: reason",
+      "DEFER_HINT": "For example: inpatient, on the stay's invoice. Pharmacist or administrator only; the fill appears in the day's reconciliation.",
+      "DEFER_REQUIRED": "This fill is not paid: give the « to be billed » reason or take the payment first.",
+      "LOAD_FAILED": "The payment status could not be loaded; the server checks the payment at hand-over."
+    },
+    "PACK": {
+      "TITLE": "Pack size: {{name}}",
+      "EXPLAIN": "Stock received in packs will be counted from now on in the prescribing unit (for example 1 blister = 10 tablets). Lots, stock, thresholds and the unit price are converted once.",
+      "PACK_UNIT": "Pack name",
+      "UNITS_PER_PACK": "Units per pack",
+      "UNIT": "Dispensing unit",
+      "UNIT_PLACEHOLDER": "tablet",
+      "REASON": "Reason",
+      "SAVE": "Convert the stock",
+      "INVALID": "Enter the units per pack (2 to 10,000), the dispensing unit and a reason.",
+      "SAVED": "Pack size saved: the stock is counted in units.",
+      "FAILED": "The pack size could not be saved.",
+      "BREAKDOWN": "{{packs}} {{packUnit}} + {{loose}} {{unit}}",
+      "SIZE": "1 {{packUnit}} = {{n}} {{unit}}",
+      "SET": "Pack size"
+    },
+    "REFUND": {
+      "TITLE": "Refunds of returns to process",
+      "PROMPT_TITLE": "Refund this return?",
+      "PROMPT_TEXT": "The server computes the amount from the price paid. A hospital administrator or an accountant other than you must approve it before it is handed to the patient.",
+      "REASON": "Reason for the refund",
+      "REASON_REQUIRED": "Enter the reason.",
+      "NO_REFUND": "No refund",
+      "REQUEST": "Ask for the refund",
+      "REQUESTED": "Refund of {{amount}} F CFA asked for; it awaits approval.",
+      "FAILED": "The refund step failed.",
+      "LOAD_FAILED": "The refunds could not be loaded.",
+      "NONE": "No refund waiting.",
+      "STATUS": {
+        "REQUESTED": "To approve",
+        "APPROVED": "Approved, to hand over",
+        "REJECTED": "Rejected",
+        "PAID": "Handed over",
+        "CANCELLED": "Cancelled"
+      },
+      "APPROVE": "Approve",
+      "REJECT": "Reject",
+      "REJECT_REASON": "Reason for the rejection",
+      "PAY": "Hand to the patient",
+      "APPROVED": "Refund approved.",
+      "REJECTED": "Refund rejected.",
+      "PAID": "Refund handed to the patient.",
+      "REJECT_CONFIRM": "Reject this refund?"
+    },
+    "RECON": {
+      "TITLE": "Pharmacy reconciliation",
+      "SUBTITLE": "The day's sales, fills, returns, receipts and adjustments, against the stock movements and the money collected.",
+      "EXPORT": "Export (CSV)",
+      "EXPORT_FAILED": "The export could not be produced.",
+      "DATE": "Day",
+      "LOAD_FAILED": "The reconciliation could not be loaded.",
+      "RECONCILED": "Day reconciled: no difference.",
+      "DIFFERENCES": "{{count}} difference(s) to review.",
+      "MONEY": "Money of the day",
+      "SALES": "Counter sales",
+      "COUNT": "{{count}} operation(s)",
+      "DISPENSE_PAYMENTS": "Fill payments",
+      "REFUNDS": "Refunds handed over",
+      "NET": "Net collected",
+      "DEFERRED": "Handed over « to be billed »",
+      "UNPAID": "Handed over unpaid",
+      "DIFFERENCES_TITLE": "Differences",
+      "COL_KIND": "Difference",
+      "COL_LOT": "Lot",
+      "COL_EXPECTED": "Expected",
+      "COL_ACTUAL": "Found",
+      "COL_AMOUNT": "Amount",
+      "KIND": {
+        "SALE_STOCK_MISMATCH": "Sale without a matching stock movement",
+        "DISPENSE_STOCK_MISMATCH": "Fill without a matching stock movement",
+        "PRICE_NOT_LIST": "Sale at a price other than the list",
+        "UNPAID_HANDED_OVER": "Fill handed over unpaid",
+        "CONTROLLED_BALANCE": "Controlled register balance differs from the stock"
+      },
+      "STOCK_TITLE": "Stock by medication and lot",
+      "NO_MOVEMENT": "No movement this day.",
+      "COL_RECEIVED": "Received",
+      "COL_SOLD": "Sold",
+      "COL_DISPENSED": "Dispensed",
+      "COL_RETURNED": "Returned",
+      "COL_ADJUSTED": "Adjusted",
+      "COL_TRANSFERRED": "Transferred",
+      "MOVED": "movement: {{n}}",
+      "CONTROLLED_TITLE": "Controlled substances: register and stock",
+      "CONTROLLED_LINE": "register {{register}}, stock {{stock}}",
+      "DEFERRED_TITLE": "Fills handed over « to be billed »"
+    },
+    "METHOD": {
+      "CASH": "Cash",
+      "MOBILE_MONEY": "Mobile Money",
+      "INSURANCE": "Insurance"
+    }
   }
 }

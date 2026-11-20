@@ -33,6 +33,7 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { DashPipe } from '../shared/pipes/dash.pipe';
 import { missingRequiredMessage } from '../shared/required-fields';
+import { PharmacyMoneyService } from '../services/pharmacy-money.service';
 
 /** The add-item field the form may refuse (QA D1306). */
 const CI_FIELD_IDS = ['ciMed'];
@@ -59,6 +60,8 @@ const CI_FIELD_IDS = ['ciMed'];
 })
 export class InventoryDashboardComponent implements OnInit {
   private readonly svc = inject(PharmacyService);
+  /** QA D2674: the pack size that converts stock kept in packs to units. */
+  private readonly money = inject(PharmacyMoneyService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
@@ -107,6 +110,13 @@ export class InventoryDashboardComponent implements OnInit {
   inventoryItems = signal<InventoryItemResponse[]>([]);
   /** QA D835: the row whose price box is open; every other row shows its price as text. */
   editingPriceId = signal<string | null>(null);
+  /** QA D2674 (r65): the item whose pack size is being set, and the form's fields. */
+  readonly packItem = signal<InventoryItemResponse | null>(null);
+  readonly packSaving = signal(false);
+  packUnitsPerPack: number | null = null;
+  packUnit = '';
+  packTargetUnit = '';
+  packReason = '';
   stockLoading = signal(false);
   currentPage = 0;
   pageSize = 20;
@@ -309,7 +319,62 @@ export class InventoryDashboardComponent implements OnInit {
     });
   }
 
+  /** QA D2674: opens the pack-size form, the pack's name prefilled with the item's current unit. */
+  openPackSize(item: InventoryItemResponse): void {
+    this.packItem.set(item);
+    this.packUnitsPerPack = null;
+    this.packUnit = item.unit && item.unit !== 'UNIT' ? item.unit : '';
+    this.packTargetUnit = '';
+    this.packReason = '';
+  }
+
+  /**
+   * QA D2674 (r65): stock received as « plaquette de 10 comprimés » could not fill a « comprimé »
+   * prescription. Once set, the stock is counted in tablets (10 to a plaquette) and shown in both.
+   */
+  savePackSize(): void {
+    const item = this.packItem();
+    if (!item) return;
+    const n = Number(this.packUnitsPerPack);
+    const missing: string[] = [];
+    if (!Number.isInteger(n) || n < 2 || n > 10000) missing.push('packUnitsPerPack');
+    if (!this.packTargetUnit.trim()) missing.push('packTargetUnit');
+    if (!this.packReason.trim()) missing.push('packReason');
+    if (missing.length) {
+      const message = this.translate.instant('PHARMACY_MONEY.PACK.INVALID');
+      refuseFields(this.host.nativeElement, missing, missing, message);
+      this.toast.error(message);
+      return;
+    }
+    this.packSaving.set(true);
+    this.money
+      .setPackSize(item.id, {
+        unitsPerPack: n,
+        unit: this.packTargetUnit.trim(),
+        packUnit: this.packUnit.trim() || undefined,
+        reason: this.packReason.trim(),
+      })
+      .subscribe({
+        next: (res) => {
+          const saved = res?.data;
+          if (saved) {
+            this.inventoryItems.update((rows) => rows.map((r) => (r.id === item.id ? saved : r)));
+          }
+          this.packSaving.set(false);
+          this.packItem.set(null);
+          this.toast.success(this.translate.instant('PHARMACY_MONEY.PACK.SAVED'));
+        },
+        error: (err) => {
+          this.packSaving.set(false);
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('PHARMACY_MONEY.PACK.FAILED'),
+          );
+        },
+      });
+  }
+
   /** QA D264: the checkout charges quantity x this price, so the pharmacy sets it here. */
+
   savePrice(item: InventoryItemResponse, raw: string): void {
     const price = Number(raw);
     const priceId = `price-input-${item.id}`;

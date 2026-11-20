@@ -56,6 +56,8 @@ import { AllergyHoldDialogComponent } from '../shared/allergy-acknowledgement/al
 import { AllergyReviewStateComponent } from '../shared/allergy-acknowledgement/allergy-review-state.component';
 import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
 import { RoleContextService } from '../core/role-context.service';
+import { CfaPipe } from '../shared/pipes/cfa.pipe';
+import { DispensePaymentStatus, PharmacyMoneyService } from '../services/pharmacy-money.service';
 
 /** The viewer's local calendar date as YYYY-MM-DD (not the UTC one). */
 function localIsoDate(d: Date): string {
@@ -191,6 +193,7 @@ export function sameDispenseUnit(
     AllergyHoldDialogComponent,
     AllergyReviewStateComponent,
     CdsCardListComponent,
+    CfaPipe,
   ],
   templateUrl: './dispensing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -198,6 +201,8 @@ export function sameDispenseUnit(
 })
 export class DispensingComponent implements OnInit, OnDestroy {
   private readonly svc = inject(PharmacyService);
+  /** QA D2675: the hand-over reads how the fill is settled before it leaves the counter. */
+  private readonly money = inject(PharmacyMoneyService);
   private readonly roleContext = inject(RoleContextService);
   /**
    * QA D2120: dispensing, claiming, handing over, cancelling and routing are clinical acts
@@ -286,6 +291,11 @@ export class DispensingComponent implements OnInit, OnDestroy {
   );
   readyActionSaving = signal(false);
   handOverScan = '';
+  /** QA D2675: the fill's charge, what is paid or claimed, and what is still due. */
+  readonly handOverPayment = signal<DispensePaymentStatus | null>(null);
+  readonly handOverPaymentFailed = signal(false);
+  /** QA D2675: why an unpaid fill is handed over « à facturer » (required then). */
+  handOverDeferReason = '';
   cancelReason: ReadyCancelReason = 'NOT_COLLECTED';
 
   // G13 — work-queue claim ("being prepared by"). Advisory: it coordinates
@@ -1171,7 +1181,22 @@ export class DispensingComponent implements OnInit, OnDestroy {
   openHandOver(rx: WorkQueuePrescription): void {
     this.closeForm();
     this.handOverScan = '';
+    this.handOverDeferReason = '';
+    this.handOverPayment.set(null);
+    this.handOverPaymentFailed.set(false);
     this.readyAction.set({ kind: 'handOver', rx });
+    const dispenseId = rx.readyForCollection?.dispenseId;
+    if (dispenseId) {
+      this.money.dispensePaymentStatus(dispenseId).subscribe({
+        next: (res) => this.handOverPayment.set(res?.data ?? null),
+        error: () => this.handOverPaymentFailed.set(true),
+      });
+    }
+  }
+
+  /** QA D2675: an unpaid fill needs a « à facturer » reason before it can be handed over. */
+  handOverNeedsReason(): boolean {
+    return this.handOverPayment()?.status === 'UNPAID';
   }
 
   openCancelReady(rx: WorkQueuePrescription): void {
@@ -1189,8 +1214,23 @@ export class DispensingComponent implements OnInit, OnDestroy {
     const dispenseId = this.readyAction()?.rx.readyForCollection?.dispenseId;
     if (!dispenseId) return;
     const scan = this.handOverScan.trim();
+    const deferReason = this.handOverDeferReason.trim();
+    if (this.handOverNeedsReason() && !deferReason) {
+      const message = this.translate.instant('PHARMACY_MONEY.HANDOVER.DEFER_REQUIRED');
+      refuseFields(
+        this.host.nativeElement,
+        ['handOverDeferReason'],
+        ['handOverDeferReason'],
+        message,
+      );
+      this.toast.error(message);
+      return;
+    }
+    const body: { patientScanValue?: string; billingDeferredReason?: string } = {};
+    if (scan) body.patientScanValue = scan;
+    if (deferReason && this.handOverNeedsReason()) body.billingDeferredReason = deferReason;
     this.readyActionSaving.set(true);
-    this.svc.handOver(dispenseId, scan ? { patientScanValue: scan } : {}).subscribe({
+    this.svc.handOver(dispenseId, body).subscribe({
       next: () => this.afterReadyAction('PHARMACY.HAND_OVER_SUCCESS'),
       error: (err) => {
         // QA D1555 / Policy 4: an allergy recorded since the fill was prepared holds the hand-over.

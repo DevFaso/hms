@@ -156,6 +156,13 @@ export interface InventoryItemResponse {
   active: boolean;
   /** QA D157: a controlled substance; a manual movement of it needs a witness. */
   controlled?: boolean;
+  /** QA D2674: units of `unit` in one pack, once the item is counted in units; absent otherwise. */
+  unitsPerPack?: number | null;
+  /** QA D2674: the pack's name ("plaquette"). */
+  packUnit?: string | null;
+  /** QA D2674: the stock on hand as whole packs plus loose units. */
+  fullPacksOnHand?: number | null;
+  looseUnitsOnHand?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1233,6 +1240,8 @@ export class PharmacyService {
     body: {
       patientScanValue?: string;
       notes?: string;
+      /** QA D2675: why an unpaid fill is handed over « à facturer ». */
+      billingDeferredReason?: string;
     } = {},
   ): Observable<ApiResponse<DispenseResponse>> {
     return this.http.post<ApiResponse<DispenseResponse>>(

@@ -481,9 +481,76 @@
           </section>
         }
         <p>{{ 'PHARMACY.HAND_OVER_CONFIRM' | translate }}</p>
+        <!-- QA D2675 (r65): the dialog shows the quantity, the amount and how it is settled before the
+             fill leaves the counter; an unpaid fill needs a « à facturer » reason. -->
+        <section
+          class="handover-payment"
+          data-testid="hand-over-payment"
+          [attr.aria-label]="'PHARMACY_MONEY.HANDOVER.TITLE' | translate"
+        >
+          @if (handOverPayment(); as pay) {
+            <dl class="handover-payment-grid">
+              <div>
+                <dt>{{ 'PHARMACY_MONEY.HANDOVER.QUANTITY' | translate }}</dt>
+                <dd>{{ pay.quantity }} {{ pay.unit ?? '' }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'PHARMACY_MONEY.HANDOVER.CHARGE' | translate }}</dt>
+                <dd>{{ pay.charge | cfa: 'XOF' }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'PHARMACY_MONEY.HANDOVER.PAID' | translate }}</dt>
+                <dd>{{ pay.paid | cfa: 'XOF' }}</dd>
+              </div>
+              @if (pay.claimed > 0) {
+                <div>
+                  <dt>{{ 'PHARMACY_MONEY.HANDOVER.CLAIMED' | translate }}</dt>
+                  <dd>{{ pay.claimed | cfa: 'XOF' }}</dd>
+                </div>
+              }
+              <div>
+                <dt>{{ 'PHARMACY_MONEY.HANDOVER.DUE' | translate }}</dt>
+                <dd data-testid="hand-over-due">{{ pay.due | cfa: 'XOF' }}</dd>
+              </div>
+            </dl>
+            <p
+              class="handover-payment-status"
+              [class.handover-unpaid]="pay.status === 'UNPAID'"
+              data-testid="hand-over-payment-status"
+            >
+              {{ 'PHARMACY_MONEY.HANDOVER.STATUS.' + pay.status | translate }}
+            </p>
+            @if (handOverNeedsReason()) {
+              <div class="form-row">
+                <div class="field full-width">
+                  <label for="handOverDeferReason"
+                    >{{ 'PHARMACY_MONEY.HANDOVER.DEFER_LABEL' | translate }} *</label
+                  >
+                  <textarea
+                    id="handOverDeferReason"
+                    name="handOverDeferReason"
+                    rows="2"
+                    maxlength="500"
+                    required
+                    data-testid="hand-over-defer-reason"
+                    [(ngModel)]="handOverDeferReason"
+                  ></textarea>
+                  <small class="hint">{{ 'PHARMACY_MONEY.HANDOVER.DEFER_HINT' | translate }}</small>
+                </div>
+              </div>
+            }
+          } @else if (handOverPaymentFailed()) {
+            <p class="handover-payment-status">
+              {{ 'PHARMACY_MONEY.HANDOVER.LOAD_FAILED' | translate }}
+            </p>
+          } @else {
+            <p class="handover-payment-status">{{ 'COMMON.LOADING' | translate }}</p>
+          }
+        </section>
         <div class="form-row">
           <div class="field full-width">
             <label for="handOverScan">{{ 'PHARMACY.PATIENT_SCAN' | translate }}</label>
+
             <input
               id="handOverScan"
               type="text"
