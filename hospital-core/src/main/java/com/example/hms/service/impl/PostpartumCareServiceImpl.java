@@ -90,6 +90,8 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
     private final com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
     /** r54: the shared severe-blood-pressure rule (obstetric up to 42 days after birth, adult after). */
     private final com.example.hms.service.vitals.SevereHypertension severeHypertension;
+    /** QA D2580 (r65): the readings recorded here are charted where the chart reads. */
+    private final com.example.hms.service.vitals.MaternityVitalCharting maternityVitalCharting;
 
     @Override
     public PostpartumObservationResponseDTO recordObservation(UUID patientId,
@@ -134,6 +136,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
 
         PostpartumObservation saved = observationRepository.save(observation);
         carePlanRepository.save(carePlan);
+        maternityVitalCharting.chartPostpartumObservation(saved);
 
         publishAlerts(saved);
         return mapper.toResponse(saved, carePlan);
