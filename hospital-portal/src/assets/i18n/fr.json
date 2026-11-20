@@ -2096,7 +2096,8 @@
       "PHARMACY_REFUND_REJECTED": "Remboursement pharmacie refusé",
       "PHARMACY_REFUND_PAID": "Remboursement pharmacie remis au patient",
       "PHARMACY_REFUND_CANCELLED": "Remboursement pharmacie annulé",
-      "PHARMACY_PACK_SIZE_SET": "Conditionnement fixé sur un article d’inventaire"
+      "PHARMACY_PACK_SIZE_SET": "Conditionnement fixé sur un article d’inventaire",
+      "PHARMACY_PRICE_CHANGED": "Prix de vente de la pharmacie modifié"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -7494,7 +7495,8 @@
         "PHARMACY_REFUND_APPROVED": "Remboursement pharmacie approuvé",
         "PHARMACY_REFUND_REJECTED": "Remboursement pharmacie refusé",
         "PHARMACY_REFUND_PAID": "Remboursement pharmacie remis",
-        "PHARMACY_REFUND_CANCELLED": "Remboursement pharmacie annulé"
+        "PHARMACY_REFUND_CANCELLED": "Remboursement pharmacie annulé",
+        "PHARMACY_PRICE_CHANGED": "Prix de vente de la pharmacie modifié"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -15017,7 +15019,10 @@
         "DISPENSE_STOCK_MISMATCH": "Délivrance sans mouvement de stock correspondant",
         "PRICE_NOT_LIST": "Vente à un prix différent du tarif",
         "UNPAID_HANDED_OVER": "Délivrance remise non payée",
-        "CONTROLLED_BALANCE": "Solde du registre des stupéfiants différent du stock"
+        "CONTROLLED_BALANCE": "Solde du registre des stupéfiants différent du stock",
+        "LOT_BALANCE_MISMATCH": "Solde du lot : ouverture + mouvements différent du stock détenu",
+        "RETURN_NOT_REFUNDED": "Retour patient sans remboursement demandé",
+        "REFUND_EXCEEDS_PAID": "Remboursements remis supérieurs à ce qui reste compté comme payé"
       },
       "STOCK_TITLE": "Stock par médicament et par lot",
       "NO_MOVEMENT": "Aucun mouvement ce jour.",
@@ -15031,6 +15036,16 @@
       "CONTROLLED_TITLE": "Stupéfiants : registre et stock",
       "CONTROLLED_LINE": "registre {{register}}, stock {{stock}}",
       "DEFERRED_TITLE": "Délivrances remises « à facturer »"
+    },
+    "ONESTEP": {
+      "DEFER_LABEL": "Remettre « à facturer » : motif",
+      "CHARGE": "Montant de cette délivrance : {{amount}}",
+      "DEFER_HINT": "Cette délivrance a un prix et rien n’est encore payé. Pour la remettre maintenant, indiquez pourquoi elle sera facturée plus tard (pharmacien ou administrateur uniquement) ; elle apparaît dans le rapprochement du jour. Pour l’encaisser d’abord, utilisez « Marquer prête à retirer » et remettez-la une fois payée.",
+      "DEFER_REQUIRED": "Cette délivrance n’est pas payée : indiquez le motif « à facturer », ou marquez-la prête à retirer et encaissez-la avant la remise."
+    },
+    "PRICE": {
+      "REASON": "Motif du changement de prix",
+      "REASON_REQUIRED": "Indiquez le motif de ce changement de prix : il est conservé dans l’historique des prix."
     }
   }
 }

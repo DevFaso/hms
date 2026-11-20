@@ -385,6 +385,34 @@
           </div>
         </div>
 
+        <!-- Review of #1239 (QA D2675): a one-step fill leaves the counter before any payment can
+             exist. With a price it is handed over « à facturer », with a reason; « Prête » is the
+             path that takes the payment first. -->
+        @if (oneStepNeedsDeferral()) {
+          <div class="form-row">
+            <div class="field full-width" data-testid="dispense-defer">
+              <label for="dispDeferReason">{{
+                'PHARMACY_MONEY.ONESTEP.DEFER_LABEL' | translate
+              }}</label>
+              @if (oneStepCharge() > 0) {
+                <small class="field-hint" data-testid="dispense-defer-charge">{{
+                  'PHARMACY_MONEY.ONESTEP.CHARGE'
+                    | translate: { amount: (oneStepCharge() | cfa: 'XOF') }
+                }}</small>
+              }
+              <textarea
+                id="dispDeferReason"
+                name="billingDeferredReason"
+                rows="2"
+                maxlength="500"
+                data-testid="dispense-defer-reason"
+                [(ngModel)]="form.billingDeferredReason"
+              ></textarea>
+              <small class="hint">{{ 'PHARMACY_MONEY.ONESTEP.DEFER_HINT' | translate }}</small>
+            </div>
+          </div>
+        }
+
         <app-inline-discard-ask [form]="dispenseForm" />
         <div class="form-actions">
           <button type="button" class="btn-secondary" (click)="closeForm()">

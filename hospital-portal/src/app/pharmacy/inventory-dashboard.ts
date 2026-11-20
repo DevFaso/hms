@@ -375,13 +375,24 @@ export class InventoryDashboardComponent implements OnInit {
 
   /** QA D264: the checkout charges quantity x this price, so the pharmacy sets it here. */
 
-  savePrice(item: InventoryItemResponse, raw: string): void {
+  savePrice(item: InventoryItemResponse, raw: string, reason = ''): void {
     const price = Number(raw);
     const priceId = `price-input-${item.id}`;
     if (raw === '' || !Number.isInteger(price) || price < 0) {
       // QA D1306 (round 28): the price box is marked, not only a toast.
       const message = this.translate.instant('PHARMACY.PRICE_INVALID');
       refuseFields(this.host.nativeElement, [priceId], [priceId], message);
+      this.toast.error(message);
+      return;
+    }
+    // Review of #1239: a changed price needs its reason (kept in the price history); the server
+    // also requires the store manager or a hospital admin and says so when it refuses.
+    const why = reason.trim();
+    const changed = Number(item.unitPrice ?? 0) !== price;
+    if (changed && !why) {
+      const reasonId = `price-reason-${item.id}`;
+      const message = this.translate.instant('PHARMACY_MONEY.PRICE.REASON_REQUIRED');
+      refuseFields(this.host.nativeElement, [reasonId], [reasonId], message);
       this.toast.error(message);
       return;
     }
@@ -395,6 +406,7 @@ export class InventoryDashboardComponent implements OnInit {
         reorderQuantity: item.reorderQuantity,
         unit: item.unit,
         unitPrice: price,
+        ...(changed ? { priceChangeReason: why } : {}),
         active: item.active,
       })
       .subscribe({

@@ -32,12 +32,23 @@ describe('InventoryDashboardComponent savePrice (QA D264)', () => {
       active: true,
     } as unknown as InventoryItemResponse;
 
+    // Review of #1239: a changed price with no reason is refused here, and nothing is sent.
     c.savePrice(item, '250');
+    expect(svc.updateInventoryItem).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('PHARMACY_MONEY.PRICE.REASON_REQUIRED');
+
+    c.savePrice(item, '250', '  Nouveau tarif fournisseur ');
 
     const req = svc.updateInventoryItem.calls.mostRecent().args[1];
     expect('quantityOnHand' in req).toBeFalse();
     expect(req.unitPrice).toBe(250);
+    expect(req.priceChangeReason).toBe('Nouveau tarif fournisseur');
     expect(toast.success).toHaveBeenCalled();
+
+    // The same price again is no price change: it needs no reason and sends none.
+    svc.updateInventoryItem.calls.reset();
+    c.savePrice({ ...item, unitPrice: 250 } as InventoryItemResponse, '250');
+    expect('priceChangeReason' in svc.updateInventoryItem.calls.mostRecent().args[1]).toBeFalse();
   });
 });
 
@@ -122,7 +133,19 @@ describe('InventoryDashboardComponent price column (QA D835)', () => {
     // QA D1191: saved on Enter (or the Save button), never on change/blur.
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     fixture.detectChanges();
+    // Review of #1239: a changed price with no reason is refused under the reason box.
+    expect(svc.updateInventoryItem).not.toHaveBeenCalled();
+    const reason = fixture.nativeElement.querySelector(
+      '[data-testid="price-reason-inv-1"]',
+    ) as HTMLInputElement;
+    expect(reason.getAttribute('aria-invalid')).toBe('true');
+    reason.value = 'Nouveau tarif fournisseur';
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    fixture.detectChanges();
     expect(svc.updateInventoryItem).toHaveBeenCalled();
+    expect(svc.updateInventoryItem.calls.mostRecent().args[1].priceChangeReason).toBe(
+      'Nouveau tarif fournisseur',
+    );
     expect(fixture.nativeElement.querySelector('[data-testid="price-input-inv-1"]')).toBeNull();
     expect(
       (fixture.nativeElement.querySelector('[data-testid="price-inv-1"]') as HTMLElement)

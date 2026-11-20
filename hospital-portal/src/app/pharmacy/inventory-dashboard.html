@@ -305,7 +305,19 @@
                         [value]="item.unitPrice ?? ''"
                         appFocusOnRender
                         [focusOnRenderReturn]="'[data-testid=price-edit-' + item.id + ']'"
-                        (keydown.enter)="savePrice(item, priceInput.value)"
+                        (keydown.enter)="savePrice(item, priceInput.value, priceReason.value)"
+                      />
+                      <!-- Review of #1239: a price change is kept in the price history with its reason. -->
+                      <input
+                        #priceReason
+                        [id]="'price-reason-' + item.id"
+                        type="text"
+                        maxlength="500"
+                        class="price-reason-input"
+                        [attr.aria-label]="'PHARMACY_MONEY.PRICE.REASON' | translate"
+                        [placeholder]="'PHARMACY_MONEY.PRICE.REASON' | translate"
+                        [attr.data-testid]="'price-reason-' + item.id"
+                        (keydown.enter)="savePrice(item, priceInput.value, priceReason.value)"
                       />
                       <button
                         type="button"
@@ -313,7 +325,7 @@
                         [attr.aria-label]="'PHARMACY.SAVE_PRICE' | translate"
                         [title]="'PHARMACY.SAVE_PRICE' | translate"
                         [attr.data-testid]="'price-save-' + item.id"
-                        (click)="savePrice(item, priceInput.value)"
+                        (click)="savePrice(item, priceInput.value, priceReason.value)"
                       >
                         <span class="material-symbols-outlined" aria-hidden="true">check</span>
                       </button>

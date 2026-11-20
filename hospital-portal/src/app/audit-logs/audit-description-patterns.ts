@@ -1884,4 +1884,10 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Pack size set on an inventory item$/,
     params: [],
   },
+  // Review of #1239: a selling price set or changed (the figures stay on the price-history row).
+  {
+    key: 'AUDIT.DESC.PHARMACY_PRICE_CHANGED',
+    re: /^Pharmacy selling price changed$/,
+    params: [],
+  },
 ];

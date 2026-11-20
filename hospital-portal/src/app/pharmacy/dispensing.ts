@@ -765,6 +765,33 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.stockLots().find((lot) => lot.id === this.selectedLotId()),
   );
 
+  /**
+   * Review of #1239 (QA D2675): what a one-step fill costs at the pharmacy's list price (the price
+   * of the chosen lot's item, else of the order's medication); 0 when it is not priced. Nothing can
+   * be paid on a fill that does not exist yet, so a priced one leaves « à facturer », with a reason.
+   */
+  oneStepCharge(): number {
+    const lot = this.selectedLot();
+    const item = lot
+      ? this.inventoryItems().find((i) => i.id === lot.inventoryItemId)
+      : this.inventoryItems().find(
+          (i) =>
+            !!this.form.medicationCatalogItemId &&
+            i.medicationCatalogItemId === this.form.medicationCatalogItemId,
+        );
+    const price = Number(item?.unitPrice ?? 0);
+    const quantity = Number(this.form.quantityDispensed ?? 0);
+    return price > 0 && quantity > 0 ? Math.round(price * quantity) : 0;
+  }
+
+  /** The server refused a one-step fill for want of the « à facturer » reason (a price it knows). */
+  readonly deferReasonAsked = signal(false);
+
+  /** The « à facturer » reason is shown: the fill has a price here, or the server asked for it. */
+  oneStepNeedsDeferral(): boolean {
+    return this.oneStepCharge() > 0 || this.deferReasonAsked();
+  }
+
   /** QA D654: the chosen lot is of a controlled substance, so the fill is witnessed. */
   readonly lotIsControlled = computed(() => {
     const lot = this.selectedLot();
@@ -985,6 +1012,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.form.dispensedBy = this.auth.currentProfile()?.id ?? '';
     this.verifyAttested.set(false);
     this.cdsAlerts.set([]);
+    this.deferReasonAsked.set(false);
     this.allergyHold.set(null);
     this.showForm.set(true);
     this.loadStockLots();
@@ -1016,7 +1044,37 @@ export class DispensingComponent implements OnInit, OnDestroy {
     } else {
       delete body.fefoOverrideReason;
     }
+    // Review of #1239: the « à facturer » reason travels only when it was asked for and typed.
+    const deferReason = this.form.billingDeferredReason?.trim();
+    if (this.oneStepNeedsDeferral() && deferReason) {
+      body.billingDeferredReason = deferReason;
+    } else {
+      delete body.billingDeferredReason;
+    }
     return body;
+  }
+
+  /**
+   * Review of #1239 (QA D2675): a priced one-step fill with no « à facturer » reason is refused
+   * where the reason is typed, before the server refuses it.
+   */
+  private missingDeferReason(): boolean {
+    if (!this.oneStepNeedsDeferral() || this.form.billingDeferredReason?.trim()) {
+      return false;
+    }
+    const message = this.translate.instant('PHARMACY_MONEY.ONESTEP.DEFER_REQUIRED');
+    refuseFields(this.host.nativeElement, ['dispDeferReason'], ['dispDeferReason'], message);
+    this.toast.error(message);
+    return true;
+  }
+
+  /** The server asked for the « à facturer » reason: the field is shown for the next try. */
+  private noteDeferReasonAsked(err: unknown): void {
+    const fields = (err as { error?: { fieldErrors?: Record<string, unknown> } } | null)?.error
+      ?.fieldErrors;
+    if (fields && 'billingDeferredReason' in fields) {
+      this.deferReasonAsked.set(true);
+    }
   }
 
   /** QA D654: refuses a controlled fill with no witness before the server does. */
@@ -1047,6 +1105,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
 
   submitDispense(): void {
     if (this.missingWitness()) return;
+    if (this.missingDeferReason()) return;
     const split = this.fefoSplit();
     if (split.length > 1) {
       this.submitSplitDispense(split);
@@ -1069,6 +1128,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
           return;
         }
         this.noteCdsAlerts(err);
+        this.noteDeferReasonAsked(err);
         this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.DISPENSE_FAILED'));
       },
     });
@@ -1159,7 +1219,10 @@ export class DispensingComponent implements OnInit, OnDestroy {
   submitReady(): void {
     if (this.missingWitness()) return;
     this.saving.set(true);
-    this.svc.markReady({ ...this.attestedForm(), patientScanValue: '' }).subscribe({
+    // A prepared fill is paid (or marked « à facturer ») at hand-over, never here.
+    const ready: DispenseRequest = { ...this.attestedForm(), patientScanValue: '' };
+    delete ready.billingDeferredReason;
+    this.svc.markReady(ready).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('PHARMACY.READY_SUCCESS'));
         this.formClaimedRowId.set(null);

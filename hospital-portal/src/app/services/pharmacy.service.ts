@@ -139,6 +139,8 @@ export interface InventoryItemRequest {
   unit?: string;
   /** QA D264: selling price of one unit, whole XOF. */
   unitPrice?: number | null;
+  /** Review of #1239: why the price changes; required by the server when it does (price history). */
+  priceChangeReason?: string;
   active?: boolean;
 }
 
@@ -366,6 +368,11 @@ export interface DispenseRequest {
    * alerts (`cdsAdvisories`), which the form then shows beside this field.
    */
   cdsOverrideReason?: string;
+  /**
+   * Review of #1239 (QA D2675): a one-step fill leaves the counter before it can be paid. When it has
+   * a price, this is why it is handed over « à facturer » (a pharmacist or a hospital admin only).
+   */
+  billingDeferredReason?: string;
   /**
    * Roadmap row 4 / T-68 — optional client-supplied idempotency key the
    * offline-dispense queue mints when the user clicks Dispense. Allows the

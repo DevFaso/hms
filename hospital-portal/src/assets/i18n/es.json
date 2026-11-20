@@ -2096,7 +2096,8 @@
       "PHARMACY_REFUND_REJECTED": "Pharmacy refund rejected",
       "PHARMACY_REFUND_PAID": "Pharmacy refund paid out",
       "PHARMACY_REFUND_CANCELLED": "Pharmacy refund cancelled",
-      "PHARMACY_PACK_SIZE_SET": "Pack size set on an inventory item"
+      "PHARMACY_PACK_SIZE_SET": "Pack size set on an inventory item",
+      "PHARMACY_PRICE_CHANGED": "Pharmacy selling price changed"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -7528,7 +7529,8 @@
         "PHARMACY_REFUND_APPROVED": "Pharmacy refund approved",
         "PHARMACY_REFUND_REJECTED": "Pharmacy refund rejected",
         "PHARMACY_REFUND_PAID": "Pharmacy refund paid out",
-        "PHARMACY_REFUND_CANCELLED": "Pharmacy refund cancelled"
+        "PHARMACY_REFUND_CANCELLED": "Pharmacy refund cancelled",
+        "PHARMACY_PRICE_CHANGED": "Pharmacy selling price changed"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -15017,7 +15019,10 @@
         "DISPENSE_STOCK_MISMATCH": "Fill without a matching stock movement",
         "PRICE_NOT_LIST": "Sale at a price other than the list",
         "UNPAID_HANDED_OVER": "Fill handed over unpaid",
-        "CONTROLLED_BALANCE": "Controlled register balance differs from the stock"
+        "CONTROLLED_BALANCE": "Controlled register balance differs from the stock",
+        "LOT_BALANCE_MISMATCH": "Lot balance: opening + movements differs from the stock held",
+        "RETURN_NOT_REFUNDED": "Patient return with no refund requested",
+        "REFUND_EXCEEDS_PAID": "Refunds paid out above what is still counted as paid"
       },
       "STOCK_TITLE": "Stock by medication and lot",
       "NO_MOVEMENT": "No movement this day.",
@@ -15031,6 +15036,16 @@
       "CONTROLLED_TITLE": "Controlled substances: register and stock",
       "CONTROLLED_LINE": "register {{register}}, stock {{stock}}",
       "DEFERRED_TITLE": "Fills handed over « to be billed »"
+    },
+    "ONESTEP": {
+      "DEFER_LABEL": "Hand over « to be billed »: reason",
+      "CHARGE": "Amount of this fill: {{amount}}",
+      "DEFER_HINT": "This fill has a price and nothing is paid on it yet. To hand it over now, say why it is billed later (pharmacist or administrator only); it is listed in the day’s reconciliation. To take the payment first, use « Mark ready for collection » and hand it over once paid.",
+      "DEFER_REQUIRED": "This fill is not paid: give the « to be billed » reason, or mark it ready for collection and take the payment before handing it over."
+    },
+    "PRICE": {
+      "REASON": "Reason for the price change",
+      "REASON_REQUIRED": "Give the reason for this price change: it is kept in the price history."
     }
   }
 }

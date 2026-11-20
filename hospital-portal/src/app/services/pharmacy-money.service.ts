@@ -130,6 +130,16 @@ export interface PharmacyReconciliation {
     reason: string;
     deferredAt?: string | null;
   }[];
+  /** Review of #1239: every lot over the day, opening + movements against its closing (also in the CSV). */
+  lotBalances?: {
+    stockLotId: string;
+    medicationName?: string | null;
+    lotNumber?: string | null;
+    opening: number;
+    movements: number;
+    closing: number;
+    matches: boolean;
+  }[];
 }
 
 @Injectable({ providedIn: 'root' })
