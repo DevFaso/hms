@@ -29,4 +29,20 @@ public interface LabTestDefinitionService {
      */
     LabTestDefinitionResponseDTO createNewVersion(UUID id);
     byte[] exportPdf();
+
+    /**
+     * Policy 2026-11-20 (provisional): the tests of the caller's catalogue the
+     * curated mapping recommends a sensitive category for. Read-only: a
+     * suggestion the lab director confirms.
+     */
+    List<com.example.hms.payload.dto.LabSensitivityRecommendationDTO> recommendedSensitivity();
+
+    /**
+     * Policy 2026-11-20: tag the tests the lab director confirmed, each with
+     * the category the mapping recommends for it, each audited. A test the
+     * mapping does not name, or a category it does not recommend, is refused
+     * and nothing is applied.
+     */
+    List<com.example.hms.payload.dto.LabSensitivityRecommendationDTO> applyRecommendedSensitivity(
+        List<com.example.hms.payload.dto.ApplyLabSensitivityRecommendationsRequestDTO.Item> confirmed);
 }

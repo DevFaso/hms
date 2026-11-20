@@ -413,6 +413,11 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'SensitivityTaggingController#tagProblem',
     roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
+  // Policy 2026-11-20: a minor's sensitive result released to a verified parent or guardian.
+  minorResultRelease: {
+    endpoint: 'MinorResultReleaseController#release',
+    roles: ['ROLE_DOCTOR', 'ROLE_MIDWIFE'],
+  },
 } as const satisfies Record<string, ActionPermission>;
 
 /**

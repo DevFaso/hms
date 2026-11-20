@@ -245,6 +245,7 @@
       <app-patient-chart
         [patientId]="patient()!.id"
         [patientGender]="patient()!.gender"
+        [patientDateOfBirth]="patient()!.dateOfBirth"
         [refreshToken]="accessEpoch()"
         (openRestricted)="openRestrictedRows()"
       />

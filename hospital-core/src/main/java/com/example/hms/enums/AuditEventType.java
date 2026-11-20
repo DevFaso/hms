@@ -351,6 +351,12 @@ public enum AuditEventType {
     PHARMACY_REFUND_CANCELLED,
     /** Review of #1239 (V311): a pharmacy's selling price set or changed, with the reason (price history). */
     PHARMACY_PRICE_CHANGED,
+    /** Policy 2026-11-20 (V347): a clinician released a minor's sensitive result to a verified parent or guardian (ids and category only). */
+    SENSITIVE_RESULT_RELEASED_TO_PROXY,
+    /** Policy 2026-11-20 (V347): staff verified that the holder of a family-access grant is the patient's parent or guardian. */
+    PROXY_RELATIONSHIP_VERIFIED,
+    /** Policy 2026-11-20: the lab director applied recommended sensitive categories to the catalogue (one row per test). */
+    LAB_SENSITIVITY_RECOMMENDATION_APPLIED,
     /** Policy rule 6 (V345): a fill asked to leave « à facturer » (third-party cover or credit); decides nothing. */
     DISPENSE_BILLING_DEFERRAL_REQUESTED,
     /** Policy rule 6: a requested deferral approved by another person (billing, finance or a hospital admin). */

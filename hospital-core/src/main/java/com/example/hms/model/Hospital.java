@@ -232,6 +232,18 @@ public class Hospital extends BaseEntity {
     @Column(name = "record_access_posture", nullable = false, length = 32)
     private RecordAccessPosture recordAccessPosture = RecordAccessPosture.TREATMENT_PRESUMED;
 
+    /**
+     * Policy 2026-11-20 (V347, provisional): from this age to 17, a minor's
+     * sensitive records are hidden from the parents unless a clinician
+     * releases them. NULL means the provisional default
+     * ({@code ProxySensitivityPolicy.DEFAULT_ADOLESCENT_AGE}); Burkina has no
+     * statutory adolescent-confidentiality age, so a jurist must confirm it.
+     */
+    @jakarta.validation.constraints.Min(0)
+    @jakarta.validation.constraints.Max(18)
+    @Column(name = "adolescent_confidentiality_age")
+    private Integer adolescentConfidentialityAge;
+
     @Pattern(regexp = "^[a-z][a-z0-9_]{0,62}$",
         message = "tenantSchemaName must be a valid PostgreSQL identifier (lowercase, "
             + "starts with a letter, ≤ 63 chars, [a-z0-9_])")

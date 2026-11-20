@@ -28,6 +28,17 @@ public interface PriceListItemRepository extends JpaRepository<PriceListItem, UU
 
     boolean existsByHospitalIdAndCode(UUID hospitalId, String code);
 
+    /**
+     * Review of #1242: the items an invoice's lines were priced from, at the invoice's own hospital, read WITHOUT
+     * the caller's tenant scope. {@code findAllById} is narrowed to the caller's hospitals, so a family proxy with
+     * no assignment where the grantor was billed loaded nothing and the invoice with the hidden test was shown (the
+     * QA D1212 trap). The hospital named here is the invoice's, never the caller's; only
+     * {@code ProxyRecordFilter} calls it, to decide whether to withhold.
+     */
+    @Query("SELECT i FROM PriceListItem i WHERE i.hospitalId = :hospitalId AND i.id IN :ids")
+    List<PriceListItem> findUnscopedByHospitalIdAndIdIn(@Param("hospitalId") UUID hospitalId,
+                                                        @Param("ids") java.util.Collection<UUID> ids);
+
     /** The active item another one would collide with on the same link (one active item per link). */
     @Query("""
         SELECT i FROM PriceListItem i

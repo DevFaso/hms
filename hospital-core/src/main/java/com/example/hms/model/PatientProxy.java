@@ -70,4 +70,23 @@ public class PatientProxy extends BaseEntity {
 
     @Column(name = "notes", length = 500)
     private String notes;
+
+    /**
+     * Policy 2026-11-20 (V347): when staff checked that the holder is the
+     * patient's parent or legal guardian. The relationship above is what the
+     * grantor declared; only a verified PARENT or LEGAL_GUARDIAN grant can
+     * receive a minor's released result or a young child's sensitive record
+     * ({@code ProxySensitivityPolicy}). NULL: not verified.
+     */
+    @Column(name = "relationship_verified_at")
+    private LocalDateTime relationshipVerifiedAt;
+
+    @Column(name = "relationship_verified_by_user_id")
+    private java.util.UUID relationshipVerifiedByUserId;
+
+    /** A parent or legal guardian whose relationship staff verified. */
+    public boolean isVerifiedParentOrGuardian() {
+        return relationshipVerifiedAt != null
+            && (relationship == ProxyRelationship.PARENT || relationship == ProxyRelationship.LEGAL_GUARDIAN);
+    }
 }

@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import type { AllergyReviewState } from '../shared/allergy-acknowledgement/allergy-acknowledgement';
 import { CdsCard } from '../shared/cds-card/cds-card.model';
 import { MobileMoneyOperator } from '../shared/mobile-money-operator';
+import { SensitivityCategory } from '../shared/sensitivity/sensitivity-category';
 
 /* ───────────────────────────── Medication Catalog ───────────────────────────── */
 
@@ -21,6 +22,10 @@ export interface MedicationCatalogItemRequest {
   essentialList?: boolean;
   controlled?: boolean;
   description?: string;
+  /** Policy 2026-11-20: the medicine's sensitive category. Left out, the server keeps the current one. */
+  sensitivityCategory?: SensitivityCategory;
+  /** True clears the sensitive category. */
+  clearSensitivityCategory?: boolean;
 }
 
 /** Round 18 (QA D935): one weight band; min inclusive, max exclusive (null: no upper bound). */
@@ -63,6 +68,8 @@ export interface MedicationCatalogItemResponse {
   category?: string;
   essentialList: boolean;
   controlled: boolean;
+  /** Policy 2026-11-20: the sensitive category this medicine reveals; null for none. */
+  sensitivityCategory?: SensitivityCategory | null;
   /** QA D935: mg per kg per dose, or null when the catalogue holds no ceiling. */
   pediatricMaxDoseMgPerKg?: number | null;
   /** Round 18 (QA D935): the rest of the paediatric limits, their source and approval. */
