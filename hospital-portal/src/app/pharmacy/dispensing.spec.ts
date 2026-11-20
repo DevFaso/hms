@@ -582,6 +582,64 @@ describe('DispensingComponent', () => {
     expect(el.querySelector('#fefoReason')!.getAttribute('aria-invalid')).toBe('true');
   });
 
+  it('review of #1239: a priced one-step fill asks for the « à facturer » reason and sends it; « Prête » never does', () => {
+    pharmacySvc.createDispense.and.returnValue(of({ data: { id: 'd-new' } } as any));
+    pharmacySvc.markReady.and.returnValue(of({ data: { id: 'd-ready' } } as any));
+    component.inventoryItems.set([
+      {
+        id: 'inv-1',
+        medicationCatalogItemId: 'cat-1',
+        medicationName: 'Amoxicilline',
+        quantityOnHand: 100,
+        unitPrice: 100,
+      } as any,
+    ]);
+    component.selectPrescription(mockWorkQueue.data.content[0]);
+    component.form.quantityDispensed = 10;
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(component.form.stockLotId).toBeTruthy();
+    expect(component.oneStepCharge()).toBe(1000);
+    expect(el.querySelector('#dispDeferReason')).not.toBeNull();
+
+    component.submitDispense();
+    fixture.detectChanges();
+    expect(pharmacySvc.createDispense).not.toHaveBeenCalled();
+    expect(toastSvc.error).toHaveBeenCalledWith('PHARMACY_MONEY.ONESTEP.DEFER_REQUIRED');
+    expect(el.querySelector('#dispDeferReason')!.getAttribute('aria-invalid')).toBe('true');
+
+    component.form.billingDeferredReason = '  Hospitalisée, facture du séjour ';
+    component.submitDispense();
+    expect(pharmacySvc.createDispense.calls.mostRecent().args[0].billingDeferredReason).toBe(
+      'Hospitalisée, facture du séjour',
+    );
+
+    // A prepared fill is paid or deferred at hand-over: the reason never travels with « Prête ».
+    component.selectPrescription(mockWorkQueue.data.content[0]);
+    component.form.billingDeferredReason = 'x';
+    component.submitReady();
+    expect('billingDeferredReason' in pharmacySvc.markReady.calls.mostRecent().args[0]).toBeFalse();
+  });
+
+  it('review of #1239: an unpriced one-step fill shows no « à facturer » field, until the server asks for one', () => {
+    component.selectPrescription(mockWorkQueue.data.content[0]);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(component.oneStepCharge()).toBe(0);
+    expect(el.querySelector('#dispDeferReason')).toBeNull();
+
+    pharmacySvc.createDispense.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: { message: 'Non payée', fieldErrors: { billingDeferredReason: 'Non payée' } },
+      })),
+    );
+    component.submitDispense();
+    fixture.detectChanges();
+    expect(component.deferReasonAsked()).toBeTrue();
+    expect(el.querySelector('#dispDeferReason')).not.toBeNull();
+  });
+
   it('QA D654: an ordinary lot sends no witness', () => {
     pharmacySvc.createDispense.and.returnValue(of({ data: { id: 'd-new' } } as any));
     component.selectPrescription(mockWorkQueue.data.content[0]);

@@ -97,6 +97,17 @@ class CancelVoidReasonGuardTest {
             "NOT A VOID: approves a refund asked for with its reason; another person decides (D-3)");
         HANDLERS.put("POST /billing-invoices/{invoiceId}/refunds/{refundId}/pay",
             "NOT A VOID: hands over a refund already asked for with a reason and approved by another person");
+        // QA D2676 (r65, plan PR 13): pharmacy refunds of patient returns, the same steps.
+        HANDLERS.put("POST /pharmacy/refunds/{id}/reject",
+            "PharmacyRefundReasonRequestDTO.reason -> service/pharmacy/PharmacyRefundServiceTest#rejectKeepsTheReason");
+        HANDLERS.put("POST /pharmacy/refunds/{id}/cancel",
+            "PharmacyRefundReasonRequestDTO.reason -> service/pharmacy/PharmacyRefundServiceTest#cancelNeedsAReason");
+        HANDLERS.put("POST /pharmacy/refunds",
+            "NOT A VOID: asks for a refund, with a required reason (PharmacyRefundServiceTest#reasonIsRequired); nothing moves until another person approves");
+        HANDLERS.put("POST /pharmacy/refunds/{id}/approve",
+            "NOT A VOID: approves a refund asked for with its reason; another person decides (D-3)");
+        HANDLERS.put("POST /pharmacy/refunds/{id}/pay",
+            "NOT A VOID: hands over a refund already asked for with a reason and approved by another person");
         // Billing-money plan PR 7: a payer's rejection of its share names the payer's reason.
         HANDLERS.put("POST /billing-invoices/{invoiceId}/payer-shares/{shareId}/reject",
             "PayerShareRejectRequestDTO.reason -> service/billing/InvoiceCoverageServiceTest#rejectingNeedsTheReasonAndNeverACardNumber");

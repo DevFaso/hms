@@ -78,6 +78,8 @@ class InventoryServiceImplTest {
 
     /** QA D655: the controlled-stock witness rule. */
     @Mock private ControlledStockWitness controlledStockWitness;
+    /** Review of #1239: the price history every price change is kept in. */
+    @Mock private PharmacyPriceHistory priceHistory;
     /** The server's clock; real time unless a test pins it. */
     @Mock private java.time.Clock clock;
 
@@ -1327,5 +1329,319 @@ class InventoryServiceImplTest {
 
             assertThat(result).isNotNull();
         }
+    }
+
+    /* r65-D2674-pack-size */
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("QA D2674: setPackSize converts packs to units once: lots, stock, price, thresholds, a ledger row per lot")
+    void setPackSizeConvertsTheStockToUnits() {
+        inventoryItem.setUnit("plaquette");
+        inventoryItem.setUnitPrice(new BigDecimal("2500"));
+        com.example.hms.model.pharmacy.StockLot lot = com.example.hms.model.pharmacy.StockLot.builder()
+                .inventoryItem(inventoryItem).lotNumber("LOT-A-R65-1").remainingQuantity(new BigDecimal("40")).build();
+        lot.setId(stockLotId);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+        when(inventoryItemRepository.lockById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+        when(stockLotRepository.findAllByInventoryItemIdOrderByExpiryDateAsc(inventoryItemId)).thenReturn(java.util.List.of(lot));
+        when(inventoryItemRepository.save(any(InventoryItem.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.setPackSize(inventoryItemId, com.example.hms.payload.dto.pharmacy.PackSizeRequestDTO.builder()
+                .unitsPerPack(10).unit("comprimé").reason("Stock reçu en plaquettes").build());
+
+        verify(stockLotRepository).scaleQuantitiesOfItem(eq(inventoryItemId),
+                org.mockito.ArgumentMatchers.argThat(f -> f.compareTo(BigDecimal.TEN) == 0), any());
+        verify(inventoryItemRepository).scaleOnHand(eq(inventoryItemId),
+                org.mockito.ArgumentMatchers.argThat(f -> f.compareTo(BigDecimal.TEN) == 0), any());
+        org.mockito.ArgumentCaptor<com.example.hms.model.pharmacy.StockTransaction> tx =
+                org.mockito.ArgumentCaptor.forClass(com.example.hms.model.pharmacy.StockTransaction.class);
+        verify(stockTransactionRepository).save(tx.capture());
+        assertThat(tx.getValue().getQuantity()).isEqualByComparingTo("360");
+        assertThat(inventoryItem.getUnitsPerPack()).isEqualTo(10);
+        assertThat(inventoryItem.getPackUnit()).isEqualTo("plaquette");
+        assertThat(inventoryItem.getUnit()).isEqualTo("comprimé");
+        assertThat(inventoryItem.getUnitPrice()).isEqualByComparingTo("250");
+        assertThat(inventoryItem.getReorderThreshold()).isEqualByComparingTo("100");
+        // Review of #1239: the moment is kept (a refund converts across it), and so is the price of one unit.
+        assertThat(inventoryItem.getPackSizeSetAt()).isNotNull();
+        verify(priceHistory).keep(eq(inventoryItem),
+                org.mockito.ArgumentMatchers.argThat(old -> old.compareTo(new BigDecimal("2500")) == 0),
+                org.mockito.ArgumentMatchers.argThat(now -> now.compareTo(new BigDecimal("250")) == 0),
+                org.mockito.ArgumentMatchers.contains("Conversion: 1 plaquette = 10 comprimé"), eq(userId),
+                eq(inventoryItem.getPackSizeSetAt()));
+    }
+
+    // ── review of #1239: list price changes ──────────────────────────────
+
+    private InventoryItemRequestDTO priceRequest(String price, String reason) {
+        InventoryItemRequestDTO dto = buildItemRequest();
+        dto.setQuantityOnHand(null);
+        dto.setUnitPrice(new BigDecimal(price));
+        dto.setPriceChangeReason(reason);
+        return dto;
+    }
+
+    private void stubPricedItem(boolean maySetPrice) {
+        inventoryItem.setUnitPrice(new BigDecimal("250"));
+        when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        org.mockito.Mockito.lenient().when(roleValidator.canSetPharmacyPrice(userId, hospitalId)).thenReturn(maySetPrice);
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("review of #1239: a pharmacist cannot change the selling price; nothing is saved or kept")
+    void aPharmacistCannotChangeThePrice() {
+        stubPricedItem(false);
+        InventoryItemRequestDTO dto = priceRequest("1", "promotion");
+
+        assertThatThrownBy(() -> service.updateInventoryItem(inventoryItemId, dto))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .satisfies(e -> {
+                    com.example.hms.exception.FieldBusinessException refused =
+                            (com.example.hms.exception.FieldBusinessException) e;
+                    assertThat(refused.getField()).isEqualTo("unitPrice");
+                    assertThat(refused.getMessageKey()).isEqualTo("pharmacy.price.roleRequired");
+                });
+        verify(inventoryItemMapper, never()).updateEntity(any(), any());
+        verify(inventoryItemRepository, never()).save(any());
+        verify(priceHistory, never()).keep(any(), any(), any(), any(), any(), any());
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("review of #1239: the store manager changes a price only with a reason, free of card data")
+    void aPriceChangeNeedsAReason() {
+        stubPricedItem(true);
+        InventoryItemRequestDTO blank = priceRequest("300", "  ");
+        assertThatThrownBy(() -> service.updateInventoryItem(inventoryItemId, blank))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .satisfies(e -> {
+                    com.example.hms.exception.FieldBusinessException refused =
+                            (com.example.hms.exception.FieldBusinessException) e;
+                    assertThat(refused.getField()).isEqualTo("priceChangeReason");
+                    assertThat(refused.getMessageKey()).isEqualTo("pharmacy.price.reasonRequired");
+                });
+        InventoryItemRequestDTO card = priceRequest("300", "carte 4111 1111 1111 1111");
+        assertThatThrownBy(() -> service.updateInventoryItem(inventoryItemId, card))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        InventoryItemRequestDTO tooLong = priceRequest("300", "x".repeat(501));
+        assertThatThrownBy(() -> service.updateInventoryItem(inventoryItemId, tooLong))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.price.reasonTooLong");
+        verify(inventoryItemRepository, never()).save(any());
+        verify(priceHistory, never()).keep(any(), any(), any(), any(), any(), any());
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("review of #1239: a price change with its reason is saved, kept in the history (old, new, why, who) and audited")
+    void aPriceChangeIsKeptAndAudited() {
+        stubPricedItem(true);
+        when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
+        InventoryItemRequestDTO dto = priceRequest("300", " Nouveau tarif fournisseur ");
+
+        service.updateInventoryItem(inventoryItemId, dto);
+
+        verify(inventoryItemMapper).updateEntity(inventoryItem, dto);
+        verify(priceHistory).keep(eq(inventoryItem),
+                org.mockito.ArgumentMatchers.argThat(old -> old.compareTo(new BigDecimal("250")) == 0),
+                org.mockito.ArgumentMatchers.argThat(now -> now.compareTo(new BigDecimal("300")) == 0),
+                eq("Nouveau tarif fournisseur"), eq(userId), any());
+        org.mockito.ArgumentCaptor<AuditEventRequestDTO> audit = org.mockito.ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.PHARMACY_PRICE_CHANGED);
+        assertThat(audit.getValue().getEventDescription()).doesNotContain("300").doesNotContain("250");
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("review of #1239: the unchanged price in the form asks for no role and no reason (a pharmacist still edits thresholds)")
+    void anUnchangedPriceIsNotAPriceChange() {
+        stubPricedItem(false);
+        when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
+
+        service.updateInventoryItem(inventoryItemId, priceRequest("250.00", null));
+
+        verify(inventoryItemRepository).save(inventoryItem);
+        verify(priceHistory, never()).keep(any(), any(), any(), any(), any(), any());
+        verify(roleValidator, never()).canSetPharmacyPrice(any(), any());
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("review of #1239: the price history is read back with its reason and author; another hospital's item is missing")
+    void thePriceHistoryIsReadBack() {
+        when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        user.setFirstName("Awa");
+        user.setLastName("Traoré");
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        java.time.LocalDateTime at = java.time.LocalDateTime.of(2026, 11, 20, 9, 0);
+        when(priceHistory.historyOf(inventoryItem)).thenReturn(java.util.List.of(
+                com.example.hms.model.pharmacy.PharmacyPriceChange.builder().inventoryItemId(inventoryItemId)
+                        .oldPrice(new BigDecimal("250")).newPrice(new BigDecimal("300"))
+                        .reason("Nouveau tarif fournisseur").changedBy(userId).changedAt(at).build()));
+
+        assertThat(service.listPriceHistory(inventoryItemId)).singleElement().satisfies(line -> {
+            assertThat(line.getOldPrice()).isEqualByComparingTo("250");
+            assertThat(line.getNewPrice()).isEqualByComparingTo("300");
+            assertThat(line.getReason()).isEqualTo("Nouveau tarif fournisseur");
+            assertThat(line.getChangedByName()).isEqualTo("Awa Traoré");
+            assertThat(line.getChangedAt()).isEqualTo(at);
+        });
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        assertThatThrownBy(() -> service.listPriceHistory(inventoryItemId))
+                .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+    }
+
+    private void stubNewItem() {
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(medicationCatalogItemRepository.findById(medicationId)).thenReturn(Optional.of(medication));
+        when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(pharmacyId, medicationId))
+                .thenReturn(Optional.empty());
+        when(inventoryItemRepository.findByPharmacyIdAndActiveTrue(eq(pharmacyId), any()))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("review of #1239: a new item is priced only by the store manager or an admin; its first price opens the history")
+    void aNewItemIsPricedByTheStoreManager() {
+        stubNewItem();
+        InventoryItemRequestDTO dto = priceRequest("250", null);
+        when(roleValidator.canSetPharmacyPrice(userId, hospitalId)).thenReturn(false);
+        assertThatThrownBy(() -> service.createInventoryItem(dto))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.price.roleRequired");
+        verify(inventoryItemRepository, never()).save(any());
+
+        when(roleValidator.canSetPharmacyPrice(userId, hospitalId)).thenReturn(true);
+        when(inventoryItemMapper.toEntity(dto, pharmacy, medication)).thenReturn(inventoryItem);
+        when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
+        service.createInventoryItem(dto);
+
+        verify(priceHistory).keep(eq(inventoryItem), org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.argThat(now -> now.compareTo(new BigDecimal("250")) == 0),
+                eq(InventoryServiceImpl.INITIAL_PRICE_REASON), eq(userId), any());
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("QA D2674: a pack size already set is never changed (the stock would be converted twice)")
+    void setPackSizeOnlyOnce() {
+        inventoryItem.setUnitsPerPack(10);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+        when(inventoryItemRepository.lockById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+
+        assertThatThrownBy(() -> service.setPackSize(inventoryItemId, com.example.hms.payload.dto.pharmacy.PackSizeRequestDTO
+                .builder().unitsPerPack(12).unit("comprimé").reason("x").build()))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.pack.alreadySet");
+        verify(stockLotRepository, never()).scaleQuantitiesOfItem(any(), any(), any());
+    }
+
+    /* r65-D2674-receipt-in-packs */
+    private StockLotRequestDTO packsReceipt(String packs, String costPerPack, LocalDate expiry) {
+        return StockLotRequestDTO.builder()
+                .inventoryItemId(inventoryItemId)
+                .lotNumber("LOT-PACKS")
+                .expiryDate(expiry)
+                .initialQuantity(new BigDecimal(packs))
+                .remainingQuantity(new BigDecimal(packs))
+                .unitCost(new BigDecimal(costPerPack))
+                .receivedDate(LocalDate.now())
+                .inPacks(true)
+                .build();
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("QA D2674: a receipt in packs is converted to units (quantities ×10, cost ÷10) before it is checked")
+    void receiptInPacksIsConvertedToUnits() {
+        inventoryItem.setUnitsPerPack(10);
+        inventoryItem.setUnit("comprimé");
+        StockLotRequestDTO dto = packsReceipt("40", "2500", LocalDate.now().minusDays(1));
+        when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+        stubHospitalScope();
+
+        // An expired lot is refused by the receipt's own checks, after the conversion.
+        assertThatThrownBy(() -> service.receiveStock(dto)).isInstanceOf(BusinessException.class);
+
+        assertThat(dto.getInitialQuantity()).isEqualByComparingTo("400");
+        assertThat(dto.getRemainingQuantity()).isEqualByComparingTo("400");
+        assertThat(dto.getUnitCost()).isEqualByComparingTo("250");
+        assertThat(dto.getInPacks()).isFalse();
+        verify(stockLotRepository, never()).save(any());
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("QA D2674: a receipt in packs of an item with no pack size is refused")
+    void receiptInPacksNeedsAPackSize() {
+        StockLotRequestDTO dto = packsReceipt("40", "2500", LocalDate.now().plusYears(1));
+        when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+        stubHospitalScope();
+
+        assertThatThrownBy(() -> service.receiveStock(dto))
+                .extracting("messageKey").isEqualTo("pharmacy.pack.noPackSize");
+    }
+
+    private void stubPackSizeLock() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+        when(inventoryItemRepository.lockById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("QA D2674: the pack size names every missing field at once, and refuses a measured unit")
+    void packSizeIsChecked() {
+        stubPackSizeLock();
+        com.example.hms.payload.dto.pharmacy.PackSizeRequestDTO empty =
+                new com.example.hms.payload.dto.pharmacy.PackSizeRequestDTO();
+        assertThatThrownBy(() -> service.setPackSize(inventoryItemId, empty))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+
+        com.example.hms.payload.dto.pharmacy.PackSizeRequestDTO measured = com.example.hms.payload.dto.pharmacy
+                .PackSizeRequestDTO.builder().unitsPerPack(10).unit("ml").reason("flacons").build();
+        assertThatThrownBy(() -> service.setPackSize(inventoryItemId, measured))
+                .extracting("messageKey").isEqualTo("pharmacy.pack.unitMeasured");
+        verify(stockLotRepository, never()).scaleQuantitiesOfItem(any(), any(), any());
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("QA D2674: a controlled item keeps its register as received: no pack size")
+    void packSizeRefusedForAControlledItem() {
+        com.example.hms.model.medication.MedicationCatalogItem morphine =
+                new com.example.hms.model.medication.MedicationCatalogItem();
+        morphine.setId(UUID.randomUUID());
+        morphine.setControlled(true);
+        inventoryItem.setMedicationCatalogItem(morphine);
+        stubPackSizeLock();
+        com.example.hms.payload.dto.pharmacy.PackSizeRequestDTO dto = com.example.hms.payload.dto.pharmacy
+                .PackSizeRequestDTO.builder().unitsPerPack(10).unit("ampoule").reason("x").build();
+
+        assertThatThrownBy(() -> service.setPackSize(inventoryItemId, dto))
+                .extracting("messageKey").isEqualTo("pharmacy.pack.controlledRefused");
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("QA D2674: an item with no lots converts its stock on hand with one item-level ledger row")
+    void packSizeOfAnItemWithoutLots() {
+        inventoryItem.setUnit(null);
+        stubPackSizeLock();
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(stockLotRepository.findAllByInventoryItemIdOrderByExpiryDateAsc(inventoryItemId))
+                .thenReturn(java.util.List.of());
+        when(inventoryItemRepository.save(any(InventoryItem.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.setPackSize(inventoryItemId, com.example.hms.payload.dto.pharmacy.PackSizeRequestDTO.builder()
+                .unitsPerPack(12).unit("gélule").reason("boîtes de 12").build());
+
+        org.mockito.ArgumentCaptor<com.example.hms.model.pharmacy.StockTransaction> tx =
+                org.mockito.ArgumentCaptor.forClass(com.example.hms.model.pharmacy.StockTransaction.class);
+        verify(stockTransactionRepository).save(tx.capture());
+        assertThat(tx.getValue().getStockLot()).isNull();
+        assertThat(tx.getValue().getQuantity()).isEqualByComparingTo("1100");
+        assertThat(inventoryItem.getPackUnit()).isEqualTo("pack");
     }
 }

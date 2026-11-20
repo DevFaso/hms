@@ -77,4 +77,7 @@ public interface DispenseService {
      * row carries its active claim. The filter is ignored when claims are off.
      */
     Page<WorkQueuePrescriptionDTO> getWorkQueue(Pageable pageable, QueueClaimFilter claimFilter);
+
+    /** QA D2675 (r65): what a fill costs and how it is settled (paid, covered, « à facturer », unpaid). */
+    com.example.hms.payload.dto.pharmacy.DispensePaymentStatusDTO getPaymentStatus(UUID dispenseId);
 }

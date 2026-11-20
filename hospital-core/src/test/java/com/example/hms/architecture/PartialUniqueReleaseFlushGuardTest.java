@@ -106,7 +106,9 @@ class PartialUniqueReleaseFlushGuardTest {
         // Billing plan PR 11 (V310, QA D2430): one payment per client request key and hospital; the key never moves.
         Map.entry("payment_transactions", "PaymentTransaction"),
         Map.entry("pharmacy_payments", "PharmacyPayment"),
-        Map.entry("pharmacy_sales", "PharmacySale"));
+        Map.entry("pharmacy_sales", "PharmacySale"),
+        // QA D2676 (V311): one live refund per return movement; a refund is never replaced, a new one is asked.
+        Map.entry("pharmacy_refunds", "PharmacyRefund"));
 
     /** Indexes whose rows no setter can release: the slot is the row's own key, not its state. */
     private static final Set<String> KEY_ONLY_ENTITIES =

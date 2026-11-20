@@ -301,7 +301,7 @@ public class ControlledDrugRegisterService {
         }
         return switch (type) {
             case RECEIPT, RETURN, ADJUSTMENT -> q;
-            case DISPENSE, TRANSFER -> q.negate();
+            case DISPENSE, TRANSFER, SALE -> q.negate();
         };
     }
 

@@ -1620,6 +1620,18 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./pharmacy/pharmacy-claims').then((m) => m.PharmacyClaimsComponent),
       },
+      {
+        // QA D2673 (r65): the pharmacy's daily reconciliation and its refunds (D2676).
+        path: 'pharmacy/reconciliation',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+        },
+        loadComponent: () =>
+          import('./pharmacy/pharmacy-reconciliation').then(
+            (m) => m.PharmacyReconciliationComponent,
+          ),
+      },
 
       // Administration landing for ROLE_ADMIN. ROLE_SUPER_ADMIN passes the
       // role gate but is redirected to /super-admin by SuperAdminRedirectGuard

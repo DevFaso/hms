@@ -29,6 +29,14 @@ public class InventoryItemResponseDTO {
     private BigDecimal reorderQuantity;
     private BigDecimal unitPrice;
     private String unit;
+    /** QA D2674 (r65): units of {@code unit} in one pack, when the item was converted; null otherwise. */
+    private Integer unitsPerPack;
+    /** QA D2674: the pack's name ("plaquette"). */
+    private String packUnit;
+    /** QA D2674: the stock on hand as whole packs (with {@link #looseUnitsOnHand}); null without a pack size. */
+    private BigDecimal fullPacksOnHand;
+    /** QA D2674: the units left over beyond {@link #fullPacksOnHand}. */
+    private BigDecimal looseUnitsOnHand;
     private boolean active;
     /** QA D157: a controlled substance; a manual movement of it needs a witness. */
     private boolean controlled;

@@ -104,6 +104,7 @@ class PaymentIdempotencyPostgresIT {
     @Autowired private PatientRepository patients;
     @Autowired private PharmacyRepository pharmacies;
     @Autowired private MedicationCatalogItemRepository catalog;
+    @Autowired private com.example.hms.repository.pharmacy.InventoryItemRepository inventoryItems;
     @Autowired private JdbcTemplate jdbc;
     @org.springframework.test.context.bean.override.mockito.MockitoBean
     private com.example.hms.service.SmsService smsService;
@@ -295,6 +296,10 @@ class PaymentIdempotencyPostgresIT {
         Pharmacy pharmacy = pharmacies.saveAndFlush(Pharmacy.builder().hospital(hospital).name("Officine D2430").build());
         MedicationCatalogItem item = catalog.saveAndFlush(MedicationCatalogItem.builder()
             .nameFr("Paracétamol 500 mg").genericName("paracetamol").hospital(hospital).build());
+        // QA D2671 / D2670 (r65): the sale is priced from the pharmacy's list and takes its stock.
+        com.example.hms.model.pharmacy.InventoryItem stocked = inventoryItems.saveAndFlush(
+            com.example.hms.model.pharmacy.InventoryItem.builder().pharmacy(pharmacy).medicationCatalogItem(item)
+                .unit("comprimé").unitPrice(new BigDecimal("500")).quantityOnHand(new BigDecimal("100")).build());
         UUID key = UUID.randomUUID();
         List<Callable<Object>> calls = new ArrayList<>();
         for (int i = 0; i < RACERS; i++) {
@@ -314,6 +319,11 @@ class PaymentIdempotencyPostgresIT {
         assertThat(succeeded(race(calls))).isEqualTo(RACERS);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM clinical.pharmacy_sales WHERE client_request_id = ?",
             Integer.class, key)).isEqualTo(1);
+        // The stock went down once, with one SALE movement.
+        assertThat(jdbc.queryForObject("SELECT quantity_on_hand FROM clinical.inventory_items WHERE id = ?",
+            BigDecimal.class, stocked.getId())).isEqualByComparingTo("99");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM clinical.stock_transactions WHERE inventory_item_id = ?"
+            + " AND transaction_type = 'SALE'", Integer.class, stocked.getId())).isEqualTo(1);
     }
 
     @Test

@@ -170,7 +170,7 @@ class ServiceWriteTenantLoadCoverageTest {
             + " (QA D966: a read; 404 unless the prescription is the calling patient's own)"),
         entry("PatientVitalSignServiceImpl.resolveRegistration#findById", UNSWEPT),
         entry("PermissionServiceImpl.createPermission#findById", ACTOR),
-        entry("PharmacySaleServiceImpl.buildLine#findById", SHARED),
+        entry("PharmacySaleServiceImpl.price#findById", SHARED),
         entry("PhoneVerificationServiceImpl.consumeVerifiedChallenge#findById", OWN_ROW + " (the caller's own challenge)"),
         entry("PlatformRegistryServiceImpl.linkDepartmentToService#findById", UNSWEPT),
         entry("PostpartumCareServiceImpl.resolveRegistration#findById", UNSWEPT),

@@ -329,6 +329,20 @@ public enum AuditEventType {
     IMAGING_IMAGE_WITHDRAWN,
     /** QA D2466 (r64): a key image's caption corrected after upload. */
     IMAGING_IMAGE_CAPTION_UPDATED,
+    /** QA D2675 (r65, V311): a fill handed over unpaid, marked « à facturer » with a reason. */
+    DISPENSE_BILLING_DEFERRED,
+    /** QA D2676 (r65, V311): a pharmacy refund of a patient return asked for. */
+    PHARMACY_REFUND_REQUESTED,
+    /** QA D2676: a pharmacy refund approved by another hospital admin or accountant. */
+    PHARMACY_REFUND_APPROVED,
+    /** QA D2676: a pharmacy refund rejected, with the reason. */
+    PHARMACY_REFUND_REJECTED,
+    /** QA D2676: a pharmacy refund paid out to the patient (money out). */
+    PHARMACY_REFUND_PAID,
+    /** QA D2676: a pharmacy refund withdrawn before payment, with the reason. */
+    PHARMACY_REFUND_CANCELLED,
+    /** Review of #1239 (V311): a pharmacy's selling price set or changed, with the reason (price history). */
+    PHARMACY_PRICE_CHANGED,
 
     OTHER
 }

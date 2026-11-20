@@ -94,4 +94,10 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
          + "WHERE i.id = :id")
     int incrementOnHand(@Param("id") UUID id, @Param("quantity") BigDecimal quantity,
                         @Param("now") LocalDateTime now);
+
+    /** QA D2674 (r65): the item's stock counted {@code factor} times finer (packs to units), atomically. */
+    @Modifying(flushAutomatically = true, clearAutomatically = false)
+    @Query("UPDATE InventoryItem i SET i.quantityOnHand = i.quantityOnHand * :factor, i.updatedAt = :now "
+         + "WHERE i.id = :id")
+    int scaleOnHand(@Param("id") UUID id, @Param("factor") BigDecimal factor, @Param("now") LocalDateTime now);
 }

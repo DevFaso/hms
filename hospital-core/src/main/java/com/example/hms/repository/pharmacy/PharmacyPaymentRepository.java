@@ -44,6 +44,16 @@ public interface PharmacyPaymentRepository extends JpaRepository<PharmacyPayment
             @org.springframework.data.repository.query.Param("start") java.time.LocalDateTime start,
             @org.springframework.data.repository.query.Param("end") java.time.LocalDateTime end);
 
+    /** QA D2673 (r65): the POSTED payments received in [from, to) for fills of one pharmacy of the hospital. */
+    @org.springframework.data.jpa.repository.Query("SELECT p FROM PharmacyPayment p WHERE p.hospital.id = :hospitalId "
+         + "AND p.dispense.pharmacy.id = :pharmacyId AND p.status = com.example.hms.enums.PharmacyPaymentStatus.POSTED "
+         + "AND p.createdAt >= :from AND p.createdAt < :to ORDER BY p.createdAt")
+    java.util.List<PharmacyPayment> findPostedForPharmacyDay(
+            @org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
+            @org.springframework.data.repository.query.Param("pharmacyId") UUID pharmacyId,
+            @org.springframework.data.repository.query.Param("from") java.time.LocalDateTime from,
+            @org.springframework.data.repository.query.Param("to") java.time.LocalDateTime to);
+
     /** QA D843: whether a dispense already carries a POSTED payment. */
     boolean existsByDispense_IdAndStatus(UUID dispenseId, com.example.hms.enums.PharmacyPaymentStatus status);
 

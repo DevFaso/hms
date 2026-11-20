@@ -54,6 +54,11 @@ class PaymentIdempotencyKeyGuardTest {
         NOT_KEYED.put("POST /billing-invoices/{invoiceId}/refunds/{refundId}/pay",
             "pays out one APPROVED refund: a transition of that row under the invoice lock; a replay finds it PAID"
                 + " and is refused, nothing is paid twice (the refund REQUEST carries its key, V307)");
+        NOT_KEYED.put("POST /pharmacy/refunds",
+            "QA D2676 (V311): asks for the refund of one RETURN movement; at most one live refund per movement"
+                + " (uk_prefund_live_return, checked under the sale or dispense lock): a replay is refused, never doubled");
+        NOT_KEYED.put("POST /pharmacy/refunds/{id}/pay",
+            "QA D2676: pays out one APPROVED refund under its row lock; a replay finds it PAID and answers with it");
         NOT_KEYED.put("POST /me/patient/billing/invoices/{invoiceId}/pay",
             "a patient's declaration: a PENDING row that counts only once a cashier confirms it; a duplicate is"
                 + " rejected at the desk (key: standing debt, the mobile apps would need to send it too)");

@@ -1848,4 +1848,46 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Instrument outbox message (\S+) \((\S+)\) viewed$/,
     params: ['message', 'type'],
   },
+  // QA r65 (D2674-D2676): pharmacy money and stock (constant descriptions, ids on the row).
+  {
+    key: 'AUDIT.DESC.PHARMACY_FILL_DEFERRED',
+    re: /^Fill handed over unpaid, marked to be billed$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PHARMACY_REFUND_REQUESTED',
+    re: /^Pharmacy refund requested$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PHARMACY_REFUND_APPROVED',
+    re: /^Pharmacy refund approved$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PHARMACY_REFUND_REJECTED',
+    re: /^Pharmacy refund rejected$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PHARMACY_REFUND_PAID',
+    re: /^Pharmacy refund paid out$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PHARMACY_REFUND_CANCELLED',
+    re: /^Pharmacy refund cancelled$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PHARMACY_PACK_SIZE_SET',
+    re: /^Pack size set on an inventory item$/,
+    params: [],
+  },
+  // Review of #1239: a selling price set or changed (the figures stay on the price-history row).
+  {
+    key: 'AUDIT.DESC.PHARMACY_PRICE_CHANGED',
+    re: /^Pharmacy selling price changed$/,
+    params: [],
+  },
 ];

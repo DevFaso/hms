@@ -5,6 +5,7 @@ import com.example.hms.enums.PharmacyPaymentStatus;
 import com.example.hms.model.pharmacy.Dispense;
 import com.example.hms.model.pharmacy.PharmacyPayment;
 import com.example.hms.repository.pharmacy.PharmacyPaymentRepository;
+import com.example.hms.repository.pharmacy.PharmacyRefundRepository;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +37,7 @@ class PharmacyPaymentVoiderTest {
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-20T08:00:00Z"), ZoneOffset.UTC);
 
     @Mock private PharmacyPaymentRepository paymentRepository;
+    @Mock private PharmacyRefundRepository refundRepository;
     @Mock private PharmacyServiceSupport support;
     @Mock private RoleValidator roleValidator;
 
@@ -44,7 +46,7 @@ class PharmacyPaymentVoiderTest {
 
     @BeforeEach
     void setUp() {
-        voider = new PharmacyPaymentVoider(paymentRepository, support, roleValidator, CLOCK);
+        voider = new PharmacyPaymentVoider(paymentRepository, refundRepository, support, roleValidator, CLOCK);
         dispense = Dispense.builder().build();
         dispense.setId(UUID.randomUUID());
     }
@@ -68,6 +70,26 @@ class PharmacyPaymentVoiderTest {
         assertThat(payment.getVoidedBy()).isEqualTo(pharmacist);
         verify(support).logAudit(eq(AuditEventType.PAYMENT_REVERSED), argThat(d -> d.contains(payment.getId().toString()) && !d.contains("200")),
                 eq(payment.getId().toString()), eq("PHARMACY_PAYMENT"));
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("review of #1239 (money back twice): a fill with a live refund keeps its payment, the cancel is refused")
+    void aFillWithALiveRefundIsNeverVoided() {
+        // 500 F paid, 250 F refund asked (or approved, or paid): voiding the 500 would give 750 back.
+        when(refundRepository.existsByDispenseIdAndStatusIn(dispense.getId(), PharmacyPaymentVoider.LIVE_REFUNDS))
+                .thenReturn(true);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> voider.voidForCancelledDispense(dispense, "x"))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> voider.requireNoLiveRefund(dispense))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
+
+        verify(paymentRepository, never()).voidPostedForDispense(any(), any(), any(), any());
+        verify(support, never()).logAudit(any(), any(), any(), any());
+        assertThat(PharmacyPaymentVoider.LIVE_REFUNDS).containsExactlyInAnyOrder(
+                com.example.hms.enums.PharmacyRefundStatus.REQUESTED,
+                com.example.hms.enums.PharmacyRefundStatus.APPROVED,
+                com.example.hms.enums.PharmacyRefundStatus.PAID);
     }
 
     @Test

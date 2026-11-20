@@ -64,6 +64,8 @@ class StockTransactionServiceImplTest {
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
+    /** QA D2676 (r65): a return may name the counter sale it gives back. */
+    @Mock private com.example.hms.repository.pharmacy.PharmacySaleRepository pharmacySaleRepository;
 
     /** QA D964: FEFO is followed unless a test says otherwise (null = no override recorded). */
     @org.mockito.Mock private FefoLotPolicy fefoLotPolicy;
@@ -750,7 +752,7 @@ class StockTransactionServiceImplTest {
 
         private void stubLotMovements(BigDecimal issued, BigDecimal returned) {
             org.mockito.Mockito.lenient().when(stockTransactionRepository.sumQuantityForLot(stockLotId, java.util.EnumSet.of(
-                    StockTransactionType.DISPENSE, StockTransactionType.TRANSFER))).thenReturn(issued);
+                    StockTransactionType.DISPENSE, StockTransactionType.TRANSFER, StockTransactionType.SALE))).thenReturn(issued);
             org.mockito.Mockito.lenient().when(stockTransactionRepository.sumQuantityForLot(stockLotId, java.util.EnumSet.of(
                     StockTransactionType.RETURN))).thenReturn(returned);
             // D668: these returns name no dispense, so they give back transferred stock.
@@ -919,8 +921,79 @@ class StockTransactionServiceImplTest {
             verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
         }
 
+        /** QA D2676: a completed counter sale of this pharmacy that took {@code quantity} off the lot. */
+        private com.example.hms.model.pharmacy.PharmacySale saleOf(String quantity,
+                com.example.hms.enums.PharmacySaleStatus status, StockLot lot) {
+            com.example.hms.model.pharmacy.PharmacySale sale = com.example.hms.model.pharmacy.PharmacySale.builder()
+                    .pharmacy(pharmacy).status(status).build();
+            sale.setId(UUID.randomUUID());
+            sale.addLine(com.example.hms.model.pharmacy.SaleLine.builder().stockLot(lot)
+                    .medicationCatalogItem(inventoryItem.getMedicationCatalogItem())
+                    .quantity(new BigDecimal(quantity)).build());
+            when(pharmacySaleRepository.findLockedById(sale.getId())).thenReturn(Optional.of(sale));
+            return sale;
+        }
+
+        private StockTransactionRequestDTO returnOfSale(com.example.hms.model.pharmacy.PharmacySale sale, String qty) {
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.RETURN, new BigDecimal(qty));
+            dto.setReferenceId(sale.getId());
+            return dto;
+        }
+
+        @Test
+        @DisplayName("QA D2676: a return of a counter sale goes back on its lot, within what the sale took")
+        void acceptsAReturnOfACounterSale() {
+            var sale = saleOf("10", com.example.hms.enums.PharmacySaleStatus.COMPLETED, stockLot);
+            StockTransactionRequestDTO dto = returnOfSale(sale, "4");
+            stubCommonMocks(dto, true);
+            stubLotMovements(new BigDecimal("40.00"), BigDecimal.ZERO);
+            when(stockTransactionRepository.sumQuantityForReferenceAndLot(sale.getId(), stockLotId,
+                    java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(new BigDecimal("2"));
+
+            service.recordTransaction(dto);
+
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("54.00"));
+        }
+
+        @Test
+        @DisplayName("QA D2676: a return above what the sale took and was not returned yet is refused")
+        void refusesAReturnAboveTheSale() {
+            var sale = saleOf("10", com.example.hms.enums.PharmacySaleStatus.COMPLETED, stockLot);
+            StockTransactionRequestDTO dto = returnOfSale(sale, "9");
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(stockTransactionRepository.sumQuantityForReferenceAndLot(sale.getId(), stockLotId,
+                    java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(new BigDecimal("2"));
+
+            assertThatThrownBy(() -> service.recordTransaction(dto))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .extracting("messageKey").isEqualTo("stockTransaction.return.exceedsSold");
+            verify(stockTransactionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D2676: a return of a sale not completed, or that sold from another lot, is refused")
+        void refusesAReturnOfASaleThatCannotTakeIt() {
+            var refunded = saleOf("10", com.example.hms.enums.PharmacySaleStatus.REFUNDED, stockLot);
+            StockTransactionRequestDTO dto = returnOfSale(refunded, "1");
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            assertThatThrownBy(() -> service.recordTransaction(dto))
+                    .extracting("messageKey").isEqualTo("stockTransaction.return.saleNotReturnable");
+
+            StockLot otherLot = StockLot.builder().inventoryItem(inventoryItem).lotNumber("AUTRE").build();
+            otherLot.setId(UUID.randomUUID());
+            var otherLotSale = saleOf("10", com.example.hms.enums.PharmacySaleStatus.COMPLETED, otherLot);
+            StockTransactionRequestDTO second = returnOfSale(otherLotSale, "1");
+            assertThatThrownBy(() -> service.recordTransaction(second))
+                    .extracting("messageKey").isEqualTo("stockTransaction.return.saleNotReturnable");
+        }
+
         @Test
         @DisplayName("D604: a return within what its dispense delivered still goes back on the lot")
+
         void acceptsAReturnWithinTheDispense() {
             var dispense = dispenseOf(new BigDecimal("4"), com.example.hms.enums.DispenseStatus.COMPLETED, stockLot);
             StockTransactionRequestDTO dto = returnAgainst(dispense, "2");

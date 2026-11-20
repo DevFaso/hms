@@ -41,6 +41,12 @@ public class StockLotRequestDTO {
     @jakarta.validation.constraints.PositiveOrZero(message = "{stockLot.quantity.negative}")
     private BigDecimal remainingQuantity;
 
+    /**
+     * QA D2674 (r65): true when the quantities (and the unit cost) are per pack of an item counted in units
+     * ({@code unitsPerPack}); the receipt converts them to units. False or absent: they are in the item's unit.
+     */
+    private Boolean inPacks;
+
     @Size(max = 255)
     private String supplier;
 

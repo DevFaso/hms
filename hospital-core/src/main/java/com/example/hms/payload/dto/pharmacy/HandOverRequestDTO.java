@@ -25,4 +25,13 @@ public class HandOverRequestDTO {
     /** Appended to the fill's notes. */
     @Size(max = 1000)
     private String notes;
+
+    /**
+     * QA D2675 (r65): why a fill not paid (nor covered by a claim) is handed over anyway: « à facturer » (billed
+     * later, on the stay's invoice for instance). Required only then, and only a pharmacist or a hospital admin may
+     * give it. Never card data.
+     */
+    @Size(max = 500)
+    @com.example.hms.validation.NoCardNumber
+    private String billingDeferredReason;
 }
