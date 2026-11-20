@@ -790,8 +790,8 @@ class ProxyReadSensitivityGuardTest {
     private static final Pattern REPOSITORY_FIELD = Pattern.compile(
         "private\\s+(?:final\\s+)?(?:[\\w.]+\\.)?(\\w+Repository)\\s+(\\w+)\\s*;");
     private static final Pattern REPOSITORY_ENTITY = Pattern.compile("extends\\s+\\w*Repository<\\s*(\\w+)\\s*,");
-    /** A class declaration up to its body: the name, then whatever it extends and implements. */
-    private static final Pattern CLASS_HEADER = Pattern.compile("class\\s+\\w+([^{]*+)\\{");
+    /** Where a class declaration starts; its header runs from there to the first brace. */
+    private static final Pattern CLASS_KEYWORD = Pattern.compile("\\bclass\\s");
     private static final Pattern TENANT_SCOPED = Pattern.compile("\\bTenantScoped\\b");
     /** The inherited finders {@code TenantAwareJpaRepository} narrows to the caller's hospitals. */
     private static final String SCOPED_FINDERS =
@@ -880,13 +880,15 @@ class ProxyReadSensitivityGuardTest {
             if (model == null) {
                 return false;
             }
-            Matcher header = CLASS_HEADER.matcher(
-                SourceScan.stripComments(Files.readString(model, StandardCharsets.UTF_8)));
-            if (!header.find()) {
+            String source = SourceScan.stripComments(Files.readString(model, StandardCharsets.UTF_8));
+            Matcher declaration = CLASS_KEYWORD.matcher(source);
+            int body = declaration.find() ? source.indexOf('{', declaration.end()) : -1;
+            if (body < 0) {
                 return false;
             }
-            int implemented = header.group(1).indexOf("implements");
-            return implemented >= 0 && TENANT_SCOPED.matcher(header.group(1).substring(implemented)).find();
+            String header = source.substring(declaration.end(), body);
+            int implemented = header.indexOf("implements");
+            return implemented >= 0 && TENANT_SCOPED.matcher(header.substring(implemented)).find();
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
