@@ -750,7 +750,7 @@ class StockTransactionServiceImplTest {
 
         private void stubLotMovements(BigDecimal issued, BigDecimal returned) {
             org.mockito.Mockito.lenient().when(stockTransactionRepository.sumQuantityForLot(stockLotId, java.util.EnumSet.of(
-                    StockTransactionType.DISPENSE, StockTransactionType.TRANSFER))).thenReturn(issued);
+                    StockTransactionType.DISPENSE, StockTransactionType.TRANSFER, StockTransactionType.SALE))).thenReturn(issued);
             org.mockito.Mockito.lenient().when(stockTransactionRepository.sumQuantityForLot(stockLotId, java.util.EnumSet.of(
                     StockTransactionType.RETURN))).thenReturn(returned);
             // D668: these returns name no dispense, so they give back transferred stock.

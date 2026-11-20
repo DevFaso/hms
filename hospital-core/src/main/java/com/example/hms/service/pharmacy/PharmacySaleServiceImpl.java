@@ -239,7 +239,6 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
                     .transactionType(StockTransactionType.SALE)
                     .quantity(line.units())
                     .referenceId(sale.getId())
-                    .reason("Counter sale " + sale.getId())
                     .performedByUser(soldBy)
                     .build());
         }

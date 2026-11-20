@@ -110,6 +110,22 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
             DispenseStatus status, LocalDateTime from, LocalDateTime to);
 
     /**
+     * QA D2673 (r65): every fill of one pharmacy created in [from, to) (the moment its stock left the shelf), any
+     * status, oldest first.
+     */
+    @Query("SELECT d FROM Dispense d WHERE d.pharmacy.id = :pharmacyId AND d.createdAt >= :from AND d.createdAt < :to "
+         + "ORDER BY d.createdAt")
+    List<Dispense> findCreatedForDay(@Param("pharmacyId") UUID pharmacyId, @Param("from") LocalDateTime from,
+                                     @Param("to") LocalDateTime to);
+
+    /** QA D2673 (r65): the fills of one pharmacy handed over (COMPLETED or PARTIAL) in [from, to). */
+    @Query("SELECT d FROM Dispense d WHERE d.pharmacy.id = :pharmacyId AND d.dispensedAt >= :from "
+         + "AND d.dispensedAt < :to AND d.status IN (com.example.hms.enums.DispenseStatus.COMPLETED, "
+         + "com.example.hms.enums.DispenseStatus.PARTIAL) ORDER BY d.dispensedAt")
+    List<Dispense> findHandedOverForDay(@Param("pharmacyId") UUID pharmacyId, @Param("from") LocalDateTime from,
+                                        @Param("to") LocalDateTime to);
+
+    /**
      * The statuses that are not a fill (G15): a cancelled fill, and a fill
      * that is prepared and still waiting for collection. Pass to
      * {@link #sumQuantityDispensedForPrescription}.

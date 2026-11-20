@@ -1328,4 +1328,54 @@ class InventoryServiceImplTest {
             assertThat(result).isNotNull();
         }
     }
+
+    /* r65-D2674-pack-size */
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("QA D2674: setPackSize converts packs to units once: lots, stock, price, thresholds, a ledger row per lot")
+    void setPackSizeConvertsTheStockToUnits() {
+        inventoryItem.setUnit("plaquette");
+        inventoryItem.setUnitPrice(new BigDecimal("2500"));
+        com.example.hms.model.pharmacy.StockLot lot = com.example.hms.model.pharmacy.StockLot.builder()
+                .inventoryItem(inventoryItem).lotNumber("LOT-A-R65-1").remainingQuantity(new BigDecimal("40")).build();
+        lot.setId(stockLotId);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+        when(inventoryItemRepository.lockById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+        when(stockLotRepository.findAllByInventoryItemIdOrderByExpiryDateAsc(inventoryItemId)).thenReturn(java.util.List.of(lot));
+        when(inventoryItemRepository.save(any(InventoryItem.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.setPackSize(inventoryItemId, com.example.hms.payload.dto.pharmacy.PackSizeRequestDTO.builder()
+                .unitsPerPack(10).unit("comprimé").reason("Stock reçu en plaquettes").build());
+
+        verify(stockLotRepository).scaleQuantitiesOfItem(eq(inventoryItemId),
+                org.mockito.ArgumentMatchers.argThat(f -> f.compareTo(BigDecimal.TEN) == 0), any());
+        verify(inventoryItemRepository).scaleOnHand(eq(inventoryItemId),
+                org.mockito.ArgumentMatchers.argThat(f -> f.compareTo(BigDecimal.TEN) == 0), any());
+        org.mockito.ArgumentCaptor<com.example.hms.model.pharmacy.StockTransaction> tx =
+                org.mockito.ArgumentCaptor.forClass(com.example.hms.model.pharmacy.StockTransaction.class);
+        verify(stockTransactionRepository).save(tx.capture());
+        assertThat(tx.getValue().getQuantity()).isEqualByComparingTo("360");
+        assertThat(inventoryItem.getUnitsPerPack()).isEqualTo(10);
+        assertThat(inventoryItem.getPackUnit()).isEqualTo("plaquette");
+        assertThat(inventoryItem.getUnit()).isEqualTo("comprimé");
+        assertThat(inventoryItem.getUnitPrice()).isEqualByComparingTo("250");
+        assertThat(inventoryItem.getReorderThreshold()).isEqualByComparingTo("100");
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("QA D2674: a pack size already set is never changed (the stock would be converted twice)")
+    void setPackSizeOnlyOnce() {
+        inventoryItem.setUnitsPerPack(10);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+        when(inventoryItemRepository.lockById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+
+        assertThatThrownBy(() -> service.setPackSize(inventoryItemId, com.example.hms.payload.dto.pharmacy.PackSizeRequestDTO
+                .builder().unitsPerPack(12).unit("comprimé").reason("x").build()))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.pack.alreadySet");
+        verify(stockLotRepository, never()).scaleQuantitiesOfItem(any(), any(), any());
+    }
 }

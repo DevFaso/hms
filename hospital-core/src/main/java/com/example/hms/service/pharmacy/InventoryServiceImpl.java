@@ -268,8 +268,7 @@ public class InventoryServiceImpl implements InventoryService {
             item.setReorderQuantity(item.getReorderQuantity().multiply(factor));
         }
         InventoryItem saved = inventoryItemRepository.save(item);
-        logAudit(AuditEventType.STOCK_ADJUSTMENT, "Pack size set: 1 " + packUnit + " = " + perPack + " " + unit,
-                saved.getId().toString());
+        logAudit(AuditEventType.STOCK_ADJUSTMENT, "Pack size set on an inventory item", saved.getId().toString());
         return inventoryItemMapper.toResponseDTO(saved);
     }
 
