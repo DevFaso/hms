@@ -210,10 +210,91 @@ class PharmacyClaimServiceImplTest {
         when(claimRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(claimMapper.toResponseDTO(any())).thenReturn(PharmacyClaimResponseDTO.builder().build());
 
+        UUID billing = UUID.randomUUID();
+        when(roleValidator.getCurrentUserId()).thenReturn(billing);
+
         service.markAccepted(UUID.randomUUID(), "ok");
 
         assertThat(existing.getClaimStatus()).isEqualTo(PharmacyClaimStatus.ACCEPTED);
         assertThat(existing.getNotes()).isEqualTo("ok");
+        // Review of #1244: no money desk at the hospital, nothing recorded: the claim covers no fill.
+        assertThat(existing.getVouchedBy()).isNull();
+    }
+
+    // ───────────── review round 2 of #1244: who stands behind a claim is recorded when it happens ─────────────
+
+    private PharmacyClaim aClaimIn(PharmacyClaimStatus status) {
+        PharmacyClaim claim = draftClaim();
+        claim.setHospital(hospital);
+        claim.setClaimStatus(status);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(claimRepository.findById(any())).thenReturn(Optional.of(claim));
+        when(claimRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(claimMapper.toResponseDTO(any())).thenReturn(PharmacyClaimResponseDTO.builder().build());
+        return claim;
+    }
+
+    private UUID actingAs(boolean moneyDesk) {
+        UUID actor = UUID.randomUUID();
+        User who = new User();
+        who.setId(actor);
+        org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(actor);
+        org.mockito.Mockito.lenient().when(userRepository.findById(actor)).thenReturn(Optional.of(who));
+        org.mockito.Mockito.lenient().when(roleValidator.vouchesForClaimCover(actor, hospitalId)).thenReturn(moneyDesk);
+        return actor;
+    }
+
+    @Test
+    @DisplayName("review round 2: a pharmacist alone creates, sends, accepts and settles a claim: nobody is ever recorded behind it")
+    void thePharmacyAloneVouchesForNothing() {
+        PharmacyClaim claim = aClaimIn(PharmacyClaimStatus.DRAFT);
+        UUID pharmacist = actingAs(false);
+
+        service.submitClaim(UUID.randomUUID());
+        service.markAccepted(UUID.randomUUID(), null);
+        service.markPaid(UUID.randomUUID(), null);
+
+        assertThat(claim.getClaimStatus()).isEqualTo(PharmacyClaimStatus.PAID);
+        assertThat(claim.getVouchedBy()).isNull();
+        assertThat(claim.getSecondVouchedBy()).isNull();
+        assertThat(FillClaimCover.counts(claim, pharmacist)).isFalse();
+        assertThat(FillClaimCover.counts(claim, UUID.randomUUID())).as("nor for a colleague").isFalse();
+    }
+
+    @Test
+    @DisplayName("review round 2 (A): billing accepts, the pharmacist later records the payment: billing still stands behind the claim")
+    void aLaterPaymentByThePharmacistKeepsTheVoucher() {
+        PharmacyClaim claim = aClaimIn(PharmacyClaimStatus.SUBMITTED);
+        UUID clerk = actingAs(true);
+        service.markAccepted(UUID.randomUUID(), null);
+        assertThat(claim.getVouchedBy()).isEqualTo(clerk);
+        java.time.LocalDateTime vouchedAt = claim.getVouchedAt();
+        assertThat(vouchedAt).isNotNull();
+
+        UUID pharmacist = actingAs(false);
+        service.markPaid(UUID.randomUUID(), null);
+
+        assertThat(claim.getClaimStatus()).isEqualTo(PharmacyClaimStatus.PAID);
+        assertThat(claim.getVouchedBy()).isEqualTo(clerk);
+        assertThat(claim.getVouchedAt()).isEqualTo(vouchedAt);
+        assertThat(claim.getSecondVouchedBy()).isNull();
+        assertThat(FillClaimCover.counts(claim, pharmacist)).isTrue();
+    }
+
+    @Test
+    @DisplayName("review round 2: billing sends the claim: recorded at once; a rejection records nobody")
+    void sendingRecordsAMoneyDeskAndARejectionRecordsNobody() {
+        PharmacyClaim claim = aClaimIn(PharmacyClaimStatus.DRAFT);
+        UUID clerk = actingAs(true);
+        service.submitClaim(UUID.randomUUID());
+        assertThat(claim.getVouchedBy()).isEqualTo(clerk);
+        assertThat(claim.getVouchedAt()).isEqualTo(claim.getSubmittedAt());
+
+        actingAs(true);
+        service.markRejected(UUID.randomUUID(), "Assuré inconnu");
+
+        assertThat(claim.getSecondVouchedBy()).as("refusing a claim is not standing behind it").isNull();
+        assertThat(FillClaimCover.counts(claim, UUID.randomUUID())).as("a rejected claim covers nothing").isFalse();
     }
 
     @Test

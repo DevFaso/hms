@@ -84,6 +84,8 @@ class TimelineEventRegistryGuardTest {
         Map.entry("ProxySensitiveRelease", "policy 2026-11-20: a disclosure of an existing result to a parent, on the"
             + " audit trail; the result itself is on the chronology, and a row here would name a hidden category to"
             + " every reader of it"),
+        Map.entry("DispenseBillingDeferral", "V345: who answers for a fill that left unpaid; money, not care. The fill"
+            + " itself is on the chronology, and the row is read only by the pharmacy and the money desks"),
         Map.entry("PatientNotificationDelivery", "V312: a delivery record of an SMS / email about an appointment or a"
             + " result that is itself on the chronology; operational, read only by the hospital's administrators"),
         // r53: never on the chronology, which reception, proxies and other hospitals' shared views can reach.

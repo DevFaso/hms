@@ -1,0 +1,313 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <p class="workspace-eyebrow">
+        <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span
+        ><span>{{ 'PHARMACY_WORKSPACE.LABEL' | translate }}</span>
+      </p>
+      <h1 class="page-title">{{ 'PHARMACY_MONEY.DEFERRAL.PAGE_TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'PHARMACY_MONEY.DEFERRAL.PAGE_SUBTITLE' | translate }}</p>
+      <p class="deferral-provisional" data-testid="deferrals-provisional">
+        {{ 'PHARMACY_MONEY.DEFERRAL.PROVISIONAL' | translate }}
+      </p>
+    </div>
+    <div class="header-actions">
+      <button
+        class="btn-secondary"
+        type="button"
+        data-testid="deferrals-refresh"
+        [disabled]="loading()"
+        (click)="load()"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+        {{ 'PHARMACY_MONEY.DEFERRAL.REFRESH' | translate }}
+      </button>
+    </div>
+  </div>
+
+  <div
+    class="deferral-views"
+    role="group"
+    [attr.aria-label]="'PHARMACY_MONEY.DEFERRAL.VIEWS' | translate"
+  >
+    <button
+      type="button"
+      class="deferral-view"
+      [class.deferral-view-on]="view() === 'work'"
+      [attr.aria-pressed]="view() === 'work'"
+      data-testid="deferrals-view-work"
+      (click)="setView('work')"
+    >
+      {{ 'PHARMACY_MONEY.DEFERRAL.VIEW_WORK' | translate }}
+    </button>
+    <button
+      type="button"
+      class="deferral-view"
+      [class.deferral-view-on]="view() === 'due'"
+      [attr.aria-pressed]="view() === 'due'"
+      data-testid="deferrals-view-due"
+      (click)="setView('due')"
+    >
+      {{ 'PHARMACY_MONEY.DEFERRAL.VIEW_DUE' | translate }}
+    </button>
+  </div>
+
+  @if (loading()) {
+    <p class="muted" role="status">{{ 'COMMON.LOADING' | translate }}</p>
+  } @else if (failed()) {
+    <p class="muted" role="alert" data-testid="deferrals-failed">
+      {{ 'PHARMACY_MONEY.DEFERRAL.LOAD_FAILED' | translate }}
+    </p>
+  } @else if (rows().length === 0) {
+    <p class="muted" data-testid="deferrals-empty">
+      {{
+        (view() === 'due' ? 'PHARMACY_MONEY.DEFERRAL.NONE_DUE' : 'PHARMACY_MONEY.DEFERRAL.NONE')
+          | translate
+      }}
+    </p>
+  } @else {
+    <ul class="deferral-list" data-testid="deferrals-list">
+      @for (r of rows(); track r.id) {
+        <li class="deferral-card" [attr.data-testid]="'deferral-' + r.id">
+          <div class="deferral-main">
+            <strong>{{ r.kind | keyLabel: 'PHARMACY_MONEY.DEFERRAL.KIND.' }}</strong>
+            <span class="deferral-status" [attr.data-status]="r.status">{{
+              (r.kind === 'URGENCY_OVERRIDE' ? 'TO_REVIEW' : r.status)
+                | keyLabel: 'PHARMACY_MONEY.DEFERRAL.STATUS.'
+            }}</span>
+          </div>
+          <dl class="deferral-meta">
+            <div>
+              <dt>{{ 'PATIENTS.PATIENT' | translate }}</dt>
+              <dd>
+                {{ r.patientName | dash }}
+                @if (r.patientMrn) {
+                  <span class="deferral-mrn">({{ r.patientMrn }})</span>
+                }
+              </dd>
+            </div>
+            <div>
+              <dt>{{ 'PHARMACY_MONEY.DEFERRAL.MEDICATION' | translate }}</dt>
+              <dd>{{ r.medicationName | dash }}</dd>
+            </div>
+            <div>
+              <dt>{{ 'PHARMACY_MONEY.DEFERRAL.ASKED' | translate }}</dt>
+              <dd>
+                {{ r.requestedByName | dash }} · {{ r.requestedAt | serverTime | date: 'short' }}
+              </dd>
+            </div>
+            <div class="deferral-meta-wide">
+              <dt>{{ 'PHARMACY_MONEY.DEFERRAL.REASON' | translate }}</dt>
+              <dd>{{ r.reason | dash }}</dd>
+            </div>
+            @if (r.coverReference) {
+              <div>
+                <dt>{{ 'PHARMACY_MONEY.DEFERRAL.COVER_REFERENCE' | translate }}</dt>
+                <dd>{{ r.coverReference }}</dd>
+              </div>
+            }
+            @if (r.decidedByName) {
+              <div>
+                <dt>{{ 'PHARMACY_MONEY.DEFERRAL.DECIDED' | translate }}</dt>
+                <dd>{{ r.decidedByName }}</dd>
+              </div>
+            }
+            @if (r.creditLimit) {
+              <div>
+                <dt>{{ 'PHARMACY_MONEY.DEFERRAL.LIMIT_LABEL' | translate }}</dt>
+                <dd>{{ r.creditLimit | cfa: 'XOF' }}</dd>
+              </div>
+            }
+            @if (r.amountDue) {
+              <div>
+                <dt>{{ 'PHARMACY_MONEY.DEFERRAL.AMOUNT_DUE' | translate }}</dt>
+                <dd>{{ r.amountDue | cfa: 'XOF' }}</dd>
+              </div>
+            }
+            @if (r.stillDue !== null && r.stillDue !== undefined) {
+              <div data-testid="deferral-still-due">
+                <dt>{{ 'PHARMACY_MONEY.DEFERRAL.STILL_DUE' | translate }}</dt>
+                <dd>{{ r.stillDue | cfa: 'XOF' }}</dd>
+              </div>
+            }
+          </dl>
+
+          <div class="deferral-actions">
+            @if (r.canDecide) {
+              <button
+                type="button"
+                class="btn-primary btn-sm"
+                [disabled]="busy() === r.id"
+                [attr.data-testid]="'deferral-approve-' + r.id"
+                (click)="start(r, 'approve')"
+              >
+                {{ 'PHARMACY_MONEY.DEFERRAL.APPROVE' | translate }}
+              </button>
+              <button
+                type="button"
+                class="btn-secondary btn-sm"
+                [disabled]="busy() === r.id"
+                [attr.data-testid]="'deferral-reject-' + r.id"
+                (click)="start(r, 'reject')"
+              >
+                {{ 'PHARMACY_MONEY.DEFERRAL.REJECT' | translate }}
+              </button>
+            }
+            @if (r.canReview) {
+              <button
+                type="button"
+                class="btn-primary btn-sm"
+                [disabled]="busy() === r.id"
+                [attr.data-testid]="'deferral-review-' + r.id"
+                (click)="start(r, 'review')"
+              >
+                {{ 'PHARMACY_MONEY.DEFERRAL.REVIEW' | translate }}
+              </button>
+            }
+            @if (canWithdraw(r)) {
+              <button
+                type="button"
+                class="btn-secondary btn-sm"
+                [disabled]="busy() === r.id"
+                [attr.data-testid]="'deferral-cancel-' + r.id"
+                (click)="start(r, 'cancel')"
+              >
+                {{ 'PHARMACY_MONEY.DEFERRAL.CANCEL' | translate }}
+              </button>
+            }
+            @if (r.status === 'REQUESTED' && !r.canDecide) {
+              <em class="deferral-waiting" data-testid="deferral-not-yours">{{
+                'PHARMACY_MONEY.DEFERRAL.WAITING_OTHER' | translate
+              }}</em>
+            }
+            @if (r.kind === 'URGENCY_OVERRIDE' && !r.canReview) {
+              <em class="deferral-waiting">{{
+                'PHARMACY_MONEY.DEFERRAL.WAITING_REVIEW' | translate
+              }}</em>
+            }
+          </div>
+
+          @if (acting(); as a) {
+            @if (a.id === r.id) {
+              <form
+                class="deferral-step"
+                appInlineSubForm
+                #stepForm="inlineSubForm"
+                (dismissed)="stop()"
+                (ngSubmit)="submitStep(r, a.step)"
+              >
+                @if (a.step === 'approve' && r.kind === 'THIRD_PARTY_COVER') {
+                  <div class="field">
+                    <label [for]="fieldId(r, 'cover')"
+                      >{{ 'PHARMACY_MONEY.DEFERRAL.COVER_REFERENCE' | translate }} *</label
+                    >
+                    <input
+                      type="text"
+                      maxlength="120"
+                      required
+                      [id]="fieldId(r, 'cover')"
+                      name="stepCover"
+                      data-testid="deferral-step-cover"
+                      [(ngModel)]="stepCover"
+                    />
+                    <small class="hint">{{
+                      'PHARMACY_MONEY.DEFERRAL.COVER_HINT' | translate
+                    }}</small>
+                  </div>
+                }
+                @if (a.step === 'approve' && r.kind === 'OUTPATIENT_CREDIT') {
+                  <div class="field">
+                    <label [for]="fieldId(r, 'limit')">{{
+                      'PHARMACY_MONEY.DEFERRAL.LIMIT_LABEL' | translate
+                    }}</label>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      inputmode="numeric"
+                      [id]="fieldId(r, 'limit')"
+                      name="stepLimit"
+                      data-testid="deferral-step-limit"
+                      [(ngModel)]="stepLimit"
+                    />
+                    <small class="hint">{{
+                      'PHARMACY_MONEY.DEFERRAL.LIMIT_HINT' | translate
+                    }}</small>
+                  </div>
+                }
+                <div class="field">
+                  <label [for]="fieldId(r, 'note')"
+                    >{{ noteLabelKey(r, a.step) | translate }}
+                    @if (noteRequired(r, a.step)) {
+                      *
+                    }
+                  </label>
+                  <textarea
+                    rows="2"
+                    maxlength="500"
+                    [required]="noteRequired(r, a.step)"
+                    [id]="fieldId(r, 'note')"
+                    name="stepNote"
+                    data-testid="deferral-step-note"
+                    [(ngModel)]="stepNote"
+                  ></textarea>
+                </div>
+                <app-inline-discard-ask [form]="stepForm" />
+                <div class="deferral-step-actions">
+                  <button
+                    type="submit"
+                    class="btn-primary btn-sm"
+                    data-testid="deferral-step-confirm"
+                    appSubmitGuard
+                    submitGuardRequired
+                    [disabled]="busy() === r.id"
+                  >
+                    {{ 'COMMON.CONFIRM' | translate }}
+                  </button>
+                  <button type="button" class="btn-secondary btn-sm" (click)="stop()">
+                    {{ 'COMMON.CANCEL' | translate }}
+                  </button>
+                </div>
+              </form>
+            }
+          }
+        </li>
+      }
+    </ul>
+  }
+
+  @if (policy(); as p) {
+    <section class="policy-card" data-testid="billing-policy">
+      <h2 class="policy-title">{{ 'PHARMACY_MONEY.POLICY.TITLE' | translate }}</h2>
+      <p class="deferral-provisional">{{ 'PHARMACY_MONEY.POLICY.PROVISIONAL' | translate }}</p>
+      <label class="policy-row">
+        <input
+          type="checkbox"
+          data-testid="policy-auto-consultation"
+          [checked]="p.autoConsultationOnPlannedAdmission"
+          [disabled]="!p.canEdit || policySaving()"
+          (change)="setAutoConsultation($any($event.target).checked)"
+        />
+        <span>
+          <strong>{{ 'PHARMACY_MONEY.POLICY.AUTO_CONSULTATION' | translate }}</strong>
+          <small>{{ 'PHARMACY_MONEY.POLICY.AUTO_CONSULTATION_HINT' | translate }}</small>
+        </span>
+      </label>
+      <label class="policy-row policy-row-off">
+        <input
+          type="checkbox"
+          data-testid="policy-pharmacist-renewal"
+          disabled
+          [checked]="p.pharmacistExceptionalRenewal"
+        />
+        <span>
+          <strong>{{ 'PHARMACY_MONEY.POLICY.PHARMACIST_RENEWAL' | translate }}</strong>
+          <small>{{ 'PHARMACY_MONEY.POLICY.PHARMACIST_RENEWAL_HINT' | translate }}</small>
+        </span>
+      </label>
+      @if (!p.canEdit) {
+        <p class="muted">{{ 'PHARMACY_MONEY.POLICY.ADMIN_ONLY' | translate }}</p>
+      }
+    </section>
+  }
+</div>

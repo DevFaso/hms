@@ -60,6 +60,10 @@ public class PharmacyReconciliationDTO {
         private BigDecimal deferredTotal;
         /** Of that, what was handed over unpaid with no reason (a difference). */
         private BigDecimal unpaidTotal;
+        /** Policy rule 6: of the « à facturer » total, what left on an urgency override. */
+        private BigDecimal urgencyOverrideTotal;
+        /** Policy rule 6: of the « à facturer » total, what went on the account of an open stay. */
+        private BigDecimal admissionAccountTotal;
     }
 
     /** One medication (and lot) of the day: what the records say left or came back, against the stock movements. */
@@ -155,5 +159,26 @@ public class PharmacyReconciliationDTO {
         private BigDecimal due;
         private String reason;
         private LocalDateTime deferredAt;
+        /** Policy rule 6 (V345): the deferral behind the fill; null on a fill marked before the rule. */
+        private UUID deferralId;
+        /** THIRD_PARTY_COVER, OUTPATIENT_CREDIT, URGENCY_OVERRIDE, ADMISSION_ACCOUNT, or UNAPPROVED (before the rule). */
+        private String kind;
+        private String requestedByName;
+        private String approvedByName;
+        private String handedOverByName;
+        private String coverReference;
+        private BigDecimal creditLimit;
+        private String approvalNote;
+        /**
+         * Review of #1244: who the fill was for, so finance can bill it: the patient's name and MRN at this
+         * hospital, and the stay an inpatient item is charged to. A staff-only report (pharmacist, accountant,
+         * hospital admin).
+         */
+        private String patientName;
+        private String patientMrn;
+        private UUID admissionId;
+        /** An urgency override only: whether finance reviewed it, and who. */
+        private Boolean reviewed;
+        private String reviewedByName;
     }
 }

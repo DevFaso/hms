@@ -104,4 +104,26 @@ public class PharmacyClaim extends BaseEntity {
     @Size(max = 1000)
     @Column(name = "notes", length = 1000)
     private String notes;
+
+    /**
+     * Policy rule 6 (V345): who stands behind this claim as cover for its fill, recorded WHEN it happened. The
+     * first person who sent the claim or recorded the payer's acceptance or payment while holding a money desk
+     * (billing, claims, accounting) or the hospital admin role at the claim's hospital at that moment. Written
+     * once by {@code ClaimVouching}, never erased: what they do or hold afterwards changes nothing.
+     */
+    @Column(name = "vouched_by")
+    private java.util.UUID vouchedBy;
+
+    @Column(name = "vouched_at")
+    private LocalDateTime vouchedAt;
+
+    /**
+     * The first OTHER person who did the same. With two different people behind a claim, whoever hands the fill
+     * over, somebody else stands behind it. Written once, never erased.
+     */
+    @Column(name = "second_vouched_by")
+    private java.util.UUID secondVouchedBy;
+
+    @Column(name = "second_vouched_at")
+    private LocalDateTime secondVouchedAt;
 }

@@ -1251,6 +1251,19 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           route: '/pharmacy/reconciliation',
           roles: ['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
         },
+        {
+          // Policy rule 6 (V345): mirrors the /pharmacy/billing-deferrals RoleGuard.
+          icon: 'receipt_long',
+          label: 'Deferred billing',
+          translationKey: 'NAV.PHARMACY_BILLING_DEFERRALS',
+          route: '/pharmacy/billing-deferrals',
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_BILLING_SPECIALIST',
+            'ROLE_ACCOUNTANT',
+            'ROLE_HOSPITAL_ADMIN',
+          ],
+        },
 
         {
           icon: 'medication',

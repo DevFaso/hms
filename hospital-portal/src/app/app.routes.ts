@@ -1662,6 +1662,22 @@ export const routes: Routes = [
             (m) => m.PharmacyReconciliationComponent,
           ),
       },
+      {
+        // Policy rule 6 (provisional, V345): « à facturer » asked for, approved by another person, and
+        // the urgency overrides finance reviews. Mirrors DispenseBillingDeferralController's readers.
+        path: 'pharmacy/billing-deferrals',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_BILLING_SPECIALIST',
+            'ROLE_ACCOUNTANT',
+            'ROLE_HOSPITAL_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/billing-deferrals').then((m) => m.BillingDeferralsComponent),
+      },
 
       // Administration landing for ROLE_ADMIN. ROLE_SUPER_ADMIN passes the
       // role gate but is redirected to /super-admin by SuperAdminRedirectGuard

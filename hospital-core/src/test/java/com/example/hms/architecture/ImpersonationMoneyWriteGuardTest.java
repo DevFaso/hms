@@ -93,6 +93,11 @@ class ImpersonationMoneyWriteGuardTest {
             "POST /pharmacy-sales",
             "POST /me/patient/billing/invoices/{invoiceId}/pay",
             "POST /pharmacy/claims/{id}/pay",
+            // Review round 2 of #1244: sending a claim, or recording its acceptance, makes it cover for a fill.
+            "POST /pharmacy/claims",
+            "POST /pharmacy/claims/{id}/submit",
+            "POST /pharmacy/claims/{id}/accept",
+            "POST /pharmacy/claims/{id}/reject",
             // PR 10 review: the till's own steps (a support session never closes, reopens or reviews one).
             "POST /cash-sessions/{id}/close",
             "POST /cash-sessions/{id}/reopen",

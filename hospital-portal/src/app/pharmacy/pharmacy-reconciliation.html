@@ -116,6 +116,19 @@
         <div class="recon-tile">
           <span class="tile-label">{{ 'PHARMACY_MONEY.RECON.DEFERRED' | translate }}</span>
           <strong>{{ d.money.deferredTotal | cfa: 'XOF' }}</strong>
+          <!-- Policy rule 6: what of it left on an urgency override, and what went on an open stay. -->
+          @if ((d.money.urgencyOverrideTotal ?? 0) > 0) {
+            <small data-testid="recon-urgency-total">{{
+              'PHARMACY_MONEY.RECON.DEFERRED_URGENCY'
+                | translate: { amount: (d.money.urgencyOverrideTotal | cfa: 'XOF') }
+            }}</small>
+          }
+          @if ((d.money.admissionAccountTotal ?? 0) > 0) {
+            <small data-testid="recon-stay-total">{{
+              'PHARMACY_MONEY.RECON.DEFERRED_STAY'
+                | translate: { amount: (d.money.admissionAccountTotal | cfa: 'XOF') }
+            }}</small>
+          }
         </div>
         <div class="recon-tile" [class.recon-tile-ko]="d.money.unpaidTotal > 0">
           <span class="tile-label">{{ 'PHARMACY_MONEY.RECON.UNPAID' | translate }}</span>
@@ -238,10 +251,54 @@
         <h2 class="recon-h2">{{ 'PHARMACY_MONEY.RECON.DEFERRED_TITLE' | translate }}</h2>
         <ul class="recon-list" data-testid="recon-deferred">
           @for (f of d.deferred; track f.dispenseId) {
-            <li>
+            <li [attr.data-kind]="f.kind">
               <span>{{ f.medicationName | dash }} × {{ f.quantity }}</span>
               <span class="recon-amount">{{ f.due | cfa: 'XOF' }}</span>
-              <em class="recon-reason">{{ f.reason }}</em>
+              <!-- Review of #1244: who the fill was for, so finance can bill it. -->
+              @if (f.patientName) {
+                <span class="recon-deferral-who" data-testid="recon-deferral-patient"
+                  >{{ f.patientName }}
+                  @if (f.patientMrn) {
+                    ({{ f.patientMrn }})
+                  }
+                </span>
+              }
+              <!-- Policy rule 6: the deferral behind the fill: its kind and who answers for it. -->
+              <strong class="recon-deferral-kind" data-testid="recon-deferral-kind">{{
+                f.kind ?? 'UNAPPROVED' | keyLabel: 'PHARMACY_MONEY.DEFERRAL.KIND.'
+              }}</strong>
+              @if (f.reason) {
+                <em class="recon-reason">{{ f.reason }}</em>
+              }
+              @if (f.approvedByName) {
+                <span class="recon-deferral-who">{{
+                  'PHARMACY_MONEY.DEFERRAL.APPROVED_BY' | translate: { name: f.approvedByName }
+                }}</span>
+              }
+              @if (f.handedOverByName) {
+                <span class="recon-deferral-who">{{
+                  'PHARMACY_MONEY.RECON.HANDED_OVER_BY' | translate: { name: f.handedOverByName }
+                }}</span>
+              }
+              @if (f.coverReference) {
+                <span class="recon-deferral-who">{{
+                  'PHARMACY_MONEY.DEFERRAL.COVER_REFERENCE_VALUE'
+                    | translate: { ref: f.coverReference }
+                }}</span>
+              }
+              @if (f.kind === 'URGENCY_OVERRIDE') {
+                <span
+                  class="recon-deferral-who"
+                  [class.recon-deferral-open]="!f.reviewed"
+                  data-testid="recon-override-review"
+                  >{{
+                    (f.reviewed
+                      ? 'PHARMACY_MONEY.RECON.OVERRIDE_REVIEWED'
+                      : 'PHARMACY_MONEY.RECON.OVERRIDE_TO_REVIEW'
+                    ) | translate
+                  }}</span
+                >
+              }
             </li>
           }
         </ul>

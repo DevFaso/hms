@@ -1,0 +1,189 @@
+<section class="deferral-choice" data-testid="deferral-choice">
+  @if (onOpenStay()) {
+    <p class="deferral-note" data-testid="deferral-open-stay">
+      <span class="material-symbols-outlined" aria-hidden="true">hotel</span>
+      <span>{{ 'PHARMACY_MONEY.DEFERRAL.OPEN_STAY' | translate }}</span>
+    </p>
+  } @else {
+    <p class="deferral-intro">{{ 'PHARMACY_MONEY.DEFERRAL.INTRO' | translate }}</p>
+
+    @if (loading()) {
+      <p class="deferral-muted" role="status">{{ 'COMMON.LOADING' | translate }}</p>
+    }
+    @if (loadFailed()) {
+      <p class="deferral-muted" role="alert" data-testid="deferral-load-failed">
+        {{ 'PHARMACY_MONEY.DEFERRAL.LOAD_FAILED' | translate }}
+      </p>
+    }
+
+    <fieldset class="deferral-options">
+      <legend>{{ 'PHARMACY_MONEY.DEFERRAL.LEGEND' | translate }}</legend>
+
+      @if (approved(); as a) {
+        <label class="deferral-option" [class.deferral-option-off]="!a.canExecute">
+          <input
+            type="radio"
+            [id]="fieldId('mode-approved')"
+            [name]="fieldId('mode')"
+            value="approved"
+            [checked]="mode() === 'approved'"
+            [disabled]="!a.canExecute"
+            data-testid="deferral-use-approved"
+            (change)="setMode('approved')"
+          />
+          <span class="deferral-option-body">
+            <strong>{{ 'PHARMACY_MONEY.DEFERRAL.USE_APPROVED' | translate }}</strong>
+            <span>
+              {{ a.kind | keyLabel: 'PHARMACY_MONEY.DEFERRAL.KIND.' }} ·
+              {{
+                'PHARMACY_MONEY.DEFERRAL.APPROVED_BY'
+                  | translate: { name: (a.decidedByName | dash) }
+              }}
+            </span>
+            @if (a.creditLimit) {
+              <span>{{
+                'PHARMACY_MONEY.DEFERRAL.LIMIT'
+                  | translate: { amount: (a.creditLimit | cfa: 'XOF') }
+              }}</span>
+            }
+            @if (a.coverReference) {
+              <span>{{
+                'PHARMACY_MONEY.DEFERRAL.COVER_REFERENCE_VALUE'
+                  | translate: { ref: a.coverReference }
+              }}</span>
+            }
+            @if (!a.canExecute) {
+              <em data-testid="deferral-own-approval">{{
+                'PHARMACY_MONEY.DEFERRAL.OWN_APPROVAL' | translate
+              }}</em>
+            }
+          </span>
+        </label>
+      } @else if (pending(); as p) {
+        <div class="deferral-pending" data-testid="deferral-pending">
+          <p>
+            <strong>{{ 'PHARMACY_MONEY.DEFERRAL.PENDING' | translate }}</strong>
+            {{ p.kind | keyLabel: 'PHARMACY_MONEY.DEFERRAL.KIND.' }} ·
+            {{
+              'PHARMACY_MONEY.DEFERRAL.ASKED_BY' | translate: { name: (p.requestedByName | dash) }
+            }}
+          </p>
+          <button
+            type="button"
+            class="btn-secondary btn-sm"
+            data-testid="deferral-refresh"
+            [disabled]="loading()"
+            (click)="reload()"
+          >
+            {{ 'PHARMACY_MONEY.DEFERRAL.REFRESH' | translate }}
+          </button>
+        </div>
+      } @else {
+        <div class="deferral-request" data-testid="deferral-request">
+          <p>
+            <strong>{{ 'PHARMACY_MONEY.DEFERRAL.REQUEST_TITLE' | translate }}</strong>
+          </p>
+          <div class="deferral-request-grid">
+            <div class="field">
+              <label [for]="fieldId('request-kind')">{{
+                'PHARMACY_MONEY.DEFERRAL.REQUEST_KIND' | translate
+              }}</label>
+              <select
+                [id]="fieldId('request-kind')"
+                [name]="fieldId('request-kind')"
+                data-testid="deferral-request-kind"
+                [(ngModel)]="requestKind"
+                [ngModelOptions]="{ standalone: true }"
+              >
+                <option value="THIRD_PARTY_COVER">
+                  {{ 'PHARMACY_MONEY.DEFERRAL.KIND.THIRD_PARTY_COVER' | translate }}
+                </option>
+                <option value="OUTPATIENT_CREDIT">
+                  {{ 'PHARMACY_MONEY.DEFERRAL.KIND.OUTPATIENT_CREDIT' | translate }}
+                </option>
+              </select>
+            </div>
+            @if (requestKind === 'THIRD_PARTY_COVER') {
+              <div class="field">
+                <label [for]="fieldId('request-cover')">{{
+                  'PHARMACY_MONEY.DEFERRAL.COVER_REFERENCE' | translate
+                }}</label>
+                <input
+                  type="text"
+                  maxlength="120"
+                  [id]="fieldId('request-cover')"
+                  [name]="fieldId('request-cover')"
+                  data-testid="deferral-request-cover"
+                  [(ngModel)]="requestCover"
+                  [ngModelOptions]="{ standalone: true }"
+                />
+              </div>
+            }
+          </div>
+          <div class="field">
+            <label [for]="fieldId('request-reason')"
+              >{{ 'PHARMACY_MONEY.DEFERRAL.REQUEST_REASON' | translate }} *</label
+            >
+            <textarea
+              rows="2"
+              maxlength="500"
+              [id]="fieldId('request-reason')"
+              [name]="fieldId('request-reason')"
+              data-testid="deferral-request-reason"
+              [(ngModel)]="requestReason"
+              [ngModelOptions]="{ standalone: true }"
+            ></textarea>
+          </div>
+          <button
+            type="button"
+            class="btn-secondary btn-sm"
+            data-testid="deferral-request-send"
+            [disabled]="requesting()"
+            (click)="ask()"
+          >
+            {{ 'PHARMACY_MONEY.DEFERRAL.REQUEST_SEND' | translate }}
+          </button>
+          <small class="deferral-hint">{{
+            'PHARMACY_MONEY.DEFERRAL.REQUEST_HINT' | translate
+          }}</small>
+        </div>
+      }
+
+      <label class="deferral-option">
+        <input
+          type="radio"
+          [id]="fieldId('mode-urgency')"
+          [name]="fieldId('mode')"
+          value="urgency"
+          [checked]="mode() === 'urgency'"
+          data-testid="deferral-use-urgency"
+          (change)="setMode('urgency')"
+        />
+        <span class="deferral-option-body">
+          <strong>{{ 'PHARMACY_MONEY.DEFERRAL.URGENCY' | translate }}</strong>
+          <span>{{ 'PHARMACY_MONEY.DEFERRAL.URGENCY_HINT' | translate }}</span>
+        </span>
+      </label>
+      @if (mode() === 'urgency') {
+        <div class="field">
+          <label [for]="fieldId('urgency-reason')"
+            >{{ 'PHARMACY_MONEY.DEFERRAL.URGENCY_REASON' | translate }} *</label
+          >
+          <textarea
+            rows="2"
+            maxlength="500"
+            required
+            [id]="fieldId('urgency-reason')"
+            [name]="fieldId('urgency-reason')"
+            data-testid="deferral-urgency-reason"
+            [(ngModel)]="urgencyReason"
+            [ngModelOptions]="{ standalone: true }"
+          ></textarea>
+        </div>
+      }
+    </fieldset>
+  }
+  <small class="deferral-hint deferral-provisional" data-testid="deferral-provisional">{{
+    'PHARMACY_MONEY.DEFERRAL.PROVISIONAL' | translate
+  }}</small>
+</section>

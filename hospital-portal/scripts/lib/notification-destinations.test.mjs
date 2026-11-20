@@ -64,6 +64,8 @@ const NO_DESTINATION = {
   PRO_CRITICAL_ITEM_ESCALATION: 'staff only (escalation chain); the staff bell expands the message',
   PRO_SCREEN_POSITIVE: 'staff only (care team); the staff bell expands the message',
   REORDER_ALERT: 'staff only (pharmacy stock); the staff bell expands the message',
+  PHARMACY_BILLING_DEFERRAL:
+    'staff only (accountants and hospital admins asked to approve an outpatient credit); the staff bell expands the message',
   MEWS_ESCALATION:
     'staff only (maternal early warning, policy 2026-11-20: midwife in charge and doctors); the staff bell expands the message',
 };

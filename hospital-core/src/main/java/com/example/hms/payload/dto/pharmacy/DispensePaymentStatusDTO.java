@@ -31,4 +31,6 @@ public class DispensePaymentStatusDTO {
     private String status;
     private String billingDeferredReason;
     private LocalDateTime billingDeferredAt;
+    /** Policy rule 6 (V345): an inpatient item: what is due goes on the account of the open stay, nobody approves. */
+    private boolean onOpenStay;
 }

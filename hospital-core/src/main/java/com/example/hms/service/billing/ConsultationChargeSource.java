@@ -36,7 +36,8 @@ public class ConsultationChargeSource implements VisitChargeSource {
      * QA D2701 (r65): admissions that do not start with a medical consultation. A labour admission, a planned
      * (elective) stay, a day case, a newborn's stay or a transfer in got a « Consultation générale » line by default,
      * which the cashier had to find and delete. They are billed only for the services actually recorded. An emergency,
-     * urgent, observation or psychiatric admission is first seen by a doctor and keeps the default line (E3).
+     * urgent, observation or psychiatric admission is first seen by a doctor and keeps the default line (E3), unless
+     * the emergency visit of the same episode was already billed for it ({@link EmergencyEpisodeConsultation}).
      */
     static final java.util.Set<com.example.hms.enums.AdmissionType> NO_DEFAULT_CONSULTATION = java.util.EnumSet.of(
         com.example.hms.enums.AdmissionType.LABOR_DELIVERY,
@@ -44,6 +45,18 @@ public class ConsultationChargeSource implements VisitChargeSource {
         com.example.hms.enums.AdmissionType.DAY_CASE,
         com.example.hms.enums.AdmissionType.NEWBORN,
         com.example.hms.enums.AdmissionType.TRANSFER);
+
+    /**
+     * Policy rule 6 (provisional, V345): the rule above is the default of every hospital, and a hospital may choose
+     * otherwise for itself ({@code hospital_billing_policies.auto_consultation_on_planned_admission}). A required
+     * setter: the application always wires it; a source built by hand in a unit test has none and uses the default.
+     */
+    private HospitalBillingPolicyService billingPolicy;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setBillingPolicy(HospitalBillingPolicyService billingPolicy) {
+        this.billingPolicy = billingPolicy;
+    }
 
     @Override
     public BillableOrderType type() {
@@ -65,7 +78,7 @@ public class ConsultationChargeSource implements VisitChargeSource {
                         treatment.getPrice(), treatment)));
             }
         }
-        if (services.isEmpty() && !plannedAdmission(visit)) {
+        if (services.isEmpty() && !plannedAdmission(visit) && !billedOnTheEmergencyVisit(visit)) {
             Optional<TariffResolver.Tariff> tariff =
                 visit.tariff(PriceListLinkType.SYSTEM, PriceListSystemKey.CONSULTATION_DEFAULT.name());
             if (tariff.isPresent()) {
@@ -82,10 +95,40 @@ public class ConsultationChargeSource implements VisitChargeSource {
         return lines;
     }
 
+    /**
+     * Policy rule 6 (provisional, owner decision 2026-11-20): one consultation per episode. A required setter: the
+     * application always wires it; a source built by hand in a unit test has none and bills as before.
+     */
+    private EmergencyEpisodeConsultation emergencyEpisode;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setEmergencyEpisode(EmergencyEpisodeConsultation emergencyEpisode) {
+        this.emergencyEpisode = emergencyEpisode;
+    }
+
+    /**
+     * Whether the stay follows an emergency visit already billed in the same episode: its consultation was charged
+     * there, and the stay's invoice gets no second line ({@link EmergencyEpisodeConsultation}).
+     */
+    private boolean billedOnTheEmergencyVisit(Visit visit) {
+        UUID admissionId = visit.encounter().getAdmissionId();
+        if (admissionId == null || admissionRepository == null || emergencyEpisode == null) {
+            return false;
+        }
+        return admissionRepository.findById(admissionId)
+            .map(emergencyEpisode::alreadyBilledOnTheEmergencyVisit)
+            .orElse(false);
+    }
+
     /** QA D2701: whether the visit is an admission of a kind that does not begin with a consultation. */
     private boolean plannedAdmission(Visit visit) {
         UUID admissionId = visit.encounter().getAdmissionId();
         if (admissionId == null || admissionRepository == null) {
+            return false;
+        }
+        // Policy rule 6: a hospital that chose a default consultation on every admission gets one.
+        UUID hospitalId = visit.encounter().getHospital() != null ? visit.encounter().getHospital().getId() : null;
+        if (billingPolicy != null && billingPolicy.autoConsultationOnPlannedAdmission(hospitalId)) {
             return false;
         }
         return admissionRepository.findById(admissionId)

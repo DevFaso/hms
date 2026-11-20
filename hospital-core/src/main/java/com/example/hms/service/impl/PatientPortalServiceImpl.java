@@ -1800,10 +1800,23 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .status(r.getStatus().name())
                 .preferredPharmacy(r.getPreferredPharmacy())
                 .notes(r.getPatientNotes())
-                .providerNotes(r.getProviderNotes())
+                .providerNotes(reasonThePatientReads(r))
                 .requestedAt(r.getCreatedAt())
                 .updatedAt(r.getUpdatedAt())
                 .build();
+    }
+
+    /**
+     * Policy rule 1 (QA D2308): what the patient reads under a decided request. A pharmacist's refusal to dispense
+     * shows the pharmacist's reason (QA D1315: a refusal the patient cannot read is no answer); the pharmacist's
+     * flags to the prescriber on a request still open are never shown to the patient.
+     */
+    private static String reasonThePatientReads(RefillRequest r) {
+        if (r.getDecisionBasis() == com.example.hms.enums.RefillDecisionBasis.PHARMACIST_REFUSAL
+                && (r.getProviderNotes() == null || r.getProviderNotes().isBlank())) {
+            return r.getPharmacistNote();
+        }
+        return r.getProviderNotes();
     }
 
     /**

@@ -11,6 +11,7 @@ import {
   OnInit,
   signal,
   ChangeDetectionStrategy,
+  viewChild,
 } from '@angular/core';
 import { focusFirstInvalid, refuseFields } from '../shared/forms/invalid-fields';
 import { CommonModule } from '@angular/common';
@@ -58,6 +59,8 @@ import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
 import { RoleContextService } from '../core/role-context.service';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
 import { KeyLabelPipe } from '../shared/pipes/key-label.pipe';
+import { BillingDeferralChoiceComponent } from './billing-deferral-choice';
+import { BillingDeferralChoice } from '../services/billing-deferral.service';
 import { DispensePaymentStatus, PharmacyMoneyService } from '../services/pharmacy-money.service';
 
 /** The viewer's local calendar date as YYYY-MM-DD (not the UTC one). */
@@ -196,6 +199,7 @@ export function sameDispenseUnit(
     CdsCardListComponent,
     CfaPipe,
     KeyLabelPipe,
+    BillingDeferralChoiceComponent,
   ],
   templateUrl: './dispensing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -296,8 +300,13 @@ export class DispensingComponent implements OnInit, OnDestroy {
   /** QA D2675: the fill's charge, what is paid or claimed, and what is still due. */
   readonly handOverPayment = signal<DispensePaymentStatus | null>(null);
   readonly handOverPaymentFailed = signal(false);
-  /** QA D2675: why an unpaid fill is handed over « à facturer » (required then). */
-  handOverDeferReason = '';
+  /**
+   * Policy rule 6: what an unpaid fill leaves on, chosen in the hand-over dialog and in the one-step
+   * form: a deferral somebody else approved, or a logged urgency override. Never the pharmacist's
+   * own « à facturer ».
+   */
+  private readonly handOverDeferral = viewChild<BillingDeferralChoiceComponent>('handOverDeferral');
+  private readonly oneStepDeferral = viewChild<BillingDeferralChoiceComponent>('oneStepDeferral');
   cancelReason: ReadyCancelReason = 'NOT_COLLECTED';
 
   // G13 — work-queue claim ("being prepared by"). Advisory: it coordinates
@@ -784,10 +793,10 @@ export class DispensingComponent implements OnInit, OnDestroy {
     return price > 0 && quantity > 0 ? Math.round(price * quantity) : 0;
   }
 
-  /** The server refused a one-step fill for want of the « à facturer » reason (a price it knows). */
+  /** The server refused a one-step fill as unpaid (a price it knows and this page does not). */
   readonly deferReasonAsked = signal(false);
 
-  /** The « à facturer » reason is shown: the fill has a price here, or the server asked for it. */
+  /** The deferral choice is shown: the fill has a price here, or the server refused it as unpaid. */
   oneStepNeedsDeferral(): boolean {
     return this.oneStepCharge() > 0 || this.deferReasonAsked();
   }
@@ -1044,35 +1053,28 @@ export class DispensingComponent implements OnInit, OnDestroy {
     } else {
       delete body.fefoOverrideReason;
     }
-    // Review of #1239: the « à facturer » reason travels only when it was asked for and typed.
-    const deferReason = this.form.billingDeferredReason?.trim();
-    if (this.oneStepNeedsDeferral() && deferReason) {
-      body.billingDeferredReason = deferReason;
-    } else {
-      delete body.billingDeferredReason;
-    }
+    // Policy rule 6: what an unpaid fill leaves on is added by the caller, once it is chosen.
+    delete body.billingDeferralId;
+    delete body.billingUrgencyReason;
     return body;
   }
 
   /**
-   * Review of #1239 (QA D2675): a priced one-step fill with no « à facturer » reason is refused
-   * where the reason is typed, before the server refuses it.
+   * Policy rule 6 (QA D2675): what a priced one-step fill leaves on. An empty object when nothing is
+   * asked (no price here, or an inpatient item); null when the choice is not complete, which the
+   * choice itself marks and says.
    */
-  private missingDeferReason(): boolean {
-    if (!this.oneStepNeedsDeferral() || this.form.billingDeferredReason?.trim()) {
-      return false;
-    }
-    const message = this.translate.instant('PHARMACY_MONEY.ONESTEP.DEFER_REQUIRED');
-    refuseFields(this.host.nativeElement, ['dispDeferReason'], ['dispDeferReason'], message);
-    this.toast.error(message);
-    return true;
+  private oneStepDeferralChoice(): BillingDeferralChoice | null {
+    if (!this.oneStepNeedsDeferral()) return {};
+    const choice = this.oneStepDeferral();
+    return choice ? choice.choice() : {};
   }
 
-  /** The server asked for the « à facturer » reason: the field is shown for the next try. */
+  /** The server refused the fill as unpaid: the deferral choice is shown for the next try. */
   private noteDeferReasonAsked(err: unknown): void {
     const fields = (err as { error?: { fieldErrors?: Record<string, unknown> } } | null)?.error
       ?.fieldErrors;
-    if (fields && 'billingDeferredReason' in fields) {
+    if (fields && ('billingDeferralId' in fields || 'billingUrgencyReason' in fields)) {
       this.deferReasonAsked.set(true);
     }
   }
@@ -1105,14 +1107,15 @@ export class DispensingComponent implements OnInit, OnDestroy {
 
   submitDispense(): void {
     if (this.missingWitness()) return;
-    if (this.missingDeferReason()) return;
+    const deferral = this.oneStepDeferralChoice();
+    if (deferral === null) return;
     const split = this.fefoSplit();
     if (split.length > 1) {
-      this.submitSplitDispense(split);
+      this.submitSplitDispense(split, deferral);
       return;
     }
     this.saving.set(true);
-    this.svc.createDispense(this.attestedForm()).subscribe({
+    this.svc.createDispense({ ...this.attestedForm(), ...deferral }).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('PHARMACY.DISPENSE_SUCCESS'));
         this.formClaimedRowId.set(null);
@@ -1170,9 +1173,13 @@ export class DispensingComponent implements OnInit, OnDestroy {
    * because the earlier lot is empty). If a later part fails, the parts
    * already recorded stand and the order shows what is still owed.
    */
-  private async submitSplitDispense(parts: FefoPart<StockLotResponse>[]): Promise<void> {
+  private async submitSplitDispense(
+    parts: FefoPart<StockLotResponse>[],
+    deferral: BillingDeferralChoice,
+  ): Promise<void> {
     this.saving.set(true);
-    const base = this.attestedForm();
+    // Policy rule 6: the parts of one fill are one hand-over; each names the same deferral.
+    const base: DispenseRequest = { ...this.attestedForm(), ...deferral };
     let recorded = 0;
     try {
       for (const [index, part] of parts.entries()) {
@@ -1219,9 +1226,8 @@ export class DispensingComponent implements OnInit, OnDestroy {
   submitReady(): void {
     if (this.missingWitness()) return;
     this.saving.set(true);
-    // A prepared fill is paid (or marked « à facturer ») at hand-over, never here.
+    // A prepared fill is paid (or leaves on a deferral) at hand-over, never here.
     const ready: DispenseRequest = { ...this.attestedForm(), patientScanValue: '' };
-    delete ready.billingDeferredReason;
     this.svc.markReady(ready).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('PHARMACY.READY_SUCCESS'));
@@ -1246,7 +1252,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
   openHandOver(rx: WorkQueuePrescription): void {
     this.closeForm();
     this.handOverScan = '';
-    this.handOverDeferReason = '';
+    this.handOverDeferralAsked.set(false);
     this.handOverPayment.set(null);
     this.handOverPaymentFailed.set(false);
     this.readyAction.set({ kind: 'handOver', rx });
@@ -1259,10 +1265,16 @@ export class DispensingComponent implements OnInit, OnDestroy {
     }
   }
 
-  /** QA D2675: an unpaid fill needs a « à facturer » reason before it can be handed over. */
-  handOverNeedsReason(): boolean {
-    return this.handOverPayment()?.status === 'UNPAID';
+  /**
+   * QA D2675, policy rule 6: an unpaid fill leaves on the account of an open stay, on a deferral
+   * somebody else approved, or on a logged urgency override; the choice is shown then.
+   */
+  handOverNeedsDeferral(): boolean {
+    return this.handOverPayment()?.status === 'UNPAID' || this.handOverDeferralAsked();
   }
+
+  /** The server refused the hand-over as unpaid although the payment status was not (or could not be) read. */
+  readonly handOverDeferralAsked = signal(false);
 
   openCancelReady(rx: WorkQueuePrescription): void {
     this.closeForm();
@@ -1279,21 +1291,15 @@ export class DispensingComponent implements OnInit, OnDestroy {
     const dispenseId = this.readyAction()?.rx.readyForCollection?.dispenseId;
     if (!dispenseId) return;
     const scan = this.handOverScan.trim();
-    const deferReason = this.handOverDeferReason.trim();
-    if (this.handOverNeedsReason() && !deferReason) {
-      const message = this.translate.instant('PHARMACY_MONEY.HANDOVER.DEFER_REQUIRED');
-      refuseFields(
-        this.host.nativeElement,
-        ['handOverDeferReason'],
-        ['handOverDeferReason'],
-        message,
-      );
-      this.toast.error(message);
-      return;
+    // Policy rule 6: null when the choice is not complete (the choice marks and says what is missing).
+    let deferral: BillingDeferralChoice | null = {};
+    if (this.handOverNeedsDeferral()) {
+      const chooser = this.handOverDeferral();
+      deferral = chooser ? chooser.choice() : {};
     }
-    const body: { patientScanValue?: string; billingDeferredReason?: string } = {};
+    if (deferral === null) return;
+    const body: { patientScanValue?: string } & BillingDeferralChoice = { ...deferral };
     if (scan) body.patientScanValue = scan;
-    if (deferReason && this.handOverNeedsReason()) body.billingDeferredReason = deferReason;
     this.readyActionSaving.set(true);
     this.svc.handOver(dispenseId, body).subscribe({
       next: () => this.afterReadyAction('PHARMACY.HAND_OVER_SUCCESS'),
@@ -1302,6 +1308,11 @@ export class DispensingComponent implements OnInit, OnDestroy {
         if (this.showAllergyHold(err)) {
           this.readyActionSaving.set(false);
           return;
+        }
+        const fields = (err as { error?: { fieldErrors?: Record<string, unknown> } } | null)?.error
+          ?.fieldErrors;
+        if (fields && ('billingDeferralId' in fields || 'billingUrgencyReason' in fields)) {
+          this.handOverDeferralAsked.set(true);
         }
         this.readyActionFailed(err, 'PHARMACY.HAND_OVER_FAILED');
       },

@@ -21,4 +21,11 @@ public class RefillDecisionRequestDTO {
     @Schema(description = "Provider notes shown to the patient; required to deny or hold shown to the patient (e.g. reason for denial).",
             example = "Approved — please pick up at preferred pharmacy by Friday.")
     private String providerNotes;
+
+    /**
+     * Policy rule 1 (QA D2308): what the pharmacist writes: the flags forwarded to the prescriber, or the reason of
+     * a refusal to dispense. Required on those two steps, ignored on a prescriber's decision.
+     */
+    @Size(max = 1000)
+    private String pharmacistNote;
 }

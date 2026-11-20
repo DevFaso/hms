@@ -83,6 +83,7 @@ public class PharmacyReconciliationService {
     private static final String MONEY_SECTION = "argent";
     private static final String CSV_MEDICATION = "medicament";
     private static final String CSV_DIFFERENCE = "ecart";
+    private static final String CSV_DEFERRED = "a_facturer";
 
     private static final Set<PharmacySaleStatus> SOLD = EnumSet.of(PharmacySaleStatus.COMPLETED,
             PharmacySaleStatus.REFUNDED);
@@ -151,6 +152,7 @@ public class PharmacyReconciliationService {
         priceDifferences(sales, differences);
         List<DeferredFill> deferred = new ArrayList<>();
         Money money = money(sales, payments, refunds, handedOver, deferred, differences);
+        describeDeferrals(hospitalId, deferred, money);
         refundDifferences(new Day(hospitalId, pharmacyId, from, to), refunds, differences);
         unrefundedReturns(pharmacyId, movements, differences);
         List<LotBalance> lotBalances = lotBalances(pharmacyId, from, to, differences);
@@ -556,24 +558,85 @@ public class PharmacyReconciliationService {
             return;
         }
         settled.charges = settled.charges.add(charge);
-        // Review of #1239: a DRAFT claim was never sent to a payer and covers nothing.
+        // Review of #1239 and #1244: a claim covers a fill only when a money desk, other than whoever handed
+        // the fill over, stands behind it (FillClaimCover); a DRAFT or a dispenser's own claim covers nothing.
+        // Stored facts only: a closed day reads the same whatever happened to the claim or to its voucher since.
+        UUID handedOverBy = fill.getDispensedByUser() != null ? fill.getDispensedByUser().getId() : null;
+        UUID hospitalId = fill.getPharmacy() != null && fill.getPharmacy().getHospital() != null
+                ? fill.getPharmacy().getHospital().getId() : null;
         BigDecimal covered = nz(paymentRepository.sumPostedForDispense(fill.getId()))
-                .add(nz(claimRepository.sumSentForDispense(fill.getId())));
+                .add(FillClaimCover.coveredFor(claimRepository, fill.getId(), handedOverBy));
         BigDecimal due = charge.subtract(covered).max(BigDecimal.ZERO);
         if (due.signum() <= 0) {
             return;
         }
-        if (fill.getBillingDeferredReason() != null) {
+        if (fill.leftOnDeferredBilling()) {
             settled.deferredTotal = settled.deferredTotal.add(due);
             deferred.add(DeferredFill.builder().dispenseId(fill.getId()).medicationName(fill.getMedicationName())
                     .quantity(fill.getQuantityDispensed()).due(due).reason(fill.getBillingDeferredReason())
-                    .deferredAt(fill.getBillingDeferredAt()).build());
+                    .deferredAt(fill.getBillingDeferredAt()).deferralId(fill.getBillingDeferralId())
+                    .patientName(fill.getPatient() != null ? fill.getPatient().getFullName() : null)
+                    .patientMrn(fill.getPatient() != null && hospitalId != null
+                            ? fill.getPatient().getMrnForHospital(hospitalId) : null)
+                    .build());
         } else {
             settled.unpaidTotal = settled.unpaidTotal.add(due);
             differences.add(Difference.builder().type("UNPAID_HANDED_OVER").medicationName(fill.getMedicationName())
                     .lotNumber(fill.getStockLot() != null ? fill.getStockLot().getLotNumber() : null)
                     .referenceId(fill.getId()).expected(charge).actual(covered).amount(due).build());
         }
+    }
+
+    /** A fill marked « à facturer » before policy rule 6: a reason and nobody who approved it. */
+    static final String KIND_UNAPPROVED = "UNAPPROVED";
+
+    /**
+     * Policy rule 6 (V345): the reconciliation names the deferral behind every « à facturer » fill: its kind, who
+     * asked, who approved, who handed it over, its limit or voucher, and whether an urgency override was reviewed.
+     * A fill with no deferral row (marked before the rule) is listed as UNAPPROVED. An optional collaborator: a
+     * service built by hand in a unit test has none and lists every fill as before.
+     */
+    private DispenseBillingDeferralService billingDeferrals;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setBillingDeferrals(DispenseBillingDeferralService billingDeferrals) {
+        this.billingDeferrals = billingDeferrals;
+    }
+
+    private void describeDeferrals(UUID hospitalId, List<DeferredFill> deferred, Money money) {
+        BigDecimal overrides = BigDecimal.ZERO;
+        BigDecimal stays = BigDecimal.ZERO;
+        Map<UUID, com.example.hms.payload.dto.pharmacy.DispenseBillingDeferralDTO> byId = billingDeferrals == null
+                ? Map.of()
+                : billingDeferrals.byIds(hospitalId, deferred.stream().map(DeferredFill::getDeferralId)
+                        .filter(java.util.Objects::nonNull).distinct().toList());
+        for (DeferredFill fill : deferred) {
+            com.example.hms.payload.dto.pharmacy.DispenseBillingDeferralDTO d =
+                    fill.getDeferralId() == null ? null : byId.get(fill.getDeferralId());
+            if (d == null) {
+                // Marked before the rule, or a deferral this hospital does not hold: nobody approved it here.
+                fill.setDeferralId(null);
+                fill.setKind(KIND_UNAPPROVED);
+                continue;
+            }
+            fill.setKind(d.getKind());
+            fill.setAdmissionId(d.getAdmissionId());
+            fill.setRequestedByName(d.getRequestedByName());
+            fill.setApprovedByName(d.getDecidedByName());
+            fill.setHandedOverByName(d.getExecutedByName());
+            fill.setCoverReference(d.getCoverReference());
+            fill.setCreditLimit(d.getCreditLimit());
+            fill.setApprovalNote(d.getDecisionNote());
+            if (com.example.hms.enums.DispenseBillingDeferralKind.URGENCY_OVERRIDE.name().equals(d.getKind())) {
+                fill.setReviewed(d.getReviewedAt() != null);
+                fill.setReviewedByName(d.getReviewedByName());
+                overrides = overrides.add(nz(fill.getDue()));
+            } else if (com.example.hms.enums.DispenseBillingDeferralKind.ADMISSION_ACCOUNT.name().equals(d.getKind())) {
+                stays = stays.add(nz(fill.getDue()));
+            }
+        }
+        money.setUrgencyOverrideTotal(overrides);
+        money.setAdmissionAccountTotal(stays);
     }
 
     // ───────────────────────────── controlled ─────────────────────────────
@@ -628,8 +691,22 @@ public class PharmacyReconciliationService {
                 csv.append(row(MONEY_SECTION, "paiements_" + k, plain(v))).append("\r\n"));
         csv.append(row(MONEY_SECTION, "remboursements", plain(m.getRefundsPaid()))).append("\r\n");
         csv.append(row(MONEY_SECTION, "net_encaisse", plain(m.getNetCollected()))).append("\r\n");
-        csv.append(row(MONEY_SECTION, "a_facturer", plain(m.getDeferredTotal()))).append("\r\n");
+        csv.append(row(MONEY_SECTION, CSV_DEFERRED, plain(m.getDeferredTotal()))).append("\r\n");
         csv.append(row(MONEY_SECTION, "remis_non_payes", plain(m.getUnpaidTotal()))).append("\r\n");
+        csv.append(row(MONEY_SECTION, "a_facturer_urgence", plain(m.getUrgencyOverrideTotal()))).append("\r\n");
+        csv.append(row(MONEY_SECTION, "a_facturer_compte_hospitalisation", plain(m.getAdmissionAccountTotal())))
+                .append("\r\n");
+        // Policy rule 6: every « à facturer » fill of the day with the deferral behind it.
+        csv.append("\r\n").append(row(CSV_DEFERRED, CSV_MEDICATION, "quantite", "du", "type", "motif", "reference",
+                "plafond", "demande_par", "approuve_par", "remis_par", "revue", "patient", "dossier", "sejour"))
+                .append("\r\n");
+        for (DeferredFill f : day.getDeferred()) {
+            csv.append(row(CSV_DEFERRED, f.getMedicationName(), plain(f.getQuantity()), plain(f.getDue()), f.getKind(),
+                    f.getReason(), f.getCoverReference(), plain(f.getCreditLimit()), f.getRequestedByName(),
+                    f.getApprovedByName(), f.getHandedOverByName(), reviewedCell(f), f.getPatientName(),
+                    f.getPatientMrn(), f.getAdmissionId() != null ? f.getAdmissionId().toString() : ""))
+                    .append("\r\n");
+        }
         csv.append("\r\n").append(row(CSV_MEDICATION, "lot", "unite", "recu", "vendu_enregistre", "vendu_mouvement",
                 "delivre_enregistre", "delivre_mouvement", "retour", "ajustement", "transfert", CSV_DIFFERENCE)).append("\r\n");
         for (StockLine l : day.getStock()) {
@@ -652,6 +729,14 @@ public class PharmacyReconciliationService {
                     plain(l.getMovements()), plain(l.getClosing()), l.isMatches() ? "non" : "oui")).append("\r\n");
         }
         return csv.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    /** Whether an urgency override was reviewed; empty for every other kind. */
+    private static String reviewedCell(DeferredFill fill) {
+        if (fill.getReviewed() == null) {
+            return "";
+        }
+        return Boolean.TRUE.equals(fill.getReviewed()) ? "oui" : "non";
     }
 
     /** The export's file name for that day. */

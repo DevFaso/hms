@@ -385,15 +385,16 @@
           </div>
         </div>
 
-        <!-- Review of #1239 (QA D2675): a one-step fill leaves the counter before any payment can
-             exist. With a price it is handed over « à facturer », with a reason; « Prête » is the
-             path that takes the payment first. -->
+        <!-- Review of #1239 (QA D2675), policy rule 6: a one-step fill leaves the counter before any
+             payment can exist. With a price it leaves on the account of an open stay, on a deferral
+             somebody else approved, or on a logged urgency override; « Prête » is the path that
+             takes the payment first. -->
         @if (oneStepNeedsDeferral()) {
           <div class="form-row">
             <div class="field full-width" data-testid="dispense-defer">
-              <label for="dispDeferReason">{{
-                'PHARMACY_MONEY.ONESTEP.DEFER_LABEL' | translate
-              }}</label>
+              <span class="field-label">{{
+                'PHARMACY_MONEY.DEFERRAL.ONESTEP_TITLE' | translate
+              }}</span>
               @if (oneStepCharge() > 0) {
                 {{ ' '
                 }}<small class="field-hint" data-testid="dispense-defer-charge">{{
@@ -401,15 +402,11 @@
                     | translate: { amount: (oneStepCharge() | cfa: 'XOF') }
                 }}</small>
               }
-              <textarea
-                id="dispDeferReason"
-                name="billingDeferredReason"
-                rows="2"
-                maxlength="500"
-                data-testid="dispense-defer-reason"
-                [(ngModel)]="form.billingDeferredReason"
-              ></textarea>
-              <small class="hint">{{ 'PHARMACY_MONEY.ONESTEP.DEFER_HINT' | translate }}</small>
+              <app-billing-deferral-choice
+                #oneStepDeferral
+                idPrefix="dispense-deferral"
+                [prescriptionId]="form.prescriptionId"
+              />
             </div>
           </div>
         }
@@ -549,31 +546,21 @@
             >
               {{ pay.status | keyLabel: 'PHARMACY_MONEY.HANDOVER.STATUS.' }}
             </p>
-            @if (handOverNeedsReason()) {
-              <div class="form-row">
-                <div class="field full-width">
-                  <label for="handOverDeferReason"
-                    >{{ 'PHARMACY_MONEY.HANDOVER.DEFER_LABEL' | translate }} *</label
-                  >
-                  <textarea
-                    id="handOverDeferReason"
-                    name="handOverDeferReason"
-                    rows="2"
-                    maxlength="500"
-                    required
-                    data-testid="hand-over-defer-reason"
-                    [(ngModel)]="handOverDeferReason"
-                  ></textarea>
-                  <small class="hint">{{ 'PHARMACY_MONEY.HANDOVER.DEFER_HINT' | translate }}</small>
-                </div>
-              </div>
-            }
           } @else if (handOverPaymentFailed()) {
             <p class="handover-payment-status">
               {{ 'PHARMACY_MONEY.HANDOVER.LOAD_FAILED' | translate }}
             </p>
           } @else {
             <p class="handover-payment-status">{{ 'COMMON.LOADING' | translate }}</p>
+          }
+          <!-- Policy rule 6: an unpaid fill (as read above, or as the server refused it) leaves on the
+               account of an open stay, a deferral somebody else approved, or a logged urgency override. -->
+          @if (handOverNeedsDeferral()) {
+            <app-billing-deferral-choice
+              #handOverDeferral
+              idPrefix="hand-over-deferral"
+              [prescriptionId]="readyAction()!.rx.id"
+            />
           }
         </section>
         <div class="form-row">

@@ -1392,7 +1392,27 @@
     "TOAST_DENY_FAILED": "Impossible de refuser la demande de renouvellement",
     "TOAST_PAUSED": "Renouvellement mis en attente",
     "TOAST_PAUSE_FAILED": "Impossible de mettre la demande de renouvellement en attente",
-    "NOTES_REQUIRED_FOR": "(obligatoires pour refuser ou mettre en attente)"
+    "NOTES_REQUIRED_FOR": "(obligatoires pour refuser ou mettre en attente)",
+    "FIELD_PHARMACIST_NOTE": "Note du pharmacien",
+    "FIELD_DECISION_BASIS": "Décision",
+    "BASIS_PRESCRIBER_DECISION": "Décision du prescripteur",
+    "BASIS_ORIGINAL_PRESCRIPTION": "Renouvellement inscrit sur l’ordonnance (libéré par la pharmacie)",
+    "BASIS_PHARMACIST_REFUSAL": "Refus de délivrance du pharmacien",
+    "PHARMACY_RULE": "Seul le prescripteur approuve un renouvellement. Vous pouvez libérer un renouvellement déjà inscrit sur l’ordonnance, transmettre la demande avec vos remarques, ou refuser de délivrer avec un motif.",
+    "PHARMACIST_NOTE_PLACEHOLDER": "Remarques pour le prescripteur, ou motif du refus (le patient lit un refus)",
+    "ACTION_RELEASE": "Libérer le renouvellement inscrit",
+    "ACTION_FORWARD": "Transmettre au prescripteur",
+    "ACTION_PHARMACIST_REFUSE": "Refuser de délivrer",
+    "NEEDS_PRESCRIBER": "Il ne reste aucun renouvellement inscrit sur l’ordonnance : le prescripteur doit approuver ce renouvellement.",
+    "PROVISIONAL": "Règle provisoire, en attente d’approbation de l’Ordre des pharmaciens.",
+    "PHARMACIST_NOTE_REQUIRED_FORWARD": "Indiquez vos remarques pour le prescripteur.",
+    "PHARMACIST_NOTE_REQUIRED_REFUSE": "Indiquez le motif du refus de délivrance : le patient et le prescripteur le lisent.",
+    "PHARMACIST_REFUSE_CONFIRM": "Refuser de délivrer ce renouvellement ?",
+    "TOAST_FORWARDED": "Demande transmise au prescripteur.",
+    "TOAST_FORWARD_FAILED": "La demande n’a pas pu être transmise.",
+    "TOAST_PHARMACIST_REFUSED": "Refus enregistré ; le patient et le prescripteur sont prévenus.",
+    "TOAST_RELEASED": "Renouvellement libéré dans la file de la pharmacie.",
+    "TOAST_RELEASE_FAILED": "Le renouvellement n’a pas pu être libéré."
   },
   "ADMISSIONS": {
     "ROOM_BED_HELD_HINT": "La chambre suit le lit occupé par ce séjour. Pour déplacer le patient, attribuez un autre lit ou demandez un transfert.",
@@ -2108,7 +2128,14 @@
       "ADOLESCENT_AGE_SET": "Âge de confidentialité des adolescents fixé à {{age}} ans",
       "ADOLESCENT_AGE_RESET": "Âge de confidentialité des adolescents ramené à la valeur par défaut ({{age}} ans)",
       "IMAGING_REPORTING_SETTINGS_CHANGED": "Réglage de l'échographie modifié",
-      "IMAGING_EXAM_RECORD_UPDATED": "Réalisation de l'examen d'imagerie mise à jour"
+      "IMAGING_EXAM_RECORD_UPDATED": "Réalisation de l'examen d'imagerie mise à jour",
+      "DISPENSE_BILLING_DEFERRAL_REQUESTED": "Report « à facturer » demandé",
+      "DISPENSE_BILLING_DEFERRAL_APPROVED": "Report « à facturer » approuvé",
+      "DISPENSE_BILLING_DEFERRAL_REJECTED": "Report « à facturer » refusé",
+      "DISPENSE_BILLING_DEFERRAL_CANCELLED": "Report « à facturer » retiré",
+      "DISPENSE_BILLING_URGENCY_OVERRIDE": "Délivrance remise sans paiement par dérogation d’urgence",
+      "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Dérogation d’urgence revue",
+      "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Délivrance portée au compte du séjour"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -5276,7 +5303,8 @@
     "MY_IMAGING": "Imagerie",
     "LAB_CRITICAL_PENDING": "Résultats critiques à relire",
     "PHARMACY_RECONCILIATION": "Rapprochement pharmacie",
-    "PHARMACY_TILL_CLOSE": "Clôture de caisse pharmacie"
+    "PHARMACY_TILL_CLOSE": "Clôture de caisse pharmacie",
+    "PHARMACY_BILLING_DEFERRALS": "Reports « à facturer »"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerte critique",
@@ -7652,7 +7680,14 @@
         "INVOICE_LINE_PRICED_MANUALLY": "Ligne tarifée à la main",
         "SENSITIVE_RESULT_RELEASED_TO_PROXY": "Résultat sensible communiqué à un parent",
         "PROXY_RELATIONSHIP_VERIFIED": "Lien de parenté vérifié",
-        "LAB_SENSITIVITY_RECOMMENDATION_APPLIED": "Catégorie sensible recommandée appliquée"
+        "LAB_SENSITIVITY_RECOMMENDATION_APPLIED": "Catégorie sensible recommandée appliquée",
+        "DISPENSE_BILLING_DEFERRAL_REQUESTED": "Report « à facturer » demandé",
+        "DISPENSE_BILLING_DEFERRAL_APPROVED": "Report « à facturer » approuvé",
+        "DISPENSE_BILLING_DEFERRAL_REJECTED": "Report « à facturer » refusé",
+        "DISPENSE_BILLING_DEFERRAL_CANCELLED": "Report « à facturer » retiré",
+        "DISPENSE_BILLING_URGENCY_OVERRIDE": "Délivrance remise sans paiement par dérogation d’urgence",
+        "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Dérogation d’urgence revue",
+        "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Délivrance portée au compte du séjour"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -7785,6 +7820,7 @@
         "PRO_SCREEN_POSITIVE": "Dépistage PRO positif",
         "REORDER_ALERT": "Alerte de réapprovisionnement",
         "SEVERE_HYPERTENSION": "Hypertension sévère",
+        "PHARMACY_BILLING_DEFERRAL": "Paiement différé en pharmacie",
         "MEWS_ESCALATION": "Alerte précoce maternelle (MEWS)"
       },
       "ORGANIZATION_TYPE": {
@@ -8205,7 +8241,8 @@
         "PROXY_SENSITIVE_RELEASE": "Communication d’un résultat sensible à un parent",
         "PATIENT_PROXY": "Accès famille",
         "HOSPITAL_ADOLESCENT_CONFIDENTIALITY_AGE": "Âge de confidentialité des adolescents",
-        "HOSPITAL_IMAGING_REPORTING_SETTINGS": "Réglage de l'échographie"
+        "HOSPITAL_IMAGING_REPORTING_SETTINGS": "Réglage de l'échographie",
+        "DISPENSE_BILLING_DEFERRAL": "Report « à facturer »"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",
@@ -15132,7 +15169,7 @@
         "PAID": "Payée.",
         "COVERED": "Couverte (paiement et prise en charge).",
         "DEFERRED": "Déjà marquée « à facturer ».",
-        "UNPAID": "Non payée : encaissez-la d’abord à la caisse, ou remettez-la « à facturer » avec un motif."
+        "UNPAID": "Non payée : encaissez-la d’abord à la caisse, ou choisissez ci-dessous sur quelle base elle sort."
       },
       "DEFER_LABEL": "Remettre « à facturer » : motif",
       "DEFER_HINT": "Par exemple : patient hospitalisé, sur la facture du séjour. Réservé au pharmacien ou à l’administrateur ; la délivrance apparaît dans le rapprochement du jour.",
@@ -15227,7 +15264,12 @@
       "MOVED": "mouvement : {{n}}",
       "CONTROLLED_TITLE": "Stupéfiants : registre et stock",
       "CONTROLLED_LINE": "registre {{register}}, stock {{stock}}",
-      "DEFERRED_TITLE": "Délivrances remises « à facturer »"
+      "DEFERRED_TITLE": "Délivrances remises « à facturer »",
+      "DEFERRED_URGENCY": "dont dérogations d’urgence : {{amount}}",
+      "DEFERRED_STAY": "dont comptes de séjour : {{amount}}",
+      "HANDED_OVER_BY": "remis par {{name}}",
+      "OVERRIDE_REVIEWED": "Revue par la comptabilité",
+      "OVERRIDE_TO_REVIEW": "À revoir par la comptabilité"
     },
     "ONESTEP": {
       "DEFER_LABEL": "Remettre « à facturer » : motif",
@@ -15238,6 +15280,102 @@
     "PRICE": {
       "REASON": "Motif du changement de prix",
       "REASON_REQUIRED": "Indiquez le motif de ce changement de prix : il est conservé dans l’historique des prix."
+    },
+    "DEFERRAL": {
+      "PAGE_TITLE": "Reports « à facturer »",
+      "PAGE_SUBTITLE": "Une délivrance ne sort non payée de la pharmacie que sur un report approuvé par une autre personne, sur le compte d’un séjour ouvert, ou par une dérogation d’urgence journalisée. Approuvez, refusez et revoyez-les ici.",
+      "PROVISIONAL": "Règle provisoire, en attente d’approbation de la direction et du responsable financier de l’établissement.",
+      "INTRO": "Cette délivrance n’est pas payée. Le pharmacien n’accorde pas de crédit : choisissez sur quelle base elle sort.",
+      "LEGEND": "Base de la remise sans paiement",
+      "OPEN_STAY": "Patient hospitalisé : le montant dû est porté au compte du séjour. Aucune approbation n’est nécessaire.",
+      "LOAD_FAILED": "Les reports n’ont pas pu être chargés.",
+      "USE_APPROVED": "Utiliser le report approuvé",
+      "APPROVED_BY": "approuvé par {{name}}",
+      "ASKED_BY": "demandé par {{name}}",
+      "LIMIT": "Plafond : {{amount}}",
+      "COVER_REFERENCE_VALUE": "Bon ou prise en charge : {{ref}}",
+      "OWN_APPROVAL": "Vous avez approuvé ce report : une autre personne doit remettre la délivrance.",
+      "PENDING": "Une demande attend sa décision.",
+      "REFRESH": "Actualiser",
+      "REQUEST_TITLE": "Demander un report à la facturation ou à la comptabilité",
+      "REQUEST_KIND": "Ce qui est demandé",
+      "KIND": {
+        "THIRD_PARTY_COVER": "Prise en charge par un tiers (bon ou assurance)",
+        "OUTPATIENT_CREDIT": "Crédit au patient externe",
+        "URGENCY_OVERRIDE": "Dérogation d’urgence",
+        "ADMISSION_ACCOUNT": "Compte du séjour hospitalier",
+        "UNAPPROVED": "Marquée avant la règle, sans approbation"
+      },
+      "COVER_REFERENCE": "Numéro du bon ou de la prise en charge",
+      "REQUEST_REASON": "Pourquoi la délivrance devrait sortir avant d’être payée",
+      "REQUEST_REASON_REQUIRED": "Indiquez pourquoi la délivrance devrait sortir avant d’être payée.",
+      "REQUEST_SEND": "Envoyer la demande",
+      "REQUEST_HINT": "La facturation vérifie un bon ou une prise en charge ; la comptabilité ou l’administrateur décide d’un crédit. Vous ne pouvez pas approuver votre propre demande.",
+      "REQUEST_SENT": "Demande envoyée. Elle attend sa décision.",
+      "REQUEST_FAILED": "La demande n’a pas pu être envoyée.",
+      "URGENCY": "Dérogation d’urgence",
+      "URGENCY_HINT": "Quand les soins ne peuvent pas attendre une approbation. Elle est journalisée à votre nom et la comptabilité la revoit ensuite.",
+      "URGENCY_REASON": "Motif de l’urgence",
+      "URGENCY_REASON_REQUIRED": "Indiquez le motif de l’urgence.",
+      "CHOICE_REQUIRED": "Cette délivrance n’est pas payée : encaissez-la d’abord, utilisez un report approuvé, ou enregistrez une dérogation d’urgence.",
+      "ONESTEP_TITLE": "Cette délivrance a un prix et rien n’est encore payé",
+      "NONE": "Rien à approuver ni à revoir.",
+      "STATUS": {
+        "REQUESTED": "À décider",
+        "APPROVED": "Approuvé, pas encore utilisé",
+        "REJECTED": "Refusé",
+        "EXECUTED": "Utilisé",
+        "CANCELLED": "Retiré",
+        "TO_REVIEW": "À revoir"
+      },
+      "MEDICATION": "Médicament",
+      "ASKED": "Demandé par",
+      "REASON": "Motif",
+      "DECIDED": "Décidé par",
+      "LIMIT_LABEL": "Plafond (F CFA)",
+      "AMOUNT_DUE": "Montant sorti sans paiement",
+      "APPROVE": "Approuver",
+      "REJECT": "Refuser",
+      "REVIEW": "Revoir",
+      "CANCEL": "Retirer",
+      "WAITING_OTHER": "En attente de la décision d’une autre personne.",
+      "WAITING_REVIEW": "En attente de la revue par la comptabilité.",
+      "COVER_HINT": "Le numéro du bon ou de la prise en charge que vous avez vérifié.",
+      "LIMIT_HINT": "Facultatif. Le montant maximal qui peut sortir sur ce crédit.",
+      "CREDIT_REASON": "Motif de l’accord du crédit",
+      "APPROVE_NOTE": "Note (facultative)",
+      "REJECT_REASON": "Motif du refus",
+      "CANCEL_REASON": "Motif du retrait",
+      "REVIEW_NOTE": "Résultat de la revue",
+      "COVER_REFERENCE_REQUIRED": "Enregistrez le numéro du bon ou de la prise en charge que vous avez vérifié.",
+      "CREDIT_REASON_REQUIRED": "Indiquez le motif de ce crédit.",
+      "LIMIT_INVALID": "Le plafond est un montant entier en F CFA, supérieur à zéro.",
+      "REJECT_REASON_REQUIRED": "Indiquez le motif du refus.",
+      "CANCEL_REASON_REQUIRED": "Indiquez le motif du retrait.",
+      "REVIEW_NOTE_REQUIRED": "Indiquez le résultat de votre revue.",
+      "APPROVE_DONE": "Report approuvé.",
+      "REJECT_DONE": "Report refusé.",
+      "CANCEL_DONE": "Report retiré.",
+      "REVIEW_DONE": "Dérogation d’urgence revue.",
+      "STEP_FAILED": "L’étape n’a pas pu être enregistrée.",
+      "REJECT_CONFIRM": "Refuser ce report ?",
+      "CANCEL_CONFIRM": "Retirer ce report ?",
+      "VIEW_WORK": "À traiter",
+      "VIEW_DUE": "Sorties, encore dues",
+      "STILL_DUE": "Reste dû à ce jour",
+      "NONE_DUE": "Aucune délivrance sortie sans paiement ne reste due.",
+      "VIEWS": "Listes des paiements différés"
+    },
+    "POLICY": {
+      "TITLE": "Politique de facturation de l’établissement",
+      "PROVISIONAL": "Règles provisoires, en attente d’approbation de la direction et du responsable financier de l’établissement, et de l’Ordre des pharmaciens pour les renouvellements.",
+      "AUTO_CONSULTATION": "Facturer une consultation par défaut sur les admissions programmées",
+      "AUTO_CONSULTATION_HINT": "Désactivé (recommandé) : une admission programmée, en hôpital de jour, d’un nouveau-né, en travail ou par transfert est facturée pour son séjour et les actes enregistrés, jamais pour une consultation que personne n’a enregistrée. Une consultation est facturée par visite où elle a eu lieu.",
+      "PHARMACIST_RENEWAL": "Prolongation exceptionnelle par le pharmacien",
+      "PHARMACIST_RENEWAL_HINT": "Désactivée et non disponible : aucun texte ne l’autorise encore. Seul un prescripteur autorisé approuve un renouvellement.",
+      "ADMIN_ONLY": "Seul un administrateur de l’établissement peut modifier cette politique.",
+      "SAVED": "Politique enregistrée.",
+      "FAILED": "La politique n’a pas pu être enregistrée."
     }
   },
   "WARD_INBOX": {

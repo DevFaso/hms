@@ -357,6 +357,20 @@ public enum AuditEventType {
     PROXY_RELATIONSHIP_VERIFIED,
     /** Policy 2026-11-20: the lab director applied recommended sensitive categories to the catalogue (one row per test). */
     LAB_SENSITIVITY_RECOMMENDATION_APPLIED,
+    /** Policy rule 6 (V345): a fill asked to leave « à facturer » (third-party cover or credit); decides nothing. */
+    DISPENSE_BILLING_DEFERRAL_REQUESTED,
+    /** Policy rule 6: a requested deferral approved by another person (billing, finance or a hospital admin). */
+    DISPENSE_BILLING_DEFERRAL_APPROVED,
+    /** Policy rule 6: a requested deferral rejected, with the reason. */
+    DISPENSE_BILLING_DEFERRAL_REJECTED,
+    /** Policy rule 6: a deferral withdrawn before any hand-over, with the reason. */
+    DISPENSE_BILLING_DEFERRAL_CANCELLED,
+    /** Policy rule 6: a fill handed over unpaid on a logged urgency override; finance reviews it. */
+    DISPENSE_BILLING_URGENCY_OVERRIDE,
+    /** Policy rule 6: an urgency override reviewed by finance afterwards. */
+    DISPENSE_BILLING_OVERRIDE_REVIEWED,
+    /** Policy rule 6: an inpatient fill charged to the account of the open stay. */
+    DISPENSE_POSTED_TO_ADMISSION_ACCOUNT,
 
     OTHER
 }

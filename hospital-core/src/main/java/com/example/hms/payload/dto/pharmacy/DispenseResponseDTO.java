@@ -77,6 +77,8 @@ public class DispenseResponseDTO {
     /** QA D2675 (r65): why the fill was handed over unpaid (« à facturer »), and when; null otherwise. */
     private String billingDeferredReason;
     private java.time.LocalDateTime billingDeferredAt;
+    /** Policy rule 6 (V345): the deferral the fill left on (approved, urgency override or open stay). */
+    private java.util.UUID billingDeferralId;
 
     /* ── Ready for collection (G15) ─────────────────────────────────────── */
 
