@@ -11,6 +11,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @DisplayName("Review of #1237: NEWS2 is shown only where it is validated")
@@ -107,14 +109,13 @@ class News2ApplicabilityTest {
 
         assertThat(known.sourceHospitalId()).isEqualTo(elsewhere);
         applicability.accountForeignRecord(mother.getId(), here, known);
-        org.mockito.Mockito.verify(severeHypertension).accountForeignRecord(mother.getId(), here, elsewhere);
+        verify(severeHypertension).accountForeignRecord(mother.getId(), here, elsewhere);
         // No record behind the status, or not an obstetric status: nothing to account.
         applicability.accountForeignRecord(mother.getId(), here,
             new News2Applicability.Applicability(News2Applicability.Status.OBSTETRIC, null));
         applicability.accountForeignRecord(mother.getId(), here,
             new News2Applicability.Applicability(News2Applicability.Status.APPLIES, null, elsewhere));
         applicability.accountForeignRecord(mother.getId(), here, null);
-        org.mockito.Mockito.verify(severeHypertension, org.mockito.Mockito.times(1))
-            .accountForeignRecord(any(), any(), any());
+        verify(severeHypertension, times(1)).accountForeignRecord(any(), any(), any());
     }
 }

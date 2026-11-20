@@ -378,7 +378,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                                                    ObstetricWard obstetric) {
         if (last.isEmpty() || last.get().getRecordedAt() == null) {
             // No vitals ever recorded — overdue now
-            return vitalTask(ctx, hospitalId, now.minusMinutes(30), now, effectiveWindow, null, true, null);
+            return vitalTask(ctx, hospitalId, now.minusMinutes(30), new RoundWindow(now, effectiveWindow), null, true,
+                null);
         }
         if (underMaternalWarning(ctx.patientId(), obstetric)) {
             return maternalVitalTask(ctx, hospitalId, now, effectiveWindow, last.get(), obstetric);
@@ -396,7 +397,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         boolean scoreShown = !obstetric.contains(ctx.patientId()) && (patient == null
             || !com.example.hms.service.vitals.VitalSignJudgement.isNewborn(patient.getDateOfBirth(),
                 last.get().getRecordedAt()));
-        return vitalTask(ctx, hospitalId, dueTime, now, effectiveWindow, news, scoreShown, null);
+        return vitalTask(ctx, hospitalId, dueTime, new RoundWindow(now, effectiveWindow), news, scoreShown, null);
+    }
+
+    /** When a round is read, and how far ahead the list looks. */
+    private record RoundWindow(LocalDateTime now, Duration lookAhead) {
     }
 
     /** The maternal early warning sets this patient's round: she is under the obstetric scope, and it is on. */
@@ -419,7 +424,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                     obstetric.births().get(ctx.patientId()), last.getRecordedAt()));
         LocalDateTime dueTime = last.getRecordedAt().plus(com.example.hms.service.vitals.MaternalEarlyWarning
             .observationInterval(rules, mews, ROUTINE_VITALS_INTERVAL));
-        return vitalTask(ctx, hospitalId, dueTime, now, effectiveWindow, null, false, mews);
+        return vitalTask(ctx, hospitalId, dueTime, new RoundWindow(now, effectiveWindow), null, false, mews);
     }
 
     /**
@@ -428,11 +433,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      * maternal score the round is named after it; a set with nothing to score (a weight alone) carries none.
      */
     private static NurseVitalTaskResponseDTO vitalTask(PatientContext ctx, UUID hospitalId, LocalDateTime dueTime,
-                                                       LocalDateTime now, Duration effectiveWindow,
+                                                       RoundWindow window,
                                                        NewsScoreCalculator.NewsScoreResult news, boolean scoreShown,
                                                        com.example.hms.service.vitals.MaternalEarlyWarning.Score mews) {
-        boolean overdue = dueTime.isBefore(now);
-        if (!overdue && !dueTime.isBefore(now.plus(effectiveWindow))) {
+        boolean overdue = dueTime.isBefore(window.now());
+        if (!overdue && !dueTime.isBefore(window.now().plus(window.lookAhead()))) {
             return null;
         }
         boolean maternalScored = mews != null && !mews.empty();

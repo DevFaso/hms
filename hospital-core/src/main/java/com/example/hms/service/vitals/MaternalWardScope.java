@@ -71,11 +71,16 @@ public class MaternalWardScope {
         return latestBirth;
     }
 
-    /** The due date of the latest version of each woman's history (the rows come newest first), in one query. */
+    /**
+     * The due date of the latest version of each woman's history (the rows come newest first), in one
+     * query. The latest version decides even when it dates nothing: a woman is marked seen on her first
+     * row, so an older version never answers in place of a newer one that carries no date.
+     */
     private Map<UUID, LocalDate> dueDates(UUID hospitalId, Collection<UUID> patientIds) {
         Map<UUID, LocalDate> dueDates = new HashMap<>();
+        Set<UUID> seen = new java.util.HashSet<>();
         for (Object[] row : maternalHistoryRepository.pregnancyDatesAt(patientIds, hospitalId)) {
-            if (row[0] instanceof UUID patientId && !dueDates.containsKey(patientId)) {
+            if (row[0] instanceof UUID patientId && seen.add(patientId)) {
                 dueDates.put(patientId, dueDate((LocalDate) row[1], (LocalDate) row[2], (LocalDate) row[3]));
             }
         }

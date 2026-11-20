@@ -33,6 +33,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -306,6 +307,6 @@ class SevereHypertensionTest {
         // The acting hospital's own record is no disclosure.
         rule.accountForeignRecord(p.getId(), HERE, HERE);
         rule.accountForeignRecord(p.getId(), HERE, null);
-        verify(reach, org.mockito.Mockito.times(1)).recordReach(any(), any(), any(), any(), any(), anyString());
+        verify(reach, times(1)).recordReach(any(), any(), any(), any(), any(), anyString());
     }
 }

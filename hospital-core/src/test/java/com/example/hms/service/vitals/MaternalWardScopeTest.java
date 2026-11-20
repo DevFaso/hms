@@ -93,6 +93,21 @@ class MaternalWardScopeTest {
     }
 
     @Test
+    @DisplayName("a latest version that dates nothing still decides: the older version's pregnancy is not read")
+    void aLatestVersionWithNoDatesStillDecides() {
+        UUID cleared = UUID.randomUUID();
+        when(histories.pregnancyDatesAt(any(), eq(HERE))).thenReturn(List.of(
+            // Newest first: the dates were cleared; the older version dated a pregnancy that covers today.
+            history(cleared, null, null, null),
+            history(cleared, null, TODAY.plusDays(30), null)));
+        Set<UUID> obstetric = new HashSet<>();
+
+        scope.extend(obstetric, HERE, List.of(cleared), NOW);
+
+        assertThat(obstetric).isEmpty();
+    }
+
+    @Test
     @DisplayName("a birth within 42 days is returned to date the pulse table; day 43 is not")
     void theBirthsOfThePostpartumWomen() {
         UUID dayTwo = UUID.randomUUID();
