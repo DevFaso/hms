@@ -28,9 +28,10 @@ import java.time.LocalDateTime;
  * transaction, tagged with its source so the chart can say where it came from.
  *
  * <p>The row is judged by the shared {@link VitalSignJudgement} (so its « significatif » flag
- * matches what the nurse station would set for the same values) but never escalated: the
- * maternity service already raised its own alerts for these values, and a second notice per
- * reading would double every alert. {@code MaternityVitalChartingGuardTest} keeps every entity
+ * matches what the nurse station would set for the same values) and escalated for NEWS2 like
+ * every vitals write, but without its judgement: the maternity service already raised its own
+ * severe-pressure and newborn alerts for these values, and a second notice per reading would
+ * double them. {@code MaternityVitalChartingGuardTest} keeps every entity
  * that stores a vital sign on this list.
  */
 @Service
@@ -128,7 +129,14 @@ public class MaternityVitalCharting {
         if (alerted) {
             vital.setClinicallySignificant(true);
         }
-        return vitalSignRepository.save(vital);
+        PatientVitalSign saved = vitalSignRepository.save(vital);
+        // The NEWS2 escalation every vitals write has; no judgement is passed, so the severe-pressure
+        // and newborn notices are not sent a second time (the maternity service sent its own).
+        Staff staff = saved.getRecordedByStaff();
+        String recorder = staff != null && staff.getUser() != null ? staff.getUser().getUsername() : null;
+        vitalSignJudgement.escalate(saved, null, saved.getPatient().getId(),
+            saved.getHospital() != null ? saved.getHospital().getId() : null, recorder, null);
+        return saved;
     }
 
     private static boolean anyValue(Object... values) {

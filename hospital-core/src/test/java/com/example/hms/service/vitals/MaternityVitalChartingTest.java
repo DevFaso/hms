@@ -20,7 +20,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -65,8 +64,11 @@ class MaternityVitalChartingTest {
         assertThat(vital.getTemperatureCelsius()).isEqualTo(38.4);
         assertThat(vital.isClinicallySignificant()).isTrue();
         verify(judgement).judge(vital);
-        // The maternity service raised its alerts already: the chart row never escalates again.
-        verify(judgement, never()).escalate(any(), any(), any(), any(), any(), any());
+        // NEWS2 escalates as for every vitals write, without the judgement: the maternity service
+        // raised its own severe-pressure and newborn alerts, which are not sent twice.
+        verify(judgement).escalate(org.mockito.ArgumentMatchers.eq(vital), org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.eq(mother.getId()), org.mockito.ArgumentMatchers.eq(hospital.getId()),
+            org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull());
     }
 
     @Test
