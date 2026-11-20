@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -579,7 +578,8 @@ class BedAssignmentServiceTest {
         @SuppressWarnings("unchecked")
         org.springframework.beans.factory.ObjectProvider<com.example.hms.service.maternity.MidwifeNewbornCare> provider =
             mock(org.springframework.beans.factory.ObjectProvider.class);
-        doAnswer(invocation -> {
+        // Lenient: a move that stays in neonatology never reaches the provider.
+        org.mockito.Mockito.lenient().doAnswer(invocation -> {
             java.util.function.Consumer<com.example.hms.service.maternity.MidwifeNewbornCare> consumer =
                 invocation.getArgument(0);
             consumer.accept(care);
@@ -611,6 +611,39 @@ class BedAssignmentServiceTest {
         service.assignBed(admission, maternityCot.getId());
 
         verify(care).withdrawPhysicianTask(admission.getId());
+    }
+
+    @Test
+    void review1243_movingTheBabyFromOneNeonatalCotToAnotherKeepsThePhysiciansTask() {
+        // Second review of #1243: a nurse (anybody) moves the baby N1 -> N2, or a transfer lands in
+        // another NICU cot. The baby is still in neonatology: the unreviewed task must stay.
+        com.example.hms.service.maternity.MidwifeNewbornCare care = wireNewbornCare();
+        com.example.hms.model.Patient baby = new com.example.hms.model.Patient();
+        baby.setDateOfBirth(java.time.LocalDate.now().minusDays(2));
+        admission.setPatient(baby);
+        Bed first = cotIn(WardType.NICU, "N1");
+        admission.setBed(first);
+        Bed second = cotIn(WardType.NICU, "N2");
+        second.setStatus(BedStatus.AVAILABLE);
+        when(bedRepository.findByIdAndWard_Hospital_Id(second.getId(), hospitalId)).thenReturn(Optional.of(second));
+
+        service.assignBed(admission, second.getId());
+
+        assertThat(admission.getBed()).isSameAs(second);
+        assertThat(first.getStatus()).isNotEqualTo(BedStatus.OCCUPIED);
+        verify(care, never()).withdrawPhysicianTask(any());
+
+        // A transfer completed into a third NICU cot it had reserved: the same.
+        Bed reserved = cotIn(WardType.NICU, "N3");
+        reserved.setStatus(BedStatus.RESERVED);
+        when(bedRepository.findByIdAndWard_Hospital_Id(reserved.getId(), hospitalId)).thenReturn(Optional.of(reserved));
+        service.assignBed(admission, reserved.getId(), java.util.Set.of(BedStatus.RESERVED));
+        assertThat(admission.getBed()).isSameAs(reserved);
+        verify(care, never()).withdrawPhysicianTask(any());
+
+        // The same cot posted again changes nothing at all.
+        service.assignBed(admission, reserved.getId());
+        verify(care, never()).withdrawPhysicianTask(any());
     }
 
     @Test

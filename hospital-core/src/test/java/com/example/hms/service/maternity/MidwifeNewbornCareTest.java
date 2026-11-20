@@ -196,6 +196,27 @@ class MidwifeNewbornCareTest {
     }
 
     @Test
+    void theNeonatalCotTheBabyAlreadyHoldsIsNoNewPlacement_nobodyIsAskedAgain() {
+        // Second review of #1243: the same cot posted again is a no-op in the assignment; filing
+        // again would delete the physicians' task, acknowledged ones too, and alert them anew.
+        Admission inNeonatology = stay(AdmissionType.NEWBORN);
+        Bed held = bedIn(WardType.NICU);
+        inNeonatology.setBed(held);
+        assertThat(care.requireBedAMidwifeMayAssign(inNeonatology, held.getId())).isFalse();
+
+        // Another neonatal cot is a placement of hers: the physicians are asked about it.
+        assertThat(care.requireBedAMidwifeMayAssign(inNeonatology, bedIn(WardType.NICU).getId())).isTrue();
+
+        // The same bed again never opens a ward that is not hers: a held surgical bed is still refused.
+        Admission inSurgery = stay(AdmissionType.NEWBORN);
+        Bed surgical = bedIn(WardType.SURGICAL);
+        inSurgery.setBed(surgical);
+        UUID surgicalId = surgical.getId();
+        assertThatThrownBy(() -> care.requireBedAMidwifeMayAssign(inSurgery, surgicalId))
+            .isInstanceOf(FieldBusinessException.class);
+    }
+
+    @Test
     void sheIsRefusedEveryOtherWard() {
         for (WardType type : WardType.values()) {
             if (type == WardType.MATERNITY) {

@@ -156,12 +156,16 @@ public class MidwifeNewbornCare {
         // Assigning a bed frees the one the stay holds (BedAssignmentService): that bed must be
         // hers to free too, or a move into maternity would release a bed of another ward.
         Bed held = admission.getBed();
-        if (held != null && !bedId.equals(held.getId())) {
+        boolean sameBedAgain = held != null && bedId.equals(held.getId());
+        if (held != null && !sameBedAgain) {
             requireHerWard(held, admission, BedAssignmentService.FIELD_BED_ID);
         }
         // A bed of another hospital answers as not found in the assignment itself.
         Bed bed = bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId).orElse(null);
-        return bed != null && requireHerWard(bed, admission, BedAssignmentService.FIELD_BED_ID);
+        boolean neonatalCot = bed != null && requireHerWard(bed, admission, BedAssignmentService.FIELD_BED_ID);
+        // The cot the stay already holds is no placement (the assignment itself changes nothing):
+        // the physicians are not asked again, and the task they have, read or not, is left alone.
+        return neonatalCot && !sameBedAgain;
     }
 
     /** The same wards, for the bed a caller who is only a midwife releases. */

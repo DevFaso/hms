@@ -1379,6 +1379,22 @@ class AdmissionServiceImplTest {
     }
 
     @Test
+    void review1243_theSameNeonatalCotPostedAgainLeavesThePhysiciansTasksUntouched() {
+        // The rule answers "no new placement" for the cot the stay holds: nothing is withdrawn,
+        // nothing is filed.
+        com.example.hms.service.maternity.MidwifeNewbornCare care = policyRule2Care();
+        Admission admission = stayInScope(AdmissionStatus.ACTIVE);
+        UUID heldCot = UUID.randomUUID();
+        when(admissionRepository.save(admission)).thenReturn(admission);
+        when(care.requireBedAMidwifeMayAssign(admission, heldCot)).thenReturn(false);
+
+        service.assignBed(admissionId, heldCot);
+
+        verify(care, never()).withdrawPhysicianTask(any());
+        verify(care, never()).askPhysicianAfterCommit(any());
+    }
+
+    @Test
     void policyRule2_aBedOutsideHerWardsIsNeverAssignedOrReleasedByAMidwife() {
         com.example.hms.service.maternity.MidwifeNewbornCare care = policyRule2Care();
         Admission admission = stayInScope(AdmissionStatus.ACTIVE);

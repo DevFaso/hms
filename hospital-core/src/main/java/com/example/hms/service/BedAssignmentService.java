@@ -75,13 +75,24 @@ public class BedAssignmentService {
         this.newbornCare = newbornCare;
     }
 
-    /** Every way a stay stops holding a bed comes through here: a move, an unassignment, a discharge. */
-    private void leftBed(Admission admission, Bed bed) {
-        boolean neonatal = bed.getWard() != null
-            && bed.getWard().getWardType() == com.example.hms.enums.WardType.NICU;
-        if (neonatal && newbornCare != null && admission.getId() != null) {
+    /**
+     * Every way a stay stops holding a bed comes through here: a move, an unassignment, a
+     * discharge. {@code movedTo} is the bed the stay takes instead, null when it takes none.
+     *
+     * <p>The task ends when the baby leaves NEONATOLOGY, not when it changes cot there (second
+     * review of #1243): a move from one NICU cot to another, by anybody, or a transfer into
+     * another NICU cot, keeps the physicians' unreviewed task.
+     */
+    private void leftBed(Admission admission, Bed bed, Bed movedTo) {
+        boolean leavesNeonatology = isNeonatal(bed) && !isNeonatal(movedTo);
+        if (leavesNeonatology && newbornCare != null && admission.getId() != null) {
             newbornCare.ifAvailable(care -> care.withdrawPhysicianTask(admission.getId()));
         }
+    }
+
+    private static boolean isNeonatal(Bed bed) {
+        return bed != null && bed.getWard() != null
+            && bed.getWard().getWardType() == com.example.hms.enums.WardType.NICU;
     }
 
     /**
@@ -141,7 +152,7 @@ public class BedAssignmentService {
 
         if (current != null) {
             markAvailable(current);
-            leftBed(admission, current);
+            leftBed(admission, current, bed);
         }
         bed.setStatus(BedStatus.OCCUPIED);
         bedRepository.save(bed);
@@ -227,7 +238,7 @@ public class BedAssignmentService {
             return;
         }
         markAvailable(bed);
-        leftBed(admission, bed);
+        leftBed(admission, bed, null);
         admission.setBed(null);
         admission.setRoomBed(null);
         log.info("Bed {} unassigned from admission {}", bedLabel(bed), admission.getId());
@@ -245,7 +256,7 @@ public class BedAssignmentService {
             return;
         }
         markAvailable(bed);
-        leftBed(admission, bed);
+        leftBed(admission, bed, null);
         log.info("Bed {} released by admission {}", bedLabel(bed), admission.getId());
     }
 
