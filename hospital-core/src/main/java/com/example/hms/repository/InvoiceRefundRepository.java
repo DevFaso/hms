@@ -51,6 +51,23 @@ public interface InvoiceRefundRepository extends JpaRepository<InvoiceRefund, UU
                                        @Param("statuses") Collection<InvoiceRefundStatus> statuses,
                                        @Param("excludedId") UUID excludedId);
 
+    /**
+     * PR 10 review: what the live reversals of an invoice not yet paid out (asked or approved) will take out of the
+     * money received, optionally leaving one out (the reversal being checked is not counted against itself). A
+     * refund and a reversal never hand the same excess back twice. Zero when none.
+     */
+    @Query("""
+           SELECT COALESCE(SUM(r.amount), 0)
+             FROM InvoiceRefund r
+            WHERE r.invoice.id = :invoiceId
+              AND r.status IN :statuses
+              AND r.reversedPaymentId IS NOT NULL
+              AND (:excludedId IS NULL OR r.id <> :excludedId)
+           """)
+    BigDecimal sumReversalsByInvoiceAndStatusIn(@Param("invoiceId") UUID invoiceId,
+                                                @Param("statuses") Collection<InvoiceRefundStatus> statuses,
+                                                @Param("excludedId") UUID excludedId);
+
     /*
      * The conditional UPDATEs: each moves a refund only from the status it must be in and stamps who and when in the
      * same statement (the V307 CHECKs require the stamps with the status). 1 for the request that wins, 0 for a

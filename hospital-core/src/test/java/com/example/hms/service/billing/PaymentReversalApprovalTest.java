@@ -145,6 +145,12 @@ class PaymentReversalApprovalTest {
             r.setStatus(call.getArgument(2));
             return 1;
         });
+        // PR 10 review: what the open refunds and the reversals waiting hold, read from the same ledger.
+        when(refunds.sumByInvoiceAndStatusIn(any(), any(), any())).thenAnswer(call -> held(call.getArgument(1),
+            call.getArgument(2), false));
+        when(refunds.sumReversalsByInvoiceAndStatusIn(any(), any(), any())).thenAnswer(call ->
+            held(call.getArgument(1), call.getArgument(2), true));
+        when(roles.canRequestRefund(any(), eq(HOSPITAL_A))).thenReturn(true);
         when(refunds.markPaid(any(), any(), any())).thenAnswer(call -> {
             InvoiceRefund r = ledger.get(call.<UUID>getArgument(0));
             if (r == null || r.getStatus() != InvoiceRefundStatus.APPROVED) {
@@ -162,6 +168,133 @@ class PaymentReversalApprovalTest {
 
     private void actAs(UUID user) {
         when(roles.getCurrentUserId()).thenReturn(user);
+    }
+
+    private BigDecimal held(java.util.Collection<InvoiceRefundStatus> statuses, UUID excluded, boolean reversals) {
+        return ledger.values().stream()
+            .filter(r -> statuses.contains(r.getStatus()))
+            .filter(r -> (r.getReversedPaymentId() != null) == reversals)
+            .filter(r -> excluded == null || !excluded.equals(r.getId()))
+            .map(InvoiceRefund::getAmount)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /** Invoice 2 000 paid twice (4 000 received): 2 000 too much, and the second payment is the one reversed. */
+    private void paidTwice() {
+        invoice.setTotalAmount(new BigDecimal("2000"));
+        invoice.setAmountPaid(new BigDecimal("4000"));
+        invoice.setStatus(InvoiceStatus.PAID);
+        payment.setAmount(new BigDecimal("2000"));
+    }
+
+    private InvoiceRefundDTO refundAsked(String amount) {
+        com.example.hms.payload.dto.billing.InvoiceRefundRequestDTO body =
+            new com.example.hms.payload.dto.billing.InvoiceRefundRequestDTO();
+        body.setAmount(new BigDecimal(amount));
+        body.setMethod("CASH");
+        body.setReason("Trop-perçu");
+        actAs(BILLING_A);
+        return service.request(invoice.getId(), body);
+    }
+
+    /** A row put in the ledger as it stands (a state left by the code before this fix). */
+    private InvoiceRefund stored(InvoiceRefundStatus status, UUID reversedPaymentId) {
+        InvoiceRefund row = InvoiceRefund.builder().invoice(invoice).hospitalId(HOSPITAL_A)
+            .amount(new BigDecimal("2000")).method(PaymentMethod.CASH).reason("x").status(status)
+            .requestedBy(BILLING_A).reversedPaymentId(reversedPaymentId).build();
+        row.setId(UUID.randomUUID());
+        ledger.put(row.getId(), row);
+        return row;
+    }
+
+    @Test
+    @DisplayName("PR 10 review: an overpayment refund asked first, the reversal of the second payment is refused")
+    void refundFirstThenReversalIsRefused() {
+        paidTwice();
+        refundAsked("2000");
+        actAs(BILLING_2_A);
+        UUID invoiceId = invoice.getId();
+        UUID paymentId = payment.getId();
+
+        assertThatThrownBy(() -> service.requestReversal(invoiceId, paymentId, "Saisie en double"))
+            .isInstanceOf(ConflictException.class)
+            .hasMessageContaining("deux fois le même trop-perçu");
+        assertThat(ledger.values()).noneMatch(r -> r.getReversedPaymentId() != null);
+    }
+
+    @Test
+    @DisplayName("PR 10 review: the reversal asked first, the overpayment refund of the same excess is refused")
+    void reversalFirstThenRefundIsRefused() {
+        paidTwice();
+        asked();
+
+        assertThatThrownBy(() -> refundAsked("2000"))
+            .isInstanceOfSatisfying(FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("amount"));
+        assertThat(ledger.values()).noneMatch(r -> r.getReversedPaymentId() == null);
+    }
+
+    @Test
+    @DisplayName("PR 10 review: the refund paid out, an approved reversal of the same excess is not paid out")
+    void refundPaidThenReversalPayoutIsRefused() {
+        paidTwice();
+        // The state the finding names: the refund of 2 000 was handed back, the reversal was approved before it.
+        invoice.setAmountRefunded(new BigDecimal("2000"));
+        stored(InvoiceRefundStatus.PAID, null);
+        InvoiceRefund reversal = stored(InvoiceRefundStatus.APPROVED, payment.getId());
+        actAs(BILLING_A);
+        UUID invoiceId = invoice.getId();
+        UUID reversalId = reversal.getId();
+
+        assertThatThrownBy(() -> service.pay(invoiceId, reversalId, null))
+            .isInstanceOf(ConflictException.class)
+            .hasMessageContaining("deux fois le même trop-perçu");
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CONFIRMED);
+        assertThat(invoice.getAmountPaid()).isEqualByComparingTo("4000");
+        verify(sessions, never()).stamp(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("PR 10 review: both approved, neither is paid out until one is withdrawn; nor approved in either order")
+    void bothApprovedNeitherPaysOut() {
+        paidTwice();
+        InvoiceRefund refund = stored(InvoiceRefundStatus.APPROVED, null);
+        InvoiceRefund reversal = stored(InvoiceRefundStatus.APPROVED, payment.getId());
+        actAs(BILLING_A);
+        UUID invoiceId = invoice.getId();
+        UUID refundId = refund.getId();
+        UUID reversalId = reversal.getId();
+
+        assertThatThrownBy(() -> service.pay(invoiceId, refundId, null)).isInstanceOf(ConflictException.class);
+        assertThatThrownBy(() -> service.pay(invoiceId, reversalId, null)).isInstanceOf(ConflictException.class);
+        assertThat(invoice.getAmountRefunded()).isEqualByComparingTo("0");
+        assertThat(invoice.getAmountPaid()).isEqualByComparingTo("4000");
+
+        // Still REQUESTED on both sides (asked before the fix): the approver is refused whichever comes first.
+        refund.setStatus(InvoiceRefundStatus.REQUESTED);
+        reversal.setStatus(InvoiceRefundStatus.REQUESTED);
+        actAs(ACCOUNTANT_A);
+        assertThatThrownBy(() -> service.approve(invoiceId, refundId)).isInstanceOf(ConflictException.class);
+        assertThatThrownBy(() -> service.approve(invoiceId, reversalId)).isInstanceOf(ConflictException.class);
+
+        // The refund withdrawn: the reversal goes through and the hospital keeps the bill's 2 000.
+        refund.setStatus(InvoiceRefundStatus.CANCELLED);
+        service.approve(invoiceId, reversalId);
+        actAs(BILLING_A);
+        service.pay(invoiceId, reversalId, null);
+        assertThat(invoice.getAmountPaid()).isEqualByComparingTo("2000");
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REVERSED);
+    }
+
+    @Test
+    @DisplayName("PR 10 review: with no refund on the invoice a payment entered in error is reversed as before")
+    void aReversalAloneIsNotHeldToThePatientShare() {
+        // 18 000 billed, 2 000 received: reversing 1 000 leaves less than the patient's share, and that is fine.
+        InvoiceRefundDTO reversal = asked();
+        actAs(ACCOUNTANT_A);
+        service.approve(invoice.getId(), reversal.getId());
+        actAs(BILLING_A);
+        assertThat(service.pay(invoice.getId(), reversal.getId(), null).getStatus()).isEqualTo("PAID");
     }
 
     private InvoiceRefundDTO asked() {

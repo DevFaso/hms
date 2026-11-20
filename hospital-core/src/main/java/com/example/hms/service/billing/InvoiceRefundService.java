@@ -178,7 +178,7 @@ public class InvoiceRefundService {
         if (!refundRepository.findLiveReversalOf(payment.getId()).isEmpty()) {
             throw new ConflictException(MessageUtil.resolve("billing.payment.reversalPending"));
         }
-        requireReversalRoom(invoice, payment);
+        requireReversalRoom(invoice, payment, null);
         InvoiceRefund refund;
         try {
             refund = refundRepository.saveAndFlush(InvoiceRefund.builder()
@@ -210,8 +210,17 @@ public class InvoiceRefundService {
             .orElseThrow(() -> new ResourceNotFoundException("billing.payment.notFound"));
     }
 
-    /** A reversal takes the payment's amount out of what was received; refunds already handed back must still fit. */
-    private static void requireReversalRoom(BillingInvoice invoice, PaymentTransaction payment) {
+    /**
+     * A reversal takes the payment's amount out of what was received; refunds already handed back must still fit.
+     *
+     * <p>PR 10 review: a refund and a reversal never hand the same excess back twice. Invoice 2 000, paid twice: an
+     * overpayment refund of 2 000 and the reversal of the second payment were both approved and both paid out, and
+     * the hospital kept nothing on a bill of 2 000. While a refund is asked, approved or paid on the invoice, a
+     * reversal is refused when what the hospital would keep after it (less the refunds open and the other reversals
+     * waiting) is under the patient's share. With no refund on the invoice a payment entered in error is reversed
+     * as before, whatever is left owing.
+     */
+    private void requireReversalRoom(BillingInvoice invoice, PaymentTransaction payment, UUID thisReversalId) {
         BigDecimal paid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
         BigDecimal refunded = invoice.getAmountRefunded() != null ? invoice.getAmountRefunded() : BigDecimal.ZERO;
         BigDecimal remaining = paid.subtract(payment.getAmount());
@@ -221,6 +230,28 @@ public class InvoiceRefundService {
         if (remaining.compareTo(refunded) < 0) {
             throw new BusinessException("billing.payment.reversalBelowRefunded");
         }
+        BigDecimal openRefunds = nz(refundRepository.sumByInvoiceAndStatusIn(invoice.getId(), OPEN, null));
+        if (refunded.signum() == 0 && openRefunds.signum() == 0) {
+            return;
+        }
+        BigDecimal otherReversals = nz(refundRepository.sumReversalsByInvoiceAndStatusIn(invoice.getId(), OPEN,
+            thisReversalId));
+        BigDecimal keptAfter = remaining.subtract(refunded).subtract(openRefunds).subtract(otherReversals);
+        if (keptAfter.compareTo(InvoiceBalance.patientShareOf(invoice)) < 0) {
+            throw new ConflictException(MessageUtil.resolve("billing.payment.reversalWhileRefund"));
+        }
+    }
+
+    /**
+     * PR 10 review, the other order: what a refund may still take, less the reversals asked or approved and not yet
+     * paid out (each will lower the amount received by its payment).
+     */
+    private BigDecimal reversalsWaiting(BillingInvoice invoice) {
+        return nz(refundRepository.sumReversalsByInvoiceAndStatusIn(invoice.getId(), OPEN, null));
+    }
+
+    private static BigDecimal nz(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
     }
 
     /** QA D2702: whether this refund reverses a payment. */
@@ -269,7 +300,9 @@ public class InvoiceRefundService {
         if (due.signum() <= 0) {
             throw new FieldBusinessException(FIELD_AMOUNT, "billing.refund.nothingDue");
         }
-        BigDecimal open = refundRepository.sumByInvoiceAndStatusIn(invoice.getId(), OPEN, null);
+        // PR 10 review: a reversal waiting will take its payment out of the money received; it holds that much.
+        BigDecimal open = nz(refundRepository.sumByInvoiceAndStatusIn(invoice.getId(), OPEN, null))
+            .add(reversalsWaiting(invoice));
         BigDecimal refundable = InvoiceBalance.refundableOf(invoice, open);
         if (amount.compareTo(refundable) > 0) {
             throw new FieldBusinessException(FIELD_AMOUNT, "billing.refund.exceedsRefundable", francs(refundable));
@@ -310,10 +343,11 @@ public class InvoiceRefundService {
             if (payment.getStatus() != PaymentStatus.CONFIRMED) {
                 throw new ConflictException(MessageUtil.resolve("billing.payment.notConfirmed"));
             }
-            requireReversalRoom(invoice, payment);
+            requireReversalRoom(invoice, payment, refund.getId());
         } else {
             // The balance may have moved since the request (a reversal, a line added): the request must still fit.
-            BigDecimal others = refundRepository.sumByInvoiceAndStatusIn(invoice.getId(), OPEN, refund.getId());
+            BigDecimal others = nz(refundRepository.sumByInvoiceAndStatusIn(invoice.getId(), OPEN, refund.getId()))
+                .add(reversalsWaiting(invoice));
             BigDecimal room = InvoiceBalance.refundableOf(invoice, others);
             if (refund.getAmount().compareTo(room) > 0) {
                 throw new ConflictException(MessageUtil.resolve("billing.refund.noLongerDue", francs(room)));
@@ -370,9 +404,9 @@ public class InvoiceRefundService {
         PaymentTransaction reversed = null;
         if (reversal) {
             reversed = loadPayment(refund.getReversedPaymentId(), invoice);
-            requireReversalRoom(invoice, reversed);
+            requireReversalRoom(invoice, reversed, refund.getId());
         } else {
-            BigDecimal due = InvoiceBalance.refundDueOf(invoice);
+            BigDecimal due = InvoiceBalance.refundableOf(invoice, reversalsWaiting(invoice));
             if (refund.getAmount().compareTo(due) > 0) {
                 throw new ConflictException(MessageUtil.resolve("billing.refund.noLongerDue", francs(due)));
             }
