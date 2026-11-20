@@ -87,6 +87,7 @@ public class NewsScoreProtocolRule implements BpaRule {
         if (status.notValidated()) {
             Optional<BpaProtocol> protocol = protocolRepository.findByProtocolCodeAndActiveTrue(PROTOCOL_CODE);
             return protocol.isEmpty() ? List.of() : List.of(notValidatedCard(protocol.get(), status,
+                BpaCardText.when(text, latest.get().getRecordedAt(), text.zoneOf(context.hospitalId())),
                 // The adult bands mean nothing for a newborn (her own rules alert): never a warning from them.
                 status == News2Applicability.Status.OBSTETRIC && score.riskBand() != NewsScoreCalculator.RiskBand.LOW));
         }
@@ -110,15 +111,16 @@ public class NewsScoreProtocolRule implements BpaRule {
     }
 
     /** « NEWS2 non validé … — voir les alertes maternité », with no score. */
-    private CdsCard notValidatedCard(BpaProtocol protocol, News2Applicability.Status status, boolean raised) {
+    private CdsCard notValidatedCard(BpaProtocol protocol, News2Applicability.Status status, String readAt,
+                                     boolean raised) {
         String key = status == News2Applicability.Status.NEWBORN
             ? "cds.bpa.news2.notValidated.newborn" : "cds.bpa.news2.notValidated.obstetric";
         String fallback = status == News2Applicability.Status.NEWBORN
-            ? "NEWS2 not validated for a newborn: see the newborn alerts"
-            : "NEWS2 not validated in pregnancy / postpartum: see the maternity alerts";
+            ? "NEWS2 not validated for a newborn: see the newborn alerts (vitals recorded {0})"
+            : "NEWS2 not validated in pregnancy / postpartum: see the maternity alerts (vitals recorded {0})";
         return new CdsCard(
             BpaCardText.name(text, protocol),
-            text.get(key, fallback),
+            text.get(key, fallback, readAt),
             raised ? CdsCard.Indicator.WARNING : CdsCard.Indicator.INFO,
             new Source(text.get("cds.bpa.source", "HMS Best-Practice Advisory"), null, null),
             null,
