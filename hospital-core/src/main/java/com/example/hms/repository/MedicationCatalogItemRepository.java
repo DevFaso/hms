@@ -82,6 +82,18 @@ public interface MedicationCatalogItemRepository extends JpaRepository<Medicatio
     Optional<MedicationCatalogItem> findByHospitalIdAndCode(UUID hospitalId, String code);
 
     /**
+     * Review of #1242: the catalogue items that carry a sensitive category, at one hospital or in the platform
+     * catalogue. What an order with no catalogue link is compared with, by code then by name, before a family
+     * proxy reads it ({@code ProxyRecordFilter}).
+     */
+    @Query("""
+        SELECT m FROM MedicationCatalogItem m
+        WHERE m.sensitivityCategory IS NOT NULL
+          AND (m.hospital IS NULL OR m.hospital.id = :hospitalId)
+        """)
+    java.util.List<MedicationCatalogItem> findTaggedVisibleAt(@Param("hospitalId") UUID hospitalId);
+
+    /**
      * QA D1314: which of these catalogue lines are controlled, for a page of
      * orders in one statement. Each row is {@code [item id, hospital id, code]}.
      * The prescription list read the catalogue once per row of the page.

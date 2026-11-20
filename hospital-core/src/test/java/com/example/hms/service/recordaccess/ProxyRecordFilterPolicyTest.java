@@ -258,7 +258,8 @@ class ProxyRecordFilterPolicyTest {
             PriceListItem price = PriceListItem.builder()
                 .linkType(PriceListLinkType.LAB_TEST_DEFINITION).linkKey(vdrl.getId().toString()).build();
             UUID priceId = UUID.randomUUID();
-            when(priceItems.findAllById(List.of(priceId))).thenReturn(List.of(price));
+            when(priceItems.findUnscopedByHospitalIdAndIdIn(hospital.getId(), List.of(priceId)))
+                .thenReturn(List.of(price));
 
             BillingInvoice invoice = invoiceOf(null);
             InvoiceItem line = new InvoiceItem();
@@ -266,6 +267,59 @@ class ProxyRecordFilterPolicyTest {
             invoice.getInvoiceItems().add(line);
 
             assertThat(filter.admits(invoice)).isFalse();
+        }
+
+        @Test
+        @DisplayName("a priced line whose price-list item cannot be read is withheld, never shown unjudged")
+        void aPricedLineThatCannotBeJudged() {
+            readingAs(adult, ProxyRelationship.SPOUSE, true, "ALL");
+            UUID priceId = UUID.randomUUID();
+            when(priceItems.findUnscopedByHospitalIdAndIdIn(hospital.getId(), List.of(priceId))).thenReturn(List.of());
+            BillingInvoice invoice = invoiceOf(null);
+            InvoiceItem line = new InvoiceItem();
+            line.setPriceListItemId(priceId);
+            invoice.getInvoiceItems().add(line);
+
+            assertThat(filter.admits(invoice)).isFalse();
+            // The scoped finder, which answers by the CALLER's hospitals, is never the one asked.
+            verify(priceItems, never()).findAllById(any());
+
+            // An invoice with no hospital to read its items at is withheld too.
+            invoice.setHospital(null);
+            assertThat(filter.admits(invoice)).isFalse();
+        }
+
+        @Test
+        @DisplayName("an order with no catalogue link is withheld when its code or its typed name is a tagged medicine's")
+        void anUnlinkedOrderOfATaggedMedicine() {
+            readingAs(adult, ProxyRelationship.SPOUSE, true, "ALL");
+            // Two strengths: the prescription service links neither, the name being ambiguous.
+            MedicationCatalogItem dtg50 = MedicationCatalogItem.builder().code("DTG50").nameFr("Dolutégravir 50 mg")
+                .genericName("Dolutégravir").sensitivityCategory(SensitivityCategory.HIV).build();
+            MedicationCatalogItem dtg10 = MedicationCatalogItem.builder().code("DTG10").nameFr("Dolutégravir 10 mg")
+                .genericName("Dolutégravir").sensitivityCategory(SensitivityCategory.HIV).build();
+            when(medicines.findTaggedVisibleAt(hospital.getId())).thenReturn(List.of(dtg50, dtg10));
+
+            assertThat(filter.admits(unlinked("Dolutegravir 50 mg comprimé", null))).as("by the typed name").isFalse();
+            assertThat(filter.admits(unlinked("TLD", "dtg10"))).as("by the code").isFalse();
+            assertThat(filter.admits(unlinked("Paracétamol 500 mg", null))).isTrue();
+            assertThat(filter.admits(unlinked("Paracétamol 500 mg", "PARA500"))).isTrue();
+        }
+
+        @Test
+        @DisplayName("an unlinked order at a hospital with no tagged medicine is ordinary")
+        void anUnlinkedOrderWithNothingTagged() {
+            readingAs(adult, ProxyRelationship.SPOUSE, true, "ALL");
+            when(medicines.findTaggedVisibleAt(hospital.getId())).thenReturn(List.of());
+
+            assertThat(filter.admits(unlinked("Dolutegravir 50 mg", null))).isTrue();
+        }
+
+        private Prescription unlinked(String typedName, String code) {
+            Prescription prescription = prescription(null);
+            prescription.setMedicationName(typedName);
+            prescription.setMedicationCode(code);
+            return prescription;
         }
 
         private BillingInvoice invoiceOf(Encounter visit) {
@@ -293,8 +347,26 @@ class ProxyRecordFilterPolicyTest {
                 LabTestComponent.builder().code("GS").name("Groupe sanguin").build()));
 
             assertThat(filter.admits(order(adult, visit(adult, null), panel))).isFalse();
-            assertThat(filter.hidingCategoryOf(order(adult, visit(adult, null), panel)))
+            assertThat(filter.familyHidingOf(order(adult, visit(adult, null), panel)).category())
                 .isEqualTo(SensitivityCategory.HIV);
+        }
+
+        @Test
+        @DisplayName("a platform panel ordered at a hospital is judged by that hospital's tagged tests")
+        void aPlatformPanelWithAHospitalTaggedComponent() {
+            readingAs(adult, ProxyRelationship.SPOUSE, true, "ALL");
+            LabTestDefinition hiv = test("HIV", SensitivityCategory.HIV);
+            when(definitions.findLiveTaggedAtHospital(hospital.getId())).thenReturn(List.of(hiv));
+            // The panel is the platform's: it has no hospital of its own.
+            LabTestDefinition panel = new LabTestDefinition();
+            panel.setId(UUID.randomUUID());
+            panel.setTestCode("BPN");
+            panel.setName("Bilan prénatal");
+            panel.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
+            panel.setComponents(List.of(LabTestComponent.builder().code("HIV").name("Sérologie VIH").build()));
+            when(definitions.findLiveGlobalByCode("BPN")).thenReturn(List.of(panel));
+
+            assertThat(filter.admits(order(adult, visit(adult, null), panel))).isFalse();
         }
 
         @Test
@@ -354,6 +426,46 @@ class ProxyRecordFilterPolicyTest {
             assertThat(filter.admits(minorOrder)).as("a parent nobody verified").isFalse();
             readingAs(teenager, ProxyRelationship.SIBLING, true, "ALL");
             assertThat(filter.admits(minorOrder)).as("a sibling").isFalse();
+        }
+
+        @Test
+        @DisplayName("a release of a result that violence is on, or of another category, is never honoured")
+        void onlyAnHivReleaseCounts() {
+            readingAs(teenager, ProxyRelationship.PARENT, true, "ALL");
+            LabOrder afterAssault = order(teenager, visit(teenager, SensitivityCategory.SEXUAL_DOMESTIC_VIOLENCE),
+                test("HIV", SensitivityCategory.HIV));
+            LabOrder syphilis = order(teenager, visit(teenager, null), test("TPHA", SensitivityCategory.STI));
+            when(releases.findReleasedLabOrderIds(grantId)).thenReturn(Set.of(afterAssault.getId(), syphilis.getId()));
+
+            assertThat(filter.admits(afterAssault)).as("an HIV test of a violence visit").isFalse();
+            assertThat(filter.admits(syphilis)).as("a syphilis serology at 15").isFalse();
+        }
+
+        @Test
+        @DisplayName("the clinician's list holds what a verified parent is refused, and says what is releasable")
+        void whatTheFamilyIsRefused() {
+            LabTestDefinition hbs = test("AGHBS", SensitivityCategory.VIRAL_HEPATITIS);
+            LabTestDefinition sickle = test("EPHB", SensitivityCategory.SICKLE_CELL);
+            LabTestDefinition hiv = test("HIV", SensitivityCategory.HIV);
+
+            // A child of 6: the parent already reads the hepatitis and the sickle result.
+            assertThat(filter.familyHidingOf(order(child, visit(child, null), hbs))).isNull();
+            assertThat(filter.familyHidingOf(order(child, visit(child, null), sickle))).isNull();
+            assertThat(filter.familyHidingOf(order(child, visit(child, null), test("NFS", null)))).isNull();
+            // At 15: hepatitis is hidden and not releasable; the sickle status is still read.
+            assertThat(filter.familyHidingOf(order(teenager, visit(teenager, null), hbs)))
+                .isEqualTo(new ProxyRecordFilter.FamilyHiding(SensitivityCategory.VIRAL_HEPATITIS, false));
+            assertThat(filter.familyHidingOf(order(teenager, visit(teenager, null), sickle))).isNull();
+            // HIV at any age under 18: hidden, releasable.
+            assertThat(filter.familyHidingOf(order(child, visit(child, null), hiv)))
+                .isEqualTo(new ProxyRecordFilter.FamilyHiding(SensitivityCategory.HIV, true));
+            // HIV test in a violence visit: hidden, never releasable.
+            assertThat(filter.familyHidingOf(order(teenager,
+                visit(teenager, SensitivityCategory.SEXUAL_DOMESTIC_VIOLENCE), hiv)).releasable()).isFalse();
+            // The hospital's own adolescent age moves the line.
+            hospital.setAdolescentConfidentialityAge(16);
+            assertThat(filter.familyHidingOf(order(teenager, visit(teenager, null), hbs))).isNull();
+            hospital.setAdolescentConfidentialityAge(null);
         }
 
         @Test

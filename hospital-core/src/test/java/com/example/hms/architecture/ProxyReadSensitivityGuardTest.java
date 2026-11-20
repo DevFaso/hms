@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * an HIV-tagged visit. Every proxy read went through the patient's own read,
  * and none asked the sensitivity tag.
  *
- * <p>The class is closed by nine rules over the source. None of them trusts a
+ * <p>The class is closed by eleven rules over the source. None of them trusts a
  * name or a path alone, so a new proxy read fails here until it goes through
  * {@code ProxyRecordFilter}:
  * <ol>
@@ -65,6 +65,18 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li><b>the surrounding records</b>: the filter keeps judging a panel by its
  *       components, a prescription by its medicine and an invoice by the tests
  *       it bills, and reaches an exception through the policy only.</li>
+ * </ol>
+ *
+ * <p>The independent review of #1242 found two more ways out, each now a rule:
+ * <ol start="10">
+ *   <li><b>the caller's tenant scope</b>: a proxy holds no assignment where the
+ *       grantor was treated, so a read that goes through a finder the tenant
+ *       filter narrows to the CALLER's hospitals loads nothing and judges
+ *       nothing. Neither the filter nor a {@code *ForProxy} read calls one on a
+ *       tenant-scoped entity;</li>
+ *   <li><b>the release itself</b>: the release service keeps every check of a
+ *       release (a minor, a clinician with care, a verified parent's grant
+ *       that is not the clinician's own, an HIV result only).</li>
  * </ol>
  */
 @DisplayName("D2730: every proxy read withholds sensitive records")
@@ -165,6 +177,8 @@ class ProxyReadSensitivityGuardTest {
             "a clinician releases one result to one grant: writes a release row; the proxy still reads through the filter"),
         Map.entry(RELEASE_SERVICE + "#stampVerified",
             "stamps a grant verified: writes a grant row"),
+        Map.entry(RELEASE_SERVICE + "#refuseOwnGrant",
+            "reads who holds a grant, to refuse the clinician their own: hands the proxy nothing"),
         Map.entry("controller/PatientImagingPortalController.java#getProxyImaging",
             "resolves the grantor, then reads with Reader.PROXY (rule 2 checks it)"),
         Map.entry("controller/PatientImagingPortalController.java#getProxyImagingImage",
@@ -706,13 +720,29 @@ class ProxyReadSensitivityGuardTest {
             "a prescription of a tagged medicine (an antiretroviral) is withheld whatever visit wrote it"),
         "billsNoHiddenOrder", List.of("admits(order, cache)",
             "an invoice is withheld when its visit ordered a test the proxy may not read"),
-        "billsNoHiddenTest", List.of("testCategory(",
+        "billsNoHiddenTest", List.of("admitsPricedFrom(",
             "an invoice is withheld when a line is priced from a tagged test"),
+        "admitsPricedFrom", List.of("testCategory(",
+            "the price-list item of a line is judged by the test its price is linked to"),
         "releasedToReader", List.of("ProxySensitivityPolicy.honoursReleases(",
             "a release counts only for a verified parent of a patient under 18"));
 
+    /** What the review of #1242 added to the same methods: "filter method" to the call it must also keep. */
+    private static final Map<String, List<String>> SURROUNDING_RECORDS_REVIEWED = Map.of(
+        "billsNoHiddenTest", List.of("findUnscopedByHospitalIdAndIdIn(",
+            "the items of an invoice are read at the invoice's hospital, outside the caller's tenant scope"),
+        "medicineCategory", List.of("unlinkedMedicineCategory(",
+            "an order with no catalogue link is still compared with the tagged medicines"),
+        "unlinkedMedicineCategory", List.of("namesCatalogItem(",
+            "an unlinked order is matched by its typed name (and its code) against every tagged medicine"),
+        "testCategory", List.of("orderedAt",
+            "a platform panel is judged by the tagged tests of the hospital that ordered it"),
+        "familyHidingOf", List.of("ProxySensitivityPolicy.hiddenFromVerifiedParent(",
+            "the clinician's list holds only what a verified parent is actually refused"));
+
     /** The entity overloads of {@code admits} that must reach the checks above. */
     private static final Map<String, String> SURROUNDING_CALLERS = Map.of(
+        "ProxySensitivityPolicy.releasable(", "admits(LabOrder) honours a release of an HIV result only",
         "billsNoHiddenOrder(", "admits(BillingInvoice) judges the tests its visit ordered",
         "billsNoHiddenTest(", "admits(BillingInvoice) judges the tests its lines are priced from",
         "medicineCategory(", "admits(Prescription) judges the medicine",
@@ -725,6 +755,12 @@ class ProxyReadSensitivityGuardTest {
         Map<String, String> methods = methodsOf(code);
         List<String> problems = new ArrayList<>();
         SURROUNDING_RECORDS.forEach((method, rule) -> {
+            String body = methods.get(method);
+            if (body == null || !body.contains(rule.get(0))) {
+                problems.add("ProxyRecordFilter#" + method + " no longer holds `" + rule.get(0) + "`: " + rule.get(1));
+            }
+        });
+        SURROUNDING_RECORDS_REVIEWED.forEach((method, rule) -> {
             String body = methods.get(method);
             if (body == null || !body.contains(rule.get(0))) {
                 problems.add("ProxyRecordFilter#" + method + " no longer holds `" + rule.get(0) + "`: " + rule.get(1));
@@ -746,6 +782,171 @@ class ProxyReadSensitivityGuardTest {
         assertThat(calls).as("ProxyRecordFilter asks ProxySensitivityPolicy.admits in one place").isEqualTo(1);
         assertThat(methods.get("readerOf")).as("an exception applies only to a row of the patient the grant names")
             .contains("grantorPatientId()");
+        assertThat(problems).as(SourceScan.MANDATE).isEmpty();
+    }
+
+    // ── Rule 10 ─────────────────────────────────────────────────────────────
+
+    private static final Pattern REPOSITORY_FIELD = Pattern.compile(
+        "private\\s+(?:final\\s+)?(?:[\\w.]+\\.)?(\\w+Repository)\\s+(\\w+)\\s*;");
+    private static final Pattern REPOSITORY_ENTITY = Pattern.compile("extends\\s+\\w*Repository<\\s*(\\w+)\\s*,");
+    private static final Pattern TENANT_SCOPED_ENTITY = Pattern.compile(
+        "class\\s+\\w+[^{]*\\bimplements\\b[^{]*\\bTenantScoped\\b");
+    /** The inherited finders {@code TenantAwareJpaRepository} narrows to the caller's hospitals. */
+    private static final String SCOPED_FINDERS =
+        "findById|findAllById|findAll|findOne|existsById|getReferenceById|getById|count|exists";
+
+    /**
+     * Scoped finders a proxy read calls on a tenant-scoped entity on purpose:
+     * "file#method -> field.finder" to why the caller's scope is the right one.
+     */
+    private static final Map<String, String> SCOPED_ON_PURPOSE = Map.of();
+
+    @Test
+    @DisplayName("rule 10: no proxy read judges a tenant-scoped row through a finder narrowed to the caller's hospitals")
+    void noProxyReadGoesThroughTheCallersTenantScope() throws IOException {
+        Map<String, Boolean> tenantScopedByRepository = new LinkedHashMap<>();
+        List<String> problems = new ArrayList<>();
+        Set<String> scopedFieldsOfTheFilter = new TreeSet<>();
+        Set<String> used = new TreeSet<>();
+        for (Path file : sources("")) {
+            String rel = rel(file);
+            if (rel.startsWith("repository/") || rel.startsWith("controller/")) {
+                continue;
+            }
+            String code = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+            boolean filter = rel.equals(FILTER);
+            if (!filter && !code.contains("ForProxy")) {
+                continue;
+            }
+            Map<String, String> scopedFields = new LinkedHashMap<>();
+            Matcher field = REPOSITORY_FIELD.matcher(code);
+            while (field.find()) {
+                if (tenantScopedByRepository.computeIfAbsent(field.group(1),
+                        ProxyReadSensitivityGuardTest::repositoryOfATenantScopedEntity)) {
+                    scopedFields.put(field.group(2), field.group(1));
+                }
+            }
+            if (filter) {
+                scopedFieldsOfTheFilter.addAll(scopedFields.keySet());
+            }
+            for (Member member : membersOf(code)) {
+                // The filter is a proxy read from end to end; elsewhere, the *ForProxy reads.
+                if (!filter && !member.name().endsWith("ForProxy")) {
+                    continue;
+                }
+                for (String name : scopedFields.keySet()) {
+                    Matcher call = Pattern.compile("\\b" + name + "\\s*\\.\\s*(" + SCOPED_FINDERS + ")\\s*\\(")
+                        .matcher(member.body());
+                    while (call.find()) {
+                        String key = rel + "#" + member.name() + " -> " + name + "." + call.group(1);
+                        if (SCOPED_ON_PURPOSE.containsKey(key)) {
+                            used.add(key);
+                        } else {
+                            problems.add(key + ": " + scopedFields.get(name) + " holds a tenant-scoped entity, and"
+                                + " this finder is narrowed to the CALLER's hospitals. A proxy holds no assignment"
+                                + " where the grantor was treated, so it loads nothing and the row is shown unjudged"
+                                + " (QA D1212, review of #1242). Read by an explicit @Query that names the ROW's"
+                                + " hospital, and withhold what cannot be loaded");
+                        }
+                    }
+                }
+            }
+        }
+        assertThat(scopedFieldsOfTheFilter).as("the scan recognises the filter's tenant-scoped repository")
+            .contains("priceListItemRepository");
+        for (String listed : SCOPED_ON_PURPOSE.keySet()) {
+            if (!used.contains(listed)) {
+                problems.add(listed + " is listed in SCOPED_ON_PURPOSE and no longer made: remove the entry");
+            }
+        }
+        assertThat(problems).as(SourceScan.MANDATE).isEmpty();
+    }
+
+    /** Whether the entity a repository type holds implements TenantScoped (the tenant filter narrows its finders). */
+    private static boolean repositoryOfATenantScopedEntity(String repositoryType) {
+        try {
+            Path repository = fileNamed("repository", repositoryType);
+            if (repository == null) {
+                return false;
+            }
+            Matcher entity = REPOSITORY_ENTITY.matcher(
+                SourceScan.stripComments(Files.readString(repository, StandardCharsets.UTF_8)));
+            if (!entity.find()) {
+                return false;
+            }
+            Path model = fileNamed("model", entity.group(1));
+            return model != null && TENANT_SCOPED_ENTITY.matcher(
+                SourceScan.stripComments(Files.readString(model, StandardCharsets.UTF_8))).find();
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static Path fileNamed(String dir, String type) throws IOException {
+        for (Path file : sources(dir)) {
+            if (file.getFileName().toString().equals(type + ".java")) {
+                return file;
+            }
+        }
+        return null;
+    }
+
+    // ── Rule 11 ─────────────────────────────────────────────────────────────
+
+    /** What each write of the release service must keep: "method" to the checks, each with why. */
+    private static final Map<String, Map<String, String>> RELEASE_CHECKS = Map.of(
+        "release", Map.of(
+            "requireActingHospital(", "a release is a clinical act at one hospital",
+            "requirePatientInCare(", "the clinician has care of the patient (chart gate and treatment relationship)",
+            "requireMinor(", "only a patient under 18: an adult's result is the adult's",
+            "requireGuardianGrant(", "the grant is this patient's, live, a parent's or a guardian's",
+            "refuseOwnGrant(", "nobody releases a result to themselves",
+            "relationshipVerified", "an unverified grant needs the clinician's attestation",
+            "releasable()", "an HIV result only; never one that violence is on",
+            "isReleased", "only a result the laboratory released"),
+        "verifyGuardian", Map.of(
+            "requireActingHospital(", "a verification is made at one hospital",
+            "requirePatientInCare(", "the clinician has care of the patient",
+            "requireMinor(", "only for a patient under 18",
+            "requireGuardianGrant(", "the grant is this patient's, live, a parent's or a guardian's",
+            "refuseOwnGrant(", "nobody verifies their own relationship"));
+
+    @Test
+    @DisplayName("rule 11: the release service keeps every check of a release and of a verification")
+    void theReleaseServiceKeepsItsChecks() throws IOException {
+        Map<String, String> methods = methodsOf(SourceScan.stripComments(
+            Files.readString(ROOT.resolve(RELEASE_SERVICE), StandardCharsets.UTF_8)));
+        List<String> problems = new ArrayList<>();
+        RELEASE_CHECKS.forEach((method, checks) -> {
+            String body = methods.get(method);
+            assertThat(body).as("MinorResultReleaseServiceImpl#" + method + " exists").isNotNull();
+            checks.forEach((token, why) -> {
+                if (!body.contains(token)) {
+                    problems.add("MinorResultReleaseServiceImpl#" + method + " no longer holds `" + token + "`: " + why);
+                }
+            });
+        });
+        String policy = SourceScan.stripComments(Files.readString(ROOT.resolve(POLICY), StandardCharsets.UTF_8));
+        String releasable = methodsOf(policy).get("releasable");
+        assertThat(releasable).as("ProxySensitivityPolicy.releasable exists").isNotNull();
+        if (!releasable.contains("MinorRule.NEVER") || !releasable.contains("MinorRule.RELEASE_ONLY")) {
+            problems.add("ProxySensitivityPolicy.releasable no longer refuses a NEVER category and requires a"
+                + " RELEASE_ONLY one: only an HIV result is released, never one that violence is on");
+        }
+        if (!Pattern.compile("MINOR_RULES\\.put\\(\\s*SensitivityCategory\\.SEXUAL_DOMESTIC_VIOLENCE\\s*,\\s*MinorRule\\.NEVER")
+                .matcher(policy).find()) {
+            problems.add("SEXUAL_DOMESTIC_VIOLENCE is no longer NEVER in ProxySensitivityPolicy.MINOR_RULES: a"
+                + " violence record goes to authorities only (Code pénal art. 525-2), never to a parent");
+        }
+        Matcher releaseOnly = Pattern.compile("MINOR_RULES\\.put\\(\\s*SensitivityCategory\\.(\\w+)\\s*,\\s*MinorRule\\.RELEASE_ONLY")
+            .matcher(policy);
+        Set<String> releasableCategories = new TreeSet<>();
+        while (releaseOnly.find()) {
+            releasableCategories.add(releaseOnly.group(1));
+        }
+        assertThat(releasableCategories).as("owner decision 2026-11-21: the release covers HIV only (Loi 030-2008"
+            + " art. 17-18); another releasable category is a new decision, not a code change").containsExactly("HIV");
         assertThat(problems).as(SourceScan.MANDATE).isEmpty();
     }
 

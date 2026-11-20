@@ -79,6 +79,49 @@ class ProxySensitivityPolicyTest {
     }
 
     @Test
+    @DisplayName("only an HIV result is releasable; violence on the visit or the test forbids it; nothing else is")
+    void onlyHivIsReleasable() {
+        assertThat(ProxySensitivityPolicy.releasable(null, SensitivityCategory.HIV)).isTrue();
+        assertThat(ProxySensitivityPolicy.releasable(SensitivityCategory.HIV, null)).isTrue();
+        // An HIV test ordered in an STI-tagged visit is still an HIV result.
+        assertThat(ProxySensitivityPolicy.releasable(SensitivityCategory.STI, SensitivityCategory.HIV)).isTrue();
+        assertThat(ProxySensitivityPolicy.releasable(SensitivityCategory.SEXUAL_DOMESTIC_VIOLENCE,
+            SensitivityCategory.HIV)).as("a post-assault HIV test").isFalse();
+        assertThat(ProxySensitivityPolicy.releasable(SensitivityCategory.HIV,
+            SensitivityCategory.SEXUAL_DOMESTIC_VIOLENCE)).isFalse();
+        assertThat(ProxySensitivityPolicy.releasable(null, null)).isFalse();
+        for (SensitivityCategory category : SensitivityCategory.values()) {
+            if (category != SensitivityCategory.HIV) {
+                assertThat(ProxySensitivityPolicy.releasable(null, category)).as("%s", category).isFalse();
+                assertThat(ProxySensitivityPolicy.releasable(category, null)).as("%s", category).isFalse();
+            }
+        }
+        assertThat(ProxySensitivityPolicy.minorRuleOf(SensitivityCategory.SEXUAL_DOMESTIC_VIOLENCE))
+            .isEqualTo(ProxySensitivityPolicy.MinorRule.NEVER);
+        assertThat(ProxySensitivityPolicy.minorRuleOf(SensitivityCategory.HIV))
+            .isEqualTo(ProxySensitivityPolicy.MinorRule.RELEASE_ONLY);
+    }
+
+    @Test
+    @DisplayName("what the clinician's list calls hidden is exactly what a verified parent is refused")
+    void hiddenFromVerifiedParentIsTheReadRule() {
+        for (SensitivityCategory category : SensitivityCategory.values()) {
+            for (Integer age : new Integer[] {null, 0, 6, 11, 12, 15, 17, 18, 40}) {
+                for (int adolescentAge : new int[] {0, 12, 16, 18}) {
+                    assertThat(ProxySensitivityPolicy.hiddenFromVerifiedParent(category, age, adolescentAge))
+                        .as("%s at %s, adolescent age %d", category, age, adolescentAge)
+                        .isEqualTo(!ProxySensitivityPolicy.admits(category, age, adolescentAge, VERIFIED_PARENT));
+                }
+            }
+        }
+        assertThat(ProxySensitivityPolicy.hiddenFromVerifiedParent(null, 15, 12)).isFalse();
+        // What the reviewer found listed as hidden while the parent already read it.
+        assertThat(ProxySensitivityPolicy.hiddenFromVerifiedParent(SensitivityCategory.SICKLE_CELL, 15, 12)).isFalse();
+        assertThat(ProxySensitivityPolicy.hiddenFromVerifiedParent(SensitivityCategory.VIRAL_HEPATITIS, 6, 12)).isFalse();
+        assertThat(ProxySensitivityPolicy.hiddenFromVerifiedParent(SensitivityCategory.VIRAL_HEPATITIS, 15, 12)).isTrue();
+    }
+
+    @Test
     @DisplayName("a child's own sickle status stays visible to the verified parent, at every age under 18")
     void aChildsSickleStatusStaysVisible() {
         assertThat(ProxySensitivityPolicy.admits(SensitivityCategory.SICKLE_CELL, 3, ADOLESCENT, VERIFIED_PARENT)).isTrue();

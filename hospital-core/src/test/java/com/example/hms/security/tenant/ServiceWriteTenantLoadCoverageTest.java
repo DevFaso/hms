@@ -106,7 +106,7 @@ class ServiceWriteTenantLoadCoverageTest {
         // that holds them; it reads a catalogue row's category to decide whether to WITHHOLD, and returns none.
         Map.entry("ProxyRecordFilter.medicineCategory#findById",
             "a proxy read, owned by the grant's patient: the category of the medicine a prescription names; withholds, returns no row"),
-        Map.entry("ProxyRecordFilter.billsNoHiddenTest#findById",
+        Map.entry("ProxyRecordFilter.admitsPricedFrom#findById",
             "a proxy read, owned by the grant's patient: the category of the test an invoice line is priced from; withholds, returns no row"),
         // V312: the patient notification ledger and its sweep run with no request tenant (after commit, or a
         // scheduler thread). The ids come from the action that queued the row, which was tenant-checked

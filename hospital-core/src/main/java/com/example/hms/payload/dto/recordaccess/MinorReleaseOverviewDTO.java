@@ -32,8 +32,12 @@ public record MinorReleaseOverviewDTO(
                            LocalDateTime verifiedAt) {
     }
 
-    /** One result hidden from the family, with the grants it was released to. */
+    /**
+     * One result a verified parent is refused, with the grants it was released to.
+     * {@code releasable}: a clinician may release it (an HIV result; never one that violence is on).
+     */
     public record HiddenResult(UUID labOrderId, String testName, SensitivityCategory category,
-                               LocalDateTime resultedAt, List<ProxySensitiveReleaseDTO> releases) {
+                               LocalDateTime resultedAt, boolean releasable,
+                               List<ProxySensitiveReleaseDTO> releases) {
     }
 }

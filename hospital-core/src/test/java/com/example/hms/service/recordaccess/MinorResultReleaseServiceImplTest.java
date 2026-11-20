@@ -74,6 +74,8 @@ class MinorResultReleaseServiceImplTest {
     @InjectMocks private MinorResultReleaseServiceImpl service;
 
     private static final String REASON = "Annonce faite aux parents après conseil, à leur demande.";
+    private static final ProxyRecordFilter.FamilyHiding HIV_HIDDEN =
+        new ProxyRecordFilter.FamilyHiding(SensitivityCategory.HIV, true);
 
     private final UUID hospitalId = UUID.randomUUID();
     private final UUID doctorId = UUID.randomUUID();
@@ -106,7 +108,7 @@ class MinorResultReleaseServiceImplTest {
         when(patientProxyRepository.findByGrantorPatient_IdAndStatus(minor.getId(), ProxyStatus.ACTIVE))
             .thenReturn(List.of(mother));
         when(labOrderRepository.findById(hivOrder.getId())).thenReturn(Optional.of(hivOrder));
-        when(proxyRecordFilter.hidingCategoryOf(hivOrder)).thenReturn(SensitivityCategory.HIV);
+        when(proxyRecordFilter.familyHidingOf(hivOrder)).thenReturn(HIV_HIDDEN);
         LabResult released = resultOf(hivOrder, true);
         when(labResultRepository.findByLabOrder_Id(hivOrder.getId())).thenReturn(List.of(released));
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(minor.getId(), hospitalId,
@@ -312,10 +314,10 @@ class MinorResultReleaseServiceImplTest {
             .isInstanceOf(ResourceNotFoundException.class);
         hivOrder.setHospital(hospital);
 
-        when(proxyRecordFilter.hidingCategoryOf(hivOrder)).thenReturn(null);
+        when(proxyRecordFilter.familyHidingOf(hivOrder)).thenReturn(null);
         assertThatThrownBy(() -> service.release(minorId, orderId, motherId, REASON, false, doctorId))
             .isInstanceOf(BusinessException.class);
-        when(proxyRecordFilter.hidingCategoryOf(hivOrder)).thenReturn(SensitivityCategory.HIV);
+        when(proxyRecordFilter.familyHidingOf(hivOrder)).thenReturn(HIV_HIDDEN);
 
         when(labResultRepository.findByLabOrder_Id(hivOrder.getId())).thenReturn(List.of(resultOf(hivOrder, false)));
         assertThatThrownBy(() -> service.release(minorId, orderId, motherId, REASON, false, doctorId))
@@ -333,6 +335,49 @@ class MinorResultReleaseServiceImplTest {
                 doctorId)).isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
         }
         verify(releaseRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("only an HIV result is released: a hidden hepatitis or a result that violence is on is refused")
+    void onlyHivIsReleased() {
+        mother.setRelationshipVerifiedAt(LocalDateTime.now());
+
+        when(proxyRecordFilter.familyHidingOf(hivOrder))
+            .thenReturn(new ProxyRecordFilter.FamilyHiding(SensitivityCategory.VIRAL_HEPATITIS, false));
+        assertThatThrownBy(() -> service.release(minorId, orderId, motherId, REASON, false, doctorId))
+            .isInstanceOf(BusinessException.class).hasFieldOrPropertyWithValue("messageKey", "proxyRelease.hivOnly");
+
+        // An HIV test ordered in a violence visit: the filter says it is not releasable.
+        when(proxyRecordFilter.familyHidingOf(hivOrder))
+            .thenReturn(new ProxyRecordFilter.FamilyHiding(SensitivityCategory.HIV, false));
+        assertThatThrownBy(() -> service.release(minorId, orderId, motherId, REASON, false, doctorId))
+            .isInstanceOf(BusinessException.class).hasFieldOrPropertyWithValue("messageKey", "proxyRelease.hivOnly");
+
+        verify(releaseRepository, never()).save(any());
+        verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    @Test
+    @DisplayName("a clinician who holds the grant neither verifies their own relationship nor releases to themselves")
+    void neverOnesOwnGrant() {
+        UUID parentWhoIsADoctor = mother.getProxyUser().getId();
+        when(treatmentRelationshipResolver.resolve(minorId, hospitalId, parentWhoIsADoctor)).thenReturn(Optional.of(
+            new TreatmentRelationship(null, UUID.randomUUID(), hospitalId, minorId, LocalDateTime.now(), null, true)));
+
+        assertThatThrownBy(() -> service.verifyGuardian(minorId, motherId, parentWhoIsADoctor))
+            .isInstanceOf(AccessDeniedException.class);
+        assertThat(mother.getRelationshipVerifiedAt()).as("not stamped by its own holder").isNull();
+
+        assertThatThrownBy(() -> service.release(minorId, orderId, motherId, REASON, true, parentWhoIsADoctor))
+            .isInstanceOf(AccessDeniedException.class);
+        // Not even with a grant someone else verified.
+        mother.setRelationshipVerifiedAt(LocalDateTime.now());
+        assertThatThrownBy(() -> service.release(minorId, orderId, motherId, REASON, false, parentWhoIsADoctor))
+            .isInstanceOf(AccessDeniedException.class);
+
+        verify(patientProxyRepository, never()).save(any());
+        verify(releaseRepository, never()).save(any());
+        verify(auditEventLogService, never()).logEvent(any());
     }
 
     @Test
@@ -355,7 +400,7 @@ class MinorResultReleaseServiceImplTest {
         when(patientProxyRepository.findByGrantorPatient_IdAndStatus(minor.getId(), ProxyStatus.ACTIVE))
             .thenReturn(List.of(mother, aunt));
         LabOrder count = order(minor, "NFS");
-        when(proxyRecordFilter.hidingCategoryOf(count)).thenReturn(null);
+        when(proxyRecordFilter.familyHidingOf(count)).thenReturn(null);
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(minor.getId(), hospitalId,
             Pageable.unpaged())).thenReturn(List.of(resultOf(hivOrder, true), resultOf(count, true)));
         when(releaseRepository.findByPatientIdAndHospitalIdOrderByReleasedAtDesc(minor.getId(), hospitalId))
@@ -377,6 +422,7 @@ class MinorResultReleaseServiceImplTest {
             assertThat(result.labOrderId()).isEqualTo(hivOrder.getId());
             assertThat(result.testName()).isEqualTo("Sérologie VIH");
             assertThat(result.category()).isEqualTo(SensitivityCategory.HIV);
+            assertThat(result.releasable()).isTrue();
             assertThat(result.releases()).singleElement().satisfies(release -> {
                 assertThat(release.getHolderName()).isEqualTo("Awa Sawadogo");
                 assertThat(release.getReason()).isEqualTo(REASON);

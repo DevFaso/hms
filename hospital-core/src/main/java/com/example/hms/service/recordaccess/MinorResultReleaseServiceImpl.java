@@ -104,6 +104,7 @@ public class MinorResultReleaseServiceImpl implements MinorResultReleaseService 
         Patient patient = requirePatientInCare(patientId, hospitalId, actorUserId);
         requireMinor(patient);
         PatientProxy grant = requireGuardianGrant(patientId, grantId);
+        refuseOwnGrant(grant, actorUserId);
         stampVerified(grant, patient, hospitalId, actorUserId);
         return overviewOf(patient, hospitalId);
     }
@@ -121,6 +122,7 @@ public class MinorResultReleaseServiceImpl implements MinorResultReleaseService 
         Patient patient = requirePatientInCare(patientId, hospitalId, actorUserId);
         requireMinor(patient);
         PatientProxy grant = requireGuardianGrant(patientId, grantId);
+        refuseOwnGrant(grant, actorUserId);
         if (grant.getRelationshipVerifiedAt() == null) {
             if (!relationshipVerified) {
                 throw new BusinessException("proxyRelease.relationshipNotVerified");
@@ -128,10 +130,16 @@ public class MinorResultReleaseServiceImpl implements MinorResultReleaseService 
             stampVerified(grant, patient, hospitalId, actorUserId);
         }
         LabOrder order = requireOrder(patientId, labOrderId, hospitalId);
-        SensitivityCategory category = proxyRecordFilter.hidingCategoryOf(order);
-        if (category == null) {
+        ProxyRecordFilter.FamilyHiding hiding = proxyRecordFilter.familyHidingOf(order);
+        if (hiding == null) {
             throw new BusinessException("proxyRelease.notSensitive");
         }
+        // Owner decision 2026-11-21: HIV only. Loi 030-2008 art. 17-18 covers the HIV result; a result
+        // that violence is on goes to authorities only, and no other category is releasable for now.
+        if (!hiding.releasable()) {
+            throw new BusinessException("proxyRelease.hivOnly");
+        }
+        SensitivityCategory category = hiding.category();
         if (labResultRepository.findByLabOrder_Id(labOrderId).stream().noneMatch(LabResult::isReleased)) {
             throw new BusinessException("proxyRelease.notReleasedYet");
         }
@@ -214,6 +222,18 @@ public class MinorResultReleaseServiceImpl implements MinorResultReleaseService 
         return grant;
     }
 
+    /**
+     * Review of #1242: nobody verifies their own relationship or releases a
+     * result to themselves. A clinician who is the child's parent holds the
+     * grant as a parent; another clinician with care of the child decides.
+     */
+    private static void refuseOwnGrant(PatientProxy grant, UUID actorUserId) {
+        User holder = grant.getProxyUser();
+        if (holder != null && holder.getId() != null && holder.getId().equals(actorUserId)) {
+            throw new AccessDeniedException(MessageUtil.resolveOrRaw("proxyRelease.ownGrant"));
+        }
+    }
+
     private static boolean isLive(PatientProxy grant) {
         return grant.getStatus() == ProxyStatus.ACTIVE
             && (grant.getExpiresAt() == null || grant.getExpiresAt().isAfter(LocalDateTime.now(ZONE)));
@@ -290,13 +310,15 @@ public class MinorResultReleaseServiceImpl implements MinorResultReleaseService 
         for (LabResult result : rows) {
             LabOrder order = result.getLabOrder();
             // One row per order: its first released result, when a proxy does not read it.
-            SensitivityCategory category = result.isReleased() && order != null && !byOrder.containsKey(order.getId())
-                ? proxyRecordFilter.hidingCategoryOf(order) : null;
-            if (category != null) {
+            // And only what a verified parent is actually refused: never a result they already read.
+            ProxyRecordFilter.FamilyHiding hiding =
+                result.isReleased() && order != null && !byOrder.containsKey(order.getId())
+                    ? proxyRecordFilter.familyHidingOf(order) : null;
+            if (hiding != null) {
                 LabTestDefinition test = order.getLabTestDefinition();
                 byOrder.put(order.getId(), new MinorReleaseOverviewDTO.HiddenResult(order.getId(),
-                    test == null ? null : test.getName(), category, result.getReleasedAt(),
-                    releasesByOrder.getOrDefault(order.getId(), List.of())));
+                    test == null ? null : test.getName(), hiding.category(), result.getReleasedAt(),
+                    hiding.releasable(), releasesByOrder.getOrDefault(order.getId(), List.of())));
             }
         }
         return byOrder.values().stream()

@@ -30,7 +30,8 @@ import java.util.Map;
  * </ol>
  *
  * <p>A release ({@code ProxySensitiveRelease}) is the other way a minor's
- * result reaches a parent; {@link #honoursReleases} says when one counts.
+ * result reaches a parent: an HIV result only ({@link #releasable}), and
+ * {@link #honoursReleases} says when one counts.
  * Pure: no repository, no clock but the one it is given.
  */
 public final class ProxySensitivityPolicy {
@@ -50,9 +51,11 @@ public final class ProxySensitivityPolicy {
     public enum MinorRule {
         /** Hidden at every age under 18; a clinician releases a result to a named parent. */
         RELEASE_ONLY,
+        /** Hidden at every age and never released to a parent: disclosed to authorities only. */
+        NEVER,
         /** A child's own status stays visible to the parents, who manage the care. */
         PARENT_VISIBLE,
-        /** Visible under the hospital's adolescent age; hidden from it to 17, releasable. */
+        /** Visible under the hospital's adolescent age; hidden from it to 17, and not releasable for now. */
         BY_ADOLESCENT_AGE
     }
 
@@ -67,7 +70,7 @@ public final class ProxySensitivityPolicy {
         // Loi 030-2008 art. 17-18: the parents have a right to the result, through a clinician.
         MINOR_RULES.put(SensitivityCategory.HIV, MinorRule.RELEASE_ONLY);
         // The parent holding the grant may be the perpetrator (Code pénal art. 525-2: to authorities only).
-        MINOR_RULES.put(SensitivityCategory.SEXUAL_DOMESTIC_VIOLENCE, MinorRule.RELEASE_ONLY);
+        MINOR_RULES.put(SensitivityCategory.SEXUAL_DOMESTIC_VIOLENCE, MinorRule.NEVER);
         // A child's own sickle status stays visible to the parents.
         MINOR_RULES.put(SensitivityCategory.SICKLE_CELL, MinorRule.PARENT_VISIBLE);
         MINOR_RULES.put(SensitivityCategory.STI, MinorRule.BY_ADOLESCENT_AGE);
@@ -106,18 +109,48 @@ public final class ProxySensitivityPolicy {
         if (category.restricted() && reader.holdsRestrictedScope()) {
             return true;
         }
-        if (!isMinor(subjectAge) || !reader.verifiedParentOrGuardian()) {
+        if (!reader.verifiedParentOrGuardian()) {
+            return false;
+        }
+        return !hiddenFromVerifiedParent(category, subjectAge, adolescentAge);
+    }
+
+    /**
+     * Whether a verified parent or guardian, with no scope of their own for
+     * it, is refused a row of this category: always for an adult's, and for a
+     * minor's by the category's {@link MinorRule}. What the clinician's
+     * « hidden from the family » list shows is exactly what this refuses.
+     */
+    public static boolean hiddenFromVerifiedParent(SensitivityCategory category, Integer subjectAge,
+                                                   int adolescentAge) {
+        if (category == null) {
             return false;
         }
         MinorRule rule = MINOR_RULES.get(category);
-        if (rule == null) {
-            return false;
+        if (!isMinor(subjectAge) || rule == null) {
+            return true;
         }
         return switch (rule) {
-            case RELEASE_ONLY -> false;
-            case PARENT_VISIBLE -> true;
-            case BY_ADOLESCENT_AGE -> subjectAge < adolescentAge;
+            case RELEASE_ONLY, NEVER -> true;
+            case PARENT_VISIBLE -> false;
+            case BY_ADOLESCENT_AGE -> subjectAge >= adolescentAge;
         };
+    }
+
+    /**
+     * Whether a clinician may release, to a verified parent, a result that
+     * carries these categories (its visit's and its test's). HIV only: Loi
+     * 030-2008 art. 17-18 is the legal basis, and it covers the HIV result.
+     * Never when violence is on the visit or the test (authorities only, Code
+     * pénal art. 525-2), and no other category is releasable for now.
+     */
+    public static boolean releasable(SensitivityCategory visitCategory, SensitivityCategory testCategory) {
+        MinorRule visit = minorRuleOf(visitCategory);
+        MinorRule test = minorRuleOf(testCategory);
+        if (visit == MinorRule.NEVER || test == MinorRule.NEVER) {
+            return false;
+        }
+        return visit == MinorRule.RELEASE_ONLY || test == MinorRule.RELEASE_ONLY;
     }
 
     /**

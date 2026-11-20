@@ -25,6 +25,7 @@ import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.MedicationCatalogItemRepository;
 import com.example.hms.repository.PriceListItemRepository;
 import com.example.hms.repository.ProxySensitiveReleaseRepository;
+import com.example.hms.service.pharmacy.DispenseVerificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -194,34 +195,56 @@ public class ProxyRecordFilter {
         if (order == null) {
             return true;
         }
+        Hospital recordedAt = order.getHospital();
         SensitivityCategory visitCategory = sensitivityClassifier.effectiveCategory(order.getEncounter());
-        SensitivityCategory testCategory = testCategory(order.getLabTestDefinition(), cache);
+        SensitivityCategory testCategory = testCategory(order.getLabTestDefinition(), recordedAt, cache);
         if (visitCategory == null && testCategory == null) {
             return true;
         }
         Patient subject = order.getPatient();
-        if (releasedToReader(order, subject, cache)) {
+        // HIV only, and never a result that violence is on: a release of anything else is not honoured.
+        if (ProxySensitivityPolicy.releasable(visitCategory, testCategory)
+                && releasedToReader(order, subject, cache)) {
             return true;
         }
-        Hospital recordedAt = order.getHospital();
         return admits(visitCategory, subject, recordedAt) && admits(testCategory, subject, recordedAt);
     }
 
     /**
-     * The category that hides an order's result from a proxy: HIV when its
-     * test or its visit is, else the test's, else the visit's; null for an
-     * ordinary result. What the clinician's release screen lists.
+     * What hides an order's result from the family, as the clinician's release
+     * screen shows it: the category, and whether a clinician may release it.
      */
-    public SensitivityCategory hidingCategoryOf(LabOrder order) {
+    public record FamilyHiding(SensitivityCategory category, boolean releasable) {
+    }
+
+    /**
+     * What a <em>verified parent or guardian</em> of this patient is refused of
+     * an order's result, or null when they read it (a child's sickle status, a
+     * result of a child under the hospital's adolescent age): the same rule the
+     * proxy read applies ({@link ProxySensitivityPolicy#hiddenFromVerifiedParent}),
+     * so the screen never lists as hidden what the parent already sees. The
+     * category shown is HIV when HIV hides it, else the test's, else the visit's.
+     */
+    public FamilyHiding familyHidingOf(LabOrder order) {
         if (order == null) {
             return null;
         }
+        Hospital recordedAt = order.getHospital();
         SensitivityCategory visitCategory = sensitivityClassifier.effectiveCategory(order.getEncounter());
-        SensitivityCategory testCategory = testCategory(order.getLabTestDefinition(), new ReadCache());
-        if (visitCategory == SensitivityCategory.HIV || testCategory == SensitivityCategory.HIV) {
-            return SensitivityCategory.HIV;
+        SensitivityCategory testCategory = testCategory(order.getLabTestDefinition(), recordedAt, new ReadCache());
+        Integer age = ageOf(order.getPatient());
+        int adolescentAge = ProxySensitivityPolicy.adolescentAgeOr(
+            recordedAt == null ? null : recordedAt.getAdolescentConfidentialityAge());
+        boolean byVisit = ProxySensitivityPolicy.hiddenFromVerifiedParent(visitCategory, age, adolescentAge);
+        boolean byTest = ProxySensitivityPolicy.hiddenFromVerifiedParent(testCategory, age, adolescentAge);
+        if (!byVisit && !byTest) {
+            return null;
         }
-        return testCategory != null ? testCategory : visitCategory;
+        SensitivityCategory shown = byTest ? testCategory : visitCategory;
+        if (byVisit && visitCategory == SensitivityCategory.HIV) {
+            shown = SensitivityCategory.HIV;
+        }
+        return new FamilyHiding(shown, ProxySensitivityPolicy.releasable(visitCategory, testCategory));
     }
 
     private boolean releasedToReader(LabOrder order, Patient subject, ReadCache cache) {
@@ -247,14 +270,21 @@ public class ProxyRecordFilter {
      * new. A test with no live definition left keeps the tag of the row the
      * order used.
      */
-    private SensitivityCategory testCategory(LabTestDefinition definition, ReadCache cache) {
+    private SensitivityCategory testCategory(LabTestDefinition definition, Hospital orderedAt, ReadCache cache) {
         if (definition == null) {
             return null;
         }
-        Hospital hospital = definition.getHospital();
-        UUID hospitalId = hospital == null ? null : hospital.getId();
-        SensitivityCategory own = ownOrLiveCategory(definition, hospitalId, cache);
-        return own != null ? own : componentCategory(definition, hospitalId, cache);
+        Hospital catalogue = definition.getHospital();
+        UUID catalogueId = catalogue == null ? null : catalogue.getId();
+        SensitivityCategory own = ownOrLiveCategory(definition, catalogueId, cache);
+        if (own != null) {
+            return own;
+        }
+        // Review of #1242: a platform panel (no hospital of its own) ordered at a hospital is judged by
+        // THAT hospital's tagged tests too; read from the definition alone, the hospital's tag on a
+        // component was ignored.
+        UUID orderedAtId = orderedAt == null ? null : orderedAt.getId();
+        return componentCategory(definition, orderedAtId != null ? orderedAtId : catalogueId, cache);
     }
 
     private SensitivityCategory ownOrLiveCategory(LabTestDefinition definition, UUID hospitalId, ReadCache cache) {
@@ -346,13 +376,47 @@ public class ProxyRecordFilter {
     }
 
     private SensitivityCategory medicineCategory(Prescription prescription) {
-        UUID itemId = prescription.getMedicationCatalogItemId();
-        if (itemId == null || medicationCatalogItemRepository == null) {
+        if (medicationCatalogItemRepository == null) {
             return null;
+        }
+        UUID itemId = prescription.getMedicationCatalogItemId();
+        if (itemId == null) {
+            return unlinkedMedicineCategory(prescription);
         }
         return medicationCatalogItemRepository.findById(itemId)
             .map(MedicationCatalogItem::getSensitivityCategory)
             .orElse(null);
+    }
+
+    /**
+     * Review of #1242: an order with no catalogue link. The prescription
+     * service leaves an order unlinked when its name matches several items
+     * (two strengths of dolutegravir), so "no link" never meant "not a tagged
+     * medicine". It is compared, at its own hospital, with the tagged items of
+     * the catalogue: by its code, then by the name as typed (the pharmacy's
+     * one name rule). ANY tagged match withholds it - a wrong guess here
+     * hides a prescription, never shows one.
+     */
+    private SensitivityCategory unlinkedMedicineCategory(Prescription prescription) {
+        Hospital hospital = prescription.getHospital();
+        UUID hospitalId = hospital == null ? null : hospital.getId();
+        if (hospitalId == null) {
+            return null;
+        }
+        List<MedicationCatalogItem> tagged = medicationCatalogItemRepository.findTaggedVisibleAt(hospitalId);
+        if (tagged == null || tagged.isEmpty()) {
+            return null;
+        }
+        String code = prescription.getMedicationCode();
+        for (MedicationCatalogItem item : tagged) {
+            boolean byCode = code != null && !code.isBlank() && item.getCode() != null
+                && item.getCode().trim().equalsIgnoreCase(code.trim());
+            if (byCode || DispenseVerificationService.namesCatalogItem(prescription.getMedicationName(), item)
+                    || DispenseVerificationService.namesCatalogItem(prescription.getMedicationDisplayName(), item)) {
+                return item.getSensitivityCategory();
+            }
+        }
+        return null;
     }
 
     /** A problem by its own tag, else by the visit it was recorded in. */
@@ -412,18 +476,35 @@ public class ProxyRecordFilter {
         if (priced.isEmpty()) {
             return true;
         }
-        for (PriceListItem item : priceListItemRepository.findAllById(priced)) {
-            if (item.getLinkType() != PriceListLinkType.LAB_TEST_DEFINITION || item.getLinkKey() == null) {
-                continue;
-            }
-            UUID definitionId = uuidOrNull(item.getLinkKey());
-            LabTestDefinition definition = definitionId == null ? null
-                : labTestDefinitionRepository.findById(definitionId).orElse(null);
-            if (!admits(testCategory(definition, cache), invoice.getPatient(), invoice.getHospital())) {
+        // Review of #1242: read at the INVOICE's hospital, outside the caller's tenant scope. The scoped
+        // findAllById answered with the proxy's own hospitals: at a hospital where the proxy holds no
+        // assignment it loaded nothing, and the invoice with the hidden test was shown (QA D1212 trap).
+        Hospital billedAt = invoice.getHospital();
+        UUID billedAtId = billedAt == null ? null : billedAt.getId();
+        List<PriceListItem> items = billedAtId == null ? List.of()
+            : priceListItemRepository.findUnscopedByHospitalIdAndIdIn(billedAtId, priced);
+        if (items == null || items.size() < priced.size()) {
+            // A priced line whose item cannot be read cannot be judged: withheld.
+            return false;
+        }
+        for (PriceListItem item : items) {
+            if (!admitsPricedFrom(item, invoice, cache)) {
                 return false;
             }
         }
         return true;
+    }
+
+    /** One price-list item: an ordinary one, or the price of a test this proxy may read. */
+    private boolean admitsPricedFrom(PriceListItem item, BillingInvoice invoice, ReadCache cache) {
+        if (item.getLinkType() != PriceListLinkType.LAB_TEST_DEFINITION || item.getLinkKey() == null) {
+            return true;
+        }
+        UUID definitionId = uuidOrNull(item.getLinkKey());
+        LabTestDefinition definition = definitionId == null ? null
+            : labTestDefinitionRepository.findById(definitionId).orElse(null);
+        return admits(testCategory(definition, invoice.getHospital(), cache), invoice.getPatient(),
+            invoice.getHospital());
     }
 
     private static UUID uuidOrNull(String text) {
