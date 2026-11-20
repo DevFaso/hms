@@ -153,7 +153,8 @@ public class ProxyRecordFilter {
     }
 
     private static Integer ageOf(Patient subject) {
-        return subject == null ? null : ProxySensitivityPolicy.ageOn(subject.getDateOfBirth(), LocalDate.now());
+        return subject == null ? null : ProxySensitivityPolicy.ageOn(subject.getDateOfBirth(),
+            LocalDate.now(java.time.ZoneId.systemDefault()));
     }
 
     /** A visit, by its explicit tag or its department's default. */

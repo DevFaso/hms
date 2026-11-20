@@ -81,6 +81,10 @@ class MinorResultReleaseServiceImplTest {
     private Patient minor;
     private PatientProxy mother;
     private LabOrder hivOrder;
+    /** Their ids, read once: a refusal's lambda then makes one call. */
+    private UUID minorId;
+    private UUID motherId;
+    private UUID orderId;
 
     @BeforeEach
     void setUp() {
@@ -89,6 +93,9 @@ class MinorResultReleaseServiceImplTest {
         minor = patient(15);
         mother = grant(minor, ProxyRelationship.PARENT, "Awa", "Sawadogo");
         hivOrder = order(minor, "Sérologie VIH");
+        minorId = minor.getId();
+        motherId = mother.getId();
+        orderId = hivOrder.getId();
 
         when(patientChartAccess.require(minor.getId(), hospitalId)).thenReturn(minor);
         when(treatmentRelationshipResolver.resolve(minor.getId(), hospitalId, doctorId)).thenReturn(Optional.of(
@@ -195,7 +202,7 @@ class MinorResultReleaseServiceImplTest {
     @Test
     @DisplayName("an unverified parent needs the clinician's attestation; given, the grant is stamped verified and that is audited")
     void anUnverifiedParentNeedsTheAttestation() {
-        assertThatThrownBy(() -> service.release(minor.getId(), hivOrder.getId(), mother.getId(), REASON, false,
+        assertThatThrownBy(() -> service.release(minorId, orderId, motherId, REASON, false,
             doctorId)).isInstanceOf(BusinessException.class);
         verify(releaseRepository, never()).save(any());
 
@@ -220,7 +227,10 @@ class MinorResultReleaseServiceImplTest {
             new TreatmentRelationship(null, UUID.randomUUID(), hospitalId, adult.getId(), LocalDateTime.now(), null,
                 true)));
 
-        assertThatThrownBy(() -> service.release(adult.getId(), order.getId(), parent.getId(), REASON, true, doctorId))
+        UUID adultId = adult.getId();
+        UUID adultOrderId = order.getId();
+        UUID parentId = parent.getId();
+        assertThatThrownBy(() -> service.release(adultId, adultOrderId, parentId, REASON, true, doctorId))
             .isInstanceOf(BusinessException.class);
         verify(releaseRepository, never()).save(any());
         assertThat(service.overview(adult.getId(), doctorId).minor()).isFalse();
@@ -233,7 +243,8 @@ class MinorResultReleaseServiceImplTest {
         aunt.setRelationshipVerifiedAt(LocalDateTime.now());
         when(patientProxyRepository.findById(aunt.getId())).thenReturn(Optional.of(aunt));
 
-        assertThatThrownBy(() -> service.release(minor.getId(), hivOrder.getId(), aunt.getId(), REASON, true, doctorId))
+        UUID auntId = aunt.getId();
+        assertThatThrownBy(() -> service.release(minorId, orderId, auntId, REASON, true, doctorId))
             .isInstanceOf(BusinessException.class);
         verify(releaseRepository, never()).save(any());
     }
@@ -243,16 +254,17 @@ class MinorResultReleaseServiceImplTest {
     void theGrantMustBeThisPatientsAndLive() {
         PatientProxy others = grant(patient(10), ProxyRelationship.PARENT, "X", "Y");
         when(patientProxyRepository.findById(others.getId())).thenReturn(Optional.of(others));
-        assertThatThrownBy(() -> service.release(minor.getId(), hivOrder.getId(), others.getId(), REASON, true, doctorId))
+        UUID othersId = others.getId();
+        assertThatThrownBy(() -> service.release(minorId, orderId, othersId, REASON, true, doctorId))
             .isInstanceOf(ResourceNotFoundException.class);
 
         mother.setStatus(ProxyStatus.REVOKED);
-        assertThatThrownBy(() -> service.release(minor.getId(), hivOrder.getId(), mother.getId(), REASON, true, doctorId))
+        assertThatThrownBy(() -> service.release(minorId, orderId, motherId, REASON, true, doctorId))
             .isInstanceOf(ResourceNotFoundException.class);
 
         mother.setStatus(ProxyStatus.ACTIVE);
         mother.setExpiresAt(LocalDateTime.now().minusMinutes(1));
-        assertThatThrownBy(() -> service.release(minor.getId(), hivOrder.getId(), mother.getId(), REASON, true, doctorId))
+        assertThatThrownBy(() -> service.release(minorId, orderId, motherId, REASON, true, doctorId))
             .isInstanceOf(ResourceNotFoundException.class);
         verify(releaseRepository, never()).save(any());
     }
@@ -262,9 +274,9 @@ class MinorResultReleaseServiceImplTest {
     void hasCareOfThePatient() {
         when(treatmentRelationshipResolver.resolve(minor.getId(), hospitalId, doctorId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.release(minor.getId(), hivOrder.getId(), mother.getId(), REASON, true, doctorId))
+        assertThatThrownBy(() -> service.release(minorId, orderId, motherId, REASON, true, doctorId))
             .isInstanceOf(AccessDeniedException.class);
-        assertThatThrownBy(() -> service.overview(minor.getId(), doctorId)).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> service.overview(minorId, doctorId)).isInstanceOf(AccessDeniedException.class);
         verify(releaseRepository, never()).save(any());
     }
 
@@ -273,7 +285,7 @@ class MinorResultReleaseServiceImplTest {
     void needsANamedClinician() {
         mother.setRelationshipVerifiedAt(LocalDateTime.now());
 
-        assertThatThrownBy(() -> service.release(minor.getId(), hivOrder.getId(), mother.getId(), REASON, false, null))
+        assertThatThrownBy(() -> service.release(minorId, orderId, motherId, REASON, false, null))
             .isInstanceOf(AccessDeniedException.class);
         verify(releaseRepository, never()).save(any());
     }
@@ -283,7 +295,7 @@ class MinorResultReleaseServiceImplTest {
     void needsAnActingHospital() {
         HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
 
-        assertThatThrownBy(() -> service.release(minor.getId(), hivOrder.getId(), mother.getId(), REASON, true, doctorId))
+        assertThatThrownBy(() -> service.release(minorId, orderId, motherId, REASON, true, doctorId))
             .isInstanceOf(RuntimeException.class);
         verify(releaseRepository, never()).save(any());
     }
@@ -296,17 +308,17 @@ class MinorResultReleaseServiceImplTest {
         Hospital elsewhere = new Hospital();
         elsewhere.setId(UUID.randomUUID());
         hivOrder.setHospital(elsewhere);
-        assertThatThrownBy(() -> service.release(minor.getId(), hivOrder.getId(), mother.getId(), REASON, false, doctorId))
+        assertThatThrownBy(() -> service.release(minorId, orderId, motherId, REASON, false, doctorId))
             .isInstanceOf(ResourceNotFoundException.class);
         hivOrder.setHospital(hospital);
 
         when(proxyRecordFilter.hidingCategoryOf(hivOrder)).thenReturn(null);
-        assertThatThrownBy(() -> service.release(minor.getId(), hivOrder.getId(), mother.getId(), REASON, false, doctorId))
+        assertThatThrownBy(() -> service.release(minorId, orderId, motherId, REASON, false, doctorId))
             .isInstanceOf(BusinessException.class);
         when(proxyRecordFilter.hidingCategoryOf(hivOrder)).thenReturn(SensitivityCategory.HIV);
 
         when(labResultRepository.findByLabOrder_Id(hivOrder.getId())).thenReturn(List.of(resultOf(hivOrder, false)));
-        assertThatThrownBy(() -> service.release(minor.getId(), hivOrder.getId(), mother.getId(), REASON, false, doctorId))
+        assertThatThrownBy(() -> service.release(minorId, orderId, motherId, REASON, false, doctorId))
             .isInstanceOf(BusinessException.class);
         verify(releaseRepository, never()).save(any());
     }
@@ -317,7 +329,7 @@ class MinorResultReleaseServiceImplTest {
         mother.setRelationshipVerifiedAt(LocalDateTime.now());
 
         for (String reason : new String[] {null, "             ", "  court   ", "a         "}) {
-            assertThatThrownBy(() -> service.release(minor.getId(), hivOrder.getId(), mother.getId(), reason, false,
+            assertThatThrownBy(() -> service.release(minorId, orderId, motherId, reason, false,
                 doctorId)).isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
         }
         verify(releaseRepository, never()).save(any());

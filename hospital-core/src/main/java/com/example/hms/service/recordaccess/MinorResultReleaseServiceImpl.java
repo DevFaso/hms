@@ -38,6 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -75,6 +76,8 @@ public class MinorResultReleaseServiceImpl implements MinorResultReleaseService 
     private static final String MSG_RESULT_NOT_FOUND = "proxyRelease.resultNotFound";
     /** As {@code MinorResultReleaseRequestDTO}: the shortest reason, counted without the spaces around it. */
     private static final int MIN_REASON_LENGTH = 10;
+    /** The server's zone, as every other timestamp of the record is written. */
+    private static final ZoneId ZONE = ZoneId.systemDefault();
 
     private final PatientChartAccess patientChartAccess;
     private final TreatmentRelationshipResolver treatmentRelationshipResolver;
@@ -145,7 +148,7 @@ public class MinorResultReleaseServiceImpl implements MinorResultReleaseService 
             .sensitivityCategory(category)
             .reason(reason.trim())
             .releasedByUserId(actorUserId)
-            .releasedAt(LocalDateTime.now())
+            .releasedAt(LocalDateTime.now(ZONE))
             .build());
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("releaseId", String.valueOf(release.getId()));
@@ -154,9 +157,9 @@ public class MinorResultReleaseServiceImpl implements MinorResultReleaseService 
         details.put("proxyUserId", grant.getProxyUser().getId().toString());
         details.put("relationship", String.valueOf(grant.getRelationship()));
         details.put("category", category.name());
-        audit(AuditEventType.SENSITIVE_RESULT_RELEASED_TO_PROXY, "PROXY_SENSITIVE_RELEASE", labOrderId, patientId,
-            hospitalId, actorUserId, "Sensitive result (" + category + ") released to a verified parent or guardian",
-            details);
+        audit(AuditEventType.SENSITIVE_RESULT_RELEASED_TO_PROXY, "PROXY_SENSITIVE_RELEASE", labOrderId,
+            new Act(patientId, hospitalId, actorUserId),
+            "Sensitive result (" + category + ") released to a verified parent or guardian", details);
         // Ids only: a category next to an order id in a log line would say what the result is about.
         log.info("[proxy-release] order {} released to grant {}", labOrderId, grantId);
         return overviewOf(patient, hospitalId);
@@ -195,7 +198,7 @@ public class MinorResultReleaseServiceImpl implements MinorResultReleaseService 
     }
 
     private static Integer ageOf(Patient patient) {
-        return ProxySensitivityPolicy.ageOn(patient.getDateOfBirth(), LocalDate.now());
+        return ProxySensitivityPolicy.ageOn(patient.getDateOfBirth(), LocalDate.now(ZONE));
     }
 
     /** This patient's active, unexpired grant, held by a declared parent or legal guardian. */
@@ -213,7 +216,7 @@ public class MinorResultReleaseServiceImpl implements MinorResultReleaseService 
 
     private static boolean isLive(PatientProxy grant) {
         return grant.getStatus() == ProxyStatus.ACTIVE
-            && (grant.getExpiresAt() == null || grant.getExpiresAt().isAfter(LocalDateTime.now()));
+            && (grant.getExpiresAt() == null || grant.getExpiresAt().isAfter(LocalDateTime.now(ZONE)));
     }
 
     private static boolean isParentOrGuardian(PatientProxy grant) {
@@ -233,15 +236,16 @@ public class MinorResultReleaseServiceImpl implements MinorResultReleaseService 
         if (grant.getRelationshipVerifiedAt() != null) {
             return;
         }
-        grant.setRelationshipVerifiedAt(LocalDateTime.now());
+        grant.setRelationshipVerifiedAt(LocalDateTime.now(ZONE));
         grant.setRelationshipVerifiedByUserId(actorUserId);
         patientProxyRepository.save(grant);
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("grantId", String.valueOf(grant.getId()));
         details.put("proxyUserId", String.valueOf(grant.getProxyUser().getId()));
         details.put("relationship", String.valueOf(grant.getRelationship()));
-        audit(AuditEventType.PROXY_RELATIONSHIP_VERIFIED, "PATIENT_PROXY", grant.getId(), patient.getId(), hospitalId,
-            actorUserId, "Family-access relationship verified (" + grant.getRelationship() + ")", details);
+        audit(AuditEventType.PROXY_RELATIONSHIP_VERIFIED, "PATIENT_PROXY", grant.getId(),
+            new Act(patient.getId(), hospitalId, actorUserId),
+            "Family-access relationship verified (" + grant.getRelationship() + ")", details);
     }
 
     // ── The overview ────────────────────────────────────────────────────────
@@ -285,17 +289,15 @@ public class MinorResultReleaseServiceImpl implements MinorResultReleaseService 
             .findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(patientId, hospitalId, Pageable.unpaged());
         for (LabResult result : rows) {
             LabOrder order = result.getLabOrder();
-            if (!result.isReleased() || order == null || byOrder.containsKey(order.getId())) {
-                continue;
+            // One row per order: its first released result, when a proxy does not read it.
+            SensitivityCategory category = result.isReleased() && order != null && !byOrder.containsKey(order.getId())
+                ? proxyRecordFilter.hidingCategoryOf(order) : null;
+            if (category != null) {
+                LabTestDefinition test = order.getLabTestDefinition();
+                byOrder.put(order.getId(), new MinorReleaseOverviewDTO.HiddenResult(order.getId(),
+                    test == null ? null : test.getName(), category, result.getReleasedAt(),
+                    releasesByOrder.getOrDefault(order.getId(), List.of())));
             }
-            SensitivityCategory category = proxyRecordFilter.hidingCategoryOf(order);
-            if (category == null) {
-                continue;
-            }
-            LabTestDefinition test = order.getLabTestDefinition();
-            byOrder.put(order.getId(), new MinorReleaseOverviewDTO.HiddenResult(order.getId(),
-                test == null ? null : test.getName(), category, result.getReleasedAt(),
-                releasesByOrder.getOrDefault(order.getId(), List.of())));
         }
         return byOrder.values().stream()
             .sorted(Comparator.comparing(MinorReleaseOverviewDTO.HiddenResult::resultedAt,
@@ -313,15 +315,19 @@ public class MinorResultReleaseServiceImpl implements MinorResultReleaseService 
         return name.isEmpty() ? user.getUsername() : name;
     }
 
+    /** Whose record, at which hospital, by whom: what every audit row of this service names. */
+    private record Act(UUID patientId, UUID hospitalId, UUID actorUserId) {
+    }
+
     /** After commit, ids and category names only - never the reason, which can say what the result is. */
-    private void audit(AuditEventType type, String entityType, UUID resourceId, UUID patientId, UUID hospitalId,
-                       UUID actorUserId, String description, Map<String, Object> details) {
+    private void audit(AuditEventType type, String entityType, UUID resourceId, Act act, String description,
+                       Map<String, Object> details) {
         AuditEventRequestDTO event = AuditEventRequestDTO.builder()
             .eventType(type)
             .status(AuditStatus.SUCCESS)
-            .userId(actorUserId)
-            .patientId(patientId)
-            .hospitalId(hospitalId)
+            .userId(act.actorUserId())
+            .patientId(act.patientId())
+            .hospitalId(act.hospitalId())
             .entityType(entityType)
             .resourceId(String.valueOf(resourceId))
             .eventDescription(description)

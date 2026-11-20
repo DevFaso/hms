@@ -122,6 +122,20 @@ class NewbornRegistrationServiceTest {
     }
 
     @Test
+    @DisplayName("policy 2026-11-20: the mother's family access on her newborn is a verified parent's, stamped by who recorded the birth")
+    void theMotherIsAVerifiedParent() {
+        UUID recorder = UUID.randomUUID();
+
+        service.registerLiveBorn(delivery(true, 1, InfantSex.FEMALE), recorder);
+
+        ArgumentCaptor<PatientProxy> proxy = ArgumentCaptor.forClass(PatientProxy.class);
+        verify(proxies).save(proxy.capture());
+        assertThat(proxy.getValue().getRelationshipVerifiedAt()).isNotNull();
+        assertThat(proxy.getValue().getRelationshipVerifiedByUserId()).isEqualTo(recorder);
+        assertThat(proxy.getValue().isVerifiedParentOrGuardian()).isTrue();
+    }
+
+    @Test
     @DisplayName("a single live birth registers one baby at the delivering hospital, linked to the mother")
     void singleBirth() {
         DeliveryRecord delivery = delivery(true, 1, InfantSex.FEMALE);
@@ -158,10 +172,6 @@ class NewbornRegistrationServiceTest {
         assertThat(proxy.getValue().getProxyUser()).isSameAs(motherAccount);
         assertThat(proxy.getValue().getRelationship()).isEqualTo(ProxyRelationship.PARENT);
         assertThat(proxy.getValue().getStatus()).isEqualTo(ProxyStatus.ACTIVE);
-        // Policy 2026-11-20: staff recorded the birth, so the mother is a verified parent.
-        assertThat(proxy.getValue().getRelationshipVerifiedAt()).isNotNull();
-        assertThat(proxy.getValue().getRelationshipVerifiedByUserId()).isEqualTo(recorder);
-        assertThat(proxy.getValue().isVerifiedParentOrGuardian()).isTrue();
 
         ArgumentCaptor<AuditEventRequestDTO> event = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
         verify(audit).logEvent(event.capture());

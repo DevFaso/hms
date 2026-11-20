@@ -248,7 +248,7 @@ public class NewbornRegistrationService {
             .permissions(PROXY_PERMISSIONS)
             .notes(messageSource.getMessage("newborn.registration.proxyNote", null, locale))
             // Policy 2026-11-20: staff recorded this birth, so the mother is a verified parent.
-            .relationshipVerifiedAt(java.time.LocalDateTime.now())
+            .relationshipVerifiedAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()))
             .relationshipVerifiedByUserId(recorderUserId)
             .build());
     }

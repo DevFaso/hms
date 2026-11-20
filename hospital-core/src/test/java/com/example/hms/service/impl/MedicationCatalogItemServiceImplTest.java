@@ -368,7 +368,7 @@ class MedicationCatalogItemServiceImplTest {
         // The full-replace edit carries no category: the tag must survive it.
         service.update(itemId, requestDTO);
         assertThat(item.getSensitivityCategory()).isEqualTo(com.example.hms.enums.SensitivityCategory.HIV);
-        verify(auditEventLogService, org.mockito.Mockito.never()).logEvent(any());
+        verify(auditEventLogService, never()).logEvent(any());
 
         requestDTO.setClearSensitivityCategory(true);
         service.update(itemId, requestDTO);

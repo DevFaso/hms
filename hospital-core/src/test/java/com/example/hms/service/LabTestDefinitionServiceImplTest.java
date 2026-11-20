@@ -52,6 +52,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -2464,7 +2465,7 @@ class LabTestDefinitionServiceImplTest {
             assertThat(hcg.getSensitivityCategory()).isEqualTo(com.example.hms.enums.SensitivityCategory.PREGNANCY);
             org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
                 org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
-            verify(auditEventLogService, org.mockito.Mockito.times(2)).logEvent(audit.capture());
+            verify(auditEventLogService, times(2)).logEvent(audit.capture());
             assertThat(audit.getAllValues()).allSatisfy(event -> {
                 assertThat(event.getEventType())
                     .isEqualTo(com.example.hms.enums.AuditEventType.LAB_SENSITIVITY_RECOMMENDATION_APPLIED);
@@ -2484,12 +2485,13 @@ class LabTestDefinitionServiceImplTest {
             classifyingAs(director, sec, hiv, glucose);
 
             // Glucose is not on the list: it cannot be tagged through this path.
-            assertThatThrownBy(() -> service.applyRecommendedSensitivity(java.util.List.of(
-                confirmed(glucose, com.example.hms.enums.SensitivityCategory.HIV))))
+            var outsideTheList = java.util.List.of(confirmed(glucose, com.example.hms.enums.SensitivityCategory.HIV));
+            assertThatThrownBy(() -> service.applyRecommendedSensitivity(outsideTheList))
                 .isInstanceOf(com.example.hms.exception.BusinessException.class);
             // Nor may a listed test take another category than the recommended one.
-            assertThatThrownBy(() -> service.applyRecommendedSensitivity(java.util.List.of(
-                confirmed(hiv, com.example.hms.enums.SensitivityCategory.SUBSTANCE_USE))))
+            var anotherCategory =
+                java.util.List.of(confirmed(hiv, com.example.hms.enums.SensitivityCategory.SUBSTANCE_USE));
+            assertThatThrownBy(() -> service.applyRecommendedSensitivity(anotherCategory))
                 .isInstanceOf(com.example.hms.exception.BusinessException.class);
 
             assertThat(glucose.getSensitivityCategory()).isNull();
@@ -2509,8 +2511,8 @@ class LabTestDefinitionServiceImplTest {
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             classifyingAs(director, sec);
 
-            assertThatThrownBy(() -> service.applyRecommendedSensitivity(java.util.List.of(
-                confirmed(elsewhere, com.example.hms.enums.SensitivityCategory.HIV))))
+            var anotherHospitals = java.util.List.of(confirmed(elsewhere, com.example.hms.enums.SensitivityCategory.HIV));
+            assertThatThrownBy(() -> service.applyRecommendedSensitivity(anotherHospitals))
                 .isInstanceOf(ResourceNotFoundException.class);
             assertThat(elsewhere.getSensitivityCategory()).isNull();
         }
@@ -2524,8 +2526,8 @@ class LabTestDefinitionServiceImplTest {
             classifyingAs(scientist, sec, hiv);
 
             assertThatThrownBy(() -> service.recommendedSensitivity()).isInstanceOf(AccessDeniedException.class);
-            assertThatThrownBy(() -> service.applyRecommendedSensitivity(java.util.List.of(
-                confirmed(hiv, com.example.hms.enums.SensitivityCategory.HIV))))
+            var confirmedHiv = java.util.List.of(confirmed(hiv, com.example.hms.enums.SensitivityCategory.HIV));
+            assertThatThrownBy(() -> service.applyRecommendedSensitivity(confirmedHiv))
                 .isInstanceOf(AccessDeniedException.class);
             assertThat(hiv.getSensitivityCategory()).isNull();
         }

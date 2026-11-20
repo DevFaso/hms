@@ -122,15 +122,22 @@ public final class RecommendedLabSensitivity {
         }
         // A panel: the most protected component decides (the rules are in that order).
         for (Rule rule : RULES) {
-            for (LabTestComponent component : components) {
-                if (component != null && matches(rule, component.getCode(), component.getName()) != null) {
-                    String shown = component.getName() != null && !component.getName().isBlank()
-                        ? component.getName() : component.getCode();
-                    return Optional.of(new Match(rule.category(), MatchedOn.COMPONENT, shown));
-                }
+            Optional<Match> byComponent = components.stream()
+                .filter(component -> component != null
+                    && matches(rule, component.getCode(), component.getName()) != null)
+                .findFirst()
+                .map(component -> new Match(rule.category(), MatchedOn.COMPONENT, shownNameOf(component)));
+            if (byComponent.isPresent()) {
+                return byComponent;
             }
         }
         return Optional.empty();
+    }
+
+    /** What the director is shown for a matched component: its name, else its code. */
+    private static String shownNameOf(LabTestComponent component) {
+        String name = component.getName();
+        return name != null && !name.isBlank() ? name : component.getCode();
     }
 
     private static Optional<Match> match(String code, String name) {
