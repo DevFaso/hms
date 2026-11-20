@@ -51,6 +51,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -430,7 +431,7 @@ class PharmacyRefundServiceTest {
         // The payment still counted and not yet given back: the payout goes through, under the dispense row lock.
         dispense.setStatus(com.example.hms.enums.DispenseStatus.COMPLETED);
         assertThat(service.pay(id, null).getStatus()).isEqualTo("PAID");
-        verify(dispenseRepository, org.mockito.Mockito.times(3)).findLockedById(dispense.getId());
+        verify(dispenseRepository, times(3)).findLockedById(dispense.getId());
     }
 
     @Test

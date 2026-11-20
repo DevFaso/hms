@@ -81,6 +81,8 @@ public class PharmacyReconciliationService {
     /** UTF-8 byte order mark, so a spreadsheet reads the accents. */
     private static final String BOM = String.valueOf((char) 0xFEFF);
     private static final String MONEY_SECTION = "argent";
+    private static final String CSV_MEDICATION = "medicament";
+    private static final String CSV_DIFFERENCE = "ecart";
 
     private static final Set<PharmacySaleStatus> SOLD = EnumSet.of(PharmacySaleStatus.COMPLETED,
             PharmacySaleStatus.REFUNDED);
@@ -235,6 +237,7 @@ public class PharmacyReconciliationService {
     private static final Set<PharmacyRefundStatus> RETURN_HANDLED = EnumSet.of(PharmacyRefundStatus.REQUESTED,
             PharmacyRefundStatus.APPROVED, PharmacyRefundStatus.PAID, PharmacyRefundStatus.REJECTED);
     private static final Set<PharmacyRefundStatus> PAID_OUT = EnumSet.of(PharmacyRefundStatus.PAID);
+    private static final String REFUND_EXCEEDS_PAID = "REFUND_EXCEEDS_PAID";
 
     /**
      * Review of #1239 (money back twice): refunds paid out on a sale or a fill never exceed what is still counted
@@ -254,30 +257,36 @@ public class PharmacyReconciliationService {
         }
         List<UUID> voided = refundRepository.findRefundedDispensesVoidedBetween(day.hospitalId(), day.pharmacyId(),
                 day.from(), day.to());
-        if (voided != null) {
-            dispenseIds.addAll(voided);
+        dispenseIds.addAll(nzList(voided));
+        dispenseIds.forEach(dispenseId -> refundAboveDispensePayment(dispenseId, day.pharmacyId(), differences));
+        saleIds.forEach(saleId -> refundAboveSaleTotal(saleId, day.pharmacyId(), differences));
+    }
+
+    /** A fill whose paid refunds exceed its payments still counted. */
+    private void refundAboveDispensePayment(UUID dispenseId, UUID pharmacyId, List<Difference> differences) {
+        BigDecimal stillPaid = nz(paymentRepository.sumPostedForDispense(dispenseId));
+        BigDecimal paidOut = nz(refundRepository.sumForDispense(dispenseId, PAID_OUT));
+        if (paidOut.compareTo(stillPaid) <= 0) {
+            return;
         }
-        for (UUID dispenseId : dispenseIds) {
-            Dispense fill = dispenseRepository.findByIdAndPharmacy_Id(dispenseId, day.pharmacyId()).orElse(null);
-            BigDecimal stillPaid = nz(paymentRepository.sumPostedForDispense(dispenseId));
-            BigDecimal paidOut = nz(refundRepository.sumForDispense(dispenseId, PAID_OUT));
-            if (paidOut.compareTo(stillPaid) > 0) {
-                differences.add(Difference.builder().type("REFUND_EXCEEDS_PAID")
-                        .medicationName(fill != null ? fill.getMedicationName() : null)
-                        .lotNumber(fill != null && fill.getStockLot() != null ? fill.getStockLot().getLotNumber() : null)
-                        .referenceId(dispenseId).expected(stillPaid).actual(paidOut)
-                        .amount(paidOut.subtract(stillPaid)).build());
-            }
-        }
-        for (UUID saleId : saleIds) {
-            PharmacySale sale = saleRepository.findByIdAndPharmacy_Id(saleId, day.pharmacyId()).orElse(null);
-            BigDecimal stillPaid = sale != null && SOLD.contains(sale.getStatus())
-                    ? nz(sale.getTotalAmount()) : BigDecimal.ZERO;
-            BigDecimal paidOut = nz(refundRepository.sumForSale(saleId, PAID_OUT));
-            if (paidOut.compareTo(stillPaid) > 0) {
-                differences.add(Difference.builder().type("REFUND_EXCEEDS_PAID").referenceId(saleId)
-                        .expected(stillPaid).actual(paidOut).amount(paidOut.subtract(stillPaid)).build());
-            }
+        Dispense fill = dispenseRepository.findByIdAndPharmacy_Id(dispenseId, pharmacyId).orElse(null);
+        StockLot lot = fill != null ? fill.getStockLot() : null;
+        differences.add(Difference.builder().type(REFUND_EXCEEDS_PAID)
+                .medicationName(fill != null ? fill.getMedicationName() : null)
+                .lotNumber(lot != null ? lot.getLotNumber() : null)
+                .referenceId(dispenseId).expected(stillPaid).actual(paidOut)
+                .amount(paidOut.subtract(stillPaid)).build());
+    }
+
+    /** A counter sale whose paid refunds exceed its total (nothing, once it is no longer a sale). */
+    private void refundAboveSaleTotal(UUID saleId, UUID pharmacyId, List<Difference> differences) {
+        BigDecimal stillPaid = saleRepository.findByIdAndPharmacy_Id(saleId, pharmacyId)
+                .filter(sale -> SOLD.contains(sale.getStatus()))
+                .map(sale -> nz(sale.getTotalAmount())).orElse(BigDecimal.ZERO);
+        BigDecimal paidOut = nz(refundRepository.sumForSale(saleId, PAID_OUT));
+        if (paidOut.compareTo(stillPaid) > 0) {
+            differences.add(Difference.builder().type(REFUND_EXCEEDS_PAID).referenceId(saleId)
+                    .expected(stillPaid).actual(paidOut).amount(paidOut.subtract(stillPaid)).build());
         }
     }
 
@@ -467,23 +476,30 @@ public class PharmacyReconciliationService {
         for (PharmacySale sale : sales) {
             LocalDateTime soldAt = sale.getSaleDate() != null ? sale.getSaleDate() : sale.getCreatedAt();
             for (SaleLine line : sale.getLines()) {
-                if (line.getMedicationCatalogItem() == null || line.getUnitPrice() == null) {
-                    continue;
-                }
-                InventoryItem item = line.getStockLot() != null && line.getStockLot().getInventoryItem() != null
-                        ? line.getStockLot().getInventoryItem()
-                        : itemOf(sale.getPharmacy(), line.getMedicationCatalogItem());
-                BigDecimal list = item == null ? null : priceHistory.priceAt(item, soldAt).orElse(null);
-                if (list != null && list.compareTo(line.getUnitPrice()) != 0) {
-                    differences.add(Difference.builder().type("PRICE_NOT_LIST")
-                            .medicationName(medicationName(line.getMedicationCatalogItem()))
-                            .lotNumber(line.getStockLot() != null ? line.getStockLot().getLotNumber() : null)
-                            .referenceId(sale.getId()).expected(list).actual(line.getUnitPrice())
-                            .amount(PharmacyListPrice.amount(list.subtract(line.getUnitPrice()), nz(line.getQuantity())))
-                            .build());
-                }
+                priceDifference(sale, line, soldAt, differences);
             }
         }
+    }
+
+    /** One sale line against the list price of its item when the sale was made. */
+    private void priceDifference(PharmacySale sale, SaleLine line, LocalDateTime soldAt,
+                                 List<Difference> differences) {
+        if (line.getMedicationCatalogItem() == null || line.getUnitPrice() == null) {
+            return;
+        }
+        StockLot lot = line.getStockLot();
+        InventoryItem item = lot != null && lot.getInventoryItem() != null
+                ? lot.getInventoryItem() : itemOf(sale.getPharmacy(), line.getMedicationCatalogItem());
+        BigDecimal list = item == null ? null : priceHistory.priceAt(item, soldAt).orElse(null);
+        if (list == null || list.compareTo(line.getUnitPrice()) == 0) {
+            return;
+        }
+        differences.add(Difference.builder().type("PRICE_NOT_LIST")
+                .medicationName(medicationName(line.getMedicationCatalogItem()))
+                .lotNumber(lot != null ? lot.getLotNumber() : null)
+                .referenceId(sale.getId()).expected(list).actual(line.getUnitPrice())
+                .amount(PharmacyListPrice.amount(list.subtract(line.getUnitPrice()), nz(line.getQuantity())))
+                .build());
     }
 
     // ───────────────────────────── money ─────────────────────────────
@@ -614,22 +630,22 @@ public class PharmacyReconciliationService {
         csv.append(row(MONEY_SECTION, "net_encaisse", plain(m.getNetCollected()))).append("\r\n");
         csv.append(row(MONEY_SECTION, "a_facturer", plain(m.getDeferredTotal()))).append("\r\n");
         csv.append(row(MONEY_SECTION, "remis_non_payes", plain(m.getUnpaidTotal()))).append("\r\n");
-        csv.append("\r\n").append(row("medicament", "lot", "unite", "recu", "vendu_enregistre", "vendu_mouvement",
-                "delivre_enregistre", "delivre_mouvement", "retour", "ajustement", "transfert", "ecart")).append("\r\n");
+        csv.append("\r\n").append(row(CSV_MEDICATION, "lot", "unite", "recu", "vendu_enregistre", "vendu_mouvement",
+                "delivre_enregistre", "delivre_mouvement", "retour", "ajustement", "transfert", CSV_DIFFERENCE)).append("\r\n");
         for (StockLine l : day.getStock()) {
             csv.append(row(l.getMedicationName(), l.getLotNumber(), l.getUnit(), plain(l.getReceived()),
                     plain(l.getSoldRecorded()), plain(l.getSoldMoved()), plain(l.getDispensedRecorded()),
                     plain(l.getDispensedMoved()), plain(l.getReturned()), plain(l.getAdjusted()),
                     plain(l.getTransferred()), l.isDifference() ? "oui" : "non")).append("\r\n");
         }
-        csv.append("\r\n").append(row("ecart", "medicament", "lot", "reference", "attendu", "constate", "montant"))
+        csv.append("\r\n").append(row(CSV_DIFFERENCE, CSV_MEDICATION, "lot", "reference", "attendu", "constate", "montant"))
                 .append("\r\n");
         for (Difference d : day.getDifferences()) {
             csv.append(row(d.getType(), d.getMedicationName(), d.getLotNumber(),
                     d.getReferenceId() != null ? d.getReferenceId().toString() : "", plain(d.getExpected()),
                     plain(d.getActual()), plain(d.getAmount()))).append("\r\n");
         }
-        csv.append("\r\n").append(row("solde_lot", "medicament", "lot", "ouverture", "mouvements", "cloture", "ecart"))
+        csv.append("\r\n").append(row("solde_lot", CSV_MEDICATION, "lot", "ouverture", "mouvements", "cloture", CSV_DIFFERENCE))
                 .append("\r\n");
         for (LotBalance l : day.getLotBalances()) {
             csv.append(row("solde_lot", l.getMedicationName(), l.getLotNumber(), plain(l.getOpening()),

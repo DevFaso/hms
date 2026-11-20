@@ -134,13 +134,12 @@ class ClientMoneyFieldGuardTest {
     void everyClientMoneyFieldIsAccountedFor() throws Exception {
         Set<String> found = moneyFieldsOfRequestBodies();
         List<String> unclassified = found.stream().filter(key -> !FIELDS.containsKey(key)).toList();
-        assertThat(found).as("the scan must keep finding the counter-sale price this guard was written for")
-            .contains("SaleLineRequestDTO.unitPrice", "PharmacyPaymentRequestDTO.amount");
-        assertThat(found).as("review of #1239: a line reached only through its body's list (the sale line) and a "
-                + "money field that is not a BigDecimal (a long) are both scanned")
-            .contains("SaleLineRequestDTO.unitPrice", "SubscriptionPlanRequestDTO.monthlyPriceCents");
-        assertThat(FIELDS.keySet()).as("an entry of FIELDS that no controller reads any more: remove it")
-            .isSubsetOf(found);
+        assertThat(found).as("the scan must keep finding the counter-sale price this guard was written for, a line "
+                + "reached only through its body's list (the sale line) and a money field that is not a BigDecimal "
+                + "(review of #1239: a long)")
+            .contains("SaleLineRequestDTO.unitPrice", "PharmacyPaymentRequestDTO.amount",
+                "SubscriptionPlanRequestDTO.monthlyPriceCents")
+            .containsAll(FIELDS.keySet());
         assertThat(unclassified)
             .as("a money field a client sends: is a server price known for it? Classify it in FIELDS, and if a "
                 + "server price exists, refuse any other figure in the service")

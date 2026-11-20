@@ -1,5 +1,6 @@
 package com.example.hms.service.pharmacy;
 
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.CdsAlertSeverity;
@@ -2625,7 +2626,7 @@ class DispenseServiceImplTest {
             dispense.setStockLot(stockLot);
             when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            org.mockito.Mockito.doThrow(new com.example.hms.exception.ConflictException("refund"))
+            doThrow(new com.example.hms.exception.ConflictException("refund"))
                     .when(paymentVoider).requireNoLiveRefund(dispense);
 
             assertThatThrownBy(() -> service.cancelDispense(dispenseId, null, CANCEL_REASON))
