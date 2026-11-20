@@ -69,6 +69,14 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
         this.coverageService = coverageService;
     }
 
+    /** PR 10 review (V309, QA D2703): the lines taken off drafts, kept for the day report. Optional like the above. */
+    private com.example.hms.repository.InvoiceLineRemovalRepository lineRemovalRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setLineRemovalRepository(com.example.hms.repository.InvoiceLineRemovalRepository repository) {
+        this.lineRemovalRepository = repository;
+    }
+
     @Override
     @Transactional
     public InvoiceItemResponseDTO createInvoiceItem(InvoiceItemRequestDTO dto, Locale locale) {
@@ -82,13 +90,36 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
         Treatment related = resolveRelatedService(dto.getRelatedServiceId(), invoice);
 
         InvoiceItem item = invoiceItemMapper.toInvoiceItem(dto, invoice, assignment, related);
+        String reason = handAddedLineReason(invoice, dto.getOverrideReason());
+        item.setOverrideReason(reason);
 
         InvoiceItem saved = invoiceItemRepository.save(item);
+        if (reason != null) {
+            auditLineAfterCommit(AuditEventType.INVOICE_LINE_PRICED_MANUALLY, "Draft line " + saved.getId()
+                + " of invoice " + invoice.getId() + " priced by hand", saved.getId(), invoice, reason);
+        }
 
         // Keep invoice totals in sync
         billingInvoiceService.recomputeAndPersistTotals(invoice.getId());
 
         return invoiceItemMapper.toInvoiceItemResponseDTO(saved);
+    }
+
+    /**
+     * PR 10 review (QA D2703): the checkout prices a visit's charges; a line typed beside them on the visit's
+     * invoice is priced by hand, and an unpriced charge removed and typed again at any price left no trace. Such a
+     * line needs {@code overrideReason}: kept on the line, audited, listed in the day report. An invoice made by
+     * hand with no visit is hand lines throughout: a reason there is kept when given, never required.
+     */
+    private static String handAddedLineReason(BillingInvoice invoice, String rawReason) {
+        String reason = rawReason == null ? "" : rawReason.trim();
+        if (reason.isEmpty()) {
+            if (invoice.getEncounter() != null) {
+                throw new FieldBusinessException(FIELD_OVERRIDE_REASON, "billing.item.addedLineReasonRequired");
+            }
+            return null;
+        }
+        return requireOverrideReason(reason);
     }
 
     @Override
@@ -320,7 +351,11 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     /**
      * Review #1197 M2 (D-2): taking a line priced from the price list off a draft would otherwise let a cashier
      * re-add it lower with no reason, no role check and no trace. A tariff line (overridden or not) is deleted only
-     * with a reason, by a billing specialist or a hospital admin of the hospital; every deletion is audited (ids in
+     * by a billing specialist or a hospital admin of the hospital.
+     *
+     * <p>PR 10 review (QA D2703): the same hole stood for a line with no price-list price (an unpriced charge
+     * removed, then typed again at any price). EVERY line is now removed only with a reason; the removal is kept
+     * ({@code invoice_line_removals}: the line, its price, who, when, why) for the day report, and audited (ids in
      * the description, the reason in the details).
      */
     @Override
@@ -332,29 +367,52 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
         BillingInvoice invoice = writableInvoice(invoiceId, INVOICE_ITEM_NOT_FOUND_KEY, id);
         boolean tariffLine = com.example.hms.mapper.InvoiceItemMapper.tariffUnitPriceOf(item) != null;
         String reason = rawReason == null ? "" : rawReason.trim();
-        if (tariffLine) {
-            if (reason.isEmpty()) {
-                throw new FieldBusinessException(FIELD_DELETE_REASON, "billing.item.deleteReasonRequired");
-            }
-            // QA D2101: a refused removal names the removal, not a price change.
-            if (!isTariffWriter(invoice)) {
-                throw new ClientSafeAccessDeniedException(
-                    com.example.hms.utility.MessageUtil.resolve("billing.item.deleteNotAllowed"));
-            }
+        if (reason.isEmpty()) {
+            throw new FieldBusinessException(FIELD_DELETE_REASON,
+                tariffLine ? "billing.item.deleteReasonRequired" : "billing.item.removeReasonRequired");
+        }
+        // QA D2101: a refused removal names the removal, not a price change.
+        if (tariffLine && !isTariffWriter(invoice)) {
+            throw new ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolve("billing.item.deleteNotAllowed"));
         }
         if (reason.length() > OVERRIDE_REASON_MAX) {
             throw new FieldBusinessException(FIELD_DELETE_REASON, "billing.item.overrideReasonTooLong",
                 OVERRIDE_REASON_MAX);
         }
+        com.example.hms.utility.CardNumbers.requireNone(reason, FIELD_DELETE_REASON);
         UUID priceVersion = item.getPriceListPriceId();
+        recordRemoval(item, invoice, reason);
         invoice.getInvoiceItems().remove(item);
         invoiceItemRepository.delete(item);
         auditLineAfterCommit(AuditEventType.INVOICE_LINE_DELETED, "Draft line " + id + " of invoice " + invoiceId
             + " deleted" + (priceVersion != null ? " (tariff price version " + priceVersion + ")" : ""),
-            id, invoice, reason.isEmpty() ? null : reason);
+            id, invoice, reason);
 
         // recompute after deletion
         billingInvoiceService.recomputeAndPersistTotals(invoiceId);
+    }
+
+    /** PR 10 review (QA D2703): what the removed line was, for the day report. */
+    private void recordRemoval(InvoiceItem item, BillingInvoice invoice, String reason) {
+        UUID userId = roleValidator.getCurrentUserId();
+        if (lineRemovalRepository == null || userId == null) {
+            return;
+        }
+        lineRemovalRepository.save(com.example.hms.model.InvoiceLineRemoval.builder()
+            .hospitalId(invoice.getHospital().getId())
+            .invoiceId(invoice.getId())
+            .invoiceNumber(invoice.getInvoiceNumber())
+            .itemDescription(item.getItemDescription())
+            .textCode(item.getTextCode())
+            .textArgs(item.getTextArgs())
+            .quantity(item.getQuantity())
+            .unitPrice(item.getUnitPrice() != null ? item.getUnitPrice() : java.math.BigDecimal.ZERO)
+            .tariffUnitPrice(com.example.hms.mapper.InvoiceItemMapper.tariffUnitPriceOf(item))
+            .reason(reason)
+            .removedBy(userId)
+            .removedAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()))
+            .build());
     }
 
     private BillingInvoice writableInvoice(UUID invoiceId) {

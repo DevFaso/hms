@@ -303,19 +303,95 @@ class TariffOverrideTest {
         assertThat(event.getValue().getDetails()).isEqualTo(java.util.Map.of("reason", "Doublon de la consultation"));
     }
 
-    @Test
-    @DisplayName("#1197 M2: a typed line is deleted without a reason, as before, and the deletion is still audited")
-    void everyDeletionIsAudited() {
+    private void aLineWithNoPriceListPrice(String price) {
         line.setPriceSource(InvoiceLinePriceSource.MANUAL);
         line.setPriceListItemId(null);
         line.setPriceListPriceId(null);
+        line.setUnitPrice(new BigDecimal(price));
+    }
 
-        service.deleteInvoiceItem(line.getId(), null, Locale.FRENCH);
+    @Test
+    @DisplayName("PR 10 review (QA D2703): a line with no price-list price is not deleted without a reason either")
+    void deletingAnyLineNeedsAReason() {
+        aLineWithNoPriceListPrice("0");
+
+        assertThatThrownBy(() -> service.deleteInvoiceItem(line.getId(), null, Locale.FRENCH))
+            .isInstanceOfSatisfying(FieldBusinessException.class, e -> {
+                assertThat(e.getField()).isEqualTo("reason");
+                assertThat(e.getMessageKey()).isEqualTo("billing.item.removeReasonRequired");
+            });
+        assertThatThrownBy(() -> service.deleteInvoiceItem(line.getId(), "4111 1111 1111 1111", Locale.FRENCH))
+            .isInstanceOf(FieldBusinessException.class);
+        verify(itemRepository, never()).delete(any());
+        verify(audit, never()).logEvent(any());
+    }
+
+    @Test
+    @DisplayName("PR 10 review (QA D2703): the removal is kept for the day report (line, price, who, why) and audited")
+    void aRemovalIsKeptAndAudited() {
+        com.example.hms.repository.InvoiceLineRemovalRepository removals =
+            mock(com.example.hms.repository.InvoiceLineRemovalRepository.class);
+        service.setLineRemovalRepository(removals);
+        invoice.setInvoiceNumber("TWP-2026-000040");
+        aLineWithNoPriceListPrice("0");
+        line.setItemDescription("Radiographie thorax");
+
+        service.deleteInvoiceItem(line.getId(), " Acte non réalisé ", Locale.FRENCH);
 
         verify(itemRepository).delete(line);
+        ArgumentCaptor<com.example.hms.model.InvoiceLineRemoval> kept =
+            ArgumentCaptor.forClass(com.example.hms.model.InvoiceLineRemoval.class);
+        verify(removals).save(kept.capture());
+        assertThat(kept.getValue().getHospitalId()).isEqualTo(HOSPITAL_ID);
+        assertThat(kept.getValue().getInvoiceId()).isEqualTo(invoice.getId());
+        assertThat(kept.getValue().getInvoiceNumber()).isEqualTo("TWP-2026-000040");
+        assertThat(kept.getValue().getItemDescription()).isEqualTo("Radiographie thorax");
+        assertThat(kept.getValue().getUnitPrice()).isEqualByComparingTo("0");
+        assertThat(kept.getValue().getReason()).isEqualTo("Acte non réalisé");
+        assertThat(kept.getValue().getRemovedBy()).isEqualTo(cashier);
         ArgumentCaptor<AuditEventRequestDTO> event = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
         verify(audit).logEvent(event.capture());
         assertThat(event.getValue().getEventType()).isEqualTo(AuditEventType.INVOICE_LINE_DELETED);
-        assertThat(event.getValue().getDetails()).isNull();
+        assertThat(event.getValue().getEventDescription()).doesNotContain("réalisé");
+        assertThat(event.getValue().getDetails()).isEqualTo(java.util.Map.of("reason", "Acte non réalisé"));
+    }
+
+    @Test
+    @DisplayName("PR 10 review (QA D2703): a line typed on a visit's invoice needs a reason, kept and audited")
+    void aLineTypedOnAVisitInvoiceNeedsAReason() {
+        when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(cashier, HOSPITAL_ID))
+            .thenReturn(java.util.List.of(line.getAssignment()));
+        invoice.setEncounter(new com.example.hms.model.Encounter());
+
+        assertThatThrownBy(() -> service.createInvoiceItem(priced("500", "  "), Locale.FRENCH))
+            .isInstanceOfSatisfying(FieldBusinessException.class, e -> {
+                assertThat(e.getField()).isEqualTo("overrideReason");
+                assertThat(e.getMessageKey()).isEqualTo("billing.item.addedLineReasonRequired");
+            });
+        verify(itemRepository, never()).save(any());
+
+        InvoiceItemResponseDTO typed = service.createInvoiceItem(priced("500", "Radio refaite, tarif convenu"),
+            Locale.FRENCH);
+
+        assertThat(typed.getPriceSource()).isEqualTo("MANUAL");
+        assertThat(typed.getOverrideReason()).isEqualTo("Radio refaite, tarif convenu");
+        ArgumentCaptor<AuditEventRequestDTO> event = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(audit).logEvent(event.capture());
+        assertThat(event.getValue().getEventType()).isEqualTo(AuditEventType.INVOICE_LINE_PRICED_MANUALLY);
+        assertThat(event.getValue().getEventDescription()).doesNotContain("Radio").doesNotContain("500");
+        assertThat(event.getValue().getDetails())
+            .isEqualTo(java.util.Map.of("reason", "Radio refaite, tarif convenu"));
+    }
+
+    @Test
+    @DisplayName("PR 10 review: an invoice made by hand with no visit takes its lines with no reason, and no audit row")
+    void aLineOnAHandMadeInvoiceNeedsNoReason() {
+        when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(cashier, HOSPITAL_ID))
+            .thenReturn(java.util.List.of(line.getAssignment()));
+
+        InvoiceItemResponseDTO typed = service.createInvoiceItem(priced("500", null), Locale.FRENCH);
+
+        assertThat(typed.getOverrideReason()).isNull();
+        verify(audit, never()).logEvent(any());
     }
 }

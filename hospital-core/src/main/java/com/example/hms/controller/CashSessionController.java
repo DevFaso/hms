@@ -122,6 +122,14 @@ public class CashSessionController {
         return pdf(rendered.content(), rendered.fileName());
     }
 
+    @GetMapping("/removed-lines")
+    @PreAuthorize(SUPERVISOR_READERS)
+    @Operation(summary = "The lines taken off draft invoices on a day, each with its reason (QA D2703)")
+    public ResponseEntity<List<com.example.hms.payload.dto.billing.InvoiceLineRemovalDTO>> removedLines(
+        @RequestParam(name = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return ResponseEntity.ok(reports.removedLines(date));
+    }
+
     @GetMapping("/day-report.csv")
     @PreAuthorize(SUPERVISOR_READERS)
     @Operation(summary = "The day's journal of every money movement (CSV)")

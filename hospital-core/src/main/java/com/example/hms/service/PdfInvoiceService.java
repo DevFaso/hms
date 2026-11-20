@@ -559,6 +559,7 @@ public class PdfInvoiceService {
             if (report.dayReport()) {
                 cashDayTotals(w, t, report.sessions());
                 cashPricedByHand(w, t, report.priced());
+                cashRemovedLines(w, t, report.removed());
             }
             w.ensureRoom(90);
             w.down(30);
@@ -626,6 +627,7 @@ public class PdfInvoiceService {
             money(s.getTotalExpected()), "", s.getTotalDifference() != null ? money(s.getTotalDifference()) : "-");
         w.text(BOLD, 10, MARGIN, t.get("pdf.cash.cashToCount", money(s.getCashToCount())));
         w.down(14);
+        cashDifferenceLines(w, t, s);
         if ("OPEN".equals(s.getStatus())) {
             w.text(BOLD, 10, MARGIN, t.get("pdf.cash.notClosed"));
             w.down(14);
@@ -638,6 +640,28 @@ public class PdfInvoiceService {
             }
         }
         w.down(6);
+    }
+
+    /**
+     * PR 10 review: the session's total nets a shortage against a surplus; the drawer's own difference and every
+     * line that differs are printed apart, in bold.
+     */
+    private static void cashDifferenceLines(Writer w, PdfLabels t,
+                                            com.example.hms.payload.dto.billing.CashSessionDTO s) throws IOException {
+        if (s.getCashDifference() != null) {
+            w.text(BOLD, 10, MARGIN, t.get("pdf.cash.cashDifference", money(s.getCashDifference())));
+            w.down(14);
+        }
+        if (s.getDifferenceLines() <= 0) {
+            return;
+        }
+        int round = s.getCloseRound();
+        String differing = s.getCounts().stream()
+            .filter(c -> c.getCloseRound() == round && c.getDifference() != null && c.getDifference().signum() != 0)
+            .map(c -> cashMethodLabel(t, c.getMethod(), c.getOperator()) + " " + money(c.getDifference()))
+            .collect(java.util.stream.Collectors.joining(" ; "));
+        w.paragraph(BOLD, 10, MARGIN, t.get("pdf.cash.differenceLines", s.getDifferenceLines(), differing));
+        w.down(14);
     }
 
     private static void cashDayTotals(Writer w, PdfLabels t,
@@ -675,6 +699,32 @@ public class PdfInvoiceService {
         if (open > 0) {
             w.text(BOLD, 10, MARGIN, t.get("pdf.cash.openSessions", open));
             w.down(14);
+        }
+        // PR 10 review: a till whose lines differ is named even when its differences sum to zero.
+        long differing = sessions.stream().filter(s -> s.getDifferenceLines() > 0).count();
+        if (differing > 0) {
+            w.text(BOLD, 10, MARGIN, t.get("pdf.cash.sessionsWithDifference", differing));
+            w.down(14);
+        }
+    }
+
+    /** PR 10 review (QA D2703): the lines taken off draft invoices that day, each with its reason. */
+    private static void cashRemovedLines(Writer w, PdfLabels t,
+                                         List<com.example.hms.payload.dto.billing.InvoiceLineRemovalDTO> lines)
+            throws IOException {
+        w.ensureRoom(40);
+        w.down(6);
+        w.text(BOLD, 11, MARGIN, t.get("pdf.cash.removedLines"));
+        w.down(14);
+        if (lines == null || lines.isEmpty()) {
+            w.text(BODY, 9, MARGIN, t.get("pdf.cash.removedLinesNone"));
+            w.down(13);
+            return;
+        }
+        for (var l : lines) {
+            w.paragraph(BODY, 9, MARGIN, t.get("pdf.cash.removedLine", safe(l.getInvoiceNumber()),
+                safe(l.getLine()), l.getQuantity(), money(l.getUnitPrice()), safe(l.getReason())));
+            w.down(13);
         }
     }
 

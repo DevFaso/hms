@@ -523,27 +523,79 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
      * refused on {@code confirmUnpricedLines}, naming the lines, unless the request
      * confirms them (a line that really is free stays possible). On the server, so
      * an API call does not slip through either.
+     *
+     * <p>PR 10 review (QA D2703): the confirmation alone let an unpriced line go out at
+     * 0 F with no reason. Confirming now needs {@code unpricedLinesReason}: kept on each
+     * such line, audited ({@code INVOICE_LINE_PRICED_MANUALLY}, ids in the description,
+     * the reason in the details) and listed in the day report with the prices set by hand.
      */
     private void requireUnpricedLinesConfirmed(BillingInvoice invoice, InvoiceStatus nextStatus,
                                                BillingInvoiceRequestDTO dto) {
-        if (nextStatus != InvoiceStatus.SENT || Boolean.TRUE.equals(dto.getConfirmUnpricedLines())
-                || invoiceItemRepository == null) {
+        if (nextStatus != InvoiceStatus.SENT || invoiceItemRepository == null) {
             return;
         }
         List<InvoiceItem> lines = invoiceItemRepository.findByBillingInvoiceId(invoice.getId());
         if (lines == null) {
             return;
         }
-        String unpriced = lines.stream()
-            .filter(line -> nz(line.getTotalPrice()).signum() == 0)
-            // QA D1901: each line named in the reader's language.
+        List<InvoiceItem> free = lines.stream().filter(line -> nz(line.getTotalPrice()).signum() == 0).toList();
+        if (free.isEmpty()) {
+            return;
+        }
+        // QA D1901: each line named in the reader's language.
+        String unpriced = free.stream()
             .map(line -> com.example.hms.service.billing.BillingTextRenderer.render(line.getTextCode(), line.getTextArgs(),
                 line.getItemDescription()))
             .collect(java.util.stream.Collectors.joining(", "));
-        if (!unpriced.isEmpty()) {
+        if (!Boolean.TRUE.equals(dto.getConfirmUnpricedLines())) {
             throw new com.example.hms.exception.FieldBusinessException("confirmUnpricedLines",
                 "billing.invoice.unpricedLines", unpriced);
         }
+        String reason = dto.getUnpricedLinesReason() == null ? "" : dto.getUnpricedLinesReason().trim();
+        if (reason.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_UNPRICED_REASON,
+                "billing.invoice.unpricedLinesReasonRequired", unpriced);
+        }
+        if (reason.length() > UNPRICED_REASON_MAX) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_UNPRICED_REASON,
+                "billing.item.overrideReasonTooLong", UNPRICED_REASON_MAX);
+        }
+        com.example.hms.utility.CardNumbers.requireNone(reason, FIELD_UNPRICED_REASON);
+        UUID actorId = roleValidator.getCurrentUserId();
+        for (InvoiceItem line : free) {
+            line.setOverrideReason(reason);
+            invoiceItemRepository.save(line);
+            auditFreeLineAfterCommit(actorId, invoice, line.getId(), reason);
+        }
+    }
+
+    private static final String FIELD_UNPRICED_REASON = "unpricedLinesReason";
+    private static final int UNPRICED_REASON_MAX = 500;
+
+    /** PR 10 review (QA D2703): one row per line issued at 0 F; ids in the description, the reason in the details. */
+    private void auditFreeLineAfterCommit(UUID actorId, BillingInvoice invoice, UUID lineId, String reason) {
+        if (auditEventLogService == null) {
+            return;
+        }
+        String line = String.valueOf(lineId);
+        String invoiceIdText = String.valueOf(invoice.getId());
+        UUID hospitalId = invoice.getHospital() != null ? invoice.getHospital().getId() : null;
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.INVOICE_LINE_PRICED_MANUALLY)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .hospitalId(hospitalId)
+                    .eventDescription("Draft line " + line + " of invoice " + invoiceIdText + " priced by hand")
+                    .entityType("INVOICE_ITEM")
+                    .resourceId(line)
+                    .details(java.util.Map.of("reason", reason))
+                    .build());
+            } catch (RuntimeException ex) {
+                LOG.warn("Free line audit not written for line {}: {}", line, ex.getClass().getSimpleName());
+            }
+        });
     }
 
     /** QA D768: methods whose money can only be traced by its transaction reference. */

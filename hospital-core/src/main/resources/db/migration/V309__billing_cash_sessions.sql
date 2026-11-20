@@ -36,6 +36,10 @@
 --   existing links are moved to their root, unless another active item of
 --   the hospital already holds that root (left as is; the price list flags it).
 --
+-- billing.invoice_line_removals - QA D2703 (PR review): a line taken off a
+--   draft invoice is deleted, so what it was, its price, who removed it, when
+--   and why are kept here; the day report lists them.
+--
 -- Idempotent (IF NOT EXISTS, DROP CONSTRAINT IF EXISTS before ADD, the link
 -- UPDATE is a no-op once applied). Plain DDL and DML, no DO block.
 
@@ -122,6 +126,32 @@ CREATE INDEX IF NOT EXISTS idx_refund_cash_session ON billing.invoice_refunds (c
 CREATE UNIQUE INDEX IF NOT EXISTS uq_refund_live_reversal
     ON billing.invoice_refunds (reversed_payment_id)
     WHERE reversed_payment_id IS NOT NULL AND status IN ('REQUESTED', 'APPROVED', 'PAID');
+
+-- QA D2703: the lines taken off draft invoices, with the reason.
+CREATE TABLE IF NOT EXISTS billing.invoice_line_removals (
+    id                 UUID           NOT NULL DEFAULT gen_random_uuid(),
+    hospital_id        UUID           NOT NULL,
+    invoice_id         UUID           NOT NULL,
+    invoice_number     VARCHAR(100),
+    item_description   VARCHAR(255)   NOT NULL,
+    text_code          VARCHAR(120),
+    text_args          TEXT,
+    quantity           INTEGER        NOT NULL,
+    unit_price         NUMERIC(12, 2) NOT NULL,
+    tariff_unit_price  NUMERIC(12, 2),
+    reason             VARCHAR(500)   NOT NULL,
+    removed_by         UUID           NOT NULL,
+    removed_at         TIMESTAMP      NOT NULL,
+    created_at         TIMESTAMP      NOT NULL DEFAULT now(),
+    updated_at         TIMESTAMP      NOT NULL DEFAULT now(),
+
+    CONSTRAINT pk_invoice_line_removals     PRIMARY KEY (id),
+    CONSTRAINT fk_line_removal_hospital     FOREIGN KEY (hospital_id) REFERENCES hospital.hospitals (id),
+    CONSTRAINT fk_line_removal_invoice      FOREIGN KEY (invoice_id) REFERENCES billing.billing_invoices (id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_line_removal_hospital_at
+    ON billing.invoice_line_removals (hospital_id, removed_at);
 
 -- QA D2700: lab-test price links move to the first version of the test's lineage.
 WITH RECURSIVE lineage AS (

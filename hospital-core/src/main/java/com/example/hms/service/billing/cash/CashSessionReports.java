@@ -2,6 +2,7 @@ package com.example.hms.service.billing.cash;
 
 import com.example.hms.model.InvoiceItem;
 import com.example.hms.payload.dto.billing.CashSessionDTO;
+import com.example.hms.payload.dto.billing.InvoiceLineRemovalDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.InvoiceItemRepository;
 import com.example.hms.service.PdfInvoiceService;
@@ -37,11 +38,20 @@ public class CashSessionReports {
     private final InvoiceItemRepository invoiceItemRepository;
     private final HospitalRepository hospitalRepository;
     private final PdfInvoiceService pdfInvoiceService;
+    private final com.example.hms.repository.InvoiceLineRemovalRepository lineRemovalRepository;
+    private final com.example.hms.repository.UserRepository userRepository;
 
     /** What a PDF prints: one session, or every session of the day with the totals and the prices set by hand. */
     public record Report(String hospitalName, LocalDate day, boolean dayReport, List<CashSessionDTO> sessions,
-                         List<PricedLine> priced) {
+                         List<PricedLine> priced, List<InvoiceLineRemovalDTO> removed) {
+
+        /** A report with no removed lines (a session's sheet). */
+        public Report(String hospitalName, LocalDate day, boolean dayReport, List<CashSessionDTO> sessions,
+                      List<PricedLine> priced) {
+            this(hospitalName, day, dayReport, sessions, priced, List.of());
+        }
     }
+
 
     /** A draft line priced by hand with a reason, as the day report lists it (owner decision D-2). */
     public record PricedLine(String invoiceNumber, String line, BigDecimal gridPrice, BigDecimal price,
@@ -80,14 +90,18 @@ public class CashSessionReports {
         CashSessionService.DayReport day = sessions.dayReport(date);
         List<PricedLine> priced = pricedByHand(day.hospitalId(), day.day());
         byte[] pdf = pdfInvoiceService.generateCashReportPdf(new Report(hospitalName(day.hospitalId()), day.day(),
-            true, day.sessions(), priced), effective(locale));
+            true, day.sessions(), priced, removedLines(day.hospitalId(), day.day())), effective(locale));
         return new Rendered(pdf, "rapport-caisses-" + day.day());
     }
 
     /**
-     * The day's journal: one row per money movement of every session (date, till, cashier, document, kind, method,
-     * operator, reference, in, out). UTF-8 with a BOM, {@code ;}, CRLF; a cell a spreadsheet would run as a formula
-     * is written behind an apostrophe.
+     * The day's journal: one row per money movement of every session (date, till, cashier, document, kind, status,
+     * method, operator, reference, in, out). UTF-8 with a BOM, {@code ;}, CRLF; a cell a spreadsheet would run as a
+     * formula is written behind an apostrophe.
+     *
+     * <p>PR 10 review: {@code statut} is the movement's own status. A payment later reversed (REVERSED) or a
+     * pharmacy payment voided with its dispense (VOIDED) stays money in on the day it came in, and was shown as a
+     * plain entry; the accountant now sees which rows are no longer counted on their invoice or dispense.
      */
     @Transactional(readOnly = true)
     public Rendered journalCsv(LocalDate date) {
@@ -96,7 +110,7 @@ public class CashSessionReports {
             .map(com.example.hms.utility.HospitalTime::zoneOf).orElse(java.time.ZoneId.systemDefault());
         StringBuilder out = new StringBuilder().append((char) 0xFEFF);
         out.append(String.join(SEPARATOR, "date", "caisse", "caissier", "statut_caisse", "document", "nature",
-            "mode", "operateur", "reference", "entree", "sortie")).append(CRLF);
+            "statut", "mode", "operateur", "reference", "entree", "sortie")).append(CRLF);
         for (CashSessionDTO s : day.sessions()) {
             for (CashSessionDTO.Movement m : s.getMovements()) {
                 boolean in = CashSessionService.IN.equals(m.getDirection());
@@ -106,7 +120,7 @@ public class CashSessionReports {
                 out.append(String.join(SEPARATOR,
                     m.getAt() != null ? TIME.format(com.example.hms.utility.HospitalTime.at(m.getAt(), zone)) : "",
                     cell(s.getTill()), cell(s.getCashierName()), cell(s.getStatus()), cell(m.getDocument()),
-                    cell(m.getKind()), cell(m.getMethod()), cell(m.getOperator()), cell(m.getReference()),
+                    cell(m.getKind()), cell(m.getStatus()), cell(m.getMethod()), cell(m.getOperator()), cell(m.getReference()),
                     in ? amount : "", in ? "" : amount)).append(CRLF);
             }
         }
@@ -134,6 +148,51 @@ public class CashSessionReports {
                 item.getBillingInvoice() != null ? item.getBillingInvoice().getInvoiceNumber() : null,
                 BillingTextRenderer.render(item.getTextCode(), item.getTextArgs(), item.getItemDescription()),
                 item.getTariffUnitPrice(), item.getUnitPrice(), item.getOverrideReason()));
+        }
+        return lines;
+    }
+
+    /**
+     * PR 10 review (QA D2703): the lines taken off draft invoices of the acting hospital on a day, oldest first, for
+     * « Caisses du jour ». Supervisors only (the same check as the day report).
+     */
+    @Transactional(readOnly = true)
+    public List<InvoiceLineRemovalDTO> removedLines(LocalDate date) {
+        CashSessionService.DayReport day = sessions.dayReport(date);
+        return removedLines(day.hospitalId(), day.day());
+    }
+
+    private List<InvoiceLineRemovalDTO> removedLines(UUID hospitalId, LocalDate day) {
+        List<InvoiceLineRemovalDTO> lines = new ArrayList<>();
+        List<com.example.hms.model.InvoiceLineRemoval> rows = lineRemovalRepository
+            .findByHospitalIdAndRemovedAtGreaterThanEqualAndRemovedAtLessThanOrderByRemovedAtAsc(hospitalId,
+                day.atStartOfDay(), day.plusDays(1).atStartOfDay());
+        if (rows == null || rows.isEmpty()) {
+            return lines;
+        }
+        java.util.Map<UUID, String> names = new java.util.HashMap<>();
+        java.util.Set<UUID> ids = new java.util.HashSet<>();
+        rows.forEach(row -> ids.add(row.getRemovedBy()));
+        ids.remove(null);
+        if (!ids.isEmpty()) {
+            for (com.example.hms.model.User user : userRepository.findAllById(ids)) {
+                String name = (java.util.Objects.toString(user.getFirstName(), "") + " "
+                    + java.util.Objects.toString(user.getLastName(), "")).trim();
+                names.put(user.getId(), name.isEmpty() ? null : name);
+            }
+        }
+        for (com.example.hms.model.InvoiceLineRemoval row : rows) {
+            lines.add(InvoiceLineRemovalDTO.builder()
+                .id(row.getId())
+                .invoiceNumber(row.getInvoiceNumber())
+                .line(BillingTextRenderer.render(row.getTextCode(), row.getTextArgs(), row.getItemDescription()))
+                .quantity(row.getQuantity() != null ? row.getQuantity() : 1)
+                .unitPrice(row.getUnitPrice())
+                .tariffUnitPrice(row.getTariffUnitPrice())
+                .reason(row.getReason())
+                .removedByName(names.get(row.getRemovedBy()))
+                .removedAt(row.getRemovedAt())
+                .build());
         }
         return lines;
     }

@@ -3708,9 +3708,44 @@ class BillingInvoiceServiceImplTest {
         BillingInvoice invoice = draftWithLines("Consultation=5000", "Certificat offert=0");
 
         billingInvoiceService.updateInvoice(invoice.getId(),
-            editOf().status(InvoiceStatus.SENT).confirmUnpricedLines(true).build(), Locale.ENGLISH);
+            editOf().status(InvoiceStatus.SENT).confirmUnpricedLines(true)
+                .unpricedLinesReason("Certificat offert par la direction").build(), Locale.ENGLISH);
 
         assertEquals(InvoiceStatus.SENT, invoice.getStatus());
+    }
+
+    @Test
+    void issuing_withALineAtZero_needsAReason_keptOnTheLineAndAudited_D2703() {
+        BillingInvoice invoice = draftWithLines("Consultation=5000", "TDR=0");
+        com.example.hms.model.InvoiceItem free = invoiceItemRepository.findByBillingInvoiceId(invoice.getId()).get(1);
+        free.setId(UUID.randomUUID());
+        UUID invoiceId = invoice.getId();
+
+        // Confirmed, but with no reason: refused on the reason's own field, naming the lines.
+        BillingInvoiceRequestDTO noReason = editOf().status(InvoiceStatus.SENT).confirmUnpricedLines(true)
+            .unpricedLinesReason("  ").build();
+        com.example.hms.exception.FieldBusinessException refused = assertThrows(
+            com.example.hms.exception.FieldBusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, noReason, Locale.ENGLISH));
+        assertEquals("unpricedLinesReason", refused.getField());
+        assertEquals("billing.invoice.unpricedLinesReasonRequired", refused.getMessageKey());
+        assertEquals("TDR", refused.getArgs()[0]);
+        assertEquals(InvoiceStatus.DRAFT, invoice.getStatus());
+        assertNull(free.getOverrideReason());
+
+        // A card number is never a reason.
+        BillingInvoiceRequestDTO card = editOf().status(InvoiceStatus.SENT).confirmUnpricedLines(true)
+            .unpricedLinesReason("4111 1111 1111 1111").build();
+        assertThrows(com.example.hms.exception.FieldBusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, card, Locale.ENGLISH));
+
+        billingInvoiceService.updateInvoice(invoiceId, editOf().status(InvoiceStatus.SENT)
+            .confirmUnpricedLines(true).unpricedLinesReason(" Test offert, campagne paludisme ").build(),
+            Locale.ENGLISH);
+
+        assertEquals(InvoiceStatus.SENT, invoice.getStatus());
+        assertEquals("Test offert, campagne paludisme", free.getOverrideReason());
+        verify(invoiceItemRepository).save(free);
     }
 
     @Test
@@ -3875,7 +3910,8 @@ class BillingInvoiceServiceImplTest {
         billingInvoiceService.setCoverageService(coverage);
 
         billingInvoiceService.updateInvoice(invoice.getId(),
-            editOf().status(InvoiceStatus.SENT).confirmUnpricedLines(true).build(), Locale.FRENCH);
+            editOf().status(InvoiceStatus.SENT).confirmUnpricedLines(true).unpricedLinesReason("Ligne offerte")
+                .build(), Locale.FRENCH);
 
         verify(coverage).applyAtIssue(eq(invoice), any());
         assertEquals(InvoiceStatus.CANCELLED, copay.getStatus());

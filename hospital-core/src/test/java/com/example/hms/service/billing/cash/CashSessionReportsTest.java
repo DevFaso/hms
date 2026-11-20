@@ -44,7 +44,12 @@ class CashSessionReportsTest {
     private final InvoiceItemRepository items = mock(InvoiceItemRepository.class);
     private final HospitalRepository hospitals = mock(HospitalRepository.class);
     private final PdfInvoiceService pdf = new PdfInvoiceService(TestMessageSources.bundles());
-    private final CashSessionReports reports = new CashSessionReports(sessions, items, hospitals, pdf);
+    private final com.example.hms.repository.InvoiceLineRemovalRepository removals =
+        mock(com.example.hms.repository.InvoiceLineRemovalRepository.class);
+    private final com.example.hms.repository.UserRepository users =
+        mock(com.example.hms.repository.UserRepository.class);
+    private final CashSessionReports reports = new CashSessionReports(sessions, items, hospitals, pdf, removals,
+        users);
 
     private CashSessionDTO billing;
     private CashSessionDTO pharmacy;
@@ -117,11 +122,96 @@ class CashSessionReportsTest {
         long out = 0;
         for (String row : rows.subList(1, rows.size())) {
             String[] cells = row.split(";", -1);
-            in += cells[9].isEmpty() ? 0 : Long.parseLong(cells[9]);
-            out += cells[10].isEmpty() ? 0 : Long.parseLong(cells[10]);
+            in += cells[10].isEmpty() ? 0 : Long.parseLong(cells[10]);
+            out += cells[11].isEmpty() ? 0 : Long.parseLong(cells[11]);
         }
         assertThat(in).isEqualTo(2150);
         assertThat(out).isEqualTo(500);
+    }
+
+    @Test
+    @DisplayName("PR 10 review: the journal has a status column, so a voided or reversed payment is not a plain entry")
+    void journalNamesTheStatusOfEachMovement() {
+        CashSessionDTO.Movement voided = movement("PHARMACY_PAYMENT", "IN", "CASH", "400", "RX-1");
+        voided.setStatus("VOIDED");
+        CashSessionDTO.Movement reversed = movement("PAYMENT", "IN", "CASH", "200", "TWP-2026-000031");
+        reversed.setStatus("REVERSED");
+        pharmacy.setMovements(List.of(voided, reversed));
+
+        List<String> rows = new String(reports.journalCsv(DAY).content(), StandardCharsets.UTF_8).lines().toList();
+
+        String[] header = rows.get(0).split(";", -1);
+        assertThat(header).hasSize(12);
+        assertThat(header[6]).isEqualTo("statut");
+        assertThat(rows).anySatisfy(row -> {
+            String[] cells = row.split(";", -1);
+            assertThat(cells[5]).isEqualTo("\"PHARMACY_PAYMENT\"");
+            assertThat(cells[6]).isEqualTo("\"VOIDED\"");
+            assertThat(cells[10]).isEqualTo("400");
+        });
+        assertThat(rows).anySatisfy(row -> assertThat(row.split(";", -1)[6]).isEqualTo("\"REVERSED\""));
+    }
+
+    @Test
+    @DisplayName("PR 10 review: the day report prints the cash difference, the lines that differ and the lines removed")
+    void dayReportFlagsDifferencesAndListsRemovedLines() throws java.io.IOException {
+        // -500 on cash and +500 on Orange Money: the total says 0.
+        billing.setCounts(List.of(
+            CashSessionDTO.Count.builder().closeRound(1).method("CASH").expected(new BigDecimal("500"))
+                .counted(BigDecimal.ZERO).difference(new BigDecimal("-500")).explanation("Tiroir").build(),
+            CashSessionDTO.Count.builder().closeRound(1).method("MOBILE_MONEY").operator("ORANGE_MONEY")
+                .expected(new BigDecimal("850")).counted(new BigDecimal("1350")).difference(new BigDecimal("500"))
+                .explanation("Releve").build()));
+        billing.setTotalDifference(BigDecimal.ZERO);
+        billing.setCashDifference(new BigDecimal("-500"));
+        billing.setDifferenceLines(2);
+        com.example.hms.model.InvoiceLineRemoval removed = com.example.hms.model.InvoiceLineRemoval.builder()
+            .invoiceNumber("TWP-2026-000040").itemDescription("Radiographie thorax").quantity(1)
+            .unitPrice(BigDecimal.ZERO).reason("Acte non realise").build();
+        when(removals.findByHospitalIdAndRemovedAtGreaterThanEqualAndRemovedAtLessThanOrderByRemovedAtAsc(
+            eq(HOSPITAL), any(), any())).thenReturn(List.of(removed));
+
+        String text;
+        try (var doc = org.apache.pdfbox.pdmodel.PDDocument.load(reports.dayReportPdf(DAY, Locale.FRENCH).content())) {
+            text = new org.apache.pdfbox.text.PDFTextStripper().getText(doc);
+        }
+
+        assertThat(text).contains("Écart espèces : -500");
+        assertThat(text).contains("ÉCART sur 2 ligne(s)");
+        assertThat(text).contains("1 caisse(s) avec un écart");
+        assertThat(text).contains("Lignes retirées des factures");
+        assertThat(text).contains("TWP-2026-000040").contains("Radiographie thorax").contains("Acte non realise");
+    }
+
+    @Test
+    @DisplayName("PR 10 review (QA D2703): the supervisor reads the day's removed lines, with who and why")
+    void removedLinesAreReadableByTheSupervisor() {
+        UUID cashier = UUID.randomUUID();
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(cashier);
+        user.setFirstName("Awa");
+        user.setLastName("Caisse");
+        when(users.findAllById(any())).thenReturn(List.of(user));
+        com.example.hms.model.InvoiceLineRemoval removed = com.example.hms.model.InvoiceLineRemoval.builder()
+            .invoiceNumber("TWP-2026-000040").itemDescription("Radiographie thorax").quantity(2)
+            .unitPrice(new BigDecimal("7500")).reason("Acte non réalisé").removedBy(cashier)
+            .removedAt(LocalDateTime.of(2026, 11, 20, 9, 30)).build();
+        when(removals.findByHospitalIdAndRemovedAtGreaterThanEqualAndRemovedAtLessThanOrderByRemovedAtAsc(
+            eq(HOSPITAL), eq(DAY.atStartOfDay()), eq(DAY.plusDays(1).atStartOfDay()))).thenReturn(List.of(removed));
+
+        List<com.example.hms.payload.dto.billing.InvoiceLineRemovalDTO> lines =
+            new CashSessionController(sessions, reports).removedLines(DAY).getBody();
+
+        assertThat(lines).singleElement().satisfies(line -> {
+            assertThat(line.getInvoiceNumber()).isEqualTo("TWP-2026-000040");
+            assertThat(line.getLine()).isEqualTo("Radiographie thorax");
+            assertThat(line.getQuantity()).isEqualTo(2);
+            assertThat(line.getUnitPrice()).isEqualByComparingTo("7500");
+            assertThat(line.getReason()).isEqualTo("Acte non réalisé");
+            assertThat(line.getRemovedByName()).isEqualTo("Awa Caisse");
+        });
+        // The same supervisor check as the day report stands in front of the read.
+        org.mockito.Mockito.verify(sessions).dayReport(DAY);
     }
 
     @Test
