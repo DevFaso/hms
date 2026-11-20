@@ -1395,7 +1395,7 @@
     "NOTES_REQUIRED_FOR": "(obligatoires pour refuser ou mettre en attente)",
     "FIELD_PHARMACIST_NOTE": "Note du pharmacien",
     "FIELD_DECISION_BASIS": "Décision",
-    "BASIS_PRESCRIBER_APPROVAL": "Décision du prescripteur",
+    "BASIS_PRESCRIBER_DECISION": "Décision du prescripteur",
     "BASIS_ORIGINAL_PRESCRIPTION": "Renouvellement inscrit sur l’ordonnance (libéré par la pharmacie)",
     "BASIS_PHARMACIST_REFUSAL": "Refus de délivrance du pharmacien",
     "PHARMACY_RULE": "Seul le prescripteur approuve un renouvellement. Vous pouvez libérer un renouvellement déjà inscrit sur l’ordonnance, transmettre la demande avec vos remarques, ou refuser de délivrer avec un motif.",

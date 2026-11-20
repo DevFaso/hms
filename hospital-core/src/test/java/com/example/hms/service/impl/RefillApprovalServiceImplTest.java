@@ -798,7 +798,7 @@ class RefillApprovalServiceImplTest {
             MedicationRefillResponseDTO result = service.approve(auth, refillId, null);
 
             assertThat(result.getStatus()).isEqualTo("APPROVED");
-            assertThat(result.getDecisionBasis()).isEqualTo("PRESCRIBER_APPROVAL");
+            assertThat(result.getDecisionBasis()).isEqualTo("PRESCRIBER_DECISION");
             assertThat(pending.getDecidedBy()).isEqualTo(userId);
             assertThat(pending.getDecidedAt()).isNotNull();
         }

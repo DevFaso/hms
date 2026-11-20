@@ -180,7 +180,7 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
             refill.setProviderNotes(decision.getProviderNotes().trim());
         }
         if (newStatus != RefillStatus.PAUSED) {
-            stampDecision(refill, deciderId, com.example.hms.enums.RefillDecisionBasis.PRESCRIBER_APPROVAL);
+            stampDecision(refill, deciderId, com.example.hms.enums.RefillDecisionBasis.PRESCRIBER_DECISION);
         }
         refill = refillRequestRepository.save(refill);
 

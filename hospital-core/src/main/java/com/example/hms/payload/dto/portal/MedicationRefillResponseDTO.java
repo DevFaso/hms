@@ -63,7 +63,7 @@ public class MedicationRefillResponseDTO {
     @Schema(description = "When the pharmacist reviewed the request")
     private LocalDateTime pharmacistReviewedAt;
 
-    @Schema(description = "On what authority it was decided: PRESCRIBER_APPROVAL, ORIGINAL_PRESCRIPTION, PHARMACIST_REFUSAL")
+    @Schema(description = "On what authority it was decided: PRESCRIBER_DECISION, ORIGINAL_PRESCRIPTION, PHARMACIST_REFUSAL")
     private String decisionBasis;
 
     /**

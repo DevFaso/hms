@@ -33,7 +33,7 @@
 --   before this migration (those keep their reason and have no approver).
 --
 -- clinical.refill_requests - who decided a request and on what basis
---   (PRESCRIBER_APPROVAL, ORIGINAL_PRESCRIPTION for a refill the prescriber
+--   (PRESCRIBER_DECISION, ORIGINAL_PRESCRIPTION for a refill the prescriber
 --   already wrote, PHARMACIST_REFUSAL), and the review note of the pharmacist.
 --
 -- Idempotent (IF NOT EXISTS, DROP CONSTRAINT IF EXISTS before each ADD). Plain
@@ -115,4 +115,4 @@ ALTER TABLE clinical.refill_requests ADD COLUMN IF NOT EXISTS pharmacist_reviewe
 ALTER TABLE clinical.refill_requests DROP CONSTRAINT IF EXISTS ck_refill_decision_basis;
 ALTER TABLE clinical.refill_requests ADD CONSTRAINT ck_refill_decision_basis
     CHECK (decision_basis IS NULL
-           OR decision_basis IN ('PRESCRIBER_APPROVAL', 'ORIGINAL_PRESCRIPTION', 'PHARMACIST_REFUSAL'));
+           OR decision_basis IN ('PRESCRIBER_DECISION', 'ORIGINAL_PRESCRIPTION', 'PHARMACIST_REFUSAL'));

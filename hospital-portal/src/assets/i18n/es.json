@@ -1395,7 +1395,7 @@
     "NOTES_REQUIRED_FOR": "(obligatorias para denegar o poner en espera)",
     "FIELD_PHARMACIST_NOTE": "Pharmacist’s note",
     "FIELD_DECISION_BASIS": "Decision",
-    "BASIS_PRESCRIBER_APPROVAL": "Prescriber’s decision",
+    "BASIS_PRESCRIBER_DECISION": "Prescriber’s decision",
     "BASIS_ORIGINAL_PRESCRIPTION": "Refill written on the prescription (released by the pharmacy)",
     "BASIS_PHARMACIST_REFUSAL": "Pharmacist’s refusal to dispense",
     "PHARMACY_RULE": "Only the prescriber approves a renewal. You can release a refill already written on the prescription, forward the request with your remarks, or refuse to dispense with a reason.",

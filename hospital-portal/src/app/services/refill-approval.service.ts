@@ -28,7 +28,7 @@ export interface RefillRequest {
   pharmacistNote?: string | null;
   pharmacistReviewedAt?: string | null;
   /** On what authority the request was decided. */
-  decisionBasis?: 'PRESCRIBER_APPROVAL' | 'ORIGINAL_PRESCRIPTION' | 'PHARMACIST_REFUSAL' | null;
+  decisionBasis?: 'PRESCRIBER_DECISION' | 'ORIGINAL_PRESCRIPTION' | 'PHARMACIST_REFUSAL' | null;
   /** A refill the prescriber already wrote is still unused: the pharmacy may release it. */
   writtenRefillLeft?: boolean;
   /** The server answered a pharmacist: the card shows the pharmacy's steps, never a decision. */
