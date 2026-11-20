@@ -155,6 +155,24 @@ export interface LabResultResponse {
   criticalCommunicatedAt?: string | null;
   criticalCommunicationReadBack?: string | null;
   criticalCommunicatedBy?: string | null;
+  /**
+   * r65 D2614 (release worklist only): the patient's file number at the
+   * ordering hospital, birth date and sex, to check identity on a critical call.
+   */
+  patientMrn?: string | null;
+  patientDateOfBirth?: string | null;
+  patientGender?: string | null;
+  /** r65 D2613 (release worklist only): the rejected QC run holding this release, if any. */
+  qcHold?: LabQcHold | null;
+}
+
+/** r65 D2613: the rejected QC run that holds a result's release. */
+export interface LabQcHold {
+  runId: string;
+  qcLevel: string | null;
+  recordedAt: string | null;
+  recordedBy: string | null;
+  sdFlag: string | null;
 }
 
 /** r63 (NFS panels): one component value of a panel result. */

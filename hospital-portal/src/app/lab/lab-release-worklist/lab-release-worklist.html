@@ -96,6 +96,14 @@
             <tr [class.is-critical]="isCritical(row)" [attr.data-testid]="'release-row-' + row.id">
               <td>
                 <span class="patient-name">{{ row.patientFullName }}</span>
+                @if (hasPatientIdentity(row)) {
+                  <!-- r65 D2614: near-identical names exist; the file number, age and sex tell them apart -->
+                  <span class="patient-identity" [attr.data-testid]="'release-identity-' + row.id">
+                    <ng-container
+                      *ngTemplateOutlet="identity; context: { $implicit: row }"
+                    ></ng-container>
+                  </span>
+                }
                 @if (isCritical(row)) {
                   <span class="critical-tag" data-testid="release-critical-tag">
                     {{ 'LAB_RELEASE.CRITICAL' | translate }}
@@ -104,6 +112,13 @@
               </td>
               <td>
                 <span class="test-name">{{ row.labTestName }}</span>
+                @if (row.qcHold) {
+                  <!-- r65 D2613: the QC hold is said on the row, before the dialog is filled -->
+                  {{ ' '
+                  }}<span class="qc-hold-tag" [attr.data-testid]="'release-qc-hold-' + row.id">{{
+                    'LAB_RELEASE.QC_HOLD_TAG' | translate
+                  }}</span>
+                }
                 @if (isUrgentPriority(row)) {
                   {{ ' '
                   }}<span
@@ -267,6 +282,22 @@
               <span class="material-symbols-outlined" aria-hidden="true">priority_high</span>
               {{ 'LAB_RELEASE.CRITICAL_TITLE' | translate }}
             </p>
+            <!-- r65 D2614: who the patient is, checked aloud during the call -->
+            <p class="critical-release-identity" data-testid="release-critical-identity">
+              <strong>{{ target.patientFullName }}</strong>
+              @if (hasPatientIdentity(target)) {
+                ·
+                <ng-container
+                  *ngTemplateOutlet="identity; context: { $implicit: target }"
+                ></ng-container>
+              }
+              @if (target.orderedByName) {
+                <br />
+                <span data-testid="release-critical-orderer">{{
+                  'LAB_RELEASE.ORDERED_BY' | translate: { name: target.orderedByName }
+                }}</span>
+              }
+            </p>
             <p class="critical-release-hint">{{ 'LAB_RELEASE.CRITICAL_HINT' | translate }}</p>
             <div class="critical-release-fields">
               <label class="release-field">
@@ -309,10 +340,33 @@
             </div>
           </div>
         }
-        @if (qcOverrideNotice(); as notice) {
-          <!-- r63 D2304: the test's latest QC run was rejected; a release needs a documented reason -->
+        @if (qcOverrideRequired(target)) {
+          <!-- r63 D2304: the test's latest QC run was rejected; a release needs a documented reason.
+               r65 D2613: shown when the dialog opens, naming the run, not after a refused release. -->
           <div class="qc-override" role="group" data-testid="release-qc-override">
-            <p class="modal-error" role="alert">{{ notice }}</p>
+            @if (target.qcHold; as hold) {
+              <p class="qc-hold-banner" role="note" data-testid="release-qc-hold-banner">
+                <span class="material-symbols-outlined" aria-hidden="true">block</span>
+                {{
+                  'LAB_RELEASE.QC_HOLD_BANNER'
+                    | translate
+                      : {
+                          test: target.labTestName,
+                          level:
+                            (hold.qcLevel === 'LOW_CONTROL'
+                              ? 'LAB_RELEASE.QC_LEVEL_LOW'
+                              : 'LAB_RELEASE.QC_LEVEL_HIGH'
+                            ) | translate,
+                          at: hold.recordedAt
+                            ? (hold.recordedAt | serverTime | date: 'short')
+                            : '—',
+                          by: hold.recordedBy || '—',
+                        }
+                }}
+              </p>
+            } @else if (qcOverrideNotice(); as notice) {
+              <p class="modal-error" role="alert">{{ notice }}</p>
+            }
             <label class="release-field">
               <span>{{ 'LAB_RELEASE.QC_OVERRIDE_REASON' | translate }} *</span>
               <textarea
@@ -388,3 +442,22 @@
     </div>
   }
 </div>
+
+<!-- r65 D2614: « MRN · 35 ans · F », the parts that are known -->
+<ng-template #identity let-r>
+  @if (r.patientMrn) {
+    <span class="mono">{{ r.patientMrn }}</span>
+  }
+  @if (patientAge(r); as age) {
+    @if (r.patientMrn) {
+      ·
+    }
+    {{ age.key | translate: { n: age.n } }}
+  }
+  @if (r.patientGender) {
+    @if (r.patientMrn || patientAge(r)) {
+      ·
+    }
+    {{ r.patientGender | enumLabel: 'gender' }}
+  }
+</ng-template>

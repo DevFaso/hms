@@ -280,9 +280,46 @@ export class LabReleaseWorklistComponent implements OnInit {
     );
   }
 
-  /** r63 D2304: the QC override was asked for and no reason has been given yet. */
+  /**
+   * r63 D2304 / r65 D2613: this release needs a documented QC override: the
+   * worklist row already says a rejected run holds it, or the API refused it.
+   */
+  qcOverrideRequired(r: LabResultResponse | null = this.releaseTarget()): boolean {
+    return this.qcOverrideNotice() !== null || !!r?.qcHold;
+  }
+
+  /** r63 D2304: the QC override is needed and no reason has been given yet. */
   qcOverrideMissing(): boolean {
-    return this.qcOverrideNotice() !== null && !this.qcOverrideReason().trim();
+    return this.qcOverrideRequired() && !this.qcOverrideReason().trim();
+  }
+
+  /**
+   * r65 D2614: the age at today in whole years (months under two), for the
+   * identity line of a critical call; null when the birth date is unknown.
+   */
+  patientAge(r: LabResultResponse): { key: string; n: number } | null {
+    const dob = r.patientDateOfBirth
+      ? new Date(`${r.patientDateOfBirth.slice(0, 10)}T00:00:00`)
+      : null;
+    if (!dob || Number.isNaN(dob.getTime())) {
+      return null;
+    }
+    const now = new Date();
+    let months = (now.getFullYear() - dob.getFullYear()) * 12 + (now.getMonth() - dob.getMonth());
+    if (now.getDate() < dob.getDate()) {
+      months -= 1;
+    }
+    if (months < 0) {
+      return null;
+    }
+    return months < 24
+      ? { key: 'LAB_RELEASE.AGE_MONTHS', n: months }
+      : { key: 'LAB_RELEASE.AGE_YEARS', n: Math.floor(months / 12) };
+  }
+
+  /** r65 D2614: the row has something to identify the patient by beyond the name. */
+  hasPatientIdentity(r: LabResultResponse): boolean {
+    return !!(r.patientMrn || r.patientDateOfBirth || r.patientGender);
   }
 
   inputValue(event: Event): string {
@@ -338,7 +375,7 @@ export class LabReleaseWorklistComponent implements OnInit {
             criticalReadBack: this.criticalReadBack().trim(),
           }
         : {}),
-      ...(this.qcOverrideNotice() !== null
+      ...(this.qcOverrideRequired(target)
         ? { qcOverrideReason: this.qcOverrideReason().trim() }
         : {}),
     };

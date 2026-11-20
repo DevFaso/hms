@@ -4776,7 +4776,14 @@
     "CRITICAL_READ_BACK": "Value read back",
     "CRITICAL_READ_BACK_PLACEHOLDER": "As they repeated it",
     "QC_OVERRIDE_REASON": "Reason for releasing despite the rejected QC",
-    "QC_BLOCKED": "The latest quality-control run for this test was rejected. Record a passing run, or give the reason for releasing anyway."
+    "QC_BLOCKED": "The latest quality-control run for this test was rejected. Record a passing run, or give the reason for releasing anyway.",
+    "QC_HOLD_TAG": "QC rejected",
+    "QC_HOLD_BANNER": "Release held: the latest quality-control run for {{test}} was rejected ({{level}}, {{at}}, recorded by {{by}}). Record a passing run, or give the reason for releasing this result anyway.",
+    "QC_LEVEL_LOW": "low control",
+    "QC_LEVEL_HIGH": "high control",
+    "AGE_YEARS": "{{n}} y",
+    "AGE_MONTHS": "{{n}} mo",
+    "ORDERED_BY": "Ordered by: {{name}}"
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Lab Instruments",
@@ -5139,7 +5146,8 @@
     "PRICE_LIST": "Price list",
     "PATIENT_NOTIFICATIONS": "Patient notifications",
     "PAYERS": "Payers",
-    "MY_IMAGING": "Imaging"
+    "MY_IMAGING": "Imaging",
+    "LAB_CRITICAL_PENDING": "Critical results awaiting read-back"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Critical alert",
@@ -14908,5 +14916,16 @@
     "SIGNED_BY": "signed by {{name}}",
     "BY": "by {{name}}",
     "NOT_ATTESTED": "Not attested"
+  },
+  "LAB_CRITICAL_PENDING": {
+    "TITLE": "Critical results awaiting read-back",
+    "SUBTITLE": "Critical lab results of this hospital that no clinician has read back yet",
+    "WHAT_TO_DO": "Each result below is still paging. Call the ordering clinician, or the clinician on duty, and make sure a doctor, nurse or midwife reads the value back in e-Keneya: that is what stops the alerts.",
+    "NO_SCOPE": "Select a hospital to see its critical results.",
+    "LOAD_ERROR": "The critical results could not be loaded. Try again.",
+    "EMPTY": "No critical result is waiting for a read-back.",
+    "ORDERED_BY": "Ordered by",
+    "PAGING_SINCE": "Alert sent",
+    "ROUNDS": "Escalation rounds"
   }
 }

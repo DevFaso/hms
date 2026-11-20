@@ -4776,7 +4776,14 @@
     "CRITICAL_READ_BACK": "Valeur relue",
     "CRITICAL_READ_BACK_PLACEHOLDER": "Telle qu’elle a été répétée",
     "QC_OVERRIDE_REASON": "Motif de la validation malgré le CQ rejeté",
-    "QC_BLOCKED": "Le dernier contrôle qualité de cette analyse a été rejeté. Enregistrez un contrôle conforme, ou indiquez pourquoi vous validez malgré tout."
+    "QC_BLOCKED": "Le dernier contrôle qualité de cette analyse a été rejeté. Enregistrez un contrôle conforme, ou indiquez pourquoi vous validez malgré tout.",
+    "QC_HOLD_TAG": "CQ rejeté",
+    "QC_HOLD_BANNER": "Validation bloquée : le dernier contrôle qualité de {{test}} a été rejeté ({{level}}, {{at}}, enregistré par {{by}}). Enregistrez un contrôle conforme, ou indiquez pourquoi vous validez ce résultat malgré tout.",
+    "QC_LEVEL_LOW": "contrôle bas",
+    "QC_LEVEL_HIGH": "contrôle haut",
+    "AGE_YEARS": "{{n}} ans",
+    "AGE_MONTHS": "{{n}} mois",
+    "ORDERED_BY": "Prescripteur : {{name}}"
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Instruments de laboratoire",
@@ -5139,7 +5146,8 @@
     "PRICE_LIST": "Grille tarifaire",
     "PATIENT_NOTIFICATIONS": "Notifications aux patients",
     "PAYERS": "Organismes payeurs",
-    "MY_IMAGING": "Imagerie"
+    "MY_IMAGING": "Imagerie",
+    "LAB_CRITICAL_PENDING": "Résultats critiques à relire"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerte critique",
@@ -14908,5 +14916,16 @@
     "SIGNED_BY": "signé par {{name}}",
     "BY": "par {{name}}",
     "NOT_ATTESTED": "Non attesté"
+  },
+  "LAB_CRITICAL_PENDING": {
+    "TITLE": "Résultats critiques à relire",
+    "SUBTITLE": "Résultats de laboratoire critiques de cet hôpital qu’aucun clinicien n’a encore relus",
+    "WHAT_TO_DO": "Chaque résultat ci-dessous continue d’alerter. Appelez le prescripteur, ou le clinicien de garde, et assurez-vous qu’un médecin, un infirmier ou une sage-femme relise la valeur dans e-Keneya : c’est ce qui arrête les alertes.",
+    "NO_SCOPE": "Sélectionnez un hôpital pour voir ses résultats critiques.",
+    "LOAD_ERROR": "Impossible de charger les résultats critiques. Réessayez.",
+    "EMPTY": "Aucun résultat critique n’attend de relecture.",
+    "ORDERED_BY": "Prescripteur",
+    "PAGING_SINCE": "Alerte envoyée",
+    "ROUNDS": "Relances"
   }
 }
