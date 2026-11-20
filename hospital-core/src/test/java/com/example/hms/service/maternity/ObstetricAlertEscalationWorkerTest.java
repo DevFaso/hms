@@ -250,7 +250,7 @@ class ObstetricAlertEscalationWorkerTest {
         // QA D2582 (r65): the documenter's reminder never sends her to acknowledge in an in-basket she has no item in.
         verify(notificationService).createNotification(eq(ObstetricAlertEscalationWorker.DOCUMENTER_REMINDER_KEY),
             org.mockito.ArgumentMatchers.any(), eq("documenter"), eq(ObstetricAlertEscalationWorker.ESCALATION_TYPE));
-        verify(notificationService, org.mockito.Mockito.never()).createNotification(
+        verify(notificationService, never()).createNotification(
             eq(ObstetricAlertEscalationWorker.REMINDER_KEY), org.mockito.ArgumentMatchers.any(), eq("documenter"),
             org.mockito.ArgumentMatchers.any());
         for (String u : List.of("drA", "mwB", "nurseC")) {

@@ -119,7 +119,7 @@ public class MaternityVitalCharting {
             .registration(registration)
             .recordedByStaff(staff)
             .recordedByAssignment(assignment)
-            .recordedAt(at != null ? at : LocalDateTime.now())
+            .recordedAt(at != null ? at : LocalDateTime.now(java.time.ZoneId.systemDefault()))
             .source(source)
             .build();
     }
