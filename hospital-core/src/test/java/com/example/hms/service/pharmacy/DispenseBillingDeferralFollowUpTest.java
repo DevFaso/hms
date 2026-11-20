@@ -118,7 +118,7 @@ class DispenseBillingDeferralFollowUpTest {
         verify(inBasket).createItemInNewTransaction(items.capture());
         assertThat(items.getValue().getPriority()).isEqualTo(InBasketPriority.URGENT);
         assertThat(items.getValue().getTitleKey()).isEqualTo("pharmacy.deferral.followUp.approvalTitle");
-        verify(notifications, org.mockito.Mockito.times(2)).createNotification(any(), any(), any(), any());
+        verify(notifications, times(2)).createNotification(any(), any(), any(), any());
     }
 
     @Test

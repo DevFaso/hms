@@ -288,18 +288,9 @@ public class DispenseBillingDeferralService {
     /**
      * The work to do at the acting hospital: the deferrals asked for or approved, and the urgency overrides not yet
      * reviewed. With {@code statuses}, the deferrals in those states instead; with {@code prescriptionId}, only
-     * those of that prescription (what the counter reads before a hand-over).
-     */
-    @Transactional(readOnly = true)
-    public List<DispenseBillingDeferralDTO> list(Collection<DispenseBillingDeferralStatus> statuses,
-                                                 UUID prescriptionId) {
-        return list(statuses, prescriptionId, false);
-    }
-
-    /**
-     * As {@link #list(Collection, UUID)}; with {@code stillDueOnly}, only the deferrals whose fills still owe
-     * money now (what finance chases): a fill since paid, covered by a claim a money desk stands behind, or
-     * cancelled, owes nothing.
+     * those of that prescription (what the counter reads before a hand-over). With {@code stillDueOnly}, only the
+     * deferrals whose fills still owe money now (what finance chases): a fill since paid, covered by a claim a
+     * money desk stands behind, or cancelled, owes nothing.
      */
     @Transactional(readOnly = true)
     public List<DispenseBillingDeferralDTO> list(Collection<DispenseBillingDeferralStatus> statuses,
@@ -358,6 +349,18 @@ public class DispenseBillingDeferralService {
         return byId;
     }
 
+    /** The override the same person already made today for this prescription with the same reason, not yet reviewed. */
+    private DispenseBillingDeferral overrideOfThisHandOver(Prescription prescription, UUID hospitalId, UUID actorId,
+                                                           String urgency, LocalDateTime now) {
+        return deferralRepository
+                .findFirstByHospitalIdAndPrescriptionIdAndKindAndRequestedByAndReviewedAtIsNullOrderByRequestedAtDesc(
+                        hospitalId, prescription.getId(), DispenseBillingDeferralKind.URGENCY_OVERRIDE, actorId)
+                .filter(row -> row.getRequestedAt() != null
+                        && row.getRequestedAt().toLocalDate().equals(now.toLocalDate())
+                        && urgency.equals(row.getReason()))
+                .orElse(null);
+    }
+
     // ───────────────────────────── the counter's gate ─────────────────────────────
 
     /**
@@ -414,13 +417,7 @@ public class DispenseBillingDeferralService {
         CardNumbers.requireNone(urgency, FIELD_URGENCY);
         // A fill the counter splits over several lots is ONE hand-over: its further lots go on the override the
         // same person already made today for this prescription, with the same reason. One override, one review.
-        DispenseBillingDeferral sameHandOver = deferralRepository
-                .findFirstByHospitalIdAndPrescriptionIdAndKindAndRequestedByAndReviewedAtIsNullOrderByRequestedAtDesc(
-                        hospitalId, prescription.getId(), DispenseBillingDeferralKind.URGENCY_OVERRIDE, actorId)
-                .filter(row -> row.getRequestedAt() != null
-                        && row.getRequestedAt().toLocalDate().equals(now.toLocalDate())
-                        && urgency.equals(row.getReason()))
-                .orElse(null);
+        DispenseBillingDeferral sameHandOver = overrideOfThisHandOver(prescription, hospitalId, actorId, urgency, now);
         if (sameHandOver != null) {
             sameHandOver.setAmountDue(sameHandOver.getAmountDue() == null ? due : sameHandOver.getAmountDue().add(due));
             return sameHandOver;

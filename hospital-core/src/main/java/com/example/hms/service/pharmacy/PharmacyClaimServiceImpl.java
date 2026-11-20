@@ -171,7 +171,7 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
         // Policy rule 6 (review of #1244): who recorded the payer's answer. The counter reads it before a claim
         // covers a fill.
         claim.setDecidedBy(roleValidator.getCurrentUserId());
-        claim.setDecidedAt(LocalDateTime.now());
+        claim.setDecidedAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         if (notes != null && !notes.isBlank()) {
             claim.setNotes(notes);
         }

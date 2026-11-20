@@ -52,7 +52,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -605,7 +607,7 @@ class DispenseBillingDeferralServiceTest {
                     DispenseBillingDeferralKind.URGENCY_OVERRIDE)).thenReturn(List.of(override));
             actingAs(accountant);
 
-            List<DispenseBillingDeferralDTO> work = service.list(null, null);
+            List<DispenseBillingDeferralDTO> work = service.list(null, null, false);
 
             assertThat(work).extracting(DispenseBillingDeferralDTO::getId)
                     .containsExactly(open.getId(), override.getId());
@@ -656,7 +658,7 @@ class DispenseBillingDeferralServiceTest {
             when(roleValidator.canReadDispenseBillingCounter(nobody, hospitalId)).thenReturn(false);
             assertThatThrownBy(() -> service.counter(prescriptionId))
                     .isInstanceOf(ClientSafeAccessDeniedException.class);
-            assertThatThrownBy(() -> service.list(null, null))
+            assertThatThrownBy(() -> service.list(null, null, false))
                     .isInstanceOf(ClientSafeAccessDeniedException.class);
         }
 
@@ -700,7 +702,7 @@ class DispenseBillingDeferralServiceTest {
 
             assertThat(second).isSameAs(first);
             assertThat(first.getAmountDue()).isEqualByComparingTo("1000");
-            verify(deferralRepository, org.mockito.Mockito.times(1)).save(any());
+            verify(deferralRepository, times(1)).save(any());
 
             // Each fill has its audit line; the review task is filed once, for the first.
             com.example.hms.model.pharmacy.Dispense lotA = new com.example.hms.model.pharmacy.Dispense();
@@ -710,8 +712,8 @@ class DispenseBillingDeferralServiceTest {
             service.executed(first, lotA, prescription);
             service.executed(first, lotB, prescription);
             assertThat(first.getDispenseId()).isEqualTo(lotA.getId());
-            verify(followUp, org.mockito.Mockito.times(1)).reviewNeeded(eq(first), any(), any());
-            verify(support, org.mockito.Mockito.times(2)).logAudit(
+            verify(followUp, times(1)).reviewNeeded(eq(first), any(), any());
+            verify(support, times(2)).logAudit(
                     eq(AuditEventType.DISPENSE_BILLING_URGENCY_OVERRIDE), anyString(), anyString(), anyString());
         }
 
@@ -776,7 +778,7 @@ class DispenseBillingDeferralServiceTest {
                     eq(prescriptionId), any())).thenReturn(List.of());
 
             assertThat(service.counter(prescriptionId).getOpen()).isEmpty();
-            assertThatThrownBy(() -> service.list(null, null))
+            assertThatThrownBy(() -> service.list(null, null, false))
                     .isInstanceOf(ClientSafeAccessDeniedException.class);
             // And whoever does not hand fills over reads no counter either.
             when(roleValidator.canReadDispenseBillingCounter(verifier, hospitalId)).thenReturn(false);
@@ -793,7 +795,7 @@ class DispenseBillingDeferralServiceTest {
                     DispenseBillingDeferralStatus.EXECUTED, pharmacist);
             when(deferralRepository.findByHospitalIdAndStatusInOrderByRequestedAtAsc(eq(hospitalId), any()))
                     .thenReturn(List.of(owing, settled));
-            DeferredFillBalance balance = org.mockito.Mockito.mock(DeferredFillBalance.class);
+            DeferredFillBalance balance = mock(DeferredFillBalance.class);
             when(balance.stillDue(owing)).thenReturn(new BigDecimal("700"));
             when(balance.stillDue(settled)).thenReturn(BigDecimal.ZERO);
             service.setFillBalance(balance);
@@ -802,9 +804,9 @@ class DispenseBillingDeferralServiceTest {
             List<DispenseBillingDeferralDTO> all = service.list(List.of(DispenseBillingDeferralStatus.EXECUTED), null,
                     false);
             assertThat(all).hasSize(2);
-            List<DispenseBillingDeferralDTO> due = service.list(List.of(DispenseBillingDeferralStatus.EXECUTED), null,
+            List<DispenseBillingDeferralDTO> stillOwing = service.list(List.of(DispenseBillingDeferralStatus.EXECUTED), null,
                     true);
-            assertThat(due).singleElement().satisfies(row -> {
+            assertThat(stillOwing).singleElement().satisfies(row -> {
                 assertThat(row.getId()).isEqualTo(owing.getId());
                 assertThat(row.getStillDue()).isEqualByComparingTo("700");
             });
