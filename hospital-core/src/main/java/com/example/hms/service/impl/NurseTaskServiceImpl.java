@@ -416,6 +416,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
         // Only include if within the look-ahead or already overdue. The look-ahead
         // was also the routine interval, so nearly every admitted patient was due.
+        // A set with nothing to score (a weight alone) carries no maternal score.
+        boolean maternalScored = mews != null && !mews.empty();
         if (overdue || dueTime.isBefore(now.plus(effectiveWindow))) {
             return NurseVitalTaskResponseDTO.builder()
                 .id(UUID.nameUUIDFromBytes((ctx.patientId() + ":VITAL:" + hospitalId).getBytes()))
@@ -425,8 +427,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 .dueTime(dueTime)
                 .overdue(overdue)
                 .news2Score(news != null && scoreShown ? news.total() : null)
-                .mewsScore(mews != null && !mews.empty() ? mews.total() : null)
-                .mewsTier(mews != null && !mews.empty() ? mews.responseTier().name() : null)
+                .mewsScore(maternalScored ? mews.total() : null)
+                .mewsTier(maternalScored ? mews.responseTier().name() : null)
                 .build();
         }
         return null;

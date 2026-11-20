@@ -84,6 +84,8 @@ public class LaborServiceImpl implements LaborService {
 
     static final int FHR_BRADYCARDIA_BPM = com.example.hms.service.maternity.LaborAlertArgs.FHR_BRADYCARDIA_BPM;
     private static final String FETAL_HEART_RATE_FIELD = "fetalHeartRateBpm";
+    /** What a blood-pressure alert was triggered by (a stored value: the reader maps it to the two pressures). */
+    private static final String BLOOD_PRESSURE_FIELD = "bloodPressure";
     static final int FHR_TACHYCARDIA_BPM = com.example.hms.service.maternity.LaborAlertArgs.FHR_TACHYCARDIA_BPM;
     static final int ACTIVE_PHASE_DILATION_CM = com.example.hms.service.maternity.LaborAlertArgs.ACTIVE_PHASE_DILATION_CM;
     static final double ACTION_LINE_LAG_HOURS = 4.0;
@@ -1508,7 +1510,7 @@ public class LaborServiceImpl implements LaborService {
             entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.CAUTION,
                 "labor-maternal-hypotension",
                 alertText("labor-maternal-hypotension", sys),
-                "bloodPressure");
+                BLOOD_PRESSURE_FIELD);
         }
         com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert shock =
             com.example.hms.service.vitals.MaternalEarlyWarning.shockAlert(maternalRules, pulse, sys);
@@ -1516,12 +1518,12 @@ public class LaborServiceImpl implements LaborService {
             entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.URGENT,
                 "labor-maternal-severe-shock",
                 alertText("labor-maternal-severe-shock", pulse, sys),
-                "bloodPressure", new Object[]{pulse, sys});
+                BLOOD_PRESSURE_FIELD, new Object[]{pulse, sys});
         } else if (shock == com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert.SHOCK) {
             entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.CAUTION,
                 "labor-maternal-shock",
                 alertText("labor-maternal-shock", pulse, sys),
-                "bloodPressure", new Object[]{pulse, sys});
+                BLOOD_PRESSURE_FIELD, new Object[]{pulse, sys});
         }
         boolean severe = com.example.hms.service.vitals.SevereHypertension.isObstetricSevere(sys, dia);
         boolean mild = who.contains(com.example.hms.service.vitals.MaternalEarlyWarning.LabourAlert.SYSTOLIC_HIGH)
@@ -1530,12 +1532,12 @@ public class LaborServiceImpl implements LaborService {
             entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.URGENT,
                 "labor-severe-hypertension",
                 alertText("labor-severe-hypertension", com.example.hms.service.maternity.LaborAlertArgs.bloodPressure(sys, dia)),
-                "bloodPressure", com.example.hms.service.maternity.LaborAlertArgs.bloodPressure(sys, dia));
+                BLOOD_PRESSURE_FIELD, com.example.hms.service.maternity.LaborAlertArgs.bloodPressure(sys, dia));
         } else if (mild) {
             entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.CAUTION,
                 "labor-hypertension",
                 alertText("labor-hypertension", com.example.hms.service.maternity.LaborAlertArgs.bloodPressure(sys, dia)),
-                "bloodPressure", com.example.hms.service.maternity.LaborAlertArgs.bloodPressure(sys, dia));
+                BLOOD_PRESSURE_FIELD, com.example.hms.service.maternity.LaborAlertArgs.bloodPressure(sys, dia));
         }
     }
 
