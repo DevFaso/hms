@@ -653,6 +653,41 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
+    void review1237_aMotherInLabourKeepsTheShortRoundButNoNews2Number_onOneQueryForTheWard() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        LocalDateTime fixedNow = LocalDateTime.of(2026, 10, 19, 10, 0);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "A Three", "A", "Three")));
+        PatientVitalSign last = PatientVitalSign.builder()
+            .recordedAt(fixedNow.minusMinutes(20))
+            .temperatureCelsius(38.9).heartRateBpm(112).respiratoryRateBpm(26)
+            .systolicBpMmHg(95).diastolicBpMmHg(60).spo2Percent(91)
+            .build();
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId)).thenReturn(Optional.of(last));
+        com.example.hms.repository.LaborEpisodeRepository episodes =
+            org.mockito.Mockito.mock(com.example.hms.repository.LaborEpisodeRepository.class);
+        when(episodes.obstetricPatientIdsAt(any(), org.mockito.ArgumentMatchers.eq(hospitalId), any(), any()))
+            .thenReturn(List.of(patientId));
+        service.setLaborEpisodeRepository(episodes);
+
+        try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
+            mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
+            List<NurseVitalTaskResponseDTO> vitals = service.getDueVitals(nurseId, hospitalId, null);
+
+            assertThat(vitals).singleElement().satisfies(v -> {
+                // The safety net stays: the raised band still shortens the round.
+                assertThat(v.getType()).isEqualTo("NEWS2_HIGH");
+                assertThat(v.getDueTime()).isEqualTo(fixedNow.minusMinutes(5));
+                // But NEWS2 is not validated in labour: no number is shown.
+                assertThat(v.getNews2Score()).isNull();
+            });
+        }
+        verify(episodes, org.mockito.Mockito.times(1)).obstetricPatientIdsAt(any(), any(), any(), any());
+    }
+
+    @Test
     void createHandoffPersistsSbarRecord() {
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();

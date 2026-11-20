@@ -223,7 +223,8 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
             if (dto == null || news2Applicability == null || vital.getPatient() == null) {
                 return dto;
             }
-            LocalDateTime at = vital.getRecordedAt() != null ? vital.getRecordedAt() : LocalDateTime.now();
+            LocalDateTime at = vital.getRecordedAt() != null ? vital.getRecordedAt()
+                : LocalDateTime.now(java.time.ZoneId.systemDefault());
             UUID readAt = scopeHospitalId != null ? scopeHospitalId
                 : CrossHospitalReachRecorder.hospitalIdOf(vital.getHospital());
             com.example.hms.service.vitals.News2Applicability.Status status = byDay.computeIfAbsent(at.toLocalDate(),

@@ -65,4 +65,13 @@ class News2ApplicabilityTest {
         assertThat(News2EscalationService.observationInterval(
             com.example.hms.utility.NewsScoreCalculator.score(calm), routine)).isLessThanOrEqualTo(routine);
     }
+
+    @Test
+    void noPatientKeepsTheScoreAndAnUnknownTimeIsNow() {
+        assertThat(applicability.statusOf(null, UUID.randomUUID(), now)).isEqualTo(News2Applicability.Status.APPLIES);
+        assertThat(applicability.statusOf(born(LocalDate.now().minusDays(2)), UUID.randomUUID(), null))
+            .isEqualTo(News2Applicability.Status.NEWBORN);
+        assertThat(News2Applicability.Status.APPLIES.notValidated()).isFalse();
+        assertThat(News2Applicability.Status.NEWBORN.notValidated()).isTrue();
+    }
 }

@@ -20,6 +20,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -138,7 +139,7 @@ class MaternityVitalChartingTest {
         PatientVitalSign vital = charting.chartLaborPartographEntry(caution);
         assertThat(vital.isClinicallySignificant()).isTrue();
         // No URGENT alert covered either reading (a low pressure and fast pulse): the NEWS2 page fires (safety net).
-        verify(judgement, org.mockito.Mockito.times(2)).escalate(any(), org.mockito.ArgumentMatchers.isNull(),
+        verify(judgement, times(2)).escalate(any(), org.mockito.ArgumentMatchers.isNull(),
             any(), any(), any(), any(), org.mockito.ArgumentMatchers.eq(false));
     }
 
@@ -170,5 +171,49 @@ class MaternityVitalChartingTest {
         charting.chartPostpartumObservation(corrected);
 
         verify(repository).deleteAll(java.util.List.of(oldRow));
+    }
+
+    @Test
+    void review1237_aCorrectionWithNoChartedRowOrNoTimeDeletesNothing_andAnEmptyRecordChartsNothing() {
+        PostpartumObservation untimed = PostpartumObservation.builder().patient(mother).hospital(hospital).build();
+        PostpartumObservation corrected = PostpartumObservation.builder().patient(mother).hospital(hospital)
+            .observationTime(at).supersedesObservation(untimed).build();
+        // The corrected observation records no vital sign: nothing charted, and the untimed original has no row.
+        assertThat(charting.chartPostpartumObservation(corrected)).isNull();
+
+        PostpartumObservation original = PostpartumObservation.builder().patient(mother).hospital(hospital)
+            .observationTime(at.minusMinutes(10)).build();
+        when(repository.findByPatient_IdAndHospital_IdAndSourceAndRecordedAt(mother.getId(), hospital.getId(),
+            MaternityVitalCharting.SOURCE_POSTPARTUM, at.minusMinutes(10))).thenReturn(java.util.List.of());
+        charting.chartPostpartumObservation(PostpartumObservation.builder().patient(mother).hospital(hospital)
+            .observationTime(at).supersedesObservation(original).build());
+
+        verify(repository, org.mockito.Mockito.never()).deleteAll(any());
+        verify(repository, org.mockito.Mockito.never()).save(any());
+        assertThat(charting.chartPostpartumObservation(null)).isNull();
+        assertThat(charting.chartLaborPartographEntry(null)).isNull();
+        assertThat(charting.chartNewbornAssessment(null, true)).isNull();
+    }
+
+    @Test
+    void review1237_theRecordersAssignmentAtAnotherHospitalIsNotCarried() {
+        com.example.hms.model.Hospital other = new com.example.hms.model.Hospital();
+        other.setId(UUID.randomUUID());
+        com.example.hms.model.UserRoleHospitalAssignment elsewhere = new com.example.hms.model.UserRoleHospitalAssignment();
+        elsewhere.setHospital(other);
+        com.example.hms.model.Staff staff = new com.example.hms.model.Staff();
+        staff.setAssignment(elsewhere);
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setUsername("midwife.a");
+        staff.setUser(user);
+        LaborPartographEntry entry = LaborPartographEntry.builder().patient(mother).hospital(hospital)
+            .recordedByStaff(staff).systolicBpMmHg(120).build();
+
+        PatientVitalSign vital = charting.chartLaborPartographEntry(entry);
+
+        assertThat(vital.getRecordedByAssignment()).isNull();
+        assertThat(vital.getRecordedAt()).isNotNull();
+        verify(judgement).escalate(any(), org.mockito.ArgumentMatchers.isNull(), any(), any(),
+            org.mockito.ArgumentMatchers.eq("midwife.a"), any(), org.mockito.ArgumentMatchers.eq(false));
     }
 }
