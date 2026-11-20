@@ -226,6 +226,22 @@ class CashSessionReportsTest {
     }
 
     @Test
+    @DisplayName("a rendered file copies its bytes in and out, and compares by content")
+    void aRenderedFileIsAValue() {
+        byte[] bytes = {1, 2, 3};
+        CashSessionReports.Rendered file = new CashSessionReports.Rendered(bytes, "journal");
+        bytes[0] = 9;
+        file.content()[1] = 9;
+
+        assertThat(file.content()).containsExactly(1, 2, 3);
+        assertThat(file).isEqualTo(new CashSessionReports.Rendered(new byte[] {1, 2, 3}, "journal"))
+            .hasSameHashCodeAs(new CashSessionReports.Rendered(new byte[] {1, 2, 3}, "journal"))
+            .isNotEqualTo(new CashSessionReports.Rendered(new byte[] {1, 2, 4}, "journal"))
+            .isNotEqualTo(new CashSessionReports.Rendered(new byte[] {1, 2, 3}, "rapport"))
+            .hasToString("Rendered[journal, 3 bytes]");
+    }
+
+    @Test
     @DisplayName("an empty day still prints a report")
     void emptyDay() {
         when(sessions.dayReport(any())).thenReturn(new CashSessionService.DayReport(HOSPITAL, DAY, List.of()));

@@ -138,8 +138,9 @@ class PriceListLinksTest {
         when(labTests.findById(v2.getId())).thenReturn(Optional.of(v2));
         when(labTests.findBySupersedesDefinitionId(v1.getId())).thenReturn(List.of(v2));
 
-        assertThatThrownBy(() -> links.normalise(HOSPITAL, PriceListLinkType.LAB_TEST_DEFINITION,
-            v1.getId().toString()))
+        String storedKey = v1.getId().toString();
+
+        assertThatThrownBy(() -> links.normalise(HOSPITAL, PriceListLinkType.LAB_TEST_DEFINITION, storedKey))
             .isInstanceOfSatisfying(FieldBusinessException.class,
                 e -> assertThat(e.getField()).isEqualTo("linkKey"));
     }

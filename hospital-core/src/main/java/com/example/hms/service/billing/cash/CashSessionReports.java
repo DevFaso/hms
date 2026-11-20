@@ -58,22 +58,35 @@ public class CashSessionReports {
                              String reason) {
     }
 
-    /** Bytes and the file name they are served under (without its extension). */
-    public static final class Rendered {
-        private final byte[] content;
-        private final String fileName;
+    /**
+     * Bytes and the file name they are served under (without its extension). The bytes are copied in and out, and
+     * two values are equal when their bytes are (an array compares by identity otherwise).
+     */
+    public record Rendered(byte[] content, String fileName) {
 
-        public Rendered(byte[] content, String fileName) {
-            this.content = content.clone();
-            this.fileName = fileName;
+        public Rendered {
+            content = content.clone();
         }
 
+        @Override
         public byte[] content() {
             return content.clone();
         }
 
-        public String fileName() {
-            return fileName;
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof Rendered that && java.util.Arrays.equals(content, that.content)
+                && java.util.Objects.equals(fileName, that.fileName);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * java.util.Arrays.hashCode(content) + java.util.Objects.hashCode(fileName);
+        }
+
+        @Override
+        public String toString() {
+            return "Rendered[" + fileName + ", " + content.length + " bytes]";
         }
     }
 

@@ -315,12 +315,14 @@ class TariffOverrideTest {
     void deletingAnyLineNeedsAReason() {
         aLineWithNoPriceListPrice("0");
 
-        assertThatThrownBy(() -> service.deleteInvoiceItem(line.getId(), null, Locale.FRENCH))
+        java.util.UUID lineId = line.getId();
+
+        assertThatThrownBy(() -> service.deleteInvoiceItem(lineId, null, Locale.FRENCH))
             .isInstanceOfSatisfying(FieldBusinessException.class, e -> {
                 assertThat(e.getField()).isEqualTo("reason");
                 assertThat(e.getMessageKey()).isEqualTo("billing.item.removeReasonRequired");
             });
-        assertThatThrownBy(() -> service.deleteInvoiceItem(line.getId(), "4111 1111 1111 1111", Locale.FRENCH))
+        assertThatThrownBy(() -> service.deleteInvoiceItem(lineId, "4111 1111 1111 1111", Locale.FRENCH))
             .isInstanceOf(FieldBusinessException.class);
         verify(itemRepository, never()).delete(any());
         verify(audit, never()).logEvent(any());
@@ -363,7 +365,9 @@ class TariffOverrideTest {
             .thenReturn(java.util.List.of(line.getAssignment()));
         invoice.setEncounter(new com.example.hms.model.Encounter());
 
-        assertThatThrownBy(() -> service.createInvoiceItem(priced("500", "  "), Locale.FRENCH))
+        InvoiceItemRequestDTO noReason = priced("500", "  ");
+
+        assertThatThrownBy(() -> service.createInvoiceItem(noReason, Locale.FRENCH))
             .isInstanceOfSatisfying(FieldBusinessException.class, e -> {
                 assertThat(e.getField()).isEqualTo("overrideReason");
                 assertThat(e.getMessageKey()).isEqualTo("billing.item.addedLineReasonRequired");

@@ -95,8 +95,8 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
 
         InvoiceItem saved = invoiceItemRepository.save(item);
         if (reason != null) {
-            auditLineAfterCommit(AuditEventType.INVOICE_LINE_PRICED_MANUALLY, "Draft line " + saved.getId()
-                + " of invoice " + invoice.getId() + " priced by hand", saved.getId(), invoice, reason);
+            auditLineAfterCommit(AuditEventType.INVOICE_LINE_PRICED_MANUALLY,
+                pricedByHand(saved.getId(), invoice.getId()), saved.getId(), invoice, reason);
         }
 
         // Keep invoice totals in sync
@@ -212,9 +212,8 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
                 + invoice.getId(), saved.getId(), invoice, null);
         } else if (priceChange == PriceChange.PRICED_BY_HAND) {
             // QA D2703: an unpriced line priced (or a line set to 0 F) by hand: ids in the description, reason in details.
-            auditLineAfterCommit(AuditEventType.INVOICE_LINE_PRICED_MANUALLY, "Draft line " + saved.getId()
-                + " of invoice " + invoice.getId() + " priced by hand", saved.getId(), invoice,
-                saved.getOverrideReason());
+            auditLineAfterCommit(AuditEventType.INVOICE_LINE_PRICED_MANUALLY,
+                pricedByHand(saved.getId(), invoice.getId()), saved.getId(), invoice, saved.getOverrideReason());
         } else if (priceChange == PriceChange.RESTORED) {
             // Review #1197 L2: setting an overridden line back to the price list is audited too.
             auditLineAfterCommit(AuditEventType.INVOICE_LINE_PRICE_RESTORED, "Tariff price version "
@@ -299,6 +298,11 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
         }
         com.example.hms.utility.CardNumbers.requireNone(reason, FIELD_OVERRIDE_REASON);
         return reason;
+    }
+
+    /** The audit description of a line priced by hand: ids only (the portal's audit pattern reads it). */
+    private static String pricedByHand(UUID lineId, UUID invoiceId) {
+        return "Draft line " + lineId + " of invoice " + invoiceId + " priced by hand";
     }
 
     /** What a line edit did to a price-list price (or, QA D2703, to a line with none). */
