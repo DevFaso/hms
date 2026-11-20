@@ -731,7 +731,7 @@
                   } @else if (v.mewsReviewWithinMinutes) {
                     <span class="mews-review">{{
                       'PATIENTS.MEWS_REVIEW_WITHIN'
-                        | translate: { minutes: v.mewsReviewWithinMinutes }
+                        | translate: { delay: v.mewsReviewWithinMinutes | elapsed }
                     }}</span>
                   }
                   @for (alert of v.mewsAlerts ?? []; track alert) {

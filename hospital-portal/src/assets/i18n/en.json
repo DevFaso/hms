@@ -6223,7 +6223,7 @@
     "MEWS_PROVISIONAL_HINT": "Maternal early warning score (NHS England national MEWS 2024, CRADLE add-on). Provisional rule, pending the sign-off of an obstetric clinician. NEWS2 is not validated in pregnancy / postpartum.",
     "MEWS_INCOMPLETE": "incomplete",
     "MEWS_INCOMPLETE_HINT": "Some vital signs are missing: the true score can only be equal or higher.",
-    "MEWS_REVIEW_WITHIN": "medical review within {{minutes}} min",
+    "MEWS_REVIEW_WITHIN": "medical review within {{delay}}",
     "MEWS_REVIEW_IMMEDIATE": "immediate medical review",
     "MEWS_CONCERNS": "additional concern recorded",
     "MEWS_ALERT_SEVERE_HYPERTENSION": "Severe blood pressure",

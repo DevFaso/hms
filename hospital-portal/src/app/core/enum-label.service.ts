@@ -985,7 +985,6 @@ export class EnumLabelService implements OnDestroy {
       MATERNITY_ALERT: 'Maternity alert',
       MEDICATION_REFILL: 'Medication Refill',
       NEWS2_ESCALATION: 'NEWS2 Escalation',
-      MEWS_ESCALATION: 'Maternal early warning (MEWS)',
       OBSTETRIC_ALERT: 'Urgent Obstetric Alert',
       OBSTETRIC_ALERT_ESCALATION: 'Urgent Obstetric Alert Escalation',
       PHARMACY_EVENT: 'Pharmacy Update',
@@ -997,6 +996,7 @@ export class EnumLabelService implements OnDestroy {
       PRO_SCREEN_POSITIVE: 'Positive PRO Screen',
       REORDER_ALERT: 'Reorder Alert',
       SEVERE_HYPERTENSION: 'Severe hypertension',
+      MEWS_ESCALATION: 'Maternal early warning (MEWS)',
     },
 
     /* ── Order source (snapshot drawer + nurse station board) ─── */

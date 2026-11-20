@@ -71,6 +71,7 @@ import { refuseFields } from '../shared/forms/invalid-fields';
 import { DashPipe } from '../shared/pipes/dash.pipe';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { ElapsedPipe } from '../shared/pipes/elapsed.pipe';
 import { NationalUniqueIdViewComponent } from './national-unique-id-view.component';
 
 /** The chart-restriction reason box: the server names it `reason` in a 400. */
@@ -101,6 +102,7 @@ type TabKey =
   standalone: true,
   imports: [
     DateTimePipe,
+    ElapsedPipe,
     DashPipe,
     SubmitGuardDirective,
     LocaleNumberPipe,
