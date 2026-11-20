@@ -772,6 +772,37 @@ class BillingInvoiceServiceImplTest {
         assertNull(rows.getAllValues().get(1).getMobileMoneyOperator(), "cash has no operator");
     }
 
+    /** QA D2704 (r65): two tabs on one invoice pressed the same handover; the second is asked about. */
+    @Test
+    void recordStaffPayment_theSamePaymentJustRecordedIsAskedAboutNotRecordedTwice_D2704() {
+        BillingInvoice invoice = payableInvoice(UUID.randomUUID());
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.save(any(BillingInvoice.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentTransactionRepository.saveAndFlush(any(PaymentTransaction.class)))
+            .thenAnswer(inv -> inv.getArgument(0));
+        PaymentTransaction first = PaymentTransaction.builder().invoice(invoice).amount(new BigDecimal("10"))
+            .paymentMethod(com.example.hms.enums.PaymentMethod.CASH)
+            .status(com.example.hms.enums.PaymentStatus.CONFIRMED).build();
+        when(paymentTransactionRepository.findRecentSamePayments(eq(invoice.getId()), any(), any(), any()))
+            .thenReturn(List.of(first));
+        UUID invoiceId = invoice.getId();
+        com.example.hms.payload.dto.StaffPaymentRequestDTO again =
+            new com.example.hms.payload.dto.StaffPaymentRequestDTO(new BigDecimal("10"), "CASH", null, null, null,
+                UUID.randomUUID());
+
+        com.example.hms.exception.FieldBusinessException asked = assertThrows(
+            com.example.hms.exception.FieldBusinessException.class,
+            () -> billingInvoiceService.recordStaffPayment(invoiceId, again, null, Locale.FRENCH));
+        assertEquals("confirmDuplicate", asked.getField());
+        assertEquals("billing.payment.possibleDuplicate", asked.getMessageKey());
+        verify(paymentTransactionRepository, never()).saveAndFlush(any());
+
+        // A payment the cashier confirms as new is recorded.
+        billingInvoiceService.recordStaffPayment(invoiceId, new com.example.hms.payload.dto.StaffPaymentRequestDTO(
+            new BigDecimal("10"), "CASH", null, null, null, UUID.randomUUID(), Boolean.TRUE), null, Locale.FRENCH);
+        verify(paymentTransactionRepository, times(1)).saveAndFlush(any(PaymentTransaction.class));
+    }
+
     @Test
     void recordStaffPayment_insuranceIsRefusedOnTheMethod_D1611() {
         BillingInvoice invoice = payableInvoice(UUID.randomUUID());
@@ -1533,27 +1564,6 @@ class BillingInvoiceServiceImplTest {
     }
 
     @Test
-    void reversePayment_thatLosesTheRaceToAConcurrentReverseSubtractsNothing() {
-        BillingInvoice invoice = payableInvoice(UUID.randomUUID());
-        invoice.setAmountPaid(new BigDecimal("100.00"));
-        invoice.setStatus(InvoiceStatus.PAID);
-        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
-        var row = ledgerRow(invoice, "60.00", com.example.hms.enums.PaymentStatus.CONFIRMED);
-        when(paymentTransactionRepository.transitionStatus(row.getId(), invoice.getId(),
-            com.example.hms.enums.PaymentStatus.CONFIRMED, com.example.hms.enums.PaymentStatus.REVERSED))
-            .thenReturn(0);
-        UUID invoiceId = invoice.getId();
-        UUID rowId = row.getId();
-        UUID staff = UUID.randomUUID();
-
-        assertThrows(com.example.hms.exception.BusinessException.class,
-            () -> billingInvoiceService.reversePayment(invoiceId, rowId, "Refund", staff, Locale.ENGLISH));
-        assertEquals(new BigDecimal("100.00"), invoice.getAmountPaid());
-        assertEquals(InvoiceStatus.PAID, invoice.getStatus());
-        verify(invoiceRepository, never()).save(any(BillingInvoice.class));
-    }
-
-    @Test
     void confirmPayment_onAnotherHospitalsInvoiceIsNotFound() {
         BillingInvoice invoice = payableInvoice(UUID.randomUUID());
         Hospital other = new Hospital();
@@ -1619,60 +1629,30 @@ class BillingInvoiceServiceImplTest {
         assertEquals(originalPatient, invoice.getPatient().getId());
     }
 
+    /**
+     * QA D2702: the reverse endpoint only asks for the reversal (the refund approval, InvoiceRefundService); no money
+     * moves here, the payment stays CONFIRMED and the invoice keeps its amount paid. The reversal itself is tested in
+     * PaymentReversalApprovalTest.
+     */
     @Test
-    void reversePayment_reopensThePaidInvoiceAndKeepsTotalsConsistent_D142() {
+    void reversePayment_onlyAsksForTheReversal_D2702() {
+        com.example.hms.service.billing.InvoiceRefundService refunds =
+            mock(com.example.hms.service.billing.InvoiceRefundService.class);
+        billingInvoiceService.setInvoiceRefundService(refunds);
         BillingInvoice invoice = payableInvoice(UUID.randomUUID());
         invoice.setAmountPaid(new BigDecimal("100.00"));
         invoice.setStatus(InvoiceStatus.PAID);
         when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
-        when(invoiceRepository.save(any(BillingInvoice.class))).thenAnswer(inv -> inv.getArgument(0));
-        var first = ledgerRow(invoice, "60.00", com.example.hms.enums.PaymentStatus.CONFIRMED);
-        UUID accountant = UUID.randomUUID();
+        var row = ledgerRow(invoice, "60.00", com.example.hms.enums.PaymentStatus.CONFIRMED);
 
-        billingInvoiceService.reversePayment(invoice.getId(), first.getId(), "Refunded: duplicate", accountant,
-            Locale.ENGLISH);
+        billingInvoiceService.reversePayment(invoice.getId(), row.getId(), "Saisie en double", UUID.randomUUID(),
+            Locale.FRENCH);
 
-        assertEquals(com.example.hms.enums.PaymentStatus.REVERSED, first.getStatus());
-        assertEquals("Refunded: duplicate", first.getReversalReason());
-        assertEquals(accountant, first.getReversedBy());
-        assertNotNull(first.getReversedAt());
-        assertEquals(new BigDecimal("40.00"), invoice.getAmountPaid());
-        assertEquals(InvoiceStatus.PARTIALLY_PAID, invoice.getStatus());
-    }
-
-    @Test
-    void reversePayment_ofTheOnlyPaymentLeavesAnIssuedUnpaidInvoice_D142() {
-        BillingInvoice invoice = payableInvoice(UUID.randomUUID());
-        invoice.setAmountPaid(new BigDecimal("100.00"));
-        invoice.setStatus(InvoiceStatus.PAID);
-        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
-        when(invoiceRepository.save(any(BillingInvoice.class))).thenAnswer(inv -> inv.getArgument(0));
-        var only = ledgerRow(invoice, "100.00", com.example.hms.enums.PaymentStatus.CONFIRMED);
-
-        billingInvoiceService.reversePayment(invoice.getId(), only.getId(), "Entered in error", UUID.randomUUID(),
-            Locale.ENGLISH);
-
-        assertEquals(0, invoice.getAmountPaid().signum());
-        assertEquals(InvoiceStatus.SENT, invoice.getStatus());
-    }
-
-    @Test
-    void reversePayment_needsAReasonAndAConfirmedRow_D142() {
-        BillingInvoice invoice = payableInvoice(UUID.randomUUID());
-        invoice.setAmountPaid(new BigDecimal("40.00"));
-        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
-        var confirmed = ledgerRow(invoice, "40.00", com.example.hms.enums.PaymentStatus.CONFIRMED);
-        var pending = ledgerRow(invoice, "10.00", com.example.hms.enums.PaymentStatus.PENDING);
-        UUID invoiceId = invoice.getId();
-        UUID confirmedId = confirmed.getId();
-        UUID pendingId = pending.getId();
-        UUID staff = UUID.randomUUID();
-
-        assertThrows(com.example.hms.exception.BusinessException.class,
-            () -> billingInvoiceService.reversePayment(invoiceId, confirmedId, "  ", staff, Locale.ENGLISH));
-        assertThrows(com.example.hms.exception.BusinessException.class,
-            () -> billingInvoiceService.reversePayment(invoiceId, pendingId, "why", staff, Locale.ENGLISH));
-        assertEquals(new BigDecimal("40.00"), invoice.getAmountPaid());
+        verify(refunds).requestReversal(invoice.getId(), row.getId(), "Saisie en double");
+        assertEquals(com.example.hms.enums.PaymentStatus.CONFIRMED, row.getStatus());
+        assertEquals(new BigDecimal("100.00"), invoice.getAmountPaid());
+        assertEquals(InvoiceStatus.PAID, invoice.getStatus());
+        verify(paymentTransactionRepository, never()).transitionStatus(any(), any(), any(), any());
     }
 
     @Test
@@ -2533,49 +2513,6 @@ class BillingInvoiceServiceImplTest {
             .map(com.example.hms.payload.dto.CashClosingDTO.Entry::getDirection).toList());
         assertEquals(List.of("IN", "OUT"), closing.getByMethod().stream()
             .map(com.example.hms.payload.dto.CashClosingDTO.MethodTotal::getDirection).toList());
-    }
-
-    /** Billing-money plan PR 8: a reversal is audited as PAYMENT_REVERSED, never as a refund (REFUND_ISSUED). */
-    @Test
-    void reversePayment_isAuditedAsAReversalNotARefund() {
-        AuditEventLogService audit = mock(AuditEventLogService.class);
-        billingInvoiceService.setAuditEventLogService(audit);
-        BillingInvoice invoice = payableInvoice(UUID.randomUUID());
-        invoice.setAmountPaid(new BigDecimal("100.00"));
-        invoice.setStatus(InvoiceStatus.PAID);
-        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
-        when(invoiceRepository.save(any(BillingInvoice.class))).thenAnswer(inv -> inv.getArgument(0));
-        var row = ledgerRow(invoice, "100.00", com.example.hms.enums.PaymentStatus.CONFIRMED);
-
-        billingInvoiceService.reversePayment(invoice.getId(), row.getId(), "Entered in error", UUID.randomUUID(),
-            Locale.ENGLISH);
-
-        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> logged =
-            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
-        verify(audit).logEvent(logged.capture());
-        assertEquals(com.example.hms.enums.AuditEventType.PAYMENT_REVERSED, logged.getValue().getEventType());
-    }
-
-    /** Billing-money plan PR 8: money already handed back on a refund came out of what was received. */
-    @Test
-    void reversePayment_cannotTakeTheMoneyHeldBelowWhatWasRefunded() {
-        BillingInvoice invoice = payableInvoice(UUID.randomUUID());
-        invoice.setTotalAmount(new BigDecimal("1500.00"));
-        invoice.setAmountPaid(new BigDecimal("2000.00"));
-        invoice.setAmountRefunded(new BigDecimal("500.00"));
-        invoice.setStatus(InvoiceStatus.PAID);
-        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
-        var row = ledgerRow(invoice, "2000.00", com.example.hms.enums.PaymentStatus.CONFIRMED);
-        UUID invoiceId = invoice.getId();
-        UUID rowId = row.getId();
-        UUID staff = UUID.randomUUID();
-
-        BusinessException refused = assertThrows(BusinessException.class,
-            () -> billingInvoiceService.reversePayment(invoiceId, rowId, "Entered in error", staff, Locale.ENGLISH));
-
-        assertEquals("billing.payment.reversalBelowRefunded", refused.getMessageKey());
-        assertEquals(com.example.hms.enums.PaymentStatus.CONFIRMED, row.getStatus());
-        assertEquals(new BigDecimal("2000.00"), invoice.getAmountPaid());
     }
 
     /** QA D1902: the refusal to cancel a paid invoice no longer sends the clerk back to a draft. */

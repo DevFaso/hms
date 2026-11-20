@@ -44,6 +44,7 @@ public interface InvoiceRefundRepository extends JpaRepository<InvoiceRefund, UU
              FROM InvoiceRefund r
             WHERE r.invoice.id = :invoiceId
               AND r.status IN :statuses
+              AND r.reversedPaymentId IS NULL
               AND (:excludedId IS NULL OR r.id <> :excludedId)
            """)
     BigDecimal sumByInvoiceAndStatusIn(@Param("invoiceId") UUID invoiceId,
@@ -80,7 +81,14 @@ public interface InvoiceRefundRepository extends JpaRepository<InvoiceRefund, UU
 
     /** What is recorded when a refund is handed over (Sonar S107: one value, not eight parameters). */
     record Payout(UUID paidBy, LocalDateTime paidAt, String reference,
-                  com.example.hms.enums.MobileMoneyOperator operator, Integer receiptSeq, String receiptNumber) {
+                  com.example.hms.enums.MobileMoneyOperator operator, Integer receiptSeq, String receiptNumber,
+                  UUID cashSessionId) {
+
+        /** A payout outside any cash session (callers written before PR 10). */
+        public Payout(UUID paidBy, LocalDateTime paidAt, String reference,
+                      com.example.hms.enums.MobileMoneyOperator operator, Integer receiptSeq, String receiptNumber) {
+            this(paidBy, paidAt, reference, operator, receiptSeq, receiptNumber, null);
+        }
     }
 
     String MARK_PAID = """
@@ -88,7 +96,8 @@ public interface InvoiceRefundRepository extends JpaRepository<InvoiceRefund, UU
               SET r.status = com.example.hms.enums.InvoiceRefundStatus.PAID,
                   r.paidBy = :#{#payout.paidBy}, r.paidAt = :#{#payout.paidAt},
                   r.reference = :#{#payout.reference}, r.mobileMoneyOperator = :#{#payout.operator},
-                  r.receiptSeq = :#{#payout.receiptSeq}, r.receiptNumber = :#{#payout.receiptNumber}
+                  r.receiptSeq = :#{#payout.receiptSeq}, r.receiptNumber = :#{#payout.receiptNumber},
+                  r.cashSessionId = :#{#payout.cashSessionId}
             WHERE r.id = :id
               AND r.hospitalId = :hospitalId
               AND r.status = com.example.hms.enums.InvoiceRefundStatus.APPROVED
@@ -145,4 +154,20 @@ public interface InvoiceRefundRepository extends JpaRepository<InvoiceRefund, UU
                                com.example.hms.enums.InvoiceRefundStatus.PAID)
            """)
     boolean existsLiveReference(@Param("hospitalId") UUID hospitalId, @Param("reference") String reference);
+
+    /** QA D2702: the live reversal (asked, approved or paid) of one payment, if any. */
+    @Query("""
+           SELECT r FROM InvoiceRefund r
+            WHERE r.reversedPaymentId = :paymentId
+              AND r.status IN (com.example.hms.enums.InvoiceRefundStatus.REQUESTED,
+                               com.example.hms.enums.InvoiceRefundStatus.APPROVED,
+                               com.example.hms.enums.InvoiceRefundStatus.PAID)
+           """)
+    List<InvoiceRefund> findLiveReversalOf(@Param("paymentId") UUID paymentId);
+
+    /** Billing plan PR 10: the refunds paid out in one cash session (money out). */
+    List<InvoiceRefund> findByCashSessionIdOrderByPaidAtAsc(UUID cashSessionId);
+
+    /** Billing plan PR 10: the refunds paid out in any of these sessions (the day report). */
+    List<InvoiceRefund> findByCashSessionIdIn(java.util.Collection<UUID> cashSessionIds);
 }

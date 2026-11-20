@@ -3791,4 +3791,19 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V309 (billing-money plan PR 10, QA r65 D2325/D2326/D2714/D2672,
+         D2702, D2700): cash sessions and their counted close, cash_session_id
+         on every money row, payment reversals as approved refunds, and lab
+         price links moved to the test lineage's first version. Number
+         pre-allocated to wave 1; registered after V317. Plain idempotent DDL
+         and DML, no DO block.
+         ================================================================= -->
+    <changeSet id="V309-billing-cash-sessions" author="hms-team" runOnChange="false">
+        <sqlFile path="V309__billing_cash_sessions.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

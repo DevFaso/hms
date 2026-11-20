@@ -119,4 +119,15 @@ public class PaymentTransaction extends BaseEntity {
      */
     @Column(name = "client_request_id")
     private UUID clientRequestId;
+
+    /** Billing plan PR 10 (V309): the cash session the money was taken in (null on rows written before it). */
+    @Column(name = "cash_session_id")
+    private UUID cashSessionId;
+
+    /**
+     * QA D2702 (V309): the approved, paid-out refund that reversed this row. The money stays counted in on the day
+     * it came in; the outflow is that refund, on the day it left the till.
+     */
+    @Column(name = "reversal_refund_id")
+    private UUID reversalRefundId;
 }

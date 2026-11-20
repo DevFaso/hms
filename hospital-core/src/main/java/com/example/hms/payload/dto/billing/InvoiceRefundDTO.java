@@ -47,4 +47,6 @@ public class InvoiceRefundDTO {
     private String cancelledByName;
     private LocalDateTime cancelledAt;
     private String cancelReason;
+    /** QA D2702: set when the refund reverses this payment (a reversal goes through the same approval). */
+    private UUID reversedPaymentId;
 }

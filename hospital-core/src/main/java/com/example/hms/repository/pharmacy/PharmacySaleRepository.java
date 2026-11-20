@@ -35,4 +35,10 @@ public interface PharmacySaleRepository extends JpaRepository<PharmacySale, UUID
 
     /** Billing plan PR 11 (QA D2430): the counter sale a client request key already recorded at this hospital. */
     java.util.Optional<PharmacySale> findByHospital_IdAndClientRequestId(UUID hospitalId, UUID clientRequestId);
+
+    /** Billing plan PR 10 (QA D2672): the pharmacy money taken in one cash session. */
+    java.util.List<PharmacySale> findByCashSessionIdOrderByCreatedAtAsc(java.util.UUID cashSessionId);
+
+    /** Billing plan PR 10 (QA D2672): the pharmacy money taken in any of these sessions (the day report). */
+    java.util.List<PharmacySale> findByCashSessionIdIn(java.util.Collection<java.util.UUID> cashSessionIds);
 }

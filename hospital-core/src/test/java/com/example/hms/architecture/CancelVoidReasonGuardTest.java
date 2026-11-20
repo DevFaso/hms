@@ -82,7 +82,7 @@ class CancelVoidReasonGuardTest {
         HANDLERS.put("POST /billing-invoices/{invoiceId}/payments/{paymentId}/reject",
             "PaymentReasonRequestDTO.reason (@NotBlank) -> service/BillingInvoiceServiceImplTest#rejectPayment_needsAReason_D1069");
         HANDLERS.put("POST /billing-invoices/{invoiceId}/payments/{paymentId}/reverse",
-            "PaymentReasonRequestDTO.reason (@NotBlank) -> service/BillingInvoiceServiceImplTest#reversePayment_needsAReasonAndAConfirmedRow_D142");
+            "PaymentReasonRequestDTO.reason (@NotBlank) -> service/billing/PaymentReversalApprovalTest#reasonRequiredAndOneLiveReversal");
         HANDLERS.put("POST /billing-invoices/{invoiceId}/adjustments/{adjustmentId}/reverse",
             "AdjustmentReversalRequestDTO.reason (@NotBlank) -> service/BillingInvoiceServiceImplTest#reverseAdjustment_needsAReasonALiveRowAndAStandingInvoice_D1105");
         // Billing-money plan PR 8: refunds. Each step that ends one names its reason; the others move money out
@@ -381,6 +381,9 @@ class CancelVoidReasonGuardTest {
             "CloseReasonRequestDTO.reason -> service/scheduling/PatientRecallServiceImplTest#aCancelWithoutAReasonIsRefused_D1157");
         CLINICAL_HANDLERS.put("POST /recalls/{id}/close",
             "NOT A WITHDRAWAL: closes the recall because the visit took place (or the need lapsed with it)");
+        CLINICAL_HANDLERS.put("POST /cash-sessions/{id}/close",
+            "NOT A WITHDRAWAL: the cashier counts and closes their own till (billing plan PR 10); a difference needs "
+                + "its explanation (CashSessionServiceTest#differenceNeedsAnExplanation)");
         CLINICAL_HANDLERS.put("POST /discharge-approvals/{id}/cancel",
             "@RequestParam reason -> service/DischargeApprovalServiceImplTest#cancelWithoutAReasonIsRefused_D1160");
         CLINICAL_HANDLERS.put("POST /discharge-approvals/{id}/reject",
