@@ -257,7 +257,8 @@ public class LabResultController {
     }
 
     @GetMapping("/hospital/{hospitalId}/critical")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE')")
+    // r65 D2183: HOSPITAL_ADMIN reads the critical lists (it is paged from escalation round 2), never acknowledges.
+    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE', 'HOSPITAL_ADMIN')")
     @Operation(summary = "Get Critical Lab Results", description = "Retrieves all critical lab results for a hospital since a specified time.")
     public ResponseEntity<List<LabResultResponseDTO>> getCriticalResults(
             @PathVariable UUID hospitalId,
@@ -269,7 +270,7 @@ public class LabResultController {
     }
 
     @GetMapping("/hospital/{hospitalId}/critical/unacknowledged")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE', 'HOSPITAL_ADMIN')")
     @Operation(summary = "Get Unacknowledged Critical Results", description = "Retrieves critical lab results that require acknowledgment - used for alert dashboards.")
     public ResponseEntity<List<LabResultResponseDTO>> getUnacknowledgedCriticalResults(
             @PathVariable UUID hospitalId,

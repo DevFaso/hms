@@ -244,10 +244,15 @@ public class LabResultMapper {
     }
 
     private static com.example.hms.model.LabTestComponent componentDefinition(String code, OrderContext context) {
-        if (code == null) {
+        return componentDefinition(code, context.components());
+    }
+
+    private static com.example.hms.model.LabTestComponent componentDefinition(
+            String code, List<com.example.hms.model.LabTestComponent> definitions) {
+        if (code == null || definitions == null) {
             return null;
         }
-        return context.components().stream()
+        return definitions.stream()
             .filter(c -> c != null && code.equalsIgnoreCase(c.getCode()))
             .findFirst()
             .orElse(null);
@@ -284,6 +289,44 @@ public class LabResultMapper {
 
     private static List<com.example.hms.payload.dto.LabResultComponentResponseDTO> componentResponses(
             LabResult result, OrderContext context) {
+        return componentResponses(result, context.components());
+    }
+
+    /**
+     * r65 D2610 / D2623: a panel result's component values, each graded
+     * against its own component's ranges, exactly as the result screen shows
+     * them; empty for a single-value result. Loads the order and its test
+     * definition when a session is open (the outbox and the read-back path
+     * hold lazy proxies); a component whose definition cannot be read is
+     * returned ungraded (UNSPECIFIED, no range), never dropped.
+     */
+    public static List<com.example.hms.payload.dto.LabResultComponentResponseDTO> gradedComponentsOf(
+            LabResult result) {
+        if (result == null || !result.hasComponents()) {
+            return Collections.emptyList();
+        }
+        return componentResponses(result, componentDefinitionsOf(result.getLabOrder()));
+    }
+
+    private static List<com.example.hms.model.LabTestComponent> componentDefinitionsOf(LabOrder order) {
+        if (order == null) {
+            return Collections.emptyList();
+        }
+        try {
+            Hibernate.initialize(order);
+            LabTestDefinition definition = order.getLabTestDefinition();
+            if (definition == null) {
+                return Collections.emptyList();
+            }
+            Hibernate.initialize(definition);
+            return definition.getComponents() != null ? definition.getComponents() : Collections.emptyList();
+        } catch (RuntimeException detached) {
+            return Collections.emptyList();
+        }
+    }
+
+    private static List<com.example.hms.payload.dto.LabResultComponentResponseDTO> componentResponses(
+            LabResult result, List<com.example.hms.model.LabTestComponent> definitions) {
         if (!result.hasComponents()) {
             return Collections.emptyList();
         }
@@ -291,7 +334,7 @@ public class LabResultMapper {
         return componentsOf(result).stream()
             .filter(Objects::nonNull)
             .map(value -> {
-                LabTestReferenceRange range = componentRange(value, componentDefinition(value.getCode(), context),
+                LabTestReferenceRange range = componentRange(value, componentDefinition(value.getCode(), definitions),
                     patient);
                 return com.example.hms.payload.dto.LabResultComponentResponseDTO.builder()
                     .code(value.getCode())
