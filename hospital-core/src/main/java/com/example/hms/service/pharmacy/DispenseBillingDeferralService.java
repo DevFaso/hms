@@ -408,6 +408,15 @@ public class DispenseBillingDeferralService {
         if (deferralId != null) {
             return execute(deferralId, prescription, hospitalId, due, actorId, now);
         }
+        return overrideForUrgency(prescription, hospitalId, due, actorId, urgency, now);
+    }
+
+    /**
+     * The logged urgency override: a pharmacist or a hospital admin, with a reason; reviewed afterwards by
+     * somebody else. A further lot of the same hand-over goes on the override already made.
+     */
+    private DispenseBillingDeferral overrideForUrgency(Prescription prescription, UUID hospitalId, BigDecimal due,
+                                                       UUID actorId, String urgency, LocalDateTime now) {
         if (!roleValidator.canOverrideDispenseBillingForUrgency(actorId, hospitalId)) {
             throw new FieldBusinessException(FIELD_URGENCY, "pharmacy.handOver.urgencyRoleRequired");
         }
