@@ -14910,5 +14910,27 @@
     "SIGNED_BY": "firmada por {{name}}",
     "BY": "por {{name}}",
     "NOT_ATTESTED": "No atestada"
+  },
+  "SENSITIVITY_TAG": {
+    "LABEL": "Categoría sensible",
+    "NONE": "Ninguna",
+    "NONE_FOLLOWS_VISIT": "Ninguna propia (sigue a su visita)",
+    "CATEGORY_SUBSTANCE_USE": "Adicciones",
+    "CATEGORY_BEHAVIOURAL_HEALTH": "Salud mental",
+    "CATEGORY_HIV": "VIH",
+    "CATEGORY_REPRODUCTIVE_HEALTH": "Salud reproductiva",
+    "INHERITED": "Se aplica ahora: {{category}} (heredada de la visita o de su servicio)",
+    "BADGE": "Sensible: {{category}}",
+    "ENCOUNTER_LABEL": "Categoría sensible de esta visita",
+    "ENCOUNTER_HINT": "Los resultados, medicamentos, diagnósticos y facturas de una visita clasificada no se muestran a una persona con acceso familiar, y quedan tras el acceso de emergencia para otros hospitales. El paciente sigue viéndolo todo.",
+    "PROBLEM_ACTION": "Categoría sensible",
+    "PROBLEM_TITLE": "Categoría sensible de este diagnóstico",
+    "PROBLEM_HINT": "Un diagnóstico clasificado no se muestra a una persona con acceso familiar. Sin categoría propia, sigue a la visita en la que se registró.",
+    "PROBLEM_NEW_HINT": "Si se deja en «ninguna», el diagnóstico toma la categoría de la visita en curso del paciente, si la tiene.",
+    "TEST_LABEL": "Categoría sensible de esta prueba",
+    "TEST_HINT": "Todos los resultados de una prueba clasificada se ocultan a una persona con acceso familiar, sea cual sea la visita que la pidió, incluidos los de versiones anteriores. Se aplica cuando esta versión está activa. Solo el director del laboratorio puede cambiarla.",
+    "SAVED": "Categoría sensible guardada.",
+    "SAVE_FAILED": "No se pudo guardar la categoría sensible.",
+    "LOAD_FAILED": "No se pudo cargar la categoría sensible."
   }
 }

@@ -356,6 +356,20 @@
               </button>
             </div>
           }
+          @if (canTagSensitivity() && encounterSensitivity(); as tag) {
+            <!-- QA D2730: the visit's sensitive category, set by the clinicians who write it. -->
+            <div class="encounter-sensitivity" data-testid="encounter-sensitivity">
+              <app-sensitivity-select
+                controlId="encounter-sensitivity-select"
+                labelKey="SENSITIVITY_TAG.ENCOUNTER_LABEL"
+                hintKey="SENSITIVITY_TAG.ENCOUNTER_HINT"
+                [value]="tag.explicitCategory"
+                [inherited]="tag.effectiveCategory"
+                [disabled]="sensitivitySaving()"
+                (picked)="setEncounterSensitivity($event)"
+              />
+            </div>
+          }
           <div class="detail-grid">
             <div class="detail-field">
               <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span
