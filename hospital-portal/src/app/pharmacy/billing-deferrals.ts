@@ -14,6 +14,9 @@ import { ToastService } from '../core/toast.service';
 import { refusalReason, refusedFieldReasons } from '../shared/refusal-reason';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
 import { DashPipe } from '../shared/pipes/dash.pipe';
 import { KeyLabelPipe } from '../shared/pipes/key-label.pipe';
@@ -45,6 +48,9 @@ type Step = 'approve' | 'reject' | 'cancel' | 'review';
     DashPipe,
     KeyLabelPipe,
     ServerTimePipe,
+    SubmitGuardDirective,
+    InlineSubFormDirective,
+    InlineDiscardAskComponent,
   ],
   templateUrl: './billing-deferrals.html',
   styleUrl: './billing-deferrals.scss',

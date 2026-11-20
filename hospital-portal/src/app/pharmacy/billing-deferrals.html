@@ -148,7 +148,13 @@
 
           @if (acting(); as a) {
             @if (a.id === r.id) {
-              <form class="deferral-step" (ngSubmit)="submitStep(r, a.step)">
+              <form
+                class="deferral-step"
+                appInlineSubForm
+                #stepForm="inlineSubForm"
+                (dismissed)="stop()"
+                (ngSubmit)="submitStep(r, a.step)"
+              >
                 @if (a.step === 'approve' && r.kind === 'THIRD_PARTY_COVER') {
                   <div class="field">
                     <label [for]="fieldId(r, 'cover')"
@@ -205,11 +211,14 @@
                     [(ngModel)]="stepNote"
                   ></textarea>
                 </div>
+                <app-inline-discard-ask [form]="stepForm" />
                 <div class="deferral-step-actions">
                   <button
                     type="submit"
                     class="btn-primary btn-sm"
                     data-testid="deferral-step-confirm"
+                    appSubmitGuard
+                    submitGuardRequired
                     [disabled]="busy() === r.id"
                   >
                     {{ 'COMMON.CONFIRM' | translate }}

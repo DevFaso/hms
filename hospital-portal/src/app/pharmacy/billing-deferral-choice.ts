@@ -116,7 +116,10 @@ export class BillingDeferralChoiceComponent {
   ask(): void {
     const reason = this.requestReason.trim();
     if (!reason) {
-      this.refuse('request-reason', 'PHARMACY_MONEY.DEFERRAL.REQUEST_REASON_REQUIRED');
+      const message = this.translate.instant('PHARMACY_MONEY.DEFERRAL.REQUEST_REASON_REQUIRED');
+      const id = this.fieldId('request-reason');
+      refuseFields(this.host.nativeElement, [id], [id], message);
+      this.toast.error(message);
       return;
     }
     if (this.requesting()) return;
