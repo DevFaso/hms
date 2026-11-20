@@ -76,25 +76,18 @@ public class DispenseBillingDeferralFollowUp {
         if (deferralId == null || hospitalId == null) {
             return;
         }
+        Object[] bodyArgs = {java.util.Objects.toString(medicationName, ""), java.util.Objects.toString(patientName, "")};
         TransactionCallbacks.afterCommit(() -> {
             try {
-                List<com.example.hms.model.User> billing =
-                    assignmentRepository.findLiveUsersAtHospitalWithRoleCodes(hospitalId, BILLING_ROLE_CODES);
-                Object[] bodyArgs = {medicationName != null ? medicationName : "", patientName != null ? patientName : ""};
-                int filed = 0;
-                for (com.example.hms.model.User user : billing) {
-                    // Never the same person: the one who asked or overrode does not get their own task.
-                    if (user.getId() != null && user.getId().equals(actorId)) {
-                        continue;
-                    }
+                List<com.example.hms.model.User> recipients = recipients(hospitalId, actorId);
+                for (com.example.hms.model.User user : recipients) {
                     CreateInBasketItemRequest item = task(deferralId, hospitalId, priority, titleKey, bodyKey, bodyArgs);
                     item.setRecipientUserId(user.getId());
                     item.setPatientId(patientId);
                     item.setPatientName(patientName);
                     inBasketService.createItemInNewTransaction(item);
-                    filed++;
                 }
-                if (filed == 0) {
+                if (recipients.isEmpty()) {
                     log.warn("Deferral {} at hospital {} has no billing staff to file a task for; it stays listed on "
                         + "the deferrals page", deferralId, hospitalId);
                 }
@@ -102,6 +95,16 @@ public class DispenseBillingDeferralFollowUp {
                 log.warn("Follow-up task not filed for deferral {}: {}", deferralId, ex.getMessage());
             }
         });
+    }
+
+    /**
+     * The billing staff of the hospital the task is for. Never the same person: whoever asked or overrode does not
+     * get their own task.
+     */
+    private List<com.example.hms.model.User> recipients(UUID hospitalId, UUID actorId) {
+        return assignmentRepository.findLiveUsersAtHospitalWithRoleCodes(hospitalId, BILLING_ROLE_CODES).stream()
+            .filter(user -> !java.util.Objects.equals(user.getId(), actorId))
+            .toList();
     }
 
     /** One task about a deferral: keyed, so each reader gets it in their language. */
