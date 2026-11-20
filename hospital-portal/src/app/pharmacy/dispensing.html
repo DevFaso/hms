@@ -395,7 +395,8 @@
                 'PHARMACY_MONEY.ONESTEP.DEFER_LABEL' | translate
               }}</label>
               @if (oneStepCharge() > 0) {
-                <small class="field-hint" data-testid="dispense-defer-charge">{{
+                {{ ' '
+                }}<small class="field-hint" data-testid="dispense-defer-charge">{{
                   'PHARMACY_MONEY.ONESTEP.CHARGE'
                     | translate: { amount: (oneStepCharge() | cfa: 'XOF') }
                 }}</small>
