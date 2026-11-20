@@ -14168,7 +14168,7 @@
     "ADDENDUM_FAILED": "Le complément n'a pas pu être enregistré.",
     "EMPTY_PATIENT": "Aucune note de soins pour ce patient.",
     "TAB": "Notes de soins",
-    "OPEN": "Notes"
+    "OPEN": "Notes de soins"
   },
   "MEDICAL_CERTIFICATE": {
     "DAYS": "Jours d'arrêt",
@@ -14945,7 +14945,7 @@
     "ASSIGN_BED": "Attribuer le lit",
     "NO_FREE_BED": "Aucun lit libre ne convient à ce patient.",
     "BED_BY_NURSE": "Un(e) infirmier(ère) du service ou un médecin attribue le lit :",
-    "OPEN_ADMISSIONS": "Admissions",
+    "OPEN_ADMISSIONS": "Ouvrir les admissions",
     "REASON_LABOUR": "Travail",
     "REASON_NEWBORN": "Nouveau-né",
     "ADMITTED": "{{patient}} admis(e).",
