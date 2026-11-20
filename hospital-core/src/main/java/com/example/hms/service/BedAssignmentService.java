@@ -162,8 +162,11 @@ public class BedAssignmentService {
             : java.time.Period.between(patient.getDateOfBirth(), java.time.LocalDate.now(java.time.ZoneId.systemDefault())).getYears();
         com.example.hms.enums.WardType type = bed.getWard().getWardType();
         boolean mismatch = switch (type) {
-            case MATERNITY -> com.example.hms.utility.ObstetricEligibility.isRecordedMale(patient)
-                || com.example.hms.utility.ObstetricEligibility.isRecordedChild(patient);
+            // Policy rule 2 (2026-11-20, provisional): a baby under one year (the NICU ward's own
+            // bound) takes a maternity cot beside its mother; the D431 child is still refused.
+            case MATERNITY -> !(age != null && age < 1)
+                && (com.example.hms.utility.ObstetricEligibility.isRecordedMale(patient)
+                    || com.example.hms.utility.ObstetricEligibility.isRecordedChild(patient));
             case PEDIATRIC -> age != null && age >= 18;
             case NICU -> age != null && age >= 1;
             default -> false; // Every other ward takes any patient.

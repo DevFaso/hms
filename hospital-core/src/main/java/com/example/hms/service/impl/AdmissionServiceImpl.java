@@ -128,7 +128,8 @@ public class AdmissionServiceImpl implements AdmissionService {
     }
 
     /**
-     * A midwife admits a woman in labour and nothing else: the type is LABOR_DELIVERY, the patient
+     * A midwife admits a woman in labour (and, policy rule 2, the newborn of a delivery she
+     * attended: {@link #requireMidwifeNewbornAdmission}) and nothing else: the type is LABOR_DELIVERY, the patient
      * is obstetric-eligible (the labour-episode rule: not recorded male, not a child), and she is
      * the admitting provider herself. A named attending physician is still checked as a physician.
      * The model has no maternity ward or department type to require, so the scope is the
@@ -142,6 +143,26 @@ public class AdmissionServiceImpl implements AdmissionService {
             throw new com.example.hms.exception.FieldBusinessException("admittingProviderId", "admission.midwife.selfProvider");
         }
         com.example.hms.utility.ObstetricEligibility.requireObstetricEligible(patient);
+    }
+
+    /**
+     * Policy rule 2 (2026-11-20, provisional): a midwife admits the newborn of a delivery she
+     * attended at this hospital, as its admitting provider ({@code MidwifeNewbornCare}). Any other
+     * newborn, and every newborn for a nurse, stays a physician's admission.
+     */
+    private void requireMidwifeNewbornAdmission(Patient patient, UUID hospitalId, Staff admittingProvider, UUID callerId) {
+        if (admittingProvider.getUser() == null || !callerId.equals(admittingProvider.getUser().getId())) {
+            throw new com.example.hms.exception.FieldBusinessException("admittingProviderId", "admission.midwife.selfProvider");
+        }
+        midwifeNewbornCare.requireNewbornOfHerDelivery(patient, hospitalId, callerId);
+    }
+
+    /** Policy rule 2: the midwife's newborn and maternity-ward reach (setter-injected, like the safeguarding screen). */
+    private com.example.hms.service.maternity.MidwifeNewbornCare midwifeNewbornCare;
+
+    @Autowired
+    void setMidwifeNewbornCare(com.example.hms.service.maternity.MidwifeNewbornCare midwifeNewbornCare) {
+        this.midwifeNewbornCare = midwifeNewbornCare;
     }
 
     @Override
@@ -171,7 +192,11 @@ public class AdmissionServiceImpl implements AdmissionService {
         if (callerId != null && isPhysicianAt(callerId, targetHospitalId)) {
             requirePhysician(admittingProvider, targetHospitalId);
         } else if (callerId != null && roleValidator.isMidwife(callerId, targetHospitalId)) {
-            requireMidwifeLabourAdmission(request, patient, admittingProvider, callerId);
+            if (request.getAdmissionType() == AdmissionType.NEWBORN && midwifeNewbornCare != null) {
+                requireMidwifeNewbornAdmission(patient, targetHospitalId, admittingProvider, callerId);
+            } else {
+                requireMidwifeLabourAdmission(request, patient, admittingProvider, callerId);
+            }
         } else {
             throw new BusinessException("admission.caller.notPermitted");
         }
@@ -486,8 +511,15 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Transactional
     public AdmissionResponseDTO assignBed(UUID admissionId, UUID bedId) {
         Admission admission = loadTenantScopedAdmission(admissionId);
+        // Policy rule 2 (provisional): a midwife assigns maternity beds and cots; a NICU cot for a
+        // newborn is assigned too and a physician is asked to review (a task, never a refusal).
+        boolean askPhysician = midwifeNewbornCare != null
+            && midwifeNewbornCare.requireBedAMidwifeMayAssign(admission, bedId);
         bedAssignmentService.assignBed(admission, bedId);
         admission = admissionRepository.save(admission);
+        if (askPhysician) {
+            midwifeNewbornCare.askPhysicianAfterCommit(admission);
+        }
         return admissionMapper.toResponseDTO(admission);
     }
 
@@ -504,6 +536,9 @@ public class AdmissionServiceImpl implements AdmissionService {
             throw new com.example.hms.exception.FieldBusinessException("reason", "admission.bed.unassignReasonTooLong", MAX_BED_RELEASE_REASON);
         }
         Admission admission = loadTenantScopedAdmission(admissionId);
+        if (midwifeNewbornCare != null) {
+            midwifeNewbornCare.requireBedAMidwifeMayRelease(admission);
+        }
         String bedLabel = admission.getBed() == null ? null : BedAssignmentService.bedLabel(admission.getBed());
         bedAssignmentService.unassignBed(admission);
         admission = admissionRepository.save(admission);

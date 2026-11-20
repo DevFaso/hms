@@ -1269,4 +1269,105 @@ class AdmissionServiceImplTest {
 
         assertThat(admission.getRoomBed()).isEqualTo("Salle 3");
     }
+
+    // ── Policy rule 2 (2026-11-20, provisional): the midwife and the newborn ──
+
+    private com.example.hms.service.maternity.MidwifeNewbornCare policyRule2Care() {
+        com.example.hms.service.maternity.MidwifeNewbornCare care =
+            org.mockito.Mockito.mock(com.example.hms.service.maternity.MidwifeNewbornCare.class);
+        service.setMidwifeNewbornCare(care);
+        return care;
+    }
+
+    @Test
+    void policyRule2_aMidwifeAdmitsTheNewbornOfADeliverySheAttended() {
+        com.example.hms.service.maternity.MidwifeNewbornCare care = policyRule2Care();
+        AdmissionRequestDTO request = midwifeRequest(com.example.hms.enums.AdmissionType.NEWBORN);
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        AdmissionResponseDTO response = new AdmissionResponseDTO();
+        when(admissionRepository.save(any(Admission.class))).thenReturn(admission);
+        when(admissionMapper.toResponseDTO(admission)).thenReturn(response);
+
+        assertThat(service.admitPatient(request)).isEqualTo(response);
+
+        verify(care).requireNewbornOfHerDelivery(patient, hospitalId, staff.getUser().getId());
+        org.mockito.ArgumentCaptor<Admission> saved = org.mockito.ArgumentCaptor.forClass(Admission.class);
+        verify(admissionRepository).save(saved.capture());
+        // She is the baby's responsible clinician.
+        assertThat(saved.getValue().getAdmittingProvider()).isSameAs(staff);
+        assertThat(saved.getValue().getAdmissionType()).isEqualTo(com.example.hms.enums.AdmissionType.NEWBORN);
+    }
+
+    @Test
+    void policyRule2_aMidwifeIsRefusedANewbornThatIsNotHers_andAnotherAdmittingProvider() {
+        com.example.hms.service.maternity.MidwifeNewbornCare care = policyRule2Care();
+        org.mockito.Mockito.doThrow(new com.example.hms.exception.FieldBusinessException("patientId",
+            "admission.midwife.newbornNotHers")).when(care).requireNewbornOfHerDelivery(any(), any(), any());
+        AdmissionRequestDTO request = midwifeRequest(com.example.hms.enums.AdmissionType.NEWBORN);
+        assertThatThrownBy(() -> service.admitPatient(request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasMessageContaining("a delivery she attended");
+
+        // Somebody else named as admitting provider: refused before the delivery is even read.
+        org.mockito.Mockito.reset(care);
+        UUID otherMidwife = UUID.randomUUID();
+        org.mockito.Mockito.when(roleValidator.getCurrentUserId()).thenReturn(otherMidwife);
+        org.mockito.Mockito.when(roleValidator.isMidwife(otherMidwife, hospitalId)).thenReturn(true);
+        assertThatThrownBy(() -> service.admitPatient(request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasMessageContaining("admitting provider herself");
+        verify(care, never()).requireNewbornOfHerDelivery(any(), any(), any());
+        verify(admissionRepository, never()).save(any());
+    }
+
+    @Test
+    void policyRule2_aNurseGainsNoNewbornAdmission() {
+        com.example.hms.service.maternity.MidwifeNewbornCare care = policyRule2Care();
+        AdmissionRequestDTO request = midwifeRequest(com.example.hms.enums.AdmissionType.NEWBORN);
+        // A nurse at the hospital: neither a physician nor a midwife there.
+        org.mockito.Mockito.when(roleValidator.isMidwife(staff.getUser().getId(), hospitalId)).thenReturn(false);
+        org.mockito.Mockito.lenient().when(roleValidator.isNurse(staff.getUser().getId(), hospitalId)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.admitPatient(request))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageContaining("not permitted to admit");
+        verify(care, never()).requireNewbornOfHerDelivery(any(), any(), any());
+        verify(admissionRepository, never()).save(any());
+    }
+
+    @Test
+    void policyRule2_aNeonatalCotAssignedByAMidwifeAsksAPhysician_aMaternityOneDoesNot() {
+        com.example.hms.service.maternity.MidwifeNewbornCare care = policyRule2Care();
+        Admission admission = stayInScope(AdmissionStatus.ACTIVE);
+        UUID bedId = UUID.randomUUID();
+        when(admissionRepository.save(admission)).thenReturn(admission);
+
+        when(care.requireBedAMidwifeMayAssign(admission, bedId)).thenReturn(false);
+        service.assignBed(admissionId, bedId);
+        verify(care, never()).askPhysicianAfterCommit(any());
+
+        when(care.requireBedAMidwifeMayAssign(admission, bedId)).thenReturn(true);
+        service.assignBed(admissionId, bedId);
+        verify(care).askPhysicianAfterCommit(admission);
+        verify(bedAssignmentService, times(2)).assignBed(admission, bedId);
+    }
+
+    @Test
+    void policyRule2_aBedOutsideHerWardsIsNeverAssignedOrReleasedByAMidwife() {
+        com.example.hms.service.maternity.MidwifeNewbornCare care = policyRule2Care();
+        Admission admission = stayInScope(AdmissionStatus.ACTIVE);
+        UUID bedId = UUID.randomUUID();
+        when(care.requireBedAMidwifeMayAssign(admission, bedId)).thenThrow(
+            new com.example.hms.exception.FieldBusinessException("bedId", "admission.bed.midwifeWards"));
+        assertThatThrownBy(() -> service.assignBed(admissionId, bedId))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        verify(bedAssignmentService, never()).assignBed(any(Admission.class), any(UUID.class));
+
+        org.mockito.Mockito.doThrow(new com.example.hms.exception.BusinessException("admission.bed.midwifeWards"))
+            .when(care).requireBedAMidwifeMayRelease(admission);
+        assertThatThrownBy(() -> service.unassignBed(admissionId, "Sortie"))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        verify(bedAssignmentService, never()).unassignBed(any());
+    }
 }

@@ -15208,7 +15208,7 @@
     "ACUITY_PICK": "Elegir el nivel de gravedad",
     "ADMIT_MOTHER": "Ingresar en maternidad",
     "ADMIT_NEWBORN": "Ingresar al recién nacido",
-    "NEWBORN_BY_DOCTOR": "Un médico ingresa al recién nacido.",
+    "NEWBORN_BY_DOCTOR": "Un médico, o la matrona que atendió el parto, ingresa al recién nacido.",
     "BY_CLINICIAN": "Un médico o una matrona la ingresa.",
     "IN_BED": "en la cama {{bed}}.",
     "NO_BED": "ingresado(a), sin cama: no aparece en el tablero de camas.",
@@ -15216,7 +15216,7 @@
     "BED_PICK": "Elegir una cama",
     "ASSIGN_BED": "Asignar la cama",
     "NO_FREE_BED": "Ninguna cama libre conviene a este paciente.",
-    "BED_BY_NURSE": "Una enfermera del servicio o un médico asigna la cama:",
+    "BED_BY_NURSE": "Una enfermera de la unidad, una matrona (camas de maternidad) o un médico asigna la cama:",
     "OPEN_ADMISSIONS": "Ingresos",
     "REASON_LABOUR": "Trabajo de parto",
     "REASON_NEWBORN": "Recién nacido",
@@ -15224,7 +15224,11 @@
     "ADMIT_FAILED": "No se pudo registrar el ingreso.",
     "BED_ASSIGNED": "Cama {{bed}} asignada.",
     "BED_FAILED": "No se pudo asignar la cama.",
-    "LOAD_FAILED": "estancia desconocida: no se pudieron leer los ingresos. Recargue antes de ingresar."
+    "LOAD_FAILED": "estancia desconocida: no se pudieron leer los ingresos. Recargue antes de ingresar.",
+    "MIDWIFE_NEWBORN_RULE": "Una matrona ingresa al recién nacido de un parto que atendió y es su clínica responsable. Regla provisional, pendiente de aprobación por una matrona o un obstetra designado.",
+    "MIDWIFE_BED_RULE": "Una matrona asigna las camas de maternidad. Regla provisional, pendiente de aprobación por una matrona o un obstetra designado.",
+    "MIDWIFE_COT_RULE": "Una matrona asigna las cunas de maternidad. Una cuna de neonatología también se asigna, y entonces se pide a un médico que valore al recién nacido. Regla provisional, pendiente de aprobación por una matrona o un obstetra designado.",
+    "BED_ASSIGNED_PHYSICIAN_ASKED": "Cama {{bed}} asignada. Se ha pedido a un médico que valore al recién nacido."
   },
   "SENSITIVITY_TAG": {
     "LABEL": "Categoría sensible",

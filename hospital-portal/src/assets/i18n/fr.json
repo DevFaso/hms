@@ -15208,7 +15208,7 @@
     "ACUITY_PICK": "Choisir le niveau de gravité",
     "ADMIT_MOTHER": "Admettre en maternité",
     "ADMIT_NEWBORN": "Admettre le nouveau-né",
-    "NEWBORN_BY_DOCTOR": "Un médecin admet le nouveau-né.",
+    "NEWBORN_BY_DOCTOR": "Un médecin, ou la sage-femme qui a participé à l'accouchement, admet le nouveau-né.",
     "BY_CLINICIAN": "Un médecin ou une sage-femme l'admet.",
     "IN_BED": "au lit {{bed}}.",
     "NO_BED": "admis(e), sans lit : n'apparaît pas au tableau des lits.",
@@ -15216,7 +15216,7 @@
     "BED_PICK": "Choisir un lit",
     "ASSIGN_BED": "Attribuer le lit",
     "NO_FREE_BED": "Aucun lit libre ne convient à ce patient.",
-    "BED_BY_NURSE": "Un(e) infirmier(ère) du service ou un médecin attribue le lit :",
+    "BED_BY_NURSE": "Un(e) infirmier(ère) du service, une sage-femme (lits de maternité) ou un médecin attribue le lit :",
     "OPEN_ADMISSIONS": "Ouvrir les admissions",
     "REASON_LABOUR": "Travail",
     "REASON_NEWBORN": "Nouveau-né",
@@ -15224,7 +15224,11 @@
     "ADMIT_FAILED": "L'admission n'a pas pu être enregistrée.",
     "BED_ASSIGNED": "Lit {{bed}} attribué.",
     "BED_FAILED": "Le lit n'a pas pu être attribué.",
-    "LOAD_FAILED": "séjour inconnu : les admissions n'ont pas pu être lues. Rechargez avant d'admettre."
+    "LOAD_FAILED": "séjour inconnu : les admissions n'ont pas pu être lues. Rechargez avant d'admettre.",
+    "MIDWIFE_NEWBORN_RULE": "Une sage-femme admet le nouveau-né d'un accouchement auquel elle a participé et en est la clinicienne responsable. Règle provisoire, en attente d'approbation par une sage-femme ou un obstétricien désigné.",
+    "MIDWIFE_BED_RULE": "Une sage-femme attribue les lits des services de maternité. Règle provisoire, en attente d'approbation par une sage-femme ou un obstétricien désigné.",
+    "MIDWIFE_COT_RULE": "Une sage-femme attribue les berceaux des services de maternité. Un berceau de néonatologie est attribué aussi, et un médecin est alors invité à examiner le nouveau-né. Règle provisoire, en attente d'approbation par une sage-femme ou un obstétricien désigné.",
+    "BED_ASSIGNED_PHYSICIAN_ASKED": "Lit {{bed}} attribué. Un médecin est invité à examiner le nouveau-né."
   },
   "SENSITIVITY_TAG": {
     "LABEL": "Catégorie sensible",

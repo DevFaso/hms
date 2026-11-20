@@ -91,12 +91,11 @@ describe('MaternityStayComponent (QA D2594)', () => {
       }),
     );
     fixture.detectChanges();
-    // A midwife does not assign beds (AdmissionController#assignBed): the card says who does.
-    expect(
-      (fixture.nativeElement as HTMLElement).querySelector(
-        '[data-testid="maternity-stay-who-assigns"]',
-      ),
-    ).not.toBeNull();
+    // Policy rule 2 (provisional): the midwife assigns the maternity bed herself, and is told the rule.
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="maternity-stay-who-assigns"]')).toBeNull();
+    expect(host.querySelector('[data-testid="maternity-stay-bed-select"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="maternity-stay-midwife-bed-rule"]')).not.toBeNull();
   });
 
   it("marks the server's refusal at the acuity", () => {
@@ -143,16 +142,86 @@ describe('MaternityStayComponent (QA D2594)', () => {
     expectFieldsMarked(fixture, { 'stay-bed-p1': 'Lit occupé.' });
   });
 
-  it('a newborn is admitted by a doctor; a midwife is told so instead of a button the server refuses', () => {
+  it('Policy rule 2: a midwife admits the newborn as its responsible clinician; a nurse is told who does', () => {
+    admissions.create.and.returnValue(of(stay(null)));
     let fixture = render('NEWBORN');
     let host = fixture.nativeElement as HTMLElement;
-    expect(host.querySelector('[data-testid="maternity-stay-admit"]')).toBeNull();
-    expect(host.querySelector('[data-testid="maternity-stay-who-admits"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="maternity-stay-admit"]')).not.toBeNull();
+    // The rule is shown as provisional where it applies.
+    expect(
+      host.querySelector('[data-testid="maternity-stay-midwife-newborn-rule"]'),
+    ).not.toBeNull();
+    fixture.componentInstance.acuity = 'LEVEL_1_MINIMAL';
+    fixture.componentInstance.admit();
+    expect(admissions.create).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        patientId: 'p1',
+        admittingProviderId: 's1',
+        admissionType: 'NEWBORN',
+      }),
+    );
+
     TestBed.resetTestingModule();
     roles = ['ROLE_DOCTOR'];
     fixture = render('NEWBORN');
     host = fixture.nativeElement as HTMLElement;
     expect(host.querySelector('[data-testid="maternity-stay-admit"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="maternity-stay-midwife-newborn-rule"]')).toBeNull();
+
+    // A nurse gains no newborn admission: no button, and the card says who admits.
+    TestBed.resetTestingModule();
+    roles = ['ROLE_NURSE'];
+    fixture = render('NEWBORN');
+    host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="maternity-stay-admit"]')).toBeNull();
+    expect(host.querySelector('[data-testid="maternity-stay-who-admits"]')).not.toBeNull();
+  });
+
+  it("Policy rule 2: the server's refusal of a newborn that is not hers is shown as worded", () => {
+    admissions.create.and.returnValue(
+      throwError(() => ({ error: { message: 'Ce patient est admis par un médecin.' } })),
+    );
+    const fixture = render('NEWBORN');
+    fixture.componentInstance.acuity = 'LEVEL_1_MINIMAL';
+    fixture.componentInstance.admit();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.stay()).toBeNull();
+    expect(fixture.componentInstance.saving()).toBeFalse();
+  });
+
+  it("Policy rule 2: a midwife's bed picker holds the maternity wards' beds, and a neonatal cot for a newborn", () => {
+    const free = [
+      { id: 'm1', label: 'MAT/M-01', wardType: 'MATERNITY' },
+      { id: 'g1', label: 'GEN/G-01', wardType: 'GENERAL' },
+      { id: 'n1', label: 'NEO/N-01', wardType: 'NICU' },
+      { id: 'x1', label: 'OLD/X-01' },
+    ] as never[];
+    beds.getAvailableBeds.and.returnValue(of(free));
+    admissions.getCurrentByPatient.and.returnValue(of(stay(null)));
+
+    // A woman in labour: maternity beds (and a bed an older server sent with no ward type).
+    let fixture = render('LABOR_DELIVERY');
+    expect(fixture.componentInstance.beds().map((b) => b.id)).toEqual(['m1', 'x1']);
+
+    // A newborn: the neonatal cot too, and assigning it tells her a doctor is asked.
+    TestBed.resetTestingModule();
+    fixture = render('NEWBORN');
+    expect(fixture.componentInstance.beds().map((b) => b.id)).toEqual(['m1', 'n1', 'x1']);
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="maternity-stay-midwife-bed-rule"]',
+      ),
+    ).not.toBeNull();
+    admissions.assignBed.and.returnValue(of(stay('NEO/N-01')));
+    fixture.componentInstance.bedId = 'n1';
+    fixture.componentInstance.assignBed(stay(null));
+    expect(admissions.assignBed).toHaveBeenCalledWith('adm1', 'n1');
+
+    // A nurse (or a midwife who is also one) keeps every ward's beds.
+    TestBed.resetTestingModule();
+    roles = ['ROLE_MIDWIFE', 'ROLE_NURSE'];
+    fixture = render('NEWBORN');
+    expect(fixture.componentInstance.beds().length).toBe(4);
   });
 
   it('Review of #1237: a failed stay lookup says so, never « non admise »', () => {

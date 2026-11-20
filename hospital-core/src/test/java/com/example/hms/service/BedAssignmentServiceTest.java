@@ -539,4 +539,33 @@ class BedAssignmentServiceTest {
         assertThat(bed.getStatus()).isEqualTo(BedStatus.OCCUPIED);
         assertThat(admission.getRoomBed()).isEqualTo("MAT01/B07");
     }
+
+    // ── Policy rule 2 (2026-11-20, provisional): a newborn takes a maternity cot ──
+
+    @Test
+    void policyRule2_aNewbornTakesAMaternityCot_whateverItsRecordedSex() {
+        for (String sex : new String[] {"MALE", "FEMALE", null}) {
+            com.example.hms.model.Patient baby = new com.example.hms.model.Patient();
+            baby.setGender(sex);
+            baby.setDateOfBirth(java.time.LocalDate.now().minusDays(2));
+            admission.setPatient(baby);
+            admission.setBed(null);
+            Bed bed = bed("C-" + sex, BedStatus.AVAILABLE);
+            when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId)).thenReturn(Optional.of(bed));
+
+            service.assignBed(admission, bed.getId());
+
+            assertThat(bed.getStatus()).isEqualTo(BedStatus.OCCUPIED);
+        }
+    }
+
+    @Test
+    void policyRule2_aOneYearOldIsStillRefusedAMaternityBed() {
+        admission.setPatient(patient("FEMALE", 1));
+        Bed bed = bed("B09", BedStatus.AVAILABLE);
+        when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId)).thenReturn(Optional.of(bed));
+
+        UUID bedId = bed.getId();
+        assertThatThrownBy(() -> service.assignBed(admission, bedId)).isInstanceOf(BusinessException.class);
+    }
 }

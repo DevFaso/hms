@@ -124,7 +124,8 @@ export const ACTION_PERMISSIONS = {
   },
   admissionCreate: {
     endpoint: 'AdmissionController#admitPatient',
-    // A midwife admits a woman in labour only (policy 2); the form narrows to it.
+    // A midwife admits a woman in labour (policy 2) or the newborn of a delivery she attended
+    // (policy rule 2, 2026-11-20, provisional); the form narrows to it.
     roles: ['ROLE_DOCTOR', 'ROLE_MIDWIFE'],
   },
   admissionUpdate: {
@@ -137,11 +138,12 @@ export const ACTION_PERMISSIONS = {
   },
   admissionAssignBed: {
     endpoint: 'AdmissionController#assignBed',
-    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN'],
+    // Policy rule 2 (provisional): a midwife assigns maternity-ward beds and cots (shared/midwife-beds).
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
   },
   admissionUnassignBed: {
     endpoint: 'AdmissionController#unassignBed',
-    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
   },
   admissionDischarge: {
     endpoint: 'AdmissionController#dischargePatient',

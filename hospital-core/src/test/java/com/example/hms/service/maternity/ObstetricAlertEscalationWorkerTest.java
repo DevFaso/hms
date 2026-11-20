@@ -275,4 +275,36 @@ class ObstetricAlertEscalationWorkerTest {
             org.mockito.ArgumentMatchers.argThat(a -> a[2] instanceof String n && n.contains("Awa")),
             eq("drA"), eq(ObstetricAlertEscalationWorker.ESCALATION_TYPE));
     }
+
+    // ── Policy rule 2 (2026-11-20, provisional): a newborn's danger sign always reaches a physician ──
+
+    @Test
+    void policyRule2_aNewbornDangerSignAlwaysReachesAPhysician() {
+        // Only a midwife in the first circle: the hospital's doctors join it.
+        assertThat(worker.withAPhysician(new java.util.LinkedHashSet<>(List.of("mwB")), HOSPITAL))
+            .containsExactly("mwB", "drA", "documenter");
+        // A doctor is already in it (any case): nothing is added.
+        assertThat(worker.withAPhysician(new java.util.LinkedHashSet<>(List.of("DRA", "mwB")), HOSPITAL))
+            .containsExactly("DRA", "mwB");
+        // A hospital with no doctor keeps the circle it has.
+        when(staffRepository.findActiveUsernamesByHospitalAndRole(HOSPITAL, "ROLE_DOCTOR")).thenReturn(List.of());
+        assertThat(worker.withAPhysician(new java.util.LinkedHashSet<>(List.of("mwB")), HOSPITAL))
+            .containsExactly("mwB");
+    }
+
+    @Test
+    void policyRule2_raisingANewbornAlertWithOnlyAMidwifeOnCallNotifiesTheDoctorToo_aLabourAlertDoesNot() {
+        when(onCallScheduleRepository.findByHospitalAndWindow(eq(HOSPITAL), any(), any()))
+            .thenReturn(List.of(shift("mwB", true, true)));
+        when(escalationRepository.save(any())).thenReturn(row((short) 0));
+
+        worker.raise(alert(DOCUMENTER));
+        verify(notificationService, never()).createNotification(any(), any(), eq("drA"), any());
+        verify(notificationService).createNotification(any(), any(), eq("mwB"), any());
+
+        worker.raise(new ObstetricAlertEscalationService.UrgentAlert(HOSPITAL, PATIENT, "Bébé",
+            ObstetricAlertEscalationService.SOURCE_NEWBORN, UUID.randomUUID(), "DANGER_SIGN", "Danger sign",
+            "Convulsions", DOCUMENTER, "text"));
+        verify(notificationService).createNotification(any(), any(), eq("drA"), any());
+    }
 }

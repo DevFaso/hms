@@ -56,6 +56,11 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
+import {
+  MIDWIFE_ONLY_ROLES,
+  WARD_WIDE_BED_ROLES,
+  bedsAMidwifeAssigns,
+} from '../shared/midwife-beds';
 
 /** The bed-release reason's field (QA D1100), marked when it is refused. */
 const UNASSIGN_REASON_ID = 'admission-unassign-bed-reason';
@@ -415,9 +420,18 @@ export class AdmissionsComponent implements OnInit {
     { value: 'OTHER', labelKey: 'ADMISSIONS.DISPOSITION_OTHER' },
   ];
 
-  /** The types the New admission form offers: a midwife's is labour and delivery alone. */
+  /**
+   * The types the New admission form offers: a midwife's are labour and delivery, and (policy
+   * rule 2, 2026-11-20, provisional) the newborn of a delivery she attended.
+   */
   protected readonly formAdmissionTypes = computed<AdmissionType[]>(() =>
-    this.midwifeAdmitsLabourOnly() ? ['LABOR_DELIVERY'] : this.admissionTypes,
+    this.midwifeAdmitsLabourOnly() ? ['LABOR_DELIVERY', 'NEWBORN'] : this.admissionTypes,
+  );
+  /** Policy rule 2: a midwife who is neither a nurse nor a physician is offered the maternity wards' beds. */
+  protected readonly midwifeBedsOnly = computed(
+    () =>
+      this.roleContext.hasAnyActiveRole([...MIDWIFE_ONLY_ROLES]) &&
+      !this.roleContext.hasAnyActiveRole([...WARD_WIDE_BED_ROLES]),
   );
 
   admissionTypes: AdmissionType[] = [
@@ -908,7 +922,11 @@ export class AdmissionsComponent implements OnInit {
     this.bedsLoading.set(true);
     this.bedService.getAvailableBeds(adm.patientId).subscribe({
       next: (beds) => {
-        this.availableBeds.set(beds);
+        this.availableBeds.set(
+          this.midwifeBedsOnly()
+            ? bedsAMidwifeAssigns(beds, adm.admissionType === 'NEWBORN')
+            : beds,
+        );
         this.bedsLoading.set(false);
       },
       error: () => {
