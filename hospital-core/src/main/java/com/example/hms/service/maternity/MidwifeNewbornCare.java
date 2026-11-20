@@ -5,6 +5,7 @@ import com.example.hms.enums.AdmissionType;
 import com.example.hms.enums.InBasketItemType;
 import com.example.hms.enums.InBasketPriority;
 import com.example.hms.enums.WardType;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.model.Admission;
 import com.example.hms.model.Bed;
@@ -26,6 +27,9 @@ import com.example.hms.utility.RoleValidator;
 import com.example.hms.utility.TransactionCallbacks;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -48,7 +52,8 @@ import java.util.UUID;
  *       never a refusal. Every other ward stays with nurses and physicians.</li>
  * </ul>
  * A caller who is also a nurse or a physician at the hospital keeps that
- * role's reach; a nurse gains nothing here.
+ * role's reach; a nurse gains nothing here. The midwife role counts at the
+ * hospital it is held at: held elsewhere only, it assigns no bed here.
  */
 @Component
 @RequiredArgsConstructor
@@ -65,6 +70,9 @@ public class MidwifeNewbornCare {
     static final String BODY_KEY = "newborn.neonatology.doctorTask.body";
     static final String NOT_HER_NEWBORN_KEY = "admission.midwife.newbornNotHers";
     static final String WARD_KEY = "admission.bed.midwifeWards";
+    /** {@code AdmissionController#assignBed} and {@code #unassignBed} before policy rule 2. */
+    private static final Set<String> BED_ROLES_BEFORE_THIS_RULE = Set.of(
+        SecurityConstants.ROLE_DOCTOR, SecurityConstants.ROLE_NURSE, SecurityConstants.ROLE_SUPER_ADMIN);
 
     private final DeliveryNewbornRepository deliveryNewbornRepository;
     private final BedRepository bedRepository;
@@ -106,7 +114,8 @@ public class MidwifeNewbornCare {
      */
     public boolean requireBedAMidwifeMayAssign(Admission admission, UUID bedId) {
         UUID hospitalId = hospitalIdOf(admission);
-        if (hospitalId == null || bedId == null || !onlyMidwifeAt(hospitalId)) {
+        if (hospitalId == null || bedId == null
+                || !narrowedToHerWards(hospitalId, BedAssignmentService.FIELD_BED_ID)) {
             return false;
         }
         // A bed of another hospital answers as not found in the assignment itself.
@@ -117,10 +126,46 @@ public class MidwifeNewbornCare {
     /** The same wards, for the bed a caller who is only a midwife releases. */
     public void requireBedAMidwifeMayRelease(Admission admission) {
         UUID hospitalId = hospitalIdOf(admission);
-        if (hospitalId == null || admission.getBed() == null || !onlyMidwifeAt(hospitalId)) {
+        if (hospitalId == null || admission.getBed() == null || !narrowedToHerWards(hospitalId, null)) {
             return;
         }
         requireHerWard(admission.getBed(), admission, null);
+    }
+
+    /**
+     * Whether the ward rule applies to the caller at this hospital.
+     * <ul>
+     *   <li>A nurse or a physician THERE keeps every ward: false.</li>
+     *   <li>A midwife there (and nothing wider there) is narrowed: true, whatever role she holds
+     *       at another hospital.</li>
+     *   <li>Neither: a caller the endpoint admitted before this rule (a token carrying NURSE,
+     *       DOCTOR or SUPER_ADMIN) is left as before: false. A caller it admits only as a midwife,
+     *       on a role held at another hospital, is refused: that role counts for nothing here.</li>
+     * </ul>
+     */
+    private boolean narrowedToHerWards(UUID hospitalId, String field) {
+        UUID caller = roleValidator.getCurrentUserId();
+        if (caller != null && (roleValidator.isNurse(caller, hospitalId) || roleValidator.isDoctor(caller, hospitalId)
+                || roleValidator.isPhysician(caller, hospitalId) || roleValidator.isSurgeon(caller, hospitalId))) {
+            return false;
+        }
+        if (caller != null && roleValidator.isMidwife(caller, hospitalId)) {
+            return true;
+        }
+        if (admittedBeforeThisRule()) {
+            return false;
+        }
+        throw field == null ? new BusinessException(WARD_KEY) : new FieldBusinessException(field, WARD_KEY);
+    }
+
+    /** The token carries a role the bed endpoints admitted before the midwife joined them. */
+    private static boolean admittedBeforeThisRule() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication.getAuthorities() == null) {
+            return false;
+        }
+        return authentication.getAuthorities().stream().map(GrantedAuthority::getAuthority)
+            .anyMatch(BED_ROLES_BEFORE_THIS_RULE::contains);
     }
 
     private static boolean requireHerWard(Bed bed, Admission admission, String field) {
@@ -131,20 +176,7 @@ public class MidwifeNewbornCare {
         if (type == WardType.NICU && admission.getAdmissionType() == AdmissionType.NEWBORN) {
             return true;
         }
-        throw field == null
-            ? new com.example.hms.exception.BusinessException(WARD_KEY)
-            : new FieldBusinessException(field, WARD_KEY);
-    }
-
-    /** A midwife at the hospital who is neither a nurse nor a physician there. */
-    private boolean onlyMidwifeAt(UUID hospitalId) {
-        UUID caller = roleValidator.getCurrentUserId();
-        return caller != null
-            && roleValidator.isMidwife(caller, hospitalId)
-            && !roleValidator.isNurse(caller, hospitalId)
-            && !roleValidator.isDoctor(caller, hospitalId)
-            && !roleValidator.isPhysician(caller, hospitalId)
-            && !roleValidator.isSurgeon(caller, hospitalId);
+        throw field == null ? new BusinessException(WARD_KEY) : new FieldBusinessException(field, WARD_KEY);
     }
 
     /**

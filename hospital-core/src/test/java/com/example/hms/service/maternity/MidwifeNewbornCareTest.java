@@ -201,7 +201,46 @@ class MidwifeNewbornCareTest {
 
         when(roleValidator.isDoctor(MIDWIFE, HOSPITAL)).thenReturn(false);
         when(roleValidator.isMidwife(MIDWIFE, HOSPITAL)).thenReturn(false);
+        // Not a midwife here, admitted on a role the endpoint took before this rule: left as before.
+        signIn("ROLE_SUPER_ADMIN");
         assertThat(care.requireBedAMidwifeMayAssign(stay(AdmissionType.ELECTIVE), generalBed)).isFalse();
+    }
+
+    @Test
+    void aMidwifeRoleHeldAtAnotherHospitalAssignsAndReleasesNoBedHere() {
+        // Her token carries ROLE_MIDWIFE (held at another hospital); here she is neither a midwife,
+        // a nurse nor a physician, so the role that got her through the endpoint counts for nothing.
+        when(roleValidator.isMidwife(MIDWIFE, HOSPITAL)).thenReturn(false);
+        signIn("ROLE_MIDWIFE", "ROLE_RECEPTIONIST");
+        UUID maternityBed = bedIn(WardType.MATERNITY).getId();
+        Admission labour = stay(AdmissionType.LABOR_DELIVERY);
+        assertThatThrownBy(() -> care.requireBedAMidwifeMayAssign(labour, maternityBed))
+            .isInstanceOf(FieldBusinessException.class);
+
+        Admission inMaternity = stay(AdmissionType.LABOR_DELIVERY);
+        inMaternity.setBed(bedIn(WardType.MATERNITY));
+        assertThatThrownBy(() -> care.requireBedAMidwifeMayRelease(inMaternity)).isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void aMidwifeHereIsNarrowedEvenWhenHerTokenCarriesANursesRoleFromElsewhere() {
+        signIn("ROLE_MIDWIFE", "ROLE_NURSE");
+        UUID generalBed = bedIn(WardType.GENERAL).getId();
+        Admission labour = stay(AdmissionType.LABOR_DELIVERY);
+        assertThatThrownBy(() -> care.requireBedAMidwifeMayAssign(labour, generalBed))
+            .isInstanceOf(FieldBusinessException.class);
+    }
+
+    private static void signIn(String... authorities) {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("u", "n/a",
+                java.util.Arrays.stream(authorities)
+                    .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new).toList()));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearSession() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
     }
 
     @Test

@@ -274,4 +274,19 @@ describe('MaternityStayComponent (QA D2594)', () => {
     const sent = admissions.create.calls.mostRecent().args[0];
     expect(sent.admissionDateTime).not.toBe('2026-11-20T00:22:00');
   });
+
+  it('Policy rule 2: the card and its provisional rule fit at 1366, 1024, 768 and 390 px wide', () => {
+    admissions.getCurrentByPatient.and.returnValue(of(stay(null)));
+    const fixture = render('NEWBORN');
+    const host = fixture.nativeElement as HTMLElement;
+    host.style.display = 'block';
+    for (const width of [1366, 1024, 768, 390]) {
+      host.style.width = `${width - 32}px`;
+      fixture.detectChanges();
+      const card = host.querySelector<HTMLElement>('.maternity-stay')!;
+      expect(card.scrollWidth)
+        .withContext(`stay card at ${width}px`)
+        .toBeLessThanOrEqual(card.clientWidth + 1);
+    }
+  });
 });

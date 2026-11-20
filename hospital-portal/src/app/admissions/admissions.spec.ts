@@ -188,18 +188,29 @@ describe('AdmissionsComponent', () => {
       expect(Object.values(gates()).every(Boolean)).toBeTrue();
     });
 
-    it('a midwife is offered New admission for labour and delivery only, and no other write (policy 2)', () => {
+    it('a midwife is offered New admission for labour and for her newborn, and the maternity beds (policy 2, policy rule 2)', () => {
       activeRoles = ['ROLE_MIDWIFE'];
       expect(gates()).toEqual({
         admit: true,
         edit: false,
         orderSets: false,
-        assignBed: false,
-        unassignBed: false,
+        // Policy rule 2 (2026-11-20, provisional): she assigns and frees maternity-ward beds.
+        assignBed: true,
+        unassignBed: true,
         discharge: false,
         cancel: false,
       });
-      expect(component['formAdmissionTypes']()).toEqual(['LABOR_DELIVERY']);
+      expect(component['formAdmissionTypes']()).toEqual(['LABOR_DELIVERY', 'NEWBORN']);
+      expect(component['midwifeBedsOnly']()).toBeTrue();
+    });
+
+    it('Policy rule 2: a midwife who is also a nurse, and a nurse, keep every ward in the bed picker', () => {
+      activeRoles = ['ROLE_MIDWIFE', 'ROLE_NURSE'];
+      expect(component['midwifeBedsOnly']()).toBeFalse();
+      activeRoles = ['ROLE_NURSE'];
+      expect(component['midwifeBedsOnly']()).toBeFalse();
+      // A nurse gains no admission of any type.
+      expect(gates().admit).toBeFalse();
     });
 
     it('D1634: a midwife admitting sees a neutral provider label', () => {

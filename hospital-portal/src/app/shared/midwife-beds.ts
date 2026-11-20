@@ -9,10 +9,17 @@ import { BedResponse } from '../services/bed.service';
  */
 export const MIDWIFE_ONLY_ROLES: readonly string[] = ['ROLE_MIDWIFE'];
 /** Holding one of these as well lifts the narrowing: a nurse or a physician assigns any ward's bed. */
-export const WARD_WIDE_BED_ROLES: readonly string[] = ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN'];
+export const WARD_WIDE_BED_ROLES: readonly string[] = [
+  'ROLE_DOCTOR',
+  'ROLE_NURSE',
+  'ROLE_SUPER_ADMIN',
+];
 
 /** The beds a caller who is only a midwife may assign for this stay; a bed with no ward type is kept. */
-export function bedsAMidwifeAssigns(beds: readonly BedResponse[], newbornStay: boolean): BedResponse[] {
+export function bedsAMidwifeAssigns(
+  beds: readonly BedResponse[],
+  newbornStay: boolean,
+): BedResponse[] {
   return beds.filter(
     (bed) =>
       !bed.wardType || bed.wardType === 'MATERNITY' || (newbornStay && bed.wardType === 'NICU'),
