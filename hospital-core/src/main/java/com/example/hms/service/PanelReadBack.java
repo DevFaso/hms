@@ -39,7 +39,9 @@ import java.util.regex.Pattern;
 final class PanelReadBack {
 
     private static final Pattern SEGMENT_SPLIT =
-        Pattern.compile("\\s*(?:[;\\n\\r|]+|\\s+(?:et|and|y)\\s+|,(?=\\s*\\p{L}))\\s*");
+        // One separator at a time, no surrounding whitespace runs (each part is
+        // trimmed): linear on any input (CodeQL java/polynomial-redos).
+        Pattern.compile("[;\\n\\r|]|\\s(?:et|and|y)\\s|,(?=\\s*+\\p{L})");
     private static final Pattern MARKS = Pattern.compile("\\p{M}+");
     private static final Pattern LABEL_SEPARATOR = Pattern.compile("^[\\s:=]+");
 

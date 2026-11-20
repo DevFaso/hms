@@ -352,11 +352,7 @@
                     | translate
                       : {
                           test: target.labTestName,
-                          level:
-                            (hold.qcLevel === 'LOW_CONTROL'
-                              ? 'LAB_RELEASE.QC_LEVEL_LOW'
-                              : 'LAB_RELEASE.QC_LEVEL_HIGH'
-                            ) | translate,
+                          level: qcLevelKey(hold) | translate,
                           at: hold.recordedAt
                             ? (hold.recordedAt | serverTime | date: 'short')
                             : '—',

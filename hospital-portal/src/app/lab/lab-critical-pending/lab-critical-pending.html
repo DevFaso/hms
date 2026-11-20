@@ -58,6 +58,8 @@
           <div class="card-value">
             <span class="test">{{ row.labTestName }}</span>
             <strong class="value">{{ row.resultValue | labValue: row.resultUnit }}</strong>
+            <!-- QA D1016: a correction says it replaces a validated value -->
+            <app-lab-correction-badge [corrected]="!!row.supersedesResultId" />
           </div>
           <dl class="card-facts">
             <dt>{{ 'LAB_CRITICAL_PENDING.ORDERED_BY' | translate }}</dt>
@@ -69,7 +71,7 @@
               }}
             </dd>
             <dt>{{ 'LAB_CRITICAL_PENDING.ROUNDS' | translate }}</dt>
-            <dd>{{ row.criticalEscalationLevel ?? 0 }}</dd>
+            <dd>{{ escalationRounds(row) }}</dd>
           </dl>
         </li>
       }

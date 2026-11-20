@@ -14,7 +14,12 @@ import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.comp
 import { Subject, of } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
 
-import { LabResultPage, LabResultResponse, LabService } from '../../services/lab.service';
+import {
+  LabQcHold,
+  LabResultPage,
+  LabResultResponse,
+  LabService,
+} from '../../services/lab.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
@@ -298,9 +303,9 @@ export class LabReleaseWorklistComponent implements OnInit {
    * identity line of a critical call; null when the birth date is unknown.
    */
   patientAge(r: LabResultResponse): { key: string; n: number } | null {
-    const dob = r.patientDateOfBirth
-      ? new Date(`${r.patientDateOfBirth.slice(0, 10)}T00:00:00`)
-      : null;
+    // A calendar date (LocalDate "YYYY-MM-DD"), not a server time: read as a local date.
+    const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(r.patientDateOfBirth ?? '');
+    const dob = parts ? new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3])) : null;
     if (!dob || Number.isNaN(dob.getTime())) {
       return null;
     }
@@ -315,6 +320,13 @@ export class LabReleaseWorklistComponent implements OnInit {
     return months < 24
       ? { key: 'LAB_RELEASE.AGE_MONTHS', n: months }
       : { key: 'LAB_RELEASE.AGE_YEARS', n: Math.floor(months / 12) };
+  }
+
+  /** r65 D2613: the label key of the rejected run's control level. */
+  qcLevelKey(hold: LabQcHold): string {
+    return hold.qcLevel === 'LOW_CONTROL'
+      ? 'LAB_RELEASE.QC_LEVEL_LOW'
+      : 'LAB_RELEASE.QC_LEVEL_HIGH';
   }
 
   /** r65 D2614: the row has something to identify the patient by beyond the name. */

@@ -35,7 +35,12 @@ class HospitalAdminOffOrdersTest {
     void laboratory() {
         assertOffChart(LabOrderController.class);
         assertOffChart(LabSpecimenController.class);
-        assertOffChart(LabResultController.class, "/critical-escalation/run", "/{id}");
+        // r65 D2183: the escalation pages HOSPITAL_ADMIN from round 2, so it reads the two
+        // critical lists it is paged about; acknowledging and reading back stay clinical.
+        assertOffChart(LabResultController.class, "/critical-escalation/run", "/{id}",
+            "/hospital/{hospitalId}/critical");
+        assertKept(LabResultController.class, "GET /hospital/{hospitalId}/critical");
+        assertKept(LabResultController.class, "GET /hospital/{hospitalId}/critical/unacknowledged");
         assertRefuses(LabResultController.class, "POST /{id}/acknowledge");
         assertRefuses(LabResultController.class, "POST /{id}/critical-read-back");
         assertKept(LabResultController.class, "POST /critical-escalation/run");

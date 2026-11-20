@@ -191,8 +191,19 @@ public class Hl7v2MessageBuilder {
         return high != null ? "<" + high : "";
     }
 
+    /**
+     * A range limit as HL7 v2 writes a number on the wire (OBX-7): a point,
+     * no grouping, no trailing zeros, whatever the reader's language. The
+     * machine locale is explicit, so this is never display text.
+     */
     private static String plain(Double value) {
-        return value == null ? null : java.math.BigDecimal.valueOf(value).stripTrailingZeros().toPlainString();
+        if (value == null) {
+            return null;
+        }
+        java.text.DecimalFormat wire = new java.text.DecimalFormat("0.##########",
+            java.text.DecimalFormatSymbols.getInstance(Locale.ROOT));
+        wire.setGroupingUsed(false);
+        return wire.format(value);
     }
 
     /**

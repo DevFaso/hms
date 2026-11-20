@@ -6,6 +6,7 @@ import { LabResultResponse, LabService } from '../../services/lab.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { LabValuePipe } from '../shared/lab-value.pipe';
+import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.component';
 
 /**
  * r65 D2183: the hospital's critical lab results still waiting for a
@@ -21,7 +22,13 @@ import { LabValuePipe } from '../shared/lab-value.pipe';
 @Component({
   selector: 'app-lab-critical-pending',
   standalone: true,
-  imports: [CommonModule, TranslateModule, ServerTimePipe, LabValuePipe],
+  imports: [
+    CommonModule,
+    TranslateModule,
+    ServerTimePipe,
+    LabValuePipe,
+    LabCorrectionBadgeComponent,
+  ],
   templateUrl: './lab-critical-pending.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './lab-critical-pending.scss',
@@ -34,6 +41,11 @@ export class LabCriticalPendingComponent implements OnInit {
   failed = signal(false);
   noScope = signal(false);
   rows = signal<LabResultResponse[]>([]);
+
+  /** How many escalation rounds this result has paged (a count, never an enum). */
+  escalationRounds(row: LabResultResponse): number {
+    return row.criticalEscalationLevel ?? 0;
+  }
 
   ngOnInit(): void {
     this.load();
