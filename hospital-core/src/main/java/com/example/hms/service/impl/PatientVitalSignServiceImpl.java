@@ -128,6 +128,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
             response.setNewbornAlerts(vitalSignJudgement.alerts(judgement));
             response.setPostpartumAlerts(vitalSignJudgement.postpartumAlerts(judgement));
             response.setHypertensionAlerts(vitalSignJudgement.hypertensionAlerts(judgement));
+            response.setMaternalAlerts(vitalSignJudgement.maternalAlerts(judgement));
         }
         return response;
     }
@@ -249,15 +250,33 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         this.news2Applicability = news2Applicability;
     }
 
+    /** Policy 2026-11-20: the maternal early warning (setter-injected; absent, the chart says « NEWS2 non validé »). */
+    private com.example.hms.service.vitals.MaternalEarlyWarningService maternalEarlyWarning;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setMaternalEarlyWarning(com.example.hms.service.vitals.MaternalEarlyWarningService maternalEarlyWarning) {
+        this.maternalEarlyWarning = maternalEarlyWarning;
+    }
+
     /**
      * Review of #1237 (High): the response of one reading, with no reassuring NEWS2 score for a pregnant or
      * postpartum woman or a newborn (News2Applicability). The status is read once per reading day of one read.
+     * Policy 2026-11-20 (provisional): for the pregnant or postpartum woman the reading carries the maternal
+     * early warning instead, scored from the row itself (no further query).
      */
     private java.util.function.Function<PatientVitalSign, PatientVitalSignResponseDTO> responder(UUID scopeHospitalId) {
-        java.util.Map<java.time.LocalDate, com.example.hms.service.vitals.News2Applicability.Status> byDay =
+        java.util.Map<java.time.LocalDate, com.example.hms.service.vitals.News2Applicability.Applicability> byDay =
             new java.util.HashMap<>();
         return vital -> {
             PatientVitalSignResponseDTO dto = vitalSignMapper.toResponse(vital);
+            if (dto != null) {
+                // Policy 2026-11-20: the ticked maternal concerns are read back on the staff chart and the
+                // patient's own portal only. A family proxy's read does not pass here (policy: a proxy
+                // is not shown what reveals a pregnancy), so the mapper itself never carries them.
+                java.util.Set<com.example.hms.enums.MaternalConcern> ticked =
+                    com.example.hms.enums.MaternalConcern.parse(vital.getMaternalConcerns());
+                dto.setMaternalConcerns(ticked.isEmpty() ? null : ticked.stream().map(Enum::name).toList());
+            }
             if (dto == null || news2Applicability == null || vital.getPatient() == null) {
                 return dto;
             }
@@ -265,14 +284,17 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
                 : LocalDateTime.now(java.time.ZoneId.systemDefault());
             UUID readAt = scopeHospitalId != null ? scopeHospitalId
                 : CrossHospitalReachRecorder.hospitalIdOf(vital.getHospital());
-            com.example.hms.service.vitals.News2Applicability.Status status = byDay.computeIfAbsent(at.toLocalDate(),
-                day -> news2Applicability.statusOf(vital.getPatient(), readAt, at));
-            if (status.notValidated()) {
+            com.example.hms.service.vitals.News2Applicability.Applicability known = byDay.computeIfAbsent(
+                at.toLocalDate(), day -> news2Applicability.applicabilityOf(vital.getPatient(), readAt, at));
+            if (known != null && known.status().notValidated()) {
                 dto.setNewsScore(null);
                 dto.setNewsRiskBand(null);
                 dto.setNewsComplete(null);
                 dto.setNewsMissing(null);
-                dto.setNewsNotValidated(status.name());
+                dto.setNewsNotValidated(known.status().name());
+                if (maternalEarlyWarning != null) {
+                    maternalEarlyWarning.describe(maternalEarlyWarning.scoreFor(known, vital), dto);
+                }
             }
             return dto;
         };

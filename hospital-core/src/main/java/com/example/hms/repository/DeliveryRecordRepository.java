@@ -32,6 +32,22 @@ public interface DeliveryRecordRepository extends JpaRepository<DeliveryRecord, 
         UUID patientId, java.util.Collection<UUID> hospitalIds, java.time.LocalDateTime from,
         java.time.LocalDateTime to);
 
+    /**
+     * Policy 2026-11-20 (ward reads, QA D1314): the latest birth since {@code since} of each of
+     * {@code patientIds} at this hospital, as (patient id, birth time) rows, in ONE query for a ward.
+     */
+    @org.springframework.data.jpa.repository.Query("""
+        select d.patient.id, max(d.birthDateTime) from DeliveryRecord d
+        where d.patient.id in :patientIds
+          and d.hospital.id = :hospitalId
+          and d.birthDateTime >= :since
+        group by d.patient.id
+        """)
+    java.util.List<Object[]> latestBirthTimesAt(
+        @org.springframework.data.repository.query.Param("patientIds") java.util.Collection<UUID> patientIds,
+        @org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
+        @org.springframework.data.repository.query.Param("since") java.time.LocalDateTime since);
+
     /** QA D1067: the delivery that ended the pregnancy a maternal history dates (at or after its start). */
     Optional<DeliveryRecord> findFirstByPatient_IdAndHospital_IdAndBirthDateTimeGreaterThanEqualOrderByBirthDateTimeDesc(
         UUID patientId, UUID hospitalId, java.time.LocalDateTime since);

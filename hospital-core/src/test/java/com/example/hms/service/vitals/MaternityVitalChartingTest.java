@@ -216,4 +216,27 @@ class MaternityVitalChartingTest {
         verify(judgement).escalate(any(), org.mockito.ArgumentMatchers.isNull(), any(), any(),
             org.mockito.ArgumentMatchers.eq("midwife.a"), any(), org.mockito.ArgumentMatchers.eq(false));
     }
+
+    @Test
+    void policy20261120_theChartedRowCarriesOnlyTheMaternalWarning_andBleedingIsAConcern() {
+        MaternalEarlyWarning.Score score = MaternalEarlyWarning.score(new MaternalEarlyWarningRules(),
+            PatientVitalSign.builder().heartRateBpm(125).build(), false);
+        org.mockito.Mockito.when(judgement.judge(any())).thenReturn(new VitalSignJudgement.Judgement(false,
+            java.util.List.of(), new SevereHypertension.Verdict(SevereHypertension.Scope.POSTPARTUM,
+                SevereHypertension.Level.URGENT), score));
+        PostpartumObservation obs = PostpartumObservation.builder().patient(mother).hospital(hospital)
+            .observationTime(at).systolicBpMmHg(118).pulseBpm(125).excessiveBleeding(true).build();
+
+        PatientVitalSign vital = charting.chartPostpartumObservation(obs);
+
+        // « Saignement excessif » is the score's additional concern "significant vaginal bleeding".
+        assertThat(vital.getMaternalConcerns()).isEqualTo("VAGINAL_BLEEDING");
+        ArgumentCaptor<VitalSignJudgement.Judgement> passed = ArgumentCaptor.forClass(VitalSignJudgement.Judgement.class);
+        verify(judgement).escalate(any(), passed.capture(), any(), any(), any(), any(),
+            org.mockito.ArgumentMatchers.eq(false));
+        // The maternal warning is carried; the severe pressure the postpartum screen already alerted on is not.
+        assertThat(passed.getValue().maternal()).isSameAs(score);
+        assertThat(passed.getValue().bloodPressure().raised()).isFalse();
+        assertThat(passed.getValue().newborn()).isFalse();
+    }
 }

@@ -95,6 +95,12 @@ public class MaternityVitalCharting {
         vital.setHeartRateBpm(observation.getPulseBpm());
         vital.setRespiratoryRateBpm(observation.getRespirationsPerMin());
         vital.setPainScore(observation.getPainScore());
+        // Policy 2026-11-20 (provisional): « saignement excessif » on the observation is the maternal
+        // early warning's additional concern "significant vaginal bleeding". It raises the level; no points.
+        if (observation.isExcessiveBleeding()) {
+            vital.setMaternalConcerns(com.example.hms.enums.MaternalConcern.join(
+                List.of(com.example.hms.enums.MaternalConcern.VAGINAL_BLEEDING)));
+        }
         List<PostpartumObservationAlert> alerts = observation.getAlerts() == null ? List.of() : observation.getAlerts();
         return save(vital,
             alerts.stream().anyMatch(a -> a.getSeverity() == PostpartumAlertSeverity.CAUTION
@@ -174,17 +180,19 @@ public class MaternityVitalCharting {
         // QA D1077: the measure rules every vitals write holds (these rows carry no child-only measure).
         com.example.hms.service.support.PatientMeasureRules.requireVitalSignApplicable(
             vital, null, java.time.LocalDate.now(java.time.ZoneId.systemDefault()));
-        vitalSignJudgement.judge(vital);
+        VitalSignJudgement.Judgement judged = vitalSignJudgement.judge(vital);
         if (alerted) {
             vital.setClinicallySignificant(true);
         }
         PatientVitalSign saved = vitalSignRepository.save(vital);
-        // The NEWS2 escalation every vitals write has (in labour the only page for a low pressure or a fast
-        // pulse), except when an URGENT maternity alert already paged for this reading. No judgement is
-        // passed, so the severe-pressure and newborn notices are not sent a second time.
+        // The early-warning escalation every vitals write has, except when an URGENT maternity alert already
+        // paged for this reading: one reading never pages twice. For the mother it is the maternal early
+        // warning (policy 2026-11-20, provisional; it replaces the NEWS2 page, and in labour it is the page
+        // for a low pressure or a fast pulse); for the baby, NEWS2 never applied. Only the maternal warning
+        // of the judgement is passed, so the severe-pressure and newborn notices are not sent a second time.
         Staff staff = saved.getRecordedByStaff();
         String recorder = staff != null && staff.getUser() != null ? staff.getUser().getUsername() : null;
-        vitalSignJudgement.escalate(saved, null, saved.getPatient().getId(),
+        vitalSignJudgement.escalate(saved, judged == null ? null : judged.maternalOnly(), saved.getPatient().getId(),
             saved.getHospital() != null ? saved.getHospital().getId() : null, recorder, null, urgentAlerted);
         return saved;
     }

@@ -177,9 +177,10 @@ class NewsScoreProtocolRuleTest {
         when(repo.findByProtocolCodeAndActiveTrue("NEWS2_EWS")).thenReturn(Optional.of(activeProtocol()));
         com.example.hms.service.vitals.News2Applicability applicability =
             mock(com.example.hms.service.vitals.News2Applicability.class);
-        when(applicability.statusOf(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+        when(applicability.applicabilityOf(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
             org.mockito.ArgumentMatchers.any()))
-            .thenReturn(com.example.hms.service.vitals.News2Applicability.Status.OBSTETRIC);
+            .thenReturn(new com.example.hms.service.vitals.News2Applicability.Applicability(
+                com.example.hms.service.vitals.News2Applicability.Status.OBSTETRIC, null));
         NewsScoreProtocolRule obstetric = new NewsScoreProtocolRule(repo);
         obstetric.setApplicability(applicability);
         PatientVitalSign calm = PatientVitalSign.builder()
@@ -196,5 +197,81 @@ class NewsScoreProtocolRuleTest {
         // A raised band stays a warning: the trigger is kept as a safety net.
         assertThat(obstetric.evaluate(context(List.of(deterioratingVitals(LocalDateTime.now().minusMinutes(5),
             "LABOR_PARTOGRAPH")))).get(0).indicator()).isEqualTo(CdsCard.Indicator.WARNING);
+    }
+
+    /** Policy 2026-11-20 (provisional): the maternal early warning stands where « NEWS2 non validé » stood. */
+    private NewsScoreProtocolRule maternalRule(com.example.hms.service.vitals.News2Applicability.Status status) {
+        com.example.hms.service.vitals.News2Applicability applicability =
+            mock(com.example.hms.service.vitals.News2Applicability.class);
+        when(applicability.applicabilityOf(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()))
+            .thenReturn(new com.example.hms.service.vitals.News2Applicability.Applicability(status, null));
+        NewsScoreProtocolRule maternal = new NewsScoreProtocolRule(repo,
+            new com.example.hms.cdshooks.CdsCardText(com.example.hms.i18n.TestMessageSources.bundles()));
+        maternal.setApplicability(applicability);
+        maternal.setMaternalEarlyWarning(new com.example.hms.service.vitals.MaternalEarlyWarningService(
+            new com.example.hms.service.vitals.MaternalEarlyWarningRules(), applicability, null, null, null, null,
+            null, java.time.Clock.systemUTC()));
+        return maternal;
+    }
+
+    @Test
+    void policy20261120_aPregnantOrPostpartumWomanGetsHerMaternalScore_neverANews2Number() {
+        when(repo.findByProtocolCodeAndActiveTrue("NEWS2_EWS")).thenReturn(Optional.of(activeProtocol()));
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        try {
+            NewsScoreProtocolRule maternal =
+                maternalRule(com.example.hms.service.vitals.News2Applicability.Status.OBSTETRIC);
+            // Pulse 125 (2) and 164/104 (2 + 2): MEWS 6, medium; the severe pressure is a RED add-on alert.
+            PatientVitalSign set = PatientVitalSign.builder()
+                .respiratoryRateBpm(16).spo2Percent(98).onOxygen(true).temperatureCelsius(37.0)
+                .systolicBpMmHg(164).diastolicBpMmHg(104).heartRateBpm(125)
+                .recordedAt(LocalDateTime.now().minusMinutes(5)).source("POSTPARTUM").build();
+
+            List<CdsCard> cards = maternal.evaluate(context(List.of(set)));
+
+            assertThat(cards).hasSize(1);
+            CdsCard card = cards.get(0);
+            assertThat(card.summary()).contains("MEWS").contains("provisoire");
+            assertThat(card.detail())
+                .contains("MEWS : 6")
+                .contains("NEWS2 n'est pas validé en grossesse / post-partum")
+                .contains("Revue médicale immédiate")
+                .contains("traitement supplémentaire (oxygène)")
+                .contains("tension artérielle sévère")
+                .contains("Score provisoire")
+                .doesNotContain("NEWS2 :")
+                .doesNotContain("cds.bpa.");
+            assertThat(card.indicator()).isEqualTo(CdsCard.Indicator.WARNING);
+
+            // A calm set is an information card: it shows the maternal score, never a reassuring NEWS2.
+            PatientVitalSign calm = PatientVitalSign.builder()
+                .respiratoryRateBpm(16).spo2Percent(98).temperatureCelsius(36.8).systolicBpMmHg(118)
+                .diastolicBpMmHg(74).heartRateBpm(80)
+                .recordedAt(LocalDateTime.now().minusMinutes(5)).source("NURSE_STATION").build();
+            CdsCard low = maternal.evaluate(context(List.of(calm))).get(0);
+            assertThat(low.indicator()).isEqualTo(CdsCard.Indicator.INFO);
+            assertThat(low.detail()).contains("MEWS : 0").contains("préoccupation faible").contains("Score provisoire");
+
+            // A partograph row has no respiratory rate or SpO2: the card says the score is incomplete.
+            PatientVitalSign partograph = PatientVitalSign.builder().heartRateBpm(125).systolicBpMmHg(118)
+                .diastolicBpMmHg(74).recordedAt(LocalDateTime.now().minusMinutes(5)).source("LABOR_PARTOGRAPH").build();
+            assertThat(maternal.evaluate(context(List.of(partograph))).get(0).detail())
+                .contains("Score INCOMPLET").contains("fréquence respiratoire").contains("Revue médicale sous 30 min");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
+    @Test
+    void policy20261120_aNewbornKeepsTheNotValidatedCard_theMaternalScoreIsNotHers() {
+        when(repo.findByProtocolCodeAndActiveTrue("NEWS2_EWS")).thenReturn(Optional.of(activeProtocol()));
+        NewsScoreProtocolRule maternal = maternalRule(com.example.hms.service.vitals.News2Applicability.Status.NEWBORN);
+
+        List<CdsCard> cards = maternal.evaluate(context(List.of(
+            deterioratingVitals(LocalDateTime.now().minusMinutes(5), "NEWBORN_ASSESSMENT"))));
+
+        assertThat(cards).hasSize(1);
+        assertThat(cards.get(0).detail()).doesNotContain("MEWS");
     }
 }

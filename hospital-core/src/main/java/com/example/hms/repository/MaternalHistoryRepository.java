@@ -267,4 +267,19 @@ public interface MaternalHistoryRepository extends JpaRepository<MaternalHistory
         ORDER BY mh.recordedDate DESC
         """)
     Page<MaternalHistory> findWithChronicConditions(@Param("hospitalId") UUID hospitalId, Pageable pageable);
+
+    /**
+     * Policy 2026-11-20 (ward reads, QA D1314): the dates that date a pregnancy, for each history of
+     * {@code patientIds} at this hospital, newest version first, as (patient id, due date by ultrasound,
+     * recorded due date, last menstrual period) rows, in ONE query for a ward.
+     */
+    @Query("""
+        select m.patient.id, m.estimatedDueDateByUltrasound, m.estimatedDueDate, m.lastMenstrualPeriod
+        from MaternalHistory m
+        where m.patient.id in :patientIds
+          and m.hospital.id = :hospitalId
+        order by m.versionNumber desc, m.recordedDate desc
+        """)
+    List<Object[]> pregnancyDatesAt(@Param("patientIds") java.util.Collection<UUID> patientIds,
+                                    @Param("hospitalId") UUID hospitalId);
 }

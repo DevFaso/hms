@@ -201,8 +201,33 @@ public class SevereHypertension {
         return organDamageSign ? Level.URGENT : Level.WARNING;
     }
 
-    /** The scope, and the hospital whose record decided it (null when no record did). */
-    private record Found(Scope scope, UUID sourceHospitalId) {
+    /** The scope, the hospital whose record decided it (null when no record did), and the birth behind POSTPARTUM. */
+    private record Found(Scope scope, UUID sourceHospitalId, LocalDateTime birthAt) {
+        Found(Scope scope, UUID sourceHospitalId) {
+            this(scope, sourceHospitalId, null);
+        }
+    }
+
+    /**
+     * Policy 2026-11-20 (maternal early warning, provisional): the scope with the birth that dates a
+     * POSTPARTUM one. The maternal early-warning score reads it to switch the pulse table 48 h after the
+     * birth; {@code birthAt} is null for every other scope.
+     */
+    public record ObstetricContext(Scope scope, LocalDateTime birthAt) {
+        public static final ObstetricContext NONE = new ObstetricContext(Scope.NONE, null);
+
+        public boolean obstetric() {
+            return scope == Scope.PREGNANT || scope == Scope.POSTPARTUM;
+        }
+    }
+
+    /** {@link #scopeOf} with the birth that dates a POSTPARTUM scope: the same reads, the same policy. */
+    public ObstetricContext obstetricContextOf(Patient patient, UUID actingHospitalId, LocalDateTime at) {
+        if (patient == null || at == null) {
+            return ObstetricContext.NONE;
+        }
+        Found found = find(patient, actingHospitalId, at);
+        return new ObstetricContext(found.scope(), found.birthAt());
     }
 
     /**
@@ -252,7 +277,8 @@ public class SevereHypertension {
             Optional<DeliveryRecord> recentBirth = latestBirth(patientId, readable,
                 at.toLocalDate().minusDays(POSTPARTUM_DAYS).atStartOfDay(), at);
             if (recentBirth.isPresent()) {
-                return new Found(Scope.POSTPARTUM, hospitalOf(recentBirth.get().getHospital()));
+                return new Found(Scope.POSTPARTUM, hospitalOf(recentBirth.get().getHospital()),
+                    recentBirth.get().getBirthDateTime());
             }
             Optional<Found> pregnancy = pregnancy(patientId, readable, at);
             if (pregnancy.isPresent()) {

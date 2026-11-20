@@ -37,4 +37,11 @@ public class TriageSubmissionResponseDTO {
 
     /** r54 (provisional): the adult severe-blood-pressure warning (WARNING, or URGENT with a sign of organ damage); empty when none. */
     private java.util.List<NewbornVitalAlertDTO> hypertensionAlerts;
+
+    /**
+     * Policy 2026-11-20 (provisional): on a write only, the maternal early warning of a pregnant or
+     * postpartum woman's set (the level of concern when a review is due, and each shock-index alert);
+     * empty when none.
+     */
+    private java.util.List<NewbornVitalAlertDTO> maternalAlerts;
 }

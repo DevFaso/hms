@@ -43,15 +43,35 @@ class News2ApplicabilityTest {
     @Test
     void aPregnantOrPostpartumWomanIsNotValidated() {
         Patient mother = born(now.toLocalDate().minusYears(28));
-        when(severeHypertension.scopeOf(any(), any(), any())).thenReturn(SevereHypertension.Scope.POSTPARTUM);
+        when(severeHypertension.obstetricContextOf(any(), any(), any()))
+            .thenReturn(new SevereHypertension.ObstetricContext(SevereHypertension.Scope.POSTPARTUM, null));
         assertThat(applicability.statusOf(mother, UUID.randomUUID(), now)).isEqualTo(News2Applicability.Status.OBSTETRIC);
-        when(severeHypertension.scopeOf(any(), any(), any())).thenReturn(SevereHypertension.Scope.PREGNANT);
+        when(severeHypertension.obstetricContextOf(any(), any(), any()))
+            .thenReturn(new SevereHypertension.ObstetricContext(SevereHypertension.Scope.PREGNANT, null));
         assertThat(applicability.statusOf(mother, UUID.randomUUID(), now).notValidated()).isTrue();
     }
 
     @Test
+    void policy20261120_aPregnantGirlUnderSixteenIsAnObstetricPatient_withTheBirthThatDatesHerPulseTable() {
+        Patient girl = born(now.toLocalDate().minusYears(15));
+        LocalDateTime birth = now.minusHours(50);
+        when(severeHypertension.obstetricContextOf(any(), any(), any()))
+            .thenReturn(new SevereHypertension.ObstetricContext(SevereHypertension.Scope.POSTPARTUM, birth));
+
+        News2Applicability.Applicability known = applicability.applicabilityOf(girl, UUID.randomUUID(), now);
+
+        assertThat(known.status()).isEqualTo(News2Applicability.Status.OBSTETRIC);
+        assertThat(known.birthAt()).isEqualTo(birth);
+        // Outside pregnancy and the postpartum window she is a child again: no adult score, as before.
+        when(severeHypertension.obstetricContextOf(any(), any(), any()))
+            .thenReturn(new SevereHypertension.ObstetricContext(SevereHypertension.Scope.NONE, null));
+        assertThat(applicability.statusOf(girl, UUID.randomUUID(), now)).isEqualTo(News2Applicability.Status.CHILD);
+    }
+
+    @Test
     void anAdultOutsidePregnancyKeepsTheScore() {
-        when(severeHypertension.scopeOf(any(), any(), any())).thenReturn(SevereHypertension.Scope.ADULT);
+        when(severeHypertension.obstetricContextOf(any(), any(), any()))
+            .thenReturn(new SevereHypertension.ObstetricContext(SevereHypertension.Scope.ADULT, null));
         assertThat(applicability.statusOf(born(now.toLocalDate().minusYears(40)), UUID.randomUUID(), now))
             .isEqualTo(News2Applicability.Status.APPLIES);
     }

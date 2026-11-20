@@ -547,10 +547,11 @@ class PatientVitalSignServiceImplTest {
             java.util.Set.of(hospitalId), PageRequest.of(0, 2))).thenReturn(List.of(today, lastMonth));
         com.example.hms.service.vitals.News2Applicability applicability =
             org.mockito.Mockito.mock(com.example.hms.service.vitals.News2Applicability.class);
-        when(applicability.statusOf(any(), any(), any())).thenAnswer(inv ->
-            ((LocalDateTime) inv.getArgument(2)).isAfter(LocalDateTime.now().minusDays(42))
-                ? com.example.hms.service.vitals.News2Applicability.Status.OBSTETRIC
-                : com.example.hms.service.vitals.News2Applicability.Status.APPLIES);
+        when(applicability.applicabilityOf(any(), any(), any())).thenAnswer(inv ->
+            new com.example.hms.service.vitals.News2Applicability.Applicability(
+                ((LocalDateTime) inv.getArgument(2)).isAfter(LocalDateTime.now().minusDays(42))
+                    ? com.example.hms.service.vitals.News2Applicability.Status.OBSTETRIC
+                    : com.example.hms.service.vitals.News2Applicability.Status.APPLIES, null));
         service.setNews2Applicability(applicability);
 
         List<PatientVitalSignResponseDTO> responses = service.getRecentVitals(patientId, hospitalId, 2);
@@ -820,5 +821,59 @@ class PatientVitalSignServiceImplTest {
         staff.setLicenseNumber("LIC" + userId.toString().substring(0, 4));
         staff.setActive(true);
         return staff;
+    }
+
+    @Test
+    void policy20261120_theChartCarriesTheMaternalScore_inPlaceOfNews2NonValide() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Patient patient = minimalPatient(patientId);
+        patient.setDateOfBirth(java.time.LocalDate.now().minusYears(28));
+        LocalDateTime birth = LocalDateTime.now().minusHours(60);
+        // Pulse 104: 0 on the antenatal table, 1 on the table that applies from 48 h after the birth.
+        PatientVitalSign afterTheSwitch = PatientVitalSign.builder().patient(patient).hospital(minimalHospital(hospitalId))
+            .respiratoryRateBpm(16).spo2Percent(98).temperatureCelsius(37.0).systolicBpMmHg(120).diastolicBpMmHg(76)
+            .heartRateBpm(104).maternalConcerns("INCREASED_PAIN")
+            .recordedAt(LocalDateTime.now().minusMinutes(10)).source("POSTPARTUM").build();
+        afterTheSwitch.setId(UUID.randomUUID());
+        PatientVitalSign beforeTheSwitch = PatientVitalSign.builder().patient(patient).hospital(minimalHospital(hospitalId))
+            .respiratoryRateBpm(16).spo2Percent(98).temperatureCelsius(37.0).systolicBpMmHg(120).diastolicBpMmHg(76)
+            .heartRateBpm(104)
+            .recordedAt(birth.plusHours(20)).source("POSTPARTUM").build();
+        beforeTheSwitch.setId(UUID.randomUUID());
+        when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
+        when(recordAccessPolicy.readableHospitalIds(any(), org.mockito.ArgumentMatchers.eq(patientId),
+            org.mockito.ArgumentMatchers.eq(hospitalId))).thenReturn(java.util.Set.of(hospitalId));
+        when(vitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(patientId,
+            java.util.Set.of(hospitalId), PageRequest.of(0, 2))).thenReturn(List.of(afterTheSwitch, beforeTheSwitch));
+        com.example.hms.service.vitals.News2Applicability applicability =
+            org.mockito.Mockito.mock(com.example.hms.service.vitals.News2Applicability.class);
+        when(applicability.applicabilityOf(any(), any(), any())).thenReturn(
+            new com.example.hms.service.vitals.News2Applicability.Applicability(
+                com.example.hms.service.vitals.News2Applicability.Status.OBSTETRIC, birth));
+        service.setNews2Applicability(applicability);
+        service.setMaternalEarlyWarning(new com.example.hms.service.vitals.MaternalEarlyWarningService(
+            new com.example.hms.service.vitals.MaternalEarlyWarningRules(), applicability, null, null, null, null,
+            null, java.time.Clock.systemUTC()));
+
+        List<PatientVitalSignResponseDTO> responses = service.getRecentVitals(patientId, hospitalId, 2);
+
+        PatientVitalSignResponseDTO late = responses.get(0);
+        assertThat(late.getNewsScore()).as("never a NEWS2 number for her").isNull();
+        assertThat(late.getNewsNotValidated()).isEqualTo("OBSTETRIC");
+        assertThat(late.getMewsScore()).isEqualTo(1);
+        assertThat(late.getMewsPostBirthPulse()).isTrue();
+        // A score of 1 is low; the ticked concern raises the level to low-medium (never the points).
+        assertThat(late.getMewsTier()).isEqualTo("LOW_MEDIUM");
+        assertThat(late.getMewsConcerns()).containsExactly("INCREASED_PAIN");
+        assertThat(late.getMaternalConcerns()).containsExactly("INCREASED_PAIN");
+        assertThat(late.getMewsReviewWithinMinutes()).isEqualTo(30);
+        assertThat(late.getMewsComplete()).isTrue();
+
+        PatientVitalSignResponseDTO early = responses.get(1);
+        assertThat(early.getMewsScore()).isZero();
+        assertThat(early.getMewsPostBirthPulse()).isFalse();
+        assertThat(early.getMewsTier()).isEqualTo("LOW");
+        assertThat(early.getNewsScore()).isNull();
     }
 }

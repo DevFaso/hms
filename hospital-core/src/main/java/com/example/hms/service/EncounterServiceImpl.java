@@ -2357,6 +2357,7 @@ public class EncounterServiceImpl implements EncounterService {
                 .newbornAlerts(vitalSignJudgement.alerts(judgement))
                 .postpartumAlerts(vitalSignJudgement.postpartumAlerts(judgement))
                 .hypertensionAlerts(vitalSignJudgement.hypertensionAlerts(judgement))
+                .maternalAlerts(vitalSignJudgement.maternalAlerts(judgement))
                 .build();
     }
 
@@ -2429,6 +2430,8 @@ public class EncounterServiceImpl implements EncounterService {
                 .fundalHeightCm(req.getFundalHeightCm())
                 // r54: the organ-damage signs the shared severe-blood-pressure rule reads.
                 .organDamageSymptoms(com.example.hms.enums.OrganDamageSymptom.join(req.getOrganDamageSymptoms()))
+                // Policy 2026-11-20: the additional concerns the maternal early warning reads.
+                .maternalConcerns(com.example.hms.enums.MaternalConcern.join(req.getMaternalConcerns()))
                 .build();
     }
 
