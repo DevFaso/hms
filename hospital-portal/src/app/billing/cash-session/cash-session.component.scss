@@ -150,3 +150,19 @@ tr.money-out td {
   margin: 1.5rem 0 0.5rem;
   font-size: 1.125rem;
 }
+
+/*
+ * PR 10 review: « Caisses du jour » has eight columns, four of them amounts. With a cash difference shown
+ * (a six-figure amount where a dash stood), the table was 16 px wider than a 1024 px screen leaves it and the
+ * last columns scrolled out of sight (#1224 guard: no hidden column at a desktop width). Below 1200 px the
+ * table is set a size smaller and the status badge loses its offset.
+ */
+.cash-supervisor .data-table .status-badge {
+  margin-left: 0;
+}
+
+@media (max-width: 1200px) {
+  .cash-supervisor .data-table {
+    font-size: 0.875rem;
+  }
+}
