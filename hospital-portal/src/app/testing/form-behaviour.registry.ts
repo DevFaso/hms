@@ -50,6 +50,7 @@ import { MedicationCatalogComponent } from '../pharmacy/medication-catalog';
 import { MtmReviewComponent } from '../pharmacy/mtm-review';
 import { PharmacyCheckoutComponent } from '../pharmacy/pharmacy-checkout';
 import { PharmacyClaimsComponent } from '../pharmacy/pharmacy-claims';
+import { PharmacyReconciliationComponent } from '../pharmacy/pharmacy-reconciliation';
 import { PharmacyRegistryComponent } from '../pharmacy/pharmacy-registry';
 import { StockAdjustmentComponent } from '../pharmacy/stock-adjustment';
 import { StockRoutingComponent } from '../pharmacy/stock-routing';
@@ -287,6 +288,11 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'PharmacyClaimsComponent',
     file: 'pharmacy/pharmacy-claims',
     type: PharmacyClaimsComponent,
+  },
+  {
+    name: 'PharmacyReconciliationComponent',
+    file: 'pharmacy/pharmacy-reconciliation',
+    type: PharmacyReconciliationComponent,
   },
   {
     name: 'PharmacyRegistryComponent',

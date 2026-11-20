@@ -518,7 +518,7 @@
               [class.handover-unpaid]="pay.status === 'UNPAID'"
               data-testid="hand-over-payment-status"
             >
-              {{ 'PHARMACY_MONEY.HANDOVER.STATUS.' + pay.status | translate }}
+              {{ pay.status | keyLabel: 'PHARMACY_MONEY.HANDOVER.STATUS.' }}
             </p>
             @if (handOverNeedsReason()) {
               <div class="form-row">

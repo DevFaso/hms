@@ -57,6 +57,7 @@ import { AllergyReviewStateComponent } from '../shared/allergy-acknowledgement/a
 import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
 import { RoleContextService } from '../core/role-context.service';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
+import { KeyLabelPipe } from '../shared/pipes/key-label.pipe';
 import { DispensePaymentStatus, PharmacyMoneyService } from '../services/pharmacy-money.service';
 
 /** The viewer's local calendar date as YYYY-MM-DD (not the UTC one). */
@@ -194,6 +195,7 @@ export function sameDispenseUnit(
     AllergyReviewStateComponent,
     CdsCardListComponent,
     CfaPipe,
+    KeyLabelPipe,
   ],
   templateUrl: './dispensing.html',
   changeDetection: ChangeDetectionStrategy.Eager,

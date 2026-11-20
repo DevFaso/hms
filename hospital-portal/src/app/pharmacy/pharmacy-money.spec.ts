@@ -242,5 +242,15 @@ describe('Pharmacy reconciliation page (QA D2673)', () => {
     expect(host.querySelectorAll('[data-testid="recon-differences"] tbody tr').length).toBe(1);
     expect(host.querySelector('[data-testid="recon-stock"] tr.row-ko')).not.toBeNull();
     expect(host.querySelector('[data-testid="refund-approve-rf-1"]')).not.toBeNull();
+
+    // QA D2676: an empty rejection reason is marked and nothing is sent.
+    document.body.appendChild(host);
+    fixture.componentInstance.startReject(fixture.componentInstance.refunds()[0]);
+    fixture.detectChanges();
+    expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="refund-reject-confirm"]',
+      sent: m.rejectRefund,
+    });
+    host.remove();
   });
 });

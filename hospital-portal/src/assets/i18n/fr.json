@@ -15031,11 +15031,6 @@
       "CONTROLLED_TITLE": "Stupéfiants : registre et stock",
       "CONTROLLED_LINE": "registre {{register}}, stock {{stock}}",
       "DEFERRED_TITLE": "Délivrances remises « à facturer »"
-    },
-    "METHOD": {
-      "CASH": "Espèces",
-      "MOBILE_MONEY": "Paiement mobile",
-      "INSURANCE": "Assurance"
     }
   }
 }

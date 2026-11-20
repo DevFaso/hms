@@ -12,11 +12,13 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import { allRows } from '../shared/all-pages';
-import { refusalReason } from '../shared/refusal-reason';
+import { refusalReason, refusedFieldReasons } from '../shared/refusal-reason';
 import { saveBlob } from '../shared/download-file';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
+import { KeyLabelPipe } from '../shared/pipes/key-label.pipe';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { DashPipe } from '../shared/pipes/dash.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { PharmacyResponse, PharmacyService } from '../services/pharmacy.service';
@@ -42,7 +44,16 @@ function localIsoDate(d: Date): string {
 @Component({
   selector: 'app-pharmacy-reconciliation',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, CfaPipe, DashPipe, ServerTimePipe],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    CfaPipe,
+    DashPipe,
+    ServerTimePipe,
+    KeyLabelPipe,
+    SubmitGuardDirective,
+  ],
   templateUrl: './pharmacy-reconciliation.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './pharmacy-reconciliation.scss',
@@ -171,7 +182,7 @@ export class PharmacyReconciliationComponent implements OnInit {
   async confirmReject(refund: PharmacyRefund): Promise<void> {
     const reason = this.rejectReason.trim();
     if (!reason) {
-      const id = 'reject-' + refund.id;
+      const id = 'refundRejectReason';
       const message = this.translate.instant('PHARMACY_MONEY.REFUND.REASON_REQUIRED');
       refuseFields(this.host.nativeElement, [id], [id], message);
       this.toast.error(message);
@@ -183,9 +194,25 @@ export class PharmacyReconciliationComponent implements OnInit {
     });
     if (!ok) return;
     this.refundBusy.set(refund.id);
-    this.money
-      .rejectRefund(refund.id, reason)
-      .subscribe(this.afterRefundStep('PHARMACY_MONEY.REFUND.REJECTED'));
+    this.money.rejectRefund(refund.id, reason).subscribe({
+      next: this.afterRefundStep('PHARMACY_MONEY.REFUND.REJECTED').next,
+      error: (err: unknown) => {
+        this.refundBusy.set(null);
+        // A 400 that names the reason marks the field under it.
+        const idByField = { reason: 'refundRejectReason' };
+        const refused = refusedFieldReasons(err, idByField);
+        if (refused.length > 0) {
+          refuseFields(
+            this.host.nativeElement,
+            refused.map(([id, message]) => ({ id, message })),
+            Object.values(idByField),
+          );
+        }
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY_MONEY.REFUND.FAILED'),
+        );
+      },
+    });
   }
 
   pay(refund: PharmacyRefund): void {

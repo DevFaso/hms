@@ -161,3 +161,14 @@
     flex: 1 1 12rem;
   }
 }
+
+// Free-text reasons sit in their own element (no hand-written quotes, D1880).
+.recon-reason {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.recon-amount,
+.refund-meta span {
+  margin-left: 0.5rem;
+}

@@ -15031,11 +15031,6 @@
       "CONTROLLED_TITLE": "Controlled substances: register and stock",
       "CONTROLLED_LINE": "register {{register}}, stock {{stock}}",
       "DEFERRED_TITLE": "Fills handed over « to be billed »"
-    },
-    "METHOD": {
-      "CASH": "Cash",
-      "MOBILE_MONEY": "Mobile Money",
-      "INSURANCE": "Insurance"
     }
   }
 }

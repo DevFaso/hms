@@ -13,7 +13,7 @@
         class="btn-secondary"
         type="button"
         data-testid="recon-export"
-        [disabled]="exporting() || !selectedPharmacyId()"
+        [disabled]="exporting()"
         (click)="exportCsv()"
       >
         <span class="material-symbols-outlined" aria-hidden="true">table</span>
@@ -82,7 +82,8 @@
           }}</small>
           @for (m of salesMethods(); track m[0]) {
             <small
-              >{{ 'PHARMACY_MONEY.METHOD.' + m[0] | translate }} : {{ m[1] | cfa: 'XOF' }}</small
+              >{{ 'PORTAL.ENUM.PAYMENT_METHOD.' + m[0] | translate
+              }}{{ 'COMMON.COLON' | translate }} {{ m[1] | cfa: 'XOF' }}</small
             >
           }
         </div>
@@ -96,7 +97,8 @@
           }}</small>
           @for (m of paymentMethods(); track m[0]) {
             <small
-              >{{ 'PHARMACY_MONEY.METHOD.' + m[0] | translate }} : {{ m[1] | cfa: 'XOF' }}</small
+              >{{ 'PORTAL.ENUM.PAYMENT_METHOD.' + m[0] | translate
+              }}{{ 'COMMON.COLON' | translate }} {{ m[1] | cfa: 'XOF' }}</small
             >
           }
         </div>
@@ -143,7 +145,7 @@
             <tbody>
               @for (x of d.differences; track $index) {
                 <tr class="row-ko">
-                  <td>{{ 'PHARMACY_MONEY.RECON.KIND.' + x.type | translate }}</td>
+                  <td>{{ x.type | keyLabel: 'PHARMACY_MONEY.RECON.KIND.' }}</td>
                   <td>{{ x.medicationName | dash }}</td>
                   <td>{{ x.lotNumber | dash }}</td>
                   <td>{{ x.expected ?? null | dash }}</td>
@@ -222,7 +224,7 @@
         <ul class="recon-list" data-testid="recon-controlled">
           @for (c of d.controlled; track c.inventoryItemId) {
             <li [class.row-ko]="!c.matches">
-              {{ c.medicationName | dash }} :
+              {{ c.medicationName | dash }}{{ 'COMMON.COLON' | translate }}
               {{
                 'PHARMACY_MONEY.RECON.CONTROLLED_LINE'
                   | translate: { register: c.registerBalance, stock: c.stockBalance }
@@ -237,8 +239,9 @@
         <ul class="recon-list" data-testid="recon-deferred">
           @for (f of d.deferred; track f.dispenseId) {
             <li>
-              {{ f.medicationName | dash }} × {{ f.quantity }} — {{ f.due | cfa: 'XOF' }} — «
-              {{ f.reason }} »
+              <span>{{ f.medicationName | dash }} × {{ f.quantity }}</span>
+              <span class="recon-amount">{{ f.due | cfa: 'XOF' }}</span>
+              <em class="recon-reason">{{ f.reason }}</em>
             </li>
           }
         </ul>
@@ -259,11 +262,13 @@
             <strong>{{ r.amount | cfa: 'XOF' }}</strong>
             <span>{{ r.medicationName | dash }} × {{ r.quantity }}</span>
             <span class="refund-status">{{
-              'PHARMACY_MONEY.REFUND.STATUS.' + r.status | translate
+              r.status | keyLabel: 'PHARMACY_MONEY.REFUND.STATUS.'
             }}</span>
           </div>
           <p class="refund-meta">
-            « {{ r.reason }} » — {{ r.requestedByName | dash }}, {{ r.requestedAt | serverTime }}
+            <em class="recon-reason">{{ r.reason }}</em>
+            <span>{{ r.requestedByName | dash }}</span>
+            <span>{{ r.requestedAt | serverTime | date: 'short' }}</span>
           </p>
           <div class="refund-actions">
             @if (r.canDecide) {
@@ -293,26 +298,29 @@
             }
           </div>
           @if (rejecting() === r.id) {
-            <div class="refund-reject">
-              <label [for]="'reject-' + r.id"
+            <form class="refund-reject" (ngSubmit)="confirmReject(r)">
+              <label for="refundRejectReason"
                 >{{ 'PHARMACY_MONEY.REFUND.REJECT_REASON' | translate }} *</label
               >
               <input
-                [id]="'reject-' + r.id"
+                id="refundRejectReason"
+                name="refundRejectReason"
                 type="text"
                 maxlength="500"
                 required
                 [(ngModel)]="rejectReason"
               />
               <button
-                type="button"
+                type="submit"
                 class="btn-secondary btn-sm"
                 [disabled]="refundBusy() === r.id"
-                (click)="confirmReject(r)"
+                appSubmitGuard
+                submitGuardRequired
+                data-testid="refund-reject-confirm"
               >
                 {{ 'PHARMACY_MONEY.REFUND.REJECT' | translate }}
               </button>
-            </div>
+            </form>
           }
         </li>
       }
