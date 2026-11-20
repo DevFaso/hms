@@ -14,6 +14,21 @@ describe('hl7-summary (outbox message display)', () => {
     'OBR|1|o-1||WBC^Leucocytes|||20261119152000+0000\r' +
     'OBX|1|NM|WBC^Leucocytes||12.4|10\\S\\9/L^per litre^UCUM||H|||F|||20261119152000+0000\r';
 
+  it('r65 D2610: names the panel and lists every component of a one-OBX-per-component message', () => {
+    const panel =
+      'MSH|^~\\&|HMS|HOSPITAL|LAB_ANALYZER|LAB|20261119153000+0000||ORU^R01^ORU_R01|HMS-2|P|2.5.1\r' +
+      'PID|1||p-1||Kaboré^Issa\r' +
+      'OBR|1|o-1||NFS^NFS|||20261119152000+0000\r' +
+      'OBX|1|NM|HB^Hémoglobine||5.5|g/dL|12-16|LL|||F|||20261119152000+0000\r' +
+      'OBX|2|NM|PLT^Plaquettes||180|10\\S\\9/L|150-400|N|||F|||20261119152000+0000\r';
+    const summary = parseHl7Summary(panel)!;
+    expect(summary.test).toBe('NFS');
+    expect(summary.value).toBe('HB 5.5 g/dL (LL); PLT 180 10^9/L (N)');
+    expect(summary.unit).toBeNull();
+    expect(summary.flag).toBeNull();
+    expect(summary.resultStatus).toBe('F');
+  });
+
   it('splits on CR, LF and CRLF alike and drops the trailing empty line', () => {
     expect(hl7SegmentLines('A\rB\nC\r\nD\r')).toEqual(['A', 'B', 'C', 'D']);
     expect(hl7SegmentLines('')).toEqual([]);

@@ -105,6 +105,31 @@ export function parseHl7Summary(payload: string | null | undefined): Hl7Summary 
     const pid = segment('PID');
     const obr = segment('OBR');
     const obx = segment('OBX');
+    // r65 D2610: a panel (an NFS) is one OBX per component; the summary names
+    // the panel and lists each component with its unit and flag.
+    const observations = lines.filter((l) => l.startsWith('OBX|')).map((l) => l.split('|'));
+    if (observations.length > 1) {
+      return {
+        messageType,
+        patientName: personName(pid?.[5]),
+        test: codedText(obr?.[4]),
+        value: observations
+          .map((o) =>
+            [
+              orNull(component(o[3], 0)) ?? codedText(o[3]),
+              unescape((o[5] ?? '').trim()),
+              component(o[6], 0),
+              (o[8] ?? '').trim() ? `(${(o[8] ?? '').trim()})` : '',
+            ]
+              .filter((part) => !!part)
+              .join(' '),
+          )
+          .join('; '),
+        unit: null,
+        flag: null,
+        resultStatus: orNull((observations[0][11] ?? '').trim()),
+      };
+    }
     return {
       messageType,
       patientName: personName(pid?.[5]),

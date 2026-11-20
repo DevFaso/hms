@@ -1030,6 +1030,16 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, API_LAB_ORDERS)
                 .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
 
+                // r65 D2183: the hospital's critical lists only, for the
+                // HOSPITAL_ADMIN the escalation pages from round 2; the union
+                // of the two @PreAuthorize lists, which stay the precise gate.
+                // Acknowledge and read-back stay clinical (matcher below).
+                .requestMatchers(HttpMethod.GET,
+                        API_LAB_RESULTS + "/hospital/*/critical",
+                        API_LAB_RESULTS + "/hospital/*/critical/unacknowledged")
+                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
+                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+
                 // E9 #69: PHARMACIST reads results (renal function before verifying, V139).
                 .requestMatchers(HttpMethod.GET, API_LAB_RESULTS, API_LAB_RESULTS_PATTERN)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,

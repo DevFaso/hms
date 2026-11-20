@@ -155,7 +155,9 @@ final class ComputedKeys {
             "ActingScopeResolver.java|hospitalScope.refused.");
         r.put("com/example/hms/service/CriticalValueNotificationService.java|text.key()",
             new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
-        r.put("com/example/hms/service/CriticalValueNotificationService.java|text.key() #2",
+        // r65 D2183: the escalation text, the orderer's or the tier-2 coordinator's
+        // (COORDINATOR_ESCALATION_KEY), both NotificationText.of literal sites.
+        r.put("com/example/hms/service/CriticalValueNotificationService.java|sent.key()",
             new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
         site(r, d, "com/example/hms/service/EmailServiceImpl.java|\"email.role.label.\" + code",
             "EmailServiceImpl.java|email.role.label.");

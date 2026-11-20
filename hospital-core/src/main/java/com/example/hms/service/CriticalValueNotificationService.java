@@ -76,6 +76,13 @@ public class CriticalValueNotificationService {
     /** Tier-2 recipients: accountable for the desk, not for the order. */
     private static final String TIER_TWO_ROLE = "ROLE_HOSPITAL_ADMIN";
 
+    /**
+     * r65 D2183: what a tier-2 recipient is asked to do. They can open the
+     * hospital's critical worklist to see what is waiting, but the value is
+     * closed only by a clinician's read-back, so they are asked to get one.
+     */
+    static final String COORDINATOR_ESCALATION_KEY = "lab.critical.escalation.coordinator";
+
     private final NotificationService notificationService;
     private final SmsService smsService;
     private final LabResultRepository labResultRepository;
@@ -293,8 +300,21 @@ public class CriticalValueNotificationService {
         NotificationText text = buildText(result, true);
         String message = text.render(messageSource, NotificationLocales.STAFF);
 
+        // r65 D2183: a hospital admin is paged to get a clinician on it, not to
+        // acknowledge it (a critical value is closed by a clinician's
+        // read-back), so the tier-2 text says so; the orderer keeps the
+        // "review and acknowledge" text.
+        String ordering = resolveOrderingUsername(result);
+        NotificationText coordinatorText = null;
         for (String recipient : escalationRecipients(result, round)) {
-            notificationService.createNotification(text.key(), text.args(), recipient, ESCALATION_TYPE,
+            NotificationText sent = text;
+            if (!recipient.equals(ordering)) {
+                if (coordinatorText == null) {
+                    coordinatorText = NotificationText.of(COORDINATOR_ESCALATION_KEY, text.args());
+                }
+                sent = coordinatorText;
+            }
+            notificationService.createNotification(sent.key(), sent.args(), recipient, ESCALATION_TYPE,
                 result.getId());
         }
         // SMS once per round, not once per recipient: the transport targets the
@@ -409,7 +429,7 @@ public class CriticalValueNotificationService {
         }
 
         // QA D1095: the unit as shown (the test definition's when none was typed).
-        if (!readBackMatches(result.getResultValue(), LabResultMapper.unitOf(result), repeatedValue)) {
+        if (!readBackConfirms(result, repeatedValue)) {
             // Written by the inner transaction straight to the row, never
             // through the caller's managed entity, whose transaction rolls back.
             // D1553 (Rex P2): one conditional UPDATE, so a read-back confirmed
@@ -449,6 +469,20 @@ public class CriticalValueNotificationService {
         // orderer and to every escalation recipient) no longer read as unread.
         notificationService.markReadForSubject(result.getId(), java.util.List.of(NOTIFICATION_TYPE, ESCALATION_TYPE));
         return saved;
+    }
+
+    /**
+     * Whether the repeated value confirms what was phoned: the value (and
+     * unit) of a single test, or, r65 D2623, the critical component(s) of a
+     * panel ({@link PanelReadBack}). A panel's full stored summary still
+     * matches, as before.
+     */
+    private boolean readBackConfirms(LabResult result, String repeatedValue) {
+        if (readBackMatches(result.getResultValue(), LabResultMapper.unitOf(result), repeatedValue)) {
+            return true;
+        }
+        return result.hasComponents()
+            && PanelReadBack.matches(LabResultMapper.gradedComponentsOf(result), repeatedValue);
     }
 
     /**

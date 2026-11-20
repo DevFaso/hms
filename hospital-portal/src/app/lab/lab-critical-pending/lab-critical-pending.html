@@ -1,0 +1,80 @@
+<div class="critical-pending-container">
+  <header class="page-header">
+    <div>
+      <h1 class="page-title" id="lab-critical-pending-title">
+        {{ 'LAB_CRITICAL_PENDING.TITLE' | translate }}
+      </h1>
+      <p class="page-subtitle">{{ 'LAB_CRITICAL_PENDING.SUBTITLE' | translate }}</p>
+    </div>
+    <button
+      type="button"
+      class="btn-refresh"
+      (click)="load()"
+      [disabled]="loading()"
+      [attr.aria-label]="'COMMON.REFRESH' | translate"
+      [title]="'COMMON.REFRESH' | translate"
+      data-testid="critical-pending-refresh"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true" [class.spin]="loading()"
+        >refresh</span
+      >
+    </button>
+  </header>
+
+  <p class="what-to-do" role="note" data-testid="critical-pending-what-to-do">
+    <span class="material-symbols-outlined" aria-hidden="true">call</span>
+    {{ 'LAB_CRITICAL_PENDING.WHAT_TO_DO' | translate }}
+  </p>
+
+  @if (noScope()) {
+    <p class="state-block" data-testid="critical-pending-no-scope">
+      {{ 'LAB_CRITICAL_PENDING.NO_SCOPE' | translate }}
+    </p>
+  } @else if (loading()) {
+    <p class="state-block" data-testid="critical-pending-loading">
+      {{ 'COMMON.LOADING' | translate }}
+    </p>
+  } @else if (failed()) {
+    <div class="state-block state-error" role="alert" data-testid="critical-pending-error">
+      <p>{{ 'LAB_CRITICAL_PENDING.LOAD_ERROR' | translate }}</p>
+      <button type="button" class="btn-primary" (click)="load()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (rows().length === 0) {
+    <p class="state-block" data-testid="critical-pending-empty">
+      {{ 'LAB_CRITICAL_PENDING.EMPTY' | translate }}
+    </p>
+  } @else {
+    <ul class="critical-list" aria-labelledby="lab-critical-pending-title">
+      @for (row of rows(); track row.id) {
+        <li class="critical-card" [attr.data-testid]="'critical-pending-row-' + row.id">
+          <div class="card-head">
+            <span class="patient">{{ row.patientFullName }}</span>
+            @if (row.labOrderCode) {
+              <span class="order-code">{{ row.labOrderCode }}</span>
+            }
+          </div>
+          <div class="card-value">
+            <span class="test">{{ row.labTestName }}</span>
+            <strong class="value">{{ row.resultValue | labValue: row.resultUnit }}</strong>
+            <!-- QA D1016: a correction says it replaces a validated value -->
+            <app-lab-correction-badge [corrected]="!!row.supersedesResultId" />
+          </div>
+          <dl class="card-facts">
+            <dt>{{ 'LAB_CRITICAL_PENDING.ORDERED_BY' | translate }}</dt>
+            <dd>{{ row.orderedByName || '—' }}</dd>
+            <dt>{{ 'LAB_CRITICAL_PENDING.PAGING_SINCE' | translate }}</dt>
+            <dd>
+              {{
+                row.criticalNotifiedAt ? (row.criticalNotifiedAt | serverTime | date: 'short') : '—'
+              }}
+            </dd>
+            <dt>{{ 'LAB_CRITICAL_PENDING.ROUNDS' | translate }}</dt>
+            <dd>{{ escalationRounds(row) }}</dd>
+          </dl>
+        </li>
+      }
+    </ul>
+  }
+</div>

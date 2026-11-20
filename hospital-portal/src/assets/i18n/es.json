@@ -4776,7 +4776,14 @@
     "CRITICAL_READ_BACK": "Value read back",
     "CRITICAL_READ_BACK_PLACEHOLDER": "As they repeated it",
     "QC_OVERRIDE_REASON": "Reason for releasing despite the rejected QC",
-    "QC_BLOCKED": "The latest quality-control run for this test was rejected. Record a passing run, or give the reason for releasing anyway."
+    "QC_BLOCKED": "The latest quality-control run for this test was rejected. Record a passing run, or give the reason for releasing anyway.",
+    "QC_HOLD_TAG": "CC rechazado",
+    "QC_HOLD_BANNER": "Liberación retenida: el último control de calidad de {{test}} fue rechazado ({{level}}, {{at}}, registrado por {{by}}). Registre un control aceptado o indique por qué libera este resultado de todos modos.",
+    "QC_LEVEL_LOW": "control bajo",
+    "QC_LEVEL_HIGH": "control alto",
+    "AGE_YEARS": "{{n}} años",
+    "AGE_MONTHS": "{{n}} meses",
+    "ORDERED_BY": "Solicitado por: {{name}}"
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Instrumentos de laboratorio",
@@ -5139,7 +5146,8 @@
     "PRICE_LIST": "Lista de precios",
     "PATIENT_NOTIFICATIONS": "Patient notifications",
     "PAYERS": "Payers",
-    "MY_IMAGING": "Imaging"
+    "MY_IMAGING": "Imaging",
+    "LAB_CRITICAL_PENDING": "Resultados críticos por repetir"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerta crítica",
@@ -14908,5 +14916,16 @@
     "SIGNED_BY": "firmada por {{name}}",
     "BY": "por {{name}}",
     "NOT_ATTESTED": "No atestada"
+  },
+  "LAB_CRITICAL_PENDING": {
+    "TITLE": "Resultados críticos por repetir",
+    "SUBTITLE": "Resultados de laboratorio críticos de este hospital que ningún clínico ha repetido todavía",
+    "WHAT_TO_DO": "Cada resultado sigue alertando. Llame al médico solicitante, o al clínico de guardia, y asegúrese de que un médico, enfermero o partera repita el valor en e-Keneya: eso detiene las alertas.",
+    "NO_SCOPE": "Seleccione un hospital para ver sus resultados críticos.",
+    "LOAD_ERROR": "No se pudieron cargar los resultados críticos. Inténtelo de nuevo.",
+    "EMPTY": "Ningún resultado crítico espera repetición.",
+    "ORDERED_BY": "Solicitado por",
+    "PAGING_SINCE": "Alerta enviada",
+    "ROUNDS": "Escaladas"
   }
 }

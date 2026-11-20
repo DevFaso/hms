@@ -773,6 +773,22 @@ export const routes: Routes = [
           ),
       },
       {
+        // r65 D2183: the critical results still waiting for a clinician's
+        // read-back, read-only, for the hospital admin the escalation pages
+        // from round 2. GET /lab-results/hospital/{id}/critical/unacknowledged.
+        path: 'lab-critical-pending',
+        canActivate: [RoleGuard],
+        data: {
+          requiresHospitalScope: true,
+          hospitalNetworkTitleKey: 'NAV.LAB_CRITICAL_PENDING',
+          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () =>
+          import('./lab/lab-critical-pending/lab-critical-pending').then(
+            (m) => m.LabCriticalPendingComponent,
+          ),
+      },
+      {
         path: 'lab-qc-dashboard',
         canActivate: [RoleGuard],
         data: {
