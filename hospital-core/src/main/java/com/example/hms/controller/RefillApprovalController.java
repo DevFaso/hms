@@ -39,6 +39,17 @@ public class RefillApprovalController {
     private static final String PROVIDER_ROLES =
         "hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST')";
 
+    /**
+     * Policy rule 1 (provisional; CSP art. 276, QA D2308): a renewal is decided by a prescriber, never by a
+     * pharmacist. The service checks the assignment at the prescription's hospital and the list of the drug.
+     */
+    private static final String PRESCRIBERS =
+        "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')";
+
+    /** Policy rule 1: what the pharmacy does with a request: review and flag, refuse to dispense, release a written refill. */
+    private static final String PHARMACISTS =
+        "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'PHARMACIST')";
+
     private final RefillApprovalService service;
 
     @Operation(summary = "List refill requests for the current provider",
@@ -64,7 +75,7 @@ public class RefillApprovalController {
     @Operation(summary = "Approve a refill request",
             description = "Marks the request APPROVED and notifies the patient. Provider notes are optional.")
     @PutMapping("/{refillId}/approve")
-    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE','PHARMACIST')")
+    @PreAuthorize(PRESCRIBERS)
     public ResponseEntity<ApiResponseWrapper<MedicationRefillResponseDTO>> approve(
             Authentication auth,
             @PathVariable UUID refillId,
@@ -77,7 +88,7 @@ public class RefillApprovalController {
             description = "Marks the request DENIED and notifies the patient. Provider notes (the reason the "
                     + "patient is told) are required.")
     @PutMapping("/{refillId}/reject")
-    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE','PHARMACIST')")
+    @PreAuthorize(PRESCRIBERS)
     public ResponseEntity<ApiResponseWrapper<MedicationRefillResponseDTO>> reject(
             Authentication auth,
             @PathVariable UUID refillId,
@@ -92,7 +103,7 @@ public class RefillApprovalController {
                     + "queue and can still be approved or denied later. Provider notes are required — "
                     + "they are relayed to the patient as the reason for the hold.")
     @PutMapping("/{refillId}/pause")
-    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE','PHARMACIST')")
+    @PreAuthorize(PRESCRIBERS)
     public ResponseEntity<ApiResponseWrapper<MedicationRefillResponseDTO>> pause(
             Authentication auth,
             @PathVariable UUID refillId,
@@ -100,5 +111,39 @@ public class RefillApprovalController {
                 com.example.hms.validation.OnRefusal.class}) @RequestBody RefillDecisionRequestDTO decision) {
         MedicationRefillResponseDTO result = service.pause(auth, refillId, decision);
         return ResponseEntity.ok(ApiResponseWrapper.success(result));
+    }
+
+    @Operation(summary = "Pharmacist review: forward a request to its prescriber with flags",
+            description = "Decides nothing: the request stays open and the prescriber is notified. The note is required.")
+    @PutMapping("/{refillId}/pharmacist-review")
+    @PreAuthorize(PHARMACISTS)
+    public ResponseEntity<ApiResponseWrapper<MedicationRefillResponseDTO>> pharmacistReview(
+            Authentication auth,
+            @PathVariable UUID refillId,
+            @Valid @RequestBody RefillDecisionRequestDTO review) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(service.pharmacistReview(auth, refillId, review)));
+    }
+
+    @Operation(summary = "Pharmacist refusal to dispense",
+            description = "Marks the request DENIED as a pharmacist's refusal, with the reason; the patient and the "
+                    + "prescriber are notified.")
+    @PutMapping("/{refillId}/pharmacist-refuse")
+    @PreAuthorize(PHARMACISTS)
+    public ResponseEntity<ApiResponseWrapper<MedicationRefillResponseDTO>> pharmacistRefuse(
+            Authentication auth,
+            @PathVariable UUID refillId,
+            @Valid @RequestBody RefillDecisionRequestDTO refusal) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(service.pharmacistRefuse(auth, refillId, refusal)));
+    }
+
+    @Operation(summary = "Release a refill already written on the prescription",
+            description = "Ordinary dispensing: only while the prescription still counts an unused refill, never a "
+                    + "controlled drug. A refill beyond what was written needs a prescriber's approval.")
+    @PutMapping("/{refillId}/release-as-prescribed")
+    @PreAuthorize(PHARMACISTS)
+    public ResponseEntity<ApiResponseWrapper<MedicationRefillResponseDTO>> releaseAsPrescribed(
+            Authentication auth,
+            @PathVariable UUID refillId) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(service.releaseAsPrescribed(auth, refillId)));
     }
 }
