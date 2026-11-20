@@ -165,4 +165,9 @@
       }
     </form>
   }
+
+  <!-- Policy rule 3 (2026-11-20, provisional): who may report an ultrasound at this hospital. -->
+  @if (hospitalId(); as id) {
+    <app-imaging-reporting-settings [hospitalId]="id" />
+  }
 </div>

@@ -43,7 +43,8 @@ public class DashboardConfigurationServiceImpl implements DashboardConfiguration
         Map.entry("ROLE_BILLING_SPECIALIST", 10),
         Map.entry("ROLE_LAB_SCIENTIST", 11),
         Map.entry("ROLE_PHYSIOTHERAPIST", 12),
-        Map.entry("ROLE_PATIENT", 13)
+        Map.entry("ROLE_PATIENT", 13),
+        Map.entry("ROLE_IMAGING_TECHNICIAN", 14)
     );
 
     private final AuthService authService;

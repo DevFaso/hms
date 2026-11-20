@@ -591,6 +591,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (this.auth.hasAnyRole(['ROLE_PHYSIOTHERAPIST'])) {
       return this.t('DASHBOARD.ROLE.PHYSIOTHERAPIST');
     }
+    // Policy rule 3 (2026-11-20, provisional): the imaging technician's own badge.
+    if (this.auth.hasAnyRole(['ROLE_IMAGING_TECHNICIAN'])) {
+      return this.t('DASHBOARD.ROLE.IMAGING_TECHNICIAN');
+    }
     return this.t('DASHBOARD.ROLE.STAFF');
   });
 

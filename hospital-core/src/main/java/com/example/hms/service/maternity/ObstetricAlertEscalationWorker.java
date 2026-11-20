@@ -67,8 +67,11 @@ public class ObstetricAlertEscalationWorker {
     public static final String NOTIFICATION_TYPE = "OBSTETRIC_ALERT";
     public static final String ESCALATION_TYPE = "OBSTETRIC_ALERT_ESCALATION";
 
-    private static final List<String> FIRST_NOTICE_ROLES = List.of("ROLE_DOCTOR", "ROLE_MIDWIFE");
-    private static final List<String> REMINDER_ROLES = List.of("ROLE_DOCTOR", "ROLE_MIDWIFE", "ROLE_NURSE");
+    /** The physician of the first circle; policy rule 2: a newborn's danger sign always reaches one. */
+    private static final String NEWBORN_PHYSICIAN_ROLE = "ROLE_DOCTOR";
+    private static final String MIDWIFE_ROLE = "ROLE_MIDWIFE";
+    private static final List<String> FIRST_NOTICE_ROLES = List.of(NEWBORN_PHYSICIAN_ROLE, MIDWIFE_ROLE);
+    private static final List<String> REMINDER_ROLES = List.of(NEWBORN_PHYSICIAN_ROLE, MIDWIFE_ROLE, "ROLE_NURSE");
     private static final int TITLE_MAX = 500;
     static final String REMINDER_KEY = "obstetric.alert.escalation";
     /**
@@ -114,6 +117,9 @@ public class ObstetricAlertEscalationWorker {
             .build());
         Set<String> recipients = firstNoticeRecipients(alert.hospitalId(),
             usernameOf(alert.documentedByUserId()));
+        if (ObstetricAlertEscalationService.SOURCE_NEWBORN.equals(alert.sourceType())) {
+            recipients = withAPhysician(recipients, alert.hospitalId());
+        }
         // QA D665: each reader gets the notice in her own language; the stored
         // staff-locale text only titles the in-basket item.
         Object[] args = {typeLabelArg(alert.sourceType(), alert.alertType(), alert.typeLabel()),
@@ -246,6 +252,24 @@ public class ObstetricAlertEscalationWorker {
             }
         }
         return recipients.isEmpty() ? obstetricTeam : recipients;
+    }
+
+    /**
+     * Policy rule 2 (2026-11-20, provisional): a newborn's danger sign always reaches a physician.
+     * When the first circle holds midwives only (an on-call midwife and no on-call doctor), the
+     * hospital's doctors are added to it. Nothing is blocked and nobody is removed.
+     */
+    Set<String> withAPhysician(Set<String> recipients, UUID hospitalId) {
+        List<String> doctors = staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, NEWBORN_PHYSICIAN_ROLE);
+        Set<String> doctorsLower = new LinkedHashSet<>();
+        doctors.forEach(u -> doctorsLower.add(u.toLowerCase(Locale.ROOT)));
+        boolean reached = recipients.stream().anyMatch(u -> u != null && doctorsLower.contains(u.toLowerCase(Locale.ROOT)));
+        if (reached || doctors.isEmpty()) {
+            return recipients;
+        }
+        Set<String> widened = new LinkedHashSet<>(recipients);
+        widened.addAll(doctors);
+        return widened;
     }
 
     /** The first circle widened to the hospital's doctors, midwives and nurses. */

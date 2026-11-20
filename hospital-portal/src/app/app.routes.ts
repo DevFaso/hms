@@ -1317,6 +1317,9 @@ export const routes: Routes = [
             // order creation and listing — the guard was the outlier.
             'ROLE_MIDWIFE',
             'ROLE_RADIOLOGIST',
+            // Policy rule 3 (2026-11-20, provisional): the imaging technician works the worklist
+            // (check-in, the exam, its record and key images); no order, no report.
+            'ROLE_IMAGING_TECHNICIAN',
             // User decision 2026-11-14: the admin roles read Imagerie
             // (orders and released reports of their hospitals), read-only.
             'ROLE_HOSPITAL_ADMIN',

@@ -21,6 +21,7 @@ import { labelledRefusalReason, refusedFieldReasons } from '../../shared/refusal
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { map, Observable } from 'rxjs';
+import { ImagingReportingSettingsComponent } from '../reporting-settings/imaging-reporting-settings.component';
 
 /** Bound to the form: strings throughout so ngModel never sees undefined. */
 interface PacsForm {
@@ -60,7 +61,7 @@ const ALL_FIELD_IDS = Object.values(FIELD_IDS);
 @Component({
   selector: 'app-pacs-settings',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule, ImagingReportingSettingsComponent],
   templateUrl: './pacs-settings.component.html',
   styleUrl: './pacs-settings.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

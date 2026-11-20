@@ -1949,6 +1949,16 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Adolescent confidentiality age reset to the default \((\d+)\)$/,
     params: ['age'],
   },
+  // Policy rule 3 (V346, provisional): a hospital's imaging reporting setting changed (the value is in the details).
+  {
+    key: 'AUDIT.DESC.IMAGING_REPORTING_SETTINGS_CHANGED',
+    re: /^Imaging reporting settings changed$/,
+  },
+  // Policy rule 3 (V346): an exam record written (what changed is in the details; never the free text).
+  {
+    key: 'AUDIT.DESC.IMAGING_EXAM_RECORD_UPDATED',
+    re: /^Imaging exam record updated$/,
+  },
   // Policy rule 6 (V345): « à facturer » asked for, decided by another person, an urgency override and its
   // review, and an inpatient fill charged to the stay (constant descriptions, ids on the row).
   {

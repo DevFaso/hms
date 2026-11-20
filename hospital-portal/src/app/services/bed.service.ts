@@ -50,6 +50,8 @@ export interface BedResponse {
   wardId: string;
   wardName: string;
   wardCode: string;
+  /** The ward's population; absent from an older server. */
+  wardType?: WardType | null;
   bedNumber: string;
   /** e.g. "MAT01/B03" — same shape as Admission.roomBed. */
   label: string;

@@ -116,6 +116,20 @@ class AdmissionCreationGuardTest {
                 "com/example/hms/utility/ObstetricEligibility#requireObstetricEligible");
     }
 
+    @Test
+    @DisplayName("Policy rule 2: the midwife's newborn admission and her bed reach are checked server-side, and a nurse admits nobody")
+    void midwifeNewbornAdmissionIsCheckedServerSide() throws IOException, NoSuchMethodException {
+        assertThat(scan().get("AdmissionServiceImpl").calls())
+            .contains("com/example/hms/service/maternity/MidwifeNewbornCare#requireNewbornOfHerDelivery",
+                "com/example/hms/service/maternity/MidwifeNewbornCare#requireBedAMidwifeMayAssign",
+                "com/example/hms/service/maternity/MidwifeNewbornCare#requireBedAMidwifeMayRelease");
+        // The newborn admission is a physician's or the delivering midwife's: the endpoint never names a nurse.
+        String admit = com.example.hms.controller.AdmissionController.class
+            .getMethod("admitPatient", com.example.hms.payload.dto.AdmissionRequestDTO.class)
+            .getAnnotation(org.springframework.security.access.prepost.PreAuthorize.class).value();
+        assertThat(admit).contains("'DOCTOR','MIDWIFE'").doesNotContain("NURSE");
+    }
+
     // ── bytecode scan ───────────────────────────────────────────────────────
 
     private static Map<String, Usage> scan() throws IOException {

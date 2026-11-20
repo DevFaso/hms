@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -538,5 +539,128 @@ class BedAssignmentServiceTest {
 
         assertThat(bed.getStatus()).isEqualTo(BedStatus.OCCUPIED);
         assertThat(admission.getRoomBed()).isEqualTo("MAT01/B07");
+    }
+
+    // ── Policy rule 2 (2026-11-20, provisional): a newborn takes a maternity cot ──
+
+    @Test
+    void policyRule2_aNewbornTakesAMaternityCot_whateverItsRecordedSex() {
+        for (String sex : new String[] {"MALE", "FEMALE", null}) {
+            com.example.hms.model.Patient baby = new com.example.hms.model.Patient();
+            baby.setGender(sex);
+            baby.setDateOfBirth(java.time.LocalDate.now().minusDays(2));
+            admission.setPatient(baby);
+            admission.setBed(null);
+            Bed bed = bed("C-" + sex, BedStatus.AVAILABLE);
+            when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId)).thenReturn(Optional.of(bed));
+
+            service.assignBed(admission, bed.getId());
+
+            assertThat(bed.getStatus()).isEqualTo(BedStatus.OCCUPIED);
+        }
+    }
+
+    @Test
+    void policyRule2_aOneYearOldIsStillRefusedAMaternityBed() {
+        admission.setPatient(patient("FEMALE", 1));
+        Bed bed = bed("B09", BedStatus.AVAILABLE);
+        when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId)).thenReturn(Optional.of(bed));
+
+        UUID bedId = bed.getId();
+        assertThatThrownBy(() -> service.assignBed(admission, bedId)).isInstanceOf(BusinessException.class);
+    }
+
+    // ── Review of #1243: the physician's task ends when the stay leaves its neonatal cot ──
+
+    private com.example.hms.service.maternity.MidwifeNewbornCare wireNewbornCare() {
+        com.example.hms.service.maternity.MidwifeNewbornCare care =
+            mock(com.example.hms.service.maternity.MidwifeNewbornCare.class);
+        @SuppressWarnings("unchecked")
+        org.springframework.beans.factory.ObjectProvider<com.example.hms.service.maternity.MidwifeNewbornCare> provider =
+            mock(org.springframework.beans.factory.ObjectProvider.class);
+        // Lenient: a move that stays in neonatology never reaches the provider.
+        org.mockito.Mockito.lenient().doAnswer(invocation -> {
+            java.util.function.Consumer<com.example.hms.service.maternity.MidwifeNewbornCare> consumer =
+                invocation.getArgument(0);
+            consumer.accept(care);
+            return null;
+        }).when(provider).ifAvailable(any());
+        service.setNewbornCare(provider);
+        return care;
+    }
+
+    private Bed cotIn(WardType type, String number) {
+        Ward other = Ward.builder().hospital(admission.getHospital()).name(type.name()).code(type.name())
+            .wardType(type).build();
+        Bed cot = Bed.builder().ward(other).bedNumber(number).status(BedStatus.OCCUPIED).build();
+        cot.setId(UUID.randomUUID());
+        return cot;
+    }
+
+    @Test
+    void review1243_movingTheBabyOutOfANeonatalCotWithdrawsThePhysiciansTask() {
+        com.example.hms.service.maternity.MidwifeNewbornCare care = wireNewbornCare();
+        com.example.hms.model.Patient baby = new com.example.hms.model.Patient();
+        baby.setDateOfBirth(java.time.LocalDate.now().minusDays(2));
+        admission.setPatient(baby);
+        admission.setBed(cotIn(WardType.NICU, "N1"));
+        Bed maternityCot = bed("M7", BedStatus.AVAILABLE);
+        when(bedRepository.findByIdAndWard_Hospital_Id(maternityCot.getId(), hospitalId))
+            .thenReturn(Optional.of(maternityCot));
+
+        service.assignBed(admission, maternityCot.getId());
+
+        verify(care).withdrawPhysicianTask(admission.getId());
+    }
+
+    @Test
+    void review1243_movingTheBabyFromOneNeonatalCotToAnotherKeepsThePhysiciansTask() {
+        // Second review of #1243: a nurse (anybody) moves the baby N1 -> N2, or a transfer lands in
+        // another NICU cot. The baby is still in neonatology: the unreviewed task must stay.
+        com.example.hms.service.maternity.MidwifeNewbornCare care = wireNewbornCare();
+        com.example.hms.model.Patient baby = new com.example.hms.model.Patient();
+        baby.setDateOfBirth(java.time.LocalDate.now().minusDays(2));
+        admission.setPatient(baby);
+        Bed first = cotIn(WardType.NICU, "N1");
+        admission.setBed(first);
+        Bed second = cotIn(WardType.NICU, "N2");
+        second.setStatus(BedStatus.AVAILABLE);
+        when(bedRepository.findByIdAndWard_Hospital_Id(second.getId(), hospitalId)).thenReturn(Optional.of(second));
+
+        service.assignBed(admission, second.getId());
+
+        assertThat(admission.getBed()).isSameAs(second);
+        assertThat(first.getStatus()).isNotEqualTo(BedStatus.OCCUPIED);
+        verify(care, never()).withdrawPhysicianTask(any());
+
+        // A transfer completed into a third NICU cot it had reserved: the same.
+        Bed reserved = cotIn(WardType.NICU, "N3");
+        reserved.setStatus(BedStatus.RESERVED);
+        when(bedRepository.findByIdAndWard_Hospital_Id(reserved.getId(), hospitalId)).thenReturn(Optional.of(reserved));
+        service.assignBed(admission, reserved.getId(), java.util.Set.of(BedStatus.RESERVED));
+        assertThat(admission.getBed()).isSameAs(reserved);
+        verify(care, never()).withdrawPhysicianTask(any());
+
+        // The same cot posted again changes nothing at all.
+        service.assignBed(admission, reserved.getId());
+        verify(care, never()).withdrawPhysicianTask(any());
+    }
+
+    @Test
+    void review1243_unassigningOrReleasingANeonatalCotWithdrawsTheTask_aMaternityBedWithdrawsNothing() {
+        com.example.hms.service.maternity.MidwifeNewbornCare care = wireNewbornCare();
+
+        admission.setBed(cotIn(WardType.NICU, "N2"));
+        service.unassignBed(admission);
+        verify(care, times(1)).withdrawPhysicianTask(admission.getId());
+
+        // At discharge the bed is released and kept as history: the task goes too.
+        admission.setBed(cotIn(WardType.NICU, "N3"));
+        service.releaseBed(admission);
+        verify(care, times(2)).withdrawPhysicianTask(admission.getId());
+
+        admission.setBed(cotIn(WardType.MATERNITY, "M8"));
+        service.unassignBed(admission);
+        verify(care, times(2)).withdrawPhysicianTask(any());
     }
 }

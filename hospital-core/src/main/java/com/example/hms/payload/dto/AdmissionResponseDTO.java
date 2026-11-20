@@ -59,6 +59,9 @@ public class AdmissionResponseDTO {
     /** Structured bed reference (P0 #4); null when only free-text roomBed is set. */
     private UUID bedId;
 
+    /** The ward type of the structured bed (MATERNITY, NICU, ...): a screen narrows bed actions on it. */
+    private String bedWardType;
+
     private AdmissionType admissionType;
     private AdmissionStatus status;
     private AcuityLevel acuityLevel;

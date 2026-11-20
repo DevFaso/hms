@@ -1345,6 +1345,10 @@
             </div>
           }
 
+          <!-- Policy rule 3 (2026-11-20, provisional): check-in, who performed the exam, its
+               technical note, contrast and dose (imaging-exam-record block). -->
+          <app-imaging-exam-record [order]="ord" (changed)="onExamChanged($event)" />
+
           <!-- r63: age, sex, pregnancy, creatinine and prior studies, read-only. -->
           @if (canSeeReadingContext) {
             <app-imaging-reading-context

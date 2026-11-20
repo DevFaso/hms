@@ -39,7 +39,13 @@ describe('PacsSettingsComponent', () => {
       'settings',
       'saveSettings',
       'testConnection',
+      'reportingSettings',
+      'setReportingSettings',
     ]);
+    // Policy rule 3: the page also hosts the imaging reporting settings block.
+    pacs.reportingSettings.and.returnValue(
+      of({ hospitalId: 'h1', ultrasoundByNonPhysician: false }),
+    );
     pacs.settings.and.returnValue(of(initial));
     pacs.saveSettings.and.returnValue(of(initial));
     pacs.testConnection.and.returnValue(of({ result: 'OK', source: 'HOSPITAL' }));

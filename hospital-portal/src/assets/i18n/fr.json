@@ -2127,6 +2127,8 @@
       "MEDICATION_SENSITIVITY_CHANGED": "Catégorie sensible du médicament changée de {{from}} à {{to}}",
       "ADOLESCENT_AGE_SET": "Âge de confidentialité des adolescents fixé à {{age}} ans",
       "ADOLESCENT_AGE_RESET": "Âge de confidentialité des adolescents ramené à la valeur par défaut ({{age}} ans)",
+      "IMAGING_REPORTING_SETTINGS_CHANGED": "Réglage de l'échographie modifié",
+      "IMAGING_EXAM_RECORD_UPDATED": "Réalisation de l'examen d'imagerie mise à jour",
       "DISPENSE_BILLING_DEFERRAL_REQUESTED": "Report « à facturer » demandé",
       "DISPENSE_BILLING_DEFERRAL_APPROVED": "Report « à facturer » approuvé",
       "DISPENSE_BILLING_DEFERRAL_REJECTED": "Report « à facturer » refusé",
@@ -3532,7 +3534,8 @@
       "PHARMACY_VERIFIER": "Vérificateur de pharmacie",
       "CLAIMS_REVIEWER": "Contrôleur(se) des remboursements",
       "ANESTHESIOLOGIST": "Anesthésiste",
-      "PHYSIOTHERAPIST": "Kinésithérapeute"
+      "PHYSIOTHERAPIST": "Kinésithérapeute",
+      "IMAGING_TECHNICIAN": "Technicien d'imagerie médicale / Manipulateur"
     },
     "ROLES": "Rôles",
     "ROOMED": "En salle d'examen",
@@ -7133,7 +7136,8 @@
         "SURGEON": "Chirurgien(ne)",
         "TECHNICIAN": "Technicien(ne)",
         "THERAPIST": "Thérapeute",
-        "USER": "Utilisateur(trice)"
+        "USER": "Utilisateur(trice)",
+        "IMAGING_TECHNICIAN": "Technicien d'imagerie médicale / Manipulateur"
       },
       "ACCESS_TYPE": {
         "CREATE": "Créé",
@@ -8219,6 +8223,7 @@
         "PROXY_SENSITIVE_RELEASE": "Communication d’un résultat sensible à un parent",
         "PATIENT_PROXY": "Accès famille",
         "HOSPITAL_ADOLESCENT_CONFIDENTIALITY_AGE": "Âge de confidentialité des adolescents",
+        "HOSPITAL_IMAGING_REPORTING_SETTINGS": "Réglage de l'échographie",
         "DISPENSE_BILLING_DEFERRAL": "Report « à facturer »"
       },
       "TIMELINE_CATEGORY": {
@@ -9610,7 +9615,8 @@
       "SUPPORT": "Agent de support aidant les utilisateurs en cas de problème ou de question sur le système",
       "SURGEON": "Chirurgien(ne) réalisant les interventions, gérant les plans opératoires et les soins postopératoires",
       "TECHNICIAN": "Technicien biomédical ou informatique chargé de la maintenance des équipements et du support technique",
-      "USER": "Utilisateur standard disposant des droits d'accès de base"
+      "USER": "Utilisateur standard disposant des droits d'accès de base",
+      "IMAGING_TECHNICIAN": "Technicien d'imagerie médicale / Manipulateur : accueille le patient, réalise et documente les examens d'imagerie et joint les images ; ne prescrit pas d'examen et ne rédige pas de compte rendu"
     },
     "BUILT_IN_ACCESS": "Accès intégré au rôle",
     "NO_PERMISSION_CATALOGUE": "Aucun catalogue de permissions n'est défini : les accès de ce rôle sont intégrés à la plateforme et ne se modifient pas ici."
@@ -15365,7 +15371,7 @@
     "ACUITY_PICK": "Choisir le niveau de gravité",
     "ADMIT_MOTHER": "Admettre en maternité",
     "ADMIT_NEWBORN": "Admettre le nouveau-né",
-    "NEWBORN_BY_DOCTOR": "Un médecin admet le nouveau-né.",
+    "NEWBORN_BY_DOCTOR": "Un médecin, ou la sage-femme qui a participé à l'accouchement, admet le nouveau-né.",
     "BY_CLINICIAN": "Un médecin ou une sage-femme l'admet.",
     "IN_BED": "au lit {{bed}}.",
     "NO_BED": "admis(e), sans lit : n'apparaît pas au tableau des lits.",
@@ -15373,7 +15379,7 @@
     "BED_PICK": "Choisir un lit",
     "ASSIGN_BED": "Attribuer le lit",
     "NO_FREE_BED": "Aucun lit libre ne convient à ce patient.",
-    "BED_BY_NURSE": "Un(e) infirmier(ère) du service ou un médecin attribue le lit :",
+    "BED_BY_NURSE": "Un(e) infirmier(ère) du service, une sage-femme (lits de maternité) ou un médecin attribue le lit :",
     "OPEN_ADMISSIONS": "Ouvrir les admissions",
     "REASON_LABOUR": "Travail",
     "REASON_NEWBORN": "Nouveau-né",
@@ -15381,7 +15387,11 @@
     "ADMIT_FAILED": "L'admission n'a pas pu être enregistrée.",
     "BED_ASSIGNED": "Lit {{bed}} attribué.",
     "BED_FAILED": "Le lit n'a pas pu être attribué.",
-    "LOAD_FAILED": "séjour inconnu : les admissions n'ont pas pu être lues. Rechargez avant d'admettre."
+    "LOAD_FAILED": "séjour inconnu : les admissions n'ont pas pu être lues. Rechargez avant d'admettre.",
+    "MIDWIFE_NEWBORN_RULE": "Une sage-femme admet le nouveau-né d'un accouchement auquel elle a participé et en est la clinicienne responsable. Règle provisoire, en attente d'approbation par une sage-femme ou un obstétricien désigné.",
+    "MIDWIFE_BED_RULE": "Une sage-femme attribue les lits des unités de maternité. Règle provisoire, en attente d'approbation par une sage-femme ou un obstétricien désigné.",
+    "MIDWIFE_COT_RULE": "Une sage-femme attribue les berceaux des unités de maternité. Un berceau de néonatologie est attribué aussi, et un médecin est alors invité à examiner le nouveau-né. Règle provisoire, en attente d'approbation par une sage-femme ou un obstétricien désigné.",
+    "BED_ASSIGNED_PHYSICIAN_ASKED": "Lit {{bed}} attribué. Un médecin est invité à examiner le nouveau-né."
   },
   "SENSITIVITY_TAG": {
     "LABEL": "Catégorie sensible",
@@ -15486,5 +15496,38 @@
       "TB_SCOPE_HINT": "La tuberculose est en accès restreint : cette personne ne la voit que si vous cochez cette case (utile pour le dépistage de l’entourage). Les autres dossiers sensibles (VIH, IST, grossesse, santé mentale…) ne sont jamais montrés.",
       "TB_SCOPE_BADGE": "et tuberculose"
     }
+  },
+  "IMAGING_EXAM": {
+    "TITLE": "Réalisation de l'examen",
+    "TECHNICIAN_RULE": "En tant que technicien d'imagerie, vous accueillez le patient, réalisez et documentez l'examen et joignez ses images. La prescription de l'examen, la rédaction et la signature du compte rendu restent au médecin. Règle provisoire, en attente d'approbation du radiologue ou du directeur médical.",
+    "CHECKED_IN": "Arrivée du patient",
+    "STARTED": "Début de l'examen",
+    "PERFORMED_BY": "Réalisé par",
+    "TECHNICAL_NOTE": "Note technique",
+    "TECHNICAL_NOTE_HINT": "Protocole utilisé, installation du patient, incidents. Pas d'interprétation.",
+    "CONTRAST_GIVEN": "Produit de contraste administré",
+    "CONTRAST_DETAILS": "Produit, volume, voie, réaction éventuelle",
+    "DOSE": "Dose de rayonnement",
+    "SAVE": "Enregistrer la réalisation",
+    "NOTHING_TO_SAVE": "Saisissez une note technique, le produit de contraste ou la dose.",
+    "SAVED": "Réalisation de l'examen enregistrée.",
+    "SAVE_FAILED": "La réalisation de l'examen n'a pas pu être enregistrée.",
+    "CHECK_IN": "Enregistrer l'arrivée du patient",
+    "CHECKED_IN_DONE": "Arrivée du patient enregistrée.",
+    "DISCONTINUE": "Interrompre l'examen",
+    "DISCONTINUE_TITLE": "Interrompre cet examen ?",
+    "DISCONTINUE_MESSAGE": "La demande est close et son prescripteur voit le motif. Une nouvelle demande sera nécessaire pour refaire l'examen.",
+    "DISCONTINUED": "Examen interrompu.",
+    "ULTRASOUND_PHYSICIANS_ONLY": "Échographie : dans cet établissement, l'examen est réalisé par un médecin. Vous pouvez enregistrer l'arrivée du patient et joindre des images. Règle provisoire, en attente d'approbation du radiologue ou du directeur médical."
+  },
+  "IMAGING_REPORTING_SETTINGS": {
+    "TITLE": "Échographie",
+    "ULTRASOUND": "Échographie par un non-médecin",
+    "PHYSICIANS_ONLY": "Médecins uniquement (par défaut)",
+    "NON_PHYSICIAN": "Un technicien d'imagerie peut réaliser l'échographie",
+    "SAVED": "Réglage enregistré.",
+    "SAVE_FAILED": "Le réglage n'a pas pu être enregistré.",
+    "LOAD_FAILED": "Le réglage de l'échographie n'a pas pu être lu.",
+    "WHAT_IT_DOES": "Avec « Médecins uniquement », un technicien d'imagerie ne peut ni démarrer, ni terminer, ni interrompre une échographie, ni en saisir la réalisation. Dans tous les cas, le compte rendu est rédigé et signé par un médecin. Règle provisoire, en attente d'approbation du radiologue ou du directeur médical et de la position du ministère."
   }
 }

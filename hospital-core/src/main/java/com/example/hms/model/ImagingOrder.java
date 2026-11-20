@@ -262,6 +262,57 @@ public class ImagingOrder extends BaseEntity implements TenantScoped {
     @Column(name = "status_updated_by")
     private UUID statusUpdatedBy;
 
+    // ── The exam record (policy rule 3, V346, provisional) ──────────────
+    // Written by ImagingExamRecord and the status endpoint from the session,
+    // never from a request body naming somebody.
+
+    /** When the patient was checked in at the imaging desk; set once. */
+    @Column(name = "checked_in_at")
+    private LocalDateTime checkedInAt;
+
+    @Column(name = "checked_in_by_user_id")
+    private UUID checkedInByUserId;
+
+    @Column(name = "checked_in_by_name", length = 150)
+    private String checkedInByName;
+
+    /** When the exam was started (the first move to IN_PROGRESS). */
+    @Column(name = "exam_started_at")
+    private LocalDateTime examStartedAt;
+
+    /** Who performed the exam: whoever started it (or completed one nobody had started). */
+    @Column(name = "performed_by_user_id")
+    private UUID performedByUserId;
+
+    /** Their staff row at the order's hospital, when they have one: the report's "performed by". */
+    @Column(name = "performed_by_staff_id")
+    private UUID performedByStaffId;
+
+    @Column(name = "performed_by_name", length = 150)
+    private String performedByName;
+
+    /** The technical note (protocol used, positioning, incidents): free text, encrypted. */
+    @Convert(converter = com.example.hms.security.EncryptedStringConverter.class)
+    @Column(name = "exam_technical_note", columnDefinition = "TEXT")
+    private String examTechnicalNote;
+
+    @Column(name = "exam_contrast_administered")
+    private Boolean examContrastAdministered;
+
+    /** The contrast given (agent, volume, route, reaction): free text, encrypted. */
+    @Convert(converter = com.example.hms.security.EncryptedStringConverter.class)
+    @Column(name = "exam_contrast_details", columnDefinition = "TEXT")
+    private String examContrastDetails;
+
+    @Column(name = "exam_radiation_dose_mgy", precision = 8, scale = 3)
+    private java.math.BigDecimal examRadiationDoseMgy;
+
+    @Column(name = "exam_recorded_at")
+    private LocalDateTime examRecordedAt;
+
+    @Column(name = "exam_recorded_by_user_id")
+    private UUID examRecordedByUserId;
+
     @Override
     public UUID getTenantOrganizationId() {
         return hospital != null && hospital.getOrganization() != null ? hospital.getOrganization().getId() : null;

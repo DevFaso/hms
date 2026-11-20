@@ -357,6 +357,7 @@ public class BedManagementServiceImpl implements BedManagementService {
             .wardId(ward != null ? ward.getId() : null)
             .wardName(ward != null ? ward.getName() : null)
             .wardCode(ward != null ? ward.getCode() : null)
+            .wardType(ward != null && ward.getWardType() != null ? ward.getWardType().name() : null)
             .bedNumber(bed.getBedNumber())
             .label(BedAssignmentService.bedLabel(bed))
             .status(bed.getStatus() != null ? bed.getStatus().name() : null)

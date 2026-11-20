@@ -501,6 +501,7 @@ export class Login implements OnInit, AfterViewInit {
       ROLE_QUALITY_MANAGER: 'verified',
       ROLE_PHARMACIST: 'medication',
       ROLE_RADIOLOGIST: 'radiology',
+      ROLE_IMAGING_TECHNICIAN: 'radiology',
       ROLE_BILLING_OFFICER: 'payments',
       ROLE_PATIENT: 'person',
       ROLE_STAFF: 'badge',

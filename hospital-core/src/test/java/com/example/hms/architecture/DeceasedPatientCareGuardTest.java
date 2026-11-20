@@ -152,6 +152,7 @@ class DeceasedPatientCareGuardTest {
         ImagingOrder#updateOrder,updateStatus,captureSignature | closes or documents an order made before the death
         ImagingStudyImage#upload,delete,withdraw | V316: key images of a study already done document it, as its report does; r64 D2464: withdrawing a wrong image corrects that record
         ImagingOrder#recordAuthorization | administrative: the insurer's pre-authorisation number of a study already done (provisional rule 1)
+        ImagingOrder#checkIn,recordExam | policy rule 3: the arrival and the exam record document a study ordered before the death, as its status write does
         Isolation#discontinuePrecaution | lifting a precaution
         LabOrder#updateLabOrder,deleteLabOrder,transitionLabOrderStatus,voidLabOrder | closes or corrects an order made before the death; results of its samples stay open
         LabSpecimen#receiveSpecimen,rejectSpecimen | a sample collected before the death
@@ -231,7 +232,8 @@ class DeceasedPatientCareGuardTest {
         Map.entry("Dhis2Export", NOT_CARE), Map.entry("Downtime", NOT_CARE), Map.entry("DrugInteractionAdmin", NOT_CARE),
         Map.entry("EmpiProbabilistic", NOT_CARE), Map.entry("FeatureFlag", NOT_CARE), Map.entry("FrontendAudit", NOT_CARE),
         Map.entry("Hospital", NOT_CARE), Map.entry("HospitalRecordAccessPosture", NOT_CARE),
-        Map.entry("HospitalPacsSettings", NOT_CARE), Map.entry("InBasket", NOT_CARE),
+        Map.entry("HospitalPacsSettings", NOT_CARE), Map.entry("HospitalImagingReportingSettings", NOT_CARE),
+        Map.entry("InBasket", NOT_CARE),
         Map.entry("Inventory", NOT_CARE), Map.entry("LabInstrument", NOT_CARE), Map.entry("LabInventory", NOT_CARE),
         Map.entry("LabQcEvent", NOT_CARE), Map.entry("LabQcTarget", NOT_CARE), Map.entry("LabReflexRule", NOT_CARE), Map.entry("LabTestDefinition", NOT_CARE),
         Map.entry("LabTestValidationStudy", NOT_CARE), Map.entry("Me", NOT_CARE), Map.entry("MedicationCatalog", NOT_CARE),
