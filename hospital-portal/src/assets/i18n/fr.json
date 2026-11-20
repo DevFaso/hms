@@ -8198,7 +8198,8 @@
         "PHARMACY_REFUND": "Remboursement pharmacie",
         "CASH_SESSION": "Caisse",
         "PROBLEM_SENSITIVITY": "Sensibilité du diagnostic",
-        "LAB_TEST_DEFINITION_SENSITIVITY": "Sensibilité de l’examen de laboratoire"
+        "LAB_TEST_DEFINITION_SENSITIVITY": "Sensibilité de l’examen de laboratoire",
+        "DISPENSE_BILLING_DEFERRAL": "Report « à facturer »"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",

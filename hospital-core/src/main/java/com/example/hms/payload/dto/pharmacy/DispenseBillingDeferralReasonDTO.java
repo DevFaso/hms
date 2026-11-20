@@ -1,6 +1,7 @@
 package com.example.hms.payload.dto.pharmacy;
 
 import com.example.hms.validation.NoCardNumber;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -14,6 +15,7 @@ import lombok.Setter;
 @AllArgsConstructor
 public class DispenseBillingDeferralReasonDTO {
 
+    @NotBlank
     @Size(max = 500)
     @NoCardNumber
     private String reason;

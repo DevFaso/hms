@@ -2,6 +2,8 @@ package com.example.hms.payload.dto.pharmacy;
 
 import com.example.hms.enums.DispenseBillingDeferralKind;
 import com.example.hms.validation.NoCardNumber;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -21,10 +23,13 @@ import java.util.UUID;
 @AllArgsConstructor
 public class DispenseBillingDeferralRequestDTO {
 
+    @NotNull
     private UUID prescriptionId;
 
+    @NotNull
     private DispenseBillingDeferralKind kind;
 
+    @NotBlank
     @Size(max = 500)
     @NoCardNumber
     private String reason;

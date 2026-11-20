@@ -8232,7 +8232,8 @@
         "PHARMACY_REFUND": "Pharmacy refund",
         "CASH_SESSION": "Till",
         "PROBLEM_SENSITIVITY": "Diagnosis sensitivity",
-        "LAB_TEST_DEFINITION_SENSITIVITY": "Lab test sensitivity"
+        "LAB_TEST_DEFINITION_SENSITIVITY": "Lab test sensitivity",
+        "DISPENSE_BILLING_DEFERRAL": "Deferred pharmacy billing"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",
