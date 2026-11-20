@@ -2963,7 +2963,7 @@ class LaborServiceImplTest {
         request.setDiastolicBpMmHg(diastolic);
         request.setTemperatureCelsius(temperature);
         return service.addEntry(patientId, episodeId, recorderUserId, request).getAlerts().stream()
-            .map(alert -> alert.getCode()).toList();
+            .map(com.example.hms.payload.dto.clinical.labor.LaborAlertDTO::getCode).toList();
     }
 
     @Test

@@ -376,62 +376,77 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private NurseVitalTaskResponseDTO vitalTaskFor(PatientContext ctx, UUID hospitalId, LocalDateTime now,
                                                    Duration effectiveWindow, Optional<PatientVitalSign> last,
                                                    ObstetricWard obstetric) {
-        // Compute when the next vitals check is due
-        LocalDateTime dueTime;
-        boolean overdue;
-        NewsScoreCalculator.NewsScoreResult news = null;
-        boolean scoreShown = true;
-        com.example.hms.service.vitals.MaternalEarlyWarning.Score mews = null;
         if (last.isEmpty() || last.get().getRecordedAt() == null) {
             // No vitals ever recorded — overdue now
-            dueTime = now.minusMinutes(30);
-            overdue = true;
-        } else if (obstetric.contains(ctx.patientId()) && maternalEarlyWarning != null && maternalEarlyWarning.enabled()) {
-            // Policy 2026-11-20 (provisional): a pregnant or postpartum woman's round follows the level of
-            // concern of her maternal early warning (30 min with a concern or at low-medium, 15 min above);
-            // NEWS2 is not validated for her and neither sets her round nor is shown.
-            com.example.hms.service.vitals.MaternalEarlyWarningRules rules = maternalEarlyWarning.rules();
-            mews = com.example.hms.service.vitals.MaternalEarlyWarning.score(rules, last.get(),
-                com.example.hms.service.vitals.MaternalEarlyWarning.postBirthPulse(rules,
-                    obstetric.births().get(ctx.patientId()), last.get().getRecordedAt()));
-            dueTime = last.get().getRecordedAt().plus(com.example.hms.service.vitals.MaternalEarlyWarning
-                .observationInterval(rules, mews, ROUTINE_VITALS_INTERVAL));
-            overdue = dueTime.isBefore(now);
-            scoreShown = false;
-        } else {
-            // QA D207: the NEWS2 band of the last set shortens the interval.
-            // QA D518: the adult score does not set a child's interval.
-            news = NewsScoreCalculator.applies(last.get()) ? NewsScoreCalculator.score(last.get()) : null;
-            // observationInterval never returns more than the routine interval: a score only shortens a round.
-            dueTime = last.get().getRecordedAt().plus(
-                com.example.hms.service.vitals.News2EscalationService.observationInterval(news, ROUTINE_VITALS_INTERVAL));
-            overdue = dueTime.isBefore(now);
-            // Review of #1237 (High): NEWS2 is not validated in labour, after a birth or for a newborn. It may
-            // still shorten the round (a safety net) but its number is never shown as reassurance.
-            com.example.hms.model.Patient patient = last.get().getPatient();
-            scoreShown = !obstetric.contains(ctx.patientId()) && (patient == null
-                || !com.example.hms.service.vitals.VitalSignJudgement.isNewborn(patient.getDateOfBirth(),
-                    last.get().getRecordedAt()));
+            return vitalTask(ctx, hospitalId, now.minusMinutes(30), now, effectiveWindow, null, true, null);
         }
+        if (underMaternalWarning(ctx.patientId(), obstetric)) {
+            return maternalVitalTask(ctx, hospitalId, now, effectiveWindow, last.get(), obstetric);
+        }
+        // QA D207: the NEWS2 band of the last set shortens the interval.
+        // QA D518: the adult score does not set a child's interval.
+        NewsScoreCalculator.NewsScoreResult news =
+            NewsScoreCalculator.applies(last.get()) ? NewsScoreCalculator.score(last.get()) : null;
+        // observationInterval never returns more than the routine interval: a score only shortens a round.
+        LocalDateTime dueTime = last.get().getRecordedAt().plus(
+            com.example.hms.service.vitals.News2EscalationService.observationInterval(news, ROUTINE_VITALS_INTERVAL));
+        // Review of #1237 (High): NEWS2 is not validated in labour, after a birth or for a newborn. It may
+        // still shorten the round (a safety net) but its number is never shown as reassurance.
+        com.example.hms.model.Patient patient = last.get().getPatient();
+        boolean scoreShown = !obstetric.contains(ctx.patientId()) && (patient == null
+            || !com.example.hms.service.vitals.VitalSignJudgement.isNewborn(patient.getDateOfBirth(),
+                last.get().getRecordedAt()));
+        return vitalTask(ctx, hospitalId, dueTime, now, effectiveWindow, news, scoreShown, null);
+    }
 
-        // Only include if within the look-ahead or already overdue. The look-ahead
-        // was also the routine interval, so nearly every admitted patient was due.
-        // A set with nothing to score (a weight alone) carries no maternal score.
-        boolean maternalScored = mews != null && !mews.empty();
-        if (overdue || dueTime.isBefore(now.plus(effectiveWindow))) {
-            return NurseVitalTaskResponseDTO.builder()
-                .id(UUID.nameUUIDFromBytes((ctx.patientId() + ":VITAL:" + hospitalId).getBytes()))
-                .patientId(ctx.patientId())
-                .patientName(ctx.displayName())
-                .type(mews != null ? maternalRoundType(mews, overdue) : vitalsRoundType(news, overdue))
-                .dueTime(dueTime)
-                .overdue(overdue)
-                .news2Score(news != null && scoreShown ? news.total() : null)
-                .mewsScore(maternalScored ? mews.total() : null)
-                .mewsTier(maternalScored ? mews.responseTier().name() : null)
-                .build();
+    /** The maternal early warning sets this patient's round: she is under the obstetric scope, and it is on. */
+    private boolean underMaternalWarning(UUID patientId, ObstetricWard obstetric) {
+        return obstetric.contains(patientId) && maternalEarlyWarning != null && maternalEarlyWarning.enabled();
+    }
+
+    /**
+     * Policy 2026-11-20 (provisional): a pregnant or postpartum woman's round follows the level of concern
+     * of her maternal early warning (30 min with a concern or at low-medium, 15 min above); NEWS2 is not
+     * validated for her and neither sets her round nor is shown.
+     */
+    private NurseVitalTaskResponseDTO maternalVitalTask(PatientContext ctx, UUID hospitalId, LocalDateTime now,
+                                                        Duration effectiveWindow, PatientVitalSign last,
+                                                        ObstetricWard obstetric) {
+        com.example.hms.service.vitals.MaternalEarlyWarningRules rules = maternalEarlyWarning.rules();
+        com.example.hms.service.vitals.MaternalEarlyWarning.Score mews =
+            com.example.hms.service.vitals.MaternalEarlyWarning.score(rules, last,
+                com.example.hms.service.vitals.MaternalEarlyWarning.postBirthPulse(rules,
+                    obstetric.births().get(ctx.patientId()), last.getRecordedAt()));
+        LocalDateTime dueTime = last.getRecordedAt().plus(com.example.hms.service.vitals.MaternalEarlyWarning
+            .observationInterval(rules, mews, ROUTINE_VITALS_INTERVAL));
+        return vitalTask(ctx, hospitalId, dueTime, now, effectiveWindow, null, false, mews);
+    }
+
+    /**
+     * The round as the list reads it, or {@code null} when it is neither overdue nor inside the look-ahead
+     * (the look-ahead was also the routine interval, so nearly every admitted patient was due). With a
+     * maternal score the round is named after it; a set with nothing to score (a weight alone) carries none.
+     */
+    private static NurseVitalTaskResponseDTO vitalTask(PatientContext ctx, UUID hospitalId, LocalDateTime dueTime,
+                                                       LocalDateTime now, Duration effectiveWindow,
+                                                       NewsScoreCalculator.NewsScoreResult news, boolean scoreShown,
+                                                       com.example.hms.service.vitals.MaternalEarlyWarning.Score mews) {
+        boolean overdue = dueTime.isBefore(now);
+        if (!overdue && !dueTime.isBefore(now.plus(effectiveWindow))) {
+            return null;
         }
-        return null;
+        boolean maternalScored = mews != null && !mews.empty();
+        return NurseVitalTaskResponseDTO.builder()
+            .id(UUID.nameUUIDFromBytes((ctx.patientId() + ":VITAL:" + hospitalId).getBytes()))
+            .patientId(ctx.patientId())
+            .patientName(ctx.displayName())
+            .type(mews != null ? maternalRoundType(mews, overdue) : vitalsRoundType(news, overdue))
+            .dueTime(dueTime)
+            .overdue(overdue)
+            .news2Score(news != null && scoreShown ? news.total() : null)
+            .mewsScore(maternalScored ? mews.total() : null)
+            .mewsTier(maternalScored ? mews.responseTier().name() : null)
+            .build();
     }
 
     /* ═══════════════════════════════════════════════════════════════════
@@ -1356,7 +1371,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .collect(java.util.stream.Collectors.toSet());
     }
 
-    /** QA D207: a MEDIUM/HIGH NEWS2 round is named as such, ahead of the overdue/routine split. */
     /** Policy 2026-11-20: the round of a pregnant or postpartum woman, named after her maternal level of concern. */
     static String maternalRoundType(com.example.hms.service.vitals.MaternalEarlyWarning.Score mews, boolean overdue) {
         return switch (mews.responseTier()) {
@@ -1367,6 +1381,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         };
     }
 
+    /** QA D207: a MEDIUM/HIGH NEWS2 round is named as such, ahead of the overdue/routine split. */
     static String vitalsRoundType(NewsScoreCalculator.NewsScoreResult news, boolean overdue) {
         if (news != null && news.riskBand() == NewsScoreCalculator.RiskBand.HIGH) return VITALS_ROUND_NEWS2_HIGH;
         if (news != null && (news.riskBand() == NewsScoreCalculator.RiskBand.MEDIUM

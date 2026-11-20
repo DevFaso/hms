@@ -106,8 +106,7 @@ class MaternalWardScopeTest {
 
         Map<UUID, LocalDateTime> births = scope.extend(new HashSet<>(), HERE, List.of(dayTwo, dayFortyTwo, dayFortyThree), NOW);
 
-        assertThat(births).containsOnlyKeys(dayTwo, dayFortyTwo);
-        assertThat(births.get(dayTwo)).isEqualTo(NOW.minusDays(2));
+        assertThat(births).containsOnlyKeys(dayTwo, dayFortyTwo).containsEntry(dayTwo, NOW.minusDays(2));
     }
 
     @Test

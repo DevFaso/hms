@@ -264,7 +264,7 @@ public class MaternalEarlyWarningService {
             .max(Comparator.comparing(Admission::getAdmissionDateTime,
                 Comparator.nullsFirst(Comparator.naturalOrder())))
             .map(Admission::getDepartment)
-            .map(department -> department.getHeadOfDepartment())
+            .map(com.example.hms.model.Department::getHeadOfDepartment)
             .filter(head -> head.isActive() && head.getUser() != null && head.getUser().getUsername() != null
                 && head.getUser().isActive() && !head.getUser().isDeleted())
             .map(head -> head.getUser().getUsername());

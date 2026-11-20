@@ -210,23 +210,8 @@ public class VitalSignJudgement {
      */
     public void escalate(PatientVitalSign saved, Judgement judgement, UUID patientId, UUID hospitalId,
                          String recorderUsername, String visitPhysicianUsername, boolean news2CoveredByMaternityAlert) {
-        // Policy 2026-11-20 (provisional): for a pregnant or postpartum woman the NEWS2 page is replaced
-        // by the maternal early-warning escalation. NEWS2 is not validated for her and never pages.
-        MaternalEarlyWarning.Score maternal = judgement == null ? null : judgement.maternal();
-        if (maternal == null && !news2CoveredByMaternityAlert) {
-            news2EscalationService.escalateIfNeeded(saved, patientId, hospitalId, recorderUsername,
-                visitPhysicianUsername);
-        }
-        Set<String> paged = Set.of();
-        if (judgement != null && patientId != null && hospitalId != null) {
-            paged = escalateBloodPressure(saved, judgement.bloodPressure(), patientId, hospitalId, recorderUsername,
-                visitPhysicianUsername);
-        }
-        if (maternal != null && !news2CoveredByMaternityAlert && maternalEarlyWarning != null) {
-            // One reading never pages a person twice: whoever the severe-pressure notice reached is skipped.
-            maternalEarlyWarning.escalate(saved, maternal, patientId, hospitalId, recorderUsername,
-                visitPhysicianUsername, paged);
-        }
+        escalateEarlyWarning(saved, judgement, patientId, hospitalId, recorderUsername, visitPhysicianUsername,
+            news2CoveredByMaternityAlert);
         if (judgement == null || !judgement.newborn() || patientId == null || hospitalId == null) {
             return;
         }
@@ -252,6 +237,32 @@ public class VitalSignJudgement {
                     log.warn("Newborn vitals notice not created: {}", ex.getClass().getSimpleName());
                 }
             }
+        }
+    }
+
+    /**
+     * The early-warning page and the severe-pressure notice of one reading. Policy 2026-11-20
+     * (provisional): for a pregnant or postpartum woman the NEWS2 page is replaced by the maternal
+     * early-warning escalation; NEWS2 is not validated for her and never pages. Neither page is sent
+     * for a reading an URGENT maternity alert already paged for.
+     */
+    private void escalateEarlyWarning(PatientVitalSign saved, Judgement judgement, UUID patientId, UUID hospitalId,
+                                      String recorderUsername, String visitPhysicianUsername,
+                                      boolean coveredByMaternityAlert) {
+        MaternalEarlyWarning.Score maternal = judgement == null ? null : judgement.maternal();
+        if (maternal == null && !coveredByMaternityAlert) {
+            news2EscalationService.escalateIfNeeded(saved, patientId, hospitalId, recorderUsername,
+                visitPhysicianUsername);
+        }
+        Set<String> paged = Set.of();
+        if (judgement != null && patientId != null && hospitalId != null) {
+            paged = escalateBloodPressure(saved, judgement.bloodPressure(), patientId, hospitalId, recorderUsername,
+                visitPhysicianUsername);
+        }
+        if (maternal != null && !coveredByMaternityAlert && maternalEarlyWarning != null) {
+            // One reading never pages a person twice: whoever the severe-pressure notice reached is skipped.
+            maternalEarlyWarning.escalate(saved, maternal, patientId, hospitalId, recorderUsername,
+                visitPhysicianUsername, paged);
         }
     }
 

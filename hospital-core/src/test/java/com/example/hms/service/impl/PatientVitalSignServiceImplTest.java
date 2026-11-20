@@ -847,7 +847,7 @@ class PatientVitalSignServiceImplTest {
         when(vitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(patientId,
             java.util.Set.of(hospitalId), PageRequest.of(0, 2))).thenReturn(List.of(afterTheSwitch, beforeTheSwitch));
         com.example.hms.service.vitals.News2Applicability applicability =
-            org.mockito.Mockito.mock(com.example.hms.service.vitals.News2Applicability.class);
+            mock(com.example.hms.service.vitals.News2Applicability.class);
         when(applicability.applicabilityOf(any(), any(), any())).thenReturn(
             new com.example.hms.service.vitals.News2Applicability.Applicability(
                 com.example.hms.service.vitals.News2Applicability.Status.OBSTETRIC, birth));

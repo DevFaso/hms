@@ -269,15 +269,11 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
             new java.util.HashMap<>();
         return vital -> {
             PatientVitalSignResponseDTO dto = vitalSignMapper.toResponse(vital);
-            if (dto != null) {
-                // Policy 2026-11-20: the ticked maternal concerns are read back on the staff chart and the
-                // patient's own portal only. A family proxy's read does not pass here (policy: a proxy
-                // is not shown what reveals a pregnancy), so the mapper itself never carries them.
-                java.util.Set<com.example.hms.enums.MaternalConcern> ticked =
-                    com.example.hms.enums.MaternalConcern.parse(vital.getMaternalConcerns());
-                dto.setMaternalConcerns(ticked.isEmpty() ? null : ticked.stream().map(Enum::name).toList());
+            if (dto == null) {
+                return null;
             }
-            if (dto == null || news2Applicability == null || vital.getPatient() == null) {
+            readBackMaternalConcerns(vital, dto);
+            if (news2Applicability == null || vital.getPatient() == null) {
                 return dto;
             }
             LocalDateTime at = vital.getRecordedAt() != null ? vital.getRecordedAt()
@@ -287,17 +283,37 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
             com.example.hms.service.vitals.News2Applicability.Applicability known = byDay.computeIfAbsent(
                 at.toLocalDate(), day -> news2Applicability.applicabilityOf(vital.getPatient(), readAt, at));
             if (known != null && known.status().notValidated()) {
-                dto.setNewsScore(null);
-                dto.setNewsRiskBand(null);
-                dto.setNewsComplete(null);
-                dto.setNewsMissing(null);
-                dto.setNewsNotValidated(known.status().name());
-                if (maternalEarlyWarning != null) {
-                    maternalEarlyWarning.describe(maternalEarlyWarning.scoreFor(known, vital), dto);
-                }
+                withoutNews2(vital, dto, known);
             }
             return dto;
         };
+    }
+
+    /**
+     * Policy 2026-11-20: the ticked maternal concerns are read back on the staff chart and the patient's own
+     * portal only. A family proxy's read does not pass here (policy: a proxy is not shown what reveals a
+     * pregnancy), so the mapper itself never carries them.
+     */
+    private static void readBackMaternalConcerns(PatientVitalSign vital, PatientVitalSignResponseDTO dto) {
+        java.util.Set<com.example.hms.enums.MaternalConcern> ticked =
+            com.example.hms.enums.MaternalConcern.parse(vital.getMaternalConcerns());
+        dto.setMaternalConcerns(ticked.isEmpty() ? null : ticked.stream().map(Enum::name).toList());
+    }
+
+    /**
+     * No NEWS2 number for a patient it is not validated for; the pregnant or postpartum woman's reading
+     * carries her maternal early warning instead (policy 2026-11-20, provisional).
+     */
+    private void withoutNews2(PatientVitalSign vital, PatientVitalSignResponseDTO dto,
+                              com.example.hms.service.vitals.News2Applicability.Applicability known) {
+        dto.setNewsScore(null);
+        dto.setNewsRiskBand(null);
+        dto.setNewsComplete(null);
+        dto.setNewsMissing(null);
+        dto.setNewsNotValidated(known.status().name());
+        if (maternalEarlyWarning != null) {
+            maternalEarlyWarning.describe(maternalEarlyWarning.scoreFor(known, vital), dto);
+        }
     }
 
     @Override

@@ -44,26 +44,9 @@ public class MaternalWardScope {
         // A pregnancy that covers today began at most 280 + 14 days ago: no older birth can matter.
         LocalDateTime since = today
             .minusDays((long) SevereHypertension.PREGNANCY_DAYS + SevereHypertension.POST_TERM_GRACE_DAYS).atStartOfDay();
-        Map<UUID, LocalDateTime> latestBirth = new HashMap<>();
-        for (Object[] row : deliveryRecordRepository.latestBirthTimesAt(patientIds, hospitalId, since)) {
-            if (row[0] instanceof UUID patientId && row[1] instanceof LocalDateTime birthAt) {
-                latestBirth.put(patientId, birthAt);
-            }
-        }
-        // The latest version of each woman's history (the rows come newest first).
-        Map<UUID, LocalDate> dueDates = new HashMap<>();
-        for (Object[] row : maternalHistoryRepository.pregnancyDatesAt(patientIds, hospitalId)) {
-            if (row[0] instanceof UUID patientId && !dueDates.containsKey(patientId)) {
-                dueDates.put(patientId, dueDate((LocalDate) row[1], (LocalDate) row[2], (LocalDate) row[3]));
-            }
-        }
-        for (Map.Entry<UUID, LocalDate> history : dueDates.entrySet()) {
-            LocalDate due = history.getValue();
-            if (!SevereHypertension.isPregnantOn(due, today)) {
-                continue;
-            }
-            LocalDateTime birth = latestBirth.get(history.getKey());
-            if (birth == null || birth.isBefore(due.minusDays(SevereHypertension.PREGNANCY_DAYS).atStartOfDay())) {
+        Map<UUID, LocalDateTime> latestBirth = latestBirths(hospitalId, patientIds, since);
+        for (Map.Entry<UUID, LocalDate> history : dueDates(hospitalId, patientIds).entrySet()) {
+            if (pregnantOn(today, history.getValue(), latestBirth.get(history.getKey()))) {
                 obstetric.add(history.getKey());
             }
         }
@@ -75,6 +58,37 @@ public class MaternalWardScope {
             }
         });
         return births;
+    }
+
+    /** The latest birth since {@code since} of each patient, in one query. */
+    private Map<UUID, LocalDateTime> latestBirths(UUID hospitalId, Collection<UUID> patientIds, LocalDateTime since) {
+        Map<UUID, LocalDateTime> latestBirth = new HashMap<>();
+        for (Object[] row : deliveryRecordRepository.latestBirthTimesAt(patientIds, hospitalId, since)) {
+            if (row[0] instanceof UUID patientId && row[1] instanceof LocalDateTime birthAt) {
+                latestBirth.put(patientId, birthAt);
+            }
+        }
+        return latestBirth;
+    }
+
+    /** The due date of the latest version of each woman's history (the rows come newest first), in one query. */
+    private Map<UUID, LocalDate> dueDates(UUID hospitalId, Collection<UUID> patientIds) {
+        Map<UUID, LocalDate> dueDates = new HashMap<>();
+        for (Object[] row : maternalHistoryRepository.pregnancyDatesAt(patientIds, hospitalId)) {
+            if (row[0] instanceof UUID patientId && !dueDates.containsKey(patientId)) {
+                dueDates.put(patientId, dueDate((LocalDate) row[1], (LocalDate) row[2], (LocalDate) row[3]));
+            }
+        }
+        return dueDates;
+    }
+
+    /** The pregnancy {@code due} dates covers {@code today}, and no birth is recorded since it began. */
+    private static boolean pregnantOn(LocalDate today, LocalDate due, LocalDateTime latestBirth) {
+        if (!SevereHypertension.isPregnantOn(due, today)) {
+            return false;
+        }
+        return latestBirth == null
+            || latestBirth.isBefore(due.minusDays(SevereHypertension.PREGNANCY_DAYS).atStartOfDay());
     }
 
     /** As {@link SevereHypertension#dueDateOf}: ultrasound first, then the recorded one, then LMP + 280 days. */

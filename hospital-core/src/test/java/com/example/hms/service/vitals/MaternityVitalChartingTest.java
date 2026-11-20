@@ -221,7 +221,7 @@ class MaternityVitalChartingTest {
     void policy20261120_theChartedRowCarriesOnlyTheMaternalWarning_andBleedingIsAConcern() {
         MaternalEarlyWarning.Score score = MaternalEarlyWarning.score(new MaternalEarlyWarningRules(),
             PatientVitalSign.builder().heartRateBpm(125).build(), false);
-        org.mockito.Mockito.when(judgement.judge(any())).thenReturn(new VitalSignJudgement.Judgement(false,
+        when(judgement.judge(any())).thenReturn(new VitalSignJudgement.Judgement(false,
             java.util.List.of(), new SevereHypertension.Verdict(SevereHypertension.Scope.POSTPARTUM,
                 SevereHypertension.Level.URGENT), score));
         PostpartumObservation obs = PostpartumObservation.builder().patient(mother).hospital(hospital)

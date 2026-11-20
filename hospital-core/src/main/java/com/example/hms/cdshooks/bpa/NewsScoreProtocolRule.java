@@ -88,19 +88,7 @@ public class NewsScoreProtocolRule implements BpaRule {
             : applicability.applicabilityOf(context.patient(), context.hospitalId(), latest.get().getRecordedAt());
         News2Applicability.Status status = known == null ? News2Applicability.Status.APPLIES : known.status();
         if (status.notValidated()) {
-            Optional<BpaProtocol> protocol = protocolRepository.findByProtocolCodeAndActiveTrue(PROTOCOL_CODE);
-            // Policy 2026-11-20 (provisional): a pregnant or postpartum woman gets her maternal early
-            // warning in place of the « NEWS2 non validé » text. Scored from the bundle's own values.
-            MaternalEarlyWarning.Score maternal = maternalEarlyWarning == null ? null
-                : maternalEarlyWarning.scoreFor(known, latest.get());
-            if (protocol.isPresent() && maternal != null && !maternal.empty()) {
-                return List.of(maternalCard(maternal,
-                    BpaCardText.when(text, latest.get().getRecordedAt(), text.zoneOf(context.hospitalId()))));
-            }
-            return protocol.isEmpty() ? List.of() : List.of(notValidatedCard(protocol.get(), status,
-                BpaCardText.when(text, latest.get().getRecordedAt(), text.zoneOf(context.hospitalId())),
-                // The adult bands mean nothing for a newborn (her own rules alert): never a warning from them.
-                status == News2Applicability.Status.OBSTETRIC && score.riskBand() != NewsScoreCalculator.RiskBand.LOW));
+            return notValidatedCards(context, latest.get(), known, score);
         }
         if (!NewsScoreCalculator.appliesTo(context.patient())) {
             return List.of();
@@ -119,6 +107,34 @@ public class NewsScoreProtocolRule implements BpaRule {
     @org.springframework.beans.factory.annotation.Autowired
     void setApplicability(News2Applicability applicability) {
         this.applicability = applicability;
+    }
+
+    /**
+     * The card of a patient NEWS2 is not validated for. Policy 2026-11-20 (provisional): a pregnant or
+     * postpartum woman gets her maternal early warning in place of the « NEWS2 non validé » text, scored
+     * from the bundle's own values; a newborn, or a set with nothing to score, keeps that text.
+     */
+    private List<CdsCard> notValidatedCards(BpaRuleContext context, PatientVitalSign latest,
+                                            News2Applicability.Applicability known, NewsScoreResult score) {
+        Optional<BpaProtocol> protocol = protocolRepository.findByProtocolCodeAndActiveTrue(PROTOCOL_CODE);
+        if (protocol.isEmpty()) {
+            return List.of();
+        }
+        String readAt = BpaCardText.when(text, latest.getRecordedAt(), text.zoneOf(context.hospitalId()));
+        MaternalEarlyWarning.Score maternal = maternalEarlyWarning == null ? null
+            : maternalEarlyWarning.scoreFor(known, latest);
+        if (maternal != null && !maternal.empty()) {
+            return List.of(maternalCard(maternal, readAt));
+        }
+        // The adult bands mean nothing for a newborn (her own rules alert): never a warning from them.
+        boolean raised = known.status() == News2Applicability.Status.OBSTETRIC
+            && score.riskBand() != NewsScoreCalculator.RiskBand.LOW;
+        return List.of(notValidatedCard(protocol.get(), known.status(), readAt, raised));
+    }
+
+    /** The source every card of this rule names. */
+    private Source source() {
+        return new Source(text.get("cds.bpa.source", "HMS Best-Practice Advisory"), null, null);
     }
 
     /** Policy 2026-11-20: the maternal early warning (setter-injected; absent, the card says « NEWS2 non validé »). */
@@ -165,7 +181,7 @@ public class NewsScoreProtocolRule implements BpaRule {
             text.get("cds.bpa.mews.title", "cds.bpa.mews.title"),
             detail.toString(),
             score.needsEscalation() ? CdsCard.Indicator.WARNING : CdsCard.Indicator.INFO,
-            new Source(text.get("cds.bpa.source", "HMS Best-Practice Advisory"), null, null),
+            source(),
             null,
             null,
             null,
@@ -185,7 +201,7 @@ public class NewsScoreProtocolRule implements BpaRule {
             BpaCardText.name(text, protocol),
             text.get(key, fallback, readAt),
             raised ? CdsCard.Indicator.WARNING : CdsCard.Indicator.INFO,
-            new Source(text.get("cds.bpa.source", "HMS Best-Practice Advisory"), null, null),
+            source(),
             null,
             null,
             null,
@@ -230,7 +246,7 @@ public class NewsScoreProtocolRule implements BpaRule {
             BpaCardText.name(text, protocol),
             detail.toString(),
             CdsCard.Indicator.WARNING,
-            new Source(text.get("cds.bpa.source", "HMS Best-Practice Advisory"), null, null),
+            source(),
             links,
             null,
             null,
