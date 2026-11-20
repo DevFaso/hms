@@ -54,6 +54,8 @@ class ClinicalLabResultReadPathGuardTest {
         Map.entry("com/example/hms/service/notification/PatientNotificationRenderer.java",
             "V312: is any result of the order released, before a content-free notice; no values"),
         Map.entry("com/example/hms/repository/LabResultRepository.java", "the repository itself"),
+        Map.entry("com/example/hms/service/recordaccess/MinorResultReleaseServiceImpl.java",
+            "policy 2026-11-20: which orders have a released result, for the family-release screen; test names, no values"),
         Map.entry("com/example/hms/repository/ImagingReportRepository.java", "javadoc reference only"),
         Map.entry("com/example/hms/bootstrap/DevSyntheticDataSeeder.java", "dev seeding, writes only"),
         Map.entry("com/example/hms/fhir/write/ObservationFhirWriteService.java", "write path"),
