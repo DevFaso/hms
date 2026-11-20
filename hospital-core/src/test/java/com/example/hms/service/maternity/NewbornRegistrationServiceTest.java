@@ -158,6 +158,10 @@ class NewbornRegistrationServiceTest {
         assertThat(proxy.getValue().getProxyUser()).isSameAs(motherAccount);
         assertThat(proxy.getValue().getRelationship()).isEqualTo(ProxyRelationship.PARENT);
         assertThat(proxy.getValue().getStatus()).isEqualTo(ProxyStatus.ACTIVE);
+        // Policy 2026-11-20: staff recorded the birth, so the mother is a verified parent.
+        assertThat(proxy.getValue().getRelationshipVerifiedAt()).isNotNull();
+        assertThat(proxy.getValue().getRelationshipVerifiedByUserId()).isEqualTo(recorder);
+        assertThat(proxy.getValue().isVerifiedParentOrGuardian()).isTrue();
 
         ArgumentCaptor<AuditEventRequestDTO> event = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
         verify(audit).logEvent(event.capture());

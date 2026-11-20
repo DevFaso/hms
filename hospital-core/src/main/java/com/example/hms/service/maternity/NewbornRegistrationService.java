@@ -224,14 +224,14 @@ public class NewbornRegistrationService {
             .hospital(delivery.getHospital())
             .birthOrder(order)
             .build());
-        grantMotherProxy(baby, mother, locale);
+        grantMotherProxy(baby, mother, locale, recorderUserId);
         auditAfterCommit(created.getId(), hospitalId, delivery.getHospital().getName(), delivery.getId(), order,
             recorderUserId);
         return link;
     }
 
     /** The mother sees the baby under her portal's family access (the parent of a newborn). */
-    private void grantMotherProxy(Patient baby, Patient mother, Locale locale) {
+    private void grantMotherProxy(Patient baby, Patient mother, Locale locale, UUID recorderUserId) {
         if (mother.getUser() == null) {
             return;
         }
@@ -247,6 +247,9 @@ public class NewbornRegistrationService {
             .status(ProxyStatus.ACTIVE)
             .permissions(PROXY_PERMISSIONS)
             .notes(messageSource.getMessage("newborn.registration.proxyNote", null, locale))
+            // Policy 2026-11-20: staff recorded this birth, so the mother is a verified parent.
+            .relationshipVerifiedAt(java.time.LocalDateTime.now())
+            .relationshipVerifiedByUserId(recorderUserId)
             .build());
     }
 

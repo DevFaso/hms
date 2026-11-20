@@ -3844,4 +3844,19 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V347: sensitive-data defaults and the release of a minor's result
+         (policy 2026-11-20, provisional). One new table
+         (clinical.proxy_sensitive_releases), the verification stamp of a
+         family-access grant, the per-hospital adolescent confidentiality
+         age, and a sensitive category on a catalogue medicine. Additive:
+         IF NOT EXISTS / DROP IF EXISTS, no DO block, no backfill.
+         ================================================================= -->
+    <changeSet id="V347-sensitive-defaults-minor-result-release" author="hms-team" runOnChange="false">
+        <sqlFile path="V347__sensitive_defaults_minor_result_release.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>
