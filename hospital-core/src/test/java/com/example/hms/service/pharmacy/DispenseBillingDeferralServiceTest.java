@@ -584,5 +584,75 @@ class DispenseBillingDeferralServiceTest {
             assertThat(work.get(1).isCanReview()).isTrue();
             assertThat(work.get(0).getMedicationName()).isEqualTo("Amoxicilline 500 mg");
         }
+
+        @Test
+        @DisplayName("the counter view: an inpatient order needs nothing; otherwise the open deferrals of the prescription")
+        void theCounterView() {
+            DispenseBillingDeferral approved = stored(DispenseBillingDeferralKind.OUTPATIENT_CREDIT,
+                    DispenseBillingDeferralStatus.APPROVED, billing);
+            approved.setDecidedBy(accountant);
+            when(deferralRepository.findByHospitalIdAndPrescriptionIdAndStatusInOrderByRequestedAtAsc(eq(hospitalId),
+                    eq(prescriptionId), any())).thenReturn(List.of(approved));
+            actingAs(pharmacist);
+
+            var counter = service.counter(prescriptionId);
+            assertThat(counter.isOnOpenStay()).isFalse();
+            assertThat(counter.getOpen()).singleElement().satisfies(row -> {
+                assertThat(row.isCanExecute()).as("approved by somebody else: the pharmacist may hand over").isTrue();
+                assertThat(row.isCanDecide()).isFalse();
+            });
+
+            // The approver reads the same row and may not hand the fill over on it.
+            actingAs(accountant);
+            assertThat(service.counter(prescriptionId).getOpen().get(0).isCanExecute()).isFalse();
+
+            openStay(AdmissionStatus.ACTIVE);
+            assertThat(service.counter(prescriptionId).isOnOpenStay()).isTrue();
+        }
+
+        @Test
+        @DisplayName("the counter view of a prescription of another hospital answers as a missing one; a reader is required")
+        void theCounterViewIsScoped() {
+            actingAs(pharmacist);
+            Hospital elsewhere = new Hospital();
+            elsewhere.setId(UUID.randomUUID());
+            prescription.setHospital(elsewhere);
+            assertThatThrownBy(() -> service.counter(prescriptionId))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+
+            prescription.setHospital(hospital);
+            when(roleValidator.canRequestDispenseBillingDeferral(any(), eq(hospitalId))).thenReturn(false);
+            UUID nobody = UUID.randomUUID();
+            actingAs(nobody);
+            assertThatThrownBy(() -> service.counter(prescriptionId))
+                    .isInstanceOf(ClientSafeAccessDeniedException.class);
+            assertThatThrownBy(() -> service.list(null, null))
+                    .isInstanceOf(ClientSafeAccessDeniedException.class);
+        }
+
+        @Test
+        @DisplayName("the reconciliation reads deferrals by id, at its hospital only, with nobody's actions on them")
+        void byIdsForTheReconciliation() {
+            DispenseBillingDeferral row = stored(DispenseBillingDeferralKind.URGENCY_OVERRIDE,
+                    DispenseBillingDeferralStatus.EXECUTED, pharmacist);
+            when(deferralRepository.findByHospitalIdAndIdIn(hospitalId, List.of(row.getId()))).thenReturn(List.of(row));
+            when(userRepository.findById(pharmacist)).thenReturn(Optional.of(named(pharmacist, "Awa", "Pharmacienne")));
+
+            var byId = service.byIds(hospitalId, List.of(row.getId()));
+
+            assertThat(byId).containsOnlyKeys(row.getId());
+            assertThat(byId.get(row.getId()).getRequestedByName()).isEqualTo("Awa Pharmacienne");
+            assertThat(byId.get(row.getId()).isCanReview()).isFalse();
+            assertThat(service.byIds(hospitalId, List.of())).isEmpty();
+            assertThat(service.byIds(null, List.of(row.getId()))).isEmpty();
+        }
+    }
+
+    private static User named(UUID id, String first, String last) {
+        User u = new User();
+        u.setId(id);
+        u.setFirstName(first);
+        u.setLastName(last);
+        return u;
     }
 }
