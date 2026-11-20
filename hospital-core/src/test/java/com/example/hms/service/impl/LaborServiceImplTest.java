@@ -2953,4 +2953,109 @@ class LaborServiceImplTest {
         verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(urgent ->
             "labor.alert.msg.labor-outcome-conflict".equals(urgent.alertMessageKey())));
     }
+
+    /* ── Policy 2026-11-20 (provisional): WHO Labour Care Guide alert values and the CRADLE shock index ── */
+
+    private List<String> maternalAlertCodes(Integer pulse, Integer systolic, Integer diastolic, Double temperature) {
+        PartographEntryRequestDTO request = entryRequest();
+        request.setPulseBpm(pulse);
+        request.setSystolicBpMmHg(systolic);
+        request.setDiastolicBpMmHg(diastolic);
+        request.setTemperatureCelsius(temperature);
+        return service.addEntry(patientId, episodeId, recorderUserId, request).getAlerts().stream()
+            .map(com.example.hms.payload.dto.clinical.labor.LaborAlertDTO::getCode).toList();
+    }
+
+    @Test
+    void policy20261120_whoLabourCareGuideAlertValues_eachEdge() {
+        // Pulse: below 60, or 120 and more.
+        assertThat(maternalAlertCodes(59, null, null, null)).containsExactly("labor-maternal-bradycardia");
+        assertThat(maternalAlertCodes(60, null, null, null)).isEmpty();
+        assertThat(maternalAlertCodes(119, null, null, null)).isEmpty();
+        assertThat(maternalAlertCodes(120, null, null, null)).containsExactly("labor-maternal-tachycardia");
+        // Systolic: below 80, or 140 and more. Diastolic: 90 and more.
+        assertThat(maternalAlertCodes(null, 79, null, null)).containsExactly("labor-maternal-hypotension");
+        assertThat(maternalAlertCodes(null, 80, null, null)).isEmpty();
+        assertThat(maternalAlertCodes(null, 139, 89, null)).isEmpty();
+        assertThat(maternalAlertCodes(null, 140, null, null)).containsExactly("labor-hypertension");
+        assertThat(maternalAlertCodes(null, null, 90, null)).containsExactly("labor-hypertension");
+        // Temperature: below 35.0 °C, or 37.5 °C and more.
+        assertThat(maternalAlertCodes(null, null, null, 34.9)).containsExactly("labor-maternal-hypothermia");
+        assertThat(maternalAlertCodes(null, null, null, 35.0)).isEmpty();
+        assertThat(maternalAlertCodes(null, null, null, 37.4)).isEmpty();
+        assertThat(maternalAlertCodes(null, null, null, 37.5)).containsExactly("labor-maternal-fever");
+    }
+
+    @Test
+    void policy20261120_aLowPressureASlowPulseAndALowTemperatureAreFrenchCautions() {
+        PartographEntryRequestDTO request = entryRequest();
+        request.setPulseBpm(56);
+        request.setSystolicBpMmHg(78);
+        request.setTemperatureCelsius(34.6);
+
+        PartographEntryResponseDTO response = service.addEntry(patientId, episodeId, recorderUserId, request);
+
+        assertThat(response.getAlerts())
+            .allSatisfy(alert -> assertThat(alert.getSeverity()).isEqualTo(LaborAlertSeverity.CAUTION.name()))
+            .anySatisfy(alert -> {
+                assertThat(alert.getCode()).isEqualTo("labor-maternal-hypotension");
+                assertThat(alert.getMessage()).contains("Pression systolique maternelle 78 mmHg")
+                    .contains("Guide OMS").contains("Règle provisoire");
+            })
+            .anySatisfy(alert -> {
+                assertThat(alert.getCode()).isEqualTo("labor-maternal-bradycardia");
+                assertThat(alert.getMessage()).contains("Pouls maternel 56 bpm").contains("Règle provisoire");
+            })
+            .anySatisfy(alert -> {
+                assertThat(alert.getCode()).isEqualTo("labor-maternal-hypothermia");
+                assertThat(alert.getMessage()).contains("34,6").contains("Règle provisoire");
+            });
+    }
+
+    @Test
+    void policy20261120_theShockIndexIsACautionInTheYellowRangeAndUrgentInTheRed() {
+        // 110 / 100 = 1.1: yellow. 89 / 100: green. 170 / 100 = 1.7: red.
+        assertThat(maternalAlertCodes(89, 100, null, null)).isEmpty();
+        assertThat(maternalAlertCodes(110, 100, null, null)).containsExactly("labor-maternal-shock");
+
+        PartographEntryRequestDTO request = entryRequest();
+        request.setPulseBpm(170);
+        request.setSystolicBpMmHg(100);
+        PartographEntryResponseDTO response = service.addEntry(patientId, episodeId, recorderUserId, request);
+
+        assertThat(response.getAlerts())
+            .anySatisfy(alert -> {
+                assertThat(alert.getCode()).isEqualTo("labor-maternal-severe-shock");
+                assertThat(alert.getSeverity()).isEqualTo(LaborAlertSeverity.URGENT.name());
+                assertThat(alert.getMessage()).contains("Pouls 170 bpm").contains("100 mmHg").contains("zone rouge");
+            })
+            .noneSatisfy(alert -> assertThat(alert.getCode()).isEqualTo("labor-maternal-shock"));
+    }
+
+    @Test
+    void review1241_switchedOffThePartographIsAsBeforeThePolicy() {
+        com.example.hms.service.vitals.MaternalEarlyWarningRules off =
+            new com.example.hms.service.vitals.MaternalEarlyWarningRules();
+        off.setEnabled(false);
+        service.setMaternalRules(off);
+
+        // The WHO values raise nothing below the earlier thresholds, and the low values raise nothing at all.
+        assertThat(maternalAlertCodes(120, null, null, 37.6)).isEmpty();
+        assertThat(maternalAlertCodes(56, 78, null, 34.6)).isEmpty();
+        // The earlier thresholds still alert: 38.0 °C and above 120 bpm.
+        assertThat(maternalAlertCodes(121, null, null, 38.0))
+            .containsExactly("labor-maternal-fever", "labor-maternal-tachycardia");
+        // No shock-index alert, yellow or red: pulse 170 over 100 is the earlier tachycardia caution only.
+        PartographEntryRequestDTO request = entryRequest();
+        request.setPulseBpm(170);
+        request.setSystolicBpMmHg(100);
+        PartographEntryResponseDTO response = service.addEntry(patientId, episodeId, recorderUserId, request);
+        assertThat(response.getAlerts()).singleElement().satisfies(alert -> {
+            assertThat(alert.getCode()).isEqualTo("labor-maternal-tachycardia");
+            assertThat(alert.getSeverity()).isEqualTo(LaborAlertSeverity.CAUTION.name());
+        });
+        // The pressure alerts are unchanged either way.
+        assertThat(maternalAlertCodes(null, 145, 92, null)).containsExactly("labor-hypertension");
+        assertThat(maternalAlertCodes(null, 164, 104, null)).containsExactly("labor-severe-hypertension");
+    }
 }

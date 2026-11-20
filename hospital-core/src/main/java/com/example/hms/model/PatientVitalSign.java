@@ -138,6 +138,25 @@ public class PatientVitalSign extends BaseEntity {
     @Column(name = "organ_damage_symptoms", length = 200)
     private String organDamageSymptoms;
 
+    /**
+     * Policy 2026-11-20 (V348, provisional): the additional concerns of the national maternal early
+     * warning score ticked with this set, as {@link com.example.hms.enums.MaternalConcern} names,
+     * comma-separated; null for none. They raise the level of concern; they are never points.
+     */
+    @Column(name = "maternal_concerns", length = 200)
+    private String maternalConcerns;
+
+    /**
+     * Policy 2026-11-20 (V348, provisional): the maternal early-warning level this reading paged at
+     * (LOW_MEDIUM, MEDIUM, HIGH) and when; null when it paged nobody. Read only for the page cool-down:
+     * one page per woman and per level in 30 minutes. Never shown, never a score (the score is computed).
+     */
+    @Column(name = "mews_paged_tier", length = 20)
+    private String mewsPagedTier;
+
+    @Column(name = "mews_paged_at")
+    private LocalDateTime mewsPagedAt;
+
     @Builder.Default
     @Column(name = "clinically_significant", nullable = false)
     private boolean clinicallySignificant = false;

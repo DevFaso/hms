@@ -150,6 +150,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private static final String VITALS_ROUND_FULL_SET = "FULL_SET";
     private static final String VITALS_ROUND_NEWS2_HIGH = "NEWS2_HIGH";
     private static final String VITALS_ROUND_NEWS2_MEDIUM = "NEWS2_MEDIUM";
+    /** Policy 2026-11-20 (provisional): the rounds the maternal early warning shortens. */
+    private static final String VITALS_ROUND_MEWS_HIGH = "MEWS_HIGH";
+    private static final String VITALS_ROUND_MEWS_MEDIUM = "MEWS_MEDIUM";
+    private static final String VITALS_ROUND_MEWS_LOW_MEDIUM = "MEWS_LOW_MEDIUM";
     private static final String ORDER_TYPE_LAB = "LAB";
     private static final String ORDER_TYPE_IMAGING = "IMAGING";
     private static final String ORDER_TYPE_PROCEDURE = "PROCEDURE";
@@ -309,7 +313,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         // is not a vitals round and does not restart its clock). QA D1314: read for the ward at once.
         java.util.Map<UUID, PatientVitalSign> latest = marWardReader.latestObservationSets(hospitalId,
             inBed.stream().map(PatientContext::patientId).toList());
-        Set<UUID> obstetric = obstetricPatientIds(hospitalId, inBed.stream().map(PatientContext::patientId).toList(), now);
+        ObstetricWard obstetric = obstetricPatientIds(hospitalId, inBed.stream().map(PatientContext::patientId).toList(), now);
         List<NurseVitalTaskResponseDTO> tasks = new ArrayList<>();
         for (PatientContext ctx : inBed) {
             NurseVitalTaskResponseDTO task = vitalTaskFor(ctx, hospitalId, now, effectiveWindow,
@@ -325,13 +329,39 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      * Review of #1237 (High), batched for the ward reads (D1314): the patients of this read in labour here or
      * delivered here within the postpartum window, in one query. NEWS2 is not validated for them.
      */
-    private Set<UUID> obstetricPatientIds(UUID hospitalId, List<UUID> patientIds, LocalDateTime now) {
+    private ObstetricWard obstetricPatientIds(UUID hospitalId, List<UUID> patientIds, LocalDateTime now) {
         if (hospitalId == null || patientIds.isEmpty() || laborEpisodeRepository == null) {
-            return Set.of();
+            return ObstetricWard.NONE;
         }
-        return new java.util.HashSet<>(laborEpisodeRepository.obstetricPatientIdsAt(patientIds, hospitalId,
+        Set<UUID> ids = new java.util.HashSet<>(laborEpisodeRepository.obstetricPatientIdsAt(patientIds, hospitalId,
             com.example.hms.enums.LaborStatus.ACTIVE,
             now.toLocalDate().minusDays(com.example.hms.service.vitals.SevereHypertension.POSTPARTUM_DAYS).atStartOfDay()));
+        // Policy 2026-11-20 (provisional): with the maternal early warning on, the women a maternal history
+        // dates as pregnant now are under it too, and a postpartum woman's birth sets her pulse table. Two
+        // more queries for the whole ward (MaternalWardScope), never one per patient.
+        java.util.Map<UUID, LocalDateTime> births = maternalEarlyWarning != null && maternalEarlyWarning.enabled()
+            && maternalWardScope != null ? maternalWardScope.extend(ids, hospitalId, patientIds, now) : java.util.Map.of();
+        return new ObstetricWard(ids, births == null ? java.util.Map.of() : births);
+    }
+
+    /** The patients of a ward read under the maternal rules, and the birth of each one still postpartum. */
+    private record ObstetricWard(Set<UUID> ids, java.util.Map<UUID, LocalDateTime> births) {
+        static final ObstetricWard NONE = new ObstetricWard(Set.of(), java.util.Map.of());
+
+        boolean contains(UUID patientId) {
+            return ids.contains(patientId);
+        }
+    }
+
+    /** Policy 2026-11-20: the maternal early warning and its ward batch (setter-injected; absent, as before). */
+    private com.example.hms.service.vitals.MaternalEarlyWarningService maternalEarlyWarning;
+    private com.example.hms.service.vitals.MaternalWardScope maternalWardScope;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setMaternalEarlyWarning(com.example.hms.service.vitals.MaternalEarlyWarningService maternalEarlyWarning,
+                                 com.example.hms.service.vitals.MaternalWardScope maternalWardScope) {
+        this.maternalEarlyWarning = maternalEarlyWarning;
+        this.maternalWardScope = maternalWardScope;
     }
 
     /** Review of #1237: the ward reads the labour episodes for the NEWS2 applicability (setter-injected). */
@@ -345,46 +375,83 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     /** The vitals round of one admitted patient, or {@code null} when none falls in the window. */
     private NurseVitalTaskResponseDTO vitalTaskFor(PatientContext ctx, UUID hospitalId, LocalDateTime now,
                                                    Duration effectiveWindow, Optional<PatientVitalSign> last,
-                                                   Set<UUID> obstetric) {
-        // Compute when the next vitals check is due
-        LocalDateTime dueTime;
-        boolean overdue;
-        NewsScoreCalculator.NewsScoreResult news = null;
-        boolean scoreShown = true;
+                                                   ObstetricWard obstetric) {
         if (last.isEmpty() || last.get().getRecordedAt() == null) {
             // No vitals ever recorded — overdue now
-            dueTime = now.minusMinutes(30);
-            overdue = true;
-        } else {
-            // QA D207: the NEWS2 band of the last set shortens the interval.
-            // QA D518: the adult score does not set a child's interval.
-            news = NewsScoreCalculator.applies(last.get()) ? NewsScoreCalculator.score(last.get()) : null;
-            // observationInterval never returns more than the routine interval: a score only shortens a round.
-            dueTime = last.get().getRecordedAt().plus(
-                com.example.hms.service.vitals.News2EscalationService.observationInterval(news, ROUTINE_VITALS_INTERVAL));
-            overdue = dueTime.isBefore(now);
-            // Review of #1237 (High): NEWS2 is not validated in labour, after a birth or for a newborn. It may
-            // still shorten the round (a safety net) but its number is never shown as reassurance.
-            com.example.hms.model.Patient patient = last.get().getPatient();
-            scoreShown = !obstetric.contains(ctx.patientId()) && (patient == null
-                || !com.example.hms.service.vitals.VitalSignJudgement.isNewborn(patient.getDateOfBirth(),
-                    last.get().getRecordedAt()));
+            return vitalTask(ctx, hospitalId, now.minusMinutes(30), new RoundWindow(now, effectiveWindow), null, true,
+                null);
         }
+        if (underMaternalWarning(ctx.patientId(), obstetric)) {
+            return maternalVitalTask(ctx, hospitalId, now, effectiveWindow, last.get(), obstetric);
+        }
+        // QA D207: the NEWS2 band of the last set shortens the interval.
+        // QA D518: the adult score does not set a child's interval.
+        NewsScoreCalculator.NewsScoreResult news =
+            NewsScoreCalculator.applies(last.get()) ? NewsScoreCalculator.score(last.get()) : null;
+        // observationInterval never returns more than the routine interval: a score only shortens a round.
+        LocalDateTime dueTime = last.get().getRecordedAt().plus(
+            com.example.hms.service.vitals.News2EscalationService.observationInterval(news, ROUTINE_VITALS_INTERVAL));
+        // Review of #1237 (High): NEWS2 is not validated in labour, after a birth or for a newborn. It may
+        // still shorten the round (a safety net) but its number is never shown as reassurance.
+        com.example.hms.model.Patient patient = last.get().getPatient();
+        boolean scoreShown = !obstetric.contains(ctx.patientId()) && (patient == null
+            || !com.example.hms.service.vitals.VitalSignJudgement.isNewborn(patient.getDateOfBirth(),
+                last.get().getRecordedAt()));
+        return vitalTask(ctx, hospitalId, dueTime, new RoundWindow(now, effectiveWindow), news, scoreShown, null);
+    }
 
-        // Only include if within the look-ahead or already overdue. The look-ahead
-        // was also the routine interval, so nearly every admitted patient was due.
-        if (overdue || dueTime.isBefore(now.plus(effectiveWindow))) {
-            return NurseVitalTaskResponseDTO.builder()
-                .id(UUID.nameUUIDFromBytes((ctx.patientId() + ":VITAL:" + hospitalId).getBytes()))
-                .patientId(ctx.patientId())
-                .patientName(ctx.displayName())
-                .type(vitalsRoundType(news, overdue))
-                .dueTime(dueTime)
-                .overdue(overdue)
-                .news2Score(news != null && scoreShown ? news.total() : null)
-                .build();
+    /** When a round is read, and how far ahead the list looks. */
+    private record RoundWindow(LocalDateTime now, Duration lookAhead) {
+    }
+
+    /** The maternal early warning sets this patient's round: she is under the obstetric scope, and it is on. */
+    private boolean underMaternalWarning(UUID patientId, ObstetricWard obstetric) {
+        return obstetric.contains(patientId) && maternalEarlyWarning != null && maternalEarlyWarning.enabled();
+    }
+
+    /**
+     * Policy 2026-11-20 (provisional): a pregnant or postpartum woman's round follows the level of concern
+     * of her maternal early warning (30 min with a concern or at low-medium, 15 min above); NEWS2 is not
+     * validated for her and neither sets her round nor is shown.
+     */
+    private NurseVitalTaskResponseDTO maternalVitalTask(PatientContext ctx, UUID hospitalId, LocalDateTime now,
+                                                        Duration effectiveWindow, PatientVitalSign last,
+                                                        ObstetricWard obstetric) {
+        com.example.hms.service.vitals.MaternalEarlyWarningRules rules = maternalEarlyWarning.rules();
+        com.example.hms.service.vitals.MaternalEarlyWarning.Score mews =
+            com.example.hms.service.vitals.MaternalEarlyWarning.score(rules, last,
+                com.example.hms.service.vitals.MaternalEarlyWarning.postBirthPulse(rules,
+                    obstetric.births().get(ctx.patientId()), last.getRecordedAt()));
+        LocalDateTime dueTime = last.getRecordedAt().plus(com.example.hms.service.vitals.MaternalEarlyWarning
+            .observationInterval(rules, mews, ROUTINE_VITALS_INTERVAL));
+        return vitalTask(ctx, hospitalId, dueTime, new RoundWindow(now, effectiveWindow), null, false, mews);
+    }
+
+    /**
+     * The round as the list reads it, or {@code null} when it is neither overdue nor inside the look-ahead
+     * (the look-ahead was also the routine interval, so nearly every admitted patient was due). With a
+     * maternal score the round is named after it; a set with nothing to score (a weight alone) carries none.
+     */
+    private static NurseVitalTaskResponseDTO vitalTask(PatientContext ctx, UUID hospitalId, LocalDateTime dueTime,
+                                                       RoundWindow window,
+                                                       NewsScoreCalculator.NewsScoreResult news, boolean scoreShown,
+                                                       com.example.hms.service.vitals.MaternalEarlyWarning.Score mews) {
+        boolean overdue = dueTime.isBefore(window.now());
+        if (!overdue && !dueTime.isBefore(window.now().plus(window.lookAhead()))) {
+            return null;
         }
-        return null;
+        boolean maternalScored = mews != null && !mews.empty();
+        return NurseVitalTaskResponseDTO.builder()
+            .id(UUID.nameUUIDFromBytes((ctx.patientId() + ":VITAL:" + hospitalId).getBytes()))
+            .patientId(ctx.patientId())
+            .patientName(ctx.displayName())
+            .type(mews != null ? maternalRoundType(mews, overdue) : vitalsRoundType(news, overdue))
+            .dueTime(dueTime)
+            .overdue(overdue)
+            .news2Score(news != null && scoreShown ? news.total() : null)
+            .mewsScore(maternalScored ? mews.total() : null)
+            .mewsTier(maternalScored ? mews.responseTier().name() : null)
+            .build();
     }
 
     /* ═══════════════════════════════════════════════════════════════════
@@ -1309,6 +1376,16 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .collect(java.util.stream.Collectors.toSet());
     }
 
+    /** Policy 2026-11-20: the round of a pregnant or postpartum woman, named after her maternal level of concern. */
+    static String maternalRoundType(com.example.hms.service.vitals.MaternalEarlyWarning.Score mews, boolean overdue) {
+        return switch (mews.responseTier()) {
+            case HIGH -> VITALS_ROUND_MEWS_HIGH;
+            case MEDIUM -> VITALS_ROUND_MEWS_MEDIUM;
+            case LOW_MEDIUM -> VITALS_ROUND_MEWS_LOW_MEDIUM;
+            case LOW -> overdue ? VITALS_ROUND_FULL_SET : VITALS_ROUND_ROUTINE;
+        };
+    }
+
     /** QA D207: a MEDIUM/HIGH NEWS2 round is named as such, ahead of the overdue/routine split. */
     static String vitalsRoundType(NewsScoreCalculator.NewsScoreResult news, boolean overdue) {
         if (news != null && news.riskBand() == NewsScoreCalculator.RiskBand.HIGH) return VITALS_ROUND_NEWS2_HIGH;
@@ -2137,7 +2214,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         java.util.Map<UUID, PatientVitalSign> latest = marWardReader.latestObservationSets(hospitalId, patientIds);
         // Each card reads its order against its own stay, so no map of stays here.
         WardOrders ward = readWardOrders(patientIds, hospitalId, java.util.Map.of());
-        Set<UUID> obstetric = obstetricPatientIds(hospitalId, new ArrayList<>(patientIds), now);
+        ObstetricWard obstetric = obstetricPatientIds(hospitalId, new ArrayList<>(patientIds), now);
 
         List<NurseWorkboardPatientDTO> result = new ArrayList<>();
         for (Admission a : admissions) {
@@ -2151,7 +2228,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     private NurseWorkboardPatientDTO toWorkboardCard(Admission a, UUID hospitalId, LocalDateTime now,
                                                      java.util.Map<UUID, PatientVitalSign> latest, WardOrders ward,
-                                                     Set<UUID> obstetric) {
+                                                     ObstetricWard obstetric) {
         UUID admissionId = a.getId();
         Patient patient = JpaProxyUtils.safeInit(a.getPatient(), ADMISSION_OWNER, admissionId, ASSOCIATION_PATIENT);
         if (patient == null) return null;
@@ -2318,6 +2395,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .painScore(request.getPainScale())
             // r54: the organ-damage signs the shared severe-blood-pressure rule reads.
             .organDamageSymptoms(com.example.hms.enums.OrganDamageSymptom.join(request.getOrganDamageSymptoms()))
+            // Policy 2026-11-20: the additional concerns the maternal early warning reads.
+            .maternalConcerns(com.example.hms.enums.MaternalConcern.join(request.getMaternalConcerns()))
             .build();
 
         // QA D1564: the shared judgement - a newborn's set against the newborn bands, every
@@ -2338,7 +2417,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         vitalSignRepository.save(vital);
         // QA D207: MEDIUM/HIGH NEWS2 alerts the nurse and the responsible physician;
         // QA D1564: so does an urgent newborn finding.
-        vitalSignJudgement.escalate(vital, judgement, patientId, hospitalId, usernameOf(nurseUserId), null);
+        com.example.hms.service.vitals.MaternalEarlyWarningService.PageStatus maternalPage =
+            vitalSignJudgement.escalate(vital, judgement, patientId, hospitalId, usernameOf(nurseUserId), null);
 
         // Advance encounter status after vitals are captured.
         // ARRIVED → WAITING_FOR_PHYSICIAN  (vitals captured = triage complete)
@@ -2370,6 +2450,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .newbornAlerts(vitalSignJudgement.alerts(judgement))
             .postpartumAlerts(vitalSignJudgement.postpartumAlerts(judgement))
             .hypertensionAlerts(vitalSignJudgement.hypertensionAlerts(judgement))
+            .maternalAlerts(vitalSignJudgement.maternalAlerts(judgement, maternalPage))
             .build();
     }
 

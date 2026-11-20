@@ -121,13 +121,15 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         PatientVitalSign saved = vitalSignRepository.save(entity);
         // QA D207: the same NEWS2 escalation as the nurse station's capture (and D1564's newborn notices).
         String recorderUsername = staff != null && staff.getUser() != null ? staff.getUser().getUsername() : null;
-        vitalSignJudgement.escalate(saved, judgement, patientId, hospital != null ? hospital.getId() : null,
-            recorderUsername, null);
+        com.example.hms.service.vitals.MaternalEarlyWarningService.PageStatus maternalPage =
+            vitalSignJudgement.escalate(saved, judgement, patientId, hospital != null ? hospital.getId() : null,
+                recorderUsername, null);
         PatientVitalSignResponseDTO response = responder(hospital != null ? hospital.getId() : null).apply(saved);
         if (response != null) {
             response.setNewbornAlerts(vitalSignJudgement.alerts(judgement));
             response.setPostpartumAlerts(vitalSignJudgement.postpartumAlerts(judgement));
             response.setHypertensionAlerts(vitalSignJudgement.hypertensionAlerts(judgement));
+            response.setMaternalAlerts(vitalSignJudgement.maternalAlerts(judgement, maternalPage));
         }
         return response;
     }
@@ -155,7 +157,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
                 vitals.stream().map(v -> CrossHospitalReachRecorder.hospitalIdOf(v.getHospital())).toList(), hospitalId),
             "Cross-hospital vital signs read on the treatment relationship");
         return vitals.stream()
-            .map(responder(hospitalId))
+            .map(responder(hospitalId, true))
             .toList();
     }
 
@@ -237,7 +239,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         Patient patient = requireScopedChart(patientId, hospitalId);
         PageRequest pageable = PageRequest.of(Math.max(page, 0), Math.max(size, 1));
         return vitalSignRepository.findWithinRange(patient.getId(), hospitalId, from, to, pageable).stream()
-            .map(responder(hospitalId))
+            .map(responder(hospitalId, true))
             .toList();
     }
 
@@ -249,33 +251,83 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         this.news2Applicability = news2Applicability;
     }
 
+    /** Policy 2026-11-20: the maternal early warning (setter-injected; absent, the chart says « NEWS2 non validé »). */
+    private com.example.hms.service.vitals.MaternalEarlyWarningService maternalEarlyWarning;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setMaternalEarlyWarning(com.example.hms.service.vitals.MaternalEarlyWarningService maternalEarlyWarning) {
+        this.maternalEarlyWarning = maternalEarlyWarning;
+    }
+
     /**
      * Review of #1237 (High): the response of one reading, with no reassuring NEWS2 score for a pregnant or
      * postpartum woman or a newborn (News2Applicability). The status is read once per reading day of one read.
+     * Policy 2026-11-20 (provisional): for the pregnant or postpartum woman the reading carries the maternal
+     * early warning instead, scored from the row itself (no further query).
      */
     private java.util.function.Function<PatientVitalSign, PatientVitalSignResponseDTO> responder(UUID scopeHospitalId) {
-        java.util.Map<java.time.LocalDate, com.example.hms.service.vitals.News2Applicability.Status> byDay =
+        return responder(scopeHospitalId, false);
+    }
+
+    /**
+     * {@link #responder(UUID)} for a staff read of the chart. Review of #1241: a maternal score that rests on
+     * another hospital's obstetric record discloses that record to the reader, so it is accounted in the
+     * reach ledger (RECORD_SHARE), once per read and per source hospital, never once per row. Not on the
+     * patient's own portal (she reads her own record) nor on the response of a write (the write accounted it).
+     */
+    private java.util.function.Function<PatientVitalSign, PatientVitalSignResponseDTO> responder(
+            UUID scopeHospitalId, boolean accountForeignRecord) {
+        java.util.Map<java.time.LocalDate, com.example.hms.service.vitals.News2Applicability.Applicability> byDay =
             new java.util.HashMap<>();
+        java.util.Set<UUID> accounted = new java.util.HashSet<>();
         return vital -> {
             PatientVitalSignResponseDTO dto = vitalSignMapper.toResponse(vital);
-            if (dto == null || news2Applicability == null || vital.getPatient() == null) {
+            if (dto == null) {
+                return null;
+            }
+            readBackMaternalConcerns(vital, dto);
+            if (news2Applicability == null || vital.getPatient() == null) {
                 return dto;
             }
             LocalDateTime at = vital.getRecordedAt() != null ? vital.getRecordedAt()
                 : LocalDateTime.now(java.time.ZoneId.systemDefault());
             UUID readAt = scopeHospitalId != null ? scopeHospitalId
                 : CrossHospitalReachRecorder.hospitalIdOf(vital.getHospital());
-            com.example.hms.service.vitals.News2Applicability.Status status = byDay.computeIfAbsent(at.toLocalDate(),
-                day -> news2Applicability.statusOf(vital.getPatient(), readAt, at));
-            if (status.notValidated()) {
-                dto.setNewsScore(null);
-                dto.setNewsRiskBand(null);
-                dto.setNewsComplete(null);
-                dto.setNewsMissing(null);
-                dto.setNewsNotValidated(status.name());
+            com.example.hms.service.vitals.News2Applicability.Applicability known = byDay.computeIfAbsent(
+                at.toLocalDate(), day -> news2Applicability.applicabilityOf(vital.getPatient(), readAt, at));
+            if (known != null && known.status().notValidated() && withoutNews2(vital, dto, known)
+                    && accountForeignRecord && known.sourceHospitalId() != null
+                    && accounted.add(known.sourceHospitalId())) {
+                news2Applicability.accountForeignRecord(vital.getPatient().getId(), readAt, known);
             }
             return dto;
         };
+    }
+
+    /**
+     * Policy 2026-11-20: the ticked maternal concerns are read back on the staff chart and the patient's own
+     * portal only. A family proxy's read does not pass here (policy: a proxy is not shown what reveals a
+     * pregnancy), so the mapper itself never carries them.
+     */
+    private static void readBackMaternalConcerns(PatientVitalSign vital, PatientVitalSignResponseDTO dto) {
+        java.util.Set<com.example.hms.enums.MaternalConcern> ticked =
+            com.example.hms.enums.MaternalConcern.parse(vital.getMaternalConcerns());
+        dto.setMaternalConcerns(ticked.isEmpty() ? null : ticked.stream().map(Enum::name).toList());
+    }
+
+    /**
+     * No NEWS2 number for a patient it is not validated for; the pregnant or postpartum woman's reading
+     * carries her maternal early warning instead (policy 2026-11-20, provisional). True when it does.
+     */
+    private boolean withoutNews2(PatientVitalSign vital, PatientVitalSignResponseDTO dto,
+                                 com.example.hms.service.vitals.News2Applicability.Applicability known) {
+        dto.setNewsScore(null);
+        dto.setNewsRiskBand(null);
+        dto.setNewsComplete(null);
+        dto.setNewsMissing(null);
+        dto.setNewsNotValidated(known.status().name());
+        return maternalEarlyWarning != null
+            && maternalEarlyWarning.describe(maternalEarlyWarning.scoreFor(known, vital), dto);
     }
 
     @Override

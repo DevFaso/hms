@@ -1,4 +1,5 @@
 import { OrganDamageSymptom } from '../shared/organ-damage-symptoms';
+import { MaternalConcern } from '../shared/maternal-concerns';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
@@ -14,6 +15,12 @@ export interface NurseVitalTask {
   type: string;
   dueTime: string;
   overdue: boolean;
+  /**
+   * Policy 2026-11-20 (provisional): for a pregnant or postpartum woman, the maternal early-warning
+   * total of her last set and its level; the round's type then reads MEWS_…, never NEWS2_….
+   */
+  mewsScore?: number | null;
+  mewsTier?: 'LOW' | 'LOW_MEDIUM' | 'MEDIUM' | 'HIGH' | null;
 }
 
 /** QA D922: a colleague who may witness a controlled dose. */
@@ -274,6 +281,8 @@ export interface NurseVitalCaptureResponse {
   postpartumAlerts?: NewbornVitalAlert[];
   /** r54: the adult severe-blood-pressure warning; empty when none. */
   hypertensionAlerts?: NewbornVitalAlert[];
+  /** Policy 2026-11-20 (provisional): the maternal early warning of a pregnant or postpartum woman's set; empty when none. */
+  maternalAlerts?: NewbornVitalAlert[];
 }
 
 export interface NurseVitalCaptureRequest {
@@ -296,6 +305,8 @@ export interface NurseVitalCaptureRequest {
   notes?: string;
   /** r54: the organ-damage signs ticked with the blood pressure (optional). */
   organDamageSymptoms?: OrganDamageSymptom[];
+  /** Policy 2026-11-20 (provisional): the maternal score's additional concerns ticked with the set (optional). */
+  maternalConcerns?: MaternalConcern[];
 }
 
 // ── MVP 13 interfaces ─────────────────────────────────────────────

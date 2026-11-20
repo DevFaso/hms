@@ -1356,6 +1356,49 @@ describe('NurseStationComponent — two-tier polling', () => {
     );
   });
 
+  it('policy 2026-11-20: sends the ticked maternal concerns and shows the maternal warning from the server', () => {
+    nurseServiceSpy.captureVitals.and.returnValue(
+      of({
+        clinicallySignificant: true,
+        maternalAlerts: [
+          {
+            code: 'mews-low-medium',
+            severity: 'WARNING',
+            type: 'MATERNAL_EARLY_WARNING',
+            message: 'Score 2: review within 30 minutes.',
+          },
+        ],
+      }),
+    );
+    component.recordVitals('p1', 'Awa');
+    component.updateVitalsMaternalConcerns(['VAGINAL_BLEEDING']);
+    expect(component.vitalsHasReading())
+      .withContext('a ticked concern alone is not a reading')
+      .toBeFalse();
+    component.updateVitalsField('heartRateBpm', '125');
+    component.submitVitals();
+    expect(nurseServiceSpy.captureVitals.calls.mostRecent().args[1].maternalConcerns).toEqual([
+      'VAGINAL_BLEEDING',
+    ]);
+    expect(toastSpy.push).toHaveBeenCalledWith(
+      'warning',
+      jasmine.stringMatching(/MATERNAL_EWS_PAGED.*Score 2: review within 30 minutes\./),
+      jasmine.any(Number),
+    );
+  });
+
+  it('policy 2026-11-20: no ticked concern is sent as nothing', () => {
+    nurseServiceSpy.captureVitals.and.returnValue(of({}));
+    component.recordVitals('p1', 'Awa');
+    component.updateVitalsMaternalConcerns(['STAFF_CONCERNED']);
+    component.updateVitalsMaternalConcerns([]);
+    component.updateVitalsField('heartRateBpm', '80');
+    component.submitVitals();
+    expect(
+      nurseServiceSpy.captureVitals.calls.mostRecent().args[1].maternalConcerns,
+    ).toBeUndefined();
+  });
+
   it('r54: no ticked sign is sent as nothing', () => {
     nurseServiceSpy.captureVitals.and.returnValue(of({}));
     component.recordVitals('p1', 'Awa');

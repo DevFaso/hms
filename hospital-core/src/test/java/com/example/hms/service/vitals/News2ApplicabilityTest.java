@@ -11,6 +11,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @DisplayName("Review of #1237: NEWS2 is shown only where it is validated")
@@ -43,15 +46,35 @@ class News2ApplicabilityTest {
     @Test
     void aPregnantOrPostpartumWomanIsNotValidated() {
         Patient mother = born(now.toLocalDate().minusYears(28));
-        when(severeHypertension.scopeOf(any(), any(), any())).thenReturn(SevereHypertension.Scope.POSTPARTUM);
+        when(severeHypertension.obstetricContextOf(any(), any(), any()))
+            .thenReturn(new SevereHypertension.ObstetricContext(SevereHypertension.Scope.POSTPARTUM, null));
         assertThat(applicability.statusOf(mother, UUID.randomUUID(), now)).isEqualTo(News2Applicability.Status.OBSTETRIC);
-        when(severeHypertension.scopeOf(any(), any(), any())).thenReturn(SevereHypertension.Scope.PREGNANT);
+        when(severeHypertension.obstetricContextOf(any(), any(), any()))
+            .thenReturn(new SevereHypertension.ObstetricContext(SevereHypertension.Scope.PREGNANT, null));
         assertThat(applicability.statusOf(mother, UUID.randomUUID(), now).notValidated()).isTrue();
     }
 
     @Test
+    void policy20261120_aPregnantGirlUnderSixteenIsAnObstetricPatient_withTheBirthThatDatesHerPulseTable() {
+        Patient girl = born(now.toLocalDate().minusYears(15));
+        LocalDateTime birth = now.minusHours(50);
+        when(severeHypertension.obstetricContextOf(any(), any(), any()))
+            .thenReturn(new SevereHypertension.ObstetricContext(SevereHypertension.Scope.POSTPARTUM, birth));
+
+        News2Applicability.Applicability known = applicability.applicabilityOf(girl, UUID.randomUUID(), now);
+
+        assertThat(known.status()).isEqualTo(News2Applicability.Status.OBSTETRIC);
+        assertThat(known.birthAt()).isEqualTo(birth);
+        // Outside pregnancy and the postpartum window she is a child again: no adult score, as before.
+        when(severeHypertension.obstetricContextOf(any(), any(), any()))
+            .thenReturn(new SevereHypertension.ObstetricContext(SevereHypertension.Scope.NONE, null));
+        assertThat(applicability.statusOf(girl, UUID.randomUUID(), now)).isEqualTo(News2Applicability.Status.CHILD);
+    }
+
+    @Test
     void anAdultOutsidePregnancyKeepsTheScore() {
-        when(severeHypertension.scopeOf(any(), any(), any())).thenReturn(SevereHypertension.Scope.ADULT);
+        when(severeHypertension.obstetricContextOf(any(), any(), any()))
+            .thenReturn(new SevereHypertension.ObstetricContext(SevereHypertension.Scope.ADULT, null));
         assertThat(applicability.statusOf(born(now.toLocalDate().minusYears(40)), UUID.randomUUID(), now))
             .isEqualTo(News2Applicability.Status.APPLIES);
     }
@@ -73,5 +96,45 @@ class News2ApplicabilityTest {
             .isEqualTo(News2Applicability.Status.NEWBORN);
         assertThat(News2Applicability.Status.APPLIES.notValidated()).isFalse();
         assertThat(News2Applicability.Status.NEWBORN.notValidated()).isTrue();
+    }
+
+    @Test
+    void policy20261120_aForeignObstetricRecordBehindAWarningIsAccountedByTheSharedRule() {
+        UUID here = UUID.randomUUID();
+        UUID elsewhere = UUID.randomUUID();
+        Patient mother = born(now.toLocalDate().minusYears(28));
+        when(severeHypertension.obstetricContextOf(any(), any(), any())).thenReturn(
+            new SevereHypertension.ObstetricContext(SevereHypertension.Scope.PREGNANT, null, elsewhere));
+
+        News2Applicability.Applicability known = applicability.applicabilityOf(mother, here, now);
+
+        assertThat(known.sourceHospitalId()).isEqualTo(elsewhere);
+        applicability.accountForeignRecord(mother.getId(), here, known);
+        verify(severeHypertension).accountForeignRecord(mother.getId(), here, elsewhere);
+        // No record behind the status, or not an obstetric status: nothing to account.
+        applicability.accountForeignRecord(mother.getId(), here,
+            new News2Applicability.Applicability(News2Applicability.Status.OBSTETRIC, null));
+        applicability.accountForeignRecord(mother.getId(), here,
+            new News2Applicability.Applicability(News2Applicability.Status.APPLIES, null, elsewhere));
+        applicability.accountForeignRecord(mother.getId(), here, null);
+        verify(severeHypertension, times(1)).accountForeignRecord(any(), any(), any());
+    }
+
+    @Test
+    void review1241_switchedOffAGirlUnderSixteenIsAChildAndHerObstetricRecordIsNotRead() {
+        MaternalEarlyWarningRules off = new MaternalEarlyWarningRules();
+        off.setEnabled(false);
+        applicability.setMaternalRules(off);
+        Patient girl = born(now.toLocalDate().minusYears(15));
+        when(severeHypertension.obstetricContextOf(any(), any(), any()))
+            .thenReturn(new SevereHypertension.ObstetricContext(SevereHypertension.Scope.PREGNANT, null));
+
+        // As before the policy: the age is asked first, with no lookup of her obstetric record.
+        assertThat(applicability.statusOf(girl, UUID.randomUUID(), now)).isEqualTo(News2Applicability.Status.CHILD);
+        verify(severeHypertension, never()).obstetricContextOf(any(), any(), any());
+
+        // A pregnant adult is still not shown a NEWS2 score, as since #1237.
+        Patient woman = born(now.toLocalDate().minusYears(28));
+        assertThat(applicability.statusOf(woman, UUID.randomUUID(), now)).isEqualTo(News2Applicability.Status.OBSTETRIC);
     }
 }

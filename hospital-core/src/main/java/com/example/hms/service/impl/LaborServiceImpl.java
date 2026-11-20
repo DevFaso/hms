@@ -84,16 +84,14 @@ public class LaborServiceImpl implements LaborService {
 
     static final int FHR_BRADYCARDIA_BPM = com.example.hms.service.maternity.LaborAlertArgs.FHR_BRADYCARDIA_BPM;
     private static final String FETAL_HEART_RATE_FIELD = "fetalHeartRateBpm";
+    /** What a blood-pressure alert was triggered by (a stored value: the reader maps it to the two pressures). */
+    private static final String BLOOD_PRESSURE_FIELD = "bloodPressure";
     static final int FHR_TACHYCARDIA_BPM = com.example.hms.service.maternity.LaborAlertArgs.FHR_TACHYCARDIA_BPM;
     static final int ACTIVE_PHASE_DILATION_CM = com.example.hms.service.maternity.LaborAlertArgs.ACTIVE_PHASE_DILATION_CM;
     static final double ACTION_LINE_LAG_HOURS = 4.0;
-    static final double MATERNAL_FEVER_C = 38.0;
-    static final int MATERNAL_TACHYCARDIA_BPM = 120;
     /** The obstetric severe range is the shared rule's (r54): one place holds it. */
     static final int SEVERE_HTN_SYSTOLIC = com.example.hms.service.vitals.SevereHypertension.OBSTETRIC_SYSTOLIC;
     static final int SEVERE_HTN_DIASTOLIC = com.example.hms.service.vitals.SevereHypertension.OBSTETRIC_DIASTOLIC;
-    static final int HTN_SYSTOLIC = 140;
-    static final int HTN_DIASTOLIC = 90;
     static final int PPH_BLOOD_LOSS_ML = 500;
     static final int APGAR_LOW = 7;
     static final int APGAR_CRITICAL = 4;
@@ -1460,33 +1458,86 @@ public class LaborServiceImpl implements LaborService {
         }
     }
 
+    /** Policy 2026-11-20: the one maternal rule set (setter-injected; absent, its published defaults). */
+    private com.example.hms.service.vitals.MaternalEarlyWarningRules maternalRules =
+        new com.example.hms.service.vitals.MaternalEarlyWarningRules();
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setMaternalRules(com.example.hms.service.vitals.MaternalEarlyWarningRules maternalRules) {
+        this.maternalRules = maternalRules;
+    }
+
+    /**
+     * Policy 2026-11-20 (PROVISIONAL, pending a named obstetric clinician's sign-off): the woman's alerts
+     * during labour are the WHO Labour Care Guide alert values (pulse, systolic and diastolic pressure,
+     * temperature), each a CAUTION that asks the midwife to assess, plus the CRADLE add-on: a severe
+     * pressure (the shared rule) and a severe shock index are URGENT and page the team, a shock index in
+     * the yellow range is a CAUTION. The numbers live in MaternalEarlyWarningRules, never here. Before
+     * this a labouring woman's low pressure, slow pulse or low temperature raised nothing.
+     */
     private void evaluateMaternalCondition(LaborPartographEntry entry) {
-        if (entry.getTemperatureCelsius() != null && entry.getTemperatureCelsius() >= MATERNAL_FEVER_C) {
+        Integer pulse = entry.getPulseBpm();
+        Integer sys = entry.getSystolicBpMmHg();
+        Integer dia = entry.getDiastolicBpMmHg();
+        List<com.example.hms.service.vitals.MaternalEarlyWarning.LabourAlert> who =
+            com.example.hms.service.vitals.MaternalEarlyWarning.labourAlerts(maternalRules, pulse, sys, dia,
+                entry.getTemperatureCelsius());
+        if (who.contains(com.example.hms.service.vitals.MaternalEarlyWarning.LabourAlert.TEMPERATURE_HIGH)) {
             entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.CAUTION,
                 "labor-maternal-fever",
                 alertText("labor-maternal-fever", entry.getTemperatureCelsius()),
                 "temperatureCelsius");
         }
-        if (entry.getPulseBpm() != null && entry.getPulseBpm() > MATERNAL_TACHYCARDIA_BPM) {
+        if (who.contains(com.example.hms.service.vitals.MaternalEarlyWarning.LabourAlert.TEMPERATURE_LOW)) {
+            entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.CAUTION,
+                "labor-maternal-hypothermia",
+                alertText("labor-maternal-hypothermia", entry.getTemperatureCelsius()),
+                "temperatureCelsius");
+        }
+        if (who.contains(com.example.hms.service.vitals.MaternalEarlyWarning.LabourAlert.PULSE_HIGH)) {
             entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.CAUTION,
                 "labor-maternal-tachycardia",
-                alertText("labor-maternal-tachycardia", entry.getPulseBpm()),
+                alertText("labor-maternal-tachycardia", pulse),
                 "pulseBpm");
         }
-        Integer sys = entry.getSystolicBpMmHg();
-        Integer dia = entry.getDiastolicBpMmHg();
+        if (who.contains(com.example.hms.service.vitals.MaternalEarlyWarning.LabourAlert.PULSE_LOW)) {
+            entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.CAUTION,
+                "labor-maternal-bradycardia",
+                alertText("labor-maternal-bradycardia", pulse),
+                "pulseBpm");
+        }
+        if (who.contains(com.example.hms.service.vitals.MaternalEarlyWarning.LabourAlert.SYSTOLIC_LOW)) {
+            entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.CAUTION,
+                "labor-maternal-hypotension",
+                alertText("labor-maternal-hypotension", sys),
+                BLOOD_PRESSURE_FIELD);
+        }
+        com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert shock =
+            com.example.hms.service.vitals.MaternalEarlyWarning.shockAlert(maternalRules, pulse, sys);
+        if (shock == com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert.SEVERE_SHOCK) {
+            entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.URGENT,
+                "labor-maternal-severe-shock",
+                alertText("labor-maternal-severe-shock", pulse, sys),
+                BLOOD_PRESSURE_FIELD, new Object[]{pulse, sys});
+        } else if (shock == com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert.SHOCK) {
+            entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.CAUTION,
+                "labor-maternal-shock",
+                alertText("labor-maternal-shock", pulse, sys),
+                BLOOD_PRESSURE_FIELD, new Object[]{pulse, sys});
+        }
         boolean severe = com.example.hms.service.vitals.SevereHypertension.isObstetricSevere(sys, dia);
-        boolean mild = (sys != null && sys >= HTN_SYSTOLIC) || (dia != null && dia >= HTN_DIASTOLIC);
+        boolean mild = who.contains(com.example.hms.service.vitals.MaternalEarlyWarning.LabourAlert.SYSTOLIC_HIGH)
+            || who.contains(com.example.hms.service.vitals.MaternalEarlyWarning.LabourAlert.DIASTOLIC_HIGH);
         if (severe) {
             entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.URGENT,
                 "labor-severe-hypertension",
                 alertText("labor-severe-hypertension", com.example.hms.service.maternity.LaborAlertArgs.bloodPressure(sys, dia)),
-                "bloodPressure", com.example.hms.service.maternity.LaborAlertArgs.bloodPressure(sys, dia));
+                BLOOD_PRESSURE_FIELD, com.example.hms.service.maternity.LaborAlertArgs.bloodPressure(sys, dia));
         } else if (mild) {
             entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.CAUTION,
                 "labor-hypertension",
                 alertText("labor-hypertension", com.example.hms.service.maternity.LaborAlertArgs.bloodPressure(sys, dia)),
-                "bloodPressure", com.example.hms.service.maternity.LaborAlertArgs.bloodPressure(sys, dia));
+                BLOOD_PRESSURE_FIELD, com.example.hms.service.maternity.LaborAlertArgs.bloodPressure(sys, dia));
         }
     }
 

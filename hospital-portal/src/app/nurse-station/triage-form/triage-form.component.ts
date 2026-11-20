@@ -3,9 +3,12 @@ import {
   announceNewbornWarning,
   announcePostpartumWarning,
   announceHypertensionWarning,
+  announceMaternalWarning,
 } from '../../shared/newborn-vital-alerts';
 import { OrganDamageSymptomsComponent } from '../../shared/organ-damage-symptoms/organ-damage-symptoms.component';
 import { OrganDamageSymptom } from '../../shared/organ-damage-symptoms';
+import { MaternalConcernsComponent } from '../../shared/maternal-concerns/maternal-concerns.component';
+import { MaternalConcern } from '../../shared/maternal-concerns';
 import {
   Component,
   EventEmitter,
@@ -59,6 +62,7 @@ const TRIAGE_VITAL_IDS = TRIAGE_VITAL_INPUTS.map(([, id]) => id);
   imports: [
     SubmitGuardDirective,
     OrganDamageSymptomsComponent,
+    MaternalConcernsComponent,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -129,6 +133,8 @@ export class TriageFormComponent {
   painScale = signal<number | null>(null);
   /** r54 (provisional): the optional organ-damage signs, read by the server's severe-pressure rule. */
   organDamageSymptoms = signal<OrganDamageSymptom[]>([]);
+  /** Policy 2026-11-20 (provisional): the maternal score's optional additional concerns, read by the server. */
+  maternalConcerns = signal<MaternalConcern[]>([]);
   /** QA D1031: the antenatal fundal height, in cm (optional). */
   fundalHeightCm = signal<number | null>(null);
 
@@ -216,6 +222,7 @@ export class TriageFormComponent {
       vitals.some((v) => v !== null) ||
       !!this.consciousnessLevel() ||
       this.organDamageSymptoms().length > 0 ||
+      this.maternalConcerns().length > 0 ||
       this.onOxygen() ||
       this.fallRisk() ||
       !!this.roomAssignment().trim() ||
@@ -336,6 +343,7 @@ export class TriageFormComponent {
       organDamageSymptoms: this.organDamageSymptoms().length
         ? this.organDamageSymptoms()
         : undefined,
+      maternalConcerns: this.maternalConcerns().length ? this.maternalConcerns() : undefined,
       fundalHeightCm: this.showFundalHeight() ? (this.fundalHeightCm() ?? undefined) : undefined,
       fallRisk: this.fallRisk() || undefined,
       fallRiskScore: this.fallRiskScore() ?? undefined,
@@ -363,6 +371,13 @@ export class TriageFormComponent {
         // r54: an adult's severe pressure; saved, and warned (a recheck; URGENT with a sign of organ damage).
         announceHypertensionWarning(
           response?.hypertensionAlerts,
+          this.toast,
+          this.translate,
+          this.encounter?.patientFullName || this.encounter?.patientName,
+        );
+        // Policy 2026-11-20 (provisional): a pregnant or postpartum woman's maternal early warning; saved, and warned.
+        announceMaternalWarning(
+          response?.maternalAlerts,
           this.toast,
           this.translate,
           this.encounter?.patientFullName || this.encounter?.patientName,

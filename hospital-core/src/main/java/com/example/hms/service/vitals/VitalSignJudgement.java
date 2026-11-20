@@ -94,14 +94,32 @@ public class VitalSignJudgement {
      * shared severe-blood-pressure verdict (QA D1890, r54).
      */
     public record Judgement(boolean newborn, List<NewbornAlertRules.Finding> newbornFindings,
-                            SevereHypertension.Verdict bloodPressure) {
+                            SevereHypertension.Verdict bloodPressure, MaternalEarlyWarning.Score maternal) {
         public Judgement {
             newbornFindings = newbornFindings == null ? List.of() : List.copyOf(newbornFindings);
             bloodPressure = bloodPressure == null ? SevereHypertension.Verdict.NONE : bloodPressure;
         }
 
+        public Judgement(boolean newborn, List<NewbornAlertRules.Finding> newbornFindings,
+                         SevereHypertension.Verdict bloodPressure) {
+            this(newborn, newbornFindings, bloodPressure, null);
+        }
+
         public Judgement(boolean newborn, List<NewbornAlertRules.Finding> newbornFindings) {
-            this(newborn, newbornFindings, SevereHypertension.Verdict.NONE);
+            this(newborn, newbornFindings, SevereHypertension.Verdict.NONE, null);
+        }
+
+        /**
+         * Policy 2026-11-20: the maternal early warning alone, for a reading a maternity screen charted.
+         * That screen raised its own pressure and newborn alerts, so neither is carried a second time.
+         */
+        public Judgement maternalOnly() {
+            return new Judgement(false, List.of(), SevereHypertension.Verdict.NONE, maternal);
+        }
+
+        /** The maternal warning marks the set: a review is due, or a CRADLE add-on alert is lit. */
+        public boolean maternalSignificant() {
+            return maternal != null && (maternal.needsEscalation() || !maternal.alerts().isEmpty());
         }
 
         /** The obstetric rule raised (pregnancy, or 42 days after a birth): URGENT. */
@@ -157,8 +175,17 @@ public class VitalSignJudgement {
                     com.example.hms.service.recordaccess.CrossHospitalReachRecorder.hospitalIdOf(vital.getHospital()),
                     vital.getSystolicBpMmHg(), vital.getDiastolicBpMmHg(), at,
                     !com.example.hms.enums.OrganDamageSymptom.parse(vital.getOrganDamageSymptoms()).isEmpty());
-            judgement = new Judgement(false, List.of(), bloodPressure);
-            significant = judgement.bloodPressure().raised() || outsideAgeRanges(vital);
+            // Policy 2026-11-20 (provisional): a pregnant or postpartum woman's set is scored with the
+            // maternal early warning; a level that needs a review, or a CRADLE alert, is significant.
+            MaternalEarlyWarning.Score maternal = maternalEarlyWarning == null || patient == null ? null
+                : maternalEarlyWarning.assess(patient,
+                    com.example.hms.service.recordaccess.CrossHospitalReachRecorder.hospitalIdOf(vital.getHospital()),
+                    // A raised warning resting on another hospital's record is accounted once: the pressure
+                    // warning of this reading already did it when it raised.
+                    vital, !bloodPressure.raised());
+            judgement = new Judgement(false, List.of(), bloodPressure, maternal);
+            significant = judgement.bloodPressure().raised() || outsideAgeRanges(vital)
+                || judgement.maternalSignificant();
         }
         if (significant) {
             vital.setClinicallySignificant(true);
@@ -170,9 +197,10 @@ public class VitalSignJudgement {
      * After the save: the NEWS2 escalation every path had, then the newborn notices. Never throws
      * for a notice that could not be created: the vital set is the record.
      */
-    public void escalate(PatientVitalSign saved, Judgement judgement, UUID patientId, UUID hospitalId,
-                         String recorderUsername, String visitPhysicianUsername) {
-        escalate(saved, judgement, patientId, hospitalId, recorderUsername, visitPhysicianUsername, false);
+    public MaternalEarlyWarningService.PageStatus escalate(PatientVitalSign saved, Judgement judgement, UUID patientId,
+                                                           UUID hospitalId, String recorderUsername,
+                                                           String visitPhysicianUsername) {
+        return escalate(saved, judgement, patientId, hospitalId, recorderUsername, visitPhysicianUsername, false);
     }
 
     /**
@@ -181,16 +209,48 @@ public class VitalSignJudgement {
      * not sent twice. Otherwise it fires at its usual trigger (a safety net: in labour it is the only page
      * for a low pressure or a fast pulse).
      */
-    public void escalate(PatientVitalSign saved, Judgement judgement, UUID patientId, UUID hospitalId,
-                         String recorderUsername, String visitPhysicianUsername, boolean news2CoveredByMaternityAlert) {
-        if (!news2CoveredByMaternityAlert) {
-            news2EscalationService.escalateIfNeeded(saved, patientId, hospitalId, recorderUsername,
-                visitPhysicianUsername);
+    public MaternalEarlyWarningService.PageStatus escalate(PatientVitalSign saved, Judgement judgement, UUID patientId,
+                                                           UUID hospitalId, String recorderUsername,
+                                                           String visitPhysicianUsername,
+                                                           boolean news2CoveredByMaternityAlert) {
+        return escalate(saved, judgement, patientId, hospitalId, recorderUsername, visitPhysicianUsername,
+            MaternityCover.of(news2CoveredByMaternityAlert));
+    }
+
+    /**
+     * Which URGENT maternity alert already paged for a reading a maternity screen charted.
+     * {@code anyUrgentAlert}: any of them (a fetal heart rate, the action line, the mother's own values);
+     * it covers the NEWS2 page, as since #1237. {@code urgentMaternalAlert}: one about the mother's own
+     * condition; only that one covers her maternal early-warning page. A fetal bradycardia pages the team
+     * about the baby: it says nothing of a mother whose own score is high.
+     */
+    public record MaternityCover(boolean anyUrgentAlert, boolean urgentMaternalAlert) {
+        public static final MaternityCover NONE = new MaternityCover(false, false);
+
+        /** The same answer for both pages (a screen whose every URGENT alert is about the mother). */
+        public static MaternityCover of(boolean urgentAlert) {
+            return new MaternityCover(urgentAlert, urgentAlert);
         }
-        if (judgement != null && patientId != null && hospitalId != null) {
-            escalateBloodPressure(saved, judgement.bloodPressure(), patientId, hospitalId, recorderUsername,
-                visitPhysicianUsername);
-        }
+    }
+
+    /**
+     * The same, saying which page the maternity alerts of the reading already cover. Returns what became of
+     * the maternal early-warning page (null when none was considered: no maternal score, or a maternity
+     * alert covered it), so the recorder's warning can say it: {@link #maternalAlerts(Judgement,
+     * MaternalEarlyWarningService.PageStatus)}.
+     */
+    public MaternalEarlyWarningService.PageStatus escalate(PatientVitalSign saved, Judgement judgement, UUID patientId,
+                                                           UUID hospitalId, String recorderUsername,
+                                                           String visitPhysicianUsername, MaternityCover cover) {
+        MaternalEarlyWarningService.PageStatus maternalPage = escalateEarlyWarning(saved, judgement, patientId,
+            hospitalId, recorderUsername, visitPhysicianUsername, cover == null ? MaternityCover.NONE : cover);
+        notifyUrgentNewbornFindings(saved, judgement, patientId, hospitalId, recorderUsername, visitPhysicianUsername);
+        return maternalPage;
+    }
+
+    /** QA D1564: each URGENT newborn finding reaches the recorder and the physicians, in their language. */
+    private void notifyUrgentNewbornFindings(PatientVitalSign saved, Judgement judgement, UUID patientId,
+                                             UUID hospitalId, String recorderUsername, String visitPhysicianUsername) {
         if (judgement == null || !judgement.newborn() || patientId == null || hospitalId == null) {
             return;
         }
@@ -219,25 +279,69 @@ public class VitalSignJudgement {
         }
     }
 
-    /** Obstetric: always URGENT, notified. Adult: only the URGENT one (a sign of organ damage) is notified. */
-    private void escalateBloodPressure(PatientVitalSign saved, SevereHypertension.Verdict bloodPressure, UUID patientId,
-                                       UUID hospitalId, String recorderUsername, String visitPhysicianUsername) {
-        if (bloodPressure.obstetric()) {
-            notifySevereHypertension(saved, patientId, hospitalId, recorderUsername, visitPhysicianUsername,
-                bloodPressure.scope(), bloodPressure.messageKey());
-        } else if (bloodPressure.adult() && bloodPressure.level() == SevereHypertension.Level.URGENT) {
-            notifySevereHypertension(saved, patientId, hospitalId, recorderUsername, visitPhysicianUsername,
-                bloodPressure.scope(), bloodPressure.messageKey());
+    /**
+     * The early-warning page and the severe-pressure notice of one reading. Policy 2026-11-20
+     * (provisional): for a pregnant or postpartum woman the NEWS2 page is replaced by the maternal
+     * early-warning escalation; NEWS2 is not validated for her and never pages. The NEWS2 page is not
+     * sent for a reading any URGENT maternity alert already paged for (#1237); the maternal page only
+     * for one an URGENT alert about the mother's own condition paged for.
+     */
+    private MaternalEarlyWarningService.PageStatus escalateEarlyWarning(PatientVitalSign saved, Judgement judgement,
+                                                                        UUID patientId, UUID hospitalId,
+                                                                        String recorderUsername,
+                                                                        String visitPhysicianUsername,
+                                                                        MaternityCover cover) {
+        MaternalEarlyWarning.Score maternal = judgement == null ? null : judgement.maternal();
+        if (maternal == null && !cover.anyUrgentAlert()) {
+            news2EscalationService.escalateIfNeeded(saved, patientId, hospitalId, recorderUsername,
+                visitPhysicianUsername);
         }
+        Set<String> paged = Set.of();
+        if (judgement != null && patientId != null && hospitalId != null) {
+            paged = escalateBloodPressure(saved, judgement, patientId, hospitalId, recorderUsername,
+                visitPhysicianUsername);
+        }
+        if (maternal != null && !cover.urgentMaternalAlert() && maternalEarlyWarning != null) {
+            // One reading never pages a person twice: whoever the severe-pressure notice reached is skipped
+            // (that notice carries her score and its level, so nobody is left without them).
+            return maternalEarlyWarning.page(saved, maternal, patientId, hospitalId, recorderUsername,
+                visitPhysicianUsername, paged).status();
+        }
+        return null;
     }
 
     /**
-     * QA D1890, r54: the notice (type, patient, warning) to the recorder, the stay's responsible
-     * physician and the visit's clinician, each in her language. Never throws.
+     * Obstetric: always URGENT, notified. Adult: only the URGENT one (a sign of organ damage) is notified.
+     * Returns who the notice reached, so the maternal escalation of the same reading skips them.
      */
-    private void notifySevereHypertension(PatientVitalSign saved, UUID patientId, UUID hospitalId,
-                                          String recorderUsername, String visitPhysicianUsername,
-                                          SevereHypertension.Scope scope, String messageKey) {
+    private Set<String> escalateBloodPressure(PatientVitalSign saved, Judgement judgement,
+                                              UUID patientId, UUID hospitalId, String recorderUsername,
+                                              String visitPhysicianUsername) {
+        SevereHypertension.Verdict bloodPressure = judgement.bloodPressure();
+        if (bloodPressure.obstetric()
+            || (bloodPressure.adult() && bloodPressure.level() == SevereHypertension.Level.URGENT)) {
+            return notifySevereHypertension(saved, patientId, hospitalId, recorderUsername, visitPhysicianUsername,
+                bloodPressure, bloodPressure.obstetric() ? judgement.maternal() : null);
+        }
+        return Set.of();
+    }
+
+    /** Policy 2026-11-20: the obstetric pressure notice with the maternal score and its level. */
+    static final String POSTPARTUM_MEWS_NOTICE_KEY = "postpartum.alert.notification.mews";
+    static final String PREGNANCY_MEWS_NOTICE_KEY = "vitals.alert.notification.pregnancy.mews";
+    static final String MEWS_TIER_LABEL_PREFIX = "cds.bpa.mews.tier.";
+
+    /**
+     * QA D1890, r54: the notice (type, patient, warning) to the recorder, the stay's responsible
+     * physician and the visit's clinician, each in her language. Never throws. Policy 2026-11-20
+     * (provisional): with a maternal score, the obstetric notice also gives the score and its level:
+     * these readers are not paged a second time for the reading, so the one notice must carry both.
+     */
+    private Set<String> notifySevereHypertension(PatientVitalSign saved, UUID patientId, UUID hospitalId,
+                                                 String recorderUsername, String visitPhysicianUsername,
+                                                 SevereHypertension.Verdict bloodPressure,
+                                                 MaternalEarlyWarning.Score maternal) {
+        SevereHypertension.Scope scope = bloodPressure.scope();
         Set<String> recipients = news2EscalationService.recipients(patientId, hospitalId, recorderUsername,
             visitPhysicianUsername);
         String fullName = saved != null && saved.getPatient() != null
@@ -245,23 +349,145 @@ public class VitalSignJudgement {
         Object patientArg = fullName.isBlank() ? NotificationLocalizer.key("patient.fallback.generic") : fullName;
         // Postpartum: the postpartum observation's own notice; pregnancy: a pregnancy notice (r54
         // review: never headed "postpartum" for a woman still pregnant); adult: the vitals notice.
-        Object[] args = {NotificationLocalizer.key(scope == SevereHypertension.Scope.ADULT
-                ? HYPERTENSION_TYPE_KEY : POSTPARTUM_TYPE_KEY), patientArg,
-            ObstetricAlertEscalationWorker.alertMessageArg(messageKey, null, "")};
+        Object typeArg = NotificationLocalizer.key(scope == SevereHypertension.Scope.ADULT
+            ? HYPERTENSION_TYPE_KEY : POSTPARTUM_TYPE_KEY);
+        Object messageArg = ObstetricAlertEscalationWorker.alertMessageArg(bloodPressure.messageKey(), null, "");
+        // {3} the maternal score, {4} the level it is answered at (a concern or a RED alert has raised it).
+        Object[] args = maternal == null ? new Object[]{typeArg, patientArg, messageArg}
+            : new Object[]{typeArg, patientArg, messageArg, maternal.total(),
+                NotificationLocalizer.key(MEWS_TIER_LABEL_PREFIX + maternal.responseTier().name())};
+        Set<String> reached = new java.util.LinkedHashSet<>();
         for (String recipient : recipients) {
             try {
-                if (scope == SevereHypertension.Scope.POSTPARTUM) {
-                    notificationService.createNotification(POSTPARTUM_NOTICE_KEY, args, recipient, NOTIFICATION_TYPE);
-                } else if (scope == SevereHypertension.Scope.PREGNANT) {
-                    notificationService.createNotification(PREGNANCY_NOTICE_KEY, args, recipient, NOTIFICATION_TYPE);
-                } else {
-                    notificationService.createNotification(HYPERTENSION_NOTICE_KEY, args, recipient,
-                        HYPERTENSION_NOTIFICATION_TYPE);
-                }
+                sendPressureNotice(scope, maternal != null, args, recipient);
+                reached.add(recipient);
             } catch (RuntimeException ex) {
                 log.warn("Severe blood-pressure notice not created: {}", ex.getClass().getSimpleName());
             }
         }
+        return reached;
+    }
+
+    /**
+     * One pressure notice, each written with its own key and type: the adult one; or the obstetric one,
+     * postpartum or pregnancy (never headed "postpartum" for a woman still pregnant), with the maternal
+     * score and its level when she has one.
+     */
+    private void sendPressureNotice(SevereHypertension.Scope scope, boolean withScore, Object[] args, String recipient) {
+        if (scope == SevereHypertension.Scope.ADULT) {
+            notificationService.createNotification(HYPERTENSION_NOTICE_KEY, args, recipient,
+                HYPERTENSION_NOTIFICATION_TYPE);
+        } else if (scope == SevereHypertension.Scope.POSTPARTUM && withScore) {
+            notificationService.createNotification(POSTPARTUM_MEWS_NOTICE_KEY, args, recipient, NOTIFICATION_TYPE);
+        } else if (scope == SevereHypertension.Scope.POSTPARTUM) {
+            notificationService.createNotification(POSTPARTUM_NOTICE_KEY, args, recipient, NOTIFICATION_TYPE);
+        } else if (withScore) {
+            notificationService.createNotification(PREGNANCY_MEWS_NOTICE_KEY, args, recipient, NOTIFICATION_TYPE);
+        } else {
+            notificationService.createNotification(PREGNANCY_NOTICE_KEY, args, recipient, NOTIFICATION_TYPE);
+        }
+    }
+
+    /** Policy 2026-11-20: the maternal early warning (setter-injected; absent, every path is as before). */
+    private MaternalEarlyWarningService maternalEarlyWarning;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setMaternalEarlyWarning(MaternalEarlyWarningService maternalEarlyWarning) {
+        this.maternalEarlyWarning = maternalEarlyWarning;
+    }
+
+    static final String MATERNAL_ALERT_TYPE = "MATERNAL_EARLY_WARNING";
+    static final String MEWS_MESSAGE_PREFIX = "vitals.alert.msg.mews.";
+    static final String MATERNAL_ALERT_MESSAGE_PREFIX = "vitals.alert.msg.maternal.";
+
+    /**
+     * Policy 2026-11-20 (provisional): what the recorder of a pregnant or postpartum woman's set reads
+     * after the save, in her language: the level of concern when a review is due, and each shock-index
+     * alert (the severe pressure keeps its own warning, {@link #postpartumAlerts}). Empty otherwise.
+     */
+    public List<NewbornVitalAlertDTO> maternalAlerts(Judgement judgement) {
+        return maternalAlerts(judgement, null);
+    }
+
+    static final String MEWS_WITHHELD_MESSAGE_KEY = "vitals.alert.msg.mews.withheld";
+    static final String MEWS_UNSENT_MESSAGE_KEY = "vitals.alert.msg.mews.unsent";
+    /** The code suffix of a level whose page the cool-down withheld; the portal then never says « prévenue ». */
+    public static final String WITHHELD_SUFFIX = "-withheld";
+    /** The code suffix of a level whose page reached nobody. */
+    public static final String UNSENT_SUFFIX = "-unsent";
+
+    /**
+     * The level of concern as the recorder reads it, with the truth about its page: withheld by the
+     * cool-down, reached nobody, or (sent, or not reported on) the plain code and sentence.
+     */
+    private NewbornVitalAlertDTO maternalLevelAlert(MaternalEarlyWarning.Score score, MaternalEarlyWarning.Tier tier,
+                                                    MaternalEarlyWarningService.PageStatus page,
+                                                    MaternalEarlyWarningRules rules, java.util.Locale locale) {
+        // The caller has a score (it returns early without one): read it before anything that tolerates none.
+        int total = score.total();
+        String level = "mews-" + tier.name().toLowerCase(java.util.Locale.ROOT).replace('_', '-');
+        long observeWithin =
+            MaternalEarlyWarning.observationInterval(rules, score, java.time.Duration.ofHours(12)).toMinutes();
+        String code;
+        String message;
+        switch (page == null ? MaternalEarlyWarningService.PageStatus.SENT : page) {
+            case WITHHELD -> {
+                code = level + WITHHELD_SUFFIX;
+                message = messageSource.getMessage(MEWS_WITHHELD_MESSAGE_KEY, new Object[]{total,
+                    rules.getEscalation().getPageCoolDownMinutes(), observeWithin}, code, locale);
+            }
+            case NOBODY -> {
+                code = level + UNSENT_SUFFIX;
+                message = messageSource.getMessage(MEWS_UNSENT_MESSAGE_KEY, new Object[]{total}, code, locale);
+            }
+            default -> {
+                Integer review = MaternalEarlyWarning.reviewWithinMinutes(rules, tier);
+                code = level;
+                message = messageSource.getMessage(MEWS_MESSAGE_PREFIX + tier.name(),
+                    new Object[]{total, review == null ? 0 : review, observeWithin}, code, locale);
+            }
+        }
+        return NewbornVitalAlertDTO.builder()
+            .code(code)
+            .severity(tier == MaternalEarlyWarning.Tier.HIGH ? "URGENT" : "WARNING")
+            .type(MATERNAL_ALERT_TYPE)
+            .message(message)
+            .build();
+    }
+
+    /**
+     * The same, saying the truth about the page (review of #1241, round 2). When the cool-down withheld
+     * it, the level's code ends in {@value #WITHHELD_SUFFIX} and the sentence says the team was already
+     * told a moment ago and that no new page was sent; when a due page reached nobody, the code ends in
+     * {@value #UNSENT_SUFFIX} and the sentence says to tell the team directly. Only a page that was sent
+     * keeps the plain {@code mews-<level>} code, the one the portal reads as « l'équipe a été prévenue ».
+     */
+    public List<NewbornVitalAlertDTO> maternalAlerts(Judgement judgement, MaternalEarlyWarningService.PageStatus page) {
+        MaternalEarlyWarning.Score score = judgement == null ? null : judgement.maternal();
+        if (score == null || maternalEarlyWarning == null) {
+            return List.of();
+        }
+        java.util.Locale locale = LocaleContextHolder.getLocale();
+        MaternalEarlyWarningRules rules = maternalEarlyWarning.rules();
+        List<NewbornVitalAlertDTO> alerts = new java.util.ArrayList<>();
+        // The level the set is answered at: a concern or a RED add-on alert has already raised it.
+        MaternalEarlyWarning.Tier tier = score.responseTier();
+        if (tier != MaternalEarlyWarning.Tier.LOW) {
+            alerts.add(maternalLevelAlert(score, tier, page, rules, locale));
+        }
+        for (MaternalEarlyWarning.HardAlert alert : score.alerts()) {
+            if (alert == MaternalEarlyWarning.HardAlert.SEVERE_HYPERTENSION) {
+                continue;
+            }
+            String code = "maternal-" + alert.name().toLowerCase(java.util.Locale.ROOT).replace('_', '-');
+            alerts.add(NewbornVitalAlertDTO.builder()
+                .code(code)
+                .severity(alert.light() == MaternalEarlyWarning.Light.RED ? "URGENT" : "WARNING")
+                .type(MATERNAL_ALERT_TYPE)
+                .message(messageSource.getMessage(MATERNAL_ALERT_MESSAGE_PREFIX + alert.name(), null, code, locale))
+                .build());
+        }
+        return alerts;
     }
 
     /**

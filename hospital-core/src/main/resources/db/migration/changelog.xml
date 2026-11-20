@@ -3888,4 +3888,16 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V348: the additional concerns of the maternal early warning score
+         on a vital set (policy 2026-11-20, provisional). Additive: one
+         nullable column, IF NOT EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V348-vital-sign-maternal-concerns" author="hms-team" runOnChange="false">
+        <sqlFile path="V348__vital_sign_maternal_concerns.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

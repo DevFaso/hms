@@ -66,6 +66,8 @@ const NO_DESTINATION = {
   REORDER_ALERT: 'staff only (pharmacy stock); the staff bell expands the message',
   PHARMACY_BILLING_DEFERRAL:
     'staff only (accountants and hospital admins asked to approve an outpatient credit); the staff bell expands the message',
+  MEWS_ESCALATION:
+    'staff only (maternal early warning, policy 2026-11-20: midwife in charge and doctors); the staff bell expands the message',
 };
 
 const CALL = /create(?:Literal)?Notification\s*\(/g;

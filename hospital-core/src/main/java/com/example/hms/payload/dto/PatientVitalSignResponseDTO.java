@@ -62,6 +62,29 @@ public class PatientVitalSignResponseDTO {
      */
     private String newsNotValidated;
 
+    /* ── Maternal early warning (policy 2026-11-20, PROVISIONAL) ───────
+       For a pregnant or postpartum woman (newsNotValidated = OBSTETRIC) the
+       chart shows this in place of « NEWS2 non validé ». Computed on read
+       from this set, never stored; pending a named obstetric clinician's
+       sign-off, and every consumer must say « provisoire ». */
+    /** The additional concerns the recorder ticked on this set (MaternalConcern names). */
+    private java.util.List<String> maternalConcerns;
+    /** The points of the vital signs that were recorded (0-12); null when the score does not apply. */
+    private Integer mewsScore;
+    /** LOW | LOW_MEDIUM | MEDIUM | HIGH: the level the set is answered at (a concern or a RED alert raises it). */
+    private String mewsTier;
+    private Boolean mewsComplete;
+    /** The scored vital signs this set lacks (RESPIRATORY_RATE, SPO2, TEMPERATURE, PULSE, SYSTOLIC, DIASTOLIC). */
+    private java.util.List<String> mewsMissing;
+    /** The additional concerns read on this set: the ticked ones, oxygen and a lowered consciousness. */
+    private java.util.List<String> mewsConcerns;
+    /** The CRADLE add-on alerts: SEVERE_HYPERTENSION (red), SHOCK (yellow), SEVERE_SHOCK (red). */
+    private java.util.List<String> mewsAlerts;
+    /** Medical review within this many minutes (0 = immediate); null at the low level. */
+    private Integer mewsReviewWithinMinutes;
+    /** The pulse was scored with the bands that apply from 48 h after the birth. */
+    private Boolean mewsPostBirthPulse;
+
     private LocalDateTime recordedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -74,4 +97,11 @@ public class PatientVitalSignResponseDTO {
 
     /** r54 (provisional): the adult severe-blood-pressure warning (WARNING, or URGENT with a sign of organ damage); empty when none. */
     private java.util.List<NewbornVitalAlertDTO> hypertensionAlerts;
+
+    /**
+     * Policy 2026-11-20 (provisional): on a write only, the maternal early warning of a pregnant or
+     * postpartum woman's set (the level of concern when a review is due, and each shock-index alert);
+     * empty when none.
+     */
+    private java.util.List<NewbornVitalAlertDTO> maternalAlerts;
 }

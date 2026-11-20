@@ -302,7 +302,26 @@ final class ComputedKeys {
         // QA D1564: the shared vitals judgement raises NewbornAlertRules' own codes and types.
         // r54: the shared severe-blood-pressure rule's sentence, one per scope and level.
         r.put("com/example/hms/service/vitals/VitalSignJudgement.java|bloodPressure.messageKey()", severeHypertensionMessages());
-        r.put("com/example/hms/service/vitals/VitalSignJudgement.java|bloodPressure.messageKey() #2", severeHypertensionMessages());
+        // Policy 2026-11-20 (provisional): the maternal early warning's level, alert, concern and vital-sign words.
+        // Review of #1241: the level named in the obstetric pressure notice.
+        r.put("com/example/hms/service/vitals/VitalSignJudgement.java|MEWS_TIER_LABEL_PREFIX + maternal.responseTier().name()",
+            enumValues("cds.bpa.mews.tier.", com.example.hms.service.vitals.MaternalEarlyWarning.Tier.class));
+        r.put("com/example/hms/service/vitals/VitalSignJudgement.java|MEWS_MESSAGE_PREFIX + tier.name()",
+            values("vitals.alert.msg.mews.", List.of("LOW_MEDIUM", "MEDIUM", "HIGH")));
+        r.put("com/example/hms/service/vitals/VitalSignJudgement.java|MATERNAL_ALERT_MESSAGE_PREFIX + alert.name()",
+            values("vitals.alert.msg.maternal.", List.of("SHOCK", "SEVERE_SHOCK")));
+        r.put("com/example/hms/service/vitals/MaternalEarlyWarningService.java|key",
+            values("mews.escalation.", List.of("lowMedium", "medium", "high", "red")));
+        r.put("com/example/hms/service/vitals/MaternalEarlyWarningService.java|ALERT_LABEL_PREFIX + a.name()",
+            enumValues("mews.alert.", com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert.class));
+        r.put("com/example/hms/cdshooks/bpa/NewsScoreProtocolRule.java|MaternalEarlyWarningService.ALERT_LABEL_PREFIX + a.name()",
+            enumValues("mews.alert.", com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert.class));
+        r.put("com/example/hms/cdshooks/bpa/NewsScoreProtocolRule.java|\"cds.bpa.mews.tier.\" + tier.name()",
+            enumValues("cds.bpa.mews.tier.", com.example.hms.service.vitals.MaternalEarlyWarning.Tier.class));
+        r.put("com/example/hms/cdshooks/bpa/NewsScoreProtocolRule.java|\"cds.bpa.mews.param.\" + m.name()",
+            enumValues("cds.bpa.mews.param.", com.example.hms.service.vitals.MaternalEarlyWarning.Parameter.class));
+        r.put("com/example/hms/cdshooks/bpa/NewsScoreProtocolRule.java|\"cds.bpa.mews.concern.\" + c.name()",
+            enumValues("cds.bpa.mews.concern.", com.example.hms.enums.MaternalConcern.class));
         r.put("com/example/hms/service/vitals/VitalSignJudgement.java|verdict.messageKey()", severeHypertensionMessages());
         site(r, d, "com/example/hms/service/vitals/VitalSignJudgement.java|ALERT_MSG_PREFIX + f.code()",
             "NewbornAssessmentServiceImpl.java|newborn.alert.msg.");
