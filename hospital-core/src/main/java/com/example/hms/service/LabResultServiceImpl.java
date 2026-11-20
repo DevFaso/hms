@@ -859,7 +859,42 @@ public class LabResultServiceImpl implements LabResultService {
         Page<LabResult> page = labResultRepository.findPendingReleaseHandledBy(hospitalId,
             com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE));
         recordPerformedHereReach(page.getContent());
-        return page.map(labResultMapper::toResponseDTO);
+        java.util.Map<String, java.util.Optional<com.example.hms.model.LabQcEvent>> holdsByTest = new java.util.HashMap<>();
+        return page.map(result -> withReleaseContext(labResultMapper.toResponseDTO(result), result, holdsByTest));
+    }
+
+    /**
+     * r65 D2613 / D2614: what the release dialog needs before it is filled:
+     * the QC run holding the release (read once per test on the page, the
+     * gate's own reading) and the patient's identifiers for the critical call.
+     */
+    private LabResultResponseDTO withReleaseContext(
+            LabResultResponseDTO dto, LabResult result,
+            java.util.Map<String, java.util.Optional<com.example.hms.model.LabQcEvent>> holdsByTest) {
+        LabOrder order = result.getLabOrder();
+        if (order == null) {
+            return dto;
+        }
+        com.example.hms.model.Patient patient = order.getPatient();
+        if (patient != null) {
+            UUID orderingHospitalId = order.getHospital() != null ? order.getHospital().getId() : null;
+            dto.setPatientMrn(patient.getMrnForHospital(orderingHospitalId));
+            dto.setPatientDateOfBirth(patient.getDateOfBirth());
+            dto.setPatientGender(patient.getGender());
+        }
+        UUID testId = order.getLabTestDefinition() != null ? order.getLabTestDefinition().getId() : null;
+        java.util.Optional<com.example.hms.model.LabQcEvent> hold = testId == null
+            ? qcReleaseGate.blockingRun(order)
+            : holdsByTest.computeIfAbsent(LabQcReleaseGate.runningHospitalId(order) + ":" + testId,
+                key -> qcReleaseGate.blockingRun(order));
+        hold.ifPresent(run -> dto.setQcHold(LabResultResponseDTO.LabQcHoldDTO.builder()
+            .runId(run.getId())
+            .qcLevel(run.getQcLevel() != null ? run.getQcLevel().name() : null)
+            .recordedAt(run.getRecordedAt())
+            .recordedBy(run.getRecordedByDisplay())
+            .sdFlag(run.getSdFlag())
+            .build()));
+        return dto;
     }
 
     @Override
