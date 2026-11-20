@@ -202,8 +202,11 @@ public class PriceListService {
             : labTestDefinitionRepository.findVisibleAt(hospitalId).stream()
                 .filter(LabTestDefinition::isActive)
                 .sorted(Comparator.comparing(d -> Objects.toString(d.getTestCode(), "")))
+                // PR 10 review (QA D2700): the option's value is the id the link is stored on (the test's first
+                // version), so the form shows the linked test selected after the lab revised it.
                 .map(d -> PriceListLinkOptionsDTO.Option.builder()
-                    .id(d.getId()).code(d.getTestCode()).name(d.getName()).build())
+                    .id(LabTestLineage.rootId(d, labTestDefinitionRepository))
+                    .code(d.getTestCode()).name(d.getName()).build())
                 .toList();
         List<PriceListLinkOptionsDTO.Option> treatments = hospitalId == null ? List.of()
             : treatmentRepository.findByHospital_Id(hospitalId).stream()

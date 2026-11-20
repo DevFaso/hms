@@ -111,6 +111,40 @@ class PriceListLinksTest {
     }
 
     @Test
+    @DisplayName("PR 10 review: the stored first version of a revised test is accepted when the item is edited")
+    void theStoredFirstVersionIsAcceptedOnEdit() {
+        LabTestDefinition v1 = labTest("TWP-NFS", HOSPITAL);
+        v1.setActive(false);
+        LabTestDefinition v2 = labTest("TWP-NFS", HOSPITAL);
+        v2.setSupersedesDefinitionId(v1.getId());
+        when(labTests.findById(v1.getId())).thenReturn(Optional.of(v1));
+        when(labTests.findById(v2.getId())).thenReturn(Optional.of(v2));
+        when(labTests.findBySupersedesDefinitionId(v1.getId())).thenReturn(List.of(v2));
+
+        // The form sends back the id the link is stored on (v1, no longer active): the item still saves.
+        assertThat(links.normalise(HOSPITAL, PriceListLinkType.LAB_TEST_DEFINITION, v1.getId().toString()))
+            .isEqualTo(v1.getId().toString());
+    }
+
+    @Test
+    @DisplayName("PR 10 review: a test whose every version is retired is still refused")
+    void aLineageRetiredWholeIsRefused() {
+        LabTestDefinition v1 = labTest("TWP-OLD", HOSPITAL);
+        v1.setActive(false);
+        LabTestDefinition v2 = labTest("TWP-OLD", HOSPITAL);
+        v2.setActive(false);
+        v2.setSupersedesDefinitionId(v1.getId());
+        when(labTests.findById(v1.getId())).thenReturn(Optional.of(v1));
+        when(labTests.findById(v2.getId())).thenReturn(Optional.of(v2));
+        when(labTests.findBySupersedesDefinitionId(v1.getId())).thenReturn(List.of(v2));
+
+        assertThatThrownBy(() -> links.normalise(HOSPITAL, PriceListLinkType.LAB_TEST_DEFINITION,
+            v1.getId().toString()))
+            .isInstanceOfSatisfying(FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("linkKey"));
+    }
+
+    @Test
     void aPlatformLabTestIsLinkableAndSoIsOneGivenByItsId() {
         LabTestDefinition platform = labTest("GLOBAL-GLY", null);
         when(labTests.findLiveGlobalByCode("GLOBAL-GLY")).thenReturn(List.of(platform));
