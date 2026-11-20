@@ -851,6 +851,38 @@ class DispenseReadyForCollectionTest {
         }
 
         @Test
+        @DisplayName("policy rule 6: a hand-over lost to somebody else is refused when a deferral was admitted for it; with none it answers as the first did")
+        void aLostRaceNeverKeepsADeferral() {
+            Dispense d = pricedPreparedFill();
+            stubLocked(d);
+            wireTheDeferralGate();
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            when(roleValidator.canOverrideDispenseBillingForUrgency(userId, hospitalId)).thenReturn(true);
+            // Somebody else hands the fill over between the gate and the conditional UPDATE: no row changes.
+            when(dispenseRepository.completePreparedFill(eq(dispenseId), any(), eq(user), any(), any(), any()))
+                    .thenAnswer(lost -> {
+                        d.setStatus(DispenseStatus.COMPLETED);
+                        return 0;
+                    });
+
+            // Paid, so nothing was admitted: the call answers as the hand-over that won did.
+            when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(new BigDecimal("1000"));
+            assertThat(service.handOver(dispenseId, null).getStatus()).isEqualTo("COMPLETED");
+
+            // Unpaid, on an urgency override: the override was written by the gate, so the call is refused and
+            // the refusal rolls it back. Never an override logged with no fill behind it.
+            d.setStatus(DispenseStatus.PENDING);
+            when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            assertThatThrownBy(() -> service.handOver(dispenseId, HandOverRequestDTO.builder()
+                    .billingUrgencyReason("Crise, caisse fermée").build()))
+                    .isInstanceOf(com.example.hms.exception.ConflictException.class);
+            assertThat(d.getBillingDeferralId()).isNull();
+            verify(deferralFollowUp, never()).reviewNeeded(any(), any(), any());
+        }
+
+        @Test
         @DisplayName("policy rule 6: whoever approved a deferral does not hand the fill over on it")
         void theApproverDoesNotHandOver() {
             Dispense d = pricedPreparedFill();
