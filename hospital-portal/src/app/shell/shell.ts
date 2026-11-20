@@ -1399,6 +1399,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/lab-release-worklist',
       });
     }
+    // r65 D2183: the hospital admin is paged from escalation round 2; this is
+    // where the paged results are, read-only (read-back stays clinical).
+    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN'])) {
+      items.push({
+        icon: 'notification_important',
+        label: 'Critical results awaiting read-back',
+        translationKey: 'NAV.LAB_CRITICAL_PENDING',
+        route: '/lab-critical-pending',
+      });
+    }
     // r63 D2304: the bench records the daily QC, so the technician and the
     // scientist reach the QC dashboard (not the ops dashboard).
     if (

@@ -120,6 +120,7 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
   '/lab-results': 'DIAGNOSTICS',
   '/lab-approval-queue': 'DIAGNOSTICS',
   '/lab-release-worklist': 'DIAGNOSTICS',
+  '/lab-critical-pending': 'DIAGNOSTICS',
   '/lab-qc-dashboard': 'DIAGNOSTICS',
   '/lab-ops-dashboard': 'DIAGNOSTICS',
   '/lab-test-config': 'DIAGNOSTICS',

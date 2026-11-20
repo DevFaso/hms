@@ -45,6 +45,27 @@ class SecurityConfigLabMatcherTest {
     }
 
     /**
+     * r65 D2183: the critical lists admit, at the edge, every role their
+     * annotations admit, HOSPITAL_ADMIN included (paged from escalation round
+     * 2), and are declared before the coarse GET matcher that refuses it.
+     */
+    @Test
+    @DisplayName("critical-list matcher admits HOSPITAL_ADMIN and comes before the coarse GET matcher")
+    void criticalListMatcherAdmitsThePagedAdmin() throws IOException {
+        String source = Files.readString(SOURCE, StandardCharsets.UTF_8);
+        String critical = "API_LAB_RESULTS + \"/hospital/*/critical/unacknowledged\")";
+        String coarse = ".requestMatchers(HttpMethod.GET, API_LAB_RESULTS, API_LAB_RESULTS_PATTERN)";
+        assertThat(source.indexOf(critical)).as("critical matcher declared").isPositive()
+            .isLessThan(source.indexOf(coarse));
+        assertThat(source).contains("API_LAB_RESULTS + \"/hospital/*/critical\",");
+        String roles = rolesOf(source, critical);
+        for (String role : new String[] {"ROLE_HOSPITAL_ADMIN", "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
+            "ROLE_LAB_SCIENTIST", "ROLE_LAB_DIRECTOR", "ROLE_QUALITY_MANAGER"}) {
+            assertThat(roles).as("critical lists admit %s", role).contains(role);
+        }
+    }
+
+    /**
      * B8 — the coarse matcher is first-match-wins and terminal, so every role
      * the controller's {@code @PreAuthorize} admits must be admitted here too;
      * LAB_DIRECTOR, QUALITY_MANAGER and SUPER_ADMIN used to get 403 before the
