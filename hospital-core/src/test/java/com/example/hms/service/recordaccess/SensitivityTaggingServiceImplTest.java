@@ -204,4 +204,38 @@ class SensitivityTaggingServiceImplTest {
             .isInstanceOf(ResourceNotFoundException.class);
         verify(patientProblemRepository, never()).save(any());
     }
+
+    @Test
+    @DisplayName("D2730: the answer is built from the loaded problem, never from what save returns")
+    void aSaveThatReturnsNothingStillAnswers() {
+        UUID problemId = UUID.randomUUID();
+        com.example.hms.model.PatientProblem problem = problemOf(problemId, null);
+        when(patientProblemRepository.save(any())).thenReturn(null);
+
+        SensitivityTagResponseDTO dto = service.tagProblem(patientId, problemId, SensitivityCategory.HIV, actor);
+
+        assertThat(dto.id()).isEqualTo(problemId);
+        assertThat(dto.explicitCategory()).isEqualTo(SensitivityCategory.HIV);
+        assertThat(dto.departmentDefault()).isNull();
+        assertThat(problem.getSensitivityCategory()).isEqualTo(SensitivityCategory.HIV);
+    }
+
+    @Test
+    @DisplayName("D2730: a problem with no visit, or a visit with no department, has no department default")
+    void aProblemWithNoVisitOrNoDepartment() {
+        UUID noVisit = UUID.randomUUID();
+        problemOf(noVisit, null);
+        SensitivityTagResponseDTO untagged = service.tagProblem(patientId, noVisit, null, actor);
+        assertThat(untagged.effectiveCategory()).isNull();
+        assertThat(untagged.departmentDefault()).isNull();
+        assertThat(untagged.travelsCrossHospital()).isTrue();
+
+        UUID noDepartment = UUID.randomUUID();
+        Encounter visit = new Encounter();
+        visit.setSensitivityCategory(SensitivityCategory.HIV);
+        problemOf(noDepartment, visit);
+        SensitivityTagResponseDTO fromVisit = service.tagProblem(patientId, noDepartment, null, actor);
+        assertThat(fromVisit.effectiveCategory()).isEqualTo(SensitivityCategory.HIV);
+        assertThat(fromVisit.departmentDefault()).isNull();
+    }
 }

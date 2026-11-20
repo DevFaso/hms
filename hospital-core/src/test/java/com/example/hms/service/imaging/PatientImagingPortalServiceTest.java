@@ -84,7 +84,7 @@ class PatientImagingPortalServiceTest {
         service = new PatientImagingPortalService(orderRepository, reportRepository, imageRepository,
             new ImagingReportMapper(), fileUploadService, roleValidator, auditEventLogService,
             encounterRepository, new ProxyRecordFilter(new SensitivityClassifierImpl(),
-                org.mockito.Mockito.mock(com.example.hms.repository.LabTestDefinitionRepository.class)));
+                mock(com.example.hms.repository.LabTestDefinitionRepository.class)));
         hospital = new Hospital();
         hospital.setId(UUID.randomUUID());
         hospital.setName("CHU Yalgado");
@@ -164,7 +164,8 @@ class PatientImagingPortalServiceTest {
 
         assertThat(service.studiesOf(patientId, Reader.PATIENT)).hasSize(1);
         assertThat(service.studiesOf(patientId, Reader.PROXY)).isEmpty();
-        assertThatThrownBy(() -> service.openImage(patientId, onStudy.getId(), Reader.PROXY))
+        UUID imageId = onStudy.getId();
+        assertThatThrownBy(() -> service.openImage(patientId, imageId, Reader.PROXY))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 

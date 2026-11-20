@@ -63,10 +63,25 @@ class ProxyReadSensitivityGuardTest {
      * A class member's declaration: at member indentation, any modifiers (or
      * none: a package-private method counts), a type, then the name and its "(".
      */
-    private static final Pattern MEMBER = Pattern.compile(
-        "\\n    (?:(?:public|protected|private|static|final|abstract|synchronized|default) )*"
-            + "(?!(?:return|new|else|throw|case)\\b)[\\w<>\\[\\],.? ]+?\\s"
-            + "(?!(?:if|for|while|switch|catch|synchronized)\\b)(\\w+)\\s*\\(");
+    private static final Pattern MEMBER = Pattern.compile("\\n {4}(?! )([^\\n(;={}]*+)\\(");
+
+    /** What starts a statement, not a declaration. */
+    private static final Set<String> STATEMENT_WORDS = Set.of("return", "new", "else", "throw", "case");
+    /** What a parenthesis follows in a statement. */
+    private static final Set<String> CONTROL_WORDS =
+        Set.of("if", "for", "while", "switch", "catch", "synchronized", "try");
+    private static final Pattern IDENTIFIER = Pattern.compile("\\w+");
+
+    /** The member's name, when the text before a "(" is a declaration: a type (and modifiers), then a name. */
+    private static String declaredName(String beforeParenthesis) {
+        String[] words = beforeParenthesis.strip().split("\\s+");
+        String name = words[words.length - 1];
+        if (words.length < 2 || !IDENTIFIER.matcher(name).matches() || CONTROL_WORDS.contains(name)
+                || STATEMENT_WORDS.contains(words[0]) || words[0].startsWith("@") || words[0].startsWith("}")) {
+            return null;
+        }
+        return name;
+    }
 
     /** An injected collaborator: {@code private final Type name;}. */
     private static final Pattern FIELD = Pattern.compile(
@@ -325,7 +340,7 @@ class ProxyReadSensitivityGuardTest {
                 problems.add(listed + " is listed in NEUTRAL_CALLS and no proxy read calls it: remove the entry");
             }
         }
-        assertThat(grantChecked.keySet()).as("the proxy reads were found").contains("getProxyRecords",
+        assertThat(grantChecked).as("the proxy reads were found").containsKeys("getProxyRecords",
             "getProxyLabResults", "countProxyLabResults", "getProxyMedications", "getProxyMedicationsPage",
             "getProxyAppointments", "getProxyBilling", GRANTOR_RESOLVER);
         assertThat(problems).as(SourceScan.MANDATE).isEmpty();
@@ -528,7 +543,11 @@ class ProxyReadSensitivityGuardTest {
         List<Member> members = new ArrayList<>();
         Matcher member = MEMBER.matcher(code);
         while (member.find()) {
-            int open = code.indexOf('(', member.end() - 1);
+            String name = declaredName(member.group(1));
+            if (name == null) {
+                continue;
+            }
+            int open = member.end() - 1;
             int close = SourceScan.closingParen(code, open);
             int brace = SourceScan.indexOfOutsideLiterals(code, '{', close);
             int semicolon = SourceScan.indexOfOutsideLiterals(code, ';', close);
@@ -536,7 +555,7 @@ class ProxyReadSensitivityGuardTest {
                 continue;
             }
             int end = SourceScan.closingBrace(code, brace);
-            members.add(new Member(member.group(1), member.start(), brace, end, code.substring(brace, end + 1)));
+            members.add(new Member(name, member.start(), brace, end, code.substring(brace, end + 1)));
         }
         return members;
     }

@@ -52,6 +52,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -243,7 +245,7 @@ class ProxySensitiveRecordsTest {
 
             assertThat(List.of(resultOf(v1, generalVisit), resultOf(v1, generalVisit), resultOf(v1, generalVisit)))
                 .allMatch(oneRead);
-            org.mockito.Mockito.verify(labTestDefinitionRepository, org.mockito.Mockito.times(1))
+            verify(labTestDefinitionRepository, times(1))
                 .findLiveByCodeAtHospital("GLY", hospital.getId());
         }
     }

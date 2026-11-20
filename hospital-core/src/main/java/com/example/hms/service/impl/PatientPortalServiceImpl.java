@@ -145,6 +145,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private static final String FIELD_PRESCRIPTION_ID = "prescriptionId";
 
 
+    /** The status of a running course, and of a live legacy diagnosis row. */
+    private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String PROXY_VIEW_LAB_RESULTS = "VIEW_LAB_RESULTS";
     private static final String PROXY_VIEW_MEDICATIONS = "VIEW_MEDICATIONS";
     private static final String PROXY_VIEW_APPOINTMENTS = "VIEW_APPOINTMENTS";
@@ -486,12 +488,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         isolatedReads.attempt("health summary active diagnoses", () -> {
             if (patientProblemRepository != null) {
                 patientProblemRepository.findByPatient_IdAndStatusOrderByCreatedAtDesc(
-                        patientId, com.example.hms.enums.ProblemStatus.ACTIVE).stream()
+                        patientId, com.example.hms.enums.ProblemStatus.ACTIVE)
                     .forEach(p -> addDiagnosisLabel(out, p.getProblemDisplay(), p.getProblemCode()));
             }
             if (patientDiagnosisRepository != null) {
                 patientDiagnosisRepository.findByPatient_IdOrderByDiagnosedAtDesc(patientId).stream()
-                    .filter(d -> "ACTIVE".equalsIgnoreCase(d.getStatus()))
+                    .filter(d -> STATUS_ACTIVE.equalsIgnoreCase(d.getStatus()))
                     .forEach(d -> addDiagnosisLabel(out, d.getDescription(), d.getIcdCode()));
             }
         });
@@ -1556,7 +1558,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // the running courses at ten.
         isolatedReads.attempt("health summary medications",
             () -> out.set(medicationService.getMedicationsForPatientPortal(patientId, hospitalId, 100).stream()
-                .filter(m -> "ACTIVE".equals(m.getStatus()))
+                .filter(m -> STATUS_ACTIVE.equals(m.getStatus()))
                 .toList()));
         return out.get();
     }
@@ -1587,7 +1589,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             new java.util.concurrent.atomic.AtomicReference<>(Collections.emptyList());
         isolatedReads.attempt("proxy records medications",
             () -> out.set(medicationService.getMedicationsForProxy(grantorId, 100).stream()
-                .filter(m -> "ACTIVE".equals(m.getStatus()))
+                .filter(m -> STATUS_ACTIVE.equals(m.getStatus()))
                 .toList()));
         return out.get();
     }

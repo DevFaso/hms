@@ -210,7 +210,7 @@ public class ProxyRecordFilter {
         } else if (visit.getStatus() != null && visit.getStatus().isClosed()) {
             last = first;
         } else {
-            last = LocalDate.now();
+            last = LocalDate.now(java.time.ZoneId.systemDefault());
         }
         LocalDate end = last.compareTo(first) < 0 ? first : last;
         return day.compareTo(first) >= 0 && day.compareTo(end) <= 0;

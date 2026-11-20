@@ -163,8 +163,12 @@ class SignedNoteAddendaGuardTest {
     }
 
     /** A patient- or proxy-facing read, by the house naming (the D1910 and D2730 guards use the same). */
-    private static final Pattern PATIENT_READ = Pattern.compile(
-        "\\b(toPatientPortal\\w*|\\w*ForPortalPatient|\\w*ForPatientPortal\\w*|\\w*ForProxy)\\s*+\\(");
+    private static final Pattern CALLED_OR_DECLARED = Pattern.compile("\\b(\\w++)\\s*+\\(");
+
+    private static boolean isPatientRead(String name) {
+        return name.startsWith("toPatientPortal") || name.endsWith("ForPortalPatient")
+            || name.contains("ForPatientPortal") || name.endsWith("ForProxy");
+    }
 
     /** What hands a reader a raw note or every addendum. */
     private static final Pattern RAW_NOTE = Pattern.compile(
@@ -194,8 +198,11 @@ class SignedNoteAddendaGuardTest {
                 if (rel.startsWith("controller/") && code.contains("\"/me/patient") && RAW_NOTE.matcher(code).find()) {
                     missing.add(rel + " (a /me/patient controller maps a note itself)");
                 }
-                java.util.regex.Matcher m = PATIENT_READ.matcher(code);
+                java.util.regex.Matcher m = CALLED_OR_DECLARED.matcher(code);
                 while (m.find()) {
+                    if (!isPatientRead(m.group(1))) {
+                        continue;
+                    }
                     String body = SourceScan.methodBody(code, m.group(1));
                     if (body == null || !RAW_NOTE.matcher(body).find()) {
                         continue;

@@ -87,7 +87,7 @@ public class SensitivityTaggingServiceImpl implements SensitivityTaggingService 
             return describe(problem);
         }
         problem.setSensitivityCategory(category);
-        problem = patientProblemRepository.save(problem);
+        patientProblemRepository.save(problem);
         audit(AuditEventType.DATA_UPDATE, "PROBLEM_SENSITIVITY", problemId, actorUserId, patientId, before, category);
         log.info("[sensitivity] problem {} tag {} -> {}", problemId, before, category);
         return describe(problem);
@@ -146,9 +146,9 @@ public class SensitivityTaggingServiceImpl implements SensitivityTaggingService 
     }
 
     private SensitivityTagResponseDTO describe(PatientProblem problem) {
-        SensitivityCategory effective = classifier.effectiveCategory(problem);
         Encounter visit = problem.getSourceEncounter();
         Department department = visit == null ? null : visit.getDepartment();
+        SensitivityCategory effective = classifier.effectiveCategory(problem);
         SensitivityCategory deptDefault = department == null
             ? null : department.getDefaultSensitivityCategory();
         return new SensitivityTagResponseDTO(problem.getId(), problem.getSensitivityCategory(),

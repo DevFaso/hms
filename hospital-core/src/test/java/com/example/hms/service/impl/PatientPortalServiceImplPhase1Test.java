@@ -136,7 +136,7 @@ class PatientPortalServiceImplPhase1Test {
     private com.example.hms.service.recordaccess.ProxyRecordFilter proxyRecordFilter =
         new com.example.hms.service.recordaccess.ProxyRecordFilter(
             new com.example.hms.service.recordaccess.SensitivityClassifierImpl(),
-            org.mockito.Mockito.mock(com.example.hms.repository.LabTestDefinitionRepository.class));
+            mock(com.example.hms.repository.LabTestDefinitionRepository.class));
 
     @InjectMocks
     private PatientPortalServiceImpl service;

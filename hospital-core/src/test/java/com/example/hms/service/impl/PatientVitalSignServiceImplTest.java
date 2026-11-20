@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -107,7 +108,7 @@ class PatientVitalSignServiceImplTest {
             encounterRepository,
             new com.example.hms.service.recordaccess.ProxyRecordFilter(
                 new com.example.hms.service.recordaccess.SensitivityClassifierImpl(),
-                org.mockito.Mockito.mock(com.example.hms.repository.LabTestDefinitionRepository.class)));
+                mock(com.example.hms.repository.LabTestDefinitionRepository.class)));
     }
 
     @org.junit.jupiter.api.AfterEach
