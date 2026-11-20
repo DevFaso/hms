@@ -78,7 +78,7 @@ type UltrasoundReporting = 'PHYSICIANS_ONLY' | 'NON_PHYSICIAN';
           type="button"
           class="btn-primary"
           data-testid="us-reporting-save"
-          [disabled]="saving() || choice === saved()"
+          [disabled]="saving()"
           (click)="save()"
         >
           {{ 'COMMON.SAVE' | translate }}
@@ -137,7 +137,7 @@ export class ImagingReportingSettingsComponent implements OnChanges {
   readonly loading = signal(false);
   readonly saving = signal(false);
   readonly loadFailed = signal(false);
-  /** What the server holds; the save button waits for a change. */
+  /** What the server holds. */
   readonly saved = signal<UltrasoundReporting>('PHYSICIANS_ONLY');
   choice: UltrasoundReporting = 'PHYSICIANS_ONLY';
 
@@ -163,7 +163,9 @@ export class ImagingReportingSettingsComponent implements OnChanges {
 
   save(): void {
     const id = this.hospitalId();
-    if (!id || this.saving() || this.choice === this.saved()) return;
+    // An unchanged choice is sent too (the server writes and audits nothing then): the button is
+    // never silently disabled.
+    if (!id || this.saving()) return;
     this.saving.set(true);
     this.pacs
       .setReportingSettings(id, this.choice === 'NON_PHYSICIAN')

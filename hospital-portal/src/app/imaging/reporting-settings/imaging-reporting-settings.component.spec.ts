@@ -39,14 +39,18 @@ describe('ImagingReportingSettingsComponent (policy rule 3)', () => {
     );
   });
 
-  it('opens on physicians only, says it is a setting only, and has nothing to save', () => {
+  it('opens on physicians only and says it is a setting only; the save is never silently disabled', () => {
+    pacs.setReportingSettings.and.returnValue(
+      of({ hospitalId: 'h1', ultrasoundNonPhysicianReporting: false }),
+    );
     const fixture = render();
     expect(pacs.reportingSettings).toHaveBeenCalledWith('h1');
     expect(fixture.componentInstance.choice).toBe('PHYSICIANS_ONLY');
     expect(el(fixture, 'us-reporting-provisional')).not.toBeNull();
-    expect((el(fixture, 'us-reporting-save') as HTMLButtonElement).disabled).toBeTrue();
-    fixture.componentInstance.save();
-    expect(pacs.setReportingSettings).not.toHaveBeenCalled();
+    expect((el(fixture, 'us-reporting-save') as HTMLButtonElement).disabled).toBeFalse();
+    // An unchanged choice is sent as it is: the server writes nothing for it.
+    el(fixture, 'us-reporting-save')?.click();
+    expect(pacs.setReportingSettings).toHaveBeenCalledWith('h1', false);
   });
 
   it('saves the hospital’s decision and shows what the server holds', () => {
