@@ -35,7 +35,7 @@
 -- clinical.dispenses.billing_deferred_amount - what this fill still owed when
 --   it left (whole francs). A cancelled fill gives it back to its deferral.
 --
--- clinical.pharmacy_claims.decided_by / decided_at - who recorded the payer's
+-- billing.pharmacy_claims.decided_by / decided_at - who recorded the payer's
 --   answer (accepted, rejected, paid). A claim covers a fill at the counter
 --   only when somebody of the money desks, other than the person handing the
 --   fill over, stands behind it: its submitter while it is only sent, its
@@ -116,8 +116,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_dbdef_dispense ON clinical.dispense_billing
 ALTER TABLE clinical.dispenses ADD COLUMN IF NOT EXISTS billing_deferral_id UUID;
 ALTER TABLE clinical.dispenses ADD COLUMN IF NOT EXISTS billing_deferred_amount NUMERIC(12, 2);
 
-ALTER TABLE clinical.pharmacy_claims ADD COLUMN IF NOT EXISTS decided_by UUID;
-ALTER TABLE clinical.pharmacy_claims ADD COLUMN IF NOT EXISTS decided_at TIMESTAMP;
+ALTER TABLE billing.pharmacy_claims ADD COLUMN IF NOT EXISTS decided_by UUID;
+ALTER TABLE billing.pharmacy_claims ADD COLUMN IF NOT EXISTS decided_at TIMESTAMP;
 
 ALTER TABLE clinical.refill_requests ADD COLUMN IF NOT EXISTS decided_by UUID;
 ALTER TABLE clinical.refill_requests ADD COLUMN IF NOT EXISTS decided_at TIMESTAMP;
