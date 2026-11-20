@@ -187,6 +187,9 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         }
         User receivedBy = userRepository.findById(currentUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));
+        // Billing plan PR 10 (QA D2672): the pharmacist's till today, before any operator is charged; a closed till
+        // refuses the payment and nothing is written.
+        java.util.UUID cashSessionId = stampPharmacyTill(hospitalId, currentUserId);
 
         String providerReference = dto.getReferenceNumber();
         String currency = dto.getCurrency() != null ? dto.getCurrency() : "XOF";
@@ -209,6 +212,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         entity.setCurrency(currency);
         entity.setReceiptNumber(allocateReceiptNumber(hospital));
         entity.setClientRequestId(dto.getClientRequestId());
+        entity.setCashSessionId(cashSessionId);
         PharmacyPayment saved = saveKeyed(entity);
 
         support.logAudit(AuditEventType.PAYMENT_POSTED,
@@ -406,5 +410,18 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         if (!hospitalId.equals(dto.getHospitalId())) {
             throw new com.example.hms.exception.FieldBusinessException("hospitalId", "pharmacy.payment.hospitalMismatch");
         }
+    }
+
+    /** Billing plan PR 10 (V309, QA D2672): pharmacy money lands in the pharmacist's PHARMACY cash session. */
+    private com.example.hms.service.billing.cash.CashSessionService cashSessions;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setCashSessionService(com.example.hms.service.billing.cash.CashSessionService service) {
+        this.cashSessions = service;
+    }
+
+    private java.util.UUID stampPharmacyTill(java.util.UUID hospitalId, java.util.UUID cashierId) {
+        return cashSessions == null ? null
+                : cashSessions.stamp(com.example.hms.enums.CashTill.PHARMACY, hospitalId, cashierId);
     }
 }

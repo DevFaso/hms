@@ -77,6 +77,9 @@ class ReceptionistClinicalReadGuardTest {
      * ({@code /me/**}) are not the desk's reach and are skipped by name below.
      */
     private static final Map<String, String> THE_DESK_NEEDS_IT = Map.ofEntries(
+        // Billing plan PR 10: the receptionist's own till (the copay till): why a manager reopened or reviewed it.
+        Map.entry("CashSessionDTO#reopenReason", "why the desk's own till was reopened, billing plan PR 10"),
+        Map.entry("CashSessionDTO#reviewNote", "the manager's note on the desk's own till, billing plan PR 10"),
         // User decision 2026-11-06: the isolation precaution stays on the bed board as a type, and the
         // yes/no facts around it place the patient. Organism and reason are removed by the shaping.
         Map.entry("BedBoardDTO.OccupantDTO#isolationPrecautions", "the precaution TYPE on the bed board, user decision 2026-11-06"),

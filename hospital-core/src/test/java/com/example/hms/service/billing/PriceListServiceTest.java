@@ -258,6 +258,33 @@ class PriceListServiceTest {
     }
 
     @Test
+    @DisplayName("PR 10 review (QA D2700): a revised lab test is offered under the id its link is stored on")
+    void theLabTestOptionIsTheStoredFirstVersion() {
+        when(roles.canReadPriceList(ACTOR, HOSPITAL)).thenReturn(true);
+        com.example.hms.model.LabTestDefinition v1 = new com.example.hms.model.LabTestDefinition();
+        v1.setId(UUID.randomUUID());
+        v1.setTestCode("TWP-NFS");
+        v1.setName("NFS");
+        v1.setActive(false);
+        com.example.hms.model.LabTestDefinition v2 = new com.example.hms.model.LabTestDefinition();
+        v2.setId(UUID.randomUUID());
+        v2.setTestCode("TWP-NFS");
+        v2.setName("NFS (automate)");
+        v2.setActive(true);
+        v2.setSupersedesDefinitionId(v1.getId());
+        when(labTests.findVisibleAt(HOSPITAL)).thenReturn(List.of(v1, v2));
+        when(labTests.findById(v1.getId())).thenReturn(Optional.of(v1));
+        when(treatments.findByHospital_Id(HOSPITAL)).thenReturn(List.of());
+
+        // One option, the active version's name, valued with the first version's id: the form's select shows the
+        // linked test selected (the item's linkKey is that id) instead of an empty required field.
+        assertThat(service.linkOptions().getLabTests()).singleElement().satisfies(option -> {
+            assertThat(option.getId()).isEqualTo(v1.getId());
+            assertThat(option.getName()).isEqualTo("NFS (automate)");
+        });
+    }
+
+    @Test
     @DisplayName("no hospital and not the verified super-admin: refused, never read across hospitals")
     void aNullHospitalWithoutTheVerifiedSuperAdminIsRefused() {
         when(roles.requireActiveHospitalId()).thenReturn(null);

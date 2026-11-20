@@ -73,6 +73,8 @@ export interface PriceListItem {
   linkType?: PriceListLinkType | null;
   linkKey?: string | null;
   linkLabel?: string | null;
+  /** QA D2700: a lab-test link whose test has no active version left: it prices nothing until relinked. */
+  linkRetired?: boolean;
   active: boolean;
   currentPrice?: PriceListPrice | null;
   nextPrice?: PriceListPrice | null;

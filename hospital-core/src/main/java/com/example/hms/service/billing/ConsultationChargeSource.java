@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * QA D972: each service recorded on the visit at the hospital's own price for
@@ -28,6 +29,21 @@ public class ConsultationChargeSource implements VisitChargeSource {
     static final String CONSULTATION_CODE = "billing.checkout.consultation";
 
     private final EncounterTreatmentRepository encounterTreatmentRepository;
+    /** QA D2701: the visit's admission, to tell a planned stay from one that came through a consultation. */
+    private final com.example.hms.repository.AdmissionRepository admissionRepository;
+
+    /**
+     * QA D2701 (r65): admissions that do not start with a medical consultation. A labour admission, a planned
+     * (elective) stay, a day case, a newborn's stay or a transfer in got a « Consultation générale » line by default,
+     * which the cashier had to find and delete. They are billed only for the services actually recorded. An emergency,
+     * urgent, observation or psychiatric admission is first seen by a doctor and keeps the default line (E3).
+     */
+    static final java.util.Set<com.example.hms.enums.AdmissionType> NO_DEFAULT_CONSULTATION = java.util.EnumSet.of(
+        com.example.hms.enums.AdmissionType.LABOR_DELIVERY,
+        com.example.hms.enums.AdmissionType.ELECTIVE,
+        com.example.hms.enums.AdmissionType.DAY_CASE,
+        com.example.hms.enums.AdmissionType.NEWBORN,
+        com.example.hms.enums.AdmissionType.TRANSFER);
 
     @Override
     public BillableOrderType type() {
@@ -49,7 +65,7 @@ public class ConsultationChargeSource implements VisitChargeSource {
                         treatment.getPrice(), treatment)));
             }
         }
-        if (services.isEmpty()) {
+        if (services.isEmpty() && !plannedAdmission(visit)) {
             Optional<TariffResolver.Tariff> tariff =
                 visit.tariff(PriceListLinkType.SYSTEM, PriceListSystemKey.CONSULTATION_DEFAULT.name());
             if (tariff.isPresent()) {
@@ -64,5 +80,17 @@ public class ConsultationChargeSource implements VisitChargeSource {
                 : VisitCharge.worded(BillingText.of(CONSULTATION_CODE), ItemCategory.SERVICE, 1, consultation));
         }
         return lines;
+    }
+
+    /** QA D2701: whether the visit is an admission of a kind that does not begin with a consultation. */
+    private boolean plannedAdmission(Visit visit) {
+        UUID admissionId = visit.encounter().getAdmissionId();
+        if (admissionId == null || admissionRepository == null) {
+            return false;
+        }
+        return admissionRepository.findById(admissionId)
+            .map(admission -> admission.getAdmissionType() != null
+                && NO_DEFAULT_CONSULTATION.contains(admission.getAdmissionType()))
+            .orElse(false);
     }
 }

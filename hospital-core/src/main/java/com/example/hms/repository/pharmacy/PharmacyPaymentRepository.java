@@ -94,4 +94,10 @@ public interface PharmacyPaymentRepository extends JpaRepository<PharmacyPayment
 
     /** Billing plan PR 11 (QA D2430): the dispense payment a client request key already recorded at this hospital. */
     java.util.Optional<PharmacyPayment> findByHospital_IdAndClientRequestId(UUID hospitalId, UUID clientRequestId);
+
+    /** Billing plan PR 10 (QA D2672): the pharmacy money taken in one cash session. */
+    java.util.List<PharmacyPayment> findByCashSessionIdOrderByCreatedAtAsc(java.util.UUID cashSessionId);
+
+    /** Billing plan PR 10 (QA D2672): the pharmacy money taken in any of these sessions (the day report). */
+    java.util.List<PharmacyPayment> findByCashSessionIdIn(java.util.Collection<java.util.UUID> cashSessionIds);
 }

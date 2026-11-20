@@ -183,8 +183,10 @@ public class BillingInvoiceController {
         return ResponseEntity.ok(invoiceService.searchInvoices(searchRequest, pageable, locale));
     }
 
+    // PR 10 review: never the platform super-admin: a payment lands in the cashier's till, and theirs could not be
+    // closed. The service refuses anyone who holds no till at the hospital (CashSessionService.stamp).
     @PostMapping("/{invoiceId}/payments")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
     @Operation(summary = "Record a payment on an invoice")
     public ResponseEntity<BillingInvoiceResponseDTO> recordStaffPayment(
         @PathVariable UUID invoiceId,

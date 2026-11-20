@@ -160,6 +160,9 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
             runningTotal = runningTotal.add(saleLine.getLineTotal());
         }
         sale.setTotalAmount(runningTotal.setScale(2, RoundingMode.HALF_UP));
+        // Billing plan PR 10 (QA D2672): a counter sale is money in the pharmacist's till today; a closed till
+        // refuses it and nothing is written.
+        sale.setCashSessionId(stampPharmacyTill(activeHospitalId, soldBy != null ? soldBy.getId() : null));
 
         PharmacySale saved = saveKeyed(sale);
         // QA D2670 (r65): the sale takes its stock in the same transaction; a lot emptied meanwhile refuses the
@@ -423,5 +426,18 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
         }
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));
+    }
+
+    /** Billing plan PR 10 (V309, QA D2672): pharmacy money lands in the pharmacist's PHARMACY cash session. */
+    private com.example.hms.service.billing.cash.CashSessionService cashSessions;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setCashSessionService(com.example.hms.service.billing.cash.CashSessionService service) {
+        this.cashSessions = service;
+    }
+
+    private java.util.UUID stampPharmacyTill(java.util.UUID hospitalId, java.util.UUID cashierId) {
+        return cashSessions == null ? null
+                : cashSessions.stamp(com.example.hms.enums.CashTill.PHARMACY, hospitalId, cashierId);
     }
 }

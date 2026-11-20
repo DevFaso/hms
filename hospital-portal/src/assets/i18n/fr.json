@@ -2097,7 +2097,10 @@
       "PHARMACY_REFUND_PAID": "Remboursement pharmacie remis au patient",
       "PHARMACY_REFUND_CANCELLED": "Remboursement pharmacie annulé",
       "PHARMACY_PACK_SIZE_SET": "Conditionnement fixé sur un article d’inventaire",
-      "PHARMACY_PRICE_CHANGED": "Prix de vente de la pharmacie modifié"
+      "PHARMACY_PRICE_CHANGED": "Prix de vente de la pharmacie modifié",
+      "REVERSAL_EVENT": "{{what}} : contre-passation {{refund}} sur la facture {{invoice}}",
+      "CASH_SESSION_EVENT": "{{what}} : caisse {{session}}",
+      "INVOICE_LINE_PRICED_MANUALLY": "Ligne {{line}} du brouillon {{invoice}} tarifée à la main"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -2402,6 +2405,15 @@
       "PAYER_SHARE_CLAIMED": "Part assureur réclamée",
       "PAYER_SHARE_PAID": "Part assureur payée par l’assureur",
       "PAYER_SHARE_REJECTED": "Part assureur refusée par l’assureur"
+    },
+    "REVERSAL_EVENT": {
+      "PAYMENT_REVERSAL_REQUESTED": "Contre-passation demandée",
+      "PAYMENT_REVERSED": "Paiement contre-passé (argent remis)"
+    },
+    "CASH_SESSION_EVENT": {
+      "CASH_SESSION_CLOSED": "Caisse clôturée",
+      "CASH_SESSION_REOPENED": "Caisse rouverte",
+      "CASH_SESSION_REVIEWED": "Caisse vérifiée"
     }
   },
   "BILLING": {
@@ -2533,7 +2545,7 @@
     "RECEIPT": "Reçu",
     "REVERSAL_REASON": "Motif",
     "REVERSAL_REASON_REQUIRED": "Un motif est obligatoire.",
-    "REVERSAL_NOTE": "Le paiement reste au journal comme contre-passé ; le montant payé et le solde sont recalculés. Remboursez le patient par le même moyen.",
+    "REVERSAL_NOTE": "La contre-passation est une demande : un autre responsable (administrateur ou comptable) doit l’approuver, puis l’argent est remis au patient depuis « Remboursements ». Le paiement reste compté jusqu’à la remise.",
     "PAYMENT_CONFIRMED": "Paiement confirmé.",
     "PAYMENT_REVERSED": "Paiement contre-passé.",
     "PAYMENT_REJECTED": "Paiement refusé.",
@@ -2707,7 +2719,8 @@
         "WHOLE_ROW": "Ligne entière",
         "TOO_LARGE": "Le fichier dépasse 1 Mo. Découpez la grille en plusieurs fichiers.",
         "CONCURRENT_ERROR": "Un autre utilisateur vient de créer ce code (ou ce lien) dans la grille : rien n’a été appliqué. Relancez la vérification."
-      }
+      },
+      "LINK_RETIRED": "Ce test n’a plus de version active : ce prix ne s’applique plus. Liez-le au test actuel."
     },
     "REFUNDS": {
       "TITLE": "Demandes de remboursement",
@@ -2758,7 +2771,8 @@
       "INVOICE": "Facture",
       "REFERENCE_AT_HANDOVER": "La référence de la transaction sera demandée à la remise, quand l’argent est envoyé.",
       "HAND_OVER_TITLE": "Remettre le remboursement de {{amount}}",
-      "RECEIPT_NUMBER": "Reçu n° {{number}}"
+      "RECEIPT_NUMBER": "Reçu n° {{number}}",
+      "REVERSAL_TAG": "Contre-passation d’un paiement"
     },
     "PAYERS": {
       "TITLE": "Organismes payeurs",
@@ -2864,7 +2878,94 @@
       "ESTIMATE_NOTE": "Estimation selon la formule du patient : la part de l'assureur est fixée à l'émission de la facture."
     },
     "LINE_SHARES": "Assureur : {{payer}} · Patient : {{patient}}",
-    "LINE_SHARES_ESTIMATED": "Estimation — Assureur : {{payer}} · Patient : {{patient}}"
+    "LINE_SHARES_ESTIMATED": "Estimation — Assureur : {{payer}} · Patient : {{patient}}",
+    "PAYMENT_REVERSAL_REQUESTED": "Contre-passation demandée : un autre responsable doit l’approuver, puis remettez l’argent au patient depuis « Remboursements ». Le paiement reste compté jusque-là.",
+    "PAYMENT_DUPLICATE_CONFIRM": "Enregistrer un deuxième paiement identique ?",
+    "UNPRICED_LINE_HINT": "Ligne sans prix de la grille : indiquez pourquoi vous la tarifez à la main.",
+    "CASH_SESSION": {
+      "TITLE": "Ma caisse du jour",
+      "EMPTY": "Aucun encaissement ce jour-là : votre caisse s’ouvre au premier paiement que vous encaissez.",
+      "TILLS": {
+        "BILLING": "Caisse facturation",
+        "RECEPTION": "Caisse accueil",
+        "PHARMACY": "Caisse pharmacie"
+      },
+      "STATUSES": {
+        "OPEN": "Ouverte",
+        "CLOSED": "Clôturée",
+        "REVIEWED": "Vérifiée"
+      },
+      "CASH_TO_COUNT": "Espèces à compter :",
+      "CLOSED_BY": "Caisse clôturée le {{ date }} par {{ name }}",
+      "REOPENED_BY": "Rouverte le {{ date }} par {{ name }} — motif : {{ reason }}",
+      "BY_METHOD": "Attendu, compté et écart par moyen de paiement",
+      "IN": "Entrées",
+      "OUT": "Sorties",
+      "EXPECTED": "Attendu",
+      "COUNTED": "Compté",
+      "COUNTED_FOR": "Montant compté — {{ method }}",
+      "DIFFERENCE": "Écart",
+      "EXPLANATION": "Explication de l’écart",
+      "EXPLANATION_PLACEHOLDER": "Pourquoi le compte diffère-t-il ?",
+      "TOTAL": "Totaux",
+      "CLOSE": "Clôturer la caisse",
+      "PRINT_SHEET": "Imprimer la feuille de caisse",
+      "CLOSE_HINT": "Comptez les espèces du tiroir, relevez les soldes Orange Money et Moov Money et les tickets de carte, puis clôturez. Une caisse clôturée n’accepte plus de paiement.",
+      "EARLIER_COUNTS": "Comptes des clôtures précédentes",
+      "ROUND": "Clôture {{ round }}",
+      "MOVEMENTS": "Mouvements de la caisse ({{ count }})",
+      "KIND": "Nature",
+      "KINDS": {
+        "PAYMENT": "Paiement de facture",
+        "COPAY": "Ticket modérateur (accueil)",
+        "PHARMACY_PAYMENT": "Paiement de dispensation",
+        "COUNTER_SALE": "Vente au comptoir",
+        "REFUND": "Remboursement remis",
+        "REVERSAL": "Contre-passation remise"
+      },
+      "CLOSED_TOAST": "Caisse clôturée.",
+      "CLOSE_FAILED": "La caisse n’a pas pu être clôturée.",
+      "COUNT_REQUIRED": "Saisissez le montant compté pour {{ method }}.",
+      "COUNT_WHOLE": "Le montant compté pour {{ method }} doit être un nombre entier de francs, 0 ou plus.",
+      "EXPLANATION_REQUIRED": "Expliquez l’écart pour {{ method }}.",
+      "SUPERVISOR_TITLE": "Caisses du jour",
+      "SUPERVISOR_SUBTITLE": "Toutes les caisses de l’établissement : facturation, accueil et pharmacie. Les caisses encore ouvertes sont signalées.",
+      "SUPERVISOR_EMPTY": "Aucune caisse n’a encaissé ce jour-là.",
+      "SUPERVISOR_LINK": "Caisses du jour",
+      "DAY_REPORT": "Rapport journalier (PDF)",
+      "JOURNAL": "Journal des mouvements (CSV)",
+      "TILL": "Caisse",
+      "CASHIER": "Caissier",
+      "DETAILS": "Détail",
+      "REOPEN": "Rouvrir",
+      "REVIEW": "Marquer vérifiée",
+      "REOPEN_REASON": "Motif de la réouverture",
+      "REVIEW_NOTE": "Note de vérification (facultative)",
+      "REOPEN_REASON_REQUIRED": "Un motif est obligatoire pour rouvrir une caisse.",
+      "REOPENED_TOAST": "Caisse rouverte.",
+      "REVIEWED_TOAST": "Caisse marquée vérifiée.",
+      "ACTION_FAILED": "L’action sur la caisse n’a pas pu être enregistrée.",
+      "EXPORT_FAILED": "Le journal n’a pas pu être téléchargé.",
+      "EXPLANATION_VALUE": "Explication de l’écart : {{ text }}",
+      "REVIEW_NOTE_VALUE": "Note de vérification : {{ text }}",
+      "PHARMACY_LINK": "Clôture de caisse",
+      "LINES_WITH_DIFFERENCE": "{{count}} ligne(s) avec écart",
+      "REMOVED_LINES": "Lignes retirées des factures",
+      "REMOVED_INVOICE": "Facture",
+      "REMOVED_LINE": "Ligne retirée",
+      "REMOVED_REASON": "Motif",
+      "REMOVED_BY": "Retirée par",
+      "CASH_DIFFERENCE_VALUE": "Écart espèces : {{ amount }}"
+    },
+    "UNPRICED_LINES_REASON": "Motif des lignes à 0 F CFA",
+    "UNPRICED_LINES_REASON_PLACEHOLDER": "Pourquoi ces lignes sont-elles émises gratuitement ?",
+    "UNPRICED_LINES_REASON_REQUIRED": "Indiquez pourquoi ces lignes sont émises à 0 F CFA, ou saisissez d’abord leur prix.",
+    "ADDED_LINE_REASON": "Ligne ajoutée à la main — motif",
+    "ADDED_LINE_REASON_PLACEHOLDER": "Pourquoi cette ligne est-elle ajoutée à la main sur la facture de la visite ?",
+    "ADDED_LINE_REASON_REQUIRED": "Indiquez pourquoi cette ligne est ajoutée à la main sur la facture de la visite.",
+    "LINE_REMOVE_REASON": "Motif du retrait de cette ligne",
+    "LINE_REMOVE_REASON_PLACEHOLDER": "Pourquoi cette ligne est-elle retirée de la facture ?",
+    "LINE_REMOVE_REASON_REQUIRED": "Indiquez le motif du retrait de cette ligne."
   },
   "CHAT": {
     "ACCESS_DENIED": "Vous n'avez pas l'autorisation d'accéder à la messagerie.",
@@ -5156,7 +5257,8 @@
     "PAYERS": "Organismes payeurs",
     "MY_IMAGING": "Imagerie",
     "LAB_CRITICAL_PENDING": "Résultats critiques à relire",
-    "PHARMACY_RECONCILIATION": "Rapprochement pharmacie"
+    "PHARMACY_RECONCILIATION": "Rapprochement pharmacie",
+    "PHARMACY_TILL_CLOSE": "Clôture de caisse pharmacie"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerte critique",
@@ -7509,7 +7611,12 @@
         "PHARMACY_REFUND_REJECTED": "Remboursement pharmacie refusé",
         "PHARMACY_REFUND_PAID": "Remboursement pharmacie remis",
         "PHARMACY_REFUND_CANCELLED": "Remboursement pharmacie annulé",
-        "PHARMACY_PRICE_CHANGED": "Prix de vente de la pharmacie modifié"
+        "PHARMACY_PRICE_CHANGED": "Prix de vente de la pharmacie modifié",
+        "PAYMENT_REVERSAL_REQUESTED": "Contre-passation demandée",
+        "CASH_SESSION_CLOSED": "Caisse clôturée",
+        "CASH_SESSION_REOPENED": "Caisse rouverte",
+        "CASH_SESSION_REVIEWED": "Caisse vérifiée",
+        "INVOICE_LINE_PRICED_MANUALLY": "Ligne tarifée à la main"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -8051,7 +8158,8 @@
         "HOSPITAL_PACS_SETTINGS": "Connexion PACS",
         "LAB_QC_TARGET": "Cible CQ du laboratoire",
         "INSTRUMENT_OUTBOX_MESSAGE": "Message de la boîte d’envoi des instruments",
-        "PHARMACY_REFUND": "Remboursement pharmacie"
+        "PHARMACY_REFUND": "Remboursement pharmacie",
+        "CASH_SESSION": "Caisse"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",

@@ -351,6 +351,30 @@ public class RoleValidator {
         return hasAnyCode(userId, hospitalId, PHARMACIST_ROLE, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE);
     }
 
+    /**
+     * Billing-money plan PR 10 (plan section 3.8): who supervises the hospital's tills: sees every cash session of
+     * the day, reopens a closed one with a reason, marks one reviewed. A hospital admin or an accountant there.
+     */
+    public boolean canSuperviseTills(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE);
+    }
+
+    /**
+     * PR 10 review: who holds a till at {@code hospitalId}, the people who can count and close their own cash
+     * session there: a hospital admin, an accountant, a billing specialist, a receptionist or a pharmacist
+     * assignment. Money taken by anyone else (the platform super-admin on their expanded authorities) would sit in
+     * a session nobody can close.
+     */
+    public boolean canHoldTill(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE, BILLING_SPECIALIST_ROLE,
+            RECEPTIONIST_ROLE, "PHARMACIST");
+    }
+
+    /** Billing-money plan PR 10: whether the refund payer hands money back at the billing desk (else reception). */
+    public boolean paysAtBillingDesk(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, BILLING_SPECIALIST_ROLE, ACCOUNTANT_ROLE);
+    }
+
     /** Billing-money plan PR 2 (plan section 3.8): who reads a hospital's price list there. */
     public boolean canReadPriceList(UUID userId, UUID hospitalId) {
         return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE, BILLING_SPECIALIST_ROLE,

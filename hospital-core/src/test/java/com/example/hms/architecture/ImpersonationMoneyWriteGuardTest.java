@@ -33,7 +33,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * on the money paths under impersonation, with an audit row.
  *
  * <p>This scan finds every write endpoint ({@code POST / PUT / PATCH / DELETE}) of every controller, and every one
- * that looks like money (its controller or path names billing, an invoice, a refund, a price, a payment or a sale)
+ * that looks like money (its controller or path names billing, an invoice, a refund, a price, a payment, a sale or
+ * cash)
  * must be under a money path, or listed in {@link #NOT_MONEY} with why. A new money endpoint outside the paths fails
  * here. The copay taken inside a check-in (whose path is not money) is refused in the service.
  */
@@ -41,7 +42,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ImpersonationMoneyWriteGuardTest {
 
     private static final Pattern LOOKS_LIKE_MONEY = Pattern.compile(
-        "(?i)billing|invoice|refund|price|payment|/pay\\b|/pay$|sale");
+        "(?i)billing|invoice|refund|price|payment|/pay\\b|/pay$|sale|cash");
 
     /** "METHOD path" -> why a write that looks like money is not one. */
     private static final Map<String, String> NOT_MONEY = new TreeMap<>();
@@ -91,12 +92,29 @@ class ImpersonationMoneyWriteGuardTest {
             "POST /pharmacy/payments",
             "POST /pharmacy-sales",
             "POST /me/patient/billing/invoices/{invoiceId}/pay",
-            "POST /pharmacy/claims/{id}/pay");
+            "POST /pharmacy/claims/{id}/pay",
+            // PR 10 review: the till's own steps (a support session never closes, reopens or reviews one).
+            "POST /cash-sessions/{id}/close",
+            "POST /cash-sessions/{id}/reopen",
+            "POST /cash-sessions/{id}/review");
         assertThat(uncovered)
             .as("a money write a support session could make as the user: put it under ImpersonationLimits.MONEY_PATHS,"
                 + " or list it in NOT_MONEY with why")
             .isEmpty();
         assertThat(NOT_MONEY.keySet()).as("a NOT_MONEY entry that no longer exists: delete it").isSubsetOf(writes);
+    }
+
+    @Test
+    void everyCashSessionWriteIsRefusedInTheServiceToo() throws IOException {
+        // PR 10 review: review() had no refusal of its own; the path rule is the first line, this is the second.
+        String source = com.example.hms.testsupport.SourceScan.stripComments(Files.readString(
+            Path.of("src/main/java/com/example/hms/service/billing/cash/CashSessionService.java"),
+            StandardCharsets.UTF_8));
+        for (String write : List.of("close", "reopen", "review")) {
+            assertThat(com.example.hms.testsupport.SourceScan.methodBody(source, write))
+                .as("CashSessionService." + write + " refuses a support session")
+                .contains("ImpersonationLimits.refuseMoneyWrite(");
+        }
     }
 
     @Test

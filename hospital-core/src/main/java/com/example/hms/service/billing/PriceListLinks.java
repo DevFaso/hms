@@ -25,7 +25,9 @@ import java.util.UUID;
  * <ul>
  *   <li>SYSTEM: one of {@link PriceListSystemKey}.</li>
  *   <li>LAB_TEST_DEFINITION: a live lab test the hospital can order (its own or the platform catalogue's), given by
- *       its id or its test code (a finance lead cannot type an id, README A-1); stored as the id.</li>
+ *       its id or its test code (a finance lead cannot type an id, README A-1); stored as the id of the test's
+ *       FIRST version (QA D2700: {@link LabTestLineage}), so a revision of the test keeps its price. Any version
+ *       of a lineage that still has an active one is accepted, the stored first version included.</li>
  *   <li>PROCEDURE_CODE: the procedure order's code (else its name), trimmed, single spaces, upper case
  *       ({@link #procedureKey}; PR 3, deferred from the #1179 review).</li>
  *   <li>IMAGING_STUDY: {@code <ImagingModality>:<study type>}, the study type folded to lower case without accents
@@ -63,7 +65,9 @@ public class PriceListLinks {
         }
         String stored = switch (type) {
             case SYSTEM -> systemKey(key);
-            case LAB_TEST_DEFINITION -> labTest(hospitalId, key).getId().toString();
+            // QA D2700: stored on the test's lineage (its first version), so the lab's next version keeps the price.
+            case LAB_TEST_DEFINITION ->
+                LabTestLineage.rootId(labTest(hospitalId, key), labTestDefinitionRepository).toString();
             case PROCEDURE_CODE -> procedureKey(key);
             case IMAGING_STUDY -> imagingKey(key);
             case TRANSFUSION_PRODUCT -> transfusionProduct(key);
@@ -182,9 +186,20 @@ public class PriceListLinks {
                 || hospitalId.equals(definition.getHospital().getId()))
             .or(() -> single(labTestDefinitionRepository.findLiveByCodeAtHospital(key, hospitalId)))
             .or(() -> single(labTestDefinitionRepository.findLiveGlobalByCode(key)))
-            .filter(LabTestDefinition::isActive);
+            .filter(definition -> definition.isActive() || lineageIsOrderable(definition));
         return found.orElseThrow(() ->
             new FieldBusinessException(FIELD_LINK_KEY, "billing.priceList.linkUnknownLabTest", key));
+    }
+
+    /**
+     * PR 10 review (QA D2700): the link is stored on the test's FIRST version, which is no longer active once the
+     * lab revises the test. The form sends that stored id back when the item is edited (its label, its category),
+     * and "unknown test" refused the save. A version that is not active itself is a known test as long as its
+     * lineage still has an active version; a lineage retired whole stays refused.
+     */
+    private boolean lineageIsOrderable(LabTestDefinition definition) {
+        return LabTestLineage.hasActiveVersion(LabTestLineage.rootId(definition, labTestDefinitionRepository),
+            labTestDefinitionRepository);
     }
 
     private Treatment treatment(UUID hospitalId, String key) {

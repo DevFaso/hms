@@ -51,4 +51,10 @@ public interface PharmacySaleRepository extends JpaRepository<PharmacySale, UUID
                                             @org.springframework.data.repository.query.Param("pharmacyId") UUID pharmacyId,
                                             @org.springframework.data.repository.query.Param("from") java.time.LocalDateTime from,
                                             @org.springframework.data.repository.query.Param("to") java.time.LocalDateTime to);
+
+    /** Billing plan PR 10 (QA D2672): the pharmacy money taken in one cash session. */
+    java.util.List<PharmacySale> findByCashSessionIdOrderByCreatedAtAsc(java.util.UUID cashSessionId);
+
+    /** Billing plan PR 10 (QA D2672): the pharmacy money taken in any of these sessions (the day report). */
+    java.util.List<PharmacySale> findByCashSessionIdIn(java.util.Collection<java.util.UUID> cashSessionIds);
 }

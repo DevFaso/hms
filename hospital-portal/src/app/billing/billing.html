@@ -32,6 +32,13 @@
           {{ 'BILLING.PAYERS.TITLE' | translate }}
         </a>
       }
+      <!-- Billing-money plan PR 10 (QA r65 D2326): every till of the day, for the admin and the accountant -->
+      @if (canSuperviseTills) {
+        <a class="btn-secondary" routerLink="/billing/caisses" data-testid="cash-supervisor-link">
+          <span class="material-symbols-outlined" aria-hidden="true">account_balance</span>
+          {{ 'BILLING.CASH_SESSION.SUPERVISOR_LINK' | translate }}
+        </a>
+      }
       <!-- QA D1059: the cashier's daily cash closing -->
       @if (canRecordPayment) {
         <button
@@ -54,7 +61,8 @@
   </div>
 
   @if (showCashClosing()) {
-    <app-cash-closing />
+    <!-- Billing-money plan PR 10 (QA r65 D2325, D2714): the counted close of the cashier's own tills. -->
+    <app-cash-session />
   }
   @if (showRefundQueue()) {
     <app-refund-queue (openInvoice)="openInvoiceById($event)" />
@@ -555,13 +563,26 @@
                           />
                           <!-- Billing-money plan PR 3 (D-2): a price-list line shows its tariff, and
                                changing its price asks why; the reason is kept with the line. -->
-                          @if (isTariffLine(it)) {
-                            <div class="cell-secondary" [attr.data-testid]="'line-tariff-' + it.id">
-                              {{
-                                'BILLING.TARIFF_PRICE_VALUE'
-                                  | translate: { amount: formatCurrency(it.tariffUnitPrice ?? 0) }
-                              }}
-                            </div>
+                          @if (lineNeedsReason(it)) {
+                            @if (isTariffLine(it)) {
+                              <div
+                                class="cell-secondary"
+                                [attr.data-testid]="'line-tariff-' + it.id"
+                              >
+                                {{
+                                  'BILLING.TARIFF_PRICE_VALUE'
+                                    | translate: { amount: formatCurrency(it.tariffUnitPrice ?? 0) }
+                                }}
+                              </div>
+                            } @else {
+                              <!-- QA D2703: an unpriced line priced by hand says why; the day report lists it. -->
+                              <div
+                                class="cell-secondary"
+                                [attr.data-testid]="'line-unpriced-' + it.id"
+                              >
+                                {{ 'BILLING.UNPRICED_LINE_HINT' | translate }}
+                              </div>
+                            }
                             <label class="line-edit-label" for="line-edit-override-reason"
                               >{{ 'BILLING.OVERRIDE_REASON' | translate }}
                               @if (overrideReasonRequired(it)) {
@@ -634,6 +655,16 @@
                                   | translate: { reason: it.overrideReason }
                               }}
                             </div>
+                          } @else if (it.overrideReason) {
+                            <div
+                              class="cell-secondary"
+                              [attr.data-testid]="'line-priced-reason-' + it.id"
+                            >
+                              {{
+                                'BILLING.OVERRIDE_REASON_VALUE'
+                                  | translate: { reason: it.overrideReason }
+                              }}
+                            </div>
                           }
                         </td>
                         <td class="amount">
@@ -699,7 +730,7 @@
                         >
                           <td colspan="5">
                             <label class="line-edit-label" for="line-remove-reason"
-                              >{{ 'BILLING.REMOVE_REASON' | translate }} *</label
+                              >{{ 'BILLING.LINE_REMOVE_REASON' | translate }} *</label
                             >
                             <input
                               required
@@ -708,7 +739,7 @@
                               id="line-remove-reason"
                               class="line-edit-input"
                               [attr.data-testid]="'line-remove-reason-' + it.id"
-                              [placeholder]="'BILLING.REMOVE_REASON_PLACEHOLDER' | translate"
+                              [placeholder]="'BILLING.LINE_REMOVE_REASON_PLACEHOLDER' | translate"
                               [ngModel]="removeLineReason()"
                               (ngModelChange)="removeLineReason.set($event)"
                               (keydown.enter)="confirmRemoveTariffLine(it)"
@@ -789,6 +820,23 @@
                     (ngModelChange)="newItemUnitPrice.set($event)"
                   />
                 </div>
+                <!-- PR 10 review (QA D2703): a line typed on a visit's invoice says why; the day report lists it. -->
+                @if (addedLineNeedsReason(inv)) {
+                  <div class="field">
+                    <label for="line-reason">{{ 'BILLING.ADDED_LINE_REASON' | translate }} *</label>
+                    <input
+                      required
+                      id="line-reason"
+                      data-server-field="overrideReason"
+                      data-testid="line-add-reason"
+                      type="text"
+                      maxlength="500"
+                      [placeholder]="'BILLING.ADDED_LINE_REASON_PLACEHOLDER' | translate"
+                      [ngModel]="newItemReason()"
+                      (ngModelChange)="newItemReason.set($event)"
+                    />
+                  </div>
+                }
                 <button
                   type="button"
                   class="btn-primary"
@@ -1099,6 +1147,27 @@
                 required
                 [attr.aria-invalid]="!form.cancelReason?.trim()"
                 [placeholder]="'INVOICE_CANCEL.REASON_PLACEHOLDER' | translate"
+              ></textarea>
+            </div>
+          </div>
+        }
+        <!-- PR 10 review (QA D2703): lines at 0 F CFA are issued only with a reason, under the lines named -->
+        @if (unpricedLines(); as lines) {
+          <div class="form-row">
+            <div class="field">
+              <label for="bill-unpriced-reason"
+                >{{ 'BILLING.UNPRICED_LINES_REASON' | translate }} *</label
+              >
+              <p class="field-hint" data-testid="unpriced-lines-named">{{ lines }}</p>
+              <textarea
+                id="bill-unpriced-reason"
+                data-testid="unpriced-lines-reason"
+                data-server-field="unpricedLinesReason"
+                [(ngModel)]="form.unpricedLinesReason"
+                maxlength="500"
+                rows="2"
+                required
+                [placeholder]="'BILLING.UNPRICED_LINES_REASON_PLACEHOLDER' | translate"
               ></textarea>
             </div>
           </div>

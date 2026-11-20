@@ -132,7 +132,10 @@ export interface InvoiceItemRequest {
   itemCategory: InvoiceItemCategory;
   quantity: number;
   unitPrice: number;
-  /** Billing-money plan PR 3 (D-2): required when a price-list price is changed. */
+  /**
+   * Billing-money plan PR 3 (D-2): required when a price-list price is changed. PR 10 review
+   * (QA D2703): also required to add a line by hand to a visit's invoice.
+   */
   overrideReason?: string;
 }
 
@@ -166,6 +169,11 @@ export interface BillingInvoiceRequest {
    * (the server refuses on this field otherwise, naming them).
    */
   confirmUnpricedLines?: boolean;
+  /**
+   * PR 10 review (QA D2703): why the lines at 0 F CFA go out free. Required with
+   * `confirmUnpricedLines`; kept on each such line and listed in the day report.
+   */
+  unpricedLinesReason?: string;
 }
 
 /**
@@ -195,6 +203,8 @@ export interface StaffPaymentRequest {
   mobileMoneyOperator?: MobileMoneyOperator;
   /** Billing plan PR 11 (QA D2430): one key per payment dialog; a retry with it records nothing twice. */
   clientRequestId?: string;
+  /** QA D2704: the cashier confirms a second same payment just recorded on this invoice (another tab). */
+  confirmDuplicate?: boolean;
 }
 
 export type PaymentStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'REVERSED';
@@ -339,6 +349,8 @@ export interface InvoiceRefund {
   cancelledByName?: string | null;
   cancelledAt?: string | null;
   cancelReason?: string | null;
+  /** QA D2702: set when this refund reverses that payment (asked, approved by another person, paid out). */
+  reversedPaymentId?: string | null;
 }
 
 export interface InvoiceRefundRequest {

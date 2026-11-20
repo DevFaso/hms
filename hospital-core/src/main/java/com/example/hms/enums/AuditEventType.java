@@ -329,6 +329,14 @@ public enum AuditEventType {
     IMAGING_IMAGE_WITHDRAWN,
     /** QA D2466 (r64): a key image's caption corrected after upload. */
     IMAGING_IMAGE_CAPTION_UPDATED,
+    /** QA D2702 (V309): a payment reversal asked for, with a reason; it waits for another person's approval (ids only). */
+    PAYMENT_REVERSAL_REQUESTED,
+    /** Billing-money plan PR 10 (V309): a cash session counted and closed, reopened with a reason, or reviewed. */
+    CASH_SESSION_CLOSED,
+    CASH_SESSION_REOPENED,
+    CASH_SESSION_REVIEWED,
+    /** QA D2703: a draft line with no price-list price priced by hand, or set to 0, with a reason (ids only). */
+    INVOICE_LINE_PRICED_MANUALLY,
     /** QA D2675 (r65, V311): a fill handed over unpaid, marked « à facturer » with a reason. */
     DISPENSE_BILLING_DEFERRED,
     /** QA D2676 (r65, V311): a pharmacy refund of a patient return asked for. */

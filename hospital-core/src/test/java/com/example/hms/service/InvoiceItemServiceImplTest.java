@@ -215,7 +215,7 @@ class InvoiceItemServiceImplTest {
         zero.setBillingInvoice(invoice);
         when(itemRepository.findById(zero.getId())).thenReturn(Optional.of(zero));
         InvoiceItemRequestDTO priced = InvoiceItemRequestDTO.builder().billingInvoiceId(invoice.getId())
-            .itemDescription("Radiographie thoracique").quantity(1).unitPrice(new BigDecimal("7500"))
+            .itemDescription("Radiographie thoracique").quantity(1).unitPrice(new BigDecimal("7500")).overrideReason("Radio du jour")
             .itemCategory(ItemCategory.SERVICE).build();
 
         var saved = service.updateInvoiceItem(zero.getId(), priced, Locale.FRENCH);
@@ -246,13 +246,13 @@ class InvoiceItemServiceImplTest {
             when(itemRepository.findById(stay.getId())).thenReturn(Optional.of(stay));
 
             service.updateInvoiceItem(stay.getId(), InvoiceItemRequestDTO.builder().billingInvoiceId(invoice.getId())
-                .itemDescription("Hospital stay (days)").quantity(2).unitPrice(new BigDecimal("5000"))
+                .itemDescription("Hospital stay (days)").quantity(2).unitPrice(new BigDecimal("5000")).overrideReason("Tarif du service")
                 .itemCategory(ItemCategory.SERVICE).build(), Locale.ENGLISH);
             assertThat(stay.getTextCode()).isEqualTo("billing.checkout.bedDays");
             assertThat(stay.getItemDescription()).isEqualTo("Hospitalisation (journées)");
 
             service.updateInvoiceItem(stay.getId(), InvoiceItemRequestDTO.builder().billingInvoiceId(invoice.getId())
-                .itemDescription("Chambre individuelle").quantity(2).unitPrice(new BigDecimal("5000"))
+                .itemDescription("Chambre individuelle").quantity(2).unitPrice(new BigDecimal("5000")).overrideReason("Tarif du service")
                 .itemCategory(ItemCategory.SERVICE).build(), Locale.ENGLISH);
             assertThat(stay.getTextCode()).isNull();
             assertThat(stay.getItemDescription()).isEqualTo("Chambre individuelle");
