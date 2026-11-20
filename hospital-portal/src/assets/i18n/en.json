@@ -8056,7 +8056,9 @@
         "PAYER_PLAN": "Payer plan",
         "HOSPITAL_PACS_SETTINGS": "PACS connection",
         "LAB_QC_TARGET": "Lab QC target",
-        "INSTRUMENT_OUTBOX_MESSAGE": "Instrument outbox message"
+        "INSTRUMENT_OUTBOX_MESSAGE": "Instrument outbox message",
+        "PROBLEM_SENSITIVITY": "Diagnosis sensitivity",
+        "LAB_TEST_DEFINITION_SENSITIVITY": "Lab test sensitivity"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",

@@ -8056,7 +8056,9 @@
         "PAYER_PLAN": "Payer plan",
         "HOSPITAL_PACS_SETTINGS": "Conexión PACS",
         "LAB_QC_TARGET": "Objetivo de CC del laboratorio",
-        "INSTRUMENT_OUTBOX_MESSAGE": "Mensaje de la bandeja de salida de instrumentos"
+        "INSTRUMENT_OUTBOX_MESSAGE": "Mensaje de la bandeja de salida de instrumentos",
+        "PROBLEM_SENSITIVITY": "Sensibilidad del diagnóstico",
+        "LAB_TEST_DEFINITION_SENSITIVITY": "Sensibilidad de la prueba de laboratorio"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Alergia",
