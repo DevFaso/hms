@@ -2398,4 +2398,136 @@ class LabTestDefinitionServiceImplTest {
             assertThat(saved.getValue().hasGradingBasis()).isTrue();
         }
     }
+
+    // ---- Policy 2026-11-20 (provisional): recommended sensitive categories ----
+
+    private LabTestDefinition catalogueTest(String code, String name) {
+        LabTestDefinition test = LabTestDefinition.builder().testCode(code).name(name).active(true).build();
+        test.setId(UUID.randomUUID());
+        test.setHospital(hospital);
+        lenient().when(repository.findById(test.getId())).thenReturn(Optional.of(test));
+        lenient().when(repository.save(test)).thenReturn(test);
+        return test;
+    }
+
+    private void classifyingAs(User user, MockedStatic<SecurityUtils> sec, LabTestDefinition... catalogue) {
+        actingAt(hospitalId);
+        holdsRolesAtHospital(user);
+        sec.when(SecurityUtils::getCurrentUsername).thenReturn(user.getUsername());
+        when(userRepository.findByUsername(user.getUsername())).thenReturn(Optional.of(user));
+        lenient().when(repository.findNotRetiredAtHospital(hospitalId)).thenReturn(java.util.List.of(catalogue));
+    }
+
+    private static com.example.hms.payload.dto.ApplyLabSensitivityRecommendationsRequestDTO.Item confirmed(
+            LabTestDefinition test, com.example.hms.enums.SensitivityCategory category) {
+        return new com.example.hms.payload.dto.ApplyLabSensitivityRecommendationsRequestDTO.Item(test.getId(), category);
+    }
+
+    @Test
+    void policy_theDirectorIsShownTheRecommendedCategories_andNothingIsTagged() {
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        LabTestDefinition hiv = catalogueTest("SRV", "Sérologie VIH");
+        LabTestDefinition tpha = catalogueTest("TPHA", "Sérologie syphilis");
+        tpha.setSensitivityCategory(com.example.hms.enums.SensitivityCategory.STI);
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            classifyingAs(director, sec, hiv, tpha, definition);
+
+            java.util.List<com.example.hms.payload.dto.LabSensitivityRecommendationDTO> shown =
+                service.recommendedSensitivity();
+
+            // CBC is outside the list: never proposed.
+            assertThat(shown).extracting(com.example.hms.payload.dto.LabSensitivityRecommendationDTO::testCode)
+                .containsExactly("SRV", "TPHA");
+            assertThat(shown.get(0).recommendedCategory()).isEqualTo(com.example.hms.enums.SensitivityCategory.HIV);
+            assertThat(shown.get(0).applied()).isFalse();
+            assertThat(shown.get(0).provisional()).isTrue();
+            assertThat(shown.get(1).applied()).isTrue();
+            assertThat(hiv.getSensitivityCategory()).isNull();
+            verify(repository, never()).save(any());
+            verify(auditEventLogService, never()).logEvent(any());
+        }
+    }
+
+    @Test
+    void policy_theDirectorConfirms_eachTagIsAppliedAndAudited() {
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        LabTestDefinition hiv = catalogueTest("SRV", "Sérologie VIH");
+        LabTestDefinition hcg = catalogueTest("BHCG", "Dosage");
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            classifyingAs(director, sec, hiv, hcg);
+
+            service.applyRecommendedSensitivity(java.util.List.of(
+                confirmed(hiv, com.example.hms.enums.SensitivityCategory.HIV),
+                confirmed(hcg, com.example.hms.enums.SensitivityCategory.PREGNANCY)));
+
+            assertThat(hiv.getSensitivityCategory()).isEqualTo(com.example.hms.enums.SensitivityCategory.HIV);
+            assertThat(hcg.getSensitivityCategory()).isEqualTo(com.example.hms.enums.SensitivityCategory.PREGNANCY);
+            org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+                org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+            verify(auditEventLogService, org.mockito.Mockito.times(2)).logEvent(audit.capture());
+            assertThat(audit.getAllValues()).allSatisfy(event -> {
+                assertThat(event.getEventType())
+                    .isEqualTo(com.example.hms.enums.AuditEventType.LAB_SENSITIVITY_RECOMMENDATION_APPLIED);
+                assertThat(event.getEntityType()).isEqualTo("LAB_TEST_DEFINITION_SENSITIVITY");
+                assertThat(event.getUserId()).isEqualTo(director.getId());
+                assertThat(event.getDetails()).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP).containsKey("mapping").containsEntry("from", "null");
+            });
+        }
+    }
+
+    @Test
+    void policy_aTestOutsideTheList_orAnotherCategory_refusesTheWholeRequest() {
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        LabTestDefinition hiv = catalogueTest("SRV", "Sérologie VIH");
+        LabTestDefinition glucose = catalogueTest("GLY", "Glycémie");
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            classifyingAs(director, sec, hiv, glucose);
+
+            // Glucose is not on the list: it cannot be tagged through this path.
+            assertThatThrownBy(() -> service.applyRecommendedSensitivity(java.util.List.of(
+                confirmed(glucose, com.example.hms.enums.SensitivityCategory.HIV))))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            // Nor may a listed test take another category than the recommended one.
+            assertThatThrownBy(() -> service.applyRecommendedSensitivity(java.util.List.of(
+                confirmed(hiv, com.example.hms.enums.SensitivityCategory.SUBSTANCE_USE))))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+
+            assertThat(glucose.getSensitivityCategory()).isNull();
+            assertThat(hiv.getSensitivityCategory()).isNull();
+            verify(repository, never()).save(any());
+            verify(auditEventLogService, never()).logEvent(any());
+        }
+    }
+
+    @Test
+    void policy_anotherHospitalsTest_isUnknown() {
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        LabTestDefinition elsewhere = catalogueTest("SRV", "Sérologie VIH");
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        elsewhere.setHospital(other);
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            classifyingAs(director, sec);
+
+            assertThatThrownBy(() -> service.applyRecommendedSensitivity(java.util.List.of(
+                confirmed(elsewhere, com.example.hms.enums.SensitivityCategory.HIV))))
+                .isInstanceOf(ResourceNotFoundException.class);
+            assertThat(elsewhere.getSensitivityCategory()).isNull();
+        }
+    }
+
+    @Test
+    void policy_onlyTheLabDirectorSeesAndAppliesTheRecommendations() {
+        User scientist = userWithRole("ROLE_LAB_SCIENTIST");
+        LabTestDefinition hiv = catalogueTest("SRV", "Sérologie VIH");
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            classifyingAs(scientist, sec, hiv);
+
+            assertThatThrownBy(() -> service.recommendedSensitivity()).isInstanceOf(AccessDeniedException.class);
+            assertThatThrownBy(() -> service.applyRecommendedSensitivity(java.util.List.of(
+                confirmed(hiv, com.example.hms.enums.SensitivityCategory.HIV))))
+                .isInstanceOf(AccessDeniedException.class);
+            assertThat(hiv.getSensitivityCategory()).isNull();
+        }
+    }
 }
