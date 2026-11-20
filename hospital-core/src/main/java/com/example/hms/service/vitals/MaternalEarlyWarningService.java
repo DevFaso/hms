@@ -197,23 +197,37 @@ public class MaternalEarlyWarningService {
      */
     public Page page(PatientVitalSign saved, Score score, UUID patientId, UUID hospitalId,
                      String recorderUsername, String visitPhysicianUsername, Collection<String> alreadyPaged) {
-        Set<String> paged = new LinkedHashSet<>();
         if (score == null || !score.needsEscalation() || patientId == null || hospitalId == null) {
-            return new Page(PageStatus.NOT_DUE, paged);
+            return new Page(PageStatus.NOT_DUE, Set.of());
         }
         if (!score.red() && pagedRecently(patientId, hospitalId, score.responseTier())) {
-            return new Page(PageStatus.WITHHELD, paged);
+            return new Page(PageStatus.WITHHELD, Set.of());
         }
-        Set<String> skip = lowerCased(alreadyPaged);
-        boolean toldByAnotherNotice = !skip.isEmpty();
+        Set<String> alreadyTold = lowerCased(alreadyPaged);
+        boolean toldByAnotherNotice = !alreadyTold.isEmpty();
+        Set<String> paged = notifyCircle(saved, score, alreadyTold,
+            recipients(score.responseTier(), patientId, hospitalId, recorderUsername, visitPhysicianUsername));
+        boolean told = toldByAnotherNotice || !paged.isEmpty();
+        if (saved != null && told) {
+            saved.setMewsPagedTier(score.responseTier().name());
+            saved.setMewsPagedAt(LocalDateTime.now(clock));
+        }
+        return new Page(told ? PageStatus.SENT : PageStatus.NOBODY, paged);
+    }
+
+    /**
+     * One notice to each member of the circle the reading has not told yet ({@code alreadyTold}, lower
+     * case). A notice that cannot be created never stops the others. Returns who was told.
+     */
+    private Set<String> notifyCircle(PatientVitalSign saved, Score score, Set<String> alreadyTold, Set<String> circle) {
+        Set<String> paged = new LinkedHashSet<>();
         String patientName = saved != null && saved.getPatient() != null ? saved.getPatient().getFullName() : null;
         Object patientArg = patientName == null || patientName.isBlank()
             ? NotificationLocalizer.key("patient.fallback.generic") : patientName;
         String key = keyOf(score);
         Object[] args = argsOf(score, patientArg);
-        for (String recipient : recipients(score.responseTier(), patientId, hospitalId, recorderUsername,
-            visitPhysicianUsername)) {
-            if (!skip.add(recipient.toLowerCase(Locale.ROOT))) {
+        for (String recipient : circle) {
+            if (!alreadyTold.add(recipient.toLowerCase(Locale.ROOT))) {
                 continue;
             }
             try {
@@ -223,12 +237,7 @@ public class MaternalEarlyWarningService {
                 log.warn("Maternal early-warning notice not created: {}", ex.getClass().getSimpleName());
             }
         }
-        boolean told = toldByAnotherNotice || !paged.isEmpty();
-        if (saved != null && told) {
-            saved.setMewsPagedTier(score.responseTier().name());
-            saved.setMewsPagedAt(LocalDateTime.now(clock));
-        }
-        return new Page(told ? PageStatus.SENT : PageStatus.NOBODY, paged);
+        return paged;
     }
 
     /**

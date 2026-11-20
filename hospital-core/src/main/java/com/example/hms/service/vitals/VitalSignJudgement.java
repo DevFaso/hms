@@ -417,6 +417,43 @@ public class VitalSignJudgement {
     public static final String UNSENT_SUFFIX = "-unsent";
 
     /**
+     * The level of concern as the recorder reads it, with the truth about its page: withheld by the
+     * cool-down, reached nobody, or (sent, or not reported on) the plain code and sentence.
+     */
+    private NewbornVitalAlertDTO maternalLevelAlert(MaternalEarlyWarning.Score score, MaternalEarlyWarning.Tier tier,
+                                                    MaternalEarlyWarningService.PageStatus page,
+                                                    MaternalEarlyWarningRules rules, java.util.Locale locale) {
+        String level = "mews-" + tier.name().toLowerCase(java.util.Locale.ROOT).replace('_', '-');
+        long observeWithin =
+            MaternalEarlyWarning.observationInterval(rules, score, java.time.Duration.ofHours(12)).toMinutes();
+        String code;
+        String message;
+        switch (page == null ? MaternalEarlyWarningService.PageStatus.SENT : page) {
+            case WITHHELD -> {
+                code = level + WITHHELD_SUFFIX;
+                message = messageSource.getMessage(MEWS_WITHHELD_MESSAGE_KEY, new Object[]{score.total(),
+                    rules.getEscalation().getPageCoolDownMinutes(), observeWithin}, code, locale);
+            }
+            case NOBODY -> {
+                code = level + UNSENT_SUFFIX;
+                message = messageSource.getMessage(MEWS_UNSENT_MESSAGE_KEY, new Object[]{score.total()}, code, locale);
+            }
+            default -> {
+                Integer review = MaternalEarlyWarning.reviewWithinMinutes(rules, tier);
+                code = level;
+                message = messageSource.getMessage(MEWS_MESSAGE_PREFIX + tier.name(),
+                    new Object[]{score.total(), review == null ? 0 : review, observeWithin}, code, locale);
+            }
+        }
+        return NewbornVitalAlertDTO.builder()
+            .code(code)
+            .severity(tier == MaternalEarlyWarning.Tier.HIGH ? "URGENT" : "WARNING")
+            .type(MATERNAL_ALERT_TYPE)
+            .message(message)
+            .build();
+    }
+
+    /**
      * The same, saying the truth about the page (review of #1241, round 2). When the cool-down withheld
      * it, the level's code ends in {@value #WITHHELD_SUFFIX} and the sentence says the team was already
      * told a moment ago and that no new page was sent; when a due page reached nobody, the code ends in
@@ -434,28 +471,7 @@ public class VitalSignJudgement {
         // The level the set is answered at: a concern or a RED add-on alert has already raised it.
         MaternalEarlyWarning.Tier tier = score.responseTier();
         if (tier != MaternalEarlyWarning.Tier.LOW) {
-            String code = "mews-" + tier.name().toLowerCase(java.util.Locale.ROOT).replace('_', '-');
-            Integer review = MaternalEarlyWarning.reviewWithinMinutes(rules, tier);
-            long observeWithin =
-                MaternalEarlyWarning.observationInterval(rules, score, java.time.Duration.ofHours(12)).toMinutes();
-            String message;
-            if (page == MaternalEarlyWarningService.PageStatus.WITHHELD) {
-                code += WITHHELD_SUFFIX;
-                message = messageSource.getMessage(MEWS_WITHHELD_MESSAGE_KEY, new Object[]{score.total(),
-                    rules.getEscalation().getPageCoolDownMinutes(), observeWithin}, code, locale);
-            } else if (page == MaternalEarlyWarningService.PageStatus.NOBODY) {
-                code += UNSENT_SUFFIX;
-                message = messageSource.getMessage(MEWS_UNSENT_MESSAGE_KEY, new Object[]{score.total()}, code, locale);
-            } else {
-                message = messageSource.getMessage(MEWS_MESSAGE_PREFIX + tier.name(),
-                    new Object[]{score.total(), review == null ? 0 : review, observeWithin}, code, locale);
-            }
-            alerts.add(NewbornVitalAlertDTO.builder()
-                .code(code)
-                .severity(tier == MaternalEarlyWarning.Tier.HIGH ? "URGENT" : "WARNING")
-                .type(MATERNAL_ALERT_TYPE)
-                .message(message)
-                .build());
+            alerts.add(maternalLevelAlert(score, tier, page, rules, locale));
         }
         for (MaternalEarlyWarning.HardAlert alert : score.alerts()) {
             if (alert == MaternalEarlyWarning.HardAlert.SEVERE_HYPERTENSION) {
