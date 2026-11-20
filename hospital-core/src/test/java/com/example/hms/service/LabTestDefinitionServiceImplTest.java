@@ -519,6 +519,22 @@ class LabTestDefinitionServiceImplTest {
     }
 
     @Test
+    void d2730_aNewTestIsTaggedByTheDirectorOnly() {
+        requestDTO.setSensitivityCategory(com.example.hms.enums.SensitivityCategory.HIV);
+        User scientist = userWithRole("ROLE_LAB_SCIENTIST");
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            holdsRolesAtHospital(scientist);
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn(scientist.getUsername());
+            when(userRepository.findByUsername(scientist.getUsername())).thenReturn(Optional.of(scientist));
+            when(assignmentRepository.findById(assignmentUUID)).thenReturn(Optional.of(assignment));
+            assignment.setUser(scientist);
+
+            assertThatThrownBy(() -> service.create(requestDTO)).isInstanceOf(AccessDeniedException.class);
+            verify(repository, never()).save(any());
+        }
+    }
+
+    @Test
     void d2730_onlyTheLabDirectorTagsATest() {
         User scientist = userWithRole("ROLE_LAB_SCIENTIST");
         requestDTO.setSensitivityCategory(com.example.hms.enums.SensitivityCategory.HIV);
