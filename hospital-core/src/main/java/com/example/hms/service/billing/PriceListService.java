@@ -202,8 +202,11 @@ public class PriceListService {
             : labTestDefinitionRepository.findVisibleAt(hospitalId).stream()
                 .filter(LabTestDefinition::isActive)
                 .sorted(Comparator.comparing(d -> Objects.toString(d.getTestCode(), "")))
+                // PR 10 review (QA D2700): the option's value is the id the link is stored on (the test's first
+                // version), so the form shows the linked test selected after the lab revised it.
                 .map(d -> PriceListLinkOptionsDTO.Option.builder()
-                    .id(d.getId()).code(d.getTestCode()).name(d.getName()).build())
+                    .id(LabTestLineage.rootId(d, labTestDefinitionRepository))
+                    .code(d.getTestCode()).name(d.getName()).build())
                 .toList();
         List<PriceListLinkOptionsDTO.Option> treatments = hospitalId == null ? List.of()
             : treatmentRepository.findByHospital_Id(hospitalId).stream()
@@ -675,7 +678,7 @@ public class PriceListService {
     }
 
     /** What the lab-test and service links name, read in two queries at most. */
-    private record LinkLabels(Map<UUID, String> labTests, Map<UUID, String> treatments) {
+    private record LinkLabels(Map<UUID, String> labTests, Map<UUID, String> treatments, Set<UUID> retiredLabTests) {
     }
 
     private LinkLabels linkLabels(Collection<PriceListItem> items) {
@@ -692,7 +695,14 @@ public class PriceListService {
             treatmentRepository.findAllById(chunk)
                 .forEach(t -> treatments.putIfAbsent(t.getId(), Objects.toString(t.getName(), "")));
         }
-        return new LinkLabels(labTests, treatments);
+        // QA D2700: a lab link whose test has no active version left prices nothing: the list flags it.
+        Set<UUID> retired = new HashSet<>();
+        for (UUID labId : labIds) {
+            if (!LabTestLineage.hasActiveVersion(labId, labTestDefinitionRepository)) {
+                retired.add(labId);
+            }
+        }
+        return new LinkLabels(labTests, treatments, retired);
     }
 
     private static Set<UUID> idsOf(Collection<PriceListItem> items, PriceListLinkType type) {
@@ -746,6 +756,8 @@ public class PriceListService {
             .linkType(item.getLinkType())
             .linkKey(item.getLinkKey())
             .linkLabel(linkLabelOf(item, linkLabels))
+            .linkRetired(item.getLinkType() == PriceListLinkType.LAB_TEST_DEFINITION
+                && parse(item.getLinkKey()).map(id -> linkLabels.retiredLabTests().contains(id)).orElse(true))
             .active(item.isActive())
             .deactivatedAt(item.getDeactivatedAt())
             .deactivatedByName(names.of(item.getDeactivatedBy()))

@@ -191,6 +191,8 @@ public class LaborServiceImpl implements LaborService {
     private final com.example.hms.service.maternity.FetalDeathEventService fetalDeathEvents;
     /** Provisional (2026-11-14): no Apgar or preterm alert is raised or chased for a confirmed stillborn baby. */
     private final com.example.hms.service.maternity.StillbornNeonatalAlerts stillbornNeonatalAlerts;
+    /** QA D2580 (r65): the readings recorded here are charted where the chart reads. */
+    private final com.example.hms.service.vitals.MaternityVitalCharting maternityVitalCharting;
 
     /* ═══════════════════════ Episodes ═══════════════════════ */
 
@@ -929,6 +931,7 @@ public class LaborServiceImpl implements LaborService {
         evaluateMaternalCondition(entry);
 
         LaborPartographEntry saved = entryRepository.save(entry);
+        maternityVitalCharting.chartLaborPartographEntry(saved);
         publishUrgentAlerts(saved.getAlerts(), episode, documentedBy,
             com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_PARTOGRAPH, saved.getId());
         return laborMapper.toEntryResponse(saved, episode.getActivePhaseStartAt());

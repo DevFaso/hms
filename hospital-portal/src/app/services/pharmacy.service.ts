@@ -139,6 +139,8 @@ export interface InventoryItemRequest {
   unit?: string;
   /** QA D264: selling price of one unit, whole XOF. */
   unitPrice?: number | null;
+  /** Review of #1239: why the price changes; required by the server when it does (price history). */
+  priceChangeReason?: string;
   active?: boolean;
 }
 
@@ -156,6 +158,13 @@ export interface InventoryItemResponse {
   active: boolean;
   /** QA D157: a controlled substance; a manual movement of it needs a witness. */
   controlled?: boolean;
+  /** QA D2674: units of `unit` in one pack, once the item is counted in units; absent otherwise. */
+  unitsPerPack?: number | null;
+  /** QA D2674: the pack's name ("plaquette"). */
+  packUnit?: string | null;
+  /** QA D2674: the stock on hand as whole packs plus loose units. */
+  fullPacksOnHand?: number | null;
+  looseUnitsOnHand?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -359,6 +368,11 @@ export interface DispenseRequest {
    * alerts (`cdsAdvisories`), which the form then shows beside this field.
    */
   cdsOverrideReason?: string;
+  /**
+   * Review of #1239 (QA D2675): a one-step fill leaves the counter before it can be paid. When it has
+   * a price, this is why it is handed over « à facturer » (a pharmacist or a hospital admin only).
+   */
+  billingDeferredReason?: string;
   /**
    * Roadmap row 4 / T-68 — optional client-supplied idempotency key the
    * offline-dispense queue mints when the user clicks Dispense. Allows the
@@ -1233,6 +1247,8 @@ export class PharmacyService {
     body: {
       patientScanValue?: string;
       notes?: string;
+      /** QA D2675: why an unpaid fill is handed over « à facturer ». */
+      billingDeferredReason?: string;
     } = {},
   ): Observable<ApiResponse<DispenseResponse>> {
     return this.http.post<ApiResponse<DispenseResponse>>(

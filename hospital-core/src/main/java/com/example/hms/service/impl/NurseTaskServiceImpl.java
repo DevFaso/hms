@@ -309,10 +309,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         // is not a vitals round and does not restart its clock). QA D1314: read for the ward at once.
         java.util.Map<UUID, PatientVitalSign> latest = marWardReader.latestObservationSets(hospitalId,
             inBed.stream().map(PatientContext::patientId).toList());
+        Set<UUID> obstetric = obstetricPatientIds(hospitalId, inBed.stream().map(PatientContext::patientId).toList(), now);
         List<NurseVitalTaskResponseDTO> tasks = new ArrayList<>();
         for (PatientContext ctx : inBed) {
             NurseVitalTaskResponseDTO task = vitalTaskFor(ctx, hospitalId, now, effectiveWindow,
-                Optional.ofNullable(latest.get(ctx.patientId())));
+                Optional.ofNullable(latest.get(ctx.patientId())), obstetric);
             if (task != null) {
                 tasks.add(task);
             }
@@ -320,13 +321,36 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return tasks;
     }
 
+    /**
+     * Review of #1237 (High), batched for the ward reads (D1314): the patients of this read in labour here or
+     * delivered here within the postpartum window, in one query. NEWS2 is not validated for them.
+     */
+    private Set<UUID> obstetricPatientIds(UUID hospitalId, List<UUID> patientIds, LocalDateTime now) {
+        if (hospitalId == null || patientIds.isEmpty() || laborEpisodeRepository == null) {
+            return Set.of();
+        }
+        return new java.util.HashSet<>(laborEpisodeRepository.obstetricPatientIdsAt(patientIds, hospitalId,
+            com.example.hms.enums.LaborStatus.ACTIVE,
+            now.toLocalDate().minusDays(com.example.hms.service.vitals.SevereHypertension.POSTPARTUM_DAYS).atStartOfDay()));
+    }
+
+    /** Review of #1237: the ward reads the labour episodes for the NEWS2 applicability (setter-injected). */
+    private com.example.hms.repository.LaborEpisodeRepository laborEpisodeRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setLaborEpisodeRepository(com.example.hms.repository.LaborEpisodeRepository laborEpisodeRepository) {
+        this.laborEpisodeRepository = laborEpisodeRepository;
+    }
+
     /** The vitals round of one admitted patient, or {@code null} when none falls in the window. */
     private NurseVitalTaskResponseDTO vitalTaskFor(PatientContext ctx, UUID hospitalId, LocalDateTime now,
-                                                   Duration effectiveWindow, Optional<PatientVitalSign> last) {
+                                                   Duration effectiveWindow, Optional<PatientVitalSign> last,
+                                                   Set<UUID> obstetric) {
         // Compute when the next vitals check is due
         LocalDateTime dueTime;
         boolean overdue;
         NewsScoreCalculator.NewsScoreResult news = null;
+        boolean scoreShown = true;
         if (last.isEmpty() || last.get().getRecordedAt() == null) {
             // No vitals ever recorded — overdue now
             dueTime = now.minusMinutes(30);
@@ -335,9 +359,16 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             // QA D207: the NEWS2 band of the last set shortens the interval.
             // QA D518: the adult score does not set a child's interval.
             news = NewsScoreCalculator.applies(last.get()) ? NewsScoreCalculator.score(last.get()) : null;
+            // observationInterval never returns more than the routine interval: a score only shortens a round.
             dueTime = last.get().getRecordedAt().plus(
                 com.example.hms.service.vitals.News2EscalationService.observationInterval(news, ROUTINE_VITALS_INTERVAL));
             overdue = dueTime.isBefore(now);
+            // Review of #1237 (High): NEWS2 is not validated in labour, after a birth or for a newborn. It may
+            // still shorten the round (a safety net) but its number is never shown as reassurance.
+            com.example.hms.model.Patient patient = last.get().getPatient();
+            scoreShown = !obstetric.contains(ctx.patientId()) && (patient == null
+                || !com.example.hms.service.vitals.VitalSignJudgement.isNewborn(patient.getDateOfBirth(),
+                    last.get().getRecordedAt()));
         }
 
         // Only include if within the look-ahead or already overdue. The look-ahead
@@ -350,7 +381,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 .type(vitalsRoundType(news, overdue))
                 .dueTime(dueTime)
                 .overdue(overdue)
-                .news2Score(news != null ? news.total() : null)
+                .news2Score(news != null && scoreShown ? news.total() : null)
                 .build();
         }
         return null;
@@ -2106,10 +2137,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         java.util.Map<UUID, PatientVitalSign> latest = marWardReader.latestObservationSets(hospitalId, patientIds);
         // Each card reads its order against its own stay, so no map of stays here.
         WardOrders ward = readWardOrders(patientIds, hospitalId, java.util.Map.of());
+        Set<UUID> obstetric = obstetricPatientIds(hospitalId, new ArrayList<>(patientIds), now);
 
         List<NurseWorkboardPatientDTO> result = new ArrayList<>();
         for (Admission a : admissions) {
-            NurseWorkboardPatientDTO card = toWorkboardCard(a, hospitalId, now, latest, ward);
+            NurseWorkboardPatientDTO card = toWorkboardCard(a, hospitalId, now, latest, ward, obstetric);
             if (card != null) {
                 result.add(card);
             }
@@ -2118,7 +2150,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     }
 
     private NurseWorkboardPatientDTO toWorkboardCard(Admission a, UUID hospitalId, LocalDateTime now,
-                                                     java.util.Map<UUID, PatientVitalSign> latest, WardOrders ward) {
+                                                     java.util.Map<UUID, PatientVitalSign> latest, WardOrders ward,
+                                                     Set<UUID> obstetric) {
         UUID admissionId = a.getId();
         Patient patient = JpaProxyUtils.safeInit(a.getPatient(), ADMISSION_OWNER, admissionId, ASSOCIATION_PATIENT);
         if (patient == null) return null;
@@ -2129,7 +2162,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         // QA D1402: the card says "vitals due" when the vitals list says overdue,
         // not on a threshold of its own.
         NurseVitalTaskResponseDTO vitalRound = vitalTaskFor(new PatientContext(patient.getId(), null),
-            hospitalId, now, normalizeWindow(null), lastSet);
+            hospitalId, now, normalizeWindow(null), lastSet, obstetric);
         boolean vitalsDue = vitalRound != null && vitalRound.isOverdue();
 
         // QA D949: due means DUE or OVERDUE, never a later slot or a finished course.

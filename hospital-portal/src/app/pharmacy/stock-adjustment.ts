@@ -35,6 +35,7 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { DashPipe } from '../shared/pipes/dash.pipe';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { missingRequiredMessage } from '../shared/required-fields';
+import { PharmacyMoneyService } from '../services/pharmacy-money.service';
 /** QA D1051: a fill reference as stored: an optional lot (older rows: "lot X"), then the minute. */
 const RETURN_FILL_REF = /^(?:lot\s+)?(?:(\S+)\s+)?(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2})$/i;
 
@@ -500,9 +501,14 @@ export class StockAdjustmentComponent implements OnInit {
           witnessedBy: this.form.witnessedBy,
         })
       : this.svc.recordTransaction(this.form);
+    const returnedRef = this.isReturn() ? this.form.referenceId : undefined;
     request$.subscribe({
-      next: () => {
+      next: (res) => {
         this.toast.success(this.translate.instant('PHARMACY.TX_RECORDED'));
+        // QA D2676 (r65): a return of a sale or a fill offers its refund (two-person rule).
+        const txId = (res as { data?: { id?: string } } | null)?.data?.id;
+        this.refundPrompt.set(returnedRef && txId ? { returnTransactionId: txId } : null);
+        this.refundReason = '';
         this.closeForm();
         this.saving.set(false);
         this.loadTransactions();
@@ -515,7 +521,47 @@ export class StockAdjustmentComponent implements OnInit {
     });
   }
 
+  /** QA D2676: the return just recorded, whose refund the pharmacist may ask for. */
+  readonly refundPrompt = signal<{ returnTransactionId: string } | null>(null);
+  readonly refundSaving = signal(false);
+  refundReason = '';
+  private readonly money = inject(PharmacyMoneyService);
+
+  /** QA D2676: asks for the refund; another hospital admin or accountant approves it. */
+  requestRefund(): void {
+    const prompt = this.refundPrompt();
+    const reason = this.refundReason.trim();
+    if (!prompt) return;
+    if (!reason) {
+      const message = this.translate.instant('PHARMACY_MONEY.REFUND.REASON_REQUIRED');
+      refuseFields(this.host.nativeElement, ['refundReason'], ['refundReason'], message);
+      this.toast.error(message);
+      return;
+    }
+    this.refundSaving.set(true);
+    this.money
+      .requestRefund({ returnTransactionId: prompt.returnTransactionId, reason })
+      .subscribe({
+        next: (res) => {
+          this.refundSaving.set(false);
+          this.refundPrompt.set(null);
+          this.toast.success(
+            this.translate.instant('PHARMACY_MONEY.REFUND.REQUESTED', {
+              amount: res?.data?.amount ?? 0,
+            }),
+          );
+        },
+        error: (err) => {
+          this.refundSaving.set(false);
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('PHARMACY_MONEY.REFUND.FAILED'),
+          );
+        },
+      });
+  }
+
   /** QA D1243: the chosen adjustment reason only removes stock (damage, expiry). */
+
   writeOffReason(): boolean {
     return this.isAdjustment() && WRITE_OFF_REASON_CODES.has(this.adjustmentReasonCode ?? '');
   }

@@ -42,6 +42,11 @@ export interface VitalSignResponse {
   newsRiskBand: NewsRiskBand | null;
   newsComplete: boolean | null;
   newsMissing: string[] | null;
+  /**
+   * Review of #1237: OBSTETRIC or NEWBORN when NEWS2 is not validated for this patient at this reading
+   * (server News2Applicability); the score fields are then null and the chart says why.
+   */
+  newsNotValidated?: 'OBSTETRIC' | 'NEWBORN' | null;
   recordedAt: string;
   createdAt: string;
   updatedAt: string | null;

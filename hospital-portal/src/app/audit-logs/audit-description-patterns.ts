@@ -1848,4 +1848,66 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Instrument outbox message (\S+) \((\S+)\) viewed$/,
     params: ['message', 'type'],
   },
+  // QA r65 (D2674-D2676): pharmacy money and stock (constant descriptions, ids on the row).
+  {
+    key: 'AUDIT.DESC.PHARMACY_FILL_DEFERRED',
+    re: /^Fill handed over unpaid, marked to be billed$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PHARMACY_REFUND_REQUESTED',
+    re: /^Pharmacy refund requested$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PHARMACY_REFUND_APPROVED',
+    re: /^Pharmacy refund approved$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PHARMACY_REFUND_REJECTED',
+    re: /^Pharmacy refund rejected$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PHARMACY_REFUND_PAID',
+    re: /^Pharmacy refund paid out$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PHARMACY_REFUND_CANCELLED',
+    re: /^Pharmacy refund cancelled$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PHARMACY_PACK_SIZE_SET',
+    re: /^Pack size set on an inventory item$/,
+    params: [],
+  },
+  // Review of #1239: a selling price set or changed (the figures stay on the price-history row).
+  {
+    key: 'AUDIT.DESC.PHARMACY_PRICE_CHANGED',
+    re: /^Pharmacy selling price changed$/,
+    params: [],
+  },
+  // QA D2702 (V309): a payment reversal asked for, then paid out through the refund approval (ids only).
+  {
+    key: 'AUDIT.DESC.REVERSAL_EVENT',
+    re: /^(Payment reversal requested|Payment reversed): refund (\S+) on invoice (\S+)$/,
+    params: ['what', 'refund', 'invoice'],
+    localise: { what: 'phrase:REVERSAL_EVENT' },
+  },
+  // Billing-money plan PR 10 (V309): a till closed, reopened or reviewed (ids only; a reason is in the details).
+  {
+    key: 'AUDIT.DESC.CASH_SESSION_EVENT',
+    re: /^(Cash session closed|Cash session reopened|Cash session reviewed): session (\S+)$/,
+    params: ['what', 'session'],
+    localise: { what: 'phrase:CASH_SESSION_EVENT' },
+  },
+  // QA D2703: a draft line with no price-list price priced by hand, or set to 0, with a reason (in the details).
+  {
+    key: 'AUDIT.DESC.INVOICE_LINE_PRICED_MANUALLY',
+    re: /^Draft line (\S+) of invoice (\S+) priced by hand$/,
+    params: ['line', 'invoice'],
+  },
 ];

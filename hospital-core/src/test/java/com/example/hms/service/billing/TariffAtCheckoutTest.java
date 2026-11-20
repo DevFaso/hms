@@ -82,10 +82,12 @@ class TariffAtCheckoutTest {
     private final InvoiceNumberAllocator numbers = mock(InvoiceNumberAllocator.class);
     private final PriceListItemRepository items = mock(PriceListItemRepository.class);
     private final PriceListPriceRepository prices = mock(PriceListPriceRepository.class);
+    private final com.example.hms.repository.LabTestDefinitionRepository labDefinitions =
+        mock(com.example.hms.repository.LabTestDefinitionRepository.class);
     private final TariffResolver resolver = new TariffResolver(items, prices, CLOCK, "Africa/Ouagadougou");
     private final EncounterCheckoutChargeListener listener = new EncounterCheckoutChargeListener(
         encounters, invoices, treatments, assignments, numbers, resolver, List.of(
-            new ConsultationChargeSource(given), new LabOrderChargeSource(labOrders),
+            new ConsultationChargeSource(given, admissions), new LabOrderChargeSource(labOrders, labDefinitions),
             new ImagingOrderChargeSource(imaging), new ProcedureOrderChargeSource(procedures),
             new TransfusionChargeSource(transfusions, units), new BedDaysChargeSource(admissions)));
 
@@ -266,5 +268,58 @@ class TariffAtCheckoutTest {
 
         assertThat(draft.getInvoiceItems()).extracting(InvoiceItem::getItemDescription, InvoiceItem::getPriceSource)
             .contains(tuple("Suture simple", InvoiceLinePriceSource.TARIFF));
+    }
+
+    @Test
+    @DisplayName("QA D2700: the lab revises the test (a new version); the visit is still priced from the test's link")
+    void aRevisedLabTestKeepsItsPrice() {
+        theTestClinicGrid(hospitalId);
+        // The lab's version 2 supersedes the version the price list links to; the doctor orders version 2.
+        LabTestDefinition v1 = new LabTestDefinition();
+        v1.setId(tdrId);
+        v1.setName("TDR paludisme");
+        LabTestDefinition v2 = new LabTestDefinition();
+        v2.setId(UUID.randomUUID());
+        v2.setName("TDR paludisme");
+        v2.setSupersedesDefinitionId(tdrId);
+        when(labDefinitions.findById(tdrId)).thenReturn(Optional.of(v1));
+        LabOrder order = new LabOrder();
+        order.setId(UUID.randomUUID());
+        order.setLabTestDefinition(v2);
+        when(labOrders.findIdsByEncounterIdAndStatusNotIn(eq(encounter.getId()), any())).thenReturn(List.of(order.getId()));
+        when(labOrders.findAllById(List.of(order.getId()))).thenReturn(List.of(order));
+
+        BillingInvoice draft = listener.chargeVisit(event(LocalDateTime.of(2026, 11, 15, 8, 30))).orElseThrow();
+
+        assertThat(draft.getInvoiceItems())
+            .extracting(InvoiceItem::getItemDescription, InvoiceItem::getUnitPrice, InvoiceItem::getPriceSource)
+            .contains(tuple("TDR paludisme (grille)", new BigDecimal("1500.00"), InvoiceLinePriceSource.TARIFF));
+    }
+
+    @Test
+    @DisplayName("QA D2701: a labour admission with no recorded service gets no automatic consultation line")
+    void aLabourAdmissionHasNoDefaultConsultation() {
+        theTestClinicGrid(hospitalId);
+        admissions.findById(encounter.getAdmissionId()).orElseThrow()
+            .setAdmissionType(com.example.hms.enums.AdmissionType.LABOR_DELIVERY);
+
+        BillingInvoice draft = listener.chargeVisit(event(LocalDateTime.of(2026, 11, 15, 8, 30))).orElseThrow();
+
+        assertThat(draft.getInvoiceItems()).extracting(InvoiceItem::getItemDescription)
+            .doesNotContain("Consultation générale")
+            .contains("Journée d'hospitalisation");
+    }
+
+    @Test
+    @DisplayName("QA D2701: an emergency admission (seen by a doctor first) keeps the default consultation (E3)")
+    void anEmergencyAdmissionKeepsTheDefaultConsultation() {
+        theTestClinicGrid(hospitalId);
+        admissions.findById(encounter.getAdmissionId()).orElseThrow()
+            .setAdmissionType(com.example.hms.enums.AdmissionType.EMERGENCY);
+
+        BillingInvoice draft = listener.chargeVisit(event(LocalDateTime.of(2026, 11, 15, 8, 30))).orElseThrow();
+
+        assertThat(draft.getInvoiceItems()).extracting(InvoiceItem::getItemDescription)
+            .contains("Consultation générale");
     }
 }

@@ -1,5 +1,6 @@
 package com.example.hms.service.pharmacy;
 
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.CdsAlertSeverity;
@@ -241,7 +242,7 @@ class DispenseServiceImplTest {
                 });
         // #926 review: by default the lot has issued plenty, so the lot cap does not bind.
         org.mockito.Mockito.lenient().when(stockTransactionRepository.sumQuantityForLot(any(),
-                eq(java.util.EnumSet.of(StockTransactionType.DISPENSE, StockTransactionType.TRANSFER))))
+                eq(StockTransactionServiceImpl.ISSUED_TYPES)))
                 .thenReturn(new BigDecimal("1000"));
         org.mockito.Mockito.lenient().when(stockLotRepository.incrementRemaining(any(), any(), any()))
                 .thenAnswer(inv -> {
@@ -529,6 +530,74 @@ class DispenseServiceImplTest {
             verify(dispenseRepository).save(any(Dispense.class));
             verify(prescriptionRepository).save(any(Prescription.class));
             verify(stockLotRepository, never()).save(any());
+        }
+
+        /** Review of #1239: a one-step fill of 10 capsules priced 100 F CFA each (charge 1 000), nothing paid yet. */
+        private Dispense stubThePricedOneStepFill(DispenseRequestDTO dto) {
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            entity.setMedicationCatalogItem(catalogItem);
+            inventoryItem.setUnitPrice(new BigDecimal("100"));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(pharmacyId, catalogItem.getId()))
+                    .thenReturn(Optional.of(inventoryItem));
+            return entity;
+        }
+
+        @Test
+        @DisplayName("review of #1239: a priced one-step fill with no « à facturer » reason is refused with the amount due; nothing is saved")
+        void aPricedOneStepFillNeedsAReason() {
+            DispenseRequestDTO dto = buildRequest();
+            stubThePricedOneStepFill(dto);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .satisfies(e -> {
+                        com.example.hms.exception.FieldBusinessException refused =
+                                (com.example.hms.exception.FieldBusinessException) e;
+                        assertThat(refused.getField()).isEqualTo("billingDeferredReason");
+                        assertThat(refused.getMessageKey()).isEqualTo("pharmacy.handOver.unpaid");
+                    });
+            verify(dispenseRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("review of #1239: « à facturer » on a one-step fill is refused from a role that may not defer billing")
+        void aOneStepDeferralNeedsTheRole() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setBillingDeferredReason("plus tard");
+            stubThePricedOneStepFill(dto);
+            when(roleValidator.canDeferDispenseBilling(userId, hospitalId)).thenReturn(false);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.handOver.deferRoleRequired");
+            verify(dispenseRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("review of #1239: a priced one-step fill « à facturer » by a pharmacist is saved with the reason, author and time, and audited")
+        void aPricedOneStepFillIsDeferredWithAReason() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setBillingDeferredReason("  Hospitalisée, sur la facture du séjour ");
+            Dispense entity = stubThePricedOneStepFill(dto);
+            when(roleValidator.canDeferDispenseBilling(userId, hospitalId)).thenReturn(true);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
+                    .thenReturn(BigDecimal.TEN);
+            when(prescriptionRepository.save(any(Prescription.class))).thenReturn(prescription);
+
+            service.createDispense(dto);
+
+            assertThat(entity.getBillingDeferredReason()).isEqualTo("Hospitalisée, sur la facture du séjour");
+            assertThat(entity.getBillingDeferredBy()).isEqualTo(userId);
+            assertThat(entity.getBillingDeferredAt()).isNotNull().isEqualTo(entity.getDispensedAt());
+            verify(support).logAudit(eq(AuditEventType.DISPENSE_BILLING_DEFERRED), any(), eq(dispenseId.toString()), any());
         }
 
         /** QA D1555: the patient's allergies, read by the real re-check (no catalogue, no audit). */
@@ -2500,8 +2569,7 @@ class DispenseServiceImplTest {
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(dispense);
             when(stockTransactionRepository.sumQuantityForReference(dispenseId,
                     java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(BigDecimal.ZERO);
-            when(stockTransactionRepository.sumQuantityForLot(stockLotId,
-                    java.util.EnumSet.of(StockTransactionType.DISPENSE, StockTransactionType.TRANSFER)))
+            when(stockTransactionRepository.sumQuantityForLot(stockLotId, StockTransactionServiceImpl.ISSUED_TYPES))
                     .thenReturn(new BigDecimal("4"));
             when(stockTransactionRepository.sumQuantityForLot(stockLotId,
                     java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(new BigDecimal("4"));
@@ -2513,6 +2581,63 @@ class DispenseServiceImplTest {
             verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
             verify(stockTransactionRepository, never()).save(any());
             assertThat(dispense.getStatus()).isEqualTo(DispenseStatus.CANCELLED);
+        }
+
+        /**
+         * Review of #1239: what is still out of a lot counted fills and transfers only, while the returns it
+         * subtracted included the returns of counter sales. On a lot that also sold 6 units, all returned, a 4-unit
+         * fill looked already back (4 issued - 6 returned) and its cancel put nothing on the shelf.
+         */
+        @Test
+        @DisplayName("review of #1239: a cancel counts counter sales among what left the lot (one list with the manual return)")
+        void aCancelCountsSoldUnitsAmongWhatLeftTheLot() {
+            Dispense dispense = buildDispense(DispenseStatus.COMPLETED);
+            dispense.setQuantityDispensed(new BigDecimal("4"));
+            dispense.setStockLot(stockLot);
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(dispense);
+            when(stockTransactionRepository.sumQuantityForReference(dispenseId,
+                    java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(BigDecimal.ZERO);
+            // The lot's ledger: this fill of 4, a counter sale of 6, and the 6 sold units returned.
+            when(stockTransactionRepository.sumQuantityForLot(eq(stockLotId), any())).thenAnswer(inv -> {
+                java.util.Collection<StockTransactionType> types = inv.getArgument(1);
+                BigDecimal total = BigDecimal.ZERO;
+                if (types.contains(StockTransactionType.DISPENSE)) total = total.add(new BigDecimal("4"));
+                if (types.contains(StockTransactionType.SALE)) total = total.add(new BigDecimal("6"));
+                if (types.contains(StockTransactionType.RETURN)) total = total.add(new BigDecimal("6"));
+                return total;
+            });
+
+            service.cancelDispense(dispenseId, null, CANCEL_REASON);
+
+            verify(stockLotRepository).incrementRemaining(eq(stockLotId), eq(new BigDecimal("4")), any());
+            verify(inventoryItemRepository).incrementOnHand(eq(inventoryItem.getId()), eq(new BigDecimal("4")), any());
+            assertThat(StockTransactionServiceImpl.ISSUED_TYPES).containsExactlyInAnyOrder(
+                    StockTransactionType.DISPENSE, StockTransactionType.TRANSFER, StockTransactionType.SALE);
+        }
+
+        @Test
+        @DisplayName("review of #1239 (money back twice): a fill with a live refund is not cancelled; nothing moves")
+        void aFillWithALiveRefundIsNotCancelled() {
+            Dispense dispense = buildDispense(DispenseStatus.COMPLETED);
+            dispense.setStockLot(stockLot);
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            doThrow(new com.example.hms.exception.ConflictException("refund"))
+                    .when(paymentVoider).requireNoLiveRefund(dispense);
+
+            assertThatThrownBy(() -> service.cancelDispense(dispenseId, null, CANCEL_REASON))
+                    .isInstanceOf(com.example.hms.exception.ConflictException.class);
+
+            assertThat(dispense.getStatus()).isEqualTo(DispenseStatus.COMPLETED);
+            verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+            verify(stockTransactionRepository, never()).save(any());
+            verify(dispenseRepository, never()).save(any());
+            verify(paymentVoider, never()).voidForCancelledDispense(any(), any());
         }
 
         @Test

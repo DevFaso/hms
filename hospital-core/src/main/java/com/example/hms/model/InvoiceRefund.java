@@ -117,4 +117,15 @@ public class InvoiceRefund extends BaseEntity {
     /** A retried request carrying the same key returns the refund already asked for (unique per hospital). */
     @Column(name = "client_request_id")
     private UUID clientRequestId;
+
+    /** Billing plan PR 10 (V309): the cash session the refund was paid out in, as money out. */
+    @Column(name = "cash_session_id")
+    private UUID cashSessionId;
+
+    /**
+     * QA D2702 (V309): set when this refund reverses a confirmed payment entered in error. Asked with a reason,
+     * approved by another person, paid out at a till; only then is the payment REVERSED.
+     */
+    @Column(name = "reversed_payment_id")
+    private UUID reversedPaymentId;
 }

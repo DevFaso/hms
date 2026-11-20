@@ -8,6 +8,8 @@ import { AppointmentFormComponent } from '../appointments/appointment-form';
 import { AppointmentListComponent } from '../appointments/appointment-list';
 import { BillingComponent } from '../billing/billing';
 import { CashClosingComponent } from '../billing/cash-closing/cash-closing.component';
+import { CashSessionComponent } from '../billing/cash-session/cash-session.component';
+import { CashSupervisorComponent } from '../billing/cash-session/cash-supervisor.component';
 import { InvoicePayerSharesComponent } from '../billing/payer-shares/invoice-payer-shares.component';
 import { PayersComponent } from '../billing/payers/payers.component';
 import { PriceListImportComponent } from '../billing/price-list/price-list-import.component';
@@ -50,6 +52,7 @@ import { MedicationCatalogComponent } from '../pharmacy/medication-catalog';
 import { MtmReviewComponent } from '../pharmacy/mtm-review';
 import { PharmacyCheckoutComponent } from '../pharmacy/pharmacy-checkout';
 import { PharmacyClaimsComponent } from '../pharmacy/pharmacy-claims';
+import { PharmacyReconciliationComponent } from '../pharmacy/pharmacy-reconciliation';
 import { PharmacyRegistryComponent } from '../pharmacy/pharmacy-registry';
 import { StockAdjustmentComponent } from '../pharmacy/stock-adjustment';
 import { StockRoutingComponent } from '../pharmacy/stock-routing';
@@ -105,6 +108,16 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'CashClosingComponent',
     file: 'billing/cash-closing/cash-closing.component',
     type: CashClosingComponent,
+  },
+  {
+    name: 'CashSessionComponent',
+    file: 'billing/cash-session/cash-session.component',
+    type: CashSessionComponent,
+  },
+  {
+    name: 'CashSupervisorComponent',
+    file: 'billing/cash-session/cash-supervisor.component',
+    type: CashSupervisorComponent,
   },
   {
     name: 'InvoicePayerSharesComponent',
@@ -287,6 +300,11 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'PharmacyClaimsComponent',
     file: 'pharmacy/pharmacy-claims',
     type: PharmacyClaimsComponent,
+  },
+  {
+    name: 'PharmacyReconciliationComponent',
+    file: 'pharmacy/pharmacy-reconciliation',
+    type: PharmacyReconciliationComponent,
   },
   {
     name: 'PharmacyRegistryComponent',

@@ -597,6 +597,33 @@ export const routes: Routes = [
           import('./billing/payers/payers.component').then((m) => m.PayersComponent),
       },
 
+      // Billing-money plan PR 10 (QA r65 D2326): every till of the hospital on a day, the day report and
+      // the journal. Hospital admin and accountant (the super-admin reads); mirrors CashSessionController.
+      {
+        path: 'billing/caisses',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_SUPER_ADMIN', 'ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+        },
+        loadComponent: () =>
+          import('./billing/cash-session/cash-supervisor.component').then(
+            (m) => m.CashSupervisorComponent,
+          ),
+      },
+
+      // Billing-money plan PR 10 (QA r65 D2672): the pharmacist's own till, counted and closed.
+      {
+        path: 'pharmacy/caisse',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_PHARMACIST'],
+        },
+        loadComponent: () =>
+          import('./billing/cash-session/pharmacy-cash.page').then(
+            (m) => m.PharmacyCashPageComponent,
+          ),
+      },
+
       // Billing
       {
         path: 'billing',
@@ -770,6 +797,22 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./lab/lab-release-worklist/lab-release-worklist').then(
             (m) => m.LabReleaseWorklistComponent,
+          ),
+      },
+      {
+        // r65 D2183: the critical results still waiting for a clinician's
+        // read-back, read-only, for the hospital admin the escalation pages
+        // from round 2. GET /lab-results/hospital/{id}/critical/unacknowledged.
+        path: 'lab-critical-pending',
+        canActivate: [RoleGuard],
+        data: {
+          requiresHospitalScope: true,
+          hospitalNetworkTitleKey: 'NAV.LAB_CRITICAL_PENDING',
+          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () =>
+          import('./lab/lab-critical-pending/lab-critical-pending').then(
+            (m) => m.LabCriticalPendingComponent,
           ),
       },
       {
@@ -1603,6 +1646,18 @@ export const routes: Routes = [
         },
         loadComponent: () =>
           import('./pharmacy/pharmacy-claims').then((m) => m.PharmacyClaimsComponent),
+      },
+      {
+        // QA D2673 (r65): the pharmacy's daily reconciliation and its refunds (D2676).
+        path: 'pharmacy/reconciliation',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+        },
+        loadComponent: () =>
+          import('./pharmacy/pharmacy-reconciliation').then(
+            (m) => m.PharmacyReconciliationComponent,
+          ),
       },
 
       // Administration landing for ROLE_ADMIN. ROLE_SUPER_ADMIN passes the

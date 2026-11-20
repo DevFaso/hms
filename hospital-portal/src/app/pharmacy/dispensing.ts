@@ -56,6 +56,9 @@ import { AllergyHoldDialogComponent } from '../shared/allergy-acknowledgement/al
 import { AllergyReviewStateComponent } from '../shared/allergy-acknowledgement/allergy-review-state.component';
 import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
 import { RoleContextService } from '../core/role-context.service';
+import { CfaPipe } from '../shared/pipes/cfa.pipe';
+import { KeyLabelPipe } from '../shared/pipes/key-label.pipe';
+import { DispensePaymentStatus, PharmacyMoneyService } from '../services/pharmacy-money.service';
 
 /** The viewer's local calendar date as YYYY-MM-DD (not the UTC one). */
 function localIsoDate(d: Date): string {
@@ -191,6 +194,8 @@ export function sameDispenseUnit(
     AllergyHoldDialogComponent,
     AllergyReviewStateComponent,
     CdsCardListComponent,
+    CfaPipe,
+    KeyLabelPipe,
   ],
   templateUrl: './dispensing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -198,6 +203,8 @@ export function sameDispenseUnit(
 })
 export class DispensingComponent implements OnInit, OnDestroy {
   private readonly svc = inject(PharmacyService);
+  /** QA D2675: the hand-over reads how the fill is settled before it leaves the counter. */
+  private readonly money = inject(PharmacyMoneyService);
   private readonly roleContext = inject(RoleContextService);
   /**
    * QA D2120: dispensing, claiming, handing over, cancelling and routing are clinical acts
@@ -286,6 +293,11 @@ export class DispensingComponent implements OnInit, OnDestroy {
   );
   readyActionSaving = signal(false);
   handOverScan = '';
+  /** QA D2675: the fill's charge, what is paid or claimed, and what is still due. */
+  readonly handOverPayment = signal<DispensePaymentStatus | null>(null);
+  readonly handOverPaymentFailed = signal(false);
+  /** QA D2675: why an unpaid fill is handed over « à facturer » (required then). */
+  handOverDeferReason = '';
   cancelReason: ReadyCancelReason = 'NOT_COLLECTED';
 
   // G13 — work-queue claim ("being prepared by"). Advisory: it coordinates
@@ -753,6 +765,33 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.stockLots().find((lot) => lot.id === this.selectedLotId()),
   );
 
+  /**
+   * Review of #1239 (QA D2675): what a one-step fill costs at the pharmacy's list price (the price
+   * of the chosen lot's item, else of the order's medication); 0 when it is not priced. Nothing can
+   * be paid on a fill that does not exist yet, so a priced one leaves « à facturer », with a reason.
+   */
+  oneStepCharge(): number {
+    const lot = this.selectedLot();
+    const item = lot
+      ? this.inventoryItems().find((i) => i.id === lot.inventoryItemId)
+      : this.inventoryItems().find(
+          (i) =>
+            !!this.form.medicationCatalogItemId &&
+            i.medicationCatalogItemId === this.form.medicationCatalogItemId,
+        );
+    const price = Number(item?.unitPrice ?? 0);
+    const quantity = Number(this.form.quantityDispensed ?? 0);
+    return price > 0 && quantity > 0 ? Math.round(price * quantity) : 0;
+  }
+
+  /** The server refused a one-step fill for want of the « à facturer » reason (a price it knows). */
+  readonly deferReasonAsked = signal(false);
+
+  /** The « à facturer » reason is shown: the fill has a price here, or the server asked for it. */
+  oneStepNeedsDeferral(): boolean {
+    return this.oneStepCharge() > 0 || this.deferReasonAsked();
+  }
+
   /** QA D654: the chosen lot is of a controlled substance, so the fill is witnessed. */
   readonly lotIsControlled = computed(() => {
     const lot = this.selectedLot();
@@ -973,6 +1012,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.form.dispensedBy = this.auth.currentProfile()?.id ?? '';
     this.verifyAttested.set(false);
     this.cdsAlerts.set([]);
+    this.deferReasonAsked.set(false);
     this.allergyHold.set(null);
     this.showForm.set(true);
     this.loadStockLots();
@@ -1004,7 +1044,37 @@ export class DispensingComponent implements OnInit, OnDestroy {
     } else {
       delete body.fefoOverrideReason;
     }
+    // Review of #1239: the « à facturer » reason travels only when it was asked for and typed.
+    const deferReason = this.form.billingDeferredReason?.trim();
+    if (this.oneStepNeedsDeferral() && deferReason) {
+      body.billingDeferredReason = deferReason;
+    } else {
+      delete body.billingDeferredReason;
+    }
     return body;
+  }
+
+  /**
+   * Review of #1239 (QA D2675): a priced one-step fill with no « à facturer » reason is refused
+   * where the reason is typed, before the server refuses it.
+   */
+  private missingDeferReason(): boolean {
+    if (!this.oneStepNeedsDeferral() || this.form.billingDeferredReason?.trim()) {
+      return false;
+    }
+    const message = this.translate.instant('PHARMACY_MONEY.ONESTEP.DEFER_REQUIRED');
+    refuseFields(this.host.nativeElement, ['dispDeferReason'], ['dispDeferReason'], message);
+    this.toast.error(message);
+    return true;
+  }
+
+  /** The server asked for the « à facturer » reason: the field is shown for the next try. */
+  private noteDeferReasonAsked(err: unknown): void {
+    const fields = (err as { error?: { fieldErrors?: Record<string, unknown> } } | null)?.error
+      ?.fieldErrors;
+    if (fields && 'billingDeferredReason' in fields) {
+      this.deferReasonAsked.set(true);
+    }
   }
 
   /** QA D654: refuses a controlled fill with no witness before the server does. */
@@ -1035,6 +1105,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
 
   submitDispense(): void {
     if (this.missingWitness()) return;
+    if (this.missingDeferReason()) return;
     const split = this.fefoSplit();
     if (split.length > 1) {
       this.submitSplitDispense(split);
@@ -1057,6 +1128,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
           return;
         }
         this.noteCdsAlerts(err);
+        this.noteDeferReasonAsked(err);
         this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.DISPENSE_FAILED'));
       },
     });
@@ -1147,7 +1219,10 @@ export class DispensingComponent implements OnInit, OnDestroy {
   submitReady(): void {
     if (this.missingWitness()) return;
     this.saving.set(true);
-    this.svc.markReady({ ...this.attestedForm(), patientScanValue: '' }).subscribe({
+    // A prepared fill is paid (or marked « à facturer ») at hand-over, never here.
+    const ready: DispenseRequest = { ...this.attestedForm(), patientScanValue: '' };
+    delete ready.billingDeferredReason;
+    this.svc.markReady(ready).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('PHARMACY.READY_SUCCESS'));
         this.formClaimedRowId.set(null);
@@ -1171,7 +1246,22 @@ export class DispensingComponent implements OnInit, OnDestroy {
   openHandOver(rx: WorkQueuePrescription): void {
     this.closeForm();
     this.handOverScan = '';
+    this.handOverDeferReason = '';
+    this.handOverPayment.set(null);
+    this.handOverPaymentFailed.set(false);
     this.readyAction.set({ kind: 'handOver', rx });
+    const dispenseId = rx.readyForCollection?.dispenseId;
+    if (dispenseId) {
+      this.money.dispensePaymentStatus(dispenseId).subscribe({
+        next: (res) => this.handOverPayment.set(res?.data ?? null),
+        error: () => this.handOverPaymentFailed.set(true),
+      });
+    }
+  }
+
+  /** QA D2675: an unpaid fill needs a « à facturer » reason before it can be handed over. */
+  handOverNeedsReason(): boolean {
+    return this.handOverPayment()?.status === 'UNPAID';
   }
 
   openCancelReady(rx: WorkQueuePrescription): void {
@@ -1189,8 +1279,23 @@ export class DispensingComponent implements OnInit, OnDestroy {
     const dispenseId = this.readyAction()?.rx.readyForCollection?.dispenseId;
     if (!dispenseId) return;
     const scan = this.handOverScan.trim();
+    const deferReason = this.handOverDeferReason.trim();
+    if (this.handOverNeedsReason() && !deferReason) {
+      const message = this.translate.instant('PHARMACY_MONEY.HANDOVER.DEFER_REQUIRED');
+      refuseFields(
+        this.host.nativeElement,
+        ['handOverDeferReason'],
+        ['handOverDeferReason'],
+        message,
+      );
+      this.toast.error(message);
+      return;
+    }
+    const body: { patientScanValue?: string; billingDeferredReason?: string } = {};
+    if (scan) body.patientScanValue = scan;
+    if (deferReason && this.handOverNeedsReason()) body.billingDeferredReason = deferReason;
     this.readyActionSaving.set(true);
-    this.svc.handOver(dispenseId, scan ? { patientScanValue: scan } : {}).subscribe({
+    this.svc.handOver(dispenseId, body).subscribe({
       next: () => this.afterReadyAction('PHARMACY.HAND_OVER_SUCCESS'),
       error: (err) => {
         // QA D1555 / Policy 4: an allergy recorded since the fill was prepared holds the hand-over.

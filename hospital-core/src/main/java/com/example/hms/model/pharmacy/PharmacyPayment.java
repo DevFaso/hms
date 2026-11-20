@@ -139,4 +139,8 @@ public class PharmacyPayment extends BaseEntity {
      */
     @Column(name = "client_request_id")
     private java.util.UUID clientRequestId;
+
+    /** Billing plan PR 10 (V309, QA D2672): the pharmacy cash session the money was taken in. */
+    @Column(name = "cash_session_id")
+    private java.util.UUID cashSessionId;
 }

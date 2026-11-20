@@ -75,6 +75,14 @@ public class BillingInvoiceRequestDTO {
     private Boolean confirmUnpricedLines;
 
     /**
+     * PR 10 review (QA D2703): why the lines at 0 F CFA go out free. Required with {@code confirmUnpricedLines};
+     * kept on each such line, audited and listed in the day report.
+     */
+    @jakarta.validation.constraints.Size(max = 500)
+    @com.example.hms.validation.NoCardNumber
+    private String unpricedLinesReason;
+
+    /**
      * Ignored: the amount paid only ever moves through a recorded payment
      * (QA D91).
      */

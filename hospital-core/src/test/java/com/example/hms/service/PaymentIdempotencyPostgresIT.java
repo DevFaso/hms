@@ -104,7 +104,10 @@ class PaymentIdempotencyPostgresIT {
     @Autowired private PatientRepository patients;
     @Autowired private PharmacyRepository pharmacies;
     @Autowired private MedicationCatalogItemRepository catalog;
+    @Autowired private com.example.hms.repository.pharmacy.InventoryItemRepository inventoryItems;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private com.example.hms.repository.RoleRepository roles;
+    @Autowired private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignments;
     @org.springframework.test.context.bean.override.mockito.MockitoBean
     private com.example.hms.service.SmsService smsService;
     @org.springframework.test.context.bean.override.mockito.MockitoBean
@@ -131,6 +134,14 @@ class PaymentIdempotencyPostgresIT {
         account.setLastName("Caisse");
         account.setPhoneNumber("+2267" + (1_000_000 + Math.abs(tag.hashCode() % 8_999_999)));
         cashier = users.saveAndFlush(account);
+        // PR 10 review: money is taken only by someone who holds a till at the hospital (their session can be
+        // closed), read on the assignment.
+        com.example.hms.model.Role role = roles.findByCode("ROLE_BILLING_SPECIALIST").orElseGet(() ->
+            roles.saveAndFlush(com.example.hms.model.Role.builder().name("BILLING_SPECIALIST")
+                .code("ROLE_BILLING_SPECIALIST").description("ROLE_BILLING_SPECIALIST").build()));
+        assignments.saveAndFlush(com.example.hms.model.UserRoleHospitalAssignment.builder()
+            .assignmentCode("D2430-" + tag).description("PR 11 IT").user(cashier).hospital(hospital).role(role)
+            .startDate(LocalDate.now()).assignedAt(java.time.LocalDateTime.now()).active(true).build());
         User patientAccount = new User();
         patientAccount.setUsername("patient." + tag.toLowerCase(Locale.ROOT));
         patientAccount.setPasswordHash("x");
@@ -261,13 +272,21 @@ class PaymentIdempotencyPostgresIT {
     }
 
     @Test
-    @DisplayName("staff payment: without a key nothing changes (two partial payments are two rows)")
+    @DisplayName("staff payment: without a key, a second same payment is asked about (QA D2704), then two rows")
     void staffPaymentWithoutAKeyIsUnchanged() {
         BillingInvoice invoice = invoiceOf("5000");
-        for (int i = 0; i < 2; i++) {
-            invoiceService.recordStaffPayment(invoice.getId(),
-                new StaffPaymentRequestDTO(new BigDecimal("1000"), "CASH", null, null), cashier.getId(), Locale.FRENCH);
-        }
+        invoiceService.recordStaffPayment(invoice.getId(),
+            new StaffPaymentRequestDTO(new BigDecimal("1000"), "CASH", null, null), cashier.getId(), Locale.FRENCH);
+        UUID invoiceId = invoice.getId();
+        UUID cashierId = cashier.getId();
+        StaffPaymentRequestDTO again = new StaffPaymentRequestDTO(new BigDecimal("1000"), "CASH", null, null);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                invoiceService.recordStaffPayment(invoiceId, again, cashierId, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+        assertThat(paymentRows(invoice.getId())).isEqualTo(1);
+        StaffPaymentRequestDTO confirmed = new StaffPaymentRequestDTO(new BigDecimal("1000"), "CASH", null, null,
+            null, null, Boolean.TRUE);
+        invoiceService.recordStaffPayment(invoiceId, confirmed, cashierId, Locale.FRENCH);
         assertThat(paymentRows(invoice.getId())).isEqualTo(2);
     }
 
@@ -295,6 +314,10 @@ class PaymentIdempotencyPostgresIT {
         Pharmacy pharmacy = pharmacies.saveAndFlush(Pharmacy.builder().hospital(hospital).name("Officine D2430").build());
         MedicationCatalogItem item = catalog.saveAndFlush(MedicationCatalogItem.builder()
             .nameFr("Paracétamol 500 mg").genericName("paracetamol").hospital(hospital).build());
+        // QA D2671 / D2670 (r65): the sale is priced from the pharmacy's list and takes its stock.
+        com.example.hms.model.pharmacy.InventoryItem stocked = inventoryItems.saveAndFlush(
+            com.example.hms.model.pharmacy.InventoryItem.builder().pharmacy(pharmacy).medicationCatalogItem(item)
+                .unit("comprimé").unitPrice(new BigDecimal("500")).quantityOnHand(new BigDecimal("100")).build());
         UUID key = UUID.randomUUID();
         List<Callable<Object>> calls = new ArrayList<>();
         for (int i = 0; i < RACERS; i++) {
@@ -314,6 +337,11 @@ class PaymentIdempotencyPostgresIT {
         assertThat(succeeded(race(calls))).isEqualTo(RACERS);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM clinical.pharmacy_sales WHERE client_request_id = ?",
             Integer.class, key)).isEqualTo(1);
+        // The stock went down once, with one SALE movement.
+        assertThat(jdbc.queryForObject("SELECT quantity_on_hand FROM clinical.inventory_items WHERE id = ?",
+            BigDecimal.class, stocked.getId())).isEqualByComparingTo("99");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM clinical.stock_transactions WHERE inventory_item_id = ?"
+            + " AND transaction_type = 'SALE'", Integer.class, stocked.getId())).isEqualTo(1);
     }
 
     @Test

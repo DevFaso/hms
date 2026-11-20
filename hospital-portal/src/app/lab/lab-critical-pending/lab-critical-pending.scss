@@ -1,0 +1,140 @@
+:host {
+  display: block;
+}
+
+.critical-pending-container {
+  padding: 1.5rem;
+  max-width: 1100px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.page-subtitle {
+  margin: 0.25rem 0 0;
+  color: var(--text-secondary, #555);
+}
+
+.btn-refresh {
+  border: 1px solid var(--border-color, #d0d5dd);
+  background: var(--surface, #fff);
+  border-radius: 8px;
+  padding: 0.4rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.what-to-do {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #7c2d12;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin: 0 0 1rem;
+}
+
+.state-block {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--text-secondary, #555);
+}
+
+.state-error {
+  color: #b42318;
+}
+
+.critical-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 0.75rem;
+}
+
+.critical-card {
+  border: 1px solid #fecaca;
+  border-left: 4px solid #dc2626;
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  padding: 0.75rem 1rem;
+  min-width: 0;
+}
+
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.order-code {
+  font-family: monospace;
+  font-weight: 400;
+  color: var(--text-secondary, #555);
+  overflow-wrap: anywhere;
+}
+
+.card-value {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+  margin: 0.5rem 0;
+  overflow-wrap: anywhere;
+}
+
+.value {
+  color: #b42318;
+}
+
+.card-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.75rem;
+  margin: 0;
+  font-size: 0.875rem;
+
+  dt {
+    color: var(--text-secondary, #555);
+  }
+
+  dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 480px) {
+  .critical-pending-container {
+    padding: 1rem;
+  }
+}
+
+/* Long words (or a label not yet loaded) wrap instead of widening the page. */
+.page-header > div,
+.page-title,
+.page-subtitle,
+.what-to-do,
+.state-block,
+.card-head,
+.critical-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

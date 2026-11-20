@@ -526,6 +526,43 @@ class PatientVitalSignServiceImplTest {
     }
 
     @Test
+    void review1237_noReassuringNews2ForAPostpartumMother_theScoreStaysForAnAdult() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Patient patient = minimalPatient(patientId);
+        PatientVitalSign today = PatientVitalSign.builder().patient(patient).hospital(minimalHospital(hospitalId))
+            .respiratoryRateBpm(16).spo2Percent(98).onOxygen(false).temperatureCelsius(37.0).systolicBpMmHg(162)
+            .heartRateBpm(80).consciousnessLevel(com.example.hms.enums.ConsciousnessLevel.ALERT)
+            .recordedAt(LocalDateTime.now()).source("POSTPARTUM").build();
+        today.setId(UUID.randomUUID());
+        PatientVitalSign lastMonth = PatientVitalSign.builder().patient(patient).hospital(minimalHospital(hospitalId))
+            .respiratoryRateBpm(16).spo2Percent(98).onOxygen(false).temperatureCelsius(37.0).systolicBpMmHg(120)
+            .heartRateBpm(80).consciousnessLevel(com.example.hms.enums.ConsciousnessLevel.ALERT)
+            .recordedAt(LocalDateTime.now().minusDays(90)).source("NURSE_STATION").build();
+        lastMonth.setId(UUID.randomUUID());
+        when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
+        when(recordAccessPolicy.readableHospitalIds(any(), org.mockito.ArgumentMatchers.eq(patientId),
+            org.mockito.ArgumentMatchers.eq(hospitalId))).thenReturn(java.util.Set.of(hospitalId));
+        when(vitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(patientId,
+            java.util.Set.of(hospitalId), PageRequest.of(0, 2))).thenReturn(List.of(today, lastMonth));
+        com.example.hms.service.vitals.News2Applicability applicability =
+            org.mockito.Mockito.mock(com.example.hms.service.vitals.News2Applicability.class);
+        when(applicability.statusOf(any(), any(), any())).thenAnswer(inv ->
+            ((LocalDateTime) inv.getArgument(2)).isAfter(LocalDateTime.now().minusDays(42))
+                ? com.example.hms.service.vitals.News2Applicability.Status.OBSTETRIC
+                : com.example.hms.service.vitals.News2Applicability.Status.APPLIES);
+        service.setNews2Applicability(applicability);
+
+        List<PatientVitalSignResponseDTO> responses = service.getRecentVitals(patientId, hospitalId, 2);
+
+        assertThat(responses.get(0).getNewsScore()).isNull();
+        assertThat(responses.get(0).getNewsRiskBand()).isNull();
+        assertThat(responses.get(0).getNewsNotValidated()).isEqualTo("OBSTETRIC");
+        assertThat(responses.get(1).getNewsScore()).isNotNull();
+        assertThat(responses.get(1).getNewsNotValidated()).isNull();
+    }
+
+    @Test
     void getRecentVitalsForPatientPortal_readsThePatientsOwnRows_withoutTheStaffGate() {
         UUID patientId = UUID.randomUUID();
         PatientVitalSign vitalSign = PatientVitalSign.builder()

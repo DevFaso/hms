@@ -129,13 +129,111 @@ public class Hl7v2MessageBuilder {
         }
         String orderId = order.getId() != null ? encodeEscapes(order.getId().toString()) : "";
 
-        return msh("ORU^R01^ORU_R01", msgId, now) +
+        String header = msh("ORU^R01^ORU_R01", msgId, now) +
             pid(patientId, patientName) +
-            "OBR|1|" + orderId + "||" + testCode + "^" + testName + "|||" + resultDate + SEG_TERM +
+            "OBR|1|" + orderId + "||" + testCode + "^" + testName + "|||" + resultDate + SEG_TERM;
+        if (result.hasComponents()) {
+            return header + panelObservations(result, resultStatus, resultDate);
+        }
+        return header +
             "OBX|1|" + valueType(result.getResultValue()) + "|" + testCode + "^" + testName + "||"
             + encodeEscapes(result.getResultValue()) + "|" +
             encodeEscapes(com.example.hms.mapper.LabResultMapper.unitOf(result)) + "||" + abnormalFlag + "|||" + resultStatus
             + "|||" + resultDate + SEG_TERM;
+    }
+
+    /**
+     * r65 D2610: a panel (an NFS) goes out as one OBX per component, the way a
+     * receiver expects a panel: OBX-3 the component's code and name, OBX-5 its
+     * value (NM when numeric), OBX-6 its unit, OBX-7 the range it was graded
+     * against, OBX-8 its own grade, OBX-11 the result's status and OBX-14 the
+     * result time. Before this the stored summary line ("HB 5.5 g/dL; HCT 42
+     * %; ...") went out as one ST value that no analyser or LIS could read.
+     */
+    private String panelObservations(LabResult result, String resultStatus, String resultDate) {
+        StringBuilder segments = new StringBuilder();
+        int setId = 1;
+        for (com.example.hms.payload.dto.LabResultComponentResponseDTO component
+                : com.example.hms.mapper.LabResultMapper.gradedComponentsOf(result)) {
+            String value = component.getValue();
+            segments.append("OBX|").append(setId++).append('|').append(numeric(value) ? "NM" : valueType(value))
+                .append('|').append(encodeEscapes(component.getCode())).append('^')
+                .append(encodeEscapes(component.getName())).append("||")
+                .append(encodeEscapes(value)).append('|')
+                .append(encodeEscapes(component.getUnit())).append('|')
+                .append(encodeEscapes(rangeText(component.getReferenceRange()))).append('|')
+                .append(componentFlag(component)).append("|||").append(resultStatus)
+                .append("|||").append(resultDate).append(SEG_TERM);
+        }
+        return segments.toString();
+    }
+
+    private static final java.util.regex.Pattern NUMERIC_VALUE =
+        java.util.regex.Pattern.compile("[+-]?\\d++(?:\\.\\d++)?+");
+
+    private static boolean numeric(String value) {
+        return value != null && NUMERIC_VALUE.matcher(value.trim()).matches();
+    }
+
+    /** OBX-7: "low-high", ">low" or "<high" from the graded range; empty when none. */
+    private static String rangeText(com.example.hms.payload.dto.LabResultReferenceRangeDTO range) {
+        if (range == null) {
+            return "";
+        }
+        String low = plain(range.getMinValue());
+        String high = plain(range.getMaxValue());
+        if (low != null && high != null) {
+            return low + "-" + high;
+        }
+        if (low != null) {
+            return ">" + low;
+        }
+        return high != null ? "<" + high : "";
+    }
+
+    /**
+     * A range limit as HL7 v2 writes a number on the wire (OBX-7): a point,
+     * no grouping, no trailing zeros, whatever the reader's language. The
+     * machine locale is explicit, so this is never display text.
+     */
+    private static String plain(Double value) {
+        if (value == null) {
+            return null;
+        }
+        java.text.DecimalFormat wire = new java.text.DecimalFormat("0.##########",
+            java.text.DecimalFormatSymbols.getInstance(Locale.ROOT));
+        wire.setGroupingUsed(false);
+        return wire.format(value);
+    }
+
+    /**
+     * OBX-8 (HL7 table 0078) of one component, from its own grade: N, L, H,
+     * A, and LL / HH for a critical value below / above the range.
+     */
+    private static String componentFlag(com.example.hms.payload.dto.LabResultComponentResponseDTO component) {
+        String severity = component.getSeverityFlag() == null ? "" : component.getSeverityFlag();
+        return switch (severity) {
+            case "NORMAL" -> "N";
+            case "LOW" -> "L";
+            case "HIGH" -> "H";
+            case "ABNORMAL" -> "A";
+            case com.example.hms.mapper.LabResultMapper.FLAG_CRITICAL -> criticalSide(component);
+            default -> "";
+        };
+    }
+
+    private static String criticalSide(com.example.hms.payload.dto.LabResultComponentResponseDTO component) {
+        com.example.hms.payload.dto.LabResultReferenceRangeDTO range = component.getReferenceRange();
+        if (range != null && numeric(component.getValue())) {
+            double value = Double.parseDouble(component.getValue().trim());
+            boolean belowCriticalLow = range.getCriticalLow() != null && value <= range.getCriticalLow();
+            boolean belowRange = range.getCriticalLow() == null && range.getMinValue() != null
+                && value < range.getMinValue();
+            if (belowCriticalLow || belowRange) {
+                return "LL";
+            }
+        }
+        return "HH";
     }
 
     /**

@@ -3,6 +3,12 @@ import { TranslateModule } from '@ngx-translate/core';
 import { Subject, of, throwError } from 'rxjs';
 import { NursingNotesPanelComponent } from './nursing-notes-panel.component';
 import { NursingNote, NursingNoteService } from '../../services/nursing-note.service';
+import { RoleContextService } from '../../core/role-context.service';
+import {
+  expectEmptySubmitRefusal,
+  expectFieldsMarked,
+  fieldErrorsResponse,
+} from '../../testing/form-refusal-behaviour';
 
 describe('NursingNotesPanelComponent (QA D927)', () => {
   let service: jasmine.SpyObj<NursingNoteService>;
@@ -100,5 +106,112 @@ describe('NursingNotesPanelComponent (QA D927)', () => {
     expect((fixture.nativeElement as HTMLElement).textContent).toContain(
       'NURSING_NOTES.LOAD_FAILED',
     );
+  });
+});
+
+/** QA D2583 (r65): a saved care note takes an addendum where it is read. */
+describe('NursingNotesPanelComponent addendum (QA D2583)', () => {
+  let service: jasmine.SpyObj<NursingNoteService>;
+  let roles: string[];
+  const note: NursingNote = {
+    id: 'n1',
+    patientId: 'p1',
+    hospitalId: 'h1',
+    template: 'DAR',
+    narrative: 'Pansement refait',
+    documentedAt: '2026-11-20T00:30:00',
+  };
+
+  function render() {
+    TestBed.configureTestingModule({
+      imports: [NursingNotesPanelComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: NursingNoteService, useValue: service },
+        {
+          provide: RoleContextService,
+          useValue: {
+            hasAnyActiveRole: (wanted: string[]) => wanted.some((r) => roles.includes(r)),
+          },
+        },
+      ],
+    });
+    const fixture = TestBed.createComponent(NursingNotesPanelComponent);
+    fixture.componentInstance.patientId = 'p1';
+    fixture.componentInstance.hospitalId = 'h1';
+    fixture.componentInstance.ngOnChanges();
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  function open(fixture: ReturnType<typeof render>) {
+    (fixture.nativeElement as HTMLElement)
+      .querySelector<HTMLButtonElement>('[data-testid="nursing-note-addendum-open"]')!
+      .click();
+    fixture.detectChanges();
+  }
+
+  beforeEach(() => {
+    roles = ['ROLE_NURSE'];
+    service = jasmine.createSpyObj('NursingNoteService', ['listRecent', 'appendAddendum']);
+    service.listRecent.and.returnValue(of([note]));
+  });
+
+  it('offers « Ajouter un complément » to a nurse, and refuses an empty one at the field', () => {
+    const fixture = render();
+    open(fixture);
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="nursing-note-addendum-save"]',
+      sent: service.appendAddendum,
+    });
+    expect(marked).toEqual(['nn-addendum-n1']);
+  });
+
+  it('saves the addendum, unattested unless ticked, and shows it under the note', () => {
+    service.appendAddendum.and.returnValue(
+      of({ ...note, addenda: [{ id: 'a1', content: 'Rougeur à revoir', authorName: 'Awa' }] }),
+    );
+    const fixture = render();
+    open(fixture);
+    fixture.componentInstance.addendumText = 'Rougeur à revoir';
+    fixture.componentInstance.saveAddendum(note);
+    fixture.detectChanges();
+    expect(service.appendAddendum).toHaveBeenCalledWith('n1', 'Rougeur à revoir', false, 'h1');
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="note-addendum-content"]')?.textContent).toContain(
+      'Rougeur à revoir',
+    );
+    // Saved without the attestation: said so, never "signed".
+    expect(host.querySelector('[data-testid="note-addendum-unattested"]')).not.toBeNull();
+  });
+
+  it("marks the server's refusal at the addendum field", () => {
+    service.appendAddendum.and.returnValue(
+      throwError(() => fieldErrorsResponse({ content: 'Le complément est requis.' })),
+    );
+    const fixture = render();
+    open(fixture);
+    fixture.componentInstance.addendumText = 'x';
+    fixture.componentInstance.saveAddendum(note);
+    fixture.detectChanges();
+    expectFieldsMarked(fixture, { 'nn-addendum-n1': 'Le complément est requis.' });
+  });
+
+  it("is read only for a role that cannot write one, and on another hospital's note", () => {
+    roles = ['ROLE_SUPER_ADMIN'];
+    let fixture = render();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="nursing-note-addendum-open"]',
+      ),
+    ).toBeNull();
+    TestBed.resetTestingModule();
+    roles = ['ROLE_NURSE'];
+    service.listRecent.and.returnValue(of([{ ...note, hospitalId: 'h2' }]));
+    fixture = render();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="nursing-note-addendum-open"]',
+      ),
+    ).toBeNull();
   });
 });

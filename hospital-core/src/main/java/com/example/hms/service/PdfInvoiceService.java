@@ -533,6 +533,220 @@ public class PdfInvoiceService {
         }
     }
 
+    /**
+     * Billing-money plan PR 10 (QA D2325, D2326, D2714): one cashier's sheet or the hospital's day report. Per till:
+     * money in, money out, expected, counted and difference per method; the cash to count; the explanations; then
+     * (day report) the day's totals per method, the prices set by hand, and the signature lines.
+     */
+    public byte[] generateCashReportPdf(com.example.hms.service.billing.cash.CashSessionReports.Report report,
+                                        Locale locale) {
+        PdfLabels t = PdfLabels.of(messageSource, locale);
+        try (var doc = new PDDocument()) {
+            var w = new Writer(doc);
+            w.text(BOLD, 16, MARGIN, t.get(report.dayReport() ? "pdf.cash.dayTitle" : "pdf.cash.sessionTitle"));
+            w.down(20);
+            w.text(BODY, 11, MARGIN, t.get(HOSPITAL, safe(report.hospitalName())));
+            w.down(15);
+            w.text(BODY, 11, MARGIN, t.get("pdf.cash.date", t.fmt(report.day())));
+            w.down(20);
+            if (report.sessions().isEmpty()) {
+                w.text(BODY, 11, MARGIN, t.get("pdf.cash.none"));
+                w.down(15);
+            }
+            for (var s : report.sessions()) {
+                cashSessionBlock(w, t, s);
+            }
+            if (report.dayReport()) {
+                cashDayTotals(w, t, report.sessions());
+                cashPricedByHand(w, t, report.priced());
+                cashRemovedLines(w, t, report.removed());
+            }
+            w.ensureRoom(90);
+            w.down(30);
+            w.text(BODY, 11, MARGIN, t.get("pdf.cash.cashierSignature"));
+            w.text(BODY, 11, MARGIN + 260, t.get("pdf.cash.supervisorSignature"));
+            return w.finish();
+        } catch (IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
+    private static final float[] CASH_COLUMNS = {MARGIN, MARGIN + 150, MARGIN + 220, MARGIN + 290, MARGIN + 365,
+        MARGIN + 440};
+
+    private static void cashRow(Writer w, PDFont font, String... cells) throws IOException {
+        w.ensureRoom(14);
+        for (int i = 0; i < cells.length && i < CASH_COLUMNS.length; i++) {
+            w.text(font, 9, CASH_COLUMNS[i], safe(cells[i]));
+        }
+        w.down(13);
+    }
+
+    private static String cashMethodLabel(PdfLabels t, String method, String operator) {
+        if ("MOBILE_MONEY".equals(method)) {
+            String o = operator != null ? operator : "NOT_STATED";
+            return t.getOrCode("pdf.payment.operator." + o, o);
+        }
+        return t.getOrCode("pdf.payment.method." + safe(method), safe(method));
+    }
+
+    private static BigDecimal cashAmount(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
+    }
+
+    private static void cashSessionBlock(Writer w, PdfLabels t,
+                                         com.example.hms.payload.dto.billing.CashSessionDTO s) throws IOException {
+        w.ensureRoom(80);
+        w.rule();
+        w.down(14);
+        w.text(BOLD, 11, MARGIN, t.get("pdf.cash.session", t.getOrCode("pdf.cash.till." + s.getTill(), s.getTill()),
+            safe(s.getCashierName()), t.getOrCode("pdf.cash.status." + s.getStatus(), s.getStatus())));
+        w.down(14);
+        if (s.getClosedAt() != null && !"OPEN".equals(s.getStatus())) {
+            w.text(BODY, 9, MARGIN, t.get("pdf.cash.closedBy", t.fmt(s.getClosedAt()), safe(s.getClosedByName())));
+            w.down(13);
+        }
+        if (s.getReopenedAt() != null) {
+            w.text(BODY, 9, MARGIN, t.get("pdf.cash.reopenedBy", t.fmt(s.getReopenedAt()),
+                safe(s.getReopenedByName())));
+            w.down(13);
+        }
+        cashRow(w, BOLD, t.get("pdf.cash.method"), t.get("pdf.cash.in"), t.get("pdf.cash.out"),
+            t.get("pdf.cash.expected"), t.get("pdf.cash.counted"), t.get("pdf.cash.difference"));
+        int round = s.getCloseRound();
+        for (var line : s.getMethods()) {
+            var count = s.getCounts().stream()
+                .filter(c -> c.getCloseRound() == round && java.util.Objects.equals(c.getMethod(), line.getMethod())
+                    && java.util.Objects.equals(c.getOperator(), line.getOperator()))
+                .findFirst().orElse(null);
+            cashRow(w, BODY, cashMethodLabel(t, line.getMethod(), line.getOperator()), money(line.getInAmount()),
+                money(line.getOutAmount()), money(line.getExpected()),
+                count != null ? money(count.getCounted()) : "-", count != null ? money(count.getDifference()) : "-");
+        }
+        cashRow(w, BOLD, t.get("pdf.cash.total"), money(s.getTotalIn()), money(s.getTotalOut()),
+            money(s.getTotalExpected()), "", s.getTotalDifference() != null ? money(s.getTotalDifference()) : "-");
+        w.text(BOLD, 10, MARGIN, t.get("pdf.cash.cashToCount", money(s.getCashToCount())));
+        w.down(14);
+        cashDifferenceLines(w, t, s);
+        if ("OPEN".equals(s.getStatus())) {
+            w.text(BOLD, 10, MARGIN, t.get("pdf.cash.notClosed"));
+            w.down(14);
+        }
+        for (var c : s.getCounts()) {
+            if (c.getCloseRound() == round && c.getExplanation() != null && !c.getExplanation().isBlank()) {
+                w.paragraph(BODY, 9, MARGIN, t.get("pdf.cash.explanation",
+                    cashMethodLabel(t, c.getMethod(), c.getOperator()), c.getExplanation()));
+                w.down(13);
+            }
+        }
+        w.down(6);
+    }
+
+    /**
+     * PR 10 review: the session's total nets a shortage against a surplus; the drawer's own difference and every
+     * line that differs are printed apart, in bold.
+     */
+    private static void cashDifferenceLines(Writer w, PdfLabels t,
+                                            com.example.hms.payload.dto.billing.CashSessionDTO s) throws IOException {
+        if (s.getCashDifference() != null) {
+            w.text(BOLD, 10, MARGIN, t.get("pdf.cash.cashDifference", money(s.getCashDifference())));
+            w.down(14);
+        }
+        if (s.getDifferenceLines() <= 0) {
+            return;
+        }
+        int round = s.getCloseRound();
+        String differing = s.getCounts().stream()
+            .filter(c -> c.getCloseRound() == round && c.getDifference() != null && c.getDifference().signum() != 0)
+            .map(c -> cashMethodLabel(t, c.getMethod(), c.getOperator()) + " " + money(c.getDifference()))
+            .collect(java.util.stream.Collectors.joining(" ; "));
+        w.paragraph(BOLD, 10, MARGIN, t.get("pdf.cash.differenceLines", s.getDifferenceLines(), differing));
+        w.down(14);
+    }
+
+    private static void cashDayTotals(Writer w, PdfLabels t,
+                                      List<com.example.hms.payload.dto.billing.CashSessionDTO> sessions)
+            throws IOException {
+        java.util.Map<String, BigDecimal[]> totals = new java.util.LinkedHashMap<>();
+        java.util.Map<String, String[]> labels = new java.util.HashMap<>();
+        BigDecimal in = BigDecimal.ZERO;
+        BigDecimal out = BigDecimal.ZERO;
+        for (var s : sessions) {
+            for (var line : s.getMethods()) {
+                String k = line.getMethod() + "|" + safe(line.getOperator());
+                labels.putIfAbsent(k, new String[] {line.getMethod(), line.getOperator()});
+                BigDecimal[] sum = totals.computeIfAbsent(k, x -> new BigDecimal[] {BigDecimal.ZERO, BigDecimal.ZERO});
+                sum[0] = sum[0].add(cashAmount(line.getInAmount()));
+                sum[1] = sum[1].add(cashAmount(line.getOutAmount()));
+                in = in.add(cashAmount(line.getInAmount()));
+                out = out.add(cashAmount(line.getOutAmount()));
+            }
+        }
+        w.ensureRoom(60);
+        w.rule();
+        w.down(14);
+        w.text(BOLD, 11, MARGIN, t.get("pdf.cash.dayTotals"));
+        w.down(14);
+        cashRow(w, BOLD, t.get("pdf.cash.method"), t.get("pdf.cash.in"), t.get("pdf.cash.out"),
+            t.get("pdf.cash.expected"));
+        for (var e : totals.entrySet()) {
+            String[] l = labels.get(e.getKey());
+            cashRow(w, BODY, cashMethodLabel(t, l[0], l[1]), money(e.getValue()[0]), money(e.getValue()[1]),
+                money(e.getValue()[0].subtract(e.getValue()[1])));
+        }
+        cashRow(w, BOLD, t.get("pdf.cash.total"), money(in), money(out), money(in.subtract(out)));
+        long open = sessions.stream().filter(s -> "OPEN".equals(s.getStatus())).count();
+        if (open > 0) {
+            w.text(BOLD, 10, MARGIN, t.get("pdf.cash.openSessions", open));
+            w.down(14);
+        }
+        // PR 10 review: a till whose lines differ is named even when its differences sum to zero.
+        long differing = sessions.stream().filter(s -> s.getDifferenceLines() > 0).count();
+        if (differing > 0) {
+            w.text(BOLD, 10, MARGIN, t.get("pdf.cash.sessionsWithDifference", differing));
+            w.down(14);
+        }
+    }
+
+    /** PR 10 review (QA D2703): the lines taken off draft invoices that day, each with its reason. */
+    private static void cashRemovedLines(Writer w, PdfLabels t,
+                                         List<com.example.hms.payload.dto.billing.InvoiceLineRemovalDTO> lines)
+            throws IOException {
+        w.ensureRoom(40);
+        w.down(6);
+        w.text(BOLD, 11, MARGIN, t.get("pdf.cash.removedLines"));
+        w.down(14);
+        if (lines == null || lines.isEmpty()) {
+            w.text(BODY, 9, MARGIN, t.get("pdf.cash.removedLinesNone"));
+            w.down(13);
+            return;
+        }
+        for (var l : lines) {
+            w.paragraph(BODY, 9, MARGIN, t.get("pdf.cash.removedLine", safe(l.getInvoiceNumber()),
+                safe(l.getLine()), l.getQuantity(), money(l.getUnitPrice()), safe(l.getReason())));
+            w.down(13);
+        }
+    }
+
+    private static void cashPricedByHand(Writer w, PdfLabels t,
+                                         List<com.example.hms.service.billing.cash.CashSessionReports.PricedLine> lines)
+            throws IOException {
+        w.ensureRoom(40);
+        w.down(6);
+        w.text(BOLD, 11, MARGIN, t.get("pdf.cash.pricedByHand"));
+        w.down(14);
+        if (lines.isEmpty()) {
+            w.text(BODY, 9, MARGIN, t.get("pdf.cash.pricedByHandNone"));
+            w.down(13);
+            return;
+        }
+        for (var l : lines) {
+            w.paragraph(BODY, 9, MARGIN, t.get("pdf.cash.pricedLine", safe(l.invoiceNumber()), safe(l.line()),
+                l.gridPrice() != null ? money(l.gridPrice()) : "-", money(l.price()), safe(l.reason())));
+            w.down(13);
+        }
+    }
+
     /** A cursor over pages: moves down, and opens a new page when the room runs out. */
     private static final class Writer {
         /** Line height of a wrapped 10-point line. */

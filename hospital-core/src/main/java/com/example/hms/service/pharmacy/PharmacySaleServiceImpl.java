@@ -21,7 +21,12 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.pharmacy.PharmacyRepository;
 import com.example.hms.repository.pharmacy.PharmacySaleRepository;
+import com.example.hms.repository.pharmacy.InventoryItemRepository;
 import com.example.hms.repository.pharmacy.StockLotRepository;
+import com.example.hms.repository.pharmacy.StockTransactionRepository;
+import com.example.hms.enums.StockTransactionType;
+import com.example.hms.model.pharmacy.InventoryItem;
+import com.example.hms.model.pharmacy.StockTransaction;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -54,6 +59,8 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
     static final int LINE_NOTES_MAX = 500;
     /** The marker of a FEFO override in a line's notes, as on a fill. */
     static final String FEFO_NOTE_PREFIX = "FEFO: ";
+    private static final String FIELD_ITEM = "medicationCatalogItemId";
+    private static final String FIELD_UNIT_PRICE = "unitPrice";
 
     private final PharmacySaleRepository saleRepository;
     private final PharmacyRepository pharmacyRepository;
@@ -68,6 +75,10 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
     private final FefoLotPolicy fefoLotPolicy;
     /** QA D1129: a non-cash sale's reference is recorded once across every till. */
     private final com.example.hms.service.payment.PaymentReferenceRegistry referenceRegistry;
+    /** QA D2671 (r65): the list price of every line; QA D2670: the stock the sale takes. */
+    private final InventoryItemRepository inventoryItemRepository;
+    /** QA D2670 (r65): the SALE movement each line writes. */
+    private final StockTransactionRepository stockTransactionRepository;
 
     @Override
     public PharmacySaleResponseDTO createSale(PharmacySaleRequestDTO dto) {
@@ -132,22 +143,108 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
                 .totalAmount(BigDecimal.ZERO)
                 .build();
 
+        // QA D2671 / D2674 (r65): every line is priced and counted by the server first (list price, pack
+        // conversion), so FEFO and the stock check below judge the units that will really leave the shelf.
+        java.util.List<PricedLine> priced = new java.util.ArrayList<>();
+        for (SaleLineRequestDTO lineDto : dto.getLines()) {
+            priced.add(price(lineDto, pharmacy));
+        }
         BigDecimal runningTotal = BigDecimal.ZERO;
         // What the sale's lines take off each lot (nothing moves until the
         // sale is saved), so FEFO judges each line on what the others leave,
         // whatever order the lines were entered in (review of #975).
-        java.util.Map<java.util.UUID, BigDecimal> takenByLot = quantityTakenByLot(dto.getLines());
-        for (SaleLineRequestDTO lineDto : dto.getLines()) {
-            SaleLine line = buildLine(lineDto, pharmacy, takenByLot);
-            sale.addLine(line);
-            runningTotal = runningTotal.add(line.getLineTotal());
+        java.util.Map<java.util.UUID, BigDecimal> takenByLot = quantityTakenByLot(priced);
+        for (PricedLine line : priced) {
+            SaleLine saleLine = buildLine(line, takenByLot);
+            sale.addLine(saleLine);
+            runningTotal = runningTotal.add(saleLine.getLineTotal());
         }
         sale.setTotalAmount(runningTotal.setScale(2, RoundingMode.HALF_UP));
+        // Billing plan PR 10 (QA D2672): a counter sale is money in the pharmacist's till today; a closed till
+        // refuses it and nothing is written.
+        sale.setCashSessionId(stampPharmacyTill(activeHospitalId, soldBy != null ? soldBy.getId() : null));
 
         PharmacySale saved = saveKeyed(sale);
+        // QA D2670 (r65): the sale takes its stock in the same transaction; a lot emptied meanwhile refuses the
+        // whole sale (it rolls back), never records one the shelf cannot give.
+        moveStock(saved, priced, soldBy);
         log.info("Recorded pharmacy sale {} ({} lines, total {})",
                 saved.getId(), saved.getLines().size(), saved.getTotalAmount());
         return mapper.toResponseDTO(saved);
+    }
+
+    /** One requested line as the server prices and counts it. */
+    record PricedLine(SaleLineRequestDTO request, MedicationCatalogItem item, InventoryItem stocked,
+                      BigDecimal units, BigDecimal unitPrice, StockLot lot) {
+    }
+
+    /**
+     * QA D2671 (r65): a line's price is the pharmacy's list price for the medication (its inventory item's selling
+     * price), never the client's. A price sent with the line is accepted only when it is that price. QA D2674: a
+     * quantity in packs is converted to the units the stock is counted in. QA D2670: a lot is required when the
+     * item is kept in lots, and it must be a lot of that same item at the selling pharmacy.
+     */
+    private PricedLine price(SaleLineRequestDTO lineDto, Pharmacy pharmacy) {
+        if (lineDto.getQuantity() == null || lineDto.getQuantity().signum() <= 0) {
+            throw new com.example.hms.exception.FieldBusinessException("quantity", "pharmacy.sale.lineQuantityPositive");
+        }
+        MedicationCatalogItem item = catalogItemRepository.findById(lineDto.getMedicationCatalogItemId())
+                .orElseThrow(() -> new ResourceNotFoundException("medication.catalog.notfound"));
+        InventoryItem stocked = inventoryItemRepository
+                .findByPharmacyIdAndMedicationCatalogItemId(pharmacy.getId(), item.getId())
+                .filter(InventoryItem::isActive)
+                .orElseThrow(() -> new com.example.hms.exception.FieldBusinessException(FIELD_ITEM,
+                        "pharmacy.sale.notStocked"));
+        // A controlled substance leaves the pharmacy against a signed prescription and in the register, never
+        // over the counter (the register has no counter-sale movement).
+        if (ControlledStockWitness.isControlled(stocked)) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_ITEM,
+                    "pharmacy.sale.controlledNeedsPrescription");
+        }
+        BigDecimal listPrice = PharmacyListPrice.of(stocked)
+                .orElseThrow(() -> new com.example.hms.exception.FieldBusinessException(FIELD_UNIT_PRICE,
+                        "pharmacy.sale.noListPrice"));
+        if (lineDto.getUnitPrice() != null && lineDto.getUnitPrice().compareTo(listPrice) != 0) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_UNIT_PRICE, "pharmacy.sale.priceNotList",
+                    com.example.hms.utility.DisplayNumbers.quantity(listPrice));
+        }
+        BigDecimal units = PackQuantity.toUnits(stocked, lineDto.getQuantity(), lineDto.getInPacks(), "quantity");
+        StockLot lot = lineDto.getStockLotId() == null ? null : sellingLot(lineDto, pharmacy, stocked);
+        if (lot == null && stockLotRepository.existsByInventoryItemId(stocked.getId())) {
+            throw new com.example.hms.exception.FieldBusinessException("stockLotId", "pharmacy.sale.lotRequired");
+        }
+        // QA D779: half a tablet of a counted item is refused here too.
+        WholeUnitQuantity.require(stocked, units);
+        return new PricedLine(lineDto, item, stocked, units, listPrice, lot);
+    }
+
+    /**
+     * QA D2670 (r65): each line takes its units off its lot (when kept in lots) and off the item, with the atomic
+     * UPDATEs every stock writer uses, and writes a SALE movement naming the sale. 0 rows = not enough left at this
+     * instant: the sale is refused with the lot and the quantity, and nothing of it is kept.
+     */
+    private void moveStock(PharmacySale sale, java.util.List<PricedLine> lines, User soldBy) {
+        LocalDateTime now = LocalDateTime.now(java.time.ZoneId.systemDefault());
+        for (PricedLine line : lines) {
+            String quantity = com.example.hms.utility.DisplayNumbers.quantity(line.units());
+            if (line.lot() != null
+                    && stockLotRepository.decrementRemaining(line.lot().getId(), line.units(), now) == 0) {
+                throw new com.example.hms.exception.FieldBusinessException("stockLotId", "stock.lot.insufficient",
+                        line.lot().getLotNumber(), quantity);
+            }
+            if (inventoryItemRepository.decrementOnHand(line.stocked().getId(), line.units(), now) == 0) {
+                throw new com.example.hms.exception.FieldBusinessException("quantity",
+                        "pharmacy.sale.stockInsufficient", quantity);
+            }
+            stockTransactionRepository.save(StockTransaction.builder()
+                    .inventoryItem(line.stocked())
+                    .stockLot(line.lot())
+                    .transactionType(StockTransactionType.SALE)
+                    .quantity(line.units())
+                    .referenceId(sale.getId())
+                    .performedByUser(soldBy)
+                    .build());
+        }
     }
 
     /**
@@ -192,58 +289,51 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
         }
     }
 
-    /** The quantity each lot gives up across all the lines of a sale (positive quantities only). */
-    private static java.util.Map<java.util.UUID, BigDecimal> quantityTakenByLot(java.util.List<SaleLineRequestDTO> lines) {
+    /** The units each lot gives up across all the lines of a sale. */
+    private static java.util.Map<java.util.UUID, BigDecimal> quantityTakenByLot(java.util.List<PricedLine> lines) {
         java.util.Map<java.util.UUID, BigDecimal> taken = new java.util.HashMap<>();
-        for (SaleLineRequestDTO line : lines) {
-            if (line.getStockLotId() != null && line.getQuantity() != null && line.getQuantity().signum() > 0) {
-                taken.merge(line.getStockLotId(), line.getQuantity(), BigDecimal::add);
+        for (PricedLine line : lines) {
+            if (line.lot() != null) {
+                taken.merge(line.lot().getId(), line.units(), BigDecimal::add);
             }
         }
         return java.util.Map.copyOf(taken);
     }
 
-    private SaleLine buildLine(SaleLineRequestDTO lineDto, Pharmacy pharmacy,
-                               java.util.Map<java.util.UUID, BigDecimal> takenByLot) {
-        if (lineDto.getQuantity() == null || lineDto.getQuantity().signum() <= 0) {
-            throw new com.example.hms.exception.FieldBusinessException("quantity", "pharmacy.sale.lineQuantityPositive");
-        }
-        if (lineDto.getUnitPrice() == null || lineDto.getUnitPrice().signum() < 0) {
-            throw new com.example.hms.exception.FieldBusinessException("unitPrice", "pharmacy.sale.linePriceNegative");
-        }
-
-        MedicationCatalogItem item = catalogItemRepository.findById(lineDto.getMedicationCatalogItemId())
-                .orElseThrow(() -> new ResourceNotFoundException("medication.catalog.notfound"));
-
-        StockLot lot = lineDto.getStockLotId() == null ? null : sellingLot(lineDto, pharmacy);
+    private SaleLine buildLine(PricedLine line, java.util.Map<java.util.UUID, BigDecimal> takenByLot) {
+        SaleLineRequestDTO lineDto = line.request();
+        StockLot lot = line.lot();
         if (lot != null) {
             // Review of #975: the sale's lines together never take more than
             // the lot holds - an oversold lot would also hand later lines a
             // FEFO credit for stock that is not there.
-            BigDecimal taken = takenByLot.getOrDefault(lot.getId(), lineDto.getQuantity());
+            BigDecimal taken = takenByLot.getOrDefault(lot.getId(), line.units());
             if (lot.getRemainingQuantity() != null && taken.compareTo(lot.getRemainingQuantity()) > 0) {
                 throw new com.example.hms.exception.FieldBusinessException("stockLotId", "stock.lot.insufficient", lot.getLotNumber(),
                         com.example.hms.utility.DisplayNumbers.quantity(taken));
             }
+        } else if (line.stocked().getQuantityOnHand() != null
+                && line.units().compareTo(line.stocked().getQuantityOnHand()) > 0) {
+            throw new com.example.hms.exception.FieldBusinessException("quantity", "pharmacy.sale.stockInsufficient",
+                    com.example.hms.utility.DisplayNumbers.quantity(line.units()));
         }
         String lineNotes = lot == null ? lineDto.getNotes() : notesWithFefoReason(lineDto, lot, takenByLot);
 
-        BigDecimal lineTotal = lineDto.getQuantity()
-                .multiply(lineDto.getUnitPrice())
-                .setScale(2, RoundingMode.HALF_UP);
-
         return SaleLine.builder()
-                .medicationCatalogItem(item)
+                .medicationCatalogItem(line.item())
                 .stockLot(lot)
-                .quantity(lineDto.getQuantity())
-                .unitPrice(lineDto.getUnitPrice())
-                .lineTotal(lineTotal)
+                .quantity(line.units())
+                .unitPrice(line.unitPrice())
+                .lineTotal(PharmacyListPrice.amount(line.unitPrice(), line.units()).setScale(2, RoundingMode.HALF_UP))
                 .notes(lineNotes)
                 .build();
     }
 
-    /** The lot a line is sold from: of the selling pharmacy, and a whole number of a counted item. */
-    private StockLot sellingLot(SaleLineRequestDTO lineDto, Pharmacy pharmacy) {
+    /**
+     * The lot a line is sold from: of the selling pharmacy, of the line's own medication (QA D2670: a lot of
+     * another drug would take the wrong shelf down), and not expired (review of #1239).
+     */
+    private StockLot sellingLot(SaleLineRequestDTO lineDto, Pharmacy pharmacy, InventoryItem stocked) {
         StockLot lot = stockLotRepository.findById(lineDto.getStockLotId())
                 .orElseThrow(() -> new ResourceNotFoundException("stocklot.notfound"));
         // Lot must belong to the selling pharmacy — prevents cross-pharmacy traceability bugs.
@@ -252,9 +342,16 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
                 || !pharmacy.getId().equals(lot.getInventoryItem().getPharmacy().getId())) {
             throw new com.example.hms.exception.FieldBusinessException("stockLotId", "pharmacy.sale.lotOtherPharmacy");
         }
-        // QA D779: a counter sale from a lot is the same movement as a
-        // fill: half a tablet of a counted item is refused here too.
-        WholeUnitQuantity.require(lot.getInventoryItem(), lineDto.getQuantity());
+        if (!stocked.getId().equals(lot.getInventoryItem().getId())) {
+            throw new com.example.hms.exception.FieldBusinessException("stockLotId", "pharmacy.sale.lotOtherMedication");
+        }
+        // Review of #1239: an expired lot is never sold, as it is never dispensed. Expired ON its expiry date
+        // (QA D710, the rule of DispenseVerificationService.verifyExpiry and of the goods receipt).
+        java.time.LocalDate expiry = lot.getExpiryDate();
+        if (expiry == null || !expiry.isAfter(java.time.LocalDate.now(java.time.ZoneId.systemDefault()))) {
+            throw new com.example.hms.exception.FieldBusinessException("stockLotId", "pharmacy.sale.lotExpired",
+                    lot.getLotNumber(), expiry == null ? "" : com.example.hms.utility.DisplayDates.date(expiry));
+        }
         return lot;
     }
 
@@ -329,5 +426,18 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
         }
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));
+    }
+
+    /** Billing plan PR 10 (V309, QA D2672): pharmacy money lands in the pharmacist's PHARMACY cash session. */
+    private com.example.hms.service.billing.cash.CashSessionService cashSessions;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setCashSessionService(com.example.hms.service.billing.cash.CashSessionService service) {
+        this.cashSessions = service;
+    }
+
+    private java.util.UUID stampPharmacyTill(java.util.UUID hospitalId, java.util.UUID cashierId) {
+        return cashSessions == null ? null
+                : cashSessions.stamp(com.example.hms.enums.CashTill.PHARMACY, hospitalId, cashierId);
     }
 }

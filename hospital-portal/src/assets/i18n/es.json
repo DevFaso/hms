@@ -2089,7 +2089,18 @@
       "IMAGING_PORTAL_IMAGE_VIEWED": "Image {{image}} of imaging order {{order}} viewed on the patient portal",
       "IMAGING_IMAGE_WITHDRAWN": "Image {{image}} withdrawn from imaging order {{order}}",
       "IMAGING_IMAGE_CAPTION_CORRECTED": "Caption of image {{image}} corrected on imaging order {{order}}",
-      "INSTRUMENT_OUTBOX_VIEWED": "Mensaje {{message}} de la bandeja de salida de instrumentos ({{type}}) consultado"
+      "INSTRUMENT_OUTBOX_VIEWED": "Mensaje {{message}} de la bandeja de salida de instrumentos ({{type}}) consultado",
+      "PHARMACY_FILL_DEFERRED": "Fill handed over unpaid, to be billed",
+      "PHARMACY_REFUND_REQUESTED": "Pharmacy refund requested",
+      "PHARMACY_REFUND_APPROVED": "Pharmacy refund approved",
+      "PHARMACY_REFUND_REJECTED": "Pharmacy refund rejected",
+      "PHARMACY_REFUND_PAID": "Pharmacy refund paid out",
+      "PHARMACY_REFUND_CANCELLED": "Pharmacy refund cancelled",
+      "PHARMACY_PACK_SIZE_SET": "Pack size set on an inventory item",
+      "PHARMACY_PRICE_CHANGED": "Pharmacy selling price changed",
+      "REVERSAL_EVENT": "{{what}}: reversal {{refund}} on invoice {{invoice}}",
+      "CASH_SESSION_EVENT": "{{what}}: till {{session}}",
+      "INVOICE_LINE_PRICED_MANUALLY": "Draft line {{line}} of invoice {{invoice}} priced by hand"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -2394,6 +2405,15 @@
       "PAYER_SHARE_CLAIMED": "Insurer share claimed",
       "PAYER_SHARE_PAID": "Insurer share paid by the insurer",
       "PAYER_SHARE_REJECTED": "Insurer share rejected by the insurer"
+    },
+    "REVERSAL_EVENT": {
+      "PAYMENT_REVERSAL_REQUESTED": "Payment reversal requested",
+      "PAYMENT_REVERSED": "Payment reversed (money handed back)"
+    },
+    "CASH_SESSION_EVENT": {
+      "CASH_SESSION_CLOSED": "Till closed",
+      "CASH_SESSION_REOPENED": "Till reopened",
+      "CASH_SESSION_REVIEWED": "Till reviewed"
     }
   },
   "BILLING": {
@@ -2525,7 +2545,7 @@
     "RECEIPT": "Recibo",
     "REVERSAL_REASON": "Motivo",
     "REVERSAL_REASON_REQUIRED": "El motivo es obligatorio.",
-    "REVERSAL_NOTE": "El pago queda en el registro como revertido y se recalculan el importe pagado y el saldo. Reembolse al paciente por el mismo medio.",
+    "REVERSAL_NOTE": "La anulación es una solicitud: otro responsable (administrador o contador) debe aprobarla y luego el dinero se devuelve desde « Reembolsos ». El pago sigue contado hasta la devolución.",
     "PAYMENT_CONFIRMED": "Pago confirmado.",
     "PAYMENT_REVERSED": "Pago revertido.",
     "PAYMENT_REJECTED": "Pago rechazado.",
@@ -2699,7 +2719,8 @@
         "WHOLE_ROW": "Whole row",
         "TOO_LARGE": "The file is larger than 1 MB. Split the price list into several files.",
         "CONCURRENT_ERROR": "Someone else has just created this code (or link) in the price list: nothing was applied. Check the file again."
-      }
+      },
+      "LINK_RETIRED": "This test has no active version any more: this price no longer applies. Link it to the current test."
     },
     "REFUNDS": {
       "TITLE": "Refund requests",
@@ -2750,7 +2771,8 @@
       "INVOICE": "Invoice",
       "REFERENCE_AT_HANDOVER": "La referencia de la transacción se pide en la entrega, cuando se envía el dinero.",
       "HAND_OVER_TITLE": "Entregar el reembolso de {{amount}}",
-      "RECEIPT_NUMBER": "Recibo n.º {{number}}"
+      "RECEIPT_NUMBER": "Recibo n.º {{number}}",
+      "REVERSAL_TAG": "Payment reversal"
     },
     "PAYERS": {
       "TITLE": "Payers",
@@ -2856,7 +2878,94 @@
       "ESTIMATE_NOTE": "Estimación según el plan del paciente: la parte del asegurador se fija al emitir la factura."
     },
     "LINE_SHARES": "Asegurador: {{payer}} · Paciente: {{patient}}",
-    "LINE_SHARES_ESTIMATED": "Estimación — Asegurador: {{payer}} · Paciente: {{patient}}"
+    "LINE_SHARES_ESTIMATED": "Estimación — Asegurador: {{payer}} · Paciente: {{patient}}",
+    "PAYMENT_REVERSAL_REQUESTED": "Reversal requested: another manager must approve it, then hand the money back from « Refunds ». The payment stays counted until then.",
+    "PAYMENT_DUPLICATE_CONFIRM": "Record a second identical payment?",
+    "UNPRICED_LINE_HINT": "Line with no price-list price: say why you price it by hand.",
+    "CASH_SESSION": {
+      "TITLE": "My till today",
+      "EMPTY": "No money taken on this day: your till opens with the first payment you take.",
+      "TILLS": {
+        "BILLING": "Billing till",
+        "RECEPTION": "Reception till",
+        "PHARMACY": "Pharmacy till"
+      },
+      "STATUSES": {
+        "OPEN": "Open",
+        "CLOSED": "Closed",
+        "REVIEWED": "Reviewed"
+      },
+      "CASH_TO_COUNT": "Cash to count:",
+      "CLOSED_BY": "Till closed on {{ date }} by {{ name }}",
+      "REOPENED_BY": "Reopened on {{ date }} by {{ name }} — reason: {{ reason }}",
+      "BY_METHOD": "Expected, counted and difference by payment method",
+      "IN": "In",
+      "OUT": "Out",
+      "EXPECTED": "Expected",
+      "COUNTED": "Counted",
+      "COUNTED_FOR": "Amount counted — {{ method }}",
+      "DIFFERENCE": "Difference",
+      "EXPLANATION": "Explanation of the difference",
+      "EXPLANATION_PLACEHOLDER": "Why does the count differ?",
+      "TOTAL": "Total",
+      "CLOSE": "Close the till",
+      "PRINT_SHEET": "Print the till sheet",
+      "CLOSE_HINT": "Count the cash in the drawer, read the Orange Money and Moov Money balances and the card slips, then close. A closed till takes no more payments.",
+      "EARLIER_COUNTS": "Counts of earlier closes",
+      "ROUND": "Close {{ round }}",
+      "MOVEMENTS": "Till movements ({{ count }})",
+      "KIND": "Type",
+      "KINDS": {
+        "PAYMENT": "Invoice payment",
+        "COPAY": "Copay (reception)",
+        "PHARMACY_PAYMENT": "Dispense payment",
+        "COUNTER_SALE": "Counter sale",
+        "REFUND": "Refund handed back",
+        "REVERSAL": "Reversal handed back"
+      },
+      "CLOSED_TOAST": "Till closed.",
+      "CLOSE_FAILED": "The till could not be closed.",
+      "COUNT_REQUIRED": "Enter the amount counted for {{ method }}.",
+      "COUNT_WHOLE": "The amount counted for {{ method }} must be a whole number of francs, 0 or more.",
+      "EXPLANATION_REQUIRED": "Explain the difference for {{ method }}.",
+      "SUPERVISOR_TITLE": "Tills of the day",
+      "SUPERVISOR_SUBTITLE": "Every till of the hospital: billing, reception and pharmacy. Tills still open are flagged.",
+      "SUPERVISOR_EMPTY": "No till took money on this day.",
+      "SUPERVISOR_LINK": "Tills of the day",
+      "DAY_REPORT": "Day report (PDF)",
+      "JOURNAL": "Journal (CSV)",
+      "TILL": "Till",
+      "CASHIER": "Cashier",
+      "DETAILS": "Details",
+      "REOPEN": "Reopen",
+      "REVIEW": "Mark reviewed",
+      "REOPEN_REASON": "Reason for reopening",
+      "REVIEW_NOTE": "Review note (optional)",
+      "REOPEN_REASON_REQUIRED": "A reason is required to reopen a till.",
+      "REOPENED_TOAST": "Till reopened.",
+      "REVIEWED_TOAST": "Till marked reviewed.",
+      "ACTION_FAILED": "The action on the till could not be saved.",
+      "EXPORT_FAILED": "The journal could not be downloaded.",
+      "EXPLANATION_VALUE": "Explanation of the difference: {{ text }}",
+      "REVIEW_NOTE_VALUE": "Review note: {{ text }}",
+      "PHARMACY_LINK": "Till close",
+      "LINES_WITH_DIFFERENCE": "{{count}} línea(s) con diferencia",
+      "REMOVED_LINES": "Líneas retiradas de las facturas",
+      "REMOVED_INVOICE": "Factura",
+      "REMOVED_LINE": "Línea retirada",
+      "REMOVED_REASON": "Motivo",
+      "REMOVED_BY": "Retirada por",
+      "CASH_DIFFERENCE_VALUE": "Diferencia en efectivo: {{ amount }}"
+    },
+    "UNPRICED_LINES_REASON": "Motivo de las líneas a 0 F CFA",
+    "UNPRICED_LINES_REASON_PLACEHOLDER": "¿Por qué se emiten estas líneas sin coste?",
+    "UNPRICED_LINES_REASON_REQUIRED": "Indique por qué estas líneas se emiten a 0 F CFA, o introduzca primero su precio.",
+    "ADDED_LINE_REASON": "Línea añadida a mano — motivo",
+    "ADDED_LINE_REASON_PLACEHOLDER": "¿Por qué se añade esta línea a mano en la factura de la visita?",
+    "ADDED_LINE_REASON_REQUIRED": "Indique por qué esta línea se añade a mano en la factura de la visita.",
+    "LINE_REMOVE_REASON": "Motivo de la retirada de esta línea",
+    "LINE_REMOVE_REASON_PLACEHOLDER": "¿Por qué se retira esta línea de la factura?",
+    "LINE_REMOVE_REASON_REQUIRED": "Indique el motivo de la retirada de esta línea."
   },
   "CHAT": {
     "ACCESS_DENIED": "No tiene permiso para acceder a la mensajería.",
@@ -4778,7 +4887,14 @@
     "CRITICAL_READ_BACK": "Value read back",
     "CRITICAL_READ_BACK_PLACEHOLDER": "As they repeated it",
     "QC_OVERRIDE_REASON": "Reason for releasing despite the rejected QC",
-    "QC_BLOCKED": "The latest quality-control run for this test was rejected. Record a passing run, or give the reason for releasing anyway."
+    "QC_BLOCKED": "The latest quality-control run for this test was rejected. Record a passing run, or give the reason for releasing anyway.",
+    "QC_HOLD_TAG": "CC rechazado",
+    "QC_HOLD_BANNER": "Liberación retenida: el último control de calidad de {{test}} fue rechazado ({{level}}, {{at}}, registrado por {{by}}). Registre un control aceptado o indique por qué libera este resultado de todos modos.",
+    "QC_LEVEL_LOW": "control bajo",
+    "QC_LEVEL_HIGH": "control alto",
+    "AGE_YEARS": "{{n}} años",
+    "AGE_MONTHS": "{{n}} meses",
+    "ORDERED_BY": "Solicitado por: {{name}}"
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Instrumentos de laboratorio",
@@ -5141,7 +5257,10 @@
     "PRICE_LIST": "Lista de precios",
     "PATIENT_NOTIFICATIONS": "Patient notifications",
     "PAYERS": "Payers",
-    "MY_IMAGING": "Imaging"
+    "MY_IMAGING": "Imaging",
+    "LAB_CRITICAL_PENDING": "Resultados críticos por repetir",
+    "PHARMACY_RECONCILIATION": "Conciliación de farmacia",
+    "PHARMACY_TILL_CLOSE": "Pharmacy till close"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerta crítica",
@@ -6093,7 +6212,9 @@
     "MANAGE_ACCESS": "Gestionar accesos",
     "CLINICAL_ESSENTIALS": "Resumen clínico",
     "CLINICAL_SUMMARY_HELP": "Las alertas clínicas permanecen visibles arriba. Abra el expediente detallado para revisar la atención documentada.",
-    "RECORD_ACTIONS": "Más acciones"
+    "RECORD_ACTIONS": "Más acciones",
+    "NEWS_NOT_VALIDATED_OBSTETRIC": "no validado en el embarazo / posparto: vea las alertas de maternidad",
+    "NEWS_NOT_VALIDATED_NEWBORN": "no validado en el recién nacido: vea las alertas del recién nacido"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Registros de acceso",
@@ -6874,7 +6995,10 @@
         "OTHER": "Otro",
         "DELIVERY": "Sala de partos",
         "PATIENT_REPORTED": "Informado por el paciente",
-        "MANUAL": "Entrada manual"
+        "MANUAL": "Entrada manual",
+        "LABOR_PARTOGRAPH": "Trabajo de parto (partograma)",
+        "POSTPARTUM": "Control posparto",
+        "NEWBORN_ASSESSMENT": "Evaluación del recién nacido"
       },
       "ENCOUNTER_TYPE": {
         "CONSULTATION": "Consulta",
@@ -7516,7 +7640,19 @@
         "MFA_RESET": "Verificación en dos pasos restablecida",
         "PATIENT_CHANNEL_PREFERENCES_UPDATED": "Opciones de SMS / correo del paciente modificadas",
         "IMAGING_IMAGE_WITHDRAWN": "Imaging image withdrawn",
-        "IMAGING_IMAGE_CAPTION_UPDATED": "Imaging image caption corrected"
+        "IMAGING_IMAGE_CAPTION_UPDATED": "Imaging image caption corrected",
+        "DISPENSE_BILLING_DEFERRED": "Fill handed over to be billed",
+        "PHARMACY_REFUND_REQUESTED": "Pharmacy refund requested",
+        "PHARMACY_REFUND_APPROVED": "Pharmacy refund approved",
+        "PHARMACY_REFUND_REJECTED": "Pharmacy refund rejected",
+        "PHARMACY_REFUND_PAID": "Pharmacy refund paid out",
+        "PHARMACY_REFUND_CANCELLED": "Pharmacy refund cancelled",
+        "PHARMACY_PRICE_CHANGED": "Pharmacy selling price changed",
+        "PAYMENT_REVERSAL_REQUESTED": "Payment reversal requested",
+        "CASH_SESSION_CLOSED": "Till closed",
+        "CASH_SESSION_REOPENED": "Till reopened",
+        "CASH_SESSION_REVIEWED": "Till reviewed",
+        "INVOICE_LINE_PRICED_MANUALLY": "Line priced by hand"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -7890,7 +8026,8 @@
         "DISPENSE": "Dispensación",
         "ADJUSTMENT": "Ajuste",
         "TRANSFER": "Traslado",
-        "RETURN": "Devolución"
+        "RETURN": "Devolución",
+        "SALE": "Counter sale"
       },
       "INVOICE_ITEM_CATEGORY": {
         "SERVICE": "Servicio",
@@ -8057,6 +8194,8 @@
         "HOSPITAL_PACS_SETTINGS": "Conexión PACS",
         "LAB_QC_TARGET": "Objetivo de CC del laboratorio",
         "INSTRUMENT_OUTBOX_MESSAGE": "Mensaje de la bandeja de salida de instrumentos",
+        "PHARMACY_REFUND": "Pharmacy refund",
+        "CASH_SESSION": "Caja",
         "PROBLEM_SENSITIVITY": "Sensibilidad del diagnóstico",
         "LAB_TEST_DEFINITION_SENSITIVITY": "Sensibilidad de la prueba de laboratorio"
       },
@@ -13657,7 +13796,9 @@
       "TITLE": "Frecuencia no reconocida",
       "REASON_LABEL": "La hora de la próxima dosis no puede calcularse con esta frecuencia. ¿Por qué administrar esta dosis ahora?",
       "CONFIRM": "Administrar la dosis ahora"
-    }
+    },
+    "CLINICAL_ADVISORY_TITLE": "Controles clínicos para esta dosis",
+    "CLINICAL_ADVISORY_CHIP": "Alerta clínica"
   },
   "CREDENTIALING": {
     "CURRENT_EXPIRY": "Caducidad actual",
@@ -14127,7 +14268,8 @@
     "GLUCOSE": "La glucemia debe estar entre {{min}} y {{max}} mg/dL.",
     "WEIGHT": "El peso debe estar entre {{min}} y {{max}} kg.",
     "HEIGHT": "La talla debe estar entre {{min}} y {{max}} cm.",
-    "HEAD_CIRCUMFERENCE": "El perímetro cefálico debe estar entre {{min}} y {{max}} cm."
+    "HEAD_CIRCUMFERENCE": "El perímetro cefálico debe estar entre {{min}} y {{max}} cm.",
+    "FOR_PATIENT": "{{patient}}:"
   },
   "ORGAN_DAMAGE": {
     "LEGEND": "Signos de daño de órganos (opcional, con una presión arterial elevada)",
@@ -14158,7 +14300,15 @@
     "PLAN": "Plan:",
     "RESPONSE": "Respuesta:",
     "SUBJECTIVE": "Subjetivo:",
-    "TITLE": "Notas de cuidados de enfermería"
+    "TITLE": "Notas de cuidados de enfermería",
+    "ADD_ADDENDUM": "Añadir un complemento",
+    "ADDENDUM_LABEL": "Complemento",
+    "ADDENDUM_ATTEST": "Certifico que este complemento es exacto y no usa abreviaturas",
+    "ADDENDUM_SAVED": "Complemento guardado bajo la nota de cuidados.",
+    "ADDENDUM_FAILED": "No se pudo guardar el complemento.",
+    "EMPTY_PATIENT": "Aún no hay notas de cuidados para este paciente.",
+    "TAB": "Notas de cuidados",
+    "OPEN": "Notas"
   },
   "MEDICAL_CERTIFICATE": {
     "DAYS": "Días de baja",
@@ -14912,6 +15062,169 @@
     "SIGNED_BY": "firmada por {{name}}",
     "BY": "por {{name}}",
     "NOT_ATTESTED": "No atestada"
+  },
+  "LAB_CRITICAL_PENDING": {
+    "TITLE": "Resultados críticos por repetir",
+    "SUBTITLE": "Resultados de laboratorio críticos de este hospital que ningún clínico ha repetido todavía",
+    "WHAT_TO_DO": "Cada resultado sigue alertando. Llame al médico solicitante, o al clínico de guardia, y asegúrese de que un médico, enfermero o partera repita el valor en e-Keneya: eso detiene las alertas.",
+    "NO_SCOPE": "Seleccione un hospital para ver sus resultados críticos.",
+    "LOAD_ERROR": "No se pudieron cargar los resultados críticos. Inténtelo de nuevo.",
+    "EMPTY": "Ningún resultado crítico espera repetición.",
+    "ORDERED_BY": "Solicitado por",
+    "PAGING_SINCE": "Alerta enviada",
+    "ROUNDS": "Escaladas"
+  },
+  "PHARMACY_MONEY": {
+    "HANDOVER": {
+      "TITLE": "Payment of the fill",
+      "QUANTITY": "Quantity handed over",
+      "CHARGE": "Amount",
+      "PAID": "Paid",
+      "CLAIMED": "Covered (insurance)",
+      "DUE": "Still due",
+      "STATUS": {
+        "NO_CHARGE": "No price set: nothing to collect.",
+        "PAID": "Paid.",
+        "COVERED": "Covered (payment and insurance).",
+        "DEFERRED": "Already marked « to be billed ».",
+        "UNPAID": "Not paid: take the payment at the checkout first, or hand it over « to be billed » with a reason."
+      },
+      "DEFER_LABEL": "Hand over « to be billed »: reason",
+      "DEFER_HINT": "For example: inpatient, on the stay's invoice. Pharmacist or administrator only; the fill appears in the day's reconciliation.",
+      "DEFER_REQUIRED": "This fill is not paid: give the « to be billed » reason or take the payment first.",
+      "LOAD_FAILED": "The payment status could not be loaded; the server checks the payment at hand-over."
+    },
+    "PACK": {
+      "TITLE": "Pack size: {{name}}",
+      "EXPLAIN": "Stock received in packs will be counted from now on in the prescribing unit (for example 1 blister = 10 tablets). Lots, stock, thresholds and the unit price are converted once.",
+      "PACK_UNIT": "Pack name",
+      "UNITS_PER_PACK": "Units per pack",
+      "UNIT": "Dispensing unit",
+      "UNIT_PLACEHOLDER": "tablet",
+      "REASON": "Reason",
+      "SAVE": "Convert the stock",
+      "INVALID": "Enter the units per pack (2 to 10,000), the dispensing unit and a reason.",
+      "SAVED": "Pack size saved: the stock is counted in units.",
+      "FAILED": "The pack size could not be saved.",
+      "BREAKDOWN": "{{packs}} {{packUnit}} + {{loose}} {{unit}}",
+      "SIZE": "1 {{packUnit}} = {{n}} {{unit}}",
+      "SET": "Pack size"
+    },
+    "REFUND": {
+      "TITLE": "Refunds of returns to process",
+      "PROMPT_TITLE": "Refund this return?",
+      "PROMPT_TEXT": "The server computes the amount from the price paid. A hospital administrator or an accountant other than you must approve it before it is handed to the patient.",
+      "REASON": "Reason for the refund",
+      "REASON_REQUIRED": "Enter the reason.",
+      "NO_REFUND": "No refund",
+      "REQUEST": "Ask for the refund",
+      "REQUESTED": "Refund of {{amount}} F CFA asked for; it awaits approval.",
+      "FAILED": "The refund step failed.",
+      "LOAD_FAILED": "The refunds could not be loaded.",
+      "NONE": "No refund waiting.",
+      "STATUS": {
+        "REQUESTED": "To approve",
+        "APPROVED": "Approved, to hand over",
+        "REJECTED": "Rejected",
+        "PAID": "Handed over",
+        "CANCELLED": "Cancelled"
+      },
+      "APPROVE": "Approve",
+      "REJECT": "Reject",
+      "REJECT_REASON": "Reason for the rejection",
+      "PAY": "Hand to the patient",
+      "APPROVED": "Refund approved.",
+      "REJECTED": "Refund rejected.",
+      "PAID": "Refund handed to the patient.",
+      "REJECT_CONFIRM": "Reject this refund?"
+    },
+    "RECON": {
+      "TITLE": "Pharmacy reconciliation",
+      "SUBTITLE": "The day's sales, fills, returns, receipts and adjustments, against the stock movements and the money collected.",
+      "EXPORT": "Export (CSV)",
+      "EXPORT_FAILED": "The export could not be produced.",
+      "DATE": "Day",
+      "LOAD_FAILED": "The reconciliation could not be loaded.",
+      "RECONCILED": "Day reconciled: no difference.",
+      "DIFFERENCES": "{{count}} difference(s) to review.",
+      "MONEY": "Money of the day",
+      "SALES": "Counter sales",
+      "COUNT": "{{count}} operation(s)",
+      "DISPENSE_PAYMENTS": "Fill payments",
+      "REFUNDS": "Refunds handed over",
+      "NET": "Net collected",
+      "DEFERRED": "Handed over « to be billed »",
+      "UNPAID": "Handed over unpaid",
+      "DIFFERENCES_TITLE": "Differences",
+      "COL_KIND": "Difference",
+      "COL_LOT": "Lot",
+      "COL_EXPECTED": "Expected",
+      "COL_ACTUAL": "Found",
+      "COL_AMOUNT": "Amount",
+      "KIND": {
+        "SALE_STOCK_MISMATCH": "Sale without a matching stock movement",
+        "DISPENSE_STOCK_MISMATCH": "Fill without a matching stock movement",
+        "PRICE_NOT_LIST": "Sale at a price other than the list",
+        "UNPAID_HANDED_OVER": "Fill handed over unpaid",
+        "CONTROLLED_BALANCE": "Controlled register balance differs from the stock",
+        "LOT_BALANCE_MISMATCH": "Lot balance: opening + movements differs from the stock held",
+        "RETURN_NOT_REFUNDED": "Patient return with no refund requested",
+        "REFUND_EXCEEDS_PAID": "Refunds paid out above what is still counted as paid"
+      },
+      "STOCK_TITLE": "Stock by medication and lot",
+      "NO_MOVEMENT": "No movement this day.",
+      "COL_RECEIVED": "Received",
+      "COL_SOLD": "Sold",
+      "COL_DISPENSED": "Dispensed",
+      "COL_RETURNED": "Returned",
+      "COL_ADJUSTED": "Adjusted",
+      "COL_TRANSFERRED": "Transferred",
+      "MOVED": "movement: {{n}}",
+      "CONTROLLED_TITLE": "Controlled substances: register and stock",
+      "CONTROLLED_LINE": "register {{register}}, stock {{stock}}",
+      "DEFERRED_TITLE": "Fills handed over « to be billed »"
+    },
+    "ONESTEP": {
+      "DEFER_LABEL": "Hand over « to be billed »: reason",
+      "CHARGE": "Amount of this fill: {{amount}}",
+      "DEFER_HINT": "This fill has a price and nothing is paid on it yet. To hand it over now, say why it is billed later (pharmacist or administrator only); it is listed in the day’s reconciliation. To take the payment first, use « Mark ready for collection » and hand it over once paid.",
+      "DEFER_REQUIRED": "This fill is not paid: give the « to be billed » reason, or mark it ready for collection and take the payment before handing it over."
+    },
+    "PRICE": {
+      "REASON": "Reason for the price change",
+      "REASON_REQUIRED": "Give the reason for this price change: it is kept in the price history."
+    }
+  },
+  "WARD_INBOX": {
+    "TITLE": "Notificaciones del servicio",
+    "EMPTY": "Ninguna notificación del servicio.",
+    "FAILED": "No se pudieron cargar las notificaciones del servicio.",
+    "MARK_READ": "Marcar como leído"
+  },
+  "MATERNITY_STAY": {
+    "LOADING": "Comprobando la estancia…",
+    "NOT_ADMITTED": "no ingresado(a): no aparece en el puesto de enfermería ni en el tablero de camas.",
+    "ACUITY": "Nivel de gravedad",
+    "ACUITY_PICK": "Elegir el nivel de gravedad",
+    "ADMIT_MOTHER": "Ingresar en maternidad",
+    "ADMIT_NEWBORN": "Ingresar al recién nacido",
+    "NEWBORN_BY_DOCTOR": "Un médico ingresa al recién nacido.",
+    "BY_CLINICIAN": "Un médico o una matrona la ingresa.",
+    "IN_BED": "en la cama {{bed}}.",
+    "NO_BED": "ingresado(a), sin cama: no aparece en el tablero de camas.",
+    "BED": "Cama",
+    "BED_PICK": "Elegir una cama",
+    "ASSIGN_BED": "Asignar la cama",
+    "NO_FREE_BED": "Ninguna cama libre conviene a este paciente.",
+    "BED_BY_NURSE": "Una enfermera del servicio o un médico asigna la cama:",
+    "OPEN_ADMISSIONS": "Ingresos",
+    "REASON_LABOUR": "Trabajo de parto",
+    "REASON_NEWBORN": "Recién nacido",
+    "ADMITTED": "{{patient}} ingresado(a).",
+    "ADMIT_FAILED": "No se pudo registrar el ingreso.",
+    "BED_ASSIGNED": "Cama {{bed}} asignada.",
+    "BED_FAILED": "No se pudo asignar la cama.",
+    "LOAD_FAILED": "estancia desconocida: no se pudieron leer los ingresos. Recargue antes de ingresar."
   },
   "SENSITIVITY_TAG": {
     "LABEL": "Categoría sensible",

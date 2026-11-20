@@ -154,4 +154,8 @@ public interface PatientVitalSignRepository extends JpaRepository<PatientVitalSi
     """)
     List<PatientVitalSign> findGrowthSeries(@Param("patientId") UUID patientId,
                                             @Param("hospitalId") UUID hospitalId);
+
+    /** Review of #1237: the row a maternity record charted at this hospital (to retire it when the record is corrected). */
+    List<PatientVitalSign> findByPatient_IdAndHospital_IdAndSourceAndRecordedAt(UUID patientId, UUID hospitalId,
+                                                                               String source, LocalDateTime recordedAt);
 }

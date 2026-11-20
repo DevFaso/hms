@@ -3792,6 +3792,35 @@
     </changeSet>
 
     <!-- =================================================================
+         V311 (billing-money plan PR 13, scorecard M4; QA r65 D2670-D2676):
+         pharmacy pack size on inventory items, "à facturer" on a dispense,
+         and clinical.pharmacy_refunds (two-person refund of a patient
+         return). Pre-allocated; registered after V313. Plain idempotent
+         DDL, no DO block.
+         ================================================================= -->
+    <changeSet id="V311-pharmacy-sale-stock-refunds" author="hms-team" runOnChange="false">
+        <sqlFile path="V311__pharmacy_sale_stock_refunds_reconciliation.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V309 (billing-money plan PR 10, QA r65 D2325/D2326/D2714/D2672,
+         D2702, D2700): cash sessions and their counted close, cash_session_id
+         on every money row, payment reversals as approved refunds, and lab
+         price links moved to the test lineage's first version, and the
+         lines taken off draft invoices (D2703). Number pre-allocated to wave
+         1; registered after V317. Plain idempotent DDL and DML, no DO block.
+         ================================================================= -->
+    <changeSet id="V309-billing-cash-sessions" author="hms-team" runOnChange="false">
+        <sqlFile path="V309__billing_cash_sessions.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
          V341: a sensitive category on a lab test definition (QA D2730,
          r65). Additive: one nullable column, IF NOT EXISTS, no DO block.
          ================================================================= -->

@@ -2089,7 +2089,18 @@
       "IMAGING_PORTAL_IMAGE_VIEWED": "Image {{image}} de la demande d’imagerie {{order}} consultée sur le portail patient",
       "IMAGING_IMAGE_WITHDRAWN": "Image {{image}} retirée de la demande d’imagerie {{order}}",
       "IMAGING_IMAGE_CAPTION_CORRECTED": "Légende de l’image {{image}} corrigée sur la demande d’imagerie {{order}}",
-      "INSTRUMENT_OUTBOX_VIEWED": "Message {{message}} de la boîte d’envoi des instruments ({{type}}) consulté"
+      "INSTRUMENT_OUTBOX_VIEWED": "Message {{message}} de la boîte d’envoi des instruments ({{type}}) consulté",
+      "PHARMACY_FILL_DEFERRED": "Délivrance remise non payée, « à facturer »",
+      "PHARMACY_REFUND_REQUESTED": "Remboursement pharmacie demandé",
+      "PHARMACY_REFUND_APPROVED": "Remboursement pharmacie approuvé",
+      "PHARMACY_REFUND_REJECTED": "Remboursement pharmacie refusé",
+      "PHARMACY_REFUND_PAID": "Remboursement pharmacie remis au patient",
+      "PHARMACY_REFUND_CANCELLED": "Remboursement pharmacie annulé",
+      "PHARMACY_PACK_SIZE_SET": "Conditionnement fixé sur un article d’inventaire",
+      "PHARMACY_PRICE_CHANGED": "Prix de vente de la pharmacie modifié",
+      "REVERSAL_EVENT": "{{what}} : contre-passation {{refund}} sur la facture {{invoice}}",
+      "CASH_SESSION_EVENT": "{{what}} : caisse {{session}}",
+      "INVOICE_LINE_PRICED_MANUALLY": "Ligne {{line}} du brouillon {{invoice}} tarifée à la main"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -2394,6 +2405,15 @@
       "PAYER_SHARE_CLAIMED": "Part assureur réclamée",
       "PAYER_SHARE_PAID": "Part assureur payée par l’assureur",
       "PAYER_SHARE_REJECTED": "Part assureur refusée par l’assureur"
+    },
+    "REVERSAL_EVENT": {
+      "PAYMENT_REVERSAL_REQUESTED": "Contre-passation demandée",
+      "PAYMENT_REVERSED": "Paiement contre-passé (argent remis)"
+    },
+    "CASH_SESSION_EVENT": {
+      "CASH_SESSION_CLOSED": "Caisse clôturée",
+      "CASH_SESSION_REOPENED": "Caisse rouverte",
+      "CASH_SESSION_REVIEWED": "Caisse vérifiée"
     }
   },
   "BILLING": {
@@ -2525,7 +2545,7 @@
     "RECEIPT": "Reçu",
     "REVERSAL_REASON": "Motif",
     "REVERSAL_REASON_REQUIRED": "Un motif est obligatoire.",
-    "REVERSAL_NOTE": "Le paiement reste au journal comme contre-passé ; le montant payé et le solde sont recalculés. Remboursez le patient par le même moyen.",
+    "REVERSAL_NOTE": "La contre-passation est une demande : un autre responsable (administrateur ou comptable) doit l’approuver, puis l’argent est remis au patient depuis « Remboursements ». Le paiement reste compté jusqu’à la remise.",
     "PAYMENT_CONFIRMED": "Paiement confirmé.",
     "PAYMENT_REVERSED": "Paiement contre-passé.",
     "PAYMENT_REJECTED": "Paiement refusé.",
@@ -2699,7 +2719,8 @@
         "WHOLE_ROW": "Ligne entière",
         "TOO_LARGE": "Le fichier dépasse 1 Mo. Découpez la grille en plusieurs fichiers.",
         "CONCURRENT_ERROR": "Un autre utilisateur vient de créer ce code (ou ce lien) dans la grille : rien n’a été appliqué. Relancez la vérification."
-      }
+      },
+      "LINK_RETIRED": "Ce test n’a plus de version active : ce prix ne s’applique plus. Liez-le au test actuel."
     },
     "REFUNDS": {
       "TITLE": "Demandes de remboursement",
@@ -2750,7 +2771,8 @@
       "INVOICE": "Facture",
       "REFERENCE_AT_HANDOVER": "La référence de la transaction sera demandée à la remise, quand l’argent est envoyé.",
       "HAND_OVER_TITLE": "Remettre le remboursement de {{amount}}",
-      "RECEIPT_NUMBER": "Reçu n° {{number}}"
+      "RECEIPT_NUMBER": "Reçu n° {{number}}",
+      "REVERSAL_TAG": "Contre-passation d’un paiement"
     },
     "PAYERS": {
       "TITLE": "Organismes payeurs",
@@ -2856,7 +2878,94 @@
       "ESTIMATE_NOTE": "Estimation selon la formule du patient : la part de l'assureur est fixée à l'émission de la facture."
     },
     "LINE_SHARES": "Assureur : {{payer}} · Patient : {{patient}}",
-    "LINE_SHARES_ESTIMATED": "Estimation — Assureur : {{payer}} · Patient : {{patient}}"
+    "LINE_SHARES_ESTIMATED": "Estimation — Assureur : {{payer}} · Patient : {{patient}}",
+    "PAYMENT_REVERSAL_REQUESTED": "Contre-passation demandée : un autre responsable doit l’approuver, puis remettez l’argent au patient depuis « Remboursements ». Le paiement reste compté jusque-là.",
+    "PAYMENT_DUPLICATE_CONFIRM": "Enregistrer un deuxième paiement identique ?",
+    "UNPRICED_LINE_HINT": "Ligne sans prix de la grille : indiquez pourquoi vous la tarifez à la main.",
+    "CASH_SESSION": {
+      "TITLE": "Ma caisse du jour",
+      "EMPTY": "Aucun encaissement ce jour-là : votre caisse s’ouvre au premier paiement que vous encaissez.",
+      "TILLS": {
+        "BILLING": "Caisse facturation",
+        "RECEPTION": "Caisse accueil",
+        "PHARMACY": "Caisse pharmacie"
+      },
+      "STATUSES": {
+        "OPEN": "Ouverte",
+        "CLOSED": "Clôturée",
+        "REVIEWED": "Vérifiée"
+      },
+      "CASH_TO_COUNT": "Espèces à compter :",
+      "CLOSED_BY": "Caisse clôturée le {{ date }} par {{ name }}",
+      "REOPENED_BY": "Rouverte le {{ date }} par {{ name }} — motif : {{ reason }}",
+      "BY_METHOD": "Attendu, compté et écart par moyen de paiement",
+      "IN": "Entrées",
+      "OUT": "Sorties",
+      "EXPECTED": "Attendu",
+      "COUNTED": "Compté",
+      "COUNTED_FOR": "Montant compté — {{ method }}",
+      "DIFFERENCE": "Écart",
+      "EXPLANATION": "Explication de l’écart",
+      "EXPLANATION_PLACEHOLDER": "Pourquoi le compte diffère-t-il ?",
+      "TOTAL": "Totaux",
+      "CLOSE": "Clôturer la caisse",
+      "PRINT_SHEET": "Imprimer la feuille de caisse",
+      "CLOSE_HINT": "Comptez les espèces du tiroir, relevez les soldes Orange Money et Moov Money et les tickets de carte, puis clôturez. Une caisse clôturée n’accepte plus de paiement.",
+      "EARLIER_COUNTS": "Comptes des clôtures précédentes",
+      "ROUND": "Clôture {{ round }}",
+      "MOVEMENTS": "Mouvements de la caisse ({{ count }})",
+      "KIND": "Nature",
+      "KINDS": {
+        "PAYMENT": "Paiement de facture",
+        "COPAY": "Ticket modérateur (accueil)",
+        "PHARMACY_PAYMENT": "Paiement de dispensation",
+        "COUNTER_SALE": "Vente au comptoir",
+        "REFUND": "Remboursement remis",
+        "REVERSAL": "Contre-passation remise"
+      },
+      "CLOSED_TOAST": "Caisse clôturée.",
+      "CLOSE_FAILED": "La caisse n’a pas pu être clôturée.",
+      "COUNT_REQUIRED": "Saisissez le montant compté pour {{ method }}.",
+      "COUNT_WHOLE": "Le montant compté pour {{ method }} doit être un nombre entier de francs, 0 ou plus.",
+      "EXPLANATION_REQUIRED": "Expliquez l’écart pour {{ method }}.",
+      "SUPERVISOR_TITLE": "Caisses du jour",
+      "SUPERVISOR_SUBTITLE": "Toutes les caisses de l’établissement : facturation, accueil et pharmacie. Les caisses encore ouvertes sont signalées.",
+      "SUPERVISOR_EMPTY": "Aucune caisse n’a encaissé ce jour-là.",
+      "SUPERVISOR_LINK": "Caisses du jour",
+      "DAY_REPORT": "Rapport journalier (PDF)",
+      "JOURNAL": "Journal des mouvements (CSV)",
+      "TILL": "Caisse",
+      "CASHIER": "Caissier",
+      "DETAILS": "Détail",
+      "REOPEN": "Rouvrir",
+      "REVIEW": "Marquer vérifiée",
+      "REOPEN_REASON": "Motif de la réouverture",
+      "REVIEW_NOTE": "Note de vérification (facultative)",
+      "REOPEN_REASON_REQUIRED": "Un motif est obligatoire pour rouvrir une caisse.",
+      "REOPENED_TOAST": "Caisse rouverte.",
+      "REVIEWED_TOAST": "Caisse marquée vérifiée.",
+      "ACTION_FAILED": "L’action sur la caisse n’a pas pu être enregistrée.",
+      "EXPORT_FAILED": "Le journal n’a pas pu être téléchargé.",
+      "EXPLANATION_VALUE": "Explication de l’écart : {{ text }}",
+      "REVIEW_NOTE_VALUE": "Note de vérification : {{ text }}",
+      "PHARMACY_LINK": "Clôture de caisse",
+      "LINES_WITH_DIFFERENCE": "{{count}} ligne(s) avec écart",
+      "REMOVED_LINES": "Lignes retirées des factures",
+      "REMOVED_INVOICE": "Facture",
+      "REMOVED_LINE": "Ligne retirée",
+      "REMOVED_REASON": "Motif",
+      "REMOVED_BY": "Retirée par",
+      "CASH_DIFFERENCE_VALUE": "Écart espèces : {{ amount }}"
+    },
+    "UNPRICED_LINES_REASON": "Motif des lignes à 0 F CFA",
+    "UNPRICED_LINES_REASON_PLACEHOLDER": "Pourquoi ces lignes sont-elles émises gratuitement ?",
+    "UNPRICED_LINES_REASON_REQUIRED": "Indiquez pourquoi ces lignes sont émises à 0 F CFA, ou saisissez d’abord leur prix.",
+    "ADDED_LINE_REASON": "Ligne ajoutée à la main — motif",
+    "ADDED_LINE_REASON_PLACEHOLDER": "Pourquoi cette ligne est-elle ajoutée à la main sur la facture de la visite ?",
+    "ADDED_LINE_REASON_REQUIRED": "Indiquez pourquoi cette ligne est ajoutée à la main sur la facture de la visite.",
+    "LINE_REMOVE_REASON": "Motif du retrait de cette ligne",
+    "LINE_REMOVE_REASON_PLACEHOLDER": "Pourquoi cette ligne est-elle retirée de la facture ?",
+    "LINE_REMOVE_REASON_REQUIRED": "Indiquez le motif du retrait de cette ligne."
   },
   "CHAT": {
     "ACCESS_DENIED": "Vous n'avez pas l'autorisation d'accéder à la messagerie.",
@@ -4778,7 +4887,14 @@
     "CRITICAL_READ_BACK": "Valeur relue",
     "CRITICAL_READ_BACK_PLACEHOLDER": "Telle qu’elle a été répétée",
     "QC_OVERRIDE_REASON": "Motif de la validation malgré le CQ rejeté",
-    "QC_BLOCKED": "Le dernier contrôle qualité de cette analyse a été rejeté. Enregistrez un contrôle conforme, ou indiquez pourquoi vous validez malgré tout."
+    "QC_BLOCKED": "Le dernier contrôle qualité de cette analyse a été rejeté. Enregistrez un contrôle conforme, ou indiquez pourquoi vous validez malgré tout.",
+    "QC_HOLD_TAG": "CQ rejeté",
+    "QC_HOLD_BANNER": "Validation bloquée : le dernier contrôle qualité de {{test}} a été rejeté ({{level}}, {{at}}, enregistré par {{by}}). Enregistrez un contrôle conforme, ou indiquez pourquoi vous validez ce résultat malgré tout.",
+    "QC_LEVEL_LOW": "contrôle bas",
+    "QC_LEVEL_HIGH": "contrôle haut",
+    "AGE_YEARS": "{{n}} ans",
+    "AGE_MONTHS": "{{n}} mois",
+    "ORDERED_BY": "Prescripteur : {{name}}"
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Instruments de laboratoire",
@@ -5141,7 +5257,10 @@
     "PRICE_LIST": "Grille tarifaire",
     "PATIENT_NOTIFICATIONS": "Notifications aux patients",
     "PAYERS": "Organismes payeurs",
-    "MY_IMAGING": "Imagerie"
+    "MY_IMAGING": "Imagerie",
+    "LAB_CRITICAL_PENDING": "Résultats critiques à relire",
+    "PHARMACY_RECONCILIATION": "Rapprochement pharmacie",
+    "PHARMACY_TILL_CLOSE": "Clôture de caisse pharmacie"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerte critique",
@@ -6093,7 +6212,9 @@
     "MANAGE_ACCESS": "Gérer les accès",
     "CLINICAL_ESSENTIALS": "L’essentiel clinique",
     "CLINICAL_SUMMARY_HELP": "Les alertes cliniques restent visibles ci-dessus. Ouvrez le dossier détaillé pour consulter les soins documentés.",
-    "RECORD_ACTIONS": "Plus d’actions"
+    "RECORD_ACTIONS": "Plus d’actions",
+    "NEWS_NOT_VALIDATED_OBSTETRIC": "non validé en grossesse / post-partum — voir les alertes maternité",
+    "NEWS_NOT_VALIDATED_NEWBORN": "non validé chez le nouveau-né — voir les alertes nouveau-né"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Journaux d'accès",
@@ -6840,7 +6961,10 @@
         "OTHER": "Autre",
         "DELIVERY": "Salle d’accouchement",
         "PATIENT_REPORTED": "Déclaré par le patient",
-        "MANUAL": "Saisie manuelle"
+        "MANUAL": "Saisie manuelle",
+        "LABOR_PARTOGRAPH": "Travail (partogramme)",
+        "POSTPARTUM": "Surveillance post-partum",
+        "NEWBORN_ASSESSMENT": "Évaluation du nouveau-né"
       },
       "ENCOUNTER_TYPE": {
         "CONSULTATION": "Consultation",
@@ -7482,7 +7606,19 @@
         "MFA_RESET": "Validation en deux étapes réinitialisée",
         "PATIENT_CHANNEL_PREFERENCES_UPDATED": "Choix SMS / e-mail du patient modifiés",
         "IMAGING_IMAGE_WITHDRAWN": "Image d’imagerie retirée",
-        "IMAGING_IMAGE_CAPTION_UPDATED": "Légende d’image d’imagerie corrigée"
+        "IMAGING_IMAGE_CAPTION_UPDATED": "Légende d’image d’imagerie corrigée",
+        "DISPENSE_BILLING_DEFERRED": "Délivrance remise « à facturer »",
+        "PHARMACY_REFUND_REQUESTED": "Remboursement pharmacie demandé",
+        "PHARMACY_REFUND_APPROVED": "Remboursement pharmacie approuvé",
+        "PHARMACY_REFUND_REJECTED": "Remboursement pharmacie refusé",
+        "PHARMACY_REFUND_PAID": "Remboursement pharmacie remis",
+        "PHARMACY_REFUND_CANCELLED": "Remboursement pharmacie annulé",
+        "PHARMACY_PRICE_CHANGED": "Prix de vente de la pharmacie modifié",
+        "PAYMENT_REVERSAL_REQUESTED": "Contre-passation demandée",
+        "CASH_SESSION_CLOSED": "Caisse clôturée",
+        "CASH_SESSION_REOPENED": "Caisse rouverte",
+        "CASH_SESSION_REVIEWED": "Caisse vérifiée",
+        "INVOICE_LINE_PRICED_MANUALLY": "Ligne tarifée à la main"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -7856,7 +7992,8 @@
         "DISPENSE": "Dispensation",
         "ADJUSTMENT": "Ajustement",
         "TRANSFER": "Transfert",
-        "RETURN": "Retour"
+        "RETURN": "Retour",
+        "SALE": "Vente au comptoir"
       },
       "INVOICE_ITEM_CATEGORY": {
         "SERVICE": "Prestation",
@@ -8023,6 +8160,8 @@
         "HOSPITAL_PACS_SETTINGS": "Connexion PACS",
         "LAB_QC_TARGET": "Cible CQ du laboratoire",
         "INSTRUMENT_OUTBOX_MESSAGE": "Message de la boîte d’envoi des instruments",
+        "PHARMACY_REFUND": "Remboursement pharmacie",
+        "CASH_SESSION": "Caisse",
         "PROBLEM_SENSITIVITY": "Sensibilité du diagnostic",
         "LAB_TEST_DEFINITION_SENSITIVITY": "Sensibilité de l’examen de laboratoire"
       },
@@ -13657,7 +13796,9 @@
       "TITLE": "Fréquence non reconnue",
       "REASON_LABEL": "L’heure de la prochaine dose ne peut pas être calculée à partir de cette fréquence. Pourquoi donner cette dose maintenant ?",
       "CONFIRM": "Administrer maintenant"
-    }
+    },
+    "CLINICAL_ADVISORY_TITLE": "Contrôles cliniques pour cette dose",
+    "CLINICAL_ADVISORY_CHIP": "Alerte clinique"
   },
   "CREDENTIALING": {
     "CURRENT_EXPIRY": "Expiration actuelle",
@@ -14127,7 +14268,8 @@
     "GLUCOSE": "La glycémie doit être comprise entre {{min}} et {{max}} mg/dL.",
     "WEIGHT": "Le poids doit être compris entre {{min}} et {{max}} kg.",
     "HEIGHT": "La taille doit être comprise entre {{min}} et {{max}} cm.",
-    "HEAD_CIRCUMFERENCE": "Le périmètre crânien doit être compris entre {{min}} et {{max}} cm."
+    "HEAD_CIRCUMFERENCE": "Le périmètre crânien doit être compris entre {{min}} et {{max}} cm.",
+    "FOR_PATIENT": "{{patient}} :"
   },
   "ORGAN_DAMAGE": {
     "LEGEND": "Signes d'atteinte d'organe (facultatif, si la tension est élevée)",
@@ -14158,7 +14300,15 @@
     "PLAN": "Plan :",
     "RESPONSE": "Réponse :",
     "SUBJECTIVE": "Subjectif :",
-    "TITLE": "Notes de soins infirmiers"
+    "TITLE": "Notes de soins infirmiers",
+    "ADD_ADDENDUM": "Ajouter un complément",
+    "ADDENDUM_LABEL": "Complément",
+    "ADDENDUM_ATTEST": "J'atteste que ce complément est exact et sans abréviation",
+    "ADDENDUM_SAVED": "Complément enregistré sous la note de soins.",
+    "ADDENDUM_FAILED": "Le complément n'a pas pu être enregistré.",
+    "EMPTY_PATIENT": "Aucune note de soins pour ce patient.",
+    "TAB": "Notes de soins",
+    "OPEN": "Notes de soins"
   },
   "MEDICAL_CERTIFICATE": {
     "DAYS": "Jours d'arrêt",
@@ -14912,6 +15062,169 @@
     "SIGNED_BY": "signé par {{name}}",
     "BY": "par {{name}}",
     "NOT_ATTESTED": "Non attesté"
+  },
+  "LAB_CRITICAL_PENDING": {
+    "TITLE": "Résultats critiques à relire",
+    "SUBTITLE": "Résultats de laboratoire critiques de cet hôpital qu’aucun clinicien n’a encore relus",
+    "WHAT_TO_DO": "Chaque résultat ci-dessous continue d’alerter. Appelez le prescripteur, ou le clinicien de garde, et assurez-vous qu’un médecin, un infirmier ou une sage-femme relise la valeur dans e-Keneya : c’est ce qui arrête les alertes.",
+    "NO_SCOPE": "Sélectionnez un hôpital pour voir ses résultats critiques.",
+    "LOAD_ERROR": "Impossible de charger les résultats critiques. Réessayez.",
+    "EMPTY": "Aucun résultat critique n’attend de relecture.",
+    "ORDERED_BY": "Prescripteur",
+    "PAGING_SINCE": "Alerte envoyée",
+    "ROUNDS": "Relances"
+  },
+  "PHARMACY_MONEY": {
+    "HANDOVER": {
+      "TITLE": "Paiement de la délivrance",
+      "QUANTITY": "Quantité remise",
+      "CHARGE": "Montant",
+      "PAID": "Payé",
+      "CLAIMED": "Pris en charge (assurance)",
+      "DUE": "Reste à payer",
+      "STATUS": {
+        "NO_CHARGE": "Aucun prix fixé : rien à encaisser.",
+        "PAID": "Payée.",
+        "COVERED": "Couverte (paiement et prise en charge).",
+        "DEFERRED": "Déjà marquée « à facturer ».",
+        "UNPAID": "Non payée : encaissez-la d’abord à la caisse, ou remettez-la « à facturer » avec un motif."
+      },
+      "DEFER_LABEL": "Remettre « à facturer » : motif",
+      "DEFER_HINT": "Par exemple : patient hospitalisé, sur la facture du séjour. Réservé au pharmacien ou à l’administrateur ; la délivrance apparaît dans le rapprochement du jour.",
+      "DEFER_REQUIRED": "Cette délivrance n’est pas payée : indiquez le motif « à facturer » ou encaissez-la d’abord.",
+      "LOAD_FAILED": "Le statut de paiement n’a pas pu être chargé ; le serveur vérifiera le paiement à la remise."
+    },
+    "PACK": {
+      "TITLE": "Conditionnement : {{name}}",
+      "EXPLAIN": "Le stock reçu en conditionnements sera compté désormais à l’unité de prescription (par exemple 1 plaquette = 10 comprimés). Les lots, le stock, les seuils et le prix unitaire sont convertis une seule fois.",
+      "PACK_UNIT": "Nom du conditionnement",
+      "UNITS_PER_PACK": "Unités par conditionnement",
+      "UNIT": "Unité de délivrance",
+      "UNIT_PLACEHOLDER": "comprimé",
+      "REASON": "Motif",
+      "SAVE": "Convertir le stock",
+      "INVALID": "Indiquez le nombre d’unités par conditionnement (2 à 10 000), l’unité de délivrance et un motif.",
+      "SAVED": "Conditionnement enregistré : le stock est compté à l’unité.",
+      "FAILED": "Le conditionnement n’a pas pu être enregistré.",
+      "BREAKDOWN": "{{packs}} {{packUnit}} + {{loose}} {{unit}}",
+      "SIZE": "1 {{packUnit}} = {{n}} {{unit}}",
+      "SET": "Conditionnement"
+    },
+    "REFUND": {
+      "TITLE": "Remboursements de retours à traiter",
+      "PROMPT_TITLE": "Rembourser ce retour ?",
+      "PROMPT_TEXT": "Le montant est calculé par le serveur à partir du prix payé. Un administrateur ou un comptable, autre que vous, devra l’approuver avant qu’il soit remis au patient.",
+      "REASON": "Motif du remboursement",
+      "REASON_REQUIRED": "Indiquez le motif.",
+      "NO_REFUND": "Pas de remboursement",
+      "REQUEST": "Demander le remboursement",
+      "REQUESTED": "Remboursement de {{amount}} F CFA demandé ; il attend l’approbation.",
+      "FAILED": "L’opération sur le remboursement a échoué.",
+      "LOAD_FAILED": "Les remboursements n’ont pas pu être chargés.",
+      "NONE": "Aucun remboursement en attente.",
+      "STATUS": {
+        "REQUESTED": "À approuver",
+        "APPROVED": "Approuvé, à remettre",
+        "REJECTED": "Refusé",
+        "PAID": "Remis",
+        "CANCELLED": "Annulé"
+      },
+      "APPROVE": "Approuver",
+      "REJECT": "Refuser",
+      "REJECT_REASON": "Motif du refus",
+      "PAY": "Remettre au patient",
+      "APPROVED": "Remboursement approuvé.",
+      "REJECTED": "Remboursement refusé.",
+      "PAID": "Remboursement remis au patient.",
+      "REJECT_CONFIRM": "Refuser ce remboursement ?"
+    },
+    "RECON": {
+      "TITLE": "Rapprochement de la pharmacie",
+      "SUBTITLE": "Ventes, délivrances, retours, réceptions et ajustements du jour, face aux mouvements de stock et à l’argent encaissé.",
+      "EXPORT": "Exporter (CSV)",
+      "EXPORT_FAILED": "L’export n’a pas pu être produit.",
+      "DATE": "Jour",
+      "LOAD_FAILED": "Le rapprochement n’a pas pu être chargé.",
+      "RECONCILED": "Journée rapprochée : aucun écart.",
+      "DIFFERENCES": "{{count}} écart(s) à examiner.",
+      "MONEY": "Argent du jour",
+      "SALES": "Ventes au comptoir",
+      "COUNT": "{{count}} opération(s)",
+      "DISPENSE_PAYMENTS": "Paiements des délivrances",
+      "REFUNDS": "Remboursements remis",
+      "NET": "Net encaissé",
+      "DEFERRED": "Remis « à facturer »",
+      "UNPAID": "Remis non payés",
+      "DIFFERENCES_TITLE": "Écarts",
+      "COL_KIND": "Écart",
+      "COL_LOT": "N° de lot",
+      "COL_EXPECTED": "Attendu",
+      "COL_ACTUAL": "Constaté",
+      "COL_AMOUNT": "Montant",
+      "KIND": {
+        "SALE_STOCK_MISMATCH": "Vente sans mouvement de stock correspondant",
+        "DISPENSE_STOCK_MISMATCH": "Délivrance sans mouvement de stock correspondant",
+        "PRICE_NOT_LIST": "Vente à un prix différent du tarif",
+        "UNPAID_HANDED_OVER": "Délivrance remise non payée",
+        "CONTROLLED_BALANCE": "Solde du registre des stupéfiants différent du stock",
+        "LOT_BALANCE_MISMATCH": "Solde du lot : ouverture + mouvements différent du stock détenu",
+        "RETURN_NOT_REFUNDED": "Retour patient sans remboursement demandé",
+        "REFUND_EXCEEDS_PAID": "Remboursements remis supérieurs à ce qui reste compté comme payé"
+      },
+      "STOCK_TITLE": "Stock par médicament et par lot",
+      "NO_MOVEMENT": "Aucun mouvement ce jour.",
+      "COL_RECEIVED": "Reçu",
+      "COL_SOLD": "Vendu",
+      "COL_DISPENSED": "Délivré",
+      "COL_RETURNED": "Retourné",
+      "COL_ADJUSTED": "Ajusté",
+      "COL_TRANSFERRED": "Transféré",
+      "MOVED": "mouvement : {{n}}",
+      "CONTROLLED_TITLE": "Stupéfiants : registre et stock",
+      "CONTROLLED_LINE": "registre {{register}}, stock {{stock}}",
+      "DEFERRED_TITLE": "Délivrances remises « à facturer »"
+    },
+    "ONESTEP": {
+      "DEFER_LABEL": "Remettre « à facturer » : motif",
+      "CHARGE": "Montant de cette délivrance : {{amount}}",
+      "DEFER_HINT": "Cette délivrance a un prix et rien n’est encore payé. Pour la remettre maintenant, indiquez pourquoi elle sera facturée plus tard (pharmacien ou administrateur uniquement) ; elle apparaît dans le rapprochement du jour. Pour l’encaisser d’abord, utilisez « Marquer prête à retirer » et remettez-la une fois payée.",
+      "DEFER_REQUIRED": "Cette délivrance n’est pas payée : indiquez le motif « à facturer », ou marquez-la prête à retirer et encaissez-la avant la remise."
+    },
+    "PRICE": {
+      "REASON": "Motif du changement de prix",
+      "REASON_REQUIRED": "Indiquez le motif de ce changement de prix : il est conservé dans l’historique des prix."
+    }
+  },
+  "WARD_INBOX": {
+    "TITLE": "Notifications du service",
+    "EMPTY": "Aucune notification du service.",
+    "FAILED": "Les notifications du service n'ont pas pu être chargées.",
+    "MARK_READ": "Marquer comme lu"
+  },
+  "MATERNITY_STAY": {
+    "LOADING": "Vérification du séjour…",
+    "NOT_ADMITTED": "non admis(e) : n'apparaît ni au poste infirmier ni au tableau des lits.",
+    "ACUITY": "Niveau de gravité",
+    "ACUITY_PICK": "Choisir le niveau de gravité",
+    "ADMIT_MOTHER": "Admettre en maternité",
+    "ADMIT_NEWBORN": "Admettre le nouveau-né",
+    "NEWBORN_BY_DOCTOR": "Un médecin admet le nouveau-né.",
+    "BY_CLINICIAN": "Un médecin ou une sage-femme l'admet.",
+    "IN_BED": "au lit {{bed}}.",
+    "NO_BED": "admis(e), sans lit : n'apparaît pas au tableau des lits.",
+    "BED": "Lit",
+    "BED_PICK": "Choisir un lit",
+    "ASSIGN_BED": "Attribuer le lit",
+    "NO_FREE_BED": "Aucun lit libre ne convient à ce patient.",
+    "BED_BY_NURSE": "Un(e) infirmier(ère) du service ou un médecin attribue le lit :",
+    "OPEN_ADMISSIONS": "Ouvrir les admissions",
+    "REASON_LABOUR": "Travail",
+    "REASON_NEWBORN": "Nouveau-né",
+    "ADMITTED": "{{patient}} admis(e).",
+    "ADMIT_FAILED": "L'admission n'a pas pu être enregistrée.",
+    "BED_ASSIGNED": "Lit {{bed}} attribué.",
+    "BED_FAILED": "Le lit n'a pas pu être attribué.",
+    "LOAD_FAILED": "séjour inconnu : les admissions n'ont pas pu être lues. Rechargez avant d'admettre."
   },
   "SENSITIVITY_TAG": {
     "LABEL": "Catégorie sensible",

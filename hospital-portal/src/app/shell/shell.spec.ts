@@ -1788,6 +1788,8 @@ describe('ShellComponent — route-level hospital scope gate', () => {
         // refuses a scopeless read outright rather than guessing a hospital,
         // so the page must not render until one is pinned.
         'lab-release-worklist',
+        // r65 D2183: one hospital's critical results awaiting read-back.
+        'lab-critical-pending',
         'lab-staff',
         'maternity',
         'mortality',

@@ -48,6 +48,19 @@ public class StaffPaymentRequestDTO {
      */
     private java.util.UUID clientRequestId;
 
+    /**
+     * QA D2704: the cashier confirms a second payment of the same amount, method and reference on this invoice within
+     * a few minutes (a second tab, a second dialog). Without it such a payment is refused with
+     * {@code billing.payment.possibleDuplicate}, naming the field, and nothing is recorded.
+     */
+    private Boolean confirmDuplicate;
+
+    /** A payment with an idempotency key and no duplicate confirmation (callers written before QA D2704). */
+    public StaffPaymentRequestDTO(BigDecimal amount, String method, String reference, String notes,
+            com.example.hms.enums.MobileMoneyOperator mobileMoneyOperator, java.util.UUID clientRequestId) {
+        this(amount, method, reference, notes, mobileMoneyOperator, clientRequestId, null);
+    }
+
     /** A payment with no Mobile Money operator (any method other than MOBILE_MONEY). */
     public StaffPaymentRequestDTO(BigDecimal amount, String method, String reference, String notes) {
         this(amount, method, reference, notes, null);

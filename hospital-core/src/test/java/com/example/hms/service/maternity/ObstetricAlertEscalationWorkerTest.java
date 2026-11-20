@@ -247,7 +247,13 @@ class ObstetricAlertEscalationWorkerTest {
         assertThat(worker.escalateOne(r.getId())).isTrue();
         verify(messageSource).getMessage(eq("patient.fallback.generic"), isNull(), any());
         // QA D659: the reminder still names the patient (here the keyed fallback), keyed per reader (D665).
-        for (String u : List.of("documenter", "drA", "mwB", "nurseC")) {
+        // QA D2582 (r65): the documenter's reminder never sends her to acknowledge in an in-basket she has no item in.
+        verify(notificationService).createNotification(eq(ObstetricAlertEscalationWorker.DOCUMENTER_REMINDER_KEY),
+            org.mockito.ArgumentMatchers.any(), eq("documenter"), eq(ObstetricAlertEscalationWorker.ESCALATION_TYPE));
+        verify(notificationService, never()).createNotification(
+            eq(ObstetricAlertEscalationWorker.REMINDER_KEY), org.mockito.ArgumentMatchers.any(), eq("documenter"),
+            org.mockito.ArgumentMatchers.any());
+        for (String u : List.of("drA", "mwB", "nurseC")) {
             verify(notificationService).createNotification(eq(ObstetricAlertEscalationWorker.REMINDER_KEY),
                 org.mockito.ArgumentMatchers.argThat(a -> a.length == 4 && "3".equals(a[0]) && "".equals(a[1])
                     && java.util.Map.of("key", "patient.fallback.generic").equals(a[2]) && "".equals(a[3])),

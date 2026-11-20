@@ -42,7 +42,22 @@ interface WarningToast {
   push(type: 'warning', message: string, durationMs?: number): void;
 }
 interface Translator {
-  instant(key: string): unknown;
+  instant(key: string, params?: Record<string, unknown>): unknown;
+}
+
+/**
+ * QA D2585 (r65): these warnings stay on screen for 20 s, long after the dialog closed and while
+ * the nurse records the next patient; a warning that does not name its patient reads as the next
+ * one's. Every announcement starts with the patient's name, when the caller knows it.
+ */
+function withPatient(
+  message: string,
+  patientName: string | null | undefined,
+  translate: Translator,
+): string {
+  const name = patientName?.trim();
+  if (!name) return message;
+  return `${String(translate.instant('VITAL_LIMITS.FOR_PATIENT', { patient: name }))} ${message}`;
 }
 
 /** Shows the newborn warning after a save, if the set raised one. Returns whether it did. */
@@ -50,11 +65,16 @@ export function announceNewbornWarning(
   alerts: NewbornVitalAlert[] | null | undefined,
   toast: WarningToast,
   translate: Translator,
+  patientName: string | null | undefined,
 ): boolean {
   const warning = newbornVitalWarning(alerts);
   if (!warning) return false;
   const heading = String(translate.instant(warning.headingKey));
-  toast.push('warning', [heading, ...warning.lines].join(' '), NEWBORN_WARNING_MS);
+  toast.push(
+    'warning',
+    withPatient([heading, ...warning.lines].join(' '), patientName, translate),
+    NEWBORN_WARNING_MS,
+  );
   return true;
 }
 
@@ -69,11 +89,16 @@ export function announcePostpartumWarning(
   alerts: NewbornVitalAlert[] | null | undefined,
   toast: { push(type: 'error', message: string, durationMs?: number): void },
   translate: Translator,
+  patientName: string | null | undefined,
 ): boolean {
   const lines = (alerts ?? []).map((a) => a.message).filter((m) => !!m);
   if (!lines.length) return false;
   const heading = String(translate.instant('VITAL_LIMITS.POSTPARTUM_WARNING_URGENT'));
-  toast.push('error', [heading, ...lines].join(' '), NEWBORN_WARNING_MS);
+  toast.push(
+    'error',
+    withPatient([heading, ...lines].join(' '), patientName, translate),
+    NEWBORN_WARNING_MS,
+  );
   return true;
 }
 
@@ -88,6 +113,7 @@ export function announceHypertensionWarning(
   alerts: NewbornVitalAlert[] | null | undefined,
   toast: { push(type: 'warning' | 'error', message: string, durationMs?: number): void },
   translate: Translator,
+  patientName: string | null | undefined,
 ): boolean {
   const lines = (alerts ?? []).map((a) => a.message).filter((m) => !!m);
   if (!lines.length) return false;
@@ -95,6 +121,10 @@ export function announceHypertensionWarning(
   const heading = String(
     translate.instant(urgent ? 'VITAL_LIMITS.ADULT_HTN_URGENT' : 'VITAL_LIMITS.ADULT_HTN_WARNING'),
   );
-  toast.push(urgent ? 'error' : 'warning', [heading, ...lines].join(' '), NEWBORN_WARNING_MS);
+  toast.push(
+    urgent ? 'error' : 'warning',
+    withPatient([heading, ...lines].join(' '), patientName, translate),
+    NEWBORN_WARNING_MS,
+  );
   return true;
 }

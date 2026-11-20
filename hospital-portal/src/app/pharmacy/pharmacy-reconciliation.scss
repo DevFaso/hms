@@ -1,0 +1,174 @@
+// QA D2673 (r65): the pharmacy's day. Tiles wrap, tables scroll inside their region, nothing scrolls the page
+// sideways at 390 px.
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.recon-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  select,
+  input {
+    max-width: 100%;
+  }
+}
+
+.recon-verdict {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.recon-ok {
+  color: #075e53;
+  background: #e2f5ec;
+}
+
+.recon-ko {
+  color: #a61f32;
+  background: #ffedf0;
+}
+
+.recon-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.recon-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+
+  .tile-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary, #5b6472);
+  }
+
+  small {
+    font-size: 0.75rem;
+  }
+}
+
+.recon-tile-net {
+  border-color: var(--primary, #1d4ed8);
+}
+
+.recon-tile-ko {
+  border-color: #a61f32;
+  color: #a61f32;
+}
+
+.recon-h2 {
+  font-size: 1.05rem;
+  margin: 1.25rem 0 0.5rem;
+}
+
+.table-wrapper {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.row-ko {
+  background: #fff4f5;
+  color: #a61f32;
+}
+
+.recon-moved {
+  display: block;
+  font-size: 0.75rem;
+}
+
+.recon-list {
+  margin: 0;
+  padding-left: 1.25rem;
+
+  li {
+    overflow-wrap: anywhere;
+  }
+}
+
+.recon-error {
+  color: #a61f32;
+}
+
+.refund-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.refund-card {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  min-width: 0;
+}
+
+.refund-main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: baseline;
+  overflow-wrap: anywhere;
+}
+
+.refund-status {
+  font-size: 0.75rem;
+  color: var(--text-secondary, #5b6472);
+}
+
+.refund-meta {
+  margin: 0.25rem 0;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.refund-actions,
+.refund-reject {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+
+  input {
+    min-width: 0;
+    flex: 1 1 12rem;
+  }
+}
+
+// Free-text reasons sit in their own element (no hand-written quotes, D1880).
+.recon-reason {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.recon-amount,
+.refund-meta span {
+  margin-left: 0.5rem;
+}

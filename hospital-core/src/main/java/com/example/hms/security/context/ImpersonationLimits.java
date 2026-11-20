@@ -56,12 +56,16 @@ public class ImpersonationLimits implements HandlerInterceptor {
     /**
      * Every path whose writes move money or set what is owed: invoices and their payments, reversals, adjustments
      * and refunds; invoice lines (a price override, a line removed); the price list; pharmacy payments and counter
-     * sales; an insurer's settlement of a pharmacy claim; a patient's own payment declaration.
+     * sales; an insurer's settlement of a pharmacy claim; a patient's own payment declaration; the cash sessions
+     * (a till closed, reopened or marked reviewed).
      */
     public static final List<String> MONEY_PATHS = List.of(
         "/billing-invoices/**", "/invoice-items/**", "/billing/price-list/**", "/billing/payers/**",
         "/pharmacy/payments/**",
-        "/pharmacy-sales/**", "/me/patient/billing/invoices/*/pay", "/pharmacy/claims/*/pay");
+        "/pharmacy-sales/**", "/me/patient/billing/invoices/*/pay", "/pharmacy/claims/*/pay",
+        "/pharmacy/refunds/**",
+        // PR 10 review: a till's close, reopen and review are four-eyes steps on money counted.
+        "/cash-sessions/**");
 
     /** Writes under {@link #MONEY_PATHS} that only read: a search sent as a POST for its body. */
     public static final List<String> MONEY_PATH_READS = List.of("/billing-invoices/search");

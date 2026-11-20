@@ -99,6 +99,9 @@ class LaborServiceImplTest {
     private LaborEpisode episode;
     private User recorder;
 
+    @Mock
+    private com.example.hms.service.vitals.MaternityVitalCharting maternityVitalCharting;
+
     @BeforeEach
     void setUp() {
         service = new LaborServiceImpl(
@@ -110,7 +113,7 @@ class LaborServiceImplTest {
             obstetricAlertEscalation, new com.example.hms.mapper.MaternalHistoryMapper(), auditEventLogService,
             roleValidator, entityManager, newbornRegistration, fetalDeathEvents,
             new com.example.hms.service.maternity.StillbornNeonatalAlerts(deliveryNewbornRepository,
-                newbornAssessmentRepository, escalationRepository));
+                newbornAssessmentRepository, escalationRepository), maternityVitalCharting);
 
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
@@ -582,6 +585,8 @@ class LaborServiceImplTest {
         request.setCervicalDilationCm(6);
 
         PartographEntryResponseDTO response = service.addEntry(patientId, episodeId, recorderUserId, request);
+        // QA D2580: the entry is charted where the chart reads.
+        verify(maternityVitalCharting).chartLaborPartographEntry(org.mockito.ArgumentMatchers.any());
 
         assertThat(response.getAlerts())
             .anySatisfy(alert -> {

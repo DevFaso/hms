@@ -76,6 +76,15 @@ public class DispenseRequestDTO {
 
     private DispenseStatus status;
 
+    /**
+     * Review of #1239 (QA D2675): a one-step fill hands the medication over before any payment can exist. When it
+     * has a charge, this is why it leaves the counter unpaid: « à facturer ». Required only then, and only a
+     * pharmacist or a hospital admin may give it. Never card data.
+     */
+    @Size(max = 500)
+    @com.example.hms.validation.NoCardNumber
+    private String billingDeferredReason;
+
     @Size(max = 1000)
     private String notes;
 

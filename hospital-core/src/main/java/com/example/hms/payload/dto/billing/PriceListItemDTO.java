@@ -35,6 +35,8 @@ public class PriceListItemDTO {
     private String linkKey;
     /** What the link names, for reading (a lab test's code and name, a service's name); null when unlinked. */
     private String linkLabel;
+    /** QA D2700: a lab-test link whose test has no active version any more: it prices nothing until relinked. */
+    private boolean linkRetired;
     private boolean active;
     private LocalDateTime deactivatedAt;
     private String deactivatedByName;

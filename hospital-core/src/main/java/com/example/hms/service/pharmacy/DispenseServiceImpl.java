@@ -99,6 +99,8 @@ public class DispenseServiceImpl implements DispenseService {
     private final DispenseMapper dispenseMapper;
     /** QA D843: the checkout must know which fills are already paid. */
     private final com.example.hms.repository.pharmacy.PharmacyPaymentRepository paymentRepository;
+    /** QA D2675 (r65): a live insurer claim covers part of a fill's charge at hand-over. */
+    private final com.example.hms.repository.pharmacy.PharmacyClaimRepository claimRepository;
     private final RoleValidator roleValidator;
     private final PharmacyServiceSupport support;
     private final DispenseVerificationService dispenseVerificationService;
@@ -437,10 +439,24 @@ public class DispenseServiceImpl implements DispenseService {
         // Build and save the dispense record
         Dispense dispense = dispenseMapper.toEntity(dto, fill.mapperContext());
         dispense.setDispensedAt(LocalDateTime.now(clock));
+        // Review of #1239 (QA D2675): this fill leaves the counter now, and nothing can have been paid or claimed
+        // on a row that does not exist yet. With a charge it passes the gate of a hand-over: « à facturer », with
+        // a reason, from a pharmacist or a hospital admin. The refusal rolls the stock movement back.
+        String deferredReason = requireFreeOrDeferred(dispense, dto.getBillingDeferredReason(),
+                fill.actors().dispensedBy());
+        if (deferredReason != null) {
+            dispense.setBillingDeferredReason(deferredReason);
+            dispense.setBillingDeferredBy(fill.actors().dispensedBy().getId());
+            dispense.setBillingDeferredAt(dispense.getDispensedAt());
+        }
         recordVerification(dispense, dto, fill.verification());
         dispense.setNotes(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(dispense.getNotes(), fill.allergyAck(), DISPENSE_NOTES_MAX, "notes"));
         Dispense saved = dispenseRepository.save(dispense);
         auditAllergyAcknowledged(fill.allergyAck(), prescription, saved.getId());
+        if (deferredReason != null) {
+            logAudit(AuditEventType.DISPENSE_BILLING_DEFERRED,
+                    "Fill handed over unpaid, marked to be billed", saved.getId().toString());
+        }
 
         // Update prescription status based on cumulative dispensed quantity (supports partial fills)
         updatePrescriptionStatusFromHistory(prescription, true);
@@ -589,6 +605,8 @@ public class DispenseServiceImpl implements DispenseService {
 
         LocalDateTime now = LocalDateTime.now(clock);
         User handedOverBy = resolveCurrentUser();
+        // QA D2675 (r65): a fill leaves the counter paid, covered by a claim, free, or marked « à facturer ».
+        String deferredReason = requirePaidCoveredOrDeferred(dispense, request, handedOverBy);
         int changed = dispenseRepository.completePreparedFill(dispense.getId(), now, handedOverBy,
                 mergedVerificationStatus(dispense, patientScan),
                 patientScan != null ? patientScan : dispense.getPatientScanValue(),
@@ -603,6 +621,13 @@ public class DispenseServiceImpl implements DispenseService {
             throw new ConflictException(MessageUtil.resolve(READY_NOT_PENDING));
         }
         appendNotes(dispense, request);
+        if (deferredReason != null) {
+            dispense.setBillingDeferredReason(deferredReason);
+            dispense.setBillingDeferredBy(handedOverBy.getId());
+            dispense.setBillingDeferredAt(now);
+            logAudit(AuditEventType.DISPENSE_BILLING_DEFERRED,
+                    "Fill handed over unpaid, marked to be billed", dispense.getId().toString());
+        }
         if (allergyAck != null) {
             dispense.setNotes(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(dispense.getNotes(), allergyAck, DISPENSE_NOTES_MAX, "notes"));
             auditAllergyAcknowledged(allergyAck, prescription, dispense.getId());
@@ -682,7 +707,114 @@ public class DispenseServiceImpl implements DispenseService {
         return new ResourceNotFoundException(DISPENSE_NOT_FOUND);
     }
 
+    /** What the patient owes for a fill, and how much is paid or claimed (QA D2675). */
+    record FillSettlement(BigDecimal charge, BigDecimal paid, BigDecimal claimed) {
+        BigDecimal due() {
+            return charge.subtract(paid).subtract(claimed).max(BigDecimal.ZERO);
+        }
+    }
+
+    private FillSettlement settlementOf(Dispense dispense) {
+        BigDecimal charge = DispenseCharge.of(dispense, inventoryItemRepository).orElse(BigDecimal.ZERO);
+        BigDecimal paid = charge.signum() > 0 && paymentRepository != null
+                ? java.util.Objects.requireNonNullElse(paymentRepository.sumPostedForDispense(dispense.getId()),
+                        BigDecimal.ZERO)
+                : BigDecimal.ZERO;
+        // Review of #1239: only a claim sent to the payer covers a fill; a DRAFT one is an unsent form.
+        BigDecimal claimed = charge.signum() > 0 && claimRepository != null
+                ? java.util.Objects.requireNonNullElse(claimRepository.sumSentForDispense(dispense.getId()),
+                        BigDecimal.ZERO)
+                : BigDecimal.ZERO;
+        return new FillSettlement(charge, paid, claimed);
+    }
+
+    /**
+     * QA D2675 (r65): « Remettre au patient » handed over fills with no payment row (Sulfate de fer 200, morphine 2)
+     * and nothing listed them. A fill now leaves the counter only when nothing is owed on it: its charge is paid,
+     * covered by a claim sent to the payer (SUBMITTED, ACCEPTED or PAID, never a DRAFT), or it has no charge (not
+     * priced). Otherwise it is marked « à facturer » with a reason,
+     * by a pharmacist or a hospital admin; the reconciliation lists it. Returns that reason, or null when owed nothing.
+     */
+    private String requirePaidCoveredOrDeferred(Dispense dispense, HandOverRequestDTO request, User actor) {
+        FillSettlement settlement = settlementOf(dispense);
+        if (settlement.charge().signum() <= 0 || settlement.due().signum() <= 0) {
+            return null;
+        }
+        return requireDeferral(dispense, request != null ? request.getBillingDeferredReason() : null,
+                settlement.due(), actor);
+    }
+
+    /**
+     * Review of #1239: the one-step fill saved COMPLETED with no settlement check, so the hand-over gate was
+     * bypassed by not preparing first. A new fill has no payment and no claim yet: what is due is its whole charge.
+     * Returns the « à facturer » reason, or null when the fill has no charge.
+     */
+    private String requireFreeOrDeferred(Dispense newFill, String billingDeferredReason, User actor) {
+        BigDecimal charge = DispenseCharge.of(newFill, inventoryItemRepository).orElse(BigDecimal.ZERO);
+        if (charge.signum() <= 0) {
+            return null;
+        }
+        return requireDeferral(newFill, billingDeferredReason, charge, actor);
+    }
+
+    /** The « à facturer » reason of a fill that leaves with {@code due} unpaid: required, by an authorised role. */
+    private String requireDeferral(Dispense dispense, String billingDeferredReason, BigDecimal due, User actor) {
+        String reason = trimToNull(billingDeferredReason);
+        if (reason == null) {
+            throw new com.example.hms.exception.FieldBusinessException("billingDeferredReason",
+                    "pharmacy.handOver.unpaid", com.example.hms.utility.DisplayNumbers.quantity(due));
+        }
+        UUID hospitalId = dispense.getPharmacy().getHospital().getId();
+        if (actor == null || !roleValidator.canDeferDispenseBilling(actor.getId(), hospitalId)) {
+            throw new com.example.hms.exception.FieldBusinessException("billingDeferredReason",
+                    "pharmacy.handOver.deferRoleRequired");
+        }
+        if (reason.length() > 500) {
+            throw new com.example.hms.exception.FieldBusinessException("billingDeferredReason",
+                    "pharmacy.handOver.deferReasonTooLong");
+        }
+        com.example.hms.utility.CardNumbers.requireNone(reason, "billingDeferredReason");
+        return reason;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.pharmacy.DispensePaymentStatusDTO getPaymentStatus(UUID dispenseId) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        Dispense dispense = dispenseRepository.findById(dispenseId).orElseThrow(this::dispenseNotFound);
+        if (hospitalId == null || dispense.getPharmacy() == null || dispense.getPharmacy().getHospital() == null
+                || !hospitalId.equals(dispense.getPharmacy().getHospital().getId())) {
+            throw dispenseNotFound();
+        }
+        FillSettlement settlement = settlementOf(dispense);
+        String status;
+        if (settlement.charge().signum() <= 0) {
+            status = "NO_CHARGE";
+        } else if (settlement.paid().compareTo(settlement.charge()) >= 0) {
+            status = "PAID";
+        } else if (settlement.due().signum() <= 0) {
+            status = "COVERED";
+        } else if (dispense.getBillingDeferredReason() != null) {
+            status = "DEFERRED";
+        } else {
+            status = "UNPAID";
+        }
+        return com.example.hms.payload.dto.pharmacy.DispensePaymentStatusDTO.builder()
+                .dispenseId(dispense.getId())
+                .quantity(dispense.getQuantityDispensed())
+                .unit(dispense.getUnit())
+                .charge(settlement.charge())
+                .paid(settlement.paid())
+                .claimed(settlement.claimed())
+                .due(settlement.due())
+                .status(status)
+                .billingDeferredReason(dispense.getBillingDeferredReason())
+                .billingDeferredAt(dispense.getBillingDeferredAt())
+                .build();
+    }
+
     /** COMPLETED and prepared: this fill was already handed over. */
+
     private static boolean isHandOverReplay(Dispense dispense) {
         return dispense.getStatus() == DispenseStatus.COMPLETED && dispense.getPreparedByUser() != null;
     }
@@ -1539,6 +1671,10 @@ public class DispenseServiceImpl implements DispenseService {
         if (dispense.getStatus() != DispenseStatus.COMPLETED && dispense.getStatus() != DispenseStatus.PARTIAL) {
             throw new BusinessException("pharmacy.dispense.cancelWrongStatus");
         }
+        // Review of #1239 (money back twice): the cancel voids the whole payment. A fill with a refund asked,
+        // approved or paid already gives part of it back, so it is refused before anything moves; the dispense
+        // row is locked (above), the lock a refund request takes.
+        paymentVoider.requireNoLiveRefund(dispense);
 
         dispense.setStatus(DispenseStatus.CANCELLED);
         dispense.setCancelNote(why);
@@ -1632,11 +1768,16 @@ public class DispenseServiceImpl implements DispenseService {
         return stillOut.max(BigDecimal.ZERO);
     }
 
+    /**
+     * What left the lot and has not come back. Review of #1239: the same movement types as a manual return counts
+     * ({@link StockTransactionServiceImpl#ISSUED_TYPES}, counter sales included). Without SALE here, the returns of
+     * sold units were subtracted from the fills alone and a cancel put back less than the fill took.
+     */
     private BigDecimal lotStillOut(UUID lotId) {
         BigDecimal issued = stockTransactionRepository.sumQuantityForLot(lotId,
-                java.util.EnumSet.of(StockTransactionType.DISPENSE, StockTransactionType.TRANSFER));
+                StockTransactionServiceImpl.ISSUED_TYPES);
         BigDecimal back = stockTransactionRepository.sumQuantityForLot(lotId,
-                java.util.EnumSet.of(StockTransactionType.RETURN));
+                StockTransactionServiceImpl.RETURNED_TYPES);
         return (issued == null ? BigDecimal.ZERO : issued)
                 .subtract(back == null ? BigDecimal.ZERO : back).max(BigDecimal.ZERO);
     }

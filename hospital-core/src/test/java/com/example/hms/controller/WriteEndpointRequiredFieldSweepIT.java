@@ -139,9 +139,14 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
                 + " when the result is critical or its QC rejected; a normal release sends none"),
         Map.entry("POST /appointments/search",
             SEARCH_FILTER),
+        Map.entry("POST /cash-sessions/{id}/review",
+            "billing plan PR 10: a supervisor's review note is optional; marking a closed till reviewed needs nothing else"),
         Map.entry("POST /billing-invoices/{invoiceId}/refunds/{refundId}/pay",
             "a cash hand-over needs nothing; the reference (and mobile-money operator) is required by the service only"
                 + " for the method that sends money (billing-money plan PR 8 review)"),
+        Map.entry("POST /pharmacy/refunds/{id}/pay",
+            "QA D2676: a cash hand-over needs nothing; the mobile-money reference and operator are required by the"
+                + " service only for that method"),
         Map.entry("PUT /hospitals/{hospitalId}/pacs-settings",
             "a settings form: an absent switch means off (V317); switching the viewer on requires the DICOMweb address,"
                 + " refused by name in the service"),

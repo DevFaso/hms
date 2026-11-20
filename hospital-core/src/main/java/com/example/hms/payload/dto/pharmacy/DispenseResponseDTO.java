@@ -74,6 +74,9 @@ public class DispenseResponseDTO {
     private List<String> verificationOverrides;
 
     private String verificationOverrideReason;
+    /** QA D2675 (r65): why the fill was handed over unpaid (« à facturer »), and when; null otherwise. */
+    private String billingDeferredReason;
+    private java.time.LocalDateTime billingDeferredAt;
 
     /* ── Ready for collection (G15) ─────────────────────────────────────── */
 

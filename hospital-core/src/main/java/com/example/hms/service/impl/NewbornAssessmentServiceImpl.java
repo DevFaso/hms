@@ -80,6 +80,8 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
     private final MessageSource messageSource;
     /** Provisional (2026-11-14): no Apgar alert for a confirmed stillborn baby, per baby. */
     private final com.example.hms.service.maternity.StillbornNeonatalAlerts stillbornNeonatalAlerts;
+    /** QA D2580 (r65): the readings recorded here are charted where the chart reads. */
+    private final com.example.hms.service.vitals.MaternityVitalCharting maternityVitalCharting;
 
     /**
      * QA D1151 (round 21): a newborn assessment records something; a blank
@@ -176,6 +178,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         evaluateAssessment(assessment, request, recordedOnNewbornChart);
 
         NewbornAssessment saved = assessmentRepository.save(assessment);
+        maternityVitalCharting.chartNewbornAssessment(saved, recordedOnNewbornChart);
         publishAlerts(saved, documentedBy);
         return mapper.toResponse(saved);
     }

@@ -149,4 +149,35 @@ public class LabResultResponseDTO {
     private LocalDateTime criticalCommunicatedAt;
     private String criticalCommunicationReadBack;
     private String criticalCommunicatedBy;
+
+    /**
+     * r65 D2614: who the patient is, to check during a critical call when two
+     * patients have near-identical names: the file number at the ordering
+     * hospital, the date of birth and the sex. Filled on the release worklist.
+     */
+    private String patientMrn;
+    private java.time.LocalDate patientDateOfBirth;
+    private String patientGender;
+
+    /**
+     * r65 D2613: the rejected QC run that holds this result's release (the
+     * same run the release gate refuses on), so the worklist says so before
+     * the release dialog is filled; null when nothing holds it. Filled on the
+     * release worklist.
+     */
+    private LabQcHoldDTO qcHold;
+
+    /** r65 D2613: the rejected QC run holding a release: which control level, when, by whom. */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class LabQcHoldDTO {
+        private java.util.UUID runId;
+        private String qcLevel;
+        private LocalDateTime recordedAt;
+        private String recordedBy;
+        private String sdFlag;
+    }
 }

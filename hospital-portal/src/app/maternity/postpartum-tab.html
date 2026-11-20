@@ -378,17 +378,19 @@
                   }
                 </td>
                 <td>
-                  @for (alert of a.alerts ?? []; track $index) {
-                    <span class="{{ alertClass(alert.severity) }}" [title]="alert.message">
-                      {{ alert.type | enumLabel: 'newbornAlertType' }}
-                    </span>
+                  <!-- QA D2581 (r65): one chip per system at its most severe alert; a range notice is no chip. -->
+                  @for (chip of newbornAlertChips(a); track chip.type) {
+                    <span
+                      class="{{ alertClass(chip.severity) }}"
+                      data-testid="newborn-alert-chip"
+                      >{{ chip.type | enumLabel: 'newbornAlertType' }}</span
+                    >{{ ' ' }}
                   }
-                  <!-- QA D1424: what asks to remeasure, or names the acceptable range, is read, not hovered. -->
+                  <!-- QA D1424, D2581: every alert is read, not hovered, most severe first, coloured by its severity. -->
                   @for (alert of newbornAlertsToRead(a); track $index) {
                     <p
-                      class="saved-note"
-                      [class.risk-badge]="isNewbornValueCheck(alert) || isNewbornDangerSign(alert)"
-                      [class.risk-high]="isNewbornValueCheck(alert) || isNewbornDangerSign(alert)"
+                      class="saved-note {{ newbornSentenceClass(alert) }}"
+                      [attr.data-severity]="alert.severity"
                       data-testid="newborn-alert-sentence"
                     >
                       {{ alert.message }}

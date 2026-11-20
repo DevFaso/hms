@@ -1242,6 +1242,15 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           ],
         },
         {
+          // QA D2673 (r65): mirrors the /pharmacy/reconciliation RoleGuard.
+          icon: 'balance',
+          label: 'Pharmacy reconciliation',
+          translationKey: 'NAV.PHARMACY_RECONCILIATION',
+          route: '/pharmacy/reconciliation',
+          roles: ['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
+        },
+
+        {
           icon: 'medication',
           label: 'Dispensing',
           translationKey: 'NAV.DISPENSING',
@@ -1329,6 +1338,15 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/pharmacy/checkout',
       });
     }
+    // Billing-money plan PR 10 (QA r65 D2672): the pharmacist's till close; mirrors the /pharmacy/caisse guard.
+    if (this.hasAnyRole(['ROLE_PHARMACIST'])) {
+      items.push({
+        icon: 'savings',
+        label: 'Pharmacy Till Close',
+        translationKey: 'NAV.PHARMACY_TILL_CLOSE',
+        route: '/pharmacy/caisse',
+      });
+    }
     if (this.hasAnyRole(['ROLE_PHARMACIST', 'ROLE_SUPER_ADMIN'])) {
       items.push({
         icon: 'clinical_notes',
@@ -1397,6 +1415,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         label: 'Release Worklist',
         translationKey: 'NAV.LAB_RELEASE_WORKLIST',
         route: '/lab-release-worklist',
+      });
+    }
+    // r65 D2183: the hospital admin is paged from escalation round 2; this is
+    // where the paged results are, read-only (read-back stays clinical).
+    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN'])) {
+      items.push({
+        icon: 'notification_important',
+        label: 'Critical results awaiting read-back',
+        translationKey: 'NAV.LAB_CRITICAL_PENDING',
+        route: '/lab-critical-pending',
       });
     }
     // r63 D2304: the bench records the daily QC, so the technician and the

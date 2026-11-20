@@ -880,7 +880,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
           icon: 'edit_note',
           label: this.t('DASHBOARD.QA.NURSING_NOTES'),
           description: this.t('DASHBOARD.QA.NURSING_NOTES_DESC'),
-          route: '/encounters',
+          // QA D2583 (r65): care notes are written and read back on the nurse station, not the visits list.
+          route: '/nurse-station',
           color: '#0e7c6b',
           bgColor: '#e6f4f1',
         },

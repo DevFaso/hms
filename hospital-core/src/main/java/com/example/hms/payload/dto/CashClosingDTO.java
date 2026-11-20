@@ -101,5 +101,10 @@ public class CashClosingDTO {
         private String status;
         /** IN for money received, OUT for a refund handed back (billing-money plan PR 8). */
         private String direction;
+        /**
+         * QA D2702: a payment reversed through an approved refund. Its money came in that day and stays counted
+         * there; the refund that handed it back is the money out, on the day it left the till.
+         */
+        private boolean reversalPaidOut;
     }
 }

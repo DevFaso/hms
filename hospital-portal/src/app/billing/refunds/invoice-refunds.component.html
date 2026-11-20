@@ -69,7 +69,15 @@
                 <div class="cell-secondary">{{ r.reference }}</div>
               }
             </td>
-            <td>{{ r.reason }}</td>
+            <td>
+              {{ r.reason }}
+              <!-- QA D2702: a payment reversal goes through the same approval and payout as a refund. -->
+              @if (r.reversedPaymentId) {
+                <div class="cell-secondary" data-testid="refund-is-reversal">
+                  {{ 'BILLING.REFUNDS.REVERSAL_TAG' | translate }}
+                </div>
+              }
+            </td>
             <td>
               <span class="refund-status" [attr.data-status]="r.status">{{
                 r.status | keyLabel: 'BILLING.REFUNDS.STATUSES.'

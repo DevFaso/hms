@@ -245,4 +245,20 @@ public class Dispense extends BaseEntity {
     @Size(max = 1024)
     @Column(name = "verification_override_reason", length = 1024)
     private String verificationOverrideReason;
+
+    /**
+     * QA D2675 (r65, V311): why this fill was handed over before it was paid ("à facturer": billed later, on the
+     * stay's invoice for instance). Null on a fill paid, covered by a claim, or with nothing to pay.
+     */
+    @Size(max = 500)
+    @Column(name = "billing_deferred_reason", length = 500)
+    private String billingDeferredReason;
+
+    /** QA D2675: who marked the fill « à facturer ». */
+    @Column(name = "billing_deferred_by")
+    private java.util.UUID billingDeferredBy;
+
+    /** QA D2675: when the fill was marked « à facturer ». */
+    @Column(name = "billing_deferred_at")
+    private LocalDateTime billingDeferredAt;
 }

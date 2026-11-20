@@ -56,6 +56,11 @@ public class PatientVitalSignResponseDTO {
     private String newsRiskBand;
     private Boolean newsComplete;
     private java.util.List<String> newsMissing;
+    /**
+     * Review of #1237: set (OBSTETRIC or NEWBORN) when NEWS2 is not validated for this patient at this
+     * reading (News2Applicability); the score fields are then empty and the chart says why.
+     */
+    private String newsNotValidated;
 
     private LocalDateTime recordedAt;
     private LocalDateTime createdAt;

@@ -46,3 +46,42 @@
     white-space: pre-wrap;
   }
 }
+
+/* QA D2583 (r65): the addendum action and form under each care note. */
+.nursing-notes__addendum-open {
+  margin-top: 6px;
+}
+
+.nursing-notes__addendum {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  min-width: 0;
+
+  textarea {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+  }
+}
+
+.nursing-notes__addendum-label {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.nursing-notes__attest {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.nursing-notes__addendum-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

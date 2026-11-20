@@ -139,6 +139,10 @@ public class PharmacySale extends BaseEntity {
     @Column(name = "client_request_id")
     private java.util.UUID clientRequestId;
 
+    /** Billing plan PR 10 (V309, QA D2672): the pharmacy cash session the money was taken in. */
+    @Column(name = "cash_session_id")
+    private java.util.UUID cashSessionId;
+
     @OneToMany(mappedBy = "sale", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private List<SaleLine> lines = new ArrayList<>();

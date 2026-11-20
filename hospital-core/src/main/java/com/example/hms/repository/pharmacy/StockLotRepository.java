@@ -20,6 +20,9 @@ public interface StockLotRepository extends JpaRepository<StockLot, UUID> {
 
     Page<StockLot> findByInventoryItemId(UUID inventoryItemId, Pageable pageable);
 
+    /** QA D2674 (r65): every lot of an item, shortest-dated first. */
+    List<StockLot> findAllByInventoryItemIdOrderByExpiryDateAsc(UUID inventoryItemId);
+
     /** QA D315: whether this lot number was already received for the item with another expiry. */
     @Query("SELECT (COUNT(s) > 0) FROM StockLot s WHERE s.inventoryItem.id = :inventoryItemId "
          + "AND UPPER(s.lotNumber) = UPPER(CAST(:lotNumber AS string)) AND s.expiryDate <> :expiryDate")
@@ -46,6 +49,11 @@ public interface StockLotRepository extends JpaRepository<StockLot, UUID> {
 
     /** D82: whether the item is tracked in lots at all. */
     boolean existsByInventoryItemId(UUID inventoryItemId);
+
+    /** Review of #1239 (per-lot balance): every lot of one pharmacy, with its item and medication. */
+    @Query("SELECT s FROM StockLot s JOIN FETCH s.inventoryItem i LEFT JOIN FETCH i.medicationCatalogItem "
+         + "WHERE i.pharmacy.id = :pharmacyId")
+    List<StockLot> findAllWithItemByPharmacyId(@Param("pharmacyId") UUID pharmacyId);
 
     @Query("SELECT s FROM StockLot s WHERE s.inventoryItem.id = :inventoryItemId " +
            "AND s.remainingQuantity > 0 AND s.expiryDate > CURRENT_DATE " +
@@ -93,4 +101,15 @@ public interface StockLotRepository extends JpaRepository<StockLot, UUID> {
          + "WHERE l.id = :id")
     int incrementRemaining(@Param("id") UUID id, @Param("quantity") BigDecimal quantity,
                            @Param("now") LocalDateTime now);
+
+    /**
+     * QA D2674 (r65): every lot of an item counted {@code factor} times finer (packs to units). The cost of one unit
+     * is the pack's cost divided by {@code factor}. One atomic UPDATE, as every stock writer (#825 round 5).
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = false)
+    @Query("UPDATE StockLot l SET l.initialQuantity = l.initialQuantity * :factor, "
+         + "l.remainingQuantity = l.remainingQuantity * :factor, l.unitCost = l.unitCost / :factor, l.updatedAt = :now "
+         + "WHERE l.inventoryItem.id = :itemId")
+    int scaleQuantitiesOfItem(@Param("itemId") UUID itemId, @Param("factor") BigDecimal factor,
+                              @Param("now") LocalDateTime now);
 }

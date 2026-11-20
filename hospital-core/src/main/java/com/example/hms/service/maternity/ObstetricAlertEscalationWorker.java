@@ -71,6 +71,12 @@ public class ObstetricAlertEscalationWorker {
     private static final List<String> REMINDER_ROLES = List.of("ROLE_DOCTOR", "ROLE_MIDWIFE", "ROLE_NURSE");
     private static final int TITLE_MAX = 500;
     static final String REMINDER_KEY = "obstetric.alert.escalation";
+    /**
+     * QA D2582 (r65): the documenter's reminder. She cannot acknowledge her own alert, so no in-basket
+     * item is filed for her; the team's reminder told her to « accusez réception dans votre boîte de
+     * réception » and sent her to an empty page. Hers says the team has not acknowledged it yet.
+     */
+    static final String DOCUMENTER_REMINDER_KEY = "obstetric.alert.escalation.documenter";
     private static final String PATIENT_FALLBACK = "patient.fallback.generic";
 
     private final ObstetricAlertEscalationRepository escalationRepository;
@@ -207,7 +213,7 @@ public class ObstetricAlertEscalationWorker {
         String documenter = usernameOf(row.getDocumentedByUserId());
         if (documenter != null) {
             // The documenter learns it is still unanswered; she cannot answer it herself.
-            notifyQuietly(REMINDER_KEY, reminderArgs, documenter, ESCALATION_TYPE, row.getId());
+            notifyQuietly(DOCUMENTER_REMINDER_KEY, reminderArgs, documenter, ESCALATION_TYPE, row.getId());
         }
         deliver(row, REMINDER_KEY, reminderArgs, message, patientName, reminderRecipients(row.getHospitalId()),
             ESCALATION_TYPE);

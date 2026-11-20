@@ -31,10 +31,30 @@ public class InventoryItemMapper {
             .reorderQuantity(entity.getReorderQuantity())
             .unitPrice(entity.getUnitPrice())
             .unit(entity.getUnit())
+            .unitsPerPack(entity.getUnitsPerPack())
+            .packUnit(entity.getPackUnit())
+            .fullPacksOnHand(packsOf(entity))
+            .looseUnitsOnHand(looseUnitsOf(entity))
             .active(entity.isActive())
             .createdAt(entity.getCreatedAt())
             .updatedAt(entity.getUpdatedAt())
             .build();
+    }
+
+    /** QA D2674 (r65): the whole packs in the stock on hand, or null when the item has no pack size. */
+    static BigDecimal packsOf(InventoryItem entity) {
+        if (entity.getUnitsPerPack() == null || entity.getQuantityOnHand() == null) {
+            return null;
+        }
+        return entity.getQuantityOnHand().divideToIntegralValue(BigDecimal.valueOf(entity.getUnitsPerPack()));
+    }
+
+    /** QA D2674: the units beyond the whole packs, or null when the item has no pack size. */
+    static BigDecimal looseUnitsOf(InventoryItem entity) {
+        if (entity.getUnitsPerPack() == null || entity.getQuantityOnHand() == null) {
+            return null;
+        }
+        return entity.getQuantityOnHand().remainder(BigDecimal.valueOf(entity.getUnitsPerPack()));
     }
 
     public InventoryItem toEntity(InventoryItemRequestDTO dto, Pharmacy pharmacy,

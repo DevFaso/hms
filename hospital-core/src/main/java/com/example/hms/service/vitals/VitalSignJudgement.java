@@ -172,8 +172,21 @@ public class VitalSignJudgement {
      */
     public void escalate(PatientVitalSign saved, Judgement judgement, UUID patientId, UUID hospitalId,
                          String recorderUsername, String visitPhysicianUsername) {
-        news2EscalationService.escalateIfNeeded(saved, patientId, hospitalId, recorderUsername,
-            visitPhysicianUsername);
+        escalate(saved, judgement, patientId, hospitalId, recorderUsername, visitPhysicianUsername, false);
+    }
+
+    /**
+     * Review of #1237: the same, for a maternity reading. {@code news2CoveredByMaternityAlert} is true only
+     * when an URGENT maternity alert already paged the team for this very reading; the NEWS2 page is then
+     * not sent twice. Otherwise it fires at its usual trigger (a safety net: in labour it is the only page
+     * for a low pressure or a fast pulse).
+     */
+    public void escalate(PatientVitalSign saved, Judgement judgement, UUID patientId, UUID hospitalId,
+                         String recorderUsername, String visitPhysicianUsername, boolean news2CoveredByMaternityAlert) {
+        if (!news2CoveredByMaternityAlert) {
+            news2EscalationService.escalateIfNeeded(saved, patientId, hospitalId, recorderUsername,
+                visitPhysicianUsername);
+        }
         if (judgement != null && patientId != null && hospitalId != null) {
             escalateBloodPressure(saved, judgement.bloodPressure(), patientId, hospitalId, recorderUsername,
                 visitPhysicianUsername);

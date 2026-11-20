@@ -32,6 +32,45 @@
     </div>
   </div>
 
+  <!-- QA D2676 (r65): a patient return of a paid sale or fill offers its refund; another hospital
+       admin or accountant approves it on the reconciliation page before it is paid out. -->
+  @if (refundPrompt()) {
+    <form
+      class="form-card form-card-accent"
+      data-testid="refund-prompt"
+      (ngSubmit)="requestRefund()"
+    >
+      <h3>{{ 'PHARMACY_MONEY.REFUND.PROMPT_TITLE' | translate }}</h3>
+      <p class="workspace-note">{{ 'PHARMACY_MONEY.REFUND.PROMPT_TEXT' | translate }}</p>
+      <div class="form-row">
+        <div class="field full-width">
+          <label for="refundReason">{{ 'PHARMACY_MONEY.REFUND.REASON' | translate }} *</label>
+          <input
+            id="refundReason"
+            name="refundReason"
+            type="text"
+            maxlength="500"
+            required
+            [(ngModel)]="refundReason"
+          />
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-secondary" (click)="refundPrompt.set(null)">
+          {{ 'PHARMACY_MONEY.REFUND.NO_REFUND' | translate }}
+        </button>
+        <button
+          type="submit"
+          class="btn-primary"
+          [disabled]="refundSaving()"
+          data-testid="refund-request"
+        >
+          {{ 'PHARMACY_MONEY.REFUND.REQUEST' | translate }}
+        </button>
+      </div>
+    </form>
+  }
+
   <!-- Record Transaction Form -->
   @if (showForm()) {
     <div class="form-card form-card-accent">
