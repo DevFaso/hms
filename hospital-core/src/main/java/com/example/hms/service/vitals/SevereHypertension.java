@@ -212,9 +212,15 @@ public class SevereHypertension {
      * Policy 2026-11-20 (maternal early warning, provisional): the scope with the birth that dates a
      * POSTPARTUM one. The maternal early-warning score reads it to switch the pulse table 48 h after the
      * birth; {@code birthAt} is null for every other scope.
+     * {@code sourceHospitalId} is the hospital whose record decided the scope (null when none did): a
+     * maternal warning raised on another hospital's record is accounted, as a pressure warning is.
      */
-    public record ObstetricContext(Scope scope, LocalDateTime birthAt) {
-        public static final ObstetricContext NONE = new ObstetricContext(Scope.NONE, null);
+    public record ObstetricContext(Scope scope, LocalDateTime birthAt, UUID sourceHospitalId) {
+        public static final ObstetricContext NONE = new ObstetricContext(Scope.NONE, null, null);
+
+        public ObstetricContext(Scope scope, LocalDateTime birthAt) {
+            this(scope, birthAt, null);
+        }
 
         public boolean obstetric() {
             return scope == Scope.PREGNANT || scope == Scope.POSTPARTUM;
@@ -227,7 +233,16 @@ public class SevereHypertension {
             return ObstetricContext.NONE;
         }
         Found found = find(patient, actingHospitalId, at);
-        return new ObstetricContext(found.scope(), found.birthAt());
+        return new ObstetricContext(found.scope(), found.birthAt(), found.sourceHospitalId());
+    }
+
+    /**
+     * Policy 2026-11-20: a maternal early warning raised on another hospital's obstetric record is
+     * accounted in the reach ledger ({@code RECORD_SHARE}), exactly as a raised pressure warning is.
+     * Nothing is recorded for the acting hospital's own record.
+     */
+    public void accountForeignRecord(UUID patientId, UUID actingHospitalId, UUID sourceHospitalId) {
+        recordForeignReach(patientId, actingHospitalId, sourceHospitalId);
     }
 
     /**

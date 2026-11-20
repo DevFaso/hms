@@ -94,4 +94,27 @@ class News2ApplicabilityTest {
         assertThat(News2Applicability.Status.APPLIES.notValidated()).isFalse();
         assertThat(News2Applicability.Status.NEWBORN.notValidated()).isTrue();
     }
+
+    @Test
+    void policy20261120_aForeignObstetricRecordBehindAWarningIsAccountedByTheSharedRule() {
+        UUID here = UUID.randomUUID();
+        UUID elsewhere = UUID.randomUUID();
+        Patient mother = born(now.toLocalDate().minusYears(28));
+        when(severeHypertension.obstetricContextOf(any(), any(), any())).thenReturn(
+            new SevereHypertension.ObstetricContext(SevereHypertension.Scope.PREGNANT, null, elsewhere));
+
+        News2Applicability.Applicability known = applicability.applicabilityOf(mother, here, now);
+
+        assertThat(known.sourceHospitalId()).isEqualTo(elsewhere);
+        applicability.accountForeignRecord(mother.getId(), here, known);
+        org.mockito.Mockito.verify(severeHypertension).accountForeignRecord(mother.getId(), here, elsewhere);
+        // No record behind the status, or not an obstetric status: nothing to account.
+        applicability.accountForeignRecord(mother.getId(), here,
+            new News2Applicability.Applicability(News2Applicability.Status.OBSTETRIC, null));
+        applicability.accountForeignRecord(mother.getId(), here,
+            new News2Applicability.Applicability(News2Applicability.Status.APPLIES, null, elsewhere));
+        applicability.accountForeignRecord(mother.getId(), here, null);
+        org.mockito.Mockito.verify(severeHypertension, org.mockito.Mockito.times(1))
+            .accountForeignRecord(any(), any(), any());
+    }
 }

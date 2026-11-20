@@ -304,4 +304,24 @@ class MaternalEarlyWarningServiceTest {
             PatientVitalSign.builder().patient(mother).recordedAt(NOW).weightKg(61.0).build()), weightOnly);
         assertThat(weightOnly.getMewsTier()).isNull();
     }
+
+    @Test
+    @DisplayName("a write accounts a raised warning that rests on another hospital's record; a low score or a read does not")
+    void aRaisedWarningOnAForeignRecordIsAccounted() {
+        UUID elsewhere = UUID.randomUUID();
+        News2Applicability.Applicability foreign =
+            new News2Applicability.Applicability(News2Applicability.Status.OBSTETRIC, null, elsewhere);
+        when(applicability.applicabilityOf(any(), any(), any())).thenReturn(foreign);
+
+        // A calm set raises nothing: nothing to account.
+        service.assess(mother, HERE, set().build(), true);
+        // A read (the chart, the advisory) never accounts here: those reads account their own rows.
+        service.assess(mother, HERE, set().heartRateBpm(125).build());
+        // The pressure warning of the same reading already accounted it.
+        service.assess(mother, HERE, set().heartRateBpm(125).build(), false);
+        verify(applicability, never()).accountForeignRecord(any(), any(), any());
+
+        service.assess(mother, HERE, set().heartRateBpm(125).build(), true);
+        verify(applicability).accountForeignRecord(mother.getId(), HERE, foreign);
+    }
 }

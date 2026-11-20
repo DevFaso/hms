@@ -180,7 +180,9 @@ public class VitalSignJudgement {
             MaternalEarlyWarning.Score maternal = maternalEarlyWarning == null || patient == null ? null
                 : maternalEarlyWarning.assess(patient,
                     com.example.hms.service.recordaccess.CrossHospitalReachRecorder.hospitalIdOf(vital.getHospital()),
-                    vital);
+                    // A raised warning resting on another hospital's record is accounted once: the pressure
+                    // warning of this reading already did it when it raised.
+                    vital, !bloodPressure.raised());
             judgement = new Judgement(false, List.of(), bloodPressure, maternal);
             significant = judgement.bloodPressure().raised() || outsideAgeRanges(vital)
                 || judgement.maternalSignificant();

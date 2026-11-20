@@ -56,7 +56,20 @@ public class News2Applicability {
      * Policy 2026-11-20: the status with, for an OBSTETRIC one, the birth that dates the postpartum
      * window (null in pregnancy). The maternal early-warning score reads it to switch its pulse table.
      */
-    public record Applicability(Status status, LocalDateTime birthAt) {
+    public record Applicability(Status status, LocalDateTime birthAt, UUID sourceHospitalId) {
+        public Applicability(Status status, LocalDateTime birthAt) {
+            this(status, birthAt, null);
+        }
+    }
+
+    /**
+     * A maternal warning raised for an OBSTETRIC status that rests on another hospital's record is
+     * accounted in the reach ledger (the shared rule does it, as for its own pressure warning).
+     */
+    public void accountForeignRecord(UUID patientId, UUID hospitalId, Applicability known) {
+        if (known != null && known.status() == Status.OBSTETRIC && known.sourceHospitalId() != null) {
+            severeHypertension.accountForeignRecord(patientId, hospitalId, known.sourceHospitalId());
+        }
     }
 
     /** The status of a reading taken at {@code at} for {@code patient}, read at {@code hospitalId}. */
@@ -78,7 +91,7 @@ public class News2Applicability {
         // applied to her) and no early-warning page in labour; the maternal early warning now covers her.
         SevereHypertension.ObstetricContext context = severeHypertension.obstetricContextOf(patient, hospitalId, when);
         if (context != null && context.obstetric()) {
-            return new Applicability(Status.OBSTETRIC, context.birthAt());
+            return new Applicability(Status.OBSTETRIC, context.birthAt(), context.sourceHospitalId());
         }
         return new Applicability(NewsScoreCalculator.appliesTo(patient) ? Status.APPLIES : Status.CHILD, null);
     }

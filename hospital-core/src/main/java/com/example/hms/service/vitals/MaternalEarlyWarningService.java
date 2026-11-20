@@ -89,12 +89,26 @@ public class MaternalEarlyWarningService {
      * record once.
      */
     public Score assess(Patient patient, UUID hospitalId, PatientVitalSign vital) {
+        return assess(patient, hospitalId, vital, false);
+    }
+
+    /**
+     * {@link #assess} for a write. With {@code accountForeignRecord}, a warning that is raised (a review
+     * is due, or a CRADLE alert is lit) on another hospital's obstetric record is accounted in the reach
+     * ledger; the caller passes false when the pressure warning of the same reading already accounted it.
+     */
+    public Score assess(Patient patient, UUID hospitalId, PatientVitalSign vital, boolean accountForeignRecord) {
         if (!rules.isEnabled() || patient == null || vital == null) {
             return null;
         }
         LocalDateTime at = vital.getRecordedAt() != null ? vital.getRecordedAt()
             : LocalDateTime.now(ZoneId.systemDefault());
-        return scoreFor(applicability.applicabilityOf(patient, hospitalId, at), vital);
+        News2Applicability.Applicability known = applicability.applicabilityOf(patient, hospitalId, at);
+        Score score = scoreFor(known, vital);
+        if (accountForeignRecord && score != null && (score.needsEscalation() || !score.alerts().isEmpty())) {
+            applicability.accountForeignRecord(patient.getId(), hospitalId, known);
+        }
+        return score;
     }
 
     /** The warning once the applicability is known (a chart read asks it once per day, not per row). */

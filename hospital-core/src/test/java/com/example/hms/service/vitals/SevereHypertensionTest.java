@@ -286,4 +286,26 @@ class SevereHypertensionTest {
         assertThat(new Verdict(Scope.ADULT, Level.WARNING).messageKey()).isEqualTo(SevereHypertension.ADULT_MESSAGE_KEY);
         assertThat(new Verdict(Scope.ADULT, Level.URGENT).messageKey()).isEqualTo(SevereHypertension.ADULT_URGENT_MESSAGE_KEY);
     }
+
+    @Test
+    @DisplayName("policy 2026-11-20: the obstetric context names the hospital behind it, and a foreign one is accounted")
+    void policy20261120_theObstetricContextNamesTheHospitalBehindIt() {
+        Patient p = adultWoman();
+        pregnantAt(p, ELSEWHERE, AT.toLocalDate().plusWeeks(10));
+
+        SevereHypertension.ObstetricContext context = rule.obstetricContextOf(p, HERE, AT);
+
+        assertThat(context.scope()).isEqualTo(Scope.PREGNANT);
+        assertThat(context.obstetric()).isTrue();
+        assertThat(context.sourceHospitalId()).isEqualTo(ELSEWHERE);
+        // Reading the scope accounts nothing; a maternal warning raised on it does.
+        verify(reach, never()).recordReach(any(), any(), any(), any(), any(), anyString());
+        rule.accountForeignRecord(p.getId(), HERE, context.sourceHospitalId());
+        verify(reach).recordReach(eq(p.getId()), eq(HERE), any(), any(), eq(Map.of(ELSEWHERE.toString(), 1L)),
+            eq(SevereHypertension.REACH_DESCRIPTION));
+        // The acting hospital's own record is no disclosure.
+        rule.accountForeignRecord(p.getId(), HERE, HERE);
+        rule.accountForeignRecord(p.getId(), HERE, null);
+        verify(reach, org.mockito.Mockito.times(1)).recordReach(any(), any(), any(), any(), any(), anyString());
+    }
 }
