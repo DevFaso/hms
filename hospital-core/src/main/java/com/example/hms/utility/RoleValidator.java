@@ -29,6 +29,7 @@ public class RoleValidator {
     private static final String NURSE_ROLE = "NURSE";
     private static final String MIDWIFE_ROLE = "MIDWIFE";
     private static final String ACCOUNTANT_ROLE = "ACCOUNTANT";
+    private static final String PHARMACIST_ROLE = "PHARMACIST";
     private static final String BILLING_SPECIALIST_ROLE = "BILLING_SPECIALIST";
     private static final String RECEPTIONIST_ROLE = "RECEPTIONIST";
     private static final String CLAIMS_REVIEWER_ROLE = "CLAIMS_REVIEWER";
@@ -262,7 +263,7 @@ public class RoleValidator {
     public boolean isMidwife(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, MIDWIFE_ROLE); }
     /** One query: a clinician or a pharmacist at {@code hospitalId}, not the union of the caller's assignments. */
     public boolean isClinicianOrPharmacist(UUID userId, UUID hospitalId) {
-        return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, NURSE_ROLE, MIDWIFE_ROLE, "PHARMACIST");
+        return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, NURSE_ROLE, MIDWIFE_ROLE, PHARMACIST_ROLE);
     }
     public boolean isHospitalAdmin(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE); }
     public boolean isLabScientist(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "LAB_SCIENTIST"); }
@@ -323,23 +324,23 @@ public class RoleValidator {
      * admin assignment at {@code hospitalId} (never a verifier or the super-admin alone).
      */
     public boolean canDeferDispenseBilling(UUID userId, UUID hospitalId) {
-        return hasAnyCode(userId, hospitalId, "PHARMACIST", HOSPITAL_ADMIN_ROLE);
+        return hasAnyCode(userId, hospitalId, PHARMACIST_ROLE, HOSPITAL_ADMIN_ROLE);
     }
 
     /** QA D2676 (r65, billing plan PR 13): who may ask for a pharmacy refund of a patient return there. */
     public boolean canRequestPharmacyRefund(UUID userId, UUID hospitalId) {
-        return hasAnyCode(userId, hospitalId, "PHARMACIST", HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE,
+        return hasAnyCode(userId, hospitalId, PHARMACIST_ROLE, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE,
             BILLING_SPECIALIST_ROLE);
     }
 
     /** QA D2676: who hands an approved pharmacy refund to the patient. */
     public boolean canPayPharmacyRefund(UUID userId, UUID hospitalId) {
-        return hasAnyCode(userId, hospitalId, "PHARMACIST", HOSPITAL_ADMIN_ROLE, BILLING_SPECIALIST_ROLE);
+        return hasAnyCode(userId, hospitalId, PHARMACIST_ROLE, HOSPITAL_ADMIN_ROLE, BILLING_SPECIALIST_ROLE);
     }
 
     /** QA D2673 (r65): who reads a pharmacy's daily reconciliation there. */
     public boolean canReadPharmacyReconciliation(UUID userId, UUID hospitalId) {
-        return hasAnyCode(userId, hospitalId, "PHARMACIST", HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE);
+        return hasAnyCode(userId, hospitalId, PHARMACIST_ROLE, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE);
     }
 
     /** Billing-money plan PR 2 (plan section 3.8): who reads a hospital's price list there. */

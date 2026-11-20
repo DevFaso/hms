@@ -177,7 +177,8 @@ class PharmacyRefundServiceTest {
         actAs(pharmacist);
         when(refundRepository.existsByReturnTransactionIdAndStatusIn(eq(ret.getId()), any())).thenReturn(true);
 
-        assertThatThrownBy(() -> service.request(body())).isInstanceOf(ConflictException.class);
+        PharmacyRefundRequestDTO request = body();
+        assertThatThrownBy(() -> service.request(request)).isInstanceOf(ConflictException.class);
         verify(refundRepository, never()).save(any());
     }
 
@@ -188,7 +189,8 @@ class PharmacyRefundServiceTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
         when(roleValidator.canRequestPharmacyRefund(any(), any())).thenReturn(true);
 
-        assertThatThrownBy(() -> service.request(body())).isInstanceOf(ResourceNotFoundException.class);
+        PharmacyRefundRequestDTO request = body();
+        assertThatThrownBy(() -> service.request(request)).isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
@@ -208,7 +210,8 @@ class PharmacyRefundServiceTest {
         when(roleValidator.getCurrentUserId()).thenReturn(pharmacist);
         when(roleValidator.canRequestPharmacyRefund(pharmacist, hospitalId)).thenReturn(false);
 
-        assertThatThrownBy(() -> service.request(body())).isInstanceOf(ClientSafeAccessDeniedException.class);
+        PharmacyRefundRequestDTO request = body();
+        assertThatThrownBy(() -> service.request(request)).isInstanceOf(ClientSafeAccessDeniedException.class);
         verify(stockTransactionRepository, never()).findById(any());
     }
 
@@ -218,7 +221,8 @@ class PharmacyRefundServiceTest {
         actAs(accountant);
         PharmacyRefund refund = stored(PharmacyRefundStatus.REQUESTED, accountant);
 
-        assertThatThrownBy(() -> service.approve(refund.getId())).isInstanceOf(ConflictException.class);
+        UUID id = refund.getId();
+        assertThatThrownBy(() -> service.approve(id)).isInstanceOf(ConflictException.class);
         assertThat(refund.getStatus()).isEqualTo(PharmacyRefundStatus.REQUESTED);
     }
 
@@ -228,7 +232,8 @@ class PharmacyRefundServiceTest {
         actAs(pharmacist);
         PharmacyRefund refund = stored(PharmacyRefundStatus.REQUESTED, UUID.randomUUID());
 
-        assertThatThrownBy(() -> service.approve(refund.getId())).isInstanceOf(ClientSafeAccessDeniedException.class);
+        UUID id = refund.getId();
+        assertThatThrownBy(() -> service.approve(id)).isInstanceOf(ClientSafeAccessDeniedException.class);
     }
 
     @Test
@@ -257,7 +262,8 @@ class PharmacyRefundServiceTest {
         actAs(pharmacist);
         PharmacyRefund refund = stored(PharmacyRefundStatus.REQUESTED, UUID.randomUUID());
 
-        assertThatThrownBy(() -> service.pay(refund.getId(), null)).isInstanceOf(ConflictException.class);
+        UUID id = refund.getId();
+        assertThatThrownBy(() -> service.pay(id, null)).isInstanceOf(ConflictException.class);
     }
 
     @Test
@@ -266,7 +272,9 @@ class PharmacyRefundServiceTest {
         actAs(accountant);
         PharmacyRefund refund = stored(PharmacyRefundStatus.REQUESTED, pharmacist);
 
-        assertThatThrownBy(() -> service.reject(refund.getId(), new PharmacyRefundReasonRequestDTO(null)))
+        UUID id = refund.getId();
+        PharmacyRefundReasonRequestDTO none = new PharmacyRefundReasonRequestDTO(null);
+        assertThatThrownBy(() -> service.reject(id, none))
                 .isInstanceOf(FieldBusinessException.class);
         service.reject(refund.getId(), new PharmacyRefundReasonRequestDTO("Produit entamé"));
 
@@ -292,14 +300,83 @@ class PharmacyRefundServiceTest {
         actAs(pharmacist);
         PharmacyRefund refund = stored(PharmacyRefundStatus.REQUESTED, pharmacist);
 
-        assertThatThrownBy(() -> service.cancel(refund.getId(), new PharmacyRefundReasonRequestDTO(" ")))
+        UUID id = refund.getId();
+        PharmacyRefundReasonRequestDTO blank = new PharmacyRefundReasonRequestDTO(" ");
+        assertThatThrownBy(() -> service.cancel(id, blank))
                 .isInstanceOf(FieldBusinessException.class);
         service.cancel(refund.getId(), new PharmacyRefundReasonRequestDTO("Erreur de saisie"));
         assertThat(refund.getStatus()).isEqualTo(PharmacyRefundStatus.CANCELLED);
         assertThat(refund.getCancelReason()).isEqualTo("Erreur de saisie");
 
         PharmacyRefund paid = stored(PharmacyRefundStatus.PAID, pharmacist);
-        assertThatThrownBy(() -> service.cancel(paid.getId(), new PharmacyRefundReasonRequestDTO("trop tard")))
+        UUID paidId = paid.getId();
+        PharmacyRefundReasonRequestDTO late = new PharmacyRefundReasonRequestDTO("trop tard");
+        assertThatThrownBy(() -> service.cancel(paidId, late))
                 .isInstanceOf(ConflictException.class);
+    }
+
+    @Test
+    @DisplayName("a mobile-money payout needs its reference and operator, and records them once across the tills")
+    void mobileMoneyPayout() {
+        actAs(pharmacist);
+        PharmacyRefund refund = stored(PharmacyRefundStatus.APPROVED, UUID.randomUUID());
+        refund.setMethod(PharmacyPaymentMethod.MOBILE_MONEY);
+        UUID id = refund.getId();
+        com.example.hms.payload.dto.pharmacy.PharmacyRefundPayRequestDTO noReference =
+                new com.example.hms.payload.dto.pharmacy.PharmacyRefundPayRequestDTO(null,
+                        com.example.hms.enums.MobileMoneyOperator.ORANGE_MONEY);
+        assertThatThrownBy(() -> service.pay(id, noReference)).isInstanceOf(FieldBusinessException.class);
+
+        PharmacyRefundDTO paid = service.pay(id, new com.example.hms.payload.dto.pharmacy.PharmacyRefundPayRequestDTO(
+                "OM-RB-1", com.example.hms.enums.MobileMoneyOperator.ORANGE_MONEY));
+
+        assertThat(paid.getStatus()).isEqualTo("PAID");
+        assertThat(paid.getReference()).isEqualTo("OM-RB-1");
+        assertThat(paid.getMobileMoneyOperator()).isEqualTo("ORANGE_MONEY");
+        verify(referenceRegistry).requireUnused(hospitalId, "OM-RB-1", "reference");
+        // A repeated payout answers with the refund already paid.
+        assertThat(service.pay(id, null).getStatus()).isEqualTo("PAID");
+    }
+
+    @Test
+    @DisplayName("the queue lists the hospital's open refunds; the approver may decide another's request")
+    void listOpenRefunds() {
+        actAs(accountant);
+        PharmacyRefund refund = stored(PharmacyRefundStatus.REQUESTED, pharmacist);
+        when(refundRepository.findByHospitalIdAndStatusInOrderByCreatedAtAsc(eq(hospitalId), any()))
+                .thenReturn(java.util.List.of(refund));
+        when(stockTransactionRepository.findById(ret.getId())).thenReturn(Optional.of(ret));
+
+        java.util.List<PharmacyRefundDTO> open = service.list(null);
+
+        assertThat(open).singleElement().satisfies(dto -> {
+            assertThat(dto.isCanDecide()).isTrue();
+            assertThat(dto.getMedicationName()).isEqualTo("Paracétamol");
+        });
+    }
+
+    @Test
+    @DisplayName("a return of a paid dispense is refunded at the list price, bounded by what was paid")
+    void dispenseReturn() {
+        actAs(pharmacist);
+        com.example.hms.model.pharmacy.Dispense dispense = com.example.hms.model.pharmacy.Dispense.builder()
+                .pharmacy(pharmacy).medicationCatalogItem(lot.getInventoryItem().getMedicationCatalogItem())
+                .quantityDispensed(BigDecimal.TEN).build();
+        dispense.setId(UUID.randomUUID());
+        ret.setReferenceId(dispense.getId());
+        when(saleRepository.findLockedById(dispense.getId())).thenReturn(Optional.empty());
+        when(dispenseRepository.findLockedById(dispense.getId())).thenReturn(Optional.of(dispense));
+        when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(pharmacy.getId(),
+                lot.getInventoryItem().getMedicationCatalogItem().getId())).thenReturn(Optional.of(lot.getInventoryItem()));
+        when(paymentRepository.sumPostedForDispense(dispense.getId())).thenReturn(new BigDecimal("2500"));
+        when(refundRepository.sumForDispense(eq(dispense.getId()), any())).thenReturn(BigDecimal.ZERO);
+        when(paymentRepository.findFirstByDispense_IdOrderByCreatedAtAsc(dispense.getId())).thenReturn(Optional.empty());
+        PharmacyRefundRequestDTO request = body();
+        request.setMethod(PharmacyPaymentMethod.CASH);
+
+        PharmacyRefundDTO dto = service.request(request);
+
+        assertThat(dto.getDispenseId()).isEqualTo(dispense.getId());
+        assertThat(dto.getAmount()).isEqualByComparingTo("1000");
     }
 }

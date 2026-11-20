@@ -42,7 +42,7 @@ class ClientMoneyFieldGuardTest {
     private static final Path DTOS = Path.of("src/main/java/com/example/hms/payload/dto");
     private static final Path SERVICES = Path.of("src/main/java/com/example/hms/service");
     private static final String DTO_PACKAGE = "com.example.hms.payload.dto";
-    private static final Pattern MONEY = Pattern.compile("(?i).*(price|amount|total|cost|charge|discount|fee).*");
+    private static final Pattern MONEY = Pattern.compile("(?i)price|amount|total|cost|charge|discount|fee");
 
     enum Kind { CHECKED_AGAINST_SERVER_PRICE, BOUNDED_BY_SERVER, SETS_THE_PRICE, NO_SERVER_PRICE }
 
@@ -113,7 +113,7 @@ class ClientMoneyFieldGuardTest {
         for (Class<?> dto : requestDtos()) {
             for (Field field : dto.getDeclaredFields()) {
                 if (field.getType() != BigDecimal.class || Modifier.isStatic(field.getModifiers())
-                        || !MONEY.matcher(field.getName()).matches()) {
+                        || !MONEY.matcher(field.getName()).find()) {
                     continue;
                 }
                 String key = dto.getSimpleName() + "." + field.getName();

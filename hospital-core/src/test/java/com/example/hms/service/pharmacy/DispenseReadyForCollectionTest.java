@@ -769,7 +769,43 @@ class DispenseReadyForCollectionTest {
         }
 
         @Test
+        @DisplayName("the hand-over dialog reads the charge, what is paid and due, and the status")
+        void paymentStatusForTheDialog() {
+            Dispense d = pricedPreparedFill();
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(d));
+            when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(new BigDecimal("400"));
+            when(claimRepository.sumLiveForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+
+            var unpaid = service.getPaymentStatus(dispenseId);
+            assertThat(unpaid.getCharge()).isEqualByComparingTo("1000");
+            assertThat(unpaid.getDue()).isEqualByComparingTo("600");
+            assertThat(unpaid.getStatus()).isEqualTo("UNPAID");
+
+            d.setBillingDeferredReason("séjour");
+            assertThat(service.getPaymentStatus(dispenseId).getStatus()).isEqualTo("DEFERRED");
+            when(claimRepository.sumLiveForDispense(dispenseId)).thenReturn(new BigDecimal("600"));
+            assertThat(service.getPaymentStatus(dispenseId).getStatus()).isEqualTo("COVERED");
+            when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(new BigDecimal("1000"));
+            assertThat(service.getPaymentStatus(dispenseId).getStatus()).isEqualTo("PAID");
+            inventoryItem.setUnitPrice(null);
+            assertThat(service.getPaymentStatus(dispenseId).getStatus()).isEqualTo("NO_CHARGE");
+        }
+
+        @Test
+        @DisplayName("another hospital's fill answers as missing")
+        void paymentStatusOfAnotherHospital() {
+            Dispense d = preparedFill();
+            when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(d));
+
+            assertThatThrownBy(() -> service.getPaymentStatus(dispenseId))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        }
+
+        @Test
         @DisplayName("« à facturer » by a role that may not defer billing (a verifier) is refused")
+
         void deferredByAnotherRoleIsRefused() {
             Dispense d = pricedPreparedFill();
             stubLocked(d);

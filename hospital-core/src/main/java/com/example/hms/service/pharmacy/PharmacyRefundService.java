@@ -73,6 +73,8 @@ public class PharmacyRefundService {
 
     static final String NOT_FOUND = "pharmacy.refund.notFound";
     private static final String FIELD_REASON = "reason";
+    private static final String FIELD_RETURN = "returnTransactionId";
+    private static final String REQUESTERS_ONLY = "pharmacy.refund.requestersOnly";
     private static final String FIELD_REFERENCE = "reference";
     private static final String FIELD_METHOD = "method";
     private static final String AUDIT_ENTITY = "PHARMACY_REFUND";
@@ -111,11 +113,11 @@ public class PharmacyRefundService {
     /** Asks for the money of a patient return to be given back (REQUESTED). */
     @Transactional
     public PharmacyRefundDTO request(PharmacyRefundRequestDTO body) {
-        Actor actor = requireActor(roleValidator::canRequestPharmacyRefund, "pharmacy.refund.requestersOnly");
+        Actor actor = requireActor(roleValidator::canRequestPharmacyRefund, REQUESTERS_ONLY);
         PharmacyRefundRequestDTO request = body != null ? body : new PharmacyRefundRequestDTO();
         String reason = trimToNull(request.getReason());
         RequiredFields.check()
-                .require(request.getReturnTransactionId() != null, "returnTransactionId",
+                .require(request.getReturnTransactionId() != null, FIELD_RETURN,
                         "pharmacy.refund.returnRequired")
                 .require(reason != null, FIELD_REASON, "billing.refund.reasonRequired")
                 .orThrow();
@@ -126,7 +128,7 @@ public class PharmacyRefundService {
                 .filter(t -> inHospital(t.getInventoryItem(), actor.hospitalId()))
                 .orElseThrow(() -> new ResourceNotFoundException("pharmacy.refund.returnNotFound"));
         if (ret.getReferenceId() == null) {
-            throw new FieldBusinessException("returnTransactionId", "pharmacy.refund.returnUnreferenced");
+            throw new FieldBusinessException(FIELD_RETURN, "pharmacy.refund.returnUnreferenced");
         }
         // The sale or the dispense row locked: two refunds of it are counted in turn.
         Source source = sourceOf(ret, actor.hospitalId());
@@ -138,11 +140,11 @@ public class PharmacyRefundService {
                 : refundRepository.sumForDispense(source.dispenseId(), LIVE);
         BigDecimal refundable = source.paid().subtract(nz(already)).max(BigDecimal.ZERO);
         if (refundable.signum() <= 0) {
-            throw new FieldBusinessException("returnTransactionId", "pharmacy.refund.nothingPaid");
+            throw new FieldBusinessException(FIELD_RETURN, "pharmacy.refund.nothingPaid");
         }
         BigDecimal amount = PharmacyListPrice.amount(source.unitPrice(), ret.getQuantity()).min(refundable);
         if (amount.signum() <= 0) {
-            throw new FieldBusinessException("returnTransactionId", "pharmacy.refund.nothingPaid");
+            throw new FieldBusinessException(FIELD_RETURN, "pharmacy.refund.nothingPaid");
         }
 
         PharmacyPaymentMethod method = refundMethod(request, source);
@@ -221,11 +223,26 @@ public class PharmacyRefundService {
         if (refund.getStatus() != PharmacyRefundStatus.APPROVED) {
             throw new ConflictException(MessageUtil.resolve("billing.refund.notApproved"));
         }
+        recordHandover(refund, body, actor);
+        refund.setStatus(PharmacyRefundStatus.PAID);
+        refund.setPaidBy(actor.userId());
+        refund.setPaidAt(now());
+        refundRepository.save(refund);
+        markSaleRefundedWhenFullyPaid(refund);
+        audit(AuditEventType.PHARMACY_REFUND_PAID, "Pharmacy refund paid out", refund);
+        return toDto(refund, actor);
+    }
+
+    /**
+     * The reference and operator recorded when the money is handed over: a mobile-money payout needs both; a new
+     * reference is checked for card data and recorded once across every till.
+     */
+    private void recordHandover(PharmacyRefund refund, PharmacyRefundPayRequestDTO body, Actor actor) {
         String given = trimToNull(body != null ? body.getReference() : null);
         String reference = given != null ? given : refund.getReference();
-        MobileMoneyOperator operator = body != null && body.getMobileMoneyOperator() != null
-                ? body.getMobileMoneyOperator() : refund.getMobileMoneyOperator();
-        operator = MobileMoneyOperators.require(refund.getMethod(), operator, "mobileMoneyOperator");
+        MobileMoneyOperator asked = body != null ? body.getMobileMoneyOperator() : null;
+        MobileMoneyOperator operator = MobileMoneyOperators.require(refund.getMethod(),
+                asked != null ? asked : refund.getMobileMoneyOperator(), "mobileMoneyOperator");
         if (refund.getMethod() == PharmacyPaymentMethod.MOBILE_MONEY && reference == null) {
             throw new FieldBusinessException(FIELD_REFERENCE, "billing.refund.referenceRequired");
         }
@@ -237,28 +254,26 @@ public class PharmacyRefundService {
         }
         refund.setReference(reference);
         refund.setMobileMoneyOperator(operator);
-        refund.setStatus(PharmacyRefundStatus.PAID);
-        refund.setPaidBy(actor.userId());
-        refund.setPaidAt(now());
-        refundRepository.save(refund);
-        if (refund.getSaleId() != null) {
-            saleRepository.findLockedById(refund.getSaleId()).ifPresent(sale -> {
-                BigDecimal paidOut = nz(refundRepository.sumForSale(sale.getId(),
-                        EnumSet.of(PharmacyRefundStatus.PAID)));
-                if (sale.getTotalAmount() != null && paidOut.compareTo(sale.getTotalAmount()) >= 0) {
-                    sale.setStatus(PharmacySaleStatus.REFUNDED);
-                }
-            });
+    }
+
+    /** A counter sale whose paid refunds reach its total is REFUNDED (plan finding 8: the status had no path). */
+    private void markSaleRefundedWhenFullyPaid(PharmacyRefund refund) {
+        if (refund.getSaleId() == null) {
+            return;
         }
-        audit(AuditEventType.PHARMACY_REFUND_PAID, "Pharmacy refund paid out", refund);
-        return toDto(refund, actor);
+        saleRepository.findLockedById(refund.getSaleId()).ifPresent(sale -> {
+            BigDecimal paidOut = nz(refundRepository.sumForSale(sale.getId(), EnumSet.of(PharmacyRefundStatus.PAID)));
+            if (sale.getTotalAmount() != null && paidOut.compareTo(sale.getTotalAmount()) >= 0) {
+                sale.setStatus(PharmacySaleStatus.REFUNDED);
+            }
+        });
     }
 
     /** A refund not yet paid is withdrawn, with a reason, by the person who asked for it or by an approver. */
     @Transactional
     public PharmacyRefundDTO cancel(UUID refundId, PharmacyRefundReasonRequestDTO body) {
         Actor actor = requireActor((user, hospital) -> roleValidator.canRequestPharmacyRefund(user, hospital)
-                || roleValidator.canApproveRefund(user, hospital), "pharmacy.refund.requestersOnly");
+                || roleValidator.canApproveRefund(user, hospital), REQUESTERS_ONLY);
         PharmacyRefund refund = lock(refundId, actor);
         if (!CANCELLABLE_STATUSES.contains(refund.getStatus())) {
             throw new ConflictException(MessageUtil.resolve("billing.refund.notCancellable"));
@@ -284,7 +299,7 @@ public class PharmacyRefundService {
     @Transactional(readOnly = true)
     public List<PharmacyRefundDTO> list(Collection<PharmacyRefundStatus> statuses) {
         Actor actor = requireActor((user, hospital) -> roleValidator.canRequestPharmacyRefund(user, hospital)
-                || roleValidator.canApproveRefund(user, hospital), "pharmacy.refund.requestersOnly");
+                || roleValidator.canApproveRefund(user, hospital), REQUESTERS_ONLY);
         Collection<PharmacyRefundStatus> wanted = statuses == null || statuses.isEmpty()
                 ? CANCELLABLE_STATUSES : statuses;
         return refundRepository.findByHospitalIdAndStatusInOrderByCreatedAtAsc(actor.hospitalId(), wanted).stream()
@@ -329,31 +344,31 @@ public class PharmacyRefundService {
      */
     private Source sourceOf(StockTransaction ret, UUID hospitalId) {
         if (ret.getReferenceId() == null) {
-            throw new FieldBusinessException("returnTransactionId", "pharmacy.refund.returnUnreferenced");
+            throw new FieldBusinessException(FIELD_RETURN, "pharmacy.refund.returnUnreferenced");
         }
         UUID pharmacyId = ret.getInventoryItem().getPharmacy().getId();
         PharmacySale sale = saleRepository.findLockedById(ret.getReferenceId()).orElse(null);
         if (sale != null) {
             if (sale.getHospital() == null || !hospitalId.equals(sale.getHospital().getId())
                     || sale.getPharmacy() == null || !pharmacyId.equals(sale.getPharmacy().getId())) {
-                throw new FieldBusinessException("returnTransactionId", "pharmacy.refund.returnUnreferenced");
+                throw new FieldBusinessException(FIELD_RETURN, "pharmacy.refund.returnUnreferenced");
             }
             BigDecimal unitPrice = sale.getLines().stream()
                     .filter(line -> sameStock(line, ret))
                     .map(SaleLine::getUnitPrice)
                     .filter(Objects::nonNull)
                     .findFirst()
-                    .orElseThrow(() -> new FieldBusinessException("returnTransactionId",
+                    .orElseThrow(() -> new FieldBusinessException(FIELD_RETURN,
                             "pharmacy.refund.returnUnreferenced"));
             return new Source(sale.getId(), null, unitPrice, nz(sale.getTotalAmount()), sale.getPaymentMethod());
         }
         Dispense dispense = dispenseRepository.findLockedById(ret.getReferenceId()).orElse(null);
         if (dispense == null || dispense.getPharmacy() == null || !pharmacyId.equals(dispense.getPharmacy().getId())) {
-            throw new FieldBusinessException("returnTransactionId", "pharmacy.refund.returnUnreferenced");
+            throw new FieldBusinessException(FIELD_RETURN, "pharmacy.refund.returnUnreferenced");
         }
         BigDecimal unitPrice = java.util.Optional.ofNullable(dispense.getMedicationCatalogItem())
                 .flatMap(m -> PharmacyListPrice.of(pharmacyId, m.getId(), inventoryItemRepository))
-                .orElseThrow(() -> new FieldBusinessException("returnTransactionId", "pharmacy.refund.nothingPaid"));
+                .orElseThrow(() -> new FieldBusinessException(FIELD_RETURN, "pharmacy.refund.nothingPaid"));
         BigDecimal paid = nz(paymentRepository.sumPostedForDispense(dispense.getId()));
         PharmacyPaymentMethod paidBy = paymentRepository.findFirstByDispense_IdOrderByCreatedAtAsc(dispense.getId())
                 .map(com.example.hms.model.pharmacy.PharmacyPayment::getPaymentMethod).orElse(null);

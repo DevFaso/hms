@@ -76,6 +76,9 @@ public class PharmacyReconciliationService {
     /** The CSV export's media type and file name, built here so the controller writes no cell. */
     public static final String CSV_FILE_PREFIX = "rapprochement-pharmacie-";
     public static final String CSV_MEDIA_TYPE = "text/csv;charset=UTF-8";
+    /** UTF-8 byte order mark, so a spreadsheet reads the accents. */
+    private static final String BOM = String.valueOf((char) 0xFEFF);
+    private static final String MONEY_SECTION = "argent";
 
     private static final Set<PharmacySaleStatus> SOLD = EnumSet.of(PharmacySaleStatus.COMPLETED,
             PharmacySaleStatus.REFUNDED);
@@ -113,10 +116,19 @@ public class PharmacyReconciliationService {
 
     @Transactional(readOnly = true)
     public PharmacyReconciliationDTO daily(UUID pharmacyId, LocalDate date) {
+        return build(pharmacyId, date);
+    }
+
+    /** The day, or today on the server clock when none is given (owner decision D-16). */
+    public LocalDate dayOf(LocalDate date) {
+        return date != null ? date : LocalDate.now(clock);
+    }
+
+    private PharmacyReconciliationDTO build(UUID pharmacyId, LocalDate date) {
         UUID hospitalId = requireReader();
         Pharmacy pharmacy = pharmacyRepository.findByIdAndHospital_Id(pharmacyId, hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notfound"));
-        LocalDate day = date != null ? date : LocalDate.now(clock);
+        LocalDate day = dayOf(date);
         LocalDateTime from = day.atStartOfDay();
         LocalDateTime to = from.plusDays(1);
 
@@ -164,13 +176,23 @@ public class PharmacyReconciliationService {
     }
 
     private static String keyOf(InventoryItem item, StockLot lot) {
-        return lot != null ? "lot:" + lot.getId() : "item:" + (item != null ? item.getId() : "?");
+        if (lot != null) {
+            return "lot:" + lot.getId();
+        }
+        return "item:" + (item != null ? item.getId() : "?");
+    }
+
+    private static InventoryItem itemOrLotItem(InventoryItem item, StockLot lot) {
+        if (item != null) {
+            return item;
+        }
+        return lot != null ? lot.getInventoryItem() : null;
     }
 
     private static Bucket bucket(Map<String, Bucket> buckets, InventoryItem item, StockLot lot) {
         return buckets.computeIfAbsent(keyOf(item, lot), k -> {
             Bucket b = new Bucket();
-            b.item = item != null ? item : (lot != null ? lot.getInventoryItem() : null);
+            b.item = itemOrLotItem(item, lot);
             b.lot = lot;
             return b;
         });
@@ -179,18 +201,7 @@ public class PharmacyReconciliationService {
     private List<StockLine> stockLines(List<PharmacySale> sales, List<Dispense> fills,
                                        List<StockTransaction> movements, List<Difference> differences) {
         Map<String, Bucket> buckets = new LinkedHashMap<>();
-        for (StockTransaction tx : movements) {
-            Bucket b = bucket(buckets, tx.getInventoryItem(), tx.getStockLot());
-            BigDecimal q = nz(tx.getQuantity());
-            switch (tx.getTransactionType()) {
-                case RECEIPT -> b.received = b.received.add(q);
-                case SALE -> b.soldMoved = b.soldMoved.add(q);
-                case DISPENSE -> b.dispensedMoved = b.dispensedMoved.add(q);
-                case RETURN -> b.returned = b.returned.add(q);
-                case ADJUSTMENT -> b.adjusted = b.adjusted.add(q);
-                case TRANSFER -> b.transferred = b.transferred.add(q);
-            }
-        }
+        movements.forEach(tx -> moved(bucket(buckets, tx.getInventoryItem(), tx.getStockLot()), tx));
         for (PharmacySale sale : sales) {
             for (SaleLine line : sale.getLines()) {
                 InventoryItem item = line.getStockLot() != null ? line.getStockLot().getInventoryItem()
@@ -199,48 +210,63 @@ public class PharmacyReconciliationService {
                 b.soldRecorded = b.soldRecorded.add(nz(line.getQuantity()));
             }
         }
-        for (Dispense fill : fills) {
-            // A fill with no lot (a pharmacy that keeps no stock) moves nothing and is not expected to.
-            if (fill.getStockLot() == null) {
-                continue;
-            }
+        // A fill with no lot (a pharmacy that keeps no stock) moves nothing and is not expected to.
+        fills.stream().filter(fill -> fill.getStockLot() != null).forEach(fill -> {
             Bucket b = bucket(buckets, fill.getStockLot().getInventoryItem(), fill.getStockLot());
             b.dispensedRecorded = b.dispensedRecorded.add(nz(fill.getQuantityDispensed()));
-        }
+        });
         List<StockLine> lines = new ArrayList<>();
         for (Bucket b : buckets.values()) {
-            String name = nameOf(b.item);
-            String lotNumber = b.lot != null ? b.lot.getLotNumber() : null;
-            boolean saleOff = b.soldRecorded.compareTo(b.soldMoved) != 0;
-            boolean fillOff = b.dispensedRecorded.compareTo(b.dispensedMoved) != 0;
-            if (saleOff) {
-                differences.add(Difference.builder().type("SALE_STOCK_MISMATCH").medicationName(name)
-                        .lotNumber(lotNumber).expected(b.soldRecorded).actual(b.soldMoved).build());
-            }
-            if (fillOff) {
-                differences.add(Difference.builder().type("DISPENSE_STOCK_MISMATCH").medicationName(name)
-                        .lotNumber(lotNumber).expected(b.dispensedRecorded).actual(b.dispensedMoved).build());
-            }
-            lines.add(StockLine.builder()
-                    .inventoryItemId(b.item != null ? b.item.getId() : null)
-                    .medicationName(name)
-                    .unit(b.item != null ? b.item.getUnit() : null)
-                    .stockLotId(b.lot != null ? b.lot.getId() : null)
-                    .lotNumber(lotNumber)
-                    .received(b.received)
-                    .soldRecorded(b.soldRecorded)
-                    .soldMoved(b.soldMoved)
-                    .dispensedRecorded(b.dispensedRecorded)
-                    .dispensedMoved(b.dispensedMoved)
-                    .returned(b.returned)
-                    .adjusted(b.adjusted)
-                    .transferred(b.transferred)
-                    .difference(saleOff || fillOff)
-                    .build());
+            lines.add(lineOf(b, differences));
         }
         lines.sort(java.util.Comparator.comparing((StockLine l) -> Objects.toString(l.getMedicationName(), ""))
                 .thenComparing(l -> Objects.toString(l.getLotNumber(), "")));
         return lines;
+    }
+
+    /** One movement counted in its bucket. */
+    private static void moved(Bucket b, StockTransaction tx) {
+        BigDecimal q = nz(tx.getQuantity());
+        switch (tx.getTransactionType()) {
+            case RECEIPT -> b.received = b.received.add(q);
+            case SALE -> b.soldMoved = b.soldMoved.add(q);
+            case DISPENSE -> b.dispensedMoved = b.dispensedMoved.add(q);
+            case RETURN -> b.returned = b.returned.add(q);
+            case ADJUSTMENT -> b.adjusted = b.adjusted.add(q);
+            case TRANSFER -> b.transferred = b.transferred.add(q);
+        }
+    }
+
+    /** A bucket as a stock line; a sale or fill whose movement differs is a difference. */
+    private static StockLine lineOf(Bucket b, List<Difference> differences) {
+        String name = nameOf(b.item);
+        String lotNumber = b.lot != null ? b.lot.getLotNumber() : null;
+        boolean saleOff = b.soldRecorded.compareTo(b.soldMoved) != 0;
+        boolean fillOff = b.dispensedRecorded.compareTo(b.dispensedMoved) != 0;
+        if (saleOff) {
+            differences.add(Difference.builder().type("SALE_STOCK_MISMATCH").medicationName(name)
+                    .lotNumber(lotNumber).expected(b.soldRecorded).actual(b.soldMoved).build());
+        }
+        if (fillOff) {
+            differences.add(Difference.builder().type("DISPENSE_STOCK_MISMATCH").medicationName(name)
+                    .lotNumber(lotNumber).expected(b.dispensedRecorded).actual(b.dispensedMoved).build());
+        }
+        return StockLine.builder()
+                .inventoryItemId(b.item != null ? b.item.getId() : null)
+                .medicationName(name)
+                .unit(b.item != null ? b.item.getUnit() : null)
+                .stockLotId(b.lot != null ? b.lot.getId() : null)
+                .lotNumber(lotNumber)
+                .received(b.received)
+                .soldRecorded(b.soldRecorded)
+                .soldMoved(b.soldMoved)
+                .dispensedRecorded(b.dispensedRecorded)
+                .dispensedMoved(b.dispensedMoved)
+                .returned(b.returned)
+                .adjusted(b.adjusted)
+                .transferred(b.transferred)
+                .difference(saleOff || fillOff)
+                .build();
     }
 
     private InventoryItem itemOf(Pharmacy pharmacy, MedicationCatalogItem medication) {
@@ -291,34 +317,8 @@ public class PharmacyReconciliationService {
         BigDecimal refundsPaid = refunds.stream().map(PharmacyRefund::getAmount).map(PharmacyReconciliationService::nz)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal charges = BigDecimal.ZERO;
-        BigDecimal deferredTotal = BigDecimal.ZERO;
-        BigDecimal unpaidTotal = BigDecimal.ZERO;
-        for (Dispense fill : handedOver) {
-            BigDecimal charge = DispenseCharge.of(fill, inventoryItemRepository).orElse(BigDecimal.ZERO);
-            if (charge.signum() <= 0) {
-                continue;
-            }
-            charges = charges.add(charge);
-            BigDecimal paid = nz(paymentRepository.sumPostedForDispense(fill.getId()));
-            BigDecimal claimed = nz(claimRepository.sumLiveForDispense(fill.getId()));
-            BigDecimal due = charge.subtract(paid).subtract(claimed).max(BigDecimal.ZERO);
-            if (due.signum() <= 0) {
-                continue;
-            }
-            String name = fill.getMedicationName();
-            if (fill.getBillingDeferredReason() != null) {
-                deferredTotal = deferredTotal.add(due);
-                deferred.add(DeferredFill.builder().dispenseId(fill.getId()).medicationName(name)
-                        .quantity(fill.getQuantityDispensed()).due(due).reason(fill.getBillingDeferredReason())
-                        .deferredAt(fill.getBillingDeferredAt()).build());
-            } else {
-                unpaidTotal = unpaidTotal.add(due);
-                differences.add(Difference.builder().type("UNPAID_HANDED_OVER").medicationName(name)
-                        .lotNumber(fill.getStockLot() != null ? fill.getStockLot().getLotNumber() : null)
-                        .referenceId(fill.getId()).expected(charge).actual(paid.add(claimed)).amount(due).build());
-            }
-        }
+        Settlement settled = new Settlement();
+        handedOver.forEach(fill -> settle(fill, settled, deferred, differences));
         return Money.builder()
                 .salesCount(sales.size())
                 .salesTotal(salesTotal)
@@ -329,10 +329,46 @@ public class PharmacyReconciliationService {
                 .refundsCount(refunds.size())
                 .refundsPaid(refundsPaid)
                 .netCollected(salesTotal.add(paymentsTotal).subtract(refundsPaid))
-                .dispenseCharges(charges)
-                .deferredTotal(deferredTotal)
-                .unpaidTotal(unpaidTotal)
+                .dispenseCharges(settled.charges)
+                .deferredTotal(settled.deferredTotal)
+                .unpaidTotal(settled.unpaidTotal)
                 .build();
+    }
+
+    /** What the fills handed over cost, and what of it left « à facturer » or unpaid. */
+    private static final class Settlement {
+        BigDecimal charges = BigDecimal.ZERO;
+        BigDecimal deferredTotal = BigDecimal.ZERO;
+        BigDecimal unpaidTotal = BigDecimal.ZERO;
+    }
+
+    /**
+     * QA D2675: a fill handed over with money still due is listed « à facturer » when it was marked so, and is a
+     * difference otherwise.
+     */
+    private void settle(Dispense fill, Settlement settled, List<DeferredFill> deferred, List<Difference> differences) {
+        BigDecimal charge = DispenseCharge.of(fill, inventoryItemRepository).orElse(BigDecimal.ZERO);
+        if (charge.signum() <= 0) {
+            return;
+        }
+        settled.charges = settled.charges.add(charge);
+        BigDecimal covered = nz(paymentRepository.sumPostedForDispense(fill.getId()))
+                .add(nz(claimRepository.sumLiveForDispense(fill.getId())));
+        BigDecimal due = charge.subtract(covered).max(BigDecimal.ZERO);
+        if (due.signum() <= 0) {
+            return;
+        }
+        if (fill.getBillingDeferredReason() != null) {
+            settled.deferredTotal = settled.deferredTotal.add(due);
+            deferred.add(DeferredFill.builder().dispenseId(fill.getId()).medicationName(fill.getMedicationName())
+                    .quantity(fill.getQuantityDispensed()).due(due).reason(fill.getBillingDeferredReason())
+                    .deferredAt(fill.getBillingDeferredAt()).build());
+        } else {
+            settled.unpaidTotal = settled.unpaidTotal.add(due);
+            differences.add(Difference.builder().type("UNPAID_HANDED_OVER").medicationName(fill.getMedicationName())
+                    .lotNumber(fill.getStockLot() != null ? fill.getStockLot().getLotNumber() : null)
+                    .referenceId(fill.getId()).expected(charge).actual(covered).amount(due).build());
+        }
     }
 
     // ───────────────────────────── controlled ─────────────────────────────
@@ -376,19 +412,19 @@ public class PharmacyReconciliationService {
     /** The day as CSV (';' separated, UTF-8 with BOM), every cell neutralised against formulas. */
     @Transactional(readOnly = true)
     public byte[] exportCsv(UUID pharmacyId, LocalDate date) {
-        PharmacyReconciliationDTO day = daily(pharmacyId, date);
-        StringBuilder csv = new StringBuilder("﻿");
+        PharmacyReconciliationDTO day = build(pharmacyId, date);
+        StringBuilder csv = new StringBuilder(BOM);
         Money m = day.getMoney();
         csv.append(row("section", "libelle", "valeur")).append("\r\n");
-        csv.append(row("argent", "ventes_comptoir", plain(m.getSalesTotal()))).append("\r\n");
-        m.getSalesByMethod().forEach((k, v) -> csv.append(row("argent", "ventes_" + k, plain(v))).append("\r\n"));
-        csv.append(row("argent", "paiements_delivrances", plain(m.getDispensePaymentsTotal()))).append("\r\n");
+        csv.append(row(MONEY_SECTION, "ventes_comptoir", plain(m.getSalesTotal()))).append("\r\n");
+        m.getSalesByMethod().forEach((k, v) -> csv.append(row(MONEY_SECTION, "ventes_" + k, plain(v))).append("\r\n"));
+        csv.append(row(MONEY_SECTION, "paiements_delivrances", plain(m.getDispensePaymentsTotal()))).append("\r\n");
         m.getDispensePaymentsByMethod().forEach((k, v) ->
-                csv.append(row("argent", "paiements_" + k, plain(v))).append("\r\n"));
-        csv.append(row("argent", "remboursements", plain(m.getRefundsPaid()))).append("\r\n");
-        csv.append(row("argent", "net_encaisse", plain(m.getNetCollected()))).append("\r\n");
-        csv.append(row("argent", "a_facturer", plain(m.getDeferredTotal()))).append("\r\n");
-        csv.append(row("argent", "remis_non_payes", plain(m.getUnpaidTotal()))).append("\r\n");
+                csv.append(row(MONEY_SECTION, "paiements_" + k, plain(v))).append("\r\n"));
+        csv.append(row(MONEY_SECTION, "remboursements", plain(m.getRefundsPaid()))).append("\r\n");
+        csv.append(row(MONEY_SECTION, "net_encaisse", plain(m.getNetCollected()))).append("\r\n");
+        csv.append(row(MONEY_SECTION, "a_facturer", plain(m.getDeferredTotal()))).append("\r\n");
+        csv.append(row(MONEY_SECTION, "remis_non_payes", plain(m.getUnpaidTotal()))).append("\r\n");
         csv.append("\r\n").append(row("medicament", "lot", "unite", "recu", "vendu_enregistre", "vendu_mouvement",
                 "delivre_enregistre", "delivre_mouvement", "retour", "ajustement", "transfert", "ecart")).append("\r\n");
         for (StockLine l : day.getStock()) {

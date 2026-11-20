@@ -634,7 +634,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                                      StockTransactionType type, BigDecimal quantity) {
         LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
         switch (type) {
-            case DISPENSE, TRANSFER -> takeOff(item, lot, quantity, now);
+            case DISPENSE, TRANSFER, SALE -> takeOff(item, lot, quantity, now);
             case RECEIPT, RETURN -> putOn(item, lot, quantity, now);
             // QA D143: a negative adjustment (a write-off) goes through the
             // guarded decrement, so it can never drive a lot or the item

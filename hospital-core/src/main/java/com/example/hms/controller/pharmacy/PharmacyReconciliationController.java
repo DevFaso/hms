@@ -59,7 +59,7 @@ public class PharmacyReconciliationController {
     public ResponseEntity<byte[]> export(
             @RequestParam UUID pharmacyId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        LocalDate day = date != null ? date : LocalDate.now();
+        LocalDate day = reconciliationService.dayOf(date);
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .contentType(MediaType.parseMediaType(PharmacyReconciliationService.CSV_MEDIA_TYPE))

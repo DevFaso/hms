@@ -196,53 +196,13 @@ public class InventoryServiceImpl implements InventoryService {
         inventoryItemRepository.save(item);
     }
 
-    @Override
-    @Transactional
-    public InventoryItemResponseDTO setPackSize(UUID id, com.example.hms.payload.dto.pharmacy.PackSizeRequestDTO dto) {
-        InventoryItem scoped = resolveInventoryItem(id);
-        enforceHospitalScope(scoped.getPharmacy());
-        // The item row locked: a fill, sale or receipt waits, then moves units, never packs.
-        InventoryItem item = inventoryItemRepository.lockById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("inventoryItem.notFound", id));
-        if (item.getUnitsPerPack() != null) {
-            throw new com.example.hms.exception.FieldBusinessException("unitsPerPack", "pharmacy.pack.alreadySet",
-                    item.getUnitsPerPack(), item.getUnit());
-        }
-        // A controlled register is kept as received; its balance is never re-counted.
-        if (ControlledStockWitness.isControlled(item)) {
-            throw new com.example.hms.exception.FieldBusinessException("unitsPerPack", "pharmacy.pack.controlledRefused");
-        }
-        Integer perPack = dto != null ? dto.getUnitsPerPack() : null;
-        String unit = dto != null && dto.getUnit() != null ? dto.getUnit().trim() : "";
-        String reason = dto != null && dto.getReason() != null ? dto.getReason().trim() : "";
-        com.example.hms.exception.RequiredFields.check()
-                .require(perPack != null && perPack >= 2 && perPack <= 10000, "unitsPerPack", "pharmacy.pack.sizeInvalid")
-                .require(!unit.isEmpty(), "unit", "pharmacy.pack.unitRequired")
-                .require(!reason.isEmpty(), "reason", "stockTransaction.reason.required")
-                .orThrow();
-        if (unit.length() > 60) {
-            throw new com.example.hms.exception.FieldBusinessException("unit", "pharmacy.pack.unitTooLong");
-        }
-        // A pack converts to units of a counted form: the new unit must be a solid dose, a container or a
-        // preparation (never ml or mg), and not the pack's own unit again.
-        if (WholeUnitQuantity.isMeasured(unit)) {
-            throw new com.example.hms.exception.FieldBusinessException("unit", "pharmacy.pack.unitMeasured");
-        }
-        String packUnit = dto.getPackUnit() != null && !dto.getPackUnit().isBlank() ? dto.getPackUnit().trim()
-                : (item.getUnit() != null && !item.getUnit().isBlank() ? item.getUnit().trim() : "pack");
-        if (packUnit.length() > 60) {
-            packUnit = packUnit.substring(0, 60);
-        }
-        BigDecimal factor = BigDecimal.valueOf(perPack.longValue());
-        java.time.LocalDateTime now = java.time.LocalDateTime.now(clock);
-        java.util.List<StockLot> lots = stockLotRepository.findAllByInventoryItemIdOrderByExpiryDateAsc(item.getId());
-        BigDecimal onHandBefore = item.getQuantityOnHand() != null ? item.getQuantityOnHand() : BigDecimal.ZERO;
-        stockLotRepository.scaleQuantitiesOfItem(item.getId(), factor, now);
-        inventoryItemRepository.scaleOnHand(item.getId(), factor, now);
-        String ledgerReason = "Conversion: 1 " + packUnit + " = " + perPack + " " + unit + " | " + reason;
-        if (ledgerReason.length() > 500) {
-            ledgerReason = ledgerReason.substring(0, 500);
-        }
+    /**
+     * QA D2674: one ADJUSTMENT per lot (or for the item, when it has no lots) for what the conversion added, so the
+     * ledger (and the controlled register's running balance) still equals the stock.
+     */
+    private void recordConversion(InventoryItem item, java.util.List<StockLot> lots, BigDecimal onHandBefore,
+                                  BigDecimal factor, String reason) {
+        String ledgerReason = reason.length() > 500 ? reason.substring(0, 500) : reason;
         BigDecimal gain = factor.subtract(BigDecimal.ONE);
         for (StockLot lot : lots) {
             BigDecimal before = lot.getRemainingQuantity() != null ? lot.getRemainingQuantity() : BigDecimal.ZERO;
@@ -254,10 +214,10 @@ public class InventoryServiceImpl implements InventoryService {
         if (lots.isEmpty() && onHandBefore.signum() > 0) {
             recordStockTransaction(item, null, StockTransactionType.ADJUSTMENT, onHandBefore.multiply(gain), ledgerReason, null);
         }
-        refreshIfManaged(item);
-        item.setUnitsPerPack(perPack);
-        item.setPackUnit(packUnit);
-        item.setUnit(unit);
+    }
+
+    /** QA D2674: the price of one unit is the pack's divided by the pack size; the thresholds count units. */
+    private static void scaleItemFigures(InventoryItem item, BigDecimal factor) {
         if (item.getUnitPrice() != null) {
             item.setUnitPrice(item.getUnitPrice().divide(factor, 2, java.math.RoundingMode.HALF_UP));
         }
@@ -267,6 +227,92 @@ public class InventoryServiceImpl implements InventoryService {
         if (item.getReorderQuantity() != null) {
             item.setReorderQuantity(item.getReorderQuantity().multiply(factor));
         }
+    }
+
+    /** QA D2674 (r65): a delivery counted in packs of an item kept in units is received as units. */
+    private static void receiveInUnits(InventoryItem item, StockLotRequestDTO dto) {
+        if (!Boolean.TRUE.equals(dto.getInPacks())) {
+            return;
+        }
+        dto.setInitialQuantity(PackQuantity.toUnits(item, dto.getInitialQuantity(), true, "initialQuantity"));
+        if (dto.getRemainingQuantity() != null) {
+            dto.setRemainingQuantity(PackQuantity.toUnits(item, dto.getRemainingQuantity(), true, "remainingQuantity"));
+        }
+        if (dto.getUnitCost() != null && item.getUnitsPerPack() != null) {
+            dto.setUnitCost(dto.getUnitCost().divide(BigDecimal.valueOf(item.getUnitsPerPack()), 4,
+                    java.math.RoundingMode.HALF_UP));
+        }
+        dto.setInPacks(false);
+    }
+
+    /** The pack size asked for, checked: units per pack, the new unit, the pack's name and the reason. */
+    private record PackSize(int perPack, String unit, String packUnit, String reason) {
+    }
+
+    private static PackSize requirePackSize(InventoryItem item, com.example.hms.payload.dto.pharmacy.PackSizeRequestDTO dto) {
+        if (item.getUnitsPerPack() != null) {
+            throw new com.example.hms.exception.FieldBusinessException("unitsPerPack", "pharmacy.pack.alreadySet",
+                    item.getUnitsPerPack(), item.getUnit());
+        }
+        // A controlled register is kept as received; its balance is never re-counted.
+        if (ControlledStockWitness.isControlled(item)) {
+            throw new com.example.hms.exception.FieldBusinessException("unitsPerPack", "pharmacy.pack.controlledRefused");
+        }
+        Integer perPack = dto != null ? dto.getUnitsPerPack() : null;
+        String unit = trimmedOrEmpty(dto != null ? dto.getUnit() : null);
+        String reason = trimmedOrEmpty(dto != null ? dto.getReason() : null);
+        com.example.hms.exception.RequiredFields.check()
+                .require(perPack != null && perPack >= 2 && perPack <= 10000, "unitsPerPack", "pharmacy.pack.sizeInvalid")
+                .require(!unit.isEmpty(), "unit", "pharmacy.pack.unitRequired")
+                .require(!reason.isEmpty(), "reason", "stockTransaction.reason.required")
+                .orThrow();
+        if (unit.length() > 60) {
+            throw new com.example.hms.exception.FieldBusinessException("unit", "pharmacy.pack.unitTooLong");
+        }
+        // A pack converts to units that are counted, never to a measured amount (ml, mg).
+        if (WholeUnitQuantity.isMeasured(unit)) {
+            throw new com.example.hms.exception.FieldBusinessException("unit", "pharmacy.pack.unitMeasured");
+        }
+        String packUnit = trimmedOrEmpty(dto.getPackUnit());
+        if (packUnit.isEmpty()) {
+            packUnit = trimmedOrEmpty(item.getUnit());
+        }
+        if (packUnit.isEmpty()) {
+            packUnit = "pack";
+        }
+        return new PackSize(perPack, unit, packUnit.length() > 60 ? packUnit.substring(0, 60) : packUnit, reason);
+    }
+
+    private static String trimmedOrEmpty(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    @Override
+    @Transactional
+    public InventoryItemResponseDTO setPackSize(UUID id, com.example.hms.payload.dto.pharmacy.PackSizeRequestDTO dto) {
+        InventoryItem scoped = resolveInventoryItem(id);
+        enforceHospitalScope(scoped.getPharmacy());
+        // The item row locked: a fill, sale or receipt waits, then moves units, never packs.
+        InventoryItem item = inventoryItemRepository.lockById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("inventoryItem.notFound", id));
+        PackSize size = requirePackSize(item, dto);
+        int perPack = size.perPack();
+        String unit = size.unit();
+        String packUnit = size.packUnit();
+        String reason = size.reason();
+        BigDecimal factor = BigDecimal.valueOf(perPack);
+        java.time.LocalDateTime now = java.time.LocalDateTime.now(clock);
+        java.util.List<StockLot> lots = stockLotRepository.findAllByInventoryItemIdOrderByExpiryDateAsc(item.getId());
+        BigDecimal onHandBefore = item.getQuantityOnHand() != null ? item.getQuantityOnHand() : BigDecimal.ZERO;
+        stockLotRepository.scaleQuantitiesOfItem(item.getId(), factor, now);
+        inventoryItemRepository.scaleOnHand(item.getId(), factor, now);
+        recordConversion(item, lots, onHandBefore, factor, "Conversion: 1 " + packUnit + " = " + perPack + " "
+                + unit + " | " + reason);
+        refreshIfManaged(item);
+        item.setUnitsPerPack(perPack);
+        item.setPackUnit(packUnit);
+        item.setUnit(unit);
+        scaleItemFigures(item, factor);
         InventoryItem saved = inventoryItemRepository.save(item);
         logAudit(AuditEventType.STOCK_ADJUSTMENT, "Pack size set on an inventory item", saved.getId().toString());
         return inventoryItemMapper.toResponseDTO(saved);
@@ -329,19 +375,7 @@ public class InventoryServiceImpl implements InventoryService {
     public StockLotResponseDTO receiveStock(StockLotRequestDTO dto) {
         InventoryItem item = resolveInventoryItem(dto.getInventoryItemId());
         enforceHospitalScope(item.getPharmacy());
-        // QA D2674 (r65): a delivery counted in packs of an item kept in units is received as units.
-        if (Boolean.TRUE.equals(dto.getInPacks())) {
-            BigDecimal packs = dto.getInitialQuantity();
-            dto.setInitialQuantity(PackQuantity.toUnits(item, packs, true, "initialQuantity"));
-            if (dto.getRemainingQuantity() != null) {
-                dto.setRemainingQuantity(PackQuantity.toUnits(item, dto.getRemainingQuantity(), true, "remainingQuantity"));
-            }
-            if (dto.getUnitCost() != null && item.getUnitsPerPack() != null) {
-                dto.setUnitCost(dto.getUnitCost().divide(BigDecimal.valueOf(item.getUnitsPerPack()), 4,
-                        java.math.RoundingMode.HALF_UP));
-            }
-            dto.setInPacks(false);
-        }
+        receiveInUnits(item, dto);
 
         validateReceiptQuantitiesAndDates(dto);
         // QA D779: a receipt is a stock movement like any other (D668 guarded

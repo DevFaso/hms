@@ -221,7 +221,7 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
      * instant: the sale is refused with the lot and the quantity, and nothing of it is kept.
      */
     private void moveStock(PharmacySale sale, java.util.List<PricedLine> lines, User soldBy) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(java.time.ZoneId.systemDefault());
         for (PricedLine line : lines) {
             String quantity = com.example.hms.utility.DisplayNumbers.quantity(line.units());
             if (line.lot() != null

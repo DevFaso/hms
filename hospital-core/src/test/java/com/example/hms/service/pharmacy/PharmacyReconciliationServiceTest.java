@@ -291,7 +291,8 @@ class PharmacyReconciliationServiceTest {
     @DisplayName("a reader without the role is refused; another hospital's pharmacy answers as missing")
     void scope() {
         when(roleValidator.canReadPharmacyReconciliation(userId, hospitalId)).thenReturn(false);
-        assertThatThrownBy(() -> service.daily(pharmacy.getId(), DAY))
+        UUID pharmacyId = pharmacy.getId();
+        assertThatThrownBy(() -> service.daily(pharmacyId, DAY))
                 .isInstanceOf(ClientSafeAccessDeniedException.class);
 
         when(roleValidator.canReadPharmacyReconciliation(userId, hospitalId)).thenReturn(true);
@@ -316,5 +317,17 @@ class PharmacyReconciliationServiceTest {
     void defaultDay() {
         assertThat(service.daily(pharmacy.getId(), null).getDate()).isEqualTo(LocalDate.now(clock));
         assertThat(service.daily(pharmacy.getId(), null).getGeneratedAt()).isEqualTo(LocalDateTime.now(clock));
+    }
+
+    @Test
+    @DisplayName("the picker lists the acting hospital's pharmacies, for a reader only")
+    void pharmaciesForTheReader() {
+        when(pharmacyRepository.findByHospitalIdAndActiveTrueOrderByNameAsc(hospitalId)).thenReturn(List.of(pharmacy));
+
+        assertThat(service.pharmacies()).singleElement().satisfies(p -> {
+            assertThat(p.getPharmacyId()).isEqualTo(pharmacy.getId());
+            assertThat(p.getPharmacyName()).isEqualTo("Pharmacie centrale");
+        });
+        assertThat(service.dayOf(DAY)).isEqualTo(DAY);
     }
 }
