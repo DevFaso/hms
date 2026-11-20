@@ -616,7 +616,10 @@ public class DispenseServiceImpl implements DispenseService {
         // resync, or a flush would write its stale PENDING back.
         dispense = resync(dispense);
         if (changed == 0) {
-            if (isHandOverReplay(dispense)) {
+            // Policy rule 6: the gate has already written a deferral for this hand-over. A hand-over that turns
+            // out to be somebody else's is then refused, so the refusal rolls the deferral back: it is never left
+            // marked used, or logged as an override, with no fill behind it.
+            if (deferral == null && isHandOverReplay(dispense)) {
                 return dispenseMapper.toResponseDTO(dispense);
             }
             throw new ConflictException(MessageUtil.resolve(READY_NOT_PENDING));

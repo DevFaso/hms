@@ -1044,6 +1044,25 @@ describe('DispensingComponent', () => {
     });
   });
 
+  it('policy rule 6: a hand-over the server refuses as unpaid opens the deferral choice, even with no payment status read', () => {
+    pharmacySvc.handOver.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: { message: 'Non payée', fieldErrors: { billingDeferralId: 'Non payée' } },
+      })),
+    );
+    component.openHandOver(preparedRow as any);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('#hand-over-deferral-mode-urgency')).toBeNull();
+
+    component.confirmHandOver();
+    fixture.detectChanges();
+
+    expect(toastSvc.error).toHaveBeenCalledWith('Non payée');
+    expect(el.querySelector('#hand-over-deferral-mode-urgency')).not.toBeNull();
+  });
+
   it('shows the server refusal when a hand-over fails', () => {
     pharmacySvc.handOver.and.returnValue(
       throwError(() => ({

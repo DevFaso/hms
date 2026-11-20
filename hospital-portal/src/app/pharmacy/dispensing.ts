@@ -1252,6 +1252,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
   openHandOver(rx: WorkQueuePrescription): void {
     this.closeForm();
     this.handOverScan = '';
+    this.handOverDeferralAsked.set(false);
     this.handOverPayment.set(null);
     this.handOverPaymentFailed.set(false);
     this.readyAction.set({ kind: 'handOver', rx });
@@ -1269,8 +1270,11 @@ export class DispensingComponent implements OnInit, OnDestroy {
    * somebody else approved, or on a logged urgency override; the choice is shown then.
    */
   handOverNeedsDeferral(): boolean {
-    return this.handOverPayment()?.status === 'UNPAID';
+    return this.handOverPayment()?.status === 'UNPAID' || this.handOverDeferralAsked();
   }
+
+  /** The server refused the hand-over as unpaid although the payment status was not (or could not be) read. */
+  readonly handOverDeferralAsked = signal(false);
 
   openCancelReady(rx: WorkQueuePrescription): void {
     this.closeForm();
@@ -1304,6 +1308,11 @@ export class DispensingComponent implements OnInit, OnDestroy {
         if (this.showAllergyHold(err)) {
           this.readyActionSaving.set(false);
           return;
+        }
+        const fields = (err as { error?: { fieldErrors?: Record<string, unknown> } } | null)?.error
+          ?.fieldErrors;
+        if (fields && ('billingDeferralId' in fields || 'billingUrgencyReason' in fields)) {
+          this.handOverDeferralAsked.set(true);
         }
         this.readyActionFailed(err, 'PHARMACY.HAND_OVER_FAILED');
       },

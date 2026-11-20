@@ -544,19 +544,21 @@
             >
               {{ pay.status | keyLabel: 'PHARMACY_MONEY.HANDOVER.STATUS.' }}
             </p>
-            @if (handOverNeedsDeferral()) {
-              <app-billing-deferral-choice
-                #handOverDeferral
-                idPrefix="hand-over-deferral"
-                [prescriptionId]="readyAction()!.rx.id"
-              />
-            }
           } @else if (handOverPaymentFailed()) {
             <p class="handover-payment-status">
               {{ 'PHARMACY_MONEY.HANDOVER.LOAD_FAILED' | translate }}
             </p>
           } @else {
             <p class="handover-payment-status">{{ 'COMMON.LOADING' | translate }}</p>
+          }
+          <!-- Policy rule 6: an unpaid fill (as read above, or as the server refused it) leaves on the
+               account of an open stay, a deferral somebody else approved, or a logged urgency override. -->
+          @if (handOverNeedsDeferral()) {
+            <app-billing-deferral-choice
+              #handOverDeferral
+              idPrefix="hand-over-deferral"
+              [prescriptionId]="readyAction()!.rx.id"
+            />
           }
         </section>
         <div class="form-row">
