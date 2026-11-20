@@ -89,8 +89,8 @@ export class CashSupervisorComponent {
   }
 
   /** The latest close's counted amount of a line, or null while not closed. */
-  countedOf(s: CashSession, method: string, operator?: string | null): number | null {
-    const key = cashLineKey(method, operator);
+  countedOf(s: CashSession, line: { method: string; operator?: string | null }): number | null {
+    const key = cashLineKey(line.method, line.operator);
     const count = s.counts.find(
       (c) => c.closeRound === s.closeRound && cashLineKey(c.method, c.operator) === key,
     );

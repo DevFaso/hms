@@ -131,6 +131,7 @@
                     <textarea
                       id="cash-supervisor-note"
                       rows="2"
+                      [required]="pending()?.mode === 'reopen'"
                       maxlength="500"
                       [class.invalid]="noteRefused()"
                       [attr.aria-invalid]="noteRefused()"
@@ -190,11 +191,7 @@
                             <td class="numeric">{{ line.outAmount | cfa }}</td>
                             <td class="numeric">{{ line.expected | cfa }}</td>
                             <td class="numeric">
-                              {{
-                                countedOf(s, line.method, line.operator) === null
-                                  ? '—'
-                                  : (countedOf(s, line.method, line.operator) | cfa)
-                              }}
+                              {{ countedOf(s, line) === null ? '—' : (countedOf(s, line) | cfa) }}
                             </td>
                           </tr>
                         }

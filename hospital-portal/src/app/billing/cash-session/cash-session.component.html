@@ -208,7 +208,8 @@
               @for (c of earlierCounts(s); track c.closeRound + c.method + (c.operator ?? '')) {
                 <li>
                   {{ 'BILLING.CASH_SESSION.ROUND' | translate: { round: c.closeRound } }} —
-                  {{ c.method | keyLabel: 'BILLING.PAYMENT_METHODS.' }} : {{ c.counted | cfa }} ({{
+                  {{ c.method | keyLabel: 'BILLING.PAYMENT_METHODS.'
+                  }}{{ 'COMMON.COLON' | translate }} {{ c.counted | cfa }} ({{
                     c.difference | cfa
                   }})
                   @if (c.explanation) {

@@ -266,7 +266,8 @@
     "src/app/billing/price-list/price-list.component.html::p.changeReason",
     "src/app/billing/payers/payers.component.html::payer.deactivationReason",
     "src/app/billing/payers/payers.component.html::rule.endReason",
-    "src/app/billing/payers/payers.component.html::t.changeReason"
+    "src/app/billing/payers/payers.component.html::t.changeReason",
+    "src/app/billing/cash-session/cash-session.component.html::s.reopenReason"
   ],
   "reasons": {
     "src/app/billing/billing.html::it.overrideReason": "InvoiceItemRequestDTO.overrideReason is a size-bounded String (500 characters), typed in the billing.html input with data-testid line-override-reason-<id> via editLineOverrideReason and submitted by BillingComponent.saveLine. InvoiceItemServiceImpl.applyPrice trims and stores that explanation; InvoiceItemMapper returns it as InvoiceItemResponseDTO.overrideReason. It is the cashier's free text, not an enum token, and must remain as typed.",
@@ -289,6 +290,7 @@
     "src/app/patient-portal/prescription-document/prescription-document.component.html::item.frequency": "QA D2353: PrescriptionResponseDTO.frequency is the free text the prescriber typed, as on my-medications (pinned above); not a wire token.",
     "src/app/lab/lab-outbox/lab-outbox.html::s.messageType": "Outbox summary: an HL7 MSH-9 code with no plain-language name (OML^O21 and ORU^R01 are labelled through LAB_OUTBOX.TYPE_*); the raw code is the only honest rendering, as for row.messageType.",
     "src/app/lab/lab-outbox/lab-outbox.html::s.flag": "Outbox summary: an OBX-8 code outside the labelled set (N, A, L, H, LL, HH via LAB_OUTBOX.FLAG_*), shown raw as the analyser interface code.",
-    "src/app/lab/lab-outbox/lab-outbox.html::s.resultStatus": "Outbox summary: an OBX-11 code outside F/P/C (labelled via LAB_OUTBOX.RESULT_STATUS_*), shown raw as the HL7 table 0085 code."
+    "src/app/lab/lab-outbox/lab-outbox.html::s.resultStatus": "Outbox summary: an OBX-11 code outside F/P/C (labelled via LAB_OUTBOX.RESULT_STATUS_*), shown raw as the HL7 table 0085 code.",
+    "src/app/billing/cash-session/cash-session.component.html::s.reopenReason": "CashSessionNoteRequestDTO.note is a size-bounded String (500 characters) a hospital admin or accountant types in cash-supervisor.component.html textarea#cash-supervisor-note; CashSessionService.reopen stores it as CashSession.reopenReason. It is a person's free text (why the till was reopened), not an enum token, and must remain as typed."
   }
 }
