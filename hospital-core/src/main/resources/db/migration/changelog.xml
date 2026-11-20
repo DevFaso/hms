@@ -3791,4 +3791,15 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V341: a sensitive category on a lab test definition (QA D2730,
+         r65). Additive: one nullable column, IF NOT EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V341-lab-test-definition-sensitivity-category" author="hms-team" runOnChange="false">
+        <sqlFile path="V341__lab_test_definition_sensitivity_category.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

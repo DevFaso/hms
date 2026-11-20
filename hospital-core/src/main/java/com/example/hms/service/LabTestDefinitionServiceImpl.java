@@ -186,6 +186,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             .turnaroundTimeMinutes(current.getTurnaroundTimeMinutes())
             .expectedResult(current.getExpectedResult())
             .pointOfCare(current.isPointOfCare())
+            .sensitivityCategory(current.getSensitivityCategory())
             .referenceRanges(copyRanges(current.getReferenceRanges()))
             .components(copyComponents(current.getComponents()))
             .assignment(current.getAssignment())

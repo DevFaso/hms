@@ -74,6 +74,13 @@ public class LabTestDefinitionRequestDTO {
     @Size(max = 255)
     private String expectedResult;
 
+    /**
+     * QA D2730: the sensitive category every result of this test carries
+     * (HIV, REPRODUCTIVE_HEALTH, ...). Left out, an update keeps the current
+     * tag; null on a new test means none.
+     */
+    private com.example.hms.enums.SensitivityCategory sensitivityCategory;
+
     @Min(1)
     @Max(10080)
     private Integer turnaroundTime;
