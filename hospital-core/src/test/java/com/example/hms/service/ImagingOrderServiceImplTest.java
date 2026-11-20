@@ -2156,18 +2156,6 @@ class ImagingOrderServiceImplTest {
         assertThat(order.getExamRadiationDoseMgy()).isNull();
     }
 
-    @Test
-    void policyRule3_anExamRecordWithNothingInItIsRefusedOnTheNoteBeforeAnyLookup() {
-        signInAs(UUID.randomUUID(), TECHNICIAN);
-
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.recordExam(orderId,
-                com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO.builder().technicalNote("  ").build()))
-            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
-                refusal -> assertThat(refusal.getField()).isEqualTo("technicalNote"));
-        verify(imagingOrderRepository, never()).findById(any());
-        verify(imagingOrderRepository, never()).save(any());
-    }
-
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.EnumSource(value = ImagingOrderStatus.class, names = {"DRAFT", "ORDERED", "SCHEDULED", "RESULTS_AVAILABLE",
         "CANCELLED"})

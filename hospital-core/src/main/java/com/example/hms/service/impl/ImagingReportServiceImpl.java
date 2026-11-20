@@ -409,8 +409,9 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         if (adminReader() && !report.isReleasedToPatient()) {
             throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
         }
-        // Policy rule 3: an imaging technician reads the released reports of exams they performed.
-        if (technicianReader() && !technicianMayRead(report)) {
+        // Policy rule 3: an imaging technician reads the released reports of exams they performed
+        // (one who is also an administrator reads as the administrator above: any released report).
+        if (!adminReader() && technicianReader() && !technicianMayRead(report)) {
             throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
         }
         return imagingReportMapper.toResponseDTO(report);

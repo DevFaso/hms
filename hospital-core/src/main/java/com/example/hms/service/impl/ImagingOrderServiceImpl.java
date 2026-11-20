@@ -553,16 +553,14 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     }
 
     /**
-     * Policy rule 3 (provisional): how the exam went. The record is replaced as sent (an empty one
-     * is refused); who wrote it and when come from the session. Open from the start of the exam
-     * until a report is signed.
+     * Policy rule 3 (provisional): how the exam went. The record is replaced as sent: every field
+     * is optional and one left out is cleared (the portal refuses a save with nothing in it). Who
+     * wrote it and when come from the session. Open from the start of the exam until a report is
+     * signed.
      */
     @Override
     public ImagingOrderResponseDTO recordExam(UUID orderId,
                                               com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO request) {
-        // Refused at the edge, before any lookup: an exam record with nothing in it.
-        com.example.hms.service.support.ImagingExamRecord.requireSomethingRecorded(request.getTechnicalNote(),
-            request.getContrastAdministered(), request.getContrastDetails(), request.getRadiationDoseMgy());
         ImagingOrder order = getOrderInScope(orderId);
         com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
             IMAGING_ORDER_CANCELLED_LOCKED);

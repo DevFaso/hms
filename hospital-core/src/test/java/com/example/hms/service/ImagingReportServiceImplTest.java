@@ -879,6 +879,16 @@ class ImagingReportServiceImplTest {
         signIn("ROLE_IMAGING_TECHNICIAN", "ROLE_NURSE");
         imagingOrder.setPerformedByUserId(UUID.randomUUID());
         assertThat(imagingReportService.getReportsForOrder(orderId)).hasSize(2);
+
+        // One who is also an administrator reads as the administrator: any released report, on
+        // every read alike, and still no work in progress.
+        signIn("ROLE_IMAGING_TECHNICIAN", "ROLE_HOSPITAL_ADMIN");
+        assertThat(imagingReportService.getReportsForOrder(orderId)).extracting(ImagingReportResponseDTO::getId)
+            .containsExactly(finalRead.getId());
+        assertThat(imagingReportService.getLatestReportForOrder(orderId).getId()).isEqualTo(finalRead.getId());
+        assertThat(imagingReportService.getReport(finalRead.getId()).getId()).isEqualTo(finalRead.getId());
+        assertThatThrownBy(() -> imagingReportService.getReport(draft.getId()))
+            .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test

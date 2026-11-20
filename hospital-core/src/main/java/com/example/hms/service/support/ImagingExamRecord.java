@@ -29,7 +29,6 @@ public final class ImagingExamRecord {
     static final String TECHNICIAN_STEPS_KEY = "imaging.technician.examStepsOnly";
     static final String CHECK_IN_CLOSED_KEY = "imaging.exam.checkIn.notOpen";
     static final String RECORD_CLOSED_KEY = "imaging.exam.record.notOpen";
-    static final String RECORD_EMPTY_KEY = "imaging.exam.record.empty";
 
     /** An order a patient can still be checked in for: placed and not yet done. */
     private static final Set<ImagingOrderStatus> CHECK_IN_OPEN = EnumSet.of(ImagingOrderStatus.ORDERED,
@@ -64,23 +63,6 @@ public final class ImagingExamRecord {
         if (!CHECK_IN_OPEN.contains(status)) {
             throw new BusinessException(CHECK_IN_CLOSED_KEY);
         }
-    }
-
-    /**
-     * An exam record says something: a note, whether contrast was given, its details or the dose.
-     * An empty one is refused on the note, before any lookup (the portal refuses it the same way).
-     */
-    public static void requireSomethingRecorded(String technicalNote, Boolean contrastAdministered,
-                                                String contrastDetails, java.math.BigDecimal radiationDoseMgy) {
-        boolean nothing = isBlank(technicalNote) && contrastAdministered == null && isBlank(contrastDetails)
-            && radiationDoseMgy == null;
-        if (nothing) {
-            throw new com.example.hms.exception.FieldBusinessException("technicalNote", RECORD_EMPTY_KEY);
-        }
-    }
-
-    private static boolean isBlank(String value) {
-        return value == null || value.isBlank();
     }
 
     public static void requireRecordOpen(ImagingOrderStatus status) {
