@@ -92,3 +92,52 @@ tr.money-out td {
   overflow: hidden;
   clip: rect(0 0 0 0);
 }
+
+/* Phone (390 px): each method becomes a card; the count input stays on screen (#1224 overflow guard). */
+@media (max-width: 640px) {
+  .cash-methods thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .cash-methods,
+  .cash-methods tbody,
+  .cash-methods tfoot,
+  .cash-methods tr {
+    display: block;
+    width: 100%;
+  }
+
+  .cash-methods tr {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color, #e5e7eb);
+  }
+
+  .cash-methods th,
+  .cash-methods td {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    text-align: right;
+    border: 0;
+  }
+
+  .cash-methods td[data-label]::before {
+    content: attr(data-label);
+    text-align: left;
+    font-weight: 500;
+  }
+
+  .cash-methods td:empty {
+    display: none;
+  }
+
+  .count-input,
+  .explanation-input {
+    width: 9rem;
+    min-width: 0;
+  }
+}

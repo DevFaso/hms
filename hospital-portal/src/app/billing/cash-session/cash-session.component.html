@@ -64,7 +64,10 @@
         }
 
         <div class="table-scroll">
-          <table class="data-table" [attr.data-testid]="'cash-session-methods-' + s.till">
+          <table
+            class="data-table cash-methods"
+            [attr.data-testid]="'cash-session-methods-' + s.till"
+          >
             <caption class="sr-only">
               {{
                 'BILLING.CASH_SESSION.BY_METHOD' | translate
@@ -98,15 +101,24 @@
                       >
                     }
                   </th>
-                  <td class="numeric">{{ line.inAmount | cfa }}</td>
-                  <td class="numeric">
+                  <td [attr.data-label]="'BILLING.CASH_SESSION.IN' | translate" class="numeric">
+                    {{ line.inAmount | cfa }}
+                  </td>
+                  <td [attr.data-label]="'BILLING.CASH_SESSION.OUT' | translate" class="numeric">
                     {{ line.outAmount > 0 ? '−' : '' }}{{ line.outAmount | cfa }}
                   </td>
-                  <td class="numeric" data-testid="cash-line-expected">
+                  <td
+                    [attr.data-label]="'BILLING.CASH_SESSION.EXPECTED' | translate"
+                    class="numeric"
+                    data-testid="cash-line-expected"
+                  >
                     {{ line.expected | cfa }}
                   </td>
                   @if (canClose(s)) {
-                    <td class="numeric">
+                    <td
+                      [attr.data-label]="'BILLING.CASH_SESSION.COUNTED' | translate"
+                      class="numeric"
+                    >
                       <input
                         type="number"
                         min="0"
@@ -125,10 +137,14 @@
                         (ngModelChange)="setCounted(s, line, $event)"
                       />
                     </td>
-                    <td class="numeric" [class.gap]="(differenceOf(s, line) ?? 0) !== 0">
+                    <td
+                      [attr.data-label]="'BILLING.CASH_SESSION.DIFFERENCE' | translate"
+                      class="numeric"
+                      [class.gap]="(differenceOf(s, line) ?? 0) !== 0"
+                    >
                       {{ differenceOf(s, line) === null ? '—' : (differenceOf(s, line) | cfa) }}
                     </td>
-                    <td>
+                    <td [attr.data-label]="'BILLING.CASH_SESSION.EXPLANATION' | translate">
                       @if ((differenceOf(s, line) ?? 0) !== 0) {
                         <input
                           type="text"
@@ -145,11 +161,22 @@
                     </td>
                   } @else {
                     @let count = lastCount(s, line);
-                    <td class="numeric">{{ count ? (count.counted | cfa) : '—' }}</td>
-                    <td class="numeric" [class.gap]="(count?.difference ?? 0) !== 0">
+                    <td
+                      [attr.data-label]="'BILLING.CASH_SESSION.COUNTED' | translate"
+                      class="numeric"
+                    >
+                      {{ count ? (count.counted | cfa) : '—' }}
+                    </td>
+                    <td
+                      [attr.data-label]="'BILLING.CASH_SESSION.DIFFERENCE' | translate"
+                      class="numeric"
+                      [class.gap]="(count?.difference ?? 0) !== 0"
+                    >
                       {{ count ? (count.difference | cfa) : '—' }}
                     </td>
-                    <td>{{ count?.explanation || '' }}</td>
+                    <td [attr.data-label]="'BILLING.CASH_SESSION.EXPLANATION' | translate">
+                      {{ count?.explanation || '' }}
+                    </td>
                   }
                 </tr>
               }
