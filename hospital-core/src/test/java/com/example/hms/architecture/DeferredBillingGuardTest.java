@@ -283,9 +283,9 @@ class DeferredBillingGuardTest {
         // Sending a claim and recording its acceptance or payment are the moments it is recorded.
         String claims = SourceScan.stripComments(Files.readString(
             MAIN.resolve("service/pharmacy/PharmacyClaimServiceImpl.java"), StandardCharsets.UTF_8));
-        assertThat(count(claims, "ClaimVouching.record(")).isEqualTo(2);
-        assertThat(SourceScan.methodBody(claims, "submitClaim")).contains("ClaimVouching.record(");
-        assertThat(SourceScan.methodBody(claims, "transition")).contains("ClaimVouching.record(");
+        assertThat(count(claims, "ClaimVouching.recordVoucher(")).isEqualTo(2);
+        assertThat(SourceScan.methodBody(claims, "submitClaim")).contains("ClaimVouching.recordVoucher(");
+        assertThat(SourceScan.methodBody(claims, "transition")).contains("ClaimVouching.recordVoucher(");
     }
 
     @Test

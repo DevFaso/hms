@@ -57,6 +57,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -342,7 +344,7 @@ class PharmacyReconciliationServiceTest {
 
         // (A) The pharmacist who handed the fill over records the insurer's payment days later.
         claim.setClaimStatus(com.example.hms.enums.PharmacyClaimStatus.PAID);
-        ClaimVouching.record(claim, dispenser.getId(), roleValidator, java.time.LocalDateTime.now(clock));
+        ClaimVouching.recordVoucher(claim, dispenser.getId(), roleValidator, java.time.LocalDateTime.now(clock));
         // (B) The clerk's assignment ended: they hold no role at the hospital today.
         org.mockito.Mockito.lenient().when(roleValidator.vouchesForClaimCover(clerk, hospitalId)).thenReturn(false);
 
@@ -350,7 +352,7 @@ class PharmacyReconciliationServiceTest {
         assertThat(day.getDifferences()).as("an insurer-paid fill is not an unpaid hand-over").isEmpty();
         assertThat(day.getDeferred()).isEmpty();
         assertThat(claim.getVouchedBy()).isEqualTo(clerk);
-        org.mockito.Mockito.verify(roleValidator, org.mockito.Mockito.never()).vouchesForClaimCover(clerk, hospitalId);
+        verify(roleValidator, never()).vouchesForClaimCover(clerk, hospitalId);
     }
 
     @Test

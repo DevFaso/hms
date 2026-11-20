@@ -26,7 +26,7 @@ public final class ClaimVouching {
     }
 
     /** {@code actorId} just sent the claim, or recorded the payer's acceptance or payment of it, at {@code at}. */
-    public static void record(PharmacyClaim claim, UUID actorId, RoleValidator roles, LocalDateTime at) {
+    public static void recordVoucher(PharmacyClaim claim, UUID actorId, RoleValidator roles, LocalDateTime at) {
         UUID hospitalId = claim.getHospital() != null ? claim.getHospital().getId() : null;
         if (actorId == null || hospitalId == null || roles == null
                 || !roles.vouchesForClaimCover(actorId, hospitalId)) {

@@ -135,12 +135,12 @@ class FillClaimCoverTest {
         aMoneyDesk(billing);
         PharmacyClaim claim = claim(PharmacyClaimStatus.SUBMITTED);
 
-        ClaimVouching.record(claim, pharmacist, roles, AT);
+        ClaimVouching.recordVoucher(claim, pharmacist, roles, AT);
         assertThat(claim.getVouchedBy()).as("a pharmacist sent it").isNull();
-        ClaimVouching.record(claim, null, roles, AT);
+        ClaimVouching.recordVoucher(claim, null, roles, AT);
         assertThat(claim.getVouchedBy()).isNull();
 
-        ClaimVouching.record(claim, billing, roles, AT.plusHours(1));
+        ClaimVouching.recordVoucher(claim, billing, roles, AT.plusHours(1));
         assertThat(claim.getVouchedBy()).isEqualTo(billing);
         assertThat(claim.getVouchedAt()).isEqualTo(AT.plusHours(1));
         assertThat(claim.getSecondVouchedBy()).isNull();
@@ -151,14 +151,14 @@ class FillClaimCoverTest {
     void aLaterStepByThePharmacyErasesNobody() {
         aMoneyDesk(billing);
         PharmacyClaim claim = claim(PharmacyClaimStatus.SUBMITTED);
-        ClaimVouching.record(claim, pharmacist, roles, AT);
+        ClaimVouching.recordVoucher(claim, pharmacist, roles, AT);
         claim.setClaimStatus(PharmacyClaimStatus.ACCEPTED);
-        ClaimVouching.record(claim, billing, roles, AT.plusHours(1));
+        ClaimVouching.recordVoucher(claim, billing, roles, AT.plusHours(1));
         assertThat(FillClaimCover.counts(claim, pharmacist)).isTrue();
 
         // The fill is handed over; days later the pharmacist records the insurer's payment.
         claim.setClaimStatus(PharmacyClaimStatus.PAID);
-        ClaimVouching.record(claim, pharmacist, roles, AT.plusDays(9));
+        ClaimVouching.recordVoucher(claim, pharmacist, roles, AT.plusDays(9));
 
         assertThat(claim.getVouchedBy()).as("billing still stands behind it").isEqualTo(billing);
         assertThat(claim.getVouchedAt()).isEqualTo(AT.plusHours(1));
@@ -171,10 +171,10 @@ class FillClaimCoverTest {
     void aLaterStepByTheHanderWithAMoneyDeskErasesNobody() {
         aMoneyDesk(billing, pharmacist);
         PharmacyClaim claim = claim(PharmacyClaimStatus.ACCEPTED);
-        ClaimVouching.record(claim, billing, roles, AT);
+        ClaimVouching.recordVoucher(claim, billing, roles, AT);
         claim.setClaimStatus(PharmacyClaimStatus.PAID);
-        ClaimVouching.record(claim, pharmacist, roles, AT.plusDays(9));
-        ClaimVouching.record(claim, accountant, roles, AT.plusDays(10));
+        ClaimVouching.recordVoucher(claim, pharmacist, roles, AT.plusDays(9));
+        ClaimVouching.recordVoucher(claim, accountant, roles, AT.plusDays(10));
 
         assertThat(claim.getVouchedBy()).isEqualTo(billing);
         assertThat(claim.getSecondVouchedBy()).as("the first other person, written once").isEqualTo(pharmacist);
@@ -187,7 +187,7 @@ class FillClaimCoverTest {
     void theVoucherLeavingChangesNothing() {
         aMoneyDesk(billing);
         PharmacyClaim claim = claim(PharmacyClaimStatus.SUBMITTED);
-        ClaimVouching.record(claim, billing, roles, AT);
+        ClaimVouching.recordVoucher(claim, billing, roles, AT);
         when(claims.findByDispenseIdAndClaimStatusIn(eq(dispenseId), any())).thenReturn(List.of(claim));
         assertThat(coverFor(pharmacist)).isEqualByComparingTo("1000");
 
@@ -196,7 +196,7 @@ class FillClaimCoverTest {
 
         assertThat(coverFor(pharmacist)).isEqualByComparingTo("1000");
         // Nor does a step they repeat after leaving add or remove anything.
-        ClaimVouching.record(claim, billing, roles, AT.plusDays(30));
+        ClaimVouching.recordVoucher(claim, billing, roles, AT.plusDays(30));
         assertThat(claim.getVouchedBy()).isEqualTo(billing);
         assertThat(claim.getVouchedAt()).isEqualTo(AT);
     }
@@ -206,11 +206,11 @@ class FillClaimCoverTest {
     void theSenderHandsOverAfterSomebodyElseAccepted() {
         aMoneyDesk(billing, pharmacist);
         PharmacyClaim claim = claim(PharmacyClaimStatus.SUBMITTED);
-        ClaimVouching.record(claim, pharmacist, roles, AT);
+        ClaimVouching.recordVoucher(claim, pharmacist, roles, AT);
         assertThat(FillClaimCover.counts(claim, pharmacist)).as("their own claim, alone").isFalse();
 
         claim.setClaimStatus(PharmacyClaimStatus.ACCEPTED);
-        ClaimVouching.record(claim, billing, roles, AT.plusHours(2));
+        ClaimVouching.recordVoucher(claim, billing, roles, AT.plusHours(2));
 
         assertThat(FillClaimCover.counts(claim, pharmacist)).isTrue();
         assertThat(FillClaimCover.counts(claim, billing)).isTrue();
