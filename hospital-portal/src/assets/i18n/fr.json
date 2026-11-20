@@ -8111,7 +8111,8 @@
         "PAYER_PLAN": "Formule d’organisme payeur",
         "HOSPITAL_PACS_SETTINGS": "Connexion PACS",
         "LAB_QC_TARGET": "Cible CQ du laboratoire",
-        "INSTRUMENT_OUTBOX_MESSAGE": "Message de la boîte d’envoi des instruments"
+        "INSTRUMENT_OUTBOX_MESSAGE": "Message de la boîte d’envoi des instruments",
+        "CASH_SESSION": "Caisse"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",

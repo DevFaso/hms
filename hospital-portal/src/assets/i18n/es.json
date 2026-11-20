@@ -8145,7 +8145,8 @@
         "PAYER_PLAN": "Payer plan",
         "HOSPITAL_PACS_SETTINGS": "Conexión PACS",
         "LAB_QC_TARGET": "Objetivo de CC del laboratorio",
-        "INSTRUMENT_OUTBOX_MESSAGE": "Mensaje de la bandeja de salida de instrumentos"
+        "INSTRUMENT_OUTBOX_MESSAGE": "Mensaje de la bandeja de salida de instrumentos",
+        "CASH_SESSION": "Caja"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Alergia",

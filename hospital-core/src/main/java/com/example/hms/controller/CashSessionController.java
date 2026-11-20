@@ -4,6 +4,7 @@ import com.example.hms.enums.CashTill;
 import com.example.hms.payload.dto.billing.CashSessionCloseRequestDTO;
 import com.example.hms.payload.dto.billing.CashSessionDTO;
 import com.example.hms.payload.dto.billing.CashSessionNoteRequestDTO;
+import com.example.hms.payload.dto.billing.CashSessionReopenRequestDTO;
 import com.example.hms.service.billing.cash.CashSessionReports;
 import com.example.hms.service.billing.cash.CashSessionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -91,7 +92,7 @@ public class CashSessionController {
     @PreAuthorize(SUPERVISORS)
     @Operation(summary = "Reopen a closed session, with a reason")
     public ResponseEntity<CashSessionDTO> reopen(@PathVariable UUID id,
-                                                 @Valid @RequestBody CashSessionNoteRequestDTO body) {
+                                                 @Valid @RequestBody CashSessionReopenRequestDTO body) {
         return ResponseEntity.ok(sessions.reopen(id, body != null ? body.getNote() : null));
     }
 

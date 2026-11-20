@@ -17,6 +17,7 @@ import java.util.List;
 public class CashSessionCloseRequestDTO {
 
     @Valid
+    @jakarta.validation.constraints.NotEmpty(message = "{billing.cashSession.countsRequired}")
     private List<CountedLine> counts;
 
     /** One counted method. A non-zero difference against the expected amount needs {@code explanation}. */

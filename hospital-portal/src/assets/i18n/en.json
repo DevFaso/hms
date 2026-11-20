@@ -8145,7 +8145,8 @@
         "PAYER_PLAN": "Payer plan",
         "HOSPITAL_PACS_SETTINGS": "PACS connection",
         "LAB_QC_TARGET": "Lab QC target",
-        "INSTRUMENT_OUTBOX_MESSAGE": "Instrument outbox message"
+        "INSTRUMENT_OUTBOX_MESSAGE": "Instrument outbox message",
+        "CASH_SESSION": "Till"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",

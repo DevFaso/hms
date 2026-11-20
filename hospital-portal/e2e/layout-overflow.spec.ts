@@ -932,24 +932,47 @@ const PAYER = {
   ],
 };
 
-const CASH_CLOSING = {
-  date: '2026-11-19',
+/** Billing plan PR 10: one cashier's till with long names and large amounts. */
+const CASH_SESSION = {
+  id: 'cs-1',
+  till: 'BILLING',
+  cashierId: 'u-1',
   cashierName: 'Aminata Sawadogo-Kaboré',
-  byMethod: [
-    { source: 'BILLING', method: 'CASH', count: 12, amount: 1_245_500 },
+  businessDate: '2026-11-19',
+  status: 'OPEN',
+  closeRound: 0,
+  mine: true,
+  methods: [
     {
-      source: 'BILLING',
+      method: 'CASH',
+      operator: null,
+      inCount: 12,
+      inAmount: 1_245_500,
+      outCount: 1,
+      outAmount: 50,
+      expected: 1_245_450,
+    },
+    {
       method: 'MOBILE_MONEY',
       operator: 'ORANGE_MONEY',
-      count: 7,
-      amount: 386_000,
+      inCount: 7,
+      inAmount: 386_000,
+      outCount: 0,
+      outAmount: 0,
+      expected: 386_000,
     },
-    { source: 'BILLING', method: 'CASH', direction: 'OUT', count: 1, amount: 50 },
   ],
-  entries: [1, 2, 3].map((n) => ({
-    id: `e-${n}`,
-    source: 'BILLING',
-    receivedAt: NOW,
+  totalIn: 1_631_500,
+  totalOut: 50,
+  totalExpected: 1_631_450,
+  cashToCount: 1_245_450,
+  totalDifference: null,
+  counts: [],
+  movements: [1, 2, 3].map((n) => ({
+    id: `m-${n}`,
+    kind: 'PAYMENT',
+    direction: 'IN',
+    at: NOW,
     document: `CHWF2396-2026-00004${n}`,
     patientName: LONG_NAME,
     method: 'MOBILE_MONEY',
@@ -958,13 +981,6 @@ const CASH_CLOSING = {
     amount: 1_245_500,
     status: 'CONFIRMED',
   })),
-  receivedCount: 19,
-  receivedAmount: 1_631_500,
-  reversedCount: 1,
-  reversedAmount: 500,
-  refundedCount: 1,
-  refundedAmount: 50,
-  netAmount: 1_630_950,
 };
 
 const DIALOGS: {
@@ -990,15 +1006,28 @@ const DIALOGS: {
     },
   },
   {
+    // Billing plan PR 10 (D2325, D2714): the counted close replaced the read-only closing (D2432).
     label: '/billing [Clôture de caisse] (D2432)',
     route: '/billing',
-    focus: '[data-testid="cash-closing-totals"]',
+    focus: '[data-testid="cash-session-methods-BILLING"]',
     role: 'ROLE_BILLING_SPECIALIST',
-    seed: (p) =>
-      p.route('**/api/billing-invoices/cash-closing**', (r) => r.fulfill({ json: CASH_CLOSING })),
+    seed: (p) => p.route('**/api/cash-sessions/mine**', (r) => r.fulfill({ json: [CASH_SESSION] })),
     then: async (p) => {
       await p.locator('[data-testid="cash-closing-toggle"]').click();
-      await expect(p.locator('[data-testid="cash-closing-total"]')).toBeVisible();
+      await expect(p.locator('[data-testid="cash-to-count"]')).toBeVisible();
+    },
+  },
+  {
+    label: '/billing/caisses [Caisses du jour] (D2326)',
+    route: '/billing/caisses',
+    focus: '[data-testid="cash-supervisor-table"]',
+    role: 'ROLE_HOSPITAL_ADMIN',
+    seed: (p) =>
+      p.route('**/api/cash-sessions?**', (r) =>
+        r.fulfill({ json: [{ ...CASH_SESSION, mine: false, status: 'CLOSED', closeRound: 1 }] }),
+      ),
+    then: async (p) => {
+      await expect(p.locator('[data-testid="cash-supervisor-table"]')).toBeVisible();
     },
   },
   {
