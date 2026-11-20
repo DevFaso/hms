@@ -2100,7 +2100,8 @@
       "PHARMACY_PRICE_CHANGED": "Pharmacy selling price changed",
       "REVERSAL_EVENT": "{{what}}: reversal {{refund}} on invoice {{invoice}}",
       "CASH_SESSION_EVENT": "{{what}}: till {{session}}",
-      "INVOICE_LINE_PRICED_MANUALLY": "Draft line {{line}} of invoice {{invoice}} priced by hand"
+      "INVOICE_LINE_PRICED_MANUALLY": "Draft line {{line}} of invoice {{invoice}} priced by hand",
+      "IMAGING_REPORTING_SETTINGS_CHANGED": "Imaging reporting settings changed"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -3499,7 +3500,8 @@
       "PHARMACY_VERIFIER": "Pharmacy Verifier",
       "CLAIMS_REVIEWER": "Claims Reviewer",
       "ANESTHESIOLOGIST": "Anesthesiologist",
-      "PHYSIOTHERAPIST": "Physiotherapist"
+      "PHYSIOTHERAPIST": "Physiotherapist",
+      "IMAGING_TECHNICIAN": "Imaging technician"
     },
     "ROLES": "Roles",
     "ROOMED": "Roomed",
@@ -7126,7 +7128,8 @@
         "SURGEON": "Surgeon",
         "TECHNICIAN": "Technician",
         "THERAPIST": "Therapist",
-        "USER": "User"
+        "USER": "User",
+        "IMAGING_TECHNICIAN": "Imaging technician (radiographer)"
       },
       "ACCESS_TYPE": {
         "CREATE": "Created",
@@ -8197,7 +8200,8 @@
         "PHARMACY_REFUND": "Pharmacy refund",
         "CASH_SESSION": "Till",
         "PROBLEM_SENSITIVITY": "Diagnosis sensitivity",
-        "LAB_TEST_DEFINITION_SENSITIVITY": "Lab test sensitivity"
+        "LAB_TEST_DEFINITION_SENSITIVITY": "Lab test sensitivity",
+        "HOSPITAL_IMAGING_REPORTING_SETTINGS": "Imaging reporting settings"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",
@@ -9554,7 +9558,8 @@
       "SUPPORT": "Technical or customer support staff assisting users with system issues and inquiries",
       "SURGEON": "Surgical specialist performing operations, managing surgical plans, and post-operative care",
       "TECHNICIAN": "Medical or IT technician responsible for equipment maintenance and technical support",
-      "USER": "Standard system user with basic access permissions"
+      "USER": "Standard system user with basic access permissions",
+      "IMAGING_TECHNICIAN": "Imaging technician (radiographer) who checks the patient in, performs and documents imaging exams, and attaches images; never orders an exam or writes a report"
     },
     "BUILT_IN_ACCESS": "Built-in access",
     "NO_PERMISSION_CATALOGUE": "No permission catalogue is defined: this role's access is built into the platform and is not edited here."
@@ -15251,5 +15256,37 @@
     "SAVED": "Sensitive category saved.",
     "SAVE_FAILED": "The sensitive category could not be saved.",
     "LOAD_FAILED": "The sensitive category could not be loaded."
+  },
+  "IMAGING_EXAM": {
+    "TITLE": "Exam record",
+    "TECHNICIAN_RULE": "As an imaging technician you check the patient in, perform and document the exam and attach its images. Ordering the exam and writing or signing the report stay with the physician. Provisional rule, pending approval by the radiologist or the medical director.",
+    "CHECKED_IN": "Patient checked in",
+    "STARTED": "Exam started",
+    "PERFORMED_BY": "Performed by",
+    "TECHNICAL_NOTE": "Technical note",
+    "TECHNICAL_NOTE_HINT": "Protocol used, positioning, incidents. Not an interpretation.",
+    "CONTRAST_GIVEN": "Contrast given",
+    "CONTRAST_DETAILS": "Agent, volume, route, any reaction",
+    "DOSE": "Radiation dose",
+    "SAVE": "Save the exam record",
+    "NOTHING_TO_SAVE": "Enter a technical note, the contrast given or the dose.",
+    "SAVED": "Exam record saved.",
+    "SAVE_FAILED": "The exam record could not be saved.",
+    "CHECK_IN": "Check the patient in",
+    "CHECKED_IN_DONE": "Patient checked in.",
+    "DISCONTINUE": "Discontinue the exam",
+    "DISCONTINUE_TITLE": "Discontinue this exam?",
+    "DISCONTINUE_MESSAGE": "The request is closed and its prescriber sees the reason. A new request is needed to do the exam later.",
+    "DISCONTINUED": "Exam discontinued."
+  },
+  "IMAGING_REPORTING_SETTINGS": {
+    "TITLE": "Imaging reports",
+    "ULTRASOUND": "Ultrasound: report by a non-radiologist",
+    "PHYSICIANS_ONLY": "Physicians only (default)",
+    "NON_PHYSICIAN": "A trained non-physician may report an ultrasound",
+    "SETTING_ONLY": "This records the hospital's decision only: today every ultrasound report is still written and signed by a physician, whatever is chosen here. Provisional rule, pending approval by the radiologist or the medical director and the ministry's position.",
+    "SAVED": "Setting saved.",
+    "SAVE_FAILED": "The setting could not be saved.",
+    "LOAD_FAILED": "The imaging report settings could not be read."
   }
 }

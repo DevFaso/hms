@@ -41,6 +41,8 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
 import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ImagingImagesComponent } from './imaging-images/imaging-images.component';
+import { ImagingExamRecordComponent } from './exam-record/imaging-exam-record.component';
+import { IMAGING_EXAM_WIDER_ROLES, IMAGING_TECHNICIAN_ROLES } from '../shared/imaging-access';
 import {
   labelledRefusalReason,
   refusalReason,
@@ -207,6 +209,7 @@ const ORDER_FIELD_LABELS: Readonly<Record<string, string>> = {
     InlineSubFormDirective,
     InlineDiscardAskComponent,
     ImagingImagesComponent,
+    ImagingExamRecordComponent,
     ImagingStudyViewerComponent,
     ImagingReadingContextComponent,
   ],
@@ -447,12 +450,22 @@ export class ImagingComponent implements OnInit {
     this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderStatus')),
   );
   /**
+   * Policy rule 3 (2026-11-20, provisional): the caller acts on a study as an imaging technician
+   * (the role, and neither a doctor's nor a radiologist's wider reach on its status).
+   */
+  readonly actsAsTechnician =
+    this.roleContext.hasAnyActiveRole([...IMAGING_TECHNICIAN_ROLES]) &&
+    !this.roleContext.hasAnyActiveRole([...IMAGING_EXAM_WIDER_ROLES]);
+  /**
    * QA D1081: cancelling an imaging order is its author's (the server refuses
    * any other clinician after the confirm). Per row, through the shared rule.
    */
   canCancelThisOrder(o: ImagingOrderResponse): boolean {
     return (
       this.canCancelOrder() &&
+      // Policy rule 3 (provisional): a technician never cancels an order; they discontinue a
+      // started exam, with a reason, from the exam record block.
+      !this.actsAsTechnician &&
       // QA D1098: a resulted order (RESULTS_AVAILABLE) offered "Annuler la demande".
       isOrderCancellable(o.status) &&
       this.authorship.isAuthor({ authorUserId: o.authorUserId ?? o.orderingProviderUserId })
@@ -522,6 +535,17 @@ export class ImagingComponent implements OnInit {
         );
       },
     });
+  }
+
+  /**
+   * Policy rule 3 (provisional): the exam record block answered (a check-in, a saved record, a
+   * discontinued exam). The drawer shows the order as the server returned it; the list reloads.
+   */
+  onExamChanged(updated: ImagingOrderResponse): void {
+    if (this.selectedOrder()?.id === updated.id) {
+      this.selectedOrder.set(updated);
+    }
+    this.load();
   }
 
   /** From the request drawer: the authoring form opens over the list, the drawer closes. */
@@ -1498,8 +1522,10 @@ export class ImagingComponent implements OnInit {
       findings: '',
       impression: '',
       recommendations: '',
-      contrastAdministered: false,
-      contrastDetails: '',
+      // Policy rule 3 (provisional): the first read opens on the contrast the exam record says was
+      // given, for its author to confirm or correct; the server stores only what the author submits.
+      contrastAdministered: !existingSigned && order.examContrastAdministered === true,
+      contrastDetails: existingSigned ? '' : (order.examContrastDetails ?? ''),
       criticalFinding: false,
       reportStatus: existingSigned ? 'ADDENDUM' : 'PRELIMINARY',
     };
@@ -1710,7 +1736,8 @@ export class ImagingComponent implements OnInit {
    */
   canAddStudyImages(order: ImagingOrderResponse): boolean {
     return (
-      this.canAuthorReports &&
+      // Policy rule 3 (provisional): the imaging technician attaches the study's key images too.
+      this.roleContext.hasAnyActiveRole(actionRoles('imagingImageUpload')) &&
       order.status !== 'CANCELLED' &&
       !this.selectedOrderReports().some((r) => r.signed)
     );

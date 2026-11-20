@@ -158,10 +158,39 @@ describe('ImagingComponent — r51 study workflow and labels', () => {
 
     it('the registry still names exactly the endpoint roles (no widening)', () => {
       // User decision 2026-11-14: SUPER_ADMIN no longer acts on a study.
-      expect([...statusRoles].sort()).toEqual(['ROLE_DOCTOR', 'ROLE_RADIOLOGIST']);
+      // Policy rule 3 (2026-11-20, provisional): the imaging technician starts and completes the exam.
+      expect([...statusRoles].sort()).toEqual([
+        'ROLE_DOCTOR',
+        'ROLE_IMAGING_TECHNICIAN',
+        'ROLE_RADIOLOGIST',
+      ]);
     });
 
-    for (const role of ['ROLE_DOCTOR', 'ROLE_RADIOLOGIST']) {
+    it('Policy rule 3: the imaging technician works the exam but never orders or reports', () => {
+      setUp({
+        role: 'ROLE_IMAGING_TECHNICIAN',
+        orders: ALL_STATUSES.map((status) => order({ id: status, status })),
+      });
+      // No order, no edit, no report, no results list, no cancel of an order that is not theirs.
+      expect(component.canCreateOrder()).toBeFalse();
+      expect(component.canEditOrder()).toBeFalse();
+      expect(component.canAuthorReports).toBeFalse();
+      expect(component.canSeeResults).toBeFalse();
+      expect(component.canUpdateReportStatus).toBeFalse();
+      expect(component.canSeeToSign).toBeFalse();
+      expect(component.canSeeReadingContext).toBeFalse();
+      expect(component.isAdminReader).toBeFalse();
+      for (const status of ALL_STATUSES) {
+        expect(component.canCancelThisOrder(order({ id: status, status })))
+          .withContext(`cancel on ${status}`)
+          .toBeFalse();
+      }
+      // Key images go on the study while it has no signed report.
+      expect(component.canAddStudyImages(order({ status: 'IN_PROGRESS' }))).toBeTrue();
+      expect(component.canAddStudyImages(order({ status: 'CANCELLED' }))).toBeFalse();
+    });
+
+    for (const role of ['ROLE_DOCTOR', 'ROLE_RADIOLOGIST', 'ROLE_IMAGING_TECHNICIAN']) {
       it(`${role}: start on an ordered or scheduled order, complete only once in progress`, () => {
         setUp({ role, orders: ALL_STATUSES.map((status) => order({ id: status, status })) });
         expect(component.activeTab()).toBe('all');

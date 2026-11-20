@@ -53,7 +53,23 @@ export const ACTION_PERMISSIONS = {
   },
   imagingOrderStatus: {
     endpoint: 'ImagingOrderController#updateStatus',
-    roles: ['ROLE_DOCTOR', 'ROLE_RADIOLOGIST'],
+    // Policy rule 3 (provisional): the imaging technician starts, completes or discontinues the exam.
+    roles: ['ROLE_DOCTOR', 'ROLE_RADIOLOGIST', 'ROLE_IMAGING_TECHNICIAN'],
+  },
+  /** Policy rule 3 (provisional): whoever runs the exam checks the patient in. */
+  imagingExamCheckIn: {
+    endpoint: 'ImagingOrderController#checkIn',
+    roles: ['ROLE_IMAGING_TECHNICIAN', 'ROLE_RADIOLOGIST', 'ROLE_DOCTOR'],
+  },
+  /** Policy rule 3 (provisional): the exam record (technical note, contrast, dose). */
+  imagingExamRecord: {
+    endpoint: 'ImagingOrderController#recordExam',
+    roles: ['ROLE_IMAGING_TECHNICIAN', 'ROLE_RADIOLOGIST', 'ROLE_DOCTOR'],
+  },
+  /** V316 + policy rule 3: key images on a study; the technician attaches to the study only. */
+  imagingImageUpload: {
+    endpoint: 'ImagingStudyImageController#upload',
+    roles: ['ROLE_RADIOLOGIST', 'ROLE_DOCTOR', 'ROLE_IMAGING_TECHNICIAN'],
   },
   labSpecimenCollect: {
     endpoint: 'LabSpecimenController#collectSpecimen',

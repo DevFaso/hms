@@ -394,6 +394,8 @@ export class PermissionService {
       'View Lab',
       'View Notifications',
     ],
+    // Policy rule 3 (2026-11-20, provisional): the worklist and nothing of the chart.
+    ROLE_IMAGING_TECHNICIAN: ['View Dashboard', 'View Imaging Studies', 'View Notifications'],
     ROLE_PATIENT: [
       'View Dashboard',
       'View My Appointments',

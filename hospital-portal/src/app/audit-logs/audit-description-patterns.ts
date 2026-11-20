@@ -1910,4 +1910,9 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Draft line (\S+) of invoice (\S+) priced by hand$/,
     params: ['line', 'invoice'],
   },
+  // Policy rule 3 (V346, provisional): a hospital's imaging reporting setting changed (the value is in the details).
+  {
+    key: 'AUDIT.DESC.IMAGING_REPORTING_SETTINGS_CHANGED',
+    re: /^Imaging reporting settings changed$/,
+  },
 ];
