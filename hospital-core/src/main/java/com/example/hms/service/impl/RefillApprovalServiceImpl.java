@@ -40,6 +40,7 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
     private static final String MSG_MEDICATION_FALLBACK = "refill.decision.medicationFallback";
     private static final String MSG_NOT_FOUND = "refillRequest.notFound";
     private static final String MSG_NOT_PENDING = "patient.refill.decision.notPending";
+    private static final String MSG_USER_UNRESOLVED = "patient.refill.decision.userUnresolved";
     /** Policy rule 1 (QA D2308): only an authorised prescriber approves, holds or refuses a renewal. */
     static final String MSG_PRESCRIBER_ONLY = "patient.refill.decision.prescriberOnly";
 
@@ -52,6 +53,8 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
     private final RoleValidator roleValidator;
     /** QA D792 (#953 review, round 3): a ward order of an ended stay is not refillable. */
     private final com.example.hms.service.EndedStayOrderGuard endedStayOrders;
+    /** Policy rule 1: when a request was decided or reviewed. */
+    private final java.time.Clock clock;
 
     @Override
     @Transactional(readOnly = true)
@@ -161,7 +164,7 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         UUID deciderId = requireAuthorisedPrescriber(auth, prescription, newStatus);
 
         if (!isActionable(refill.getStatus(), newStatus)) {
-            throw new BusinessException("patient.refill.decision.notPending",
+            throw new BusinessException(MSG_NOT_PENDING,
                 String.valueOf(refill.getStatus()));
         }
 
@@ -196,7 +199,7 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
      */
     private UUID requireAuthorisedPrescriber(Authentication auth, Prescription prescription, RefillStatus decision) {
         UUID userId = authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("patient.refill.decision.userUnresolved"));
+                .orElseThrow(() -> new BusinessException(MSG_USER_UNRESOLVED));
         UUID hospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
         boolean controlled = decision == RefillStatus.APPROVED && controlledResolver.isControlled(prescription);
         if (!roleValidator.canApproveRenewal(userId, hospitalId, controlled)) {
@@ -207,7 +210,7 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
 
     private void stampDecision(RefillRequest refill, UUID userId, com.example.hms.enums.RefillDecisionBasis basis) {
         refill.setDecidedBy(userId);
-        refill.setDecidedAt(java.time.LocalDateTime.now());
+        refill.setDecidedAt(java.time.LocalDateTime.now(clock));
         refill.setDecisionBasis(basis);
     }
 
@@ -229,7 +232,7 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         }
         refill.setPharmacistNote(note);
         refill.setPharmacistReviewedBy(at.userId());
-        refill.setPharmacistReviewedAt(java.time.LocalDateTime.now());
+        refill.setPharmacistReviewedAt(java.time.LocalDateTime.now(clock));
         refill = refillRequestRepository.save(refill);
         notifyPrescriber(refill, "refill.pharmacist.flagged", note);
         log.info("Pharmacist {} forwarded refill {} to its prescriber with flags", at.userId(), refillId);
@@ -253,7 +256,7 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         refill.setStatus(RefillStatus.DENIED);
         refill.setPharmacistNote(reason);
         refill.setPharmacistReviewedBy(at.userId());
-        refill.setPharmacistReviewedAt(java.time.LocalDateTime.now());
+        refill.setPharmacistReviewedAt(java.time.LocalDateTime.now(clock));
         stampDecision(refill, at.userId(), com.example.hms.enums.RefillDecisionBasis.PHARMACIST_REFUSAL);
         refill = refillRequestRepository.save(refill);
         notifyPatient(refill, RefillStatus.DENIED);
@@ -305,7 +308,7 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
      */
     private PharmacyReview requirePharmacist(Authentication auth, UUID refillId) {
         UUID userId = authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("patient.refill.decision.userUnresolved"));
+                .orElseThrow(() -> new BusinessException(MSG_USER_UNRESOLVED));
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (!roleValidator.canReviewRenewalAtPharmacy(userId, hospitalId)) {
             throw new AccessDeniedException("patient.refill.pharmacist.only");
@@ -413,7 +416,7 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
     private UUID resolveStaffId(Authentication auth) {
         authUtils.requireAuth(auth);
         UUID userId = authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("patient.refill.decision.userUnresolved"));
+                .orElseThrow(() -> new BusinessException(MSG_USER_UNRESOLVED));
         List<Staff> staffList = staffRepository.findByUserId(userId);
         if (staffList.isEmpty()) {
             throw new BusinessException("patient.refill.decision.noStaffRecord");

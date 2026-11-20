@@ -70,6 +70,10 @@ class HospitalBillingPolicyServiceTest {
         when(policyRepository.save(any(HospitalBillingPolicy.class))).thenAnswer(saved -> saved.getArgument(0));
     }
 
+    private org.assertj.core.api.ThrowableAssert.ThrowingCallable updating(HospitalBillingPolicyUpdateDTO body) {
+        return () -> service.update(body);
+    }
+
     @Test
     @DisplayName("a hospital that never chose uses the report's rules: no automatic consultation, no pharmacist renewal")
     void theDefaultsAreTheReportsRules() {
@@ -106,7 +110,7 @@ class HospitalBillingPolicyServiceTest {
     @Test
     @DisplayName("the pharmacist-renewal flag stays off: turning it on is refused and nothing is written")
     void thePharmacistRenewalFlagStaysOff() {
-        assertThatThrownBy(() -> service.update(new HospitalBillingPolicyUpdateDTO(null, true)))
+        assertThatThrownBy(updating(new HospitalBillingPolicyUpdateDTO(null, true)))
                 .isInstanceOf(FieldBusinessException.class)
                 .extracting("field", "messageKey")
                 .containsExactly("pharmacistExceptionalRenewal", "billing.policy.pharmacistRenewalUnavailable");
@@ -125,7 +129,7 @@ class HospitalBillingPolicyServiceTest {
         assertThat(stored.isAutoConsultationOnPlannedAdmission()).as("left out: kept").isTrue();
 
         when(roleValidator.canSetHospitalBillingPolicy(admin, hospitalId)).thenReturn(false);
-        assertThatThrownBy(() -> service.update(new HospitalBillingPolicyUpdateDTO(false, null)))
+        assertThatThrownBy(updating(new HospitalBillingPolicyUpdateDTO(false, null)))
                 .isInstanceOf(ClientSafeAccessDeniedException.class);
         assertThat(stored.isAutoConsultationOnPlannedAdmission()).isTrue();
         assertThat(service.current().isCanEdit()).isFalse();

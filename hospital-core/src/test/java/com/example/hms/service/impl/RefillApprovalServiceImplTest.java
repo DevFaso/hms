@@ -77,6 +77,8 @@ class RefillApprovalServiceImplTest {
         this.endedStayOrders = new com.example.hms.service.EndedStayOrderGuard(admissionRepository);
     }
 
+    @Spy private java.time.Clock clock = java.time.Clock.systemDefaultZone();
+
     @InjectMocks private RefillApprovalServiceImpl service;
 
     private UUID userId;
@@ -122,15 +124,15 @@ class RefillApprovalServiceImplTest {
         prescription.setRefillsUsed(0);
         // Policy rule 1: the prescription has a hospital, and the caller of the prescriber tests is an authorised
         // prescriber there (a physician: every list).
-        hospitalId = UUID.randomUUID();
+        prescribingHospitalId = UUID.randomUUID();
         com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
-        hospital.setId(hospitalId);
+        hospital.setId(prescribingHospitalId);
         prescription.setHospital(hospital);
         lenient().when(roleValidator.canApproveRenewal(eq(userId), any(), org.mockito.ArgumentMatchers.anyBoolean()))
                 .thenReturn(true);
     }
 
-    private UUID hospitalId;
+    private UUID prescribingHospitalId;
 
     private RefillRequest pendingRefill() {
         RefillRequest r = new RefillRequest();
@@ -725,8 +727,8 @@ class RefillApprovalServiceImplTest {
 
         private void actingAsPharmacist() {
             when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(pharmacistId));
-            lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            lenient().when(roleValidator.canReviewRenewalAtPharmacy(pharmacistId, hospitalId)).thenReturn(true);
+            lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(prescribingHospitalId);
+            lenient().when(roleValidator.canReviewRenewalAtPharmacy(pharmacistId, prescribingHospitalId)).thenReturn(true);
         }
 
         private RefillRequest stored() {
@@ -782,11 +784,11 @@ class RefillApprovalServiceImplTest {
             stubStaffResolution();
             stored();
             when(controlledResolver.isControlled(prescription)).thenReturn(true);
-            when(roleValidator.canApproveRenewal(userId, hospitalId, true)).thenReturn(false);
+            when(roleValidator.canApproveRenewal(userId, prescribingHospitalId, true)).thenReturn(false);
 
             assertThatThrownBy(() -> service.approve(auth, refillId, null))
                     .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
-            verify(roleValidator).canApproveRenewal(userId, hospitalId, true);
+            verify(roleValidator).canApproveRenewal(userId, prescribingHospitalId, true);
         }
 
         @Test

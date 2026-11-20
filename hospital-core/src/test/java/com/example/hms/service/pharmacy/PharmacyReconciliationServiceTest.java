@@ -56,6 +56,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
@@ -286,7 +287,7 @@ class PharmacyReconciliationServiceTest {
         Dispense inpatient = fill("6", false, true);
         UUID stayId = UUID.randomUUID();
         inpatient.setBillingDeferralId(stayId);
-        DispenseBillingDeferralService deferrals = org.mockito.Mockito.mock(DispenseBillingDeferralService.class);
+        DispenseBillingDeferralService deferrals = mock(DispenseBillingDeferralService.class);
         when(deferrals.byIds(org.mockito.ArgumentMatchers.eq(hospitalId), org.mockito.ArgumentMatchers.anyCollection()))
                 .thenReturn(java.util.Map.of(
                         overrideId, com.example.hms.payload.dto.pharmacy.DispenseBillingDeferralDTO.builder()

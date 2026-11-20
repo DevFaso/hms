@@ -79,6 +79,9 @@ public class DispenseBillingDeferralService {
     private static final String FIELD_COVER = "coverReference";
     private static final String AUDIT_ENTITY = "DISPENSE_BILLING_DEFERRAL";
     private static final String READERS_ONLY = "pharmacy.deferral.readersOnly";
+    private static final String APPROVERS_ONLY = "pharmacy.deferral.approversOnly";
+    /** The audit entity of the fill itself, as the dispense service names it. */
+    private static final String FILL_ENTITY = "DISPENSE";
     private static final int TEXT_MAX = 500;
     private static final int REFERENCE_MAX = 120;
     private static final BigDecimal LIMIT_MAX = new BigDecimal("9999999999");
@@ -159,7 +162,7 @@ public class DispenseBillingDeferralService {
      */
     @Transactional
     public DispenseBillingDeferralDTO approve(UUID deferralId, DispenseBillingDeferralDecisionDTO body) {
-        Actor actor = requireActor(this::approvesSomething, "pharmacy.deferral.approversOnly");
+        Actor actor = requireActor(this::approvesSomething, APPROVERS_ONLY);
         DispenseBillingDeferral deferral = lock(deferralId, actor);
         if (!approves(deferral.getKind(), actor)) {
             throw new ClientSafeAccessDeniedException(MessageUtil.resolve(approversKey(deferral.getKind())));
@@ -198,7 +201,7 @@ public class DispenseBillingDeferralService {
     /** Another person rejects a requested deferral, with the reason. */
     @Transactional
     public DispenseBillingDeferralDTO reject(UUID deferralId, DispenseBillingDeferralReasonDTO body) {
-        Actor actor = requireActor(this::approvesSomething, "pharmacy.deferral.approversOnly");
+        Actor actor = requireActor(this::approvesSomething, APPROVERS_ONLY);
         DispenseBillingDeferral deferral = lock(deferralId, actor);
         if (!approves(deferral.getKind(), actor)) {
             throw new ClientSafeAccessDeniedException(MessageUtil.resolve(approversKey(deferral.getKind())));
@@ -454,15 +457,15 @@ public class DispenseBillingDeferralService {
         String fillId = dispense.getId().toString();
         switch (deferral.getKind()) {
             case ADMISSION_ACCOUNT -> support.logAudit(AuditEventType.DISPENSE_POSTED_TO_ADMISSION_ACCOUNT,
-                    "Fill charged to the account of the open stay", fillId, "DISPENSE");
+                    "Fill charged to the account of the open stay", fillId, FILL_ENTITY);
             case URGENCY_OVERRIDE -> {
                 support.logAudit(AuditEventType.DISPENSE_BILLING_URGENCY_OVERRIDE,
-                        "Fill handed over unpaid on an urgency override", fillId, "DISPENSE");
+                        "Fill handed over unpaid on an urgency override", fillId, FILL_ENTITY);
                 followUp.reviewNeeded(deferral, prescription.getPatient() != null
                         ? prescription.getPatient().getFullName() : null, dispense.getMedicationName());
             }
             default -> support.logAudit(AuditEventType.DISPENSE_BILLING_DEFERRED,
-                    "Fill handed over unpaid, marked to be billed", fillId, "DISPENSE");
+                    "Fill handed over unpaid, marked to be billed", fillId, FILL_ENTITY);
         }
     }
 
@@ -510,7 +513,7 @@ public class DispenseBillingDeferralService {
     /** Who decides a deferral of this kind, said to whoever is not one of them. */
     private static String approversKey(DispenseBillingDeferralKind kind) {
         return kind == DispenseBillingDeferralKind.OUTPATIENT_CREDIT
-                ? "pharmacy.deferral.creditApproversOnly" : "pharmacy.deferral.approversOnly";
+                ? "pharmacy.deferral.creditApproversOnly" : APPROVERS_ONLY;
     }
 
     /** Still waiting for its decision, and never decided by whoever asked for it. */

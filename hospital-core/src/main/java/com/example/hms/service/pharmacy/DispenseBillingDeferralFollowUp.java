@@ -87,20 +87,10 @@ public class DispenseBillingDeferralFollowUp {
                     if (user.getId() != null && user.getId().equals(actorId)) {
                         continue;
                     }
-                    CreateInBasketItemRequest item = new CreateInBasketItemRequest();
+                    CreateInBasketItemRequest item = task(deferralId, hospitalId, priority, titleKey, bodyKey, bodyArgs);
                     item.setRecipientUserId(user.getId());
-                    item.setHospitalId(hospitalId);
-                    item.setItemType(InBasketItemType.TASK);
-                    item.setPriority(priority);
-                    item.setReferenceId(deferralId);
-                    item.setReferenceType(REFERENCE_TYPE);
                     item.setPatientId(patientId);
                     item.setPatientName(patientName);
-                    item.setTitleKey(titleKey);
-                    item.setTitle(MessageUtil.resolve(NotificationLocales.STAFF, titleKey));
-                    item.setBodyKey(bodyKey);
-                    item.setBodyArgs(bodyArgs);
-                    item.setBody(MessageUtil.resolve(NotificationLocales.STAFF, bodyKey, bodyArgs));
                     inBasketService.createItemInNewTransaction(item);
                     filed++;
                 }
@@ -112,5 +102,22 @@ public class DispenseBillingDeferralFollowUp {
                 log.warn("Follow-up task not filed for deferral {}: {}", deferralId, ex.getMessage());
             }
         });
+    }
+
+    /** One task about a deferral: keyed, so each reader gets it in their language. */
+    private static CreateInBasketItemRequest task(UUID deferralId, UUID hospitalId, InBasketPriority priority,
+                                                  String titleKey, String bodyKey, Object[] bodyArgs) {
+        CreateInBasketItemRequest item = new CreateInBasketItemRequest();
+        item.setHospitalId(hospitalId);
+        item.setItemType(InBasketItemType.TASK);
+        item.setPriority(priority);
+        item.setReferenceId(deferralId);
+        item.setReferenceType(REFERENCE_TYPE);
+        item.setTitleKey(titleKey);
+        item.setTitle(MessageUtil.resolve(NotificationLocales.STAFF, titleKey));
+        item.setBodyKey(bodyKey);
+        item.setBodyArgs(bodyArgs);
+        item.setBody(MessageUtil.resolve(NotificationLocales.STAFF, bodyKey, bodyArgs));
+        return item;
     }
 }

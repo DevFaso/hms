@@ -704,10 +704,8 @@ class DispenseReadyForCollectionTest {
 
 
     /** Policy rule 6 (V345): the real deferral gate over mocked stores, wired into the service under test. */
-    final com.example.hms.repository.pharmacy.DispenseBillingDeferralRepository deferralRepository =
-            org.mockito.Mockito.mock(com.example.hms.repository.pharmacy.DispenseBillingDeferralRepository.class);
-    final DispenseBillingDeferralFollowUp deferralFollowUp =
-            org.mockito.Mockito.mock(DispenseBillingDeferralFollowUp.class);
+    @Mock private com.example.hms.repository.pharmacy.DispenseBillingDeferralRepository deferralRepository;
+    @Mock private DispenseBillingDeferralFollowUp deferralFollowUp;
 
     DispenseBillingDeferralService wireTheDeferralGate() {
         org.mockito.Mockito.lenient().when(deferralRepository.save(any(
@@ -719,9 +717,9 @@ class DispenseReadyForCollectionTest {
                     return row;
                 });
         DispenseBillingDeferralService gate = new DispenseBillingDeferralService(deferralRepository,
-                prescriptionRepository, org.mockito.Mockito.mock(com.example.hms.repository.AdmissionRepository.class),
+                prescriptionRepository, mock(com.example.hms.repository.AdmissionRepository.class),
                 userRepository, roleValidator, support, deferralFollowUp,
-                org.mockito.Mockito.mock(com.example.hms.service.AuditEventLogService.class), FIXED_CLOCK);
+                mock(com.example.hms.service.AuditEventLogService.class), FIXED_CLOCK);
         service.setBillingDeferrals(gate);
         return gate;
     }
