@@ -155,4 +155,39 @@ class SensitivityClassifierImplTest {
             assertThat(classifier.travelsCrossHospital(null)).isTrue();
         }
     }
+
+    @Test
+    @DisplayName("D2730: a problem with no tag takes the category of the visit it was recorded in")
+    void problemFollowsItsSourceVisit() {
+        com.example.hms.model.Encounter visit = new com.example.hms.model.Encounter();
+        visit.setSensitivityCategory(com.example.hms.enums.SensitivityCategory.HIV);
+        com.example.hms.model.PatientProblem problem = new com.example.hms.model.PatientProblem();
+        problem.setSourceEncounter(visit);
+
+        org.assertj.core.api.Assertions.assertThat(new SensitivityClassifierImpl().effectiveCategory(problem))
+            .isEqualTo(com.example.hms.enums.SensitivityCategory.HIV);
+
+        problem.setSensitivityCategory(com.example.hms.enums.SensitivityCategory.REPRODUCTIVE_HEALTH);
+        org.assertj.core.api.Assertions.assertThat(new SensitivityClassifierImpl().effectiveCategory(problem))
+            .as("the problem's own tag wins")
+            .isEqualTo(com.example.hms.enums.SensitivityCategory.REPRODUCTIVE_HEALTH);
+    }
+
+    @Test
+    @DisplayName("D2730: a problem recorded in a visit of a sensitive department takes that default")
+    void problemFollowsItsVisitsDepartment() {
+        com.example.hms.model.Department psychiatry = new com.example.hms.model.Department();
+        psychiatry.setDefaultSensitivityCategory(com.example.hms.enums.SensitivityCategory.BEHAVIOURAL_HEALTH);
+        com.example.hms.model.Encounter visit = new com.example.hms.model.Encounter();
+        visit.setDepartment(psychiatry);
+        com.example.hms.model.PatientProblem problem = new com.example.hms.model.PatientProblem();
+        problem.setSourceEncounter(visit);
+
+        org.assertj.core.api.Assertions.assertThat(new SensitivityClassifierImpl().effectiveCategory(problem))
+            .isEqualTo(com.example.hms.enums.SensitivityCategory.BEHAVIOURAL_HEALTH);
+        org.assertj.core.api.Assertions.assertThat(
+                new SensitivityClassifierImpl().effectiveCategory(new com.example.hms.model.PatientProblem()))
+            .as("a problem recorded outside any visit has its tag or nothing")
+            .isNull();
+    }
 }

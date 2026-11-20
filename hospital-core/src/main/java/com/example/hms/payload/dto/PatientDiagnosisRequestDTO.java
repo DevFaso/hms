@@ -65,4 +65,12 @@ public class PatientDiagnosisRequestDTO {
 
     @Schema(description = "Source system if the diagnosis was imported")
     private String sourceSystem;
+
+    @Schema(description = "The visit the diagnosis is recorded in. Left out, the server uses the patient's open "
+        + "visit at this hospital, when there is one. The diagnosis follows that visit's sensitivity category.")
+    private UUID encounterId;
+
+    @Schema(description = "Sensitive category of this diagnosis (HIV, BEHAVIOURAL_HEALTH, ...). Left out, the "
+        + "diagnosis takes the category of the visit it is recorded in.")
+    private com.example.hms.enums.SensitivityCategory sensitivityCategory;
 }

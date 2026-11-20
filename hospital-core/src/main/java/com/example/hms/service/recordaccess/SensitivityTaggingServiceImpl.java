@@ -6,10 +6,12 @@ import com.example.hms.enums.SensitivityCategory;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Department;
 import com.example.hms.model.Encounter;
+import com.example.hms.model.PatientProblem;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.recordaccess.SensitivityTagResponseDTO;
 import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.EncounterRepository;
+import com.example.hms.repository.PatientProblemRepository;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.utility.TransactionCallbacks;
 import org.slf4j.Logger;
@@ -27,18 +29,22 @@ public class SensitivityTaggingServiceImpl implements SensitivityTaggingService 
     private static final Logger log = LoggerFactory.getLogger(SensitivityTaggingServiceImpl.class);
     private static final String MSG_ENCOUNTER_NOT_FOUND = "encounter.notfound";
     private static final String MSG_DEPARTMENT_NOT_FOUND = "department.notfound";
+    private static final String MSG_PROBLEM_NOT_FOUND = "diagnosis.notFound";
 
     private final EncounterRepository encounterRepository;
     private final DepartmentRepository departmentRepository;
+    private final PatientProblemRepository patientProblemRepository;
     private final SensitivityClassifier classifier;
     private final AuditEventLogService auditEventLogService;
 
     public SensitivityTaggingServiceImpl(EncounterRepository encounterRepository,
                                          DepartmentRepository departmentRepository,
+                                         PatientProblemRepository patientProblemRepository,
                                          SensitivityClassifier classifier,
                                          AuditEventLogService auditEventLogService) {
         this.encounterRepository = encounterRepository;
         this.departmentRepository = departmentRepository;
+        this.patientProblemRepository = patientProblemRepository;
         this.classifier = classifier;
         this.auditEventLogService = auditEventLogService;
     }
@@ -63,6 +69,28 @@ public class SensitivityTaggingServiceImpl implements SensitivityTaggingService 
             encounter.getPatient() == null ? null : encounter.getPatient().getId(), before, category);
         log.info("[sensitivity] encounter {} tag {} -> {}", encounterId, before, category);
         return describe(encounter);
+    }
+
+    /**
+     * QA D2730 (r65, High): nothing wrote a problem's tag, so the proxy filter
+     * that read it withheld no diagnosis. A clinician tags the entry here; a
+     * problem recorded in a tagged visit takes that visit's category without
+     * anyone doing so.
+     */
+    @Override
+    @Transactional
+    public SensitivityTagResponseDTO tagProblem(UUID patientId, UUID problemId, SensitivityCategory category,
+                                                UUID actorUserId) {
+        PatientProblem problem = requireProblem(patientId, problemId);
+        SensitivityCategory before = problem.getSensitivityCategory();
+        if (before == category) {
+            return describe(problem);
+        }
+        problem.setSensitivityCategory(category);
+        problem = patientProblemRepository.save(problem);
+        audit(AuditEventType.DATA_UPDATE, "PROBLEM_SENSITIVITY", problemId, actorUserId, patientId, before, category);
+        log.info("[sensitivity] problem {} tag {} -> {}", problemId, before, category);
+        return describe(problem);
     }
 
     @Override
@@ -115,6 +143,28 @@ public class SensitivityTaggingServiceImpl implements SensitivityTaggingService 
             ? null : department.getDefaultSensitivityCategory();
         return new SensitivityTagResponseDTO(encounter.getId(), encounter.getSensitivityCategory(),
             effective, deptDefault, classifier.travelsCrossHospital(effective));
+    }
+
+    private SensitivityTagResponseDTO describe(PatientProblem problem) {
+        SensitivityCategory effective = classifier.effectiveCategory(problem);
+        Encounter visit = problem.getSourceEncounter();
+        Department department = visit == null ? null : visit.getDepartment();
+        SensitivityCategory deptDefault = department == null
+            ? null : department.getDefaultSensitivityCategory();
+        return new SensitivityTagResponseDTO(problem.getId(), problem.getSensitivityCategory(),
+            effective, deptDefault, classifier.travelsCrossHospital(effective));
+    }
+
+    /** The problem, when it is this patient's and the acting hospital recorded it; unknown otherwise. */
+    private PatientProblem requireProblem(UUID patientId, UUID problemId) {
+        PatientProblem problem = patientProblemRepository.findById(problemId)
+            .filter(found -> found.getPatient() != null && found.getPatient().getId() != null
+                && found.getPatient().getId().equals(patientId))
+            // A diagnosis removed as entered in error (QA D1240) is no longer on the list to tag.
+            .filter(found -> !found.isEnteredInError())
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PROBLEM_NOT_FOUND, problemId));
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(problem.getHospital(), MSG_PROBLEM_NOT_FOUND, problemId);
+        return problem;
     }
 
     private Encounter requireEncounter(UUID id) {
