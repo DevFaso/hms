@@ -1,6 +1,7 @@
 import { SensitivityCategory, SensitivityTag } from '../shared/sensitivity/sensitivity-category';
 import { NoteAddendumView } from '../shared/note-addenda/note-addendum-view';
 import { OrganDamageSymptom } from '../shared/organ-damage-symptoms';
+import { MaternalConcern } from '../shared/maternal-concerns';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, defer, map } from 'rxjs';
@@ -185,6 +186,8 @@ export interface TriageSubmissionRequest {
   roomAssignment?: string;
   /** r54: the organ-damage signs ticked with the blood pressure (optional). */
   organDamageSymptoms?: OrganDamageSymptom[];
+  /** Policy 2026-11-20 (provisional): the maternal score's additional concerns ticked with the set (optional). */
+  maternalConcerns?: MaternalConcern[];
 }
 
 export interface TriageSubmissionResponse {
@@ -203,6 +206,8 @@ export interface TriageSubmissionResponse {
   postpartumAlerts?: NewbornVitalAlert[];
   /** r54: the adult severe-blood-pressure warning; empty when none. */
   hypertensionAlerts?: NewbornVitalAlert[];
+  /** Policy 2026-11-20 (provisional): the maternal early warning of a pregnant or postpartum woman's set; empty when none. */
+  maternalAlerts?: NewbornVitalAlert[];
 }
 
 export interface MedicationReconciliationEntry {

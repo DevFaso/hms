@@ -6214,7 +6214,21 @@
     "CLINICAL_SUMMARY_HELP": "Les alertes cliniques restent visibles ci-dessus. Ouvrez le dossier détaillé pour consulter les soins documentés.",
     "RECORD_ACTIONS": "Plus d’actions",
     "NEWS_NOT_VALIDATED_OBSTETRIC": "non validé en grossesse / post-partum — voir les alertes maternité",
-    "NEWS_NOT_VALIDATED_NEWBORN": "non validé chez le nouveau-né — voir les alertes nouveau-né"
+    "NEWS_NOT_VALIDATED_NEWBORN": "non validé chez le nouveau-né — voir les alertes nouveau-né",
+    "MEWS_TIER_LOW": "Préoccupation faible",
+    "MEWS_TIER_LOW_MEDIUM": "Préoccupation faible à moyenne",
+    "MEWS_TIER_MEDIUM": "Préoccupation moyenne",
+    "MEWS_TIER_HIGH": "Préoccupation élevée",
+    "MEWS_PROVISIONAL": "provisoire",
+    "MEWS_PROVISIONAL_HINT": "Score d’alerte précoce maternelle (MEWS national NHS England 2024, complément CRADLE). Règle provisoire, en attente de la validation d’un clinicien obstétrical. NEWS2 n’est pas validé en grossesse / post-partum.",
+    "MEWS_INCOMPLETE": "incomplet",
+    "MEWS_INCOMPLETE_HINT": "Des constantes manquent : le score réel ne peut être qu’égal ou supérieur.",
+    "MEWS_REVIEW_WITHIN": "revue médicale sous {{minutes}} min",
+    "MEWS_REVIEW_IMMEDIATE": "revue médicale immédiate",
+    "MEWS_CONCERNS": "préoccupation supplémentaire signalée",
+    "MEWS_ALERT_SEVERE_HYPERTENSION": "Tension sévère",
+    "MEWS_ALERT_SHOCK": "Indice de choc : zone jaune",
+    "MEWS_ALERT_SEVERE_SHOCK": "Indice de choc : zone rouge"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Journaux d'accès",
@@ -7750,7 +7764,8 @@
         "PRO_CRITICAL_ITEM_ESCALATION": "Escalade — élément PRO critique",
         "PRO_SCREEN_POSITIVE": "Dépistage PRO positif",
         "REORDER_ALERT": "Alerte de réapprovisionnement",
-        "SEVERE_HYPERTENSION": "Hypertension sévère"
+        "SEVERE_HYPERTENSION": "Hypertension sévère",
+        "MEWS_ESCALATION": "Alerte précoce maternelle (MEWS)"
       },
       "ORGANIZATION_TYPE": {
         "ACADEMIC_CENTER": "Centre universitaire",
@@ -7790,7 +7805,10 @@
         "FULL_SET": "Bilan complet",
         "NEWS2_HIGH": "NEWS2 élevé : toutes les 15 min",
         "NEWS2_MEDIUM": "NEWS2 moyen : toutes les heures",
-        "ROUTINE": "Routine"
+        "ROUTINE": "Routine",
+        "MEWS_HIGH": "MEWS élevé : surveillance continue (provisoire)",
+        "MEWS_MEDIUM": "MEWS moyen : constantes rapprochées (provisoire)",
+        "MEWS_LOW_MEDIUM": "MEWS faible à moyen : constantes rapprochées (provisoire)"
       },
       "NEWBORN_ALERT_TYPE": {
         "APGAR": "Apgar",
@@ -14269,7 +14287,9 @@
     "WEIGHT": "Le poids doit être compris entre {{min}} et {{max}} kg.",
     "HEIGHT": "La taille doit être comprise entre {{min}} et {{max}} cm.",
     "HEAD_CIRCUMFERENCE": "Le périmètre crânien doit être compris entre {{min}} et {{max}} cm.",
-    "FOR_PATIENT": "{{patient}} :"
+    "FOR_PATIENT": "{{patient}} :",
+    "MATERNAL_EWS_WARNING": "Grossesse ou post-partum : la mesure est enregistrée. Alerte précoce maternelle provisoire, en attente de la validation d’un clinicien obstétrical.",
+    "MATERNAL_EWS_PAGED": "Grossesse ou post-partum : la mesure est enregistrée et l’équipe soignante a été prévenue. Alerte précoce maternelle provisoire, en attente de la validation d’un clinicien obstétrical."
   },
   "ORGAN_DAMAGE": {
     "LEGEND": "Signes d'atteinte d'organe (facultatif, si la tension est élevée)",
@@ -15247,5 +15267,14 @@
     "SAVED": "Catégorie sensible enregistrée.",
     "SAVE_FAILED": "Impossible d’enregistrer la catégorie sensible.",
     "LOAD_FAILED": "Impossible de charger la catégorie sensible."
+  },
+  "MATERNAL_CONCERNS": {
+    "LEGEND": "Grossesse ou post-partum : préoccupations supplémentaires (facultatif ; score maternel provisoire)",
+    "STAFF_CONCERNED": "Inquiétude du soignant",
+    "WOMAN_OR_FAMILY_CONCERNED": "Inquiétude de la patiente ou de sa famille",
+    "ADDITIONAL_THERAPY": "Traitement supplémentaire important (oxygène, par exemple)",
+    "INCREASED_PAIN": "Douleur accrue",
+    "VAGINAL_BLEEDING": "Saignement vaginal important",
+    "REDUCED_URINE_OUTPUT": "Diurèse diminuée"
   }
 }

@@ -6214,7 +6214,21 @@
     "CLINICAL_SUMMARY_HELP": "Clinical alerts remain visible above. Open the detailed record to review documented care.",
     "RECORD_ACTIONS": "More actions",
     "NEWS_NOT_VALIDATED_OBSTETRIC": "not validated in pregnancy / postpartum — see the maternity alerts",
-    "NEWS_NOT_VALIDATED_NEWBORN": "not validated for a newborn — see the newborn alerts"
+    "NEWS_NOT_VALIDATED_NEWBORN": "not validated for a newborn — see the newborn alerts",
+    "MEWS_TIER_LOW": "Low concern",
+    "MEWS_TIER_LOW_MEDIUM": "Low-medium concern",
+    "MEWS_TIER_MEDIUM": "Medium concern",
+    "MEWS_TIER_HIGH": "High concern",
+    "MEWS_PROVISIONAL": "provisional",
+    "MEWS_PROVISIONAL_HINT": "Maternal early warning score (NHS England national MEWS 2024, CRADLE add-on). Provisional rule, pending the sign-off of an obstetric clinician. NEWS2 is not validated in pregnancy / postpartum.",
+    "MEWS_INCOMPLETE": "incomplete",
+    "MEWS_INCOMPLETE_HINT": "Some vital signs are missing: the true score can only be equal or higher.",
+    "MEWS_REVIEW_WITHIN": "medical review within {{minutes}} min",
+    "MEWS_REVIEW_IMMEDIATE": "immediate medical review",
+    "MEWS_CONCERNS": "additional concern recorded",
+    "MEWS_ALERT_SEVERE_HYPERTENSION": "Severe blood pressure",
+    "MEWS_ALERT_SHOCK": "Shock index: yellow range",
+    "MEWS_ALERT_SEVERE_SHOCK": "Shock index: red range"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Access Logs",
@@ -7784,7 +7798,8 @@
         "PRO_CRITICAL_ITEM_ESCALATION": "Critical PRO Item Escalation",
         "PRO_SCREEN_POSITIVE": "Positive PRO Screen",
         "REORDER_ALERT": "Reorder Alert",
-        "SEVERE_HYPERTENSION": "Severe hypertension"
+        "SEVERE_HYPERTENSION": "Severe hypertension",
+        "MEWS_ESCALATION": "Maternal early warning (MEWS)"
       },
       "ORGANIZATION_TYPE": {
         "ACADEMIC_CENTER": "Academic Center",
@@ -7824,7 +7839,10 @@
         "FULL_SET": "Full Set",
         "NEWS2_HIGH": "NEWS2 high: every 15 min",
         "NEWS2_MEDIUM": "NEWS2 medium: hourly",
-        "ROUTINE": "Routine"
+        "ROUTINE": "Routine",
+        "MEWS_HIGH": "MEWS high: continuous observations (provisional)",
+        "MEWS_MEDIUM": "MEWS medium: close observations (provisional)",
+        "MEWS_LOW_MEDIUM": "MEWS low-medium: close observations (provisional)"
       },
       "NEWBORN_ALERT_TYPE": {
         "APGAR": "Apgar",
@@ -14269,7 +14287,9 @@
     "WEIGHT": "Weight must be between {{min}} and {{max}} kg.",
     "HEIGHT": "Height must be between {{min}} and {{max}} cm.",
     "HEAD_CIRCUMFERENCE": "Head circumference must be between {{min}} and {{max}} cm.",
-    "FOR_PATIENT": "{{patient}}:"
+    "FOR_PATIENT": "{{patient}}:",
+    "MATERNAL_EWS_WARNING": "Pregnancy or postpartum: the reading is saved. Provisional maternal early warning, pending the sign-off of an obstetric clinician.",
+    "MATERNAL_EWS_PAGED": "Pregnancy or postpartum: the reading is saved and the care team has been alerted. Provisional maternal early warning, pending the sign-off of an obstetric clinician."
   },
   "ORGAN_DAMAGE": {
     "LEGEND": "Signs of organ damage (optional, with a high blood pressure)",
@@ -15247,5 +15267,14 @@
     "SAVED": "Sensitive category saved.",
     "SAVE_FAILED": "The sensitive category could not be saved.",
     "LOAD_FAILED": "The sensitive category could not be loaded."
+  },
+  "MATERNAL_CONCERNS": {
+    "LEGEND": "Pregnancy or postpartum: additional concerns (optional; provisional maternal score)",
+    "STAFF_CONCERNED": "Staff concerned",
+    "WOMAN_OR_FAMILY_CONCERNED": "Woman or family concerned",
+    "ADDITIONAL_THERAPY": "Significant additional therapy (oxygen, for example)",
+    "INCREASED_PAIN": "Increased pain",
+    "VAGINAL_BLEEDING": "Significant vaginal bleeding",
+    "REDUCED_URINE_OUTPUT": "Reduced urine output"
   }
 }

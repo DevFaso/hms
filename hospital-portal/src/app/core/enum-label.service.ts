@@ -985,6 +985,7 @@ export class EnumLabelService implements OnDestroy {
       MATERNITY_ALERT: 'Maternity alert',
       MEDICATION_REFILL: 'Medication Refill',
       NEWS2_ESCALATION: 'NEWS2 Escalation',
+      MEWS_ESCALATION: 'Maternal early warning (MEWS)',
       OBSTETRIC_ALERT: 'Urgent Obstetric Alert',
       OBSTETRIC_ALERT_ESCALATION: 'Urgent Obstetric Alert Escalation',
       PHARMACY_EVENT: 'Pharmacy Update',
@@ -1102,6 +1103,9 @@ export class EnumLabelService implements OnDestroy {
       NEWS2_HIGH: 'NEWS2 high: every 15 min',
       NEWS2_MEDIUM: 'NEWS2 medium: hourly',
       ROUTINE: 'Routine',
+      MEWS_HIGH: 'MEWS high: continuous observations (provisional)',
+      MEWS_MEDIUM: 'MEWS medium: close observations (provisional)',
+      MEWS_LOW_MEDIUM: 'MEWS low-medium: close observations (provisional)',
     },
 
     /* ── Staff scheduling and employment ──────────────────── */

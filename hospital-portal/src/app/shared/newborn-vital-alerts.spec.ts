@@ -1,5 +1,6 @@
 import {
   announceHypertensionWarning,
+  announceMaternalWarning,
   announceNewbornWarning,
   announcePostpartumWarning,
   NEWBORN_WARNING_MS,
@@ -173,6 +174,57 @@ describe('vital-sign warnings name their patient', () => {
     announceHypertensionWarning([alert('WARNING')], toast, translate, '  ');
     expect(String(toast.push.calls.mostRecent().args[1])).toBe(
       '[VITAL_LIMITS.ADULT_HTN_WARNING] Recontrôler.',
+    );
+  });
+});
+
+/** Policy 2026-11-20 (provisional): the maternal early warning; the score is the server's, never the portal's. */
+describe('maternal early warning alerts', () => {
+  const translate = { instant: (key: string) => `[${key}]` };
+  const level = (severity: NewbornVitalAlert['severity']): NewbornVitalAlert => ({
+    code: 'mews-low-medium',
+    severity,
+    type: 'MATERNAL_EARLY_WARNING',
+    message: 'Score 2, revue sous 30 min.',
+  });
+  const shock: NewbornVitalAlert = {
+    code: 'maternal-shock',
+    severity: 'WARNING',
+    type: 'MATERNAL_EARLY_WARNING',
+    message: 'Indice de choc en zone jaune.',
+  };
+
+  it('says nothing when the set raised nothing', () => {
+    const toast = { push: jasmine.createSpy('push') };
+    expect(announceMaternalWarning(undefined, toast, translate, null)).toBeFalse();
+    expect(announceMaternalWarning([], toast, translate, null)).toBeFalse();
+    expect(toast.push).not.toHaveBeenCalled();
+  });
+
+  it('a level of concern says the team was paged, with the provisional heading', () => {
+    const toast = { push: jasmine.createSpy('push') };
+    expect(announceMaternalWarning([level('WARNING'), shock], toast, translate, null)).toBeTrue();
+    expect(toast.push).toHaveBeenCalledOnceWith(
+      'warning',
+      '[VITAL_LIMITS.MATERNAL_EWS_PAGED] Score 2, revue sous 30 min. Indice de choc en zone jaune.',
+      NEWBORN_WARNING_MS,
+    );
+  });
+
+  it('a high level or a red alert is an error toast', () => {
+    const toast = { push: jasmine.createSpy('push') };
+    announceMaternalWarning([level('URGENT')], toast, translate, 'Awa Test');
+    expect(toast.push.calls.mostRecent().args[0]).toBe('error');
+    expect(String(toast.push.calls.mostRecent().args[1])).toContain('MATERNAL_EWS_PAGED');
+  });
+
+  it('a yellow shock index alone warns without saying anyone was paged', () => {
+    const toast = { push: jasmine.createSpy('push') };
+    announceMaternalWarning([shock], toast, translate, null);
+    expect(toast.push).toHaveBeenCalledOnceWith(
+      'warning',
+      '[VITAL_LIMITS.MATERNAL_EWS_WARNING] Indice de choc en zone jaune.',
+      NEWBORN_WARNING_MS,
     );
   });
 });

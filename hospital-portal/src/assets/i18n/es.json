@@ -6214,7 +6214,21 @@
     "CLINICAL_SUMMARY_HELP": "Las alertas clínicas permanecen visibles arriba. Abra el expediente detallado para revisar la atención documentada.",
     "RECORD_ACTIONS": "Más acciones",
     "NEWS_NOT_VALIDATED_OBSTETRIC": "no validado en el embarazo / posparto: vea las alertas de maternidad",
-    "NEWS_NOT_VALIDATED_NEWBORN": "no validado en el recién nacido: vea las alertas del recién nacido"
+    "NEWS_NOT_VALIDATED_NEWBORN": "no validado en el recién nacido: vea las alertas del recién nacido",
+    "MEWS_TIER_LOW": "Preocupación baja",
+    "MEWS_TIER_LOW_MEDIUM": "Preocupación baja a media",
+    "MEWS_TIER_MEDIUM": "Preocupación media",
+    "MEWS_TIER_HIGH": "Preocupación alta",
+    "MEWS_PROVISIONAL": "provisional",
+    "MEWS_PROVISIONAL_HINT": "Puntuación de alerta temprana materna (MEWS nacional NHS England 2024, complemento CRADLE). Regla provisional, pendiente de la validación de un clínico obstétrico. NEWS2 no está validado en el embarazo / posparto.",
+    "MEWS_INCOMPLETE": "incompleta",
+    "MEWS_INCOMPLETE_HINT": "Faltan constantes: la puntuación real solo puede ser igual o mayor.",
+    "MEWS_REVIEW_WITHIN": "valoración médica en {{minutes}} min",
+    "MEWS_REVIEW_IMMEDIATE": "valoración médica inmediata",
+    "MEWS_CONCERNS": "preocupación adicional registrada",
+    "MEWS_ALERT_SEVERE_HYPERTENSION": "Presión arterial grave",
+    "MEWS_ALERT_SHOCK": "Índice de choque: zona amarilla",
+    "MEWS_ALERT_SEVERE_SHOCK": "Índice de choque: zona roja"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Registros de acceso",
@@ -7784,7 +7798,8 @@
         "PRO_CRITICAL_ITEM_ESCALATION": "Escalamiento — ítem PRO crítico",
         "PRO_SCREEN_POSITIVE": "Cribado PRO positivo",
         "REORDER_ALERT": "Alerta de reabastecimiento",
-        "SEVERE_HYPERTENSION": "Hipertensión grave"
+        "SEVERE_HYPERTENSION": "Hipertensión grave",
+        "MEWS_ESCALATION": "Alerta temprana materna (MEWS)"
       },
       "ORGANIZATION_TYPE": {
         "ACADEMIC_CENTER": "Centro académico",
@@ -7824,7 +7839,10 @@
         "FULL_SET": "Conjunto completo",
         "NEWS2_HIGH": "NEWS2 alto: cada 15 min",
         "NEWS2_MEDIUM": "NEWS2 medio: cada hora",
-        "ROUTINE": "Rutina"
+        "ROUTINE": "Rutina",
+        "MEWS_HIGH": "MEWS alto: vigilancia continua (provisional)",
+        "MEWS_MEDIUM": "MEWS medio: constantes frecuentes (provisional)",
+        "MEWS_LOW_MEDIUM": "MEWS bajo a medio: constantes frecuentes (provisional)"
       },
       "NEWBORN_ALERT_TYPE": {
         "APGAR": "Apgar",
@@ -14269,7 +14287,9 @@
     "WEIGHT": "El peso debe estar entre {{min}} y {{max}} kg.",
     "HEIGHT": "La talla debe estar entre {{min}} y {{max}} cm.",
     "HEAD_CIRCUMFERENCE": "El perímetro cefálico debe estar entre {{min}} y {{max}} cm.",
-    "FOR_PATIENT": "{{patient}}:"
+    "FOR_PATIENT": "{{patient}}:",
+    "MATERNAL_EWS_WARNING": "Embarazo o posparto: la medición queda registrada. Alerta temprana materna provisional, pendiente de la validación de un clínico obstétrico.",
+    "MATERNAL_EWS_PAGED": "Embarazo o posparto: la medición queda registrada y se ha avisado al equipo asistencial. Alerta temprana materna provisional, pendiente de la validación de un clínico obstétrico."
   },
   "ORGAN_DAMAGE": {
     "LEGEND": "Signos de daño de órganos (opcional, con una presión arterial elevada)",
@@ -15247,5 +15267,14 @@
     "SAVED": "Categoría sensible guardada.",
     "SAVE_FAILED": "No se pudo guardar la categoría sensible.",
     "LOAD_FAILED": "No se pudo cargar la categoría sensible."
+  },
+  "MATERNAL_CONCERNS": {
+    "LEGEND": "Embarazo o posparto: preocupaciones adicionales (opcional; puntuación materna provisional)",
+    "STAFF_CONCERNED": "Preocupación del profesional",
+    "WOMAN_OR_FAMILY_CONCERNED": "Preocupación de la paciente o de su familia",
+    "ADDITIONAL_THERAPY": "Tratamiento adicional importante (oxígeno, por ejemplo)",
+    "INCREASED_PAIN": "Dolor aumentado",
+    "VAGINAL_BLEEDING": "Sangrado vaginal importante",
+    "REDUCED_URINE_OUTPUT": "Diuresis disminuida"
   }
 }

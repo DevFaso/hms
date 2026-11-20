@@ -707,6 +707,63 @@ describe('PatientDetailComponent', () => {
       createdAt: '2026-04-15T01:00:00',
     };
 
+    it('policy 2026-11-20: shows the maternal score, marked provisional, in place of « NEWS2 non validé »', () => {
+      const maternal: VitalSignResponse = {
+        ...vitalWithMetrics,
+        id: 'v-mews',
+        newsNotValidated: 'OBSTETRIC',
+        mewsScore: 4,
+        mewsTier: 'HIGH',
+        mewsComplete: false,
+        mewsMissing: ['SPO2'],
+        mewsConcerns: ['VAGINAL_BLEEDING'],
+        mewsAlerts: ['SEVERE_HYPERTENSION', 'SHOCK'],
+        mewsReviewWithinMinutes: 0,
+      };
+      // A set with nothing to score (a weight alone) has no maternal score: the older text stays.
+      const weightOnly: VitalSignResponse = {
+        ...emptyVital,
+        id: 'v-weight',
+        weightKg: 61,
+        newsNotValidated: 'OBSTETRIC',
+      };
+      vitalServiceSpy.getRecent.and.returnValue(
+        of({ items: [maternal, weightOnly], withheld: false }),
+      );
+      fixture.detectChanges();
+      component.setTab('vitals');
+      fixture.detectChanges();
+
+      const cards = fixture.nativeElement.querySelectorAll('.vital-card');
+      const chip: HTMLElement = cards[0].querySelector('[data-testid="mews-chip"]');
+      expect(chip).toBeTruthy();
+      expect(chip.classList).toContain('news-high');
+      expect(chip.textContent).toContain('MEWS');
+      expect(chip.querySelector('.news-value')?.textContent?.trim()).toBe('4');
+      expect(chip.textContent).toContain('PATIENTS.MEWS_TIER_HIGH');
+      expect(chip.textContent).toContain('PATIENTS.MEWS_REVIEW_IMMEDIATE');
+      expect(chip.textContent).toContain('PATIENTS.MEWS_ALERT_SEVERE_HYPERTENSION');
+      expect(chip.textContent).toContain('PATIENTS.MEWS_ALERT_SHOCK');
+      expect(chip.textContent).toContain('PATIENTS.MEWS_CONCERNS');
+      expect(chip.textContent).toContain('PATIENTS.MEWS_INCOMPLETE');
+      expect(chip.querySelector('[data-testid="mews-provisional"]')?.textContent).toContain(
+        'PATIENTS.MEWS_PROVISIONAL',
+      );
+      // Never a NEWS2 chip beside it, neither a score nor the « non validé » text.
+      expect(cards[0].querySelector('[data-testid="news-not-validated"]')).toBeNull();
+      expect(cards[0].querySelectorAll('.news-chip').length).toBe(1);
+      // The chip wraps inside a narrow card (a 390 px phone) instead of pushing it wider.
+      const card = cards[0] as HTMLElement;
+      card.style.width = '280px';
+      card.style.boxSizing = 'border-box';
+      expect(chip.getBoundingClientRect().width)
+        .withContext('the maternal chip fits a narrow card')
+        .toBeLessThanOrEqual(card.getBoundingClientRect().width + 1);
+
+      expect(cards[1].querySelector('[data-testid="mews-chip"]')).toBeNull();
+      expect(cards[1].querySelector('[data-testid="news-not-validated"]')).toBeTruthy();
+    });
+
     it('should show no-metrics placeholder when vital has only notes', () => {
       vitalServiceSpy.getRecent.and.returnValue(
         of({ items: [vitalWithOnlyNotes], withheld: false }),

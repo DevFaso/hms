@@ -708,8 +708,57 @@
                   >{{ 'PATIENTS.BY' | translate }} {{ v.recordedByName || '—' }}</span
                 >
               </div>
+              <!-- Policy 2026-11-20 (provisional): a pregnant or postpartum woman's maternal early warning,
+                   scored by the server, in place of « NEWS2 non validé ». Always marked « provisoire ». -->
+              @if (v.mewsTier) {
+                <div
+                  class="news-chip mews-chip"
+                  data-testid="mews-chip"
+                  [class.news-low]="v.mewsTier === 'LOW'"
+                  [class.news-low-medium]="v.mewsTier === 'LOW_MEDIUM'"
+                  [class.news-medium]="v.mewsTier === 'MEDIUM'"
+                  [class.news-high]="v.mewsTier === 'HIGH'"
+                >
+                  <span class="news-label">MEWS</span>
+                  <span class="news-value">{{ v.mewsScore }}</span>
+                  <span class="news-band">{{
+                    'PATIENTS.MEWS_TIER_' + v.mewsTier | translate
+                  }}</span>
+                  @if (v.mewsReviewWithinMinutes === 0) {
+                    <span class="mews-review">{{
+                      'PATIENTS.MEWS_REVIEW_IMMEDIATE' | translate
+                    }}</span>
+                  } @else if (v.mewsReviewWithinMinutes) {
+                    <span class="mews-review">{{
+                      'PATIENTS.MEWS_REVIEW_WITHIN'
+                        | translate: { minutes: v.mewsReviewWithinMinutes }
+                    }}</span>
+                  }
+                  @for (alert of v.mewsAlerts ?? []; track alert) {
+                    <span class="mews-alert" [class.mews-alert-yellow]="alert === 'SHOCK'">{{
+                      'PATIENTS.MEWS_ALERT_' + alert | translate
+                    }}</span>
+                  }
+                  @if (v.mewsConcerns?.length) {
+                    <span class="mews-concern">{{ 'PATIENTS.MEWS_CONCERNS' | translate }}</span>
+                  }
+                  @if (v.mewsComplete === false) {
+                    <span
+                      class="news-incomplete"
+                      [attr.title]="'PATIENTS.MEWS_INCOMPLETE_HINT' | translate"
+                      >{{ 'PATIENTS.MEWS_INCOMPLETE' | translate }}</span
+                    >
+                  }
+                  <span
+                    class="mews-provisional"
+                    data-testid="mews-provisional"
+                    [attr.title]="'PATIENTS.MEWS_PROVISIONAL_HINT' | translate"
+                    >{{ 'PATIENTS.MEWS_PROVISIONAL' | translate }}</span
+                  >
+                </div>
+              }
               <!-- Review of #1237: in pregnancy, after a birth and for a newborn, no reassuring score. -->
-              @if (v.newsNotValidated) {
+              @if (v.newsNotValidated && !v.mewsTier) {
                 <div class="news-chip news-not-validated" data-testid="news-not-validated">
                   <span class="news-label">NEWS2</span>
                   <span class="news-band">{{
