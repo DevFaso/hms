@@ -423,6 +423,8 @@ public class VitalSignJudgement {
     private NewbornVitalAlertDTO maternalLevelAlert(MaternalEarlyWarning.Score score, MaternalEarlyWarning.Tier tier,
                                                     MaternalEarlyWarningService.PageStatus page,
                                                     MaternalEarlyWarningRules rules, java.util.Locale locale) {
+        // The caller has a score (it returns early without one): read it before anything that tolerates none.
+        int total = score.total();
         String level = "mews-" + tier.name().toLowerCase(java.util.Locale.ROOT).replace('_', '-');
         long observeWithin =
             MaternalEarlyWarning.observationInterval(rules, score, java.time.Duration.ofHours(12)).toMinutes();
@@ -431,18 +433,18 @@ public class VitalSignJudgement {
         switch (page == null ? MaternalEarlyWarningService.PageStatus.SENT : page) {
             case WITHHELD -> {
                 code = level + WITHHELD_SUFFIX;
-                message = messageSource.getMessage(MEWS_WITHHELD_MESSAGE_KEY, new Object[]{score.total(),
+                message = messageSource.getMessage(MEWS_WITHHELD_MESSAGE_KEY, new Object[]{total,
                     rules.getEscalation().getPageCoolDownMinutes(), observeWithin}, code, locale);
             }
             case NOBODY -> {
                 code = level + UNSENT_SUFFIX;
-                message = messageSource.getMessage(MEWS_UNSENT_MESSAGE_KEY, new Object[]{score.total()}, code, locale);
+                message = messageSource.getMessage(MEWS_UNSENT_MESSAGE_KEY, new Object[]{total}, code, locale);
             }
             default -> {
                 Integer review = MaternalEarlyWarning.reviewWithinMinutes(rules, tier);
                 code = level;
                 message = messageSource.getMessage(MEWS_MESSAGE_PREFIX + tier.name(),
-                    new Object[]{score.total(), review == null ? 0 : review, observeWithin}, code, locale);
+                    new Object[]{total, review == null ? 0 : review, observeWithin}, code, locale);
             }
         }
         return NewbornVitalAlertDTO.builder()
