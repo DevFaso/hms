@@ -2026,6 +2026,22 @@ describe('BillingComponent', () => {
       expect(component.unpricedLines()).toContain('TDR');
     }));
 
+    it('saved back as a draft, no reason is asked and none is sent', fakeAsync(() => {
+      billingSpy.updateInvoice.and.returnValues(
+        throwError(() => refusal),
+        of(mockInvoice({ id: 'inv-1' })),
+      );
+      issue();
+      tick();
+      component.form = { ...component.form, status: 'DRAFT' };
+      component.submitForm();
+      tick();
+      expect(billingSpy.updateInvoice).toHaveBeenCalledTimes(2);
+      const sent = billingSpy.updateInvoice.calls.mostRecent().args[1];
+      expect(sent.confirmUnpricedLines).toBeUndefined();
+      expect(sent.unpricedLinesReason).toBeUndefined();
+    }));
+
     it('opening another invoice forgets the lines named for the last one', fakeAsync(() => {
       billingSpy.updateInvoice.and.returnValue(throwError(() => refusal));
       issue();

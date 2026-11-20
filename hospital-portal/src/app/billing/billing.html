@@ -730,13 +730,7 @@
                         >
                           <td colspan="5">
                             <label class="line-edit-label" for="line-remove-reason"
-                              >{{
-                                (isTariffLine(it)
-                                  ? 'BILLING.REMOVE_REASON'
-                                  : 'BILLING.LINE_REMOVE_REASON'
-                                ) | translate
-                              }}
-                              *</label
+                              >{{ 'BILLING.LINE_REMOVE_REASON' | translate }} *</label
                             >
                             <input
                               required
@@ -745,12 +739,7 @@
                               id="line-remove-reason"
                               class="line-edit-input"
                               [attr.data-testid]="'line-remove-reason-' + it.id"
-                              [placeholder]="
-                                (isTariffLine(it)
-                                  ? 'BILLING.REMOVE_REASON_PLACEHOLDER'
-                                  : 'BILLING.LINE_REMOVE_REASON_PLACEHOLDER'
-                                ) | translate
-                              "
+                              [placeholder]="'BILLING.LINE_REMOVE_REASON_PLACEHOLDER' | translate"
                               [ngModel]="removeLineReason()"
                               (ngModelChange)="removeLineReason.set($event)"
                               (keydown.enter)="confirmRemoveTariffLine(it)"

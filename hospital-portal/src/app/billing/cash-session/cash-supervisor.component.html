@@ -266,7 +266,7 @@
               <td>
                 {{ line.removedByName || '—' }}
                 @if (line.removedAt) {
-                  <span class="field-hint">{{ line.removedAt | serverTime }}</span>
+                  <span class="field-hint">{{ line.removedAt | serverTime | date: 'short' }}</span>
                 }
               </td>
             </tr>

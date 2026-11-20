@@ -645,6 +645,11 @@ export class BillingComponent implements OnInit {
       return;
     }
     // PR 10 review (QA D2703): lines at 0 F CFA are issued only with the reason typed under their names.
+    // Back to a draft, nothing is issued: the question and its answer are dropped.
+    if (this.unpricedLines() !== null && this.form.status !== 'SENT') {
+      this.unpricedLines.set(null);
+      this.form = { ...this.form, confirmUnpricedLines: undefined, unpricedLinesReason: undefined };
+    }
     if (this.unpricedLines() !== null) {
       const reason = this.form.unpricedLinesReason?.trim() ?? '';
       if (!reason) {
@@ -1168,11 +1173,7 @@ export class BillingComponent implements OnInit {
         [
           {
             id: 'line-remove-reason',
-            message: this.translate.instant(
-              this.isTariffLine(item)
-                ? 'BILLING.REMOVE_REASON_REQUIRED'
-                : 'BILLING.LINE_REMOVE_REASON_REQUIRED',
-            ),
+            message: this.translate.instant('BILLING.LINE_REMOVE_REASON_REQUIRED'),
           },
         ],
         ['line-remove-reason'],
