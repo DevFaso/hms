@@ -2,6 +2,17 @@
 :host {
   display: block;
   min-width: 0;
+  // Inherited: a long word (a medicine, a voucher number, a name) wraps instead of widening the dialog.
+  overflow-wrap: anywhere;
+}
+
+label,
+legend,
+strong,
+small,
+em,
+span {
+  min-width: 0;
 }
 
 .deferral-choice {

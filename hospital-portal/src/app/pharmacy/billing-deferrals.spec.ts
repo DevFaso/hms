@@ -268,7 +268,7 @@ describe('BillingDeferralsComponent (policy rule 6: the work list)', () => {
       }),
     ]);
     click(host, 'deferral-approve-d-1');
-    for (const width of [1366, 1024, 768, 390]) {
+    for (const width of [1366, 1024, 768, 390, 320]) {
       host.style.width = `${width}px`;
       expect(host.scrollWidth)
         .withContext(`${width}px`)
@@ -401,7 +401,8 @@ describe('BillingDeferralChoiceComponent (policy rule 6: the counter)', () => {
     const host = render([]);
     host.querySelector<HTMLInputElement>('[data-testid="deferral-use-urgency"]')!.click();
     fixture.detectChanges();
-    for (const width of [768, 390]) {
+    // 320 as well: CI's fonts are wider than a desktop's, and an untranslated key is one long word.
+    for (const width of [768, 390, 320]) {
       host.style.width = `${width}px`;
       expect(host.scrollWidth)
         .withContext(`${width}px`)

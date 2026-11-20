@@ -3,6 +3,8 @@
 :host {
   display: block;
   min-width: 0;
+  // Inherited: a long word (a medicine, a voucher number, a name) wraps instead of widening the page.
+  overflow-wrap: anywhere;
 }
 
 .muted {
