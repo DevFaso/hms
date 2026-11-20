@@ -23,6 +23,10 @@
           {{ 'LAB_TEST_CONFIG.REFLEX_RULES' | translate }}
         </button>
       }
+      @if (canClassifyTests) {
+        <!-- Policy 2026-11-20 (provisional): the lab director confirms each recommended category. -->
+        <app-lab-sensitivity-recommendations (applied)="loadDefinitions()" />
+      }
       <button class="btn-export" (click)="exportCsv()">
         <span class="material-symbols-outlined">download</span>
         {{ 'LAB_TEST_CONFIG.EXPORT_CSV' | translate }}

@@ -178,9 +178,25 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         // otherwise wipe the fields its form does not carry.
         existing.setActive(dto.isActive());
         existing.setDescription(dto.getDescription());
+        // Policy 2026-11-20: the tag a proxy's read obeys. Left out, it stays (this edit replaces
+        // every other field); a change, or the explicit clear, is on the audit trail.
+        com.example.hms.enums.SensitivityCategory tagBefore = existing.getSensitivityCategory();
+        com.example.hms.enums.SensitivityCategory tagAfter = tagBefore;
+        if (dto.getSensitivityCategory() != null) {
+            tagAfter = dto.getSensitivityCategory();
+        } else if (Boolean.TRUE.equals(dto.getClearSensitivityCategory())) {
+            tagAfter = null;
+        }
+        existing.setSensitivityCategory(tagAfter);
 
         MedicationCatalogItem saved = catalogRepository.save(existing);
         log.info("Updated medication catalog item '{}'", saved.getNameFr());
+        if (tagAfter != tagBefore) {
+            // Category names only, never the medicine's name next to them.
+            logAudit(AuditEventType.CONFIGURATION_CHANGED,
+                "Medication sensitivity category changed from " + tagBefore + " to " + tagAfter,
+                saved.getId().toString());
+        }
         return mapper.toResponseDTO(saved);
     }
 

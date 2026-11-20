@@ -75,6 +75,8 @@ const NOT_MOUNTED: Readonly<Record<string, string>> = {
     'a child panel that needs its required `invoice` input from the billing detail; its request and reason dialogs are driven by invoice-refunds.component.spec.ts',
   'patients/patient-demographics-edit/patient-demographics-edit.component':
     'a child form that needs its required `patient` input from the chart; driven by patient-demographics-edit.component.spec.ts',
+  'patients/family-release/family-release.component':
+    'a child panel that needs its required `patientId` input from the chart (policy 2026-11-20); its release form is driven by family-release.component.spec.ts',
 };
 
 /**

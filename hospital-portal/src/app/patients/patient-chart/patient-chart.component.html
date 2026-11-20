@@ -421,6 +421,10 @@
         {{ 'CHART.LAB_REFRESH' | translate }}
       </button>
     </div>
+    @if (canReleaseToFamily()) {
+      <!-- Policy 2026-11-20 (provisional): a minor's sensitive result, released to a verified parent. -->
+      <app-family-release [patientId]="patientId" />
+    }
     <!-- ── Orders: what was asked for, and where it has got to ── -->
     @if (canViewLabOrders()) {
       <h3 class="labs-heading">{{ 'CHART.LAB_ORDERS' | translate }}</h3>

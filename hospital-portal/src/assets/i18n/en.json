@@ -2100,7 +2100,13 @@
       "PHARMACY_PRICE_CHANGED": "Pharmacy selling price changed",
       "REVERSAL_EVENT": "{{what}}: reversal {{refund}} on invoice {{invoice}}",
       "CASH_SESSION_EVENT": "{{what}}: till {{session}}",
-      "INVOICE_LINE_PRICED_MANUALLY": "Draft line {{line}} of invoice {{invoice}} priced by hand"
+      "INVOICE_LINE_PRICED_MANUALLY": "Draft line {{line}} of invoice {{invoice}} priced by hand",
+      "SENSITIVE_RESULT_RELEASED": "Sensitive result ({{category}}) released to a verified parent or guardian",
+      "PROXY_RELATIONSHIP_VERIFIED": "Family-access relationship verified ({{relationship}})",
+      "SENSITIVITY_RECOMMENDATION_APPLIED": "Recommended sensitive category applied: {{from}} to {{to}}",
+      "MEDICATION_SENSITIVITY_CHANGED": "Medication sensitive category changed from {{from}} to {{to}}",
+      "ADOLESCENT_AGE_SET": "Adolescent confidentiality age set to {{age}}",
+      "ADOLESCENT_AGE_RESET": "Adolescent confidentiality age reset to the default ({{age}})"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -3708,7 +3714,14 @@
     "SENSITIVITY_SUBSTANCE_USE": "Substance use",
     "SENSITIVITY_BEHAVIOURAL_HEALTH": "Behavioural health",
     "SENSITIVITY_HIV": "HIV",
-    "SENSITIVITY_REPRODUCTIVE_HEALTH": "Reproductive health"
+    "SENSITIVITY_REPRODUCTIVE_HEALTH": "Reproductive health",
+    "SENSITIVITY_STI": "Sexually transmitted infections",
+    "SENSITIVITY_VIRAL_HEPATITIS": "Viral hepatitis B and C",
+    "SENSITIVITY_PREGNANCY": "Pregnancy",
+    "SENSITIVITY_SEXUAL_DOMESTIC_VIOLENCE": "Sexual and domestic violence",
+    "SENSITIVITY_GENETIC": "Genetic tests",
+    "SENSITIVITY_SICKLE_CELL": "Sickle cell (genotype)",
+    "SENSITIVITY_TUBERCULOSIS": "Tuberculosis (restricted)"
   },
   "COST_PANEL": {
     "TITLE": "Cost per hospital",
@@ -7666,7 +7679,10 @@
         "CASH_SESSION_CLOSED": "Till closed",
         "CASH_SESSION_REOPENED": "Till reopened",
         "CASH_SESSION_REVIEWED": "Till reviewed",
-        "INVOICE_LINE_PRICED_MANUALLY": "Line priced by hand"
+        "INVOICE_LINE_PRICED_MANUALLY": "Line priced by hand",
+        "SENSITIVE_RESULT_RELEASED_TO_PROXY": "Sensitive result released to a parent",
+        "PROXY_RELATIONSHIP_VERIFIED": "Family relationship verified",
+        "LAB_SENSITIVITY_RECOMMENDATION_APPLIED": "Recommended sensitive category applied"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -8215,7 +8231,10 @@
         "PHARMACY_REFUND": "Pharmacy refund",
         "CASH_SESSION": "Till",
         "PROBLEM_SENSITIVITY": "Diagnosis sensitivity",
-        "LAB_TEST_DEFINITION_SENSITIVITY": "Lab test sensitivity"
+        "LAB_TEST_DEFINITION_SENSITIVITY": "Lab test sensitivity",
+        "PROXY_SENSITIVE_RELEASE": "Release of a sensitive result to a parent",
+        "PATIENT_PROXY": "Family access",
+        "HOSPITAL_ADOLESCENT_CONFIDENTIALITY_AGE": "Adolescent confidentiality age"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",
@@ -15266,7 +15285,89 @@
     "TEST_HINT": "Every result of a test with a category is hidden from a person with family access, whatever visit ordered it, results of earlier versions included. It applies once this version is active. Only the laboratory director changes it.",
     "SAVED": "Sensitive category saved.",
     "SAVE_FAILED": "The sensitive category could not be saved.",
-    "LOAD_FAILED": "The sensitive category could not be loaded."
+    "LOAD_FAILED": "The sensitive category could not be loaded.",
+    "CATEGORY_STI": "Sexually transmitted infections",
+    "CATEGORY_VIRAL_HEPATITIS": "Viral hepatitis B and C",
+    "CATEGORY_PREGNANCY": "Pregnancy",
+    "CATEGORY_SEXUAL_DOMESTIC_VIOLENCE": "Sexual and domestic violence",
+    "CATEGORY_GENETIC": "Genetic tests",
+    "CATEGORY_SICKLE_CELL": "Sickle cell (genotype)",
+    "CATEGORY_TUBERCULOSIS": "Tuberculosis (restricted)"
+  },
+  "SENSITIVE_POLICY": {
+    "RECO": {
+      "OPEN": "Apply recommended categories",
+      "TITLE": "Recommended sensitive categories",
+      "PROVISIONAL": "Provisional list, awaiting a clinician’s approval.",
+      "HINT": "These tests of the catalogue match the recommended list (HIV, STIs, hepatitis B and C, pregnancy, drug screens, sickle cell, genetic tests, tuberculosis). Nothing is applied without your confirmation: tick the tests to classify. A test outside this list is never proposed or classified here. The results of a classified test are hidden from people with family access; each category applied is on the audit trail.",
+      "LOADING": "Looking for matching tests…",
+      "LOAD_FAILED": "Could not load the recommended categories.",
+      "EMPTY": "No test of the catalogue matches the recommended list.",
+      "RECOMMENDED": "Recommended category: {{category}}",
+      "MATCHED_CODE": "Matched by its code: {{text}}",
+      "MATCHED_NAME": "Matched by its name: {{text}}",
+      "MATCHED_COMPONENT": "Combined panel, matched by one of its components: {{text}}. A panel is hidden whole.",
+      "REPLACES": "Would replace the current category: {{category}}",
+      "ALL_APPLIED": "Every recommended category is already applied.",
+      "ALREADY_APPLIED": "Already applied",
+      "APPLY": "Apply to the ticked tests ({{count}})",
+      "APPLIED": "Categories applied: {{count}}.",
+      "APPLY_FAILED": "Could not apply the recommended categories.",
+      "NOTHING_TICKED": "Tick at least one test to classify."
+    },
+    "RELEASE": {
+      "TITLE": "Results hidden from the family (patient under 18)",
+      "HINT": "These sensitive results are not shown to the parents in their family access. A doctor or a midwife who has care of this patient can release an HIV result to a verified parent or guardian, with a reason; the release is audited. A minor’s HIV result is never blocked for good: the parents have a right to it (Loi 030-2008, articles 17 and 18). Only HIV can be released: a result linked to violence never is, and the other categories are not for now.",
+      "PROVISIONAL": "Provisional rule, awaiting a jurist’s opinion. From age {{age}}, the other sensitive categories are hidden from the parents too (provisional age, set by the hospital).",
+      "GUARDIANS": "Parents and guardians with family access",
+      "UNNAMED": "No name on file",
+      "RELATIONSHIP_PARENT": "Parent",
+      "RELATIONSHIP_LEGAL_GUARDIAN": "Legal guardian",
+      "VERIFIED": "Relationship verified",
+      "VERIFY": "I verified the relationship",
+      "VERIFY_HINT": "Only a parent or guardian whose relationship the hospital verified can receive a result.",
+      "NO_GUARDIAN": "No parent or guardian has an active family access for this patient.",
+      "RESULTS": "Released sensitive results",
+      "UNNAMED_TEST": "Test",
+      "RELEASED_TO": "Released to {{name}} on {{date}}",
+      "RELEASE_REASON": "Reason: {{reason}}",
+      "RELEASE": "Release to a parent",
+      "TO_WHOM": "Parent or guardian",
+      "CHOOSE": "Choose…",
+      "REASON": "Reason for the release",
+      "REASON_HINT": "Required, at least {{min}} characters (for example: disclosed after counselling, at the parents’ request).",
+      "ATTEST": "I verified that this person is the patient’s parent or legal guardian.",
+      "CONFIRM": "Release the result",
+      "NO_RESULT": "No released sensitive result is hidden from the family.",
+      "VERIFIED_TOAST": "Relationship verified.",
+      "VERIFY_FAILED": "Could not record the verification.",
+      "RELEASED_TOAST": "Result released to the parent.",
+      "RELEASE_FAILED": "Could not release the result.",
+      "REASON_TOO_SHORT": "The reason needs at least {{min}} characters.",
+      "ATTEST_REQUIRED": "Confirm that you verified this person’s relationship to the patient.",
+      "NOT_RELEASABLE": "Cannot be released to the family (only an HIV result can)."
+    },
+    "AGE": {
+      "TITLE": "Adolescent confidentiality",
+      "HINT": "From this age to 17, a minor’s sensitive records (STIs, hepatitis, pregnancy, contraception, mental health, substance use, genetic tests) are hidden from the parents in their family access. Below it, a verified parent or guardian sees them. HIV stays hidden at every age, unless a clinician releases a result; violence always stays hidden.",
+      "PROVISIONAL": "Provisional rule: the age of {{age}} is borrowed from international practice. Burkina Faso sets no statutory age; a jurist must confirm it.",
+      "LABEL": "Age from which sensitive records are hidden from the parents",
+      "RESET": "Back to {{age}}",
+      "USING_DEFAULT": "The provisional default applies: {{age}}.",
+      "USING_OWN": "The hospital’s own value applies: {{age}}.",
+      "SAVED": "Confidentiality age saved.",
+      "SAVE_FAILED": "Could not save the confidentiality age.",
+      "OUT_OF_RANGE": "Enter an age from 0 to 18."
+    },
+    "MEDICINE": {
+      "LABEL": "Sensitive category of this medicine",
+      "HINT": "A prescription of a classified medicine (an antiretroviral, for example) is hidden from people with family access, whatever the visit. No list is pre-filled: the choice is the hospital’s. Provisional rule, awaiting a clinician’s approval."
+    },
+    "GRANT": {
+      "TB_SCOPE": "Also show tuberculosis records",
+      "TB_SCOPE_HINT": "Tuberculosis is restricted: this person sees it only if you tick this box (useful for screening the household). The other sensitive records (HIV, STIs, pregnancy, mental health…) are never shown.",
+      "TB_SCOPE_BADGE": "and tuberculosis"
+    }
   },
   "MATERNAL_CONCERNS": {
     "LEGEND": "Pregnancy or postpartum: additional concerns (optional; provisional maternal score)",

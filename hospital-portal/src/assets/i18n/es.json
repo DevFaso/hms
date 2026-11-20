@@ -2100,7 +2100,13 @@
       "PHARMACY_PRICE_CHANGED": "Pharmacy selling price changed",
       "REVERSAL_EVENT": "{{what}}: reversal {{refund}} on invoice {{invoice}}",
       "CASH_SESSION_EVENT": "{{what}}: till {{session}}",
-      "INVOICE_LINE_PRICED_MANUALLY": "Draft line {{line}} of invoice {{invoice}} priced by hand"
+      "INVOICE_LINE_PRICED_MANUALLY": "Draft line {{line}} of invoice {{invoice}} priced by hand",
+      "SENSITIVE_RESULT_RELEASED": "Resultado sensible ({{category}}) comunicado a un progenitor o tutor verificado",
+      "PROXY_RELATIONSHIP_VERIFIED": "Vínculo del acceso familiar verificado ({{relationship}})",
+      "SENSITIVITY_RECOMMENDATION_APPLIED": "Categoría sensible recomendada aplicada: de {{from}} a {{to}}",
+      "MEDICATION_SENSITIVITY_CHANGED": "Categoría sensible del medicamento cambiada de {{from}} a {{to}}",
+      "ADOLESCENT_AGE_SET": "Edad de confidencialidad de los adolescentes fijada en {{age}} años",
+      "ADOLESCENT_AGE_RESET": "Edad de confidencialidad de los adolescentes devuelta al valor por defecto ({{age}} años)"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -3708,7 +3714,14 @@
     "SENSITIVITY_SUBSTANCE_USE": "Adicciones",
     "SENSITIVITY_BEHAVIOURAL_HEALTH": "Salud mental",
     "SENSITIVITY_HIV": "VIH",
-    "SENSITIVITY_REPRODUCTIVE_HEALTH": "Salud reproductiva"
+    "SENSITIVITY_REPRODUCTIVE_HEALTH": "Salud reproductiva",
+    "SENSITIVITY_STI": "Infecciones de transmisión sexual",
+    "SENSITIVITY_VIRAL_HEPATITIS": "Hepatitis virales B y C",
+    "SENSITIVITY_PREGNANCY": "Embarazo",
+    "SENSITIVITY_SEXUAL_DOMESTIC_VIOLENCE": "Violencia sexual y doméstica",
+    "SENSITIVITY_GENETIC": "Pruebas genéticas",
+    "SENSITIVITY_SICKLE_CELL": "Drepanocitosis (genotipo)",
+    "SENSITIVITY_TUBERCULOSIS": "Tuberculosis (acceso restringido)"
   },
   "COST_PANEL": {
     "TITLE": "Costes por centro",
@@ -7666,7 +7679,10 @@
         "CASH_SESSION_CLOSED": "Till closed",
         "CASH_SESSION_REOPENED": "Till reopened",
         "CASH_SESSION_REVIEWED": "Till reviewed",
-        "INVOICE_LINE_PRICED_MANUALLY": "Line priced by hand"
+        "INVOICE_LINE_PRICED_MANUALLY": "Line priced by hand",
+        "SENSITIVE_RESULT_RELEASED_TO_PROXY": "Resultado sensible comunicado a un progenitor",
+        "PROXY_RELATIONSHIP_VERIFIED": "Vínculo familiar verificado",
+        "LAB_SENSITIVITY_RECOMMENDATION_APPLIED": "Categoría sensible recomendada aplicada"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -8215,7 +8231,10 @@
         "PHARMACY_REFUND": "Pharmacy refund",
         "CASH_SESSION": "Caja",
         "PROBLEM_SENSITIVITY": "Sensibilidad del diagnóstico",
-        "LAB_TEST_DEFINITION_SENSITIVITY": "Sensibilidad de la prueba de laboratorio"
+        "LAB_TEST_DEFINITION_SENSITIVITY": "Sensibilidad de la prueba de laboratorio",
+        "PROXY_SENSITIVE_RELEASE": "Comunicación de un resultado sensible a un progenitor",
+        "PATIENT_PROXY": "Acceso familiar",
+        "HOSPITAL_ADOLESCENT_CONFIDENTIALITY_AGE": "Edad de confidencialidad de los adolescentes"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Alergia",
@@ -15266,7 +15285,89 @@
     "TEST_HINT": "Todos los resultados de una prueba clasificada se ocultan a una persona con acceso familiar, sea cual sea la visita que la pidió, incluidos los de versiones anteriores. Se aplica cuando esta versión está activa. Solo el director del laboratorio puede cambiarla.",
     "SAVED": "Categoría sensible guardada.",
     "SAVE_FAILED": "No se pudo guardar la categoría sensible.",
-    "LOAD_FAILED": "No se pudo cargar la categoría sensible."
+    "LOAD_FAILED": "No se pudo cargar la categoría sensible.",
+    "CATEGORY_STI": "Infecciones de transmisión sexual",
+    "CATEGORY_VIRAL_HEPATITIS": "Hepatitis virales B y C",
+    "CATEGORY_PREGNANCY": "Embarazo",
+    "CATEGORY_SEXUAL_DOMESTIC_VIOLENCE": "Violencia sexual y doméstica",
+    "CATEGORY_GENETIC": "Pruebas genéticas",
+    "CATEGORY_SICKLE_CELL": "Drepanocitosis (genotipo)",
+    "CATEGORY_TUBERCULOSIS": "Tuberculosis (acceso restringido)"
+  },
+  "SENSITIVE_POLICY": {
+    "RECO": {
+      "OPEN": "Aplicar las categorías recomendadas",
+      "TITLE": "Categorías sensibles recomendadas",
+      "PROVISIONAL": "Lista provisional, pendiente de la aprobación de un clínico.",
+      "HINT": "Estas pruebas del catálogo corresponden a la lista recomendada (VIH, ITS, hepatitis B y C, embarazo, tóxicos, drepanocitosis, pruebas genéticas, tuberculosis). No se aplica nada sin su confirmación: marque las pruebas que desea clasificar. Una prueba fuera de esta lista nunca se propone ni se clasifica aquí. Los resultados de una prueba clasificada se ocultan a las personas con acceso familiar; cada categoría aplicada queda en el registro de auditoría.",
+      "LOADING": "Buscando las pruebas correspondientes…",
+      "LOAD_FAILED": "No se pudieron cargar las categorías recomendadas.",
+      "EMPTY": "Ninguna prueba del catálogo corresponde a la lista recomendada.",
+      "RECOMMENDED": "Categoría recomendada: {{category}}",
+      "MATCHED_CODE": "Reconocida por su código: {{text}}",
+      "MATCHED_NAME": "Reconocida por su nombre: {{text}}",
+      "MATCHED_COMPONENT": "Perfil combinado, reconocido por uno de sus componentes: {{text}}. Un perfil se oculta entero.",
+      "REPLACES": "Sustituiría la categoría actual: {{category}}",
+      "ALL_APPLIED": "Todas las categorías recomendadas ya están aplicadas.",
+      "ALREADY_APPLIED": "Ya aplicadas",
+      "APPLY": "Aplicar a las pruebas marcadas ({{count}})",
+      "APPLIED": "Categorías aplicadas: {{count}}.",
+      "APPLY_FAILED": "No se pudieron aplicar las categorías recomendadas.",
+      "NOTHING_TICKED": "Marque al menos una prueba para clasificar."
+    },
+    "RELEASE": {
+      "TITLE": "Resultados ocultos a la familia (paciente menor de edad)",
+      "HINT": "Estos resultados sensibles no se muestran a los padres en su acceso familiar. Un médico o una matrona que atiende a este paciente puede comunicar un resultado de VIH a un progenitor o tutor verificado, con un motivo; la comunicación queda auditada. El resultado de VIH de un menor nunca se bloquea de forma definitiva: los padres tienen derecho a él (ley 030-2008, artículos 17 y 18). Solo el VIH puede comunicarse: un resultado vinculado a violencia nunca, y las demás categorías no por ahora.",
+      "PROVISIONAL": "Regla provisional, pendiente del dictamen de un jurista. A partir de los {{age}} años, las demás categorías sensibles también se ocultan a los padres (edad provisional, ajustable por el establecimiento).",
+      "GUARDIANS": "Padres y tutores con acceso familiar",
+      "UNNAMED": "Nombre no registrado",
+      "RELATIONSHIP_PARENT": "Progenitor",
+      "RELATIONSHIP_LEGAL_GUARDIAN": "Tutor legal",
+      "VERIFIED": "Vínculo verificado",
+      "VERIFY": "He verificado el vínculo",
+      "VERIFY_HINT": "Solo un progenitor o tutor cuyo vínculo ha verificado el establecimiento puede recibir un resultado.",
+      "NO_GUARDIAN": "Ningún progenitor ni tutor tiene un acceso familiar activo para este paciente.",
+      "RESULTS": "Resultados sensibles validados",
+      "UNNAMED_TEST": "Prueba",
+      "RELEASED_TO": "Comunicado a {{name}} el {{date}}",
+      "RELEASE_REASON": "Motivo: {{reason}}",
+      "RELEASE": "Comunicar a un progenitor",
+      "TO_WHOM": "Progenitor o tutor",
+      "CHOOSE": "Elegir…",
+      "REASON": "Motivo de la comunicación",
+      "REASON_HINT": "Obligatorio, al menos {{min}} caracteres (por ejemplo: comunicado tras el asesoramiento, a petición de los padres).",
+      "ATTEST": "He verificado que esta persona es el progenitor o el tutor legal del paciente.",
+      "CONFIRM": "Comunicar el resultado",
+      "NO_RESULT": "Ningún resultado sensible validado está oculto a la familia.",
+      "VERIFIED_TOAST": "Vínculo verificado.",
+      "VERIFY_FAILED": "No se pudo registrar la verificación.",
+      "RELEASED_TOAST": "Resultado comunicado al progenitor.",
+      "RELEASE_FAILED": "No se pudo comunicar el resultado.",
+      "REASON_TOO_SHORT": "El motivo debe tener al menos {{min}} caracteres.",
+      "ATTEST_REQUIRED": "Confirme que ha verificado el vínculo de esta persona con el paciente.",
+      "NOT_RELEASABLE": "No puede comunicarse a la familia (solo un resultado de VIH puede)."
+    },
+    "AGE": {
+      "TITLE": "Confidencialidad de los adolescentes",
+      "HINT": "Desde esta edad y hasta los 17 años, los registros sensibles de un menor (ITS, hepatitis, embarazo, anticoncepción, salud mental, adicciones, pruebas genéticas) se ocultan a los padres en su acceso familiar. Por debajo, un progenitor o tutor verificado los ve. El VIH permanece oculto a cualquier edad, salvo que un clínico comunique un resultado; la violencia permanece siempre oculta.",
+      "PROVISIONAL": "Regla provisional: la edad de {{age}} años se toma de la práctica internacional. Burkina Faso no fija una edad legal; un jurista debe confirmarla.",
+      "LABEL": "Edad a partir de la cual los registros sensibles se ocultan a los padres",
+      "RESET": "Volver a {{age}} años",
+      "USING_DEFAULT": "Se aplica el valor provisional por defecto: {{age}} años.",
+      "USING_OWN": "Se aplica el valor del establecimiento: {{age}} años.",
+      "SAVED": "Edad de confidencialidad guardada.",
+      "SAVE_FAILED": "No se pudo guardar la edad de confidencialidad.",
+      "OUT_OF_RANGE": "Introduzca una edad entre 0 y 18 años."
+    },
+    "MEDICINE": {
+      "LABEL": "Categoría sensible de este medicamento",
+      "HINT": "Una receta de un medicamento clasificado (un antirretroviral, por ejemplo) se oculta a las personas con acceso familiar, sea cual sea la visita. No hay ninguna lista precargada: la elección corresponde al establecimiento. Regla provisional, pendiente de la aprobación de un clínico."
+    },
+    "GRANT": {
+      "TB_SCOPE": "Mostrar también los registros de tuberculosis",
+      "TB_SCOPE_HINT": "La tuberculosis es de acceso restringido: esta persona solo la ve si marca esta casilla (útil para el cribado del entorno). Los demás registros sensibles (VIH, ITS, embarazo, salud mental…) nunca se muestran.",
+      "TB_SCOPE_BADGE": "y tuberculosis"
+    }
   },
   "MATERNAL_CONCERNS": {
     "LEGEND": "Embarazo o posparto: preocupaciones adicionales (opcional; puntuación materna provisional)",

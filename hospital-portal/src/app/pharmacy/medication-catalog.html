@@ -109,6 +109,13 @@
                     'PHARMACY.BADGE_CONTROLLED' | translate
                   }}</span>
                 }
+                @if (item.sensitivityCategory; as sensitive) {
+                  {{ ' '
+                  }}<span class="badge badge-pending" data-testid="med-sensitive">{{
+                    'SENSITIVITY_TAG.BADGE'
+                      | translate: { category: sensitivityLabelKey(sensitive) | translate }
+                  }}</span>
+                }
                 @if (hasPediatricLimits(item)) {
                   <!-- Round 18 (QA D935): who may rely on the limits, at a glance. -->
                   {{ ' '
@@ -424,6 +431,17 @@
                   {{ 'PHARMACY.CONTROLLED' | translate }}
                 </label>
               </div>
+            </div>
+
+            <!-- Policy 2026-11-20 (provisional): a medicine that reveals a sensitive category. -->
+            <div class="field" data-testid="med-sensitivity">
+              <app-sensitivity-select
+                controlId="medSensitivityCategory"
+                labelKey="SENSITIVE_POLICY.MEDICINE.LABEL"
+                hintKey="SENSITIVE_POLICY.MEDICINE.HINT"
+                [value]="medSensitivity()"
+                (picked)="medSensitivity.set($event)"
+              />
             </div>
 
             <!-- Round 18 (QA D935): the paediatric dose limits moved to their own

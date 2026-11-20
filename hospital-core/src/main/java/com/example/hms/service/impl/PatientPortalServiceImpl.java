@@ -256,6 +256,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final com.example.hms.service.support.IsolatedReads isolatedReads;
     /** QA D2730 (r65): what a proxy may read of the grantor's record. */
     private final com.example.hms.service.recordaccess.ProxyRecordFilter proxyRecordFilter;
+    /** Policy 2026-11-20: carries the verified grant of a proxy read to the filter. */
+    private final com.example.hms.service.recordaccess.ProxyReadScope proxyReadScope;
 
     /**
      * QA D985: booking or cancelling the visit a recall asks for moves the
@@ -1982,6 +1984,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             throw new AccessDeniedException("Your proxy access does not include " + requiredPermission);
         }
 
+        // Policy 2026-11-20: who is reading, for the exceptions ProxyRecordFilter may apply (a
+        // tuberculosis scope, a verified parent of a minor, a released result). Entered here only.
+        proxyReadScope.enter(new com.example.hms.service.recordaccess.ProxyReadContext(proxy.getId(), patientId,
+            proxy.getRelationship(), proxy.getRelationshipVerifiedAt() != null, perms));
+
         // QA D1212 (round 23): the grant is the patient's, not a hospital's. A
         // grantor registered only at another hospital than the proxy's was
         // looked up under the PROXY's hospital scope and answered 404. The
@@ -2020,7 +2027,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     /** What a grant may name: the scopes {@code verifyProxyAccess} checks, and ALL. */
     private static final Set<String> KNOWN_PROXY_PERMISSIONS = Set.of("ALL", PROXY_VIEW_APPOINTMENTS, PROXY_VIEW_MEDICATIONS,
-            PROXY_VIEW_LAB_RESULTS, PROXY_VIEW_BILLING, PROXY_VIEW_RECORDS);
+            PROXY_VIEW_LAB_RESULTS, PROXY_VIEW_BILLING, PROXY_VIEW_RECORDS,
+            // Policy 2026-11-20: the explicit scope that opens tuberculosis (RESTRICTED) records. It opens
+            // no read by itself, and ALL never implies it.
+            com.example.hms.service.recordaccess.ProxyReadContext.SCOPE_TUBERCULOSIS);
 
     /**
      * QA D1468: BANANA was saved, and listed as a grant that opened nothing. Only a new grant is

@@ -62,6 +62,16 @@ public class MedicationCatalogItemRequestDTO {
 
     private boolean controlled;
 
+    /**
+     * Policy 2026-11-20 (provisional): the sensitive category this medicine reveals (an
+     * antiretroviral: HIV). Left out, an update keeps the tag the item has: this full-replace
+     * edit must never clear it by omission. To clear it, send {@link #clearSensitivityCategory}.
+     */
+    private com.example.hms.enums.SensitivityCategory sensitivityCategory;
+
+    /** True clears the sensitive category. Ignored when {@link #sensitivityCategory} is set. */
+    private Boolean clearSensitivityCategory;
+
     // Round 18 (QA D935): the paediatric limits are written only through the
     // pharmacy's audited PUT /medication-catalog/{id}/pediatric-dosing.
 
