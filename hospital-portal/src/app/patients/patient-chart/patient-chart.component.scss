@@ -695,3 +695,24 @@ tr.pending-row.foreign-row td:first-child {
   font-size: 0.8rem;
   color: var(--text-muted);
 }
+
+// QA D2730: a sensitive diagnosis, marked under its name.
+.sensitive-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fff4e0;
+  color: #7a4b00;
+  font-size: 0.8rem;
+  font-weight: 600;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+
+  .material-symbols-outlined {
+    flex: 0 0 auto;
+    font-size: 1rem;
+  }
+}

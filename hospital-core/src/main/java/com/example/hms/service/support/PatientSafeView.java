@@ -201,4 +201,28 @@ public final class PatientSafeView {
         }
         return staff;
     }
+
+    /**
+     * QA D2550 (r65): a signed visit note as its patient (or their proxy) reads it. The staff DTO sent
+     * every addendum, the unattested one included, and the browser only hid it. An addendum saved
+     * without its author's attestation has no {@code signedAt} and stays with the care team: the same
+     * rule as {@code NoteAddenda.signedOnly} on the after-visit summary (#1228). The signature ceremony
+     * (algorithm, value, signer and author ids) is the care team's evidence, not the patient's copy.
+     */
+    public static com.example.hms.payload.dto.EncounterNoteResponseDTO encounterNote(
+            com.example.hms.payload.dto.EncounterNoteResponseDTO staff) {
+        if (staff == null) {
+            return null;
+        }
+        if (staff.getAddenda() != null) {
+            staff.setAddenda(staff.getAddenda().stream()
+                .filter(a -> a != null && a.getSignedAt() != null)
+                .toList());
+        }
+        staff.setAuthorUserId(null);
+        staff.setSignedByUserId(null);
+        staff.setSignatureAlgorithm(null);
+        staff.setSignatureValue(null);
+        return staff;
+    }
 }

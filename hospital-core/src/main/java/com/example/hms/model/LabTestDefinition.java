@@ -1,6 +1,7 @@
 package com.example.hms.model;
 
 import com.example.hms.enums.LabTestDefinitionApprovalStatus;
+import com.example.hms.enums.SensitivityCategory;
 import com.example.hms.model.converter.LabTestReferenceRangeConverter;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
@@ -117,6 +118,18 @@ public class LabTestDefinition extends BaseEntity {
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private boolean active = true;
+
+    /**
+     * QA D2730 (r65): the sensitive category every result of this test
+     * carries, whatever visit ordered it (a syphilis or HIV serology ordered
+     * in a general consultation). NULL, the default, means the result takes
+     * its category from its visit only. Never seeded: which tests carry one
+     * is each hospital's clinical decision. A proxy never sees a result of a
+     * tagged test ({@code ProxyRecordFilter}).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sensitivity_category", length = 32)
+    private SensitivityCategory sensitivityCategory;
 
     /**
      * True when this test is performed at the bedside rather than in the

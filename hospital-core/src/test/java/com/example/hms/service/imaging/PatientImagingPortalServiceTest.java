@@ -20,6 +20,8 @@ import com.example.hms.repository.ImagingStudyImageRepository;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.FileUploadService;
 import com.example.hms.service.imaging.PatientImagingPortalService.Reader;
+import com.example.hms.service.recordaccess.ProxyRecordFilter;
+import com.example.hms.service.recordaccess.SensitivityClassifierImpl;
 import com.example.hms.storage.StoredObject;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
@@ -66,6 +68,7 @@ class PatientImagingPortalServiceTest {
     @Mock private FileUploadService fileUploadService;
     @Mock private RoleValidator roleValidator;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private com.example.hms.repository.EncounterRepository encounterRepository;
 
     private PatientImagingPortalService service;
 
@@ -79,7 +82,9 @@ class PatientImagingPortalServiceTest {
     @BeforeEach
     void setUp() {
         service = new PatientImagingPortalService(orderRepository, reportRepository, imageRepository,
-            new ImagingReportMapper(), fileUploadService, roleValidator, auditEventLogService);
+            new ImagingReportMapper(), fileUploadService, roleValidator, auditEventLogService,
+            encounterRepository, new ProxyRecordFilter(new SensitivityClassifierImpl(),
+                mock(com.example.hms.repository.LabTestDefinitionRepository.class)));
         hospital = new Hospital();
         hospital.setId(UUID.randomUUID());
         hospital.setName("CHU Yalgado");
@@ -143,6 +148,40 @@ class PatientImagingPortalServiceTest {
         image.setId(UUID.randomUUID());
         images.add(image);
         return image;
+    }
+
+    @Test
+    @DisplayName("D2730: a proxy never reads a study of an HIV-tagged visit, nor its image; the patient does")
+    void aSensitiveVisitsStudyStaysWithThePatient() {
+        com.example.hms.model.Encounter hivVisit = new com.example.hms.model.Encounter();
+        hivVisit.setId(UUID.randomUUID());
+        hivVisit.setSensitivityCategory(com.example.hms.enums.SensitivityCategory.HIV);
+        order.setEncounterId(hivVisit.getId());
+        when(encounterRepository.findWithDepartmentByIdIn(anyCollection())).thenReturn(List.of(hivVisit));
+        report(1, ImagingReportStatus.FINAL, true);
+        ImagingStudyImage onStudy = image(null);
+        when(imageRepository.findById(onStudy.getId())).thenReturn(Optional.of(onStudy));
+
+        assertThat(service.studiesOf(patientId, Reader.PATIENT)).hasSize(1);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).isEmpty();
+        UUID imageId = onStudy.getId();
+        assertThatThrownBy(() -> service.openImage(patientId, imageId, Reader.PROXY))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("D2730: an untagged visit's study reaches the proxy; an unreadable visit fails closed")
+    void anUntaggedVisitsStudyReachesTheProxy() {
+        com.example.hms.model.Encounter visit = new com.example.hms.model.Encounter();
+        visit.setId(UUID.randomUUID());
+        order.setEncounterId(visit.getId());
+        when(encounterRepository.findWithDepartmentByIdIn(anyCollection())).thenReturn(List.of(visit));
+        report(1, ImagingReportStatus.FINAL, true);
+
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).hasSize(1);
+
+        when(encounterRepository.findWithDepartmentByIdIn(anyCollection())).thenReturn(List.of());
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).isEmpty();
     }
 
     @Test

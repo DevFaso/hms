@@ -153,4 +153,16 @@ public class PatientProblem extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "sensitivity_category", length = 32)
     private SensitivityCategory sensitivityCategory;
+
+    /**
+     * QA D2730 (r65): the visit this problem was recorded in, when it was
+     * recorded in one. A problem with no tag of its own takes that visit's
+     * category ({@code SensitivityClassifier}), so a diagnosis added during an
+     * HIV-tagged visit is withheld like the rest of the visit. NULL for a
+     * problem recorded outside any visit, and for every row older than V344.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_encounter_id",
+        foreignKey = @ForeignKey(name = "fk_problem_source_encounter"))
+    private Encounter sourceEncounter;
 }

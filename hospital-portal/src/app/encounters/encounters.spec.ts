@@ -1,3 +1,4 @@
+import { SensitivityTag } from '../shared/sensitivity/sensitivity-category';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
@@ -42,6 +43,15 @@ function mockEncounter(overrides: Partial<EncounterResponse> = {}): EncounterRes
   } as EncounterResponse;
 }
 
+/** QA D2730: a visit with no sensitive category, as GET /encounters/{id}/sensitivity answers. */
+const untagged: SensitivityTag = {
+  id: 'e1',
+  explicitCategory: null,
+  effectiveCategory: null,
+  departmentDefault: null,
+  travelsCrossHospital: true,
+};
+
 describe('EncountersComponent', () => {
   let deptLookupSpy: jasmine.SpyObj<DepartmentLookupService>;
   let component: EncountersComponent;
@@ -74,6 +84,8 @@ describe('EncountersComponent', () => {
       'cosignNote',
       'getById',
       'startEncounter',
+      'getSensitivity',
+      'setSensitivity',
     ]);
     encounterSpy.list.and.returnValue(
       of([
@@ -83,6 +95,7 @@ describe('EncountersComponent', () => {
       ]),
     );
     encounterSpy.getNoteHistory.and.returnValue(of([]));
+    encounterSpy.getSensitivity.and.returnValue(of(untagged));
     hospitalSpy = jasmine.createSpyObj('HospitalService', ['list', 'getMyHospitalAsResponse']);
     hospitalSpy.getMyHospitalAsResponse.and.returnValue(
       of({ id: 'h1', name: 'City Hospital' } as HospitalResponse),
@@ -642,6 +655,7 @@ describe('EncountersComponent', () => {
     encounterSpy.addAddendum.and.returnValue(of({ id: 'a1' } as EncounterNoteAddendumResponse));
     component.selectedEncounter.set(mockEncounter());
     component.addendumContent = ' late note ';
+    component.addendumAttest.set(true);
     component.addAddendum();
     const [id, payload] = encounterSpy.addAddendum.calls.mostRecent().args;
     expect(id).toBe('e1');
@@ -649,6 +663,16 @@ describe('EncountersComponent', () => {
     expect(payload.attestAccuracy).toBeTrue();
     expect(component.addendumContent).toBe('');
     expect(encounterSpy.getNoteHistory).toHaveBeenCalledWith('e1');
+  });
+
+  it('QA D2551: the addendum is attested only when the author ticks the box (unticked by default)', () => {
+    encounterSpy.addAddendum.and.returnValue(of({ id: 'a1' } as EncounterNoteAddendumResponse));
+    component.selectedEncounter.set(mockEncounter());
+    component.openAddendumForm(null);
+    expect(component.addendumAttest()).toBeFalse();
+    component.addendumContent = 'Brouillon interne';
+    component.addAddendum();
+    expect(encounterSpy.addAddendum.calls.mostRecent().args[1].attestAccuracy).toBeFalse();
   });
 
   it('QA D2260: a saved addendum shows under the signed note at once, and the note renders it', () => {
@@ -872,6 +896,87 @@ describe('EncountersComponent', () => {
     page.addAddendum();
 
     expect(encounterSpy.addAddendum.calls.mostRecent().args[2]).toBe('note-b');
+  });
+
+  it('QA D2730: a clinician reads the sensitive category of a visit in its detail and sets it', () => {
+    encounterSpy.getSensitivity.and.returnValue(
+      of({
+        ...untagged,
+        effectiveCategory: 'BEHAVIOURAL_HEALTH',
+        departmentDefault: 'BEHAVIOURAL_HEALTH',
+      }),
+    );
+    encounterSpy.setSensitivity.and.returnValue(
+      of({
+        ...untagged,
+        explicitCategory: 'HIV',
+        effectiveCategory: 'HIV',
+        travelsCrossHospital: false,
+      }),
+    );
+    const fixture = TestBed.createComponent(EncountersComponent);
+    const page = fixture.componentInstance;
+    page.selectEncounter(mockEncounter());
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const inherited = '[data-testid="encounter-sensitivity-select-inherited"]';
+
+    const select = host.querySelector<HTMLSelectElement>('#encounter-sensitivity-select')!;
+    expect(select).not.toBeNull();
+    expect(select.value).toBe('');
+    // The department's default applies while the visit has no tag of its own.
+    expect(host.querySelector(inherited)).not.toBeNull();
+    select.value = 'HIV';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    expect(encounterSpy.setSensitivity).toHaveBeenCalledOnceWith(mockEncounter().id, 'HIV');
+    expect(page.encounterSensitivity()?.explicitCategory).toBe('HIV');
+    expect(toastSpy.success).toHaveBeenCalled();
+    expect(host.querySelector(inherited)).toBeNull();
+  });
+
+  it('QA D2730: a refused category is put back, and the desk is offered no control', () => {
+    encounterSpy.setSensitivity.and.returnValue(throwError(() => ({ status: 403 })));
+    const fixture = TestBed.createComponent(EncountersComponent);
+    const page = fixture.componentInstance;
+    page.selectEncounter(mockEncounter());
+    page.setEncounterSensitivity('HIV');
+    expect(page.encounterSensitivity()?.explicitCategory).toBeNull();
+    expect(toastSpy.error).toHaveBeenCalled();
+    expect(page.sensitivitySaving()).toBeFalse();
+
+    activeRoles = ['ROLE_RECEPTIONIST'];
+    encounterSpy.getSensitivity.calls.reset();
+    const desk = TestBed.createComponent(EncountersComponent);
+    desk.componentInstance.selectEncounter(mockEncounter());
+    desk.detectChanges();
+    expect(encounterSpy.getSensitivity).not.toHaveBeenCalled();
+    expect(
+      (desk.nativeElement as HTMLElement).querySelector('[data-testid="encounter-sensitivity"]'),
+    ).toBeNull();
+  });
+
+  it('QA D2551: the addendum form has an unticked attestation box saying it reaches the patient', () => {
+    encounterSpy.addAddendum.and.returnValue(of({ id: 'a1' } as EncounterNoteAddendumResponse));
+    const fixture = TestBed.createComponent(EncountersComponent);
+    const page = fixture.componentInstance;
+    page.selectEncounter(mockEncounter({ note: entryB, noteEntries: [draftA, entryB] }));
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    host.querySelector<HTMLButtonElement>('[data-testid="addendum-current-entry"]')!.click();
+    fixture.detectChanges();
+
+    const box = host.querySelector<HTMLInputElement>('[data-testid="addendum-attest"]')!;
+    expect(box).not.toBeNull();
+    expect(box.checked).toBeFalse();
+    expect(host.querySelector('[data-testid="addendum-attest-hint"]')).not.toBeNull();
+    box.checked = true;
+    box.dispatchEvent(new Event('change'));
+    page.addendumContent = 'Correction attestée';
+    page.addAddendum();
+
+    expect(encounterSpy.addAddendum.calls.mostRecent().args[1].attestAccuracy).toBeTrue();
   });
 
   it('QA D1131: the addendum takes focus, Escape closes only it and never drops typed text unasked', fakeAsync(() => {

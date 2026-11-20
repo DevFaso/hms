@@ -3882,7 +3882,9 @@
     "MATCHING_COUNT": "Consultations correspondantes : {{count}}",
     "CURRENT_NOTE": "Note clinique actuelle",
     "NOTE_STATUS_SIGNED": "Note signée",
-    "NOTE_STATUS_UNSIGNED": "Note non signée"
+    "NOTE_STATUS_UNSIGNED": "Note non signée",
+    "ADDENDUM_ATTEST": "J'atteste que cet addendum est exact à ma connaissance.",
+    "ADDENDUM_ATTEST_HINT": "Un addendum attesté est signé et devient visible par le patient dans son résumé de visite. Laissez la case décochée pour un addendum interne, visible par l'équipe soignante seulement."
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmer le mot de passe",
@@ -8020,7 +8022,9 @@
         "PAYER_PLAN": "Formule d’organisme payeur",
         "HOSPITAL_PACS_SETTINGS": "Connexion PACS",
         "LAB_QC_TARGET": "Cible CQ du laboratoire",
-        "INSTRUMENT_OUTBOX_MESSAGE": "Message de la boîte d’envoi des instruments"
+        "INSTRUMENT_OUTBOX_MESSAGE": "Message de la boîte d’envoi des instruments",
+        "PROBLEM_SENSITIVITY": "Sensibilité du diagnostic",
+        "LAB_TEST_DEFINITION_SENSITIVITY": "Sensibilité de l’examen de laboratoire"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",
@@ -14908,5 +14912,27 @@
     "SIGNED_BY": "signé par {{name}}",
     "BY": "par {{name}}",
     "NOT_ATTESTED": "Non attesté"
+  },
+  "SENSITIVITY_TAG": {
+    "LABEL": "Catégorie sensible",
+    "NONE": "Aucune",
+    "NONE_FOLLOWS_VISIT": "Aucune en propre (suit sa visite)",
+    "CATEGORY_SUBSTANCE_USE": "Addictologie",
+    "CATEGORY_BEHAVIOURAL_HEALTH": "Santé mentale",
+    "CATEGORY_HIV": "VIH",
+    "CATEGORY_REPRODUCTIVE_HEALTH": "Santé reproductive",
+    "INHERITED": "S’applique actuellement : {{category}} (hérité de la visite ou de son service)",
+    "BADGE": "Sensible : {{category}}",
+    "ENCOUNTER_LABEL": "Catégorie sensible de cette visite",
+    "ENCOUNTER_HINT": "Les résultats, médicaments, diagnostics et factures d’une visite classée ne sont pas montrés à une personne disposant d’un accès famille, et restent derrière le bris de glace pour les autres établissements. Le patient continue de tout voir.",
+    "PROBLEM_ACTION": "Catégorie sensible",
+    "PROBLEM_TITLE": "Catégorie sensible de ce diagnostic",
+    "PROBLEM_HINT": "Un diagnostic classé n’est pas montré à une personne disposant d’un accès famille. Sans catégorie propre, il suit la visite pendant laquelle il a été enregistré.",
+    "PROBLEM_NEW_HINT": "Laissé sur « aucune », le diagnostic prend la catégorie de la visite en cours du patient, si elle en a une.",
+    "TEST_LABEL": "Catégorie sensible de cet examen",
+    "TEST_HINT": "Tous les résultats d’un examen classé sont masqués à une personne disposant d’un accès famille, quelle que soit la visite qui l’a prescrit, y compris ceux des versions antérieures. Elle s’applique dès que cette version est active. Seul le directeur du laboratoire peut la modifier.",
+    "SAVED": "Catégorie sensible enregistrée.",
+    "SAVE_FAILED": "Impossible d’enregistrer la catégorie sensible.",
+    "LOAD_FAILED": "Impossible de charger la catégorie sensible."
   }
 }

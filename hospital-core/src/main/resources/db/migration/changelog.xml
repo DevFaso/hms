@@ -3791,4 +3791,28 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V341: a sensitive category on a lab test definition (QA D2730,
+         r65). Additive: one nullable column, IF NOT EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V341-lab-test-definition-sensitivity-category" author="hms-team" runOnChange="false">
+        <sqlFile path="V341__lab_test_definition_sensitivity_category.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V344: the visit a problem was recorded in (QA D2730, r65), so a
+         problem follows that visit's sensitivity category. Additive: one
+         nullable column, its foreign key and a partial index; IF NOT
+         EXISTS / DROP IF EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V344-patient-problem-source-encounter" author="hms-team" runOnChange="false">
+        <sqlFile path="V344__patient_problem_source_encounter.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

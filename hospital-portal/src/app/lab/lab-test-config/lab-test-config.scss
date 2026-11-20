@@ -716,3 +716,11 @@
     font-weight: 400;
   }
 }
+
+// QA D2730: a sensitive test, marked under its name in the catalogue.
+.sensitive-test {
+  display: block;
+  color: #7a4b00;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}

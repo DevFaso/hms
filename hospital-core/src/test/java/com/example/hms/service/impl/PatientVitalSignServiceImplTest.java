@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -103,7 +104,11 @@ class PatientVitalSignServiceImplTest {
             org.mockito.Mockito.mock(com.example.hms.repository.DeliveryNewbornRepository.class),
             com.example.hms.service.vitals.SevereHypertensionFixtures.actingHospitalOnly(
                 org.mockito.Mockito.mock(com.example.hms.repository.DeliveryRecordRepository.class))),
-            new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository));
+            new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
+            encounterRepository,
+            new com.example.hms.service.recordaccess.ProxyRecordFilter(
+                new com.example.hms.service.recordaccess.SensitivityClassifierImpl(),
+                mock(com.example.hms.repository.LabTestDefinitionRepository.class)));
     }
 
     @org.junit.jupiter.api.AfterEach
@@ -538,6 +543,40 @@ class PatientVitalSignServiceImplTest {
         assertThat(responses.get(0).getPatientId()).isEqualTo(patientId);
         verify(patientChartAccess, never()).require(any(), any());
         org.mockito.Mockito.verifyNoInteractions(reachRecorder);
+    }
+
+    @Test
+    void getRecentVitalsForProxy_withholdsAVitalTakenDuringASensitiveVisit_D2730() {
+        UUID patientId = UUID.randomUUID();
+        com.example.hms.model.Hospital clinic = new com.example.hms.model.Hospital();
+        clinic.setId(UUID.randomUUID());
+        LocalDateTime hivVisitTime = LocalDateTime.now().minusDays(5);
+        com.example.hms.model.Encounter hivVisit = new com.example.hms.model.Encounter();
+        hivVisit.setId(UUID.randomUUID());
+        hivVisit.setHospital(clinic);
+        hivVisit.setSensitivityCategory(com.example.hms.enums.SensitivityCategory.HIV);
+        hivVisit.setEncounterDate(hivVisitTime);
+        hivVisit.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        hivVisit.setCheckoutTimestamp(hivVisitTime.plusHours(1));
+        PatientVitalSign duringTheHivVisit = PatientVitalSign.builder().patient(minimalPatient(patientId))
+            .hospital(clinic).recordedAt(hivVisitTime.plusMinutes(10)).weightKg(61.0).build();
+        duringTheHivVisit.setId(UUID.randomUUID());
+        PatientVitalSign anotherDay = PatientVitalSign.builder().patient(minimalPatient(patientId))
+            .hospital(clinic).recordedAt(hivVisitTime.minusDays(20)).weightKg(63.0).build();
+        anotherDay.setId(UUID.randomUUID());
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(minimalPatient(patientId));
+        when(encounterRepository.findVisitsByPatientId(
+                org.mockito.ArgumentMatchers.eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(hivVisit)));
+        when(vitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(
+                org.mockito.ArgumentMatchers.eq(patientId), any()))
+            .thenReturn(List.of(duringTheHivVisit, anotherDay));
+
+        List<PatientVitalSignResponseDTO> shown = service.getRecentVitalsForProxy(patientId, 5);
+
+        assertThat(shown).extracting(PatientVitalSignResponseDTO::getId).containsExactly(anotherDay.getId());
+        // The patient's own read still holds both.
+        assertThat(service.getRecentVitalsForPatientPortal(patientId, 5)).hasSize(2);
     }
 
     @Test

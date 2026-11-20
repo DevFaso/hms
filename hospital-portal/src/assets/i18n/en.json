@@ -3882,7 +3882,9 @@
     "MATCHING_COUNT": "Matching consultations: {{count}}",
     "CURRENT_NOTE": "Current clinical note",
     "NOTE_STATUS_SIGNED": "Note signed",
-    "NOTE_STATUS_UNSIGNED": "Note unsigned"
+    "NOTE_STATUS_UNSIGNED": "Note unsigned",
+    "ADDENDUM_ATTEST": "I attest this addendum is accurate to the best of my knowledge.",
+    "ADDENDUM_ATTEST_HINT": "An attested addendum is signed and becomes visible to the patient in their visit summary. Leave it unticked for an internal addendum the care team only sees."
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",
@@ -8054,7 +8056,9 @@
         "PAYER_PLAN": "Payer plan",
         "HOSPITAL_PACS_SETTINGS": "PACS connection",
         "LAB_QC_TARGET": "Lab QC target",
-        "INSTRUMENT_OUTBOX_MESSAGE": "Instrument outbox message"
+        "INSTRUMENT_OUTBOX_MESSAGE": "Instrument outbox message",
+        "PROBLEM_SENSITIVITY": "Diagnosis sensitivity",
+        "LAB_TEST_DEFINITION_SENSITIVITY": "Lab test sensitivity"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",
@@ -14908,5 +14912,27 @@
     "SIGNED_BY": "signed by {{name}}",
     "BY": "by {{name}}",
     "NOT_ATTESTED": "Not attested"
+  },
+  "SENSITIVITY_TAG": {
+    "LABEL": "Sensitive category",
+    "NONE": "None",
+    "NONE_FOLLOWS_VISIT": "None of its own (follows its visit)",
+    "CATEGORY_SUBSTANCE_USE": "Substance use",
+    "CATEGORY_BEHAVIOURAL_HEALTH": "Behavioural health",
+    "CATEGORY_HIV": "HIV",
+    "CATEGORY_REPRODUCTIVE_HEALTH": "Reproductive health",
+    "INHERITED": "Applies now: {{category}} (from the visit or its department)",
+    "BADGE": "Sensitive: {{category}}",
+    "ENCOUNTER_LABEL": "Sensitive category of this visit",
+    "ENCOUNTER_HINT": "The results, medicines, diagnoses and invoices of a visit with a category are not shown to a person with family access, and stay behind break-the-glass for other hospitals. The patient still sees everything.",
+    "PROBLEM_ACTION": "Sensitive category",
+    "PROBLEM_TITLE": "Sensitive category of this diagnosis",
+    "PROBLEM_HINT": "A diagnosis with a category is not shown to a person with family access. With none of its own, it follows the visit it was recorded in.",
+    "PROBLEM_NEW_HINT": "Left on “none”, the diagnosis takes the category of the patient’s visit in progress, if it has one.",
+    "TEST_LABEL": "Sensitive category of this test",
+    "TEST_HINT": "Every result of a test with a category is hidden from a person with family access, whatever visit ordered it, results of earlier versions included. It applies once this version is active. Only the laboratory director changes it.",
+    "SAVED": "Sensitive category saved.",
+    "SAVE_FAILED": "The sensitive category could not be saved.",
+    "LOAD_FAILED": "The sensitive category could not be loaded."
   }
 }

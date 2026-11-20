@@ -1,3 +1,4 @@
+import { SensitivityCategory, SensitivityTag } from '../shared/sensitivity/sensitivity-category';
 import { NoteAddendumView } from '../shared/note-addenda/note-addendum-view';
 import { OrganDamageSymptom } from '../shared/organ-damage-symptoms';
 import { HttpClient, HttpParams } from '@angular/common/http';
@@ -566,6 +567,21 @@ export class EncounterService {
       req,
       noteId ? { params: { noteId } } : {},
     );
+  }
+
+  /** QA D2730: the visit's sensitive category: its own tag, and what governs. */
+  getSensitivity(encounterId: string): Observable<SensitivityTag> {
+    return this.http.get<SensitivityTag>(`${this.baseUrl}/${encounterId}/sensitivity`);
+  }
+
+  /** QA D2730: tag the visit; null clears its own tag (its department's default then applies). */
+  setSensitivity(
+    encounterId: string,
+    category: SensitivityCategory | null,
+  ): Observable<SensitivityTag> {
+    return this.http.put<SensitivityTag>(`${this.baseUrl}/${encounterId}/sensitivity`, {
+      category,
+    });
   }
 
   getNoteHistory(encounterId: string): Observable<EncounterNoteHistoryEntry[]> {

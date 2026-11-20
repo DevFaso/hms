@@ -129,8 +129,10 @@ class NeverSignedOrderReadersGuardTest {
     @DisplayName("each patient-facing read path applies the shared rule, not a status list of its own")
     void thePatientFacingPathsUseTheSharedRule() throws IOException {
         String medications = read("service/impl/PatientMedicationServiceImpl.java");
-        for (String method : List.of("getMedicationsPageForPatientPortal", "getMedications")) {
-            assertThat(SourceScan.methodBody(medications, method)).as(method).contains(ISSUED);
+        // QA D2730: the patient's and the proxy's portal reads share one issued-only reader.
+        assertThat(SourceScan.methodBody(medications, "issuedFor")).as("issuedFor").contains(ISSUED);
+        for (String method : List.of("medicationsPage", "getMedications", "countMedicationsForProxy")) {
+            assertThat(SourceScan.methodBody(medications, method)).as(method).contains("issuedFor(");
         }
         assertThat(SourceScan.methodBody(medications, "countMedicationsForPatientPortal"))
             .as("the portal total counts by the same rule, in the database")

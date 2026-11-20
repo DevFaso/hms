@@ -130,7 +130,9 @@ class PatientReachableStaffFieldGuardTest {
             site("service/EncounterServiceImpl.java#getEncountersForPortalPatient", "toPatientPortalEncounterResponseDTO"),
             site("service/EncounterServiceImpl.java#getEncounterById", "toPatientPortalEncounterResponseDTO("))),
         Map.entry("EncounterNoteResponseDTO", Rule.projected("D1910/D1960: only the signed note reaches the patient",
-            site("mapper/EncounterMapper.java#toPatientPortalEncounterResponseDTO", "getLatestSignedEncounterNote()"))),
+            site("mapper/EncounterMapper.java#toPatientPortalEncounterResponseDTO", "getLatestSignedEncounterNote()"),
+            // QA D2550: attested addenda only, no signature ceremony.
+            site("mapper/EncounterMapper.java#toPatientPortalEncounterResponseDTO", "PatientSafeView.encounterNote("))),
         Map.entry("InvoiceItemResponseDTO", Rule.projected(
             "#1197 M1: the patient's line shows the price charged, never the cashier's override or the grid price",
             site("service/BillingInvoiceServiceImpl.java#getPortalInvoiceDetail", "InvoiceItemMapper::forPatient"))),

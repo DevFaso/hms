@@ -127,7 +127,18 @@
                   }}</span>
                 }
               </td>
-              <td>{{ def.testName }}</td>
+              <td>
+                {{ def.testName }}
+                @if (def.sensitivityCategory; as category) {
+                  <!-- QA D2730: a sensitive test says so in the catalogue. -->
+                  <span class="cell-secondary sensitive-test" data-testid="def-sensitive">
+                    {{
+                      'SENSITIVITY_TAG.BADGE'
+                        | translate: { category: sensitivityLabelKey(category) | translate }
+                    }}
+                  </span>
+                }
+              </td>
               <td>{{ def.category }}</td>
               <td>{{ def.unit }}</td>
               <td>
@@ -574,6 +585,18 @@
               'LAB_TEST_CONFIG.EXPECTED_RESULT_HINT' | translate
             }}</small>
           </div>
+          @if (canClassifyTests) {
+            <!-- QA D2730: the lab director says which tests are sensitive. -->
+            <div class="form-group form-group-full" data-testid="def-sensitivity">
+              <app-sensitivity-select
+                controlId="defSensitivityCategory"
+                labelKey="SENSITIVITY_TAG.TEST_LABEL"
+                hintKey="SENSITIVITY_TAG.TEST_HINT"
+                [value]="defSensitivity()"
+                (picked)="defSensitivity.set($event)"
+              />
+            </div>
+          }
           <!-- r63 (NFS panels): a panel test lists its components, each with its unit and ranges -->
           <fieldset
             class="form-group form-group-full panel-components"

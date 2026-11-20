@@ -113,7 +113,7 @@ class PatientPortalServiceImplProxyTest {
         void canonicalScope_allowed() {
             stubActiveGrant(buildGrant("VIEW_APPOINTMENTS", null));
             when(patientRepository.findByIdUnscoped(grantorPatientId)).thenReturn(Optional.of(grantor));
-            when(appointmentService.getAppointmentsForVerifiedPatient(grantorPatientId))
+            when(appointmentService.getAppointmentsForProxy(grantorPatientId))
                     .thenReturn(List.of(AppointmentResponseDTO.builder().id(UUID.randomUUID()).build()));
 
             List<AppointmentResponseDTO> result =
@@ -134,7 +134,7 @@ class PatientPortalServiceImplProxyTest {
             stubActiveGrant(buildGrant("VIEW_APPOINTMENTS", null));
             org.mockito.Mockito.lenient().when(patientRepository.findById(grantorPatientId)).thenReturn(Optional.empty());
             when(patientRepository.findByIdUnscoped(grantorPatientId)).thenReturn(Optional.of(grantor));
-            when(appointmentService.getAppointmentsForVerifiedPatient(grantorPatientId))
+            when(appointmentService.getAppointmentsForProxy(grantorPatientId))
                     .thenReturn(List.of(AppointmentResponseDTO.builder().id(UUID.randomUUID()).build()));
 
             assertThat(service.getProxyAppointments(auth, grantorPatientId, Locale.FRENCH)).hasSize(1);
@@ -157,7 +157,7 @@ class PatientPortalServiceImplProxyTest {
         void legacyScope_normalized() {
             stubActiveGrant(buildGrant("APPOINTMENTS,LAB_RESULTS", null));
             when(patientRepository.findByIdUnscoped(grantorPatientId)).thenReturn(Optional.of(grantor));
-            when(appointmentService.getAppointmentsForVerifiedPatient(grantorPatientId))
+            when(appointmentService.getAppointmentsForProxy(grantorPatientId))
                     .thenReturn(List.of());
 
             assertThat(service.getProxyAppointments(auth, grantorPatientId, Locale.ENGLISH)).isEmpty();
@@ -168,7 +168,7 @@ class PatientPortalServiceImplProxyTest {
         void allScope_allowed() {
             stubActiveGrant(buildGrant("ALL", null));
             when(patientRepository.findByIdUnscoped(grantorPatientId)).thenReturn(Optional.of(grantor));
-            when(appointmentService.getAppointmentsForVerifiedPatient(grantorPatientId))
+            when(appointmentService.getAppointmentsForProxy(grantorPatientId))
                     .thenReturn(List.of());
 
             assertThat(service.getProxyAppointments(auth, grantorPatientId, Locale.ENGLISH)).isEmpty();
@@ -193,7 +193,7 @@ class PatientPortalServiceImplProxyTest {
                     .isInstanceOf(AccessDeniedException.class)
                     .hasMessageContaining("expired");
 
-            verify(appointmentService, never()).getAppointmentsForVerifiedPatient(any());
+            verify(appointmentService, never()).getAppointmentsForProxy(any());
         }
 
         @Test
@@ -201,7 +201,7 @@ class PatientPortalServiceImplProxyTest {
         void futureExpiry_allowed() {
             stubActiveGrant(buildGrant("ALL", LocalDateTime.now().plusDays(30)));
             when(patientRepository.findByIdUnscoped(grantorPatientId)).thenReturn(Optional.of(grantor));
-            when(appointmentService.getAppointmentsForVerifiedPatient(grantorPatientId))
+            when(appointmentService.getAppointmentsForProxy(grantorPatientId))
                     .thenReturn(List.of());
 
             assertThat(service.getProxyAppointments(auth, grantorPatientId, Locale.ENGLISH)).isEmpty();

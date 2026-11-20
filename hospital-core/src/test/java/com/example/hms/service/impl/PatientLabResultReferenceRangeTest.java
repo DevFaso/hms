@@ -54,7 +54,7 @@ class PatientLabResultReferenceRangeTest {
     @BeforeEach
     void setUp() {
         service = new PatientLabResultServiceImpl(labResultRepository, patientChartAccess, hospitalRepository,
-            new LabResultMapper(), recordAccessPolicy, reachRecorder, labSpecimenRepository);
+            new LabResultMapper(), recordAccessPolicy, reachRecorder, labSpecimenRepository, null);
     }
 
     private PatientLabResultResponseDTO readOnly(String value, String unit, LabTestReferenceRange... ranges) {

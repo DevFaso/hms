@@ -403,6 +403,16 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'PatientChannelPreferenceController#update',
     roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_RECEPTIONIST'],
   },
+  // QA D2730: a visit's sensitive category - the clinicians who write the record, and the admins.
+  encounterSensitivityTag: {
+    endpoint: 'SensitivityTaggingController#tagEncounter',
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+  },
+  // QA D2730: a problem-list entry's sensitive category - the clinicians who read the list.
+  problemSensitivityTag: {
+    endpoint: 'SensitivityTaggingController#tagProblem',
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+  },
 } as const satisfies Record<string, ActionPermission>;
 
 /**
@@ -421,6 +431,12 @@ export const SERVICE_RULE_ROLES = {
    * only the clinicians of `EncounterClosureRules.callerIsClinician()`.
    */
   readyForDischargeFromInProgress: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+  /**
+   * QA D2730: `LabTestDefinitionServiceImpl.assertMayClassify` lets only the lab
+   * director of the definition's hospital (or a super-admin) set or remove a
+   * test's sensitive category, although the PUT admits every catalogue role.
+   */
+  labTestSensitivity: ['ROLE_LAB_DIRECTOR', 'ROLE_SUPER_ADMIN'],
 } as const;
 
 export type ActionKey = keyof typeof ACTION_PERMISSIONS;
