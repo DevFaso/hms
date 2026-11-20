@@ -574,24 +574,35 @@ public class CashSessionService {
 
     // ───────────────────────────── mapping ─────────────────────────────
 
+    /**
+     * The latest close's differences. PR 10 review: their sum nets a shortage against a surplus (cash -500, Orange
+     * Money +500 = 0), so the drawer's own difference and the number of lines that differ are given beside it.
+     * Nothing while the session was never closed.
+     */
+    private record Differences(BigDecimal total, BigDecimal cash, int lines) {
+
+        static Differences of(List<CashSessionCount> counts, int round) {
+            if (round == 0) {
+                return new Differences(null, null, 0);
+            }
+            List<CashSessionCount> latest = counts.stream()
+                .filter(c -> c.getCloseRound() != null && c.getCloseRound() == round).toList();
+            BigDecimal total = latest.stream().map(CashSessionCount::getDifference)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal cash = latest.stream().filter(c -> "CASH".equals(c.getMethod()))
+                .map(CashSessionCount::getDifference).reduce(BigDecimal.ZERO, BigDecimal::add);
+            int lines = (int) latest.stream()
+                .filter(c -> c.getDifference() != null && c.getDifference().signum() != 0).count();
+            return new Differences(total, cash, lines);
+        }
+    }
+
     private CashSessionDTO toDto(CashSession s, UUID me, Map<UUID, String> names, boolean withMovements) {
         Figures figures = figures(s);
         List<CashSessionCount> stored = countRepository.findBySessionIdOrderByCloseRoundAscMethodAsc(s.getId());
         List<CashSessionCount> counts = stored != null ? stored : List.of();
         int round = s.getCloseRound() != null ? s.getCloseRound() : 0;
-        List<CashSessionCount> latest = counts.stream()
-            .filter(c -> c.getCloseRound() != null && c.getCloseRound() == round).toList();
-        BigDecimal difference = round == 0 ? null : latest.stream()
-            .map(CashSessionCount::getDifference)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        // PR 10 review: the sum nets a shortage against a surplus (cash -500, Orange Money +500 = 0). The drawer's
-        // own difference and the number of lines that differ are given beside it.
-        BigDecimal cashDifference = round == 0 ? null : latest.stream()
-            .filter(c -> "CASH".equals(c.getMethod()))
-            .map(CashSessionCount::getDifference)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        int differenceLines = round == 0 ? 0 : (int) latest.stream()
-            .filter(c -> c.getDifference() != null && c.getDifference().signum() != 0).count();
+        Differences differences = Differences.of(counts, round);
         return CashSessionDTO.builder()
             .id(s.getId())
             .till(s.getTill() != null ? s.getTill().name() : null)
@@ -615,9 +626,9 @@ public class CashSessionService {
             .totalOut(figures.totalOut())
             .totalExpected(figures.totalIn().subtract(figures.totalOut()))
             .cashToCount(figures.cashToCount())
-            .totalDifference(difference)
-            .cashDifference(cashDifference)
-            .differenceLines(differenceLines)
+            .totalDifference(differences.total())
+            .cashDifference(differences.cash())
+            .differenceLines(differences.lines())
             .counts(counts.stream().map(c -> CashSessionDTO.Count.builder()
                 .closeRound(c.getCloseRound() != null ? c.getCloseRound() : 0)
                 .method(c.getMethod())
