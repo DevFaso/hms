@@ -351,18 +351,21 @@ export class ImagingExamRecordComponent implements OnChanges {
       this.order().examRadiationDoseMgy !== null && this.order().examRadiationDoseMgy !== undefined,
   );
   /** Nothing to show and nothing to do: the section is left out. */
-  readonly visible = computed(
-    () =>
-      this.canCheckIn() ||
-      this.canRecord() ||
-      this.canDiscontinue() ||
-      !!this.order().checkedInAt ||
-      !!this.order().examStartedAt ||
-      !!this.order().performedByName ||
-      !!this.order().examTechnicalNote ||
-      this.hasContrastRecord() ||
-      this.hasDose(),
+  readonly visible = computed(() => this.canAct() || this.hasRecord());
+  private readonly canAct = computed(
+    () => this.canCheckIn() || this.canRecord() || this.canDiscontinue(),
   );
+  private readonly hasRecord = computed(() => {
+    const order = this.order();
+    return [
+      order.checkedInAt,
+      order.examStartedAt,
+      order.performedByName,
+      order.examTechnicalNote,
+      this.hasContrastRecord(),
+      this.hasDose(),
+    ].some(Boolean);
+  });
 
   ngOnChanges(): void {
     const order = this.order();

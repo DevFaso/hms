@@ -100,10 +100,12 @@ public class MidwifeNewbornCare {
             return false;
         }
         LaborEpisode episode = delivery.getEpisode();
-        return userId.equals(userIdOf(delivery.getDeliveredByStaff()))
-            || userId.equals(idOf(delivery.getDocumentedBy()))
-            || (episode != null && (userId.equals(userIdOf(episode.getAdmittedByStaff()))
-                || userId.equals(idOf(episode.getDocumentedBy()))));
+        return java.util.stream.Stream.of(
+                userIdOf(delivery.getDeliveredByStaff()),
+                idOf(delivery.getDocumentedBy()),
+                episode == null ? null : userIdOf(episode.getAdmittedByStaff()),
+                episode == null ? null : idOf(episode.getDocumentedBy()))
+            .anyMatch(userId::equals);
     }
 
     /**
@@ -145,8 +147,7 @@ public class MidwifeNewbornCare {
      */
     private boolean narrowedToHerWards(UUID hospitalId, String field) {
         UUID caller = roleValidator.getCurrentUserId();
-        if (caller != null && (roleValidator.isNurse(caller, hospitalId) || roleValidator.isDoctor(caller, hospitalId)
-                || roleValidator.isPhysician(caller, hospitalId) || roleValidator.isSurgeon(caller, hospitalId))) {
+        if (caller != null && nurseOrPhysicianAt(caller, hospitalId)) {
             return false;
         }
         if (caller != null && roleValidator.isMidwife(caller, hospitalId)) {
@@ -156,6 +157,11 @@ public class MidwifeNewbornCare {
             return false;
         }
         throw field == null ? new BusinessException(WARD_KEY) : new FieldBusinessException(field, WARD_KEY);
+    }
+
+    private boolean nurseOrPhysicianAt(UUID caller, UUID hospitalId) {
+        return roleValidator.isNurse(caller, hospitalId) || roleValidator.isDoctor(caller, hospitalId)
+            || roleValidator.isPhysician(caller, hospitalId) || roleValidator.isSurgeon(caller, hospitalId);
     }
 
     /** The token carries a role the bed endpoints admitted before the midwife joined them. */

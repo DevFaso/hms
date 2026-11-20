@@ -48,15 +48,20 @@ public final class ImagingExamRecord {
      */
     public static void requireTechnicianStep(ImagingOrderStatus from, ImagingOrderStatusUpdateRequestDTO request) {
         ImagingOrderStatus to = request.getStatus();
-        boolean step = to == ImagingOrderStatus.IN_PROGRESS && from != ImagingOrderStatus.IN_PROGRESS
-            || to == ImagingOrderStatus.COMPLETED
-            || to == ImagingOrderStatus.CANCELLED && from == ImagingOrderStatus.IN_PROGRESS;
-        boolean changesTheOrder = request.getScheduledDate() != null || request.getScheduledTime() != null
-            || request.getAppointmentLocation() != null || request.getWorkflowNotes() != null
-            || request.getRequiresAuthorization() != null || request.getAuthorizationNumber() != null;
-        if (!step || changesTheOrder) {
+        boolean starts = to == ImagingOrderStatus.IN_PROGRESS && from != ImagingOrderStatus.IN_PROGRESS;
+        boolean discontinues = to == ImagingOrderStatus.CANCELLED && from == ImagingOrderStatus.IN_PROGRESS;
+        boolean step = starts || to == ImagingOrderStatus.COMPLETED || discontinues;
+        if (!step || changesTheOrder(request)) {
             throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw(TECHNICIAN_STEPS_KEY));
         }
+    }
+
+    /** The request carries a scheduling or pre-authorisation field: a change to the order itself. */
+    private static boolean changesTheOrder(ImagingOrderStatusUpdateRequestDTO request) {
+        return java.util.stream.Stream.of(request.getScheduledDate(), request.getScheduledTime(),
+                request.getAppointmentLocation(), request.getWorkflowNotes(), request.getRequiresAuthorization(),
+                request.getAuthorizationNumber())
+            .anyMatch(java.util.Objects::nonNull);
     }
 
     public static void requireCheckInOpen(ImagingOrderStatus status) {
