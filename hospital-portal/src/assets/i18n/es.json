@@ -2940,8 +2940,24 @@
       "EXPORT_FAILED": "The journal could not be downloaded.",
       "EXPLANATION_VALUE": "Explanation of the difference: {{ text }}",
       "REVIEW_NOTE_VALUE": "Review note: {{ text }}",
-      "PHARMACY_LINK": "Till close"
-    }
+      "PHARMACY_LINK": "Till close",
+      "CASH_DIFFERENCE": "Diferencia en efectivo",
+      "LINES_WITH_DIFFERENCE": "{{count}} línea(s) con diferencia",
+      "REMOVED_LINES": "Líneas retiradas de las facturas",
+      "REMOVED_INVOICE": "Factura",
+      "REMOVED_LINE": "Línea retirada",
+      "REMOVED_REASON": "Motivo",
+      "REMOVED_BY": "Retirada por"
+    },
+    "UNPRICED_LINES_REASON": "Motivo de las líneas a 0 F CFA",
+    "UNPRICED_LINES_REASON_PLACEHOLDER": "¿Por qué se emiten estas líneas sin coste?",
+    "UNPRICED_LINES_REASON_REQUIRED": "Indique por qué estas líneas se emiten a 0 F CFA, o introduzca primero su precio.",
+    "ADDED_LINE_REASON": "Línea añadida a mano — motivo",
+    "ADDED_LINE_REASON_PLACEHOLDER": "¿Por qué se añade esta línea a mano en la factura de la visita?",
+    "ADDED_LINE_REASON_REQUIRED": "Indique por qué esta línea se añade a mano en la factura de la visita.",
+    "LINE_REMOVE_REASON": "Motivo de la retirada de esta línea",
+    "LINE_REMOVE_REASON_PLACEHOLDER": "¿Por qué se retira esta línea de la factura?",
+    "LINE_REMOVE_REASON_REQUIRED": "Indique el motivo de la retirada de esta línea."
   },
   "CHAT": {
     "ACCESS_DENIED": "No tiene permiso para acceder a la mensajería.",

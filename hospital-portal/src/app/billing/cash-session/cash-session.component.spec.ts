@@ -4,7 +4,11 @@ import { of } from 'rxjs';
 
 import { CashSessionComponent } from './cash-session.component';
 import { CashSupervisorComponent } from './cash-supervisor.component';
-import { CashSession, CashSessionService } from '../../services/cash-session.service';
+import {
+  CashSession,
+  CashSessionService,
+  RemovedInvoiceLine,
+} from '../../services/cash-session.service';
 import { ToastService } from '../../core/toast.service';
 import { provideRouter } from '@angular/router';
 
@@ -170,15 +174,17 @@ describe('CashSessionComponent (billing plan PR 10)', () => {
 });
 
 describe('CashSupervisorComponent (billing plan PR 10, QA D2326)', () => {
-  function render(rows: CashSession[]) {
+  function render(rows: CashSession[], removedLines: RemovedInvoiceLine[] = []) {
     const api = jasmine.createSpyObj<CashSessionService>('CashSessionService', [
       'list',
+      'removedLines',
       'reopen',
       'review',
       'dayReportPdf',
       'journalCsv',
     ]);
     api.list.and.returnValue(of(rows));
+    api.removedLines.and.returnValue(of(removedLines));
     api.reopen.and.callFake((id) => of(session({ id, mine: false, status: 'OPEN' })));
     const toast = jasmine.createSpyObj<ToastService>('ToastService', [
       'success',
@@ -210,6 +216,64 @@ describe('CashSupervisorComponent (billing plan PR 10, QA D2326)', () => {
     expect(el.querySelector('[data-testid="cash-review-a"]')).not.toBeNull();
     expect(el.querySelector('[data-testid="cash-reopen-b"]')).toBeNull();
     expect(el.querySelector('[data-testid="cash-reopen-c"]')).toBeNull();
+  });
+
+  it('PR 10 review: a shortage and a surplus that sum to zero are flagged, with the cash difference', () => {
+    const { el } = render([
+      session({
+        id: 'a',
+        mine: false,
+        status: 'CLOSED',
+        closeRound: 1,
+        totalDifference: 0,
+        cashDifference: -500,
+        differenceLines: 2,
+      }),
+      session({
+        id: 'b',
+        mine: false,
+        status: 'CLOSED',
+        closeRound: 1,
+        totalDifference: 0,
+        cashDifference: 0,
+        differenceLines: 0,
+      }),
+    ]);
+    const differing = el.querySelector('[data-testid="cash-difference-a"]') as HTMLElement;
+    expect(differing.classList).toContain('gap');
+    expect(differing.textContent).toContain('500');
+    expect(el.querySelector('[data-testid="cash-difference-flag-a"]')).not.toBeNull();
+    const balanced = el.querySelector('[data-testid="cash-difference-b"]') as HTMLElement;
+    expect(balanced.classList).not.toContain('gap');
+    expect(el.querySelector('[data-testid="cash-difference-flag-b"]')).toBeNull();
+  });
+
+  it('PR 10 review (QA D2703): the lines removed from invoices that day are listed with who and why', () => {
+    const { el, api } = render(
+      [session({ id: 'a', mine: false, status: 'OPEN' })],
+      [
+        {
+          id: 'r1',
+          invoiceNumber: 'TWP-2026-000040',
+          line: 'Radiographie thorax',
+          quantity: 1,
+          unitPrice: 0,
+          reason: 'Acte non réalisé',
+          removedByName: 'Awa Caisse',
+        },
+      ],
+    );
+    expect(api.removedLines).toHaveBeenCalled();
+    const row = el.querySelector('[data-testid="cash-removed-line-r1"]') as HTMLElement;
+    expect(row.textContent).toContain('TWP-2026-000040');
+    expect(row.textContent).toContain('Radiographie thorax');
+    expect(row.textContent).toContain('Acte non réalisé');
+    expect(row.textContent).toContain('Awa Caisse');
+  });
+
+  it('no removed line, no section', () => {
+    const { el } = render([session({ id: 'a', mine: false, status: 'OPEN' })]);
+    expect(el.querySelector('[data-testid="cash-removed-lines"]')).toBeNull();
   });
 
   it('reopening needs a reason', () => {

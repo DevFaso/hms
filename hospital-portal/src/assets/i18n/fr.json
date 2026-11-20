@@ -2940,8 +2940,24 @@
       "EXPORT_FAILED": "Le journal n’a pas pu être téléchargé.",
       "EXPLANATION_VALUE": "Explication de l’écart : {{ text }}",
       "REVIEW_NOTE_VALUE": "Note de vérification : {{ text }}",
-      "PHARMACY_LINK": "Clôture de caisse"
-    }
+      "PHARMACY_LINK": "Clôture de caisse",
+      "CASH_DIFFERENCE": "Écart espèces",
+      "LINES_WITH_DIFFERENCE": "{{count}} ligne(s) avec écart",
+      "REMOVED_LINES": "Lignes retirées des factures",
+      "REMOVED_INVOICE": "Facture",
+      "REMOVED_LINE": "Ligne retirée",
+      "REMOVED_REASON": "Motif",
+      "REMOVED_BY": "Retirée par"
+    },
+    "UNPRICED_LINES_REASON": "Motif des lignes à 0 F CFA",
+    "UNPRICED_LINES_REASON_PLACEHOLDER": "Pourquoi ces lignes sont-elles émises gratuitement ?",
+    "UNPRICED_LINES_REASON_REQUIRED": "Indiquez pourquoi ces lignes sont émises à 0 F CFA, ou saisissez d’abord leur prix.",
+    "ADDED_LINE_REASON": "Ligne ajoutée à la main — motif",
+    "ADDED_LINE_REASON_PLACEHOLDER": "Pourquoi cette ligne est-elle ajoutée à la main sur la facture de la visite ?",
+    "ADDED_LINE_REASON_REQUIRED": "Indiquez pourquoi cette ligne est ajoutée à la main sur la facture de la visite.",
+    "LINE_REMOVE_REASON": "Motif du retrait de cette ligne",
+    "LINE_REMOVE_REASON_PLACEHOLDER": "Pourquoi cette ligne est-elle retirée de la facture ?",
+    "LINE_REMOVE_REASON_REQUIRED": "Indiquez le motif du retrait de cette ligne."
   },
   "CHAT": {
     "ACCESS_DENIED": "Vous n'avez pas l'autorisation d'accéder à la messagerie.",

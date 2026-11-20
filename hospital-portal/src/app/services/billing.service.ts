@@ -132,7 +132,10 @@ export interface InvoiceItemRequest {
   itemCategory: InvoiceItemCategory;
   quantity: number;
   unitPrice: number;
-  /** Billing-money plan PR 3 (D-2): required when a price-list price is changed. */
+  /**
+   * Billing-money plan PR 3 (D-2): required when a price-list price is changed. PR 10 review
+   * (QA D2703): also required to add a line by hand to a visit's invoice.
+   */
   overrideReason?: string;
 }
 
@@ -166,6 +169,11 @@ export interface BillingInvoiceRequest {
    * (the server refuses on this field otherwise, naming them).
    */
   confirmUnpricedLines?: boolean;
+  /**
+   * PR 10 review (QA D2703): why the lines at 0 F CFA go out free. Required with
+   * `confirmUnpricedLines`; kept on each such line and listed in the day report.
+   */
+  unpricedLinesReason?: string;
 }
 
 /**

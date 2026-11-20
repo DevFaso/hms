@@ -55,6 +55,13 @@
   font-weight: 600;
 }
 
+/* PR 10 review: "2 lignes avec écart" under the cash difference, on its own line. */
+.gap-flag {
+  display: block;
+  font-size: 0.8125rem;
+  white-space: normal;
+}
+
 .count-input {
   width: 7rem;
   max-width: 100%;
@@ -136,4 +143,10 @@ tr.money-out td {
     width: 9rem;
     min-width: 0;
   }
+}
+
+/* PR 10 review (QA D2703): the removed lines under the tills. */
+.cash-removed-title {
+  margin: 1.5rem 0 0.5rem;
+  font-size: 1.125rem;
 }

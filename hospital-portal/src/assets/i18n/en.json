@@ -2940,8 +2940,24 @@
       "EXPORT_FAILED": "The journal could not be downloaded.",
       "EXPLANATION_VALUE": "Explanation of the difference: {{ text }}",
       "REVIEW_NOTE_VALUE": "Review note: {{ text }}",
-      "PHARMACY_LINK": "Till close"
-    }
+      "PHARMACY_LINK": "Till close",
+      "CASH_DIFFERENCE": "Cash difference",
+      "LINES_WITH_DIFFERENCE": "{{count}} line(s) with a difference",
+      "REMOVED_LINES": "Lines removed from invoices",
+      "REMOVED_INVOICE": "Invoice",
+      "REMOVED_LINE": "Line removed",
+      "REMOVED_REASON": "Reason",
+      "REMOVED_BY": "Removed by"
+    },
+    "UNPRICED_LINES_REASON": "Reason for the lines at 0 F CFA",
+    "UNPRICED_LINES_REASON_PLACEHOLDER": "Why are these lines issued free of charge?",
+    "UNPRICED_LINES_REASON_REQUIRED": "Give the reason these lines are issued at 0 F CFA, or price them first.",
+    "ADDED_LINE_REASON": "Line added by hand — reason",
+    "ADDED_LINE_REASON_PLACEHOLDER": "Why is this line added by hand to the visit’s invoice?",
+    "ADDED_LINE_REASON_REQUIRED": "Give the reason this line is added by hand to the visit’s invoice.",
+    "LINE_REMOVE_REASON": "Reason for removing this line",
+    "LINE_REMOVE_REASON_PLACEHOLDER": "Why is this line removed from the invoice?",
+    "LINE_REMOVE_REASON_REQUIRED": "Give the reason this line is removed from the invoice."
   },
   "CHAT": {
     "ACCESS_DENIED": "You do not have permission to access chat.",

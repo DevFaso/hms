@@ -730,7 +730,13 @@
                         >
                           <td colspan="5">
                             <label class="line-edit-label" for="line-remove-reason"
-                              >{{ 'BILLING.REMOVE_REASON' | translate }} *</label
+                              >{{
+                                (isTariffLine(it)
+                                  ? 'BILLING.REMOVE_REASON'
+                                  : 'BILLING.LINE_REMOVE_REASON'
+                                ) | translate
+                              }}
+                              *</label
                             >
                             <input
                               required
@@ -739,7 +745,12 @@
                               id="line-remove-reason"
                               class="line-edit-input"
                               [attr.data-testid]="'line-remove-reason-' + it.id"
-                              [placeholder]="'BILLING.REMOVE_REASON_PLACEHOLDER' | translate"
+                              [placeholder]="
+                                (isTariffLine(it)
+                                  ? 'BILLING.REMOVE_REASON_PLACEHOLDER'
+                                  : 'BILLING.LINE_REMOVE_REASON_PLACEHOLDER'
+                                ) | translate
+                              "
                               [ngModel]="removeLineReason()"
                               (ngModelChange)="removeLineReason.set($event)"
                               (keydown.enter)="confirmRemoveTariffLine(it)"
@@ -820,6 +831,23 @@
                     (ngModelChange)="newItemUnitPrice.set($event)"
                   />
                 </div>
+                <!-- PR 10 review (QA D2703): a line typed on a visit's invoice says why; the day report lists it. -->
+                @if (addedLineNeedsReason(inv)) {
+                  <div class="field">
+                    <label for="line-reason">{{ 'BILLING.ADDED_LINE_REASON' | translate }} *</label>
+                    <input
+                      required
+                      id="line-reason"
+                      data-server-field="overrideReason"
+                      data-testid="line-add-reason"
+                      type="text"
+                      maxlength="500"
+                      [placeholder]="'BILLING.ADDED_LINE_REASON_PLACEHOLDER' | translate"
+                      [ngModel]="newItemReason()"
+                      (ngModelChange)="newItemReason.set($event)"
+                    />
+                  </div>
+                }
                 <button
                   type="button"
                   class="btn-primary"
@@ -1130,6 +1158,27 @@
                 required
                 [attr.aria-invalid]="!form.cancelReason?.trim()"
                 [placeholder]="'INVOICE_CANCEL.REASON_PLACEHOLDER' | translate"
+              ></textarea>
+            </div>
+          </div>
+        }
+        <!-- PR 10 review (QA D2703): lines at 0 F CFA are issued only with a reason, under the lines named -->
+        @if (unpricedLines(); as lines) {
+          <div class="form-row">
+            <div class="field">
+              <label for="bill-unpriced-reason"
+                >{{ 'BILLING.UNPRICED_LINES_REASON' | translate }} *</label
+              >
+              <p class="field-hint" data-testid="unpriced-lines-named">{{ lines }}</p>
+              <textarea
+                id="bill-unpriced-reason"
+                data-testid="unpriced-lines-reason"
+                data-server-field="unpricedLinesReason"
+                [(ngModel)]="form.unpricedLinesReason"
+                maxlength="500"
+                rows="2"
+                required
+                [placeholder]="'BILLING.UNPRICED_LINES_REASON_PLACEHOLDER' | translate"
               ></textarea>
             </div>
           </div>

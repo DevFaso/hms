@@ -70,9 +70,28 @@ export interface CashSession {
   totalExpected: number;
   /** QA D2714: the physical cash expected in the drawer (cash in − cash out). */
   cashToCount: number;
+  /** A sum of signed differences: a shortage and a surplus net away. Never shown alone. */
   totalDifference?: number | null;
+  /** PR 10 review: the latest close's difference on the cash line alone (the drawer). */
+  cashDifference?: number | null;
+  /** PR 10 review: how many lines of the latest close differ, whatever their sum. */
+  differenceLines?: number;
   counts: CashCount[];
   movements: CashMovement[];
+}
+
+/** PR 10 review (QA D2703): a line taken off a draft invoice (InvoiceLineRemovalDTO). */
+export interface RemovedInvoiceLine {
+  id: string;
+  invoiceNumber?: string | null;
+  /** The line as it read, in the reader's language when the server worded it. */
+  line: string;
+  quantity: number;
+  unitPrice: number;
+  tariffUnitPrice?: number | null;
+  reason: string;
+  removedByName?: string | null;
+  removedAt?: string | null;
 }
 
 export interface CashCountedLine {
@@ -124,6 +143,13 @@ export class CashSessionService {
       params: dayParams(date),
       responseType: 'blob',
       observe: 'response',
+    });
+  }
+
+  /** PR 10 review (QA D2703): the lines taken off draft invoices on a day, each with its reason. */
+  removedLines(date?: string): Observable<RemovedInvoiceLine[]> {
+    return this.http.get<RemovedInvoiceLine[]>('/cash-sessions/removed-lines', {
+      params: dayParams(date),
     });
   }
 

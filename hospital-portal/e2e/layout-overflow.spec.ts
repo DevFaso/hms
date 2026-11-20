@@ -1022,12 +1022,45 @@ const DIALOGS: {
     route: '/billing/caisses',
     focus: '[data-testid="cash-supervisor-table"]',
     role: 'ROLE_HOSPITAL_ADMIN',
-    seed: (p) =>
-      p.route('**/api/cash-sessions?**', (r) =>
-        r.fulfill({ json: [{ ...CASH_SESSION, mine: false, status: 'CLOSED', closeRound: 1 }] }),
-      ),
+    seed: async (p) => {
+      await p.route('**/api/cash-sessions?**', (r) =>
+        r.fulfill({
+          json: [
+            {
+              ...CASH_SESSION,
+              mine: false,
+              status: 'CLOSED',
+              closeRound: 1,
+              // PR 10 review: a shortage and a surplus that net to zero are flagged under the cash difference.
+              totalDifference: 0,
+              cashDifference: -125_500,
+              differenceLines: 2,
+            },
+          ],
+        }),
+      );
+      // PR 10 review (QA D2703): the lines removed from invoices that day, long line, reason and name.
+      await p.route('**/api/cash-sessions/removed-lines**', (r) =>
+        r.fulfill({
+          json: [
+            {
+              id: 'removed-1',
+              invoiceNumber: 'TWP-2026-000040',
+              line: 'Radiographie du thorax de face et de profil avec interprétation du radiologue',
+              quantity: 1,
+              unitPrice: 1_250_000,
+              reason:
+                'Acte non réalisé : le patient est reparti avant la radiographie, la ligne est retirée avant émission',
+              removedByName: 'Aminata Sawadogo-Kaboré',
+              removedAt: '2026-11-20T09:30:00',
+            },
+          ],
+        }),
+      );
+    },
     then: async (p) => {
       await expect(p.locator('[data-testid="cash-supervisor-table"]')).toBeVisible();
+      await expect(p.locator('[data-testid="cash-removed-lines"]')).toBeVisible();
     },
   },
   {

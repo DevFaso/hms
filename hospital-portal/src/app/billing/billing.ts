@@ -92,6 +92,9 @@ const PAYMENT_FIELD_IDS = ['payment-amount', 'payment-operator', 'payment-refere
 const LINE_PRICE_REQUIRED_KEY = 'BILLING.LINE_UNIT_PRICE_REQUIRED';
 /** QA D1467: the field the server refuses an issue on while lines stand at 0 F CFA. */
 const UNPRICED_LINES_FIELD = 'confirmUnpricedLines';
+/** PR 10 review (QA D2703): the field the server refuses on while the lines at 0 F CFA have no reason. */
+const UNPRICED_REASON_FIELD = 'unpricedLinesReason';
+const UNPRICED_REASON_ID = 'bill-unpriced-reason';
 /** QA D2704: the field the server refuses a likely second payment on until the cashier confirms it. */
 const DUPLICATE_PAYMENT_FIELD = 'confirmDuplicate';
 
@@ -529,7 +532,14 @@ export class BillingComponent implements OnInit {
     );
   }
 
+  /**
+   * PR 10 review (QA D2703): the lines at 0 F CFA the server named when the invoice was issued. While set, the
+   * form shows them with a required reason; issuing then confirms them with that reason.
+   */
+  unpricedLines = signal<string | null>(null);
+
   openCreate(): void {
+    this.unpricedLines.set(null);
     this.form = this.emptyForm();
     // One key per form: a double click or a retry creates one invoice (QA D94).
     this.form.clientRequestId = crypto.randomUUID();
@@ -542,6 +552,7 @@ export class BillingComponent implements OnInit {
   }
 
   openEdit(inv: BillingInvoiceResponse): void {
+    this.unpricedLines.set(null);
     this.form = {
       patientId: inv.patientId ?? '',
       invoiceDate: inv.invoiceDate?.substring(0, 10) ?? '',
@@ -633,6 +644,16 @@ export class BillingComponent implements OnInit {
       this.toast.error(message);
       return;
     }
+    // PR 10 review (QA D2703): lines at 0 F CFA are issued only with the reason typed under their names.
+    if (this.unpricedLines() !== null) {
+      const reason = this.form.unpricedLinesReason?.trim() ?? '';
+      if (!reason) {
+        const message = this.translate.instant('BILLING.UNPRICED_LINES_REASON_REQUIRED');
+        refuseFields(this.host.nativeElement, [UNPRICED_REASON_ID], [UNPRICED_REASON_ID], message);
+        return;
+      }
+      this.form = { ...this.form, confirmUnpricedLines: true, unpricedLinesReason: reason };
+    }
     this.saving.set(true);
     const op = this.editing()
       ? this.billingService.updateInvoice(this.editingId()!, this.form)
@@ -650,7 +671,12 @@ export class BillingComponent implements OnInit {
             }),
           );
         }
-        this.form = { ...this.form, confirmUnpricedLines: undefined };
+        this.form = {
+          ...this.form,
+          confirmUnpricedLines: undefined,
+          unpricedLinesReason: undefined,
+        };
+        this.unpricedLines.set(null);
         this.closeModal();
         this.saving.set(false);
         this.loadInvoices(this.page());
@@ -658,15 +684,13 @@ export class BillingComponent implements OnInit {
       error: (err: HttpErrorResponse) => {
         this.saving.set(false);
         // QA D1467: the server names the lines at 0 F CFA; issued only on the clerk's word.
-        const unpriced = serverFieldErrors(err).get(UNPRICED_LINES_FIELD);
+        // PR 10 review (QA D2703): and that word is a reason, typed in the form under the lines named.
+        const refused = serverFieldErrors(err);
+        const unpriced = refused.get(UNPRICED_LINES_FIELD) ?? refused.get(UNPRICED_REASON_FIELD);
         if (unpriced) {
-          void this.confirmService
-            .ask({ titleKey: 'BILLING.UNPRICED_LINES_CONFIRM', message: unpriced })
-            .then((confirmed) => {
-              if (!confirmed) return;
-              this.form = { ...this.form, confirmUnpricedLines: true };
-              this.submitForm();
-            });
+          this.unpricedLines.set(unpriced);
+          this.form = { ...this.form, confirmUnpricedLines: undefined };
+          focusWhenRendered(this.host.nativeElement, `#${UNPRICED_REASON_ID}`);
           return;
         }
         // QA D529: the stay already has an invoice. Billed twice only on purpose.
@@ -904,7 +928,16 @@ export class BillingComponent implements OnInit {
     });
   }
 
+  /** PR 10 review (QA D2703): why a line is typed by hand on a visit's invoice. */
+  newItemReason = signal('');
+
+  /** A visit's invoice: the checkout prices its charges, so a line added by hand says why. */
+  addedLineNeedsReason(inv: BillingInvoiceResponse | null): boolean {
+    return !!inv?.encounterCode;
+  }
+
   private resetNewItem(): void {
+    this.newItemReason.set('');
     this.newItemDescription.set('');
     this.newItemCategory.set('SERVICE');
     this.newItemQuantity.set(1);
@@ -939,8 +972,20 @@ export class BillingComponent implements OnInit {
         message: this.translate.instant(cfaAmountMessageKey(priceProblem, LINE_PRICE_REQUIRED_KEY)),
       });
     }
+    const reason = this.newItemReason().trim();
+    if (this.addedLineNeedsReason(inv) && !reason) {
+      refusals.push({
+        id: 'line-reason',
+        message: this.translate.instant('BILLING.ADDED_LINE_REASON_REQUIRED'),
+      });
+    }
     if (refusals.length > 0) {
-      refuseFields(this.host.nativeElement, refusals, ['line-desc', 'line-qty', 'line-price']);
+      refuseFields(this.host.nativeElement, refusals, [
+        'line-desc',
+        'line-qty',
+        'line-price',
+        'line-reason',
+      ]);
       return;
     }
     this.itemSaving.set(true);
@@ -951,6 +996,7 @@ export class BillingComponent implements OnInit {
         itemCategory: this.newItemCategory(),
         quantity: this.newItemQuantity() ?? 1,
         unitPrice: this.newItemUnitPrice() ?? 0,
+        ...(reason ? { overrideReason: reason } : {}),
       })
       .subscribe({
         next: () => {
@@ -1092,7 +1138,11 @@ export class BillingComponent implements OnInit {
       });
   }
 
-  /* Review #1197 M2: a price-list line is removed only with a reason, asked in place. */
+  /*
+   * Review #1197 M2: a price-list line is removed only with a reason, asked in place.
+   * PR 10 review (QA D2703): every line is: an unpriced charge removed, then typed again at
+   * another price, left no trace. The reason is kept and the day report lists the removal.
+   */
   removingLineId = signal<string | null>(null);
   removeLineReason = signal('');
 
@@ -1101,21 +1151,12 @@ export class BillingComponent implements OnInit {
     this.removeLineReason.set('');
   }
 
-  async removeItem(item: InvoiceItemResponse): Promise<void> {
+  removeItem(item: InvoiceItemResponse): void {
     const inv = this.selectedInvoice();
     if (!inv || this.itemSaving()) return;
-    if (this.isTariffLine(item)) {
-      this.removingLineId.set(item.id);
-      this.removeLineReason.set('');
-      return;
-    }
-    // QA D147: a line deletion is not silent. QA D1229: asked in the app.
-    const confirmed = await this.confirmService.ask({
-      titleKey: 'BILLING.ITEM_REMOVE_CONFIRM',
-      confirmKey: 'COMMON.DELETE',
-    });
-    if (!confirmed || this.itemSaving()) return;
-    this.deleteLine(item);
+    // QA D147: a line deletion is not silent: its reason is asked in the line's own row.
+    this.removingLineId.set(item.id);
+    this.removeLineReason.set('');
   }
 
   /** Deletes a price-list line with the reason typed in its row. */
@@ -1127,7 +1168,11 @@ export class BillingComponent implements OnInit {
         [
           {
             id: 'line-remove-reason',
-            message: this.translate.instant('BILLING.REMOVE_REASON_REQUIRED'),
+            message: this.translate.instant(
+              this.isTariffLine(item)
+                ? 'BILLING.REMOVE_REASON_REQUIRED'
+                : 'BILLING.LINE_REMOVE_REASON_REQUIRED',
+            ),
           },
         ],
         ['line-remove-reason'],

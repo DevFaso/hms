@@ -12,7 +12,11 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
-import { CashSession, CashSessionService } from '../../services/cash-session.service';
+import {
+  CashSession,
+  CashSessionService,
+  RemovedInvoiceLine,
+} from '../../services/cash-session.service';
 import { CfaPipe } from '../../shared/pipes/cfa.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
@@ -66,6 +70,8 @@ export class CashSupervisorComponent {
   readonly operatorLabelKey = mobileMoneyOperatorLabelKey;
   readonly date = signal(cashDay());
   readonly sessions = signal<CashSession[]>([]);
+  /** PR 10 review (QA D2703): the lines taken off draft invoices that day, each with its reason. */
+  readonly removed = signal<RemovedInvoiceLine[]>([]);
   readonly loading = signal(false);
   readonly failed = signal(false);
   readonly expanded = signal<string | null>(null);
@@ -191,6 +197,17 @@ export class CashSupervisorComponent {
           this.sessions.set([]);
           this.failed.set(true);
           this.loading.set(false);
+        },
+      });
+    this.api
+      .removedLines(this.date())
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (rows) => {
+          if (seq === this.request) this.removed.set(rows ?? []);
+        },
+        error: () => {
+          if (seq === this.request) this.removed.set([]);
         },
       });
   }
