@@ -15297,7 +15297,7 @@
     },
     "RELEASE": {
       "TITLE": "Results hidden from the family (patient under 18)",
-      "HINT": "These sensitive results are not shown to the parents in their family access. A doctor or a midwife who has care of this patient can release a result to a verified parent or guardian, with a reason; the release is audited. A minor’s HIV result is never blocked for good: the parents have a right to it (Loi 030-2008, articles 17 and 18).",
+      "HINT": "These sensitive results are not shown to the parents in their family access. A doctor or a midwife who has care of this patient can release an HIV result to a verified parent or guardian, with a reason; the release is audited. A minor’s HIV result is never blocked for good: the parents have a right to it (Loi 030-2008, articles 17 and 18). Only HIV can be released: a result linked to violence never is, and the other categories are not for now.",
       "PROVISIONAL": "Provisional rule, awaiting a jurist’s opinion. From age {{age}}, the other sensitive categories are hidden from the parents too (provisional age, set by the hospital).",
       "GUARDIANS": "Parents and guardians with family access",
       "UNNAMED": "No name on file",
@@ -15324,11 +15324,12 @@
       "RELEASED_TOAST": "Result released to the parent.",
       "RELEASE_FAILED": "Could not release the result.",
       "REASON_TOO_SHORT": "The reason needs at least {{min}} characters.",
-      "ATTEST_REQUIRED": "Confirm that you verified this person’s relationship to the patient."
+      "ATTEST_REQUIRED": "Confirm that you verified this person’s relationship to the patient.",
+      "NOT_RELEASABLE": "Cannot be released to the family (only an HIV result can)."
     },
     "AGE": {
       "TITLE": "Adolescent confidentiality",
-      "HINT": "From this age to 17, a minor’s sensitive records (STIs, hepatitis, pregnancy, contraception, mental health, substance use, genetic tests) are hidden from the parents in their family access, unless a clinician releases them. Below it, a verified parent or guardian sees them. HIV and violence stay hidden at every age.",
+      "HINT": "From this age to 17, a minor’s sensitive records (STIs, hepatitis, pregnancy, contraception, mental health, substance use, genetic tests) are hidden from the parents in their family access. Below it, a verified parent or guardian sees them. HIV stays hidden at every age, unless a clinician releases a result; violence always stays hidden.",
       "PROVISIONAL": "Provisional rule: the age of {{age}} is borrowed from international practice. Burkina Faso sets no statutory age; a jurist must confirm it.",
       "LABEL": "Age from which sensitive records are hidden from the parents",
       "RESET": "Back to {{age}}",

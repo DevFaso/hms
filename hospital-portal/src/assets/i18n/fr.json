@@ -15297,7 +15297,7 @@
     },
     "RELEASE": {
       "TITLE": "Résultats masqués à la famille (patient mineur)",
-      "HINT": "Ces résultats sensibles ne sont pas montrés aux parents dans leur accès famille. Un médecin ou une sage-femme qui prend en charge ce patient peut communiquer un résultat à un parent ou un tuteur vérifié, avec un motif ; la communication est tracée. Le résultat VIH d’un mineur n’est jamais bloqué définitivement : les parents y ont droit (loi 030-2008, articles 17 et 18).",
+      "HINT": "Ces résultats sensibles ne sont pas montrés aux parents dans leur accès famille. Un médecin ou une sage-femme qui prend en charge ce patient peut communiquer un résultat VIH à un parent ou un tuteur vérifié, avec un motif ; la communication est tracée. Le résultat VIH d’un mineur n’est jamais bloqué définitivement : les parents y ont droit (loi 030-2008, articles 17 et 18). Seul le VIH peut être communiqué : un résultat lié à des violences ne l’est jamais, les autres catégories ne le sont pas pour l’instant.",
       "PROVISIONAL": "Règle provisoire, en attente de l’avis d’un juriste. À partir de {{age}} ans, les autres catégories sensibles sont aussi masquées aux parents (âge provisoire, réglable par l’établissement).",
       "GUARDIANS": "Parents et tuteurs disposant d’un accès famille",
       "UNNAMED": "Nom non renseigné",
@@ -15324,11 +15324,12 @@
       "RELEASED_TOAST": "Résultat communiqué au parent.",
       "RELEASE_FAILED": "Impossible de communiquer le résultat.",
       "REASON_TOO_SHORT": "Le motif doit compter au moins {{min}} caractères.",
-      "ATTEST_REQUIRED": "Confirmez que vous avez vérifié le lien de parenté de cette personne."
+      "ATTEST_REQUIRED": "Confirmez que vous avez vérifié le lien de parenté de cette personne.",
+      "NOT_RELEASABLE": "Non communicable à la famille (seul un résultat VIH peut l’être)."
     },
     "AGE": {
       "TITLE": "Confidentialité des adolescents",
-      "HINT": "À partir de cet âge et jusqu’à 17 ans, les dossiers sensibles d’un mineur (IST, hépatites, grossesse, contraception, santé mentale, addictologie, tests génétiques) sont masqués aux parents dans leur accès famille, sauf communication par un clinicien. En dessous, un parent ou tuteur vérifié les voit. Le VIH et les violences restent masqués à tout âge.",
+      "HINT": "À partir de cet âge et jusqu’à 17 ans, les dossiers sensibles d’un mineur (IST, hépatites, grossesse, contraception, santé mentale, addictologie, tests génétiques) sont masqués aux parents dans leur accès famille. En dessous, un parent ou tuteur vérifié les voit. Le VIH reste masqué à tout âge, sauf communication d’un résultat par un clinicien ; les violences restent toujours masquées.",
       "PROVISIONAL": "Règle provisoire : l’âge de {{age}} ans est emprunté à la pratique internationale. Le Burkina Faso ne fixe pas d’âge légal ; un juriste doit le confirmer.",
       "LABEL": "Âge à partir duquel les dossiers sensibles sont masqués aux parents",
       "RESET": "Revenir à {{age}} ans",

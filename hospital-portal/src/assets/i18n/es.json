@@ -15297,7 +15297,7 @@
     },
     "RELEASE": {
       "TITLE": "Resultados ocultos a la familia (paciente menor de edad)",
-      "HINT": "Estos resultados sensibles no se muestran a los padres en su acceso familiar. Un médico o una matrona que atiende a este paciente puede comunicar un resultado a un progenitor o tutor verificado, con un motivo; la comunicación queda auditada. El resultado de VIH de un menor nunca se bloquea de forma definitiva: los padres tienen derecho a él (ley 030-2008, artículos 17 y 18).",
+      "HINT": "Estos resultados sensibles no se muestran a los padres en su acceso familiar. Un médico o una matrona que atiende a este paciente puede comunicar un resultado de VIH a un progenitor o tutor verificado, con un motivo; la comunicación queda auditada. El resultado de VIH de un menor nunca se bloquea de forma definitiva: los padres tienen derecho a él (ley 030-2008, artículos 17 y 18). Solo el VIH puede comunicarse: un resultado vinculado a violencia nunca, y las demás categorías no por ahora.",
       "PROVISIONAL": "Regla provisional, pendiente del dictamen de un jurista. A partir de los {{age}} años, las demás categorías sensibles también se ocultan a los padres (edad provisional, ajustable por el establecimiento).",
       "GUARDIANS": "Padres y tutores con acceso familiar",
       "UNNAMED": "Nombre no registrado",
@@ -15324,11 +15324,12 @@
       "RELEASED_TOAST": "Resultado comunicado al progenitor.",
       "RELEASE_FAILED": "No se pudo comunicar el resultado.",
       "REASON_TOO_SHORT": "El motivo debe tener al menos {{min}} caracteres.",
-      "ATTEST_REQUIRED": "Confirme que ha verificado el vínculo de esta persona con el paciente."
+      "ATTEST_REQUIRED": "Confirme que ha verificado el vínculo de esta persona con el paciente.",
+      "NOT_RELEASABLE": "No puede comunicarse a la familia (solo un resultado de VIH puede)."
     },
     "AGE": {
       "TITLE": "Confidencialidad de los adolescentes",
-      "HINT": "Desde esta edad y hasta los 17 años, los registros sensibles de un menor (ITS, hepatitis, embarazo, anticoncepción, salud mental, adicciones, pruebas genéticas) se ocultan a los padres en su acceso familiar, salvo que un clínico los comunique. Por debajo, un progenitor o tutor verificado los ve. El VIH y la violencia permanecen ocultos a cualquier edad.",
+      "HINT": "Desde esta edad y hasta los 17 años, los registros sensibles de un menor (ITS, hepatitis, embarazo, anticoncepción, salud mental, adicciones, pruebas genéticas) se ocultan a los padres en su acceso familiar. Por debajo, un progenitor o tutor verificado los ve. El VIH permanece oculto a cualquier edad, salvo que un clínico comunique un resultado; la violencia permanece siempre oculta.",
       "PROVISIONAL": "Regla provisional: la edad de {{age}} años se toma de la práctica internacional. Burkina Faso no fija una edad legal; un jurista debe confirmarla.",
       "LABEL": "Edad a partir de la cual los registros sensibles se ocultan a los padres",
       "RESET": "Volver a {{age}} años",

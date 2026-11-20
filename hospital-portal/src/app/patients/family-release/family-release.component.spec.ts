@@ -2,6 +2,7 @@ import { Component, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { By } from '@angular/platform-browser';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { ToastService } from '../../core/toast.service';
@@ -55,6 +56,7 @@ function overview(overrides: Partial<FamilyReleaseOverview> = {}): FamilyRelease
         testName: 'Sérologie VIH 1 et 2 (test rapide Determine, confirmation)',
         category: 'HIV',
         resultedAt: '2026-11-19T10:30:00',
+        releasable: true,
         releases: [],
       },
     ],
@@ -281,6 +283,48 @@ describe('FamilyReleaseComponent (policy 2026-11-20)', () => {
     expectFieldsMarked(fixture, {
       'family-release-reason': 'Indiquez le motif de la communication de ce résultat.',
     });
+  });
+
+  it('only an HIV result offers the release: a hidden hepatitis, or a result linked to violence, says it cannot be released', () => {
+    load(
+      overview({
+        results: [
+          overview().results[0],
+          {
+            labOrderId: 'o-hbs',
+            testName: 'Antigène HBs',
+            category: 'VIRAL_HEPATITIS',
+            resultedAt: '2026-11-19T11:00:00',
+            releasable: false,
+            releases: [],
+          },
+          {
+            labOrderId: 'o-assault',
+            testName: 'Sérologie VIH (après agression)',
+            category: 'HIV',
+            resultedAt: '2026-11-19T12:00:00',
+            releasable: false,
+            releases: [],
+          },
+        ],
+      }),
+    );
+
+    expect(q('result-release-o-hiv')).not.toBeNull();
+    expect(q('result-release-o-hbs')).toBeNull();
+    expect(q('result-release-o-assault')).toBeNull();
+    const notes = host.querySelectorAll('[data-testid="result-not-releasable"]');
+    expect(notes.length).toBe(2);
+    expect(notes[0].textContent).toContain('seul un résultat VIH');
+    expect(q('family-release')!.textContent).toContain('Seul le VIH peut être communiqué');
+
+    // Not even by calling the component: the form does not open for it.
+    const assault = fixture.debugElement.query(By.directive(FamilyReleaseComponent))
+      .componentInstance as FamilyReleaseComponent;
+    assault.startRelease(assault.overview()!.results[2]);
+    fixture.detectChanges();
+    expect(q('family-release-form')).toBeNull();
+    httpMock.expectNone(`${URL}/lab-orders/o-assault`);
   });
 
   it('records that a parent’s relationship was verified', () => {

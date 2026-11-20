@@ -93,7 +93,14 @@
                   }
                 }
               </span>
-              @if (remaining(result).length && releasing()?.labOrderId !== result.labOrderId) {
+              @if (!result.releasable) {
+                <!-- Owner decision 2026-11-21: only an HIV result is released; the server refuses the rest. -->
+                <span class="family-release__note" data-testid="result-not-releasable">
+                  {{ 'SENSITIVE_POLICY.RELEASE.NOT_RELEASABLE' | translate }}
+                </span>
+              } @else if (
+                remaining(result).length && releasing()?.labOrderId !== result.labOrderId
+              ) {
                 <button
                   type="button"
                   class="family-release__btn"

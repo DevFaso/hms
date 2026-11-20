@@ -140,6 +140,8 @@ export class FamilyReleaseComponent {
   }
 
   startRelease(result: FamilyHiddenResult): void {
+    // HIV only (owner decision 2026-11-21): nothing else opens the form; the server refuses it too.
+    if (!result.releasable) return;
     const candidates = this.remaining(result);
     this.releasing.set(result);
     this.grantId.set(candidates.length === 1 ? candidates[0].grantId : '');

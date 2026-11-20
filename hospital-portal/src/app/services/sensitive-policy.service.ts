@@ -53,6 +53,8 @@ export interface FamilyHiddenResult {
   testName: string | null;
   category: SensitivityCategory;
   resultedAt: string | null;
+  /** A clinician may release it: an HIV result only, never one that violence is on. */
+  releasable: boolean;
   releases: FamilyReleaseRecord[];
 }
 
