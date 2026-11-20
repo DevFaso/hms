@@ -644,6 +644,27 @@ select:focus-visible {
   margin-bottom: 0.25rem;
 }
 
+/* QA D2551: the addendum's attestation box and what it means for the patient. */
+.addendum-attest {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+  input {
+    margin-top: 0.2rem;
+    flex: 0 0 auto;
+  }
+}
+
+.addendum-attest-hint {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.8rem;
+  color: #475569;
+  overflow-wrap: anywhere;
+}
+
 .note-input {
   width: 100%;
   padding: 0.75rem;

@@ -642,6 +642,7 @@ describe('EncountersComponent', () => {
     encounterSpy.addAddendum.and.returnValue(of({ id: 'a1' } as EncounterNoteAddendumResponse));
     component.selectedEncounter.set(mockEncounter());
     component.addendumContent = ' late note ';
+    component.addendumAttest.set(true);
     component.addAddendum();
     const [id, payload] = encounterSpy.addAddendum.calls.mostRecent().args;
     expect(id).toBe('e1');
@@ -649,6 +650,16 @@ describe('EncountersComponent', () => {
     expect(payload.attestAccuracy).toBeTrue();
     expect(component.addendumContent).toBe('');
     expect(encounterSpy.getNoteHistory).toHaveBeenCalledWith('e1');
+  });
+
+  it('QA D2551: the addendum is attested only when the author ticks the box (unticked by default)', () => {
+    encounterSpy.addAddendum.and.returnValue(of({ id: 'a1' } as EncounterNoteAddendumResponse));
+    component.selectedEncounter.set(mockEncounter());
+    component.openAddendumForm(null);
+    expect(component.addendumAttest()).toBeFalse();
+    component.addendumContent = 'Brouillon interne';
+    component.addAddendum();
+    expect(encounterSpy.addAddendum.calls.mostRecent().args[1].attestAccuracy).toBeFalse();
   });
 
   it('QA D2260: a saved addendum shows under the signed note at once, and the note renders it', () => {
@@ -872,6 +883,28 @@ describe('EncountersComponent', () => {
     page.addAddendum();
 
     expect(encounterSpy.addAddendum.calls.mostRecent().args[2]).toBe('note-b');
+  });
+
+  it('QA D2551: the addendum form has an unticked attestation box saying it reaches the patient', () => {
+    encounterSpy.addAddendum.and.returnValue(of({ id: 'a1' } as EncounterNoteAddendumResponse));
+    const fixture = TestBed.createComponent(EncountersComponent);
+    const page = fixture.componentInstance;
+    page.selectEncounter(mockEncounter({ note: entryB, noteEntries: [draftA, entryB] }));
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    host.querySelector<HTMLButtonElement>('[data-testid="addendum-current-entry"]')!.click();
+    fixture.detectChanges();
+
+    const box = host.querySelector<HTMLInputElement>('[data-testid="addendum-attest"]')!;
+    expect(box).not.toBeNull();
+    expect(box.checked).toBeFalse();
+    expect(host.querySelector('[data-testid="addendum-attest-hint"]')).not.toBeNull();
+    box.checked = true;
+    box.dispatchEvent(new Event('change'));
+    page.addendumContent = 'Correction attestée';
+    page.addAddendum();
+
+    expect(encounterSpy.addAddendum.calls.mostRecent().args[1].attestAccuracy).toBeTrue();
   });
 
   it('QA D1131: the addendum takes focus, Escape closes only it and never drops typed text unasked', fakeAsync(() => {

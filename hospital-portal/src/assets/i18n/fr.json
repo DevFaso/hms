@@ -3882,7 +3882,9 @@
     "MATCHING_COUNT": "Consultations correspondantes : {{count}}",
     "CURRENT_NOTE": "Note clinique actuelle",
     "NOTE_STATUS_SIGNED": "Note signée",
-    "NOTE_STATUS_UNSIGNED": "Note non signée"
+    "NOTE_STATUS_UNSIGNED": "Note non signée",
+    "ADDENDUM_ATTEST": "J'atteste que cet addendum est exact à ma connaissance.",
+    "ADDENDUM_ATTEST_HINT": "Un addendum attesté est signé et devient visible par le patient dans son résumé de visite. Laissez la case décochée pour un addendum interne, visible par l'équipe soignante seulement."
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmer le mot de passe",

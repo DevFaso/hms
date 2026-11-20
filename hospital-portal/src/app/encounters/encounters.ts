@@ -309,6 +309,11 @@ export class EncountersComponent implements OnInit {
   addendumContent = '';
   showAddendumForm = signal(false);
   addendumSaving = signal(false);
+  /**
+   * QA D2551 (r65): the author's accuracy attestation, unticked by default. An attested addendum is
+   * signed and reaches the patient's copy; an unticked one stays internal ("non attesté").
+   */
+  readonly addendumAttest = signal(false);
   /** QA D1131: Escape was pressed over typed addendum text; the form asks before discarding it. */
   readonly addendumDiscardAsk = signal(false);
   private readonly hostEl = inject(ElementRef);
@@ -1062,6 +1067,7 @@ export class EncountersComponent implements OnInit {
   openAddendumForm(entryId: string | null | undefined): void {
     this.addendumTargetId.set(entryId ?? null);
     this.addendumContent = '';
+    this.addendumAttest.set(false);
     this.addendumDiscardAsk.set(false);
     this.showAddendumForm.set(true);
     // QA D1131: the keyboard lands in the box, not on the page body.
@@ -1077,6 +1083,7 @@ export class EncountersComponent implements OnInit {
     this.showAddendumForm.set(false);
     this.addendumTargetId.set(null);
     this.addendumContent = '';
+    this.addendumAttest.set(false);
     this.addendumDiscardAsk.set(false);
     if (returnFocus && opener) {
       this.focusSoon(`[data-addendum-for="${CSS.escape(opener)}"]`);
@@ -1120,7 +1127,12 @@ export class EncountersComponent implements OnInit {
     const noteId = this.addendumTargetId() ?? this.noteState()?.id ?? undefined;
     this.addendumSaving.set(true);
     this.encounterService
-      .addAddendum(enc.id, { content: this.addendumContent.trim(), attestAccuracy: true }, noteId)
+      // QA D2551: the box's actual value, never a hard-coded attestation.
+      .addAddendum(
+        enc.id,
+        { content: this.addendumContent.trim(), attestAccuracy: this.addendumAttest() },
+        noteId,
+      )
       .subscribe({
         next: (addendum) => {
           this.toast.success(this.translate.instant('ENCOUNTERS.ADDENDUM_RECORDED'));

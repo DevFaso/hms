@@ -3882,7 +3882,9 @@
     "MATCHING_COUNT": "Consultas coincidentes: {{count}}",
     "CURRENT_NOTE": "Nota clínica actual",
     "NOTE_STATUS_SIGNED": "Nota firmada",
-    "NOTE_STATUS_UNSIGNED": "Nota sin firmar"
+    "NOTE_STATUS_UNSIGNED": "Nota sin firmar",
+    "ADDENDUM_ATTEST": "I attest this addendum is accurate to the best of my knowledge.",
+    "ADDENDUM_ATTEST_HINT": "An attested addendum is signed and becomes visible to the patient in their visit summary. Leave it unticked for an internal addendum the care team only sees."
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmar contraseña",

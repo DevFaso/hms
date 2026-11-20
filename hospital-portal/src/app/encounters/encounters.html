@@ -515,6 +515,25 @@
                 rows="3"
                 [placeholder]="'ENCOUNTERS.ADDENDUM_PLACEHOLDER' | translate"
               ></textarea>
+              <!-- QA D2551: the author attests (unticked by default); an attested addendum reaches the patient. -->
+              <label class="addendum-attest" for="addendum-attest">
+                <input
+                  id="addendum-attest"
+                  type="checkbox"
+                  data-testid="addendum-attest"
+                  aria-describedby="addendum-attest-hint"
+                  [checked]="addendumAttest()"
+                  (change)="addendumAttest.set($any($event.target).checked)"
+                />
+                <span>{{ 'ENCOUNTERS.ADDENDUM_ATTEST' | translate }}</span>
+              </label>
+              <p
+                id="addendum-attest-hint"
+                class="addendum-attest-hint"
+                data-testid="addendum-attest-hint"
+              >
+                {{ 'ENCOUNTERS.ADDENDUM_ATTEST_HINT' | translate }}
+              </p>
               <div class="note-actions">
                 <button
                   class="btn-primary"
