@@ -708,6 +708,15 @@
                   >{{ 'PATIENTS.BY' | translate }} {{ v.recordedByName || '—' }}</span
                 >
               </div>
+              <!-- Review of #1237: in pregnancy, after a birth and for a newborn, no reassuring score. -->
+              @if (v.newsNotValidated) {
+                <div class="news-chip news-not-validated" data-testid="news-not-validated">
+                  <span class="news-label">NEWS2</span>
+                  <span class="news-band">{{
+                    'PATIENTS.NEWS_NOT_VALIDATED_' + v.newsNotValidated | translate
+                  }}</span>
+                </div>
+              }
               @if (v.newsScore !== null && v.newsRiskBand) {
                 <div
                   class="news-chip"

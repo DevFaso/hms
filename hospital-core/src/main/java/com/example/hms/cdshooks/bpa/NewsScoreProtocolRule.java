@@ -7,6 +7,7 @@ import com.example.hms.cdshooks.dto.CdsHookDtos.Source;
 import com.example.hms.model.BpaProtocol;
 import com.example.hms.model.PatientVitalSign;
 import com.example.hms.repository.BpaProtocolRepository;
+import com.example.hms.service.vitals.News2Applicability;
 import com.example.hms.utility.NewsScoreCalculator;
 import com.example.hms.utility.NewsScoreCalculator.NewsScoreResult;
 import org.springframework.stereotype.Service;
@@ -77,17 +78,54 @@ public class NewsScoreProtocolRule implements BpaRule {
         // context's patient only - the bundle's own patient is a LAZY proxy
         // (the same patient: vitals are loaded by patient id) that cannot be
         // read outside a session, and reading it dropped every NEWS2 card.
+        NewsScoreResult score = NewsScoreCalculator.score(latest.get());
+        // Review of #1237 (High): in pregnancy, after a birth and for a newborn NEWS2 is not validated. The card
+        // never shows a (possibly reassuring) score; it says so and points to the maternity alerts. A raised
+        // band still makes it a warning: the trigger stays as a safety net.
+        News2Applicability.Status status = applicability == null ? News2Applicability.Status.APPLIES
+            : applicability.statusOf(context.patient(), context.hospitalId(), latest.get().getRecordedAt());
+        if (status.notValidated()) {
+            Optional<BpaProtocol> protocol = protocolRepository.findByProtocolCodeAndActiveTrue(PROTOCOL_CODE);
+            return protocol.isEmpty() ? List.of() : List.of(notValidatedCard(protocol.get(), status,
+                // The adult bands mean nothing for a newborn (her own rules alert): never a warning from them.
+                status == News2Applicability.Status.OBSTETRIC && score.riskBand() != NewsScoreCalculator.RiskBand.LOW));
+        }
         if (!NewsScoreCalculator.appliesTo(context.patient())) {
             return List.of();
         }
-
-        NewsScoreResult score = NewsScoreCalculator.score(latest.get());
         if (score.riskBand() == NewsScoreCalculator.RiskBand.LOW) return List.of();
 
         Optional<BpaProtocol> protocol = protocolRepository.findByProtocolCodeAndActiveTrue(PROTOCOL_CODE);
         if (protocol.isEmpty()) return List.of();
 
         return List.of(buildCard(protocol.get(), score, latest.get(), text.zoneOf(context.hospitalId())));
+    }
+
+    /** Review of #1237: the one NEWS2 applicability rule (setter-injected; absent, the card is as before). */
+    private News2Applicability applicability;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setApplicability(News2Applicability applicability) {
+        this.applicability = applicability;
+    }
+
+    /** « NEWS2 non validé … — voir les alertes maternité », with no score. */
+    private CdsCard notValidatedCard(BpaProtocol protocol, News2Applicability.Status status, boolean raised) {
+        String key = status == News2Applicability.Status.NEWBORN
+            ? "cds.bpa.news2.notValidated.newborn" : "cds.bpa.news2.notValidated.obstetric";
+        String fallback = status == News2Applicability.Status.NEWBORN
+            ? "NEWS2 not validated for a newborn: see the newborn alerts"
+            : "NEWS2 not validated in pregnancy / postpartum: see the maternity alerts";
+        return new CdsCard(
+            BpaCardText.name(text, protocol),
+            text.get(key, fallback),
+            raised ? CdsCard.Indicator.WARNING : CdsCard.Indicator.INFO,
+            new Source(text.get("cds.bpa.source", "HMS Best-Practice Advisory"), null, null),
+            null,
+            null,
+            null,
+            null
+        );
     }
 
     /** Most recent non-home bundle inside the lookback (vitals arrive DESC). */

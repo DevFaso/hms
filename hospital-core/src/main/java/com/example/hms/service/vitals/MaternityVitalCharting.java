@@ -16,6 +16,14 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import com.example.hms.enums.LaborAlertSeverity;
+import com.example.hms.enums.NewbornAlertSeverity;
+import com.example.hms.enums.NewbornAlertType;
+import com.example.hms.enums.PostpartumAlertSeverity;
+import com.example.hms.model.labor.LaborAlert;
+import com.example.hms.model.neonatal.NewbornAssessmentAlert;
+import com.example.hms.model.postpartum.PostpartumObservationAlert;
 
 /**
  * QA D2580 (r65): the readings a maternity screen records are charted where the chart reads.
@@ -59,12 +67,21 @@ public class MaternityVitalCharting {
         vital.setSystolicBpMmHg(entry.getSystolicBpMmHg());
         vital.setDiastolicBpMmHg(entry.getDiastolicBpMmHg());
         vital.setTemperatureCelsius(entry.getTemperatureCelsius());
-        return save(vital, entry.getAlerts() != null && !entry.getAlerts().isEmpty());
+        List<LaborAlert> alerts = entry.getAlerts() == null ? List.of() : entry.getAlerts();
+        return save(vital,
+            alerts.stream().anyMatch(a -> a.getSeverity() == LaborAlertSeverity.CAUTION
+                || a.getSeverity() == LaborAlertSeverity.URGENT),
+            alerts.stream().anyMatch(a -> a.getSeverity() == LaborAlertSeverity.URGENT));
     }
 
     /** The mother's postpartum vital signs. */
     @Transactional(propagation = Propagation.MANDATORY)
     public PatientVitalSign chartPostpartumObservation(PostpartumObservation observation) {
+        // Review of #1237: a correction replaces the observation it supersedes, so the earlier reading's charted
+        // row goes (the observation itself keeps its history in its own table).
+        if (observation != null && observation.getSupersedesObservation() != null) {
+            removeCharted(observation.getSupersedesObservation());
+        }
         if (observation == null || observation.getPatient() == null || !anyValue(observation.getTemperatureCelsius(),
             observation.getSystolicBpMmHg(), observation.getDiastolicBpMmHg(), observation.getPulseBpm(),
             observation.getRespirationsPerMin(), observation.getPainScore())) {
@@ -78,7 +95,11 @@ public class MaternityVitalCharting {
         vital.setHeartRateBpm(observation.getPulseBpm());
         vital.setRespiratoryRateBpm(observation.getRespirationsPerMin());
         vital.setPainScore(observation.getPainScore());
-        return save(vital, observation.getAlerts() != null && !observation.getAlerts().isEmpty());
+        List<PostpartumObservationAlert> alerts = observation.getAlerts() == null ? List.of() : observation.getAlerts();
+        return save(vital,
+            alerts.stream().anyMatch(a -> a.getSeverity() == PostpartumAlertSeverity.CAUTION
+                || a.getSeverity() == PostpartumAlertSeverity.URGENT),
+            alerts.stream().anyMatch(a -> a.getSeverity() == PostpartumAlertSeverity.URGENT));
     }
 
     /**
@@ -103,7 +124,13 @@ public class MaternityVitalCharting {
         vital.setDiastolicBpMmHg(assessment.getDiastolicBpMmHg());
         vital.setSpo2Percent(assessment.getOxygenSaturationPercent());
         vital.setBloodGlucoseMgDl(assessment.getGlucoseMgDl());
-        return save(vital, !assessment.getAlerts().isEmpty());
+        // An Apgar notice is about the birth, not this reading: it neither flags nor covers the row.
+        List<NewbornAssessmentAlert> alerts = assessment.getAlerts().stream()
+            .filter(a -> a.getType() != NewbornAlertType.APGAR).toList();
+        return save(vital,
+            alerts.stream().anyMatch(a -> a.getSeverity() == NewbornAlertSeverity.CAUTION
+                || a.getSeverity() == NewbornAlertSeverity.URGENT),
+            alerts.stream().anyMatch(a -> a.getSeverity() == NewbornAlertSeverity.URGENT));
     }
 
     private PatientVitalSign base(Patient patient, Hospital hospital, PatientHospitalRegistration registration,
@@ -124,7 +151,26 @@ public class MaternityVitalCharting {
             .build();
     }
 
-    private PatientVitalSign save(PatientVitalSign vital, boolean alerted) {
+    /** The charted row of an observation a correction superseded, if it was charted. */
+    private void removeCharted(PostpartumObservation superseded) {
+        if (superseded.getPatient() == null || superseded.getHospital() == null
+            || superseded.getObservationTime() == null) {
+            return;
+        }
+        List<PatientVitalSign> rows = vitalSignRepository.findByPatient_IdAndHospital_IdAndSourceAndRecordedAt(
+            superseded.getPatient().getId(), superseded.getHospital().getId(), SOURCE_POSTPARTUM,
+            superseded.getObservationTime());
+        if (!rows.isEmpty()) {
+            vitalSignRepository.deleteAll(rows);
+        }
+    }
+
+    /**
+     * @param alerted a CAUTION or URGENT maternity alert was raised on this reading (an INFO notice is not)
+     * @param urgentAlerted an URGENT maternity alert was raised on it: the team was already paged for this
+     *                      reading, so NEWS2 does not page a second time (review of #1237)
+     */
+    private PatientVitalSign save(PatientVitalSign vital, boolean alerted, boolean urgentAlerted) {
         // QA D1077: the measure rules every vitals write holds (these rows carry no child-only measure).
         com.example.hms.service.support.PatientMeasureRules.requireVitalSignApplicable(
             vital, null, java.time.LocalDate.now(java.time.ZoneId.systemDefault()));
@@ -133,12 +179,13 @@ public class MaternityVitalCharting {
             vital.setClinicallySignificant(true);
         }
         PatientVitalSign saved = vitalSignRepository.save(vital);
-        // The NEWS2 escalation every vitals write has; no judgement is passed, so the severe-pressure
-        // and newborn notices are not sent a second time (the maternity service sent its own).
+        // The NEWS2 escalation every vitals write has (in labour the only page for a low pressure or a fast
+        // pulse), except when an URGENT maternity alert already paged for this reading. No judgement is
+        // passed, so the severe-pressure and newborn notices are not sent a second time.
         Staff staff = saved.getRecordedByStaff();
         String recorder = staff != null && staff.getUser() != null ? staff.getUser().getUsername() : null;
         vitalSignJudgement.escalate(saved, null, saved.getPatient().getId(),
-            saved.getHospital() != null ? saved.getHospital().getId() : null, recorder, null);
+            saved.getHospital() != null ? saved.getHospital().getId() : null, recorder, null, urgentAlerted);
         return saved;
     }
 

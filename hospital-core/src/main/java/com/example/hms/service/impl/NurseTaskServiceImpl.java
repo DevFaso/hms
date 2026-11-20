@@ -320,6 +320,14 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return tasks;
     }
 
+    /** Review of #1237: the one NEWS2 applicability rule (setter-injected; absent, the score is shown as before). */
+    private com.example.hms.service.vitals.News2Applicability news2Applicability;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setNews2Applicability(com.example.hms.service.vitals.News2Applicability news2Applicability) {
+        this.news2Applicability = news2Applicability;
+    }
+
     /** The vitals round of one admitted patient, or {@code null} when none falls in the window. */
     private NurseVitalTaskResponseDTO vitalTaskFor(PatientContext ctx, UUID hospitalId, LocalDateTime now,
                                                    Duration effectiveWindow, Optional<PatientVitalSign> last) {
@@ -327,6 +335,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         LocalDateTime dueTime;
         boolean overdue;
         NewsScoreCalculator.NewsScoreResult news = null;
+        NewsScoreCalculator.NewsScoreResult shownNews = null;
         if (last.isEmpty() || last.get().getRecordedAt() == null) {
             // No vitals ever recorded — overdue now
             dueTime = now.minusMinutes(30);
@@ -335,9 +344,18 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             // QA D207: the NEWS2 band of the last set shortens the interval.
             // QA D518: the adult score does not set a child's interval.
             news = NewsScoreCalculator.applies(last.get()) ? NewsScoreCalculator.score(last.get()) : null;
+            // observationInterval never returns more than the routine interval: a score only shortens a round.
             dueTime = last.get().getRecordedAt().plus(
                 com.example.hms.service.vitals.News2EscalationService.observationInterval(news, ROUTINE_VITALS_INTERVAL));
             overdue = dueTime.isBefore(now);
+            // Review of #1237 (High): NEWS2 is not validated in pregnancy, after a birth or for a newborn; it may
+            // still shorten her round (a safety net) but its number is never shown as reassurance.
+            if (news != null && news2Applicability != null && news2Applicability.statusOf(last.get().getPatient(),
+                    hospitalId, last.get().getRecordedAt()).notValidated()) {
+                shownNews = null;
+            } else {
+                shownNews = news;
+            }
         }
 
         // Only include if within the look-ahead or already overdue. The look-ahead
@@ -350,7 +368,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 .type(vitalsRoundType(news, overdue))
                 .dueTime(dueTime)
                 .overdue(overdue)
-                .news2Score(news != null ? news.total() : null)
+                .news2Score(shownNews != null ? shownNews.total() : null)
                 .build();
         }
         return null;

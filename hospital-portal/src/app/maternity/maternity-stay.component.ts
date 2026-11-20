@@ -45,106 +45,113 @@ export type MaternityStayKind = 'LABOR_DELIVERY' | 'NEWBORN';
   imports: [FormsModule, TranslateModule, RouterLink, EnumLabelPipe, SubmitGuardDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="maternity-stay" [attr.data-testid]="'maternity-stay-' + kind()">
-      @if (loading()) {
-        <p class="muted">{{ 'MATERNITY_STAY.LOADING' | translate }}</p>
-      } @else if (!stay()) {
-        <p class="maternity-stay__warn" data-testid="maternity-stay-none">
-          <strong>{{ patientName() }}</strong> — {{ 'MATERNITY_STAY.NOT_ADMITTED' | translate }}
-        </p>
-        @if (canAdmit()) {
-          <form class="maternity-stay__form" (ngSubmit)="admit()">
-            <label [for]="'stay-acuity-' + patientId()"
-              >{{ 'MATERNITY_STAY.ACUITY' | translate }} *</label
-            >
-            <select
-              [id]="'stay-acuity-' + patientId()"
-              name="acuity"
-              required
-              data-testid="maternity-stay-acuity"
-              [(ngModel)]="acuity"
-            >
-              <option value="">{{ 'MATERNITY_STAY.ACUITY_PICK' | translate }}</option>
-              @for (level of acuityLevels; track level) {
-                <option [value]="level">{{ level | enumLabel: 'acuityLevel' }}</option>
-              }
-            </select>
-            <button
-              type="submit"
-              class="btn-primary"
-              data-testid="maternity-stay-admit"
-              [disabled]="saving()"
-              appSubmitGuard
-              submitGuardRequired
-            >
-              {{
-                (kind() === 'NEWBORN'
-                  ? 'MATERNITY_STAY.ADMIT_NEWBORN'
-                  : 'MATERNITY_STAY.ADMIT_MOTHER'
-                ) | translate
-              }}
-            </button>
-          </form>
-        } @else {
-          <p class="muted" data-testid="maternity-stay-who-admits">
-            {{
-              (kind() === 'NEWBORN'
-                ? 'MATERNITY_STAY.NEWBORN_BY_DOCTOR'
-                : 'MATERNITY_STAY.BY_CLINICIAN'
-              ) | translate
-            }}
+    @if (!hidden()) {
+      <div class="maternity-stay" [attr.data-testid]="'maternity-stay-' + kind()">
+        @if (loading()) {
+          <p class="muted">{{ 'MATERNITY_STAY.LOADING' | translate }}</p>
+        } @else if (failed()) {
+          <!-- Review of #1237: an unknown stay is never shown as « non admis(e) ». -->
+          <p class="maternity-stay__warn" role="alert" data-testid="maternity-stay-failed">
+            <strong>{{ patientName() }}</strong> — {{ 'MATERNITY_STAY.LOAD_FAILED' | translate }}
           </p>
-        }
-      } @else if (stay(); as s) {
-        @if (s.roomBed) {
-          <p class="maternity-stay__ok" data-testid="maternity-stay-bed">
-            <strong>{{ patientName() }}</strong> —
-            {{ 'MATERNITY_STAY.IN_BED' | translate: { bed: s.roomBed } }}
+        } @else if (!stay()) {
+          <p class="maternity-stay__warn" data-testid="maternity-stay-none">
+            <strong>{{ patientName() }}</strong> — {{ 'MATERNITY_STAY.NOT_ADMITTED' | translate }}
           </p>
-        } @else {
-          <p class="maternity-stay__warn" data-testid="maternity-stay-no-bed">
-            <strong>{{ patientName() }}</strong> — {{ 'MATERNITY_STAY.NO_BED' | translate }}
-          </p>
-          @if (canAssignBed()) {
-            <form class="maternity-stay__form" (ngSubmit)="assignBed(s)">
-              <label [for]="'stay-bed-' + patientId()"
-                >{{ 'MATERNITY_STAY.BED' | translate }} *</label
+          @if (canAdmit()) {
+            <form class="maternity-stay__form" (ngSubmit)="admit()">
+              <label [for]="'stay-acuity-' + patientId()"
+                >{{ 'MATERNITY_STAY.ACUITY' | translate }} *</label
               >
               <select
-                [id]="'stay-bed-' + patientId()"
-                name="bed"
+                [id]="'stay-acuity-' + patientId()"
+                name="acuity"
                 required
-                data-testid="maternity-stay-bed-select"
-                [(ngModel)]="bedId"
+                data-testid="maternity-stay-acuity"
+                [(ngModel)]="acuity"
               >
-                <option value="">{{ 'MATERNITY_STAY.BED_PICK' | translate }}</option>
-                @for (bed of beds(); track bed.id) {
-                  <option [value]="bed.id">{{ bed.label }}</option>
+                <option value="">{{ 'MATERNITY_STAY.ACUITY_PICK' | translate }}</option>
+                @for (level of acuityLevels; track level) {
+                  <option [value]="level">{{ level | enumLabel: 'acuityLevel' }}</option>
                 }
               </select>
               <button
                 type="submit"
                 class="btn-primary"
-                data-testid="maternity-stay-assign"
+                data-testid="maternity-stay-admit"
                 [disabled]="saving()"
                 appSubmitGuard
                 submitGuardRequired
               >
-                {{ 'MATERNITY_STAY.ASSIGN_BED' | translate }}
+                {{
+                  (kind() === 'NEWBORN'
+                    ? 'MATERNITY_STAY.ADMIT_NEWBORN'
+                    : 'MATERNITY_STAY.ADMIT_MOTHER'
+                  ) | translate
+                }}
               </button>
             </form>
-            @if (!bedsLoading() && beds().length === 0) {
-              <p class="muted">{{ 'MATERNITY_STAY.NO_FREE_BED' | translate }}</p>
-            }
           } @else {
-            <p class="muted" data-testid="maternity-stay-who-assigns">
-              {{ 'MATERNITY_STAY.BED_BY_NURSE' | translate }}
-              <a routerLink="/admissions">{{ 'MATERNITY_STAY.OPEN_ADMISSIONS' | translate }}</a>
+            <p class="muted" data-testid="maternity-stay-who-admits">
+              {{
+                (kind() === 'NEWBORN'
+                  ? 'MATERNITY_STAY.NEWBORN_BY_DOCTOR'
+                  : 'MATERNITY_STAY.BY_CLINICIAN'
+                ) | translate
+              }}
             </p>
           }
+        } @else if (stay(); as s) {
+          @if (s.roomBed) {
+            <p class="maternity-stay__ok" data-testid="maternity-stay-bed">
+              <strong>{{ patientName() }}</strong> —
+              {{ 'MATERNITY_STAY.IN_BED' | translate: { bed: s.roomBed } }}
+            </p>
+          } @else {
+            <p class="maternity-stay__warn" data-testid="maternity-stay-no-bed">
+              <strong>{{ patientName() }}</strong> — {{ 'MATERNITY_STAY.NO_BED' | translate }}
+            </p>
+            @if (canAssignBed()) {
+              <form class="maternity-stay__form" (ngSubmit)="assignBed(s)">
+                <label [for]="'stay-bed-' + patientId()"
+                  >{{ 'MATERNITY_STAY.BED' | translate }} *</label
+                >
+                <select
+                  [id]="'stay-bed-' + patientId()"
+                  name="bed"
+                  required
+                  data-testid="maternity-stay-bed-select"
+                  [(ngModel)]="bedId"
+                >
+                  <option value="">{{ 'MATERNITY_STAY.BED_PICK' | translate }}</option>
+                  @for (bed of beds(); track bed.id) {
+                    <option [value]="bed.id">{{ bed.label }}</option>
+                  }
+                </select>
+                <button
+                  type="submit"
+                  class="btn-primary"
+                  data-testid="maternity-stay-assign"
+                  [disabled]="saving()"
+                  appSubmitGuard
+                  submitGuardRequired
+                >
+                  {{ 'MATERNITY_STAY.ASSIGN_BED' | translate }}
+                </button>
+              </form>
+              @if (!bedsLoading() && beds().length === 0) {
+                <p class="muted">{{ 'MATERNITY_STAY.NO_FREE_BED' | translate }}</p>
+              }
+            } @else {
+              <p class="muted" data-testid="maternity-stay-who-assigns">
+                {{ 'MATERNITY_STAY.BED_BY_NURSE' | translate }}
+                <a routerLink="/admissions">{{ 'MATERNITY_STAY.OPEN_ADMISSIONS' | translate }}</a>
+              </p>
+            }
+          }
         }
-      }
-    </div>
+      </div>
+    }
   `,
   styles: `
     .maternity-stay {
@@ -183,6 +190,13 @@ export class MaternityStayComponent implements OnChanges {
   readonly kind = input<MaternityStayKind>('LABOR_DELIVERY');
   /** When the stay began (the labour admission, server local time); now when not given. */
   readonly admittedAt = input<string | null | undefined>(null);
+  /**
+   * Review of #1237: for a past delivery, the card shows only when the patient has had no stay since this
+   * time (the birth); a stay since then, open or ended, hides it. Never a backdated re-admission.
+   */
+  readonly onlyIfNoStaySince = input<string | null | undefined>(null);
+  readonly hidden = signal(false);
+  readonly failed = signal(false);
 
   private readonly admissions = inject(AdmissionService);
   private readonly bedService = inject(BedService);
@@ -230,17 +244,47 @@ export class MaternityStayComponent implements OnChanges {
     const patientId = this.patientId();
     if (!patientId) return;
     this.loading.set(true);
+    this.failed.set(false);
+    this.hidden.set(false);
     this.admissions
       .getCurrentByPatient(patientId)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (stay) => {
           this.stay.set(stay ?? null);
+          if (!stay && this.onlyIfNoStaySince()) {
+            this.checkStaySince(patientId, this.onlyIfNoStaySince()!);
+            return;
+          }
           this.loading.set(false);
           if (stay && !stay.roomBed && this.canAssignBed()) this.loadBeds();
         },
         error: () => {
           this.stay.set(null);
+          this.failed.set(true);
+          this.loading.set(false);
+        },
+      });
+  }
+
+  /** A stay admitted at or after `since` (the birth) hides the card of a past delivery. */
+  private checkStaySince(patientId: string, since: string): void {
+    this.admissions
+      .getByPatient(patientId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (stays) => {
+          // Server local times of one format compare as strings.
+          const sinceKey = since.slice(0, 16);
+          this.hidden.set(
+            (stays ?? []).some(
+              (s) => !!s.admissionDateTime && s.admissionDateTime.slice(0, 16) >= sinceKey,
+            ),
+          );
+          this.loading.set(false);
+        },
+        error: () => {
+          this.failed.set(true);
           this.loading.set(false);
         },
       });

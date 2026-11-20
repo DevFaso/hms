@@ -6091,7 +6091,9 @@
     "MANAGE_ACCESS": "Gérer les accès",
     "CLINICAL_ESSENTIALS": "L’essentiel clinique",
     "CLINICAL_SUMMARY_HELP": "Les alertes cliniques restent visibles ci-dessus. Ouvrez le dossier détaillé pour consulter les soins documentés.",
-    "RECORD_ACTIONS": "Plus d’actions"
+    "RECORD_ACTIONS": "Plus d’actions",
+    "NEWS_NOT_VALIDATED_OBSTETRIC": "non validé en grossesse / post-partum — voir les alertes maternité",
+    "NEWS_NOT_VALIDATED_NEWBORN": "non validé chez le nouveau-né — voir les alertes nouveau-né"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Journaux d'accès",
@@ -14951,6 +14953,7 @@
     "ADMITTED": "{{patient}} admis(e).",
     "ADMIT_FAILED": "L'admission n'a pas pu être enregistrée.",
     "BED_ASSIGNED": "Lit {{bed}} attribué.",
-    "BED_FAILED": "Le lit n'a pas pu être attribué."
+    "BED_FAILED": "Le lit n'a pas pu être attribué.",
+    "LOAD_FAILED": "séjour inconnu : les admissions n'ont pas pu être lues. Rechargez avant d'admettre."
   }
 }

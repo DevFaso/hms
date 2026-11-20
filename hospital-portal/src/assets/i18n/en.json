@@ -6091,7 +6091,9 @@
     "MANAGE_ACCESS": "Manage access",
     "CLINICAL_ESSENTIALS": "Clinical essentials",
     "CLINICAL_SUMMARY_HELP": "Clinical alerts remain visible above. Open the detailed record to review documented care.",
-    "RECORD_ACTIONS": "More actions"
+    "RECORD_ACTIONS": "More actions",
+    "NEWS_NOT_VALIDATED_OBSTETRIC": "not validated in pregnancy / postpartum — see the maternity alerts",
+    "NEWS_NOT_VALIDATED_NEWBORN": "not validated for a newborn — see the newborn alerts"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Access Logs",
@@ -14951,6 +14953,7 @@
     "ADMITTED": "{{patient}} admitted.",
     "ADMIT_FAILED": "The admission could not be recorded.",
     "BED_ASSIGNED": "Bed {{bed}} assigned.",
-    "BED_FAILED": "The bed could not be assigned."
+    "BED_FAILED": "The bed could not be assigned.",
+    "LOAD_FAILED": "stay unknown: the admissions could not be read. Reload before admitting."
   }
 }

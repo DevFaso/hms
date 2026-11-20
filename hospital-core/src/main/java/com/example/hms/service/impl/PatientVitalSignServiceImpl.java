@@ -119,7 +119,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         String recorderUsername = staff != null && staff.getUser() != null ? staff.getUser().getUsername() : null;
         vitalSignJudgement.escalate(saved, judgement, patientId, hospital != null ? hospital.getId() : null,
             recorderUsername, null);
-        PatientVitalSignResponseDTO response = vitalSignMapper.toResponse(saved);
+        PatientVitalSignResponseDTO response = responder(hospital != null ? hospital.getId() : null).apply(saved);
         if (response != null) {
             response.setNewbornAlerts(vitalSignJudgement.alerts(judgement));
             response.setPostpartumAlerts(vitalSignJudgement.postpartumAlerts(judgement));
@@ -151,7 +151,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
                 vitals.stream().map(v -> CrossHospitalReachRecorder.hospitalIdOf(v.getHospital())).toList(), hospitalId),
             "Cross-hospital vital signs read on the treatment relationship");
         return vitals.stream()
-            .map(vitalSignMapper::toResponse)
+            .map(responder(hospitalId))
             .toList();
     }
 
@@ -166,7 +166,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         Patient patient = patientChartAccess.requireOwnRecord(patientId);
         return vitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(patient.getId(), PageRequest.of(0, Math.max(1, limit)))
             .stream()
-            .map(vitalSignMapper::toResponse)
+            .map(responder(null))
             .toList();
     }
 
@@ -179,7 +179,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         int pageSize = Math.clamp(size, 1, PORTAL_PAGE_MAX);
         return vitalSignRepository.findPageByPatient_IdOrderByRecordedAtDesc(patient.getId(),
                 PageRequest.of(Math.max(page, 0), pageSize))
-            .map(vitalSignMapper::toResponse);
+            .map(responder(null));
     }
 
     /**
@@ -199,8 +199,44 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         Patient patient = requireScopedChart(patientId, hospitalId);
         PageRequest pageable = PageRequest.of(Math.max(page, 0), Math.max(size, 1));
         return vitalSignRepository.findWithinRange(patient.getId(), hospitalId, from, to, pageable).stream()
-            .map(vitalSignMapper::toResponse)
+            .map(responder(hospitalId))
             .toList();
+    }
+
+    /** Review of #1237: the one NEWS2 applicability rule (setter-injected; absent, every score is shown as before). */
+    private com.example.hms.service.vitals.News2Applicability news2Applicability;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setNews2Applicability(com.example.hms.service.vitals.News2Applicability news2Applicability) {
+        this.news2Applicability = news2Applicability;
+    }
+
+    /**
+     * Review of #1237 (High): the response of one reading, with no reassuring NEWS2 score for a pregnant or
+     * postpartum woman or a newborn (News2Applicability). The status is read once per reading day of one read.
+     */
+    private java.util.function.Function<PatientVitalSign, PatientVitalSignResponseDTO> responder(UUID scopeHospitalId) {
+        java.util.Map<java.time.LocalDate, com.example.hms.service.vitals.News2Applicability.Status> byDay =
+            new java.util.HashMap<>();
+        return vital -> {
+            PatientVitalSignResponseDTO dto = vitalSignMapper.toResponse(vital);
+            if (dto == null || news2Applicability == null || vital.getPatient() == null) {
+                return dto;
+            }
+            LocalDateTime at = vital.getRecordedAt() != null ? vital.getRecordedAt() : LocalDateTime.now();
+            UUID readAt = scopeHospitalId != null ? scopeHospitalId
+                : CrossHospitalReachRecorder.hospitalIdOf(vital.getHospital());
+            com.example.hms.service.vitals.News2Applicability.Status status = byDay.computeIfAbsent(at.toLocalDate(),
+                day -> news2Applicability.statusOf(vital.getPatient(), readAt, at));
+            if (status.notValidated()) {
+                dto.setNewsScore(null);
+                dto.setNewsRiskBand(null);
+                dto.setNewsComplete(null);
+                dto.setNewsMissing(null);
+                dto.setNewsNotValidated(status.name());
+            }
+            return dto;
+        };
     }
 
     @Override

@@ -55,6 +55,7 @@ describe('MaternityStayComponent (QA D2594)', () => {
       'getCurrentByPatient',
       'create',
       'assignBed',
+      'getByPatient',
     ]);
     beds = jasmine.createSpyObj('BedService', ['getAvailableBeds']);
     admissions.getCurrentByPatient.and.returnValue(of(null));
@@ -152,5 +153,56 @@ describe('MaternityStayComponent (QA D2594)', () => {
     fixture = render('NEWBORN');
     host = fixture.nativeElement as HTMLElement;
     expect(host.querySelector('[data-testid="maternity-stay-admit"]')).not.toBeNull();
+  });
+
+  it('Review of #1237: a failed stay lookup says so, never « non admise »', () => {
+    admissions.getCurrentByPatient.and.returnValue(throwError(() => new Error('boom')));
+    const host = render().nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="maternity-stay-failed"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="maternity-stay-none"]')).toBeNull();
+  });
+
+  it('Review of #1237: a past delivery offers no admission once a stay began after the birth, and admits now', () => {
+    admissions.getByPatient.and.returnValue(
+      of([{ id: 'old', admissionDateTime: '2026-11-21T08:00:00' } as unknown as AdmissionResponse]),
+    );
+    TestBed.configureTestingModule({
+      imports: [MaternityStayComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        { provide: AdmissionService, useValue: admissions },
+        { provide: BedService, useValue: beds },
+        { provide: AuthService, useValue: { getUserProfile: () => ({ staffId: 's1' }) } },
+        {
+          provide: RoleContextService,
+          useValue: {
+            hasAnyActiveRole: (wanted: string[]) => wanted.some((r) => roles.includes(r)),
+            effectiveHospitalIdForRequest: () => 'h1',
+          },
+        },
+      ],
+    });
+    let fixture = TestBed.createComponent(MaternityStayComponent);
+    fixture.componentRef.setInput('patientId', 'p1');
+    fixture.componentRef.setInput('onlyIfNoStaySince', '2026-11-20T00:22:00');
+    fixture.componentInstance.ngOnChanges();
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.maternity-stay')).toBeNull();
+
+    // No stay since the birth: offered, and admitted at the current time (no admittedAt passed).
+    admissions.getByPatient.and.returnValue(of([]));
+    admissions.create.and.returnValue(of(stay(null)));
+    fixture = TestBed.createComponent(MaternityStayComponent);
+    fixture.componentRef.setInput('patientId', 'p1');
+    fixture.componentRef.setInput('onlyIfNoStaySince', '2026-11-20T00:22:00');
+    fixture.componentInstance.ngOnChanges();
+    fixture.detectChanges();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="maternity-stay-admit"]'),
+    ).not.toBeNull();
+    fixture.componentInstance.acuity = 'LEVEL_2_MODERATE';
+    fixture.componentInstance.admit();
+    const sent = admissions.create.calls.mostRecent().args[0];
+    expect(sent.admissionDateTime).not.toBe('2026-11-20T00:22:00');
   });
 });

@@ -286,6 +286,14 @@
     color: #b91c1c;
     border-color: #fecaca;
   }
+  /* Review of #1237: no score, never green; it says why and where to look instead. */
+  &.news-not-validated {
+    background: #f1f5f9;
+    color: #334155;
+    border-color: #cbd5e1;
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
 }
 
 .vital-date {

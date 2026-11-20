@@ -68,7 +68,9 @@ class MaternityVitalChartingTest {
         // raised its own severe-pressure and newborn alerts, which are not sent twice.
         verify(judgement).escalate(org.mockito.ArgumentMatchers.eq(vital), org.mockito.ArgumentMatchers.isNull(),
             org.mockito.ArgumentMatchers.eq(mother.getId()), org.mockito.ArgumentMatchers.eq(hospital.getId()),
-            org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull());
+            org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(),
+            // Review of #1237: an URGENT maternity alert already paged for this reading: NEWS2 does not page twice.
+            org.mockito.ArgumentMatchers.eq(true));
     }
 
     @Test
@@ -121,5 +123,52 @@ class MaternityVitalChartingTest {
 
         assertThat(charting.chartNewbornAssessment(assessment, false)).isNull();
         verifyNoInteractions(repository);
+    }
+
+    @Test
+    void review1237_onlyCautionOrUrgentAlertsFlagTheRow_andNews2StillPagesWithoutAnUrgentOne() {
+        LaborPartographEntry info = LaborPartographEntry.builder().patient(mother).hospital(hospital)
+            .observationTime(at).systolicBpMmHg(118).build();
+        info.addAlert(LaborAlertType.GENERAL, LaborAlertSeverity.INFO, "c", "m", "t");
+        assertThat(charting.chartLaborPartographEntry(info).isClinicallySignificant()).isFalse();
+
+        LaborPartographEntry caution = LaborPartographEntry.builder().patient(mother).hospital(hospital)
+            .observationTime(at).systolicBpMmHg(88).pulseBpm(132).build();
+        caution.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.CAUTION, "c", "m", "t");
+        PatientVitalSign vital = charting.chartLaborPartographEntry(caution);
+        assertThat(vital.isClinicallySignificant()).isTrue();
+        // No URGENT alert covered either reading (a low pressure and fast pulse): the NEWS2 page fires (safety net).
+        verify(judgement, org.mockito.Mockito.times(2)).escalate(any(), org.mockito.ArgumentMatchers.isNull(),
+            any(), any(), any(), any(), org.mockito.ArgumentMatchers.eq(false));
+    }
+
+    @Test
+    void review1237_anApgarNoticeNeitherFlagsNorCoversTheNewbornRow() {
+        Patient baby = new Patient();
+        baby.setId(UUID.randomUUID());
+        NewbornAssessment assessment = NewbornAssessment.builder().patient(baby).hospital(hospital)
+            .assessmentTime(at).heartRateBpm(140).build();
+        assessment.addAlert(com.example.hms.model.neonatal.NewbornAssessmentAlert.builder()
+            .type(com.example.hms.enums.NewbornAlertType.APGAR)
+            .severity(com.example.hms.enums.NewbornAlertSeverity.URGENT).code("apgar").message("m").build());
+        PatientVitalSign vital = charting.chartNewbornAssessment(assessment, true);
+        assertThat(vital.isClinicallySignificant()).isFalse();
+        verify(judgement).escalate(org.mockito.ArgumentMatchers.eq(vital), org.mockito.ArgumentMatchers.isNull(),
+            any(), any(), any(), any(), org.mockito.ArgumentMatchers.eq(false));
+    }
+
+    @Test
+    void review1237_aCorrectionRetiresTheChartedRowOfTheObservationItSupersedes() {
+        PostpartumObservation original = PostpartumObservation.builder().patient(mother).hospital(hospital)
+            .observationTime(at.minusMinutes(30)).systolicBpMmHg(190).build();
+        PatientVitalSign oldRow = PatientVitalSign.builder().patient(mother).build();
+        when(repository.findByPatient_IdAndHospital_IdAndSourceAndRecordedAt(mother.getId(), hospital.getId(),
+            MaternityVitalCharting.SOURCE_POSTPARTUM, at.minusMinutes(30))).thenReturn(java.util.List.of(oldRow));
+        PostpartumObservation corrected = PostpartumObservation.builder().patient(mother).hospital(hospital)
+            .observationTime(at.minusMinutes(30)).systolicBpMmHg(130).supersedesObservation(original).build();
+
+        charting.chartPostpartumObservation(corrected);
+
+        verify(repository).deleteAll(java.util.List.of(oldRow));
     }
 }

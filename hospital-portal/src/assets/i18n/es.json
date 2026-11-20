@@ -6091,7 +6091,9 @@
     "MANAGE_ACCESS": "Gestionar accesos",
     "CLINICAL_ESSENTIALS": "Resumen clínico",
     "CLINICAL_SUMMARY_HELP": "Las alertas clínicas permanecen visibles arriba. Abra el expediente detallado para revisar la atención documentada.",
-    "RECORD_ACTIONS": "Más acciones"
+    "RECORD_ACTIONS": "Más acciones",
+    "NEWS_NOT_VALIDATED_OBSTETRIC": "no validado en el embarazo / posparto: vea las alertas de maternidad",
+    "NEWS_NOT_VALIDATED_NEWBORN": "no validado en el recién nacido: vea las alertas del recién nacido"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Registros de acceso",
@@ -14951,6 +14953,7 @@
     "ADMITTED": "{{patient}} ingresado(a).",
     "ADMIT_FAILED": "No se pudo registrar el ingreso.",
     "BED_ASSIGNED": "Cama {{bed}} asignada.",
-    "BED_FAILED": "No se pudo asignar la cama."
+    "BED_FAILED": "No se pudo asignar la cama.",
+    "LOAD_FAILED": "estancia desconocida: no se pudieron leer los ingresos. Recargue antes de ingresar."
   }
 }

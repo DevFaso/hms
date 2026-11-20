@@ -350,17 +350,20 @@
           </p>
         }
         <!-- QA D2594 (r65): the delivered mother and each newborn have a stay and a bed. -->
+        <!-- Review of #1237: only for a delivery with no stay since the birth (onlyIfNoStaySince),
+             admitted now, never at the old labour admission time. -->
         @if (!isForeign(episode) && patient(); as p) {
           <app-maternity-stay
             [patientId]="p.id"
             [patientName]="patientDisplayName()"
-            [admittedAt]="episode.admittedAt"
+            [onlyIfNoStaySince]="record.birthDateTime || episode.admittedAt"
             kind="LABOR_DELIVERY"
           />
           @for (baby of record.newborns ?? []; track baby.patientId) {
             <app-maternity-stay
               [patientId]="baby.patientId"
               [patientName]="baby.displayName || ('LABOR.NEWBORN' | translate)"
+              [onlyIfNoStaySince]="record.birthDateTime || episode.admittedAt"
               kind="NEWBORN"
             />
           }
