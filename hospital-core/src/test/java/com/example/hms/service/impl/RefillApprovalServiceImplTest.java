@@ -882,6 +882,26 @@ class RefillApprovalServiceImplTest {
         }
 
         @Test
+        @DisplayName("review of #1244: a request its prescriber put on hold is never released by the pharmacy, written refills or not")
+        void aPrescriberHoldIsNotOverriddenByThePharmacy() {
+            actingAsPharmacist();
+            RefillRequest held = stored();
+            held.setStatus(RefillStatus.PAUSED);
+
+            assertThatThrownBy(() -> service.releaseAsPrescribed(auth, refillId))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("messageKey").isEqualTo("patient.refill.release.onHold");
+            assertThat(held.getStatus()).isEqualTo(RefillStatus.PAUSED);
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+            assertThat(prescription.getRefillsRemaining()).isEqualTo(2);
+            verify(prescriptionRepository, never()).save(any());
+            // The card offers no release on a held request either.
+            when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> inv.getArgument(0));
+            assertThat(service.pharmacistReview(auth, refillId,
+                    RefillDecisionRequestDTO.builder().pharmacistNote("vu").build()).isWrittenRefillLeft()).isFalse();
+        }
+
+        @Test
         @DisplayName("narcotics and controlled drugs always need a new prescription: a written refill is not released either")
         void aControlledDrugIsNeverReleased() {
             actingAsPharmacist();

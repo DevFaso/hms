@@ -268,14 +268,20 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
     /**
      * A refill the prescriber already wrote on the prescription is ordinary dispensing: the pharmacist releases it
      * without a new decision. Only while the prescription still counts a refill; one refill beyond what was written
-     * is a renewal, and only a prescriber approves that ({@link #approve}). Never a controlled drug.
+     * is a renewal, and only a prescriber approves that ({@link #approve}). Never a controlled drug, and never a
+     * request its prescriber put on hold.
      */
     @Override
     @Transactional
     public MedicationRefillResponseDTO releaseAsPrescribed(Authentication auth, UUID refillId) {
         PharmacyReview at = requirePharmacist(auth, refillId);
         RefillRequest refill = at.refill();
-        if (!isOpen(refill.getStatus())) {
+        // Only a request nobody decided: a prescriber's hold (PAUSED) is a decision, and the pharmacy never
+        // releases past it. The prescriber lifts their own hold by approving or refusing.
+        if (refill.getStatus() == RefillStatus.PAUSED) {
+            throw new BusinessException("patient.refill.release.onHold");
+        }
+        if (refill.getStatus() != RefillStatus.REQUESTED) {
             throw new BusinessException(MSG_NOT_PENDING, String.valueOf(refill.getStatus()));
         }
         Prescription prescription = refill.getPrescription();
@@ -494,7 +500,8 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
                 .pharmacistNote(r.getPharmacistNote())
                 .pharmacistReviewedAt(r.getPharmacistReviewedAt())
                 .decisionBasis(r.getDecisionBasis() != null ? r.getDecisionBasis().name() : null)
-                .writtenRefillLeft(hasWrittenRefillLeft(r.getPrescription()))
+                .writtenRefillLeft(r.getStatus() == RefillStatus.REQUESTED
+                        && hasWrittenRefillLeft(r.getPrescription()))
                 .pharmacyView(isDispensingRole())
                 .build();
     }
