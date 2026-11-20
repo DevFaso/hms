@@ -14,6 +14,13 @@ const FR = {
     CATEGORY_BEHAVIOURAL_HEALTH: 'Santé mentale',
     CATEGORY_HIV: 'VIH',
     CATEGORY_REPRODUCTIVE_HEALTH: 'Santé reproductive',
+    CATEGORY_STI: 'Infections sexuellement transmissibles',
+    CATEGORY_VIRAL_HEPATITIS: 'Hépatites virales B et C',
+    CATEGORY_PREGNANCY: 'Grossesse',
+    CATEGORY_SEXUAL_DOMESTIC_VIOLENCE: 'Violences sexuelles et domestiques',
+    CATEGORY_GENETIC: 'Tests génétiques',
+    CATEGORY_SICKLE_CELL: 'Drépanocytose (génotype)',
+    CATEGORY_TUBERCULOSIS: 'Tuberculose (accès restreint)',
     INHERITED: 'S’applique actuellement : {{category}} (hérité de la visite ou de son service)',
     ENCOUNTER_HINT:
       'Les résultats, médicaments, diagnostics et factures d’une visite classée ne sont pas montrés à une ' +
@@ -64,7 +71,7 @@ describe('SensitivitySelectComponent (QA D2730)', () => {
 
   const select = () => host.querySelector<HTMLSelectElement>('#tag')!;
 
-  it('offers "none" and the four categories, labelled, with the hint tied to the control', () => {
+  it('offers "none" and every category of the 2026-11-20 policy, labelled, with the hint tied to the control', () => {
     const options = Array.from(select().options).map((o) => o.textContent?.trim());
     expect(options).toEqual([
       'Aucune',
@@ -72,6 +79,13 @@ describe('SensitivitySelectComponent (QA D2730)', () => {
       'Santé mentale',
       'VIH',
       'Santé reproductive',
+      'Infections sexuellement transmissibles',
+      'Hépatites virales B et C',
+      'Grossesse',
+      'Violences sexuelles et domestiques',
+      'Tests génétiques',
+      'Drépanocytose (génotype)',
+      'Tuberculose (accès restreint)',
     ]);
     expect(host.querySelector('label')!.getAttribute('for')).toBe('tag');
     expect(select().getAttribute('aria-describedby')).toBe('tag-hint');
@@ -116,7 +130,8 @@ describe('SensitivitySelectComponent (QA D2730)', () => {
   for (const width of [1366, 1024, 768, 390, 300]) {
     it(`never spills past a ${width}px container`, () => {
       fixture.componentInstance.width.set(width);
-      fixture.componentInstance.inherited.set('REPRODUCTIVE_HEALTH');
+      // The longest label of the list.
+      fixture.componentInstance.inherited.set('STI');
       fixture.detectChanges();
       const box = host.querySelector<HTMLElement>('.host')!;
       expect(box.scrollWidth).toBeLessThanOrEqual(box.clientWidth + 1);

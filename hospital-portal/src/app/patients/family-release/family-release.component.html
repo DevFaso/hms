@@ -1,0 +1,195 @@
+@if (overview(); as view) {
+  @if (view.minor) {
+    <section
+      class="family-release"
+      data-testid="family-release"
+      aria-labelledby="family-release-title"
+    >
+      <h3 class="family-release__title" id="family-release-title">
+        <span class="material-symbols-outlined" aria-hidden="true">family_restroom</span>
+        {{ 'SENSITIVE_POLICY.RELEASE.TITLE' | translate }}
+      </h3>
+      <p class="family-release__hint">{{ 'SENSITIVE_POLICY.RELEASE.HINT' | translate }}</p>
+      <p class="family-release__provisional" role="note" data-testid="family-release-provisional">
+        {{ 'SENSITIVE_POLICY.RELEASE.PROVISIONAL' | translate: { age: view.adolescentAge } }}
+      </p>
+
+      <h4 class="family-release__subtitle">
+        {{ 'SENSITIVE_POLICY.RELEASE.GUARDIANS' | translate }}
+      </h4>
+      @if (view.guardians.length) {
+        <ul class="family-release__list" data-testid="family-release-guardians">
+          @for (guardian of view.guardians; track guardian.grantId) {
+            <li class="family-release__row">
+              <span class="family-release__main">
+                <strong>{{
+                  guardian.holderName || ('SENSITIVE_POLICY.RELEASE.UNNAMED' | translate)
+                }}</strong>
+                <span>{{ relationshipKey(guardian) | translate }}</span>
+              </span>
+              @if (guardian.verified) {
+                <span class="family-release__verified" data-testid="guardian-verified">
+                  <span class="material-symbols-outlined" aria-hidden="true">verified_user</span>
+                  {{ 'SENSITIVE_POLICY.RELEASE.VERIFIED' | translate }}
+                </span>
+              } @else {
+                <button
+                  type="button"
+                  class="family-release__btn"
+                  data-testid="guardian-verify"
+                  [disabled]="busy()"
+                  (click)="verify(guardian)"
+                >
+                  {{ 'SENSITIVE_POLICY.RELEASE.VERIFY' | translate }}
+                </button>
+              }
+            </li>
+          }
+        </ul>
+        <p class="family-release__note">{{ 'SENSITIVE_POLICY.RELEASE.VERIFY_HINT' | translate }}</p>
+      } @else {
+        <p class="family-release__note" data-testid="family-release-no-guardian">
+          {{ 'SENSITIVE_POLICY.RELEASE.NO_GUARDIAN' | translate }}
+        </p>
+      }
+
+      <h4 class="family-release__subtitle">
+        {{ 'SENSITIVE_POLICY.RELEASE.RESULTS' | translate }}
+      </h4>
+      @if (view.results.length) {
+        <ul class="family-release__list" data-testid="family-release-results">
+          @for (result of view.results; track result.labOrderId) {
+            <li class="family-release__row family-release__row--result">
+              <span class="family-release__main">
+                <strong>{{
+                  result.testName || ('SENSITIVE_POLICY.RELEASE.UNNAMED_TEST' | translate)
+                }}</strong>
+                <span class="family-release__category">{{
+                  labelOf(result.category) | translate
+                }}</span>
+                @if (result.resultedAt) {
+                  <span>{{ result.resultedAt | dateTime }}</span>
+                }
+                @for (release of result.releases; track release.grantId) {
+                  <span class="family-release__released" data-testid="result-released">
+                    {{
+                      'SENSITIVE_POLICY.RELEASE.RELEASED_TO'
+                        | translate
+                          : {
+                              name:
+                                release.holderName ||
+                                ('SENSITIVE_POLICY.RELEASE.UNNAMED' | translate),
+                              date: release.releasedAt | dateTime,
+                            }
+                    }}
+                  </span>
+                  @if (release.reason) {
+                    <span class="family-release__reason" data-testid="result-release-reason">
+                      {{
+                        'SENSITIVE_POLICY.RELEASE.RELEASE_REASON'
+                          | translate: { reason: release.reason }
+                      }}
+                    </span>
+                  }
+                }
+              </span>
+              @if (remaining(result).length && releasing()?.labOrderId !== result.labOrderId) {
+                <button
+                  type="button"
+                  class="family-release__btn"
+                  [attr.data-testid]="'result-release-' + result.labOrderId"
+                  [disabled]="busy()"
+                  (click)="startRelease(result)"
+                >
+                  {{ 'SENSITIVE_POLICY.RELEASE.RELEASE' | translate }}
+                </button>
+              }
+            </li>
+            @if (releasing()?.labOrderId === result.labOrderId) {
+              <li class="family-release__form" data-testid="family-release-form">
+                <label class="family-release__label" for="family-release-guardian">
+                  {{ 'SENSITIVE_POLICY.RELEASE.TO_WHOM' | translate }}
+                </label>
+                <select
+                  id="family-release-guardian"
+                  class="family-release__control"
+                  data-testid="release-guardian"
+                  [disabled]="busy()"
+                  (change)="pickGuardian($any($event.target).value)"
+                >
+                  <option value="" [selected]="!grantId()">
+                    {{ 'SENSITIVE_POLICY.RELEASE.CHOOSE' | translate }}
+                  </option>
+                  @for (guardian of remaining(result); track guardian.grantId) {
+                    <option [value]="guardian.grantId" [selected]="guardian.grantId === grantId()">
+                      {{ guardian.holderName || ('SENSITIVE_POLICY.RELEASE.UNNAMED' | translate) }}
+                      — {{ relationshipKey(guardian) | translate }}
+                    </option>
+                  }
+                </select>
+
+                <label class="family-release__label" for="family-release-reason">
+                  {{ 'SENSITIVE_POLICY.RELEASE.REASON' | translate }}
+                </label>
+                <textarea
+                  id="family-release-reason"
+                  class="family-release__control"
+                  data-testid="release-reason"
+                  rows="3"
+                  required
+                  [attr.minlength]="reasonMin"
+                  [attr.maxlength]="reasonMax"
+                  [attr.aria-describedby]="'family-release-reason-hint'"
+                  [disabled]="busy()"
+                  [ngModel]="reason()"
+                  (ngModelChange)="reason.set($event)"
+                ></textarea>
+                <p class="family-release__note" id="family-release-reason-hint">
+                  {{ 'SENSITIVE_POLICY.RELEASE.REASON_HINT' | translate: { min: reasonMin } }}
+                </p>
+
+                @if (needsAttestation()) {
+                  <label class="family-release__attest" for="family-release-attest">
+                    <input
+                      id="family-release-attest"
+                      type="checkbox"
+                      data-testid="release-attest"
+                      [disabled]="busy()"
+                      [checked]="attested()"
+                      (change)="attested.set($any($event.target).checked)"
+                    />
+                    <span>{{ 'SENSITIVE_POLICY.RELEASE.ATTEST' | translate }}</span>
+                  </label>
+                }
+
+                <div class="family-release__actions">
+                  <button
+                    type="button"
+                    class="family-release__btn"
+                    [disabled]="busy()"
+                    (click)="cancelRelease()"
+                  >
+                    {{ 'COMMON.CANCEL' | translate }}
+                  </button>
+                  <button
+                    type="button"
+                    class="family-release__btn family-release__btn--primary"
+                    data-testid="release-submit"
+                    [disabled]="!canSubmit()"
+                    (click)="submitRelease()"
+                  >
+                    {{ 'SENSITIVE_POLICY.RELEASE.CONFIRM' | translate }}
+                  </button>
+                </div>
+              </li>
+            }
+          }
+        </ul>
+      } @else {
+        <p class="family-release__note" data-testid="family-release-no-result">
+          {{ 'SENSITIVE_POLICY.RELEASE.NO_RESULT' | translate }}
+        </p>
+      }
+    </section>
+  }
+}

@@ -12,6 +12,11 @@
     }
   </div>
 
+  @if (adolescentAgeHospitalId(); as settingsHospitalId) {
+    <!-- Policy 2026-11-20 (provisional): from which age a minor's sensitive records are hidden from the parents. -->
+    <app-adolescent-age-setting [hospitalId]="settingsHospitalId" />
+  }
+
   <div class="search-bar">
     <span class="material-symbols-outlined search-icon">search</span>
     <input

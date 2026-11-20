@@ -1,0 +1,195 @@
+// Policy 2026-11-20: the release of a minor's sensitive result to a parent.
+// Rows that wrap, no table and no fixed width: it holds from 1366 to 390 px.
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.family-release {
+  margin: 12px 0 16px;
+  padding: 14px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  min-width: 0;
+}
+
+.family-release__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 1rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+
+  .material-symbols-outlined {
+    flex: 0 0 auto;
+    font-size: 1.25rem;
+    color: #5c5c74;
+  }
+}
+
+.family-release__subtitle {
+  margin: 14px 0 6px;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.family-release__hint,
+.family-release__note {
+  margin: 0 0 8px;
+  color: #475569;
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.family-release__provisional {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 1px solid #f0c36d;
+  border-radius: 8px;
+  background: #fff8e6;
+  color: #7a4b00;
+  font-size: 0.875rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.family-release__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.family-release__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.family-release__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.family-release__category {
+  color: #7a4b00;
+  font-weight: 600;
+}
+
+.family-release__reason {
+  color: #475569;
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.family-release__released,
+.family-release__verified {
+  color: #15803d;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.family-release__verified {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+
+  .material-symbols-outlined {
+    font-size: 1.1rem;
+  }
+}
+
+.family-release__form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  background: #f8faff;
+}
+
+.family-release__label {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.family-release__control {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid #c9c9d6;
+  border-radius: 8px;
+  font: inherit;
+}
+
+.family-release__attest {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  overflow-wrap: anywhere;
+
+  input {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+  }
+}
+
+.family-release__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.family-release__btn {
+  max-width: 100%;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #374151;
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: #f3f4f6;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.family-release__btn--primary {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #fff;
+
+  &:hover:not(:disabled) {
+    background: #1e40af;
+  }
+}

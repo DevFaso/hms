@@ -153,6 +153,40 @@ describe('MyFamilyAccessComponent — proxy scopes and drill-in', () => {
     expect(toast.success).toHaveBeenCalled();
   });
 
+  it('policy 2026-11-20: the tuberculosis scope is sent only when the patient ticks it, and « tout » alone never carries it', () => {
+    fixture.detectChanges();
+    portal.grantProxy.and.returnValue(of(received));
+    component.form = { proxyUsername: 'awa', relationship: 'SPOUSE', permissions: 'ALL' };
+    component.grantAccess();
+    expect(portal.grantProxy.calls.mostRecent().args[0].permissions).toBe('ALL');
+
+    component.showGrantForm.set(true);
+    fixture.detectChanges();
+    const box = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      '[data-testid="proxy-tb-scope"]',
+    )!;
+    box.checked = true;
+    box.dispatchEvent(new Event('change'));
+    component.form = { proxyUsername: 'awa', relationship: 'SPOUSE', permissions: 'VIEW_RECORDS' };
+    component.grantAccess();
+
+    expect(portal.grantProxy.calls.mostRecent().args[0].permissions).toBe(
+      'VIEW_RECORDS,VIEW_TUBERCULOSIS',
+    );
+    // The box is cleared with the form: the next grant does not inherit it.
+    expect(component.shareTuberculosis()).toBeFalse();
+  });
+
+  it('policy 2026-11-20: a grant with the tuberculosis scope is listed with its base scope and the scope in words', () => {
+    expect(component.baseScopes('ALL,VIEW_TUBERCULOSIS')).toBe('ALL');
+    expect(component.sharesTuberculosis('ALL,VIEW_TUBERCULOSIS')).toBeTrue();
+    expect(component.baseScopes('VIEW_APPOINTMENTS,VIEW_MEDICATIONS,VIEW_LAB_RESULTS')).toBe(
+      'VIEW_APPOINTMENTS,VIEW_MEDICATIONS,VIEW_LAB_RESULTS',
+    );
+    expect(component.sharesTuberculosis('ALL')).toBeFalse();
+    expect(component.sharesTuberculosis(null)).toBeFalse();
+  });
+
   // #948 review: the expiry is checked against the server's UTC clock and
   // listed back through serverTime, so the end of the picked day is sent as
   // the reader's 23:59:59 on the UTC clock, not as the wall clock.

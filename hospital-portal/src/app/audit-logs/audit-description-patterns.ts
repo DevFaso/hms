@@ -1910,4 +1910,43 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Draft line (\S+) of invoice (\S+) priced by hand$/,
     params: ['line', 'invoice'],
   },
+  // Policy 2026-11-20 (provisional): a minor's sensitive result released to a verified parent (ids and category only).
+  {
+    key: 'AUDIT.DESC.SENSITIVE_RESULT_RELEASED',
+    re: /^Sensitive result \((\S+)\) released to a verified parent or guardian$/,
+    params: ['category'],
+    localise: { category: 'enum' },
+  },
+  // Policy 2026-11-20: staff verified that the holder of a family-access grant is the parent or guardian.
+  {
+    key: 'AUDIT.DESC.PROXY_RELATIONSHIP_VERIFIED',
+    re: /^Family-access relationship verified \((\S+)\)$/,
+    params: ['relationship'],
+    localise: { relationship: 'enum' },
+  },
+  // Policy 2026-11-20: a recommended sensitive category the lab director confirmed for one test.
+  {
+    key: 'AUDIT.DESC.SENSITIVITY_RECOMMENDATION_APPLIED',
+    re: /^Recommended sensitivity category applied: (\S+) to (\S+)$/,
+    params: ['from', 'to'],
+    localise: { from: 'enum', to: 'enum' },
+  },
+  // Policy 2026-11-20: a catalogue medicine's sensitive category (category names only).
+  {
+    key: 'AUDIT.DESC.MEDICATION_SENSITIVITY_CHANGED',
+    re: /^Medication sensitivity category changed from (\S+) to (\S+)$/,
+    params: ['from', 'to'],
+    localise: { from: 'enum', to: 'enum' },
+  },
+  // Policy 2026-11-20: the hospital's adolescent confidentiality age (before and after are in the details).
+  {
+    key: 'AUDIT.DESC.ADOLESCENT_AGE_SET',
+    re: /^Adolescent confidentiality age set to (\d+)$/,
+    params: ['age'],
+  },
+  {
+    key: 'AUDIT.DESC.ADOLESCENT_AGE_RESET',
+    re: /^Adolescent confidentiality age reset to the default \((\d+)\)$/,
+    params: ['age'],
+  },
 ];
