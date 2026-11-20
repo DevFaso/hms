@@ -34,6 +34,12 @@ public interface ImmunizationService {
     List<ImmunizationResponseDTO> getImmunizationsForPatientPortal(UUID patientId);
 
     /**
+     * QA D2730 (r65): the same read for a proxy whose grant the portal has
+     * verified, less any dose given in a sensitive visit.
+     */
+    List<ImmunizationResponseDTO> getImmunizationsForProxy(UUID patientId);
+
+    /**
      * Get immunizations by vaccine type
      */
     List<ImmunizationResponseDTO> getImmunizationsByVaccineCode(UUID patientId, String vaccineCode);

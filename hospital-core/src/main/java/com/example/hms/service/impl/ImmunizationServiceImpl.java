@@ -48,6 +48,8 @@ public class ImmunizationServiceImpl implements ImmunizationService {
     private final ImmunizationMapper immunizationMapper;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    /** QA D2730: what a proxy may read of the grantor's immunizations. */
+    private final com.example.hms.service.recordaccess.ProxyRecordFilter proxyRecordFilter;
 
     @Override
     public ImmunizationResponseDTO createImmunization(ImmunizationRequestDTO requestDTO) {
@@ -144,6 +146,18 @@ public class ImmunizationServiceImpl implements ImmunizationService {
     @Override
     @Transactional(readOnly = true)
     public List<ImmunizationResponseDTO> getImmunizationsForPatientPortal(UUID patientId) {
+        return portalImmunizations(patientId, immunization -> true);
+    }
+
+    /** QA D2730 (r65): the proxy's view, less a dose given in a sensitive visit. */
+    @Override
+    @Transactional(readOnly = true)
+    public List<ImmunizationResponseDTO> getImmunizationsForProxy(UUID patientId) {
+        return portalImmunizations(patientId, proxyRecordFilter::admits);
+    }
+
+    private List<ImmunizationResponseDTO> portalImmunizations(UUID patientId,
+            java.util.function.Predicate<PatientImmunization> shown) {
         Patient patient = patientRepository.findByIdUnscoped(patientId)
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         // QA (round 54, the D1910/D1912 class): a dose removed or marked entered
@@ -151,6 +165,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         // the health summary all read through here.
         return immunizationRepository.findByPatient_IdOrderByAdministrationDateDesc(patient.getId()).stream()
                 .filter(ImmunizationServiceImpl::isLiveRecord)
+                .filter(shown)
                 .map(immunizationMapper::toResponseDTO)
                 .toList();
     }

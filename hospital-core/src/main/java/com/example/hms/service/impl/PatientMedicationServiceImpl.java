@@ -55,17 +55,28 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
     /** G15 AC-12: a fill waiting at the counter, on each row. */
     private final com.example.hms.service.pharmacy.ReadyForCollectionLookup readyForCollection;
     private final com.example.hms.repository.AdmissionRepository admissionRepository;
+    /** QA D2730: what a proxy may read of the grantor's medications. */
+    private final com.example.hms.service.recordaccess.ProxyRecordFilter proxyRecordFilter;
+
+    /** The patient (or staff) reads every issued order. */
+    private static final java.util.function.Predicate<Prescription> EVERY_ORDER = p -> true;
 
     @Override
     @Transactional(readOnly = true)
     public List<PatientMedicationResponseDTO> getMedicationsForPatient(UUID patientId, UUID hospitalId, int limit) {
-        return getMedications(patientId, hospitalId, limit, false);
+        return getMedications(patientId, hospitalId, limit, false, EVERY_ORDER);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<PatientMedicationResponseDTO> getMedicationsForPatientPortal(UUID patientId, UUID hospitalId, int limit) {
-        return getMedications(patientId, hospitalId, limit, true);
+        return getMedications(patientId, hospitalId, limit, true, EVERY_ORDER);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PatientMedicationResponseDTO> getMedicationsForProxy(UUID patientId, int limit) {
+        return getMedications(patientId, null, limit, true, proxyRecordFilter::admits);
     }
 
     /**
@@ -77,10 +88,20 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
     @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<PatientMedicationResponseDTO> getMedicationsPageForPatientPortal(
             UUID patientId, Pageable pageable) {
+        return medicationsPage(patientId, pageable, EVERY_ORDER);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<PatientMedicationResponseDTO> getMedicationsPageForProxy(
+            UUID patientId, Pageable pageable) {
+        return medicationsPage(patientId, pageable, proxyRecordFilter::admits);
+    }
+
+    private org.springframework.data.domain.Page<PatientMedicationResponseDTO> medicationsPage(
+            UUID patientId, Pageable pageable, java.util.function.Predicate<Prescription> shown) {
         Patient patient = patientChartAccess.requireOwnRecord(patientId);
-        List<Prescription> prescriptions = prescriptionRepository
-            .findByPatient_Id(patient.getId(), Pageable.unpaged()).getContent()
-            .stream().filter(PrescriptionIssuance::wasIssued).toList();
+        List<Prescription> prescriptions = issuedFor(patient, shown);
         List<com.example.hms.model.Admission> closedStays = closedStaysOf(patient, prescriptions);
         List<Prescription> ordered = activeFirst(prescriptions, closedStays, Integer.MAX_VALUE);
         int from = (int) Math.min(pageable.getOffset(), ordered.size());
@@ -98,8 +119,28 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
         return prescriptionRepository.countIssuedByPatientId(patient.getId(), PrescriptionIssuance.PROPOSALS);
     }
 
+    /** QA D2730: the proxy's total, counted on the rows it may see (wasIssued, then the proxy filter). */
+    @Override
+    @Transactional(readOnly = true)
+    public long countMedicationsForProxy(UUID patientId) {
+        return issuedFor(patientChartAccess.requireOwnRecord(patientId), proxyRecordFilter::admits).size();
+    }
+
+    /**
+     * Every issued prescription of the patient, from every hospital; on a
+     * proxy's read, less those a proxy may not see (QA D2730: written in a
+     * sensitive visit).
+     */
+    private List<Prescription> issuedFor(Patient patient, java.util.function.Predicate<Prescription> shown) {
+        return prescriptionRepository.findByPatient_Id(patient.getId(), Pageable.unpaged()).getContent()
+            .stream()
+            .filter(PrescriptionIssuance::wasIssued)
+            .filter(shown)
+            .toList();
+    }
+
     private List<PatientMedicationResponseDTO> getMedications(UUID patientId, UUID hospitalId, int limit,
-                                                              boolean portalView) {
+                                                              boolean portalView, java.util.function.Predicate<Prescription> shown) {
         log.info("Fetching medications for patient {} in hospital {}", patientId, hospitalId);
 
         // Staff: the chart gate. It was tenant-scoped findById with NO
@@ -127,8 +168,7 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             // /medications and the dashboard card read here and still listed a
             // DRAFT as the patient's medication. QA D1537: nor a draft that was
             // cancelled before anyone signed it (PrescriptionIssuance).
-            prescriptions = prescriptionRepository.findByPatient_Id(patient.getId(), Pageable.unpaged()).getContent()
-                .stream().filter(PrescriptionIssuance::wasIssued).toList();
+            prescriptions = issuedFor(patient, shown);
         } else if (hospitalId != null) {
             Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));

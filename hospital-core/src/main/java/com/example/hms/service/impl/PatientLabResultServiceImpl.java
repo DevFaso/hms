@@ -56,25 +56,36 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
     private final LabResultMapper labResultMapper;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+
+    /** The owner (or staff) reads every row the read selected. */
+    private static final java.util.function.Predicate<LabResult> EVERY_ROW = r -> true;
     private final com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
+    /** QA D2730: what a proxy may read of the grantor's results. */
+    private final com.example.hms.service.recordaccess.ProxyRecordFilter proxyRecordFilter;
 
     @Override
     @Transactional(readOnly = true)
     public List<PatientLabResultResponseDTO> getLabResultsForPatient(UUID patientId, UUID hospitalId, int limit) {
-        return getLabResults(patientId, hospitalId, limit, false, true);
+        return getLabResults(patientId, hospitalId, limit, false, true, EVERY_ROW);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<PatientLabResultResponseDTO> getLabResultsForPatient(UUID patientId, UUID hospitalId, int limit,
                                                                      boolean includeUnreleasedValues) {
-        return getLabResults(patientId, hospitalId, limit, false, includeUnreleasedValues);
+        return getLabResults(patientId, hospitalId, limit, false, includeUnreleasedValues, EVERY_ROW);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<PatientLabResultResponseDTO> getLabResultsForPatientPortal(UUID patientId, UUID hospitalId, int limit) {
-        return getLabResults(patientId, hospitalId, limit, true, false);
+        return getLabResults(patientId, hospitalId, limit, true, false, EVERY_ROW);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PatientLabResultResponseDTO> getLabResultsForProxy(UUID patientId, int limit) {
+        return getLabResults(patientId, null, limit, true, false, proxyRecordFilter::admits);
     }
 
     /**
@@ -97,7 +108,8 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
      *        see the comment there.
      */
     private List<PatientLabResultResponseDTO> getLabResults(UUID patientId, UUID hospitalId, int limit,
-                                                            boolean portalView, boolean includeUnreleasedValues) {
+                                                            boolean portalView, boolean includeUnreleasedValues,
+                                                            java.util.function.Predicate<LabResult> shown) {
         log.info("Fetching lab results for patient {} in hospital {}", patientId, hospitalId);
 
         // Staff: the chart gate — cross-hospital safe, and the hospital
@@ -128,7 +140,9 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         // at the limit BEFORE currentFor removed the superseded rows, so a
         // page of 20 showed 17 and the two oldest released results (a
         // critical K 6.8 among them) could never be reached.
-        List<LabResult> visible = limited(currentFor(clinicalReader, resolvePairs(results, portalView)), effectiveLimit);
+        // QA D2730: a proxy's read drops the rows it may not see before the cut.
+        List<LabResult> visible = limited(shownOf(shown, currentFor(clinicalReader, resolvePairs(results, portalView))),
+            effectiveLimit);
         // Only worth reading again if there are rows we have not seen AND the
         // wider read would actually be wider — at the cap it would repeat the
         // identical query for nothing.
@@ -136,7 +150,8 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             && results.size() >= effectiveLimit
             && effectiveLimit < MAX_LIMIT) {
             results = fetchRows(patient, hospitalId, MAX_LIMIT, portalView);
-            visible = limited(currentFor(clinicalReader, resolvePairs(results, portalView)), effectiveLimit);
+            visible = limited(shownOf(shown, currentFor(clinicalReader, resolvePairs(results, portalView))),
+                effectiveLimit);
         }
 
         if (!portalView && hospitalId != null) {
@@ -167,6 +182,10 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             .toList();
     }
 
+    private static List<LabResult> shownOf(java.util.function.Predicate<LabResult> shown, List<LabResult> rows) {
+        return shown == EVERY_ROW ? rows : rows.stream().filter(shown).toList();
+    }
+
     private static List<LabResult> limited(List<LabResult> rows, int limit) {
         return rows.size() <= limit ? rows : rows.subList(0, limit);
     }
@@ -174,6 +193,17 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
     @Override
     @Transactional(readOnly = true)
     public List<PatientLabResultResponseDTO> getLabResultsForPatientPortal(UUID patientId, int offset, int limit) {
+        return pageOfCurrent(patientId, offset, limit, EVERY_ROW);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PatientLabResultResponseDTO> getLabResultsForProxy(UUID patientId, int offset, int limit) {
+        return pageOfCurrent(patientId, offset, limit, proxyRecordFilter::admits);
+    }
+
+    private List<PatientLabResultResponseDTO> pageOfCurrent(UUID patientId, int offset, int limit,
+                                                            java.util.function.Predicate<LabResult> shown) {
         Patient patient = patientChartAccess.requireOwnRecord(patientId);
         int pageSize = limit > 0 ? Math.min(limit, MAX_LIMIT) : DEFAULT_LIMIT;
         int skip = Math.max(offset, 0);
@@ -186,7 +216,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         List<LabResult> visible;
         while (true) {
             List<LabResult> rows = fetchRows(patient, null, window, true);
-            visible = ClinicalLabResultView.current(resolvePairs(rows, true));
+            visible = shownOf(shown, ClinicalLabResultView.current(resolvePairs(rows, true)));
             if (visible.size() >= needed || rows.size() < window || window >= Integer.MAX_VALUE / 2) {
                 break;
             }
@@ -204,12 +234,22 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
     @Override
     @Transactional(readOnly = true)
     public long countLabResultsForPatientPortal(UUID patientId) {
+        return countCurrent(patientId, EVERY_ROW);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countLabResultsForProxy(UUID patientId) {
+        return countCurrent(patientId, proxyRecordFilter::admits);
+    }
+
+    private long countCurrent(UUID patientId, java.util.function.Predicate<LabResult> shown) {
         Patient patient = patientChartAccess.requireOwnRecord(patientId);
         // Every row of the patient, filtered as the paged read filters them:
         // a total that counted superseded rows would promise results the list
         // never shows.
         List<LabResult> rows = fetchRows(patient, null, Integer.MAX_VALUE / 2, true);
-        return ClinicalLabResultView.current(resolvePairs(rows, true)).size();
+        return shownOf(shown, ClinicalLabResultView.current(resolvePairs(rows, true))).size();
     }
 
     private static List<LabResult> currentFor(boolean clinicalReader, List<LabResult> rows) {

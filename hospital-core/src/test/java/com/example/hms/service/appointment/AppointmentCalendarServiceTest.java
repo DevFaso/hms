@@ -58,7 +58,8 @@ class AppointmentCalendarServiceTest {
             null,                       // subjectReadGuard (the patient-only reads; the calendar never asks it)
             null,                       // encounterRepository (QA D788 completion guard; the calendar never completes)
             null,                       // slotPolicy (QA D1060 slot length; the calendar never books)
-            null                        // auditEventLogService (QA D1429 overbooking; the calendar never books)
+            null,                       // auditEventLogService (QA D1429 overbooking; the calendar never books)
+            null                        // proxyRecordFilter (QA D2730; the calendar is never a proxy read)
         );
     }
 

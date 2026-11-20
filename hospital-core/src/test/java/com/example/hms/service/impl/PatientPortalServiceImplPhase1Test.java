@@ -131,6 +131,12 @@ class PatientPortalServiceImplPhase1Test {
     private com.example.hms.service.support.IsolatedReads isolatedReads =
         com.example.hms.service.support.IsolatedReadsTestSupport.inline();
 
+    /** QA D2730: the real proxy filter (it has no collaborator but the classifier). */
+    @org.mockito.Spy
+    private com.example.hms.service.recordaccess.ProxyRecordFilter proxyRecordFilter =
+        new com.example.hms.service.recordaccess.ProxyRecordFilter(
+            new com.example.hms.service.recordaccess.SensitivityClassifierImpl());
+
     @InjectMocks
     private PatientPortalServiceImpl service;
 
@@ -1009,6 +1015,49 @@ class PatientPortalServiceImplPhase1Test {
             assertThat(saved.getAddressLine1()).isEqualTo("Secteur 15");
             assertThat(saved.getCity()).isEqualTo("12345");
             assertThat(saved.getEmail()).isEqualTo("a@b");
+        }
+    }
+
+    @Nested
+    @DisplayName("D2730: the proxy's « Dossier de santé » reads through the proxy filter only")
+    class ProxyRecordsReadThroughTheFilter {
+
+        @Test
+        @DisplayName("a VIEW_RECORDS grant reads every card through its *ForProxy read, never the patient's own")
+        void everyCardIsAProxyRead() {
+            UUID caregiverId = UUID.randomUUID();
+            com.example.hms.model.PatientProxy grant = com.example.hms.model.PatientProxy.builder()
+                .grantorPatient(patient)
+                .status(com.example.hms.enums.ProxyStatus.ACTIVE)
+                .permissions("VIEW_RECORDS")
+                .build();
+            when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(caregiverId));
+            when(patientProxyRepository.findByGrantorPatient_IdAndProxyUser_IdAndStatus(
+                    patientId, caregiverId, com.example.hms.enums.ProxyStatus.ACTIVE))
+                .thenReturn(Optional.of(grant));
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            PatientMedicationResponseDTO running = new PatientMedicationResponseDTO();
+            running.setStatus("ACTIVE");
+            when(labResultService.getLabResultsForProxy(patientId, 5))
+                .thenReturn(List.of(new PatientLabResultResponseDTO()));
+            when(medicationService.getMedicationsForProxy(patientId, 100)).thenReturn(List.of(running));
+            when(immunizationService.getImmunizationsForProxy(patientId))
+                .thenReturn(List.of(new ImmunizationResponseDTO()));
+            when(labResultService.countLabResultsForProxy(patientId)).thenReturn(1L);
+            when(medicationService.countMedicationsForProxy(patientId)).thenReturn(1L);
+
+            HealthSummaryDTO result = service.getProxyRecords(auth, patientId, Locale.FRENCH);
+
+            assertThat(result.getRecentLabResults()).hasSize(1);
+            assertThat(result.getCurrentMedications()).containsExactly(running);
+            assertThat(result.getImmunizations()).hasSize(1);
+            assertThat(result.getLabResultTotal()).isEqualTo(1L);
+            assertThat(result.getMedicationTotal()).isEqualTo(1L);
+            verify(labResultService, never()).getLabResultsForPatientPortal(any(), any(), anyInt());
+            verify(labResultService, never()).countLabResultsForPatientPortal(any());
+            verify(medicationService, never()).getMedicationsForPatientPortal(any(), any(), anyInt());
+            verify(medicationService, never()).countMedicationsForPatientPortal(any());
+            verify(immunizationService, never()).getImmunizationsForPatientPortal(any());
         }
     }
 }
