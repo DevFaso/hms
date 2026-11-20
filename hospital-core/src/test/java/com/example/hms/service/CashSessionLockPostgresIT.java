@@ -446,6 +446,34 @@ class CashSessionLockPostgresIT {
 
     // ───────────────────────────── a cross-day reversal ─────────────────────────────
 
+    /** Yesterday as it was counted: 1 000 in, nothing out, counted 1 000, no difference, still closed. */
+    private static void yesterdayIsAsCounted(CashSessionDTO dayOne, LocalDate yesterday) {
+        assertThat(dayOne.getStatus()).isEqualTo("CLOSED");
+        assertThat(dayOne.getBusinessDate()).isEqualTo(yesterday);
+        assertThat(dayOne.getTotalIn()).isEqualByComparingTo("1000");
+        assertThat(dayOne.getTotalOut()).isEqualByComparingTo("0");
+        assertThat(dayOne.getCashToCount()).isEqualByComparingTo("1000");
+        assertThat(dayOne.getCashDifference()).isEqualByComparingTo("0");
+        assertThat(dayOne.getDifferenceLines()).isZero();
+        assertThat(dayOne.getMovements()).singleElement().satisfies(m -> {
+            assertThat(m.getKind()).isEqualTo("PAYMENT");
+            assertThat(m.getDirection()).isEqualTo("IN");
+            assertThat(m.getStatus()).isEqualTo("REVERSED");
+        });
+    }
+
+    /** Today: the money out, and nothing in. */
+    private static void todayShowsTheMoneyOut(CashSessionDTO dayTwo) {
+        assertThat(dayTwo.getStatus()).isEqualTo("OPEN");
+        assertThat(dayTwo.getTotalIn()).isEqualByComparingTo("0");
+        assertThat(dayTwo.getTotalOut()).isEqualByComparingTo("1000");
+        assertThat(dayTwo.getCashToCount()).isEqualByComparingTo("-1000");
+        assertThat(dayTwo.getMovements()).singleElement().satisfies(m -> {
+            assertThat(m.getKind()).isEqualTo("REVERSAL");
+            assertThat(m.getDirection()).isEqualTo("OUT");
+        });
+    }
+
     @Test
     @DisplayName("a payment counted yesterday and reversed today: yesterday still balances, today shows the money out")
     void aReversalPaidOutTheNextDayLeavesYesterdaysTillAsCounted() {
@@ -493,30 +521,8 @@ class CashSessionLockPostgresIT {
         assertThat(after.getAmountPaid()).isEqualByComparingTo("0");
         assertThat(after.getStatus()).isEqualTo(InvoiceStatus.SENT);
 
-        // Yesterday as it was counted: 1 000 in, nothing out, counted 1 000, no difference, still closed.
-        CashSessionDTO dayOne = cashSessions.get(yesterdaysSession);
-        assertThat(dayOne.getStatus()).isEqualTo("CLOSED");
-        assertThat(dayOne.getBusinessDate()).isEqualTo(yesterday);
-        assertThat(dayOne.getTotalIn()).isEqualByComparingTo("1000");
-        assertThat(dayOne.getTotalOut()).isEqualByComparingTo("0");
-        assertThat(dayOne.getCashToCount()).isEqualByComparingTo("1000");
-        assertThat(dayOne.getCashDifference()).isEqualByComparingTo("0");
-        assertThat(dayOne.getDifferenceLines()).isZero();
-        assertThat(dayOne.getMovements()).singleElement().satisfies(m -> {
-            assertThat(m.getKind()).isEqualTo("PAYMENT");
-            assertThat(m.getDirection()).isEqualTo("IN");
-            assertThat(m.getStatus()).isEqualTo("REVERSED");
-        });
-        // Today: the money out, and nothing in.
-        CashSessionDTO dayTwo = cashSessions.get(todaysSession);
-        assertThat(dayTwo.getStatus()).isEqualTo("OPEN");
-        assertThat(dayTwo.getTotalIn()).isEqualByComparingTo("0");
-        assertThat(dayTwo.getTotalOut()).isEqualByComparingTo("1000");
-        assertThat(dayTwo.getCashToCount()).isEqualByComparingTo("-1000");
-        assertThat(dayTwo.getMovements()).singleElement().satisfies(m -> {
-            assertThat(m.getKind()).isEqualTo("REVERSAL");
-            assertThat(m.getDirection()).isEqualTo("OUT");
-        });
+        yesterdayIsAsCounted(cashSessions.get(yesterdaysSession), yesterday);
+        todayShowsTheMoneyOut(cashSessions.get(todaysSession));
         // The supervisor's day reports agree: each day lists its own session only.
         actAs(accountant);
         assertThat(cashSessions.dayReport(yesterday).sessions()).extracting(CashSessionDTO::getId)

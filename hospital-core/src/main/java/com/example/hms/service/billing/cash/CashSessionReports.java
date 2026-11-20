@@ -75,8 +75,8 @@ public class CashSessionReports {
 
         @Override
         public boolean equals(Object other) {
-            return other instanceof Rendered that && java.util.Arrays.equals(content, that.content)
-                && java.util.Objects.equals(fileName, that.fileName);
+            return other instanceof Rendered(byte[] bytes, String name) && java.util.Arrays.equals(content, bytes)
+                && java.util.Objects.equals(fileName, name);
         }
 
         @Override

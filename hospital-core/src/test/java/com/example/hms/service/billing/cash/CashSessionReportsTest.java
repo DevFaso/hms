@@ -28,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -143,13 +144,14 @@ class CashSessionReportsTest {
         String[] header = rows.get(0).split(";", -1);
         assertThat(header).hasSize(12);
         assertThat(header[6]).isEqualTo("statut");
-        assertThat(rows).anySatisfy(row -> {
-            String[] cells = row.split(";", -1);
-            assertThat(cells[5]).isEqualTo("\"PHARMACY_PAYMENT\"");
-            assertThat(cells[6]).isEqualTo("\"VOIDED\"");
-            assertThat(cells[10]).isEqualTo("400");
-        });
-        assertThat(rows).anySatisfy(row -> assertThat(row.split(";", -1)[6]).isEqualTo("\"REVERSED\""));
+        assertThat(rows)
+            .anySatisfy(row -> {
+                String[] cells = row.split(";", -1);
+                assertThat(cells[5]).isEqualTo("\"PHARMACY_PAYMENT\"");
+                assertThat(cells[6]).isEqualTo("\"VOIDED\"");
+                assertThat(cells[10]).isEqualTo("400");
+            })
+            .anySatisfy(row -> assertThat(row.split(";", -1)[6]).isEqualTo("\"REVERSED\""));
     }
 
     @Test
@@ -176,11 +178,12 @@ class CashSessionReportsTest {
             text = new org.apache.pdfbox.text.PDFTextStripper().getText(doc);
         }
 
-        assertThat(text).contains("Écart espèces : -500");
-        assertThat(text).contains("ÉCART sur 2 ligne(s)");
-        assertThat(text).contains("1 caisse(s) avec un écart");
-        assertThat(text).contains("Lignes retirées des factures");
-        assertThat(text).contains("TWP-2026-000040").contains("Radiographie thorax").contains("Acte non realise");
+        assertThat(text)
+            .contains("Écart espèces : -500")
+            .contains("ÉCART sur 2 ligne(s)")
+            .contains("1 caisse(s) avec un écart")
+            .contains("Lignes retirées des factures")
+            .contains("TWP-2026-000040").contains("Radiographie thorax").contains("Acte non realise");
     }
 
     @Test
@@ -197,7 +200,7 @@ class CashSessionReportsTest {
             .unitPrice(new BigDecimal("7500")).reason("Acte non réalisé").removedBy(cashier)
             .removedAt(LocalDateTime.of(2026, 11, 20, 9, 30)).build();
         when(removals.findByHospitalIdAndRemovedAtGreaterThanEqualAndRemovedAtLessThanOrderByRemovedAtAsc(
-            eq(HOSPITAL), eq(DAY.atStartOfDay()), eq(DAY.plusDays(1).atStartOfDay()))).thenReturn(List.of(removed));
+            HOSPITAL, DAY.atStartOfDay(), DAY.plusDays(1).atStartOfDay())).thenReturn(List.of(removed));
 
         List<com.example.hms.payload.dto.billing.InvoiceLineRemovalDTO> lines =
             new CashSessionController(sessions, reports).removedLines(DAY).getBody();
@@ -211,7 +214,7 @@ class CashSessionReportsTest {
             assertThat(line.getRemovedByName()).isEqualTo("Awa Caisse");
         });
         // The same supervisor check as the day report stands in front of the read.
-        org.mockito.Mockito.verify(sessions).dayReport(DAY);
+        verify(sessions).dayReport(DAY);
     }
 
     @Test

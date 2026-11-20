@@ -488,18 +488,28 @@ public class CashSessionService {
             // An insurer's share is never money at a till (QA D1611); mobile money names its operator (PR 9).
             com.example.hms.enums.PaymentMethod method = parseMethod(line.getMethod());
             com.example.hms.service.payment.TillPaymentMethods.requireReceivedAtTill(method, FIELD_COUNTS);
-            boolean notStated = holdsNotStated && method == com.example.hms.enums.PaymentMethod.MOBILE_MONEY
-                && line.getOperator() == null;
-            com.example.hms.enums.MobileMoneyOperator op = notStated ? null
-                : com.example.hms.service.payment.MobileMoneyOperators.require(method, line.getOperator(),
-                    FIELD_COUNTS);
-            String operator = op != null ? op.name() : null;
+            String operator = countedOperator(line, method, holdsNotStated);
             if (given.put(key(line.getMethod(), operator), line) != null) {
                 throw new FieldBusinessException(FIELD_COUNTS, "billing.cashSession.countTwice",
                     methodLabel(line.getMethod(), operator));
             }
         }
         return given;
+    }
+
+    /**
+     * The operator of a counted line: required for mobile money (PR 9), except the « non précisé » line of a
+     * session that holds such money (see {@link #NOT_STATED_LINE}); null for any other method.
+     */
+    private static String countedOperator(CashSessionCloseRequestDTO.CountedLine line,
+                                          com.example.hms.enums.PaymentMethod method, boolean holdsNotStated) {
+        if (holdsNotStated && method == com.example.hms.enums.PaymentMethod.MOBILE_MONEY
+                && line.getOperator() == null) {
+            return null;
+        }
+        com.example.hms.enums.MobileMoneyOperator operator = com.example.hms.service.payment.MobileMoneyOperators
+            .require(method, line.getOperator(), FIELD_COUNTS);
+        return operator != null ? operator.name() : null;
     }
 
     /** One counted line against what the session expects for it (0 for a method it never took). */
