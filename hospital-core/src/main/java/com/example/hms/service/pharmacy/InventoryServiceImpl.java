@@ -196,6 +196,83 @@ public class InventoryServiceImpl implements InventoryService {
         inventoryItemRepository.save(item);
     }
 
+    @Override
+    @Transactional
+    public InventoryItemResponseDTO setPackSize(UUID id, com.example.hms.payload.dto.pharmacy.PackSizeRequestDTO dto) {
+        InventoryItem scoped = resolveInventoryItem(id);
+        enforceHospitalScope(scoped.getPharmacy());
+        // The item row locked: a fill, sale or receipt waits, then moves units, never packs.
+        InventoryItem item = inventoryItemRepository.lockById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("inventoryItem.notFound", id));
+        if (item.getUnitsPerPack() != null) {
+            throw new com.example.hms.exception.FieldBusinessException("unitsPerPack", "pharmacy.pack.alreadySet",
+                    item.getUnitsPerPack(), item.getUnit());
+        }
+        // A controlled register is kept as received; its balance is never re-counted.
+        if (ControlledStockWitness.isControlled(item)) {
+            throw new com.example.hms.exception.FieldBusinessException("unitsPerPack", "pharmacy.pack.controlledRefused");
+        }
+        Integer perPack = dto != null ? dto.getUnitsPerPack() : null;
+        String unit = dto != null && dto.getUnit() != null ? dto.getUnit().trim() : "";
+        String reason = dto != null && dto.getReason() != null ? dto.getReason().trim() : "";
+        com.example.hms.exception.RequiredFields.check()
+                .require(perPack != null && perPack >= 2 && perPack <= 10000, "unitsPerPack", "pharmacy.pack.sizeInvalid")
+                .require(!unit.isEmpty(), "unit", "pharmacy.pack.unitRequired")
+                .require(!reason.isEmpty(), "reason", "stockTransaction.reason.required")
+                .orThrow();
+        if (unit.length() > 60) {
+            throw new com.example.hms.exception.FieldBusinessException("unit", "pharmacy.pack.unitTooLong");
+        }
+        // A pack converts to units of a counted form: the new unit must be a solid dose, a container or a
+        // preparation (never ml or mg), and not the pack's own unit again.
+        if (WholeUnitQuantity.isMeasured(unit)) {
+            throw new com.example.hms.exception.FieldBusinessException("unit", "pharmacy.pack.unitMeasured");
+        }
+        String packUnit = dto.getPackUnit() != null && !dto.getPackUnit().isBlank() ? dto.getPackUnit().trim()
+                : (item.getUnit() != null && !item.getUnit().isBlank() ? item.getUnit().trim() : "pack");
+        if (packUnit.length() > 60) {
+            packUnit = packUnit.substring(0, 60);
+        }
+        BigDecimal factor = BigDecimal.valueOf(perPack.longValue());
+        java.time.LocalDateTime now = java.time.LocalDateTime.now(clock);
+        java.util.List<StockLot> lots = stockLotRepository.findAllByInventoryItemIdOrderByExpiryDateAsc(item.getId());
+        BigDecimal onHandBefore = item.getQuantityOnHand() != null ? item.getQuantityOnHand() : BigDecimal.ZERO;
+        stockLotRepository.scaleQuantitiesOfItem(item.getId(), factor, now);
+        inventoryItemRepository.scaleOnHand(item.getId(), factor, now);
+        String ledgerReason = "Conversion: 1 " + packUnit + " = " + perPack + " " + unit + " | " + reason;
+        if (ledgerReason.length() > 500) {
+            ledgerReason = ledgerReason.substring(0, 500);
+        }
+        BigDecimal gain = factor.subtract(BigDecimal.ONE);
+        for (StockLot lot : lots) {
+            BigDecimal before = lot.getRemainingQuantity() != null ? lot.getRemainingQuantity() : BigDecimal.ZERO;
+            if (before.signum() > 0) {
+                recordStockTransaction(item, lot, StockTransactionType.ADJUSTMENT, before.multiply(gain), ledgerReason, null);
+            }
+            refreshIfManaged(lot);
+        }
+        if (lots.isEmpty() && onHandBefore.signum() > 0) {
+            recordStockTransaction(item, null, StockTransactionType.ADJUSTMENT, onHandBefore.multiply(gain), ledgerReason, null);
+        }
+        refreshIfManaged(item);
+        item.setUnitsPerPack(perPack);
+        item.setPackUnit(packUnit);
+        item.setUnit(unit);
+        if (item.getUnitPrice() != null) {
+            item.setUnitPrice(item.getUnitPrice().divide(factor, 2, java.math.RoundingMode.HALF_UP));
+        }
+        if (item.getReorderThreshold() != null) {
+            item.setReorderThreshold(item.getReorderThreshold().multiply(factor));
+        }
+        if (item.getReorderQuantity() != null) {
+            item.setReorderQuantity(item.getReorderQuantity().multiply(factor));
+        }
+        InventoryItem saved = inventoryItemRepository.save(item);
+        logAudit(AuditEventType.STOCK_ADJUSTMENT, "Pack size set: 1 " + packUnit + " = " + perPack + " " + unit,
+                saved.getId().toString());
+        return inventoryItemMapper.toResponseDTO(saved);
+    }
+
     // ── Stock lots ───────────────────────────────────────────────────────
 
     /** Field checks on a goods receipt, before anything is read or written. */
@@ -253,6 +330,19 @@ public class InventoryServiceImpl implements InventoryService {
     public StockLotResponseDTO receiveStock(StockLotRequestDTO dto) {
         InventoryItem item = resolveInventoryItem(dto.getInventoryItemId());
         enforceHospitalScope(item.getPharmacy());
+        // QA D2674 (r65): a delivery counted in packs of an item kept in units is received as units.
+        if (Boolean.TRUE.equals(dto.getInPacks())) {
+            BigDecimal packs = dto.getInitialQuantity();
+            dto.setInitialQuantity(PackQuantity.toUnits(item, packs, true, "initialQuantity"));
+            if (dto.getRemainingQuantity() != null) {
+                dto.setRemainingQuantity(PackQuantity.toUnits(item, dto.getRemainingQuantity(), true, "remainingQuantity"));
+            }
+            if (dto.getUnitCost() != null && item.getUnitsPerPack() != null) {
+                dto.setUnitCost(dto.getUnitCost().divide(BigDecimal.valueOf(item.getUnitsPerPack()), 4,
+                        java.math.RoundingMode.HALF_UP));
+            }
+            dto.setInPacks(false);
+        }
 
         validateReceiptQuantitiesAndDates(dto);
         // QA D779: a receipt is a stock movement like any other (D668 guarded

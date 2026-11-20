@@ -91,6 +91,18 @@ public class InventoryController {
         return ResponseEntity.ok(ApiResponseWrapper.success(inventoryService.updateInventoryItem(id, dto)));
     }
 
+    @WriteAudited(skip = true, reason = "service emits STOCK_ADJUSTMENT and one ADJUSTMENT movement per lot")
+    @PutMapping("/items/{id}/pack-size")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'STORE_MANAGER', 'HOSPITAL_ADMIN')")
+    @Operation(summary = "Set the pack size of an item (QA D2674)",
+            description = "Stock kept in packs is counted from now on in units, unitsPerPack to a pack. Once per item.")
+    @ApiResponse(responseCode = "200", description = "Pack size set and stock converted")
+    public ResponseEntity<ApiResponseWrapper<InventoryItemResponseDTO>> setPackSize(
+            @PathVariable UUID id,
+            @Valid @RequestBody com.example.hms.payload.dto.pharmacy.PackSizeRequestDTO dto) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(inventoryService.setPackSize(id, dto)));
+    }
+
     @DeleteMapping("/items/{id}")
     @PreAuthorize("hasAnyRole('STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Deactivate inventory item", description = "Soft-delete an inventory item")

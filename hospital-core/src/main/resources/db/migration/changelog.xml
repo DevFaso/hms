@@ -3791,4 +3791,18 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V311 (billing-money plan PR 13, scorecard M4; QA r65 D2670-D2676):
+         pharmacy pack size on inventory items, "à facturer" on a dispense,
+         and clinical.pharmacy_refunds (two-person refund of a patient
+         return). Pre-allocated; registered after V313. Plain idempotent
+         DDL, no DO block.
+         ================================================================= -->
+    <changeSet id="V311-pharmacy-sale-stock-refunds" author="hms-team" runOnChange="false">
+        <sqlFile path="V311__pharmacy_sale_stock_refunds_reconciliation.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

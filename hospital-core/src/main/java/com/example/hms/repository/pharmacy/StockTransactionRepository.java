@@ -51,6 +51,24 @@ public interface StockTransactionRepository extends JpaRepository<StockTransacti
     BigDecimal sumQuantityForReference(@Param("referenceId") UUID referenceId,
                                        @Param("types") Collection<StockTransactionType> types);
 
+    /** QA D2676 (r65): the total moved against one reference (a sale) on one lot by the given types. */
+    @Query("SELECT COALESCE(SUM(t.quantity), 0) FROM StockTransaction t "
+         + "WHERE t.referenceId = :referenceId AND t.stockLot.id = :lotId AND t.transactionType IN :types")
+    BigDecimal sumQuantityForReferenceAndLot(@Param("referenceId") UUID referenceId, @Param("lotId") UUID lotId,
+                                             @Param("types") Collection<StockTransactionType> types);
+
+    /** QA D2676 (r65): the total moved against one reference (a sale) on one item by the given types. */
+    @Query("SELECT COALESCE(SUM(t.quantity), 0) FROM StockTransaction t "
+         + "WHERE t.referenceId = :referenceId AND t.inventoryItem.id = :itemId AND t.transactionType IN :types")
+    BigDecimal sumQuantityForReferenceAndItem(@Param("referenceId") UUID referenceId, @Param("itemId") UUID itemId,
+                                              @Param("types") Collection<StockTransactionType> types);
+
+    /** QA D2673 (r65): every movement of one pharmacy in [from, to), oldest first, with its lot and item. */
+    @Query("SELECT t FROM StockTransaction t JOIN FETCH t.inventoryItem i LEFT JOIN FETCH t.stockLot "
+         + "WHERE i.pharmacy.id = :pharmacyId AND t.createdAt >= :from AND t.createdAt < :to ORDER BY t.createdAt")
+    java.util.List<StockTransaction> findForDay(@Param("pharmacyId") UUID pharmacyId,
+                                                @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
     /**
      * QA D932: {@link #sumQuantityForReference} for several references in one
      * query, as {@code [referenceId, total]} rows; a reference with nothing
