@@ -472,4 +472,23 @@ class VitalSignJudgementTest {
         assertThat(com.example.hms.i18n.TestMessageSources.bundles().getMessage("vitals.alert.notification.pregnancy",
             new Object[] {"t", "p", "m"}, Locale.FRENCH)).startsWith("Alerte de grossesse").doesNotContain("post-partum");
     }
+
+    @Test
+    void review1237_theNews2PageIsSkippedOnlyWhenAnUrgentMaternityAlertCoveredTheReading() {
+        com.example.hms.model.PatientVitalSign vital = com.example.hms.model.PatientVitalSign.builder()
+            .systolicBpMmHg(88).heartRateBpm(132).build();
+        java.util.UUID patientId = java.util.UUID.randomUUID();
+        java.util.UUID hospitalId = java.util.UUID.randomUUID();
+
+        judgement.escalate(vital, null, patientId, hospitalId, "mw", null, true);
+        org.mockito.Mockito.verify(news2, org.mockito.Mockito.never())
+            .escalateIfNeeded(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+
+        judgement.escalate(vital, null, patientId, hospitalId, "mw", null, false);
+        org.mockito.Mockito.verify(news2).escalateIfNeeded(vital, patientId, hospitalId, "mw", null);
+
+        judgement.escalate(vital, null, patientId, hospitalId, "mw", null);
+        org.mockito.Mockito.verify(news2, org.mockito.Mockito.times(2)).escalateIfNeeded(vital, patientId, hospitalId, "mw", null);
+    }
 }

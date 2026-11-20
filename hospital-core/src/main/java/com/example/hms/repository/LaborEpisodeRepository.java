@@ -52,4 +52,21 @@ public interface LaborEpisodeRepository extends JpaRepository<LaborEpisode, UUID
 
     /** Tenant guard — single-row lookups go through id + hospital. */
     Optional<LaborEpisode> findByIdAndHospital_Id(UUID id, UUID hospitalId);
+
+    /**
+     * Review of #1237 (ward reads, D1314): of {@code patientIds}, the women in labour at this hospital or who gave
+     * birth here since {@code birthSince}, in ONE query for a whole ward read (no per-patient lookup).
+     */
+    @org.springframework.data.jpa.repository.Query("""
+        select p.id from Patient p
+        where p.id in :patientIds
+          and (exists (select 1 from LaborEpisode e
+                       where e.patient = p and e.hospital.id = :hospitalId and e.status = :active)
+               or exists (select 1 from DeliveryRecord d
+                          where d.patient = p and d.hospital.id = :hospitalId and d.birthDateTime >= :birthSince))
+        """)
+    List<UUID> obstetricPatientIdsAt(@org.springframework.data.repository.query.Param("patientIds") java.util.Collection<UUID> patientIds,
+                                     @org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
+                                     @org.springframework.data.repository.query.Param("active") LaborStatus active,
+                                     @org.springframework.data.repository.query.Param("birthSince") java.time.LocalDateTime birthSince);
 }

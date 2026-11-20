@@ -98,6 +98,9 @@ class PostpartumCareServiceImplTest {
     private Patient patient;
     private Hospital hospital;
 
+    @Mock
+    private com.example.hms.service.vitals.MaternityVitalCharting maternityVitalCharting;
+
     @BeforeEach
     void setUp() {
         service = new PostpartumCareServiceImpl(
@@ -116,7 +119,8 @@ class PostpartumCareServiceImplTest {
             reachRecorder,
             TestMessageSources.bundles(),
             deliveryRecordRepository,
-            com.example.hms.service.vitals.SevereHypertensionFixtures.actingHospitalOnly(deliveryRecordRepository)
+            com.example.hms.service.vitals.SevereHypertensionFixtures.actingHospitalOnly(deliveryRecordRepository),
+            maternityVitalCharting
         );
 
         patientId = UUID.randomUUID();
@@ -196,6 +200,8 @@ class PostpartumCareServiceImplTest {
             .thenReturn(Optional.empty());
 
         PostpartumObservationResponseDTO response = service.recordObservation(patientId, request, recorderId);
+        // QA D2580: the observation is charted where the chart reads.
+        verify(maternityVitalCharting).chartPostpartumObservation(org.mockito.ArgumentMatchers.any());
 
         assertNotNull(response);
         assertFalse(response.getAlerts().isEmpty(), "Expected hemorrhage alert to be generated");

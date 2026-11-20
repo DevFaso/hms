@@ -57,6 +57,8 @@ final class SharedClinicalRowsCleanup {
         context.getBean(LabTestDefinitionRepository.class).deleteAll();
         // QA D605: labour charts pin the patient, the hospital and the staff.
         context.getBean(com.example.hms.repository.ObstetricAlertEscalationRepository.class).deleteAllInBatch();
+        // QA D2580: a partograph entry, postpartum check or newborn assessment charts a vital-sign row.
+        context.getBean(com.example.hms.repository.PatientVitalSignRepository.class).deleteAllInBatch();
         context.getBean(com.example.hms.repository.LaborPartographEntryRepository.class).deleteAll();
         // QA D1592: a recorded live birth registers its babies, linked to the delivery.
         context.getBean(com.example.hms.repository.DeliveryNewbornRepository.class).deleteAllInBatch();

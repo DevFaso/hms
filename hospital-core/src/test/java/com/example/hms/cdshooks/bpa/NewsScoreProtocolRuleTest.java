@@ -171,4 +171,30 @@ class NewsScoreProtocolRuleTest {
         assertThat(rule.evaluate(
             new BpaRuleContext(adult, UUID.randomUUID(), List.of(vitals), List.of(), List.of()))).hasSize(1);
     }
+
+    @Test
+    void review1237_aPostpartumMotherGetsNoReassuringScoreButTheNotValidatedCard() {
+        when(repo.findByProtocolCodeAndActiveTrue("NEWS2_EWS")).thenReturn(Optional.of(activeProtocol()));
+        com.example.hms.service.vitals.News2Applicability applicability =
+            mock(com.example.hms.service.vitals.News2Applicability.class);
+        when(applicability.statusOf(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()))
+            .thenReturn(com.example.hms.service.vitals.News2Applicability.Status.OBSTETRIC);
+        NewsScoreProtocolRule obstetric = new NewsScoreProtocolRule(repo);
+        obstetric.setApplicability(applicability);
+        PatientVitalSign calm = PatientVitalSign.builder()
+            .respiratoryRateBpm(16).spo2Percent(98).onOxygen(false).temperatureCelsius(37.0)
+            .systolicBpMmHg(162).heartRateBpm(80).consciousnessLevel(ConsciousnessLevel.ALERT)
+            .recordedAt(LocalDateTime.now().minusMinutes(5)).source("POSTPARTUM").build();
+
+        List<CdsCard> cards = obstetric.evaluate(context(List.of(calm)));
+
+        assertThat(cards).hasSize(1);
+        assertThat(cards.get(0).detail()).contains("not validated").doesNotContain("NEWS2:");
+        // A LOW band reassures nobody here: an information card, never a score.
+        assertThat(cards.get(0).indicator()).isEqualTo(CdsCard.Indicator.INFO);
+        // A raised band stays a warning: the trigger is kept as a safety net.
+        assertThat(obstetric.evaluate(context(List.of(deterioratingVitals(LocalDateTime.now().minusMinutes(5),
+            "LABOR_PARTOGRAPH")))).get(0).indicator()).isEqualTo(CdsCard.Indicator.WARNING);
+    }
 }

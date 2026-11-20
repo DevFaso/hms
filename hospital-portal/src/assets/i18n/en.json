@@ -6108,7 +6108,9 @@
     "MANAGE_ACCESS": "Manage access",
     "CLINICAL_ESSENTIALS": "Clinical essentials",
     "CLINICAL_SUMMARY_HELP": "Clinical alerts remain visible above. Open the detailed record to review documented care.",
-    "RECORD_ACTIONS": "More actions"
+    "RECORD_ACTIONS": "More actions",
+    "NEWS_NOT_VALIDATED_OBSTETRIC": "not validated in pregnancy / postpartum — see the maternity alerts",
+    "NEWS_NOT_VALIDATED_NEWBORN": "not validated for a newborn — see the newborn alerts"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Access Logs",
@@ -6889,7 +6891,10 @@
         "OTHER": "Other",
         "DELIVERY": "Delivery room",
         "PATIENT_REPORTED": "Reported by the patient",
-        "MANUAL": "Manual entry"
+        "MANUAL": "Manual entry",
+        "LABOR_PARTOGRAPH": "Labour (partograph)",
+        "POSTPARTUM": "Postpartum check",
+        "NEWBORN_ASSESSMENT": "Newborn assessment"
       },
       "ENCOUNTER_TYPE": {
         "CONSULTATION": "Consultation",
@@ -13679,7 +13684,9 @@
       "TITLE": "Frequency not recognised",
       "REASON_LABEL": "The next dose time cannot be worked out from this frequency. Why give this dose now?",
       "CONFIRM": "Give the dose now"
-    }
+    },
+    "CLINICAL_ADVISORY_TITLE": "Clinical checks for this dose",
+    "CLINICAL_ADVISORY_CHIP": "Clinical alert"
   },
   "CREDENTIALING": {
     "CURRENT_EXPIRY": "Current expiry",
@@ -14149,7 +14156,8 @@
     "GLUCOSE": "Blood glucose must be between {{min}} and {{max}} mg/dL.",
     "WEIGHT": "Weight must be between {{min}} and {{max}} kg.",
     "HEIGHT": "Height must be between {{min}} and {{max}} cm.",
-    "HEAD_CIRCUMFERENCE": "Head circumference must be between {{min}} and {{max}} cm."
+    "HEAD_CIRCUMFERENCE": "Head circumference must be between {{min}} and {{max}} cm.",
+    "FOR_PATIENT": "{{patient}}:"
   },
   "ORGAN_DAMAGE": {
     "LEGEND": "Signs of organ damage (optional, with a high blood pressure)",
@@ -14180,7 +14188,15 @@
     "PLAN": "Plan:",
     "RESPONSE": "Response:",
     "SUBJECTIVE": "Subjective:",
-    "TITLE": "Nursing care notes"
+    "TITLE": "Nursing care notes",
+    "ADD_ADDENDUM": "Add an addendum",
+    "ADDENDUM_LABEL": "Addendum",
+    "ADDENDUM_ATTEST": "I attest that this addendum is accurate and uses no abbreviations",
+    "ADDENDUM_SAVED": "Addendum saved under the care note.",
+    "ADDENDUM_FAILED": "The addendum could not be saved.",
+    "EMPTY_PATIENT": "No care note for this patient yet.",
+    "TAB": "Care notes",
+    "OPEN": "Notes"
   },
   "MEDICAL_CERTIFICATE": {
     "DAYS": "Days off work",
@@ -15066,5 +15082,36 @@
       "REASON": "Reason for the price change",
       "REASON_REQUIRED": "Give the reason for this price change: it is kept in the price history."
     }
+  },
+  "WARD_INBOX": {
+    "TITLE": "Ward notifications",
+    "EMPTY": "No ward notification.",
+    "FAILED": "The ward notifications could not be loaded.",
+    "MARK_READ": "Mark as read"
+  },
+  "MATERNITY_STAY": {
+    "LOADING": "Checking the hospital stay…",
+    "NOT_ADMITTED": "not admitted: not on the nurse station or the bed board.",
+    "ACUITY": "Acuity",
+    "ACUITY_PICK": "Choose the acuity",
+    "ADMIT_MOTHER": "Admit to maternity",
+    "ADMIT_NEWBORN": "Admit the newborn",
+    "NEWBORN_BY_DOCTOR": "A doctor admits the newborn.",
+    "BY_CLINICIAN": "A doctor or midwife admits her.",
+    "IN_BED": "in bed {{bed}}.",
+    "NO_BED": "admitted, no bed yet: not on the bed board.",
+    "BED": "Bed",
+    "BED_PICK": "Choose a bed",
+    "ASSIGN_BED": "Assign the bed",
+    "NO_FREE_BED": "No free bed suits this patient.",
+    "BED_BY_NURSE": "A ward nurse or a doctor assigns the bed:",
+    "OPEN_ADMISSIONS": "Admissions",
+    "REASON_LABOUR": "Labour",
+    "REASON_NEWBORN": "Newborn",
+    "ADMITTED": "{{patient}} admitted.",
+    "ADMIT_FAILED": "The admission could not be recorded.",
+    "BED_ASSIGNED": "Bed {{bed}} assigned.",
+    "BED_FAILED": "The bed could not be assigned.",
+    "LOAD_FAILED": "stay unknown: the admissions could not be read. Reload before admitting."
   }
 }
