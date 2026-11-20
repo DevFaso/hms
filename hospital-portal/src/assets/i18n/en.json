@@ -2941,13 +2941,13 @@
       "EXPLANATION_VALUE": "Explanation of the difference: {{ text }}",
       "REVIEW_NOTE_VALUE": "Review note: {{ text }}",
       "PHARMACY_LINK": "Till close",
-      "CASH_DIFFERENCE": "Cash difference",
       "LINES_WITH_DIFFERENCE": "{{count}} line(s) with a difference",
       "REMOVED_LINES": "Lines removed from invoices",
       "REMOVED_INVOICE": "Invoice",
       "REMOVED_LINE": "Line removed",
       "REMOVED_REASON": "Reason",
-      "REMOVED_BY": "Removed by"
+      "REMOVED_BY": "Removed by",
+      "CASH_DIFFERENCE_VALUE": "Cash difference: {{ amount }}"
     },
     "UNPRICED_LINES_REASON": "Reason for the lines at 0 F CFA",
     "UNPRICED_LINES_REASON_PLACEHOLDER": "Why are these lines issued free of charge?",

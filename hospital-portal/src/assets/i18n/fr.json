@@ -2941,13 +2941,13 @@
       "EXPLANATION_VALUE": "Explication de l’écart : {{ text }}",
       "REVIEW_NOTE_VALUE": "Note de vérification : {{ text }}",
       "PHARMACY_LINK": "Clôture de caisse",
-      "CASH_DIFFERENCE": "Écart espèces",
       "LINES_WITH_DIFFERENCE": "{{count}} ligne(s) avec écart",
       "REMOVED_LINES": "Lignes retirées des factures",
       "REMOVED_INVOICE": "Facture",
       "REMOVED_LINE": "Ligne retirée",
       "REMOVED_REASON": "Motif",
-      "REMOVED_BY": "Retirée par"
+      "REMOVED_BY": "Retirée par",
+      "CASH_DIFFERENCE_VALUE": "Écart espèces : {{ amount }}"
     },
     "UNPRICED_LINES_REASON": "Motif des lignes à 0 F CFA",
     "UNPRICED_LINES_REASON_PLACEHOLDER": "Pourquoi ces lignes sont-elles émises gratuitement ?",

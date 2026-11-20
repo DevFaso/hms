@@ -58,9 +58,6 @@
             <th scope="col" class="numeric">
               {{ 'BILLING.CASH_SESSION.CASH_TO_COUNT' | translate }}
             </th>
-            <th scope="col" class="numeric">
-              {{ 'BILLING.CASH_SESSION.CASH_DIFFERENCE' | translate }}
-            </th>
             <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
           </tr>
         </thead>
@@ -76,21 +73,25 @@
               </td>
               <td class="numeric">{{ s.totalIn | cfa }}</td>
               <td class="numeric">{{ s.totalOut > 0 ? '−' : '' }}{{ s.totalOut | cfa }}</td>
-              <td class="numeric">{{ s.cashToCount | cfa }}</td>
-              <!-- PR 10 review: the drawer's own difference, never a sum that nets a shortage against a surplus;
-                   and a flag as soon as any line differs. -->
-              <td
-                class="numeric"
-                [class.gap]="(s.cashDifference ?? 0) !== 0 || (s.differenceLines ?? 0) > 0"
-                [attr.data-testid]="'cash-difference-' + s.id"
-              >
-                {{
-                  s.cashDifference === null || s.cashDifference === undefined
-                    ? '—'
-                    : (s.cashDifference | cfa)
-                }}
+              <!-- PR 10 review: under the cash to count, the drawer's own difference (never a sum that nets a
+                   shortage against a surplus) and a flag as soon as any line differs. In the same cell: an
+                   eighth column of amounts did not fit a 1024 px screen (#1224 guard). -->
+              <td class="numeric">
+                {{ s.cashToCount | cfa }}
+                @if (s.cashDifference !== null && s.cashDifference !== undefined) {
+                  <span
+                    class="gap-flag"
+                    [class.gap]="s.cashDifference !== 0"
+                    [attr.data-testid]="'cash-difference-' + s.id"
+                  >
+                    {{
+                      'BILLING.CASH_SESSION.CASH_DIFFERENCE_VALUE'
+                        | translate: { amount: (s.cashDifference | cfa) }
+                    }}
+                  </span>
+                }
                 @if ((s.differenceLines ?? 0) > 0) {
-                  <span class="gap-flag" [attr.data-testid]="'cash-difference-flag-' + s.id">
+                  <span class="gap-flag gap" [attr.data-testid]="'cash-difference-flag-' + s.id">
                     {{
                       'BILLING.CASH_SESSION.LINES_WITH_DIFFERENCE'
                         | translate: { count: s.differenceLines }
@@ -131,7 +132,7 @@
             </tr>
             @if (pending()?.session?.id === s.id) {
               <tr>
-                <td colspan="8">
+                <td colspan="7">
                   <div class="field">
                     <label for="cash-supervisor-note">
                       {{
@@ -174,7 +175,7 @@
             }
             @if (expanded() === s.id) {
               <tr>
-                <td colspan="8">
+                <td colspan="7">
                   <div class="table-scroll">
                     <table class="data-table">
                       <thead>

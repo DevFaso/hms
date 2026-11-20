@@ -2941,13 +2941,13 @@
       "EXPLANATION_VALUE": "Explanation of the difference: {{ text }}",
       "REVIEW_NOTE_VALUE": "Review note: {{ text }}",
       "PHARMACY_LINK": "Till close",
-      "CASH_DIFFERENCE": "Diferencia en efectivo",
       "LINES_WITH_DIFFERENCE": "{{count}} línea(s) con diferencia",
       "REMOVED_LINES": "Líneas retiradas de las facturas",
       "REMOVED_INVOICE": "Factura",
       "REMOVED_LINE": "Línea retirada",
       "REMOVED_REASON": "Motivo",
-      "REMOVED_BY": "Retirada por"
+      "REMOVED_BY": "Retirada por",
+      "CASH_DIFFERENCE_VALUE": "Diferencia en efectivo: {{ amount }}"
     },
     "UNPRICED_LINES_REASON": "Motivo de las líneas a 0 F CFA",
     "UNPRICED_LINES_REASON_PLACEHOLDER": "¿Por qué se emiten estas líneas sin coste?",

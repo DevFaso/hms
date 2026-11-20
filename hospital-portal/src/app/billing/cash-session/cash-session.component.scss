@@ -55,7 +55,7 @@
   font-weight: 600;
 }
 
-/* PR 10 review: "2 lignes avec écart" under the cash difference, on its own line. */
+/* PR 10 review: the cash difference and "2 lignes avec écart", each on its own line under the cash to count. */
 .gap-flag {
   display: block;
   font-size: 0.8125rem;
@@ -151,18 +151,7 @@ tr.money-out td {
   font-size: 1.125rem;
 }
 
-/*
- * PR 10 review: « Caisses du jour » has eight columns, four of them amounts. With a cash difference shown
- * (a six-figure amount where a dash stood), the table was 16 px wider than a 1024 px screen leaves it and the
- * last columns scrolled out of sight (#1224 guard: no hidden column at a desktop width). Below 1200 px the
- * table is set a size smaller and the status badge loses its offset.
- */
+/* PR 10 review: in a table cell the status badge needs no offset (it cost the 1024 px screen 8 px). */
 .cash-supervisor .data-table .status-badge {
   margin-left: 0;
-}
-
-@media (max-width: 1200px) {
-  .cash-supervisor .data-table {
-    font-size: 0.875rem;
-  }
 }

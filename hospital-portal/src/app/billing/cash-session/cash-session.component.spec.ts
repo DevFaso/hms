@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
 import { CashSessionComponent } from './cash-session.component';
@@ -219,7 +219,7 @@ describe('CashSupervisorComponent (billing plan PR 10, QA D2326)', () => {
   });
 
   it('PR 10 review: a shortage and a surplus that sum to zero are flagged, with the cash difference', () => {
-    const { el } = render([
+    const { el, fixture } = render([
       session({
         id: 'a',
         mine: false,
@@ -239,12 +239,20 @@ describe('CashSupervisorComponent (billing plan PR 10, QA D2326)', () => {
         differenceLines: 0,
       }),
     ]);
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      BILLING: { CASH_SESSION: { CASH_DIFFERENCE_VALUE: 'Écart espèces : {{ amount }}' } },
+    });
+    translate.use('fr');
+    fixture.detectChanges();
     const differing = el.querySelector('[data-testid="cash-difference-a"]') as HTMLElement;
     expect(differing.classList).toContain('gap');
     expect(differing.textContent).toContain('500');
     expect(el.querySelector('[data-testid="cash-difference-flag-a"]')).not.toBeNull();
     const balanced = el.querySelector('[data-testid="cash-difference-b"]') as HTMLElement;
     expect(balanced.classList).not.toContain('gap');
+    // The table keeps seven columns: the difference sits under the cash to count.
+    expect(el.querySelectorAll('[data-testid="cash-supervisor-table"] thead th').length).toBe(7);
     expect(el.querySelector('[data-testid="cash-difference-flag-b"]')).toBeNull();
   });
 
