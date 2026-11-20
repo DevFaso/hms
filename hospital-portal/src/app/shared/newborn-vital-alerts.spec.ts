@@ -218,6 +218,42 @@ describe('maternal early warning alerts', () => {
     expect(String(toast.push.calls.mostRecent().args[1])).toContain('MATERNAL_EWS_PAGED');
   });
 
+  it("a withheld page never says the team was told: the heading is the neutral one, the sentence is the server's", () => {
+    const toast = { push: jasmine.createSpy('push') };
+    const withheld: NewbornVitalAlert = {
+      code: 'mews-high-withheld',
+      severity: 'URGENT',
+      type: 'MATERNAL_EARLY_WARNING',
+      message: 'Équipe déjà prévenue il y a moins de 30 min ; aucun nouvel appel.',
+    };
+    announceMaternalWarning([withheld], toast, translate, null);
+    expect(toast.push).toHaveBeenCalledOnceWith(
+      'error',
+      '[VITAL_LIMITS.MATERNAL_EWS_WARNING] Équipe déjà prévenue il y a moins de 30 min ; aucun nouvel appel.',
+      NEWBORN_WARNING_MS,
+    );
+    expect(String(toast.push.calls.mostRecent().args[1])).not.toContain('MATERNAL_EWS_PAGED');
+  });
+
+  it('a page that reached nobody never says the team was told either', () => {
+    const toast = { push: jasmine.createSpy('push') };
+    announceMaternalWarning(
+      [
+        {
+          ...level('WARNING'),
+          code: 'mews-low-medium-unsent',
+          message: "Personne n'a pu être prévenu.",
+        },
+      ],
+      toast,
+      translate,
+      null,
+    );
+    expect(String(toast.push.calls.mostRecent().args[1])).toBe(
+      "[VITAL_LIMITS.MATERNAL_EWS_WARNING] Personne n'a pu être prévenu.",
+    );
+  });
+
   it('a yellow shock index alone warns without saying anyone was paged', () => {
     const toast = { push: jasmine.createSpy('push') };
     announceMaternalWarning([shock], toast, translate, null);

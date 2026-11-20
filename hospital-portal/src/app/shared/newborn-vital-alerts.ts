@@ -129,13 +129,18 @@ export function announceHypertensionWarning(
   return true;
 }
 
+/** A maternal level whose page was SENT: the plain code, with no `-withheld` or `-unsent` ending. */
+const MEWS_PAGED_CODE = /^mews-(low-medium|medium|high)$/;
+
 /**
  * Policy 2026-11-20 (provisional, pending a named obstetric clinician's sign-off): the maternal early
  * warning of a pregnant or postpartum woman's set. The server scores the set with its one rule set
  * (national MEWS, CRADLE shock index) and returns the level of concern when a review is due and each
  * shock-index alert; the portal holds no band or threshold of its own. The set is saved either way,
- * and nothing waits on an acknowledgement. A level of concern (a `mews-…` code) means the team was
- * paged. Returns whether a warning was shown.
+ * and nothing waits on an acknowledgement. Only a plain level code (`mews-low-medium`, `mews-medium`,
+ * `mews-high`) means the team was paged: the server ends the code in `-withheld` when its cool-down
+ * held the page back (the team was told a moment ago) and in `-unsent` when it reached nobody, and its
+ * sentence says so. The heading then never claims the team was told. Returns whether a warning was shown.
  */
 export function announceMaternalWarning(
   alerts: NewbornVitalAlert[] | null | undefined,
@@ -146,7 +151,7 @@ export function announceMaternalWarning(
   const lines = (alerts ?? []).map((a) => a.message).filter((m) => !!m);
   if (!lines.length) return false;
   const urgent = (alerts ?? []).some((a) => a.severity === 'URGENT');
-  const paged = (alerts ?? []).some((a) => (a.code ?? '').startsWith('mews-'));
+  const paged = (alerts ?? []).some((a) => MEWS_PAGED_CODE.test(a.code ?? ''));
   const heading = String(
     translate.instant(
       paged ? 'VITAL_LIMITS.MATERNAL_EWS_PAGED' : 'VITAL_LIMITS.MATERNAL_EWS_WARNING',

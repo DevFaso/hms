@@ -197,9 +197,10 @@ public class VitalSignJudgement {
      * After the save: the NEWS2 escalation every path had, then the newborn notices. Never throws
      * for a notice that could not be created: the vital set is the record.
      */
-    public void escalate(PatientVitalSign saved, Judgement judgement, UUID patientId, UUID hospitalId,
-                         String recorderUsername, String visitPhysicianUsername) {
-        escalate(saved, judgement, patientId, hospitalId, recorderUsername, visitPhysicianUsername, false);
+    public MaternalEarlyWarningService.PageStatus escalate(PatientVitalSign saved, Judgement judgement, UUID patientId,
+                                                           UUID hospitalId, String recorderUsername,
+                                                           String visitPhysicianUsername) {
+        return escalate(saved, judgement, patientId, hospitalId, recorderUsername, visitPhysicianUsername, false);
     }
 
     /**
@@ -208,9 +209,11 @@ public class VitalSignJudgement {
      * not sent twice. Otherwise it fires at its usual trigger (a safety net: in labour it is the only page
      * for a low pressure or a fast pulse).
      */
-    public void escalate(PatientVitalSign saved, Judgement judgement, UUID patientId, UUID hospitalId,
-                         String recorderUsername, String visitPhysicianUsername, boolean news2CoveredByMaternityAlert) {
-        escalate(saved, judgement, patientId, hospitalId, recorderUsername, visitPhysicianUsername,
+    public MaternalEarlyWarningService.PageStatus escalate(PatientVitalSign saved, Judgement judgement, UUID patientId,
+                                                           UUID hospitalId, String recorderUsername,
+                                                           String visitPhysicianUsername,
+                                                           boolean news2CoveredByMaternityAlert) {
+        return escalate(saved, judgement, patientId, hospitalId, recorderUsername, visitPhysicianUsername,
             MaternityCover.of(news2CoveredByMaternityAlert));
     }
 
@@ -230,11 +233,24 @@ public class VitalSignJudgement {
         }
     }
 
-    /** The same, saying which page the maternity alerts of the reading already cover. */
-    public void escalate(PatientVitalSign saved, Judgement judgement, UUID patientId, UUID hospitalId,
-                         String recorderUsername, String visitPhysicianUsername, MaternityCover cover) {
-        escalateEarlyWarning(saved, judgement, patientId, hospitalId, recorderUsername, visitPhysicianUsername,
-            cover == null ? MaternityCover.NONE : cover);
+    /**
+     * The same, saying which page the maternity alerts of the reading already cover. Returns what became of
+     * the maternal early-warning page (null when none was considered: no maternal score, or a maternity
+     * alert covered it), so the recorder's warning can say it: {@link #maternalAlerts(Judgement,
+     * MaternalEarlyWarningService.PageStatus)}.
+     */
+    public MaternalEarlyWarningService.PageStatus escalate(PatientVitalSign saved, Judgement judgement, UUID patientId,
+                                                           UUID hospitalId, String recorderUsername,
+                                                           String visitPhysicianUsername, MaternityCover cover) {
+        MaternalEarlyWarningService.PageStatus maternalPage = escalateEarlyWarning(saved, judgement, patientId,
+            hospitalId, recorderUsername, visitPhysicianUsername, cover == null ? MaternityCover.NONE : cover);
+        notifyUrgentNewbornFindings(saved, judgement, patientId, hospitalId, recorderUsername, visitPhysicianUsername);
+        return maternalPage;
+    }
+
+    /** QA D1564: each URGENT newborn finding reaches the recorder and the physicians, in their language. */
+    private void notifyUrgentNewbornFindings(PatientVitalSign saved, Judgement judgement, UUID patientId,
+                                             UUID hospitalId, String recorderUsername, String visitPhysicianUsername) {
         if (judgement == null || !judgement.newborn() || patientId == null || hospitalId == null) {
             return;
         }
@@ -270,8 +286,11 @@ public class VitalSignJudgement {
      * sent for a reading any URGENT maternity alert already paged for (#1237); the maternal page only
      * for one an URGENT alert about the mother's own condition paged for.
      */
-    private void escalateEarlyWarning(PatientVitalSign saved, Judgement judgement, UUID patientId, UUID hospitalId,
-                                      String recorderUsername, String visitPhysicianUsername, MaternityCover cover) {
+    private MaternalEarlyWarningService.PageStatus escalateEarlyWarning(PatientVitalSign saved, Judgement judgement,
+                                                                        UUID patientId, UUID hospitalId,
+                                                                        String recorderUsername,
+                                                                        String visitPhysicianUsername,
+                                                                        MaternityCover cover) {
         MaternalEarlyWarning.Score maternal = judgement == null ? null : judgement.maternal();
         if (maternal == null && !cover.anyUrgentAlert()) {
             news2EscalationService.escalateIfNeeded(saved, patientId, hospitalId, recorderUsername,
@@ -285,9 +304,10 @@ public class VitalSignJudgement {
         if (maternal != null && !cover.urgentMaternalAlert() && maternalEarlyWarning != null) {
             // One reading never pages a person twice: whoever the severe-pressure notice reached is skipped
             // (that notice carries her score and its level, so nobody is left without them).
-            maternalEarlyWarning.escalate(saved, maternal, patientId, hospitalId, recorderUsername,
-                visitPhysicianUsername, paged);
+            return maternalEarlyWarning.page(saved, maternal, patientId, hospitalId, recorderUsername,
+                visitPhysicianUsername, paged).status();
         }
+        return null;
     }
 
     /**
@@ -386,6 +406,24 @@ public class VitalSignJudgement {
      * alert (the severe pressure keeps its own warning, {@link #postpartumAlerts}). Empty otherwise.
      */
     public List<NewbornVitalAlertDTO> maternalAlerts(Judgement judgement) {
+        return maternalAlerts(judgement, null);
+    }
+
+    static final String MEWS_WITHHELD_MESSAGE_KEY = "vitals.alert.msg.mews.withheld";
+    static final String MEWS_UNSENT_MESSAGE_KEY = "vitals.alert.msg.mews.unsent";
+    /** The code suffix of a level whose page the cool-down withheld; the portal then never says « prévenue ». */
+    public static final String WITHHELD_SUFFIX = "-withheld";
+    /** The code suffix of a level whose page reached nobody. */
+    public static final String UNSENT_SUFFIX = "-unsent";
+
+    /**
+     * The same, saying the truth about the page (review of #1241, round 2). When the cool-down withheld
+     * it, the level's code ends in {@value #WITHHELD_SUFFIX} and the sentence says the team was already
+     * told a moment ago and that no new page was sent; when a due page reached nobody, the code ends in
+     * {@value #UNSENT_SUFFIX} and the sentence says to tell the team directly. Only a page that was sent
+     * keeps the plain {@code mews-<level>} code, the one the portal reads as « l'équipe a été prévenue ».
+     */
+    public List<NewbornVitalAlertDTO> maternalAlerts(Judgement judgement, MaternalEarlyWarningService.PageStatus page) {
         MaternalEarlyWarning.Score score = judgement == null ? null : judgement.maternal();
         if (score == null || maternalEarlyWarning == null) {
             return List.of();
@@ -398,14 +436,25 @@ public class VitalSignJudgement {
         if (tier != MaternalEarlyWarning.Tier.LOW) {
             String code = "mews-" + tier.name().toLowerCase(java.util.Locale.ROOT).replace('_', '-');
             Integer review = MaternalEarlyWarning.reviewWithinMinutes(rules, tier);
+            long observeWithin =
+                MaternalEarlyWarning.observationInterval(rules, score, java.time.Duration.ofHours(12)).toMinutes();
+            String message;
+            if (page == MaternalEarlyWarningService.PageStatus.WITHHELD) {
+                code += WITHHELD_SUFFIX;
+                message = messageSource.getMessage(MEWS_WITHHELD_MESSAGE_KEY, new Object[]{score.total(),
+                    rules.getEscalation().getPageCoolDownMinutes(), observeWithin}, code, locale);
+            } else if (page == MaternalEarlyWarningService.PageStatus.NOBODY) {
+                code += UNSENT_SUFFIX;
+                message = messageSource.getMessage(MEWS_UNSENT_MESSAGE_KEY, new Object[]{score.total()}, code, locale);
+            } else {
+                message = messageSource.getMessage(MEWS_MESSAGE_PREFIX + tier.name(),
+                    new Object[]{score.total(), review == null ? 0 : review, observeWithin}, code, locale);
+            }
             alerts.add(NewbornVitalAlertDTO.builder()
                 .code(code)
                 .severity(tier == MaternalEarlyWarning.Tier.HIGH ? "URGENT" : "WARNING")
                 .type(MATERNAL_ALERT_TYPE)
-                .message(messageSource.getMessage(MEWS_MESSAGE_PREFIX + tier.name(),
-                    new Object[]{score.total(), review == null ? 0 : review,
-                        MaternalEarlyWarning.observationInterval(rules, score, java.time.Duration.ofHours(12)).toMinutes()},
-                    code, locale))
+                .message(message)
                 .build());
         }
         for (MaternalEarlyWarning.HardAlert alert : score.alerts()) {

@@ -706,4 +706,99 @@ class VitalSignJudgementTest {
         judgement.escalate(vital, null, mother.getId(), HERE, "mw", null, VitalSignJudgement.MaternityCover.NONE);
         verify(news2).escalateIfNeeded(vital, mother.getId(), HERE, "mw", null);
     }
+
+    // ---- Review of #1241, round 2 ----
+
+    /** The maternal warning with a cool-down table that says: she was paged at every level a moment ago. */
+    private void withARecentPageOnRecord() {
+        when(maternityStaff.findActiveUsernamesByHospitalAndRole(HERE, "ROLE_MIDWIFE")).thenReturn(List.of("sf_a"));
+        when(maternityStaff.findActiveUsernamesByHospitalAndRole(HERE, "ROLE_DOCTOR")).thenReturn(List.of("dr_a", "dr_b"));
+        when(news2.recipients(any(), any(), any(), any()))
+            .thenReturn(new LinkedHashSet<>(List.of("nurse_a", "dr_a")));
+        MaternalEarlyWarningService service = new MaternalEarlyWarningService(new MaternalEarlyWarningRules(),
+            new News2Applicability(SevereHypertensionFixtures.actingHospitalOnly(deliveries)), news2, maternityStaff,
+            mock(com.example.hms.repository.OnCallScheduleRepository.class),
+            mock(com.example.hms.repository.AdmissionRepository.class), notifications, java.time.Clock.systemUTC());
+        com.example.hms.repository.PatientVitalSignRepository vitals =
+            mock(com.example.hms.repository.PatientVitalSignRepository.class);
+        when(vitals.existsByPatient_IdAndHospital_IdAndMewsPagedTierInAndMewsPagedAtGreaterThanEqual(any(), any(),
+            any(), any())).thenReturn(true);
+        service.setVitalSignRepository(vitals);
+        judgement.setMaternalEarlyWarning(service);
+    }
+
+    @Test
+    @DisplayName("round 2: a withheld page pages nobody and the recorder reads « déjà prévenue », with a distinct code")
+    void round2_theRecorderIsToldWhenThePageWasWithheld() {
+        withARecentPageOnRecord();
+        LocaleContextHolder.setLocale(Locale.FRENCH);
+        Patient mother = motherDeliveredBefore(true);
+        // Not red: pulse 110 three days after the birth scores 2 (low-medium), no pressure alert.
+        PatientVitalSign vital = calm(bpSet(mother)).heartRateBpm(110).systolicBpMmHg(130).build();
+        VitalSignJudgement.Judgement j = judgement.judge(vital);
+        assertThat(j.maternal().red()).isFalse();
+
+        MaternalEarlyWarningService.PageStatus page =
+            judgement.escalate(vital, j, mother.getId(), HERE, "nurse_a", null);
+
+        assertThat(page).isEqualTo(MaternalEarlyWarningService.PageStatus.WITHHELD);
+        verifyNoInteractions(notifications);
+        List<NewbornVitalAlertDTO> alerts = judgement.maternalAlerts(j, page);
+        assertThat(alerts).singleElement().satisfies(a -> {
+            // Not the plain « mews-low-medium » the portal reads as « l'équipe soignante a été prévenue ».
+            assertThat(a.getCode()).isEqualTo("mews-low-medium-withheld");
+            assertThat(a.getMessage()).contains("Score d'alerte précoce maternelle 2")
+                .contains("a déjà été prévenue il y a moins de 30 min")
+                .contains("aucun nouvel appel n'a été envoyé");
+        });
+        // The score is still computed and the set still flagged: only the page was withheld.
+        assertThat(j.maternal().total()).isEqualTo(2);
+        assertThat(vital.isClinicallySignificant()).isTrue();
+    }
+
+    @Test
+    @DisplayName("round 2: on a vitals path a severe shock pages although she was paged at high a moment ago")
+    void round2_aSevereShockOnAVitalsPathIsNeverSilenced() {
+        withARecentPageOnRecord();
+        LocaleContextHolder.setLocale(Locale.FRENCH);
+        Patient mother = motherDeliveredBefore(true);
+        // Pulse 160 over 85/50: shock index 1.88.
+        PatientVitalSign vital = calm(bpSet(mother)).heartRateBpm(160).systolicBpMmHg(85).diastolicBpMmHg(50).build();
+        VitalSignJudgement.Judgement j = judgement.judge(vital);
+        assertThat(j.maternal().alerts()).containsExactly(MaternalEarlyWarning.HardAlert.SEVERE_SHOCK);
+
+        MaternalEarlyWarningService.PageStatus page =
+            judgement.escalate(vital, j, mother.getId(), HERE, "nurse_a", null);
+
+        assertThat(page).isEqualTo(MaternalEarlyWarningService.PageStatus.SENT);
+        for (String reader : List.of("nurse_a", "dr_a", "sf_a", "dr_b")) {
+            verify(notifications).createNotification(eq("mews.escalation.red"), any(), eq(reader),
+                eq(MaternalEarlyWarningService.NOTIFICATION_TYPE));
+        }
+        // The recorder's warning keeps the plain code: the team WAS told.
+        assertThat(judgement.maternalAlerts(j, page)).extracting(NewbornVitalAlertDTO::getCode)
+            .containsExactly("mews-high", "maternal-severe-shock");
+    }
+
+    @Test
+    @DisplayName("round 2: a due page that reached nobody is not called sent: the recorder is told to alert the team herself")
+    void round2_aPageThatReachedNobodyIsSaidSo() {
+        withTheMaternalWarning();
+        LocaleContextHolder.setLocale(Locale.FRENCH);
+        Patient mother = motherDeliveredBefore(true);
+        PatientVitalSign vital = calm(bpSet(mother)).heartRateBpm(110).systolicBpMmHg(130).build();
+        VitalSignJudgement.Judgement j = judgement.judge(vital);
+
+        List<NewbornVitalAlertDTO> alerts = judgement.maternalAlerts(j, MaternalEarlyWarningService.PageStatus.NOBODY);
+
+        assertThat(alerts).singleElement().satisfies(a -> {
+            assertThat(a.getCode()).isEqualTo("mews-low-medium-unsent");
+            assertThat(a.getMessage()).contains("personne n'a pu être prévenu").contains("Prévenir directement");
+        });
+        // A page that was sent, or one nobody reported on, keeps the plain code and sentence.
+        assertThat(judgement.maternalAlerts(j, MaternalEarlyWarningService.PageStatus.SENT))
+            .extracting(NewbornVitalAlertDTO::getCode).containsExactly("mews-low-medium");
+        assertThat(judgement.maternalAlerts(j)).extracting(NewbornVitalAlertDTO::getCode)
+            .containsExactly("mews-low-medium");
+    }
 }

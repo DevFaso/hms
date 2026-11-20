@@ -517,4 +517,98 @@ class MaternalEarlyWarningServiceTest {
             null, Set.of())).isNotEmpty();
         verifyNoInteractions(vitals);
     }
+
+    // ---- Review of #1241, round 2: a RED alert is never withheld by the cool-down ----
+
+    /** Pulse 160 over 85/50: shock index 1.88, a RED severe shock; the score itself is 6. */
+    private PatientVitalSign severeShock() {
+        return set().heartRateBpm(160).systolicBpMmHg(85).diastolicBpMmHg(50).build();
+    }
+
+    @Test
+    @DisplayName("round 2: a high page 10 min ago does not silence a severe shock; the cool-down is not even asked")
+    void round2_aRedAlertIsNeverWithheld() {
+        com.example.hms.repository.PatientVitalSignRepository vitals = withTheCoolDown();
+        pagedBefore(vitals, "HIGH", 10);
+        under(News2Applicability.Status.OBSTETRIC, null);
+        PatientVitalSign shock = severeShock();
+        Score score = service.assess(mother, HERE, shock);
+        assertThat(score.total()).isEqualTo(6);
+        assertThat(score.alerts()).containsExactly(MaternalEarlyWarning.HardAlert.SEVERE_SHOCK);
+        assertThat(score.responseTier()).isEqualTo(MaternalEarlyWarning.Tier.HIGH);
+
+        MaternalEarlyWarningService.Page page =
+            service.page(shock, score, mother.getId(), HERE, "sf.recorder", null, Set.of());
+
+        assertThat(page.status()).isEqualTo(MaternalEarlyWarningService.PageStatus.SENT);
+        assertThat(page.paged()).contains("sf.recorder", "sf.oncall", "dr.oncall");
+        verify(notifications).createNotification(eq("mews.escalation.red"), any(), eq("dr.oncall"),
+            eq(MaternalEarlyWarningService.NOTIFICATION_TYPE));
+        assertThat(shock.getMewsPagedTier()).isEqualTo("HIGH");
+        verifyNoInteractions(vitals);
+
+        // The same high level WITHOUT a red alert is withheld by that same page of 10 minutes ago.
+        PatientVitalSign high = setAt(MaternalEarlyWarning.Tier.HIGH);
+        Score plain = service.assess(mother, HERE, high);
+        assertThat(plain.red()).isFalse();
+        MaternalEarlyWarningService.Page withheld =
+            service.page(high, plain, mother.getId(), HERE, "sf.recorder", null, Set.of());
+        assertThat(withheld.status()).isEqualTo(MaternalEarlyWarningService.PageStatus.WITHHELD);
+        assertThat(withheld.paged()).isEmpty();
+        assertThat(high.getMewsPagedTier()).isNull();
+    }
+
+    @Test
+    @DisplayName("round 2: a red pressure paged at 10:00 does not silence a severe shock at 10:20")
+    void round2_aRedPageDoesNotSilenceTheNextRedAlert() {
+        com.example.hms.repository.PatientVitalSignRepository vitals = withTheCoolDown();
+        under(News2Applicability.Status.OBSTETRIC, null);
+        // 10:00, 164/114: a RED severe pressure. It pages and marks the reading at the high level.
+        PatientVitalSign pressure = set().systolicBpMmHg(164).diastolicBpMmHg(114).build();
+        Score first = service.assess(mother, HERE, pressure);
+        assertThat(first.alerts()).containsExactly(MaternalEarlyWarning.HardAlert.SEVERE_HYPERTENSION);
+        assertThat(service.page(pressure, first, mother.getId(), HERE, "sf.recorder", null, Set.of()).status())
+            .isEqualTo(MaternalEarlyWarningService.PageStatus.SENT);
+        assertThat(pressure.getMewsPagedTier()).isEqualTo("HIGH");
+
+        // 10:20: that page is on record, 20 minutes old. The severe shock still pages.
+        pagedBefore(vitals, "HIGH", 20);
+        clearInvocations(notifications);
+        PatientVitalSign shock = severeShock();
+        MaternalEarlyWarningService.Page page = service.page(shock, service.assess(mother, HERE, shock),
+            mother.getId(), HERE, "sf.recorder", null, Set.of());
+
+        assertThat(page.status()).isEqualTo(MaternalEarlyWarningService.PageStatus.SENT);
+        verify(notifications).createNotification(eq("mews.escalation.red"), any(), eq("sf.oncall"),
+            eq(MaternalEarlyWarningService.NOTIFICATION_TYPE));
+    }
+
+    @Test
+    @DisplayName("round 2: the page says what became of it: not due, sent, withheld, or nobody reached")
+    void round2_thePageSaysWhatBecameOfIt() {
+        com.example.hms.repository.PatientVitalSignRepository vitals = withTheCoolDown();
+        under(News2Applicability.Status.OBSTETRIC, null);
+        PatientVitalSign calm = set().build();
+        assertThat(service.page(calm, service.assess(mother, HERE, calm), mother.getId(), HERE, "sf.recorder", null,
+            Set.of()).status()).isEqualTo(MaternalEarlyWarningService.PageStatus.NOT_DUE);
+
+        PatientVitalSign lowMedium = setAt(MaternalEarlyWarning.Tier.LOW_MEDIUM);
+        assertThat(service.page(lowMedium, service.assess(mother, HERE, lowMedium), mother.getId(), HERE,
+            "sf.recorder", null, Set.of()).status()).isEqualTo(MaternalEarlyWarningService.PageStatus.SENT);
+
+        pagedBefore(vitals, "LOW_MEDIUM", 5);
+        PatientVitalSign again = setAt(MaternalEarlyWarning.Tier.LOW_MEDIUM);
+        assertThat(service.page(again, service.assess(mother, HERE, again), mother.getId(), HERE, "sf.recorder", null,
+            Set.of()).status()).isEqualTo(MaternalEarlyWarningService.PageStatus.WITHHELD);
+
+        // Nobody to tell (no recorder, nobody holds a role, every notice fails): the page is not called sent.
+        pagedBefore(vitals, "LOW_MEDIUM", 45);
+        doThrow(new IllegalStateException("down")).when(notifications)
+            .createNotification(anyString(), any(), anyString(), anyString());
+        PatientVitalSign unreachable = setAt(MaternalEarlyWarning.Tier.LOW_MEDIUM);
+        MaternalEarlyWarningService.Page nobody = service.page(unreachable, service.assess(mother, HERE, unreachable),
+            mother.getId(), HERE, "sf.recorder", null, Set.of());
+        assertThat(nobody.status()).isEqualTo(MaternalEarlyWarningService.PageStatus.NOBODY);
+        assertThat(unreachable.getMewsPagedTier()).isNull();
+    }
 }

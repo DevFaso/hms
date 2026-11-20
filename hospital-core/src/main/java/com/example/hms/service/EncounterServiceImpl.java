@@ -2311,7 +2311,8 @@ public class EncounterServiceImpl implements EncounterService {
         // QA D265 (D207 on the triage path): a triage set scoring MEDIUM/HIGH
         // alerts the triage nurse and the visit's clinician, through the same
         // escalation every other vitals path uses.
-        vitalSignJudgement.escalate(vital, judgement,
+        com.example.hms.service.vitals.MaternalEarlyWarningService.PageStatus maternalPage =
+            vitalSignJudgement.escalate(vital, judgement,
                 encounter.getPatient() != null ? encounter.getPatient().getId() : null,
                 encounter.getHospital() != null ? encounter.getHospital().getId() : null,
                 actorUsername, visitPhysicianUsername(encounter));
@@ -2357,7 +2358,7 @@ public class EncounterServiceImpl implements EncounterService {
                 .newbornAlerts(vitalSignJudgement.alerts(judgement))
                 .postpartumAlerts(vitalSignJudgement.postpartumAlerts(judgement))
                 .hypertensionAlerts(vitalSignJudgement.hypertensionAlerts(judgement))
-                .maternalAlerts(vitalSignJudgement.maternalAlerts(judgement))
+                .maternalAlerts(vitalSignJudgement.maternalAlerts(judgement, maternalPage))
                 .build();
     }
 

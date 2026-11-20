@@ -121,14 +121,15 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         PatientVitalSign saved = vitalSignRepository.save(entity);
         // QA D207: the same NEWS2 escalation as the nurse station's capture (and D1564's newborn notices).
         String recorderUsername = staff != null && staff.getUser() != null ? staff.getUser().getUsername() : null;
-        vitalSignJudgement.escalate(saved, judgement, patientId, hospital != null ? hospital.getId() : null,
-            recorderUsername, null);
+        com.example.hms.service.vitals.MaternalEarlyWarningService.PageStatus maternalPage =
+            vitalSignJudgement.escalate(saved, judgement, patientId, hospital != null ? hospital.getId() : null,
+                recorderUsername, null);
         PatientVitalSignResponseDTO response = responder(hospital != null ? hospital.getId() : null).apply(saved);
         if (response != null) {
             response.setNewbornAlerts(vitalSignJudgement.alerts(judgement));
             response.setPostpartumAlerts(vitalSignJudgement.postpartumAlerts(judgement));
             response.setHypertensionAlerts(vitalSignJudgement.hypertensionAlerts(judgement));
-            response.setMaternalAlerts(vitalSignJudgement.maternalAlerts(judgement));
+            response.setMaternalAlerts(vitalSignJudgement.maternalAlerts(judgement, maternalPage));
         }
         return response;
     }

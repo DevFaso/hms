@@ -241,6 +241,34 @@ class MaternalEarlyWarningRulesGuardTest {
         assertThat(body).contains("vitalSignMapper::toResponse").doesNotContain("responder(");
     }
 
+    /**
+     * Review of #1241, round 2: the cool-down is asked in ONE place, and never for a RED add-on alert. A
+     * high page of ten minutes ago silenced a severe shock on the vitals paths, where nothing else pages.
+     * A second call site, or the one call without the red exemption, fails here.
+     */
+    @Test
+    void theCoolDownNeverWithholdsARedAlert() throws IOException {
+        String service = code("service/vitals/MaternalEarlyWarningService.java");
+        Matcher calls = Pattern.compile("pagedRecently\\(").matcher(service);
+        int occurrences = 0;
+        while (calls.find()) {
+            occurrences++;
+        }
+        assertThat(occurrences).as("pagedRecently: its declaration and exactly one call").isEqualTo(2);
+        assertThat(Pattern.compile("!\\s*score\\.red\\(\\)\\s*&&\\s*pagedRecently\\(").matcher(service).find())
+            .as("the cool-down call is guarded by !score.red(): a RED alert is never withheld").isTrue();
+        // The three write paths hand the page's outcome to the recorder's warning: it never says « prévenue »
+        // for a page that was withheld.
+        for (String writer : List.of("service/impl/PatientVitalSignServiceImpl.java",
+                "service/impl/NurseTaskServiceImpl.java", "service/EncounterServiceImpl.java")) {
+            assertThat(code(writer)).as(writer).contains("maternalAlerts(judgement, maternalPage)")
+                .doesNotContain("maternalAlerts(judgement)");
+        }
+        String portal = Files.readString(PORTAL.resolve("app/shared/newborn-vital-alerts.ts"), StandardCharsets.UTF_8);
+        assertThat(portal).as("the portal says « prévenue » only for a plain mews-<level> code")
+            .contains("MEWS_PAGED_CODE");
+    }
+
     /** The portal draws what the server computed: it never scores a vital sign or holds a band itself. */
     @Test
     void thePortalHoldsNoMaternalThresholdOfItsOwn() throws IOException {

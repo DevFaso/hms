@@ -52,8 +52,9 @@ import java.util.UUID;
  * A person another notice already reached for this very reading (the severe blood-pressure notice,
  * which carries the score and the level) is not paged a second time. Cool-down (30 minutes,
  * provisional): a page is withheld when she was paged at the same level or a higher one in that time;
- * a level above every recent page always goes through at once. Only the page is withheld: the score,
- * the chart, the round and the recorder's on-screen warning follow every reading.
+ * a level above every recent page always goes through at once, and a RED add-on alert is never
+ * withheld. Only the page is withheld: the score, the chart, the round and the recorder's on-screen
+ * warning follow every reading, and that warning says the page was withheld.
  * It runs in the caller's transaction, like the NEWS2 escalation: if the vital set commits, so do its
  * notifications and the mark the cool-down reads; a notice that cannot be created never fails the set.
  */
@@ -155,20 +156,53 @@ public class MaternalEarlyWarningService {
         this.vitalSignRepository = vitalSignRepository;
     }
 
-    /**
-     * Pages the level's circle, except anyone in {@code alreadyPaged} (reached by another notice for
-     * this reading: the severe-pressure notice, which carries the score and the level). Returns who was
-     * paged. Nobody at the low level, and nobody when she was already paged at this level or a higher
-     * one within the cool-down (30 minutes; a level above every recent page goes through at once).
-     * The reading that pages is marked with its level and the time, which is what the cool-down reads.
-     */
+    /** What became of the page of one reading. The recorder is told exactly this, never more. */
+    public enum PageStatus {
+        /** A low level: no page is due. */
+        NOT_DUE,
+        /** Somebody was told of this level for this reading (the page, or the pressure notice that carries it). */
+        SENT,
+        /** The cool-down held the page back: the team was paged at this level or a higher one a moment ago. */
+        WITHHELD,
+        /** A page was due and reached nobody. */
+        NOBODY
+    }
+
+    /** The outcome of {@link #page}: what became of the page, and who it reached. */
+    public record Page(PageStatus status, Set<String> paged) {
+        public Page {
+            paged = paged == null ? Set.of() : java.util.Collections.unmodifiableSet(new LinkedHashSet<>(paged));
+        }
+    }
+
+    /** {@link #page}, for a caller that only needs to know who was paged. */
     public Set<String> escalate(PatientVitalSign saved, Score score, UUID patientId, UUID hospitalId,
                                 String recorderUsername, String visitPhysicianUsername,
                                 Collection<String> alreadyPaged) {
+        return page(saved, score, patientId, hospitalId, recorderUsername, visitPhysicianUsername, alreadyPaged)
+            .paged();
+    }
+
+    /**
+     * Pages the level's circle, except anyone in {@code alreadyPaged} (reached by another notice for
+     * this reading: the severe-pressure notice, which carries the score and the level). Nobody at the
+     * low level, and nobody when she was already paged at this level or a higher one within the
+     * cool-down (30 minutes; a level above every recent page goes through at once).
+     *
+     * <p><b>A RED add-on alert is never withheld</b> (review of #1241, round 2): a severe shock index or
+     * a severe pressure is a new emergency whatever was paged before. On the vitals paths nothing else
+     * pages for it; a high page of ten minutes ago must not silence it.
+     *
+     * <p>The reading that pages is marked with its level and the time, which is what the cool-down reads.
+     */
+    public Page page(PatientVitalSign saved, Score score, UUID patientId, UUID hospitalId,
+                     String recorderUsername, String visitPhysicianUsername, Collection<String> alreadyPaged) {
         Set<String> paged = new LinkedHashSet<>();
-        if (score == null || !score.needsEscalation() || patientId == null || hospitalId == null
-            || pagedRecently(patientId, hospitalId, score.responseTier())) {
-            return paged;
+        if (score == null || !score.needsEscalation() || patientId == null || hospitalId == null) {
+            return new Page(PageStatus.NOT_DUE, paged);
+        }
+        if (!score.red() && pagedRecently(patientId, hospitalId, score.responseTier())) {
+            return new Page(PageStatus.WITHHELD, paged);
         }
         Set<String> skip = lowerCased(alreadyPaged);
         boolean toldByAnotherNotice = !skip.isEmpty();
@@ -189,11 +223,12 @@ public class MaternalEarlyWarningService {
                 log.warn("Maternal early-warning notice not created: {}", ex.getClass().getSimpleName());
             }
         }
-        if (saved != null && (toldByAnotherNotice || !paged.isEmpty())) {
+        boolean told = toldByAnotherNotice || !paged.isEmpty();
+        if (saved != null && told) {
             saved.setMewsPagedTier(score.responseTier().name());
             saved.setMewsPagedAt(LocalDateTime.now(clock));
         }
-        return paged;
+        return new Page(told ? PageStatus.SENT : PageStatus.NOBODY, paged);
     }
 
     /**

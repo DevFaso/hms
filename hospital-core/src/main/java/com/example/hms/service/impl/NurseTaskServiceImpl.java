@@ -2417,7 +2417,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         vitalSignRepository.save(vital);
         // QA D207: MEDIUM/HIGH NEWS2 alerts the nurse and the responsible physician;
         // QA D1564: so does an urgent newborn finding.
-        vitalSignJudgement.escalate(vital, judgement, patientId, hospitalId, usernameOf(nurseUserId), null);
+        com.example.hms.service.vitals.MaternalEarlyWarningService.PageStatus maternalPage =
+            vitalSignJudgement.escalate(vital, judgement, patientId, hospitalId, usernameOf(nurseUserId), null);
 
         // Advance encounter status after vitals are captured.
         // ARRIVED → WAITING_FOR_PHYSICIAN  (vitals captured = triage complete)
@@ -2449,7 +2450,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .newbornAlerts(vitalSignJudgement.alerts(judgement))
             .postpartumAlerts(vitalSignJudgement.postpartumAlerts(judgement))
             .hypertensionAlerts(vitalSignJudgement.hypertensionAlerts(judgement))
-            .maternalAlerts(vitalSignJudgement.maternalAlerts(judgement))
+            .maternalAlerts(vitalSignJudgement.maternalAlerts(judgement, maternalPage))
             .build();
     }
 
