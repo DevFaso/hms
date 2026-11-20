@@ -126,3 +126,15 @@
     padding: 1rem;
   }
 }
+
+/* Long words (or a label not yet loaded) wrap instead of widening the page. */
+.page-header > div,
+.page-title,
+.page-subtitle,
+.what-to-do,
+.state-block,
+.card-head,
+.critical-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
