@@ -93,7 +93,8 @@ type TabKey =
   | 'encounters'
   | 'appointments'
   | 'directives'
-  | 'documents';
+  | 'documents'
+  | 'nursing-notes';
 
 @Component({
   selector: 'app-patient-detail',
@@ -190,6 +191,13 @@ export class PatientDetailComponent implements OnInit {
         visible: this.canViewFluidBalance(),
       },
       { key: 'micro', section: 'clinical', label: 'MICRO.TAB', visible: this.canViewMicro() },
+      {
+        // QA D2583 (r65): the nursing care notes, with their addenda, on the chart itself.
+        key: 'nursing-notes',
+        section: 'clinical',
+        label: 'NURSING_NOTES.TAB',
+        visible: this.canReadNursingNotes(),
+      },
       {
         key: 'chart-review',
         section: 'clinical',

@@ -3,12 +3,20 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
   Input,
   OnChanges,
   inject,
   signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { TranslateService } from '@ngx-translate/core';
+import { RoleContextService } from '../../core/role-context.service';
+import { ToastService } from '../../core/toast.service';
+import { refusalReason, refusedFieldReasons } from '../../shared/refusal-reason';
+import { refuseFields } from '../../shared/forms/invalid-fields';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subscription } from 'rxjs';
 import { TranslateModule } from '@ngx-translate/core';
@@ -35,6 +43,8 @@ export interface NursingNotePart {
   imports: [
     NoteAddendaComponent,
     CommonModule,
+    FormsModule,
+    SubmitGuardDirective,
     TranslateModule,
     ServerTimePipe,
     EnumLabelPipe,
@@ -61,7 +71,22 @@ export class NursingNotesPanelComponent implements OnChanges {
   private readonly service = inject(NursingNoteService);
   private readonly destroyRef = inject(DestroyRef);
 
+  /** QA D2583: the notes this hospital wrote take an addendum here; `false` shows them read-only. */
+  @Input() allowAddendum = true;
+  /** The empty state: « for this visit » in a visit, « for this patient » on the chart and the ward. */
+  @Input() emptyKey = 'NURSING_NOTES.EMPTY';
+
+  private readonly roleContext = inject(RoleContextService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
+
   readonly notes = signal<NursingNote[]>([]);
+  /** QA D2583 (r65): the note whose addendum form is open, its text, attestation and save state. */
+  readonly addendumFor = signal<string | null>(null);
+  addendumText = '';
+  addendumAttested = false;
+  readonly addendumSaving = signal(false);
   readonly loading = signal(false);
   readonly failed = signal(false);
 
@@ -93,6 +118,64 @@ export class NursingNotesPanelComponent implements OnChanges {
           this.notes.set([]);
           this.failed.set(true);
           this.loading.set(false);
+        },
+      });
+  }
+
+  /**
+   * QA D2583: an addendum is offered on a note of the acting hospital (the
+   * server loads the note by id AND hospital), to the roles that may write one.
+   */
+  canAddend(note: NursingNote): boolean {
+    if (!this.allowAddendum) return false;
+    if (!this.roleContext.hasAnyActiveRole(NursingNoteService.ADDENDUM_ROLES)) return false;
+    return !this.hospitalId || !note.hospitalId || note.hospitalId === this.hospitalId;
+  }
+
+  openAddendum(note: NursingNote): void {
+    this.addendumFor.set(note.id);
+    this.addendumText = '';
+    this.addendumAttested = false;
+  }
+
+  cancelAddendum(): void {
+    this.addendumFor.set(null);
+    this.addendumText = '';
+    this.addendumAttested = false;
+  }
+
+  saveAddendum(note: NursingNote): void {
+    const content = this.addendumText.trim();
+    if (!content || this.addendumSaving()) return;
+    this.addendumSaving.set(true);
+    this.service
+      .appendAddendum(note.id, content, this.addendumAttested, this.hospitalId ?? note.hospitalId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (updated) => {
+          // The server answers with the whole note, its addenda included.
+          this.notes.update((list) =>
+            list.map((n) => (n.id === note.id ? { ...n, ...updated, id: n.id } : n)),
+          );
+          this.addendumSaving.set(false);
+          this.cancelAddendum();
+          this.toast.success(this.translate.instant('NURSING_NOTES.ADDENDUM_SAVED'));
+        },
+        error: (err: unknown) => {
+          this.addendumSaving.set(false);
+          // The server's own reason at the field it names (NursingNoteAddendumRequestDTO.content).
+          const id = `nn-addendum-${note.id}`;
+          const refused = refusedFieldReasons(err, { content: id });
+          if (refused.length) {
+            refuseFields(
+              this.host.nativeElement,
+              refused.map(([fieldId, message]) => ({ id: fieldId, message })),
+              [id],
+            );
+          }
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('NURSING_NOTES.ADDENDUM_FAILED'),
+          );
         },
       });
   }

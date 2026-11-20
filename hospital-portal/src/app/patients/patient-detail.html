@@ -662,6 +662,14 @@
     }
 
     <!-- ═══ Chart Review Tab ═══ -->
+    <!-- QA D2583 (r65): the nursing care notes on the chart, each open to an addendum. -->
+    @if (activeTab() === 'nursing-notes' && canReadNursingNotes()) {
+      <app-nursing-notes-panel
+        [patientId]="p.id"
+        [hospitalId]="scopedHospitalId()"
+        emptyKey="NURSING_NOTES.EMPTY_PATIENT"
+      />
+    }
     @if (activeTab() === 'chart-review' && canViewChartReview()) {
       <app-chart-review [patientId]="p.id" />
     }
