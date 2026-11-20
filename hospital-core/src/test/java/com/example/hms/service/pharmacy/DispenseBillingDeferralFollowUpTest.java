@@ -38,7 +38,10 @@ class DispenseBillingDeferralFollowUpTest {
 
     private final InBasketService inBasket = mock(InBasketService.class);
     private final UserRoleHospitalAssignmentRepository assignments = mock(UserRoleHospitalAssignmentRepository.class);
-    private final DispenseBillingDeferralFollowUp followUp = new DispenseBillingDeferralFollowUp(inBasket, assignments);
+    private final com.example.hms.service.NotificationService notifications =
+            mock(com.example.hms.service.NotificationService.class);
+    private final DispenseBillingDeferralFollowUp followUp =
+            new DispenseBillingDeferralFollowUp(inBasket, assignments, notifications);
 
     private final UUID hospitalId = UUID.randomUUID();
     private final UUID pharmacist = UUID.randomUUID();
@@ -88,19 +91,47 @@ class DispenseBillingDeferralFollowUpTest {
     }
 
     @Test
-    @DisplayName("a third-party cover asked for is an urgent task for billing; a credit files none (finance has no in-basket)")
-    void aThirdPartyCoverIsATaskAndACreditIsNot() {
+    @DisplayName("a third-party cover asked for is an urgent task for billing; a credit notifies whoever may grant it")
+    void aThirdPartyCoverIsATaskAndACreditIsANotification() {
         when(assignments.findLiveUsersAtHospitalWithRoleCodes(any(), any()))
                 .thenReturn(List.of(user(UUID.randomUUID())));
+        User accountant = user(UUID.randomUUID());
+        accountant.setUsername("mariam.comptable");
+        User admin = user(UUID.randomUUID());
+        admin.setUsername("issa.admin");
+        User asker = user(pharmacist);
+        asker.setUsername("awa.pharmacienne");
+        when(assignments.findLiveUsersAtHospitalWithRoleCodes(hospitalId,
+                Set.of("ROLE_ACCOUNTANT", "ROLE_HOSPITAL_ADMIN"))).thenReturn(List.of(accountant, admin, asker));
 
         followUp.approvalNeeded(deferral(DispenseBillingDeferralKind.OUTPATIENT_CREDIT), "Awa", "Amoxicilline");
         verify(inBasket, never()).createItemInNewTransaction(any());
+        // Review of #1244: accountants and hospital admins read no in-basket: each gets a notification, never
+        // the person who asked.
+        verify(notifications).createNotification(org.mockito.ArgumentMatchers.eq("pharmacy.deferral.followUp.creditRequested"),
+                any(), org.mockito.ArgumentMatchers.eq("mariam.comptable"), org.mockito.ArgumentMatchers.eq("PHARMACY_BILLING_DEFERRAL"));
+        verify(notifications).createNotification(any(), any(), org.mockito.ArgumentMatchers.eq("issa.admin"), any());
+        verify(notifications, never()).createNotification(any(), any(), org.mockito.ArgumentMatchers.eq("awa.pharmacienne"), any());
 
         followUp.approvalNeeded(deferral(DispenseBillingDeferralKind.THIRD_PARTY_COVER), "Awa", "Amoxicilline");
         ArgumentCaptor<CreateInBasketItemRequest> items = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
         verify(inBasket).createItemInNewTransaction(items.capture());
         assertThat(items.getValue().getPriority()).isEqualTo(InBasketPriority.URGENT);
         assertThat(items.getValue().getTitleKey()).isEqualTo("pharmacy.deferral.followUp.approvalTitle");
+        verify(notifications, org.mockito.Mockito.times(2)).createNotification(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("a failure to notify the credit approvers never reaches the caller")
+    void aFailedNotificationIsSwallowed() {
+        User accountant = user(UUID.randomUUID());
+        accountant.setUsername("mariam.comptable");
+        when(assignments.findLiveUsersAtHospitalWithRoleCodes(any(), any())).thenReturn(List.of(accountant));
+        when(notifications.createNotification(any(), any(), any(), any())).thenThrow(new IllegalStateException("down"));
+
+        followUp.approvalNeeded(deferral(DispenseBillingDeferralKind.OUTPATIENT_CREDIT), "Awa", "Amoxicilline");
+
+        verify(notifications).createNotification(any(), any(), any(), any());
     }
 
     @Test

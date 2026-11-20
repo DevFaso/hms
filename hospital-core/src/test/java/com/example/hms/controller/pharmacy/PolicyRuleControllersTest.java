@@ -45,7 +45,7 @@ class PolicyRuleControllersTest {
         DispenseBillingDeferralDecisionDTO decision = new DispenseBillingDeferralDecisionDTO();
         DispenseBillingDeferralReasonDTO reason = new DispenseBillingDeferralReasonDTO("motif");
         List<DispenseBillingDeferralStatus> statuses = List.of(DispenseBillingDeferralStatus.REQUESTED);
-        when(service.list(statuses, id)).thenReturn(List.of(dto));
+        when(service.list(statuses, id, true)).thenReturn(List.of(dto));
         when(service.counter(id)).thenReturn(counter);
         when(service.request(request)).thenReturn(dto);
         when(service.approve(id, decision)).thenReturn(dto);
@@ -53,7 +53,7 @@ class PolicyRuleControllersTest {
         when(service.cancel(id, reason)).thenReturn(dto);
         when(service.review(id, reason)).thenReturn(dto);
 
-        assertThat(controller.list(statuses, id).getBody().getData()).containsExactly(dto);
+        assertThat(controller.list(statuses, id, true).getBody().getData()).containsExactly(dto);
         assertThat(controller.counter(id).getBody().getData()).isSameAs(counter);
         ResponseEntity<?> created = controller.request(request);
         assertThat(created.getStatusCode()).isEqualTo(HttpStatus.CREATED);

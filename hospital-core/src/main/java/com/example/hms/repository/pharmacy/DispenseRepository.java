@@ -248,4 +248,7 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
     /** Reminder sweep: open preparations older than the cut-off and not yet reminded. */
     List<Dispense> findByStatusAndReadyReminderSentAtIsNullAndCreatedAtBefore(
             DispenseStatus status, LocalDateTime cutoff);
+
+    /** Policy rule 6 (V345): the fills that left on one deferral (a fill split over several lots is several). */
+    List<Dispense> findByBillingDeferralId(UUID billingDeferralId);
 }

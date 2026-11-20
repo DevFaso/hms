@@ -32,6 +32,15 @@
 --   Null on a fill paid, covered or free, and on a fill marked "à facturer"
 --   before this migration (those keep their reason and have no approver).
 --
+-- clinical.dispenses.billing_deferred_amount - what this fill still owed when
+--   it left (whole francs). A cancelled fill gives it back to its deferral.
+--
+-- clinical.pharmacy_claims.decided_by / decided_at - who recorded the payer's
+--   answer (accepted, rejected, paid). A claim covers a fill at the counter
+--   only when somebody of the money desks, other than the person handing the
+--   fill over, stands behind it: its submitter while it is only sent, its
+--   decider once the payer answered. Null on a claim decided before V345.
+--
 -- clinical.refill_requests - who decided a request and on what basis
 --   (PRESCRIBER_DECISION, ORIGINAL_PRESCRIPTION for a refill the prescriber
 --   already wrote, PHARMACIST_REFUSAL), and the review note of the pharmacist.
@@ -105,6 +114,10 @@ CREATE INDEX IF NOT EXISTS idx_dbdef_prescription ON clinical.dispense_billing_d
 CREATE UNIQUE INDEX IF NOT EXISTS uk_dbdef_dispense ON clinical.dispense_billing_deferrals (dispense_id);
 
 ALTER TABLE clinical.dispenses ADD COLUMN IF NOT EXISTS billing_deferral_id UUID;
+ALTER TABLE clinical.dispenses ADD COLUMN IF NOT EXISTS billing_deferred_amount NUMERIC(12, 2);
+
+ALTER TABLE clinical.pharmacy_claims ADD COLUMN IF NOT EXISTS decided_by UUID;
+ALTER TABLE clinical.pharmacy_claims ADD COLUMN IF NOT EXISTS decided_at TIMESTAMP;
 
 ALTER TABLE clinical.refill_requests ADD COLUMN IF NOT EXISTS decided_by UUID;
 ALTER TABLE clinical.refill_requests ADD COLUMN IF NOT EXISTS decided_at TIMESTAMP;

@@ -26,6 +26,8 @@ public class DispenseBillingDeferralDTO {
     private UUID prescriptionId;
     private UUID patientId;
     private String patientName;
+    /** The patient's MRN at the deferral's own hospital (never another hospital's). */
+    private String patientMrn;
     private String medicationName;
     private UUID dispenseId;
     private UUID admissionId;
@@ -45,6 +47,11 @@ public class DispenseBillingDeferralDTO {
     private String executedByName;
     private LocalDateTime executedAt;
     private BigDecimal amountDue;
+    /**
+     * An executed deferral only: what its fills still owe now (charge less payments and claims a money desk
+     * stands behind; a cancelled fill owes nothing). {@code amountDue} is what was owed when they left.
+     */
+    private BigDecimal stillDue;
     private UUID reviewedBy;
     private String reviewedByName;
     private LocalDateTime reviewedAt;

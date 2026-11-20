@@ -44,8 +44,15 @@ public class DispenseBillingDeferralFollowUp {
     static final String APPROVAL_TITLE_KEY = "pharmacy.deferral.followUp.approvalTitle";
     static final String APPROVAL_BODY_KEY = "pharmacy.deferral.followUp.approvalBody";
 
+    /** Who grants an outpatient credit: the hospital's accountants and hospital admins. */
+    static final Set<String> CREDIT_APPROVER_ROLE_CODES =
+        Set.of(SecurityConstants.ROLE_ACCOUNTANT, SecurityConstants.ROLE_HOSPITAL_ADMIN);
+    static final String CREDIT_REQUESTED_KEY = "pharmacy.deferral.followUp.creditRequested";
+    static final String NOTIFICATION_TYPE = "PHARMACY_BILLING_DEFERRAL";
+
     private final InBasketService inBasketService;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
+    private final com.example.hms.service.NotificationService notificationService;
 
     /** An urgency override was made: finance reviews it. */
     public void reviewNeeded(DispenseBillingDeferral deferral, String patientName, String medicationName) {
@@ -54,10 +61,41 @@ public class DispenseBillingDeferralFollowUp {
 
     /** A third-party cover was asked for: billing checks the claim or voucher. */
     public void approvalNeeded(DispenseBillingDeferral deferral, String patientName, String medicationName) {
-        if (deferral.getKind() != DispenseBillingDeferralKind.THIRD_PARTY_COVER) {
+        if (deferral.getKind() == DispenseBillingDeferralKind.THIRD_PARTY_COVER) {
+            file(deferral, patientName, medicationName, APPROVAL_TITLE_KEY, APPROVAL_BODY_KEY,
+                InBasketPriority.URGENT);
+        } else if (deferral.getKind() == DispenseBillingDeferralKind.OUTPATIENT_CREDIT) {
+            notifyCreditApprovers(deferral, patientName, medicationName);
+        }
+    }
+
+    /**
+     * An outpatient credit is granted by an accountant or a hospital admin, who do not read the in-basket: each of
+     * them at the hospital gets a notification (the bell), never the person who asked. Sent after commit; a
+     * failure to notify never undoes the request, which stays listed on the deferrals page.
+     */
+    private void notifyCreditApprovers(DispenseBillingDeferral deferral, String patientName, String medicationName) {
+        UUID deferralId = deferral.getId();
+        UUID hospitalId = deferral.getHospitalId();
+        UUID actorId = deferral.getRequestedBy();
+        if (deferralId == null || hospitalId == null) {
             return;
         }
-        file(deferral, patientName, medicationName, APPROVAL_TITLE_KEY, APPROVAL_BODY_KEY, InBasketPriority.URGENT);
+        Object[] args = {java.util.Objects.toString(medicationName, ""), java.util.Objects.toString(patientName, "")};
+        TransactionCallbacks.afterCommit(() -> {
+            try {
+                assignmentRepository.findLiveUsersAtHospitalWithRoleCodes(hospitalId, CREDIT_APPROVER_ROLE_CODES)
+                    .stream()
+                    .filter(user -> !java.util.Objects.equals(user.getId(), actorId))
+                    .map(com.example.hms.model.User::getUsername)
+                    .filter(username -> username != null && !username.isBlank())
+                    .distinct()
+                    .forEach(username -> notificationService.createNotification(CREDIT_REQUESTED_KEY, args,
+                        username, NOTIFICATION_TYPE));
+            } catch (RuntimeException ex) {
+                log.warn("Credit approvers not notified of deferral {}: {}", deferralId, ex.getMessage());
+            }
+        });
     }
 
     /** The override was reviewed, or the request decided or withdrawn: nothing is left to do. */

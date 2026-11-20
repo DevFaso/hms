@@ -558,9 +558,13 @@ public class PharmacyReconciliationService {
             return;
         }
         settled.charges = settled.charges.add(charge);
-        // Review of #1239: a DRAFT claim was never sent to a payer and covers nothing.
+        // Review of #1239 and #1244: a claim covers a fill only when a money desk, other than whoever handed
+        // the fill over, stands behind it (FillClaimCover); a DRAFT or a dispenser's own claim covers nothing.
+        UUID handedOverBy = fill.getDispensedByUser() != null ? fill.getDispensedByUser().getId() : null;
+        UUID hospitalId = fill.getPharmacy() != null && fill.getPharmacy().getHospital() != null
+                ? fill.getPharmacy().getHospital().getId() : null;
         BigDecimal covered = nz(paymentRepository.sumPostedForDispense(fill.getId()))
-                .add(nz(claimRepository.sumSentForDispense(fill.getId())));
+                .add(FillClaimCover.coveredFor(claimRepository, roleValidator, fill.getId(), hospitalId, handedOverBy));
         BigDecimal due = charge.subtract(covered).max(BigDecimal.ZERO);
         if (due.signum() <= 0) {
             return;
@@ -569,7 +573,11 @@ public class PharmacyReconciliationService {
             settled.deferredTotal = settled.deferredTotal.add(due);
             deferred.add(DeferredFill.builder().dispenseId(fill.getId()).medicationName(fill.getMedicationName())
                     .quantity(fill.getQuantityDispensed()).due(due).reason(fill.getBillingDeferredReason())
-                    .deferredAt(fill.getBillingDeferredAt()).deferralId(fill.getBillingDeferralId()).build());
+                    .deferredAt(fill.getBillingDeferredAt()).deferralId(fill.getBillingDeferralId())
+                    .patientName(fill.getPatient() != null ? fill.getPatient().getFullName() : null)
+                    .patientMrn(fill.getPatient() != null && hospitalId != null
+                            ? fill.getPatient().getMrnForHospital(hospitalId) : null)
+                    .build());
         } else {
             settled.unpaidTotal = settled.unpaidTotal.add(due);
             differences.add(Difference.builder().type("UNPAID_HANDED_OVER").medicationName(fill.getMedicationName())
@@ -611,6 +619,7 @@ public class PharmacyReconciliationService {
                 continue;
             }
             fill.setKind(d.getKind());
+            fill.setAdmissionId(d.getAdmissionId());
             fill.setRequestedByName(d.getRequestedByName());
             fill.setApprovedByName(d.getDecidedByName());
             fill.setHandedOverByName(d.getExecutedByName());
@@ -688,11 +697,14 @@ public class PharmacyReconciliationService {
                 .append("\r\n");
         // Policy rule 6: every « à facturer » fill of the day with the deferral behind it.
         csv.append("\r\n").append(row(CSV_DEFERRED, CSV_MEDICATION, "quantite", "du", "type", "motif", "reference",
-                "plafond", "demande_par", "approuve_par", "remis_par", "revue")).append("\r\n");
+                "plafond", "demande_par", "approuve_par", "remis_par", "revue", "patient", "dossier", "sejour"))
+                .append("\r\n");
         for (DeferredFill f : day.getDeferred()) {
             csv.append(row(CSV_DEFERRED, f.getMedicationName(), plain(f.getQuantity()), plain(f.getDue()), f.getKind(),
                     f.getReason(), f.getCoverReference(), plain(f.getCreditLimit()), f.getRequestedByName(),
-                    f.getApprovedByName(), f.getHandedOverByName(), reviewedCell(f))).append("\r\n");
+                    f.getApprovedByName(), f.getHandedOverByName(), reviewedCell(f), f.getPatientName(),
+                    f.getPatientMrn(), f.getAdmissionId() != null ? f.getAdmissionId().toString() : ""))
+                    .append("\r\n");
         }
         csv.append("\r\n").append(row(CSV_MEDICATION, "lot", "unite", "recu", "vendu_enregistre", "vendu_mouvement",
                 "delivre_enregistre", "delivre_mouvement", "retour", "ajustement", "transfert", CSV_DIFFERENCE)).append("\r\n");

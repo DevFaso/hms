@@ -104,4 +104,14 @@ public class PharmacyClaim extends BaseEntity {
     @Size(max = 1000)
     @Column(name = "notes", length = 1000)
     private String notes;
+
+    /**
+     * Policy rule 6 (V345): who recorded the payer's answer (accepted, rejected or paid), and when. The counter
+     * reads it: an accepted claim covers a fill only when somebody other than the dispenser recorded it.
+     */
+    @Column(name = "decided_by")
+    private java.util.UUID decidedBy;
+
+    @Column(name = "decided_at")
+    private LocalDateTime decidedAt;
 }

@@ -447,7 +447,8 @@ public class DispenseServiceImpl implements DispenseService {
                 new DispenseBillingDeferralService.Choice(dto.getBillingDeferralId(), dto.getBillingUrgencyReason()),
                 fill.actors().dispensedBy());
         if (deferral != null) {
-            billingDeferrals.stamp(dispense, deferral, fill.actors().dispensedBy().getId(), dispense.getDispensedAt());
+            billingDeferrals.stamp(dispense, deferral, fill.actors().dispensedBy().getId(), dispense.getDispensedAt(),
+                    DispenseCharge.of(dispense, inventoryItemRepository).orElse(BigDecimal.ZERO));
         }
         recordVerification(dispense, dto, fill.verification());
         dispense.setNotes(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(dispense.getNotes(), fill.allergyAck(), DISPENSE_NOTES_MAX, "notes"));
@@ -606,8 +607,9 @@ public class DispenseServiceImpl implements DispenseService {
         User handedOverBy = resolveCurrentUser();
         // QA D2675 (r65), policy rule 6: a fill leaves the counter paid, covered by a claim, free, on the account of
         // an open stay, on a deferral somebody else approved, or on a logged urgency override.
+        FillSettlement settlement = settlementOf(dispense, handedOverBy.getId());
         com.example.hms.model.pharmacy.DispenseBillingDeferral deferral =
-                requirePaidCoveredOrDeferred(dispense, prescription, request, handedOverBy);
+                requirePaidCoveredOrDeferred(settlement, dispense, prescription, request, handedOverBy);
         int changed = dispenseRepository.completePreparedFill(dispense.getId(), now, handedOverBy,
                 mergedVerificationStatus(dispense, patientScan),
                 patientScan != null ? patientScan : dispense.getPatientScanValue(),
@@ -626,7 +628,7 @@ public class DispenseServiceImpl implements DispenseService {
         }
         appendNotes(dispense, request);
         if (deferral != null) {
-            billingDeferrals.stamp(dispense, deferral, handedOverBy.getId(), now);
+            billingDeferrals.stamp(dispense, deferral, handedOverBy.getId(), now, settlement.due());
             billingDeferrals.executed(deferral, dispense, prescription);
         }
         if (allergyAck != null) {
@@ -715,16 +717,21 @@ public class DispenseServiceImpl implements DispenseService {
         }
     }
 
-    private FillSettlement settlementOf(Dispense dispense) {
+    /**
+     * What is owed on a fill for {@code handingOver}. Two things, and only two, take money off the charge at the
+     * counter ({@code DeferredBillingGuardTest}): a payment posted, and a claim somebody of the money desks other
+     * than {@code handingOver} stands behind ({@link FillClaimCover}; review of #1244: a claim the pharmacist sent
+     * alone covered the whole fill).
+     */
+    private FillSettlement settlementOf(Dispense dispense, UUID handingOver) {
         BigDecimal charge = DispenseCharge.of(dispense, inventoryItemRepository).orElse(BigDecimal.ZERO);
         BigDecimal paid = charge.signum() > 0 && paymentRepository != null
                 ? java.util.Objects.requireNonNullElse(paymentRepository.sumPostedForDispense(dispense.getId()),
                         BigDecimal.ZERO)
                 : BigDecimal.ZERO;
-        // Review of #1239: only a claim sent to the payer covers a fill; a DRAFT one is an unsent form.
-        BigDecimal claimed = charge.signum() > 0 && claimRepository != null
-                ? java.util.Objects.requireNonNullElse(claimRepository.sumSentForDispense(dispense.getId()),
-                        BigDecimal.ZERO)
+        BigDecimal claimed = charge.signum() > 0
+                ? FillClaimCover.coveredFor(claimRepository, roleValidator, dispense.getId(),
+                        dispense.getPharmacy().getHospital().getId(), handingOver)
                 : BigDecimal.ZERO;
         return new FillSettlement(charge, paid, claimed);
     }
@@ -732,14 +739,14 @@ public class DispenseServiceImpl implements DispenseService {
     /**
      * QA D2675 (r65): « Remettre au patient » handed over fills with no payment row (Sulfate de fer 200, morphine 2)
      * and nothing listed them. A fill now leaves the counter only when nothing is owed on it: its charge is paid,
-     * covered by a claim sent to the payer (SUBMITTED, ACCEPTED or PAID, never a DRAFT), or it has no charge (not
-     * priced). Otherwise policy rule 6 applies ({@link DispenseBillingDeferralService#admit}): the pharmacist no
+     * covered by a claim a money desk stands behind (never a DRAFT, never one the dispenser sent alone), or it has
+     * no charge (not priced). Otherwise policy rule 6 applies ({@link DispenseBillingDeferralService#admit}): the pharmacist no
      * longer marks it « à facturer » on their own word. Returns the deferral the fill leaves on, or null when it
      * is owed nothing; the reconciliation lists every one.
      */
     private com.example.hms.model.pharmacy.DispenseBillingDeferral requirePaidCoveredOrDeferred(
-            Dispense dispense, Prescription prescription, HandOverRequestDTO request, User actor) {
-        FillSettlement settlement = settlementOf(dispense);
+            FillSettlement settlement, Dispense dispense, Prescription prescription, HandOverRequestDTO request,
+            User actor) {
         if (settlement.charge().signum() <= 0 || settlement.due().signum() <= 0) {
             return null;
         }
@@ -797,7 +804,8 @@ public class DispenseServiceImpl implements DispenseService {
                 || !hospitalId.equals(dispense.getPharmacy().getHospital().getId())) {
             throw dispenseNotFound();
         }
-        FillSettlement settlement = settlementOf(dispense);
+        // For the caller: the dialog shows what the gate will ask of the person about to hand the fill over.
+        FillSettlement settlement = settlementOf(dispense, roleValidator.getCurrentUserId());
         String status;
         if (settlement.charge().signum() <= 0) {
             status = "NO_CHARGE";
@@ -1727,6 +1735,10 @@ public class DispenseServiceImpl implements DispenseService {
         }
 
         Dispense saved = dispenseRepository.save(dispense);
+        // Policy rule 6 (review of #1244): a cancelled fill owes nothing; its deferral gives the amount back.
+        if (billingDeferrals != null) {
+            billingDeferrals.fillCancelled(saved);
+        }
         // QA D404: the money follows the stock back, in this transaction.
         // QA D1069: the voided payment carries the pharmacist's reason, not a stock phrase.
         paymentVoider.voidForCancelledDispense(saved, why);

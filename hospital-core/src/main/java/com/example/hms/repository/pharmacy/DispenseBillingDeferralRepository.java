@@ -36,6 +36,11 @@ public interface DispenseBillingDeferralRepository extends JpaRepository<Dispens
     List<DispenseBillingDeferral> findByHospitalIdAndKindAndReviewedAtIsNullOrderByRequestedAtAsc(
             UUID hospitalId, DispenseBillingDeferralKind kind);
 
+    /** The latest urgency override one person made for a prescription and finance has not reviewed yet. */
+    Optional<DispenseBillingDeferral>
+        findFirstByHospitalIdAndPrescriptionIdAndKindAndRequestedByAndReviewedAtIsNullOrderByRequestedAtDesc(
+            UUID hospitalId, UUID prescriptionId, DispenseBillingDeferralKind kind, UUID requestedBy);
+
     /** These deferrals, at the acting hospital (the reconciliation of a day). */
     List<DispenseBillingDeferral> findByHospitalIdAndIdIn(UUID hospitalId, Collection<UUID> ids);
 }

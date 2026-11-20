@@ -17,6 +17,7 @@ import com.example.hms.enums.RefillStatus;
 import com.example.hms.payload.dto.pharmacy.CancelReadyRequestDTO;
 import com.example.hms.payload.dto.pharmacy.HandOverRequestDTO;
 import java.time.LocalDateTime;
+import com.example.hms.enums.PharmacyClaimStatus;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ConflictException;
@@ -737,6 +738,30 @@ class DispenseReadyForCollectionTest {
         return row;
     }
 
+    // Policy rule 6 (review of #1244): a claim covers a fill only when a money desk, other than the person handing
+    // it over, stands behind it.
+
+    void noClaimCovers() {
+        when(claimRepository.findByDispenseIdAndClaimStatusIn(eq(dispenseId), any())).thenReturn(java.util.List.of());
+    }
+
+    /** A billing specialist of the hospital, somebody other than the pharmacist at the counter. */
+    UUID billingClerk() {
+        UUID clerk = UUID.randomUUID();
+        org.mockito.Mockito.lenient().when(roleValidator.vouchesForClaimCover(clerk, hospitalId)).thenReturn(true);
+        return clerk;
+    }
+
+    /** The one claim of the fill: who sent it, and who recorded the payer's answer (null while only sent). */
+    void aClaim(com.example.hms.enums.PharmacyClaimStatus status, String amount, UUID submittedBy, UUID decidedBy) {
+        User submitter = new User();
+        submitter.setId(submittedBy);
+        com.example.hms.model.pharmacy.PharmacyClaim claim = com.example.hms.model.pharmacy.PharmacyClaim.builder()
+                .claimStatus(status).amount(new BigDecimal(amount)).submittedByUser(submitter).decidedBy(decidedBy)
+                .build();
+        when(claimRepository.findByDispenseIdAndClaimStatusIn(eq(dispenseId), any())).thenReturn(java.util.List.of(claim));
+    }
+
     @Nested
     @DisplayName("QA D2675: a fill is handed over paid, covered, free, or « à facturer »")
     class UnpaidHandOver {
@@ -749,7 +774,7 @@ class DispenseReadyForCollectionTest {
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
-            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            noClaimCovers();
 
             assertThatThrownBy(() -> service.handOver(dispenseId, null))
                     .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
@@ -765,22 +790,79 @@ class DispenseReadyForCollectionTest {
             stubLocked(d);
             stubHandOverWrites(d);
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(new BigDecimal("1000"));
-            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            noClaimCovers();
 
             assertThat(service.handOver(dispenseId, null).getStatus()).isEqualTo("COMPLETED");
             assertThat(d.getBillingDeferredReason()).isNull();
         }
 
         @Test
-        @DisplayName("a fill a claim sent to the payer covers is handed over with no reason")
+        @DisplayName("a fill a claim sent by billing covers is handed over with no reason")
         void coveredIsHandedOver() {
             Dispense d = pricedPreparedFill();
             stubLocked(d);
             stubHandOverWrites(d);
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(new BigDecimal("200"));
-            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(new BigDecimal("800"));
+            aClaim(PharmacyClaimStatus.SUBMITTED, "800", billingClerk(), null);
 
             assertThat(service.handOver(dispenseId, null).getStatus()).isEqualTo("COMPLETED");
+        }
+
+        @Test
+        @DisplayName("review of #1244: a claim the pharmacist created and submitted alone covers nothing; the hand-over goes through the gate")
+        void aClaimThePharmacistSentAloneIsNotCover() {
+            Dispense d = pricedPreparedFill();
+            stubLocked(d);
+            wireTheDeferralGate();
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            // The whole charge claimed and sent by the person now handing the fill over.
+            aClaim(PharmacyClaimStatus.SUBMITTED, "1000", userId, null);
+
+            assertThatThrownBy(() -> service.handOver(dispenseId, null))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .extracting("field", "messageKey")
+                    .containsExactly("billingDeferralId", "pharmacy.handOver.unpaid");
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("review of #1244: nor does a claim another pharmacist sent, nor one whose acceptance the dispenser recorded")
+        void aClaimOnlyThePharmacyTouchedIsNotCover() {
+            Dispense d = pricedPreparedFill();
+            stubLocked(d);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            UUID colleague = UUID.randomUUID();
+            when(roleValidator.vouchesForClaimCover(colleague, hospitalId)).thenReturn(false);
+
+            // Sent by a colleague of the pharmacy: no money desk stands behind it.
+            aClaim(PharmacyClaimStatus.SUBMITTED, "1000", colleague, null);
+            assertThatThrownBy(() -> service.handOver(dispenseId, null))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.handOver.unpaid");
+
+            // Sent by billing, but the payer's acceptance was recorded by the person handing over.
+            aClaim(PharmacyClaimStatus.ACCEPTED, "1000", billingClerk(), userId);
+            assertThatThrownBy(() -> service.handOver(dispenseId, null))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.handOver.unpaid");
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("review of #1244: a claim whose acceptance billing recorded covers the fill, whoever sent it")
+        void aClaimBillingAcceptedIsCover() {
+            Dispense d = pricedPreparedFill();
+            stubLocked(d);
+            stubHandOverWrites(d);
+            when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            aClaim(PharmacyClaimStatus.ACCEPTED, "1000", userId, billingClerk());
+
+            assertThat(service.handOver(dispenseId, null).getStatus()).isEqualTo("COMPLETED");
+            assertThat(d.getBillingDeferralId()).isNull();
         }
 
         @Test
@@ -794,7 +876,7 @@ class DispenseReadyForCollectionTest {
             // An 800 F claim exists as a DRAFT: live for the claim screen, never sent to the payer.
             org.mockito.Mockito.lenient().when(claimRepository.sumLiveForDispense(dispenseId))
                     .thenReturn(new BigDecimal("800"));
-            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            noClaimCovers();
 
             assertThatThrownBy(() -> service.handOver(dispenseId, null))
                     .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
@@ -812,7 +894,7 @@ class DispenseReadyForCollectionTest {
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
-            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            noClaimCovers();
 
             assertThatThrownBy(() -> service.handOver(dispenseId, HandOverRequestDTO.builder()
                     .notes("à facturer, sur la facture du séjour").build()))
@@ -831,7 +913,7 @@ class DispenseReadyForCollectionTest {
             stubHandOverWrites(d);
             wireTheDeferralGate();
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
-            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            noClaimCovers();
             com.example.hms.model.pharmacy.DispenseBillingDeferral approved = approvedDeferral(UUID.randomUUID());
 
             service.handOver(dispenseId, HandOverRequestDTO.builder().billingDeferralId(approved.getId()).build());
@@ -844,6 +926,7 @@ class DispenseReadyForCollectionTest {
             assertThat(approved.getExecutedBy()).isEqualTo(userId);
             assertThat(approved.getDispenseId()).isEqualTo(dispenseId);
             assertThat(approved.getAmountDue()).isEqualByComparingTo("1000");
+            assertThat(d.getBillingDeferredAmount()).as("what this fill left owing").isEqualByComparingTo("1000");
             verify(support).logAudit(eq(AuditEventType.DISPENSE_BILLING_DEFERRED), anyString(),
                     eq(dispenseId.toString()), eq("DISPENSE"));
         }
@@ -856,7 +939,7 @@ class DispenseReadyForCollectionTest {
             wireTheDeferralGate();
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            noClaimCovers();
             when(roleValidator.canOverrideDispenseBillingForUrgency(userId, hospitalId)).thenReturn(true);
             // Somebody else hands the fill over between the gate and the conditional UPDATE: no row changes.
             when(dispenseRepository.completePreparedFill(eq(dispenseId), any(), eq(user), any(), any(), any()))
@@ -889,7 +972,7 @@ class DispenseReadyForCollectionTest {
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
-            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            noClaimCovers();
             com.example.hms.model.pharmacy.DispenseBillingDeferral approved = approvedDeferral(userId);
 
             assertThatThrownBy(() -> service.handOver(dispenseId,
@@ -907,7 +990,7 @@ class DispenseReadyForCollectionTest {
             stubHandOverWrites(d);
             wireTheDeferralGate();
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
-            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            noClaimCovers();
             when(roleValidator.canOverrideDispenseBillingForUrgency(userId, hospitalId)).thenReturn(true);
 
             service.handOver(dispenseId, HandOverRequestDTO.builder()
@@ -936,7 +1019,7 @@ class DispenseReadyForCollectionTest {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(d));
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(new BigDecimal("400"));
-            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            noClaimCovers();
 
             var unpaid = service.getPaymentStatus(dispenseId);
             assertThat(unpaid.getCharge()).isEqualByComparingTo("1000");
@@ -945,7 +1028,7 @@ class DispenseReadyForCollectionTest {
 
             d.setBillingDeferredReason("séjour");
             assertThat(service.getPaymentStatus(dispenseId).getStatus()).isEqualTo("DEFERRED");
-            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(new BigDecimal("600"));
+            aClaim(PharmacyClaimStatus.SUBMITTED, "600", billingClerk(), null);
             assertThat(service.getPaymentStatus(dispenseId).getStatus()).isEqualTo("COVERED");
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(new BigDecimal("1000"));
             assertThat(service.getPaymentStatus(dispenseId).getStatus()).isEqualTo("PAID");
@@ -973,7 +1056,7 @@ class DispenseReadyForCollectionTest {
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
-            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            noClaimCovers();
             wireTheDeferralGate();
             when(roleValidator.canOverrideDispenseBillingForUrgency(userId, hospitalId)).thenReturn(false);
 

@@ -119,6 +119,7 @@ class DispenseBillingDeferralServiceTest {
         // The pharmacist asks and overrides; the accountant approves both kinds and reviews; billing approves a
         // third-party cover only and reviews.
         when(roleValidator.canRequestDispenseBillingDeferral(any(), eq(hospitalId))).thenReturn(true);
+        when(roleValidator.canReadDispenseBillingCounter(any(), eq(hospitalId))).thenReturn(true);
         when(roleValidator.canOverrideDispenseBillingForUrgency(pharmacist, hospitalId)).thenReturn(true);
         when(roleValidator.canApproveThirdPartyCover(accountant, hospitalId)).thenReturn(true);
         when(roleValidator.canApproveOutpatientCredit(accountant, hospitalId)).thenReturn(true);
@@ -652,6 +653,7 @@ class DispenseBillingDeferralServiceTest {
             when(roleValidator.canRequestDispenseBillingDeferral(any(), eq(hospitalId))).thenReturn(false);
             UUID nobody = UUID.randomUUID();
             actingAs(nobody);
+            when(roleValidator.canReadDispenseBillingCounter(nobody, hospitalId)).thenReturn(false);
             assertThatThrownBy(() -> service.counter(prescriptionId))
                     .isInstanceOf(ClientSafeAccessDeniedException.class);
             assertThatThrownBy(() -> service.list(null, null))
@@ -673,6 +675,139 @@ class DispenseBillingDeferralServiceTest {
             assertThat(byId.get(row.getId()).isCanReview()).isFalse();
             assertThat(service.byIds(hospitalId, List.of())).isEmpty();
             assertThat(service.byIds(null, List.of(row.getId()))).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("review of #1244")
+    class ReviewOfPr1244 {
+
+        private final BigDecimal due = new BigDecimal("600");
+
+        @Test
+        @DisplayName("a fill split over lots is one override: the further lot goes on the same row, and one review is asked")
+        void oneOverrideForOneHandOver() {
+            DispenseBillingDeferralService.Choice urgency =
+                    new DispenseBillingDeferralService.Choice(null, "Asthma attack, till closed");
+            DispenseBillingDeferral first = service.admit(prescription, hospitalId, due, urgency, user(pharmacist));
+            when(deferralRepository
+                    .findFirstByHospitalIdAndPrescriptionIdAndKindAndRequestedByAndReviewedAtIsNullOrderByRequestedAtDesc(
+                            hospitalId, prescriptionId, DispenseBillingDeferralKind.URGENCY_OVERRIDE, pharmacist))
+                    .thenReturn(Optional.of(first));
+
+            DispenseBillingDeferral second = service.admit(prescription, hospitalId, new BigDecimal("400"), urgency,
+                    user(pharmacist));
+
+            assertThat(second).isSameAs(first);
+            assertThat(first.getAmountDue()).isEqualByComparingTo("1000");
+            verify(deferralRepository, org.mockito.Mockito.times(1)).save(any());
+
+            // Each fill has its audit line; the review task is filed once, for the first.
+            com.example.hms.model.pharmacy.Dispense lotA = new com.example.hms.model.pharmacy.Dispense();
+            lotA.setId(UUID.randomUUID());
+            com.example.hms.model.pharmacy.Dispense lotB = new com.example.hms.model.pharmacy.Dispense();
+            lotB.setId(UUID.randomUUID());
+            service.executed(first, lotA, prescription);
+            service.executed(first, lotB, prescription);
+            assertThat(first.getDispenseId()).isEqualTo(lotA.getId());
+            verify(followUp, org.mockito.Mockito.times(1)).reviewNeeded(eq(first), any(), any());
+            verify(support, org.mockito.Mockito.times(2)).logAudit(
+                    eq(AuditEventType.DISPENSE_BILLING_URGENCY_OVERRIDE), anyString(), anyString(), anyString());
+        }
+
+        @Test
+        @DisplayName("another reason, another day or a reviewed override is not the same hand-over: a new override")
+        void notTheSameHandOver() {
+            DispenseBillingDeferral yesterday = stored(DispenseBillingDeferralKind.URGENCY_OVERRIDE,
+                    DispenseBillingDeferralStatus.EXECUTED, pharmacist);
+            yesterday.setReason("Asthma attack, till closed");
+            yesterday.setRequestedAt(LocalDateTime.now(CLOCK).minusDays(1));
+            yesterday.setAmountDue(new BigDecimal("500"));
+            when(deferralRepository
+                    .findFirstByHospitalIdAndPrescriptionIdAndKindAndRequestedByAndReviewedAtIsNullOrderByRequestedAtDesc(
+                            hospitalId, prescriptionId, DispenseBillingDeferralKind.URGENCY_OVERRIDE, pharmacist))
+                    .thenReturn(Optional.of(yesterday));
+
+            DispenseBillingDeferral today = service.admit(prescription, hospitalId, due,
+                    new DispenseBillingDeferralService.Choice(null, "Asthma attack, till closed"), user(pharmacist));
+            assertThat(today).isNotSameAs(yesterday);
+            assertThat(yesterday.getAmountDue()).isEqualByComparingTo("500");
+
+            yesterday.setRequestedAt(LocalDateTime.now(CLOCK));
+            DispenseBillingDeferral otherReason = service.admit(prescription, hospitalId, due,
+                    new DispenseBillingDeferralService.Choice(null, "Another emergency"), user(pharmacist));
+            assertThat(otherReason).isNotSameAs(yesterday);
+        }
+
+        @Test
+        @DisplayName("a cancelled fill gives back exactly what it left owing; the deferral never goes below zero")
+        void aCancelledFillGivesItsAmountBack() {
+            DispenseBillingDeferral row = stored(DispenseBillingDeferralKind.URGENCY_OVERRIDE,
+                    DispenseBillingDeferralStatus.EXECUTED, pharmacist);
+            row.setAmountDue(new BigDecimal("1000"));
+            com.example.hms.model.pharmacy.Pharmacy pharmacy = com.example.hms.model.pharmacy.Pharmacy.builder()
+                    .hospital(hospital).name("Pharmacie").build();
+            com.example.hms.model.pharmacy.Dispense lot = new com.example.hms.model.pharmacy.Dispense();
+            lot.setPharmacy(pharmacy);
+            service.stamp(lot, row, pharmacist, LocalDateTime.now(CLOCK), new BigDecimal("400"));
+            assertThat(lot.getBillingDeferredAmount()).isEqualByComparingTo("400");
+            assertThat(lot.getBillingDeferralId()).isEqualTo(row.getId());
+
+            service.fillCancelled(lot);
+            assertThat(row.getAmountDue()).isEqualByComparingTo("600");
+            assertThat(lot.getBillingDeferredAmount()).as("not given back twice").isEqualByComparingTo("0");
+            service.fillCancelled(lot);
+            assertThat(row.getAmountDue()).isEqualByComparingTo("600");
+
+            // A fill with no deferral, or of a deferral this hospital does not hold, changes nothing.
+            service.fillCancelled(new com.example.hms.model.pharmacy.Dispense());
+            service.fillCancelled(null);
+            assertThat(row.getAmountDue()).isEqualByComparingTo("600");
+        }
+
+        @Test
+        @DisplayName("the pharmacy verifier reads the counter view, and nothing else")
+        void theVerifierReadsTheCounterOnly() {
+            UUID verifier = UUID.randomUUID();
+            actingAs(verifier);
+            when(roleValidator.canRequestDispenseBillingDeferral(verifier, hospitalId)).thenReturn(false);
+            when(roleValidator.canReadDispenseBillingCounter(verifier, hospitalId)).thenReturn(true);
+            when(deferralRepository.findByHospitalIdAndPrescriptionIdAndStatusInOrderByRequestedAtAsc(eq(hospitalId),
+                    eq(prescriptionId), any())).thenReturn(List.of());
+
+            assertThat(service.counter(prescriptionId).getOpen()).isEmpty();
+            assertThatThrownBy(() -> service.list(null, null))
+                    .isInstanceOf(ClientSafeAccessDeniedException.class);
+            // And whoever does not hand fills over reads no counter either.
+            when(roleValidator.canReadDispenseBillingCounter(verifier, hospitalId)).thenReturn(false);
+            assertThatThrownBy(() -> service.counter(prescriptionId))
+                    .isInstanceOf(ClientSafeAccessDeniedException.class);
+        }
+
+        @Test
+        @DisplayName("« sorties, encore dues »: only the executed deferrals whose fills still owe money now")
+        void executedAndStillDue() {
+            DispenseBillingDeferral owing = stored(DispenseBillingDeferralKind.OUTPATIENT_CREDIT,
+                    DispenseBillingDeferralStatus.EXECUTED, pharmacist);
+            DispenseBillingDeferral settled = stored(DispenseBillingDeferralKind.URGENCY_OVERRIDE,
+                    DispenseBillingDeferralStatus.EXECUTED, pharmacist);
+            when(deferralRepository.findByHospitalIdAndStatusInOrderByRequestedAtAsc(eq(hospitalId), any()))
+                    .thenReturn(List.of(owing, settled));
+            DeferredFillBalance balance = org.mockito.Mockito.mock(DeferredFillBalance.class);
+            when(balance.stillDue(owing)).thenReturn(new BigDecimal("700"));
+            when(balance.stillDue(settled)).thenReturn(BigDecimal.ZERO);
+            service.setFillBalance(balance);
+            actingAs(accountant);
+
+            List<DispenseBillingDeferralDTO> all = service.list(List.of(DispenseBillingDeferralStatus.EXECUTED), null,
+                    false);
+            assertThat(all).hasSize(2);
+            List<DispenseBillingDeferralDTO> due = service.list(List.of(DispenseBillingDeferralStatus.EXECUTED), null,
+                    true);
+            assertThat(due).singleElement().satisfies(row -> {
+                assertThat(row.getId()).isEqualTo(owing.getId());
+                assertThat(row.getStillDue()).isEqualByComparingTo("700");
+            });
         }
     }
 

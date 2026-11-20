@@ -169,6 +169,14 @@ public class PharmacyReconciliationDTO {
         private String coverReference;
         private BigDecimal creditLimit;
         private String approvalNote;
+        /**
+         * Review of #1244: who the fill was for, so finance can bill it: the patient's name and MRN at this
+         * hospital, and the stay an inpatient item is charged to. A staff-only report (pharmacist, accountant,
+         * hospital admin).
+         */
+        private String patientName;
+        private String patientMrn;
+        private UUID admissionId;
         /** An urgency override only: whether finance reviewed it, and who. */
         private Boolean reviewed;
         private String reviewedByName;

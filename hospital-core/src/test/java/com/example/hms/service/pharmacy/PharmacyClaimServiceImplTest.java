@@ -210,10 +210,16 @@ class PharmacyClaimServiceImplTest {
         when(claimRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(claimMapper.toResponseDTO(any())).thenReturn(PharmacyClaimResponseDTO.builder().build());
 
+        UUID billing = UUID.randomUUID();
+        when(roleValidator.getCurrentUserId()).thenReturn(billing);
+
         service.markAccepted(UUID.randomUUID(), "ok");
 
         assertThat(existing.getClaimStatus()).isEqualTo(PharmacyClaimStatus.ACCEPTED);
         assertThat(existing.getNotes()).isEqualTo("ok");
+        // Review of #1244: who recorded the payer's answer; the counter reads it before the claim covers a fill.
+        assertThat(existing.getDecidedBy()).isEqualTo(billing);
+        assertThat(existing.getDecidedAt()).isNotNull();
     }
 
     @Test

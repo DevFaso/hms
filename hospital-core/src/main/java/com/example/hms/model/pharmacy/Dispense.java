@@ -269,6 +269,10 @@ public class Dispense extends BaseEntity {
     @Column(name = "billing_deferral_id")
     private java.util.UUID billingDeferralId;
 
+    /** Policy rule 6 (V345): what this fill still owed when it left; a cancel gives it back to its deferral. */
+    @Column(name = "billing_deferred_amount", precision = 12, scale = 2)
+    private java.math.BigDecimal billingDeferredAmount;
+
     /**
      * Whether this fill left with money still due on a recorded basis: a deferral row (V345) or, before it, the
      * reason a pharmacist gave. An inpatient item carries a deferral and no reason.

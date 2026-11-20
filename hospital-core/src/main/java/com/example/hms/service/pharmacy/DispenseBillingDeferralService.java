@@ -107,6 +107,17 @@ public class DispenseBillingDeferralService {
     record Actor(UUID userId, UUID hospitalId) {
     }
 
+    /**
+     * What the fills of an executed deferral still owe now. A required setter: the application always wires it; a
+     * service built by hand in a unit test has none and reports no balance.
+     */
+    private DeferredFillBalance fillBalance;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setFillBalance(DeferredFillBalance fillBalance) {
+        this.fillBalance = fillBalance;
+    }
+
     /** What the counter sent with a fill that has money due: an approved deferral, or the reason of an override. */
     public record Choice(UUID deferralId, String urgencyReason) {
     }
@@ -282,6 +293,17 @@ public class DispenseBillingDeferralService {
     @Transactional(readOnly = true)
     public List<DispenseBillingDeferralDTO> list(Collection<DispenseBillingDeferralStatus> statuses,
                                                  UUID prescriptionId) {
+        return list(statuses, prescriptionId, false);
+    }
+
+    /**
+     * As {@link #list(Collection, UUID)}; with {@code stillDueOnly}, only the deferrals whose fills still owe
+     * money now (what finance chases): a fill since paid, covered by a claim a money desk stands behind, or
+     * cancelled, owes nothing.
+     */
+    @Transactional(readOnly = true)
+    public List<DispenseBillingDeferralDTO> list(Collection<DispenseBillingDeferralStatus> statuses,
+                                                 UUID prescriptionId, boolean stillDueOnly) {
         Actor actor = requireReader();
         boolean workList = statuses == null || statuses.isEmpty();
         Collection<DispenseBillingDeferralStatus> wanted = workList ? OPEN_STATUSES : statuses;
@@ -294,7 +316,9 @@ public class DispenseBillingDeferralService {
                     actor.hospitalId(), DispenseBillingDeferralKind.URGENCY_OVERRIDE));
         }
         Map<UUID, String> names = new HashMap<>();
-        return rows.stream().map(row -> toDto(row, actor, names)).toList();
+        return rows.stream().map(row -> toDto(row, actor, names))
+                .filter(dto -> !stillDueOnly || (dto.getStillDue() != null && dto.getStillDue().signum() > 0))
+                .toList();
     }
 
     /**
@@ -304,7 +328,7 @@ public class DispenseBillingDeferralService {
      */
     @Transactional(readOnly = true)
     public com.example.hms.payload.dto.pharmacy.DispenseBillingCounterDTO counter(UUID prescriptionId) {
-        Actor actor = requireReader();
+        Actor actor = requireCounterReader();
         Prescription prescription = prescriptionRepository.findById(prescriptionId)
                 .filter(p -> p.getHospital() != null && actor.hospitalId().equals(p.getHospital().getId()))
                 .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
@@ -388,6 +412,19 @@ public class DispenseBillingDeferralService {
             throw new FieldBusinessException(FIELD_URGENCY, "pharmacy.handOver.urgencyReasonTooLong");
         }
         CardNumbers.requireNone(urgency, FIELD_URGENCY);
+        // A fill the counter splits over several lots is ONE hand-over: its further lots go on the override the
+        // same person already made today for this prescription, with the same reason. One override, one review.
+        DispenseBillingDeferral sameHandOver = deferralRepository
+                .findFirstByHospitalIdAndPrescriptionIdAndKindAndRequestedByAndReviewedAtIsNullOrderByRequestedAtDesc(
+                        hospitalId, prescription.getId(), DispenseBillingDeferralKind.URGENCY_OVERRIDE, actorId)
+                .filter(row -> row.getRequestedAt() != null
+                        && row.getRequestedAt().toLocalDate().equals(now.toLocalDate())
+                        && urgency.equals(row.getReason()))
+                .orElse(null);
+        if (sameHandOver != null) {
+            sameHandOver.setAmountDue(sameHandOver.getAmountDue() == null ? due : sameHandOver.getAmountDue().add(due));
+            return sameHandOver;
+        }
         return deferralRepository.save(DispenseBillingDeferral.builder()
                 .hospitalId(hospitalId)
                 .prescriptionId(prescription.getId())
@@ -441,17 +478,39 @@ public class DispenseBillingDeferralService {
      * Marks the fill as left on {@code deferral}. The ONLY writer of a fill's « à facturer » columns
      * ({@code DeferredBillingGuardTest}): a fill cannot be marked deferred without a deferral row behind it.
      */
-    public void stamp(Dispense dispense, DispenseBillingDeferral deferral, UUID actorId, LocalDateTime at) {
+    public void stamp(Dispense dispense, DispenseBillingDeferral deferral, UUID actorId, LocalDateTime at,
+                      BigDecimal due) {
         dispense.setBillingDeferralId(deferral.getId());
         dispense.setBillingDeferredReason(deferral.getReason());
         dispense.setBillingDeferredBy(actorId);
         dispense.setBillingDeferredAt(at);
+        dispense.setBillingDeferredAmount(due);
+    }
+
+    /**
+     * A fill that left on a deferral was cancelled: the stock is back, so the fill owes nothing, and its deferral
+     * gives back exactly what that fill had left owing. The row stays (it is the record of what was decided).
+     */
+    @Transactional
+    public void fillCancelled(Dispense fill) {
+        if (fill == null || fill.getBillingDeferralId() == null || fill.getBillingDeferredAmount() == null
+                || fill.getPharmacy() == null || fill.getPharmacy().getHospital() == null) {
+            return;
+        }
+        deferralRepository.findLockedByIdAndHospitalId(fill.getBillingDeferralId(),
+                fill.getPharmacy().getHospital().getId()).ifPresent(deferral -> {
+                    BigDecimal owed = deferral.getAmountDue() != null ? deferral.getAmountDue() : BigDecimal.ZERO;
+                    deferral.setAmountDue(owed.subtract(fill.getBillingDeferredAmount()).max(BigDecimal.ZERO));
+                });
+        fill.setBillingDeferredAmount(BigDecimal.ZERO);
     }
 
     /** The fill now has an id: the deferral names it, the audit row is written and the follow-up task is filed. */
     @Transactional
     public void executed(DispenseBillingDeferral deferral, Dispense dispense, Prescription prescription) {
-        if (deferral.getDispenseId() == null) {
+        // The first fill names the row; a further lot of the same hand-over only adds its audit line.
+        boolean first = deferral.getDispenseId() == null;
+        if (first) {
             deferral.setDispenseId(dispense.getId());
         }
         String fillId = dispense.getId().toString();
@@ -461,8 +520,10 @@ public class DispenseBillingDeferralService {
             case URGENCY_OVERRIDE -> {
                 support.logAudit(AuditEventType.DISPENSE_BILLING_URGENCY_OVERRIDE,
                         "Fill handed over unpaid on an urgency override", fillId, FILL_ENTITY);
-                followUp.reviewNeeded(deferral, prescription.getPatient() != null
-                        ? prescription.getPatient().getFullName() : null, dispense.getMedicationName());
+                if (first) {
+                    followUp.reviewNeeded(deferral, prescription.getPatient() != null
+                            ? prescription.getPatient().getFullName() : null, dispense.getMedicationName());
+                }
             }
             default -> support.logAudit(AuditEventType.DISPENSE_BILLING_DEFERRED,
                     "Fill handed over unpaid, marked to be billed", fillId, FILL_ENTITY);
@@ -549,6 +610,20 @@ public class DispenseBillingDeferralService {
         return new Actor(userId, hospitalId);
     }
 
+    /**
+     * Whoever hands fills over reads what one may leave on: the readers of the list, and the pharmacy verifier
+     * (who may execute an approved deferral at a hand-over, and reads nothing else here).
+     */
+    private Actor requireCounterReader() {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        UUID userId = roleValidator.getCurrentUserId();
+        if (hospitalId == null || userId == null
+                || !roleValidator.canReadDispenseBillingCounter(userId, hospitalId)) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolve(READERS_ONLY));
+        }
+        return new Actor(userId, hospitalId);
+    }
+
     private DispenseBillingDeferral lock(UUID deferralId, Actor actor) {
         return deferralRepository.findLockedByIdAndHospitalId(deferralId, actor.hospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND));
@@ -626,6 +701,10 @@ public class DispenseBillingDeferralService {
                 .cancelledByName(nameOf(d.getCancelledBy(), names))
                 .cancelledAt(d.getCancelledAt())
                 .cancelReason(d.getCancelReason())
+                .patientMrn(prescription != null && prescription.getPatient() != null
+                        ? prescription.getPatient().getMrnForHospital(d.getHospitalId()) : null)
+                .stillDue(fillBalance != null && d.getStatus() == DispenseBillingDeferralStatus.EXECUTED
+                        ? fillBalance.stillDue(d) : null)
                 .canDecide(canDecide)
                 .canReview(canReview)
                 .canExecute(canExecute)

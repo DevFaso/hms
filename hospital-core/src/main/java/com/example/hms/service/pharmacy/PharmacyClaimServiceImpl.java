@@ -168,6 +168,10 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
                     com.example.hms.utility.MessageUtil.resolve("pharmacy.claim.status." + claim.getClaimStatus().name()));
         }
         claim.setClaimStatus(target);
+        // Policy rule 6 (review of #1244): who recorded the payer's answer. The counter reads it before a claim
+        // covers a fill.
+        claim.setDecidedBy(roleValidator.getCurrentUserId());
+        claim.setDecidedAt(LocalDateTime.now());
         if (notes != null && !notes.isBlank()) {
             claim.setNotes(notes);
         }

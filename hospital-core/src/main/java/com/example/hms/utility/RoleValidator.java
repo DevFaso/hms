@@ -355,6 +355,26 @@ public class RoleValidator {
         return hasAnyCode(userId, hospitalId, ACCOUNTANT_ROLE, HOSPITAL_ADMIN_ROLE);
     }
 
+    /**
+     * Policy rule 6 (review of #1244): who stands behind a claim as cover of a fill at {@code hospitalId}: a money
+     * desk (billing specialist, claims reviewer, accountant) or a hospital admin. A claim only a pharmacist sent
+     * or recorded covers nothing at the counter.
+     */
+    public boolean vouchesForClaimCover(UUID userId, UUID hospitalId) {
+        return userId != null && hospitalId != null
+            && hasAnyCode(userId, hospitalId, BILLING_SPECIALIST_ROLE, CLAIMS_REVIEWER_ROLE, ACCOUNTANT_ROLE,
+                HOSPITAL_ADMIN_ROLE);
+    }
+
+    /**
+     * Policy rule 6: who reads what a fill may leave on before a hand-over: whoever may ask, and the pharmacy
+     * verifier, who hands fills over too (and may execute an approved deferral, never override).
+     */
+    public boolean canReadDispenseBillingCounter(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, PHARMACIST_ROLE, "PHARMACY_VERIFIER", BILLING_SPECIALIST_ROLE,
+            ACCOUNTANT_ROLE, HOSPITAL_ADMIN_ROLE);
+    }
+
     /** Policy rule 6: who reviews an urgency override afterwards: an accountant, a billing specialist or a hospital admin. */
     public boolean canReviewDispenseBillingOverride(UUID userId, UUID hospitalId) {
         return hasAnyCode(userId, hospitalId, ACCOUNTANT_ROLE, BILLING_SPECIALIST_ROLE, HOSPITAL_ADMIN_ROLE);

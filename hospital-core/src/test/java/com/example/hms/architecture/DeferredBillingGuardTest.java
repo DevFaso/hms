@@ -49,7 +49,23 @@ class DeferredBillingGuardTest {
     private static final Path MAIN = Path.of("src/main/java/com/example/hms");
     private static final String GATE = "DispenseBillingDeferralService.java";
     private static final Pattern MARKS_A_FILL_DEFERRED = Pattern.compile(
-        "\\.setBillingDeferredReason\\(|\\.setBillingDeferredBy\\(|\\.setBillingDeferredAt\\(|\\.setBillingDeferralId\\(");
+        "\\.setBillingDeferredReason\\(|\\.setBillingDeferredBy\\(|\\.setBillingDeferredAt\\(|\\.setBillingDeferralId\\("
+            + "|\\.setBillingDeferredAmount\\(");
+
+    /**
+     * Review of #1244 (HIGH): what takes money off a fill's charge at the counter, by name. A claim "sent to the
+     * payer" used to be one, and a pharmacist alone could create and submit a claim for the whole charge: nothing
+     * was due, so the gate was never asked. Every source is listed here with who stands behind it; a new one fails
+     * until somebody names it and says who.
+     */
+    private static final java.util.Map<String, String> COVER_SOURCES = java.util.Map.of(
+        "paymentRepository.sumPostedForDispense(", "money the checkout took and posted",
+        "FillClaimCover.coveredFor(", "a claim a money desk, other than the dispenser, stands behind");
+
+    /** A call that reads money or a claim for a fill: a repository read, or the claim-cover rule. */
+    private static final Pattern COVER_READ = Pattern.compile(
+        "\\b(?:\\w+Repository\\.(?:sum|find|count|exists)\\w*ForDispense\\(|\\w+Repository\\.findByDispense\\w*\\("
+            + "|FillClaimCover\\.coveredFor\\()");
     private static final Pattern COMPLETES_A_PREPARED_FILL = Pattern.compile("\\.completePreparedFill\\(");
 
     /** The roles of the pharmacy: whoever holds only these never approves, grants or reviews. */
@@ -178,5 +194,65 @@ class DeferredBillingGuardTest {
             n++;
         }
         return n;
+    }
+
+    @Test
+    @DisplayName("review of #1244: every source of cover at the counter is named, and a claim counts only through the claim-cover rule")
+    void everyCoverSourceIsNamed() throws IOException {
+        String service = SourceScan.stripComments(Files.readString(
+            MAIN.resolve("service/pharmacy/DispenseServiceImpl.java"), StandardCharsets.UTF_8));
+        String settlement = between(service, "private FillSettlement settlementOf(", "return new FillSettlement(");
+        Set<String> read = new TreeSet<>();
+        java.util.regex.Matcher calls = COVER_READ.matcher(settlement);
+        while (calls.find()) {
+            read.add(calls.group());
+        }
+        assertThat(read)
+            .as("the counter takes something off a fill's charge that this guard does not name: say what it is "
+                + "and who stands behind it (a claim the pharmacist sent alone covered a whole fill)"
+                + SourceScan.MANDATE)
+            .containsExactlyInAnyOrderElementsOf(COVER_SOURCES.keySet());
+        assertThat(service).as("what is owed is the charge less the named cover, nothing else")
+            .contains("record FillSettlement(BigDecimal charge, BigDecimal paid, BigDecimal claimed)");
+
+        // The bare sum of claims "sent" is gone, and nobody but the claim-cover rule reads a fill's claims by state.
+        List<String> rawSum = new ArrayList<>();
+        List<String> claimReaders = new ArrayList<>();
+        for (Path file : javaFiles()) {
+            String code = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+            if (code.contains("sumSentForDispense")) {
+                rawSum.add(file.getFileName().toString());
+            }
+            if (code.contains(".findByDispenseIdAndClaimStatusIn(")) {
+                claimReaders.add(file.getFileName().toString());
+            }
+        }
+        assertThat(rawSum).as("a claim sent is not cover by itself").isEmpty();
+        assertThat(claimReaders).containsExactly("FillClaimCover.java");
+
+        // The reconciliation and the « still due » balance ask the same question as the gate.
+        for (String sameQuestion : List.of("service/pharmacy/PharmacyReconciliationService.java",
+                "service/pharmacy/DeferredFillBalance.java")) {
+            String code = SourceScan.stripComments(Files.readString(MAIN.resolve(sameQuestion), StandardCharsets.UTF_8));
+            assertThat(code).as(sameQuestion).contains("FillClaimCover.coveredFor(").doesNotContain("sumLiveForDispense(");
+        }
+    }
+
+    @Test
+    @DisplayName("review of #1244: who stands behind a claim as cover is a money desk or a hospital admin, never the pharmacy")
+    void thePharmacyStandsBehindNoClaim() {
+        UUID user = UUID.randomUUID();
+        UUID hospital = UUID.randomUUID();
+        for (String role : PHARMACY_ROLES) {
+            assertThat(rolesOf(Set.of(role)).vouchesForClaimCover(user, hospital)).as(role).isFalse();
+        }
+        for (String role : List.of("BILLING_SPECIALIST", "CLAIMS_REVIEWER", "ACCOUNTANT", "HOSPITAL_ADMIN")) {
+            assertThat(rolesOf(Set.of(role)).vouchesForClaimCover(user, hospital)).as(role).isTrue();
+        }
+        assertThat(rolesOf(Set.of("SUPER_ADMIN")).vouchesForClaimCover(user, hospital)).isFalse();
+        assertThat(rolesOf(Set.of("BILLING_SPECIALIST")).vouchesForClaimCover(user, null)).isFalse();
+        // The verifier reads the counter view; it approves, grants and reviews nothing (checked above).
+        assertThat(rolesOf(Set.of("PHARMACY_VERIFIER")).canReadDispenseBillingCounter(user, hospital)).isTrue();
+        assertThat(rolesOf(Set.of("RECEPTIONIST")).canReadDispenseBillingCounter(user, hospital)).isFalse();
     }
 }

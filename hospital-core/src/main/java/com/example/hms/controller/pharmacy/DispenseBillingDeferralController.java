@@ -42,6 +42,9 @@ public class DispenseBillingDeferralController {
 
     private static final String READERS =
         "hasAnyRole('PHARMACIST', 'BILLING_SPECIALIST', 'ACCOUNTANT', 'HOSPITAL_ADMIN')";
+    /** Whoever hands fills over: the readers, and the pharmacy verifier (this one read only). */
+    private static final String COUNTER_READERS =
+        "hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'BILLING_SPECIALIST', 'ACCOUNTANT', 'HOSPITAL_ADMIN')";
     /** QA D2120: a write a pharmacist makes admits no super-admin on their own. */
     private static final String REQUESTERS = "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, "
         + "'PHARMACIST','BILLING_SPECIALIST','ACCOUNTANT','HOSPITAL_ADMIN')";
@@ -56,12 +59,14 @@ public class DispenseBillingDeferralController {
     @Operation(summary = "Deferrals of the hospital: the open ones and the overrides to review by default, or by status")
     public ResponseEntity<ApiResponseWrapper<List<DispenseBillingDeferralDTO>>> list(
             @RequestParam(name = "status", required = false) List<DispenseBillingDeferralStatus> statuses,
-            @RequestParam(name = "prescriptionId", required = false) UUID prescriptionId) {
-        return ResponseEntity.ok(ApiResponseWrapper.success(deferralService.list(statuses, prescriptionId)));
+            @RequestParam(name = "prescriptionId", required = false) UUID prescriptionId,
+            @RequestParam(name = "stillDue", required = false, defaultValue = "false") boolean stillDue) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+            deferralService.list(statuses, prescriptionId, stillDue)));
     }
 
     @GetMapping("/counter/{prescriptionId}")
-    @PreAuthorize(READERS)
+    @PreAuthorize(COUNTER_READERS)
     @Operation(summary = "What the counter needs before a fill leaves unpaid: an open stay, or the open deferrals")
     public ResponseEntity<ApiResponseWrapper<com.example.hms.payload.dto.pharmacy.DispenseBillingCounterDTO>> counter(
             @PathVariable UUID prescriptionId) {
