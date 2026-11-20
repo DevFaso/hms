@@ -790,8 +790,9 @@ class ProxyReadSensitivityGuardTest {
     private static final Pattern REPOSITORY_FIELD = Pattern.compile(
         "private\\s+(?:final\\s+)?(?:[\\w.]+\\.)?(\\w+Repository)\\s+(\\w+)\\s*;");
     private static final Pattern REPOSITORY_ENTITY = Pattern.compile("extends\\s+\\w*Repository<\\s*(\\w+)\\s*,");
-    private static final Pattern TENANT_SCOPED_ENTITY = Pattern.compile(
-        "class\\s+\\w+[^{]*\\bimplements\\b[^{]*\\bTenantScoped\\b");
+    /** A class declaration up to its body: the name, then whatever it extends and implements. */
+    private static final Pattern CLASS_HEADER = Pattern.compile("class\\s+\\w+([^{]*+)\\{");
+    private static final Pattern TENANT_SCOPED = Pattern.compile("\\bTenantScoped\\b");
     /** The inherited finders {@code TenantAwareJpaRepository} narrows to the caller's hospitals. */
     private static final String SCOPED_FINDERS =
         "findById|findAllById|findAll|findOne|existsById|getReferenceById|getById|count|exists";
@@ -876,8 +877,16 @@ class ProxyReadSensitivityGuardTest {
                 return false;
             }
             Path model = fileNamed("model", entity.group(1));
-            return model != null && TENANT_SCOPED_ENTITY.matcher(
-                SourceScan.stripComments(Files.readString(model, StandardCharsets.UTF_8))).find();
+            if (model == null) {
+                return false;
+            }
+            Matcher header = CLASS_HEADER.matcher(
+                SourceScan.stripComments(Files.readString(model, StandardCharsets.UTF_8)));
+            if (!header.find()) {
+                return false;
+            }
+            int implemented = header.group(1).indexOf("implements");
+            return implemented >= 0 && TENANT_SCOPED.matcher(header.group(1).substring(implemented)).find();
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }
