@@ -120,6 +120,12 @@ public class MidwifeNewbornCare {
                 || !narrowedToHerWards(hospitalId, BedAssignmentService.FIELD_BED_ID)) {
             return false;
         }
+        // Assigning a bed frees the one the stay holds (BedAssignmentService): that bed must be
+        // hers to free too, or a move into maternity would release a bed of another ward.
+        Bed held = admission.getBed();
+        if (held != null && !bedId.equals(held.getId())) {
+            requireHerWard(held, admission, BedAssignmentService.FIELD_BED_ID);
+        }
         // A bed of another hospital answers as not found in the assignment itself.
         Bed bed = bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId).orElse(null);
         return bed != null && requireHerWard(bed, admission, BedAssignmentService.FIELD_BED_ID);

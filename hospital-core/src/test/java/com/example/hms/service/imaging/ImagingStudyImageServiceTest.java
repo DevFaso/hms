@@ -522,6 +522,55 @@ class ImagingStudyImageServiceTest {
         }
 
         @Test
+        void neverReadsADraftReportsAttachment_norAReleasedOneOfAnExamSomebodyElsePerformed() {
+            // Rex review of #1243 (P1): the technician's reach must not open a report's attachments.
+            ImagingStudyImage onStudy = image(null, UUID.randomUUID());
+            ImagingStudyImage onDraft = image(report(false, ImagingReportStatus.PRELIMINARY), UUID.randomUUID());
+            ImagingStudyImage onFinal = image(report(true, ImagingReportStatus.FINAL), UUID.randomUUID());
+            UUID draftImageId = onDraft.getId();
+            UUID finalImageId = onFinal.getId();
+            as(TECHNICIAN);
+
+            // An exam somebody else performed: the study's own images only.
+            order.setPerformedByUserId(UUID.randomUUID());
+            assertThat(service.list(order.getId())).extracting(ImagingStudyImageDTO::id)
+                .containsExactly(onStudy.getId());
+            assertThatThrownBy(() -> service.readContent(draftImageId)).isInstanceOf(ResourceNotFoundException.class);
+            assertThatThrownBy(() -> service.readContent(finalImageId)).isInstanceOf(ResourceNotFoundException.class);
+            assertThat(service.readContent(onStudy.getId()).imageId()).isEqualTo(onStudy.getId());
+
+            // Their own exam: the released report's image too, never the draft's.
+            order.setPerformedByUserId(callerId);
+            assertThat(service.list(order.getId())).extracting(ImagingStudyImageDTO::id)
+                .containsExactly(onStudy.getId(), onFinal.getId());
+            assertThatThrownBy(() -> service.readContent(draftImageId)).isInstanceOf(ResourceNotFoundException.class);
+            assertThat(service.readContent(finalImageId).imageId()).isEqualTo(finalImageId);
+
+            // Beside an administrative role: any released report's image, still no draft's.
+            order.setPerformedByUserId(UUID.randomUUID());
+            as(TECHNICIAN, "ROLE_HOSPITAL_ADMIN");
+            assertThat(service.list(order.getId())).extracting(ImagingStudyImageDTO::id)
+                .containsExactly(onStudy.getId(), onFinal.getId());
+            assertThatThrownBy(() -> service.readContent(draftImageId)).isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        void readsWhatBecameOfAStudysImage_andOfAReportsOnlyWhereTheyReadTheReport() {
+            ImagingStudyImage onStudy = image(null, callerId);
+            onStudy.setWithdrawnAt(LocalDateTime.now());
+            onStudy.setWithdrawalReason("mauvaise incidence");
+            ImagingStudyImage onFinal = image(report(true, ImagingReportStatus.FINAL), UUID.randomUUID());
+            onFinal.setWithdrawnAt(LocalDateTime.now());
+            onFinal.setWithdrawalReason("mauvais patient");
+            as(TECHNICIAN);
+
+            order.setPerformedByUserId(UUID.randomUUID());
+            assertThat(service.withdrawn(order.getId())).hasSize(1);
+            order.setPerformedByUserId(callerId);
+            assertThat(service.withdrawn(order.getId())).hasSize(2);
+        }
+
+        @Test
         void correctsTheirCaptionAndRemovesTheirImageUntilTheSignature_thenNeither() throws IOException {
             ImagingStudyImage own = image(null, callerId);
             as(TECHNICIAN);

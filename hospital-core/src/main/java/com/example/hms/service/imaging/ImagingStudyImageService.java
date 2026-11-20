@@ -167,7 +167,7 @@ public class ImagingStudyImageService {
         return imageRepository.findByImagingOrder_IdOrderByCreatedAtAsc(orderId).stream()
             // QA D2464: a withdrawn image is kept for the record and shown to no reader.
             .filter(image -> !image.isWithdrawn())
-            .filter(image -> reach == Reach.CLINICAL || released(image, studyReleased))
+            .filter(image -> readable(reach, image, studyReleased, order))
             .map(image -> reach == Reach.AS_PATIENT ? toPatientDto(image)
                 : toStaffDto(image, reach == Reach.ADMIN, reports))
             .toList();
@@ -186,7 +186,7 @@ public class ImagingStudyImageService {
         if (reach != Reach.CLINICAL) {
             boolean studyReleased = reportRepository.findByImagingOrder_IdOrderByReportVersionDesc(order.getId())
                 .stream().anyMatch(ImagingReport::isReleasedToPatient);
-            if (!released(image, studyReleased)) {
+            if (!readable(reach, image, studyReleased, order)) {
                 throw new ResourceNotFoundException(MSG_IMAGE_NOT_FOUND, imageId);
             }
         }
@@ -326,8 +326,12 @@ public class ImagingStudyImageService {
     @Transactional(readOnly = true)
     public List<ImagingStudyImageWithdrawalDTO> withdrawn(UUID orderId) {
         ImagingOrder order = loadOrderInScope(orderId);
+        // Policy rule 3: a technician reads what became of the study's images, and of a report's
+        // only where they read the report (a withdrawn image was signed, hence released).
+        Reach reach = ClinicalActor.isImagingTechnicianReader() ? technicianReach() : Reach.CLINICAL;
         return imageRepository.findByImagingOrder_IdOrderByCreatedAtAsc(order.getId()).stream()
             .filter(ImagingStudyImage::isWithdrawn)
+            .filter(image -> readable(reach, image, true, order))
             .map(image -> new ImagingStudyImageWithdrawalDTO(image.getId(), order.getId(), reportIdOf(image),
                 image.getCaption(), image.getWithdrawnAt(), image.getWithdrawnByUserId(),
                 image.getWithdrawalReason()))
@@ -336,8 +340,42 @@ public class ImagingStudyImageService {
 
     // ── Rules ────────────────────────────────────────────────────────────
 
-    /** How the caller reads a study: clinically, as an administrator, or as its patient. */
-    enum Reach { CLINICAL, ADMIN, AS_PATIENT }
+    /**
+     * How the caller reads a study: clinically, as an administrator, as its patient, or (policy
+     * rule 3) as an imaging technician, alone or beside an administrative role.
+     */
+    enum Reach { CLINICAL, ADMIN, AS_PATIENT, TECHNICIAN, TECHNICIAN_ADMIN }
+
+    /**
+     * Whether this reader sees the image. The care team sees every image; an administrator and
+     * the patient, the released ones. Policy rule 3 (provisional): an imaging technician sees the
+     * STUDY's images (what was acquired, before any release), and an image that belongs to a
+     * REPORT only as they read that report: released, and of an exam they performed (or, beside an
+     * administrative role, any released one). A draft report's attachment is never theirs.
+     */
+    private boolean readable(Reach reach, ImagingStudyImage image, boolean studyReleased, ImagingOrder order) {
+        if (reach == Reach.CLINICAL) {
+            return true;
+        }
+        if (reach == Reach.TECHNICIAN || reach == Reach.TECHNICIAN_ADMIN) {
+            ImagingReport report = image.getImagingReport();
+            if (report == null) {
+                return true;
+            }
+            return report.isReleasedToPatient() && (reach == Reach.TECHNICIAN_ADMIN || performedByCaller(order));
+        }
+        return released(image, studyReleased);
+    }
+
+    private Reach technicianReach() {
+        return ClinicalActor.isAdministrativeImagingReader() ? Reach.TECHNICIAN_ADMIN : Reach.TECHNICIAN;
+    }
+
+    /** The exam record names the caller as who performed it (stamped from the session at its start). */
+    private boolean performedByCaller(ImagingOrder order) {
+        UUID caller = roleValidator.getCurrentUserId();
+        return caller != null && caller.equals(order.getPerformedByUserId());
+    }
 
     /**
      * The report's reading rule, applied to the study. Anything the caller may not read answers
@@ -357,10 +395,12 @@ public class ImagingStudyImageService {
             }
             return Reach.AS_PATIENT;
         }
-        // Policy rule 3: an imaging technician sees the study's images (their own uploads before
-        // any release included), whatever administrative role they also hold.
-        return ClinicalActor.isAdministrativeImagingReader() && !ClinicalActor.isImagingTechnicianReader()
-            ? Reach.ADMIN : Reach.CLINICAL;
+        // Policy rule 3: an imaging technician reads the study's images and, of a report's, only
+        // those of the reports they read (readable), whatever administrative role they also hold.
+        if (ClinicalActor.isImagingTechnicianReader()) {
+            return technicianReach();
+        }
+        return ClinicalActor.isAdministrativeImagingReader() ? Reach.ADMIN : Reach.CLINICAL;
     }
 
     private ImagingOrder loadOrderInScope(UUID orderId) {

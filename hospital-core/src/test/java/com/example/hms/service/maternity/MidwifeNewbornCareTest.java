@@ -168,6 +168,28 @@ class MidwifeNewbornCareTest {
     }
 
     @Test
+    void sheNeverMovesAPatientOutOfAnotherWardsBed_theMoveWouldFreeABedThatIsNotHers() {
+        // Rex review of #1243 (P2): assigning a bed releases the one the stay holds.
+        Admission inSurgery = stay(AdmissionType.LABOR_DELIVERY);
+        inSurgery.setBed(bedIn(WardType.SURGICAL));
+        UUID maternityBed = bedIn(WardType.MATERNITY).getId();
+        assertThatThrownBy(() -> care.requireBedAMidwifeMayAssign(inSurgery, maternityBed))
+            .isInstanceOf(FieldBusinessException.class)
+            .hasMessageContaining("maternity wards only");
+
+        // From one maternity bed to another: hers on both sides.
+        Admission inMaternity = stay(AdmissionType.LABOR_DELIVERY);
+        inMaternity.setBed(bedIn(WardType.MATERNITY));
+        assertThat(care.requireBedAMidwifeMayAssign(inMaternity, bedIn(WardType.MATERNITY).getId())).isFalse();
+
+        // The same bed again changes nothing and frees nothing.
+        Admission same = stay(AdmissionType.LABOR_DELIVERY);
+        Bed held = bedIn(WardType.MATERNITY);
+        same.setBed(held);
+        assertThat(care.requireBedAMidwifeMayAssign(same, held.getId())).isFalse();
+    }
+
+    @Test
     void aNeonatalCotForANewbornIsAssignedAndAPhysicianIsAsked() {
         assertThat(care.requireBedAMidwifeMayAssign(stay(AdmissionType.NEWBORN), bedIn(WardType.NICU).getId()))
             .isTrue();
