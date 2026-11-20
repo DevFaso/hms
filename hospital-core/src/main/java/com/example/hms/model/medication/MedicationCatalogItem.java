@@ -174,6 +174,18 @@ public class MedicationCatalogItem extends BaseEntity {
     @Builder.Default
     private boolean controlled = false;
 
+    /**
+     * Policy 2026-11-20 (provisional): the sensitive category this medicine
+     * reveals whatever visit prescribed it (an antiretroviral names HIV as
+     * surely as the result does: Loi 030-2008, art. 14). NULL, the default,
+     * means a prescription takes its category from its visit only. Never
+     * seeded: which medicines carry one is each hospital's decision. A proxy
+     * never reads a prescription of a tagged medicine ({@code ProxyRecordFilter}).
+     */
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(name = "sensitivity_category", length = 32)
+    private com.example.hms.enums.SensitivityCategory sensitivityCategory;
+
     @Column(nullable = false)
     @Builder.Default
     private boolean active = true;

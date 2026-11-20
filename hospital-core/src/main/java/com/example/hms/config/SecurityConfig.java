@@ -154,6 +154,14 @@ public class SecurityConfig {
     static final String API_HOSPITAL_IMAGING_REPORTING_SETTINGS = "/hospitals/*/imaging-reporting-settings";
 
     /**
+     * Policy 2026-11-20 (V347): a hospital's adolescent confidentiality age. As the posture: its
+     * controller admits HOSPITAL_ADMIN on PUT and QUALITY_MANAGER on GET, which the /hospitals/**
+     * matchers below would refuse at the edge. The controller pins a hospital admin to the hospital
+     * they are acting in.
+     */
+    static final String API_HOSPITAL_ADOLESCENT_AGE = "/hospitals/*/adolescent-confidentiality-age";
+
+    /**
      * The HAPI FHIR servlet ({@code FhirConfig}, mounted at {@code /fhir/*}).
      * It answers with the whole chart — Encounter, Condition,
      * MedicationRequest, Immunization, Observation, DiagnosticReport,
@@ -807,6 +815,12 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, API_HOSPITAL_POSTURE)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN, ROLE_QUALITY_MANAGER)
                 .requestMatchers(HttpMethod.PUT, API_HOSPITAL_POSTURE)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                // Policy 2026-11-20: the adolescent confidentiality age, ahead of the /hospitals
+                // matchers as the posture, so the controller's own role sets decide.
+                .requestMatchers(HttpMethod.GET, API_HOSPITAL_ADOLESCENT_AGE)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN, ROLE_QUALITY_MANAGER)
+                .requestMatchers(HttpMethod.PUT, API_HOSPITAL_ADOLESCENT_AGE)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
                 // V317 PACS connection: ahead of the /hospitals matchers, as the posture.
                 .requestMatchers(HttpMethod.GET, API_HOSPITAL_PACS_SETTINGS)

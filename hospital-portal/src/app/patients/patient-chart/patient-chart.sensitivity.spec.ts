@@ -165,4 +165,35 @@ describe('PatientChartComponent - the sensitive category of a diagnosis (QA D273
     expect(host.querySelector('[data-testid="problem-sensitive"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="problem-sensitivity"]')).toBeNull();
   });
+
+  // Policy 2026-11-20 (provisional): the release of a minor's sensitive result to a parent.
+  const bornYearsAgo = (years: number): string => {
+    const born = new Date();
+    born.setFullYear(born.getFullYear() - years);
+    born.setDate(born.getDate() - 1);
+    return born.toISOString().slice(0, 10);
+  };
+
+  it('policy 2026-11-20: a doctor and a midwife are offered the family release for a patient under 18 only', () => {
+    setup(['ROLE_DOCTOR']);
+    expect(component.canReleaseToFamily()).withContext('no date of birth').toBeFalse();
+    component.patientDateOfBirth = bornYearsAgo(15);
+    expect(component.canReleaseToFamily()).withContext('15 years old').toBeTrue();
+    component.patientDateOfBirth = bornYearsAgo(18);
+    expect(component.canReleaseToFamily()).withContext('18 years old').toBeFalse();
+    component.patientDateOfBirth = 'not a date';
+    expect(component.canReleaseToFamily()).withContext('an unreadable date').toBeFalse();
+  });
+
+  it('policy 2026-11-20: a nurse and a pharmacist are not offered the family release', () => {
+    setup(['ROLE_NURSE']);
+    component.patientDateOfBirth = bornYearsAgo(15);
+    expect(component.canReleaseToFamily()).toBeFalse();
+  });
+
+  it('policy 2026-11-20: a midwife is offered it', () => {
+    setup(['ROLE_MIDWIFE']);
+    component.patientDateOfBirth = bornYearsAgo(16);
+    expect(component.canReleaseToFamily()).toBeTrue();
+  });
 });

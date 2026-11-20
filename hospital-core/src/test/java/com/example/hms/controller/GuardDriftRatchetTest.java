@@ -147,11 +147,19 @@ class GuardDriftRatchetTest {
     private static final String ULTRASOUNDCONTROLLER_REASON =
         "Ultrasound ordering and reporting; maternity cluster (c) as found 2026-09-26, pending the clinical decision in tasklist \"Nurse/midwife read drift\"";
 
+    private static final String MINOR_RELEASE_REASON =
+        "Policy 2026-11-20 (provisional, Loi 030-2008 art. 17-18): a minor's sensitive result is disclosed to a"
+            + " parent after counselling by the clinician who has care of the patient, a doctor or a midwife;"
+            + " a nurse does not make that disclosure";
+
     private static Map<String, String> doctorWithoutNurse() {
         Map<String, String> listed = new TreeMap<>();
         listed.put("AdmissionController.admitPatient",
             "Doctor and midwife only (policy 2: a midwife admits a woman in labour, the service refuses her any other type); nurses never admit, QA D84");
         listed.put("AdmissionController.cancelAdmission", ADMISSIONCONTROLLER_REASON);
+        listed.put("MinorResultReleaseController.overview", MINOR_RELEASE_REASON);
+        listed.put("MinorResultReleaseController.markGuardianVerified", MINOR_RELEASE_REASON);
+        listed.put("MinorResultReleaseController.release", MINOR_RELEASE_REASON);
         listed.put("LaborController.transferEpisode",
             "Labour transfer (provisional rule, 2026-11-12): only those who may admit a labour (doctor, midwife under policy 2) hand one to another hospital; nurses never admit");
         listed.put("LaborController.recordArrivalWithoutHandover",

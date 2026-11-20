@@ -30,6 +30,8 @@ const GRANT_RELATIONSHIP_ID = 'family-relationship';
 const GRANT_FIELDS = [GRANT_USERNAME_ID, GRANT_RELATIONSHIP_ID];
 /** QA D1464: the grant's optional end date. */
 const EXPIRES_FIELD = 'proxy-expires';
+/** Policy 2026-11-20: the explicit grant scope that opens tuberculosis (restricted) records. */
+const TUBERCULOSIS_SCOPE = 'VIEW_TUBERCULOSIS';
 
 @Component({
   selector: 'app-my-family-access',
@@ -68,6 +70,24 @@ export class MyFamilyAccessComponent implements OnInit {
     relationship: '',
     permissions: 'ALL',
   };
+  /**
+   * Policy 2026-11-20 (provisional): tuberculosis records are restricted. They
+   * reach this person only when the patient ticks this; no other scope opens them.
+   */
+  readonly shareTuberculosis = signal(false);
+
+  /** A grant's scopes without the tuberculosis one, which is labelled on its own. */
+  baseScopes(permissions: string | null | undefined): string {
+    return (permissions ?? '')
+      .split(',')
+      .map((scope) => scope.trim())
+      .filter((scope) => scope && scope !== TUBERCULOSIS_SCOPE)
+      .join(',');
+  }
+
+  sharesTuberculosis(permissions: string | null | undefined): boolean {
+    return (permissions ?? '').split(',').some((scope) => scope.trim() === TUBERCULOSIS_SCOPE);
+  }
 
   /**
    * Optional expiry, as the date input's yyyy-MM-dd. Kept separate from the
@@ -159,10 +179,15 @@ export class MyFamilyAccessComponent implements OnInit {
       ? toServerDateTime(`${this.expiresOn}T23:59:59`)
       : undefined;
     this.granting.set(true);
-    this.portalService.grantProxy(this.form).subscribe({
+    // Policy 2026-11-20: the tuberculosis scope is explicit, added only when ticked.
+    const request: ProxyGrantRequest = this.shareTuberculosis()
+      ? { ...this.form, permissions: `${this.form.permissions},${TUBERCULOSIS_SCOPE}` }
+      : this.form;
+    this.portalService.grantProxy(request).subscribe({
       next: (proxy) => {
         this.proxies.update((list) => [proxy, ...list]);
         this.showGrantForm.set(false);
+        this.shareTuberculosis.set(false);
         this.form = { proxyUsername: '', relationship: '', permissions: 'ALL' };
         this.expiresOn = '';
         this.granting.set(false);

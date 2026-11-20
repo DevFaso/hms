@@ -29,6 +29,7 @@ import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 import { refusalReason, refusedFieldReasons } from '../../shared/refusal-reason';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { SensitivitySelectComponent } from '../../shared/sensitivity/sensitivity-select';
+import { LabSensitivityRecommendationsComponent } from '../lab-sensitivity-recommendations/lab-sensitivity-recommendations.component';
 import {
   SensitivityCategory,
   sensitivityLabelKey,
@@ -64,6 +65,7 @@ const DEF_CONTROL_IDS = [...new Set(Object.values(DEF_FIELD_IDS))];
   selector: 'app-lab-test-config',
   standalone: true,
   imports: [
+    LabSensitivityRecommendationsComponent,
     SensitivitySelectComponent,
     SubmitGuardDirective,
     ModalDialogDirective,

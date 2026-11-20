@@ -66,6 +66,19 @@
             </option>
           </select>
         </label>
+        <!-- Policy 2026-11-20 (provisional): tuberculosis is restricted. It is shown to this person
+             only when the patient says so here; « tout » never includes it. -->
+        <label class="tb-scope" for="proxy-tb-scope">
+          <input
+            id="proxy-tb-scope"
+            type="checkbox"
+            data-testid="proxy-tb-scope"
+            [checked]="shareTuberculosis()"
+            (change)="shareTuberculosis.set($any($event.target).checked)"
+          />
+          <span>{{ 'SENSITIVE_POLICY.GRANT.TB_SCOPE' | translate }}</span>
+        </label>
+        <p class="tb-scope-hint">{{ 'SENSITIVE_POLICY.GRANT.TB_SCOPE_HINT' | translate }}</p>
         <label>
           {{ 'PORTAL.FAMILY.EXPIRES' | translate }}
           <!-- The backend has enforced expiresAt since the P1 #9 fix, but no
@@ -161,7 +174,15 @@
                 <td>
                   <span class="badge">{{ p.relationship | enumLabel: 'relationship' }}</span>
                 </td>
-                <td>{{ p.permissions | enumLabel: 'permissions' }}</td>
+                <td>
+                  {{ baseScopes(p.permissions) | enumLabel: 'permissions' }}
+                  @if (sharesTuberculosis(p.permissions)) {
+                    <!-- Policy 2026-11-20: the explicit tuberculosis scope, said in words. -->
+                    <span data-testid="grant-tb-scope">{{
+                      'SENSITIVE_POLICY.GRANT.TB_SCOPE_BADGE' | translate
+                    }}</span>
+                  }
+                </td>
                 <td>{{ p.createdAt | serverTime | date: 'mediumDate' }}</td>
                 <td>
                   {{
@@ -222,7 +243,15 @@
                 <td>
                   <span class="badge">{{ p.relationship | enumLabel: 'relationship' }}</span>
                 </td>
-                <td>{{ p.permissions | enumLabel: 'permissions' }}</td>
+                <td>
+                  {{ baseScopes(p.permissions) | enumLabel: 'permissions' }}
+                  @if (sharesTuberculosis(p.permissions)) {
+                    <!-- Policy 2026-11-20: the explicit tuberculosis scope, said in words. -->
+                    <span data-testid="grant-tb-scope">{{
+                      'SENSITIVE_POLICY.GRANT.TB_SCOPE_BADGE' | translate
+                    }}</span>
+                  }
+                </td>
                 <td>{{ p.createdAt | serverTime | date: 'mediumDate' }}</td>
                 <td>
                   {{

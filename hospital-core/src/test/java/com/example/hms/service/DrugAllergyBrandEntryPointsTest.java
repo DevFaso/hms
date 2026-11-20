@@ -188,6 +188,9 @@ class DrugAllergyBrandEntryPointsTest {
 
     /** Readers of an order's catalogue item that are not an identity decision, and why. */
     private static final Map<String, String> NOT_IDENTITY_CHECKS = Map.ofEntries(
+        Map.entry("service/recordaccess/ProxyRecordFilter.java", "policy 2026-11-20: reads the item's sensitive"
+            + " category only to WITHHOLD the prescription from a family proxy; no dose, allergy or interaction is"
+            + " decided from it, and a tag can only hide more"),
         Map.entry("cdshooks/rules/AdultParacetamolRule.java", "reads the route and form of the context's item, only to"
             + " withhold an oral verdict; the drug and its strength come from ParacetamolFactsReader and the engine,"
             + " both on OrderedDrugIdentity, and OrderedDrugIdentityRule flags a name that contradicts the item"),
