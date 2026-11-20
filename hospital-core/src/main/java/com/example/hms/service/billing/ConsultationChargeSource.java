@@ -45,6 +45,18 @@ public class ConsultationChargeSource implements VisitChargeSource {
         com.example.hms.enums.AdmissionType.NEWBORN,
         com.example.hms.enums.AdmissionType.TRANSFER);
 
+    /**
+     * Policy rule 6 (provisional, V345): the rule above is the default of every hospital, and a hospital may choose
+     * otherwise for itself ({@code hospital_billing_policies.auto_consultation_on_planned_admission}). A required
+     * setter: the application always wires it; a source built by hand in a unit test has none and uses the default.
+     */
+    private HospitalBillingPolicyService billingPolicy;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setBillingPolicy(HospitalBillingPolicyService billingPolicy) {
+        this.billingPolicy = billingPolicy;
+    }
+
     @Override
     public BillableOrderType type() {
         return BillableOrderType.CONSULTATION;
@@ -86,6 +98,11 @@ public class ConsultationChargeSource implements VisitChargeSource {
     private boolean plannedAdmission(Visit visit) {
         UUID admissionId = visit.encounter().getAdmissionId();
         if (admissionId == null || admissionRepository == null) {
+            return false;
+        }
+        // Policy rule 6: a hospital that chose a default consultation on every admission gets one.
+        UUID hospitalId = visit.encounter().getHospital() != null ? visit.encounter().getHospital().getId() : null;
+        if (billingPolicy != null && billingPolicy.autoConsultationOnPlannedAdmission(hospitalId)) {
             return false;
         }
         return admissionRepository.findById(admissionId)

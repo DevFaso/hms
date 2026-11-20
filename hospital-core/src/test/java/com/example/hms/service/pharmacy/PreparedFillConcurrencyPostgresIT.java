@@ -156,6 +156,8 @@ class PreparedFillConcurrencyPostgresIT {
     @MockitoBean private RoleValidator roleValidator;
     /** QA D1555: the allergy gate itself is tested in the unit tests; none of these patients has an allergy. */
     @MockitoBean private com.example.hms.service.allergy.CurrentAllergyRecheck allergyRecheck;
+    /** Policy rule 6 (V345): the deferral gate, mocked: these tests are about locks, not money. */
+    @MockitoBean private DispenseBillingDeferralService billingDeferrals;
     @MockitoBean private PharmacyServiceSupport support;
     @MockitoBean private CdsCheckService cdsCheckService;
     @MockitoBean private PrescriberPharmacyNotifier prescriberNotifier;

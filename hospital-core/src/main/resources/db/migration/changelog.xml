@@ -3844,4 +3844,19 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V345 (policy rules 1 and 6, owner decision 2026-11-20; QA r63 D2308,
+         r65 D2675): hospital.hospital_billing_policies (per-hospital
+         consultation default and the pharmacist-renewal flag, OFF),
+         clinical.dispense_billing_deferrals (approve-then-execute, two
+         people), dispenses.billing_deferral_id and the decision columns of
+         refill_requests. Additive, IF NOT EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V345-policy-deferred-billing-and-renewals" author="hms-team" runOnChange="false">
+        <sqlFile path="V345__policy_deferred_billing_and_renewals.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

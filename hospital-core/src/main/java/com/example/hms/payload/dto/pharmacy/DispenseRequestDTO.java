@@ -77,13 +77,18 @@ public class DispenseRequestDTO {
     private DispenseStatus status;
 
     /**
-     * Review of #1239 (QA D2675): a one-step fill hands the medication over before any payment can exist. When it
-     * has a charge, this is why it leaves the counter unpaid: « à facturer ». Required only then, and only a
-     * pharmacist or a hospital admin may give it. Never card data.
+     * Policy rule 6 (V345; review of #1239, QA D2675): a one-step fill hands the medication over before any payment
+     * can exist. When it has a charge, this names the deferral somebody else approved for the prescription.
+     */
+    private java.util.UUID billingDeferralId;
+
+    /**
+     * Policy rule 6: the reason of a logged « urgence » override, when the fill cannot wait for an approval. Only a
+     * pharmacist or a hospital admin may give it, and finance reviews it afterwards. Never card data.
      */
     @Size(max = 500)
     @com.example.hms.validation.NoCardNumber
-    private String billingDeferredReason;
+    private String billingUrgencyReason;
 
     @Size(max = 1000)
     private String notes;

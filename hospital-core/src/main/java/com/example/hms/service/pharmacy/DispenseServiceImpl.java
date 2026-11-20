@@ -440,22 +440,21 @@ public class DispenseServiceImpl implements DispenseService {
         Dispense dispense = dispenseMapper.toEntity(dto, fill.mapperContext());
         dispense.setDispensedAt(LocalDateTime.now(clock));
         // Review of #1239 (QA D2675): this fill leaves the counter now, and nothing can have been paid or claimed
-        // on a row that does not exist yet. With a charge it passes the gate of a hand-over: « à facturer », with
-        // a reason, from a pharmacist or a hospital admin. The refusal rolls the stock movement back.
-        String deferredReason = requireFreeOrDeferred(dispense, dto.getBillingDeferredReason(),
+        // on a row that does not exist yet. With a charge it passes the gate of a hand-over (policy rule 6): the
+        // account of an open stay, a deferral somebody else approved, or a logged urgency override. The refusal
+        // rolls the stock movement back.
+        com.example.hms.model.pharmacy.DispenseBillingDeferral deferral = requireFreeOrDeferred(dispense, prescription,
+                new DispenseBillingDeferralService.Choice(dto.getBillingDeferralId(), dto.getBillingUrgencyReason()),
                 fill.actors().dispensedBy());
-        if (deferredReason != null) {
-            dispense.setBillingDeferredReason(deferredReason);
-            dispense.setBillingDeferredBy(fill.actors().dispensedBy().getId());
-            dispense.setBillingDeferredAt(dispense.getDispensedAt());
+        if (deferral != null) {
+            billingDeferrals.stamp(dispense, deferral, fill.actors().dispensedBy().getId(), dispense.getDispensedAt());
         }
         recordVerification(dispense, dto, fill.verification());
         dispense.setNotes(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(dispense.getNotes(), fill.allergyAck(), DISPENSE_NOTES_MAX, "notes"));
         Dispense saved = dispenseRepository.save(dispense);
         auditAllergyAcknowledged(fill.allergyAck(), prescription, saved.getId());
-        if (deferredReason != null) {
-            logAudit(AuditEventType.DISPENSE_BILLING_DEFERRED,
-                    "Fill handed over unpaid, marked to be billed", saved.getId().toString());
+        if (deferral != null) {
+            billingDeferrals.executed(deferral, saved, prescription);
         }
 
         // Update prescription status based on cumulative dispensed quantity (supports partial fills)
@@ -605,8 +604,10 @@ public class DispenseServiceImpl implements DispenseService {
 
         LocalDateTime now = LocalDateTime.now(clock);
         User handedOverBy = resolveCurrentUser();
-        // QA D2675 (r65): a fill leaves the counter paid, covered by a claim, free, or marked « à facturer ».
-        String deferredReason = requirePaidCoveredOrDeferred(dispense, request, handedOverBy);
+        // QA D2675 (r65), policy rule 6: a fill leaves the counter paid, covered by a claim, free, on the account of
+        // an open stay, on a deferral somebody else approved, or on a logged urgency override.
+        com.example.hms.model.pharmacy.DispenseBillingDeferral deferral =
+                requirePaidCoveredOrDeferred(dispense, prescription, request, handedOverBy);
         int changed = dispenseRepository.completePreparedFill(dispense.getId(), now, handedOverBy,
                 mergedVerificationStatus(dispense, patientScan),
                 patientScan != null ? patientScan : dispense.getPatientScanValue(),
@@ -621,12 +622,9 @@ public class DispenseServiceImpl implements DispenseService {
             throw new ConflictException(MessageUtil.resolve(READY_NOT_PENDING));
         }
         appendNotes(dispense, request);
-        if (deferredReason != null) {
-            dispense.setBillingDeferredReason(deferredReason);
-            dispense.setBillingDeferredBy(handedOverBy.getId());
-            dispense.setBillingDeferredAt(now);
-            logAudit(AuditEventType.DISPENSE_BILLING_DEFERRED,
-                    "Fill handed over unpaid, marked to be billed", dispense.getId().toString());
+        if (deferral != null) {
+            billingDeferrals.stamp(dispense, deferral, handedOverBy.getId(), now);
+            billingDeferrals.executed(deferral, dispense, prescription);
         }
         if (allergyAck != null) {
             dispense.setNotes(com.example.hms.service.allergy.CurrentAllergyRecheck.withRecordLine(dispense.getNotes(), allergyAck, DISPENSE_NOTES_MAX, "notes"));
@@ -732,49 +730,59 @@ public class DispenseServiceImpl implements DispenseService {
      * QA D2675 (r65): « Remettre au patient » handed over fills with no payment row (Sulfate de fer 200, morphine 2)
      * and nothing listed them. A fill now leaves the counter only when nothing is owed on it: its charge is paid,
      * covered by a claim sent to the payer (SUBMITTED, ACCEPTED or PAID, never a DRAFT), or it has no charge (not
-     * priced). Otherwise it is marked « à facturer » with a reason,
-     * by a pharmacist or a hospital admin; the reconciliation lists it. Returns that reason, or null when owed nothing.
+     * priced). Otherwise policy rule 6 applies ({@link DispenseBillingDeferralService#admit}): the pharmacist no
+     * longer marks it « à facturer » on their own word. Returns the deferral the fill leaves on, or null when it
+     * is owed nothing; the reconciliation lists every one.
      */
-    private String requirePaidCoveredOrDeferred(Dispense dispense, HandOverRequestDTO request, User actor) {
+    private com.example.hms.model.pharmacy.DispenseBillingDeferral requirePaidCoveredOrDeferred(
+            Dispense dispense, Prescription prescription, HandOverRequestDTO request, User actor) {
         FillSettlement settlement = settlementOf(dispense);
         if (settlement.charge().signum() <= 0 || settlement.due().signum() <= 0) {
             return null;
         }
-        return requireDeferral(dispense, request != null ? request.getBillingDeferredReason() : null,
-                settlement.due(), actor);
+        return requireDeferral(dispense, prescription, new DispenseBillingDeferralService.Choice(
+                request != null ? request.getBillingDeferralId() : null,
+                request != null ? request.getBillingUrgencyReason() : null), settlement.due(), actor);
     }
 
     /**
      * Review of #1239: the one-step fill saved COMPLETED with no settlement check, so the hand-over gate was
      * bypassed by not preparing first. A new fill has no payment and no claim yet: what is due is its whole charge.
-     * Returns the « à facturer » reason, or null when the fill has no charge.
+     * Returns the deferral the fill leaves on, or null when the fill has no charge.
      */
-    private String requireFreeOrDeferred(Dispense newFill, String billingDeferredReason, User actor) {
+    private com.example.hms.model.pharmacy.DispenseBillingDeferral requireFreeOrDeferred(
+            Dispense newFill, Prescription prescription, DispenseBillingDeferralService.Choice choice, User actor) {
         BigDecimal charge = DispenseCharge.of(newFill, inventoryItemRepository).orElse(BigDecimal.ZERO);
         if (charge.signum() <= 0) {
             return null;
         }
-        return requireDeferral(newFill, billingDeferredReason, charge, actor);
+        return requireDeferral(newFill, prescription, choice, charge, actor);
     }
 
-    /** The « à facturer » reason of a fill that leaves with {@code due} unpaid: required, by an authorised role. */
-    private String requireDeferral(Dispense dispense, String billingDeferredReason, BigDecimal due, User actor) {
-        String reason = trimToNull(billingDeferredReason);
-        if (reason == null) {
-            throw new com.example.hms.exception.FieldBusinessException("billingDeferredReason",
+    /**
+     * Policy rule 6: the deferral of a fill that leaves with {@code due} unpaid. The one path from the counter to an
+     * unpaid hand-over; a service built without the deferral gate refuses every such fill.
+     */
+    private com.example.hms.model.pharmacy.DispenseBillingDeferral requireDeferral(
+            Dispense dispense, Prescription prescription, DispenseBillingDeferralService.Choice choice,
+            BigDecimal due, User actor) {
+        if (billingDeferrals == null) {
+            throw new com.example.hms.exception.FieldBusinessException(DispenseBillingDeferralService.FIELD_DEFERRAL,
                     "pharmacy.handOver.unpaid", com.example.hms.utility.DisplayNumbers.quantity(due));
         }
         UUID hospitalId = dispense.getPharmacy().getHospital().getId();
-        if (actor == null || !roleValidator.canDeferDispenseBilling(actor.getId(), hospitalId)) {
-            throw new com.example.hms.exception.FieldBusinessException("billingDeferredReason",
-                    "pharmacy.handOver.deferRoleRequired");
-        }
-        if (reason.length() > 500) {
-            throw new com.example.hms.exception.FieldBusinessException("billingDeferredReason",
-                    "pharmacy.handOver.deferReasonTooLong");
-        }
-        com.example.hms.utility.CardNumbers.requireNone(reason, "billingDeferredReason");
-        return reason;
+        return billingDeferrals.admit(prescription, hospitalId, due, choice, actor);
+    }
+
+    /**
+     * Policy rule 6 (V345): the gate of every fill that leaves with money due. A required setter: the application
+     * always wires it; a service built by hand in a unit test has none and refuses such a fill.
+     */
+    private DispenseBillingDeferralService billingDeferrals;
+
+    @Autowired
+    public void setBillingDeferrals(DispenseBillingDeferralService billingDeferrals) {
+        this.billingDeferrals = billingDeferrals;
     }
 
     @Override
@@ -794,7 +802,7 @@ public class DispenseServiceImpl implements DispenseService {
             status = "PAID";
         } else if (settlement.due().signum() <= 0) {
             status = "COVERED";
-        } else if (dispense.getBillingDeferredReason() != null) {
+        } else if (dispense.leftOnDeferredBilling()) {
             status = "DEFERRED";
         } else {
             status = "UNPAID";
@@ -810,6 +818,8 @@ public class DispenseServiceImpl implements DispenseService {
                 .status(status)
                 .billingDeferredReason(dispense.getBillingDeferredReason())
                 .billingDeferredAt(dispense.getBillingDeferredAt())
+                .onOpenStay(billingDeferrals != null && dispense.getPrescription() != null
+                        && billingDeferrals.chargedToOpenStay(dispense.getPrescription(), hospitalId))
                 .build();
     }
 

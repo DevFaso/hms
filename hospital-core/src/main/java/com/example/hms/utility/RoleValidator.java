@@ -320,11 +320,71 @@ public class RoleValidator {
     }
 
     /**
-     * QA D2675 (r65): who may hand a fill over unpaid, marked « à facturer » with a reason: a pharmacist or a hospital
-     * admin assignment at {@code hospitalId} (never a verifier or the super-admin alone).
+     * Policy rule 6 (provisional; QA D2675): who may hand a fill over unpaid on a logged « urgence » override, with a
+     * reason that finance reviews afterwards: a pharmacist or a hospital admin assignment at {@code hospitalId}
+     * (never a verifier or the super-admin alone). This is the ONLY way the counter lets an unpaid fill go on its
+     * own word; every other deferral is approved by somebody else first.
      */
-    public boolean canDeferDispenseBilling(UUID userId, UUID hospitalId) {
+    public boolean canOverrideDispenseBillingForUrgency(UUID userId, UUID hospitalId) {
         return hasAnyCode(userId, hospitalId, PHARMACIST_ROLE, HOSPITAL_ADMIN_ROLE);
+    }
+
+    /**
+     * Policy rule 6: who may ASK for a fill to leave « à facturer » at {@code hospitalId}: the counter or the money
+     * desks (a pharmacist, a billing specialist, an accountant or a hospital admin). Asking decides nothing. Never
+     * reception: the request names a medicine, which the front desk does not read.
+     */
+    public boolean canRequestDispenseBillingDeferral(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, PHARMACIST_ROLE, BILLING_SPECIALIST_ROLE, ACCOUNTANT_ROLE,
+            HOSPITAL_ADMIN_ROLE);
+    }
+
+    /**
+     * Policy rule 6: who checks a third-party cover against its claim or voucher at {@code hospitalId}: billing
+     * (a billing specialist), finance (an accountant) or a hospital admin. Never the pharmacist.
+     */
+    public boolean canApproveThirdPartyCover(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, BILLING_SPECIALIST_ROLE, ACCOUNTANT_ROLE, HOSPITAL_ADMIN_ROLE);
+    }
+
+    /**
+     * Policy rule 6: who grants an outpatient credit at {@code hospitalId}: finance (an accountant) or a hospital
+     * admin. Never the pharmacist, never billing alone. The social service has no role in the product yet.
+     */
+    public boolean canApproveOutpatientCredit(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, ACCOUNTANT_ROLE, HOSPITAL_ADMIN_ROLE);
+    }
+
+    /** Policy rule 6: who reviews an urgency override afterwards: an accountant, a billing specialist or a hospital admin. */
+    public boolean canReviewDispenseBillingOverride(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, ACCOUNTANT_ROLE, BILLING_SPECIALIST_ROLE, HOSPITAL_ADMIN_ROLE);
+    }
+
+    /** Policy rules 1 and 6: who sets a hospital's billing policy: a hospital admin assignment there. */
+    public boolean canSetHospitalBillingPolicy(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE);
+    }
+
+    /**
+     * Policy rule 1 (provisional; Code de la santé publique art. 276, QA D2308): who may approve the renewal of a
+     * prescription at {@code hospitalId}. A physician (doctor, physician or surgeon) for every list; a nurse or a
+     * midwife for Lists I and II only, which the catalogue knows as "not controlled". Never a pharmacist, whatever
+     * else the request says. Narcotics and controlled drugs are not renewed by anybody: they need a new
+     * prescription, which the renewal itself refuses. The product has no dentist role yet; a dentist signs as a doctor.
+     */
+    public boolean canApproveRenewal(UUID userId, UUID hospitalId, boolean controlled) {
+        if (userId == null || hospitalId == null) {
+            return false;
+        }
+        if (isSigningPhysician(userId, hospitalId)) {
+            return true;
+        }
+        return !controlled && hasAnyCode(userId, hospitalId, NURSE_ROLE, MIDWIFE_ROLE);
+    }
+
+    /** Policy rule 1: who reviews, flags or refuses a renewal request at the pharmacy: a pharmacist there. */
+    public boolean canReviewRenewalAtPharmacy(UUID userId, UUID hospitalId) {
+        return userId != null && hospitalId != null && hasAnyCode(userId, hospitalId, PHARMACIST_ROLE);
     }
 
     /**

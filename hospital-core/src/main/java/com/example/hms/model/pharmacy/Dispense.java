@@ -261,4 +261,19 @@ public class Dispense extends BaseEntity {
     /** QA D2675: when the fill was marked « à facturer ». */
     @Column(name = "billing_deferred_at")
     private LocalDateTime billingDeferredAt;
+
+    /**
+     * Policy rule 6 (V345): the {@code DispenseBillingDeferral} this fill left on: an approved deferral, an urgency
+     * override or the account of the open stay. Null on a fill marked « à facturer » before V345.
+     */
+    @Column(name = "billing_deferral_id")
+    private java.util.UUID billingDeferralId;
+
+    /**
+     * Whether this fill left with money still due on a recorded basis: a deferral row (V345) or, before it, the
+     * reason a pharmacist gave. An inpatient item carries a deferral and no reason.
+     */
+    public boolean leftOnDeferredBilling() {
+        return billingDeferralId != null || billingDeferredReason != null;
+    }
 }

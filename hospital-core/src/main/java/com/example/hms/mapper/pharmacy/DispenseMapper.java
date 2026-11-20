@@ -66,6 +66,7 @@ public class DispenseMapper {
             .verificationOverrideReason(entity.getVerificationOverrideReason())
             .billingDeferredReason(entity.getBillingDeferredReason())
             .billingDeferredAt(entity.getBillingDeferredAt())
+            .billingDeferralId(entity.getBillingDeferralId())
             .preparedBy(entity.getPreparedByUser() != null ? entity.getPreparedByUser().getId() : null)
             .preparedByName(displayNameOf(entity.getPreparedByUser()))
             .readyAt(entity.getPreparedByUser() != null ? entity.getCreatedAt() : null)

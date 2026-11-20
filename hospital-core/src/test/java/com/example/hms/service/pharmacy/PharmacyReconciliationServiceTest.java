@@ -275,6 +275,48 @@ class PharmacyReconciliationServiceTest {
     }
 
     @Test
+    @DisplayName("policy rule 6: every « à facturer » fill names the deferral behind it; one marked before the rule is UNAPPROVED")
+    void deferredFillsNameTheirDeferral() {
+        Dispense legacy = fill("2", false, true);
+        legacy.setBillingDeferredReason("Hospitalisé, facture du séjour");
+        Dispense override = fill("4", false, true);
+        UUID overrideId = UUID.randomUUID();
+        override.setBillingDeferralId(overrideId);
+        override.setBillingDeferredReason("Crise, caisse fermée");
+        Dispense inpatient = fill("6", false, true);
+        UUID stayId = UUID.randomUUID();
+        inpatient.setBillingDeferralId(stayId);
+        DispenseBillingDeferralService deferrals = org.mockito.Mockito.mock(DispenseBillingDeferralService.class);
+        when(deferrals.byIds(org.mockito.ArgumentMatchers.eq(hospitalId), org.mockito.ArgumentMatchers.anyCollection()))
+                .thenReturn(java.util.Map.of(
+                        overrideId, com.example.hms.payload.dto.pharmacy.DispenseBillingDeferralDTO.builder()
+                                .id(overrideId).kind("URGENCY_OVERRIDE").requestedByName("Awa Pharmacienne")
+                                .executedByName("Awa Pharmacienne").build(),
+                        stayId, com.example.hms.payload.dto.pharmacy.DispenseBillingDeferralDTO.builder()
+                                .id(stayId).kind("ADMISSION_ACCOUNT").executedByName("Awa Pharmacienne").build()));
+        service.setBillingDeferrals(deferrals);
+
+        PharmacyReconciliationDTO day = service.daily(pharmacy.getId(), DAY);
+
+        assertThat(day.getDifferences()).as("a deferred fill is listed apart, never a difference").isEmpty();
+        assertThat(day.getDeferred()).extracting(PharmacyReconciliationDTO.DeferredFill::getKind)
+                .containsExactlyInAnyOrder("UNAPPROVED", "URGENCY_OVERRIDE", "ADMISSION_ACCOUNT");
+        assertThat(day.getDeferred()).filteredOn(f -> "URGENCY_OVERRIDE".equals(f.getKind())).singleElement()
+                .satisfies(f -> {
+                    assertThat(f.getReviewed()).as("not reviewed yet").isFalse();
+                    assertThat(f.getRequestedByName()).isEqualTo("Awa Pharmacienne");
+                    assertThat(f.getApprovedByName()).isNull();
+                });
+        assertThat(day.getMoney().getDeferredTotal()).isEqualByComparingTo("3000");
+        assertThat(day.getMoney().getUrgencyOverrideTotal()).isEqualByComparingTo("1000");
+        assertThat(day.getMoney().getAdmissionAccountTotal()).isEqualByComparingTo("1500");
+
+        String csv = new String(service.exportCsv(pharmacy.getId(), DAY), StandardCharsets.UTF_8);
+        assertThat(csv).contains("a_facturer_urgence", "a_facturer_compte_hospitalisation", "URGENCY_OVERRIDE",
+                "ADMISSION_ACCOUNT", "UNAPPROVED", "Awa Pharmacienne", "demande_par", "approuve_par");
+    }
+
+    @Test
     @DisplayName("PR 13: controlled balances equal the register; a lot that drifted is a difference")
     void controlledBalances() {
         PharmacyReconciliationDTO day = service.daily(pharmacy.getId(), DAY);

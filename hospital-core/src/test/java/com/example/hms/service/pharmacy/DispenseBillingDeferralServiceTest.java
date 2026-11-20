@@ -1,0 +1,588 @@
+package com.example.hms.service.pharmacy;
+
+import com.example.hms.enums.AdmissionStatus;
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.DispenseBillingDeferralKind;
+import com.example.hms.enums.DispenseBillingDeferralStatus;
+import com.example.hms.exception.ClientSafeAccessDeniedException;
+import com.example.hms.exception.ConflictException;
+import com.example.hms.exception.FieldBusinessException;
+import com.example.hms.model.Admission;
+import com.example.hms.model.Encounter;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Prescription;
+import com.example.hms.model.User;
+import com.example.hms.model.pharmacy.DispenseBillingDeferral;
+import com.example.hms.payload.dto.pharmacy.DispenseBillingDeferralDTO;
+import com.example.hms.payload.dto.pharmacy.DispenseBillingDeferralDecisionDTO;
+import com.example.hms.payload.dto.pharmacy.DispenseBillingDeferralReasonDTO;
+import com.example.hms.payload.dto.pharmacy.DispenseBillingDeferralRequestDTO;
+import com.example.hms.repository.AdmissionRepository;
+import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.pharmacy.DispenseBillingDeferralRepository;
+import com.example.hms.service.AuditEventLogService;
+import com.example.hms.i18n.TestMessageSources;
+import com.example.hms.utility.MessageUtil;
+import com.example.hms.utility.RoleValidator;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.context.i18n.LocaleContextHolder;
+
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/**
+ * Policy rule 6 (provisional, V345): « à facturer » is asked for by one person, approved by another and executed by
+ * the pharmacist; an inpatient item needs nobody's approval; an urgency override is logged and reviewed.
+ */
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
+class DispenseBillingDeferralServiceTest {
+
+    private static final Clock CLOCK = Clock.fixed(LocalDateTime.of(2026, 11, 20, 9, 0).toInstant(ZoneOffset.UTC),
+            ZoneOffset.UTC);
+
+    @Mock private DispenseBillingDeferralRepository deferralRepository;
+    @Mock private PrescriptionRepository prescriptionRepository;
+    @Mock private AdmissionRepository admissionRepository;
+    @Mock private UserRepository userRepository;
+    @Mock private RoleValidator roleValidator;
+    @Mock private PharmacyServiceSupport support;
+    @Mock private DispenseBillingDeferralFollowUp followUp;
+    @Mock private AuditEventLogService auditEventLogService;
+
+    private DispenseBillingDeferralService service;
+
+    private final UUID hospitalId = UUID.randomUUID();
+    private final UUID pharmacist = UUID.randomUUID();
+    private final UUID accountant = UUID.randomUUID();
+    private final UUID billing = UUID.randomUUID();
+    private final UUID prescriptionId = UUID.randomUUID();
+    private final UUID patientId = UUID.randomUUID();
+
+    private Prescription prescription;
+    private Hospital hospital;
+
+    @BeforeEach
+    void setUp() {
+        MessageUtil.setMessageSource(TestMessageSources.bundles());
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        service = new DispenseBillingDeferralService(deferralRepository, prescriptionRepository, admissionRepository,
+                userRepository, roleValidator, support, followUp, auditEventLogService, CLOCK);
+
+        hospital = new Hospital();
+        hospital.setId(hospitalId);
+        Patient patient = new Patient();
+        patient.setId(patientId);
+        prescription = new Prescription();
+        prescription.setId(prescriptionId);
+        prescription.setHospital(hospital);
+        prescription.setPatient(patient);
+        prescription.setMedicationName("Amoxicilline 500 mg");
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(prescriptionId, hospitalId))
+                .thenReturn(Optional.of(prescription));
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(deferralRepository.save(any(DispenseBillingDeferral.class))).thenAnswer(saved -> {
+            DispenseBillingDeferral row = saved.getArgument(0);
+            if (row.getId() == null) {
+                row.setId(UUID.randomUUID());
+            }
+            return row;
+        });
+        // The pharmacist asks and overrides; the accountant approves both kinds and reviews; billing approves a
+        // third-party cover only and reviews.
+        when(roleValidator.canRequestDispenseBillingDeferral(any(), eq(hospitalId))).thenReturn(true);
+        when(roleValidator.canOverrideDispenseBillingForUrgency(pharmacist, hospitalId)).thenReturn(true);
+        when(roleValidator.canApproveThirdPartyCover(accountant, hospitalId)).thenReturn(true);
+        when(roleValidator.canApproveOutpatientCredit(accountant, hospitalId)).thenReturn(true);
+        when(roleValidator.canReviewDispenseBillingOverride(accountant, hospitalId)).thenReturn(true);
+        when(roleValidator.canApproveThirdPartyCover(billing, hospitalId)).thenReturn(true);
+        when(roleValidator.canReviewDispenseBillingOverride(billing, hospitalId)).thenReturn(true);
+    }
+
+    private void actingAs(UUID userId) {
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+    }
+
+    private static User user(UUID id) {
+        User u = new User();
+        u.setId(id);
+        return u;
+    }
+
+    private DispenseBillingDeferral stored(DispenseBillingDeferralKind kind, DispenseBillingDeferralStatus status,
+                                           UUID requestedBy) {
+        DispenseBillingDeferral row = DispenseBillingDeferral.builder().hospitalId(hospitalId)
+                .prescriptionId(prescriptionId).patientId(patientId).kind(kind).status(status)
+                .reason("Cannot pay today").requestedBy(requestedBy).requestedAt(LocalDateTime.now(CLOCK)).build();
+        row.setId(UUID.randomUUID());
+        when(deferralRepository.findLockedByIdAndHospitalId(row.getId(), hospitalId)).thenReturn(Optional.of(row));
+        return row;
+    }
+
+    private static DispenseBillingDeferralRequestDTO ask(UUID prescriptionId, DispenseBillingDeferralKind kind,
+                                                         String reason) {
+        return new DispenseBillingDeferralRequestDTO(prescriptionId, kind, reason, null);
+    }
+
+    private void openStay(AdmissionStatus status) {
+        UUID admissionId = UUID.randomUUID();
+        Encounter visit = new Encounter();
+        visit.setAdmissionId(admissionId);
+        prescription.setEncounter(visit);
+        Admission stay = new Admission();
+        stay.setId(admissionId);
+        stay.setHospital(hospital);
+        stay.setStatus(status);
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(stay));
+    }
+
+    @Nested
+    @DisplayName("asking")
+    class Asking {
+
+        @Test
+        @DisplayName("the counter asks for a credit: REQUESTED, with who and why; nothing is decided; audited")
+        void aRequestDecidesNothing() {
+            actingAs(pharmacist);
+
+            DispenseBillingDeferralDTO asked = service.request(ask(prescriptionId,
+                    DispenseBillingDeferralKind.OUTPATIENT_CREDIT, "  Cannot pay today "));
+
+            assertThat(asked.getStatus()).isEqualTo("REQUESTED");
+            assertThat(asked.getReason()).isEqualTo("Cannot pay today");
+            assertThat(asked.getRequestedBy()).isEqualTo(pharmacist);
+            assertThat(asked.getDecidedBy()).isNull();
+            assertThat(asked.isCanDecide()).as("whoever asks never decides").isFalse();
+            verify(support).logAudit(eq(AuditEventType.DISPENSE_BILLING_DEFERRAL_REQUESTED), anyString(),
+                    eq(asked.getId().toString()), anyString());
+        }
+
+        @Test
+        @DisplayName("an urgency override or the stay's account is never asked for; a reason is required")
+        void onlyAnApprovableKindWithAReason() {
+            actingAs(pharmacist);
+
+            assertThatThrownBy(() -> service.request(ask(prescriptionId,
+                    DispenseBillingDeferralKind.URGENCY_OVERRIDE, "now")))
+                    .isInstanceOf(FieldBusinessException.class);
+            assertThatThrownBy(() -> service.request(ask(prescriptionId,
+                    DispenseBillingDeferralKind.OUTPATIENT_CREDIT, "  ")))
+                    .isInstanceOf(FieldBusinessException.class);
+            verify(deferralRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("an inpatient's order needs no deferral: it goes on the account of the open stay")
+        void anInpatientNeedsNone() {
+            actingAs(pharmacist);
+            openStay(AdmissionStatus.ACTIVE);
+
+            assertThatThrownBy(() -> service.request(ask(prescriptionId,
+                    DispenseBillingDeferralKind.OUTPATIENT_CREDIT, "Cannot pay")))
+                    .isInstanceOf(FieldBusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.deferral.inpatientNotNeeded");
+        }
+
+        @Test
+        @DisplayName("one open deferral per prescription; a card number in the reason is refused")
+        void oneOpenAndNoCardData() {
+            actingAs(pharmacist);
+            when(deferralRepository.existsByHospitalIdAndPrescriptionIdAndStatusIn(eq(hospitalId), eq(prescriptionId),
+                    any())).thenReturn(true);
+            assertThatThrownBy(() -> service.request(ask(prescriptionId,
+                    DispenseBillingDeferralKind.OUTPATIENT_CREDIT, "Cannot pay")))
+                    .isInstanceOf(ConflictException.class);
+
+            when(deferralRepository.existsByHospitalIdAndPrescriptionIdAndStatusIn(eq(hospitalId), eq(prescriptionId),
+                    any())).thenReturn(false);
+            assertThatThrownBy(() -> service.request(ask(prescriptionId,
+                    DispenseBillingDeferralKind.OUTPATIENT_CREDIT, "card 4111 1111 1111 1111")))
+                    .isInstanceOf(FieldBusinessException.class);
+        }
+
+        @Test
+        @DisplayName("a prescription of another hospital answers as a missing one")
+        void anotherHospitalsPrescription() {
+            actingAs(pharmacist);
+            UUID foreign = UUID.randomUUID();
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(foreign, hospitalId)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.request(ask(foreign, DispenseBillingDeferralKind.OUTPATIENT_CREDIT, "x")))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("deciding: another person, of the right desk")
+    class Deciding {
+
+        @Test
+        @DisplayName("finance approves a credit with its reason and a limit")
+        void financeApprovesACredit() {
+            DispenseBillingDeferral row = stored(DispenseBillingDeferralKind.OUTPATIENT_CREDIT,
+                    DispenseBillingDeferralStatus.REQUESTED, pharmacist);
+            actingAs(accountant);
+
+            DispenseBillingDeferralDTO approved = service.approve(row.getId(),
+                    new DispenseBillingDeferralDecisionDTO("Known family, pays at month end", null,
+                            new BigDecimal("5000")));
+
+            assertThat(approved.getStatus()).isEqualTo("APPROVED");
+            assertThat(row.getDecidedBy()).isEqualTo(accountant);
+            assertThat(row.getDecisionNote()).isEqualTo("Known family, pays at month end");
+            assertThat(row.getCreditLimit()).isEqualByComparingTo("5000");
+            verify(support).logAudit(eq(AuditEventType.DISPENSE_BILLING_DEFERRAL_APPROVED), anyString(),
+                    eq(row.getId().toString()), anyString());
+        }
+
+        @Test
+        @DisplayName("a credit needs the approver's reason; a limit is whole francs above zero")
+        void aCreditNeedsAReasonAndAValidLimit() {
+            DispenseBillingDeferral row = stored(DispenseBillingDeferralKind.OUTPATIENT_CREDIT,
+                    DispenseBillingDeferralStatus.REQUESTED, pharmacist);
+            actingAs(accountant);
+
+            assertThatThrownBy(() -> service.approve(row.getId(), new DispenseBillingDeferralDecisionDTO()))
+                    .isInstanceOf(FieldBusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.deferral.creditReasonRequired");
+            assertThatThrownBy(() -> service.approve(row.getId(),
+                    new DispenseBillingDeferralDecisionDTO("ok", null, new BigDecimal("12.5"))))
+                    .isInstanceOf(FieldBusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.deferral.limitInvalid");
+            assertThat(row.getStatus()).isEqualTo(DispenseBillingDeferralStatus.REQUESTED);
+        }
+
+        @Test
+        @DisplayName("billing approves a third-party cover against its voucher; without a reference it is refused")
+        void billingChecksTheVoucher() {
+            DispenseBillingDeferral row = stored(DispenseBillingDeferralKind.THIRD_PARTY_COVER,
+                    DispenseBillingDeferralStatus.REQUESTED, pharmacist);
+            actingAs(billing);
+
+            assertThatThrownBy(() -> service.approve(row.getId(), null))
+                    .isInstanceOf(FieldBusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.deferral.coverReferenceRequired");
+
+            service.approve(row.getId(), new DispenseBillingDeferralDecisionDTO(null, "AMU-2026-0042", null));
+            assertThat(row.getStatus()).isEqualTo(DispenseBillingDeferralStatus.APPROVED);
+            assertThat(row.getCoverReference()).isEqualTo("AMU-2026-0042");
+        }
+
+        @Test
+        @DisplayName("billing alone does not grant a credit")
+        void billingDoesNotGrantCredit() {
+            DispenseBillingDeferral row = stored(DispenseBillingDeferralKind.OUTPATIENT_CREDIT,
+                    DispenseBillingDeferralStatus.REQUESTED, pharmacist);
+            actingAs(billing);
+
+            assertThatThrownBy(() -> service.approve(row.getId(),
+                    new DispenseBillingDeferralDecisionDTO("ok", null, null)))
+                    .isInstanceOf(ClientSafeAccessDeniedException.class);
+            assertThat(row.getStatus()).isEqualTo(DispenseBillingDeferralStatus.REQUESTED);
+        }
+
+        @Test
+        @DisplayName("the pharmacist never approves: not an approver of anything")
+        void thePharmacistNeverApproves() {
+            DispenseBillingDeferral row = stored(DispenseBillingDeferralKind.THIRD_PARTY_COVER,
+                    DispenseBillingDeferralStatus.REQUESTED, accountant);
+            actingAs(pharmacist);
+
+            assertThatThrownBy(() -> service.approve(row.getId(),
+                    new DispenseBillingDeferralDecisionDTO(null, "V-1", null)))
+                    .isInstanceOf(ClientSafeAccessDeniedException.class);
+            assertThatThrownBy(() -> service.reject(row.getId(), new DispenseBillingDeferralReasonDTO("no")))
+                    .isInstanceOf(ClientSafeAccessDeniedException.class);
+            verify(deferralRepository, never()).findLockedByIdAndHospitalId(any(), any());
+        }
+
+        @Test
+        @DisplayName("never the same person: whoever asked does not approve or reject")
+        void noSelfApproval() {
+            DispenseBillingDeferral row = stored(DispenseBillingDeferralKind.OUTPATIENT_CREDIT,
+                    DispenseBillingDeferralStatus.REQUESTED, accountant);
+            actingAs(accountant);
+
+            assertThatThrownBy(() -> service.approve(row.getId(),
+                    new DispenseBillingDeferralDecisionDTO("ok", null, null)))
+                    .isInstanceOf(ConflictException.class);
+            assertThatThrownBy(() -> service.reject(row.getId(), new DispenseBillingDeferralReasonDTO("no")))
+                    .isInstanceOf(ConflictException.class);
+            assertThat(row.getStatus()).isEqualTo(DispenseBillingDeferralStatus.REQUESTED);
+        }
+
+        @Test
+        @DisplayName("a rejection and a withdrawal each need a reason; the withdrawal is stamped")
+        void rejectAndCancelNeedAReason() {
+            DispenseBillingDeferral row = stored(DispenseBillingDeferralKind.OUTPATIENT_CREDIT,
+                    DispenseBillingDeferralStatus.REQUESTED, pharmacist);
+            actingAs(accountant);
+            assertThatThrownBy(() -> service.reject(row.getId(), new DispenseBillingDeferralReasonDTO("  ")))
+                    .isInstanceOf(FieldBusinessException.class);
+
+            actingAs(pharmacist);
+            assertThatThrownBy(() -> service.cancel(row.getId(), new DispenseBillingDeferralReasonDTO(null)))
+                    .isInstanceOf(FieldBusinessException.class);
+            service.cancel(row.getId(), new DispenseBillingDeferralReasonDTO("Patient paid at the till"));
+            assertThat(row.getStatus()).isEqualTo(DispenseBillingDeferralStatus.CANCELLED);
+            assertThat(row.getCancelledBy()).isEqualTo(pharmacist);
+            assertThat(row.getCancelledAt()).isEqualTo(LocalDateTime.now(CLOCK));
+            assertThat(row.getCancelReason()).isEqualTo("Patient paid at the till");
+        }
+
+        @Test
+        @DisplayName("a deferral of another hospital answers as a missing one")
+        void anotherHospitalsDeferral() {
+            actingAs(accountant);
+            UUID foreign = UUID.randomUUID();
+            when(deferralRepository.findLockedByIdAndHospitalId(foreign, hospitalId)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.approve(foreign, null))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("the counter's gate")
+    class Gate {
+
+        private final BigDecimal due = new BigDecimal("1000");
+
+        @Test
+        @DisplayName("no deferral without an approver: a fill with money due and nothing behind it is refused")
+        void nothingBehindItIsRefused() {
+            assertThatThrownBy(() -> service.admit(prescription, hospitalId, due,
+                    new DispenseBillingDeferralService.Choice(null, null), user(pharmacist)))
+                    .isInstanceOf(FieldBusinessException.class)
+                    .extracting("field", "messageKey")
+                    .containsExactly("billingDeferralId", "pharmacy.handOver.unpaid");
+            verify(deferralRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a deferral only asked for, rejected, of another prescription or already used is refused")
+        void onlyAnApprovedDeferralOfThisPrescription() {
+            DispenseBillingDeferral requested = stored(DispenseBillingDeferralKind.OUTPATIENT_CREDIT,
+                    DispenseBillingDeferralStatus.REQUESTED, pharmacist);
+            DispenseBillingDeferral used = stored(DispenseBillingDeferralKind.OUTPATIENT_CREDIT,
+                    DispenseBillingDeferralStatus.EXECUTED, pharmacist);
+            used.setDecidedBy(accountant);
+            used.setExecutedBy(pharmacist);
+            used.setExecutedAt(LocalDateTime.now(CLOCK).minusDays(1));
+            DispenseBillingDeferral other = stored(DispenseBillingDeferralKind.OUTPATIENT_CREDIT,
+                    DispenseBillingDeferralStatus.APPROVED, pharmacist);
+            other.setDecidedBy(accountant);
+            other.setPrescriptionId(UUID.randomUUID());
+
+            for (DispenseBillingDeferral row : List.of(requested, used, other)) {
+                assertThatThrownBy(() -> service.admit(prescription, hospitalId, due,
+                        new DispenseBillingDeferralService.Choice(row.getId(), null), user(pharmacist)))
+                        .isInstanceOf(FieldBusinessException.class)
+                        .extracting("messageKey").isEqualTo("pharmacy.handOver.deferralNotApproved");
+            }
+        }
+
+        @Test
+        @DisplayName("an approved credit is executed within its limit, and refused above it")
+        void theLimitHolds() {
+            DispenseBillingDeferral row = stored(DispenseBillingDeferralKind.OUTPATIENT_CREDIT,
+                    DispenseBillingDeferralStatus.APPROVED, pharmacist);
+            row.setDecidedBy(accountant);
+            row.setCreditLimit(new BigDecimal("500"));
+
+            assertThatThrownBy(() -> service.admit(prescription, hospitalId, due,
+                    new DispenseBillingDeferralService.Choice(row.getId(), null), user(pharmacist)))
+                    .isInstanceOf(FieldBusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.handOver.deferralOverLimit");
+            assertThat(row.getStatus()).isEqualTo(DispenseBillingDeferralStatus.APPROVED);
+
+            row.setCreditLimit(new BigDecimal("1000"));
+            DispenseBillingDeferral executed = service.admit(prescription, hospitalId, due,
+                    new DispenseBillingDeferralService.Choice(row.getId(), null), user(pharmacist));
+            assertThat(executed.getStatus()).isEqualTo(DispenseBillingDeferralStatus.EXECUTED);
+            assertThat(executed.getExecutedBy()).isEqualTo(pharmacist);
+            assertThat(executed.getAmountDue()).isEqualByComparingTo("1000");
+        }
+
+        @Test
+        @DisplayName("a fill split over two lots is one hand-over: the same person goes on, the limit holds for the total")
+        void aSplitFillIsOneHandOver() {
+            DispenseBillingDeferral row = stored(DispenseBillingDeferralKind.OUTPATIENT_CREDIT,
+                    DispenseBillingDeferralStatus.APPROVED, billing);
+            row.setDecidedBy(accountant);
+            row.setCreditLimit(new BigDecimal("1500"));
+            DispenseBillingDeferralService.Choice choice = new DispenseBillingDeferralService.Choice(row.getId(), null);
+
+            service.admit(prescription, hospitalId, new BigDecimal("600"), choice, user(pharmacist));
+            service.admit(prescription, hospitalId, new BigDecimal("400"), choice, user(pharmacist));
+            assertThat(row.getAmountDue()).isEqualByComparingTo("1000");
+
+            assertThatThrownBy(() -> service.admit(prescription, hospitalId, new BigDecimal("600"), choice,
+                    user(pharmacist)))
+                    .isInstanceOf(FieldBusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.handOver.deferralOverLimit");
+            // Somebody else does not go on with a hand-over that is not theirs.
+            when(roleValidator.canOverrideDispenseBillingForUrgency(billing, hospitalId)).thenReturn(false);
+            assertThatThrownBy(() -> service.admit(prescription, hospitalId, new BigDecimal("100"), choice,
+                    user(billing)))
+                    .isInstanceOf(FieldBusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.handOver.deferralNotApproved");
+        }
+
+        @Test
+        @DisplayName("never the same person: the approver does not hand the fill over")
+        void theApproverDoesNotExecute() {
+            DispenseBillingDeferral row = stored(DispenseBillingDeferralKind.THIRD_PARTY_COVER,
+                    DispenseBillingDeferralStatus.APPROVED, pharmacist);
+            row.setDecidedBy(accountant);
+
+            assertThatThrownBy(() -> service.admit(prescription, hospitalId, due,
+                    new DispenseBillingDeferralService.Choice(row.getId(), null), user(accountant)))
+                    .isInstanceOf(FieldBusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.handOver.deferralApproverHandsOver");
+        }
+
+        @Test
+        @DisplayName("an inpatient item goes on the account of the open stay: nobody approves, no reason is asked")
+        void anInpatientItemGoesOnTheStay() {
+            openStay(AdmissionStatus.ACTIVE);
+
+            DispenseBillingDeferral row = service.admit(prescription, hospitalId, due,
+                    new DispenseBillingDeferralService.Choice(null, null), user(pharmacist));
+
+            assertThat(row.getKind()).isEqualTo(DispenseBillingDeferralKind.ADMISSION_ACCOUNT);
+            assertThat(row.getStatus()).isEqualTo(DispenseBillingDeferralStatus.EXECUTED);
+            assertThat(row.getAdmissionId()).isNotNull();
+            assertThat(row.getDecidedBy()).isNull();
+            assertThat(row.getReason()).isNull();
+        }
+
+        @Test
+        @DisplayName("a closed stay or a take-home prescription is not an inpatient item")
+        void aClosedStayIsNotAnAccount() {
+            openStay(AdmissionStatus.DISCHARGED);
+            assertThatThrownBy(() -> service.admit(prescription, hospitalId, due,
+                    new DispenseBillingDeferralService.Choice(null, null), user(pharmacist)))
+                    .isInstanceOf(FieldBusinessException.class);
+
+            openStay(AdmissionStatus.ACTIVE);
+            prescription.setTakeHome(true);
+            assertThatThrownBy(() -> service.admit(prescription, hospitalId, due,
+                    new DispenseBillingDeferralService.Choice(null, null), user(pharmacist)))
+                    .isInstanceOf(FieldBusinessException.class);
+            assertThat(service.chargedToOpenStay(prescription, hospitalId)).isFalse();
+        }
+
+        @Test
+        @DisplayName("an urgency override: a pharmacist, with a reason, logged as an override awaiting review")
+        void anUrgencyOverride() {
+            DispenseBillingDeferral row = service.admit(prescription, hospitalId, due,
+                    new DispenseBillingDeferralService.Choice(null, "  Asthma attack, till closed "), user(pharmacist));
+
+            assertThat(row.getKind()).isEqualTo(DispenseBillingDeferralKind.URGENCY_OVERRIDE);
+            assertThat(row.getReason()).isEqualTo("Asthma attack, till closed");
+            assertThat(row.getRequestedBy()).isEqualTo(pharmacist);
+            assertThat(row.getReviewedAt()).isNull();
+
+            assertThatThrownBy(() -> service.admit(prescription, hospitalId, due,
+                    new DispenseBillingDeferralService.Choice(null, "later"), user(billing)))
+                    .isInstanceOf(FieldBusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.handOver.urgencyRoleRequired");
+            assertThatThrownBy(() -> service.admit(prescription, hospitalId, due,
+                    new DispenseBillingDeferralService.Choice(UUID.randomUUID(), "later"), user(pharmacist)))
+                    .isInstanceOf(FieldBusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.handOver.deferBothGiven");
+        }
+    }
+
+    @Nested
+    @DisplayName("reviewing an urgency override")
+    class Reviewing {
+
+        @Test
+        @DisplayName("finance reviews it with a note; the task is closed; the list no longer shows it")
+        void financeReviews() {
+            DispenseBillingDeferral row = stored(DispenseBillingDeferralKind.URGENCY_OVERRIDE,
+                    DispenseBillingDeferralStatus.EXECUTED, pharmacist);
+            actingAs(accountant);
+
+            assertThatThrownBy(() -> service.review(row.getId(), new DispenseBillingDeferralReasonDTO(" ")))
+                    .isInstanceOf(FieldBusinessException.class);
+            DispenseBillingDeferralDTO reviewed = service.review(row.getId(),
+                    new DispenseBillingDeferralReasonDTO("Justified, invoice issued"));
+
+            assertThat(reviewed.getReviewedBy()).isEqualTo(accountant);
+            assertThat(row.getReviewedAt()).isEqualTo(LocalDateTime.now(CLOCK));
+            assertThat(row.getReviewNote()).isEqualTo("Justified, invoice issued");
+            verify(followUp).close(row);
+            verify(support).logAudit(eq(AuditEventType.DISPENSE_BILLING_OVERRIDE_REVIEWED), anyString(),
+                    eq(row.getId().toString()), anyString());
+            assertThatThrownBy(() -> service.review(row.getId(), new DispenseBillingDeferralReasonDTO("again")))
+                    .isInstanceOf(ConflictException.class);
+        }
+
+        @Test
+        @DisplayName("never the same person: whoever overrode does not review; the pharmacist is no reviewer")
+        void noSelfReview() {
+            DispenseBillingDeferral own = stored(DispenseBillingDeferralKind.URGENCY_OVERRIDE,
+                    DispenseBillingDeferralStatus.EXECUTED, accountant);
+            actingAs(accountant);
+            assertThatThrownBy(() -> service.review(own.getId(), new DispenseBillingDeferralReasonDTO("fine")))
+                    .isInstanceOf(ConflictException.class);
+
+            actingAs(pharmacist);
+            assertThatThrownBy(() -> service.review(own.getId(), new DispenseBillingDeferralReasonDTO("fine")))
+                    .isInstanceOf(ClientSafeAccessDeniedException.class);
+            assertThat(own.getReviewedAt()).isNull();
+        }
+
+        @Test
+        @DisplayName("the work list: open deferrals and overrides not yet reviewed, of the acting hospital")
+        void theWorkList() {
+            DispenseBillingDeferral open = stored(DispenseBillingDeferralKind.OUTPATIENT_CREDIT,
+                    DispenseBillingDeferralStatus.REQUESTED, pharmacist);
+            DispenseBillingDeferral override = stored(DispenseBillingDeferralKind.URGENCY_OVERRIDE,
+                    DispenseBillingDeferralStatus.EXECUTED, pharmacist);
+            when(deferralRepository.findByHospitalIdAndStatusInOrderByRequestedAtAsc(eq(hospitalId), any()))
+                    .thenReturn(List.of(open));
+            when(deferralRepository.findByHospitalIdAndKindAndReviewedAtIsNullOrderByRequestedAtAsc(hospitalId,
+                    DispenseBillingDeferralKind.URGENCY_OVERRIDE)).thenReturn(List.of(override));
+            actingAs(accountant);
+
+            List<DispenseBillingDeferralDTO> work = service.list(null, null);
+
+            assertThat(work).extracting(DispenseBillingDeferralDTO::getId)
+                    .containsExactly(open.getId(), override.getId());
+            assertThat(work.get(0).isCanDecide()).isTrue();
+            assertThat(work.get(1).isCanReview()).isTrue();
+            assertThat(work.get(0).getMedicationName()).isEqualTo("Amoxicilline 500 mg");
+        }
+    }
+}

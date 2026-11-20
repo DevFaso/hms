@@ -108,6 +108,11 @@ class CancelVoidReasonGuardTest {
             "NOT A VOID: approves a refund asked for with its reason; another person decides (D-3)");
         HANDLERS.put("POST /pharmacy/refunds/{id}/pay",
             "NOT A VOID: hands over a refund already asked for with a reason and approved by another person");
+        // Policy rule 6 (V345): a deferral of a fill's billing rejected or withdrawn, each with its reason.
+        HANDLERS.put("POST /pharmacy/billing-deferrals/{id}/reject",
+            "DispenseBillingDeferralReasonDTO.reason -> service/pharmacy/DispenseBillingDeferralServiceTest#rejectAndCancelNeedAReason");
+        HANDLERS.put("POST /pharmacy/billing-deferrals/{id}/cancel",
+            "DispenseBillingDeferralReasonDTO.reason -> service/pharmacy/DispenseBillingDeferralServiceTest#rejectAndCancelNeedAReason");
         // Billing-money plan PR 7: a payer's rejection of its share names the payer's reason.
         HANDLERS.put("POST /billing-invoices/{invoiceId}/payer-shares/{shareId}/reject",
             "PayerShareRejectRequestDTO.reason -> service/billing/InvoiceCoverageServiceTest#rejectingNeedsTheReasonAndNeverACardNumber");
@@ -457,6 +462,9 @@ class CancelVoidReasonGuardTest {
             "NOT A CLINICAL RECORD: provider onboarding; ProviderDecisionRequestDTO.reason is @NotBlank");
         CLINICAL_HANDLERS.put("PUT /refills/{refillId}/reject",
             "RefillDecisionRequestDTO.providerNotes (@NotBlank, OnRefusal group) -> service/impl/RefillApprovalServiceImplTest#aDenialWithoutAReasonIsRefused_D1315");
+        // Policy rule 1 (QA D2308): the pharmacist's refusal to dispense, with its reason.
+        CLINICAL_HANDLERS.put("PUT /refills/{refillId}/pharmacist-refuse",
+            "RefillDecisionRequestDTO.pharmacistNote -> service/impl/RefillApprovalServiceImplTest#thePharmacistRefusesWithAReason");
         CLINICAL_HANDLERS.put("PUT /roi-requests/{requestId}/cancel",
             "KNOWN GAP (D1157 class, standing debt): RoiDecisionDTO.note is optional on cancel (deny requires it);"
                 + " the ROI worklist dialog has no field yet");

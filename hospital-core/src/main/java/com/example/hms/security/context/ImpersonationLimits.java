@@ -65,7 +65,10 @@ public class ImpersonationLimits implements HandlerInterceptor {
         "/pharmacy-sales/**", "/me/patient/billing/invoices/*/pay", "/pharmacy/claims/*/pay",
         "/pharmacy/refunds/**",
         // PR 10 review: a till's close, reopen and review are four-eyes steps on money counted.
-        "/cash-sessions/**");
+        "/cash-sessions/**",
+        // Policy rule 6 (V345): a deferral is asked for by one person and approved by another; the hospital's
+        // billing policy sets what a visit is charged.
+        "/pharmacy/billing-deferrals/**", "/billing/policy/**");
 
     /** Writes under {@link #MONEY_PATHS} that only read: a search sent as a POST for its body. */
     public static final List<String> MONEY_PATH_READS = List.of("/billing-invoices/search");

@@ -702,6 +702,43 @@ class DispenseReadyForCollectionTest {
         return d;
     }
 
+
+    /** Policy rule 6 (V345): the real deferral gate over mocked stores, wired into the service under test. */
+    final com.example.hms.repository.pharmacy.DispenseBillingDeferralRepository deferralRepository =
+            org.mockito.Mockito.mock(com.example.hms.repository.pharmacy.DispenseBillingDeferralRepository.class);
+    final DispenseBillingDeferralFollowUp deferralFollowUp =
+            org.mockito.Mockito.mock(DispenseBillingDeferralFollowUp.class);
+
+    DispenseBillingDeferralService wireTheDeferralGate() {
+        org.mockito.Mockito.lenient().when(deferralRepository.save(any(
+                com.example.hms.model.pharmacy.DispenseBillingDeferral.class))).thenAnswer(saved -> {
+                    com.example.hms.model.pharmacy.DispenseBillingDeferral row = saved.getArgument(0);
+                    if (row.getId() == null) {
+                        row.setId(UUID.randomUUID());
+                    }
+                    return row;
+                });
+        DispenseBillingDeferralService gate = new DispenseBillingDeferralService(deferralRepository,
+                prescriptionRepository, org.mockito.Mockito.mock(com.example.hms.repository.AdmissionRepository.class),
+                userRepository, roleValidator, support, deferralFollowUp,
+                org.mockito.Mockito.mock(com.example.hms.service.AuditEventLogService.class), FIXED_CLOCK);
+        service.setBillingDeferrals(gate);
+        return gate;
+    }
+
+    com.example.hms.model.pharmacy.DispenseBillingDeferral approvedDeferral(UUID approver) {
+        com.example.hms.model.pharmacy.DispenseBillingDeferral row =
+                com.example.hms.model.pharmacy.DispenseBillingDeferral.builder()
+                        .hospitalId(hospitalId).prescriptionId(prescriptionId).patientId(patientId)
+                        .kind(com.example.hms.enums.DispenseBillingDeferralKind.OUTPATIENT_CREDIT)
+                        .status(com.example.hms.enums.DispenseBillingDeferralStatus.APPROVED)
+                        .reason("Cannot pay today").requestedBy(userId).requestedAt(LocalDateTime.now(FIXED_CLOCK))
+                        .decidedBy(approver).decidedAt(LocalDateTime.now(FIXED_CLOCK)).build();
+        row.setId(UUID.randomUUID());
+        when(deferralRepository.findLockedByIdAndHospitalId(row.getId(), hospitalId)).thenReturn(Optional.of(row));
+        return row;
+    }
+
     @Nested
     @DisplayName("QA D2675: a fill is handed over paid, covered, free, or « à facturer »")
     class UnpaidHandOver {
@@ -719,7 +756,7 @@ class DispenseReadyForCollectionTest {
             assertThatThrownBy(() -> service.handOver(dispenseId, null))
                     .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
                     .extracting("field", "messageKey")
-                    .containsExactly("billingDeferredReason", "pharmacy.handOver.unpaid");
+                    .containsExactly("billingDeferralId", "pharmacy.handOver.unpaid");
             verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
         }
 
@@ -769,23 +806,97 @@ class DispenseReadyForCollectionTest {
         }
 
         @Test
-        @DisplayName("« à facturer » by a pharmacist, with a reason: handed over, the reason, author and time kept, audited")
-        void deferredByAPharmacistIsHandedOver() {
+        @DisplayName("policy rule 6: a reason alone no longer defers; the pharmacist's own word is refused as unpaid")
+        void aReasonWithNoApproverIsRefused() {
+            Dispense d = pricedPreparedFill();
+            stubLocked(d);
+            wireTheDeferralGate();
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+
+            assertThatThrownBy(() -> service.handOver(dispenseId, HandOverRequestDTO.builder()
+                    .notes("à facturer, sur la facture du séjour").build()))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .extracting("field", "messageKey")
+                    .containsExactly("billingDeferralId", "pharmacy.handOver.unpaid");
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+            verify(deferralRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("policy rule 6: a deferral somebody else approved is executed: handed over, the fill names it, audited")
+        void anApprovedDeferralIsExecuted() {
             Dispense d = pricedPreparedFill();
             stubLocked(d);
             stubHandOverWrites(d);
+            wireTheDeferralGate();
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
             when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
-            when(roleValidator.canDeferDispenseBilling(userId, hospitalId)).thenReturn(true);
+            com.example.hms.model.pharmacy.DispenseBillingDeferral approved = approvedDeferral(UUID.randomUUID());
 
-            service.handOver(dispenseId, HandOverRequestDTO.builder()
-                    .billingDeferredReason("Hospitalisée, sur la facture du séjour").build());
+            service.handOver(dispenseId, HandOverRequestDTO.builder().billingDeferralId(approved.getId()).build());
 
-            assertThat(d.getBillingDeferredReason()).isEqualTo("Hospitalisée, sur la facture du séjour");
+            assertThat(d.getBillingDeferralId()).isEqualTo(approved.getId());
+            assertThat(d.getBillingDeferredReason()).isEqualTo("Cannot pay today");
             assertThat(d.getBillingDeferredBy()).isEqualTo(userId);
             assertThat(d.getBillingDeferredAt()).isEqualTo(LocalDateTime.now(FIXED_CLOCK));
+            assertThat(approved.getStatus()).isEqualTo(com.example.hms.enums.DispenseBillingDeferralStatus.EXECUTED);
+            assertThat(approved.getExecutedBy()).isEqualTo(userId);
+            assertThat(approved.getDispenseId()).isEqualTo(dispenseId);
+            assertThat(approved.getAmountDue()).isEqualByComparingTo("1000");
             verify(support).logAudit(eq(AuditEventType.DISPENSE_BILLING_DEFERRED), anyString(),
                     eq(dispenseId.toString()), eq("DISPENSE"));
+        }
+
+        @Test
+        @DisplayName("policy rule 6: whoever approved a deferral does not hand the fill over on it")
+        void theApproverDoesNotHandOver() {
+            Dispense d = pricedPreparedFill();
+            stubLocked(d);
+            wireTheDeferralGate();
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            com.example.hms.model.pharmacy.DispenseBillingDeferral approved = approvedDeferral(userId);
+
+            assertThatThrownBy(() -> service.handOver(dispenseId,
+                    HandOverRequestDTO.builder().billingDeferralId(approved.getId()).build()))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.handOver.deferralApproverHandsOver");
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("policy rule 6: an urgency override by a pharmacist, with a reason: handed over, logged, a review task filed")
+        void anUrgencyOverrideIsHandedOverAndReviewed() {
+            Dispense d = pricedPreparedFill();
+            stubLocked(d);
+            stubHandOverWrites(d);
+            wireTheDeferralGate();
+            when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            when(roleValidator.canOverrideDispenseBillingForUrgency(userId, hospitalId)).thenReturn(true);
+
+            service.handOver(dispenseId, HandOverRequestDTO.builder()
+                    .billingUrgencyReason("  Crise d'asthme, caisse fermée ").build());
+
+            org.mockito.ArgumentCaptor<com.example.hms.model.pharmacy.DispenseBillingDeferral> row =
+                    org.mockito.ArgumentCaptor.forClass(com.example.hms.model.pharmacy.DispenseBillingDeferral.class);
+            verify(deferralRepository).save(row.capture());
+            assertThat(row.getValue().getKind())
+                    .isEqualTo(com.example.hms.enums.DispenseBillingDeferralKind.URGENCY_OVERRIDE);
+            assertThat(row.getValue().getReason()).isEqualTo("Crise d'asthme, caisse fermée");
+            assertThat(row.getValue().getRequestedBy()).isEqualTo(userId);
+            assertThat(row.getValue().getReviewedAt()).isNull();
+            assertThat(row.getValue().getDispenseId()).isEqualTo(dispenseId);
+            assertThat(d.getBillingDeferralId()).isEqualTo(row.getValue().getId());
+            assertThat(d.getBillingDeferredReason()).isEqualTo("Crise d'asthme, caisse fermée");
+            verify(support).logAudit(eq(AuditEventType.DISPENSE_BILLING_URGENCY_OVERRIDE), anyString(),
+                    eq(dispenseId.toString()), eq("DISPENSE"));
+            verify(deferralFollowUp).reviewNeeded(eq(row.getValue()), any(), any());
         }
 
         @Test
@@ -824,7 +935,7 @@ class DispenseReadyForCollectionTest {
         }
 
         @Test
-        @DisplayName("« à facturer » by a role that may not defer billing (a verifier) is refused")
+        @DisplayName("an urgency override by a role that may not make one (a verifier) is refused")
 
         void deferredByAnotherRoleIsRefused() {
             Dispense d = pricedPreparedFill();
@@ -833,12 +944,14 @@ class DispenseReadyForCollectionTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
             when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
-            when(roleValidator.canDeferDispenseBilling(userId, hospitalId)).thenReturn(false);
+            wireTheDeferralGate();
+            when(roleValidator.canOverrideDispenseBillingForUrgency(userId, hospitalId)).thenReturn(false);
 
             assertThatThrownBy(() -> service.handOver(dispenseId, HandOverRequestDTO.builder()
-                    .billingDeferredReason("plus tard").build()))
+                    .billingUrgencyReason("plus tard").build()))
                     .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
-                    .extracting("messageKey").isEqualTo("pharmacy.handOver.deferRoleRequired");
+                    .extracting("messageKey").isEqualTo("pharmacy.handOver.urgencyRoleRequired");
+            verify(deferralRepository, never()).save(any());
             verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
         }
     }
