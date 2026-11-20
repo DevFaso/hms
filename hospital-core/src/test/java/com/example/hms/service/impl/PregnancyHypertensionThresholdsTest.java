@@ -10,8 +10,11 @@ class PregnancyHypertensionThresholdsTest {
 
     @Test
     void theAdvisoryAndTheLabourAlertsAgree() {
-        assertThat(PregnancyHypertensionProtocolRule.HTN_SYSTOLIC).isEqualTo(LaborServiceImpl.HTN_SYSTOLIC);
-        assertThat(PregnancyHypertensionProtocolRule.HTN_DIASTOLIC).isEqualTo(LaborServiceImpl.HTN_DIASTOLIC);
+        // Policy 2026-11-20: the partograph reads its cutoffs from the one maternal rule set (WHO Labour Care Guide).
+        com.example.hms.service.vitals.MaternalEarlyWarningRules.Labour labour =
+            new com.example.hms.service.vitals.MaternalEarlyWarningRules().getLabour();
+        assertThat(PregnancyHypertensionProtocolRule.HTN_SYSTOLIC).isEqualTo(labour.getSystolicHighFrom());
+        assertThat(PregnancyHypertensionProtocolRule.HTN_DIASTOLIC).isEqualTo(labour.getDiastolicHighFrom());
         assertThat(PregnancyHypertensionProtocolRule.SEVERE_HTN_SYSTOLIC).isEqualTo(LaborServiceImpl.SEVERE_HTN_SYSTOLIC);
         assertThat(PregnancyHypertensionProtocolRule.SEVERE_HTN_DIASTOLIC).isEqualTo(LaborServiceImpl.SEVERE_HTN_DIASTOLIC);
     }

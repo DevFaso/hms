@@ -54,8 +54,11 @@ public final class LaborAlertArgs {
             case "labor-liquor" -> entry.getLiquorColour() == null ? Optional.empty()
                 : known(NotificationLocalizer.key("labor.liquor." + entry.getLiquorColour().name()));
             case "labor-action-line", "labor-alert-line" -> progress(entry, activePhaseStartAt);
-            case "labor-maternal-fever" -> known(entry.getTemperatureCelsius());
-            case "labor-maternal-tachycardia" -> known(entry.getPulseBpm());
+            case "labor-maternal-fever", "labor-maternal-hypothermia" -> known(entry.getTemperatureCelsius());
+            case "labor-maternal-tachycardia", "labor-maternal-bradycardia" -> known(entry.getPulseBpm());
+            case "labor-maternal-hypotension" -> known(entry.getSystolicBpMmHg());
+            case "labor-maternal-shock", "labor-maternal-severe-shock" ->
+                known(entry.getPulseBpm(), entry.getSystolicBpMmHg());
             case "labor-severe-hypertension", "labor-hypertension" ->
                 known(bloodPressure(entry.getSystolicBpMmHg(), entry.getDiastolicBpMmHg()));
             default -> Optional.empty();

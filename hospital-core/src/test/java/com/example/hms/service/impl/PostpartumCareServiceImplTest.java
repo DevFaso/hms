@@ -838,4 +838,35 @@ class PostpartumCareServiceImplTest {
         assertFalse(message.getValue().contains("HEMORRHAGE"), message.getValue());
         assertEquals("Évaluation des saignements", response.getAlerts().get(0).getTriggeredBy());
     }
+
+    /** Policy 2026-11-20 (provisional, CRADLE add-on): shock index (pulse ÷ systolic) from 0.9 yellow, from 1.7 red. */
+    @org.junit.jupiter.params.ParameterizedTest(name = "pulse {0} over {1} -> {2}")
+    @org.junit.jupiter.params.provider.CsvSource({
+        "89,100,", "90,100,postpartum-shock", "169,100,postpartum-shock", "170,100,postpartum-severe-shock"
+    })
+    void policy20261120_theShockIndexAfterBirth(int pulse, int systolic, String expectedCode) {
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.empty());
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now().minusMinutes(5))
+            .pulseBpm(pulse)
+            .systolicBpMmHg(systolic)
+            .build();
+
+        PostpartumObservationResponseDTO response = service.recordObservation(patientId, request, recorderId);
+
+        java.util.List<com.example.hms.payload.dto.clinical.postpartum.PostpartumAlertDTO> shock = response.getAlerts().stream()
+            .filter(alert -> alert.getCode() != null && alert.getCode().contains("shock")).toList();
+        if (expectedCode == null) {
+            assertThat(shock).isEmpty();
+        } else {
+            assertThat(shock).singleElement().satisfies(alert -> {
+                assertThat(alert.getCode()).isEqualTo(expectedCode);
+                assertThat(String.valueOf(alert.getSeverity()))
+                    .isEqualTo("postpartum-severe-shock".equals(expectedCode) ? "URGENT" : "CAUTION");
+                assertThat(alert.getMessage()).contains("Indice de choc").contains("Règle provisoire");
+            });
+        }
+    }
 }

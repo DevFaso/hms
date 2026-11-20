@@ -485,6 +485,15 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         return observation;
     }
 
+    /** Policy 2026-11-20: the one maternal rule set (setter-injected; absent, its published defaults). */
+    private com.example.hms.service.vitals.MaternalEarlyWarningRules maternalRules =
+        new com.example.hms.service.vitals.MaternalEarlyWarningRules();
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setMaternalRules(com.example.hms.service.vitals.MaternalEarlyWarningRules maternalRules) {
+        this.maternalRules = maternalRules;
+    }
+
     private AlertEvaluation evaluateObservation(PostpartumObservation observation) {
         List<PostpartumObservationAlert> alerts = new ArrayList<>();
         boolean escalateMonitoring = false;
@@ -524,6 +533,24 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
                 com.example.hms.service.vitals.SevereHypertension.ADULT_ALERT_CODE,
                 alertText(com.example.hms.service.vitals.SevereHypertension.ADULT_ALERT_CODE),
                 "Blood Pressure"));
+        }
+
+        // Policy 2026-11-20 (provisional, CRADLE add-on): the shock index (pulse ÷ systolic). Severe shock
+        // is URGENT and pages the team; the yellow range is a CAUTION. The numbers are the rule set's.
+        com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert shock =
+            com.example.hms.service.vitals.MaternalEarlyWarning.shockAlert(maternalRules,
+                observation.getPulseBpm(), observation.getSystolicBpMmHg());
+        if (shock == com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert.SEVERE_SHOCK) {
+            alerts.add(buildAlert(PostpartumAlertType.HEMORRHAGE, PostpartumAlertSeverity.URGENT,
+                "postpartum-severe-shock",
+                alertText("postpartum-severe-shock"),
+                "Shock Index"));
+            escalateMonitoring = true;
+        } else if (shock == com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert.SHOCK) {
+            alerts.add(buildAlert(PostpartumAlertType.HEMORRHAGE, PostpartumAlertSeverity.CAUTION,
+                "postpartum-shock",
+                alertText("postpartum-shock"),
+                "Shock Index"));
         }
 
         if (observation.getPainScore() != null && observation.getPainScore() >= PAIN_ALERT_THRESHOLD) {
