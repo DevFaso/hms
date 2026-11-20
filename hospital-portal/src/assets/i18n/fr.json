@@ -15008,7 +15008,7 @@
       "UNPAID": "Remis non payés",
       "DIFFERENCES_TITLE": "Écarts",
       "COL_KIND": "Écart",
-      "COL_LOT": "Lot",
+      "COL_LOT": "N° de lot",
       "COL_EXPECTED": "Attendu",
       "COL_ACTUAL": "Constaté",
       "COL_AMOUNT": "Montant",
@@ -15034,7 +15034,7 @@
     },
     "METHOD": {
       "CASH": "Espèces",
-      "MOBILE_MONEY": "Mobile Money",
+      "MOBILE_MONEY": "Paiement mobile",
       "INSURANCE": "Assurance"
     }
   }
