@@ -102,6 +102,23 @@ public interface StockTransactionRepository extends JpaRepository<StockTransacti
     java.util.List<Object[]> sumByItemAndTypeBefore(@Param("itemIds") Collection<UUID> itemIds,
                                                     @Param("before") LocalDateTime before);
 
+    /**
+     * Review of #1239 (per-lot balance): what the ledger moved on each lot of one pharmacy before a moment, as
+     * {@code [lotId, type, total]} rows. Signed and summed, it is the lot's balance by the ledger at that moment.
+     */
+    @Query("SELECT l.id, t.transactionType, COALESCE(SUM(t.quantity), 0) FROM StockTransaction t "
+         + "JOIN t.stockLot l JOIN t.inventoryItem i WHERE i.pharmacy.id = :pharmacyId AND t.createdAt < :before "
+         + "GROUP BY l.id, t.transactionType")
+    java.util.List<Object[]> sumByLotAndTypeBefore(@Param("pharmacyId") UUID pharmacyId,
+                                                   @Param("before") LocalDateTime before);
+
+    /** Review of #1239: the same, for the movements made at or after a moment (what happened since a day closed). */
+    @Query("SELECT l.id, t.transactionType, COALESCE(SUM(t.quantity), 0) FROM StockTransaction t "
+         + "JOIN t.stockLot l JOIN t.inventoryItem i WHERE i.pharmacy.id = :pharmacyId AND t.createdAt >= :from "
+         + "GROUP BY l.id, t.transactionType")
+    java.util.List<Object[]> sumByLotAndTypeFrom(@Param("pharmacyId") UUID pharmacyId,
+                                                 @Param("from") LocalDateTime from);
+
     Page<StockTransaction> findByInventoryItemPharmacyId(UUID pharmacyId, Pageable pageable);
 
     @Query("SELECT t FROM StockTransaction t WHERE t.inventoryItem.pharmacy.id = :pharmacyId " +

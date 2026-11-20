@@ -50,6 +50,11 @@ public interface StockLotRepository extends JpaRepository<StockLot, UUID> {
     /** D82: whether the item is tracked in lots at all. */
     boolean existsByInventoryItemId(UUID inventoryItemId);
 
+    /** Review of #1239 (per-lot balance): every lot of one pharmacy, with its item and medication. */
+    @Query("SELECT s FROM StockLot s JOIN FETCH s.inventoryItem i LEFT JOIN FETCH i.medicationCatalogItem "
+         + "WHERE i.pharmacy.id = :pharmacyId")
+    List<StockLot> findAllWithItemByPharmacyId(@Param("pharmacyId") UUID pharmacyId);
+
     @Query("SELECT s FROM StockLot s WHERE s.inventoryItem.id = :inventoryItemId " +
            "AND s.remainingQuantity > 0 AND s.expiryDate > CURRENT_DATE " +
            "ORDER BY s.expiryDate ASC")

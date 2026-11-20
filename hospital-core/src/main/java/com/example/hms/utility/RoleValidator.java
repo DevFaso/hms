@@ -327,6 +327,14 @@ public class RoleValidator {
         return hasAnyCode(userId, hospitalId, PHARMACIST_ROLE, HOSPITAL_ADMIN_ROLE);
     }
 
+    /**
+     * Review of #1239: who sets or changes a pharmacy's selling price there - the store manager or a hospital admin,
+     * on an assignment AT that hospital. Never the pharmacist or the inventory clerk who also sells at that price.
+     */
+    public boolean canSetPharmacyPrice(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, "STORE_MANAGER", HOSPITAL_ADMIN_ROLE);
+    }
+
     /** QA D2676 (r65, billing plan PR 13): who may ask for a pharmacy refund of a patient return there. */
     public boolean canRequestPharmacyRefund(UUID userId, UUID hospitalId) {
         return hasAnyCode(userId, hospitalId, PHARMACIST_ROLE, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE,

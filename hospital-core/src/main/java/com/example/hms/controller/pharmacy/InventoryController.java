@@ -91,6 +91,17 @@ public class InventoryController {
         return ResponseEntity.ok(ApiResponseWrapper.success(inventoryService.updateInventoryItem(id, dto)));
     }
 
+    @GetMapping("/items/{id}/price-history")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'INVENTORY_CLERK', 'STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Price history of an inventory item (review of #1239)",
+            description = "Every change of the selling price: old and new price, reason, who and when; oldest first")
+    @ApiResponse(responseCode = "200", description = "Price history retrieved")
+    @ApiResponse(responseCode = "404", description = "Inventory item not found")
+    public ResponseEntity<ApiResponseWrapper<java.util.List<com.example.hms.payload.dto.pharmacy.PharmacyPriceChangeDTO>>>
+            listPriceHistory(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(inventoryService.listPriceHistory(id)));
+    }
+
     @WriteAudited(skip = true, reason = "service emits STOCK_ADJUSTMENT and one ADJUSTMENT movement per lot")
     @PutMapping("/items/{id}/pack-size")
     @PreAuthorize("hasAnyRole('PHARMACIST', 'STORE_MANAGER', 'HOSPITAL_ADMIN')")

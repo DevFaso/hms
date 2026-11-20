@@ -341,6 +341,8 @@ public enum AuditEventType {
     PHARMACY_REFUND_PAID,
     /** QA D2676: a pharmacy refund withdrawn before payment, with the reason. */
     PHARMACY_REFUND_CANCELLED,
+    /** Review of #1239 (V311): a pharmacy's selling price set or changed, with the reason (price history). */
+    PHARMACY_PRICE_CHANGED,
 
     OTHER
 }

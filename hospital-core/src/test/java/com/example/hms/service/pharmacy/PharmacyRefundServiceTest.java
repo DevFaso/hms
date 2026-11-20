@@ -22,7 +22,6 @@ import com.example.hms.payload.dto.pharmacy.PharmacyRefundReasonRequestDTO;
 import com.example.hms.payload.dto.pharmacy.PharmacyRefundRequestDTO;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.pharmacy.DispenseRepository;
-import com.example.hms.repository.pharmacy.InventoryItemRepository;
 import com.example.hms.repository.pharmacy.PharmacyPaymentRepository;
 import com.example.hms.repository.pharmacy.PharmacyRefundRepository;
 import com.example.hms.repository.pharmacy.PharmacySaleRepository;
@@ -66,7 +65,6 @@ class PharmacyRefundServiceTest {
     @Mock private PharmacySaleRepository saleRepository;
     @Mock private DispenseRepository dispenseRepository;
     @Mock private PharmacyPaymentRepository paymentRepository;
-    @Mock private InventoryItemRepository inventoryItemRepository;
     @Mock private UserRepository userRepository;
     @Mock private PaymentReferenceRegistry referenceRegistry;
     @Mock private RoleValidator roleValidator;
@@ -87,7 +85,7 @@ class PharmacyRefundServiceTest {
     @BeforeEach
     void setUp() {
         service = new PharmacyRefundService(refundRepository, stockTransactionRepository, saleRepository,
-                dispenseRepository, paymentRepository, inventoryItemRepository, userRepository, referenceRegistry,
+                dispenseRepository, paymentRepository, userRepository, referenceRegistry,
                 roleValidator, support, auditEventLogService, clock);
         Hospital hospital = new Hospital();
         hospital.setId(hospitalId);
@@ -247,7 +245,8 @@ class PharmacyRefundServiceTest {
         assertThat(refund.getDecidedBy()).isEqualTo(accountant);
 
         actAs(pharmacist);
-        when(refundRepository.sumForSale(eq(sale.getId()), any())).thenReturn(new BigDecimal("2500"));
+        // Nothing paid out yet when the payout re-checks the sale; the whole total once this refund is paid.
+        when(refundRepository.sumForSale(eq(sale.getId()), any())).thenReturn(BigDecimal.ZERO, new BigDecimal("2500"));
         PharmacyRefundDTO paid = service.pay(refund.getId(), null);
 
         assertThat(paid.getStatus()).isEqualTo("PAID");
@@ -356,7 +355,7 @@ class PharmacyRefundServiceTest {
     }
 
     @Test
-    @DisplayName("a return of a paid dispense is refunded at the list price, bounded by what was paid")
+    @DisplayName("review of #1239: a return of a dispense gives back the share PAID for it, never today's list price")
     void dispenseReturn() {
         actAs(pharmacist);
         com.example.hms.model.pharmacy.Dispense dispense = com.example.hms.model.pharmacy.Dispense.builder()
@@ -366,9 +365,10 @@ class PharmacyRefundServiceTest {
         ret.setReferenceId(dispense.getId());
         when(saleRepository.findLockedById(dispense.getId())).thenReturn(Optional.empty());
         when(dispenseRepository.findLockedById(dispense.getId())).thenReturn(Optional.of(dispense));
-        when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(pharmacy.getId(),
-                lot.getInventoryItem().getMedicationCatalogItem().getId())).thenReturn(Optional.of(lot.getInventoryItem()));
-        when(paymentRepository.sumPostedForDispense(dispense.getId())).thenReturn(new BigDecimal("2500"));
+        // 10 units dispensed; the patient paid a 2 000 F co-payment (200 a unit). The list price has since gone
+        // from 250 to 400: at today's price the 4 returned units gave back 1 600, at the old one 1 000.
+        lot.getInventoryItem().setUnitPrice(new BigDecimal("400"));
+        when(paymentRepository.sumPostedForDispense(dispense.getId())).thenReturn(new BigDecimal("2000"));
         when(refundRepository.sumForDispense(eq(dispense.getId()), any())).thenReturn(BigDecimal.ZERO);
         when(paymentRepository.findFirstByDispense_IdOrderByCreatedAtAsc(dispense.getId())).thenReturn(Optional.empty());
         PharmacyRefundRequestDTO request = body();
@@ -377,7 +377,73 @@ class PharmacyRefundServiceTest {
         PharmacyRefundDTO dto = service.request(request);
 
         assertThat(dto.getDispenseId()).isEqualTo(dispense.getId());
-        assertThat(dto.getAmount()).isEqualByComparingTo("1000");
+        assertThat(dto.getAmount()).as("2 000 paid / 10 dispensed x 4 returned").isEqualByComparingTo("800");
+    }
+
+    @Test
+    @DisplayName("review of #1239: a return counted in units of a sale made in packs is converted before it is priced")
+    void aReturnAfterAPackConversionIsConvertedToPacks() {
+        actAs(pharmacist);
+        // The sale: 10 boxes at 250. Then the pack size is set (1 box = 10 tablets). Then 4 TABLETS come back.
+        InventoryItem item = lot.getInventoryItem();
+        item.setUnitsPerPack(10);
+        item.setPackSizeSetAt(java.time.LocalDateTime.of(2026, 11, 19, 12, 0));
+        sale.setCreatedAt(java.time.LocalDateTime.of(2026, 11, 18, 9, 0));
+        ret.setCreatedAt(java.time.LocalDateTime.of(2026, 11, 20, 9, 0));
+
+        assertThat(service.request(body()).getAmount())
+                .as("4 tablets are 0.4 box at 250, not 4 boxes").isEqualByComparingTo("100");
+
+        // A return recorded BEFORE the conversion counted boxes, like the sale: it is priced as it is.
+        ret.setCreatedAt(java.time.LocalDateTime.of(2026, 11, 18, 15, 0));
+        when(refundRepository.existsByReturnTransactionIdAndStatusIn(eq(ret.getId()), any())).thenReturn(false);
+        assertThat(service.request(body()).getAmount()).isEqualByComparingTo("1000");
+    }
+
+    @Test
+    @DisplayName("review of #1239 (money back twice): an approved refund is not paid once its fill was cancelled or its payment voided")
+    void payIsRefusedOnceThePaymentIsGone() {
+        actAs(pharmacist);
+        com.example.hms.model.pharmacy.Dispense dispense = com.example.hms.model.pharmacy.Dispense.builder()
+                .pharmacy(pharmacy).quantityDispensed(BigDecimal.TEN)
+                .status(com.example.hms.enums.DispenseStatus.COMPLETED).build();
+        dispense.setId(UUID.randomUUID());
+        PharmacyRefund refund = stored(PharmacyRefundStatus.APPROVED, UUID.randomUUID());
+        refund.setSaleId(null);
+        refund.setDispenseId(dispense.getId());
+        refund.setAmount(new BigDecimal("250"));
+        UUID id = refund.getId();
+        when(dispenseRepository.findLockedById(dispense.getId())).thenReturn(Optional.of(dispense));
+        when(refundRepository.sumForDispense(eq(dispense.getId()), any())).thenReturn(BigDecimal.ZERO);
+
+        // The payment was voided between the approval and the payout (500 F in, already owed back whole).
+        when(paymentRepository.sumPostedForDispense(dispense.getId())).thenReturn(BigDecimal.ZERO);
+        assertThatThrownBy(() -> service.pay(id, null)).isInstanceOf(ConflictException.class);
+        assertThat(refund.getStatus()).isEqualTo(PharmacyRefundStatus.APPROVED);
+        assertThat(refund.getPaidAt()).isNull();
+
+        // A cancelled fill never pays a refund, whatever its payment rows say.
+        dispense.setStatus(com.example.hms.enums.DispenseStatus.CANCELLED);
+        when(paymentRepository.sumPostedForDispense(dispense.getId())).thenReturn(new BigDecimal("500"));
+        assertThatThrownBy(() -> service.pay(id, null)).isInstanceOf(ConflictException.class);
+
+        // The payment still counted and not yet given back: the payout goes through, under the dispense row lock.
+        dispense.setStatus(com.example.hms.enums.DispenseStatus.COMPLETED);
+        assertThat(service.pay(id, null).getStatus()).isEqualTo("PAID");
+        verify(dispenseRepository, org.mockito.Mockito.times(3)).findLockedById(dispense.getId());
+    }
+
+    @Test
+    @DisplayName("review of #1239: a payout above what the sale still holds after the refunds already paid is refused")
+    void payIsBoundedByWhatIsStillHeld() {
+        actAs(pharmacist);
+        PharmacyRefund refund = stored(PharmacyRefundStatus.APPROVED, UUID.randomUUID());
+        UUID id = refund.getId();
+        // 2 500 sold, 2 000 already paid out: 1 000 more is not there.
+        when(refundRepository.sumForSale(eq(sale.getId()), any())).thenReturn(new BigDecimal("2000"));
+
+        assertThatThrownBy(() -> service.pay(id, null)).isInstanceOf(ConflictException.class);
+        assertThat(refund.getStatus()).isEqualTo(PharmacyRefundStatus.APPROVED);
     }
 
     @Test
@@ -433,8 +499,6 @@ class PharmacyRefundServiceTest {
         dispense.setId(UUID.randomUUID());
         ret.setReferenceId(dispense.getId());
         when(dispenseRepository.findLockedById(dispense.getId())).thenReturn(Optional.of(dispense));
-        when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(any(), any()))
-                .thenReturn(Optional.of(lot.getInventoryItem()));
         when(paymentRepository.sumPostedForDispense(dispense.getId())).thenReturn(BigDecimal.ZERO);
         when(refundRepository.sumForDispense(eq(dispense.getId()), any())).thenReturn(BigDecimal.ZERO);
         PharmacyRefundRequestDTO unpaid = body();

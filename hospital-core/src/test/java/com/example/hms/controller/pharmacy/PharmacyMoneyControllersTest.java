@@ -98,5 +98,12 @@ class PharmacyMoneyControllersTest {
         InventoryItemResponseDTO item = InventoryItemResponseDTO.builder().id(id).unitsPerPack(10).build();
         when(inventoryService.setPackSize(id, pack)).thenReturn(item);
         assertThat(inventoryController.setPackSize(id, pack).getBody().getData()).isSameAs(item);
+
+        // Review of #1239: the price history of an item is read back as the service gives it.
+        List<com.example.hms.payload.dto.pharmacy.PharmacyPriceChangeDTO> history = List.of(
+                com.example.hms.payload.dto.pharmacy.PharmacyPriceChangeDTO.builder().inventoryItemId(id)
+                        .reason("Nouveau tarif").build());
+        when(inventoryService.listPriceHistory(id)).thenReturn(history);
+        assertThat(inventoryController.listPriceHistory(id).getBody().getData()).isSameAs(history);
     }
 }

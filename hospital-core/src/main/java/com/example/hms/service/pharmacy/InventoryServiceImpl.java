@@ -76,6 +76,8 @@ public class InventoryServiceImpl implements InventoryService {
     private final EntityManager entityManager;
     /** The server's clock (UTC), for the picked-day check of a receipt. */
     private final Clock clock;
+    /** Review of #1239: every change of a selling price is kept, with its reason. */
+    private final PharmacyPriceHistory priceHistory;
 
     // ── Inventory items ──────────────────────────────────────────────────
 
@@ -110,10 +112,87 @@ public class InventoryServiceImpl implements InventoryService {
             throw new com.example.hms.exception.FieldBusinessException("quantityOnHand", "stock.inventory.openingQuantity");
         }
 
+        // Review of #1239: a price is set by the store manager or a hospital admin, and kept in the history.
+        PriceChange priceChange = priceChangeOf(null, dto, pharmacy);
         InventoryItem entity = inventoryItemMapper.toEntity(dto, pharmacy, medication);
         entity.setQuantityOnHand(java.math.BigDecimal.ZERO);
         InventoryItem saved = inventoryItemRepository.save(entity);
+        keepPriceChange(saved, priceChange);
         return inventoryItemMapper.toResponseDTO(saved);
+    }
+
+    /** A price change asked for on the item form, checked: the old and the new price, why and by whom. */
+    private record PriceChange(BigDecimal oldPrice, BigDecimal newPrice, String reason, UUID changedBy) {
+    }
+
+    /** The reason kept when an item is created already priced (nothing changed: there was no price). */
+    static final String INITIAL_PRICE_REASON = "Prix initial";
+    private static final String FIELD_PRICE_REASON = "priceChangeReason";
+
+    /**
+     * Review of #1239 (list price changes): the selling price is what every sale, charge and refund is computed
+     * from, and a pharmacist could rewrite it with no reason and no trace. A request that changes it (a price on a
+     * new item, or another price on an existing one) needs a store-manager or hospital-admin assignment at the
+     * pharmacy's hospital and, on an existing item, a reason. Null when the request leaves the price as it is, so a
+     * pharmacist still edits the thresholds and the unit with the unchanged price in the form.
+     */
+    private PriceChange priceChangeOf(InventoryItem existing, InventoryItemRequestDTO dto, Pharmacy pharmacy) {
+        BigDecimal current = existing != null ? existing.getUnitPrice() : null;
+        if (dto.getUnitPrice() == null || PharmacyPriceHistory.samePrice(current, dto.getUnitPrice())) {
+            return null;
+        }
+        UUID hospitalId = pharmacy != null && pharmacy.getHospital() != null ? pharmacy.getHospital().getId() : null;
+        UUID userId = roleValidator.getCurrentUserId();
+        if (hospitalId == null || userId == null || !roleValidator.canSetPharmacyPrice(userId, hospitalId)) {
+            throw new com.example.hms.exception.FieldBusinessException("unitPrice", "pharmacy.price.roleRequired");
+        }
+        String reason = trimmedOrEmpty(dto.getPriceChangeReason());
+        if (reason.isEmpty()) {
+            if (existing != null) {
+                throw new com.example.hms.exception.FieldBusinessException(FIELD_PRICE_REASON,
+                        "pharmacy.price.reasonRequired");
+            }
+            reason = INITIAL_PRICE_REASON;
+        }
+        if (reason.length() > 500) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_PRICE_REASON,
+                    "pharmacy.price.reasonTooLong");
+        }
+        com.example.hms.utility.CardNumbers.requireNone(reason, FIELD_PRICE_REASON);
+        return new PriceChange(current, dto.getUnitPrice(), reason, userId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<com.example.hms.payload.dto.pharmacy.PharmacyPriceChangeDTO> listPriceHistory(UUID id) {
+        InventoryItem item = resolveInventoryItem(id);
+        enforceHospitalScope(item.getPharmacy());
+        return priceHistory.historyOf(item).stream()
+                .map(change -> com.example.hms.payload.dto.pharmacy.PharmacyPriceChangeDTO.builder()
+                        .id(change.getId())
+                        .inventoryItemId(change.getInventoryItemId())
+                        .oldPrice(change.getOldPrice())
+                        .newPrice(change.getNewPrice())
+                        .reason(change.getReason())
+                        .changedBy(change.getChangedBy())
+                        .changedByName(userRepository.findById(change.getChangedBy())
+                                .map(u -> ((u.getFirstName() != null ? u.getFirstName() : "") + " "
+                                        + (u.getLastName() != null ? u.getLastName() : "")).trim())
+                                .orElse(null))
+                        .changedAt(change.getChangedAt())
+                        .build())
+                .toList();
+    }
+
+    /** Writes the price-history row and the audit event of a change; nothing when the price did not change. */
+    private void keepPriceChange(InventoryItem item, PriceChange change) {
+        if (change == null) {
+            return;
+        }
+        priceHistory.keep(item, change.oldPrice(), change.newPrice(), change.reason(), change.changedBy(),
+                java.time.LocalDateTime.now(clock));
+        // Ids only: the prices and the reason stay on the history row.
+        logAudit(AuditEventType.PHARMACY_PRICE_CHANGED, "Pharmacy selling price changed", item.getId().toString());
     }
 
     /**
@@ -182,8 +261,11 @@ public class InventoryServiceImpl implements InventoryService {
                 || dto.getQuantityOnHand().compareTo(item.getQuantityOnHand()) != 0)) {
             throw new com.example.hms.exception.FieldBusinessException("quantityOnHand", "stock.inventory.quantityViaTransaction");
         }
+        // Review of #1239: checked against the price the item has now, before the mapper overwrites it.
+        PriceChange priceChange = priceChangeOf(item, dto, item.getPharmacy());
         inventoryItemMapper.updateEntity(item, dto);
         InventoryItem saved = inventoryItemRepository.save(item);
+        keepPriceChange(saved, priceChange);
         return inventoryItemMapper.toResponseDTO(saved);
     }
 
@@ -306,14 +388,23 @@ public class InventoryServiceImpl implements InventoryService {
         BigDecimal onHandBefore = item.getQuantityOnHand() != null ? item.getQuantityOnHand() : BigDecimal.ZERO;
         stockLotRepository.scaleQuantitiesOfItem(item.getId(), factor, now);
         inventoryItemRepository.scaleOnHand(item.getId(), factor, now);
-        recordConversion(item, lots, onHandBefore, factor, "Conversion: 1 " + packUnit + " = " + perPack + " "
-                + unit + " | " + reason);
+        String conversionReason = "Conversion: 1 " + packUnit + " = " + perPack + " " + unit + " | " + reason;
+        recordConversion(item, lots, onHandBefore, factor, conversionReason);
         refreshIfManaged(item);
         item.setUnitsPerPack(perPack);
         item.setPackUnit(packUnit);
         item.setUnit(unit);
+        // Review of #1239: what was recorded before this moment counts packs; a refund converts.
+        item.setPackSizeSetAt(now);
+        BigDecimal priceBefore = item.getUnitPrice();
         scaleItemFigures(item, factor);
         InventoryItem saved = inventoryItemRepository.save(item);
+        // The pack's price is unchanged, but the price of ONE unit is another figure from now on: the history
+        // keeps it, so a sale made before the conversion is still compared with the price per pack.
+        if (!PharmacyPriceHistory.samePrice(priceBefore, saved.getUnitPrice())) {
+            priceHistory.keep(saved, priceBefore, saved.getUnitPrice(), conversionReason, resolveCurrentUser().getId(),
+                    now);
+        }
         logAudit(AuditEventType.STOCK_ADJUSTMENT, "Pack size set on an inventory item", saved.getId().toString());
         return inventoryItemMapper.toResponseDTO(saved);
     }

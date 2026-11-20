@@ -1,5 +1,6 @@
 package com.example.hms.service.pharmacy;
 
+import com.example.hms.enums.PharmacyRefundStatus;
 import com.example.hms.enums.PharmacySaleStatus;
 import com.example.hms.enums.StockTransactionType;
 import com.example.hms.exception.ClientSafeAccessDeniedException;
@@ -18,6 +19,7 @@ import com.example.hms.payload.dto.pharmacy.PharmacyReconciliationDTO;
 import com.example.hms.payload.dto.pharmacy.PharmacyReconciliationDTO.ControlledBalance;
 import com.example.hms.payload.dto.pharmacy.PharmacyReconciliationDTO.DeferredFill;
 import com.example.hms.payload.dto.pharmacy.PharmacyReconciliationDTO.Difference;
+import com.example.hms.payload.dto.pharmacy.PharmacyReconciliationDTO.LotBalance;
 import com.example.hms.payload.dto.pharmacy.PharmacyReconciliationDTO.Money;
 import com.example.hms.payload.dto.pharmacy.PharmacyReconciliationDTO.StockLine;
 import com.example.hms.repository.pharmacy.DispenseRepository;
@@ -92,6 +94,8 @@ public class PharmacyReconciliationService {
     private final StockTransactionRepository stockTransactionRepository;
     private final StockLotRepository stockLotRepository;
     private final InventoryItemRepository inventoryItemRepository;
+    /** Review of #1239: the price in force when a sale was made. */
+    private final PharmacyPriceHistory priceHistory;
     private final RoleValidator roleValidator;
     private final Clock clock;
 
@@ -142,9 +146,12 @@ public class PharmacyReconciliationService {
 
         List<Difference> differences = new ArrayList<>();
         List<StockLine> stock = stockLines(sales, fillsCreated, movements, differences);
-        priceDifferences(sales, pharmacyId, differences);
+        priceDifferences(sales, differences);
         List<DeferredFill> deferred = new ArrayList<>();
         Money money = money(sales, payments, refunds, handedOver, deferred, differences);
+        refundDifferences(new Day(hospitalId, pharmacyId, from, to), refunds, differences);
+        unrefundedReturns(pharmacyId, movements, differences);
+        List<LotBalance> lotBalances = lotBalances(pharmacyId, from, to, differences);
         List<ControlledBalance> controlled = controlled(pharmacyId, differences);
 
         return PharmacyReconciliationDTO.builder()
@@ -157,7 +164,180 @@ public class PharmacyReconciliationService {
                 .differences(differences)
                 .controlled(controlled)
                 .deferred(deferred)
+                .lotBalances(lotBalances)
                 .build();
+    }
+
+    /** One pharmacy's day: the hospital, the pharmacy and [from, to). */
+    private record Day(UUID hospitalId, UUID pharmacyId, LocalDateTime from, LocalDateTime to) {
+    }
+
+    // ───────────────────────────── lots ─────────────────────────────
+
+    /**
+     * Review of #1239: every lot of the pharmacy, not only those a sale or a fill touched. The ledger's balance when
+     * the day began, plus what the ledger moved during the day, must be the stock the lot held when the day ended
+     * (what it holds now, less what the ledger moved since). A lot whose quantity changed with no movement, or a
+     * movement that changed no quantity, is a LOT_BALANCE_MISMATCH whichever screen or script caused it. A lot that
+     * never held or moved anything is checked and not listed.
+     */
+    private List<LotBalance> lotBalances(UUID pharmacyId, LocalDateTime from, LocalDateTime to,
+                                         List<Difference> differences) {
+        List<StockLot> lots = stockLotRepository.findAllWithItemByPharmacyId(pharmacyId);
+        if (lots.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, BigDecimal> atOpening = signedByLot(stockTransactionRepository.sumByLotAndTypeBefore(pharmacyId, from));
+        Map<UUID, BigDecimal> atClosing = signedByLot(stockTransactionRepository.sumByLotAndTypeBefore(pharmacyId, to));
+        Map<UUID, BigDecimal> since = signedByLot(stockTransactionRepository.sumByLotAndTypeFrom(pharmacyId, to));
+        List<LotBalance> out = new ArrayList<>();
+        for (StockLot lot : lots) {
+            BigDecimal opening = atOpening.getOrDefault(lot.getId(), BigDecimal.ZERO);
+            BigDecimal moved = atClosing.getOrDefault(lot.getId(), BigDecimal.ZERO).subtract(opening);
+            BigDecimal closing = nz(lot.getRemainingQuantity()).subtract(since.getOrDefault(lot.getId(), BigDecimal.ZERO));
+            boolean matches = opening.add(moved).compareTo(closing) == 0;
+            if (matches && opening.signum() == 0 && moved.signum() == 0 && closing.signum() == 0) {
+                continue;
+            }
+            String name = nameOf(lot.getInventoryItem());
+            if (!matches) {
+                differences.add(Difference.builder().type("LOT_BALANCE_MISMATCH").medicationName(name)
+                        .lotNumber(lot.getLotNumber()).referenceId(lot.getId()).expected(opening.add(moved))
+                        .actual(closing).build());
+            }
+            out.add(LotBalance.builder().stockLotId(lot.getId())
+                    .inventoryItemId(lot.getInventoryItem() != null ? lot.getInventoryItem().getId() : null)
+                    .medicationName(name).lotNumber(lot.getLotNumber()).opening(opening).movements(moved)
+                    .closing(closing).matches(matches).build());
+        }
+        out.sort(java.util.Comparator.comparing((LotBalance l) -> Objects.toString(l.getMedicationName(), ""))
+                .thenComparing(l -> Objects.toString(l.getLotNumber(), "")));
+        return out;
+    }
+
+    /** {@code [lotId, type, total]} rows as each lot's signed balance. */
+    private static Map<UUID, BigDecimal> signedByLot(List<Object[]> rows) {
+        Map<UUID, BigDecimal> out = new LinkedHashMap<>();
+        if (rows == null) {
+            return out;
+        }
+        for (Object[] row : rows) {
+            out.merge((UUID) row[0],
+                    ControlledDrugRegisterService.signed((StockTransactionType) row[1], (BigDecimal) row[2]),
+                    BigDecimal::add);
+        }
+        return out;
+    }
+
+    // ───────────────────────────── refunds ─────────────────────────────
+
+    /** A refund in one of these states was asked for a return (or refused): the return is not "forgotten". */
+    private static final Set<PharmacyRefundStatus> RETURN_HANDLED = EnumSet.of(PharmacyRefundStatus.REQUESTED,
+            PharmacyRefundStatus.APPROVED, PharmacyRefundStatus.PAID, PharmacyRefundStatus.REJECTED);
+    private static final Set<PharmacyRefundStatus> PAID_OUT = EnumSet.of(PharmacyRefundStatus.PAID);
+
+    /**
+     * Review of #1239 (money back twice): refunds paid out on a sale or a fill never exceed what is still counted
+     * as paid on it. The services refuse the two ways it happened (a cancel that voids the payment of a refunded
+     * fill; a payout after the payment was voided); a row that diverges anyway (data written before the fix, or by
+     * hand) is listed as REFUND_EXCEEDS_PAID on the day the refund was paid and on the day the payment was voided.
+     */
+    private void refundDifferences(Day day, List<PharmacyRefund> refundsPaid, List<Difference> differences) {
+        Set<UUID> dispenseIds = new java.util.LinkedHashSet<>();
+        Set<UUID> saleIds = new java.util.LinkedHashSet<>();
+        for (PharmacyRefund refund : refundsPaid) {
+            if (refund.getDispenseId() != null) {
+                dispenseIds.add(refund.getDispenseId());
+            } else if (refund.getSaleId() != null) {
+                saleIds.add(refund.getSaleId());
+            }
+        }
+        List<UUID> voided = refundRepository.findRefundedDispensesVoidedBetween(day.hospitalId(), day.pharmacyId(),
+                day.from(), day.to());
+        if (voided != null) {
+            dispenseIds.addAll(voided);
+        }
+        for (UUID dispenseId : dispenseIds) {
+            Dispense fill = dispenseRepository.findByIdAndPharmacy_Id(dispenseId, day.pharmacyId()).orElse(null);
+            BigDecimal stillPaid = nz(paymentRepository.sumPostedForDispense(dispenseId));
+            BigDecimal paidOut = nz(refundRepository.sumForDispense(dispenseId, PAID_OUT));
+            if (paidOut.compareTo(stillPaid) > 0) {
+                differences.add(Difference.builder().type("REFUND_EXCEEDS_PAID")
+                        .medicationName(fill != null ? fill.getMedicationName() : null)
+                        .lotNumber(fill != null && fill.getStockLot() != null ? fill.getStockLot().getLotNumber() : null)
+                        .referenceId(dispenseId).expected(stillPaid).actual(paidOut)
+                        .amount(paidOut.subtract(stillPaid)).build());
+            }
+        }
+        for (UUID saleId : saleIds) {
+            PharmacySale sale = saleRepository.findByIdAndPharmacy_Id(saleId, day.pharmacyId()).orElse(null);
+            BigDecimal stillPaid = sale != null && SOLD.contains(sale.getStatus())
+                    ? nz(sale.getTotalAmount()) : BigDecimal.ZERO;
+            BigDecimal paidOut = nz(refundRepository.sumForSale(saleId, PAID_OUT));
+            if (paidOut.compareTo(stillPaid) > 0) {
+                differences.add(Difference.builder().type("REFUND_EXCEEDS_PAID").referenceId(saleId)
+                        .expected(stillPaid).actual(paidOut).amount(paidOut.subtract(stillPaid)).build());
+            }
+        }
+    }
+
+    /**
+     * Review of #1239: a patient return of the day that names a paid counter sale or a paid fill, and for which no
+     * refund was asked (or the request was withdrawn), is listed as RETURN_NOT_REFUNDED with what it would give
+     * back: the stock came back, the money did not. The stock a cancelled fill puts back is not a patient return
+     * (its payment is voided), and a return of a transfer names no patient.
+     */
+    private void unrefundedReturns(UUID pharmacyId, List<StockTransaction> movements, List<Difference> differences) {
+        List<StockTransaction> returns = movements.stream()
+                .filter(tx -> tx.getTransactionType() == StockTransactionType.RETURN && tx.getReferenceId() != null)
+                .toList();
+        if (returns.isEmpty()) {
+            return;
+        }
+        Set<UUID> handled = new java.util.HashSet<>(nzList(refundRepository.findRefundedReturnIds(
+                returns.stream().map(StockTransaction::getId).toList(), RETURN_HANDLED)));
+        for (StockTransaction ret : returns) {
+            if (handled.contains(ret.getId())) {
+                continue;
+            }
+            BigDecimal owed = refundOwed(pharmacyId, ret);
+            if (owed.signum() > 0) {
+                differences.add(Difference.builder().type("RETURN_NOT_REFUNDED")
+                        .medicationName(nameOf(ret.getInventoryItem()))
+                        .lotNumber(ret.getStockLot() != null ? ret.getStockLot().getLotNumber() : null)
+                        .referenceId(ret.getId()).expected(owed).actual(BigDecimal.ZERO).amount(owed).build());
+            }
+        }
+    }
+
+    /**
+     * What a return of a paid sale or fill would give back; zero when it names neither. Both are read by id AND
+     * pharmacy: a reference to another pharmacy's (or hospital's) row answers as naming nothing.
+     */
+    private BigDecimal refundOwed(UUID pharmacyId, StockTransaction ret) {
+        PharmacySale sale = saleRepository.findByIdAndPharmacy_Id(ret.getReferenceId(), pharmacyId).orElse(null);
+        if (sale != null) {
+            if (sale.getStatus() != PharmacySaleStatus.COMPLETED) {
+                return BigDecimal.ZERO;
+            }
+            BigDecimal linePrice = sale.getLines().stream().filter(line -> PharmacyRefundService.sameStock(line, ret))
+                    .map(SaleLine::getUnitPrice).filter(Objects::nonNull).findFirst().orElse(null);
+            BigDecimal left = nz(sale.getTotalAmount())
+                    .subtract(nz(refundRepository.sumForSale(sale.getId(), PharmacyRefundService.LIVE)));
+            return PharmacyRefundAmount.ofSaleLine(linePrice, ret, sale.getCreatedAt()).min(left).max(BigDecimal.ZERO);
+        }
+        Dispense fill = dispenseRepository.findByIdAndPharmacy_Id(ret.getReferenceId(), pharmacyId).orElse(null);
+        if (fill == null || fill.getStatus() == com.example.hms.enums.DispenseStatus.CANCELLED) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal paid = nz(paymentRepository.sumPostedForDispense(fill.getId()));
+        BigDecimal left = paid.subtract(nz(refundRepository.sumForDispense(fill.getId(), PharmacyRefundService.LIVE)));
+        return PharmacyRefundAmount.ofDispense(paid, fill.getQuantityDispensed(), ret, fill.getCreatedAt())
+                .min(left).max(BigDecimal.ZERO);
+    }
+
+    private static List<UUID> nzList(List<UUID> ids) {
+        return ids != null ? ids : List.of();
     }
 
     // ───────────────────────────── stock ─────────────────────────────
@@ -277,15 +457,23 @@ public class PharmacyReconciliationService {
                 .orElse(null);
     }
 
-    /** QA D2671: a sale line priced away from the pharmacy's list price (today's) is listed. */
-    private void priceDifferences(List<PharmacySale> sales, UUID pharmacyId, List<Difference> differences) {
+    /**
+     * QA D2671: a sale line priced away from the pharmacy's list price is listed. Review of #1239: the list price is
+     * the one in force WHEN THE SALE WAS MADE ({@link PharmacyPriceHistory#priceAt}); compared with today's, every
+     * past sale turned into a difference the day a price changed, and a sale under the price of its day went unseen
+     * once the price was lowered to it.
+     */
+    private void priceDifferences(List<PharmacySale> sales, List<Difference> differences) {
         for (PharmacySale sale : sales) {
+            LocalDateTime soldAt = sale.getSaleDate() != null ? sale.getSaleDate() : sale.getCreatedAt();
             for (SaleLine line : sale.getLines()) {
                 if (line.getMedicationCatalogItem() == null || line.getUnitPrice() == null) {
                     continue;
                 }
-                BigDecimal list = PharmacyListPrice.of(pharmacyId, line.getMedicationCatalogItem().getId(),
-                        inventoryItemRepository).orElse(null);
+                InventoryItem item = line.getStockLot() != null && line.getStockLot().getInventoryItem() != null
+                        ? line.getStockLot().getInventoryItem()
+                        : itemOf(sale.getPharmacy(), line.getMedicationCatalogItem());
+                BigDecimal list = item == null ? null : priceHistory.priceAt(item, soldAt).orElse(null);
                 if (list != null && list.compareTo(line.getUnitPrice()) != 0) {
                     differences.add(Difference.builder().type("PRICE_NOT_LIST")
                             .medicationName(medicationName(line.getMedicationCatalogItem()))
@@ -352,8 +540,9 @@ public class PharmacyReconciliationService {
             return;
         }
         settled.charges = settled.charges.add(charge);
+        // Review of #1239: a DRAFT claim was never sent to a payer and covers nothing.
         BigDecimal covered = nz(paymentRepository.sumPostedForDispense(fill.getId()))
-                .add(nz(claimRepository.sumLiveForDispense(fill.getId())));
+                .add(nz(claimRepository.sumSentForDispense(fill.getId())));
         BigDecimal due = charge.subtract(covered).max(BigDecimal.ZERO);
         if (due.signum() <= 0) {
             return;
@@ -439,6 +628,12 @@ public class PharmacyReconciliationService {
             csv.append(row(d.getType(), d.getMedicationName(), d.getLotNumber(),
                     d.getReferenceId() != null ? d.getReferenceId().toString() : "", plain(d.getExpected()),
                     plain(d.getActual()), plain(d.getAmount()))).append("\r\n");
+        }
+        csv.append("\r\n").append(row("solde_lot", "medicament", "lot", "ouverture", "mouvements", "cloture", "ecart"))
+                .append("\r\n");
+        for (LotBalance l : day.getLotBalances()) {
+            csv.append(row("solde_lot", l.getMedicationName(), l.getLotNumber(), plain(l.getOpening()),
+                    plain(l.getMovements()), plain(l.getClosing()), l.isMatches() ? "non" : "oui")).append("\r\n");
         }
         return csv.toString().getBytes(StandardCharsets.UTF_8);
     }

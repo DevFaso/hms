@@ -25,6 +25,9 @@ public interface InventoryService {
 
     void deactivateInventoryItem(UUID id);
 
+    /** Review of #1239: an item's price history (old and new price, reason, who and when), oldest first. */
+    java.util.List<com.example.hms.payload.dto.pharmacy.PharmacyPriceChangeDTO> listPriceHistory(UUID id);
+
     /**
      * QA D2674 (r65): stock kept in packs is counted from now on in units, {@code unitsPerPack} to a pack. Once per
      * item; the lots, the stock on hand, the thresholds and the prices are converted in one transaction, and an

@@ -714,7 +714,7 @@ class DispenseReadyForCollectionTest {
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
-            when(claimRepository.sumLiveForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
 
             assertThatThrownBy(() -> service.handOver(dispenseId, null))
                     .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
@@ -730,22 +730,42 @@ class DispenseReadyForCollectionTest {
             stubLocked(d);
             stubHandOverWrites(d);
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(new BigDecimal("1000"));
-            when(claimRepository.sumLiveForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
 
             assertThat(service.handOver(dispenseId, null).getStatus()).isEqualTo("COMPLETED");
             assertThat(d.getBillingDeferredReason()).isNull();
         }
 
         @Test
-        @DisplayName("a fill a live claim covers is handed over with no reason")
+        @DisplayName("a fill a claim sent to the payer covers is handed over with no reason")
         void coveredIsHandedOver() {
             Dispense d = pricedPreparedFill();
             stubLocked(d);
             stubHandOverWrites(d);
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(new BigDecimal("200"));
-            when(claimRepository.sumLiveForDispense(dispenseId)).thenReturn(new BigDecimal("800"));
+            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(new BigDecimal("800"));
 
             assertThat(service.handOver(dispenseId, null).getStatus()).isEqualTo("COMPLETED");
+        }
+
+        @Test
+        @DisplayName("review of #1239: a DRAFT claim covers nothing; the fill is refused as unpaid, with what is really due")
+        void aDraftClaimIsNotCoverage() {
+            Dispense d = pricedPreparedFill();
+            stubLocked(d);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(new BigDecimal("200"));
+            // An 800 F claim exists as a DRAFT: live for the claim screen, never sent to the payer.
+            org.mockito.Mockito.lenient().when(claimRepository.sumLiveForDispense(dispenseId))
+                    .thenReturn(new BigDecimal("800"));
+            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+
+            assertThatThrownBy(() -> service.handOver(dispenseId, null))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.handOver.unpaid");
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+            verify(claimRepository, never()).sumLiveForDispense(any());
         }
 
         @Test
@@ -755,7 +775,7 @@ class DispenseReadyForCollectionTest {
             stubLocked(d);
             stubHandOverWrites(d);
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
-            when(claimRepository.sumLiveForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
             when(roleValidator.canDeferDispenseBilling(userId, hospitalId)).thenReturn(true);
 
             service.handOver(dispenseId, HandOverRequestDTO.builder()
@@ -775,7 +795,7 @@ class DispenseReadyForCollectionTest {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(d));
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(new BigDecimal("400"));
-            when(claimRepository.sumLiveForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
 
             var unpaid = service.getPaymentStatus(dispenseId);
             assertThat(unpaid.getCharge()).isEqualByComparingTo("1000");
@@ -784,7 +804,7 @@ class DispenseReadyForCollectionTest {
 
             d.setBillingDeferredReason("séjour");
             assertThat(service.getPaymentStatus(dispenseId).getStatus()).isEqualTo("DEFERRED");
-            when(claimRepository.sumLiveForDispense(dispenseId)).thenReturn(new BigDecimal("600"));
+            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(new BigDecimal("600"));
             assertThat(service.getPaymentStatus(dispenseId).getStatus()).isEqualTo("COVERED");
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(new BigDecimal("1000"));
             assertThat(service.getPaymentStatus(dispenseId).getStatus()).isEqualTo("PAID");
@@ -812,7 +832,7 @@ class DispenseReadyForCollectionTest {
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
-            when(claimRepository.sumLiveForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            when(claimRepository.sumSentForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
             when(roleValidator.canDeferDispenseBilling(userId, hospitalId)).thenReturn(false);
 
             assertThatThrownBy(() -> service.handOver(dispenseId, HandOverRequestDTO.builder()

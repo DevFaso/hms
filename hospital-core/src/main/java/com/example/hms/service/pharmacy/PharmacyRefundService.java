@@ -1,6 +1,7 @@
 package com.example.hms.service.pharmacy;
 
 import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.DispenseStatus;
 import com.example.hms.enums.MobileMoneyOperator;
 import com.example.hms.enums.PharmacyPaymentMethod;
 import com.example.hms.enums.PharmacyRefundStatus;
@@ -23,7 +24,6 @@ import com.example.hms.payload.dto.pharmacy.PharmacyRefundReasonRequestDTO;
 import com.example.hms.payload.dto.pharmacy.PharmacyRefundRequestDTO;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.pharmacy.DispenseRepository;
-import com.example.hms.repository.pharmacy.InventoryItemRepository;
 import com.example.hms.repository.pharmacy.PharmacyPaymentRepository;
 import com.example.hms.repository.pharmacy.PharmacyRefundRepository;
 import com.example.hms.repository.pharmacy.PharmacySaleRepository;
@@ -54,9 +54,14 @@ import java.util.function.BiPredicate;
  * rule as an invoice refund (owner decision D-3).
  *
  * <p><b>What it pays for.</b> A refund names the RETURN stock movement that put the medication back, and that movement
- * names the counter sale or the dispense it returns. The amount is the server's: the returned quantity at the price the
- * patient paid (the sale line's price, or the pharmacy's list price for a dispense), bounded by what the patient paid on
- * that sale or dispense less its other live refunds. One live refund per return movement.
+ * names the counter sale or the dispense it returns. The amount is the server's ({@link PharmacyRefundAmount}): the
+ * returned quantity at the sale line's price, or the returned share of what the patient paid for a dispense (review of
+ * #1239: never today's list price), bounded by what the patient paid on that sale or dispense less its other live
+ * refunds. One live refund per return movement.
+ *
+ * <p><b>Never twice.</b> Review of #1239: a fill with a live refund cannot be cancelled (its cancel voids the whole
+ * payment, {@link PharmacyPaymentVoider}), and the payout re-reads the source under its row lock: the payment must
+ * still be counted and still hold the amount.
  *
  * <p><b>Steps.</b> REQUESTED (a pharmacist, a hospital admin, an accountant or a cashier, with a reason), APPROVED or
  * REJECTED by ANOTHER hospital admin or accountant (no self-approval; the V311 CHECK holds it in the database too),
@@ -92,7 +97,6 @@ public class PharmacyRefundService {
     private final PharmacySaleRepository saleRepository;
     private final DispenseRepository dispenseRepository;
     private final PharmacyPaymentRepository paymentRepository;
-    private final InventoryItemRepository inventoryItemRepository;
     private final UserRepository userRepository;
     private final PaymentReferenceRegistry referenceRegistry;
     private final RoleValidator roleValidator;
@@ -103,8 +107,8 @@ public class PharmacyRefundService {
     record Actor(UUID userId, UUID hospitalId) {
     }
 
-    /** What the return gives back and from what it was paid. */
-    private record Source(UUID saleId, UUID dispenseId, BigDecimal unitPrice, BigDecimal paid,
+    /** What the return gives back ({@code amount}, before the bound) and from what it was paid. */
+    private record Source(UUID saleId, UUID dispenseId, BigDecimal amount, BigDecimal paid,
                           PharmacyPaymentMethod paidBy) {
     }
 
@@ -142,7 +146,7 @@ public class PharmacyRefundService {
         if (refundable.signum() <= 0) {
             throw new FieldBusinessException(FIELD_RETURN, "pharmacy.refund.nothingPaid");
         }
-        BigDecimal amount = PharmacyListPrice.amount(source.unitPrice(), ret.getQuantity()).min(refundable);
+        BigDecimal amount = source.amount().min(refundable);
         if (amount.signum() <= 0) {
             throw new FieldBusinessException(FIELD_RETURN, "pharmacy.refund.nothingPaid");
         }
@@ -223,6 +227,7 @@ public class PharmacyRefundService {
         if (refund.getStatus() != PharmacyRefundStatus.APPROVED) {
             throw new ConflictException(MessageUtil.resolve("billing.refund.notApproved"));
         }
+        requireSourceStillPaid(refund);
         recordHandover(refund, body, actor);
         refund.setStatus(PharmacyRefundStatus.PAID);
         refund.setPaidBy(actor.userId());
@@ -232,6 +237,37 @@ public class PharmacyRefundService {
         audit(AuditEventType.PHARMACY_REFUND_PAID, "Pharmacy refund paid out", refund);
         return toDto(refund, actor);
     }
+
+    /**
+     * Review of #1239 (money back twice): between the approval and the payout the fill may have been cancelled and
+     * its payment voided, which already owes the patient the whole amount. The source row is locked (the lock a
+     * cancel and a refund request take) and re-read: the payment must still be counted, and what it still holds
+     * after the refunds already paid out must cover this one. Otherwise the payout is refused (409) and the refund
+     * stays APPROVED, to be cancelled.
+     */
+    private void requireSourceStillPaid(PharmacyRefund refund) {
+        BigDecimal held;
+        if (refund.getDispenseId() != null) {
+            Dispense dispense = dispenseRepository.findLockedById(refund.getDispenseId()).orElse(null);
+            BigDecimal posted = dispense == null || dispense.getStatus() == DispenseStatus.CANCELLED
+                    ? BigDecimal.ZERO : nz(paymentRepository.sumPostedForDispense(refund.getDispenseId()));
+            held = posted.subtract(nz(refundRepository.sumForDispense(refund.getDispenseId(),
+                    EnumSet.of(PharmacyRefundStatus.PAID))));
+        } else {
+            PharmacySale sale = saleRepository.findLockedById(refund.getSaleId()).orElse(null);
+            BigDecimal total = sale == null || !STILL_SOLD.contains(sale.getStatus())
+                    ? BigDecimal.ZERO : nz(sale.getTotalAmount());
+            held = total.subtract(nz(refundRepository.sumForSale(refund.getSaleId(),
+                    EnumSet.of(PharmacyRefundStatus.PAID))));
+        }
+        if (nz(refund.getAmount()).compareTo(held) > 0) {
+            throw new ConflictException(MessageUtil.resolve("pharmacy.refund.sourceNoLongerPaid"));
+        }
+    }
+
+    /** A sale whose money is still in the till: completed, or partly refunded. */
+    private static final Set<PharmacySaleStatus> STILL_SOLD = EnumSet.of(PharmacySaleStatus.COMPLETED,
+            PharmacySaleStatus.REFUNDED);
 
     /**
      * The reference and operator recorded when the money is handed over: a mobile-money payout needs both; a new
@@ -360,19 +396,21 @@ public class PharmacyRefundService {
                     .findFirst()
                     .orElseThrow(() -> new FieldBusinessException(FIELD_RETURN,
                             "pharmacy.refund.returnUnreferenced"));
-            return new Source(sale.getId(), null, unitPrice, nz(sale.getTotalAmount()), sale.getPaymentMethod());
+            return new Source(sale.getId(), null, PharmacyRefundAmount.ofSaleLine(unitPrice, ret, sale.getCreatedAt()),
+                    nz(sale.getTotalAmount()), sale.getPaymentMethod());
         }
         Dispense dispense = dispenseRepository.findLockedById(ret.getReferenceId()).orElse(null);
         if (dispense == null || dispense.getPharmacy() == null || !pharmacyId.equals(dispense.getPharmacy().getId())) {
             throw new FieldBusinessException(FIELD_RETURN, "pharmacy.refund.returnUnreferenced");
         }
-        BigDecimal unitPrice = java.util.Optional.ofNullable(dispense.getMedicationCatalogItem())
-                .flatMap(m -> PharmacyListPrice.of(pharmacyId, m.getId(), inventoryItemRepository))
-                .orElseThrow(() -> new FieldBusinessException(FIELD_RETURN, "pharmacy.refund.nothingPaid"));
-        BigDecimal paid = nz(paymentRepository.sumPostedForDispense(dispense.getId()));
+        // Review of #1239: the returned share of what was PAID for this fill, never today's list price.
+        BigDecimal paid = dispense.getStatus() == DispenseStatus.CANCELLED
+                ? BigDecimal.ZERO : nz(paymentRepository.sumPostedForDispense(dispense.getId()));
         PharmacyPaymentMethod paidBy = paymentRepository.findFirstByDispense_IdOrderByCreatedAtAsc(dispense.getId())
                 .map(com.example.hms.model.pharmacy.PharmacyPayment::getPaymentMethod).orElse(null);
-        return new Source(null, dispense.getId(), unitPrice, paid, paidBy);
+        BigDecimal amount = PharmacyRefundAmount.ofDispense(paid, dispense.getQuantityDispensed(), ret,
+                dispense.getCreatedAt());
+        return new Source(null, dispense.getId(), amount, paid, paidBy);
     }
 
     /** How the money goes back: as asked, or the way it was paid. */
@@ -384,7 +422,8 @@ public class PharmacyRefundService {
         return method;
     }
 
-    private static boolean sameStock(SaleLine line, StockTransaction ret) {
+    /** Whether a sale line took the stock a return puts back (the same lot, or the same unlotted medication). */
+    static boolean sameStock(SaleLine line, StockTransaction ret) {
         if (ret.getStockLot() != null) {
             return line.getStockLot() != null && ret.getStockLot().getId().equals(line.getStockLot().getId());
         }

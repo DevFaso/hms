@@ -118,6 +118,9 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
     List<Dispense> findCreatedForDay(@Param("pharmacyId") UUID pharmacyId, @Param("from") LocalDateTime from,
                                      @Param("to") LocalDateTime to);
 
+    /** Review of #1239: a fill read by the reconciliation, only when it is of that pharmacy. */
+    Optional<Dispense> findByIdAndPharmacy_Id(UUID id, UUID pharmacyId);
+
     /** QA D2673 (r65): the fills of one pharmacy handed over (COMPLETED or PARTIAL) in [from, to). */
     @Query("SELECT d FROM Dispense d WHERE d.pharmacy.id = :pharmacyId AND d.dispensedAt >= :from "
          + "AND d.dispensedAt < :to AND d.status IN (com.example.hms.enums.DispenseStatus.COMPLETED, "

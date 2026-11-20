@@ -374,11 +374,14 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     /** How a FEFO override follows a ledger reason; the ledger screen splits on it. */
     static final String FEFO_LEDGER_SEPARATOR = " | FEFO: ";
 
-    /** Movements that take stock off a lot or item, which a return may put back. */
-    private static final Set<StockTransactionType> ISSUED_TYPES =
-            java.util.EnumSet.of(StockTransactionType.DISPENSE, StockTransactionType.TRANSFER, StockTransactionType.SALE);
-    private static final Set<StockTransactionType> RETURNED_TYPES =
-            java.util.EnumSet.of(StockTransactionType.RETURN);
+    /**
+     * Movements that take stock off a lot or item, which a return may put back. The one list (review of #1239):
+     * the cancel of a fill counts what is still out of a lot with it too ({@code DispenseServiceImpl.lotStillOut}).
+     */
+    static final Set<StockTransactionType> ISSUED_TYPES = java.util.Collections.unmodifiableSet(
+            java.util.EnumSet.of(StockTransactionType.DISPENSE, StockTransactionType.TRANSFER, StockTransactionType.SALE));
+    static final Set<StockTransactionType> RETURNED_TYPES = java.util.Collections.unmodifiableSet(
+            java.util.EnumSet.of(StockTransactionType.RETURN));
 
     /**
      * QA D270 (bypass of D208): a manual RETURN put any quantity back, and a

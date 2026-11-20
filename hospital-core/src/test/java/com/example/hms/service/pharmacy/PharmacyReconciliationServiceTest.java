@@ -76,6 +76,7 @@ class PharmacyReconciliationServiceTest {
     @Mock private StockTransactionRepository stockTransactionRepository;
     @Mock private StockLotRepository stockLotRepository;
     @Mock private InventoryItemRepository inventoryItemRepository;
+    @Mock private com.example.hms.repository.pharmacy.PharmacyPriceChangeRepository priceChangeRepository;
     @Mock private RoleValidator roleValidator;
 
     private static final LocalDate DAY = LocalDate.of(2026, 11, 20);
@@ -99,7 +100,7 @@ class PharmacyReconciliationServiceTest {
     void setUp() {
         service = new PharmacyReconciliationService(pharmacyRepository, saleRepository, dispenseRepository,
                 paymentRepository, claimRepository, refundRepository, stockTransactionRepository, stockLotRepository,
-                inventoryItemRepository, roleValidator, clock);
+                inventoryItemRepository, new PharmacyPriceHistory(priceChangeRepository), roleValidator, clock);
         Hospital hospital = new Hospital();
         hospital.setId(hospitalId);
         pharmacy = Pharmacy.builder().hospital(hospital).name("Pharmacie centrale").build();
@@ -146,7 +147,7 @@ class PharmacyReconciliationServiceTest {
                 .thenReturn(payments);
         when(refundRepository.findPaidBetween(eq(hospitalId), eq(pharmacy.getId()), any(), any())).thenReturn(refunds);
         when(stockTransactionRepository.findForDay(eq(pharmacy.getId()), any(), any())).thenReturn(movements);
-        when(claimRepository.sumLiveForDispense(any())).thenReturn(BigDecimal.ZERO);
+        when(claimRepository.sumSentForDispense(any())).thenReturn(BigDecimal.ZERO);
     }
 
     private void sale(String quantity, PharmacyPaymentMethod method) {
@@ -365,7 +366,7 @@ class PharmacyReconciliationServiceTest {
     @DisplayName("a fill with no price, or fully covered by its claim, owes nothing at hand-over")
     void unpricedOrCoveredFillsOweNothing() {
         Dispense covered = fill("4", false, true);
-        when(claimRepository.sumLiveForDispense(covered.getId())).thenReturn(new BigDecimal("1000"));
+        when(claimRepository.sumSentForDispense(covered.getId())).thenReturn(new BigDecimal("1000"));
         Dispense unpriced = fill("1", false, true);
         unpriced.setMedicationCatalogItem(null);
 
@@ -373,5 +374,196 @@ class PharmacyReconciliationServiceTest {
 
         assertThat(day.getDifferences()).isEmpty();
         assertThat(day.getMoney().getDispenseCharges()).isEqualByComparingTo("1000");
+    }
+
+    // ───────────────────────── review of #1239 ─────────────────────────
+
+    @Test
+    @DisplayName("review of #1239: a DRAFT claim covers nothing; the fill handed over on it is an unpaid hand-over")
+    void aDraftClaimIsNotCoverage() {
+        Dispense fill = fill("4", false, true);
+        // The claim exists (it bounds what may be claimed) but was never sent to the payer.
+        when(claimRepository.sumLiveForDispense(fill.getId())).thenReturn(new BigDecimal("1000"));
+        when(claimRepository.sumSentForDispense(fill.getId())).thenReturn(BigDecimal.ZERO);
+
+        PharmacyReconciliationDTO day = service.daily(pharmacy.getId(), DAY);
+
+        assertThat(day.getDifferences()).singleElement().satisfies(d -> {
+            assertThat(d.getType()).isEqualTo("UNPAID_HANDED_OVER");
+            assertThat(d.getAmount()).isEqualByComparingTo("1000");
+        });
+    }
+
+    private void priceChanged(String oldPrice, String newPrice, LocalDateTime at) {
+        com.example.hms.model.pharmacy.PharmacyPriceChange change =
+                com.example.hms.model.pharmacy.PharmacyPriceChange.builder().inventoryItemId(paracetamol.getId())
+                        .oldPrice(new BigDecimal(oldPrice)).newPrice(new BigDecimal(newPrice)).changedAt(at)
+                        .reason("Nouveau tarif fournisseur").build();
+        paracetamol.setUnitPrice(new BigDecimal(newPrice));
+        when(priceChangeRepository
+                .findFirstByInventoryItemIdAndChangedAtLessThanEqualOrderByChangedAtDescCreatedAtDesc(
+                        eq(paracetamol.getId()), any()))
+                .thenAnswer(inv -> ((LocalDateTime) inv.getArgument(1)).isBefore(at)
+                        ? Optional.empty() : Optional.of(change));
+        when(priceChangeRepository
+                .findFirstByInventoryItemIdAndChangedAtGreaterThanOrderByChangedAtAscCreatedAtAsc(
+                        eq(paracetamol.getId()), any()))
+                .thenAnswer(inv -> ((LocalDateTime) inv.getArgument(1)).isBefore(at)
+                        ? Optional.of(change) : Optional.empty());
+    }
+
+    @Test
+    @DisplayName("review of #1239: a sale is compared with the price in force when it was made, not with today's")
+    void aSaleIsComparedWithThePriceOfItsDay() {
+        // Sold at 9:00 at the 250 of that morning; the price went to 300 at noon.
+        sale("10", PharmacyPaymentMethod.CASH);
+        priceChanged("250", "300", DAY.atTime(12, 0));
+
+        assertThat(service.daily(pharmacy.getId(), DAY).getDifferences())
+                .as("250 was the list price at 9:00").isEmpty();
+
+        // A sale made AFTER the change and still at 250 is 50 a unit under the list.
+        sales.get(0).setSaleDate(DAY.atTime(13, 0));
+        assertThat(service.daily(pharmacy.getId(), DAY).getDifferences()).singleElement().satisfies(d -> {
+            assertThat(d.getType()).isEqualTo("PRICE_NOT_LIST");
+            assertThat(d.getExpected()).isEqualByComparingTo("300");
+            assertThat(d.getAmount()).isEqualByComparingTo("500");
+        });
+    }
+
+    private void ledger(LocalDateTime before, StockTransactionType type, String quantity) {
+        List<Object[]> rows = new ArrayList<>();
+        rows.add(new Object[] {lot.getId(), type, new BigDecimal(quantity)});
+        when(stockTransactionRepository.sumByLotAndTypeBefore(pharmacy.getId(), before)).thenReturn(rows);
+    }
+
+    @Test
+    @DisplayName("review of #1239: every lot's opening + movements is its closing; a lot that drifted is listed")
+    void everyLotBalances() {
+        when(stockLotRepository.findAllWithItemByPharmacyId(pharmacy.getId())).thenReturn(List.of(lot));
+        // 100 received before the day; 12 sold during it (the ledger at closing: +100 -12).
+        ledger(DAY.atStartOfDay(), StockTransactionType.RECEIPT, "100");
+        List<Object[]> closing = new ArrayList<>();
+        closing.add(new Object[] {lot.getId(), StockTransactionType.RECEIPT, new BigDecimal("100")});
+        closing.add(new Object[] {lot.getId(), StockTransactionType.SALE, new BigDecimal("12")});
+        when(stockTransactionRepository.sumByLotAndTypeBefore(pharmacy.getId(), DAY.plusDays(1).atStartOfDay()))
+                .thenReturn(closing);
+        lot.setRemainingQuantity(new BigDecimal("88"));
+
+        PharmacyReconciliationDTO day = service.daily(pharmacy.getId(), DAY);
+        assertThat(day.getDifferences()).isEmpty();
+        assertThat(day.getLotBalances()).singleElement().satisfies(l -> {
+            assertThat(l.getOpening()).isEqualByComparingTo("100");
+            assertThat(l.getMovements()).isEqualByComparingTo("-12");
+            assertThat(l.getClosing()).isEqualByComparingTo("88");
+            assertThat(l.isMatches()).isTrue();
+        });
+
+        // 5 more left the lot since the day closed: its closing is what it holds now, less what moved since.
+        List<Object[]> since = new ArrayList<>();
+        since.add(new Object[] {lot.getId(), StockTransactionType.DISPENSE, new BigDecimal("5")});
+        when(stockTransactionRepository.sumByLotAndTypeFrom(pharmacy.getId(), DAY.plusDays(1).atStartOfDay()))
+                .thenReturn(since);
+        lot.setRemainingQuantity(new BigDecimal("83"));
+        assertThat(service.daily(pharmacy.getId(), DAY).getDifferences()).isEmpty();
+
+        // The lot holds 8 fewer than its movements explain (a quantity changed with no movement).
+        lot.setRemainingQuantity(new BigDecimal("75"));
+        PharmacyReconciliationDTO drifted = service.daily(pharmacy.getId(), DAY);
+        assertThat(drifted.getDifferences()).singleElement().satisfies(d -> {
+            assertThat(d.getType()).isEqualTo("LOT_BALANCE_MISMATCH");
+            assertThat(d.getLotNumber()).isEqualTo("LOT-A-R65-1");
+            assertThat(d.getExpected()).isEqualByComparingTo("88");
+            assertThat(d.getActual()).isEqualByComparingTo("80");
+        });
+        assertThat(new String(service.exportCsv(pharmacy.getId(), DAY), StandardCharsets.UTF_8))
+                .contains("solde_lot", "LOT_BALANCE_MISMATCH");
+    }
+
+    private StockTransaction patientReturn(UUID referenceId, String quantity) {
+        StockTransaction ret = StockTransaction.builder().inventoryItem(paracetamol).stockLot(lot)
+                .transactionType(StockTransactionType.RETURN).quantity(new BigDecimal(quantity))
+                .referenceId(referenceId).build();
+        ret.setId(UUID.randomUUID());
+        movements.add(ret);
+        return ret;
+    }
+
+    @Test
+    @DisplayName("review of #1239: a patient return of a paid sale with no refund asked is listed with what it owes")
+    void aReturnNobodyRefundedIsListed() {
+        sale("10", PharmacyPaymentMethod.CASH);
+        PharmacySale sold = sales.get(0);
+        when(saleRepository.findByIdAndPharmacy_Id(sold.getId(), pharmacy.getId())).thenReturn(Optional.of(sold));
+        StockTransaction ret = patientReturn(sold.getId(), "4");
+
+        assertThat(service.daily(pharmacy.getId(), DAY).getDifferences()).singleElement().satisfies(d -> {
+            assertThat(d.getType()).isEqualTo("RETURN_NOT_REFUNDED");
+            assertThat(d.getReferenceId()).isEqualTo(ret.getId());
+            assertThat(d.getAmount()).as("4 returned at the 250 paid").isEqualByComparingTo("1000");
+        });
+
+        // Once a refund is asked (or decided) for that return, it is no longer a forgotten return.
+        when(refundRepository.findRefundedReturnIds(anyCollection(), anyCollection())).thenReturn(List.of(ret.getId()));
+        assertThat(service.daily(pharmacy.getId(), DAY).getDifferences()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("review of #1239: a return of a paid fill is listed; the stock a cancelled fill puts back is not")
+    void aReturnOfAFill() {
+        Dispense paid = fill("10", true, true);
+        when(dispenseRepository.findByIdAndPharmacy_Id(paid.getId(), pharmacy.getId())).thenReturn(Optional.of(paid));
+        patientReturn(paid.getId(), "2");
+
+        assertThat(service.daily(pharmacy.getId(), DAY).getDifferences()).singleElement().satisfies(d -> {
+            assertThat(d.getType()).isEqualTo("RETURN_NOT_REFUNDED");
+            assertThat(d.getAmount()).as("2 500 paid / 10 x 2").isEqualByComparingTo("500");
+        });
+
+        paid.setStatus(DispenseStatus.CANCELLED);
+        assertThat(service.daily(pharmacy.getId(), DAY).getDifferences())
+                .extracting(PharmacyReconciliationDTO.Difference::getType).doesNotContain("RETURN_NOT_REFUNDED");
+    }
+
+    @Test
+    @DisplayName("review of #1239 (money back twice): refunds paid out above what is still counted as paid are listed")
+    void aRefundAboveWhatIsStillPaidIsListed() {
+        // 500 paid, 250 refunded and paid out, then the payment voided: 750 out for 500 in.
+        Dispense fill = fill("2", false, true);
+        fill.setStatus(DispenseStatus.CANCELLED);
+        fills.clear();
+        when(dispenseRepository.findByIdAndPharmacy_Id(fill.getId(), pharmacy.getId())).thenReturn(Optional.of(fill));
+        when(refundRepository.findRefundedDispensesVoidedBetween(eq(hospitalId), eq(pharmacy.getId()), any(), any()))
+                .thenReturn(List.of(fill.getId()));
+        when(refundRepository.sumForDispense(eq(fill.getId()), anyCollection())).thenReturn(new BigDecimal("250"));
+        movements.clear();
+
+        assertThat(service.daily(pharmacy.getId(), DAY).getDifferences()).singleElement().satisfies(d -> {
+            assertThat(d.getType()).isEqualTo("REFUND_EXCEEDS_PAID");
+            assertThat(d.getReferenceId()).isEqualTo(fill.getId());
+            assertThat(d.getExpected()).isEqualByComparingTo("0");
+            assertThat(d.getActual()).isEqualByComparingTo("250");
+            assertThat(d.getAmount()).isEqualByComparingTo("250");
+        });
+
+        // The same refund on a payment still counted is no difference.
+        when(paymentRepository.sumPostedForDispense(fill.getId())).thenReturn(new BigDecimal("500"));
+        assertThat(service.daily(pharmacy.getId(), DAY).getDifferences()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("review of #1239: a sale refunded above its total is listed on the day the refund is paid")
+    void aSaleRefundedAboveItsTotalIsListed() {
+        sale("2", PharmacyPaymentMethod.CASH);
+        PharmacySale sold = sales.get(0);
+        when(saleRepository.findByIdAndPharmacy_Id(sold.getId(), pharmacy.getId())).thenReturn(Optional.of(sold));
+        refunds.add(PharmacyRefund.builder().saleId(sold.getId()).amount(new BigDecimal("600"))
+                .status(PharmacyRefundStatus.PAID).paidAt(DAY.atTime(16, 0)).build());
+        when(refundRepository.sumForSale(eq(sold.getId()), anyCollection())).thenReturn(new BigDecimal("600"));
+
+        assertThat(service.daily(pharmacy.getId(), DAY).getDifferences()).singleElement().satisfies(d -> {
+            assertThat(d.getType()).isEqualTo("REFUND_EXCEEDS_PAID");
+            assertThat(d.getAmount()).as("600 out for 500 in").isEqualByComparingTo("100");
+        });
     }
 }

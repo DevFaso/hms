@@ -41,6 +41,9 @@ public interface PharmacySaleRepository extends JpaRepository<PharmacySale, UUID
     @org.springframework.data.jpa.repository.Query("SELECT s FROM PharmacySale s WHERE s.id = :id")
     java.util.Optional<PharmacySale> findLockedById(@org.springframework.data.repository.query.Param("id") UUID id);
 
+    /** Review of #1239: a sale read by the reconciliation, only when it is of that pharmacy. */
+    java.util.Optional<PharmacySale> findByIdAndPharmacy_Id(UUID id, UUID pharmacyId);
+
     /** QA D2673 (r65): the sales of one pharmacy of the hospital in [from, to), oldest first. */
     @org.springframework.data.jpa.repository.Query("SELECT s FROM PharmacySale s WHERE s.hospital.id = :hospitalId "
          + "AND s.pharmacy.id = :pharmacyId AND s.saleDate >= :from AND s.saleDate < :to ORDER BY s.saleDate")

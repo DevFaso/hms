@@ -19,6 +19,15 @@
 --   movement. Whole francs, > 0. No card data is stored: reference and reasons
 --   are refused by the service when they hold a card number.
 --
+-- clinical.inventory_items.pack_size_set_at (review of #1239) - when the pack
+--   size was set. A sale, fill or return recorded before it is counted in
+--   packs, one recorded after in units; a refund converts between the two.
+--
+-- clinical.pharmacy_price_changes (review of #1239) - the history of an item's
+--   selling price: every change with the old and the new price, the reason,
+--   who and when. The reconciliation compares a sale with the price in force
+--   when it was made, not with today's. Append-only.
+--
 -- Stock movements of type SALE (D2670) need no DDL: transaction_type is a
 -- VARCHAR(30) with no CHECK.
 --
@@ -30,6 +39,32 @@ ALTER TABLE clinical.inventory_items ADD COLUMN IF NOT EXISTS pack_unit VARCHAR(
 ALTER TABLE clinical.inventory_items DROP CONSTRAINT IF EXISTS ck_inv_units_per_pack;
 ALTER TABLE clinical.inventory_items ADD CONSTRAINT ck_inv_units_per_pack
     CHECK (units_per_pack IS NULL OR units_per_pack >= 2);
+
+ALTER TABLE clinical.inventory_items ADD COLUMN IF NOT EXISTS pack_size_set_at TIMESTAMP;
+
+CREATE TABLE IF NOT EXISTS clinical.pharmacy_price_changes (
+    id                 UUID           NOT NULL DEFAULT gen_random_uuid(),
+    hospital_id        UUID           NOT NULL,
+    pharmacy_id        UUID           NOT NULL,
+    inventory_item_id  UUID           NOT NULL,
+    old_price          NUMERIC(12, 2),
+    new_price          NUMERIC(12, 2),
+    reason             VARCHAR(500)   NOT NULL,
+    changed_by         UUID           NOT NULL,
+    changed_at         TIMESTAMP      NOT NULL,
+    created_at         TIMESTAMP      NOT NULL DEFAULT now(),
+    updated_at         TIMESTAMP      NOT NULL DEFAULT now(),
+
+    CONSTRAINT pk_pharmacy_price_changes PRIMARY KEY (id),
+    CONSTRAINT fk_pprice_hospital        FOREIGN KEY (hospital_id) REFERENCES hospital.hospitals (id),
+    CONSTRAINT fk_pprice_pharmacy        FOREIGN KEY (pharmacy_id) REFERENCES clinical.pharmacies (id),
+    CONSTRAINT fk_pprice_item            FOREIGN KEY (inventory_item_id) REFERENCES clinical.inventory_items (id),
+    CONSTRAINT ck_pprice_old             CHECK (old_price IS NULL OR old_price >= 0),
+    CONSTRAINT ck_pprice_new             CHECK (new_price IS NULL OR new_price >= 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pprice_item_changed ON clinical.pharmacy_price_changes (inventory_item_id, changed_at);
+CREATE INDEX IF NOT EXISTS idx_pprice_hospital ON clinical.pharmacy_price_changes (hospital_id);
 
 ALTER TABLE clinical.dispenses ADD COLUMN IF NOT EXISTS billing_deferred_reason VARCHAR(500);
 ALTER TABLE clinical.dispenses ADD COLUMN IF NOT EXISTS billing_deferred_by UUID;

@@ -95,6 +95,13 @@ public class InventoryItem extends BaseEntity {
     @Column(name = "pack_unit", length = 60)
     private String packUnit;
 
+    /**
+     * Review of #1239 (V311): when the pack size was set. What was recorded before it (a sale line, a fill, a return)
+     * counts packs, what was recorded after counts {@link #unit}; a refund converts between the two.
+     */
+    @Column(name = "pack_size_set_at")
+    private java.time.LocalDateTime packSizeSetAt;
+
     @Column(name = "active", nullable = false)
     @Builder.Default
     private boolean active = true;

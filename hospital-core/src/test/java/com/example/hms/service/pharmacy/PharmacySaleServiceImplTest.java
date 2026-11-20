@@ -256,7 +256,7 @@ class PharmacySaleServiceImplTest {
         other.setId(otherPharmacyId);
 
         InventoryItem invItem = InventoryItem.builder().pharmacy(other).build();
-        StockLot lot = StockLot.builder().inventoryItem(invItem).build();
+        StockLot lot = StockLot.builder().inventoryItem(invItem).expiryDate(java.time.LocalDate.now().plusYears(1)).build();
         lot.setId(stockLotId);
 
         SaleLineRequestDTO l = line(BigDecimal.ONE, BigDecimal.TEN);
@@ -282,7 +282,7 @@ class PharmacySaleServiceImplTest {
         UUID stockLotId = UUID.randomUUID();
         InventoryItem invItem = stocked;
         stocked.setUnit("comprimé");
-        StockLot lot = StockLot.builder().inventoryItem(invItem).build();
+        StockLot lot = StockLot.builder().inventoryItem(invItem).expiryDate(java.time.LocalDate.now().plusYears(1)).build();
         lot.setId(stockLotId);
         SaleLineRequestDTO l = line(new BigDecimal("2.5"), BigDecimal.TEN);
         l.setStockLotId(stockLotId);
@@ -307,7 +307,7 @@ class PharmacySaleServiceImplTest {
     void rejectsALineSkippingTheShorterDatedLot() {
         UUID stockLotId = UUID.randomUUID();
         InventoryItem invItem = stocked;
-        StockLot lot = StockLot.builder().inventoryItem(invItem).build();
+        StockLot lot = StockLot.builder().inventoryItem(invItem).expiryDate(java.time.LocalDate.now().plusYears(1)).build();
         lot.setId(stockLotId);
         SaleLineRequestDTO l = line(BigDecimal.ONE, BigDecimal.TEN);
         l.setStockLotId(stockLotId);
@@ -333,7 +333,7 @@ class PharmacySaleServiceImplTest {
     @DisplayName("review of #975: the lines of a sale together never take more than the lot holds")
     void linesTakingMoreThanTheLotHoldsAreRefused() {
         InventoryItem invItem = stocked;
-        StockLot lot = StockLot.builder().inventoryItem(invItem).lotNumber("R16-PCM-COURT")
+        StockLot lot = StockLot.builder().inventoryItem(invItem).expiryDate(java.time.LocalDate.now().plusYears(1)).lotNumber("R16-PCM-COURT")
                 .remainingQuantity(BigDecimal.TEN).build();
         lot.setId(UUID.randomUUID());
         SaleLineRequestDTO first = line(new BigDecimal("6"), null);
@@ -360,9 +360,9 @@ class PharmacySaleServiceImplTest {
     @DisplayName("review of #975: each line is judged on what the other lines of the same sale take, in any order")
     void aSaleSplitAcrossLotsTellsTheRuleWhatTheOtherLinesTake() {
         InventoryItem invItem = stocked;
-        StockLot shortLot = StockLot.builder().inventoryItem(invItem).build();
+        StockLot shortLot = StockLot.builder().inventoryItem(invItem).expiryDate(java.time.LocalDate.now().plusYears(1)).build();
         shortLot.setId(UUID.randomUUID());
-        StockLot longLot = StockLot.builder().inventoryItem(invItem).build();
+        StockLot longLot = StockLot.builder().inventoryItem(invItem).expiryDate(java.time.LocalDate.now().plusYears(1)).build();
         longLot.setId(UUID.randomUUID());
         // Entered long lot first: the order of the lines does not matter.
         SaleLineRequestDTO fromLong = line(new BigDecimal("5"), null);
@@ -394,7 +394,7 @@ class PharmacySaleServiceImplTest {
     void aFefoReasonThatOverflowsTheLineNotesIsRefused() {
         UUID stockLotId = UUID.randomUUID();
         InventoryItem invItem = stocked;
-        StockLot lot = StockLot.builder().inventoryItem(invItem).build();
+        StockLot lot = StockLot.builder().inventoryItem(invItem).expiryDate(java.time.LocalDate.now().plusYears(1)).build();
         lot.setId(stockLotId);
         SaleLineRequestDTO l = line(BigDecimal.ONE, BigDecimal.TEN);
         l.setStockLotId(stockLotId);
@@ -600,11 +600,60 @@ class PharmacySaleServiceImplTest {
     }
 
     private StockLot lotOfStockedItem(String number, String remaining) {
-        StockLot lot = StockLot.builder().inventoryItem(stocked).lotNumber(number)
+        StockLot lot = StockLot.builder().inventoryItem(stocked).expiryDate(java.time.LocalDate.now().plusYears(1)).lotNumber(number)
                 .remainingQuantity(new BigDecimal(remaining)).build();
         lot.setId(UUID.randomUUID());
         when(stockLotRepository.findById(lot.getId())).thenReturn(Optional.of(lot));
         return lot;
+    }
+
+    @Test
+    @DisplayName("review of #1239: an expired lot is never sold (expired ON its expiry date, as for a dispense); nothing is saved or moved")
+    void anExpiredLotIsNeverSold() {
+        stubNewUnkeyedSale();
+        StockLot lot = lotOfStockedItem("LOT-PERIME", "400");
+        SaleLineRequestDTO l = line(BigDecimal.TEN, null);
+        l.setStockLotId(lot.getId());
+        PharmacySaleRequestDTO dto = request(List.of(l));
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.systemDefault());
+
+        for (java.time.LocalDate expiry : List.of(today, today.minusDays(1), today.minusYears(1))) {
+            lot.setExpiryDate(expiry);
+            assertThatThrownBy(() -> service.createSale(dto))
+                    .as("expiry " + expiry)
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .extracting("field", "messageKey")
+                    .containsExactly("stockLotId", "pharmacy.sale.lotExpired");
+        }
+        verify(saleRepository, never()).save(any());
+        verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
+        verify(stockTransactionRepository, never()).save(any());
+
+        // The day before its expiry date the lot is still sold.
+        lot.setExpiryDate(today.plusDays(1));
+        service.createSale(dto);
+        verify(saleRepository).save(any(PharmacySale.class));
+    }
+
+    @Test
+    @DisplayName("billing review of #1239: every sale line and the sale total are whole francs, whatever the unit price (a till counts no centimes)")
+    void saleLinesAndTotalsAreWholeFrancs() {
+        stubNewUnkeyedSale();
+        // A box of 3 at 250 F converted to units: 83.33 F a unit.
+        stocked.setUnitPrice(new BigDecimal("83.33"));
+        PharmacySaleRequestDTO dto = request(List.of(line(BigDecimal.ONE, null), line(BigDecimal.valueOf(2), null)));
+
+        service.createSale(dto);
+
+        ArgumentCaptor<PharmacySale> captor = ArgumentCaptor.forClass(PharmacySale.class);
+        verify(saleRepository).save(captor.capture());
+        PharmacySale saved = captor.getValue();
+        assertThat(saved.getLines()).extracting(com.example.hms.model.pharmacy.SaleLine::getLineTotal)
+                .allSatisfy(total -> assertThat(total.remainder(BigDecimal.ONE)).isEqualByComparingTo("0"));
+        assertThat(saved.getLines().get(0).getLineTotal()).isEqualByComparingTo("83");
+        assertThat(saved.getLines().get(1).getLineTotal()).isEqualByComparingTo("167");
+        assertThat(saved.getTotalAmount()).isEqualByComparingTo("250");
+        assertThat(saved.getTotalAmount().remainder(BigDecimal.ONE)).isEqualByComparingTo("0");
     }
 
     @Test

@@ -34,6 +34,8 @@ public class PharmacyReconciliationDTO {
     private List<Difference> differences;
     private List<ControlledBalance> controlled;
     private List<DeferredFill> deferred;
+    /** Review of #1239: every lot's balance, opening + movements of the day against its closing. */
+    private List<LotBalance> lotBalances;
 
     /** The money of the day: what came in at the counter and the checkout, and what went out as refunds. */
     @Getter
@@ -90,7 +92,12 @@ public class PharmacyReconciliationDTO {
     @AllArgsConstructor
     @Builder
     public static class Difference {
-        /** SALE_STOCK_MISMATCH, DISPENSE_STOCK_MISMATCH, PRICE_NOT_LIST, UNPAID_HANDED_OVER, CONTROLLED_BALANCE. */
+        /**
+         * SALE_STOCK_MISMATCH, DISPENSE_STOCK_MISMATCH, PRICE_NOT_LIST, UNPAID_HANDED_OVER, CONTROLLED_BALANCE,
+         * LOT_BALANCE_MISMATCH (a lot whose opening + movements is not its closing), RETURN_NOT_REFUNDED (a patient
+         * return of a paid sale or fill with no refund asked), REFUND_EXCEEDS_PAID (refunds paid out above what is
+         * still counted as paid: money given back twice).
+         */
         private String type;
         private String medicationName;
         private String lotNumber;
@@ -111,6 +118,27 @@ public class PharmacyReconciliationDTO {
         private String medicationName;
         private BigDecimal registerBalance;
         private BigDecimal stockBalance;
+        private boolean matches;
+    }
+
+    /**
+     * Review of #1239: one lot over the day. {@code opening} is the ledger's balance when the day began,
+     * {@code movements} what the ledger moved during it (signed), {@code closing} the stock the lot really held when
+     * the day ended (what it holds now, less what moved since). {@code matches} is opening + movements = closing.
+     */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class LotBalance {
+        private UUID stockLotId;
+        private UUID inventoryItemId;
+        private String medicationName;
+        private String lotNumber;
+        private BigDecimal opening;
+        private BigDecimal movements;
+        private BigDecimal closing;
         private boolean matches;
     }
 

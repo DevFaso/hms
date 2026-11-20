@@ -327,8 +327,8 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
     }
 
     /**
-     * The lot a line is sold from: of the selling pharmacy and of the line's own medication (QA D2670: a lot of
-     * another drug would take the wrong shelf down).
+     * The lot a line is sold from: of the selling pharmacy, of the line's own medication (QA D2670: a lot of
+     * another drug would take the wrong shelf down), and not expired (review of #1239).
      */
     private StockLot sellingLot(SaleLineRequestDTO lineDto, Pharmacy pharmacy, InventoryItem stocked) {
         StockLot lot = stockLotRepository.findById(lineDto.getStockLotId())
@@ -341,6 +341,13 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
         }
         if (!stocked.getId().equals(lot.getInventoryItem().getId())) {
             throw new com.example.hms.exception.FieldBusinessException("stockLotId", "pharmacy.sale.lotOtherMedication");
+        }
+        // Review of #1239: an expired lot is never sold, as it is never dispensed. Expired ON its expiry date
+        // (QA D710, the rule of DispenseVerificationService.verifyExpiry and of the goods receipt).
+        java.time.LocalDate expiry = lot.getExpiryDate();
+        if (expiry == null || !expiry.isAfter(java.time.LocalDate.now(java.time.ZoneId.systemDefault()))) {
+            throw new com.example.hms.exception.FieldBusinessException("stockLotId", "pharmacy.sale.lotExpired",
+                    lot.getLotNumber(), expiry == null ? "" : com.example.hms.utility.DisplayDates.date(expiry));
         }
         return lot;
     }

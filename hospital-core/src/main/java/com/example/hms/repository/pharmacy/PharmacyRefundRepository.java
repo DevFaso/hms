@@ -40,6 +40,34 @@ public interface PharmacyRefundRepository extends JpaRepository<PharmacyRefund, 
     BigDecimal sumForDispense(@Param("dispenseId") UUID dispenseId,
                               @Param("statuses") Collection<PharmacyRefundStatus> statuses);
 
+    /**
+     * Review of #1239 (money back twice): whether a dispense carries a refund in one of the given states. A fill with
+     * a live refund is not cancelled, because the cancel voids its whole payment.
+     */
+    boolean existsByDispenseIdAndStatusIn(UUID dispenseId, Collection<PharmacyRefundStatus> statuses);
+
+    /**
+     * Review of #1239: the dispenses of one pharmacy that carry a PAID refund and had a payment voided in
+     * [from, to). The reconciliation checks each: the refunds paid must not exceed what is still counted as paid.
+     */
+    @Query("SELECT DISTINCT r.dispenseId FROM PharmacyRefund r WHERE r.hospitalId = :hospitalId "
+         + "AND r.pharmacyId = :pharmacyId AND r.status = com.example.hms.enums.PharmacyRefundStatus.PAID "
+         + "AND r.dispenseId IN (SELECT p.dispense.id FROM PharmacyPayment p "
+         + "WHERE p.status = com.example.hms.enums.PharmacyPaymentStatus.VOIDED "
+         + "AND p.voidedAt >= :from AND p.voidedAt < :to)")
+    List<UUID> findRefundedDispensesVoidedBetween(@Param("hospitalId") UUID hospitalId,
+                                                  @Param("pharmacyId") UUID pharmacyId,
+                                                  @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /**
+     * Review of #1239 (RETURN_NOT_REFUNDED): of these RETURN movements, the ones a refund in one of the given
+     * states names.
+     */
+    @Query("SELECT r.returnTransactionId FROM PharmacyRefund r WHERE r.returnTransactionId IN :returnIds "
+         + "AND r.status IN :statuses")
+    List<UUID> findRefundedReturnIds(@Param("returnIds") Collection<UUID> returnIds,
+                                     @Param("statuses") Collection<PharmacyRefundStatus> statuses);
+
     /** Refunds paid out at one pharmacy of the hospital in [from, to): money out of the day. */
     @Query("SELECT r FROM PharmacyRefund r WHERE r.hospitalId = :hospitalId AND r.pharmacyId = :pharmacyId "
          + "AND r.status = com.example.hms.enums.PharmacyRefundStatus.PAID AND r.paidAt >= :from AND r.paidAt < :to "
