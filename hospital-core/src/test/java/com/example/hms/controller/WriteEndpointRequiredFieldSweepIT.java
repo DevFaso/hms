@@ -210,6 +210,9 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
             "a null category clears the visit's explicit tag (documented on SensitivityTagRequestDTO)"),
         Map.entry("PUT /patients/{patientId}/diagnoses/{diagnosisId}/sensitivity",
             "D2730: a null category clears the problem's own tag (documented on SensitivityTagRequestDTO)"),
+        Map.entry("PUT /hospitals/{hospitalId}/adolescent-confidentiality-age",
+            "policy 2026-11-20: a null age returns the hospital to the provisional default"
+                + " (documented on UpdateAdolescentConfidentialityAgeRequestDTO)"),
         Map.entry("POST /patients/{patientId}/record-sharing/opt-out",
             "the patient's own refusal to share; the reason is optional"),
         Map.entry("POST /super-admin/hospitals/{hospitalId}/restore",

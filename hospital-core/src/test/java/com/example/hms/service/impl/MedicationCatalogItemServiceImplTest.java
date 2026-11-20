@@ -340,6 +340,42 @@ class MedicationCatalogItemServiceImplTest {
         verify(catalogRepository).save(item);
     }
 
+    // Policy 2026-11-20 (provisional): a medicine's sensitive category.
+
+    @Test
+    void update_setsTheSensitiveCategory_andAuditsIt() {
+        when(catalogRepository.findByIdAndHospital_Id(itemId, hospitalId)).thenReturn(Optional.of(item));
+        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
+        requestDTO.setSensitivityCategory(com.example.hms.enums.SensitivityCategory.HIV);
+
+        service.update(itemId, requestDTO);
+
+        assertThat(item.getSensitivityCategory()).isEqualTo(com.example.hms.enums.SensitivityCategory.HIV);
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType())
+            .isEqualTo(com.example.hms.enums.AuditEventType.CONFIGURATION_CHANGED);
+        assertThat(audit.getValue().getEventDescription()).contains("from null to HIV").doesNotContain("Paracétamol");
+    }
+
+    @Test
+    void update_leftOut_keepsTheSensitiveCategory_andOnlyTheExplicitClearRemovesIt() {
+        item.setSensitivityCategory(com.example.hms.enums.SensitivityCategory.HIV);
+        when(catalogRepository.findByIdAndHospital_Id(itemId, hospitalId)).thenReturn(Optional.of(item));
+        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
+
+        // The full-replace edit carries no category: the tag must survive it.
+        service.update(itemId, requestDTO);
+        assertThat(item.getSensitivityCategory()).isEqualTo(com.example.hms.enums.SensitivityCategory.HIV);
+        verify(auditEventLogService, never()).logEvent(any());
+
+        requestDTO.setClearSensitivityCategory(true);
+        service.update(itemId, requestDTO);
+        assertThat(item.getSensitivityCategory()).isNull();
+        verify(auditEventLogService).logEvent(any());
+    }
+
     @Test
     void update_notFound_throws() {
         when(catalogRepository.findByIdAndHospital_Id(itemId, hospitalId))

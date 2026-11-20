@@ -132,4 +132,17 @@ describe('LabTestConfigComponent - the sensitive category of a test (QA D2730)',
     expect(body['sensitivityCategory']).toBeUndefined();
     expect(body['clearSensitivityCategory']).toBeUndefined();
   });
+
+  it('policy 2026-11-20: only the director is offered « Appliquer les catégories recommandées », and it asks the server nothing until opened', () => {
+    setup(['ROLE_LAB_DIRECTOR'], [definition()]);
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="reco-open"]')).not.toBeNull();
+    httpMock.expectNone((r) => r.url.includes('/sensitivity-recommendations'));
+  });
+
+  it('policy 2026-11-20: a lab scientist is not offered the recommended categories', () => {
+    setup(['ROLE_LAB_SCIENTIST'], [definition()]);
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="reco-open"]')).toBeNull();
+  });
 });

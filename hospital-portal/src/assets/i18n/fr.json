@@ -2100,7 +2100,13 @@
       "PHARMACY_PRICE_CHANGED": "Prix de vente de la pharmacie modifié",
       "REVERSAL_EVENT": "{{what}} : contre-passation {{refund}} sur la facture {{invoice}}",
       "CASH_SESSION_EVENT": "{{what}} : caisse {{session}}",
-      "INVOICE_LINE_PRICED_MANUALLY": "Ligne {{line}} du brouillon {{invoice}} tarifée à la main"
+      "INVOICE_LINE_PRICED_MANUALLY": "Ligne {{line}} du brouillon {{invoice}} tarifée à la main",
+      "SENSITIVE_RESULT_RELEASED": "Résultat sensible ({{category}}) communiqué à un parent ou tuteur vérifié",
+      "PROXY_RELATIONSHIP_VERIFIED": "Lien de parenté de l’accès famille vérifié ({{relationship}})",
+      "SENSITIVITY_RECOMMENDATION_APPLIED": "Catégorie sensible recommandée appliquée : de {{from}} à {{to}}",
+      "MEDICATION_SENSITIVITY_CHANGED": "Catégorie sensible du médicament changée de {{from}} à {{to}}",
+      "ADOLESCENT_AGE_SET": "Âge de confidentialité des adolescents fixé à {{age}} ans",
+      "ADOLESCENT_AGE_RESET": "Âge de confidentialité des adolescents ramené à la valeur par défaut ({{age}} ans)"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -3708,7 +3714,14 @@
     "SENSITIVITY_SUBSTANCE_USE": "Addictologie",
     "SENSITIVITY_BEHAVIOURAL_HEALTH": "Santé mentale",
     "SENSITIVITY_HIV": "VIH",
-    "SENSITIVITY_REPRODUCTIVE_HEALTH": "Santé reproductive"
+    "SENSITIVITY_REPRODUCTIVE_HEALTH": "Santé reproductive",
+    "SENSITIVITY_STI": "Infections sexuellement transmissibles",
+    "SENSITIVITY_VIRAL_HEPATITIS": "Hépatites virales B et C",
+    "SENSITIVITY_PREGNANCY": "Grossesse",
+    "SENSITIVITY_SEXUAL_DOMESTIC_VIOLENCE": "Violences sexuelles et domestiques",
+    "SENSITIVITY_GENETIC": "Tests génétiques",
+    "SENSITIVITY_SICKLE_CELL": "Drépanocytose (génotype)",
+    "SENSITIVITY_TUBERCULOSIS": "Tuberculose (accès restreint)"
   },
   "COST_PANEL": {
     "TITLE": "Coûts par établissement",
@@ -7618,7 +7631,10 @@
         "CASH_SESSION_CLOSED": "Caisse clôturée",
         "CASH_SESSION_REOPENED": "Caisse rouverte",
         "CASH_SESSION_REVIEWED": "Caisse vérifiée",
-        "INVOICE_LINE_PRICED_MANUALLY": "Ligne tarifée à la main"
+        "INVOICE_LINE_PRICED_MANUALLY": "Ligne tarifée à la main",
+        "SENSITIVE_RESULT_RELEASED_TO_PROXY": "Résultat sensible communiqué à un parent",
+        "PROXY_RELATIONSHIP_VERIFIED": "Lien de parenté vérifié",
+        "LAB_SENSITIVITY_RECOMMENDATION_APPLIED": "Catégorie sensible recommandée appliquée"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -8163,7 +8179,10 @@
         "PHARMACY_REFUND": "Remboursement pharmacie",
         "CASH_SESSION": "Caisse",
         "PROBLEM_SENSITIVITY": "Sensibilité du diagnostic",
-        "LAB_TEST_DEFINITION_SENSITIVITY": "Sensibilité de l’examen de laboratoire"
+        "LAB_TEST_DEFINITION_SENSITIVITY": "Sensibilité de l’examen de laboratoire",
+        "PROXY_SENSITIVE_RELEASE": "Communication d’un résultat sensible à un parent",
+        "PATIENT_PROXY": "Accès famille",
+        "HOSPITAL_ADOLESCENT_CONFIDENTIALITY_AGE": "Âge de confidentialité des adolescents"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",
@@ -15246,6 +15265,88 @@
     "TEST_HINT": "Tous les résultats d’un examen classé sont masqués à une personne disposant d’un accès famille, quelle que soit la visite qui l’a prescrit, y compris ceux des versions antérieures. Elle s’applique dès que cette version est active. Seul le directeur du laboratoire peut la modifier.",
     "SAVED": "Catégorie sensible enregistrée.",
     "SAVE_FAILED": "Impossible d’enregistrer la catégorie sensible.",
-    "LOAD_FAILED": "Impossible de charger la catégorie sensible."
+    "LOAD_FAILED": "Impossible de charger la catégorie sensible.",
+    "CATEGORY_STI": "Infections sexuellement transmissibles",
+    "CATEGORY_VIRAL_HEPATITIS": "Hépatites virales B et C",
+    "CATEGORY_PREGNANCY": "Grossesse",
+    "CATEGORY_SEXUAL_DOMESTIC_VIOLENCE": "Violences sexuelles et domestiques",
+    "CATEGORY_GENETIC": "Tests génétiques",
+    "CATEGORY_SICKLE_CELL": "Drépanocytose (génotype)",
+    "CATEGORY_TUBERCULOSIS": "Tuberculose (accès restreint)"
+  },
+  "SENSITIVE_POLICY": {
+    "RECO": {
+      "OPEN": "Appliquer les catégories recommandées",
+      "TITLE": "Catégories sensibles recommandées",
+      "PROVISIONAL": "Liste provisoire, en attente de l’approbation d’un clinicien.",
+      "HINT": "Ces examens du catalogue correspondent à la liste recommandée (VIH, IST, hépatites B et C, grossesse, toxiques, drépanocytose, tests génétiques, tuberculose). Rien n’est appliqué sans votre confirmation : cochez les examens à classer. Un examen hors de cette liste n’est jamais proposé ni classé ici. Les résultats d’un examen classé sont masqués aux personnes disposant d’un accès famille ; chaque catégorie appliquée est tracée dans le journal d’audit.",
+      "LOADING": "Recherche des examens concernés…",
+      "LOAD_FAILED": "Impossible de charger les catégories recommandées.",
+      "EMPTY": "Aucun examen du catalogue ne correspond à la liste recommandée.",
+      "RECOMMENDED": "Catégorie recommandée : {{category}}",
+      "MATCHED_CODE": "Reconnu par son code : {{text}}",
+      "MATCHED_NAME": "Reconnu par son nom : {{text}}",
+      "MATCHED_COMPONENT": "Bilan combiné, reconnu par un de ses composants : {{text}}. Un bilan est masqué en entier.",
+      "REPLACES": "Remplacerait la catégorie actuelle : {{category}}",
+      "ALL_APPLIED": "Toutes les catégories recommandées sont déjà appliquées.",
+      "ALREADY_APPLIED": "Déjà appliquées",
+      "APPLY": "Appliquer aux examens cochés ({{count}})",
+      "APPLIED": "Catégories appliquées : {{count}}.",
+      "APPLY_FAILED": "Impossible d’appliquer les catégories recommandées.",
+      "NOTHING_TICKED": "Cochez au moins un examen à classer."
+    },
+    "RELEASE": {
+      "TITLE": "Résultats masqués à la famille (patient mineur)",
+      "HINT": "Ces résultats sensibles ne sont pas montrés aux parents dans leur accès famille. Un médecin ou une sage-femme qui prend en charge ce patient peut communiquer un résultat VIH à un parent ou un tuteur vérifié, avec un motif ; la communication est tracée. Le résultat VIH d’un mineur n’est jamais bloqué définitivement : les parents y ont droit (loi 030-2008, articles 17 et 18). Seul le VIH peut être communiqué : un résultat lié à des violences ne l’est jamais, les autres catégories ne le sont pas pour l’instant.",
+      "PROVISIONAL": "Règle provisoire, en attente de l’avis d’un juriste. À partir de {{age}} ans, les autres catégories sensibles sont aussi masquées aux parents (âge provisoire, réglable par l’établissement).",
+      "GUARDIANS": "Parents et tuteurs disposant d’un accès famille",
+      "UNNAMED": "Nom non renseigné",
+      "RELATIONSHIP_PARENT": "Père ou mère",
+      "RELATIONSHIP_LEGAL_GUARDIAN": "Tuteur légal",
+      "VERIFIED": "Lien vérifié",
+      "VERIFY": "J’ai vérifié le lien de parenté",
+      "VERIFY_HINT": "Seul un parent ou un tuteur dont le lien a été vérifié par l’établissement peut recevoir un résultat.",
+      "NO_GUARDIAN": "Aucun parent ni tuteur ne dispose d’un accès famille actif pour ce patient.",
+      "RESULTS": "Résultats sensibles validés",
+      "UNNAMED_TEST": "Examen",
+      "RELEASED_TO": "Communiqué à {{name}} le {{date}}",
+      "RELEASE_REASON": "Motif : {{reason}}",
+      "RELEASE": "Communiquer à un parent",
+      "TO_WHOM": "Parent ou tuteur",
+      "CHOOSE": "Choisir…",
+      "REASON": "Motif de la communication",
+      "REASON_HINT": "Obligatoire, {{min}} caractères au moins (par exemple : annonce faite après conseil, à la demande des parents).",
+      "ATTEST": "J’ai vérifié que cette personne est le parent ou le tuteur légal du patient.",
+      "CONFIRM": "Communiquer le résultat",
+      "NO_RESULT": "Aucun résultat sensible validé n’est masqué à la famille.",
+      "VERIFIED_TOAST": "Lien de parenté vérifié.",
+      "VERIFY_FAILED": "Impossible d’enregistrer la vérification.",
+      "RELEASED_TOAST": "Résultat communiqué au parent.",
+      "RELEASE_FAILED": "Impossible de communiquer le résultat.",
+      "REASON_TOO_SHORT": "Le motif doit compter au moins {{min}} caractères.",
+      "ATTEST_REQUIRED": "Confirmez que vous avez vérifié le lien de parenté de cette personne.",
+      "NOT_RELEASABLE": "Non communicable à la famille (seul un résultat VIH peut l’être)."
+    },
+    "AGE": {
+      "TITLE": "Confidentialité des adolescents",
+      "HINT": "À partir de cet âge et jusqu’à 17 ans, les dossiers sensibles d’un mineur (IST, hépatites, grossesse, contraception, santé mentale, addictologie, tests génétiques) sont masqués aux parents dans leur accès famille. En dessous, un parent ou tuteur vérifié les voit. Le VIH reste masqué à tout âge, sauf communication d’un résultat par un clinicien ; les violences restent toujours masquées.",
+      "PROVISIONAL": "Règle provisoire : l’âge de {{age}} ans est emprunté à la pratique internationale. Le Burkina Faso ne fixe pas d’âge légal ; un juriste doit le confirmer.",
+      "LABEL": "Âge à partir duquel les dossiers sensibles sont masqués aux parents",
+      "RESET": "Revenir à {{age}} ans",
+      "USING_DEFAULT": "Valeur provisoire par défaut appliquée : {{age}} ans.",
+      "USING_OWN": "Valeur de l’établissement appliquée : {{age}} ans.",
+      "SAVED": "Âge de confidentialité enregistré.",
+      "SAVE_FAILED": "Impossible d’enregistrer l’âge de confidentialité.",
+      "OUT_OF_RANGE": "Saisissez un âge entre 0 et 18 ans."
+    },
+    "MEDICINE": {
+      "LABEL": "Catégorie sensible de ce médicament",
+      "HINT": "Une ordonnance d’un médicament classé (un antirétroviral, par exemple) est masquée aux personnes disposant d’un accès famille, quelle que soit la visite. Aucune liste n’est préremplie : le choix revient à l’établissement. Règle provisoire, en attente de l’approbation d’un clinicien."
+    },
+    "GRANT": {
+      "TB_SCOPE": "Montrer aussi les dossiers de tuberculose",
+      "TB_SCOPE_HINT": "La tuberculose est en accès restreint : cette personne ne la voit que si vous cochez cette case (utile pour le dépistage de l’entourage). Les autres dossiers sensibles (VIH, IST, grossesse, santé mentale…) ne sont jamais montrés.",
+      "TB_SCOPE_BADGE": "et tuberculose"
+    }
   }
 }

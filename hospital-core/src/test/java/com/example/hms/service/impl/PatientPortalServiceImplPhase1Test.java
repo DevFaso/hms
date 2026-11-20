@@ -138,6 +138,11 @@ class PatientPortalServiceImplPhase1Test {
             new com.example.hms.service.recordaccess.SensitivityClassifierImpl(),
             mock(com.example.hms.repository.LabTestDefinitionRepository.class));
 
+    /** Policy 2026-11-20: the grant check hands the verified grant to the read filter. */
+    @org.mockito.Spy
+    private com.example.hms.service.recordaccess.ProxyReadScope proxyReadScope =
+        new com.example.hms.service.recordaccess.ProxyReadScope();
+
     @InjectMocks
     private PatientPortalServiceImpl service;
 

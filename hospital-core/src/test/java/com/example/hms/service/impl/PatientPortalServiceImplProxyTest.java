@@ -54,6 +54,10 @@ class PatientPortalServiceImplProxyTest {
     @Mock private PatientProxyRepository patientProxyRepository;
     @Mock private UserRepository userRepository;
     @Mock private AppointmentService appointmentService;
+    /** Policy 2026-11-20: the grant check hands the verified grant to the read filter. */
+    @org.mockito.Spy
+    private com.example.hms.service.recordaccess.ProxyReadScope proxyReadScope =
+        new com.example.hms.service.recordaccess.ProxyReadScope();
 
     @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
 

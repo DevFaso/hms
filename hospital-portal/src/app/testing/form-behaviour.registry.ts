@@ -32,6 +32,7 @@ import { BreakGlassBannerComponent } from '../patients/break-glass-banner/break-
 import { PatientChannelPreferencesComponent } from '../patients/channel-preferences/patient-channel-preferences.component';
 import { CoverageTabComponent } from '../patients/coverage-tab/coverage-tab.component';
 import { DocumentsTabComponent } from '../patients/documents-tab/documents-tab.component';
+import { FamilyReleaseComponent } from '../patients/family-release/family-release.component';
 import { FluidBalanceTabComponent } from '../patients/fluid-balance/fluid-balance-tab.component';
 import { MedicalHistoryTabComponent } from '../patients/medical-history-tab/medical-history-tab.component';
 import { NationalUniqueIdEditorComponent } from '../patients/national-unique-id-editor.component';
@@ -224,6 +225,11 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'DocumentsTabComponent',
     file: 'patients/documents-tab/documents-tab.component',
     type: DocumentsTabComponent,
+  },
+  {
+    name: 'FamilyReleaseComponent',
+    file: 'patients/family-release/family-release.component',
+    type: FamilyReleaseComponent,
   },
   {
     name: 'FluidBalanceTabComponent',

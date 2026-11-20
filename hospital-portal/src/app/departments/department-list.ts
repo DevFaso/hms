@@ -14,6 +14,7 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
 import { missingRequiredMessage } from '../shared/required-fields';
 import { storedLang } from '../shared/i18n/app-locale';
+import { AdolescentAgeSettingComponent } from '../shared/sensitivity/adolescent-age-setting';
 
 /** The backend's DepartmentResponseDTO (guarded by scripts/check-department-dto.test.mjs). */
 export interface Department {
@@ -61,6 +62,7 @@ interface DepartmentRequest {
   selector: 'app-department-list',
   standalone: true,
   imports: [
+    AdolescentAgeSettingComponent,
     PhoneFieldDirective,
     SubmitGuardDirective,
     ModalDialogDirective,
@@ -104,6 +106,16 @@ export class DepartmentListComponent implements OnInit {
     { code: 'es', labelKey: 'DEPARTMENTS.NAME_IN_ES' },
   ];
   langNames: Record<string, string> = this.emptyLangNames();
+
+  /**
+   * Policy 2026-11-20: the adolescent confidentiality age is the hospital
+   * admin's (or a super-admin's) to set, for the hospital they act in.
+   */
+  adolescentAgeHospitalId(): string | null {
+    if (!this.roleContext.hasAnyActiveRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']))
+      return null;
+    return this.roleContext.effectiveHospitalIdForRequest();
+  }
 
   /** Receptionist gets read-only access — no create/edit/delete */
   canManage = !this.roleContext.isReceptionist();

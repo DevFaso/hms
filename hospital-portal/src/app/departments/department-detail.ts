@@ -1,3 +1,7 @@
+import {
+  SENSITIVITY_CATEGORIES as SHARED_SENSITIVITY_CATEGORIES,
+  SensitivityCategory as SharedSensitivityCategory,
+} from '../shared/sensitivity/sensitivity-category';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -36,14 +40,9 @@ interface DepartmentSensitivity {
   departmentDefault: SensitivityCategory | null;
 }
 
-export type SensitivityCategory =
-  'SUBSTANCE_USE' | 'BEHAVIOURAL_HEALTH' | 'HIV' | 'REPRODUCTIVE_HEALTH';
-export const SENSITIVITY_CATEGORIES: SensitivityCategory[] = [
-  'SUBSTANCE_USE',
-  'BEHAVIOURAL_HEALTH',
-  'HIV',
-  'REPRODUCTIVE_HEALTH',
-];
+// Policy 2026-11-20: one list of categories for the whole portal (shared/sensitivity).
+export type SensitivityCategory = SharedSensitivityCategory;
+export const SENSITIVITY_CATEGORIES: readonly SensitivityCategory[] = SHARED_SENSITIVITY_CATEGORIES;
 
 interface DepartmentStats {
   totalStaff: number;

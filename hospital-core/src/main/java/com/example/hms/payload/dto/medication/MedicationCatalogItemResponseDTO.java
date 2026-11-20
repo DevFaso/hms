@@ -33,6 +33,8 @@ public class MedicationCatalogItemResponseDTO {
     private String category;
     private boolean essentialList;
     private boolean controlled;
+    /** Policy 2026-11-20: the sensitive category this medicine reveals; null for none. */
+    private com.example.hms.enums.SensitivityCategory sensitivityCategory;
     /** QA D935: mg per kg per dose, or null when the catalogue holds no ceiling. */
     private java.math.BigDecimal pediatricMaxDoseMgPerKg;
     /** Round 18 (QA D935): the rest of the paediatric limits, their source and approval. */

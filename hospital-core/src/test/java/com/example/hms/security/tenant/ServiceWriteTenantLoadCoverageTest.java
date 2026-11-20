@@ -102,6 +102,12 @@ class ServiceWriteTenantLoadCoverageTest {
     private static final Map<String, String> RECORDED = Map.ofEntries(
         Map.entry("PatientImagingPortalService.openImage#findById",
             "QA D2342: a patient read, owned by patient id (the token's or the proxy grant's), never by hospital; another patient's image is 404"),
+        // Policy 2026-11-20: the proxy read filter judges rows of the grant's patient, from every hospital
+        // that holds them; it reads a catalogue row's category to decide whether to WITHHOLD, and returns none.
+        Map.entry("ProxyRecordFilter.medicineCategory#findById",
+            "a proxy read, owned by the grant's patient: the category of the medicine a prescription names; withholds, returns no row"),
+        Map.entry("ProxyRecordFilter.admitsPricedFrom#findById",
+            "a proxy read, owned by the grant's patient: the category of the test an invoice line is priced from; withholds, returns no row"),
         // V312: the patient notification ledger and its sweep run with no request tenant (after commit, or a
         // scheduler thread). The ids come from the action that queued the row, which was tenant-checked
         // itself; the sweep only decides whether to send and never returns the rows to a caller.

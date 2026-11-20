@@ -57,7 +57,9 @@ import { refusalReason } from '../../shared/refusal-reason';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
+import { serverDateOrInstant } from '../../shared/date-utils';
 import { SensitivitySelectComponent } from '../../shared/sensitivity/sensitivity-select';
+import { FamilyReleaseComponent } from '../family-release/family-release.component';
 import {
   SensitivityCategory,
   sensitivityLabelKey,
@@ -78,6 +80,7 @@ const UNSCOPED_KEY = 'UNSCOPED';
   selector: 'app-patient-chart',
   standalone: true,
   imports: [
+    FamilyReleaseComponent,
     SensitivitySelectComponent,
     DateTimePipe,
     SubmitGuardDirective,
@@ -109,6 +112,11 @@ export class PatientChartComponent implements OnInit, OnChanges {
   @Input() refreshToken = 0;
   /** QA D1005 review: the pregnancy line is asked for only when the patient may be pregnant. */
   @Input() patientGender: string | null | undefined = undefined;
+  /**
+   * Policy 2026-11-20: the release of a sensitive result to a parent is asked
+   * for only when the patient is under 18.
+   */
+  @Input() patientDateOfBirth: string | null | undefined = undefined;
 
   /** E9 #64 — "Ouvrir avec motif" on a restricted line; the host opens the declaration. */
   readonly openRestricted = output<void>();
@@ -198,6 +206,31 @@ export class PatientChartComponent implements OnInit, OnChanges {
       !!this.hospitalId() &&
       this.roleContext.hasAnyActiveRole(actionRoles('problemSensitivityTag')),
   );
+  /**
+   * Policy 2026-11-20 (provisional): a doctor or a midwife releases a minor's
+   * sensitive result to a verified parent or guardian (the server also checks
+   * that they have care of the patient).
+   */
+  canReleaseToFamily(): boolean {
+    return (
+      this.isUnder18() &&
+      !!this.hospitalId() &&
+      this.roleContext.hasAnyActiveRole(actionRoles('minorResultRelease'))
+    );
+  }
+
+  /** Whole years since the date of birth; an unknown date reads as an adult, as on the server. */
+  private isUnder18(): boolean {
+    const born = this.patientDateOfBirth ? serverDateOrInstant(this.patientDateOfBirth) : null;
+    if (!born || Number.isNaN(born.getTime())) return false;
+    const today = new Date();
+    let age = today.getFullYear() - born.getFullYear();
+    const beforeBirthday =
+      today.getMonth() < born.getMonth() ||
+      (today.getMonth() === born.getMonth() && today.getDate() < born.getDate());
+    if (beforeBirthday) age -= 1;
+    return age >= 0 && age < 18;
+  }
   readonly showProblemActions = computed(
     () => this.canEditProblems() || this.canRemoveProblems() || this.canTagProblems(),
   );

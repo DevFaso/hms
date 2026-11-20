@@ -218,6 +218,8 @@ class DeceasedPatientCareGuardTest {
         Map.entry("NursingNote", RECORDS), Map.entry("PatientEducation", RECORDS),
         Map.entry("PatientHospitalRegistration", RECORDS), Map.entry("PatientPhoto", RECORDS), Map.entry("PatientRoi", RECORDS),
         Map.entry("RecordAccess", RECORDS), Map.entry("RoiWorklist", RECORDS), Map.entry("SensitivityTagging", RECORDS),
+        // Policy 2026-11-20: releasing an existing result to a parent is a disclosure, not new care.
+        Map.entry("MinorResultRelease", RECORDS), Map.entry("HospitalAdolescentConfidentialityAge", NOT_CARE),
         Map.entry("Hl7Inbound", INBOUND), Map.entry("InstrumentOutbox", INBOUND), Map.entry("PartnerSmsWebhook", INBOUND),
         Map.entry("SuperAdminIntegrationMessage", INBOUND),
         Map.entry("AdtIntakeProviderConfig", NOT_CARE), Map.entry("Announcement", NOT_CARE), Map.entry("ApiKey", NOT_CARE),
