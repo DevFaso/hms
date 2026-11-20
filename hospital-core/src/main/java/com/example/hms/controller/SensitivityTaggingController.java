@@ -45,6 +45,8 @@ public class SensitivityTaggingController {
      */
     static final String TAG_ROLES = "hasAnyAuthority("
         + "'ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')";
+    static final String PROBLEM_TAG_ROLES =
+        "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')";
     static final String DEPARTMENT_ROLES = "hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')";
 
     private final SensitivityTaggingService taggingService;
@@ -71,6 +73,22 @@ public class SensitivityTaggingController {
             Authentication auth) {
         UUID actorUserId = authUtils.resolveUserId(auth).orElse(null);
         return ResponseEntity.ok(taggingService.tagEncounter(encounterId, body.category(), actorUserId));
+    }
+
+    @Operation(summary = "Tag a problem-list entry with a sensitive category",
+        description = "QA D2730: a tagged problem is withheld from a family proxy and from another hospital. "
+            + "A null category clears the problem's own tag, after which its visit's category applies.")
+    @WriteAudited(skip = true, reason = "service emits DATA_UPDATE after commit with from/to categories")
+    @PutMapping("/patients/{patientId}/diagnoses/{diagnosisId}/sensitivity")
+    // The clinicians who read the problem list. No super-admin alone (QA D2120): a clinical write.
+    @PreAuthorize(PROBLEM_TAG_ROLES)
+    public ResponseEntity<SensitivityTagResponseDTO> tagProblem(
+            @PathVariable UUID patientId,
+            @PathVariable UUID diagnosisId,
+            @Valid @RequestBody SensitivityTagRequestDTO body,
+            Authentication auth) {
+        UUID actorUserId = authUtils.resolveUserId(auth).orElse(null);
+        return ResponseEntity.ok(taggingService.tagProblem(patientId, diagnosisId, body.category(), actorUserId));
     }
 
     @Operation(summary = "Read a department's default sensitive category")

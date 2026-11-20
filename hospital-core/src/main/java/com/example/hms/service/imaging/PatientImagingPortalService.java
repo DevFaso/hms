@@ -73,6 +73,9 @@ public class PatientImagingPortalService {
     private final FileUploadService fileUploadService;
     private final RoleValidator roleValidator;
     private final AuditEventLogService auditEventLogService;
+    private final com.example.hms.repository.EncounterRepository encounterRepository;
+    /** QA D2730: what a proxy may read of the grantor's imaging. */
+    private final com.example.hms.service.recordaccess.ProxyRecordFilter proxyRecordFilter;
 
     /** How the patient was reached, for the audit row. */
     public enum Reader { PATIENT, PROXY }
@@ -80,7 +83,7 @@ public class PatientImagingPortalService {
     /** The patient's studies with at least one released report, newest first. */
     @Transactional(readOnly = true)
     public List<PatientImagingStudyDTO> studiesOf(UUID patientId, Reader reader) {
-        List<ImagingOrder> orders = orderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId);
+        List<ImagingOrder> orders = shownTo(reader, orderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId));
         if (orders.isEmpty()) {
             audit(patientId, null, null, readDescription(patientId, reader, 0));
             return List.of();
@@ -108,7 +111,8 @@ public class PatientImagingPortalService {
             .orElseThrow(() -> new ResourceNotFoundException(MSG_IMAGE_NOT_FOUND, imageId));
         ImagingOrder order = image.getImagingOrder();
         if (image.isWithdrawn() || order == null || order.getPatient() == null
-                || !Objects.equals(order.getPatient().getId(), patientId)) {
+                || !Objects.equals(order.getPatient().getId(), patientId)
+                || shownTo(reader, List.of(order)).isEmpty()) {
             throw new ResourceNotFoundException(MSG_IMAGE_NOT_FOUND, imageId);
         }
         boolean studyReleased = reportRepository.findByImagingOrder_IdOrderByReportVersionDesc(order.getId())
@@ -121,6 +125,28 @@ public class PatientImagingPortalService {
         audit(patientId, order, image.getId(), "Imaging image " + image.getId() + " of imaging order " + order.getId()
             + " viewed on the patient portal" + (reader == Reader.PROXY ? " by a proxy" : ""));
         return new ImagingStudyImageService.ImageContent(object, image.getContentType(), image.getId());
+    }
+
+    /**
+     * QA D2730 (r65): a proxy never reads a study ordered in a sensitive visit
+     * ({@code ProxyRecordFilter}). An order names its visit by id; a visit
+     * that cannot be read is treated as sensitive (fails closed). The patient
+     * reads every study.
+     */
+    private List<ImagingOrder> shownTo(Reader reader, List<ImagingOrder> orders) {
+        if (reader != Reader.PROXY || orders.isEmpty()) {
+            return orders;
+        }
+        java.util.Set<UUID> visitIds = orders.stream().map(ImagingOrder::getEncounterId)
+            .filter(Objects::nonNull).collect(Collectors.toSet());
+        java.util.Set<UUID> admittedVisits = visitIds.isEmpty() ? java.util.Set.of()
+            : encounterRepository.findWithDepartmentByIdIn(visitIds).stream()
+                .filter(proxyRecordFilter::admits)
+                .map(com.example.hms.model.Encounter::getId)
+                .collect(Collectors.toSet());
+        return orders.stream()
+            .filter(o -> o.getEncounterId() == null || admittedVisits.contains(o.getEncounterId()))
+            .toList();
     }
 
     private PatientImagingStudyDTO toStudy(ImagingOrder order, List<ImagingReport> releasedReports,

@@ -36,4 +36,18 @@ public interface PatientMedicationService {
      * rows the portal list draws from; drafts are not medications).
      */
     long countMedicationsForPatientPortal(UUID patientId);
+
+    /**
+     * QA D2730 (r65): the grantor's medications as a proxy reads them - the
+     * patient's own list less every prescription written in a sensitive visit
+     * ({@code ProxyRecordFilter}). The caller has already verified the grant.
+     */
+    List<PatientMedicationResponseDTO> getMedicationsForProxy(UUID patientId, int limit);
+
+    /** QA D2730: the paged proxy list, filtered before it is paged. */
+    org.springframework.data.domain.Page<PatientMedicationResponseDTO> getMedicationsPageForProxy(
+        UUID patientId, org.springframework.data.domain.Pageable pageable);
+
+    /** QA D2730: the proxy's total, after the same filter. */
+    long countMedicationsForProxy(UUID patientId);
 }

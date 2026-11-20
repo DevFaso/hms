@@ -57,6 +57,11 @@ import { refusalReason } from '../../shared/refusal-reason';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
+import { SensitivitySelectComponent } from '../../shared/sensitivity/sensitivity-select';
+import {
+  SensitivityCategory,
+  sensitivityLabelKey,
+} from '../../shared/sensitivity/sensitivity-category';
 type ChartSection = 'allergies' | 'problems' | 'updates' | 'timeline' | 'labs';
 
 /** How many lab rows the section asks for; the backend caps `limit` at 100. */
@@ -73,6 +78,7 @@ const UNSCOPED_KEY = 'UNSCOPED';
   selector: 'app-patient-chart',
   standalone: true,
   imports: [
+    SensitivitySelectComponent,
     DateTimePipe,
     SubmitGuardDirective,
     LabValuePipe,
@@ -183,7 +189,18 @@ export class PatientChartComponent implements OnInit, OnChanges {
   readonly canRemoveProblems = computed(
     () => !!this.hospitalId() && this.roleContext.hasAnyActiveRole(actionRoles('diagnosisRemove')),
   );
-  readonly showProblemActions = computed(() => this.canEditProblems() || this.canRemoveProblems());
+  /**
+   * QA D2730: a problem-list entry's sensitive category. A tagged diagnosis is
+   * withheld from a family proxy; the clinicians who read the list set it.
+   */
+  readonly canTagProblems = computed(
+    () =>
+      !!this.hospitalId() &&
+      this.roleContext.hasAnyActiveRole(actionRoles('problemSensitivityTag')),
+  );
+  readonly showProblemActions = computed(
+    () => this.canEditProblems() || this.canRemoveProblems() || this.canTagProblems(),
+  );
   readonly canViewUpdates = computed(() =>
     this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewUpdates]),
   );
@@ -245,6 +262,12 @@ export class PatientChartComponent implements OnInit, OnChanges {
   showProblemDelete = signal(false);
   deletingProblem = signal<PatientProblem | null>(null);
   problemDeleteReason = '';
+
+  /** QA D2730: the entry whose sensitive category is being set, and the choice. */
+  taggingProblem = signal<PatientProblem | null>(null);
+  problemTagChoice = signal<SensitivityCategory | null>(null);
+  problemTagSaving = signal(false);
+  readonly sensitivityLabelKey = sensitivityLabelKey;
 
   readonly problemStatuses: ProblemStatus[] = ['ACTIVE', 'RESOLVED', 'INACTIVE', 'RECURRENCE'];
   readonly problemSeverities: ProblemSeverity[] = [
@@ -780,6 +803,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
       onsetDate: undefined,
       notes: '',
       chronic: false,
+      sensitivityCategory: null,
     };
   }
 
@@ -871,6 +895,39 @@ export class PatientChartComponent implements OnInit, OnChanges {
           this.toast.error(
             refusalReason(err) ?? this.translate.instant('CHART.PROBLEM_SAVE_ERROR'),
           ),
+      });
+  }
+
+  /* ── Problem sensitivity (QA D2730) ── */
+
+  openProblemSensitivity(p: PatientProblem): void {
+    this.problemTagChoice.set(p.sensitivityCategory ?? null);
+    this.taggingProblem.set(p);
+  }
+
+  closeProblemSensitivity(): void {
+    this.taggingProblem.set(null);
+  }
+
+  submitProblemSensitivity(): void {
+    const target = this.taggingProblem();
+    if (!target || !this.canTagProblems()) return;
+    this.problemTagSaving.set(true);
+    this.patientService
+      .setDiagnosisSensitivity(this.patientId, target.id, this.problemTagChoice())
+      .subscribe({
+        next: () => {
+          this.toast.success(this.translate.instant('SENSITIVITY_TAG.SAVED'));
+          this.problemTagSaving.set(false);
+          this.closeProblemSensitivity();
+          this.loadProblems();
+        },
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('SENSITIVITY_TAG.SAVE_FAILED'),
+          );
+          this.problemTagSaving.set(false);
+        },
       });
   }
 

@@ -162,6 +162,8 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
     /** QA D1429: an overbooking is on the audit trail. */
     private final AuditEventLogService auditEventLogService;
+    /** QA D2730: what a proxy may read of the grantor's appointments. */
+    private final com.example.hms.service.recordaccess.ProxyRecordFilter proxyRecordFilter;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -1416,8 +1418,20 @@ public class AppointmentServiceImpl implements AppointmentService {
      */
     @Override
     @Transactional(readOnly = true)
-    public List<AppointmentResponseDTO> getAppointmentsForVerifiedPatient(UUID patientId) {
-        return appointmentRepository.findByPatient_Id(patientId).stream()
+    public List<AppointmentResponseDTO> getAppointmentsForProxy(UUID patientId) {
+        List<com.example.hms.model.Appointment> appointments = appointmentRepository.findByPatient_Id(patientId);
+        // QA D2730 (r65): an appointment names its department and reason, so
+        // one in a sensitive department, or one whose visit was tagged
+        // sensitive, is not a proxy's to read (ProxyRecordFilter).
+        java.util.Set<UUID> sensitiveVisits = appointments.isEmpty() ? java.util.Set.of()
+            : encounterRepository.findByAppointmentIdIn(
+                    appointments.stream().map(com.example.hms.model.Appointment::getId).toList()).stream()
+                .filter(e -> e.getAppointment() != null && !proxyRecordFilter.admits(e))
+                .map(e -> e.getAppointment().getId())
+                .collect(java.util.stream.Collectors.toSet());
+        return appointments.stream()
+            .filter(proxyRecordFilter::admits)
+            .filter(a -> !sensitiveVisits.contains(a.getId()))
             .map(appointmentMapper::toAppointmentResponseDTO)
             .toList();
     }

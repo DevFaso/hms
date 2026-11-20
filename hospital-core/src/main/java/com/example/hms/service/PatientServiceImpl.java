@@ -10,6 +10,7 @@ import com.example.hms.enums.AllergyVerificationStatus;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.ProblemChangeType;
+import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.ProblemStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.FieldBusinessException;
@@ -1878,6 +1879,15 @@ public class PatientServiceImpl implements PatientService {
         problem.setChronic(Boolean.TRUE.equals(request.getChronic()));
         problem.setDiagnosisCodes(new ArrayList<>(DiagnosisCodeValidator.normalizeList(request.getDiagnosisCodes())));
         problem.setLastReviewedAt(LocalDateTime.now());
+        // QA D2730 (r65, High): the problem names the visit it is recorded in,
+        // and carries that visit's category from the start. A diagnosis added
+        // during an HIV-tagged visit was saved untagged, and a caregiver with
+        // family access read it.
+        Encounter sourceVisit = sourceVisitOf(request.getEncounterId(), patient, hospital, staff);
+        problem.setSourceEncounter(sourceVisit);
+        problem.setSensitivityCategory(request.getSensitivityCategory() != null
+            ? request.getSensitivityCategory()
+            : sensitivityClassifier.effectiveCategory(sourceVisit));
 
         patientProblemRepository.save(problem);
         recordProblemHistory(
@@ -1899,6 +1909,37 @@ public class PatientServiceImpl implements PatientService {
             false
         );
         return patientProblemMapper.toResponseDto(problem);
+    }
+
+    /**
+     * QA D2730: the visit a new problem is recorded in. The one the request
+     * names, when it is this patient's at this hospital; otherwise the
+     * patient's open visit there. With several open, the recording clinician's
+     * own come first, then a visit with a sensitive category (so the problem
+     * is withheld rather than shown when the choice is not certain), then the
+     * latest. Null when the patient has no open visit: the problem then has
+     * its own tag or none.
+     */
+    private Encounter sourceVisitOf(UUID requestedEncounterId, Patient patient, Hospital hospital, Staff staff) {
+        if (requestedEncounterId != null) {
+            return encounterRepository.findByIdAndHospital_Id(requestedEncounterId, hospital.getId())
+                .filter(visit -> visit.getPatient() != null && patient.getId().equals(visit.getPatient().getId()))
+                .orElseThrow(() -> new com.example.hms.exception.FieldBusinessException(
+                    "encounterId", "patient.r65.diagnosisVisitNotPatients"));
+        }
+        List<Encounter> open = encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(
+                patient.getId(), hospital.getId(), EncounterStatus.CLOSED).stream()
+            .filter(visit -> visit.getStatus() != EncounterStatus.SCHEDULED && !visit.isPrescriptionAnchor())
+            .toList();
+        List<Encounter> own = open.stream()
+            .filter(visit -> staff != null && visit.getStaff() != null
+                && staff.getId() != null && staff.getId().equals(visit.getStaff().getId()))
+            .toList();
+        return (own.isEmpty() ? open : own).stream()
+            .max(Comparator
+                .comparing((Encounter visit) -> sensitivityClassifier.effectiveCategory(visit) != null)
+                .thenComparing(Encounter::getEncounterDate, Comparator.nullsFirst(Comparator.naturalOrder())))
+            .orElse(null);
     }
 
     @Override

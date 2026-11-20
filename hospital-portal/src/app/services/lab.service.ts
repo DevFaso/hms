@@ -1,3 +1,4 @@
+import { SensitivityCategory } from '../shared/sensitivity/sensitivity-category';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
@@ -248,6 +249,8 @@ export interface LabTestDefinition {
   rejectionReason: string | null;
   /** QA D1120: the ACTIVE definition this version replaces on activation (null for a first version). */
   supersedesDefinitionId?: string | null;
+  /** QA D2730: the sensitive category every result of this test carries; null for none. */
+  sensitivityCategory?: SensitivityCategory | null;
   /** QA D1120: 1 for a first definition. */
   versionNumber?: number | null;
   unit: string | null;
@@ -498,6 +501,10 @@ export interface LabTestDefinitionRequest {
   referenceRanges?: LabTestReferenceRange[];
   /** r63 (NFS panels): omitted leaves them as they are; [] makes it a single-value test. */
   components?: LabTestComponent[];
+  /** QA D2730: the test's sensitive category. Left out, the server keeps the current one. */
+  sensitivityCategory?: SensitivityCategory;
+  /** QA D2730: true removes the category (leaving the field out never does). */
+  clearSensitivityCategory?: boolean;
 }
 
 export type LabSpecimenStatus =

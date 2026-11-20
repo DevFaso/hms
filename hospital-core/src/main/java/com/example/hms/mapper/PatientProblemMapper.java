@@ -11,6 +11,13 @@ import java.util.List;
 @Component
 public class PatientProblemMapper {
 
+    /**
+     * QA D2730: the one rule for a problem's category (its tag, else its
+     * visit's). The classifier holds no state, so the mapper keeps its own.
+     */
+    private static final com.example.hms.service.recordaccess.SensitivityClassifier SENSITIVITY =
+        new com.example.hms.service.recordaccess.SensitivityClassifierImpl();
+
     public PatientProblemResponseDTO toResponseDto(PatientProblem problem) {
         if (problem == null) {
             return null;
@@ -50,6 +57,8 @@ public class PatientProblemMapper {
         .enteredInError(problem.isEnteredInError())
         .chronic(problem.isChronic())
         .diagnosisCodes(problem.getDiagnosisCodes() == null ? List.of() : List.copyOf(problem.getDiagnosisCodes()))
+        .sensitivityCategory(problem.getSensitivityCategory())
+        .effectiveSensitivityCategory(SENSITIVITY.effectiveCategory(problem))
             .build();
     }
 

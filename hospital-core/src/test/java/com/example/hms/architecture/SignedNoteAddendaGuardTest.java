@@ -162,6 +162,66 @@ class SignedNoteAddendaGuardTest {
             .isEmpty();
     }
 
+    /** A patient- or proxy-facing read, by the house naming (the D1910 and D2730 guards use the same). */
+    private static final Pattern CALLED_OR_DECLARED = Pattern.compile("\\b(\\w++)\\s*+\\(");
+
+    private static boolean isPatientRead(String name) {
+        return name.startsWith("toPatientPortal") || name.endsWith("ForPortalPatient")
+            || name.contains("ForPatientPortal") || name.endsWith("ForProxy");
+    }
+
+    /** What hands a reader a raw note or every addendum. */
+    private static final Pattern RAW_NOTE = Pattern.compile(
+        "\\btoEncounterNoteResponseDTO\\(|\\bNoteAddenda\\.of\\(|\\bgetAddenda\\(\\)");
+
+    /** The patient copy: the note shaped by PatientSafeView, or the signed addenda only. */
+    private static final Pattern PATIENT_COPY = Pattern.compile(
+        "\\bPatientSafeView\\.encounterNote\\(|\\bNoteAddenda\\.signedOnly\\(");
+
+    /**
+     * QA D2550 (r65): /me/patient/encounters sent the full note with its UNATTESTED addendum to the patient's
+     * browser; only the screen hid it. Every patient- or proxy-facing read that maps a note, or a note's
+     * addenda, sends the patient copy ({@code PatientSafeView.encounterNote}, {@code NoteAddenda.signedOnly});
+     * and no controller under /me/patient maps a note itself.
+     */
+    @Test
+    void aPatientOrProxyReadSendsThePatientCopyOfANote() throws IOException {
+        List<String> missing = new ArrayList<>();
+        Set<String> readers = new TreeSet<>();
+        try (Stream<Path> files = Files.walk(MAIN)) {
+            for (Path file : files.filter(f -> f.toString().endsWith(".java")).toList()) {
+                String rel = MAIN.relativize(file).toString().replace('\\', '/');
+                if (rel.startsWith("payload/") || rel.startsWith("repository/") || rel.startsWith("model/")) {
+                    continue;
+                }
+                String code = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+                if (rel.startsWith("controller/") && code.contains("\"/me/patient") && RAW_NOTE.matcher(code).find()) {
+                    missing.add(rel + " (a /me/patient controller maps a note itself)");
+                }
+                java.util.regex.Matcher m = CALLED_OR_DECLARED.matcher(code);
+                while (m.find()) {
+                    if (!isPatientRead(m.group(1))) {
+                        continue;
+                    }
+                    String body = SourceScan.methodBody(code, m.group(1));
+                    if (body == null || !RAW_NOTE.matcher(body).find()) {
+                        continue;
+                    }
+                    readers.add(rel + "#" + m.group(1));
+                    if (!PATIENT_COPY.matcher(body).find()) {
+                        missing.add(rel + "#" + m.group(1));
+                    }
+                }
+            }
+        }
+        assertThat(readers).as("the scan found the patient's visit mapper")
+            .contains("mapper/EncounterMapper.java#toPatientPortalEncounterResponseDTO");
+        assertThat(missing)
+            .as("a patient or proxy read sends the patient copy of a note (QA D2550): wrap it in"
+                + " PatientSafeView.encounterNote(...) or take NoteAddenda.signedOnly(note)")
+            .isEmpty();
+    }
+
     private static List<String> dtoClassNames() throws IOException {
         List<String> names = new ArrayList<>();
         try (Stream<Path> files = Files.walk(DTO_ROOT)) {

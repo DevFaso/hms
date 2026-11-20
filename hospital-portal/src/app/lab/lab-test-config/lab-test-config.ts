@@ -28,6 +28,12 @@ import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive'
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 import { refusalReason, refusedFieldReasons } from '../../shared/refusal-reason';
 import { refuseFields } from '../../shared/forms/invalid-fields';
+import { SensitivitySelectComponent } from '../../shared/sensitivity/sensitivity-select';
+import {
+  SensitivityCategory,
+  sensitivityLabelKey,
+} from '../../shared/sensitivity/sensitivity-category';
+import { SERVICE_RULE_ROLES } from '../../core/action-permissions';
 
 /** Every reflex-rule field submitReflexRule() may refuse. */
 const REFLEX_FIELD_IDS = ['reflexTrigger', 'reflexTest', 'reflexValue'];
@@ -58,6 +64,7 @@ const DEF_CONTROL_IDS = [...new Set(Object.values(DEF_FIELD_IDS))];
   selector: 'app-lab-test-config',
   standalone: true,
   imports: [
+    SensitivitySelectComponent,
     SubmitGuardDirective,
     ModalDialogDirective,
     CommonModule,
@@ -93,6 +100,19 @@ export class LabTestConfigComponent implements OnInit {
     'ROLE_HOSPITAL_ADMIN',
     'ROLE_SUPER_ADMIN',
   ]);
+
+  /**
+   * QA D2730: which tests are sensitive is the lab director's decision (the
+   * server refuses anyone else). Every result of a tagged test is withheld
+   * from a family proxy, whatever visit ordered it.
+   */
+  readonly canClassifyTests = this.roleContext.hasAnyActiveRole([
+    ...SERVICE_RULE_ROLES.labTestSensitivity,
+  ]);
+  /** The category chosen in the editor, and the one the definition had when it opened. */
+  defSensitivity = signal<SensitivityCategory | null>(null);
+  private defSensitivityBefore: SensitivityCategory | null = null;
+  readonly sensitivityLabelKey = sensitivityLabelKey;
 
   loading = signal(true);
   error = signal<string | null>(null);
@@ -364,6 +384,8 @@ export class LabTestConfigComponent implements OnInit {
     this.editingDefCrud.set(false);
     this.clinicalFieldsLocked.set(false);
     this.editingDefId.set(null);
+    this.defSensitivityBefore = null;
+    this.defSensitivity.set(null);
     this.showDefModal.set(true);
   }
 
@@ -391,6 +413,8 @@ export class LabTestConfigComponent implements OnInit {
     };
     this.editingDefCrud.set(true);
     this.editingDefId.set(def.id);
+    this.defSensitivityBefore = def.sensitivityCategory ?? null;
+    this.defSensitivity.set(this.defSensitivityBefore);
     this.clinicalFieldsLocked.set(!this.isEditableDraft(def));
     this.showDefModal.set(true);
   }
@@ -402,9 +426,10 @@ export class LabTestConfigComponent implements OnInit {
   submitDefForm(): void {
     refuseFields(this.host.nativeElement, [], DEF_CONTROL_IDS, '');
     this.savingDef.set(true);
+    const body = this.withSensitivity(this.defForm);
     const op = this.editingDefCrud()
-      ? this.labService.updateTestDefinition(this.editingDefId()!, this.defForm)
-      : this.labService.createTestDefinition(this.defForm);
+      ? this.labService.updateTestDefinition(this.editingDefId()!, body)
+      : this.labService.createTestDefinition(body);
     op.subscribe({
       next: () => {
         this.toast.success(
@@ -431,6 +456,19 @@ export class LabTestConfigComponent implements OnInit {
         this.savingDef.set(false);
       },
     });
+  }
+
+  /**
+   * QA D2730: the body with the director's choice. Only a change is sent: a
+   * category picked, or the explicit clear when it was removed. Anyone else's
+   * save names no category, and the server keeps the current one.
+   */
+  private withSensitivity(form: LabTestDefinitionRequest): LabTestDefinitionRequest {
+    const chosen = this.defSensitivity();
+    if (!this.canClassifyTests || chosen === this.defSensitivityBefore) return form;
+    return chosen
+      ? { ...form, sensitivityCategory: chosen }
+      : { ...form, clearSensitivityCategory: true };
   }
 
   confirmDeleteDef(def: LabTestDefinition): void {

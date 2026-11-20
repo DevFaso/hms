@@ -44,7 +44,10 @@ public interface SensitivityClassifier {
     /** Consultations carry no department of their own; theirs comes via the encounter. */
     SensitivityCategory effectiveCategory(Consultation consultation);
 
-    /** Problems attach to patient and hospital only — explicit tag or nothing. */
+    /**
+     * A problem's own tag, else the category of the visit it was recorded in
+     * (QA D2730). A problem recorded outside any visit has its tag or nothing.
+     */
     SensitivityCategory effectiveCategory(PatientProblem problem);
 
     /** Nursing notes attach to patient and hospital only — explicit tag or nothing. */

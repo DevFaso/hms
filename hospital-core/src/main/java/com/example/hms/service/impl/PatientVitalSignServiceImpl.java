@@ -59,6 +59,10 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
     /** QA D1564: the one judgement of a vital set, newborns included. */
     private final com.example.hms.service.vitals.VitalSignJudgement vitalSignJudgement;
     private final com.example.hms.service.support.DischargedPatientGuard dischargedPatientGuard;
+    /** QA D2730: the grantor's visits, to place a vital in a sensitive one. */
+    private final com.example.hms.repository.EncounterRepository encounterRepository;
+    /** QA D2730: what a proxy may read of the grantor's vitals. */
+    private final com.example.hms.service.recordaccess.ProxyRecordFilter proxyRecordFilter;
 
     @Override
     public PatientVitalSignResponseDTO recordVital(UUID patientId,
@@ -169,6 +173,40 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
             .map(responder(null))
             .toList();
     }
+
+    /**
+     * QA D2730 (r65): the proxy's « Dossier de santé » read. A vital names no
+     * visit, so it is placed by its hospital and day against the grantor's
+     * sensitive visits; the rows are read a window at a time until
+     * {@code limit} readable ones are found or the history ends.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<PatientVitalSignResponseDTO> getRecentVitalsForProxy(UUID patientId, int limit) {
+        Patient patient = patientChartAccess.requireOwnRecord(patientId);
+        int wanted = Math.max(1, limit);
+        List<com.example.hms.model.Encounter> sensitiveVisits = proxyRecordFilter.sensitiveAmong(
+            encounterRepository.findVisitsByPatientId(patient.getId(),
+                org.springframework.data.domain.Pageable.unpaged()).getContent());
+        List<PatientVitalSignResponseDTO> shown = new java.util.ArrayList<>();
+        int window = Math.max(wanted, PROXY_VITALS_WINDOW);
+        for (int page = 0; shown.size() < wanted; page++) {
+            List<PatientVitalSign> rows = vitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(
+                patient.getId(), PageRequest.of(page, window));
+            rows.stream()
+                .filter(vital -> proxyRecordFilter.admits(vital, sensitiveVisits))
+                .limit((long) wanted - shown.size())
+                .map(vitalSignMapper::toResponse)
+                .forEach(shown::add);
+            if (rows.size() < window) {
+                break;
+            }
+        }
+        return shown;
+    }
+
+    /** How many vitals one proxy read fetches at a time. */
+    private static final int PROXY_VITALS_WINDOW = 50;
 
     @Override
     @Transactional(readOnly = true)

@@ -27,6 +27,12 @@ public interface BillingInvoiceService {
     Page<BillingInvoiceResponseDTO> getInvoicesForPortalPatient(UUID patientId, Pageable pageable, Locale locale);
 
     /**
+     * QA D2730 (r65): the same invoices as a proxy reads them, less those of a
+     * sensitive visit. The caller has already verified the grant.
+     */
+    Page<BillingInvoiceResponseDTO> getInvoicesForProxy(UUID patientId, Pageable pageable, Locale locale);
+
+    /**
      * QA D974: a discount, a waiver or a credit note on an issued invoice, with
      * its mandatory reason; the total is lowered and the row audited.
      */

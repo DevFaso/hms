@@ -663,6 +663,39 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .map(this::toPortalResponse);
     }
 
+    /**
+     * QA D2730 (r65): the grantor's invoices as a proxy reads them. An
+     * invoice names its visit's services, so one for a sensitive visit is
+     * not a proxy's to read ({@code ProxyRecordFilter}). Filtered before it
+     * is paged, so a page is never short and the total is the proxy's.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<BillingInvoiceResponseDTO> getInvoicesForProxy(UUID patientId, Pageable pageable, Locale locale) {
+        java.util.List<BillingInvoice> shown = invoiceRepository
+            .findByPatient_IdAndStatusNot(patientId, InvoiceStatus.DRAFT,
+                org.springframework.data.domain.PageRequest.of(0, Integer.MAX_VALUE / 2, pageable.getSort()))
+            .getContent().stream()
+            .filter(proxyRecordFilter::admits)
+            .toList();
+        if (pageable.isUnpaged()) {
+            return new org.springframework.data.domain.PageImpl<>(
+                shown.stream().map(this::toPortalResponse).toList(), pageable, shown.size());
+        }
+        int from = (int) Math.min(pageable.getOffset(), shown.size());
+        int to = Math.min(from + pageable.getPageSize(), shown.size());
+        return new org.springframework.data.domain.PageImpl<>(
+            shown.subList(from, to).stream().map(this::toPortalResponse).toList(), pageable, shown.size());
+    }
+
+    /** QA D2730: what a proxy may read of the grantor's invoices. */
+    private com.example.hms.service.recordaccess.ProxyRecordFilter proxyRecordFilter;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setProxyRecordFilter(com.example.hms.service.recordaccess.ProxyRecordFilter proxyRecordFilter) {
+        this.proxyRecordFilter = proxyRecordFilter;
+    }
+
     private com.example.hms.mapper.InvoiceItemMapper invoiceItemMapper;
 
     /** Re-reads a copay under its row lock (see lockCreditableCopay). Setter-injected; absent in unit tests. */

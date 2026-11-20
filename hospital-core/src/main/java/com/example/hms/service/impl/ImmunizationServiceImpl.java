@@ -34,6 +34,9 @@ import com.example.hms.security.context.HospitalContextHolder;
 @Slf4j
 @Transactional
 public class ImmunizationServiceImpl implements ImmunizationService {
+
+    /** A patient this caller cannot read answers as unknown. */
+    private static final String MSG_PATIENT_NOT_FOUND = "patient.notFound";
     private static final String ENCOUNTER_NOT_FOUND_KEY = "encounter.notfound";
     private static final String IMMUNIZATION_NOT_FOUND_KEY = "immunization.notFound";
 
@@ -48,13 +51,15 @@ public class ImmunizationServiceImpl implements ImmunizationService {
     private final ImmunizationMapper immunizationMapper;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    /** QA D2730: what a proxy may read of the grantor's immunizations. */
+    private final com.example.hms.service.recordaccess.ProxyRecordFilter proxyRecordFilter;
 
     @Override
     public ImmunizationResponseDTO createImmunization(ImmunizationRequestDTO requestDTO) {
         log.info("Creating immunization for patient: {}", requestDTO.getPatientId());
 
         Patient patient = patientRepository.findById(requestDTO.getPatientId())
-                .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", requestDTO.getPatientId()));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, requestDTO.getPatientId()));
 
         Hospital hospital = hospitalRepository.findClinicalById(requestDTO.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", requestDTO.getHospitalId()));
@@ -107,7 +112,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.debug("Fetching immunizations for patient: {}", patientId);
 
         if (!patientRepository.existsById(patientId)) {
-            throw new ResourceNotFoundException("patient.notFound", patientId);
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
 
         // E9 #59d — the immunization record follows the patient across the
@@ -145,12 +150,27 @@ public class ImmunizationServiceImpl implements ImmunizationService {
     @Transactional(readOnly = true)
     public List<ImmunizationResponseDTO> getImmunizationsForPatientPortal(UUID patientId) {
         Patient patient = patientRepository.findByIdUnscoped(patientId)
-                .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
+        return portalImmunizations(patient, immunization -> true);
+    }
+
+    /** QA D2730 (r65): the proxy's view, less a dose given in a sensitive visit. */
+    @Override
+    @Transactional(readOnly = true)
+    public List<ImmunizationResponseDTO> getImmunizationsForProxy(UUID patientId) {
+        Patient patient = patientRepository.findByIdUnscoped(patientId)
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
+        return portalImmunizations(patient, proxyRecordFilter::admits);
+    }
+
+    private List<ImmunizationResponseDTO> portalImmunizations(Patient patient,
+            java.util.function.Predicate<PatientImmunization> shown) {
         // QA (round 54, the D1910/D1912 class): a dose removed or marked entered
         // in error is not part of the patient's record; the portal, the apps and
         // the health summary all read through here.
         return immunizationRepository.findByPatient_IdOrderByAdministrationDateDesc(patient.getId()).stream()
                 .filter(ImmunizationServiceImpl::isLiveRecord)
+                .filter(shown)
                 .map(immunizationMapper::toResponseDTO)
                 .toList();
     }
@@ -167,7 +187,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.debug("Fetching immunizations by vaccine code {} for patient: {}", vaccineCode, patientId);
 
         if (!patientRepository.existsById(patientId)) {
-            throw new ResourceNotFoundException("patient.notFound", patientId);
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
 
         // E9 #59d — see getImmunizationsByPatientId.
@@ -197,7 +217,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.debug("Fetching overdue immunizations for patient: {}", patientId);
 
         if (!patientRepository.existsById(patientId)) {
-            throw new ResourceNotFoundException("patient.notFound", patientId);
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
 
         List<PatientImmunization> overdueImmunizations = immunizationRepository.findOverdueImmunizations(patientId);
@@ -213,7 +233,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.debug("Fetching upcoming immunizations for patient: {} between {} and {}", patientId, startDate, endDate);
 
         if (!patientRepository.existsById(patientId)) {
-            throw new ResourceNotFoundException("patient.notFound", patientId);
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
 
         List<PatientImmunization> upcomingImmunizations = 
@@ -230,7 +250,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.debug("Fetching immunizations needing reminders for patient: {}", patientId);
 
         if (!patientRepository.existsById(patientId)) {
-            throw new ResourceNotFoundException("patient.notFound", patientId);
+            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
         }
 
         List<PatientImmunization> needingReminders = 

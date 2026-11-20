@@ -107,6 +107,40 @@ class EncounterMapperCodeTest {
     }
 
     @Test
+    void d2550_thePatientCopyCarriesAttestedAddendaOnly_andNoSignatureCeremony() {
+        // QA D2550 (r65): /me/patient/encounters sent the unattested addendum to the browser.
+        Encounter visit = new Encounter();
+        visit.setId(UUID.randomUUID());
+        com.example.hms.model.encounter.EncounterNote signed = com.example.hms.model.encounter.EncounterNote.builder()
+            .assessment("Paludisme simple").signedAt(java.time.LocalDateTime.now().minusHours(2))
+            .signatureAlgorithm("HMAC-SHA256").signatureValue("digest").build();
+        signed.setId(UUID.randomUUID());
+        signed.setCreatedAt(java.time.LocalDateTime.now().minusHours(3));
+        com.example.hms.model.encounter.EncounterNoteAddendum attested =
+            com.example.hms.model.encounter.EncounterNoteAddendum.builder().note(signed)
+                .content("Addendum attesté").attestAccuracy(true)
+                .signedAt(java.time.LocalDateTime.now().minusHours(1)).build();
+        attested.setId(UUID.randomUUID());
+        com.example.hms.model.encounter.EncounterNoteAddendum internal =
+            com.example.hms.model.encounter.EncounterNoteAddendum.builder().note(signed)
+                .content("Addendum NON ATTESTE brouillon interne").attestAccuracy(false).build();
+        internal.setId(UUID.randomUUID());
+        signed.getAddenda().add(attested);
+        signed.getAddenda().add(internal);
+        visit.setEncounterNote(signed);
+        EncounterMapper mapper = new EncounterMapper();
+
+        // Path re-verified: the clinician reads both addenda.
+        assertThat(mapper.toEncounterResponseDTO(visit).getNote().getAddenda()).hasSize(2);
+
+        EncounterResponseDTO portal = mapper.toPatientPortalEncounterResponseDTO(visit);
+        assertThat(portal.getNote().getAddenda()).extracting("content").containsExactly("Addendum attesté");
+        assertThat(portal.getNote().getSignatureValue()).isNull();
+        assertThat(portal.getNote().getSignatureAlgorithm()).isNull();
+        assertThat(portal.toString()).doesNotContain("NON ATTESTE");
+    }
+
+    @Test
     void whatTheDeskTypedIsKeptApartFromTheClinicalComplaint() {
         EncounterMapper mapper = new EncounterMapper();
         com.example.hms.payload.dto.EncounterRequestDTO body = new com.example.hms.payload.dto.EncounterRequestDTO();
