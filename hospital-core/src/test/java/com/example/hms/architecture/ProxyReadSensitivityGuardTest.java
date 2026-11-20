@@ -958,7 +958,36 @@ class ProxyReadSensitivityGuardTest {
         }
         assertThat(releasableCategories).as("owner decision 2026-11-21: the release covers HIV only (Loi 030-2008"
             + " art. 17-18); another releasable category is a new decision, not a code change").containsExactly("HIV");
+        problems.addAll(releasePredicateTable());
         assertThat(problems).as(SourceScan.MANDATE).isEmpty();
+    }
+
+    /**
+     * Review of #1242, round 2: the release predicate itself, over every pair
+     * of categories. Nothing with violence on the visit or the test; then the
+     * TEST's own category decides (a pregnancy test of an HIV-clinic visit is
+     * not an HIV result), and the visit's only for a test that carries none.
+     */
+    private static List<String> releasePredicateTable() {
+        List<com.example.hms.enums.SensitivityCategory> all = new ArrayList<>(
+            List.of(com.example.hms.enums.SensitivityCategory.values()));
+        all.add(null);
+        List<String> wrong = new ArrayList<>();
+        for (com.example.hms.enums.SensitivityCategory visit : all) {
+            for (com.example.hms.enums.SensitivityCategory test : all) {
+                boolean violence = visit == com.example.hms.enums.SensitivityCategory.SEXUAL_DOMESTIC_VIOLENCE
+                    || test == com.example.hms.enums.SensitivityCategory.SEXUAL_DOMESTIC_VIOLENCE;
+                com.example.hms.enums.SensitivityCategory deciding = test != null ? test : visit;
+                boolean expected = !violence && deciding == com.example.hms.enums.SensitivityCategory.HIV;
+                if (com.example.hms.service.recordaccess.ProxySensitivityPolicy.releasable(visit, test) != expected) {
+                    wrong.add("ProxySensitivityPolicy.releasable(visit " + visit + ", test " + test + ") is "
+                        + !expected + ": a result is releasable only when no violence is on it and its test's own"
+                        + " category (the visit's, for an untagged test) is HIV. An HIV visit never makes a"
+                        + " pregnancy test or a syphilis serology releasable");
+                }
+            }
+        }
+        return wrong;
     }
 
     // ── Reading the source ──────────────────────────────────────────────────

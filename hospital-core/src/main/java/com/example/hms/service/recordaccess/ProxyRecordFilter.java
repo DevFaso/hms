@@ -202,7 +202,8 @@ public class ProxyRecordFilter {
             return true;
         }
         Patient subject = order.getPatient();
-        // HIV only, and never a result that violence is on: a release of anything else is not honoured.
+        // HIV only, judged by the test's own category first, and never a result that violence is on: a
+        // release of anything else (a pregnancy test of an HIV-clinic visit) is not honoured.
         if (ProxySensitivityPolicy.releasable(visitCategory, testCategory)
                 && releasedToReader(order, subject, cache)) {
             return true;
@@ -223,7 +224,9 @@ public class ProxyRecordFilter {
      * result of a child under the hospital's adolescent age): the same rule the
      * proxy read applies ({@link ProxySensitivityPolicy#hiddenFromVerifiedParent}),
      * so the screen never lists as hidden what the parent already sees. The
-     * category shown is HIV when HIV hides it, else the test's, else the visit's.
+     * category shown is the test's own when it hides the result, else the
+     * visit's: a pregnancy test of an HIV-clinic visit is listed as pregnancy,
+     * not as an HIV result, and is not releasable.
      */
     public FamilyHiding familyHidingOf(LabOrder order) {
         if (order == null) {
@@ -241,9 +244,6 @@ public class ProxyRecordFilter {
             return null;
         }
         SensitivityCategory shown = byTest ? testCategory : visitCategory;
-        if (byVisit && visitCategory == SensitivityCategory.HIV) {
-            shown = SensitivityCategory.HIV;
-        }
         return new FamilyHiding(shown, ProxySensitivityPolicy.releasable(visitCategory, testCategory));
     }
 

@@ -442,6 +442,36 @@ class ProxyRecordFilterPolicyTest {
         }
 
         @Test
+        @DisplayName("round 2: a pregnancy test or a syphilis serology of an HIV-clinic visit is never read through a release")
+        void aPregnancyTestOfAnHivVisit() {
+            readingAs(teenager, ProxyRelationship.PARENT, true, "ALL");
+            Encounter hivClinic = visit(teenager, SensitivityCategory.HIV);
+            LabOrder pregnancyTest = order(teenager, hivClinic, test("BHCG", SensitivityCategory.PREGNANCY));
+            LabOrder syphilis = order(teenager, hivClinic, test("TPHA", SensitivityCategory.STI));
+            LabOrder cd4 = order(teenager, hivClinic, test("CD4", null));
+            // A release row for each, however it came to exist: only the HIV result is read.
+            when(releases.findReleasedLabOrderIds(grantId))
+                .thenReturn(Set.of(pregnancyTest.getId(), syphilis.getId(), cd4.getId()));
+
+            assertThat(filter.admits(pregnancyTest)).as("β-hCG of an HIV visit").isFalse();
+            assertThat(filter.admits(syphilis)).as("TPHA of an HIV visit").isFalse();
+            assertThat(filter.labResults().test(resultOf(pregnancyTest))).isFalse();
+            assertThat(filter.admits(cd4)).as("an untagged test of the HIV visit is an HIV result").isTrue();
+
+            // And the clinician's list says what each is: its own category, not releasable.
+            assertThat(filter.familyHidingOf(pregnancyTest))
+                .isEqualTo(new ProxyRecordFilter.FamilyHiding(SensitivityCategory.PREGNANCY, false));
+            assertThat(filter.familyHidingOf(syphilis))
+                .isEqualTo(new ProxyRecordFilter.FamilyHiding(SensitivityCategory.STI, false));
+            assertThat(filter.familyHidingOf(cd4))
+                .isEqualTo(new ProxyRecordFilter.FamilyHiding(SensitivityCategory.HIV, true));
+            // An HIV test of an STI-tagged visit is still an HIV result.
+            assertThat(filter.familyHidingOf(order(teenager, visit(teenager, SensitivityCategory.STI),
+                test("HIV", SensitivityCategory.HIV))))
+                .isEqualTo(new ProxyRecordFilter.FamilyHiding(SensitivityCategory.HIV, true));
+        }
+
+        @Test
         @DisplayName("the clinician's list holds what a verified parent is refused, and says what is releasable")
         void whatTheFamilyIsRefused() {
             LabTestDefinition hbs = test("AGHBS", SensitivityCategory.VIRAL_HEPATITIS);

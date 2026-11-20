@@ -103,6 +103,32 @@ class ProxySensitivityPolicyTest {
     }
 
     @Test
+    @DisplayName("round 2: a test ordered in an HIV visit is judged by its own category, never made releasable by the visit")
+    void aTestInAnHivVisitIsJudgedByItsOwnCategory() {
+        assertThat(ProxySensitivityPolicy.releasable(SensitivityCategory.HIV, SensitivityCategory.PREGNANCY))
+            .as("a β-hCG ordered in the HIV clinic").isFalse();
+        assertThat(ProxySensitivityPolicy.releasable(SensitivityCategory.HIV, SensitivityCategory.STI))
+            .as("a TPHA ordered in the HIV clinic").isFalse();
+        // An untagged test of an HIV visit (a CD4 count) is an HIV result; an HIV test of an STI visit too.
+        assertThat(ProxySensitivityPolicy.releasable(SensitivityCategory.HIV, null)).isTrue();
+        assertThat(ProxySensitivityPolicy.releasable(SensitivityCategory.STI, SensitivityCategory.HIV)).isTrue();
+        // The whole table: no violence anywhere, then the test's category if it has one, else the visit's.
+        java.util.List<SensitivityCategory> all = new java.util.ArrayList<>(java.util.Arrays.asList(
+            SensitivityCategory.values()));
+        all.add(null);
+        for (SensitivityCategory visit : all) {
+            for (SensitivityCategory test : all) {
+                boolean violence = visit == SensitivityCategory.SEXUAL_DOMESTIC_VIOLENCE
+                    || test == SensitivityCategory.SEXUAL_DOMESTIC_VIOLENCE;
+                SensitivityCategory deciding = test != null ? test : visit;
+                assertThat(ProxySensitivityPolicy.releasable(visit, test))
+                    .as("visit %s, test %s", visit, test)
+                    .isEqualTo(!violence && deciding == SensitivityCategory.HIV);
+            }
+        }
+    }
+
+    @Test
     @DisplayName("what the clinician's list calls hidden is exactly what a verified parent is refused")
     void hiddenFromVerifiedParentIsTheReadRule() {
         for (SensitivityCategory category : SensitivityCategory.values()) {

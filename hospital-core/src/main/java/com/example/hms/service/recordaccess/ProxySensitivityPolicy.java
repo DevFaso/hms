@@ -143,6 +143,13 @@ public final class ProxySensitivityPolicy {
      * 030-2008 art. 17-18 is the legal basis, and it covers the HIV result.
      * Never when violence is on the visit or the test (authorities only, Code
      * pénal art. 525-2), and no other category is releasable for now.
+     *
+     * <p>The <em>test's own</em> category decides what the result is: a
+     * pregnancy test or a syphilis serology ordered in an HIV-clinic visit is
+     * not an HIV result, and an HIV visit never makes it releasable (review
+     * of #1242, round 2). The visit decides only for a test that carries no
+     * category of its own (a CD4 count in the HIV clinic); an HIV test stays
+     * releasable whatever visit ordered it, violence apart.
      */
     public static boolean releasable(SensitivityCategory visitCategory, SensitivityCategory testCategory) {
         MinorRule visit = minorRuleOf(visitCategory);
@@ -150,7 +157,7 @@ public final class ProxySensitivityPolicy {
         if (visit == MinorRule.NEVER || test == MinorRule.NEVER) {
             return false;
         }
-        return visit == MinorRule.RELEASE_ONLY || test == MinorRule.RELEASE_ONLY;
+        return testCategory != null ? test == MinorRule.RELEASE_ONLY : visit == MinorRule.RELEASE_ONLY;
     }
 
     /**
