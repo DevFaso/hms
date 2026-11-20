@@ -43,11 +43,14 @@ public class AdmissionController {
     private final AdmissionService admissionService;
 
     @PostMapping
-    // Policy 2 (2026-11-09, provisional): a midwife may admit a woman in labour only; the
-    // service refuses every other admission for her (AdmissionServiceImpl.requireMidwifeLabourAdmission).
+    // Policy 2 (2026-11-09, provisional): a midwife may admit a woman in labour; policy rule 2
+    // (2026-11-20, provisional): and the newborn of a delivery she attended. The service refuses
+    // every other admission for her (AdmissionServiceImpl.requireMidwifeLabourAdmission,
+    // requireMidwifeNewbornAdmission). A nurse admits nobody.
     @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','MIDWIFE')")
     @Operation(summary = "Admit a patient", description = "Create a new hospital admission for a patient. "
-        + "A physician admits any type; a midwife only a woman in labour (LABOR_DELIVERY).")
+        + "A physician admits any type; a midwife only a woman in labour (LABOR_DELIVERY) or the newborn "
+        + "of a delivery she attended (NEWBORN).")
     public ResponseEntity<AdmissionResponseDTO> admitPatient(@Valid @RequestBody AdmissionRequestDTO request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(admissionService.admitPatient(request));
     }
@@ -95,8 +98,11 @@ public class AdmissionController {
     }
 
     @PostMapping("/{admissionId}/assign-bed")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN')")
-    @Operation(summary = "Assign a bed", description = "Assign a structured bed to an admission; releases any previously held bed")
+    // Policy rule 2 (2026-11-20, provisional): a midwife assigns the beds and cots of maternity
+    // wards (and a NICU cot for a newborn, with a physician's task); MidwifeNewbornCare refuses the rest.
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Assign a bed", description = "Assign a structured bed to an admission; releases any previously held bed. "
+        + "A midwife assigns maternity-ward beds and cots only.")
     public ResponseEntity<AdmissionResponseDTO> assignBed(
         @PathVariable UUID admissionId,
         @Valid @RequestBody BedAssignmentRequestDTO request
@@ -105,7 +111,7 @@ public class AdmissionController {
     }
 
     @DeleteMapping("/{admissionId}/bed")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
     @com.example.hms.security.audit.WriteAudited(skip = true,
         reason = "AdmissionServiceImpl.unassignBed audits the release with its reason (ADMISSION_BED_RELEASED, QA D1100)")
     @Operation(summary = "Unassign the bed",

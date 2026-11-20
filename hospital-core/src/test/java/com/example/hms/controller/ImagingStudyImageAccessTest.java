@@ -84,10 +84,19 @@ class ImagingStudyImageAccessTest {
         Set<String> imageReaders = roles(ImagingStudyImageController.class, "list");
         assertThat(roles(ImagingStudyImageController.class, "content")).isEqualTo(imageReaders);
         assertThat(imageReaders).isEqualTo(roles(ImagingResultController.class, "getLatestReportForOrder"));
-        assertThat(gate(ImagingStudyImageController.class, "upload"))
+        // Policy rule 3 (2026-11-20, provisional): the report's authors and the imaging technician, who
+        // attaches the study's key images; withdrawing after the signature stays the authors' alone.
+        Set<String> authors = roles(ImagingResultController.class, "createReport");
+        Set<String> imageWriters = new java.util.TreeSet<>(authors);
+        imageWriters.add("ROLE_IMAGING_TECHNICIAN");
+        for (String write : new String[] {"upload", "delete", "updateCaption"}) {
+            assertThat(roles(ImagingStudyImageController.class, write)).as(write).isEqualTo(imageWriters);
+            assertThat(gate(ImagingStudyImageController.class, write)).as(write)
+                .startsWith("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication,");
+        }
+        assertThat(gate(ImagingStudyImageController.class, "withdraw"))
             .isEqualTo(gate(ImagingResultController.class, "createReport"));
-        assertThat(gate(ImagingStudyImageController.class, "delete"))
-            .isEqualTo(gate(ImagingResultController.class, "createReport"));
+        assertThat(roles(ImagingResultController.class, "createReport")).doesNotContain("ROLE_IMAGING_TECHNICIAN");
     }
 
     private static boolean admits(String handler, Authentication caller) {

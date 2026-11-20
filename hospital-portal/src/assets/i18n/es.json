@@ -2106,7 +2106,9 @@
       "SENSITIVITY_RECOMMENDATION_APPLIED": "Categoría sensible recomendada aplicada: de {{from}} a {{to}}",
       "MEDICATION_SENSITIVITY_CHANGED": "Categoría sensible del medicamento cambiada de {{from}} a {{to}}",
       "ADOLESCENT_AGE_SET": "Edad de confidencialidad de los adolescentes fijada en {{age}} años",
-      "ADOLESCENT_AGE_RESET": "Edad de confidencialidad de los adolescentes devuelta al valor por defecto ({{age}} años)"
+      "ADOLESCENT_AGE_RESET": "Edad de confidencialidad de los adolescentes devuelta al valor por defecto ({{age}} años)",
+      "IMAGING_REPORTING_SETTINGS_CHANGED": "Ajuste de ecografía modificado",
+      "IMAGING_EXAM_RECORD_UPDATED": "Realización del examen de imagen actualizada"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -3505,7 +3507,8 @@
       "PHARMACY_VERIFIER": "Verificador de farmacia",
       "CLAIMS_REVIEWER": "Revisor de reclamaciones",
       "ANESTHESIOLOGIST": "Anestesiólogo",
-      "PHYSIOTHERAPIST": "Fisioterapeuta"
+      "PHYSIOTHERAPIST": "Fisioterapeuta",
+      "IMAGING_TECHNICIAN": "Técnico de imagen médica"
     },
     "ROLES": "Roles",
     "ROOMED": "En consultorio",
@@ -7153,7 +7156,8 @@
         "SURGEON": "Cirujano(a)",
         "TECHNICIAN": "Técnico(a)",
         "THERAPIST": "Terapeuta",
-        "USER": "Usuario(a)"
+        "USER": "Usuario(a)",
+        "IMAGING_TECHNICIAN": "Técnico de imagen médica"
       },
       "ACCESS_TYPE": {
         "CREATE": "Creado",
@@ -8234,7 +8238,8 @@
         "LAB_TEST_DEFINITION_SENSITIVITY": "Sensibilidad de la prueba de laboratorio",
         "PROXY_SENSITIVE_RELEASE": "Comunicación de un resultado sensible a un progenitor",
         "PATIENT_PROXY": "Acceso familiar",
-        "HOSPITAL_ADOLESCENT_CONFIDENTIALITY_AGE": "Edad de confidencialidad de los adolescentes"
+        "HOSPITAL_ADOLESCENT_CONFIDENTIALITY_AGE": "Edad de confidencialidad de los adolescentes",
+        "HOSPITAL_IMAGING_REPORTING_SETTINGS": "Ajuste de ecografía"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Alergia",
@@ -9591,7 +9596,8 @@
       "SUPPORT": "Personal de soporte que ayuda a los usuarios con problemas o consultas sobre el sistema",
       "SURGEON": "Cirujano(a) que realiza intervenciones, gestiona los planes quirúrgicos y los cuidados posoperatorios",
       "TECHNICIAN": "Técnico biomédico o informático encargado del mantenimiento de equipos y del soporte técnico",
-      "USER": "Usuario estándar con permisos de acceso básicos"
+      "USER": "Usuario estándar con permisos de acceso básicos",
+      "IMAGING_TECHNICIAN": "Técnico de imagen médica: recibe al paciente, realiza y documenta los exámenes de imagen y adjunta las imágenes; no solicita exámenes ni redacta informes"
     },
     "BUILT_IN_ACCESS": "Acceso integrado del rol",
     "NO_PERMISSION_CATALOGUE": "No hay ningún catálogo de permisos definido: el acceso de este rol está integrado en la plataforma y no se modifica aquí."
@@ -15247,7 +15253,7 @@
     "ACUITY_PICK": "Elegir el nivel de gravedad",
     "ADMIT_MOTHER": "Ingresar en maternidad",
     "ADMIT_NEWBORN": "Ingresar al recién nacido",
-    "NEWBORN_BY_DOCTOR": "Un médico ingresa al recién nacido.",
+    "NEWBORN_BY_DOCTOR": "Un médico, o la matrona que atendió el parto, ingresa al recién nacido.",
     "BY_CLINICIAN": "Un médico o una matrona la ingresa.",
     "IN_BED": "en la cama {{bed}}.",
     "NO_BED": "ingresado(a), sin cama: no aparece en el tablero de camas.",
@@ -15255,7 +15261,7 @@
     "BED_PICK": "Elegir una cama",
     "ASSIGN_BED": "Asignar la cama",
     "NO_FREE_BED": "Ninguna cama libre conviene a este paciente.",
-    "BED_BY_NURSE": "Una enfermera del servicio o un médico asigna la cama:",
+    "BED_BY_NURSE": "Una enfermera de la unidad, una matrona (camas de maternidad) o un médico asigna la cama:",
     "OPEN_ADMISSIONS": "Ingresos",
     "REASON_LABOUR": "Trabajo de parto",
     "REASON_NEWBORN": "Recién nacido",
@@ -15263,7 +15269,11 @@
     "ADMIT_FAILED": "No se pudo registrar el ingreso.",
     "BED_ASSIGNED": "Cama {{bed}} asignada.",
     "BED_FAILED": "No se pudo asignar la cama.",
-    "LOAD_FAILED": "estancia desconocida: no se pudieron leer los ingresos. Recargue antes de ingresar."
+    "LOAD_FAILED": "estancia desconocida: no se pudieron leer los ingresos. Recargue antes de ingresar.",
+    "MIDWIFE_NEWBORN_RULE": "Una matrona ingresa al recién nacido de un parto que atendió y es su clínica responsable. Regla provisional, pendiente de aprobación por una matrona o un obstetra designado.",
+    "MIDWIFE_BED_RULE": "Una matrona asigna las camas de maternidad. Regla provisional, pendiente de aprobación por una matrona o un obstetra designado.",
+    "MIDWIFE_COT_RULE": "Una matrona asigna las cunas de maternidad. Una cuna de neonatología también se asigna, y entonces se pide a un médico que valore al recién nacido. Regla provisional, pendiente de aprobación por una matrona o un obstetra designado.",
+    "BED_ASSIGNED_PHYSICIAN_ASKED": "Cama {{bed}} asignada. Se ha pedido a un médico que valore al recién nacido."
   },
   "SENSITIVITY_TAG": {
     "LABEL": "Categoría sensible",
@@ -15368,6 +15378,39 @@
       "TB_SCOPE_HINT": "La tuberculosis es de acceso restringido: esta persona solo la ve si marca esta casilla (útil para el cribado del entorno). Los demás registros sensibles (VIH, ITS, embarazo, salud mental…) nunca se muestran.",
       "TB_SCOPE_BADGE": "y tuberculosis"
     }
+  },
+  "IMAGING_EXAM": {
+    "TITLE": "Realización del examen",
+    "TECHNICIAN_RULE": "Como técnico de imagen, usted recibe al paciente, realiza y documenta el examen y adjunta sus imágenes. La solicitud del examen y la redacción o firma del informe corresponden al médico. Regla provisional, pendiente de aprobación del radiólogo o del director médico.",
+    "CHECKED_IN": "Llegada del paciente",
+    "STARTED": "Inicio del examen",
+    "PERFORMED_BY": "Realizado por",
+    "TECHNICAL_NOTE": "Nota técnica",
+    "TECHNICAL_NOTE_HINT": "Protocolo utilizado, colocación del paciente, incidencias. No es una interpretación.",
+    "CONTRAST_GIVEN": "Contraste administrado",
+    "CONTRAST_DETAILS": "Producto, volumen, vía, posible reacción",
+    "DOSE": "Dosis de radiación",
+    "SAVE": "Guardar la realización",
+    "NOTHING_TO_SAVE": "Indique una nota técnica, el contraste administrado o la dosis.",
+    "SAVED": "Realización del examen guardada.",
+    "SAVE_FAILED": "No se pudo guardar la realización del examen.",
+    "CHECK_IN": "Registrar la llegada del paciente",
+    "CHECKED_IN_DONE": "Llegada del paciente registrada.",
+    "DISCONTINUE": "Interrumpir el examen",
+    "DISCONTINUE_TITLE": "¿Interrumpir este examen?",
+    "DISCONTINUE_MESSAGE": "La solicitud se cierra y el médico solicitante ve el motivo. Hará falta una nueva solicitud para repetir el examen.",
+    "DISCONTINUED": "Examen interrumpido.",
+    "ULTRASOUND_PHYSICIANS_ONLY": "Ecografía: en este hospital el examen lo realiza un médico. Usted puede registrar la llegada del paciente y adjuntar imágenes. Regla provisional, pendiente de aprobación del radiólogo o del director médico."
+  },
+  "IMAGING_REPORTING_SETTINGS": {
+    "TITLE": "Ecografía",
+    "ULTRASOUND": "Ecografía por un no médico",
+    "PHYSICIANS_ONLY": "Solo médicos (por defecto)",
+    "NON_PHYSICIAN": "Un técnico de imagen puede realizar la ecografía",
+    "SAVED": "Ajuste guardado.",
+    "SAVE_FAILED": "No se pudo guardar el ajuste.",
+    "LOAD_FAILED": "No se pudo leer el ajuste de ecografía.",
+    "WHAT_IT_DOES": "Con «Solo médicos», un técnico de imagen no puede iniciar, terminar, interrumpir ni registrar una ecografía. En todos los casos, el informe lo redacta y firma un médico. Regla provisional, pendiente de aprobación del radiólogo o del director médico y de la posición del ministerio."
   },
   "MATERNAL_CONCERNS": {
     "LEGEND": "Embarazo o posparto: preocupaciones adicionales (opcional; puntuación materna provisional)",

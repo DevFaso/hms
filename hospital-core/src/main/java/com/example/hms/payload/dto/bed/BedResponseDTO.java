@@ -17,6 +17,8 @@ public class BedResponseDTO {
     private UUID wardId;
     private String wardName;
     private String wardCode;
+    /** The ward's population (MATERNITY, NICU, ...): a picker narrows on it (policy rule 2). */
+    private String wardType;
     private String bedNumber;
     /** Display label, e.g. "MAT01/B03" — mirrors the roomBed format on admissions. */
     private String label;

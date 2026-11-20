@@ -24,6 +24,12 @@ import { refusalReason, refusedFieldReasons } from '../shared/refusal-reason';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import {
+  MIDWIFE_ONLY_ROLES,
+  WARD_WIDE_BED_ROLES,
+  bedsAMidwifeAssigns,
+  isNeonatalCot,
+} from '../shared/midwife-beds';
 
 /** The admission a maternity record opens: the mother's labour, or her newborn. */
 export type MaternityStayKind = 'LABOR_DELIVERY' | 'NEWBORN';
@@ -37,7 +43,13 @@ export type MaternityStayKind = 'LABOR_DELIVERY' | 'NEWBORN';
  *
  * The acuity is chosen by the clinician: nothing here picks a clinical level for her. Who may do
  * what is the endpoints' own rule (core/action-permissions): a midwife admits a woman in labour
- * (policy 2) but not a newborn, and does not assign beds; the card says who does instead.
+ * (policy 2).
+ *
+ * Policy rule 2 (owner 2026-11-20, PROVISIONAL until a named sage-femme or obstetrician signs it
+ * off): she also admits the newborn of a delivery she attended, as its responsible clinician, and
+ * assigns the beds and cots of maternity wards. A neonatal (NICU) cot for a newborn is assigned
+ * too and a physician is asked to review: a task, never a refusal. The server decides whose
+ * newborn it is and which ward (`MidwifeNewbornCare`); its refusal is shown as it is worded.
  */
 @Component({
   selector: 'app-maternity-stay',
@@ -101,6 +113,11 @@ export type MaternityStayKind = 'LABOR_DELIVERY' | 'NEWBORN';
               }}
             </p>
           }
+          @if (midwifeOnly() && kind() === 'NEWBORN') {
+            <p class="muted maternity-stay__rule" data-testid="maternity-stay-midwife-newborn-rule">
+              {{ 'MATERNITY_STAY.MIDWIFE_NEWBORN_RULE' | translate }}
+            </p>
+          }
         } @else if (stay(); as s) {
           @if (s.roomBed) {
             <p class="maternity-stay__ok" data-testid="maternity-stay-bed">
@@ -142,6 +159,16 @@ export type MaternityStayKind = 'LABOR_DELIVERY' | 'NEWBORN';
               @if (!bedsLoading() && beds().length === 0) {
                 <p class="muted">{{ 'MATERNITY_STAY.NO_FREE_BED' | translate }}</p>
               }
+              @if (midwifeOnly()) {
+                <p class="muted maternity-stay__rule" data-testid="maternity-stay-midwife-bed-rule">
+                  {{
+                    (kind() === 'NEWBORN'
+                      ? 'MATERNITY_STAY.MIDWIFE_COT_RULE'
+                      : 'MATERNITY_STAY.MIDWIFE_BED_RULE'
+                    ) | translate
+                  }}
+                </p>
+              }
             } @else {
               <p class="muted" data-testid="maternity-stay-who-assigns">
                 {{ 'MATERNITY_STAY.BED_BY_NURSE' | translate }}
@@ -180,6 +207,10 @@ export type MaternityStayKind = 'LABOR_DELIVERY' | 'NEWBORN';
     .maternity-stay__form select {
       min-width: 0;
       max-width: 100%;
+    }
+    .maternity-stay__rule {
+      margin: 6px 0 0;
+      overflow-wrap: anywhere;
     }
   `,
 })
@@ -224,16 +255,20 @@ export class MaternityStayComponent implements OnChanges {
   bedId = '';
 
   /**
-   * The endpoint's roles; a newborn needs a physician (the server refuses a midwife any admission
-   * but a woman in labour, policy 2).
+   * The endpoint's roles: a physician, or a midwife for a woman in labour (policy 2) and for the
+   * newborn of a delivery she attended (policy rule 2; the server refuses any other newborn).
    */
-  readonly canAdmit = computed(() => {
-    if (!this.roleContext.hasAnyActiveRole(actionRoles('admissionCreate'))) return false;
-    // rbac-inline-ok: narrows admissionCreate to its physician path, as admissions.ts does for a midwife
-    return this.kind() === 'LABOR_DELIVERY' || this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']);
-  });
+  readonly canAdmit = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('admissionCreate')),
+  );
   readonly canAssignBed = computed(() =>
     this.roleContext.hasAnyActiveRole(actionRoles('admissionAssignBed')),
+  );
+  /** A midwife who is neither a nurse nor a physician: her bed picker is the maternity wards'. */
+  readonly midwifeOnly = computed(
+    () =>
+      this.roleContext.hasAnyActiveRole([...MIDWIFE_ONLY_ROLES]) &&
+      !this.roleContext.hasAnyActiveRole([...WARD_WIDE_BED_ROLES]),
   );
 
   ngOnChanges(): void {
@@ -297,7 +332,10 @@ export class MaternityStayComponent implements OnChanges {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (beds) => {
-          this.beds.set(beds ?? []);
+          const free = beds ?? [];
+          this.beds.set(
+            this.midwifeOnly() ? bedsAMidwifeAssigns(free, this.kind() === 'NEWBORN') : free,
+          );
           this.bedsLoading.set(false);
         },
         error: () => {
@@ -350,6 +388,9 @@ export class MaternityStayComponent implements OnChanges {
 
   assignBed(stay: AdmissionResponse): void {
     if (!this.bedId || this.saving()) return;
+    // Policy rule 2: a neonatal cot assigned by a midwife asks a physician to review.
+    const physicianAsked =
+      this.midwifeOnly() && isNeonatalCot(this.beds().find((bed) => bed.id === this.bedId));
     this.saving.set(true);
     this.admissions
       .assignBed(stay.id, this.bedId)
@@ -359,7 +400,12 @@ export class MaternityStayComponent implements OnChanges {
           this.saving.set(false);
           this.stay.set(updated);
           this.toast.success(
-            this.translate.instant('MATERNITY_STAY.BED_ASSIGNED', { bed: updated.roomBed ?? '' }),
+            this.translate.instant(
+              physicianAsked
+                ? 'MATERNITY_STAY.BED_ASSIGNED_PHYSICIAN_ASKED'
+                : 'MATERNITY_STAY.BED_ASSIGNED',
+              { bed: updated.roomBed ?? '' },
+            ),
           );
         },
         error: (err: unknown) => {

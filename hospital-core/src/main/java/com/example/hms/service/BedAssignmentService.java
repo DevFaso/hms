@@ -63,6 +63,39 @@ public class BedAssignmentService {
     }
 
     /**
+     * Policy rule 2 (review of #1243): the physician's task of a newborn a midwife placed in a NICU
+     * cot ends when the stay leaves that cot. Set after construction through an ObjectProvider, as
+     * {@link #stayEncounters} is, so the callers that build this service by hand keep their constructor.
+     */
+    private org.springframework.beans.factory.ObjectProvider<com.example.hms.service.maternity.MidwifeNewbornCare> newbornCare;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setNewbornCare(
+            org.springframework.beans.factory.ObjectProvider<com.example.hms.service.maternity.MidwifeNewbornCare> newbornCare) {
+        this.newbornCare = newbornCare;
+    }
+
+    /**
+     * Every way a stay stops holding a bed comes through here: a move, an unassignment, a
+     * discharge. {@code movedTo} is the bed the stay takes instead, null when it takes none.
+     *
+     * <p>The task ends when the baby leaves NEONATOLOGY, not when it changes cot there (second
+     * review of #1243): a move from one NICU cot to another, by anybody, or a transfer into
+     * another NICU cot, keeps the physicians' unreviewed task.
+     */
+    private void leftBed(Admission admission, Bed bed, Bed movedTo) {
+        boolean leavesNeonatology = isNeonatal(bed) && !isNeonatal(movedTo);
+        if (leavesNeonatology && newbornCare != null && admission.getId() != null) {
+            newbornCare.ifAvailable(care -> care.withdrawPhysicianTask(admission.getId()));
+        }
+    }
+
+    private static boolean isNeonatal(Bed bed) {
+        return bed != null && bed.getWard() != null
+            && bed.getWard().getWardType() == com.example.hms.enums.WardType.NICU;
+    }
+
+    /**
      * Assign a bed to an admission: the bed must be active, AVAILABLE, and
      * belong to the admission's hospital. Any previously assigned bed is
      * released. The caller saves the admission; the bed rows are saved here.
@@ -119,6 +152,7 @@ public class BedAssignmentService {
 
         if (current != null) {
             markAvailable(current);
+            leftBed(admission, current, bed);
         }
         bed.setStatus(BedStatus.OCCUPIED);
         bedRepository.save(bed);
@@ -162,8 +196,11 @@ public class BedAssignmentService {
             : java.time.Period.between(patient.getDateOfBirth(), java.time.LocalDate.now(java.time.ZoneId.systemDefault())).getYears();
         com.example.hms.enums.WardType type = bed.getWard().getWardType();
         boolean mismatch = switch (type) {
-            case MATERNITY -> com.example.hms.utility.ObstetricEligibility.isRecordedMale(patient)
-                || com.example.hms.utility.ObstetricEligibility.isRecordedChild(patient);
+            // Policy rule 2 (2026-11-20, provisional): a baby under one year (the NICU ward's own
+            // bound) takes a maternity cot beside its mother; the D431 child is still refused.
+            case MATERNITY -> !(age != null && age < 1)
+                && (com.example.hms.utility.ObstetricEligibility.isRecordedMale(patient)
+                    || com.example.hms.utility.ObstetricEligibility.isRecordedChild(patient));
             case PEDIATRIC -> age != null && age >= 18;
             case NICU -> age != null && age >= 1;
             default -> false; // Every other ward takes any patient.
@@ -201,6 +238,7 @@ public class BedAssignmentService {
             return;
         }
         markAvailable(bed);
+        leftBed(admission, bed, null);
         admission.setBed(null);
         admission.setRoomBed(null);
         log.info("Bed {} unassigned from admission {}", bedLabel(bed), admission.getId());
@@ -218,6 +256,7 @@ public class BedAssignmentService {
             return;
         }
         markAvailable(bed);
+        leftBed(admission, bed, null);
         log.info("Bed {} released by admission {}", bedLabel(bed), admission.getId());
     }
 

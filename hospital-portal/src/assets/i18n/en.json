@@ -2106,7 +2106,9 @@
       "SENSITIVITY_RECOMMENDATION_APPLIED": "Recommended sensitive category applied: {{from}} to {{to}}",
       "MEDICATION_SENSITIVITY_CHANGED": "Medication sensitive category changed from {{from}} to {{to}}",
       "ADOLESCENT_AGE_SET": "Adolescent confidentiality age set to {{age}}",
-      "ADOLESCENT_AGE_RESET": "Adolescent confidentiality age reset to the default ({{age}})"
+      "ADOLESCENT_AGE_RESET": "Adolescent confidentiality age reset to the default ({{age}})",
+      "IMAGING_REPORTING_SETTINGS_CHANGED": "Ultrasound setting changed",
+      "IMAGING_EXAM_RECORD_UPDATED": "Imaging exam record updated"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -3505,7 +3507,8 @@
       "PHARMACY_VERIFIER": "Pharmacy Verifier",
       "CLAIMS_REVIEWER": "Claims Reviewer",
       "ANESTHESIOLOGIST": "Anesthesiologist",
-      "PHYSIOTHERAPIST": "Physiotherapist"
+      "PHYSIOTHERAPIST": "Physiotherapist",
+      "IMAGING_TECHNICIAN": "Imaging technician"
     },
     "ROLES": "Roles",
     "ROOMED": "Roomed",
@@ -7153,7 +7156,8 @@
         "SURGEON": "Surgeon",
         "TECHNICIAN": "Technician",
         "THERAPIST": "Therapist",
-        "USER": "User"
+        "USER": "User",
+        "IMAGING_TECHNICIAN": "Imaging technician (radiographer)"
       },
       "ACCESS_TYPE": {
         "CREATE": "Created",
@@ -8234,7 +8238,8 @@
         "LAB_TEST_DEFINITION_SENSITIVITY": "Lab test sensitivity",
         "PROXY_SENSITIVE_RELEASE": "Release of a sensitive result to a parent",
         "PATIENT_PROXY": "Family access",
-        "HOSPITAL_ADOLESCENT_CONFIDENTIALITY_AGE": "Adolescent confidentiality age"
+        "HOSPITAL_ADOLESCENT_CONFIDENTIALITY_AGE": "Adolescent confidentiality age",
+        "HOSPITAL_IMAGING_REPORTING_SETTINGS": "Ultrasound setting"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",
@@ -9591,7 +9596,8 @@
       "SUPPORT": "Technical or customer support staff assisting users with system issues and inquiries",
       "SURGEON": "Surgical specialist performing operations, managing surgical plans, and post-operative care",
       "TECHNICIAN": "Medical or IT technician responsible for equipment maintenance and technical support",
-      "USER": "Standard system user with basic access permissions"
+      "USER": "Standard system user with basic access permissions",
+      "IMAGING_TECHNICIAN": "Imaging technician (radiographer) who checks the patient in, performs and documents imaging exams, and attaches images; never orders an exam or writes a report"
     },
     "BUILT_IN_ACCESS": "Built-in access",
     "NO_PERMISSION_CATALOGUE": "No permission catalogue is defined: this role's access is built into the platform and is not edited here."
@@ -15247,7 +15253,7 @@
     "ACUITY_PICK": "Choose the acuity",
     "ADMIT_MOTHER": "Admit to maternity",
     "ADMIT_NEWBORN": "Admit the newborn",
-    "NEWBORN_BY_DOCTOR": "A doctor admits the newborn.",
+    "NEWBORN_BY_DOCTOR": "A doctor, or the midwife who attended the delivery, admits the newborn.",
     "BY_CLINICIAN": "A doctor or midwife admits her.",
     "IN_BED": "in bed {{bed}}.",
     "NO_BED": "admitted, no bed yet: not on the bed board.",
@@ -15255,7 +15261,7 @@
     "BED_PICK": "Choose a bed",
     "ASSIGN_BED": "Assign the bed",
     "NO_FREE_BED": "No free bed suits this patient.",
-    "BED_BY_NURSE": "A ward nurse or a doctor assigns the bed:",
+    "BED_BY_NURSE": "A ward nurse, a midwife (maternity beds) or a doctor assigns the bed:",
     "OPEN_ADMISSIONS": "Admissions",
     "REASON_LABOUR": "Labour",
     "REASON_NEWBORN": "Newborn",
@@ -15263,7 +15269,11 @@
     "ADMIT_FAILED": "The admission could not be recorded.",
     "BED_ASSIGNED": "Bed {{bed}} assigned.",
     "BED_FAILED": "The bed could not be assigned.",
-    "LOAD_FAILED": "stay unknown: the admissions could not be read. Reload before admitting."
+    "LOAD_FAILED": "stay unknown: the admissions could not be read. Reload before admitting.",
+    "MIDWIFE_NEWBORN_RULE": "A midwife admits the newborn of a delivery she attended and is its responsible clinician. Provisional rule, pending approval by a named midwife or obstetrician.",
+    "MIDWIFE_BED_RULE": "A midwife assigns the beds of maternity wards. Provisional rule, pending approval by a named midwife or obstetrician.",
+    "MIDWIFE_COT_RULE": "A midwife assigns the cots of maternity wards. A neonatal cot is assigned too, and a doctor is then asked to review the newborn. Provisional rule, pending approval by a named midwife or obstetrician.",
+    "BED_ASSIGNED_PHYSICIAN_ASKED": "Bed {{bed}} assigned. A doctor has been asked to review the newborn."
   },
   "SENSITIVITY_TAG": {
     "LABEL": "Sensitive category",
@@ -15368,6 +15378,39 @@
       "TB_SCOPE_HINT": "Tuberculosis is restricted: this person sees it only if you tick this box (useful for screening the household). The other sensitive records (HIV, STIs, pregnancy, mental health…) are never shown.",
       "TB_SCOPE_BADGE": "and tuberculosis"
     }
+  },
+  "IMAGING_EXAM": {
+    "TITLE": "Exam record",
+    "TECHNICIAN_RULE": "As an imaging technician you check the patient in, perform and document the exam and attach its images. Ordering the exam and writing or signing the report stay with the physician. Provisional rule, pending approval by the radiologist or the medical director.",
+    "CHECKED_IN": "Patient checked in",
+    "STARTED": "Exam started",
+    "PERFORMED_BY": "Performed by",
+    "TECHNICAL_NOTE": "Technical note",
+    "TECHNICAL_NOTE_HINT": "Protocol used, positioning, incidents. Not an interpretation.",
+    "CONTRAST_GIVEN": "Contrast given",
+    "CONTRAST_DETAILS": "Agent, volume, route, any reaction",
+    "DOSE": "Radiation dose",
+    "SAVE": "Save the exam record",
+    "NOTHING_TO_SAVE": "Enter a technical note, the contrast given or the dose.",
+    "SAVED": "Exam record saved.",
+    "SAVE_FAILED": "The exam record could not be saved.",
+    "CHECK_IN": "Check the patient in",
+    "CHECKED_IN_DONE": "Patient checked in.",
+    "DISCONTINUE": "Discontinue the exam",
+    "DISCONTINUE_TITLE": "Discontinue this exam?",
+    "DISCONTINUE_MESSAGE": "The request is closed and its prescriber sees the reason. A new request is needed to do the exam later.",
+    "DISCONTINUED": "Exam discontinued.",
+    "ULTRASOUND_PHYSICIANS_ONLY": "Ultrasound: at this hospital the exam is performed by a physician. You can check the patient in and attach images. Provisional rule, pending approval by the radiologist or the medical director."
+  },
+  "IMAGING_REPORTING_SETTINGS": {
+    "TITLE": "Ultrasound",
+    "ULTRASOUND": "Ultrasound by a non-physician",
+    "PHYSICIANS_ONLY": "Physicians only (default)",
+    "NON_PHYSICIAN": "An imaging technician may perform the ultrasound exam",
+    "SAVED": "Setting saved.",
+    "SAVE_FAILED": "The setting could not be saved.",
+    "LOAD_FAILED": "The ultrasound setting could not be read.",
+    "WHAT_IT_DOES": "With \"Physicians only\", an imaging technician cannot start, complete, discontinue or record an ultrasound exam. In every case the report is written and signed by a physician. Provisional rule, pending approval by the radiologist or the medical director and the ministry's position."
   },
   "MATERNAL_CONCERNS": {
     "LEGEND": "Pregnancy or postpartum: additional concerns (optional; provisional maternal score)",

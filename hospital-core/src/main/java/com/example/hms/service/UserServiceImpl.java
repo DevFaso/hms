@@ -422,7 +422,9 @@ public class UserServiceImpl implements UserService {
                  "ROLE_LAB_TECHNICIAN", "ROLE_LAB_DIRECTOR", "ROLE_LAB_MANAGER", "ROLE_BILLING_SPECIALIST",
                  "ROLE_ACCOUNTANT", "ROLE_CLAIMS_REVIEWER", "ROLE_ANESTHESIOLOGIST", "ROLE_PHYSIOTHERAPIST",
                  "ROLE_PHARMACY_VERIFIER", "ROLE_QUALITY_MANAGER", "ROLE_INVENTORY_CLERK",
-                 "ROLE_STORE_MANAGER" -> true;
+                 "ROLE_STORE_MANAGER",
+                 // Policy rule 3: the report's "performed by" is a staff member.
+                 "ROLE_IMAGING_TECHNICIAN" -> true;
             default -> false;
         });
 
@@ -1394,6 +1396,8 @@ public class UserServiceImpl implements UserService {
                 return JobTitle.PHYSIOTHERAPIST;
             case "ROLE_QUALITY_MANAGER":
                 return JobTitle.QUALITY_MANAGER;
+            case "ROLE_IMAGING_TECHNICIAN":
+                return JobTitle.TECHNICIAN;
             default:
                 return null;
         }

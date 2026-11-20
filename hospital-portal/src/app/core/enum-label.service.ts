@@ -770,6 +770,7 @@ export class EnumLabelService implements OnDestroy {
       PATIENT: 'Patient',
       PROVIDER_ADMIN: 'Provider Administrator',
       RADIOLOGIST: 'Radiologist',
+      IMAGING_TECHNICIAN: 'Imaging Technician',
       SURGEON: 'Surgeon',
       THERAPIST: 'Therapist',
     },

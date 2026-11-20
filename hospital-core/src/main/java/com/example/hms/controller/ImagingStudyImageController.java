@@ -42,13 +42,20 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/imaging")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','IMAGING_TECHNICIAN','PATIENT')")
 @Tag(name = "Imaging Images", description = "Key images and exported PDFs on an imaging study or report")
 public class ImagingStudyImageController {
 
     static final String READ_ROLES =
-        "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')";
+        "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','IMAGING_TECHNICIAN','PATIENT')";
+    /**
+     * Policy rule 3 (2026-11-20, provisional): the imaging technician attaches, captions and (before
+     * the signature) removes the study's key images. The service keeps them off a report's own images.
+     */
     static final String WRITE_ROLES =
+        "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'RADIOLOGIST','DOCTOR','IMAGING_TECHNICIAN')";
+    /** Withdrawing an image after the signature changes the signed record: never the technician. */
+    static final String WITHDRAW_ROLES =
         "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'RADIOLOGIST','DOCTOR')";
 
     private final ImagingStudyImageService imageService;
@@ -114,7 +121,9 @@ public class ImagingStudyImageController {
     }
 
     @GetMapping("/orders/{orderId}/images/withdrawn")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST')")
+    // Policy rule 3: the imaging technician too (the strip reads it on every load): when, by whom
+    // and why an image they attached was withdrawn; never the bytes, never the withdrawal itself.
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','IMAGING_TECHNICIAN')")
     @Operation(summary = "The study's withdrawn key images, for the record",
         description = "When, by whom and why each was withdrawn; never the bytes. Hospital-scoped.")
     public ResponseEntity<List<com.example.hms.payload.dto.imaging.ImagingStudyImageWithdrawalDTO>> withdrawn(
@@ -123,7 +132,7 @@ public class ImagingStudyImageController {
     }
 
     @PostMapping("/images/{imageId}/withdraw")
-    @PreAuthorize(WRITE_ROLES)
+    @PreAuthorize(WITHDRAW_ROLES)
     @Operation(summary = "Withdraw a key image after signing",
         description = "A radiologist or the report's signer, with a reason. The file and the record are kept and "
             + "audited; every reader, the patient included, stops seeing the image.")

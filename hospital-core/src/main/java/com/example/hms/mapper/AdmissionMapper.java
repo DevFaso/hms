@@ -107,6 +107,9 @@ public class AdmissionMapper {
         dto.setRoomBed(admission.getRoomBed());
         // getId() on the lazy proxy does not trigger initialization
         dto.setBedId(admission.getBed() != null ? admission.getBed().getId() : null);
+        dto.setBedWardType(admission.getBed() != null && admission.getBed().getWard() != null
+            && admission.getBed().getWard().getWardType() != null
+            ? admission.getBed().getWard().getWardType().name() : null);
         dto.setAdmissionType(admission.getAdmissionType());
         dto.setStatus(admission.getStatus());
         dto.setAcuityLevel(admission.getAcuityLevel());
