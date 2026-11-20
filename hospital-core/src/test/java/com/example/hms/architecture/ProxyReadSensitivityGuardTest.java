@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * an HIV-tagged visit. Every proxy read went through the patient's own read,
  * and none asked the sensitivity tag.
  *
- * <p>The class is closed by five rules over the source. None of them trusts a
+ * <p>The class is closed by nine rules over the source. None of them trusts a
  * name or a path alone, so a new proxy read fails here until it goes through
  * {@code ProxyRecordFilter}:
  * <ol>
@@ -50,6 +50,22 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       ({@code HealthSummaryDTO}, and the profile inside it) is either filled
  *       by a filtered read or listed with why it needs none.</li>
  * </ol>
+ *
+ * <p>Policy 2026-11-20 (provisional) lets a proxy read a tagged row in three
+ * cases: a tuberculosis row for a grant that names that scope, a child's
+ * record for a verified parent, and a minor's result a clinician released.
+ * Four more rules keep those exceptions where they were decided:
+ * <ol start="6">
+ *   <li><b>who is reading</b>: only the grant check opens a proxy read
+ *       context, and only the filter consults it;</li>
+ *   <li><b>the releases</b>: only listed code touches a release
+ *       ({@code ProxySensitiveRelease}, its repository), each with its reason;</li>
+ *   <li><b>the categories</b>: every {@code SensitivityCategory} has a rule for
+ *       a minor in {@code ProxySensitivityPolicy} and a label in the portal;</li>
+ *   <li><b>the surrounding records</b>: the filter keeps judging a panel by its
+ *       components, a prescription by its medicine and an invoice by the tests
+ *       it bills, and reaches an exception through the policy only.</li>
+ * </ol>
  */
 @DisplayName("D2730: every proxy read withholds sensitive records")
 class ProxyReadSensitivityGuardTest {
@@ -57,6 +73,8 @@ class ProxyReadSensitivityGuardTest {
     private static final Path ROOT = Path.of("src/main/java/com/example/hms");
     private static final String PORTAL_SERVICE = "service/impl/PatientPortalServiceImpl.java";
     private static final String GRANT_CHECK = "verifyProxyAccess";
+    /** Policy 2026-11-20: the clinician's release of a minor's result. */
+    private static final String RELEASE_SERVICE = "service/recordaccess/MinorResultReleaseServiceImpl.java";
     private static final String GRANTOR_RESOLVER = "resolveProxyRecordsPatientId";
 
     /**
@@ -132,6 +150,21 @@ class ProxyReadSensitivityGuardTest {
             "imports and injects the repository for the use below"),
         Map.entry("service/maternity/NewbornRegistrationService.java#grantMotherProxy",
             "gives the mother a grant on her newborn: writes a grant row, reads no record"),
+        Map.entry(RELEASE_SERVICE,
+            "policy 2026-11-20: the clinician's release of a minor's result; imports and injects the repository"),
+        Map.entry(RELEASE_SERVICE + "#overviewOf",
+            "the clinician's screen: the parents' grants of a patient in their care (names, relationship, verified)"),
+        Map.entry(RELEASE_SERVICE + "#requireGuardianGrant",
+            "loads the grant a release names and checks it is this patient's: a grant row, no record"),
+        Map.entry(RELEASE_SERVICE + "#isLive", "reads a grant's status and expiry"),
+        Map.entry(RELEASE_SERVICE + "#isParentOrGuardian",
+            "reads a grant's declared relationship"),
+        Map.entry(RELEASE_SERVICE + "#verifyGuardian",
+            "a clinician verifies a parent's relationship: writes a grant row, hands the proxy nothing"),
+        Map.entry(RELEASE_SERVICE + "#release",
+            "a clinician releases one result to one grant: writes a release row; the proxy still reads through the filter"),
+        Map.entry(RELEASE_SERVICE + "#stampVerified",
+            "stamps a grant verified: writes a grant row"),
         Map.entry("controller/PatientImagingPortalController.java#getProxyImaging",
             "resolves the grantor, then reads with Reader.PROXY (rule 2 checks it)"),
         Map.entry("controller/PatientImagingPortalController.java#getProxyImagingImage",
@@ -511,6 +544,209 @@ class ProxyReadSensitivityGuardTest {
             }
         }
         return filtered;
+    }
+
+    // ── Rule 6 ──────────────────────────────────────────────────────────────
+
+    private static final String FILTER = "service/recordaccess/ProxyRecordFilter.java";
+    private static final String POLICY = "service/recordaccess/ProxySensitivityPolicy.java";
+
+    /** A proxy read context built or entered: what lets the filter apply an exception. */
+    private static final Pattern CONTEXT_OPENED = Pattern.compile(
+        "\\bnew\\s+(?:[\\w.]+\\.)?ProxyReadContext\\s*\\(|\\bproxyReadScope\\s*\\.\\s*enter\\s*\\(");
+    /** The context consulted. */
+    private static final Pattern CONTEXT_READ = Pattern.compile("\\bproxyReadScope\\s*\\.\\s*current\\s*\\(");
+
+    @Test
+    @DisplayName("rule 6: only the grant check opens a proxy read context, and only the filter consults it")
+    void onlyTheGrantCheckSaysWhoIsReading() throws IOException {
+        Set<String> opened = new TreeSet<>();
+        Set<String> read = new TreeSet<>();
+        for (Path file : sources("")) {
+            String code = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+            collect(code, rel(file), CONTEXT_OPENED, opened);
+            collect(code, rel(file), CONTEXT_READ, read);
+        }
+        assertThat(opened).as("a proxy read context is what lets the filter show a tagged row (a tuberculosis scope,"
+                + " a verified parent, a released result): only the grant check, which has just verified the grant,"
+                + " may build or enter one" + SourceScan.MANDATE)
+            .containsExactly(PORTAL_SERVICE + "#" + GRANT_CHECK);
+        assertThat(read).as("only the filter consults the proxy read context" + SourceScan.MANDATE)
+            .containsExactly(FILTER + "#readerOf");
+        // Whatever a field is called: the holder itself is named by these three files only.
+        Set<String> holders = new TreeSet<>();
+        for (Path file : sources("")) {
+            String code = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+            if (Pattern.compile("\\bProxyReadScope\\b").matcher(code).find()) {
+                holders.add(rel(file));
+            }
+        }
+        assertThat(holders).as("only the grant check and the filter hold the proxy read scope" + SourceScan.MANDATE)
+            .containsExactlyInAnyOrder(PORTAL_SERVICE, FILTER, "service/recordaccess/ProxyReadScope.java");
+    }
+
+    private static void collect(String code, String file, Pattern pattern, Set<String> into) {
+        Matcher match = pattern.matcher(code);
+        if (!match.find()) {
+            return;
+        }
+        List<Member> members = membersOf(code);
+        match.reset();
+        while (match.find()) {
+            int at = match.start();
+            String owner = members.stream().filter(m -> m.holds(at)).map(Member::name).findFirst().orElse(null);
+            into.add(owner == null ? file : file + "#" + owner);
+        }
+    }
+
+    // ── Rule 7 ──────────────────────────────────────────────────────────────
+
+    private static final Pattern RELEASE_TOKEN = Pattern.compile(
+        "\\bProxySensitiveRelease(?:Repository)?\\b|\\bfindReleasedLabOrderIds\\b"
+            + "|\\bexistsByProxyGrantIdAndLabOrderId\\b");
+
+    /** Everything that may touch a release of a minor's result, each with why it shows a proxy nothing more. */
+    private static final Map<String, String> RELEASE_USERS = Map.ofEntries(
+        Map.entry("model/ProxySensitiveRelease.java", "the release entity itself"),
+        Map.entry("repository/ProxySensitiveReleaseRepository.java", "the release repository itself"),
+        Map.entry(RELEASE_SERVICE,
+            "the clinician's release service; imports and injects the repository"),
+        Map.entry(RELEASE_SERVICE + "#release",
+            "writes a release after the checks (a minor, a verified parent or guardian, a clinician with care, a reason)"),
+        Map.entry(RELEASE_SERVICE + "#overviewOf",
+            "lists a patient's releases to the clinician, scoped by patient and hospital"),
+        Map.entry(FILTER, "imports and injects the repository for the use below"),
+        Map.entry(FILTER + "#ProxyRecordFilter", "the constructor: receives the repository"),
+        Map.entry(FILTER + "#releasedToReader",
+            "the one read a release widens: the orders released to the grant of this read, honoured by the policy"));
+
+    @Test
+    @DisplayName("rule 7: only listed code touches a release of a minor's result, each with its reason")
+    void onlyListedCodeTouchesARelease() throws IOException {
+        Set<String> found = new TreeSet<>();
+        for (Path file : sources("")) {
+            collect(SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8)), rel(file),
+                RELEASE_TOKEN, found);
+        }
+        List<String> problems = new ArrayList<>();
+        for (String use : found) {
+            if (!RELEASE_USERS.containsKey(use)) {
+                problems.add(use + " touches a release of a minor's result (ProxySensitiveRelease or its repository)"
+                    + " and is not on the allow-list: a release is written by MinorResultReleaseServiceImpl and"
+                    + " honoured by ProxyRecordFilter only; list it in RELEASE_USERS with why it shows a proxy"
+                    + " nothing more");
+            }
+        }
+        for (String listed : RELEASE_USERS.keySet()) {
+            if (!found.contains(listed)) {
+                problems.add(listed + " is on the release allow-list and no longer touches a release: remove the entry");
+            }
+        }
+        assertThat(problems).as(SourceScan.MANDATE).isEmpty();
+    }
+
+    // ── Rule 8 ──────────────────────────────────────────────────────────────
+
+    private static final Path PORTAL = Path.of("..", "hospital-portal", "src");
+    private static final Pattern ENUM_CONSTANT = Pattern.compile("(?m)^\\s{4}([A-Z][A-Z0-9_]*)\\s*\\(");
+
+    @Test
+    @DisplayName("rule 8: every sensitivity category has a rule for a minor, and a label in the portal")
+    void everyCategoryIsClassifiedAndLabelled() throws IOException {
+        String enumSource = SourceScan.stripComments(Files.readString(
+            ROOT.resolve("enums/SensitivityCategory.java"), StandardCharsets.UTF_8));
+        Set<String> categories = new TreeSet<>();
+        int enumBody = enumSource.indexOf('{');
+        Matcher constant = ENUM_CONSTANT.matcher(enumSource.substring(enumBody, enumSource.indexOf(';', enumBody)));
+        while (constant.find()) {
+            categories.add(constant.group(1));
+        }
+        assertThat(categories).as("the categories were found").contains("HIV", "STI", "VIRAL_HEPATITIS", "PREGNANCY",
+            "REPRODUCTIVE_HEALTH", "SEXUAL_DOMESTIC_VIOLENCE", "BEHAVIOURAL_HEALTH", "SUBSTANCE_USE", "GENETIC",
+            "SICKLE_CELL", "TUBERCULOSIS");
+
+        String policy = SourceScan.stripComments(Files.readString(ROOT.resolve(POLICY), StandardCharsets.UTF_8));
+        String portalList = Files.readString(
+            PORTAL.resolve("app/shared/sensitivity/sensitivity-category.ts"), StandardCharsets.UTF_8);
+        List<String> problems = new ArrayList<>();
+        for (String category : categories) {
+            if (!Pattern.compile("MINOR_RULES\\.put\\(\\s*SensitivityCategory\\." + category + "\\s*,").matcher(policy)
+                    .find()) {
+                problems.add("SensitivityCategory." + category + " has no rule for a minor in ProxySensitivityPolicy"
+                    + ".MINOR_RULES: decide what a verified parent reads of it (RELEASE_ONLY, PARENT_VISIBLE or"
+                    + " BY_ADOLESCENT_AGE)");
+            }
+            if (!portalList.contains("'" + category + "'")) {
+                problems.add("SensitivityCategory." + category + " is missing from the portal's list"
+                    + " (shared/sensitivity/sensitivity-category.ts): no editor could set it");
+            }
+            for (String locale : List.of("fr", "en", "es")) {
+                String bundle = Files.readString(PORTAL.resolve("assets/i18n/" + locale + ".json"),
+                    StandardCharsets.UTF_8);
+                if (!bundle.contains("\"CATEGORY_" + category + "\"")) {
+                    problems.add("SensitivityCategory." + category + " has no label SENSITIVITY_TAG.CATEGORY_"
+                        + category + " in " + locale + ".json");
+                }
+            }
+        }
+        assertThat(problems).as(SourceScan.MANDATE).isEmpty();
+    }
+
+    // ── Rule 9 ──────────────────────────────────────────────────────────────
+
+    /**
+     * What surrounds a hidden item and would name it (Loi 030-2008 art. 14:
+     * the financial and administrative information too): "filter method" to
+     * the call its body must keep, and why.
+     */
+    private static final Map<String, List<String>> SURROUNDING_RECORDS = Map.of(
+        "testCategory", List.of("componentCategory(",
+            "a combined panel is withheld whole as soon as one component is a tagged test"),
+        "medicineCategory", List.of("medicationCatalogItemRepository",
+            "a prescription of a tagged medicine (an antiretroviral) is withheld whatever visit wrote it"),
+        "billsNoHiddenOrder", List.of("admits(order, cache)",
+            "an invoice is withheld when its visit ordered a test the proxy may not read"),
+        "billsNoHiddenTest", List.of("testCategory(",
+            "an invoice is withheld when a line is priced from a tagged test"),
+        "releasedToReader", List.of("ProxySensitivityPolicy.honoursReleases(",
+            "a release counts only for a verified parent of a patient under 18"));
+
+    /** The entity overloads of {@code admits} that must reach the checks above. */
+    private static final Map<String, String> SURROUNDING_CALLERS = Map.of(
+        "billsNoHiddenOrder(", "admits(BillingInvoice) judges the tests its visit ordered",
+        "billsNoHiddenTest(", "admits(BillingInvoice) judges the tests its lines are priced from",
+        "medicineCategory(", "admits(Prescription) judges the medicine",
+        "releasedToReader(", "admits(LabOrder) honours a release");
+
+    @Test
+    @DisplayName("rule 9: the filter judges a panel, a medicine and an invoice by what they reveal, and excepts through the policy only")
+    void theFilterJudgesTheSurroundingRecords() throws IOException {
+        String code = SourceScan.stripComments(Files.readString(ROOT.resolve(FILTER), StandardCharsets.UTF_8));
+        Map<String, String> methods = methodsOf(code);
+        List<String> problems = new ArrayList<>();
+        SURROUNDING_RECORDS.forEach((method, rule) -> {
+            String body = methods.get(method);
+            if (body == null || !body.contains(rule.get(0))) {
+                problems.add("ProxyRecordFilter#" + method + " no longer holds `" + rule.get(0) + "`: " + rule.get(1));
+            }
+        });
+        String admits = methods.get("admits");
+        assertThat(admits).as("the filter's admits overloads were found").isNotNull();
+        SURROUNDING_CALLERS.forEach((call, why) -> {
+            if (!admits.contains(call)) {
+                problems.add("no admits overload of ProxyRecordFilter calls `" + call + "` any more: " + why);
+            }
+        });
+        // An exception for a tagged row is the policy's to make: one call, in the rule for a known patient.
+        Matcher policyCall = Pattern.compile("ProxySensitivityPolicy\\.admits\\(").matcher(code);
+        int calls = 0;
+        while (policyCall.find()) {
+            calls++;
+        }
+        assertThat(calls).as("ProxyRecordFilter asks ProxySensitivityPolicy.admits in one place").isEqualTo(1);
+        assertThat(methods.get("readerOf")).as("an exception applies only to a row of the patient the grant names")
+            .contains("grantorPatientId()");
+        assertThat(problems).as(SourceScan.MANDATE).isEmpty();
     }
 
     // ── Reading the source ──────────────────────────────────────────────────
