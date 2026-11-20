@@ -347,11 +347,26 @@ export class TriageFormComponent {
         this.saving.set(false);
         this.toast.success(this.translate.instant('TRIAGE.COMPLETED'));
         // QA D1564: a newborn's triage set is judged against the newborn bands; saved, and warned.
-        announceNewbornWarning(response?.newbornAlerts, this.toast, this.translate);
+        announceNewbornWarning(
+          response?.newbornAlerts,
+          this.toast,
+          this.translate,
+          this.encounter?.patientFullName || this.encounter?.patientName,
+        );
         // QA D1890: a mother's severe pressure after birth; saved, and warned (URGENT).
-        announcePostpartumWarning(response?.postpartumAlerts, this.toast, this.translate);
+        announcePostpartumWarning(
+          response?.postpartumAlerts,
+          this.toast,
+          this.translate,
+          this.encounter?.patientFullName || this.encounter?.patientName,
+        );
         // r54: an adult's severe pressure; saved, and warned (a recheck; URGENT with a sign of organ damage).
-        announceHypertensionWarning(response?.hypertensionAlerts, this.toast, this.translate);
+        announceHypertensionWarning(
+          response?.hypertensionAlerts,
+          this.toast,
+          this.translate,
+          this.encounter?.patientFullName || this.encounter?.patientName,
+        );
         this.triageCompleted.emit(response);
       },
       error: (err) => {

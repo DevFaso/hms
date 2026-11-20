@@ -831,14 +831,50 @@ export class PostpartumTabComponent {
     );
   }
 
-  /** QA D1424: a request to remeasure, or an acceptable-range notice, reads as its sentence on the chart. */
+  /**
+   * QA D1424: a request to remeasure, or an acceptable-range notice, reads as its sentence on the chart.
+   * QA D2581 (r65): so does every other alert, most severe first: the critical heart-rate, breathing
+   * and oxygen messages the doctors receive as CRITICAL were hover-only. A range notice (INFO, « not an
+   * emergency in itself ») is left out when the same system raised a stronger alert, which it would
+   * contradict. The severities are the server's (NewbornAlertRules); nothing is re-judged here.
+   */
   newbornAlertsToRead(a: NewbornAssessmentResponse): NewbornAlert[] {
-    return (a.alerts ?? []).filter(
-      (alert) =>
-        this.isNewbornValueCheck(alert) ||
-        this.isNewbornDangerSign(alert) ||
-        alert.severity === 'INFO',
+    const alerts = a.alerts ?? [];
+    const raised = new Set(
+      alerts.filter((alert) => alert.severity !== 'INFO' && alert.type).map((alert) => alert.type),
     );
+    return alerts
+      .filter((alert) => alert.severity !== 'INFO' || !alert.type || !raised.has(alert.type))
+      .slice()
+      .sort((x, y) => newbornSeverityRank(x.severity) - newbornSeverityRank(y.severity));
+  }
+
+  /**
+   * QA D2581 (r65): one chip per system, at its most severe alert. A range notice (INFO) is read as
+   * its sentence and never makes a chip: a green « Cardiovasculaire » beside a red one read as normal.
+   */
+  newbornAlertChips(a: NewbornAssessmentResponse): { type: string; severity: string }[] {
+    const bySystem = new Map<string, string>();
+    for (const alert of a.alerts ?? []) {
+      if (alert.severity === 'INFO' || !alert.type) continue;
+      const current = bySystem.get(alert.type);
+      if (!current || newbornSeverityRank(alert.severity) < newbornSeverityRank(current)) {
+        bySystem.set(alert.type, alert.severity);
+      }
+    }
+    return [...bySystem.entries()]
+      .map(([type, severity]) => ({ type, severity }))
+      .sort((x, y) => newbornSeverityRank(x.severity) - newbornSeverityRank(y.severity));
+  }
+
+  /** QA D2581: a sentence is coloured by its own severity; a range notice stays plain. */
+  newbornSentenceClass(alert: NewbornAlert): string {
+    if (alert.severity === 'URGENT' || this.isNewbornDangerSign(alert))
+      return 'risk-badge risk-high';
+    if (alert.severity === 'CAUTION' || this.isNewbornValueCheck(alert)) {
+      return 'risk-badge risk-moderate';
+    }
+    return '';
   }
 
   readonly newbornDangerSigns = NEWBORN_DANGER_SIGNS;
@@ -1049,5 +1085,19 @@ export class PostpartumTabComponent {
         this.loadScreenings(patient.id);
       },
     });
+  }
+}
+
+/** QA D2581: the order alerts are read in, most severe first (NewbornAlertSeverity). */
+function newbornSeverityRank(severity: string | null | undefined): number {
+  switch (severity) {
+    case 'URGENT':
+      return 0;
+    case 'CAUTION':
+      return 1;
+    case 'INFO':
+      return 2;
+    default:
+      return 3;
   }
 }

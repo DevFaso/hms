@@ -344,7 +344,8 @@ describe('PostpartumTabComponent — screening', () => {
       } as NewbornAssessmentResponse).length;
     expect(read('newborn-temperature-who-danger')).toBe(1);
     expect(read('newborn-temperature-critical')).toBe(1);
-    expect(read('newborn-heart-rate')).toBe(0);
+    // QA D2581 (r65): a critical heart rate is read too, no longer hover-only.
+    expect(read('newborn-heart-rate')).toBe(1);
   });
 
   it('CR-05: the chart shows each sign as recorded, and a row nobody looked at never reads as absent', () => {
@@ -449,7 +450,56 @@ describe('PostpartumTabComponent — screening', () => {
         { code: 'newborn-heart-rate', severity: 'URGENT', message: 'c' },
       ],
     } as never);
-    expect(read.map((alert) => alert.message)).toEqual(['a', 'b']);
+    // QA D2581 (r65): every alert is read, most severe first.
+    expect(read.map((alert) => alert.message)).toEqual(['c', 'a', 'b']);
+  });
+
+  it('QA D2581: the row matches the alerts (critical messages read, no contradicting notice, no green chip)', () => {
+    const cmp = TestBed.createComponent(PostpartumTabComponent).componentInstance;
+    const assessment = {
+      alerts: [
+        {
+          type: 'THERMOREGULATION',
+          code: 'newborn-temperature-critical',
+          severity: 'URGENT',
+          message: 't',
+        },
+        { type: 'CARDIOVASCULAR', code: 'newborn-heart-rate', severity: 'URGENT', message: 'hr' },
+        {
+          type: 'CARDIOVASCULAR',
+          code: 'newborn-reference-heart-rate',
+          severity: 'INFO',
+          message: 'not urgent',
+        },
+        {
+          type: 'RESPIRATORY',
+          code: 'newborn-respiratory-rate',
+          severity: 'URGENT',
+          message: 'rr',
+        },
+        { type: 'RESPIRATORY', code: 'newborn-oxygen', severity: 'URGENT', message: 'oxygen' },
+        {
+          type: 'RESPIRATORY',
+          code: 'newborn-reference-rr',
+          severity: 'INFO',
+          message: 'not urgent',
+        },
+        { type: 'FEEDING', code: 'newborn-reference-x', severity: 'INFO', message: 'range' },
+      ],
+    } as never;
+    const read = cmp.newbornAlertsToRead(assessment).map((alert) => alert.message);
+    expect(read).toEqual(['t', 'hr', 'rr', 'oxygen', 'range']);
+    const chips = cmp.newbornAlertChips(assessment);
+    expect(chips.map((chip) => chip.type)).toEqual([
+      'THERMOREGULATION',
+      'CARDIOVASCULAR',
+      'RESPIRATORY',
+    ]);
+    expect(chips.every((chip) => chip.severity === 'URGENT')).toBeTrue();
+    const urgent = { severity: 'URGENT', code: 'x', type: 'RESPIRATORY', message: '' } as never;
+    const info = { severity: 'INFO', code: 'x', type: 'FEEDING', message: '' } as never;
+    expect(cmp.newbornSentenceClass(urgent)).toContain('risk-high');
+    expect(cmp.newbornSentenceClass(info)).toBe('');
   });
 
   it('QA D1424: a post-partum 70/120 is refused on the diastolic', () => {
