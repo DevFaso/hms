@@ -392,7 +392,9 @@
         @if (oneStepNeedsDeferral()) {
           <div class="form-row">
             <div class="field full-width" data-testid="dispense-defer">
-              <span class="field-label">{{ 'PHARMACY_MONEY.DEFERRAL.ONESTEP_TITLE' | translate }}</span>
+              <span class="field-label">{{
+                'PHARMACY_MONEY.DEFERRAL.ONESTEP_TITLE' | translate
+              }}</span>
               @if (oneStepCharge() > 0) {
                 {{ ' '
                 }}<small class="field-hint" data-testid="dispense-defer-charge">{{

@@ -347,7 +347,10 @@ describe('RefillApprovalListComponent', () => {
 
       confirmAsk.and.resolveTo(true);
       await pharmacy().pharmacistRefuse(item);
-      expect(service.pharmacistRefuse).toHaveBeenCalledOnceWith('r1', 'Interaction avec la warfarine');
+      expect(service.pharmacistRefuse).toHaveBeenCalledOnceWith(
+        'r1',
+        'Interaction avec la warfarine',
+      );
     });
 
     it('a decided card shows the note of the pharmacist and on what authority it was decided', () => {

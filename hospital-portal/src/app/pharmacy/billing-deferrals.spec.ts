@@ -69,9 +69,14 @@ describe('BillingDeferralsComponent (policy rule 6: the work list)', () => {
   let confirm: jasmine.SpyObj<ConfirmService>;
   let fixture: ComponentFixture<BillingDeferralsComponent>;
 
-  function render(rows: BillingDeferral[], p: HospitalBillingPolicy | null = policy()): HTMLElement {
+  function render(
+    rows: BillingDeferral[],
+    p: HospitalBillingPolicy | null = policy(),
+  ): HTMLElement {
     api.list.and.returnValue(of({ data: rows }) as never);
-    api.policy.and.returnValue(p ? (of({ data: p }) as never) : throwError(() => ({ status: 403 })));
+    api.policy.and.returnValue(
+      p ? (of({ data: p }) as never) : throwError(() => ({ status: 403 })),
+    );
     TestBed.configureTestingModule({
       imports: [BillingDeferralsComponent, TranslateModule.forRoot()],
       providers: [
@@ -98,7 +103,9 @@ describe('BillingDeferralsComponent (policy rule 6: the work list)', () => {
   }
 
   function type(host: HTMLElement, testid: string, value: string): void {
-    const el = host.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[data-testid="${testid}"]`)!;
+    const el = host.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      `[data-testid="${testid}"]`,
+    )!;
     el.value = value;
     el.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -117,13 +124,21 @@ describe('BillingDeferralsComponent (policy rule 6: the work list)', () => {
     const host = render([
       deferral(),
       deferral({ id: 'd-2', canDecide: false }),
-      deferral({ id: 'd-3', kind: 'URGENCY_OVERRIDE', status: 'EXECUTED', canDecide: false, canReview: true }),
+      deferral({
+        id: 'd-3',
+        kind: 'URGENCY_OVERRIDE',
+        status: 'EXECUTED',
+        canDecide: false,
+        canReview: true,
+      }),
     ]);
     expect(host.querySelector('[data-testid="deferrals-provisional"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="deferral-approve-d-1"]')).not.toBeNull();
     // Whoever asked, or a pharmacist, gets no decision: the row says another person decides.
     expect(host.querySelector('[data-testid="deferral-approve-d-2"]')).toBeNull();
-    expect(host.querySelector('[data-testid="deferral-d-2"] [data-testid="deferral-not-yours"]')).not.toBeNull();
+    expect(
+      host.querySelector('[data-testid="deferral-d-2"] [data-testid="deferral-not-yours"]'),
+    ).not.toBeNull();
     expect(host.querySelector('[data-testid="deferral-review-d-3"]')).not.toBeNull();
     expect(host.querySelector('[data-testid="deferral-cancel-d-3"]')).toBeNull();
   });
@@ -169,7 +184,9 @@ describe('BillingDeferralsComponent (policy rule 6: the work list)', () => {
     click(host, 'deferral-approve-d-1');
     await settle();
     // The number the counter typed is offered; billing confirms or corrects it.
-    expect(host.querySelector<HTMLInputElement>('[data-testid="deferral-step-cover"]')!.value).toBe('AMU-42');
+    expect(host.querySelector<HTMLInputElement>('[data-testid="deferral-step-cover"]')!.value).toBe(
+      'AMU-42',
+    );
     type(host, 'deferral-step-cover', '');
     click(host, 'deferral-step-confirm');
     expect(api.approve).not.toHaveBeenCalled();
@@ -218,11 +235,15 @@ describe('BillingDeferralsComponent (policy rule 6: the work list)', () => {
     api.updatePolicy.and.returnValue(
       of({ data: policy({ autoConsultationOnPlannedAdmission: true }) }) as never,
     );
-    const renewal = host.querySelector<HTMLInputElement>('[data-testid="policy-pharmacist-renewal"]')!;
+    const renewal = host.querySelector<HTMLInputElement>(
+      '[data-testid="policy-pharmacist-renewal"]',
+    )!;
     expect(renewal.disabled).toBeTrue();
     expect(renewal.checked).toBeFalse();
 
-    const consultation = host.querySelector<HTMLInputElement>('[data-testid="policy-auto-consultation"]')!;
+    const consultation = host.querySelector<HTMLInputElement>(
+      '[data-testid="policy-auto-consultation"]',
+    )!;
     expect(consultation.checked).toBeFalse();
     consultation.click();
     fixture.detectChanges();
@@ -249,7 +270,9 @@ describe('BillingDeferralsComponent (policy rule 6: the work list)', () => {
     click(host, 'deferral-approve-d-1');
     for (const width of [1366, 1024, 768, 390]) {
       host.style.width = `${width}px`;
-      expect(host.scrollWidth).withContext(`${width}px`).toBeLessThanOrEqual(host.clientWidth + 1);
+      expect(host.scrollWidth)
+        .withContext(`${width}px`)
+        .toBeLessThanOrEqual(host.clientWidth + 1);
     }
   });
 });
@@ -305,7 +328,12 @@ describe('BillingDeferralChoiceComponent (policy rule 6: the counter)', () => {
 
   it('a deferral somebody else approved is offered and travels with the fill', () => {
     const host = render([
-      deferral({ status: 'APPROVED', canDecide: false, canExecute: true, decidedByName: 'Mariam Comptable' }),
+      deferral({
+        status: 'APPROVED',
+        canDecide: false,
+        canExecute: true,
+        decidedByName: 'Mariam Comptable',
+      }),
     ]);
     const use = host.querySelector<HTMLInputElement>('[data-testid="deferral-use-approved"]')!;
     expect(use.checked).toBeTrue();
@@ -314,7 +342,9 @@ describe('BillingDeferralChoiceComponent (policy rule 6: the counter)', () => {
 
   it('never the same person: whoever approved it cannot hand the fill over on it', () => {
     const host = render([deferral({ status: 'APPROVED', canDecide: false, canExecute: false })]);
-    expect(host.querySelector<HTMLInputElement>('[data-testid="deferral-use-approved"]')!.disabled).toBeTrue();
+    expect(
+      host.querySelector<HTMLInputElement>('[data-testid="deferral-use-approved"]')!.disabled,
+    ).toBeTrue();
     expect(host.querySelector('[data-testid="deferral-own-approval"]')).not.toBeNull();
     expect(fixture.componentInstance.choice()).toBeNull();
   });
@@ -334,7 +364,12 @@ describe('BillingDeferralChoiceComponent (policy rule 6: the counter)', () => {
     component.requestReason = '  Bon AMU présenté ';
     component.requestCover = ' AMU-42 ';
     api.counter.and.returnValue(
-      of({ data: { onOpenStay: false, open: [deferral({ canDecide: false, kind: 'THIRD_PARTY_COVER' })] } }) as never,
+      of({
+        data: {
+          onOpenStay: false,
+          open: [deferral({ canDecide: false, kind: 'THIRD_PARTY_COVER' })],
+        },
+      }) as never,
     );
     component.ask();
     fixture.detectChanges();
@@ -368,7 +403,9 @@ describe('BillingDeferralChoiceComponent (policy rule 6: the counter)', () => {
     fixture.detectChanges();
     for (const width of [768, 390]) {
       host.style.width = `${width}px`;
-      expect(host.scrollWidth).withContext(`${width}px`).toBeLessThanOrEqual(host.clientWidth + 1);
+      expect(host.scrollWidth)
+        .withContext(`${width}px`)
+        .toBeLessThanOrEqual(host.clientWidth + 1);
     }
   });
 });

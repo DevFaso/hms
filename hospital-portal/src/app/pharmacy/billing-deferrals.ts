@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, ElementRef, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  OnInit,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Observable } from 'rxjs';
@@ -30,7 +37,15 @@ type Step = 'approve' | 'reject' | 'cancel' | 'review';
 @Component({
   selector: 'app-billing-deferrals',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, CfaPipe, DashPipe, KeyLabelPipe, ServerTimePipe],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    CfaPipe,
+    DashPipe,
+    KeyLabelPipe,
+    ServerTimePipe,
+  ],
   templateUrl: './billing-deferrals.html',
   styleUrl: './billing-deferrals.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -186,7 +201,11 @@ export class BillingDeferralsComponent implements OnInit {
     this.run(row, this.api.approve(row.id, body), 'PHARMACY_MONEY.DEFERRAL.APPROVE_DONE');
   }
 
-  private run(row: BillingDeferral, call: Observable<ApiResponse<BillingDeferral>>, doneKey: string): void {
+  private run(
+    row: BillingDeferral,
+    call: Observable<ApiResponse<BillingDeferral>>,
+    doneKey: string,
+  ): void {
     if (this.busy()) return;
     this.busy.set(row.id);
     call.subscribe({
@@ -236,7 +255,9 @@ export class BillingDeferralsComponent implements OnInit {
         this.policySaving.set(false);
         // The box goes back to what the server holds.
         this.policy.set({ ...(this.policy() as HospitalBillingPolicy) });
-        this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY_MONEY.POLICY.FAILED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY_MONEY.POLICY.FAILED'),
+        );
       },
     });
   }

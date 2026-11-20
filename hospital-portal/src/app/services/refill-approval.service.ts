@@ -99,14 +99,18 @@ export class RefillApprovalService {
   /** Policy rule 1: the pharmacist forwards the request to its prescriber with flags; decides nothing. */
   pharmacistReview(refillId: string, pharmacistNote: string): Observable<RefillRequest> {
     return this.http
-      .put<ApiWrapper<RefillRequest>>(`${this.base}/${refillId}/pharmacist-review`, { pharmacistNote })
+      .put<ApiWrapper<RefillRequest>>(`${this.base}/${refillId}/pharmacist-review`, {
+        pharmacistNote,
+      })
       .pipe(map((r) => r.data));
   }
 
   /** Policy rule 1: the pharmacist refuses to dispense, with the reason; the prescriber is told. */
   pharmacistRefuse(refillId: string, pharmacistNote: string): Observable<RefillRequest> {
     return this.http
-      .put<ApiWrapper<RefillRequest>>(`${this.base}/${refillId}/pharmacist-refuse`, { pharmacistNote })
+      .put<ApiWrapper<RefillRequest>>(`${this.base}/${refillId}/pharmacist-refuse`, {
+        pharmacistNote,
+      })
       .pipe(map((r) => r.data));
   }
 

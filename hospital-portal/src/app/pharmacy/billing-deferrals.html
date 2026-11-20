@@ -32,7 +32,9 @@
       {{ 'PHARMACY_MONEY.DEFERRAL.LOAD_FAILED' | translate }}
     </p>
   } @else if (rows().length === 0) {
-    <p class="muted" data-testid="deferrals-empty">{{ 'PHARMACY_MONEY.DEFERRAL.NONE' | translate }}</p>
+    <p class="muted" data-testid="deferrals-empty">
+      {{ 'PHARMACY_MONEY.DEFERRAL.NONE' | translate }}
+    </p>
   } @else {
     <ul class="deferral-list" data-testid="deferrals-list">
       @for (r of rows(); track r.id) {
@@ -161,7 +163,9 @@
                       data-testid="deferral-step-cover"
                       [(ngModel)]="stepCover"
                     />
-                    <small class="hint">{{ 'PHARMACY_MONEY.DEFERRAL.COVER_HINT' | translate }}</small>
+                    <small class="hint">{{
+                      'PHARMACY_MONEY.DEFERRAL.COVER_HINT' | translate
+                    }}</small>
                   </div>
                 }
                 @if (a.step === 'approve' && r.kind === 'OUTPATIENT_CREDIT') {
@@ -179,7 +183,9 @@
                       data-testid="deferral-step-limit"
                       [(ngModel)]="stepLimit"
                     />
-                    <small class="hint">{{ 'PHARMACY_MONEY.DEFERRAL.LIMIT_HINT' | translate }}</small>
+                    <small class="hint">{{
+                      'PHARMACY_MONEY.DEFERRAL.LIMIT_HINT' | translate
+                    }}</small>
                   </div>
                 }
                 <div class="field">

@@ -256,7 +256,7 @@
               <span class="recon-amount">{{ f.due | cfa: 'XOF' }}</span>
               <!-- Policy rule 6: the deferral behind the fill: its kind and who answers for it. -->
               <strong class="recon-deferral-kind" data-testid="recon-deferral-kind">{{
-                (f.kind ?? 'UNAPPROVED') | keyLabel: 'PHARMACY_MONEY.DEFERRAL.KIND.'
+                f.kind ?? 'UNAPPROVED' | keyLabel: 'PHARMACY_MONEY.DEFERRAL.KIND.'
               }}</strong>
               @if (f.reason) {
                 <em class="recon-reason">{{ f.reason }}</em>
@@ -273,7 +273,8 @@
               }
               @if (f.coverReference) {
                 <span class="recon-deferral-who">{{
-                  'PHARMACY_MONEY.DEFERRAL.COVER_REFERENCE_VALUE' | translate: { ref: f.coverReference }
+                  'PHARMACY_MONEY.DEFERRAL.COVER_REFERENCE_VALUE'
+                    | translate: { ref: f.coverReference }
                 }}</span>
               }
               @if (f.kind === 'URGENCY_OVERRIDE') {

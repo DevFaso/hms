@@ -11,12 +11,10 @@ import { ApiResponse } from './pharmacy.service';
 
 /** What is asked for (the first two) and what the counter records by itself (the last two). */
 export type BillingDeferralKind =
-  | 'THIRD_PARTY_COVER'
-  | 'OUTPATIENT_CREDIT'
-  | 'URGENCY_OVERRIDE'
-  | 'ADMISSION_ACCOUNT';
+  'THIRD_PARTY_COVER' | 'OUTPATIENT_CREDIT' | 'URGENCY_OVERRIDE' | 'ADMISSION_ACCOUNT';
 
-export type BillingDeferralStatus = 'REQUESTED' | 'APPROVED' | 'REJECTED' | 'EXECUTED' | 'CANCELLED';
+export type BillingDeferralStatus =
+  'REQUESTED' | 'APPROVED' | 'REJECTED' | 'EXECUTED' | 'CANCELLED';
 
 export interface BillingDeferral {
   id: string;

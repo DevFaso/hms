@@ -36,17 +36,20 @@
             <span>
               {{ a.kind | keyLabel: 'PHARMACY_MONEY.DEFERRAL.KIND.' }} ·
               {{
-                'PHARMACY_MONEY.DEFERRAL.APPROVED_BY' | translate: { name: (a.decidedByName | dash) }
+                'PHARMACY_MONEY.DEFERRAL.APPROVED_BY'
+                  | translate: { name: (a.decidedByName | dash) }
               }}
             </span>
             @if (a.creditLimit) {
               <span>{{
-                'PHARMACY_MONEY.DEFERRAL.LIMIT' | translate: { amount: (a.creditLimit | cfa: 'XOF') }
+                'PHARMACY_MONEY.DEFERRAL.LIMIT'
+                  | translate: { amount: (a.creditLimit | cfa: 'XOF') }
               }}</span>
             }
             @if (a.coverReference) {
               <span>{{
-                'PHARMACY_MONEY.DEFERRAL.COVER_REFERENCE_VALUE' | translate: { ref: a.coverReference }
+                'PHARMACY_MONEY.DEFERRAL.COVER_REFERENCE_VALUE'
+                  | translate: { ref: a.coverReference }
               }}</span>
             }
             @if (!a.canExecute) {
@@ -61,7 +64,9 @@
           <p>
             <strong>{{ 'PHARMACY_MONEY.DEFERRAL.PENDING' | translate }}</strong>
             {{ p.kind | keyLabel: 'PHARMACY_MONEY.DEFERRAL.KIND.' }} ·
-            {{ 'PHARMACY_MONEY.DEFERRAL.ASKED_BY' | translate: { name: (p.requestedByName | dash) } }}
+            {{
+              'PHARMACY_MONEY.DEFERRAL.ASKED_BY' | translate: { name: (p.requestedByName | dash) }
+            }}
           </p>
           <button
             type="button"
@@ -138,7 +143,9 @@
           >
             {{ 'PHARMACY_MONEY.DEFERRAL.REQUEST_SEND' | translate }}
           </button>
-          <small class="deferral-hint">{{ 'PHARMACY_MONEY.DEFERRAL.REQUEST_HINT' | translate }}</small>
+          <small class="deferral-hint">{{
+            'PHARMACY_MONEY.DEFERRAL.REQUEST_HINT' | translate
+          }}</small>
         </div>
       }
 

@@ -609,7 +609,9 @@ describe('DispensingComponent', () => {
     expect(component.oneStepCharge()).toBe(1000);
     // The pharmacist's own « à facturer » reason box is gone; the deferral choice stands in its place.
     expect(el.querySelector('#dispDeferReason')).toBeNull();
-    expect(el.querySelector('[data-testid="dispense-defer"] app-billing-deferral-choice')).not.toBeNull();
+    expect(
+      el.querySelector('[data-testid="dispense-defer"] app-billing-deferral-choice'),
+    ).not.toBeNull();
     expect(deferralSvc.counter).toHaveBeenCalledWith(mockWorkQueue.data.content[0].id);
 
     // Nothing chosen: the fill does not leave, and the option is marked.
@@ -617,19 +619,24 @@ describe('DispensingComponent', () => {
     fixture.detectChanges();
     expect(pharmacySvc.createDispense).not.toHaveBeenCalled();
     expect(toastSvc.error).toHaveBeenCalledWith('PHARMACY_MONEY.DEFERRAL.CHOICE_REQUIRED');
-    expect(
-      el.querySelector('#dispense-deferral-mode-urgency')!.getAttribute('aria-invalid'),
-    ).toBe('true');
+    expect(el.querySelector('#dispense-deferral-mode-urgency')!.getAttribute('aria-invalid')).toBe(
+      'true',
+    );
 
     // An urgency override, with its reason.
     el.querySelector<HTMLInputElement>('[data-testid="deferral-use-urgency"]')!.click();
     fixture.detectChanges();
-    const reason = el.querySelector<HTMLTextAreaElement>('[data-testid="deferral-urgency-reason"]')!;
+    const reason = el.querySelector<HTMLTextAreaElement>(
+      '[data-testid="deferral-urgency-reason"]',
+    )!;
     reason.value = '  Crise, caisse fermée ';
     reason.dispatchEvent(new Event('input'));
     fixture.detectChanges();
     component.submitDispense();
-    const sent = pharmacySvc.createDispense.calls.mostRecent().args[0] as unknown as Record<string, unknown>;
+    const sent = pharmacySvc.createDispense.calls.mostRecent().args[0] as unknown as Record<
+      string,
+      unknown
+    >;
     expect(sent['billingUrgencyReason']).toBe('Crise, caisse fermée');
     expect('billingDeferralId' in sent).toBeFalse();
     expect('billingDeferredReason' in sent).toBeFalse();
@@ -637,7 +644,10 @@ describe('DispensingComponent', () => {
     // A prepared fill is paid or deferred at hand-over: neither travels with « Prête ».
     component.selectPrescription(mockWorkQueue.data.content[0]);
     component.submitReady();
-    const ready = pharmacySvc.markReady.calls.mostRecent().args[0] as unknown as Record<string, unknown>;
+    const ready = pharmacySvc.markReady.calls.mostRecent().args[0] as unknown as Record<
+      string,
+      unknown
+    >;
     expect('billingUrgencyReason' in ready).toBeFalse();
     expect('billingDeferralId' in ready).toBeFalse();
   });
@@ -679,7 +689,10 @@ describe('DispensingComponent', () => {
 
     component.submitDispense();
 
-    const sent = pharmacySvc.createDispense.calls.mostRecent().args[0] as unknown as Record<string, unknown>;
+    const sent = pharmacySvc.createDispense.calls.mostRecent().args[0] as unknown as Record<
+      string,
+      unknown
+    >;
     expect(sent['billingDeferralId']).toBe('def-1');
     expect('billingUrgencyReason' in sent).toBeFalse();
   });
@@ -699,12 +712,17 @@ describe('DispensingComponent', () => {
     component.selectPrescription(mockWorkQueue.data.content[0]);
     component.form.quantityDispensed = 10;
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('[data-testid="deferral-open-stay"]')).not.toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="deferral-open-stay"]'),
+    ).not.toBeNull();
 
     component.submitDispense();
 
     expect(pharmacySvc.createDispense).toHaveBeenCalled();
-    const sent = pharmacySvc.createDispense.calls.mostRecent().args[0] as unknown as Record<string, unknown>;
+    const sent = pharmacySvc.createDispense.calls.mostRecent().args[0] as unknown as Record<
+      string,
+      unknown
+    >;
     expect('billingDeferralId' in sent).toBeFalse();
     expect('billingUrgencyReason' in sent).toBeFalse();
   });
@@ -1034,7 +1052,9 @@ describe('DispensingComponent', () => {
 
     el.querySelector<HTMLInputElement>('[data-testid="deferral-use-urgency"]')!.click();
     fixture.detectChanges();
-    const reason = el.querySelector<HTMLTextAreaElement>('[data-testid="deferral-urgency-reason"]')!;
+    const reason = el.querySelector<HTMLTextAreaElement>(
+      '[data-testid="deferral-urgency-reason"]',
+    )!;
     reason.value = 'Crise, caisse fermée';
     reason.dispatchEvent(new Event('input'));
     fixture.detectChanges();

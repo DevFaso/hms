@@ -264,7 +264,12 @@ describe('Pharmacy reconciliation page (QA D2673)', () => {
         data: {
           ...day,
           differences: [],
-          money: { ...day.money, deferredTotal: 3000, urgencyOverrideTotal: 1000, admissionAccountTotal: 1500 },
+          money: {
+            ...day.money,
+            deferredTotal: 3000,
+            urgencyOverrideTotal: 1000,
+            admissionAccountTotal: 1500,
+          },
           deferred: [
             {
               dispenseId: 'd-1',
@@ -276,7 +281,13 @@ describe('Pharmacy reconciliation page (QA D2673)', () => {
               handedOverByName: 'Awa Pharmacienne',
               reviewed: false,
             },
-            { dispenseId: 'd-2', medicationName: 'Paracétamol', quantity: 6, due: 1500, kind: 'ADMISSION_ACCOUNT' },
+            {
+              dispenseId: 'd-2',
+              medicationName: 'Paracétamol',
+              quantity: 6,
+              due: 1500,
+              kind: 'ADMISSION_ACCOUNT',
+            },
             {
               dispenseId: 'd-3',
               medicationName: 'Paracétamol',
@@ -299,15 +310,11 @@ describe('Pharmacy reconciliation page (QA D2673)', () => {
     const fixture = TestBed.createComponent(PharmacyReconciliationComponent);
     fixture.detectChanges();
     const host = fixture.nativeElement as HTMLElement;
-    const kinds = Array.from(host.querySelectorAll('[data-testid="recon-deferral-kind"]')).map((e) =>
-      e.textContent?.trim(),
+    const kinds = Array.from(host.querySelectorAll('[data-testid="recon-deferral-kind"]')).map(
+      (e) => e.textContent?.trim(),
     );
     // The label pipe falls back to the code where no translation is loaded (as here).
-    expect(kinds).toEqual([
-      'URGENCY_OVERRIDE',
-      'ADMISSION_ACCOUNT',
-      'UNAPPROVED',
-    ]);
+    expect(kinds).toEqual(['URGENCY_OVERRIDE', 'ADMISSION_ACCOUNT', 'UNAPPROVED']);
     const review = host.querySelectorAll('[data-testid="recon-override-review"]');
     expect(review.length).toBe(1);
     expect(review[0].textContent).toContain('PHARMACY_MONEY.RECON.OVERRIDE_TO_REVIEW');
