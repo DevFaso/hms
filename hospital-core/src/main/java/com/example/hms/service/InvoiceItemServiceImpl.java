@@ -179,6 +179,11 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
             auditLineAfterCommit(AuditEventType.INVOICE_LINE_PRICE_OVERRIDDEN, "Tariff price version "
                 + saved.getPriceListPriceId() + " overridden on draft line " + saved.getId() + " of invoice "
                 + invoice.getId(), saved.getId(), invoice, null);
+        } else if (priceChange == PriceChange.PRICED_BY_HAND) {
+            // QA D2703: an unpriced line priced (or a line set to 0 F) by hand: ids in the description, reason in details.
+            auditLineAfterCommit(AuditEventType.INVOICE_LINE_PRICED_MANUALLY, "Draft line " + saved.getId()
+                + " of invoice " + invoice.getId() + " priced by hand", saved.getId(), invoice,
+                saved.getOverrideReason());
         } else if (priceChange == PriceChange.RESTORED) {
             // Review #1197 L2: setting an overridden line back to the price list is audited too.
             auditLineAfterCommit(AuditEventType.INVOICE_LINE_PRICE_RESTORED, "Tariff price version "
@@ -201,7 +206,9 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
      *       (never the super-admin alone). It becomes MANUAL, keeps the tariff's price in {@code tariffUnitPrice}
      *       and the reason, and an audit row is written (returns true).</li>
      *   <li>Set back to the tariff's price, it is a TARIFF line again, with no reason.</li>
-     *   <li>Any other line priced by hand is MANUAL, with no reason (an unpriced line priced, as before).</li>
+     *   <li>Any other line priced by hand is MANUAL. QA D2703: pricing a line that stood at 0 F (an unpriced line),
+     *       or setting one to 0 F, needs {@code overrideReason}; the reason is kept on the line, an audit row is
+     *       written and the day report lists it. Any other change of a hand-priced line needs no reason.</li>
      * </ul>
      * The line's invoice is already known to be a DRAFT of the acting hospital ({@link #writableInvoice}).
      */
@@ -211,6 +218,13 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
         boolean changed = current == null || newPrice.compareTo(current) != 0;
         java.math.BigDecimal tariff = com.example.hms.mapper.InvoiceItemMapper.tariffUnitPriceOf(item);
         if (tariff == null) {
+            boolean fromZero = current == null || current.signum() == 0;
+            if (changed && (fromZero || newPrice.signum() == 0)) {
+                item.setOverrideReason(requireOverrideReason(rawReason));
+                item.setUnitPrice(newPrice);
+                item.setPriceSource(InvoiceLinePriceSource.MANUAL);
+                return PriceChange.PRICED_BY_HAND;
+            }
             item.setUnitPrice(newPrice);
             if (changed) {
                 item.setPriceSource(InvoiceLinePriceSource.MANUAL);
@@ -230,14 +244,7 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
             // Overridden before at this same price (the quantity or the label changed): the reason stands.
             return PriceChange.NONE;
         }
-        String reason = rawReason == null ? "" : rawReason.trim();
-        if (reason.isEmpty()) {
-            throw new FieldBusinessException(FIELD_OVERRIDE_REASON, "billing.item.overrideReasonRequired");
-        }
-        if (reason.length() > OVERRIDE_REASON_MAX) {
-            throw new FieldBusinessException(FIELD_OVERRIDE_REASON, "billing.item.overrideReasonTooLong",
-                OVERRIDE_REASON_MAX);
-        }
+        String reason = requireOverrideReason(rawReason);
         if (!isTariffWriter(invoice)) {
             throw new ClientSafeAccessDeniedException(
                 com.example.hms.utility.MessageUtil.resolve("billing.item.overrideNotAllowed"));
@@ -249,8 +256,22 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
         return PriceChange.OVERRIDDEN;
     }
 
-    /** What a line edit did to a price-list price. */
-    private enum PriceChange { NONE, OVERRIDDEN, RESTORED }
+    /** The reason a price is set by hand: required, at most 500 characters, never a card number. */
+    private static String requireOverrideReason(String rawReason) {
+        String reason = rawReason == null ? "" : rawReason.trim();
+        if (reason.isEmpty()) {
+            throw new FieldBusinessException(FIELD_OVERRIDE_REASON, "billing.item.overrideReasonRequired");
+        }
+        if (reason.length() > OVERRIDE_REASON_MAX) {
+            throw new FieldBusinessException(FIELD_OVERRIDE_REASON, "billing.item.overrideReasonTooLong",
+                OVERRIDE_REASON_MAX);
+        }
+        com.example.hms.utility.CardNumbers.requireNone(reason, FIELD_OVERRIDE_REASON);
+        return reason;
+    }
+
+    /** What a line edit did to a price-list price (or, QA D2703, to a line with none). */
+    private enum PriceChange { NONE, OVERRIDDEN, RESTORED, PRICED_BY_HAND }
 
     /**
      * D-1/D-2: a billing specialist or a hospital admin of the invoice's hospital, never the super-admin alone.

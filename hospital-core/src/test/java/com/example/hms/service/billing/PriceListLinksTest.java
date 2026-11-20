@@ -98,6 +98,19 @@ class PriceListLinksTest {
     }
 
     @Test
+    void qaD2700ALabTestIsStoredOnItsFirstVersionSoARevisionKeepsThePrice() {
+        LabTestDefinition v1 = labTest("TWP-NFS", HOSPITAL);
+        v1.setActive(false);
+        LabTestDefinition v2 = labTest("TWP-NFS", HOSPITAL);
+        v2.setSupersedesDefinitionId(v1.getId());
+        when(labTests.findLiveByCodeAtHospital("TWP-NFS", HOSPITAL)).thenReturn(List.of(v2));
+        when(labTests.findById(v1.getId())).thenReturn(Optional.of(v1));
+
+        assertThat(links.normalise(HOSPITAL, PriceListLinkType.LAB_TEST_DEFINITION, "TWP-NFS"))
+            .isEqualTo(v1.getId().toString());
+    }
+
+    @Test
     void aPlatformLabTestIsLinkableAndSoIsOneGivenByItsId() {
         LabTestDefinition platform = labTest("GLOBAL-GLY", null);
         when(labTests.findLiveGlobalByCode("GLOBAL-GLY")).thenReturn(List.of(platform));

@@ -24,6 +24,8 @@ public class LabOrderChargeSource implements VisitChargeSource {
     static final EnumSet<LabOrderStatus> NOT_BILLED = EnumSet.of(LabOrderStatus.CANCELLED, LabOrderStatus.ENTERED_IN_ERROR);
 
     private final LabOrderRepository labOrderRepository;
+    /** QA D2700: the ordered version's lineage, to find the price linked to the test, not to one version. */
+    private final com.example.hms.repository.LabTestDefinitionRepository labTestDefinitionRepository;
 
     @Override
     public BillableOrderType type() {
@@ -42,8 +44,14 @@ public class LabOrderChargeSource implements VisitChargeSource {
             String test = definition != null ? definition.getName() : null;
             if (test != null && !test.isBlank()) {
                 // PR 3: the tariff linked to the test definition first, else the service of the same name.
-                Optional<TariffResolver.Tariff> tariff = definition.getId() == null ? Optional.empty()
-                    : visit.tariff(PriceListLinkType.LAB_TEST_DEFINITION, definition.getId().toString());
+                // QA D2700: linked to the test, whatever version was ordered (a revision never unprices it).
+                Optional<TariffResolver.Tariff> tariff = Optional.empty();
+                for (UUID version : LabTestLineage.ancestry(definition, labTestDefinitionRepository)) {
+                    tariff = visit.tariff(PriceListLinkType.LAB_TEST_DEFINITION, version.toString());
+                    if (tariff.isPresent()) {
+                        break;
+                    }
+                }
                 lines.add(tariff.map(t -> VisitCharge.tariffed(t, ItemCategory.LAB_TEST, 1))
                     .orElseGet(() -> VisitCharge.of(test, ItemCategory.LAB_TEST, 1, visit.prices().sameName(test))));
             }

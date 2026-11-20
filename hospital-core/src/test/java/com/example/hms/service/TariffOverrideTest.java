@@ -158,18 +158,47 @@ class TariffOverrideTest {
     }
 
     @Test
-    @DisplayName("an unpriced line is priced without a reason, as before, and becomes MANUAL")
-    void anUnpricedLineNeedsNoReason() {
+    @DisplayName("QA D2703: an unpriced line priced by hand needs a reason, keeps it, and is audited (ids only)")
+    void anUnpricedLineNeedsAReasonAndIsAudited() {
         line.setPriceSource(InvoiceLinePriceSource.UNPRICED);
         line.setPriceListItemId(null);
         line.setPriceListPriceId(null);
         line.setUnitPrice(new BigDecimal("0.00"));
+        UUID lineId = line.getId();
+        InvoiceItemRequestDTO noReason = priced("25000", null);
 
-        InvoiceItemResponseDTO saved = service.updateInvoiceItem(line.getId(), priced("1500", null), Locale.FRENCH);
+        assertThatThrownBy(() -> service.updateInvoiceItem(lineId, noReason, Locale.FRENCH))
+            .isInstanceOfSatisfying(FieldBusinessException.class,
+                e -> assertThat(e.getField()).isEqualTo("overrideReason"));
+        verify(itemRepository, never()).save(any());
+        assertThat(line.getUnitPrice()).isEqualByComparingTo("0");
+
+        InvoiceItemResponseDTO saved = service.updateInvoiceItem(lineId,
+            priced("25000", "Prix ACC-NORMAL de la grille, version absente le jour de la naissance"), Locale.FRENCH);
 
         assertThat(saved.getPriceSource()).isEqualTo("MANUAL");
         assertThat(saved.getTariffUnitPrice()).isNull();
+        assertThat(saved.getOverrideReason()).startsWith("Prix ACC-NORMAL");
+        ArgumentCaptor<AuditEventRequestDTO> event = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(audit).logEvent(event.capture());
+        assertThat(event.getValue().getEventType()).isEqualTo(AuditEventType.INVOICE_LINE_PRICED_MANUALLY);
+        assertThat(event.getValue().getEventDescription()).doesNotContain("25000").doesNotContain("ACC-NORMAL");
+    }
+
+    @Test
+    @DisplayName("QA D2703: a hand-priced line set to 0 F CFA needs a reason too; another hand price does not")
+    void aHandPricedLineSetToZeroNeedsAReason() {
+        line.setPriceSource(InvoiceLinePriceSource.MANUAL);
+        line.setPriceListItemId(null);
+        line.setPriceListPriceId(null);
+        line.setUnitPrice(new BigDecimal("1000.00"));
+        UUID lineId = line.getId();
+
+        service.updateInvoiceItem(lineId, priced("1200", null), Locale.FRENCH);
         verify(audit, never()).logEvent(any());
+        InvoiceItemRequestDTO free = priced("0", null);
+        assertThatThrownBy(() -> service.updateInvoiceItem(lineId, free, Locale.FRENCH))
+            .isInstanceOf(FieldBusinessException.class);
     }
 
     @Test

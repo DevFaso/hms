@@ -25,7 +25,8 @@ import java.util.UUID;
  * <ul>
  *   <li>SYSTEM: one of {@link PriceListSystemKey}.</li>
  *   <li>LAB_TEST_DEFINITION: a live lab test the hospital can order (its own or the platform catalogue's), given by
- *       its id or its test code (a finance lead cannot type an id, README A-1); stored as the id.</li>
+ *       its id or its test code (a finance lead cannot type an id, README A-1); stored as the id of the test's
+ *       FIRST version (QA D2700: {@link LabTestLineage}), so a revision of the test keeps its price.</li>
  *   <li>PROCEDURE_CODE: the procedure order's code (else its name), trimmed, single spaces, upper case
  *       ({@link #procedureKey}; PR 3, deferred from the #1179 review).</li>
  *   <li>IMAGING_STUDY: {@code <ImagingModality>:<study type>}, the study type folded to lower case without accents
@@ -63,7 +64,9 @@ public class PriceListLinks {
         }
         String stored = switch (type) {
             case SYSTEM -> systemKey(key);
-            case LAB_TEST_DEFINITION -> labTest(hospitalId, key).getId().toString();
+            // QA D2700: stored on the test's lineage (its first version), so the lab's next version keeps the price.
+            case LAB_TEST_DEFINITION ->
+                LabTestLineage.rootId(labTest(hospitalId, key), labTestDefinitionRepository).toString();
             case PROCEDURE_CODE -> procedureKey(key);
             case IMAGING_STUDY -> imagingKey(key);
             case TRANSFUSION_PRODUCT -> transfusionProduct(key);
