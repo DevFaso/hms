@@ -40,19 +40,22 @@ class ImagingExamRecordTest {
     void aTechnicianNeverCancelsAnExamNotStartedNorMovesTheOrderAnywhereElse() {
         for (ImagingOrderStatus from : ImagingOrderStatus.values()) {
             if (from != ImagingOrderStatus.IN_PROGRESS) {
-                assertThatThrownBy(() -> ImagingExamRecord.requireTechnicianStep(from, to(ImagingOrderStatus.CANCELLED)))
+                ImagingOrderStatusUpdateRequestDTO cancel = to(ImagingOrderStatus.CANCELLED);
+                assertThatThrownBy(() -> ImagingExamRecord.requireTechnicianStep(from, cancel))
                     .as("cancel from " + from).isInstanceOf(ClientSafeAccessDeniedException.class);
             }
             for (ImagingOrderStatus target : new ImagingOrderStatus[] {ImagingOrderStatus.DRAFT,
                 ImagingOrderStatus.ORDERED, ImagingOrderStatus.PENDING_AUTHORIZATION, ImagingOrderStatus.SCHEDULED,
                 ImagingOrderStatus.RESULTS_AVAILABLE}) {
-                assertThatThrownBy(() -> ImagingExamRecord.requireTechnicianStep(from, to(target)))
+                ImagingOrderStatusUpdateRequestDTO move = to(target);
+                assertThatThrownBy(() -> ImagingExamRecord.requireTechnicianStep(from, move))
                     .as(from + " to " + target).isInstanceOf(ClientSafeAccessDeniedException.class);
             }
         }
         // A same-status write on a study in progress is how a schedule is recorded: not theirs.
-        assertThatThrownBy(() -> ImagingExamRecord.requireTechnicianStep(ImagingOrderStatus.IN_PROGRESS,
-            to(ImagingOrderStatus.IN_PROGRESS))).isInstanceOf(ClientSafeAccessDeniedException.class);
+        ImagingOrderStatusUpdateRequestDTO sameStatus = to(ImagingOrderStatus.IN_PROGRESS);
+        assertThatThrownBy(() -> ImagingExamRecord.requireTechnicianStep(ImagingOrderStatus.IN_PROGRESS, sameStatus))
+            .isInstanceOf(ClientSafeAccessDeniedException.class);
     }
 
     @Test
@@ -118,14 +121,14 @@ class ImagingExamRecordTest {
         for (ImagingOrderStatus status : ImagingOrderStatus.values()) {
             boolean checkIn = status == ImagingOrderStatus.ORDERED || status == ImagingOrderStatus.PENDING_AUTHORIZATION
                 || status == ImagingOrderStatus.SCHEDULED || status == ImagingOrderStatus.IN_PROGRESS;
-            boolean record = status == ImagingOrderStatus.IN_PROGRESS || status == ImagingOrderStatus.COMPLETED;
+            boolean recordOpen = status == ImagingOrderStatus.IN_PROGRESS || status == ImagingOrderStatus.COMPLETED;
             if (checkIn) {
                 assertThatCode(() -> ImagingExamRecord.requireCheckInOpen(status)).doesNotThrowAnyException();
             } else {
                 assertThatThrownBy(() -> ImagingExamRecord.requireCheckInOpen(status))
                     .as("check-in at " + status).isInstanceOf(BusinessException.class);
             }
-            if (record) {
+            if (recordOpen) {
                 assertThatCode(() -> ImagingExamRecord.requireRecordOpen(status)).doesNotThrowAnyException();
             } else {
                 assertThatThrownBy(() -> ImagingExamRecord.requireRecordOpen(status))

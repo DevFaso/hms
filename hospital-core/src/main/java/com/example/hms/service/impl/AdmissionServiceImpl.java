@@ -146,6 +146,26 @@ public class AdmissionServiceImpl implements AdmissionService {
     }
 
     /**
+     * Who admits: a physician at the hospital admits any type; a midwife there, a woman in labour
+     * (policy 2) or the newborn of a delivery she attended (policy rule 2); anyone else is refused.
+     */
+    private void requireCallerMayAdmit(AdmissionRequestDTO request, Patient patient, Staff admittingProvider,
+                                       UUID callerId, UUID hospitalId) {
+        if (callerId != null && isPhysicianAt(callerId, hospitalId)) {
+            requirePhysician(admittingProvider, hospitalId);
+            return;
+        }
+        if (callerId == null || !roleValidator.isMidwife(callerId, hospitalId)) {
+            throw new BusinessException("admission.caller.notPermitted");
+        }
+        if (request.getAdmissionType() == AdmissionType.NEWBORN && midwifeNewbornCare != null) {
+            requireMidwifeNewbornAdmission(patient, hospitalId, admittingProvider, callerId);
+        } else {
+            requireMidwifeLabourAdmission(request, patient, admittingProvider, callerId);
+        }
+    }
+
+    /**
      * Policy rule 2 (2026-11-20, provisional): a midwife admits the newborn of a delivery she
      * attended at this hospital, as its admitting provider ({@code MidwifeNewbornCare}). Any other
      * newborn, and every newborn for a nurse, stays a physician's admission.
@@ -189,17 +209,7 @@ public class AdmissionServiceImpl implements AdmissionService {
         // held at another of her hospitals counts for nothing here.
         UUID callerId = roleValidator.getCurrentUserId();
         UUID targetHospitalId = hospital.getId();
-        if (callerId != null && isPhysicianAt(callerId, targetHospitalId)) {
-            requirePhysician(admittingProvider, targetHospitalId);
-        } else if (callerId != null && roleValidator.isMidwife(callerId, targetHospitalId)) {
-            if (request.getAdmissionType() == AdmissionType.NEWBORN && midwifeNewbornCare != null) {
-                requireMidwifeNewbornAdmission(patient, targetHospitalId, admittingProvider, callerId);
-            } else {
-                requireMidwifeLabourAdmission(request, patient, admittingProvider, callerId);
-            }
-        } else {
-            throw new BusinessException("admission.caller.notPermitted");
-        }
+        requireCallerMayAdmit(request, patient, admittingProvider, callerId, targetHospitalId);
 
         // QA D304: one open stay per patient. The patient row lock serialises two
         // concurrent admissions, so the second one sees the first and is refused.

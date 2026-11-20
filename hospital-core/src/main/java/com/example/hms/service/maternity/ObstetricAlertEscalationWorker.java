@@ -67,10 +67,11 @@ public class ObstetricAlertEscalationWorker {
     public static final String NOTIFICATION_TYPE = "OBSTETRIC_ALERT";
     public static final String ESCALATION_TYPE = "OBSTETRIC_ALERT_ESCALATION";
 
-    private static final List<String> FIRST_NOTICE_ROLES = List.of("ROLE_DOCTOR", "ROLE_MIDWIFE");
-    private static final List<String> REMINDER_ROLES = List.of("ROLE_DOCTOR", "ROLE_MIDWIFE", "ROLE_NURSE");
-    /** One of {@link #FIRST_NOTICE_ROLES}: the physician a newborn's danger sign always reaches. */
+    /** The physician of the first circle; policy rule 2: a newborn's danger sign always reaches one. */
     private static final String NEWBORN_PHYSICIAN_ROLE = "ROLE_DOCTOR";
+    private static final String MIDWIFE_ROLE = "ROLE_MIDWIFE";
+    private static final List<String> FIRST_NOTICE_ROLES = List.of(NEWBORN_PHYSICIAN_ROLE, MIDWIFE_ROLE);
+    private static final List<String> REMINDER_ROLES = List.of(NEWBORN_PHYSICIAN_ROLE, MIDWIFE_ROLE, "ROLE_NURSE");
     private static final int TITLE_MAX = 500;
     static final String REMINDER_KEY = "obstetric.alert.escalation";
     /**

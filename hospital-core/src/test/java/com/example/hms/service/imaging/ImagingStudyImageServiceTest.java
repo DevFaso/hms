@@ -571,7 +571,7 @@ class ImagingStudyImageServiceTest {
         }
 
         @Test
-        void correctsTheirCaptionAndRemovesTheirImageUntilTheSignature_thenNeither() throws IOException {
+        void correctsTheirCaptionAndRemovesTheirImageUntilTheSignature_thenNeither() {
             ImagingStudyImage own = image(null, callerId);
             as(TECHNICIAN);
             assertThat(service.list(order.getId()).get(0).captionEditable()).isTrue();

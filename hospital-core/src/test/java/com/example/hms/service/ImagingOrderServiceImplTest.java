@@ -43,6 +43,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.lenient;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -1974,11 +1975,6 @@ class ImagingOrderServiceImplTest {
                     .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new).toList()));
     }
 
-    @org.junit.jupiter.api.AfterEach
-    void clearPolicyRule3Session() {
-        org.springframework.security.core.context.SecurityContextHolder.clearContext();
-    }
-
     private ImagingOrder studyOfAnotherProvider(ImagingOrderStatus status) {
         ImagingOrder order = orderAt(hospital);
         order.setStatus(status);
@@ -2114,7 +2110,7 @@ class ImagingOrderServiceImplTest {
         imagingOrderService.checkInPatient(orderId);
         assertThat(order.getCheckedInAt()).isEqualTo(first);
         assertThat(order.getCheckedInByUserId()).isEqualTo(technician);
-        verify(imagingOrderRepository, org.mockito.Mockito.times(1)).save(order);
+        verify(imagingOrderRepository, times(1)).save(order);
     }
 
     @org.junit.jupiter.params.ParameterizedTest
@@ -2163,8 +2159,9 @@ class ImagingOrderServiceImplTest {
         ImagingOrder order = studyOfAnotherProvider(status);
         signInAs(UUID.randomUUID(), TECHNICIAN);
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.recordExam(orderId,
-                com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO.builder().technicalNote("x").build()))
+        com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO anExamRecord =
+            com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO.builder().technicalNote("x").build();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.recordExam(orderId, anExamRecord))
             .isInstanceOf(com.example.hms.exception.BusinessException.class);
         assertThat(order.getExamTechnicalNote()).isNull();
         verify(imagingOrderRepository, never()).save(any());
@@ -2182,8 +2179,9 @@ class ImagingOrderServiceImplTest {
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.checkInPatient(orderId))
             .isInstanceOf(ResourceNotFoundException.class);
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.recordExam(orderId,
-                com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO.builder().technicalNote("x").build()))
+        com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO anExamRecord =
+            com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO.builder().technicalNote("x").build();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.recordExam(orderId, anExamRecord))
             .isInstanceOf(ResourceNotFoundException.class);
         verify(imagingOrderRepository, never()).save(any());
     }

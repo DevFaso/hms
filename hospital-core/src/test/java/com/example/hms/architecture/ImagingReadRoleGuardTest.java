@@ -332,11 +332,10 @@ class ImagingReadRoleGuardTest {
                 }
             }
         }
-        assertThat(admitted).as("an endpoint the policy forbids the imaging technician (no order, no report"
-            + " write or signature, no withdrawal after signing)" + SourceScan.MANDATE)
-            .doesNotContainAnyElementsOf(NEVER_THE_TECHNICIAN);
-        assertThat(admitted).as("the endpoints that admit the imaging technician (policy rule 3): a new one is"
-            + " added here with its reason, a removed one breaks their work" + SourceScan.MANDATE)
+        assertThat(admitted).as("the endpoints that admit the imaging technician (policy rule 3). Never an"
+            + " order, a report write or signature, or a withdrawal after signing; a new one is added here with"
+            + " its reason, a removed one breaks their work" + SourceScan.MANDATE)
+            .doesNotContainAnyElementsOf(NEVER_THE_TECHNICIAN)
             .isEqualTo(new TreeSet<>(TECHNICIAN_ENDPOINTS));
     }
 
@@ -351,8 +350,8 @@ class ImagingReadRoleGuardTest {
             }
         }
         // A caller who is technician and patient reads as staff, not as the patient of every study.
-        assertThat(com.example.hms.service.PatientSubjectReaderRoles.IMAGING_REPORT_READS)
-            .contains("ROLE_" + TECHNICIAN);
+        Set<String> staffReportReaders = com.example.hms.service.PatientSubjectReaderRoles.IMAGING_REPORT_READS;
+        assertThat(staffReportReaders).contains("ROLE_" + TECHNICIAN);
     }
 
     @Test

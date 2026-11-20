@@ -854,16 +854,18 @@ class ImagingReportServiceImplTest {
         doAnswer(inv -> ImagingReportResponseDTO.builder().id(((ImagingReport) inv.getArgument(0)).getId()).build())
             .when(imagingReportMapper).toResponseDTO(any(ImagingReport.class));
         signIn("ROLE_IMAGING_TECHNICIAN");
+        UUID finalId = finalRead.getId();
+        UUID draftId = draft.getId();
 
         // An exam somebody else performed (or nobody is recorded for): no report at all.
         imagingOrder.setPerformedByUserId(UUID.randomUUID());
         assertThat(imagingReportService.getReportsForOrder(orderId)).isEmpty();
         assertThatThrownBy(() -> imagingReportService.getLatestReportForOrder(orderId))
             .isInstanceOf(ResourceNotFoundException.class);
-        assertThatThrownBy(() -> imagingReportService.getReport(finalRead.getId()))
+        assertThatThrownBy(() -> imagingReportService.getReport(finalId))
             .isInstanceOf(ResourceNotFoundException.class);
         imagingOrder.setPerformedByUserId(null);
-        assertThatThrownBy(() -> imagingReportService.getReport(finalRead.getId()))
+        assertThatThrownBy(() -> imagingReportService.getReport(finalId))
             .isInstanceOf(ResourceNotFoundException.class);
 
         // Their own exam: the released reads, never the work in progress.
@@ -872,7 +874,7 @@ class ImagingReportServiceImplTest {
             .containsExactly(finalRead.getId());
         assertThat(imagingReportService.getLatestReportForOrder(orderId).getId()).isEqualTo(finalRead.getId());
         assertThat(imagingReportService.getReport(finalRead.getId()).getId()).isEqualTo(finalRead.getId());
-        assertThatThrownBy(() -> imagingReportService.getReport(draft.getId()))
+        assertThatThrownBy(() -> imagingReportService.getReport(draftId))
             .isInstanceOf(ResourceNotFoundException.class);
 
         // A technician who is also a nurse reads as the care team does.
@@ -887,7 +889,7 @@ class ImagingReportServiceImplTest {
             .containsExactly(finalRead.getId());
         assertThat(imagingReportService.getLatestReportForOrder(orderId).getId()).isEqualTo(finalRead.getId());
         assertThat(imagingReportService.getReport(finalRead.getId()).getId()).isEqualTo(finalRead.getId());
-        assertThatThrownBy(() -> imagingReportService.getReport(draft.getId()))
+        assertThatThrownBy(() -> imagingReportService.getReport(draftId))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 

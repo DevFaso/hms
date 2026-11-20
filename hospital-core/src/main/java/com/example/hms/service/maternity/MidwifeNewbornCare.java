@@ -173,7 +173,7 @@ public class MidwifeNewbornCare {
     /** The token carries a role the bed endpoints admitted before the midwife joined them. */
     private static boolean admittedBeforeThisRule() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || authentication.getAuthorities() == null) {
+        if (authentication == null) {
             return false;
         }
         return authentication.getAuthorities().stream().map(GrantedAuthority::getAuthority)

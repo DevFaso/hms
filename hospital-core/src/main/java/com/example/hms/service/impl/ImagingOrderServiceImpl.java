@@ -546,7 +546,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         }
         UUID actorId = com.example.hms.security.CallerIdentity.currentUserId();
         com.example.hms.model.User actor = actorId == null ? null : userRepository.findById(actorId).orElse(null);
-        order.setCheckedInAt(LocalDateTime.now());
+        order.setCheckedInAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         order.setCheckedInByUserId(actorId);
         order.setCheckedInByName(actor != null ? displayName(actor) : null);
         return imagingOrderMapper.toResponseDTO(imagingOrderRepository.save(order));
@@ -569,7 +569,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         order.setExamContrastAdministered(request.getContrastAdministered());
         order.setExamContrastDetails(blankToNull(request.getContrastDetails()));
         order.setExamRadiationDoseMgy(request.getRadiationDoseMgy());
-        order.setExamRecordedAt(LocalDateTime.now());
+        order.setExamRecordedAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         order.setExamRecordedByUserId(com.example.hms.security.CallerIdentity.currentUserId());
         return imagingOrderMapper.toResponseDTO(imagingOrderRepository.save(order));
     }
