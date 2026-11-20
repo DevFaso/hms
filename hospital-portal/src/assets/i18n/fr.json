@@ -2101,7 +2101,8 @@
       "REVERSAL_EVENT": "{{what}} : contre-passation {{refund}} sur la facture {{invoice}}",
       "CASH_SESSION_EVENT": "{{what}} : caisse {{session}}",
       "INVOICE_LINE_PRICED_MANUALLY": "Ligne {{line}} du brouillon {{invoice}} tarifée à la main",
-      "IMAGING_REPORTING_SETTINGS_CHANGED": "Réglages des comptes rendus d'imagerie modifiés"
+      "IMAGING_REPORTING_SETTINGS_CHANGED": "Réglage de l'échographie modifié",
+      "IMAGING_EXAM_RECORD_UPDATED": "Réalisation de l'examen d'imagerie mise à jour"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -8167,7 +8168,7 @@
         "CASH_SESSION": "Caisse",
         "PROBLEM_SENSITIVITY": "Sensibilité du diagnostic",
         "LAB_TEST_DEFINITION_SENSITIVITY": "Sensibilité de l’examen de laboratoire",
-        "HOSPITAL_IMAGING_REPORTING_SETTINGS": "Réglages des comptes rendus d'imagerie"
+        "HOSPITAL_IMAGING_REPORTING_SETTINGS": "Réglage de l'échographie"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",
@@ -15277,16 +15278,17 @@
     "DISCONTINUE": "Interrompre l'examen",
     "DISCONTINUE_TITLE": "Interrompre cet examen ?",
     "DISCONTINUE_MESSAGE": "La demande est close et son prescripteur voit le motif. Une nouvelle demande sera nécessaire pour refaire l'examen.",
-    "DISCONTINUED": "Examen interrompu."
+    "DISCONTINUED": "Examen interrompu.",
+    "ULTRASOUND_PHYSICIANS_ONLY": "Échographie : dans cet établissement, l'examen est réalisé par un médecin. Vous pouvez enregistrer l'arrivée du patient et joindre des images. Règle provisoire, en attente d'approbation du radiologue ou du directeur médical."
   },
   "IMAGING_REPORTING_SETTINGS": {
-    "TITLE": "Comptes rendus d'imagerie",
-    "ULTRASOUND": "Échographie : compte rendu par un non-radiologue",
+    "TITLE": "Échographie",
+    "ULTRASOUND": "Échographie par un non-médecin",
     "PHYSICIANS_ONLY": "Médecins uniquement (par défaut)",
-    "NON_PHYSICIAN": "Un non-médecin formé peut rédiger le compte rendu d'une échographie",
-    "SETTING_ONLY": "Ce réglage enregistre seulement la décision de l'établissement : aujourd'hui, tout compte rendu d'échographie reste rédigé et signé par un médecin, quel que soit le choix. Règle provisoire, en attente d'approbation du radiologue ou du directeur médical et de la position du ministère.",
+    "NON_PHYSICIAN": "Un technicien d'imagerie peut réaliser l'échographie",
     "SAVED": "Réglage enregistré.",
     "SAVE_FAILED": "Le réglage n'a pas pu être enregistré.",
-    "LOAD_FAILED": "Les réglages des comptes rendus d'imagerie n'ont pas pu être lus."
+    "LOAD_FAILED": "Le réglage de l'échographie n'a pas pu être lu.",
+    "WHAT_IT_DOES": "Avec « Médecins uniquement », un technicien d'imagerie ne peut ni démarrer, ni terminer, ni interrompre une échographie, ni en saisir la réalisation. Dans tous les cas, le compte rendu est rédigé et signé par un médecin. Règle provisoire, en attente d'approbation du radiologue ou du directeur médical et de la position du ministère."
   }
 }

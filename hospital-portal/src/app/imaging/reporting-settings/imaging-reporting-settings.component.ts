@@ -19,11 +19,12 @@ type UltrasoundReporting = 'PHYSICIANS_ONLY' | 'NON_PHYSICIAN';
 /**
  * Policy rule 3 (owner 2026-11-20, PROVISIONAL): a hospital's imaging reporting settings (V346).
  *
- * One setting, « Échographie : compte rendu par un non-radiologue »: whether a non-physician may
- * report an ultrasound at this hospital. It defaults to physicians only. It is a recorded
- * decision only: nothing opens reporting to anyone on it (sonographer reporting is not built),
- * and the page says so. A hospital admin sets their own hospital; the super-admin the one chosen
- * on the page that hosts this block.
+ * One setting, « Échographie par un non-médecin » (owner decision 2026-11-20): whether an imaging
+ * technician may PERFORM an ultrasound at this hospital. It defaults to physicians only, and the
+ * server then refuses a technician the exam's steps and its record on an ultrasound order. The
+ * report stays a physician's whatever is chosen (sonographer reporting is not built), and the
+ * page says so. A hospital admin sets their own hospital; the super-admin the one chosen on the
+ * page that hosts this block.
  */
 @Component({
   selector: 'app-imaging-reporting-settings',
@@ -72,7 +73,7 @@ type UltrasoundReporting = 'PHYSICIANS_ONLY' | 'NON_PHYSICIAN';
           </div>
         </fieldset>
         <p class="reporting-settings__note" data-testid="us-reporting-provisional">
-          {{ 'IMAGING_REPORTING_SETTINGS.SETTING_ONLY' | translate }}
+          {{ 'IMAGING_REPORTING_SETTINGS.WHAT_IT_DOES' | translate }}
         </p>
         <button
           type="button"
@@ -151,7 +152,7 @@ export class ImagingReportingSettingsComponent implements OnChanges {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (settings) => {
-          this.apply(settings.ultrasoundNonPhysicianReporting);
+          this.apply(settings.ultrasoundByNonPhysician);
           this.loading.set(false);
         },
         error: () => {
@@ -173,7 +174,7 @@ export class ImagingReportingSettingsComponent implements OnChanges {
       .subscribe({
         next: (settings) => {
           this.saving.set(false);
-          this.apply(settings.ultrasoundNonPhysicianReporting);
+          this.apply(settings.ultrasoundByNonPhysician);
           this.toast.success(this.translate.instant('IMAGING_REPORTING_SETTINGS.SAVED'));
         },
         error: (err: unknown) => {

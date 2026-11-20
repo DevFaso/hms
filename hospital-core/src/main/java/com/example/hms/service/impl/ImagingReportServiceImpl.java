@@ -411,7 +411,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         }
         // Policy rule 3: an imaging technician reads the released reports of exams they performed
         // (one who is also an administrator reads as the administrator above: any released report).
-        if (!adminReader() && technicianReader() && !technicianMayRead(report)) {
+        if (technicianReader(report.getImagingOrder()) && !adminReader() && !technicianMayRead(report)) {
             throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
         }
         return imagingReportMapper.toResponseDTO(report);
@@ -439,10 +439,11 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             }
         }
         // Policy rule 3: an imaging technician too, and only for an exam they performed.
-        if (!asPatient && !adminReader() && technicianReader() && !performedByCaller(order)) {
+        boolean technician = !asPatient && technicianReader(order);
+        if (technician && !adminReader() && !performedByCaller(order)) {
             throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, imagingOrderId);
         }
-        if (!asPatient && (adminReader() || technicianReader())) {
+        if (!asPatient && (adminReader() || technician)) {
             // An administrator reads the newest RELEASED version; work in progress is not theirs.
             return imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(imagingOrderId).stream()
                 .filter(ImagingReport::isReleasedToPatient)
@@ -467,7 +468,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     @Transactional(readOnly = true)
     public List<ImagingReportResponseDTO> getReportsForOrder(UUID imagingOrderId) {
         ImagingOrder order = loadOrderScoped(imagingOrderId);
-        boolean technician = !adminReader() && technicianReader();
+        boolean technician = technicianReader(order) && !adminReader();
         // Policy rule 3: an exam somebody else performed has no report a technician reads.
         if (technician && !performedByCaller(order)) {
             return List.of();
@@ -487,7 +488,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         }
         return imagingReportRepository
             .findByHospital_IdAndReportStatusOrderByPerformedAtDesc(requireReadableHospital(hospitalId), status).stream()
-            .filter(releasedFilter())
+            .filter(releasedFilter(hospitalId))
             .map(imagingReportMapper::toResponseDTO)
             .toList();
     }
@@ -500,7 +501,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         }
         return imagingReportRepository
             .findByHospital_IdAndModalityOrderByPerformedAtDesc(requireReadableHospital(hospitalId), modality).stream()
-            .filter(releasedFilter())
+            .filter(releasedFilter(hospitalId))
             .map(imagingReportMapper::toResponseDTO)
             .toList();
     }
@@ -532,22 +533,28 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         return com.example.hms.security.ClinicalActor.isAdministrativeImagingReader();
     }
 
-    private java.util.function.Predicate<ImagingReport> releasedFilter() {
+    private java.util.function.Predicate<ImagingReport> releasedFilter(UUID hospitalId) {
         boolean releasedOnly = adminReader();
         // Policy rule 3, belt and braces: the hospital lists do not admit a technician; if one ever
         // reaches them they get the reports of exams they performed, released, and no others.
-        boolean technician = !releasedOnly && technicianReader();
+        boolean technician = technicians().readsAsTechnicianAt(hospitalId) && !releasedOnly;
         return report -> technician ? technicianMayRead(report) : !releasedOnly || report.isReleasedToPatient();
     }
 
     // ── The imaging technician (policy rule 3, 2026-11-20, provisional) ──
 
     /**
-     * The caller reads imaging as a technician only (no clinical imaging role of their own):
-     * released reports of the exams they performed, never a draft, never another's exam.
+     * The caller reads imaging as a technician only AT THE ORDER'S HOSPITAL (a technician there,
+     * with no clinical imaging role there): released reports of the exams they performed, never a
+     * draft, never another's exam. A technician of another hospital admitted on that role alone
+     * is refused ({@code ImagingTechnicianScope}).
      */
-    boolean technicianReader() {
-        return com.example.hms.security.ClinicalActor.isImagingTechnicianReader();
+    private boolean technicianReader(ImagingOrder order) {
+        return technicians().readsAsTechnician(order);
+    }
+
+    private com.example.hms.service.imaging.ImagingTechnicianScope technicians() {
+        return new com.example.hms.service.imaging.ImagingTechnicianScope(roleValidator);
     }
 
     private boolean technicianMayRead(ImagingReport report) {

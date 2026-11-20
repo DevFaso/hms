@@ -482,11 +482,22 @@ export class ImagingComponent implements OnInit {
    * completed before it is started.
    */
   canStartStudy(o: ImagingOrderResponse): boolean {
-    return this.canCancelOrder() && STARTABLE_ORDER_STATUSES.includes(o.status);
+    return (
+      this.canCancelOrder() && STARTABLE_ORDER_STATUSES.includes(o.status) && this.mayPerform(o)
+    );
   }
 
   canCompleteStudy(o: ImagingOrderResponse): boolean {
-    return this.canCancelOrder() && o.status === 'IN_PROGRESS';
+    return this.canCancelOrder() && o.status === 'IN_PROGRESS' && this.mayPerform(o);
+  }
+
+  /**
+   * Owner decision 2026-11-20 (provisional): an ultrasound is performed by a physician unless the
+   * hospital's setting lets an imaging technician do it. The server says so on the order
+   * (`technicianMayPerform`) and refuses the step otherwise; nobody else is concerned.
+   */
+  private mayPerform(o: ImagingOrderResponse): boolean {
+    return !this.actsAsTechnician || o.technicianMayPerform !== false;
   }
 
   /** The order whose status write is in flight; its buttons stay disabled until it answers. */
@@ -1096,11 +1107,15 @@ export class ImagingComponent implements OnInit {
   }
 
   /**
-   * Provisional rule 1: whoever may start a study (the status endpoint's
-   * roles) records the number of a study done without it.
+   * Provisional rule 1: a doctor or a radiologist records the number of a study done without it
+   * (PUT /imaging/orders/{id}/authorization). Review of #1243: its own action entry, since the
+   * status endpoint now also admits the imaging technician, whom this endpoint refuses.
    */
   canRecordAuthorization(o: ImagingOrderResponse): boolean {
-    return this.canCancelOrder() && !!o.authorizationPending;
+    return (
+      this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderAuthorization')) &&
+      !!o.authorizationPending
+    );
   }
 
   recordAuthorization(o: ImagingOrderResponse): void {

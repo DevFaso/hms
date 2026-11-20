@@ -30,12 +30,13 @@ export interface ImagingStudyViewer {
 }
 
 /**
- * Policy rule 3 (V346, provisional): « Échographie : compte rendu par un non-radiologue ». False
- * (the default) keeps ultrasound reports with physicians; a recorded decision only.
+ * Policy rule 3 (V346, provisional; owner decision 2026-11-20): « Échographie par un non-médecin ».
+ * False (the default) keeps the ultrasound exam with physicians; true lets an imaging technician
+ * perform it. The report stays a physician's either way.
  */
 export interface ImagingReportingSettings {
   hospitalId: string;
-  ultrasoundNonPhysicianReporting: boolean;
+  ultrasoundByNonPhysician: boolean;
 }
 
 /** A hospital's PACS settings as the admin reads them: never the password. */
@@ -130,11 +131,11 @@ export class ImagingPacsService {
 
   setReportingSettings(
     hospitalId: string,
-    ultrasoundNonPhysicianReporting: boolean,
+    ultrasoundByNonPhysician: boolean,
   ): Observable<ImagingReportingSettings> {
     return this.http.put<ImagingReportingSettings>(
       `/hospitals/${encodeURIComponent(hospitalId)}/imaging-reporting-settings`,
-      { ultrasoundNonPhysicianReporting },
+      { ultrasoundByNonPhysician },
     );
   }
 

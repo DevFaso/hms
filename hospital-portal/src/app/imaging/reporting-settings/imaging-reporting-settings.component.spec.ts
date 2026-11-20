@@ -35,13 +35,13 @@ describe('ImagingReportingSettingsComponent (policy rule 3)', () => {
     ]);
     toast = jasmine.createSpyObj('ToastService', ['success', 'error']);
     pacs.reportingSettings.and.returnValue(
-      of({ hospitalId: 'h1', ultrasoundNonPhysicianReporting: false }),
+      of({ hospitalId: 'h1', ultrasoundByNonPhysician: false }),
     );
   });
 
-  it('opens on physicians only and says it is a setting only; the save is never silently disabled', () => {
+  it('opens on physicians only and says what the setting does; the save is never silently disabled', () => {
     pacs.setReportingSettings.and.returnValue(
-      of({ hospitalId: 'h1', ultrasoundNonPhysicianReporting: false }),
+      of({ hospitalId: 'h1', ultrasoundByNonPhysician: false }),
     );
     const fixture = render();
     expect(pacs.reportingSettings).toHaveBeenCalledWith('h1');
@@ -55,7 +55,7 @@ describe('ImagingReportingSettingsComponent (policy rule 3)', () => {
 
   it('saves the hospital’s decision and shows what the server holds', () => {
     pacs.setReportingSettings.and.returnValue(
-      of({ hospitalId: 'h1', ultrasoundNonPhysicianReporting: true }),
+      of({ hospitalId: 'h1', ultrasoundByNonPhysician: true }),
     );
     const fixture = render();
     fixture.componentInstance.choice = 'NON_PHYSICIAN';

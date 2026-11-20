@@ -12,9 +12,11 @@
 --    screen ever filled. The two free texts are encrypted by
 --    EncryptedStringConverter, hence TEXT.
 --
--- 3. A per-hospital setting: may a non-physician report an ultrasound?
---    Default FALSE (physicians only). A setting only: nothing reads it to
---    open reporting to anyone yet.
+-- 3. A per-hospital setting, « Échographie par un non-médecin »: may an
+--    imaging technician PERFORM an ultrasound? Default FALSE (physicians
+--    only): a technician is then refused the exam's steps and its record on
+--    an ultrasound order. The report stays a physician's either way: nothing
+--    opens reporting to anyone on it.
 --
 -- New nullable columns (one NOT NULL with a default) and one role row only.
 -- Idempotent; no DO block.
@@ -65,4 +67,4 @@ ALTER TABLE clinical.imaging_orders
     ADD COLUMN IF NOT EXISTS exam_recorded_by_user_id UUID;
 
 ALTER TABLE hospital.hospitals
-    ADD COLUMN IF NOT EXISTS ultrasound_non_physician_reporting BOOLEAN NOT NULL DEFAULT FALSE;
+    ADD COLUMN IF NOT EXISTS ultrasound_by_non_physician BOOLEAN NOT NULL DEFAULT FALSE;

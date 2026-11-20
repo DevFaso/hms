@@ -36,7 +36,11 @@ import java.util.UUID;
 @Tag(name = "Imaging Orders", description = "Order intake and duplicate checking for radiology studies")
 public class ImagingOrderController {
 
-	/** Who runs an exam: the imaging technician, a radiologist or a doctor, in a role of their own. */
+	/**
+	 * Who runs an exam: the imaging technician, a radiologist or a doctor, in a role of their own.
+	 * The token carries the roles held at every hospital, so the technician role is checked again
+	 * at the order's hospital by the services ({@code ImagingTechnicianScope}).
+	 */
 	static final String EXAM_ROLES =
 		"T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'IMAGING_TECHNICIAN','RADIOLOGIST','DOCTOR')";
 	/**
@@ -115,10 +119,12 @@ public class ImagingOrderController {
 
 	/** Policy rule 3 (provisional): how the exam went, on the order; it pre-fills the report's own fields. */
 	@PutMapping("/orders/{orderId}/exam-record")
+	@com.example.hms.security.audit.WriteAudited(skip = true,
+		reason = "ImagingOrderServiceImpl.recordExam audits the write with what changed (the dose and the contrast flag before and after)")
 	@PreAuthorize(EXAM_ROLES)
 	@Operation(summary = "Record how an imaging exam went",
 		description = "Technical note, contrast given and radiation dose. Open from the start of the exam "
-			+ "until a report is signed. Replaces the record as sent.")
+			+ "until a report is signed. Replaces the record as sent; a record with nothing in it is refused.")
 	public ResponseEntity<ImagingOrderResponseDTO> recordExam(
 		@PathVariable UUID orderId,
 		@Valid @RequestBody com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO request

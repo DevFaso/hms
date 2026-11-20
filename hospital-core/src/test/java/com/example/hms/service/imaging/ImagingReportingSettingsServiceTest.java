@@ -47,7 +47,7 @@ class ImagingReportingSettingsServiceTest {
 
     @Test
     void aHospitalStartsOnPhysiciansOnly() {
-        assertThat(Hospital.builder().build().isUltrasoundNonPhysicianReporting()).isFalse();
+        assertThat(Hospital.builder().build().isUltrasoundByNonPhysician()).isFalse();
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
 
         assertThat(service.get(hospitalId))
@@ -58,10 +58,10 @@ class ImagingReportingSettingsServiceTest {
     void aChangeIsSavedAndAuditedWithTheNewValue() {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
 
-        ImagingReportingSettingsDTO saved = service.setUltrasoundReporting(hospitalId, true, admin);
+        ImagingReportingSettingsDTO saved = service.setUltrasoundByNonPhysician(hospitalId, true, admin);
 
-        assertThat(saved.ultrasoundNonPhysicianReporting()).isTrue();
-        assertThat(hospital.isUltrasoundNonPhysicianReporting()).isTrue();
+        assertThat(saved.ultrasoundByNonPhysician()).isTrue();
+        assertThat(hospital.isUltrasoundByNonPhysician()).isTrue();
         verify(hospitalRepository).save(hospital);
         ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
         verify(auditEventLogService).logEvent(audit.capture());
@@ -71,14 +71,14 @@ class ImagingReportingSettingsServiceTest {
         assertThat(audit.getValue().getEntityType()).isEqualTo("HOSPITAL_IMAGING_REPORTING_SETTINGS");
         assertThat(audit.getValue().getDetails())
             .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
-            .containsEntry("ultrasoundNonPhysicianReporting", "true");
+            .containsEntry("ultrasoundByNonPhysician", "true");
     }
 
     @Test
     void theSameValueWritesNothingAndAuditsNothing() {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
 
-        service.setUltrasoundReporting(hospitalId, false, admin);
+        service.setUltrasoundByNonPhysician(hospitalId, false, admin);
 
         verify(hospitalRepository, never()).save(any());
         verify(auditEventLogService, never()).logEvent(any());
@@ -88,11 +88,11 @@ class ImagingReportingSettingsServiceTest {
     void aFailedAuditNeverFailsTheChange_andAnUnknownHospitalIsMissing() {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         doThrow(new IllegalStateException("audit down")).when(auditEventLogService).logEvent(any());
-        assertThatCode(() -> service.setUltrasoundReporting(hospitalId, true, admin)).doesNotThrowAnyException();
+        assertThatCode(() -> service.setUltrasoundByNonPhysician(hospitalId, true, admin)).doesNotThrowAnyException();
 
         UUID unknown = UUID.randomUUID();
         when(hospitalRepository.findClinicalById(unknown)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.get(unknown)).isInstanceOf(ResourceNotFoundException.class);
-        assertThatThrownBy(() -> service.setUltrasoundReporting(unknown, true, admin)).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.setUltrasoundByNonPhysician(unknown, true, admin)).isInstanceOf(ResourceNotFoundException.class);
     }
 }

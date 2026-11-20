@@ -56,6 +56,11 @@ export const ACTION_PERMISSIONS = {
     // Policy rule 3 (provisional): the imaging technician starts, completes or discontinues the exam.
     roles: ['ROLE_DOCTOR', 'ROLE_RADIOLOGIST', 'ROLE_IMAGING_TECHNICIAN'],
   },
+  /** Provisional rule 1: the pre-authorisation number of a study done without it. Never the technician. */
+  imagingOrderAuthorization: {
+    endpoint: 'ImagingOrderController#recordAuthorization',
+    roles: ['ROLE_DOCTOR', 'ROLE_RADIOLOGIST'],
+  },
   /** Policy rule 3 (provisional): whoever runs the exam checks the patient in. */
   imagingExamCheckIn: {
     endpoint: 'ImagingOrderController#checkIn',

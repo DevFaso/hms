@@ -88,14 +88,16 @@ class ImagingExamRecordTest {
         staff.setId(UUID.randomUUID());
         LocalDateTime start = LocalDateTime.of(2026, 11, 20, 9, 0);
 
-        ImagingExamRecord.stampPerformer(order, ImagingOrderStatus.IN_PROGRESS, starter, "Awa Kone", staff, start);
+        ImagingExamRecord.stampPerformer(order, ImagingOrderStatus.ORDERED, ImagingOrderStatus.IN_PROGRESS, starter,
+            "Awa Kone", staff, start);
         assertThat(order.getExamStartedAt()).isEqualTo(start);
         assertThat(order.getPerformedByUserId()).isEqualTo(starter);
         assertThat(order.getPerformedByStaffId()).isEqualTo(staff.getId());
         assertThat(order.getPerformedByName()).isEqualTo("Awa Kone");
 
         // Somebody else completes it: the performer stays who started it.
-        ImagingExamRecord.stampPerformer(order, ImagingOrderStatus.COMPLETED, UUID.randomUUID(), "Other", null,
+        ImagingExamRecord.stampPerformer(order, ImagingOrderStatus.IN_PROGRESS, ImagingOrderStatus.COMPLETED,
+            UUID.randomUUID(), "Other", null,
             start.plusMinutes(20));
         assertThat(order.getPerformedByUserId()).isEqualTo(starter);
         assertThat(order.getExamStartedAt()).isEqualTo(start);
@@ -103,15 +105,18 @@ class ImagingExamRecordTest {
         // A study started before V346 has no performer: whoever completes it is recorded.
         ImagingOrder legacy = new ImagingOrder();
         UUID completer = UUID.randomUUID();
-        ImagingExamRecord.stampPerformer(legacy, ImagingOrderStatus.COMPLETED, completer, "Doc", null, start);
+        ImagingExamRecord.stampPerformer(legacy, ImagingOrderStatus.IN_PROGRESS, ImagingOrderStatus.COMPLETED, completer,
+            "Doc", null, start);
         assertThat(legacy.getPerformedByUserId()).isEqualTo(completer);
         assertThat(legacy.getPerformedByStaffId()).isNull();
         assertThat(legacy.getExamStartedAt()).isNull();
 
         // No session user, or a step that performs nothing: nothing is written.
         ImagingOrder untouched = new ImagingOrder();
-        ImagingExamRecord.stampPerformer(untouched, ImagingOrderStatus.IN_PROGRESS, null, null, null, start);
-        ImagingExamRecord.stampPerformer(untouched, ImagingOrderStatus.SCHEDULED, starter, "Awa", staff, start);
+        ImagingExamRecord.stampPerformer(untouched, ImagingOrderStatus.ORDERED, ImagingOrderStatus.IN_PROGRESS, null, null,
+            null, start);
+        ImagingExamRecord.stampPerformer(untouched, ImagingOrderStatus.ORDERED, ImagingOrderStatus.SCHEDULED, starter,
+            "Awa", staff, start);
         assertThat(untouched.getPerformedByUserId()).isNull();
         assertThat(untouched.getExamStartedAt()).isNull();
     }
@@ -134,6 +139,69 @@ class ImagingExamRecordTest {
                 assertThatThrownBy(() -> ImagingExamRecord.requireRecordOpen(status))
                     .as("record at " + status).isInstanceOf(BusinessException.class);
             }
+        }
+    }
+
+    @Test
+    void aSameStatusWriteIsNotAStart_itNeverReplacesThePerformerNorTheStartTime() {
+        ImagingOrder order = new ImagingOrder();
+        UUID starter = UUID.randomUUID();
+        LocalDateTime start = LocalDateTime.of(2026, 11, 20, 9, 0);
+        ImagingExamRecord.stampPerformer(order, ImagingOrderStatus.SCHEDULED, ImagingOrderStatus.IN_PROGRESS, starter,
+            "Awa Kone", null, start);
+
+        // Review of #1243: IN_PROGRESS to IN_PROGRESS (a schedule or a location recorded) is not performing.
+        ImagingExamRecord.stampPerformer(order, ImagingOrderStatus.IN_PROGRESS, ImagingOrderStatus.IN_PROGRESS,
+            UUID.randomUUID(), "Dr Autre", null, start.plusMinutes(10));
+
+        assertThat(order.getPerformedByUserId()).isEqualTo(starter);
+        assertThat(order.getPerformedByName()).isEqualTo("Awa Kone");
+        assertThat(order.getExamStartedAt()).isEqualTo(start);
+    }
+
+    @Test
+    void theChangeListNamesTheStructuredValuesBeforeAndAfter_andTheFreeTextsOnlyAsChanged() {
+        ImagingOrder order = new ImagingOrder();
+        order.setExamTechnicalNote("ancienne note");
+        order.setExamContrastDetails("Iode 60 mL");
+        order.setExamRadiationDoseMgy(new java.math.BigDecimal("0.100"));
+
+        java.util.Map<String, String> changes = ImagingExamRecord.changes(order,
+            com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO.builder()
+                .technicalNote("nouvelle note").contrastAdministered(true).contrastDetails("  ")
+                .radiationDoseMgy(new java.math.BigDecimal("0.1000")).build());
+
+        assertThat(changes)
+            .containsEntry("technicalNote", "changed")
+            .containsEntry("contrastAdministered", "null -> true")
+            .containsEntry("contrastDetails", "cleared")
+            // 0.100 and 0.1000 are the same dose.
+            .doesNotContainKey("radiationDoseMgy");
+        assertThat(changes.values()).noneMatch(value -> value.contains("note") || value.contains("Iode"));
+
+        assertThat(ImagingExamRecord.changes(new ImagingOrder(),
+            com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO.builder().build())).isEmpty();
+    }
+
+    @Test
+    void anExamRecordWithNothingInItIsRefusedOnTheNote() {
+        try (jakarta.validation.ValidatorFactory factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+            jakarta.validation.Validator validator = factory.getValidator();
+            var empty = validator.validate(
+                com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO.builder().technicalNote("  ").build());
+            assertThat(empty).hasSize(1);
+            assertThat(empty.iterator().next().getPropertyPath()).hasToString("somethingRecorded");
+            assertThat(empty.iterator().next().getMessageTemplate()).isEqualTo("{imaging.exam.record.empty}");
+
+            // Any one of the four says something.
+            assertThat(validator.validate(com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO.builder()
+                .technicalNote("RAS").build())).isEmpty();
+            assertThat(validator.validate(com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO.builder()
+                .contrastAdministered(false).build())).isEmpty();
+            assertThat(validator.validate(com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO.builder()
+                .contrastDetails("Iode").build())).isEmpty();
+            assertThat(validator.validate(com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO.builder()
+                .radiationDoseMgy(java.math.BigDecimal.ONE).build())).isEmpty();
         }
     }
 }

@@ -354,46 +354,24 @@ class ImagingReadRoleGuardTest {
         assertThat(staffReportReaders).contains("ROLE_" + TECHNICIAN);
     }
 
+    /**
+     * Review of #1243: the technician role counts at the order's hospital, so no imaging service
+     * asks the token-wide {@code ClinicalActor} about it; each asks {@code ImagingTechnicianScope}
+     * (behaviour: ImagingTechnicianScopeTest and the three services' tests).
+     */
     @Test
-    void aTechnicianIsNarrowedByTheirOwnRoles_evenBesideAnAdminRoleOrASuperAdminToken() {
-        setAuthentication(token("ROLE_IMAGING_TECHNICIAN"));
-        assertThat(ClinicalActor.isImagingTechnicianReader()).isTrue();
-        assertThat(ClinicalActor.actsOnExamAsTechnician()).isTrue();
-        assertThat(ClinicalActor.isAdministrativeImagingReader()).isFalse();
-
-        // With an admin role: still a technician reader, and an administrative one for reports.
-        setAuthentication(token("ROLE_IMAGING_TECHNICIAN", "ROLE_HOSPITAL_ADMIN"));
-        assertThat(ClinicalActor.isImagingTechnicianReader()).isTrue();
-        assertThat(ClinicalActor.isAdministrativeImagingReader()).isTrue();
-
-        // A clinical imaging role of their own lifts the read narrowing; only a doctor's or a
-        // radiologist's lifts the exam-step narrowing.
-        setAuthentication(token("ROLE_IMAGING_TECHNICIAN", "ROLE_NURSE"));
-        assertThat(ClinicalActor.isImagingTechnicianReader()).isFalse();
-        assertThat(ClinicalActor.actsOnExamAsTechnician()).isTrue();
-        setAuthentication(token("ROLE_IMAGING_TECHNICIAN", "ROLE_RADIOLOGIST"));
-        assertThat(ClinicalActor.actsOnExamAsTechnician()).isFalse();
-        setAuthentication(token("ROLE_IMAGING_TECHNICIAN", "ROLE_DOCTOR"));
-        assertThat(ClinicalActor.actsOnExamAsTechnician()).isFalse();
-
-        // A super-admin's inherited DOCTOR and NURSE are not theirs: a super-admin who is a
-        // technician stays one.
-        String[] superAdminTechnician = Arrays.copyOf(SUPER_ADMIN, SUPER_ADMIN.length + 1);
-        superAdminTechnician[SUPER_ADMIN.length] = "ROLE_IMAGING_TECHNICIAN";
-        HospitalContextHolder.setContext(HospitalContext.builder()
-            .assignedRoles(Set.of("ROLE_SUPER_ADMIN", "ROLE_IMAGING_TECHNICIAN")).build());
-        setAuthentication(token(superAdminTechnician));
-        assertThat(ClinicalActor.isImagingTechnicianReader()).isTrue();
-        assertThat(ClinicalActor.actsOnExamAsTechnician()).isTrue();
-
-        // Nobody else is one.
-        setAuthentication(token("ROLE_RADIOLOGIST"));
-        assertThat(ClinicalActor.isImagingTechnicianReader()).isFalse();
-        assertThat(ClinicalActor.actsOnExamAsTechnician()).isFalse();
-    }
-
-    private static void setAuthentication(Authentication authentication) {
-        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(authentication);
+    void theTechnicianRoleIsReadAtTheOrdersHospitalNeverFromTheTokenAlone() throws IOException {
+        Path services = Path.of("src/main/java/com/example/hms/service");
+        for (String service : List.of("impl/ImagingOrderServiceImpl.java", "impl/ImagingReportServiceImpl.java",
+            "imaging/ImagingStudyImageService.java")) {
+            String code = SourceScan.stripComments(Files.readString(services.resolve(service), StandardCharsets.UTF_8));
+            assertThat(code).as(service + " asks the hospital-scoped technician rule" + SourceScan.MANDATE)
+                .contains("ImagingTechnicianScope(roleValidator)")
+                .doesNotContain("IMAGING_TECHNICIAN");
+        }
+        String actor = Files.readString(Path.of("src/main/java/com/example/hms/security/ClinicalActor.java"),
+            StandardCharsets.UTF_8);
+        assertThat(SourceScan.stripComments(actor)).doesNotContain("IMAGING_TECHNICIAN");
     }
 
     private static Method method(Class<?> controller, String name) throws NoSuchMethodException {

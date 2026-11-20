@@ -854,6 +854,7 @@ class ImagingReportServiceImplTest {
         doAnswer(inv -> ImagingReportResponseDTO.builder().id(((ImagingReport) inv.getArgument(0)).getId()).build())
             .when(imagingReportMapper).toResponseDTO(any(ImagingReport.class));
         signIn("ROLE_IMAGING_TECHNICIAN");
+        technicianHere();
         UUID finalId = finalRead.getId();
         UUID draftId = draft.getId();
 
@@ -879,8 +880,17 @@ class ImagingReportServiceImplTest {
 
         // A technician who is also a nurse reads as the care team does.
         signIn("ROLE_IMAGING_TECHNICIAN", "ROLE_NURSE");
+        when(roleValidator.isNurse(callerUserId, hospitalId)).thenReturn(true);
         imagingOrder.setPerformedByUserId(UUID.randomUUID());
         assertThat(imagingReportService.getReportsForOrder(orderId)).hasSize(2);
+
+        // Review of #1243: a nurse's role held at ANOTHER hospital lifts nothing here. A technician
+        // here whose token also carries a radiologist's role from elsewhere is still narrowed here.
+        when(roleValidator.isNurse(callerUserId, hospitalId)).thenReturn(false);
+        signIn("ROLE_IMAGING_TECHNICIAN", "ROLE_RADIOLOGIST");
+        assertThat(imagingReportService.getReportsForOrder(orderId)).isEmpty();
+        assertThatThrownBy(() -> imagingReportService.getReport(finalId)).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> imagingReportService.getReport(draftId)).isInstanceOf(ResourceNotFoundException.class);
 
         // One who is also an administrator reads as the administrator: any released report, on
         // every read alike, and still no work in progress.
@@ -900,8 +910,32 @@ class ImagingReportServiceImplTest {
             ImagingReportStatus.FINAL)).thenReturn(List.of(finalRead));
         imagingOrder.setPerformedByUserId(UUID.randomUUID());
         signIn("ROLE_IMAGING_TECHNICIAN");
+        technicianHere();
 
         assertThat(imagingReportService.getReportsByHospitalAndStatus(hospitalId, ImagingReportStatus.FINAL)).isEmpty();
+    }
+
+    /** Review of #1243: the technician role is held at this test's hospital. */
+    private void technicianHere() {
+        when(roleValidator.hasRole(callerUserId, hospitalId, "IMAGING_TECHNICIAN")).thenReturn(true);
+    }
+
+    @Test
+    void review1243_aTechnicianOfAnotherHospitalReadsNoReportHere() {
+        ImagingReport finalRead = version(1, ImagingReportStatus.FINAL, true);
+        when(imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(orderId)).thenReturn(List.of(finalRead));
+        when(imagingReportRepository.findById(finalRead.getId())).thenReturn(Optional.of(finalRead));
+        imagingOrder.setPerformedByUserId(callerUserId);
+        UUID finalId = finalRead.getId();
+        // The token carries the technician role, held at another hospital, and nothing else that reads imaging.
+        signIn("ROLE_IMAGING_TECHNICIAN", "ROLE_RECEPTIONIST");
+
+        assertThatThrownBy(() -> imagingReportService.getReport(finalId))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThatThrownBy(() -> imagingReportService.getLatestReportForOrder(orderId))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThatThrownBy(() -> imagingReportService.getReportsForOrder(orderId))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
     }
 
     @Test

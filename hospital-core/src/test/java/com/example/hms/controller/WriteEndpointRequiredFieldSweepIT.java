@@ -180,9 +180,6 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
             "a partial update of the patient's own contact details"),
         Map.entry("PUT /admissions/{admissionId}",
             "a partial edit of a stay: a null keeps the stored value"),
-        Map.entry("PUT /imaging/orders/{orderId}/exam-record",
-            "policy rule 3: the exam record is replaced as sent; the technical note, the contrast and the dose are"
-                + " each optional, and a field left out is cleared (the portal refuses a save with nothing in it)"),
         Map.entry("PUT /imaging/results/{reportId}",
             "a partial edit of a report (its content rule runs on the found report, EmptyClinicalWriteGuardTest)"),
         Map.entry("PUT /lab-reflex-rules/{id}",

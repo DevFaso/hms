@@ -167,6 +167,41 @@ describe('ImagingExamRecordComponent (policy rule 3)', () => {
     expect(el(fixture, 'imaging-exam-discontinue')).toBeNull();
   });
 
+  it('Ultrasound: a technician neither records nor discontinues it while the hospital keeps it with physicians', () => {
+    let fixture = render(
+      order({ status: 'IN_PROGRESS', modality: 'ULTRASOUND', technicianMayPerform: false }),
+    );
+    expect(el(fixture, 'imaging-exam-ultrasound-physicians')).not.toBeNull();
+    expect(el(fixture, 'imaging-exam-save')).toBeNull();
+    expect(el(fixture, 'imaging-exam-discontinue')).toBeNull();
+
+    // The arrival is not the exam: check-in stays.
+    TestBed.resetTestingModule();
+    fixture = render(
+      order({ status: 'ORDERED', modality: 'ULTRASOUND', technicianMayPerform: false }),
+    );
+    expect(el(fixture, 'imaging-exam-check-in')).not.toBeNull();
+    expect(el(fixture, 'imaging-exam-ultrasound-physicians')).not.toBeNull();
+
+    // The hospital allows it: the technician works it as any other exam.
+    TestBed.resetTestingModule();
+    fixture = render(
+      order({ status: 'IN_PROGRESS', modality: 'ULTRASOUND', technicianMayPerform: true }),
+    );
+    expect(el(fixture, 'imaging-exam-ultrasound-physicians')).toBeNull();
+    expect(el(fixture, 'imaging-exam-save')).not.toBeNull();
+    expect(el(fixture, 'imaging-exam-discontinue')).not.toBeNull();
+
+    // A radiologist is never held to the setting.
+    TestBed.resetTestingModule();
+    roles = ['ROLE_RADIOLOGIST'];
+    fixture = render(
+      order({ status: 'IN_PROGRESS', modality: 'ULTRASOUND', technicianMayPerform: false }),
+    );
+    expect(el(fixture, 'imaging-exam-save')).not.toBeNull();
+    expect(el(fixture, 'imaging-exam-ultrasound-physicians')).toBeNull();
+  });
+
   it('a nurse reads who performed the exam and its record, and writes nothing', () => {
     roles = ['ROLE_NURSE'];
     const fixture = render(

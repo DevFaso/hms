@@ -13,8 +13,9 @@ import java.math.BigDecimal;
 
 /**
  * Policy rule 3 (V346, provisional): how an imaging exam went, as whoever performed it records
- * it. Replaces the record: every field is optional and one left out is cleared. Who recorded it
- * and when come from the session, never from here.
+ * it. Replaces the record: a field left out is cleared, and a record with nothing in it is refused
+ * on the note ({@link #isSomethingRecorded}). Who recorded it and when come from the session, never
+ * from here.
  */
 @Data
 @Builder
@@ -38,4 +39,15 @@ public class ImagingExamRecordRequestDTO {
     @Digits(integer = 5, fraction = 3, message = "{imaging.exam.radiationDose.digits}")
     @Schema(description = "Radiation dose in mGy")
     private BigDecimal radiationDoseMgy;
+
+    /** An exam record says something: a note, whether contrast was given, its details or the dose. */
+    @com.example.hms.validation.ReportedOn("technicalNote")
+    @jakarta.validation.constraints.AssertTrue(message = "{imaging.exam.record.empty}")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Schema(hidden = true)
+    public boolean isSomethingRecorded() {
+        boolean note = technicalNote != null && !technicalNote.isBlank();
+        boolean details = contrastDetails != null && !contrastDetails.isBlank();
+        return note || details || contrastAdministered != null || radiationDoseMgy != null;
+    }
 }

@@ -28,8 +28,8 @@ import java.util.UUID;
  * Policy rule 3 (owner 2026-11-20, provisional): a hospital's imaging reporting settings (V346).
  *
  * <p>Like the PACS connection: a hospital admin reads and sets only the hospital they act at, the
- * super-admin any. One setting today, whether a non-physician may report an ultrasound; it
- * defaults to physicians only and changes no permission (a recorded decision, pending the
+ * super-admin any. One setting today, whether an imaging technician may perform an ultrasound;
+ * it defaults to physicians only. The report stays a physician's either way (pending the
  * ministry's position).
  */
 @Tag(name = "Imaging reporting settings", description = "Per-hospital imaging reporting settings")
@@ -43,7 +43,7 @@ public class HospitalImagingReportingSettingsController {
 
     /** What the admin sets; the switch is required so an empty body changes nothing by accident. */
     public record UpdateRequest(
-        @NotNull(message = "{imaging.reportingSettings.ultrasound.required}") Boolean ultrasoundNonPhysicianReporting) {
+        @NotNull(message = "{imaging.reportingSettings.ultrasound.required}") Boolean ultrasoundByNonPhysician) {
     }
 
     @Operation(summary = "Read a hospital's imaging reporting settings")
@@ -63,8 +63,8 @@ public class HospitalImagingReportingSettingsController {
                                                            Authentication auth) {
         requireActingThere(hospitalId);
         UUID actorUserId = authUtils.resolveUserId(auth).orElse(null);
-        return ResponseEntity.ok(settingsService.setUltrasoundReporting(hospitalId,
-            Boolean.TRUE.equals(body.ultrasoundNonPhysicianReporting()), actorUserId));
+        return ResponseEntity.ok(settingsService.setUltrasoundByNonPhysician(hospitalId,
+            Boolean.TRUE.equals(body.ultrasoundByNonPhysician()), actorUserId));
     }
 
     /**

@@ -155,6 +155,12 @@ public class ImagingOrderResponseDTO {
 
     private LocalDateTime examRecordedAt;
 
+    /**
+     * Whether an imaging technician of the order's hospital may perform this study: false for an
+     * ultrasound where the hospital keeps ultrasound with physicians (the default).
+     */
+    private Boolean technicianMayPerform;
+
     private String cancellationReason;
 
     private String cancelledByName;

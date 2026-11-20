@@ -1915,4 +1915,9 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     key: 'AUDIT.DESC.IMAGING_REPORTING_SETTINGS_CHANGED',
     re: /^Imaging reporting settings changed$/,
   },
+  // Policy rule 3 (V346): an exam record written (what changed is in the details; never the free text).
+  {
+    key: 'AUDIT.DESC.IMAGING_EXAM_RECORD_UPDATED',
+    re: /^Imaging exam record updated$/,
+  },
 ];

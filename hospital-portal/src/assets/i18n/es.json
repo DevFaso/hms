@@ -2101,7 +2101,8 @@
       "REVERSAL_EVENT": "{{what}}: reversal {{refund}} on invoice {{invoice}}",
       "CASH_SESSION_EVENT": "{{what}}: till {{session}}",
       "INVOICE_LINE_PRICED_MANUALLY": "Draft line {{line}} of invoice {{invoice}} priced by hand",
-      "IMAGING_REPORTING_SETTINGS_CHANGED": "Ajustes de los informes de imagen modificados"
+      "IMAGING_REPORTING_SETTINGS_CHANGED": "Ajuste de ecografía modificado",
+      "IMAGING_EXAM_RECORD_UPDATED": "Realización del examen de imagen actualizada"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -8201,7 +8202,7 @@
         "CASH_SESSION": "Caja",
         "PROBLEM_SENSITIVITY": "Sensibilidad del diagnóstico",
         "LAB_TEST_DEFINITION_SENSITIVITY": "Sensibilidad de la prueba de laboratorio",
-        "HOSPITAL_IMAGING_REPORTING_SETTINGS": "Ajustes de los informes de imagen"
+        "HOSPITAL_IMAGING_REPORTING_SETTINGS": "Ajuste de ecografía"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Alergia",
@@ -15277,16 +15278,17 @@
     "DISCONTINUE": "Interrumpir el examen",
     "DISCONTINUE_TITLE": "¿Interrumpir este examen?",
     "DISCONTINUE_MESSAGE": "La solicitud se cierra y el médico solicitante ve el motivo. Hará falta una nueva solicitud para repetir el examen.",
-    "DISCONTINUED": "Examen interrumpido."
+    "DISCONTINUED": "Examen interrumpido.",
+    "ULTRASOUND_PHYSICIANS_ONLY": "Ecografía: en este hospital el examen lo realiza un médico. Usted puede registrar la llegada del paciente y adjuntar imágenes. Regla provisional, pendiente de aprobación del radiólogo o del director médico."
   },
   "IMAGING_REPORTING_SETTINGS": {
-    "TITLE": "Informes de imagen",
-    "ULTRASOUND": "Ecografía: informe por un no radiólogo",
+    "TITLE": "Ecografía",
+    "ULTRASOUND": "Ecografía por un no médico",
     "PHYSICIANS_ONLY": "Solo médicos (por defecto)",
-    "NON_PHYSICIAN": "Un no médico formado puede redactar el informe de una ecografía",
-    "SETTING_ONLY": "Este ajuste solo registra la decisión del hospital: hoy todo informe de ecografía sigue siendo redactado y firmado por un médico, sea cual sea la opción. Regla provisional, pendiente de aprobación del radiólogo o del director médico y de la posición del ministerio.",
+    "NON_PHYSICIAN": "Un técnico de imagen puede realizar la ecografía",
     "SAVED": "Ajuste guardado.",
     "SAVE_FAILED": "No se pudo guardar el ajuste.",
-    "LOAD_FAILED": "No se pudieron leer los ajustes de los informes de imagen."
+    "LOAD_FAILED": "No se pudo leer el ajuste de ecografía.",
+    "WHAT_IT_DOES": "Con «Solo médicos», un técnico de imagen no puede iniciar, terminar, interrumpir ni registrar una ecografía. En todos los casos, el informe lo redacta y firma un médico. Regla provisional, pendiente de aprobación del radiólogo o del director médico y de la posición del ministerio."
   }
 }

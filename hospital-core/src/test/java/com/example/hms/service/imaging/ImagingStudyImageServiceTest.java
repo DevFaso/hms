@@ -500,6 +500,44 @@ class ImagingStudyImageServiceTest {
 
         private static final String TECHNICIAN = "ROLE_IMAGING_TECHNICIAN";
 
+        /** Review of #1243: the role is held at the study's hospital, where it counts. */
+        @BeforeEach
+        void aTechnicianOfTheStudysHospital() {
+            when(roleValidator.hasRole(callerId, hospitalId, "IMAGING_TECHNICIAN")).thenReturn(true);
+        }
+
+        @Test
+        void aTechnicianOfAnotherHospitalNeitherReadsNorWritesAnImageHere() throws IOException {
+            ImagingStudyImage onStudy = image(null, callerId);
+            UUID imageId = onStudy.getId();
+            when(roleValidator.hasRole(callerId, hospitalId, "IMAGING_TECHNICIAN")).thenReturn(false);
+            as(TECHNICIAN, "ROLE_RECEPTIONIST");
+
+            assertThatThrownBy(() -> service.list(order.getId()))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            assertThatThrownBy(() -> service.readContent(imageId))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            assertThatThrownBy(() -> service.upload(order.getId(), null, png(), "face"))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            assertThatThrownBy(() -> service.updateCaption(imageId, "autre"))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            assertThatThrownBy(() -> service.delete(imageId))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            verify(fileUploadService, never()).uploadImagingImage(any());
+            assertThat(onStudy.getCaption()).isEqualTo("lesion");
+        }
+
+        @Test
+        void aTechnicianHereWhoIsADoctorElsewhereStillNeverAttachesToAReport() {
+            // The token carries the doctor's role from another hospital; here they are a technician.
+            ImagingReport draft = report(false, ImagingReportStatus.PRELIMINARY);
+            UUID draftId = draft.getId();
+            as(TECHNICIAN, "ROLE_DOCTOR");
+
+            assertThatThrownBy(() -> service.upload(order.getId(), draftId, png(), "face"))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        }
+
         @Test
         void attachesToTheStudyAndNeverToAReport() throws IOException {
             as(TECHNICIAN);
@@ -604,6 +642,8 @@ class ImagingStudyImageServiceTest {
             ImagingStudyImage own = image(null, callerId);
             report(true, ImagingReportStatus.FINAL);
             as(TECHNICIAN, "ROLE_DOCTOR");
+            // A doctor at this hospital too: the wider role is held here.
+            when(roleValidator.isDoctor(callerId, hospitalId)).thenReturn(true);
             service.updateCaption(own.getId(), "corrigée");
             assertThat(own.getCaption()).isEqualTo("corrigée");
         }

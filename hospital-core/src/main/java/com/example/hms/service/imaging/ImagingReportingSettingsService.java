@@ -20,10 +20,12 @@ import java.util.UUID;
 /**
  * Policy rule 3 (owner 2026-11-20, PROVISIONAL): a hospital's imaging reporting settings (V346).
  *
- * <p>One setting, « Échographie : compte rendu par un non-radiologue »: whether a non-physician
- * may report an ultrasound at this hospital. It defaults to physicians only, and it is a recorded
- * decision only: nothing reads it to open reporting to anyone (sonographer reporting is not
- * built). Every change is a {@code CONFIGURATION_CHANGED} audit row.
+ * <p>One setting, « Échographie par un non-médecin » (owner decision 2026-11-20): whether an
+ * imaging technician may PERFORM an ultrasound at this hospital. It defaults to physicians only,
+ * and then a technician is refused the exam's steps and its record on an ultrasound order
+ * ({@code ImagingTechnicianScope}). The report stays a physician's whatever is chosen: nothing
+ * opens reporting to anyone on it (sonographer reporting is not built). Every change is a
+ * {@code CONFIGURATION_CHANGED} audit row.
  */
 @Service
 @RequiredArgsConstructor
@@ -41,15 +43,15 @@ public class ImagingReportingSettingsService {
     }
 
     @Transactional
-    public ImagingReportingSettingsDTO setUltrasoundReporting(UUID hospitalId, boolean ultrasoundNonPhysicianReporting,
+    public ImagingReportingSettingsDTO setUltrasoundByNonPhysician(UUID hospitalId, boolean ultrasoundByNonPhysician,
                                                               UUID actorUserId) {
         Hospital hospital = require(hospitalId);
-        if (hospital.isUltrasoundNonPhysicianReporting() == ultrasoundNonPhysicianReporting) {
+        if (hospital.isUltrasoundByNonPhysician() == ultrasoundByNonPhysician) {
             return toDto(hospital);
         }
-        hospital.setUltrasoundNonPhysicianReporting(ultrasoundNonPhysicianReporting);
+        hospital.setUltrasoundByNonPhysician(ultrasoundByNonPhysician);
         hospitalRepository.save(hospital);
-        TransactionCallbacks.afterCommit(() -> audit(hospitalId, actorUserId, ultrasoundNonPhysicianReporting));
+        TransactionCallbacks.afterCommit(() -> audit(hospitalId, actorUserId, ultrasoundByNonPhysician));
         return toDto(hospital);
     }
 
@@ -64,7 +66,7 @@ public class ImagingReportingSettingsService {
                 .resourceId(hospitalId.toString())
                 .eventDescription("Imaging reporting settings changed")
                 .details(Map.of("hospitalId", hospitalId.toString(),
-                    "ultrasoundNonPhysicianReporting", String.valueOf(value)))
+                    "ultrasoundByNonPhysician", String.valueOf(value)))
                 .build());
         } catch (RuntimeException ex) {
             log.warn("[imaging] reporting settings audit failed for hospital {}: {}", hospitalId,
@@ -78,6 +80,6 @@ public class ImagingReportingSettingsService {
     }
 
     private static ImagingReportingSettingsDTO toDto(Hospital hospital) {
-        return new ImagingReportingSettingsDTO(hospital.getId(), hospital.isUltrasoundNonPhysicianReporting());
+        return new ImagingReportingSettingsDTO(hospital.getId(), hospital.isUltrasoundByNonPhysician());
     }
 }

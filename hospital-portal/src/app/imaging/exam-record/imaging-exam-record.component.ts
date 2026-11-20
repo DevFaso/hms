@@ -71,6 +71,11 @@ const RECORD_OPEN: readonly ImagingOrderStatus[] = ['IN_PROGRESS', 'COMPLETED'];
             {{ 'IMAGING_EXAM.TECHNICIAN_RULE' | translate }}
           </p>
         }
+        @if (physiciansOnly()) {
+          <p class="field-hint exam-record__rule" data-testid="imaging-exam-ultrasound-physicians">
+            {{ 'IMAGING_EXAM.ULTRASOUND_PHYSICIANS_ONLY' | translate }}
+          </p>
+        }
         <dl class="exam-record__facts">
           @if (order().checkedInAt; as at) {
             <div data-testid="imaging-exam-checked-in">
@@ -336,10 +341,19 @@ export class ImagingExamRecordComponent implements OnChanges {
   readonly canCheckIn = computed(
     () => this.checksIn && !this.order().checkedInAt && CHECK_IN_OPEN.includes(this.order().status),
   );
-  readonly canRecord = computed(() => this.runsExams && RECORD_OPEN.includes(this.order().status));
+  /**
+   * Owner decision 2026-11-20 (provisional): a technician performs an ultrasound only where the
+   * hospital's setting allows it; the order says so and the server refuses otherwise.
+   */
+  readonly physiciansOnly = computed(
+    () => this.technician && this.order().technicianMayPerform === false,
+  );
+  readonly canRecord = computed(
+    () => this.runsExams && !this.physiciansOnly() && RECORD_OPEN.includes(this.order().status),
+  );
   /** The server lets a technician call off an exam only once it is in progress. */
   readonly canDiscontinue = computed(
-    () => this.technician && this.order().status === 'IN_PROGRESS',
+    () => this.technician && !this.physiciansOnly() && this.order().status === 'IN_PROGRESS',
   );
   readonly hasContrastRecord = computed(
     () =>
@@ -351,7 +365,7 @@ export class ImagingExamRecordComponent implements OnChanges {
       this.order().examRadiationDoseMgy !== null && this.order().examRadiationDoseMgy !== undefined,
   );
   /** Nothing to show and nothing to do: the section is left out. */
-  readonly visible = computed(() => this.canAct() || this.hasRecord());
+  readonly visible = computed(() => this.canAct() || this.hasRecord() || this.physiciansOnly());
   private readonly canAct = computed(
     () => this.canCheckIn() || this.canRecord() || this.canDiscontinue(),
   );

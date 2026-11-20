@@ -74,6 +74,8 @@ export interface ImagingOrderResponse {
   examContrastDetails?: string | null;
   examRadiationDoseMgy?: number | null;
   examRecordedAt?: string | null;
+  /** False for an ultrasound where the hospital keeps ultrasound with physicians (the default). */
+  technicianMayPerform?: boolean | null;
   /** QA D1922 (r53): contrast, the patient's contrast allergy, where, and the pre-authorisation. */
   contrastRequired?: boolean | null;
   contrastType?: string | null;

@@ -188,6 +188,47 @@ describe('ImagingComponent — r51 study workflow and labels', () => {
       // Key images go on the study while it has no signed report.
       expect(component.canAddStudyImages(order({ status: 'IN_PROGRESS' }))).toBeTrue();
       expect(component.canAddStudyImages(order({ status: 'CANCELLED' }))).toBeFalse();
+      // Review of #1243: the pre-authorisation number is a doctor's or a radiologist's to record
+      // (the endpoint refuses a technician), even on a study that waits for it.
+      expect(component.canRecordAuthorization(order({ authorizationPending: true }))).toBeFalse();
+    });
+
+    it('Review of #1243: a doctor and a radiologist still record the pre-authorisation number', () => {
+      for (const role of ['ROLE_DOCTOR', 'ROLE_RADIOLOGIST']) {
+        TestBed.resetTestingModule();
+        setUp({ role, orders: [order()] });
+        expect(component.canRecordAuthorization(order({ authorizationPending: true })))
+          .withContext(role)
+          .toBeTrue();
+        expect(component.canRecordAuthorization(order({ authorizationPending: false })))
+          .withContext(role)
+          .toBeFalse();
+      }
+    });
+
+    it('Ultrasound (owner decision 2026-11-20): a technician is offered the exam only where the hospital allows it', () => {
+      const ultrasound = (status: ImagingOrderResponse['status'], technicianMayPerform: boolean) =>
+        order({ id: `us-${status}`, status, modality: 'ULTRASOUND', technicianMayPerform });
+      // The default, physicians only: neither start nor complete, in the list or the drawer.
+      setUp({
+        role: 'ROLE_IMAGING_TECHNICIAN',
+        orders: [ultrasound('ORDERED', false), ultrasound('IN_PROGRESS', false)],
+      });
+      expect(q('[data-testid^="imaging-start-"]')).toBeNull();
+      expect(q('[data-testid^="imaging-complete-"]')).toBeNull();
+      expect(component.canStartStudy(ultrasound('ORDERED', false))).toBeFalse();
+      expect(component.canCompleteStudy(ultrasound('IN_PROGRESS', false))).toBeFalse();
+
+      // The hospital turned it on: the order says so.
+      expect(component.canStartStudy(ultrasound('ORDERED', true))).toBeTrue();
+      expect(component.canCompleteStudy(ultrasound('IN_PROGRESS', true))).toBeTrue();
+      // Another modality is never held to the setting, nor an order an older server sent without the flag.
+      expect(component.canStartStudy(order({ status: 'ORDERED' }))).toBeTrue();
+
+      // A radiologist is never held to it.
+      TestBed.resetTestingModule();
+      setUp({ role: 'ROLE_RADIOLOGIST', orders: [ultrasound('ORDERED', false)] });
+      expect(component.canStartStudy(ultrasound('ORDERED', false))).toBeTrue();
     });
 
     for (const role of ['ROLE_DOCTOR', 'ROLE_RADIOLOGIST', 'ROLE_IMAGING_TECHNICIAN']) {

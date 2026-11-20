@@ -2101,7 +2101,8 @@
       "REVERSAL_EVENT": "{{what}}: reversal {{refund}} on invoice {{invoice}}",
       "CASH_SESSION_EVENT": "{{what}}: till {{session}}",
       "INVOICE_LINE_PRICED_MANUALLY": "Draft line {{line}} of invoice {{invoice}} priced by hand",
-      "IMAGING_REPORTING_SETTINGS_CHANGED": "Imaging reporting settings changed"
+      "IMAGING_REPORTING_SETTINGS_CHANGED": "Ultrasound setting changed",
+      "IMAGING_EXAM_RECORD_UPDATED": "Imaging exam record updated"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -8201,7 +8202,7 @@
         "CASH_SESSION": "Till",
         "PROBLEM_SENSITIVITY": "Diagnosis sensitivity",
         "LAB_TEST_DEFINITION_SENSITIVITY": "Lab test sensitivity",
-        "HOSPITAL_IMAGING_REPORTING_SETTINGS": "Imaging reporting settings"
+        "HOSPITAL_IMAGING_REPORTING_SETTINGS": "Ultrasound setting"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",
@@ -15277,16 +15278,17 @@
     "DISCONTINUE": "Discontinue the exam",
     "DISCONTINUE_TITLE": "Discontinue this exam?",
     "DISCONTINUE_MESSAGE": "The request is closed and its prescriber sees the reason. A new request is needed to do the exam later.",
-    "DISCONTINUED": "Exam discontinued."
+    "DISCONTINUED": "Exam discontinued.",
+    "ULTRASOUND_PHYSICIANS_ONLY": "Ultrasound: at this hospital the exam is performed by a physician. You can check the patient in and attach images. Provisional rule, pending approval by the radiologist or the medical director."
   },
   "IMAGING_REPORTING_SETTINGS": {
-    "TITLE": "Imaging reports",
-    "ULTRASOUND": "Ultrasound: report by a non-radiologist",
+    "TITLE": "Ultrasound",
+    "ULTRASOUND": "Ultrasound by a non-physician",
     "PHYSICIANS_ONLY": "Physicians only (default)",
-    "NON_PHYSICIAN": "A trained non-physician may report an ultrasound",
-    "SETTING_ONLY": "This records the hospital's decision only: today every ultrasound report is still written and signed by a physician, whatever is chosen here. Provisional rule, pending approval by the radiologist or the medical director and the ministry's position.",
+    "NON_PHYSICIAN": "An imaging technician may perform the ultrasound exam",
     "SAVED": "Setting saved.",
     "SAVE_FAILED": "The setting could not be saved.",
-    "LOAD_FAILED": "The imaging report settings could not be read."
+    "LOAD_FAILED": "The ultrasound setting could not be read.",
+    "WHAT_IT_DOES": "With \"Physicians only\", an imaging technician cannot start, complete, discontinue or record an ultrasound exam. In every case the report is written and signed by a physician. Provisional rule, pending approval by the radiologist or the medical director and the ministry's position."
   }
 }

@@ -64,6 +64,52 @@ public final class ImagingExamRecord {
             .anyMatch(java.util.Objects::nonNull);
     }
 
+    /**
+     * What a record write changes, for its audit row. The contrast flag and the dose as
+     * "before -> after"; the two free texts as set, changed or cleared (never their content: they
+     * are encrypted at rest and can name the patient). Empty when nothing changes.
+     */
+    public static java.util.Map<String, String> changes(ImagingOrder order,
+                                                       com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO request) {
+        java.util.Map<String, String> changes = new java.util.LinkedHashMap<>();
+        textChange(changes, "technicalNote", order.getExamTechnicalNote(), request.getTechnicalNote());
+        if (!java.util.Objects.equals(order.getExamContrastAdministered(), request.getContrastAdministered())) {
+            changes.put("contrastAdministered",
+                order.getExamContrastAdministered() + " -> " + request.getContrastAdministered());
+        }
+        textChange(changes, "contrastDetails", order.getExamContrastDetails(), request.getContrastDetails());
+        java.math.BigDecimal before = order.getExamRadiationDoseMgy();
+        java.math.BigDecimal after = request.getRadiationDoseMgy();
+        boolean sameDose = before == null ? after == null : after != null && before.compareTo(after) == 0;
+        if (!sameDose) {
+            changes.put("radiationDoseMgy", plain(before) + " -> " + plain(after));
+        }
+        return changes;
+    }
+
+    private static void textChange(java.util.Map<String, String> changes, String field, String before, String after) {
+        String was = before == null || before.isBlank() ? null : before.trim();
+        String now = after == null || after.isBlank() ? null : after.trim();
+        if (java.util.Objects.equals(was, now)) {
+            return;
+        }
+        String change;
+        if (was == null) {
+            change = "set";
+        } else if (now == null) {
+            change = "cleared";
+        } else {
+            change = "changed";
+        }
+        changes.put(field, change);
+    }
+
+    private static String plain(java.math.BigDecimal value) {
+        // The audit row is read in any language: the neutral form, through the one number formatter.
+        return value == null ? "null"
+            : com.example.hms.utility.DisplayNumbers.measure(value, 3, java.util.Locale.ROOT);
+    }
+
     public static void requireCheckInOpen(ImagingOrderStatus status) {
         if (!CHECK_IN_OPEN.contains(status)) {
             throw new BusinessException(CHECK_IN_CLOSED_KEY);
@@ -81,12 +127,14 @@ public final class ImagingExamRecord {
      * has no performer yet (a study started before V346). {@code staff} is the actor's staff row
      * at the order's hospital, or null: it becomes the report's "performed by".
      */
-    public static void stampPerformer(ImagingOrder order, ImagingOrderStatus to, UUID actorUserId, String actorName,
-                                      Staff staff, LocalDateTime now) {
+    public static void stampPerformer(ImagingOrder order, ImagingOrderStatus from, ImagingOrderStatus to,
+                                      UUID actorUserId, String actorName, Staff staff, LocalDateTime now) {
         if (actorUserId == null) {
             return;
         }
-        boolean starting = to == ImagingOrderStatus.IN_PROGRESS;
+        // A real start only: a same-status write on a study in progress (a schedule, a location)
+        // is not performing it and never replaces who did.
+        boolean starting = to == ImagingOrderStatus.IN_PROGRESS && from != ImagingOrderStatus.IN_PROGRESS;
         boolean completingUnperformed = to == ImagingOrderStatus.COMPLETED && order.getPerformedByUserId() == null;
         if (starting && order.getExamStartedAt() == null) {
             order.setExamStartedAt(now);

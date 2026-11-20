@@ -237,6 +237,8 @@ public class ImagingOrderMapper {
             .examContrastDetails(order.getExamContrastDetails())
             .examRadiationDoseMgy(order.getExamRadiationDoseMgy())
             .examRecordedAt(order.getExamRecordedAt())
+            .technicianMayPerform(order.getModality() != com.example.hms.enums.ImagingModality.ULTRASOUND
+                || (hospital != null && hospital.isUltrasoundByNonPhysician()))
             .cancellationReason(order.getCancellationReason())
             .cancelledByName(order.getCancelledByName())
             .workflowNotes(order.getWorkflowNotes())
