@@ -100,6 +100,7 @@ class CashSessionServiceTest {
         when(scope.requirePinned()).thenReturn(HOSPITAL);
         when(days.today()).thenReturn(DAY);
         when(roles.canSuperviseTills(ACCOUNTANT, HOSPITAL)).thenReturn(true);
+        when(roles.canHoldTill(CASHIER, HOSPITAL)).thenReturn(true);
         session = CashSession.builder().hospitalId(HOSPITAL).cashierUserId(CASHIER).till(CashTill.BILLING)
             .businessDate(DAY).status(CashSessionStatus.OPEN).openedAt(LocalDateTime.of(2026, 11, 20, 8, 0)).build();
         session.setId(UUID.randomUUID());
@@ -341,14 +342,115 @@ class CashSessionServiceTest {
     }
 
     @Test
-    @DisplayName("mine: the cashier's own tills of the day; a till of an unknown cashier or hospital is no session")
+    @DisplayName("PR 10 review: money with no cashier, or taken by someone who holds no till here, is refused")
+    void stampNeverReturnsNoTill() {
+        assertThatThrownBy(() -> service.stamp(CashTill.BILLING, HOSPITAL, null))
+            .isInstanceOf(ClientSafeAccessDeniedException.class)
+            .hasMessageContaining("caissier");
+        // The platform super-admin on expanded authorities: no till assignment at the hospital.
+        UUID superAdmin = UUID.randomUUID();
+        assertThatThrownBy(() -> service.stamp(CashTill.BILLING, HOSPITAL, superAdmin))
+            .isInstanceOf(ClientSafeAccessDeniedException.class)
+            .hasMessageContaining("caisse du jour");
+        assertThatThrownBy(() -> service.stamp(CashTill.BILLING, null, CASHIER))
+            .isInstanceOf(ClientSafeAccessDeniedException.class);
+        assertThatThrownBy(() -> service.stamp(null, HOSPITAL, CASHIER))
+            .isInstanceOf(ClientSafeAccessDeniedException.class);
+        verify(writes, never()).insertIfAbsent(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("PR 10 review: a till holding app-declared mobile money (no operator) can be counted and closed")
+    void aTillWithOperatorLessMobileMoneyCloses() {
+        // A patient's declaration from the app carries no operator; the cashier confirmed it into this session.
+        BillingInvoice invoice = BillingInvoice.builder().invoiceNumber("TWP-2026-000031").build();
+        PaymentTransaction declared = PaymentTransaction.builder().invoice(invoice).amount(new BigDecimal("1500"))
+            .paymentMethod(PaymentMethod.MOBILE_MONEY).referenceNumber("APP-1").status(PaymentStatus.CONFIRMED)
+            .build();
+        when(payments.findByCashSessionIdOrderByCreatedAtAsc(session.getId())).thenReturn(List.of(declared));
+        when(refunds.findByCashSessionIdOrderByPaidAtAsc(session.getId())).thenReturn(List.of());
+        when(sales.findByCashSessionIdOrderByCreatedAtAsc(session.getId())).thenReturn(List.of());
+        actAs(CASHIER);
+
+        List<CashSessionCloseRequestDTO.CountedLine> lines = new ArrayList<>();
+        lines.add(new CashSessionCloseRequestDTO.CountedLine("MOBILE_MONEY", null, new BigDecimal("1500"), null));
+        CashSessionDTO closed = service.close(session.getId(), new CashSessionCloseRequestDTO(lines));
+
+        assertThat(closed.getStatus()).isEqualTo("CLOSED");
+        assertThat(savedCounts).singleElement().satisfies(c -> {
+            assertThat(c.getMethod()).isEqualTo("MOBILE_MONEY");
+            assertThat(c.getMobileMoneyOperator()).isNull();
+            assertThat(c.getExpectedAmount()).isEqualByComparingTo("1500");
+            assertThat(c.getDifference()).isEqualByComparingTo("0");
+        });
+    }
+
+    @Test
+    @DisplayName("PR 10 review: a mobile-money count with no operator is still refused when the till holds none")
+    void anOperatorLessCountIsRefusedWhenTheTillHoldsNone() {
+        actAs(CASHIER);
+        UUID id = session.getId();
+        CashSessionCloseRequestDTO body = counted("800", "850", null);
+        body.getCounts().add(new CashSessionCloseRequestDTO.CountedLine("MOBILE_MONEY", null, new BigDecimal("10"),
+            "x"));
+        assertThatThrownBy(() -> service.close(id, body)).isInstanceOf(FieldBusinessException.class);
+        assertThat(session.getStatus()).isEqualTo(CashSessionStatus.OPEN);
+    }
+
+    @Test
+    @DisplayName("PR 10 review: a shortage and a surplus that sum to zero are still flagged, cash apart")
+    void differencesThatNetToZeroAreFlagged() {
+        actAs(CASHIER);
+        List<CashSessionCloseRequestDTO.CountedLine> lines = new ArrayList<>();
+        lines.add(new CashSessionCloseRequestDTO.CountedLine("CASH", null, new BigDecimal("300"),
+            "500 F manquants dans le tiroir"));
+        lines.add(new CashSessionCloseRequestDTO.CountedLine("MOBILE_MONEY", MobileMoneyOperator.ORANGE_MONEY,
+            new BigDecimal("1350"), "500 F de trop sur le relevé"));
+        CashSessionDTO closed = service.close(session.getId(), new CashSessionCloseRequestDTO(lines));
+
+        // -500 on cash and +500 on Orange Money: the sum says nothing is wrong.
+        assertThat(closed.getTotalDifference()).isEqualByComparingTo("0");
+        assertThat(closed.getCashDifference()).isEqualByComparingTo("-500");
+        assertThat(closed.getDifferenceLines()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("PR 10 review: a till never closed has no difference to show")
+    void anOpenTillHasNoDifference() {
+        actAs(CASHIER);
+        CashSessionDTO open = service.get(session.getId());
+        assertThat(open.getCashDifference()).isNull();
+        assertThat(open.getDifferenceLines()).isZero();
+    }
+
+    @Test
+    @DisplayName("PR 10 review: a voided pharmacy payment stays expected in the till, and is named VOIDED")
+    void aVoidedPharmacyPaymentStaysExpected() {
+        com.example.hms.model.pharmacy.PharmacyPayment voided = new com.example.hms.model.pharmacy.PharmacyPayment();
+        voided.setAmount(new BigDecimal("400"));
+        voided.setPaymentMethod(PharmacyPaymentMethod.CASH);
+        voided.setStatus(com.example.hms.enums.PharmacyPaymentStatus.VOIDED);
+        when(pharmacyPayments.findByCashSessionIdOrderByCreatedAtAsc(session.getId())).thenReturn(List.of(voided));
+        actAs(CASHIER);
+
+        CashSessionDTO dto = service.get(session.getId());
+
+        // 800 as before, plus the 400 that came in: cancelling the dispense handed nothing back.
+        assertThat(dto.getCashToCount()).isEqualByComparingTo("1200");
+        assertThat(dto.getMovements()).anySatisfy(m -> {
+            assertThat(m.getKind()).isEqualTo("PHARMACY_PAYMENT");
+            assertThat(m.getDirection()).isEqualTo("IN");
+            assertThat(m.getStatus()).isEqualTo("VOIDED");
+        });
+    }
+
+    @Test
+    @DisplayName("mine: the cashier's own tills of the day")
     void mineAndNoSession() {
         actAs(CASHIER);
         when(sessionRepo.findByHospitalIdAndCashierUserIdAndBusinessDateOrderByTillAsc(HOSPITAL, CASHIER, DAY))
             .thenReturn(List.of(session));
         assertThat(service.mine(null)).singleElement().satisfies(s -> assertThat(s.isMine()).isTrue());
-        assertThat(service.stamp(CashTill.BILLING, null, CASHIER)).isNull();
-        assertThat(service.stamp(CashTill.BILLING, HOSPITAL, null)).isNull();
         assertThat(service.actingHospital()).isEqualTo(HOSPITAL);
         actAs(ACCOUNTANT);
         assertThat(service.get(session.getId()).getMovements()).isNotEmpty();

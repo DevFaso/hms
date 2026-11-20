@@ -137,12 +137,19 @@ public class CashSessionService {
     /**
      * The id of {@code cashierId}'s OPEN session for {@code till} today at {@code hospitalId}, opened if needed and
      * row-locked to the end of the caller's transaction. A closed session refuses the movement (409, nothing
-     * written). Null when the hospital or the cashier is unknown (a system write that is no till's money).
+     * written).
+     *
+     * <p>PR 10 review: never null. A movement with no identified cashier used to be written with no session (money
+     * in no till); it is refused. So is money taken by someone who holds no till at the hospital (the platform
+     * super-admin on expanded authorities): their session could never be counted and closed.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public UUID stamp(CashTill till, UUID hospitalId, UUID cashierId) {
         if (till == null || hospitalId == null || cashierId == null) {
-            return null;
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolve("billing.cashSession.cashierUnknown"));
+        }
+        if (!roleValidator.canHoldTill(cashierId, hospitalId)) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolve("billing.cashSession.tillHoldersOnly"));
         }
         LocalDate day = businessDays.today();
         CashSession session = sessionRepository.findLockedForDay(hospitalId, cashierId, till, day).orElse(null);
@@ -278,6 +285,8 @@ public class CashSessionService {
     /** A hospital admin or an accountant (never the session's cashier) marks a closed session reviewed. */
     @Transactional
     public CashSessionDTO review(UUID id, String note) {
+        // PR 10 review: the review is the second pair of eyes on a till; a support session is never that pair.
+        ImpersonationLimits.refuseMoneyWrite(() -> auditEventLogService, "cash session review");
         Supervisor actor = requireSupervisor();
         CashSession session = sessionRepository.findLockedByIdAndHospitalId(id, actor.hospitalId())
             .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND));
@@ -445,7 +454,8 @@ public class CashSessionService {
     /** The counted rows of a close: every expected method counted, whole francs, a difference explained. */
     private List<CashSessionCount> countedRows(CashSession session, Figures figures, CashSessionCloseRequestDTO body,
                                                UUID me) {
-        Map<String, CashSessionCloseRequestDTO.CountedLine> given = givenCounts(body);
+        Map<String, CashSessionCloseRequestDTO.CountedLine> given = givenCounts(body,
+            figures.lines().containsKey(NOT_STATED_LINE));
         Set<String> keys = new java.util.LinkedHashSet<>(figures.lines().keySet());
         keys.addAll(given.keySet());
         List<CashSessionCount> rows = new ArrayList<>();
@@ -455,8 +465,18 @@ public class CashSessionService {
         return rows;
     }
 
+    /**
+     * PR 10 review: the mobile-money line with no operator. A patient's own declaration from the app carries none
+     * ({@code MobileMoneyOperators.keep}); once a cashier confirms it, its money is in that cashier's session, and a
+     * close that refused a count without an operator could never close that till. The line is counted as it stands,
+     * « Mobile Money (opérateur non précisé) », only when the session holds such money; a count without an operator
+     * for money the session never took is still refused.
+     */
+    static final String NOT_STATED_LINE = key(MOBILE_MONEY, null);
+
     /** What was counted, by method line; a line counted twice is refused. */
-    private static Map<String, CashSessionCloseRequestDTO.CountedLine> givenCounts(CashSessionCloseRequestDTO body) {
+    private static Map<String, CashSessionCloseRequestDTO.CountedLine> givenCounts(CashSessionCloseRequestDTO body,
+                                                                                   boolean holdsNotStated) {
         Map<String, CashSessionCloseRequestDTO.CountedLine> given = new LinkedHashMap<>();
         if (body == null || body.getCounts() == null) {
             return given;
@@ -468,8 +488,11 @@ public class CashSessionService {
             // An insurer's share is never money at a till (QA D1611); mobile money names its operator (PR 9).
             com.example.hms.enums.PaymentMethod method = parseMethod(line.getMethod());
             com.example.hms.service.payment.TillPaymentMethods.requireReceivedAtTill(method, FIELD_COUNTS);
-            com.example.hms.enums.MobileMoneyOperator op = com.example.hms.service.payment.MobileMoneyOperators
-                .require(method, line.getOperator(), FIELD_COUNTS);
+            boolean notStated = holdsNotStated && method == com.example.hms.enums.PaymentMethod.MOBILE_MONEY
+                && line.getOperator() == null;
+            com.example.hms.enums.MobileMoneyOperator op = notStated ? null
+                : com.example.hms.service.payment.MobileMoneyOperators.require(method, line.getOperator(),
+                    FIELD_COUNTS);
             String operator = op != null ? op.name() : null;
             if (given.put(key(line.getMethod(), operator), line) != null) {
                 throw new FieldBusinessException(FIELD_COUNTS, "billing.cashSession.countTwice",
@@ -546,10 +569,19 @@ public class CashSessionService {
         List<CashSessionCount> stored = countRepository.findBySessionIdOrderByCloseRoundAscMethodAsc(s.getId());
         List<CashSessionCount> counts = stored != null ? stored : List.of();
         int round = s.getCloseRound() != null ? s.getCloseRound() : 0;
-        BigDecimal difference = round == 0 ? null : counts.stream()
-            .filter(c -> c.getCloseRound() != null && c.getCloseRound() == round)
+        List<CashSessionCount> latest = counts.stream()
+            .filter(c -> c.getCloseRound() != null && c.getCloseRound() == round).toList();
+        BigDecimal difference = round == 0 ? null : latest.stream()
             .map(CashSessionCount::getDifference)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // PR 10 review: the sum nets a shortage against a surplus (cash -500, Orange Money +500 = 0). The drawer's
+        // own difference and the number of lines that differ are given beside it.
+        BigDecimal cashDifference = round == 0 ? null : latest.stream()
+            .filter(c -> "CASH".equals(c.getMethod()))
+            .map(CashSessionCount::getDifference)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        int differenceLines = round == 0 ? 0 : (int) latest.stream()
+            .filter(c -> c.getDifference() != null && c.getDifference().signum() != 0).count();
         return CashSessionDTO.builder()
             .id(s.getId())
             .till(s.getTill() != null ? s.getTill().name() : null)
@@ -574,6 +606,8 @@ public class CashSessionService {
             .totalExpected(figures.totalIn().subtract(figures.totalOut()))
             .cashToCount(figures.cashToCount())
             .totalDifference(difference)
+            .cashDifference(cashDifference)
+            .differenceLines(differenceLines)
             .counts(counts.stream().map(c -> CashSessionDTO.Count.builder()
                 .closeRound(c.getCloseRound() != null ? c.getCloseRound() : 0)
                 .method(c.getMethod())

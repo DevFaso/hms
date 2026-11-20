@@ -105,6 +105,8 @@ class PaymentIdempotencyPostgresIT {
     @Autowired private PharmacyRepository pharmacies;
     @Autowired private MedicationCatalogItemRepository catalog;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private com.example.hms.repository.RoleRepository roles;
+    @Autowired private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignments;
     @org.springframework.test.context.bean.override.mockito.MockitoBean
     private com.example.hms.service.SmsService smsService;
     @org.springframework.test.context.bean.override.mockito.MockitoBean
@@ -131,6 +133,14 @@ class PaymentIdempotencyPostgresIT {
         account.setLastName("Caisse");
         account.setPhoneNumber("+2267" + (1_000_000 + Math.abs(tag.hashCode() % 8_999_999)));
         cashier = users.saveAndFlush(account);
+        // PR 10 review: money is taken only by someone who holds a till at the hospital (their session can be
+        // closed), read on the assignment.
+        com.example.hms.model.Role role = roles.findByCode("ROLE_BILLING_SPECIALIST").orElseGet(() ->
+            roles.saveAndFlush(com.example.hms.model.Role.builder().name("BILLING_SPECIALIST")
+                .code("ROLE_BILLING_SPECIALIST").description("ROLE_BILLING_SPECIALIST").build()));
+        assignments.saveAndFlush(com.example.hms.model.UserRoleHospitalAssignment.builder()
+            .assignmentCode("D2430-" + tag).description("PR 11 IT").user(cashier).hospital(hospital).role(role)
+            .startDate(LocalDate.now()).assignedAt(java.time.LocalDateTime.now()).active(true).build());
         User patientAccount = new User();
         patientAccount.setUsername("patient." + tag.toLowerCase(Locale.ROOT));
         patientAccount.setPasswordHash("x");

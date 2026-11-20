@@ -48,8 +48,16 @@ public class CashSessionDTO {
     private BigDecimal totalExpected;
     /** QA D2714: the physical cash expected in the drawer (cash in - cash out). */
     private BigDecimal cashToCount;
-    /** The latest close's total difference (counted - expected), null while never closed. */
+    /**
+     * The latest close's total difference (counted - expected), null while never closed. PR 10 review: a sum of
+     * signed differences, so a shortage on one method and a surplus on another net away; never read it alone, see
+     * {@link #cashDifference} and {@link #differenceLines}.
+     */
     private BigDecimal totalDifference;
+    /** PR 10 review: the latest close's difference on the CASH line alone (the drawer), null while never closed. */
+    private BigDecimal cashDifference;
+    /** PR 10 review: how many lines of the latest close have a difference, whatever their sum. */
+    private int differenceLines;
 
     /** Every close round's counts, oldest first. */
     private List<Count> counts;
