@@ -146,20 +146,22 @@ public class ImmunizationServiceImpl implements ImmunizationService {
     @Override
     @Transactional(readOnly = true)
     public List<ImmunizationResponseDTO> getImmunizationsForPatientPortal(UUID patientId) {
-        return portalImmunizations(patientId, immunization -> true);
+        Patient patient = patientRepository.findByIdUnscoped(patientId)
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
+        return portalImmunizations(patient, immunization -> true);
     }
 
     /** QA D2730 (r65): the proxy's view, less a dose given in a sensitive visit. */
     @Override
     @Transactional(readOnly = true)
     public List<ImmunizationResponseDTO> getImmunizationsForProxy(UUID patientId) {
-        return portalImmunizations(patientId, proxyRecordFilter::admits);
-    }
-
-    private List<ImmunizationResponseDTO> portalImmunizations(UUID patientId,
-            java.util.function.Predicate<PatientImmunization> shown) {
         Patient patient = patientRepository.findByIdUnscoped(patientId)
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
+        return portalImmunizations(patient, proxyRecordFilter::admits);
+    }
+
+    private List<ImmunizationResponseDTO> portalImmunizations(Patient patient,
+            java.util.function.Predicate<PatientImmunization> shown) {
         // QA (round 54, the D1910/D1912 class): a dose removed or marked entered
         // in error is not part of the patient's record; the portal, the apps and
         // the health summary all read through here.

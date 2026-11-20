@@ -27,8 +27,12 @@ class MinorLabourSafeguardingPathGuardTest {
 
     private static final Path MAIN = Path.of("src/main/java/com/example/hms");
 
+    /*
+     * A run of plain characters is consumed whole (++), so the matcher recurses once per token, not once per
+     * character: a long parameter list overflowed the stack on a CI shard (#1234). It matches the same text.
+     */
     private static final Pattern METHOD = Pattern.compile(
-        "\\n    (?:private|public|protected|static)[^;{=(]*?\\s(\\w+)\\s*\\(((?:[^;{()\"]|\"[^\";{]*\"|\\((?:[^;{()\"]|\"[^\";{]*\")*\\))*)\\)\\s*(?:throws [\\w., ]+)?\\{");
+        "\\n    (?:private|public|protected|static)[^;{=(]*?\\s(\\w+)\\s*\\(((?:[^;{()\"]++|\"[^\";{]*+\"|\\((?:[^;{()\"]++|\"[^\";{]*+\")*+\\))*+)\\)\\s*(?:throws [\\w., ]+)?\\{");
 
     /** A new admission row saved in the same method. */
     private static final Pattern NEW_ADMISSION = Pattern.compile("new Admission\\(\\)|\\bbuildAdmission\\(");

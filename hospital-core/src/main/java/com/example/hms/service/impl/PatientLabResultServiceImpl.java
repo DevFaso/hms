@@ -141,7 +141,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         // page of 20 showed 17 and the two oldest released results (a
         // critical K 6.8 among them) could never be reached.
         // QA D2730: a proxy's read drops the rows it may not see before the cut.
-        List<LabResult> visible = limited(shownOf(shown, currentFor(clinicalReader, resolvePairs(results, portalView))),
+        List<LabResult> visible = limited(currentFor(clinicalReader, resolvePairs(results, portalView), shown),
             effectiveLimit);
         // Only worth reading again if there are rows we have not seen AND the
         // wider read would actually be wider — at the cap it would repeat the
@@ -150,8 +150,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             && results.size() >= effectiveLimit
             && effectiveLimit < MAX_LIMIT) {
             results = fetchRows(patient, hospitalId, MAX_LIMIT, portalView);
-            visible = limited(shownOf(shown, currentFor(clinicalReader, resolvePairs(results, portalView))),
-                effectiveLimit);
+            visible = limited(currentFor(clinicalReader, resolvePairs(results, portalView), shown), effectiveLimit);
         }
 
         if (!portalView && hospitalId != null) {
@@ -252,8 +251,13 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         return shownOf(shown, ClinicalLabResultView.current(resolvePairs(rows, true))).size();
     }
 
-    private static List<LabResult> currentFor(boolean clinicalReader, List<LabResult> rows) {
-        return clinicalReader ? ClinicalLabResultView.current(rows) : rows;
+    /**
+     * The rows a clinical reader is shown (superseded ones removed), and of those the ones this reader
+     * may see (QA D2730: a proxy's filter) - both before any cut.
+     */
+    private static List<LabResult> currentFor(boolean clinicalReader, List<LabResult> rows,
+                                              java.util.function.Predicate<LabResult> shown) {
+        return shownOf(shown, clinicalReader ? ClinicalLabResultView.current(rows) : rows);
     }
 
     /**
