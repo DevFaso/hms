@@ -318,6 +318,30 @@ public class RoleValidator {
         return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, BILLING_SPECIALIST_ROLE, RECEPTIONIST_ROLE);
     }
 
+    /**
+     * QA D2675 (r65): who may hand a fill over unpaid, marked « à facturer » with a reason: a pharmacist or a hospital
+     * admin assignment at {@code hospitalId} (never a verifier or the super-admin alone).
+     */
+    public boolean canDeferDispenseBilling(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, "PHARMACIST", HOSPITAL_ADMIN_ROLE);
+    }
+
+    /** QA D2676 (r65, billing plan PR 13): who may ask for a pharmacy refund of a patient return there. */
+    public boolean canRequestPharmacyRefund(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, "PHARMACIST", HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE,
+            BILLING_SPECIALIST_ROLE);
+    }
+
+    /** QA D2676: who hands an approved pharmacy refund to the patient. */
+    public boolean canPayPharmacyRefund(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, "PHARMACIST", HOSPITAL_ADMIN_ROLE, BILLING_SPECIALIST_ROLE);
+    }
+
+    /** QA D2673 (r65): who reads a pharmacy's daily reconciliation there. */
+    public boolean canReadPharmacyReconciliation(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, "PHARMACIST", HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE);
+    }
+
     /** Billing-money plan PR 2 (plan section 3.8): who reads a hospital's price list there. */
     public boolean canReadPriceList(UUID userId, UUID hospitalId) {
         return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE, BILLING_SPECIALIST_ROLE,

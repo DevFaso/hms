@@ -689,9 +689,108 @@ class DispenseReadyForCollectionTest {
 
     final UUID dispenseId = UUID.randomUUID();
 
+    @Mock private com.example.hms.repository.pharmacy.PharmacyPaymentRepository paymentRepository;
+    @Mock private com.example.hms.repository.pharmacy.PharmacyClaimRepository claimRepository;
+
+    /** QA D2675 (r65): the fill of {@link #preparedFill()} priced at 100 F CFA a capsule (charge 1 000). */
+    Dispense pricedPreparedFill() {
+        Dispense d = preparedFill();
+        d.setMedicationCatalogItem(inventoryItem.getMedicationCatalogItem());
+        inventoryItem.setUnitPrice(new BigDecimal("100"));
+        when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(pharmacyId,
+                inventoryItem.getMedicationCatalogItem().getId())).thenReturn(Optional.of(inventoryItem));
+        return d;
+    }
+
+    @Nested
+    @DisplayName("QA D2675: a fill is handed over paid, covered, free, or « à facturer »")
+    class UnpaidHandOver {
+
+        @Test
+        @DisplayName("an unpaid priced fill with no reason is refused with the amount due; nothing is written")
+        void unpaidWithoutReasonIsRefused() {
+            Dispense d = pricedPreparedFill();
+            stubLocked(d);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            when(claimRepository.sumLiveForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+
+            assertThatThrownBy(() -> service.handOver(dispenseId, null))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .extracting("field", "messageKey")
+                    .containsExactly("billingDeferredReason", "pharmacy.handOver.unpaid");
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("a paid fill is handed over with no reason")
+        void paidIsHandedOver() {
+            Dispense d = pricedPreparedFill();
+            stubLocked(d);
+            stubHandOverWrites(d);
+            when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(new BigDecimal("1000"));
+            when(claimRepository.sumLiveForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+
+            assertThat(service.handOver(dispenseId, null).getStatus()).isEqualTo("COMPLETED");
+            assertThat(d.getBillingDeferredReason()).isNull();
+        }
+
+        @Test
+        @DisplayName("a fill a live claim covers is handed over with no reason")
+        void coveredIsHandedOver() {
+            Dispense d = pricedPreparedFill();
+            stubLocked(d);
+            stubHandOverWrites(d);
+            when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(new BigDecimal("200"));
+            when(claimRepository.sumLiveForDispense(dispenseId)).thenReturn(new BigDecimal("800"));
+
+            assertThat(service.handOver(dispenseId, null).getStatus()).isEqualTo("COMPLETED");
+        }
+
+        @Test
+        @DisplayName("« à facturer » by a pharmacist, with a reason: handed over, the reason, author and time kept, audited")
+        void deferredByAPharmacistIsHandedOver() {
+            Dispense d = pricedPreparedFill();
+            stubLocked(d);
+            stubHandOverWrites(d);
+            when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            when(claimRepository.sumLiveForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            when(roleValidator.canDeferDispenseBilling(userId, hospitalId)).thenReturn(true);
+
+            service.handOver(dispenseId, HandOverRequestDTO.builder()
+                    .billingDeferredReason("Hospitalisée, sur la facture du séjour").build());
+
+            assertThat(d.getBillingDeferredReason()).isEqualTo("Hospitalisée, sur la facture du séjour");
+            assertThat(d.getBillingDeferredBy()).isEqualTo(userId);
+            assertThat(d.getBillingDeferredAt()).isEqualTo(LocalDateTime.now(FIXED_CLOCK));
+            verify(support).logAudit(eq(AuditEventType.DISPENSE_BILLING_DEFERRED), anyString(),
+                    eq(dispenseId.toString()), eq("DISPENSE"));
+        }
+
+        @Test
+        @DisplayName("« à facturer » by a role that may not defer billing (a verifier) is refused")
+        void deferredByAnotherRoleIsRefused() {
+            Dispense d = pricedPreparedFill();
+            stubLocked(d);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            when(claimRepository.sumLiveForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
+            when(roleValidator.canDeferDispenseBilling(userId, hospitalId)).thenReturn(false);
+
+            assertThatThrownBy(() -> service.handOver(dispenseId, HandOverRequestDTO.builder()
+                    .billingDeferredReason("plus tard").build()))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.handOver.deferRoleRequired");
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+        }
+    }
+
     @Nested
     @DisplayName("hand-over (AC-4, AC-5, AC-6)")
     class HandOver {
+
 
         @Test
         @DisplayName("AC-4: COMPLETED, handed over now by the caller, the order DISPENSED and announced, receipt and audit")

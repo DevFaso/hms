@@ -157,8 +157,19 @@ public class DispenseController {
         return ResponseEntity.ok(ApiResponseWrapper.success(dispenseService.cancelReady(id, request)));
     }
 
+    @GetMapping("/{id}/payment-status")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'BILLING_SPECIALIST', 'HOSPITAL_ADMIN')")
+    @Operation(summary = "Payment status of a fill (QA D2675)",
+            description = "Charge, paid, claimed, due and whether the fill is marked « à facturer »")
+    @ApiResponse(responseCode = "200", description = "Payment status")
+    public ResponseEntity<ApiResponseWrapper<com.example.hms.payload.dto.pharmacy.DispensePaymentStatusDTO>> paymentStatus(
+            @PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(dispenseService.getPaymentStatus(id)));
+    }
+
     @GetMapping("/{id}")
     // QA D102 - billing specialists run the pharmacy checkout and so load the
+
     // dispense they take payment for; the service scopes it to the hospital.
     @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'BILLING_SPECIALIST', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Get dispense record", description = "Retrieve a dispense record by ID")
