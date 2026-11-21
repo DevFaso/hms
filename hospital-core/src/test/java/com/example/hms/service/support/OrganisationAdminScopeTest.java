@@ -369,6 +369,45 @@ class OrganisationAdminScopeTest {
         assertThat(access.reachesOnlyThroughOrganisation(hospitalA.getId())).isFalse();
     }
 
+    private User accountHolding(UserRoleHospitalAssignment... rows) {
+        User account = new User();
+        account.setId(UUID.randomUUID());
+        when(assignmentRepository.findByUserId(account.getId())).thenReturn(List.of(rows));
+        return account;
+    }
+
+    @Test
+    @DisplayName("review of #1246: an organisation's staff is whoever holds a non-patient assignment at one of its hospitals")
+    void staffOfTheCallersOrganisation() {
+        organisationAdminOfOne();
+
+        // A nurse at the sister hospital; a doctor whose invitation still waits for its code.
+        assertThat(access.isStaffOfCallersOrganisation(accountHolding(assignment("ROLE_NURSE", hospitalB, true))))
+            .isTrue();
+        assertThat(access.isStaffOfCallersOrganisation(accountHolding(assignment("ROLE_DOCTOR", hospitalA, false))))
+            .isTrue();
+        // A patient of its own hospital; another organisation's clinician; someone with no assignment.
+        assertThat(access.isStaffOfCallersOrganisation(accountHolding(assignment("ROLE_PATIENT", hospitalA, true))))
+            .isFalse();
+        assertThat(access.isStaffOfCallersOrganisation(accountHolding(assignment("ROLE_DOCTOR", hospitalC, true))))
+            .isFalse();
+        assertThat(access.isStaffOfCallersOrganisation(accountHolding())).isFalse();
+        assertThat(access.isStaffOfCallersOrganisation(null)).isFalse();
+        // A clinician of another organisation who is ALSO a patient at A is still not its staff.
+        assertThat(access.isStaffOfCallersOrganisation(accountHolding(
+            assignment("ROLE_DOCTOR", hospitalC, true), assignment("ROLE_PATIENT", hospitalA, true)))).isFalse();
+    }
+
+    @Test
+    @DisplayName("review of #1246: nobody but an organisation admin has 'its organisation's staff'")
+    void onlyAnOrganisationAdminHasOrganisationStaff() {
+        signIn("ROLE_HOSPITAL_ADMIN");
+        callerHolds(assignment("ROLE_HOSPITAL_ADMIN", hospitalA, true));
+
+        assertThat(access.isStaffOfCallersOrganisation(accountHolding(assignment("ROLE_NURSE", hospitalA, true))))
+            .isFalse();
+    }
+
     @Test
     @DisplayName("it administers no ACCOUNT: no password reset, edit or delete, even of its own organisation's staff")
     void administersNoAccount() {

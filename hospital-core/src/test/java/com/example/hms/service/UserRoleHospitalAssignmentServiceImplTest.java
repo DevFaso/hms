@@ -1805,19 +1805,6 @@ class UserRoleHospitalAssignmentServiceImplTest {
 
     // -- Review of #1246, item 2: who an organisation-only caller may name as the holder --
 
-    private UserRoleHospitalAssignment rowOf(User holder, String roleCode, Hospital at) {
-        Role held = new Role();
-        held.setId(UUID.randomUUID());
-        held.setCode(roleCode);
-        held.setName(roleCode);
-        UserRoleHospitalAssignment row = new UserRoleHospitalAssignment();
-        row.setId(UUID.randomUUID());
-        row.setUser(holder);
-        row.setRole(held);
-        row.setHospital(at);
-        return row;
-    }
-
     private UserRoleHospitalAssignmentRequestDTO grantByIdentifier(User holder, String identifier) {
         org.mockito.Mockito.lenient().when(userRepository.findByUsername(identifier)).thenReturn(Optional.empty());
         org.mockito.Mockito.lenient().when(userRepository.findByEmail(identifier)).thenReturn(Optional.empty());
@@ -1833,18 +1820,17 @@ class UserRoleHospitalAssignmentServiceImplTest {
         return dto;
     }
 
-    private void callerReachesTheHospitalThroughItsOrganisationAlone() {
+    /** The caller is an organisation admin here; {@code staff} is what the shared rule says of the holder. */
+    private void callerReachesTheHospitalThroughItsOrganisationAlone(boolean holderIsItsStaff) {
         when(accountAccess.reachesOnlyThroughOrganisation(hospital.getId())).thenReturn(true);
-        org.mockito.Mockito.lenient().when(accountAccess.organisationHospitalIds())
-            .thenReturn(Set.of(hospital.getId()));
+        org.mockito.Mockito.lenient().when(accountAccess.isStaffOfCallersOrganisation(assignee))
+            .thenReturn(holderIsItsStaff);
     }
 
     @Test
     void review2_aPatientFoundByPhoneAnswersExactlyAsAnUnknownNumber() {
-        callerReachesTheHospitalThroughItsOrganisationAlone();
-        // The number belongs to a patient of this very hospital.
-        when(assignmentRepository.findByUserId(assignee.getId()))
-            .thenReturn(List.of(rowOf(assignee, "ROLE_PATIENT", hospital)));
+        // The number belongs to a patient of this very hospital: not its staff (OrganisationAdminScopeTest).
+        callerReachesTheHospitalThroughItsOrganisationAlone(false);
         UserRoleHospitalAssignmentRequestDTO known = grantByIdentifier(assignee, "+22670000001");
         UserRoleHospitalAssignmentRequestDTO unknown = grantByIdentifier(null, "+22670000002");
 
@@ -1861,11 +1847,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
 
     @Test
     void review2_staffOfAnotherOrganisationAnswersAsUnknown() {
-        callerReachesTheHospitalThroughItsOrganisationAlone();
-        Hospital elsewhere = new Hospital();
-        elsewhere.setId(UUID.randomUUID());
-        when(assignmentRepository.findByUserId(assignee.getId()))
-            .thenReturn(List.of(rowOf(assignee, "ROLE_NURSE", elsewhere)));
+        callerReachesTheHospitalThroughItsOrganisationAlone(false);
         UserRoleHospitalAssignmentRequestDTO dto = grantByIdentifier(assignee, "+22670000003");
 
         assertThatThrownBy(() -> service.assignRole(dto))
@@ -1875,10 +1857,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
 
     @Test
     void review2_staffOfTheOrganisationMayBeNamedPendingInvitationIncluded() {
-        callerReachesTheHospitalThroughItsOrganisationAlone();
-        UserRoleHospitalAssignment pending = rowOf(assignee, "ROLE_NURSE", hospital);
-        pending.setActive(false);
-        when(assignmentRepository.findByUserId(assignee.getId())).thenReturn(List.of(pending));
+        callerReachesTheHospitalThroughItsOrganisationAlone(true);
         UserRoleHospitalAssignmentRequestDTO dto = grantByIdentifier(assignee, "+22670000004");
 
         // The fixture stubs no further than this rule: whatever stops the grant after it is not this rule.
@@ -1896,7 +1875,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
         Throwable later = org.assertj.core.api.Assertions.catchThrowable(() -> service.assignRole(dto));
 
         assertThat(later).isNotInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
-        verify(assignmentRepository, never()).findByUserId(assignee.getId());
+        verify(accountAccess, never()).isStaffOfCallersOrganisation(any());
     }
 
     /** Runs the specification the listing was asked with against a recording criteria root. */

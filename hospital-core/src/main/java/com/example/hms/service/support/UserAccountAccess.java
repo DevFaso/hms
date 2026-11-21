@@ -440,6 +440,31 @@ public class UserAccountAccess {
     }
 
     /**
+     * Review of #1246 (rule 1a): whether this account is STAFF of the caller's
+     * own organisation: it holds a non-patient assignment, active or still
+     * waiting for its code, at a hospital of that organisation. The one test
+     * for "an existing account an organisation admin may name", whichever
+     * identifier found it (a username, an e-mail, a phone, a licence number):
+     * a patient's account, or another organisation's staff, is not.
+     */
+    public boolean isStaffOfCallersOrganisation(User account) {
+        if (account == null || account.getId() == null) {
+            return false;
+        }
+        Set<UUID> organisation = organisationHospitals(caller());
+        if (organisation.isEmpty()) {
+            return false;
+        }
+        return assignmentRepository.findByUserId(account.getId()).stream()
+            .anyMatch(row -> isStaffRowAt(row, organisation));
+    }
+
+    private static boolean isStaffRowAt(UserRoleHospitalAssignment row, Set<UUID> hospitals) {
+        UUID hospitalId = hospitalIdOf(row);
+        return hospitalId != null && hospitals.contains(hospitalId) && !PATIENT.equals(roleCode(row.getRole()));
+    }
+
+    /**
      * The rows a provider admin may change from the provider staff page
      * ({@code /provider/staff}, provider plan AC-6), and nothing else uses
      * it: the rows at the provider facilities where they administer

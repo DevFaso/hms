@@ -951,6 +951,88 @@ class UserEndpointAuthorizationIT extends BaseIT {
             "hospitalId", hospitalA.getId().toString()))).isEqualTo(200);
     }
 
+    /** A clinician's staff record with a licence number, at the hospital of their one assignment. */
+    private String licensed(User clinician, Hospital hospital) {
+        String licence = "LIC-UG-" + next();
+        staffRepository.save(com.example.hms.model.Staff.builder()
+            .user(clinician).hospital(hospital)
+            .assignment(assignmentRepository.findByUserId(clinician.getId()).get(0))
+            .jobTitle(com.example.hms.enums.JobTitle.DOCTOR)
+            .employmentType(com.example.hms.enums.EmploymentType.FULL_TIME)
+            .licenseNumber(licence).name("Dr " + clinician.getFirstName()).active(true).build());
+        return licence;
+    }
+
+    /** "A new doctor" at this hospital, with fresh identifiers and someone's licence number. */
+    private Map<String, Object> newDoctorWithLicence(String licence, Hospital hospital) {
+        Map<String, Object> request = new java.util.HashMap<>(signup("newdoc", "DOCTOR", hospital));
+        request.put("licenseNumber", licence);
+        request.put("jobTitle", "DOCTOR");
+        request.put("forcePasswordChange", true);
+        return request;
+    }
+
+    private void assertNothingOf(User account, MvcResult answer) throws Exception {
+        User stored = userRepository.findById(account.getId()).orElseThrow();
+        assertThat(answer.getResponse().getContentAsString())
+            .doesNotContain(stored.getUsername(), stored.getEmail(), stored.getPhoneNumber());
+    }
+
+    @Test
+    @DisplayName("review round 2 of #1246: a licence number never hands an organisation admin another organisation's clinician")
+    void organisationAdminCannotReachAnotherOrganisationsClinicianByLicence() throws Exception {
+        String token = organisationAdmin();
+        User doctorC = account("docC", "ROLE_DOCTOR", hospitalC);
+        String licenceOfC = licensed(doctorC, hospitalC);
+
+        MvcResult refused = perform(post("/users/admin-register"), token, newDoctorWithLicence(licenceOfC, hospitalB));
+
+        // The answer any registrar gets for a number already in use, on its field, with nothing of the account.
+        assertThat(refused.getResponse().getStatus()).as(refused.getResponse().getContentAsString())
+            .isBetween(400, 409);
+        assertThat(refused.getResponse().getContentAsString()).contains("licenseNumber");
+        assertNothingOf(doctorC, refused);
+        User untouched = userRepository.findById(doctorC.getId()).orElseThrow();
+        assertThat(untouched.isForcePasswordChange()).isFalse();
+        assertThat(assignmentRepository.findByUserId(doctorC.getId())).hasSize(1)
+            .allSatisfy(a -> assertThat(a.getHospital().getId()).isEqualTo(hospitalC.getId()));
+
+        // Soft-deleted: the same refusal, and it stays deleted. A registration is no way to restore it.
+        untouched.setDeleted(true);
+        userRepository.save(untouched);
+        MvcResult stillRefused =
+            perform(post("/users/admin-register"), token, newDoctorWithLicence(licenceOfC, hospitalB));
+        assertThat(stillRefused.getResponse().getStatus()).isBetween(400, 409);
+        assertNothingOf(doctorC, stillRefused);
+        assertThat(userRepository.findById(doctorC.getId()).orElseThrow().isDeleted()).isTrue();
+        // ...nor for a hospital admin, who does not administer that account either.
+        MvcResult byHospitalAdmin = perform(post("/users/admin-register"), hms(adminA, "ROLE_HOSPITAL_ADMIN"),
+            newDoctorWithLicence(licenceOfC, hospitalA));
+        assertThat(byHospitalAdmin.getResponse().getStatus()).isBetween(400, 409);
+        assertNothingOf(doctorC, byHospitalAdmin);
+        assertThat(userRepository.findById(doctorC.getId()).orElseThrow().isDeleted()).isTrue();
+    }
+
+    @Test
+    @DisplayName("review round 2 of #1246: attaching a colleague by licence never echoes their contact details nor forces their password")
+    void attachingByLicenceEchoesNoContactDetails() throws Exception {
+        String token = organisationAdmin();
+        String licenceOfB = licensed(doctorB, hospitalB);
+        User doctorC = account("docC", "ROLE_DOCTOR", hospitalC);
+        String licenceOfC = licensed(doctorC, hospitalC);
+
+        // The organisation admin, its own organisation's doctor: whatever the outcome, no contact detail.
+        MvcResult ownStaff = perform(post("/users/admin-register"), token, newDoctorWithLicence(licenceOfB, hospitalA));
+        assertNothingOf(doctorB, ownStaff);
+        assertThat(userRepository.findById(doctorB.getId()).orElseThrow().isForcePasswordChange()).isFalse();
+
+        // A hospital admin, a live clinician of another hospital (and another organisation).
+        MvcResult elsewhere = perform(post("/users/admin-register"), hms(adminA, "ROLE_HOSPITAL_ADMIN"),
+            newDoctorWithLicence(licenceOfC, hospitalA));
+        assertNothingOf(doctorC, elsewhere);
+        assertThat(userRepository.findById(doctorC.getId()).orElseThrow().isForcePasswordChange()).isFalse();
+    }
+
     @Test
     @DisplayName("review of #1246 (rule 1b): an organisation admin reads no patient, front-desk, audit or clinical data")
     void organisationAdminReadsNoPatientOrClinicalData() throws Exception {

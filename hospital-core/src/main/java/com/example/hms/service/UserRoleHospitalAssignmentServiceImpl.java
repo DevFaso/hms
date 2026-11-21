@@ -376,12 +376,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (hospital == null || !accountAccess.reachesOnlyThroughOrganisation(hospital.getId())) {
             return;
         }
-        Set<UUID> organisation = accountAccess.organisationHospitalIds();
-        boolean staffOfTheOrganisation = assignmentRepository.findByUserId(holder.getId()).stream()
-            .anyMatch(row -> row.getHospital() != null
-                && organisation.contains(row.getHospital().getId())
-                && !isRoleCode(getRoleCode(row.getRole()), ROLE_PATIENT));
-        if (!staffOfTheOrganisation) {
+        // One rule, shared with the licence lookup of admin-register (UserServiceImpl).
+        if (!accountAccess.isStaffOfCallersOrganisation(holder)) {
             throw holderNotFound(dto);
         }
     }
