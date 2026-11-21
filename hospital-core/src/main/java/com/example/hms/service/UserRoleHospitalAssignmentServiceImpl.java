@@ -453,15 +453,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             requireNotCallersOwn(target);
             requireSuperAdminRemains(List.of(target));
         }
-        // Rule 1c: nor does an edit hand a row to the caller, or switch the
-        // caller's own row on.
-        boolean handedOver = target.getUser() == null || newUser == null
-            || !Objects.equals(newUser.getId(), target.getUser().getId());
-        boolean switchedOn = !Boolean.TRUE.equals(target.getActive()) && activeAfter;
-        boolean movedElsewhere = !Objects.equals(idOf(newHospital), idOf(target.getHospital()));
-        if (handedOver || switchedOn || movedElsewhere) {
-            requireNotSelfGrant(newUser);
-        }
+        requireNoSelfGrantThroughEdit(target, newUser, newHospital, activeAfter);
 
         if (Boolean.TRUE.equals(dto.getActive())) {
             checkActiveDoctorConflict(dto, newUser, newRole, newHospital, locale);
@@ -1758,6 +1750,22 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private void requireNotSelfGrant(User holder) {
         if (holder != null && accountAccess.isSelf(holder)) {
             throw new ConflictException(com.example.hms.utility.MessageUtil.resolve(MSG_GRANT_OWN));
+        }
+    }
+
+    /**
+     * Rule 1c, for an edit: it never hands a row to the caller, switches the
+     * caller's own row back on, or moves it to another hospital. Each of
+     * those is a grant to the caller's own account.
+     */
+    private void requireNoSelfGrantThroughEdit(UserRoleHospitalAssignment target, User newUser,
+                                               Hospital newHospital, boolean activeAfter) {
+        boolean handedOver = target.getUser() == null || newUser == null
+            || !Objects.equals(newUser.getId(), target.getUser().getId());
+        boolean switchedOn = !Boolean.TRUE.equals(target.getActive()) && activeAfter;
+        boolean movedElsewhere = !Objects.equals(idOf(newHospital), idOf(target.getHospital()));
+        if (handedOver || switchedOn || movedElsewhere) {
+            requireNotSelfGrant(newUser);
         }
     }
 

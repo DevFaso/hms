@@ -18,6 +18,9 @@ import java.util.UUID;
 
 public final class UserRoleHospitalAssignmentSpecification {
 
+    /** The assignment's hospital association. */
+    private static final String HOSPITAL = "hospital";
+
     private UserRoleHospitalAssignmentSpecification() {
     }
 
@@ -28,7 +31,7 @@ public final class UserRoleHospitalAssignmentSpecification {
         }
         return (root, query, cb) -> {
             query.distinct(true);
-            return cb.equal(root.join("hospital", JoinType.LEFT).get("id"), hospitalId);
+            return cb.equal(root.join(HOSPITAL, JoinType.LEFT).get("id"), hospitalId);
         };
     }
 
@@ -44,7 +47,7 @@ public final class UserRoleHospitalAssignmentSpecification {
                 return cb.disjunction();
             }
             query.distinct(true);
-            return root.join("hospital", JoinType.LEFT).get("id").in(hospitalIds);
+            return root.join(HOSPITAL, JoinType.LEFT).get("id").in(hospitalIds);
         };
     }
 
@@ -78,7 +81,7 @@ public final class UserRoleHospitalAssignmentSpecification {
             query.distinct(true);
 
             Join<UserRoleHospitalAssignment, User> userJoin = root.join("user", JoinType.LEFT);
-            Join<UserRoleHospitalAssignment, Hospital> hospitalJoin = root.join("hospital", JoinType.LEFT);
+            Join<UserRoleHospitalAssignment, Hospital> hospitalJoin = root.join(HOSPITAL, JoinType.LEFT);
             Join<UserRoleHospitalAssignment, Role> roleJoin = root.join("role", JoinType.LEFT);
 
             // The assignment's own holder, role, code and hospital only. The

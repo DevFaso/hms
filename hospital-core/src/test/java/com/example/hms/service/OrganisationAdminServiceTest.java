@@ -119,8 +119,8 @@ class OrganisationAdminServiceTest {
         assertThat(a.collectedTotal()).isEqualByComparingTo("180000");
         // Every figure asked for a hospital names that hospital.
         verify(totals).countAppointments(hospitalB.getId(), LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 20));
-        verify(totals).countDeaths(eq(hospitalB.getId()), eq(LocalDate.of(2026, 11, 1).atStartOfDay()),
-            eq(LocalDate.of(2026, 11, 21).atStartOfDay()));
+        verify(totals).countDeaths(hospitalB.getId(), LocalDate.of(2026, 11, 1).atStartOfDay(),
+            LocalDate.of(2026, 11, 21).atStartOfDay());
     }
 
     @Test

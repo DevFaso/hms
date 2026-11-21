@@ -209,17 +209,17 @@ public class HospitalServiceImpl implements HospitalService {
         return code;
     }
 
+    /** Rule 3: a hospital that has a price or an invoice has amounts in its currency. */
+    private boolean hasInvoiceOrPrice(UUID hospitalId) {
+        return hospitalRepository.hasPriceListItem(hospitalId) || hospitalRepository.hasInvoice(hospitalId);
+    }
+
     /**
      * QA r65 D2501: the hospital's currency and time zone, when the request
      * names them. A blank currency keeps what the row has (XOF on a new one);
      * a blank time zone on a request that carries the field clears it, which
      * means "the organisation's default" ({@code HospitalCalendar.zoneOf}).
      */
-    /** Rule 3: a hospital that has a price or an invoice has amounts in its currency. */
-    private boolean hasInvoiceOrPrice(UUID hospitalId) {
-        return hospitalRepository.hasPriceListItem(hospitalId) || hospitalRepository.hasInvoice(hospitalId);
-    }
-
     private void applyLocale(HospitalRequestDTO dto, Hospital hospital) {
         if (!HospitalLocaleRules.isBlank(dto.getCurrencyCode())) {
             String currency = HospitalLocaleRules.requireCurrency(dto.getCurrencyCode());
