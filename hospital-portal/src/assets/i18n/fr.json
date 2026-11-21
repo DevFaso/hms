@@ -2135,7 +2135,9 @@
       "DISPENSE_BILLING_DEFERRAL_CANCELLED": "Report « à facturer » retiré",
       "DISPENSE_BILLING_URGENCY_OVERRIDE": "Délivrance remise sans paiement par dérogation d’urgence",
       "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Dérogation d’urgence revue",
-      "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Délivrance portée au compte du séjour"
+      "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Délivrance portée au compte du séjour",
+      "DISPENSE_BILLING_DEFERRAL_CLOSED_SETTLED": "Report « à facturer » clos : l’ordonnance est sortie de la pharmacie sans rien devoir",
+      "PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED": "Acceptation de la demande de prise en charge pharmacie confirmée par la facturation ou la comptabilité"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",

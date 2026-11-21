@@ -2135,7 +2135,9 @@
       "DISPENSE_BILLING_DEFERRAL_CANCELLED": "Deferred billing of a fill withdrawn",
       "DISPENSE_BILLING_URGENCY_OVERRIDE": "Fill handed over unpaid on an urgency override",
       "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Urgency override of a fill’s billing reviewed",
-      "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay"
+      "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay",
+      "DISPENSE_BILLING_DEFERRAL_CLOSED_SETTLED": "Deferred billing closed: the prescription left the pharmacy with nothing due",
+      "PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED": "Pharmacy claim acceptance confirmed by billing or accounting"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",

@@ -190,11 +190,17 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
         }
         PharmacyClaim saved = claimRepository.save(claim);
 
-        support.logAudit(AuditEventType.CLAIM_SUBMITTED,
-                "Pharmacy claim " + (confirmsUnvouched ? "acceptance confirmed by a money desk" : verb)
-                        + " (status=" + target + ")",
-                saved.getId().toString(),
-                AUDIT_ENTITY);
+        if (confirmsUnvouched) {
+            support.logAudit(AuditEventType.CLAIM_SUBMITTED,
+                    "Pharmacy claim acceptance confirmed by a money desk",
+                    saved.getId().toString(),
+                    AUDIT_ENTITY);
+        } else {
+            support.logAudit(AuditEventType.CLAIM_SUBMITTED,
+                    "Pharmacy claim " + verb + " (status=" + target + ")",
+                    saved.getId().toString(),
+                    AUDIT_ENTITY);
+        }
         return forReader(saved);
     }
 

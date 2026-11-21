@@ -1996,4 +1996,16 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Fill charged to the account of the open stay$/,
     params: [],
   },
+  // QA r66 (D2929, D2925): a deferral the hand-over closed because the order left paid, and a money
+  // desk confirming a claim the pharmacy had accepted itself (constant descriptions, ids on the row).
+  {
+    key: 'AUDIT.DESC.DISPENSE_BILLING_DEFERRAL_CLOSED_SETTLED',
+    re: /^Deferred billing of a fill closed: the order left the counter with nothing due$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED',
+    re: /^Pharmacy claim acceptance confirmed by a money desk$/,
+    params: [],
+  },
 ];
