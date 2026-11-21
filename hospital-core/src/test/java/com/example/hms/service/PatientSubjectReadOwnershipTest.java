@@ -428,6 +428,8 @@ class PatientSubjectReadOwnershipTest {
         @DisplayName("staff read another patient's report in any status, as before")
         void staffUnchanged() {
             passwordLogin("ROLE_DOCTOR");
+            // A doctor of the report's hospital (QA D2915: the role counts where it is held).
+            com.example.hms.testsupport.ImagingRolesHeld.whereverTheTokenNamesThem(roleValidator);
             stub(reportFor(otherPatientId, ImagingReportStatus.DRAFT, false));
 
             assertThat(service.getReport(reportId)).isSameAs(dto);

@@ -200,6 +200,19 @@ public class ImagingStudyViewerService {
     }
 
     /**
+     * QA D2915: the legacy instance listing (DicomProxyService, study UIDs of the acting hospital)
+     * is read by the care team of that hospital, or by an administrator as before; a technician
+     * there, or a caller whose clinical role is held elsewhere, is refused.
+     */
+    public void requireInstanceListingReader() {
+        UUID acting = roleValidator.getCurrentHospitalId();
+        ImagingRoleScope roles = new ImagingRoleScope(roleValidator);
+        if (roles.readerAt(acting) == ImagingRoleScope.Reader.TECHNICIAN) {
+            roles.requireClinicalReaderAt(acting);
+        }
+    }
+
+    /**
      * The report, held to the caller's hospital (out of scope answers as a
      * missing id), read in one short read-only transaction.
      */
@@ -212,6 +225,9 @@ public class ImagingStudyViewerService {
             if (reportHospital == null || (scope != null && !scope.equals(reportHospital))) {
                 throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
             }
+            // QA D2915: pixels are read by the care team OF the report's hospital, never on a
+            // clinical role the token names and the caller holds elsewhere.
+            new ImagingRoleScope(roleValidator).requireClinicalReaderAt(reportHospital);
             UUID patientId = report.getImagingOrder() == null || report.getImagingOrder().getPatient() == null
                 ? null : report.getImagingOrder().getPatient().getId();
             return new Target(report.getId(), reportHospital, patientId, report.getStudyInstanceUid(),

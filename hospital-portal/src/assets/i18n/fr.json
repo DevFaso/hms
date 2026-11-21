@@ -15555,7 +15555,9 @@
     "DISCONTINUE_TITLE": "Interrompre cet examen ?",
     "DISCONTINUE_MESSAGE": "La demande est close et son prescripteur voit le motif. Une nouvelle demande sera nécessaire pour refaire l'examen.",
     "DISCONTINUED": "Examen interrompu.",
-    "ULTRASOUND_PHYSICIANS_ONLY": "Échographie : dans cet établissement, l'examen est réalisé par un médecin. Vous pouvez enregistrer l'arrivée du patient et joindre des images. Règle provisoire, en attente d'approbation du radiologue ou du directeur médical."
+    "ULTRASOUND_PHYSICIANS_ONLY": "Échographie : dans cet établissement, l'examen est réalisé par un médecin. Vous pouvez enregistrer l'arrivée du patient et joindre des images. Règle provisoire, en attente d'approbation du radiologue ou du directeur médical.",
+    "RECORDED_AT_EXAM": "Enregistré lors de l'examen",
+    "AWAITS_PREAUTH_NUMBER": "Le numéro de préautorisation de cet examen n'est pas encore enregistré : un médecin ou un radiologue l'enregistre avant que l'examen puisse démarrer."
   },
   "IMAGING_REPORTING_SETTINGS": {
     "TITLE": "Échographie",

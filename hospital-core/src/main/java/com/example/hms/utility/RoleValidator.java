@@ -28,6 +28,7 @@ public class RoleValidator {
     private static final String SURGEON_ROLE = "SURGEON";
     private static final String NURSE_ROLE = "NURSE";
     private static final String MIDWIFE_ROLE = "MIDWIFE";
+    private static final String RADIOLOGIST_ROLE = "RADIOLOGIST";
     private static final String ACCOUNTANT_ROLE = "ACCOUNTANT";
     private static final String PHARMACIST_ROLE = "PHARMACIST";
     private static final String BILLING_SPECIALIST_ROLE = "BILLING_SPECIALIST";
@@ -228,7 +229,7 @@ public class RoleValidator {
      * (MedicalCertificateServiceImplTest pins the two lists together).
      */
     public static final java.util.List<String> LICENSED_PHYSICIAN_ROLE_CODES = java.util.List.of(
-        DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, "ANESTHESIOLOGIST", "RADIOLOGIST");
+        DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, "ANESTHESIOLOGIST", RADIOLOGIST_ROLE);
 
     /**
      * QA D1164 (round 21): the roles a visit takes as its provider - every
@@ -277,6 +278,29 @@ public class RoleValidator {
             || isLabManager(userId, hospitalId);
     }
     public boolean hasRole(UUID userId, UUID hospitalId, String roleCode) { return hasAnyCode(userId, hospitalId, roleCode); }
+
+    /**
+     * QA D2915 (r66): the imaging roles, each read AT {@code hospitalId} in one query. A token names
+     * the role its user picked at login, wherever it is held; an imaging service asks these with the
+     * order's hospital instead ({@code ImagingRoleScope}).
+     *
+     * <p>Who interprets a study and decides for the imaging department there: a doctor, a physician,
+     * a surgeon or a radiologist.
+     */
+    public boolean interpretsImaging(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, RADIOLOGIST_ROLE);
+    }
+
+    /** QA D2915: the care team that reads a study in full there: who interprets it, the nurse and the midwife. */
+    public boolean readsImagingClinically(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, RADIOLOGIST_ROLE,
+            NURSE_ROLE, MIDWIFE_ROLE);
+    }
+
+    /** QA D2915: who places an imaging order there: a doctor, a physician, a surgeon, a nurse or a midwife. */
+    public boolean ordersImaging(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, NURSE_ROLE, MIDWIFE_ROLE);
+    }
 
     /**
      * Billing-money plan PR 2 (owner decision D-1, 2026-11-15): who maintains a hospital's price list - a hospital

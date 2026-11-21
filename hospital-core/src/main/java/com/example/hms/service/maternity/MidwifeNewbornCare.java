@@ -148,9 +148,20 @@ public class MidwifeNewbornCare {
      * @return true when a physician must be asked to review (a NICU cot assigned by a midwife)
      */
     public boolean requireBedAMidwifeMayAssign(Admission admission, UUID bedId) {
+        return requireBedAMidwifeMayAssign(admission, bedId, BedAssignmentService.FIELD_BED_ID);
+    }
+
+    /**
+     * QA D2917 (r66): the same rule on every path that gives a stay a bed. A transfer order did
+     * not ask it, so a midwife moved a patient between general-ward beds through {@code /transfers}
+     * while {@code /admissions/{id}/assign-bed} refused her the same bed.
+     *
+     * @param field the request field the refusal is reported on (a transfer's {@code toBedId}), or
+     *     null where the request names no bed (completing a transfer)
+     */
+    public boolean requireBedAMidwifeMayAssign(Admission admission, UUID bedId, String field) {
         UUID hospitalId = hospitalIdOf(admission);
-        if (hospitalId == null || bedId == null
-                || !narrowedToHerWards(hospitalId, BedAssignmentService.FIELD_BED_ID)) {
+        if (hospitalId == null || bedId == null || !narrowedToHerWards(hospitalId, field)) {
             return false;
         }
         // Assigning a bed frees the one the stay holds (BedAssignmentService): that bed must be
@@ -158,11 +169,11 @@ public class MidwifeNewbornCare {
         Bed held = admission.getBed();
         boolean sameBedAgain = held != null && bedId.equals(held.getId());
         if (held != null && !sameBedAgain) {
-            requireHerWard(held, admission, BedAssignmentService.FIELD_BED_ID);
+            requireHerWard(held, admission, field);
         }
         // A bed of another hospital answers as not found in the assignment itself.
         Bed bed = bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId).orElse(null);
-        boolean neonatalCot = bed != null && requireHerWard(bed, admission, BedAssignmentService.FIELD_BED_ID);
+        boolean neonatalCot = bed != null && requireHerWard(bed, admission, field);
         // The cot the stay already holds is no placement (the assignment itself changes nothing):
         // the physicians are not asked again, and the task they have, read or not, is left alone.
         return neonatalCot && !sameBedAgain;

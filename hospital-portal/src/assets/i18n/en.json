@@ -15555,7 +15555,9 @@
     "DISCONTINUE_TITLE": "Discontinue this exam?",
     "DISCONTINUE_MESSAGE": "The request is closed and its prescriber sees the reason. A new request is needed to do the exam later.",
     "DISCONTINUED": "Exam discontinued.",
-    "ULTRASOUND_PHYSICIANS_ONLY": "Ultrasound: at this hospital the exam is performed by a physician. You can check the patient in and attach images. Provisional rule, pending approval by the radiologist or the medical director."
+    "ULTRASOUND_PHYSICIANS_ONLY": "Ultrasound: at this hospital the exam is performed by a physician. You can check the patient in and attach images. Provisional rule, pending approval by the radiologist or the medical director.",
+    "RECORDED_AT_EXAM": "Recorded at the exam",
+    "AWAITS_PREAUTH_NUMBER": "The pre-authorisation number of this exam is not recorded yet: a doctor or a radiologist records it before the exam can start."
   },
   "IMAGING_REPORTING_SETTINGS": {
     "TITLE": "Ultrasound",
