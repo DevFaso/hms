@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -40,8 +41,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OrganisationAdminService {
 
-    /** The longest period one summary covers. */
-    static final int MAX_PERIOD_DAYS = 366;
+    /** How far back a month may be asked for. */
+    static final int MAX_MONTHS_BACK = 24;
 
     private final UserAccountAccess accountAccess;
     private final OrganisationTotalsRepository totals;
@@ -59,17 +60,27 @@ public class OrganisationAdminService {
     }
 
     /**
-     * Totals per hospital for a period. With no dates: the current month to
-     * date. The end is never before the start, and the period is at most a year.
+     * Totals per hospital for ONE calendar month: the month asked for, whole,
+     * or with none the current month to date.
+     *
+     * <p>Never an arbitrary range (review of #1246). With free dates a reader
+     * subtracts two overlapping ranges and gets the count of a single day, or
+     * walks a range around a withheld count until it is given: the small-count
+     * rule would hide nothing. Whole months do not overlap, so two answers
+     * never differ by less than a month; the current month is the one period
+     * that grows, a day at a time, and its sensitive counts stay under the
+     * same rule.
      */
     @Transactional(readOnly = true)
-    public OrganisationSummaryDTO summary(LocalDate from, LocalDate to) {
+    public OrganisationSummaryDTO summary(YearMonth month) {
         LocalDate today = LocalDate.now(clock);
-        LocalDate last = to != null ? to : today;
-        LocalDate first = from != null ? from : last.withDayOfMonth(1);
-        if (last.isBefore(first) || first.plusDays(MAX_PERIOD_DAYS).isBefore(last)) {
-            throw new FieldBusinessException("to", "organisation.summary.period.invalid");
+        YearMonth current = YearMonth.from(today);
+        YearMonth asked = month != null ? month : current;
+        if (asked.isAfter(current) || asked.isBefore(current.minusMonths(MAX_MONTHS_BACK))) {
+            throw new FieldBusinessException("month", "organisation.summary.period.invalid");
         }
+        LocalDate first = asked.atDay(1);
+        LocalDate last = asked.equals(current) ? today : asked.atEndOfMonth();
         List<HospitalTotals> rows = scopedHospitals().stream()
             .map(hospital -> totalsOf(hospital, first, last))
             .toList();
