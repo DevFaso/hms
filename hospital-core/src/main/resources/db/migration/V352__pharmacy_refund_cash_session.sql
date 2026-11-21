@@ -10,9 +10,12 @@
 --   Nullable: a refund not yet paid has none.
 --
 -- Backfill: a refund already PAID is attached to the payer's PHARMACY session
---   of the day it was paid, when that session exists. A refund with no such
---   session stays without one (it is still counted by the reconciliation, by
---   date). Stored close counts (billing.cash_session_counts) are not touched.
+--   of the day it was paid, when that session exists AND IS STILL OPEN. A till
+--   already closed or reviewed was counted and explained without the refund:
+--   attaching one now would move its expected cash after the fact, so its
+--   figures stay as they were closed. A refund with no such session stays
+--   without one (it is still counted by the reconciliation, by date). Stored
+--   close counts (billing.cash_session_counts) are not touched.
 --
 -- Idempotent (IF NOT EXISTS, DROP CONSTRAINT IF EXISTS before ADD; the UPDATE
 -- only fills NULLs). Plain DDL and DML, no DO block.
@@ -35,4 +38,5 @@ UPDATE clinical.pharmacy_refunds r
    AND s.hospital_id = r.hospital_id
    AND s.cashier_user_id = r.paid_by
    AND s.till = 'PHARMACY'
+   AND s.status = 'OPEN'
    AND s.business_date = CAST(r.paid_at AS DATE);
