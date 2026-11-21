@@ -61,6 +61,39 @@ public final class FillClaimCover {
                 || isSomebodyElse(claim.getSecondVouchedBy(), handingOver);
     }
 
+    /** Why the claims sent for a fill do not cover it for the person handing over. */
+    public enum Gap {
+        /** No claim was sent, or every claim sent counts. */
+        NONE,
+        /** A claim was sent, and the only person recorded behind it is the one handing over. */
+        OWN_VOUCHER,
+        /** A claim was sent, and nobody of a money desk is recorded behind it. */
+        NO_VOUCHER
+    }
+
+    /**
+     * QA D2931 (r66): the refusal said « n'est pas payée » for a fill whose claim covers it for anybody else. Why
+     * a claim sent for {@code dispenseId} does not count for {@code handingOver}, so the counter is told what to
+     * do next: another person stands behind the claim (or hands over), or a money desk confirms it. Reads the
+     * stored vouchers only, as {@link #counts} does.
+     */
+    public static Gap gapFor(PharmacyClaimRepository claims, UUID dispenseId, UUID handingOver) {
+        Gap gap = Gap.NONE;
+        if (claims == null || dispenseId == null) {
+            return gap;
+        }
+        for (PharmacyClaim claim : claims.findByDispenseIdAndClaimStatusIn(dispenseId, SENT)) {
+            if (claim.getAmount() == null || counts(claim, handingOver)) {
+                continue;
+            }
+            if (claim.getVouchedBy() != null) {
+                return Gap.OWN_VOUCHER;
+            }
+            gap = Gap.NO_VOUCHER;
+        }
+        return gap;
+    }
+
     private static boolean isSomebodyElse(UUID voucher, UUID handingOver) {
         return voucher != null && !voucher.equals(handingOver);
     }

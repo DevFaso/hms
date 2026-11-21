@@ -339,6 +339,64 @@ class MidwifeNewbornCareTest {
         assertThatCode(() -> care.askPhysicianAfterCommit(admission)).doesNotThrowAnyException();
     }
 
+    // ── Review of #1251 (provisional): carrying out a transfer a doctor or a nurse ordered ──
+
+    @Test
+    void review1251_sheCarriesOutAMoveIntoHerWardsFromAnyWardWhenADoctorOrANurseOrderedIt() {
+        UUID nurse = UUID.randomUUID();
+        UUID surgeon = UUID.randomUUID();
+        when(roleValidator.isNurse(nurse, HOSPITAL)).thenReturn(true);
+        when(roleValidator.isSurgeon(surgeon, HOSPITAL)).thenReturn(true);
+        for (UUID orderer : new UUID[] {nurse, surgeon}) {
+            Admission inEmergency = stay(AdmissionType.LABOR_DELIVERY);
+            inEmergency.setBed(bedIn(WardType.EMERGENCY));
+            assertThat(care.requireTransferAMidwifeMayComplete(inEmergency, bedIn(WardType.MATERNITY).getId(), orderer))
+                .as("a maternity bed asks nobody to review").isFalse();
+            // A newborn into a neonatal cot: allowed, and a physician is asked.
+            Admission newborn = stay(AdmissionType.NEWBORN);
+            newborn.setBed(bedIn(WardType.PEDIATRIC));
+            assertThat(care.requireTransferAMidwifeMayComplete(newborn, bedIn(WardType.NICU).getId(), orderer))
+                .isTrue();
+        }
+    }
+
+    @Test
+    void review1251_theDestinationIsAlwaysHers_andTheSourceTooUnlessADoctorOrANurseOrdered() {
+        UUID nurse = UUID.randomUUID();
+        when(roleValidator.isNurse(nurse, HOSPITAL)).thenReturn(true);
+        Admission inEmergency = stay(AdmissionType.LABOR_DELIVERY);
+        inEmergency.setBed(bedIn(WardType.EMERGENCY));
+        UUID maternityBed = bedIn(WardType.MATERNITY).getId();
+        UUID generalBed = bedIn(WardType.GENERAL).getId();
+        UUID neonatalCot = bedIn(WardType.NICU).getId();
+
+        // Into another ward: never, even on a nurse's order.
+        assertThatThrownBy(() -> care.requireTransferAMidwifeMayComplete(inEmergency, generalBed, nurse))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class).hasMessageContaining("maternity wards only");
+        // A neonatal cot is for a newborn stay.
+        assertThatThrownBy(() -> care.requireTransferAMidwifeMayComplete(inEmergency, neonatalCot, nurse))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        // Out of another ward on nobody's order, on a midwife's, or on that of a nurse of another hospital.
+        UUID midwife = UUID.randomUUID();
+        when(roleValidator.isMidwife(midwife, HOSPITAL)).thenReturn(true);
+        for (UUID orderer : new UUID[] {null, midwife, UUID.randomUUID()}) {
+            assertThatThrownBy(() -> care.requireTransferAMidwifeMayComplete(inEmergency, maternityBed, orderer))
+                .as("ordered by " + orderer).isInstanceOf(com.example.hms.exception.BusinessException.class);
+        }
+        // Assigning the bed herself, or ordering the move, keeps both beds to her wards.
+        assertThatThrownBy(() -> care.requireBedAMidwifeMayAssign(inEmergency, maternityBed))
+            .isInstanceOf(FieldBusinessException.class);
+    }
+
+    @Test
+    void review1251_aNurseOrAPhysicianCarryingItOutIsNotConcerned() {
+        when(roleValidator.isNurse(MIDWIFE, HOSPITAL)).thenReturn(true);
+        Admission inEmergency = stay(AdmissionType.ELECTIVE);
+        inEmergency.setBed(bedIn(WardType.EMERGENCY));
+        assertThat(care.requireTransferAMidwifeMayComplete(inEmergency, bedIn(WardType.GENERAL).getId(), null))
+            .isFalse();
+    }
+
     // ── Review of #1243: the neonatal period, and the physician's task ──
 
     @Test

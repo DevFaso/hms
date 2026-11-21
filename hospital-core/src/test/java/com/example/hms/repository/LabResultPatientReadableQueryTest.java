@@ -309,8 +309,30 @@ class LabResultPatientReadableQueryTest {
         assertThat(labResultRepository.countUnacknowledgedCriticalForOrderingStaff(atA.getId(), floor)).isZero();
 
         HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        // The page is sent at release (QA D709), so a paged result is a released one.
+        orderedAndRunAtA.setReleased(true);
         orderedAndRunAtA.setCriticalNotifiedAt(LocalDateTime.now());
         labResultRepository.save(orderedAndRunAtA);
+        HospitalContextHolder.clear();
+
+        assertThat(labResultRepository.countUnacknowledgedCriticalForOrderingStaff(atA.getId(), floor)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("QA D2951: an analyzer's CRITICAL flag on an unreleased result is not on the doctor's tile; released, it is")
+    void unreleasedCriticalFlagIsNotOnTheTile() {
+        LocalDateTime floor = LocalDateTime.now().minusDays(7);
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        orderedAndRunAtA.setAbnormalFlag(com.example.hms.enums.AbnormalFlag.CRITICAL);
+        labResultRepository.saveAndFlush(orderedAndRunAtA);
+        HospitalContextHolder.clear();
+
+        // The doctor cannot open, acknowledge or read back the laboratory's draft: it is not counted.
+        assertThat(labResultRepository.countUnacknowledgedCriticalForOrderingStaff(atA.getId(), floor)).isZero();
+
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        orderedAndRunAtA.setReleased(true);
+        labResultRepository.saveAndFlush(orderedAndRunAtA);
         HospitalContextHolder.clear();
 
         assertThat(labResultRepository.countUnacknowledgedCriticalForOrderingStaff(atA.getId(), floor)).isEqualTo(1);

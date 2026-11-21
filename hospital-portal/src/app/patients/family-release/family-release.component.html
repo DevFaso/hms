@@ -95,8 +95,13 @@
               </span>
               @if (!result.releasable) {
                 <!-- Owner decision 2026-11-21: only an HIV result is released; the server refuses the rest. -->
+                <!-- r66 D2903: an HIV result of a visit that violence is on is refused for THAT reason. -->
                 <span class="family-release__note" data-testid="result-not-releasable">
-                  {{ 'SENSITIVE_POLICY.RELEASE.NOT_RELEASABLE' | translate }}
+                  @if (result.notReleasableReason === 'VIOLENCE') {
+                    {{ 'SENSITIVE_POLICY.RELEASE.NOT_RELEASABLE_VIOLENCE' | translate }}
+                  } @else {
+                    {{ 'SENSITIVE_POLICY.RELEASE.NOT_RELEASABLE' | translate }}
+                  }
                 </span>
               } @else if (
                 remaining(result).length && releasing()?.labOrderId !== result.labOrderId

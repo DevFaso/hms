@@ -61,8 +61,8 @@ class MoneyOutApprovalGuardTest {
 
     /**
      * The pharmacy writers that stay a one-person step, each with why. The refund of a pharmacy payment or of a
-     * counter sale (money handed back at the pharmacy till) does not exist yet: when it is built it goes through an
-     * approval, not into this list.
+     * counter sale (money handed back at the pharmacy till) is {@code PharmacyRefundService}, which goes through an
+     * approval ({@link #APPROVED_PHARMACY}), never into this list.
      */
     private static final java.util.Map<String, String> ONE_PERSON_PHARMACY = java.util.Map.of(
         "service/pharmacy/PharmacyPaymentVoider.java",
@@ -71,7 +71,8 @@ class MoneyOutApprovalGuardTest {
             + "(CashSessionService counts a pharmacy payment as money in whatever its status, see "
             + "CashSessionServiceTest.aVoidedPharmacyPaymentStaysExpected), so a pharmacist cannot lower what "
             + "their own count must show by cancelling a dispense. The journal names the row VOIDED. Handing the "
-            + "money back is the pharmacy refund path (billing plan PR 13), which will need its second person.");
+            + "money back is the pharmacy refund path (PharmacyRefundService), with its second person; that payout "
+            + "is the money out of the till (QA r66 D2950).");
     /**
      * Pharmacy writers that hand money back only after a SECOND person's approval (combined r65 branch: billing
      * plan PR 13 arrived with #1239). PharmacyRefundService marks a counter sale REFUNDED only when its paid refunds
@@ -82,7 +83,8 @@ class MoneyOutApprovalGuardTest {
         "service/pharmacy/PharmacyRefundService.java",
         "Sets a counter sale REFUNDED only once its PAID refunds reach the sale total; each refund is requested, "
             + "approved by a second person (canApproveRefund, no self-approval: service check and V311 CHECK) and "
-            + "only then paid out of the till, so no single person can hand pharmacy money back.");
+            + "only then paid out of the payer's PHARMACY till (stamped and counted as money out, QA r66 D2950), so "
+            + "no single person can hand pharmacy money back.");
 
     /** The one repository statement behind that writer. */
     private static final String PHARMACY_VOID_REPOSITORY = "repository/pharmacy/PharmacyPaymentRepository.java";
@@ -129,6 +131,52 @@ class MoneyOutApprovalGuardTest {
         assertThat(VOIDS_PHARMACY_MONEY.matcher("sale.setStatus(PharmacySaleStatus.COMPLETED);").find()).isFalse();
         assertThat(PHARMACY_VOID_STATEMENT.matcher(
             "p.status = com.example.hms.enums.PharmacyPaymentStatus.VOIDED, p.voidedAt = :now").find()).isTrue();
+    }
+
+    /** QA r66 D2950: a pharmacy refund handed over, the pharmacy's own money-out state. */
+    private static final Pattern PAYS_A_PHARMACY_REFUND = Pattern.compile(
+        "setStatus\\(\\s*+(?:[\\w.]*\\.)?PharmacyRefundStatus\\.PAID\\s*+\\)");
+    private static final Pattern PHARMACY_REFUND_PAID_STATEMENT = Pattern.compile(
+        "(?<!(?:WHERE|AND|OR)\\s)(?<!(?:WHERE|AND|OR)\\s\\w{1,30}\\.)"
+            + "status\\s*+=\\s*+(?:[\\w.]*\\.)?PharmacyRefundStatus\\.PAID");
+    private static final String PHARMACY_REFUND_WRITER = "service/pharmacy/PharmacyRefundService.java";
+
+    @Test
+    @DisplayName("QA D2950: a pharmacy refund is paid only by the refund service, from APPROVED, out of a till")
+    void aPharmacyRefundIsPaidOnlyAfterApprovalAndOutOfATill() throws IOException {
+        List<String> writers;
+        List<String> statements;
+        try (Stream<Path> files = Files.walk(MAIN)) {
+            List<Path> all = files.filter(f -> f.toString().endsWith(".java")).toList();
+            writers = all.stream()
+                .filter(f -> !relative(f).contains("repository/"))
+                .filter(f -> matches(f, PAYS_A_PHARMACY_REFUND))
+                .map(MoneyOutApprovalGuardTest::relative)
+                .toList();
+            statements = all.stream()
+                .filter(f -> relative(f).contains("repository/"))
+                .filter(f -> matches(f, PHARMACY_REFUND_PAID_STATEMENT))
+                .map(MoneyOutApprovalGuardTest::relative)
+                .toList();
+        }
+        assertThat(writers).as("main code that marks a pharmacy refund paid").containsExactly(PHARMACY_REFUND_WRITER);
+        assertThat(statements).as("repository statements that write a pharmacy refund PAID").isEmpty();
+
+        String code = SourceScan.stripComments(Files.readString(MAIN.resolve(PHARMACY_REFUND_WRITER),
+            StandardCharsets.UTF_8));
+        String pay = SourceScan.methodBody(code, "pay");
+        assertThat(pay).as("pay() checks APPROVED before anything moves, and takes the money out of a till")
+            .contains("PharmacyRefundStatus.APPROVED")
+            .contains("requireSourceStillPaid(")
+            .contains("setCashSessionId(stampPharmacyTill(");
+        assertThat(pay.indexOf("PharmacyRefundStatus.APPROVED"))
+            .as("the APPROVED check comes before the payout")
+            .isLessThan(pay.indexOf("setStatus(PharmacyRefundStatus.PAID)"));
+        assertThat(PAYS_A_PHARMACY_REFUND.matcher("refund.setStatus(PharmacyRefundStatus.PAID);").find()).isTrue();
+        assertThat(PHARMACY_REFUND_PAID_STATEMENT.matcher(
+            "r.status = com.example.hms.enums.PharmacyRefundStatus.PAID, r.paidAt = :now").find()).isTrue();
+        assertThat(PHARMACY_REFUND_PAID_STATEMENT.matcher(
+            "AND r.status = com.example.hms.enums.PharmacyRefundStatus.PAID AND r.paidAt >= :from").find()).isFalse();
     }
 
     private static String relative(Path file) {

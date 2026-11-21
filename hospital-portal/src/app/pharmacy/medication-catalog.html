@@ -160,7 +160,7 @@
                       <span class="material-symbols-outlined" aria-hidden="true">child_care</span>
                     </button>
                   }
-                  @if (canManage()) {
+                  @if (canManageItem(item)) {
                     <button
                       class="action-link"
                       [title]="'COMMON.EDIT' | translate"

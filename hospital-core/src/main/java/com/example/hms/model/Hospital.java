@@ -137,7 +137,7 @@ public class Hospital extends BaseEntity {
     /**
      * V346 (policy rule 3, provisional; owner decision 2026-11-20): « Échographie par un
      * non-médecin ». False (the default) keeps ultrasound with physicians: an imaging technician
-     * neither performs an ultrasound exam nor records it ({@code ImagingTechnicianScope}). True
+     * neither performs an ultrasound exam nor records it ({@code ImagingRoleScope}). True
      * lets a technician of this hospital perform it. The REPORT stays a physician's either way:
      * no code opens reporting to a non-physician on it.
      */

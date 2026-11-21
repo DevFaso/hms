@@ -460,6 +460,7 @@ public class DispenseServiceImpl implements DispenseService {
 
         // Update prescription status based on cumulative dispensed quantity (supports partial fills)
         updatePrescriptionStatusFromHistory(prescription, true);
+        closeDeferralsOfSettledOrder(prescription, saved, deferral, fill.actors().dispensedBy());
         // A partial fill against a back order leaves the remainder unavailable,
         // so the BACKORDER decision stays PENDING until the order is fully
         // filled — whether that happens in one dispense or over several
@@ -637,6 +638,7 @@ public class DispenseServiceImpl implements DispenseService {
         }
 
         updatePrescriptionStatusFromHistory(prescription, true);
+        closeDeferralsOfSettledOrder(prescription, dispense, deferral, handedOverBy);
         if (prescription.getStatus() == PrescriptionStatus.DISPENSED) {
             closeOutBackOrder(prescription);
             support.notifyDispensed(prescription, dispense.getPatient(), dispense.getPharmacy(),
@@ -751,7 +753,24 @@ public class DispenseServiceImpl implements DispenseService {
         }
         return requireDeferral(dispense, prescription, new DispenseBillingDeferralService.Choice(
                 request != null ? request.getBillingDeferralId() : null,
-                request != null ? request.getBillingUrgencyReason() : null), settlement.due(), actor);
+                request != null ? request.getBillingUrgencyReason() : null), settlement.due(), actor,
+                // QA D2931 (r66): a claim sent for the fill that does not count for this person is named.
+                FillClaimCover.gapFor(claimRepository, dispense.getId(), actor != null ? actor.getId() : null));
+    }
+
+    /**
+     * QA D2929 (r66): a fill that completes its order and owes nothing (paid, covered or free) closes the
+     * deferrals still open for that order; a fill that left on one has already used it.
+     */
+    private void closeDeferralsOfSettledOrder(Prescription prescription, Dispense fill,
+            com.example.hms.model.pharmacy.DispenseBillingDeferral leftOn, User actor) {
+        if (billingDeferrals == null || leftOn != null || actor == null
+                || prescription.getStatus() != PrescriptionStatus.DISPENSED
+                || fill.getPharmacy() == null || fill.getPharmacy().getHospital() == null) {
+            return;
+        }
+        billingDeferrals.closeOpenOnSettledOrder(prescription, fill.getPharmacy().getHospital().getId(),
+                actor.getId());
     }
 
     /**
@@ -765,7 +784,7 @@ public class DispenseServiceImpl implements DispenseService {
         if (charge.signum() <= 0) {
             return null;
         }
-        return requireDeferral(newFill, prescription, choice, charge, actor);
+        return requireDeferral(newFill, prescription, choice, charge, actor, FillClaimCover.Gap.NONE);
     }
 
     /**
@@ -774,13 +793,12 @@ public class DispenseServiceImpl implements DispenseService {
      */
     private com.example.hms.model.pharmacy.DispenseBillingDeferral requireDeferral(
             Dispense dispense, Prescription prescription, DispenseBillingDeferralService.Choice choice,
-            BigDecimal due, User actor) {
+            BigDecimal due, User actor, FillClaimCover.Gap claimGap) {
         if (billingDeferrals == null) {
-            throw new com.example.hms.exception.FieldBusinessException(DispenseBillingDeferralService.FIELD_DEFERRAL,
-                    "pharmacy.handOver.unpaid", com.example.hms.utility.DisplayNumbers.quantity(due));
+            throw DispenseBillingDeferralService.unpaid(claimGap, due);
         }
         UUID hospitalId = dispense.getPharmacy().getHospital().getId();
-        return billingDeferrals.admit(prescription, hospitalId, due, choice, actor);
+        return billingDeferrals.admit(prescription, hospitalId, due, choice, actor, claimGap);
     }
 
     /**
@@ -828,9 +846,20 @@ public class DispenseServiceImpl implements DispenseService {
                 .status(status)
                 .billingDeferredReason(dispense.getBillingDeferredReason())
                 .billingDeferredAt(dispense.getBillingDeferredAt())
+                .claimCoverGap(claimCoverGapOf(dispense, settlement))
                 .onOpenStay(billingDeferrals != null && dispense.getPrescription() != null
                         && billingDeferrals.chargedToOpenStay(dispense.getPrescription(), hospitalId))
                 .build();
+    }
+
+    /** QA D2931 (r66): why a claim sent for a fill with money due does not cover it for the caller, or null. */
+    private String claimCoverGapOf(Dispense dispense, FillSettlement settlement) {
+        if (settlement.due().signum() <= 0) {
+            return null;
+        }
+        FillClaimCover.Gap gap = FillClaimCover.gapFor(claimRepository, dispense.getId(),
+                roleValidator.getCurrentUserId());
+        return gap == FillClaimCover.Gap.NONE ? null : gap.name();
     }
 
     /** COMPLETED and prepared: this fill was already handed over. */

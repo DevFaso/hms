@@ -53,6 +53,7 @@ public class DispenseBillingDeferralFollowUp {
     private final InBasketService inBasketService;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final com.example.hms.service.NotificationService notificationService;
+    private final org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     /** An urgency override was made: finance reviews it. */
     public void reviewNeeded(DispenseBillingDeferral deferral, String patientName, String medicationName) {
@@ -73,6 +74,11 @@ public class DispenseBillingDeferralFollowUp {
      * An outpatient credit is granted by an accountant or a hospital admin, who do not read the in-basket: each of
      * them at the hospital gets a notification (the bell), never the person who asked. Sent after commit; a
      * failure to notify never undoes the request, which stays listed on the deferrals page.
+     *
+     * <p>QA D2927 (r66): each notification is written in a transaction of its OWN (REQUIRES_NEW). After the
+     * commit the request's transaction is over but still bound to the thread: a plain save joined it and was never
+     * flushed, so five requests wrote no row and logged no warning. The notification names the deferral, so it is
+     * marked read when the request is decided or withdrawn ({@link #close}).
      */
     private void notifyCreditApprovers(DispenseBillingDeferral deferral, String patientName, String medicationName) {
         UUID deferralId = deferral.getId();
@@ -90,18 +96,34 @@ public class DispenseBillingDeferralFollowUp {
                     .map(com.example.hms.model.User::getUsername)
                     .filter(username -> username != null && !username.isBlank())
                     .distinct()
-                    .forEach(username -> notificationService.createNotification(CREDIT_REQUESTED_KEY, args,
-                        username, NOTIFICATION_TYPE));
+                    .forEach(username -> notifyInOwnTransaction(username, args, deferralId));
             } catch (RuntimeException ex) {
                 log.warn("Credit approvers not notified of deferral {}: {}", deferralId, ex.getMessage());
             }
         });
     }
 
+    /** One approver's notification, committed on its own: a failure for one never loses the others'. */
+    private void notifyInOwnTransaction(String username, Object[] args, UUID deferralId) {
+        try {
+            org.springframework.transaction.support.TransactionTemplate own =
+                new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+            own.setPropagationBehavior(
+                org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+            own.executeWithoutResult(status -> notificationService.createNotification(CREDIT_REQUESTED_KEY, args,
+                username, NOTIFICATION_TYPE, deferralId));
+        } catch (RuntimeException ex) {
+            log.warn("A credit approver was not notified of deferral {}: {}", deferralId,
+                ex.getClass().getSimpleName());
+        }
+    }
+
     /** The override was reviewed, or the request decided or withdrawn: nothing is left to do. */
     public void close(DispenseBillingDeferral deferral) {
         if (deferral != null && deferral.getId() != null) {
             inBasketService.removeAllItemsForReference(deferral.getId(), REFERENCE_TYPE);
+            // QA D2927 (r66): the bell of a credit request is answered with it.
+            notificationService.markReadForSubject(deferral.getId(), Set.of(NOTIFICATION_TYPE));
         }
     }
 

@@ -126,6 +126,7 @@ class ImagingOrderServiceImplTest {
         // mirrors the in-tx behaviour (REQUIRED propagation joins
         // the outer tx, so the call resolves to the same instance).
         imagingOrderService.setSelf(imagingOrderService);
+        com.example.hms.testsupport.ImagingRolesHeld.whereverTheTokenNamesThem(roleValidator);
         // QA D1920: the duplicate check reads a patient registered where it looks.
         org.mockito.Mockito.lenient()
             .when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
@@ -1992,6 +1993,12 @@ class ImagingOrderServiceImplTest {
                 java.util.Arrays.stream(authorities)
                     .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new).toList()));
         lenient().when(roleValidator.getCurrentUserId()).thenReturn(sessionUserId);
+        // QA D2915: held nowhere this test acts, whatever the token names.
+        lenient().when(roleValidator.interpretsImaging(eq(sessionUserId), any())).thenReturn(false);
+        lenient().when(roleValidator.readsImagingClinically(eq(sessionUserId), any())).thenReturn(false);
+        lenient().when(roleValidator.ordersImaging(eq(sessionUserId), any())).thenReturn(false);
+        lenient().when(roleValidator.isSigningPhysician(eq(sessionUserId), any())).thenReturn(false);
+        lenient().when(roleValidator.administersImagingReads(eq(sessionUserId), any())).thenReturn(false);
     }
 
     private ImagingOrder studyOfAnotherProvider(ImagingOrderStatus status) {
@@ -2275,6 +2282,145 @@ class ImagingOrderServiceImplTest {
         imagingOrderService.updateOrderStatus(orderId, step(ImagingOrderStatus.IN_PROGRESS));
         assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.IN_PROGRESS);
         assertThat(order.getPerformedByUserId()).isEqualTo(caller);
+    }
+
+    // ═══════════════ QA D2915 (r66): the radiologist's role too counts where it is held ═══════════════
+
+    private static final Class<com.example.hms.exception.ClientSafeAccessDeniedException> REFUSED =
+        com.example.hms.exception.ClientSafeAccessDeniedException.class;
+
+    /** The D2915 caller: a technician at this test's hospital, a radiologist at another, the RADIOLOGIST role picked at login. */
+    private UUID technicianHereRadiologistElsewhereUnderTheRadiologistRole() {
+        UUID caller = UUID.randomUUID();
+        tokenOnly(caller, "ROLE_RADIOLOGIST");
+        lenient().when(roleValidator.hasRole(caller, hospitalId, "IMAGING_TECHNICIAN")).thenReturn(true);
+        lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        return caller;
+    }
+
+    @Test
+    void d2915_aTechnicianAtAWhoIsARadiologistAtB_actingAtAUnderTheRadiologistRole_schedulesAndAuthorisesNothing() {
+        ImagingOrder order = studyOfAnotherProvider(ImagingOrderStatus.ORDERED);
+        order.setRequiresAuthorization(true);
+        technicianHereRadiologistElsewhereUnderTheRadiologistRole();
+        ImagingOrderStatusUpdateRequestDTO schedule = ImagingOrderStatusUpdateRequestDTO.builder()
+            .status(ImagingOrderStatus.SCHEDULED).scheduledDate(LocalDate.now().plusDays(1)).build();
+        com.example.hms.payload.dto.imaging.ImagingOrderAuthorizationRequestDTO number =
+            com.example.hms.payload.dto.imaging.ImagingOrderAuthorizationRequestDTO.builder()
+                .authorizationNumber("PA-1").build();
+        ImagingOrderStatusUpdateRequestDTO cancel = ImagingOrderStatusUpdateRequestDTO.builder()
+            .status(ImagingOrderStatus.CANCELLED).cancellationReason("x").build();
+
+        // PUT /imaging/orders/{id}/status SCHEDULED answered 200; PUT /orders/{id}/authorization too.
+        assertThatThrownBy(() -> imagingOrderService.updateOrderStatus(orderId, schedule)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingOrderService.recordAuthorization(orderId, number)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingOrderService.updateOrderStatus(orderId, cancel)).isInstanceOf(REFUSED);
+
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.ORDERED);
+        assertThat(order.getScheduledDate()).isNull();
+        assertThat(order.getAuthorizationNumber()).isNull();
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void d2915_theSameCallerAtA_ordersSignsAndReadsNoChartThere_andKeepsTheTechniciansWork() {
+        ImagingOrder order = studyOfAnotherProvider(ImagingOrderStatus.ORDERED);
+        UUID caller = technicianHereRadiologistElsewhereUnderTheRadiologistRole();
+        signer(caller, "Ali", "Sana");
+        lenient().when(imagingOrderRepository.findByIdUnscoped(orderId)).thenReturn(Optional.of(order));
+        lenient().when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        lenient().when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        ImagingOrderRequestDTO request = requestWithVisit(null);
+        ImagingOrderSignatureRequestDTO signature =
+            ImagingOrderSignatureRequestDTO.builder().attestationConfirmed(Boolean.TRUE).build();
+
+        assertThatThrownBy(() -> imagingOrderService.createOrder(request, caller)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingOrderService.updateOrder(orderId, request, caller)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingOrderService.previewDuplicates(patientId, hospitalId, ImagingModality.XRAY,
+            null, 30)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingOrderService.captureProviderSignature(orderId, signature, caller))
+            .isInstanceOf(REFUSED);
+        // A technician has no chart list, whatever role the token names.
+        assertThatThrownBy(() -> imagingOrderService.getOrdersByPatient(patientId, null)).isInstanceOf(REFUSED);
+        verify(imagingOrderRepository, never()).save(any());
+        verify(recordAccessPolicy, never()).readableHospitalIds(any(), any(), any());
+
+        // What a technician of A does still goes through: the worklist, the order, the exam.
+        imagingOrderService.getOrder(orderId);
+        imagingOrderService.getOrdersByHospital(hospitalId, null);
+        imagingOrderService.updateOrderStatus(orderId, step(ImagingOrderStatus.IN_PROGRESS));
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.IN_PROGRESS);
+        assertThat(order.getPerformedByUserId()).isEqualTo(caller);
+    }
+
+    @Test
+    void d2915_theSameCallerActingAtB_whereTheyAreTheRadiologist_schedulesAndAuthorises() {
+        // This test's hospital is now B: the radiologist's role is held here, the technician's elsewhere.
+        ImagingOrder order = studyOfAnotherProvider(ImagingOrderStatus.ORDERED);
+        order.setRequiresAuthorization(true);
+        UUID caller = UUID.randomUUID();
+        signer(caller, "Ali", "Sana");
+        // Whichever role was picked at login: what they are HERE decides.
+        for (String selected : new String[] {"ROLE_RADIOLOGIST", TECHNICIAN}) {
+            tokenOnly(caller, selected);
+            when(roleValidator.interpretsImaging(caller, hospitalId)).thenReturn(true);
+            order.setStatus(ImagingOrderStatus.ORDERED);
+            order.setAuthorizationNumber(null);
+
+            imagingOrderService.recordAuthorization(orderId,
+                com.example.hms.payload.dto.imaging.ImagingOrderAuthorizationRequestDTO.builder()
+                    .authorizationNumber("PA-1").build());
+            imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder()
+                .status(ImagingOrderStatus.SCHEDULED).scheduledDate(LocalDate.now().plusDays(1)).build());
+
+            assertThat(order.getAuthorizationNumber()).as(selected).isEqualTo("PA-1");
+            assertThat(order.getStatus()).as(selected).isEqualTo(ImagingOrderStatus.SCHEDULED);
+        }
+    }
+
+    @Test
+    void d2915_aDoctorOfAnotherHospitalWhoIsAReceptionistHereDoesNothingOnImagingHere() {
+        ImagingOrder order = studyOfAnotherProvider(ImagingOrderStatus.ORDERED);
+        UUID caller = UUID.randomUUID();
+        tokenOnly(caller, "ROLE_DOCTOR");
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        lenient().when(imagingOrderRepository.findByIdUnscoped(orderId)).thenReturn(Optional.of(order));
+        lenient().when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        lenient().when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        ImagingOrderRequestDTO request = requestWithVisit(null);
+
+        assertThatThrownBy(() -> imagingOrderService.createOrder(request, caller)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingOrderService.updateOrderStatus(orderId, step(ImagingOrderStatus.IN_PROGRESS)))
+            .isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingOrderService.checkInPatient(orderId)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingOrderService.getOrder(orderId)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingOrderService.getOrdersByHospital(hospitalId, null)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingOrderService.getOrdersByPatient(patientId, null)).isInstanceOf(REFUSED);
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    // ═══════════════ Review of #1251: the administrator's role counts where it is held ═══════════════
+
+    @Test
+    void review1251_aHospitalAdminOfAnotherHospitalReadsNoWorklistAndNoOrderHere_andTheAdminOfThisOneDoes() {
+        ImagingOrder order = studyOfAnotherProvider(ImagingOrderStatus.ORDERED);
+        UUID caller = UUID.randomUUID();
+        // A hospital admin at B, a receptionist here; the admin role was picked at login.
+        tokenOnly(caller, "ROLE_HOSPITAL_ADMIN");
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        lenient().when(imagingOrderRepository.findByIdUnscoped(orderId)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> imagingOrderService.getOrder(orderId)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingOrderService.getOrdersByHospital(hospitalId, null)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingOrderService.getAllOrders(null)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingOrderService.getOrdersByPatient(patientId, null)).isInstanceOf(REFUSED);
+        verify(imagingOrderRepository, never()).findByHospital_IdOrderByOrderedAtDesc(any());
+
+        // The hospital admin OF this hospital reads its orders, as before.
+        when(roleValidator.administersImagingReads(caller, hospitalId)).thenReturn(true);
+        imagingOrderService.getOrder(orderId);
+        imagingOrderService.getOrdersByHospital(hospitalId, null);
+        verify(imagingOrderRepository).findByHospital_IdOrderByOrderedAtDesc(hospitalId);
     }
 
     // ═══════════════ Owner decision 2026-11-20: who performs an ultrasound ═══════════════

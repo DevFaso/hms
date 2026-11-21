@@ -245,7 +245,7 @@ public class PartnerExchangeService {
                 + "Prescription: {}", masked, prescription);
         auditUnmatched("Partner SMS reply from " + masked + " could not be read as an accept/refuse/dispense "
                 + "reply and was not applied; a person must action it. Prescription: " + prescription,
-                about.map(d -> d.getId().toString()).orElse(null));
+                about.orElse(null));
     }
 
     /**
@@ -265,16 +265,18 @@ public class PartnerExchangeService {
                         + "offered to; ignored. Prescription(s): {}", refToken, masked, prescriptions);
         auditUnmatched("Partner SMS reply for reference " + refToken + " from unrecognised sender "
                 + masked + " was ignored; offer still open for prescription(s) " + prescriptions,
-                byToken.get(0).getId().toString());
+                byToken.get(0));
     }
 
-    private void auditUnmatched(String description, String resourceId) {
+    private void auditUnmatched(String description, PrescriptionRoutingDecision about) {
         try {
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .eventType(AuditEventType.SECURITY_ALERT_TRIGGERED)
                     .eventDescription(description)
                     .status(AuditStatus.FAILURE)
-                    .resourceId(resourceId)
+                    // QA D2924 (r66): a system row names the hospital of the order it is about.
+                    .hospitalId(WithdrawnOrderPartnerHandler.hospitalOf(about))
+                    .resourceId(about != null ? about.getId().toString() : null)
                     .entityType("PRESCRIPTION_ROUTING")
                     .build());
         } catch (Exception e) {
@@ -340,7 +342,7 @@ public class PartnerExchangeService {
                 channel.notifyPatientAccepted(decision.getDecidedForPatient(), decision.getTargetPharmacy());
                 audit(AuditEventType.PRESCRIPTION_SENT_TO_PARTNER,
                         "Partner SMS reply accepted prescription " + rx.getId(),
-                        decision.getId().toString());
+                        decision);
             }
             case REJECT -> {
                 decision.setStatus(RoutingDecisionStatus.REJECTED);
@@ -351,7 +353,7 @@ public class PartnerExchangeService {
                 rx.clearPharmacy();
                 audit(AuditEventType.PRESCRIPTION_ROUTED_EXTERNAL,
                         "Partner SMS reply rejected prescription " + rx.getId(),
-                        decision.getId().toString());
+                        decision);
             }
             case CONFIRM_DISPENSE -> {
                 decision.setStatus(RoutingDecisionStatus.COMPLETED);
@@ -359,7 +361,7 @@ public class PartnerExchangeService {
                 channel.notifyPatientDispensed(decision.getDecidedForPatient(), decision.getTargetPharmacy());
                 audit(AuditEventType.PRESCRIPTION_SENT_TO_PARTNER,
                         "Partner SMS confirmed dispense for prescription " + rx.getId(),
-                        decision.getId().toString());
+                        decision);
             }
         }
         prescriptionRepository.save(rx);
@@ -398,7 +400,7 @@ public class PartnerExchangeService {
         audit(AuditEventType.PRESCRIPTION_ROUTED_EXTERNAL,
                 "Partner auto-rejected after timeout for prescription "
                         + (rx != null ? rx.getId() : d.getId()),
-                d.getId().toString());
+                d);
     }
 
     /**
@@ -416,13 +418,15 @@ public class PartnerExchangeService {
         }
     }
 
-    private void audit(AuditEventType type, String description, String resourceId) {
+    private void audit(AuditEventType type, String description, PrescriptionRoutingDecision decision) {
         try {
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .eventType(type)
                     .eventDescription(description)
                     .status(AuditStatus.SUCCESS)
-                    .resourceId(resourceId)
+                    // QA D2924 (r66): a system row names the hospital of the order it is about.
+                    .hospitalId(WithdrawnOrderPartnerHandler.hospitalOf(decision))
+                    .resourceId(decision.getId().toString())
                     .entityType("PRESCRIPTION_ROUTING")
                     .build());
         } catch (Exception e) {

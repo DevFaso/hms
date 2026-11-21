@@ -143,6 +143,47 @@ describe('BillingDeferralsComponent (policy rule 6: the work list)', () => {
     expect(host.querySelector('[data-testid="deferral-cancel-d-3"]')).toBeNull();
   });
 
+  it('QA D2928: a reviewed override reads « reviewed », with who reviewed it and their note; it waits for nobody', () => {
+    const host = render([
+      deferral({
+        id: 'd-open',
+        kind: 'URGENCY_OVERRIDE',
+        status: 'EXECUTED',
+        canDecide: false,
+        canReview: false,
+      }),
+      deferral({
+        id: 'd-done',
+        kind: 'URGENCY_OVERRIDE',
+        status: 'EXECUTED',
+        canDecide: false,
+        canReview: false,
+        reviewedAt: '2026-11-20T10:15:00',
+        reviewedByName: 'Mariam Comptable',
+        reviewNote: 'Justifiée, facture émise',
+      }),
+      deferral({ id: 'd-credit', canDecide: false }),
+    ]);
+    const chip = (id: string) =>
+      host.querySelector(`[data-testid="deferral-status-${id}"]`)!.textContent!.trim();
+    // The key-label pipe renders the bare value where no translation is loaded.
+    expect(chip('d-open')).toBe('TO_REVIEW');
+    expect(chip('d-done')).toBe('REVIEWED');
+    expect(chip('d-credit')).toBe('REQUESTED');
+
+    const open = host.querySelector('[data-testid="deferral-d-open"]')!;
+    const done = host.querySelector('[data-testid="deferral-d-done"]')!;
+    expect(open.querySelector('[data-testid="deferral-waiting-review"]')).not.toBeNull();
+    expect(open.querySelector('[data-testid="deferral-reviewed-by"]')).toBeNull();
+    expect(done.querySelector('[data-testid="deferral-waiting-review"]')).toBeNull();
+    expect(done.querySelector('[data-testid="deferral-reviewed-by"]')!.textContent).toContain(
+      'Mariam Comptable',
+    );
+    expect(done.querySelector('[data-testid="deferral-review-note"]')!.textContent).toContain(
+      'Justifiée, facture émise',
+    );
+  });
+
   it('review of #1244: « sorties, encore dues » lists the executed deferrals that still owe money, with the amount', () => {
     const host = render([deferral()]);
     expect(api.list).toHaveBeenCalledWith([], undefined, false);

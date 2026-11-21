@@ -79,6 +79,8 @@ public class DispenseBillingDeferralService {
     private static final String FIELD_COVER = "coverReference";
     private static final String AUDIT_ENTITY = "DISPENSE_BILLING_DEFERRAL";
     private static final String READERS_ONLY = "pharmacy.deferral.readersOnly";
+    /** The reason recorded on a deferral closed because its order left the counter with nothing due. */
+    static final String CLOSED_SETTLED_KEY = "pharmacy.deferral.closedSettled";
     private static final String APPROVERS_ONLY = "pharmacy.deferral.approversOnly";
     /** The audit entity of the fill itself, as the dispense service names it. */
     private static final String FILL_ENTITY = "DISPENSE";
@@ -374,9 +376,26 @@ public class DispenseBillingDeferralService {
     @Transactional
     public DispenseBillingDeferral admit(Prescription prescription, UUID hospitalId, BigDecimal due, Choice choice,
                                          User actor) {
+        return admitFill(prescription, hospitalId, due, choice, actor, FillClaimCover.Gap.NONE);
+    }
+
+    /**
+     * {@link #admit(Prescription, UUID, BigDecimal, Choice, User)} for a fill a claim was sent for (QA D2931,
+     * r66): when the counter sent no basis, a fill whose claim does not count for the person handing over is told
+     * why ({@code claimGap}), not that it « is not paid ».
+     */
+    @Transactional
+    public DispenseBillingDeferral admit(Prescription prescription, UUID hospitalId, BigDecimal due, Choice choice,
+                                         User actor, FillClaimCover.Gap claimGap) {
+        return admitFill(prescription, hospitalId, due, choice, actor, claimGap);
+    }
+
+    /** The gate itself; both public entries bring the transaction. */
+    private DispenseBillingDeferral admitFill(Prescription prescription, UUID hospitalId, BigDecimal due,
+                                              Choice choice, User actor, FillClaimCover.Gap claimGap) {
         UUID actorId = actor != null ? actor.getId() : null;
         if (prescription == null || hospitalId == null || actorId == null) {
-            throw new FieldBusinessException(FIELD_DEFERRAL, "pharmacy.handOver.unpaid", DisplayNumbers.quantity(due));
+            throw unpaid(FillClaimCover.Gap.NONE, due);
         }
         LocalDateTime now = now();
         Admission stay = openStayOf(prescription, hospitalId);
@@ -401,7 +420,7 @@ public class DispenseBillingDeferralService {
             throw new FieldBusinessException(FIELD_URGENCY, "pharmacy.handOver.deferBothGiven");
         }
         if (deferralId == null && urgency == null) {
-            throw new FieldBusinessException(FIELD_DEFERRAL, "pharmacy.handOver.unpaid", DisplayNumbers.quantity(due));
+            throw unpaid(claimGap, due);
         }
         com.example.hms.security.context.ImpersonationLimits.refuseMoneyWrite(() -> auditEventLogService,
                 "deferred billing of a fill");
@@ -409,6 +428,22 @@ public class DispenseBillingDeferralService {
             return execute(deferralId, prescription, hospitalId, due, actorId, now);
         }
         return overrideForUrgency(prescription, hospitalId, due, actorId, urgency, now);
+    }
+
+    /**
+     * The refusal of a fill that would leave with {@code due} unpaid and no basis. QA D2931 (r66): a fill whose
+     * claim covers it for anybody but the person handing over (they stand behind it alone), or for nobody yet (no
+     * money desk recorded it), is told that and what to do next; any other fill is « not paid ».
+     */
+    public static FieldBusinessException unpaid(FillClaimCover.Gap claimGap, BigDecimal due) {
+        String amount = DisplayNumbers.quantity(due);
+        if (claimGap == FillClaimCover.Gap.OWN_VOUCHER) {
+            return new FieldBusinessException(FIELD_DEFERRAL, "pharmacy.handOver.claimVouchedBySelf", amount);
+        }
+        if (claimGap == FillClaimCover.Gap.NO_VOUCHER) {
+            return new FieldBusinessException(FIELD_DEFERRAL, "pharmacy.handOver.claimNotVouched", amount);
+        }
+        return new FieldBusinessException(FIELD_DEFERRAL, "pharmacy.handOver.unpaid", amount);
     }
 
     /**
@@ -511,6 +546,39 @@ public class DispenseBillingDeferralService {
         fill.setBillingDeferredAmount(BigDecimal.ZERO);
     }
 
+    /**
+     * QA D2929 (r66): the order is fully dispensed and its last fill left the counter owing nothing (paid at the
+     * checkout, or covered by a claim a money desk stands behind). A deferral still asked for or approved for it
+     * has nothing left to cover: it stayed in everybody's « À traiter » list, and an approved one stayed usable.
+     * Each is withdrawn here, by the hand-over, with the reason recorded; its task and its bell are closed. The
+     * row stays (it is the record of what was asked and decided). An order with more to dispense keeps its
+     * deferral: its next fill may still leave on it.
+     */
+    @Transactional
+    public void closeOpenOnSettledOrder(Prescription prescription, UUID hospitalId, UUID actorId) {
+        if (prescription == null || prescription.getId() == null || hospitalId == null || actorId == null) {
+            return;
+        }
+        List<DispenseBillingDeferral> open = deferralRepository
+                .findByHospitalIdAndPrescriptionIdAndStatusInOrderByRequestedAtAsc(hospitalId, prescription.getId(),
+                        OPEN_STATUSES);
+        for (DispenseBillingDeferral listed : open) {
+            DispenseBillingDeferral deferral = deferralRepository
+                    .findLockedByIdAndHospitalId(listed.getId(), hospitalId).orElse(null);
+            if (deferral == null || !OPEN_STATUSES.contains(deferral.getStatus())) {
+                continue;
+            }
+            deferral.setStatus(DispenseBillingDeferralStatus.CANCELLED);
+            deferral.setCancelledBy(actorId);
+            deferral.setCancelledAt(now());
+            deferral.setCancelReason(MessageUtil.resolve(com.example.hms.service.i18n.NotificationLocales.STAFF,
+                    CLOSED_SETTLED_KEY));
+            audit(AuditEventType.DISPENSE_BILLING_DEFERRAL_CANCELLED,
+                    "Deferred billing of a fill closed: the order left the counter with nothing due", deferral);
+            followUp.close(deferral);
+        }
+    }
+
     /** The fill now has an id: the deferral names it, the audit row is written and the follow-up task is filed. */
     @Transactional
     public void executed(DispenseBillingDeferral deferral, Dispense dispense, Prescription prescription) {
@@ -522,17 +590,18 @@ public class DispenseBillingDeferralService {
         String fillId = dispense.getId().toString();
         switch (deferral.getKind()) {
             case ADMISSION_ACCOUNT -> support.logAudit(AuditEventType.DISPENSE_POSTED_TO_ADMISSION_ACCOUNT,
-                    "Fill charged to the account of the open stay", fillId, FILL_ENTITY);
+                    "Fill charged to the account of the open stay", fillId, FILL_ENTITY, deferral.getHospitalId());
             case URGENCY_OVERRIDE -> {
                 support.logAudit(AuditEventType.DISPENSE_BILLING_URGENCY_OVERRIDE,
-                        "Fill handed over unpaid on an urgency override", fillId, FILL_ENTITY);
+                        "Fill handed over unpaid on an urgency override", fillId, FILL_ENTITY,
+                        deferral.getHospitalId());
                 if (first) {
                     followUp.reviewNeeded(deferral, prescription.getPatient() != null
                             ? prescription.getPatient().getFullName() : null, dispense.getMedicationName());
                 }
             }
             default -> support.logAudit(AuditEventType.DISPENSE_BILLING_DEFERRED,
-                    "Fill handed over unpaid, marked to be billed", fillId, FILL_ENTITY);
+                    "Fill handed over unpaid, marked to be billed", fillId, FILL_ENTITY, deferral.getHospitalId());
         }
     }
 
@@ -661,7 +730,8 @@ public class DispenseBillingDeferralService {
     }
 
     private void audit(AuditEventType type, String description, DispenseBillingDeferral deferral) {
-        support.logAudit(type, description, deferral.getId().toString(), AUDIT_ENTITY);
+        // QA D2924 (r66): the deferral's own hospital anchors the row for the hospital admin's audit log.
+        support.logAudit(type, description, deferral.getId().toString(), AUDIT_ENTITY, deferral.getHospitalId());
     }
 
     private DispenseBillingDeferralDTO toDto(DispenseBillingDeferral d, Actor actor, Map<UUID, String> names) {

@@ -11,6 +11,7 @@ import {
   fieldErrorsResponse,
 } from '../../testing/form-refusal-behaviour';
 import { answerReasonDialog } from '../../shared/reason-dialog/reason-dialog.testing';
+import { formatMeasure, resetStoredLangForTests } from '../../shared/i18n/app-locale';
 
 /** Policy rule 3 (2026-11-20, provisional): the exam record of an imaging order. */
 describe('ImagingExamRecordComponent (policy rule 3)', () => {
@@ -217,9 +218,33 @@ describe('ImagingExamRecordComponent (policy rule 3)', () => {
     expect(el(fixture, 'imaging-exam-performed-by')?.textContent).toContain('Awa Kone');
     expect(el(fixture, 'imaging-exam-note-read')?.textContent).toContain('Thorax face');
     expect(el(fixture, 'imaging-exam-contrast-read')?.textContent).toContain('Iode 80 mL IV');
-    expect(el(fixture, 'imaging-exam-dose-read')?.textContent).toContain('0.15');
+    expect(el(fixture, 'imaging-exam-dose-read')?.textContent).toContain(
+      formatMeasure(0.15, 'mGy', 3),
+    );
     expect(el(fixture, 'imaging-exam-save')).toBeNull();
     expect(el(fixture, 'imaging-exam-check-in')).toBeNull();
+  });
+
+  it('D2913 (r66): the dose reads in the number format of its reader, « 0,15 mGy » in French', () => {
+    roles = ['ROLE_NURSE'];
+    const recorded = order({ status: 'COMPLETED', examRadiationDoseMgy: 0.15 });
+    try {
+      localStorage.setItem('lang', 'fr');
+      resetStoredLangForTests();
+      expect(
+        el(render(recorded), 'imaging-exam-dose-read')?.querySelector('dd')?.textContent?.trim(),
+      ).toBe('0,15 mGy');
+
+      TestBed.resetTestingModule();
+      localStorage.setItem('lang', 'en');
+      resetStoredLangForTests();
+      expect(
+        el(render(recorded), 'imaging-exam-dose-read')?.querySelector('dd')?.textContent?.trim(),
+      ).toBe('0.15 mGy');
+    } finally {
+      localStorage.removeItem('lang');
+      resetStoredLangForTests();
+    }
   });
 
   it('shows nothing for an order with no exam record that the reader cannot act on', () => {

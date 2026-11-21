@@ -432,6 +432,7 @@ class LabResultServiceImplPerformingHospitalTest {
     @Test
     void thePerformingLaboratorySeesAndChasesTheCriticalValuesItProduced() {
         result.setResultDate(LocalDateTime.now());
+        result.setReleased(true);
         LabResultResponseDTO critical = LabResultResponseDTO.builder()
             .id(result.getId().toString())
             .severityFlag("CRITICAL")
@@ -448,6 +449,40 @@ class LabResultServiceImplPerformingHospitalTest {
         assertThat(service.getCriticalResultsRequiringAcknowledgment(ordering.getId(), Locale.ENGLISH))
             .containsExactly(critical);
         verify(labResultRepository, never()).findByLabOrder_Hospital_IdIn(any(java.util.Collection.class));
+    }
+
+    /**
+     * QA D2951 (r66): both critical lists showed a critical value the laboratory had not released, hospital-wide,
+     * while its GET, acknowledge and read-back answered 404. Before release nothing is listed and nothing is
+     * mapped (no value leaves the service); the same row is listed once released.
+     */
+    @Test
+    void anUnreleasedCriticalValueIsOnNoCriticalList() {
+        result.setResultDate(LocalDateTime.now());
+        result.setReleased(false);
+        LabResultResponseDTO critical = LabResultResponseDTO.builder()
+            .id(result.getId().toString())
+            .severityFlag("CRITICAL")
+            .resultDate(result.getResultDate())
+            .build();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        when(labResultRepository.findHandledByHospitals(List.of(performing.getId())))
+            .thenReturn(List.of(result));
+        when(labResultMapper.toResponseDTO(result)).thenReturn(critical);
+        when(labResultMapper.raisesCriticalAlert("CRITICAL")).thenReturn(true);
+
+        assertThat(service.getCriticalResults(ordering.getId(), LocalDateTime.now().minusDays(1), Locale.ENGLISH))
+            .isEmpty();
+        assertThat(service.getCriticalResultsRequiringAcknowledgment(ordering.getId(), Locale.ENGLISH))
+            .isEmpty();
+        verify(labResultMapper, never()).toResponseDTO(result);
+
+        result.setReleased(true);
+
+        assertThat(service.getCriticalResults(ordering.getId(), LocalDateTime.now().minusDays(1), Locale.ENGLISH))
+            .containsExactly(critical);
+        assertThat(service.getCriticalResultsRequiringAcknowledgment(ordering.getId(), Locale.ENGLISH))
+            .containsExactly(critical);
     }
 
     @Test

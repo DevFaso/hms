@@ -20,8 +20,17 @@ public class WholeHoursDeserializer extends StdDeserializer<Integer> {
     /** Below the field's minimum: the field's own constraint answers. */
     private static final int NOT_WHOLE = 0;
 
+    /** What a number that is not whole reads as: a value the field's own minimum refuses. */
+    private final int notWhole;
+
     public WholeHoursDeserializer() {
+        this(NOT_WHOLE);
+    }
+
+    /** For a field whose minimum is not 1 ({@link WholeCountDeserializer}): {@code notWhole} is below that minimum. */
+    protected WholeHoursDeserializer(int notWhole) {
         super(Integer.class);
+        this.notWhole = notWhole;
     }
 
     @Override
@@ -36,11 +45,11 @@ public class WholeHoursDeserializer extends StdDeserializer<Integer> {
         return context.readValue(parser, Integer.class);
     }
 
-    private static Integer wholeOrRefused(BigDecimal value) {
+    private Integer wholeOrRefused(BigDecimal value) {
         try {
             return value.intValueExact();
         } catch (ArithmeticException notAWholeInt) {
-            return NOT_WHOLE;
+            return notWhole;
         }
     }
 

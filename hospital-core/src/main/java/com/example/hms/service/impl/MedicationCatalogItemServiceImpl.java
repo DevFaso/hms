@@ -32,6 +32,7 @@ import java.util.UUID;
 public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemService {
 
     private static final String MEDICATION_CATALOG_NOT_FOUND = "medication.catalog.notfound";
+    private static final String MEDICATION_CATALOG_PLATFORM_ENTRY = "medication.catalog.platformEntry";
     private static final String AUDIT_ENTITY = "MEDICATION_CATALOG_ITEM";
 
     private final MedicationCatalogItemRepository catalogRepository;
@@ -154,8 +155,7 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
 
     @Override
     public MedicationCatalogItemResponseDTO update(UUID id, MedicationCatalogItemRequestDTO dto) {
-        MedicationCatalogItem existing = catalogRepository.findByIdAndHospital_Id(id, dto.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException(MEDICATION_CATALOG_NOT_FOUND));
+        MedicationCatalogItem existing = requireWritable(id, dto.getHospitalId());
 
         dto.setAtcCode(TerminologyCodes.normalizeAndRequireValidAtc(dto.getAtcCode()));
         dto.setRxnormCode(TerminologyCodes.normalizeAndRequireValidRxNorm(dto.getRxnormCode()));
@@ -200,10 +200,52 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         return mapper.toResponseDTO(saved);
     }
 
+    /**
+     * r66 D2901: the row a catalogue edit or deactivation acts on. Its hospital is the caller's acting
+     * hospital, never a request field: the editor sends no {@code hospitalId}, so the lookup by the body's
+     * (null) hospital answered 404 for every save since the editor shipped, and a body that did name one
+     * was looked up at whatever hospital it named.
+     * <ul>
+     *   <li>A hospital's own entry: a caller acting AT that hospital. That holds for a super-admin too:
+     *       pinned to hospital A, they do not edit hospital B's entry by its id (review of #1250). Only in
+     *       global view (no hospital pinned) does a verified super-admin reach any hospital's entry.</li>
+     *   <li>A platform (LNME) entry, shared by every tenant: a verified super-admin only, pinned or not
+     *       (it is in every hospital's list). A hospital admin sees it too, so the refusal says why rather
+     *       than "not found".</li>
+     *   <li>A {@code hospitalId} that is sent must be the entry's own (the API contract before this fix);
+     *       the controller narrows the acting scope to it first.</li>
+     * </ul>
+     * Another hospital's entry answers "not found", as an unknown id does.
+     */
+    private MedicationCatalogItem requireWritable(UUID id, UUID requestedHospitalId) {
+        boolean platformAdmin = roleValidator.isSuperAdminFromJwtClaim();
+        MedicationCatalogItem item = catalogRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException(MEDICATION_CATALOG_NOT_FOUND));
+        UUID owner = item.getHospital() == null ? null : item.getHospital().getId();
+        if (owner == null) {
+            if (!platformAdmin) {
+                throw new BusinessException(MEDICATION_CATALOG_PLATFORM_ENTRY);
+            }
+            if (requestedHospitalId != null) {
+                throw new ResourceNotFoundException(MEDICATION_CATALOG_NOT_FOUND);
+            }
+            return item;
+        }
+        if (requestedHospitalId != null && !requestedHospitalId.equals(owner)) {
+            throw new ResourceNotFoundException(MEDICATION_CATALOG_NOT_FOUND);
+        }
+        // Null only for a verified super-admin in global view; everyone else acts at one hospital.
+        UUID acting = roleValidator.requireActiveHospitalId();
+        boolean reachable = acting == null ? platformAdmin : owner.equals(acting);
+        if (!reachable) {
+            throw new ResourceNotFoundException(MEDICATION_CATALOG_NOT_FOUND);
+        }
+        return item;
+    }
+
     @Override
     public void deactivate(UUID id, UUID hospitalId) {
-        MedicationCatalogItem item = catalogRepository.findByIdAndHospital_Id(id, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException(MEDICATION_CATALOG_NOT_FOUND));
+        MedicationCatalogItem item = requireWritable(id, hospitalId);
         item.setActive(false);
         catalogRepository.save(item);
         log.info("Deactivated medication catalog item '{}'", item.getNameFr());
@@ -288,6 +330,8 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
             UUID userId = roleValidator.getCurrentUserId();
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .userId(userId)
+                    // QA D2924 (r66): the acting hospital anchors the row for the hospital admin's audit log.
+                    .hospitalId(roleValidator.getCurrentHospitalId())
                     .eventType(eventType)
                     .eventDescription(description)
                     .status(AuditStatus.SUCCESS)

@@ -2136,6 +2136,10 @@
       "DISPENSE_BILLING_URGENCY_OVERRIDE": "Délivrance remise sans paiement par dérogation d’urgence",
       "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Dérogation d’urgence revue",
       "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Délivrance portée au compte du séjour",
+      "DISPENSE_BILLING_DEFERRAL_CLOSED_SETTLED": "Report « à facturer » clos : l’ordonnance est sortie de la pharmacie sans rien devoir",
+      "PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED": "Acceptation de la demande de prise en charge pharmacie confirmée par la facturation ou la comptabilité",
+      "ADOLESCENT_AGE_SET_ZERO": "Âge de confidentialité des adolescents fixé à 0 an",
+      "ADOLESCENT_AGE_SET_ONE": "Âge de confidentialité des adolescents fixé à 1 an",
       "ACTIVATION_CODE_SHOWN": "Code d’activation affiché à la personne qui a créé l’affectation"
     },
     "SCOPE_REFUSAL": {
@@ -2957,7 +2961,8 @@
         "PHARMACY_PAYMENT": "Paiement de dispensation",
         "COUNTER_SALE": "Vente au comptoir",
         "REFUND": "Remboursement remis",
-        "REVERSAL": "Contre-passation remise"
+        "REVERSAL": "Contre-passation remise",
+        "PHARMACY_REFUND": "Remboursement pharmacie remis"
       },
       "CLOSED_TOAST": "Caisse clôturée.",
       "CLOSE_FAILED": "La caisse n’a pas pu être clôturée.",
@@ -8833,7 +8838,12 @@
     "PRN_MIN_INTERVAL_HINT": "Obligatoire pour une prescription « si besoin » : le registre propose la dose suivante une fois ce délai écoulé depuis la précédente.",
     "PRN_MIN_INTERVAL_REQUIRED": "Indiquez l’intervalle minimum entre deux doses (de 1 à 72 heures).",
     "FREQUENCY_REQUIRED": "Indiquez la fréquence : à quel rythme le médicament est donné.",
-    "PRN_MIN_INTERVAL_VALUE": "Au moins {{hours}} h entre deux doses"
+    "PRN_MIN_INTERVAL_VALUE": "Au moins {{hours}} h entre deux doses",
+    "REFILLS_ALLOWED": "Renouvellements inscrits",
+    "REFILLS_ALLOWED_HINT": "Nombre de renouvellements que la pharmacie peut délivrer sans nouvelle décision (0 = aucun). Au-delà, le prescripteur doit approuver. Règle provisoire.",
+    "REFILLS_CONTROLLED_HINT": "Stupéfiant : aucun renouvellement. Chaque nouvelle délivrance demande une nouvelle ordonnance.",
+    "REFILLS_LOCKED_HINT": "Le nombre de renouvellements ne se modifie plus après la signature.",
+    "REFILLS_ALLOWED_INVALID": "Le nombre de renouvellements est un nombre entier, de 0 à {{max}}."
   },
   "PROFILE": {
     "RECOVERY_CONFIRM_TITLE": "Confirmez votre contact de récupération",
@@ -14284,7 +14294,10 @@
       "REJECTED": "Rejetée",
       "PAID": "Payée"
     },
-    "PATIENT_UNNAMED": "Patient (sans nom au dossier)"
+    "PATIENT_UNNAMED": "Patient (sans nom au dossier)",
+    "CONFIRM_ACCEPTANCE": "Confirmer l’acceptation",
+    "AWAITING_DESK": "La réponse du payeur est enregistrée par la facturation, le contrôle des remboursements ou la comptabilité.",
+    "ACCEPTANCE_UNCONFIRMED": "Acceptation non confirmée par la facturation : cette demande ne couvre pas encore la délivrance."
   },
   "PHARMACY_CHECKOUT": {
     "TITLE": "Encaissement pharmacie",
@@ -15175,7 +15188,11 @@
       "DEFER_LABEL": "Remettre « à facturer » : motif",
       "DEFER_HINT": "Par exemple : patient hospitalisé, sur la facture du séjour. Réservé au pharmacien ou à l’administrateur ; la délivrance apparaît dans le rapprochement du jour.",
       "DEFER_REQUIRED": "Cette délivrance n’est pas payée : indiquez le motif « à facturer » ou encaissez-la d’abord.",
-      "LOAD_FAILED": "Le statut de paiement n’a pas pu être chargé ; le serveur vérifiera le paiement à la remise."
+      "LOAD_FAILED": "Le statut de paiement n’a pas pu être chargé ; le serveur vérifiera le paiement à la remise.",
+      "CLAIM_GAP": {
+        "OWN_VOUCHER": "Une prise en charge a été envoyée pour cette délivrance, mais vous êtes la seule personne à en répondre : une autre personne de la facturation ou de la comptabilité doit la confirmer, ou une autre personne remet la délivrance.",
+        "NO_VOUCHER": "Une prise en charge a été envoyée pour cette délivrance, mais personne de la facturation ou de la comptabilité ne l’a encore confirmée : elle ne couvre pas la délivrance."
+      }
     },
     "PACK": {
       "TITLE": "Conditionnement : {{name}}",
@@ -15327,7 +15344,8 @@
         "REJECTED": "Refusé",
         "EXECUTED": "Utilisé",
         "CANCELLED": "Retiré",
-        "TO_REVIEW": "À revoir"
+        "TO_REVIEW": "À revoir",
+        "REVIEWED": "Revue"
       },
       "MEDICATION": "Médicament",
       "ASKED": "Demandé par",
@@ -15365,7 +15383,8 @@
       "VIEW_DUE": "Sorties, encore dues",
       "STILL_DUE": "Reste dû à ce jour",
       "NONE_DUE": "Aucune délivrance sortie sans paiement ne reste due.",
-      "VIEWS": "Listes des paiements différés"
+      "VIEWS": "Listes des paiements différés",
+      "REVIEWED_BY": "Revue par"
     },
     "POLICY": {
       "TITLE": "Politique de facturation de l’établissement",
@@ -15494,7 +15513,8 @@
       "RELEASE_FAILED": "Impossible de communiquer le résultat.",
       "REASON_TOO_SHORT": "Le motif doit compter au moins {{min}} caractères.",
       "ATTEST_REQUIRED": "Confirmez que vous avez vérifié le lien de parenté de cette personne.",
-      "NOT_RELEASABLE": "Non communicable à la famille (seul un résultat VIH peut l’être)."
+      "NOT_RELEASABLE": "Non communicable à la famille (seul un résultat VIH peut l’être).",
+      "NOT_RELEASABLE_VIOLENCE": "Non communicable à la famille : un résultat lié à des violences ne l’est jamais."
     },
     "AGE": {
       "TITLE": "Confidentialité des adolescents",
@@ -15539,7 +15559,9 @@
     "DISCONTINUE_TITLE": "Interrompre cet examen ?",
     "DISCONTINUE_MESSAGE": "La demande est close et son prescripteur voit le motif. Une nouvelle demande sera nécessaire pour refaire l'examen.",
     "DISCONTINUED": "Examen interrompu.",
-    "ULTRASOUND_PHYSICIANS_ONLY": "Échographie : dans cet établissement, l'examen est réalisé par un médecin. Vous pouvez enregistrer l'arrivée du patient et joindre des images. Règle provisoire, en attente d'approbation du radiologue ou du directeur médical."
+    "ULTRASOUND_PHYSICIANS_ONLY": "Échographie : dans cet établissement, l'examen est réalisé par un médecin. Vous pouvez enregistrer l'arrivée du patient et joindre des images. Règle provisoire, en attente d'approbation du radiologue ou du directeur médical.",
+    "RECORDED_AT_EXAM": "Enregistré lors de l'examen",
+    "AWAITS_PREAUTH_NUMBER": "Le numéro de préautorisation de cet examen n'est pas encore enregistré : un médecin ou un radiologue l'enregistre avant que l'examen puisse démarrer."
   },
   "IMAGING_REPORTING_SETTINGS": {
     "TITLE": "Échographie",

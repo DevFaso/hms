@@ -78,7 +78,7 @@ dependencies {
     // Apache Commons
     implementation 'commons-io:commons-io:2.22.0'
     implementation 'org.apache.commons:commons-csv:1.14.1'
-    implementation 'org.apache.commons:commons-lang3:3.21.0'
+    implementation 'org.apache.commons:commons-lang3:3.22.0'
 
     // Object storage (Cloudflare R2 through the S3 API): uploaded files live in a
     // bucket so the service needs no Railway volume (a volume makes Railway stop
@@ -122,7 +122,7 @@ dependencies {
     testImplementation 'org.springframework.security:spring-security-test'
     // OtlpMetricsExportTest decodes the OTLP payload. Already on the runtime classpath (via
     // micrometer-registry-otlp, runtime scope); the version is the one that brings.
-    testImplementation 'io.opentelemetry.proto:opentelemetry-proto:1.10.0-alpha'
+    testImplementation 'io.opentelemetry.proto:opentelemetry-proto:1.11.1-alpha'
     testImplementation 'org.springframework.kafka:spring-kafka-test'
 
     // Testcontainers — drives LiquibaseSchemaIT against real PostgreSQL so

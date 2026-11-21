@@ -69,6 +69,7 @@ class ImagingStudyViewerServiceTest {
     void setUp() {
         reports = mock(ImagingReportRepository.class);
         roleValidator = mock(RoleValidator.class);
+        com.example.hms.testsupport.ImagingRolesHeld.whereverTheTokenNamesThem(roleValidator);
         gateway = mock(PacsDicomWebGateway.class);
         audit = mock(AuditEventLogService.class);
         properties = new DicomProxyProperties();
@@ -94,6 +95,25 @@ class ImagingStudyViewerServiceTest {
 
     private static DicomInstanceRef instance() {
         return new DicomInstanceRef(SERIES, SOP, 1, 1, 1, "CR");
+    }
+
+    @Test
+    @DisplayName("QA D2915: a clinical role held at another hospital opens no pixels here, and the PACS is never called")
+    void d2915_aClinicalRoleHeldElsewhereOpensNoPixelsHere() {
+        // A radiologist at B who is a technician at A, acting at A: not of the care team at A.
+        when(roleValidator.getCurrentHospitalId()).thenReturn(hospitalA);
+        when(roleValidator.readsImagingClinically(any(), org.mockito.ArgumentMatchers.eq(hospitalA))).thenReturn(false);
+
+        assertThatThrownBy(() -> service.manifest(reportId, actor)).isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThatThrownBy(() -> service.frame(reportId, SERIES, SOP, 1)).isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThatThrownBy(() -> service.viewerReady(reportId)).isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThatThrownBy(() -> service.requireInstanceListingReader()).isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verifyNoInteractions(gateway, audit);
+
+        // ... and where the role is held, the listing is theirs.
+        when(roleValidator.readsImagingClinically(any(), org.mockito.ArgumentMatchers.eq(hospitalA))).thenReturn(true);
+        service.requireInstanceListingReader();
+        assertThat(service.viewerReady(reportId)).isTrue();
     }
 
     @Test

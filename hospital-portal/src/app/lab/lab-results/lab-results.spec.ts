@@ -117,11 +117,19 @@ describe('LabResultsComponent', () => {
         fixture.detectChanges();
         flushInit();
         component.selectedResult.set(
-          mockResult({
-            criticalReadBackValue: '6,8',
-            criticalReadBackAt: stamped ? '2026-11-14T18:07:00' : null,
-            criticalReadBackBy: 'Reader',
-          }) as never,
+          mockResult(
+            stamped
+              ? {
+                  criticalReadBackValue: '6,8',
+                  criticalReadBackAt: '2026-11-14T18:07:00',
+                  criticalReadBackBy: 'Reader',
+                }
+              : {
+                  criticalReadBackRefusedValue: '6,8',
+                  criticalReadBackAt: null,
+                  criticalReadBackRefusedBy: 'Reader',
+                },
+          ) as never,
         );
         fixture.detectChanges();
         const site = stamped ? 'read-back-evidence' : 'read-back-mismatch';
@@ -1039,15 +1047,17 @@ describe('LabResultsComponent', () => {
       component.selectedResult.set(
         mockResult({
           criticalNotifiedAt: '2026-08-22T08:00:00',
-          criticalReadBackValue: '9.1',
-          criticalReadBackBy: 'Dr. Awa Traoré',
+          criticalReadBackRefusedValue: '9.1',
+          criticalReadBackRefusedBy: 'Dr. Awa Traoré',
           criticalReadBackAt: null,
         }) as never,
       );
       fixture.detectChanges();
-      expect(
-        fixture.nativeElement.querySelector('[data-testid="read-back-mismatch"]'),
-      ).not.toBeNull();
+      const mismatch = fixture.nativeElement.querySelector('[data-testid="read-back-mismatch"]');
+      expect(mismatch).not.toBeNull();
+      expect(mismatch.textContent).toContain('Dr. Awa Traoré');
+      // QA D2952: a refusal is never shown as the read-back evidence.
+      expect(fixture.nativeElement.querySelector('[data-testid="read-back-evidence"]')).toBeNull();
 
       component.selectedResult.set(
         mockResult({

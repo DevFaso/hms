@@ -1634,6 +1634,8 @@ export const routes: Routes = [
             'ROLE_PHARMACIST',
             'ROLE_BILLING_SPECIALIST',
             'ROLE_CLAIMS_REVIEWER',
+            // QA D2925 (r66): the accountant records the payer's answer to a claim.
+            'ROLE_ACCOUNTANT',
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_SUPER_ADMIN',
           ],

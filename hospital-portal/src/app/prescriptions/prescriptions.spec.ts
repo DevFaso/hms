@@ -543,6 +543,98 @@ describe('PrescriptionsComponent — signing', () => {
     );
   });
 
+  it('QA D2926: the refills the prescriber writes are sent with a new prescription; none by default', () => {
+    prescriptionService.create.and.returnValue(of({ id: 'rx-new' } as PrescriptionResponse));
+    component.openCreate();
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="rx-refills-allowed"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="rx-refills-hint"]')?.textContent).toContain(
+      'PRESCRIPTIONS.REFILLS_ALLOWED_HINT',
+    );
+    component.form.medicationName = 'Amlodipine 5 mg';
+    component.form.frequency = 'q24h';
+    component.form.quantity = 30;
+    component.submitForm();
+    expect(prescriptionService.create).toHaveBeenCalledWith(
+      jasmine.objectContaining({ refillsAllowed: 0 }),
+    );
+
+    prescriptionService.create.calls.reset();
+    component.openCreate();
+    component.form.medicationName = 'Amlodipine 5 mg';
+    component.form.frequency = 'q24h';
+    component.form.quantity = 30;
+    component.form.refillsAllowed = 2;
+    component.submitForm();
+    expect(prescriptionService.create).toHaveBeenCalledWith(
+      jasmine.objectContaining({ refillsAllowed: 2 }),
+    );
+  });
+
+  it('QA D2926: a fraction, a negative or an absurd number of refills is refused on the field and not sent', () => {
+    component.openCreate();
+    fixture.detectChanges();
+    component.form.medicationName = 'Amlodipine 5 mg';
+    component.form.frequency = 'q24h';
+    component.form.quantity = 30;
+    for (const wrong of [1.5, -1, 100]) {
+      component.form.refillsAllowed = wrong;
+      component.submitForm();
+      expect(component['formError']()).toBe('PRESCRIPTIONS.REFILLS_ALLOWED_INVALID');
+    }
+    expect(prescriptionService.create).not.toHaveBeenCalled();
+  });
+
+  it('QA D2926: a controlled substance carries no refill: the field is locked, says why, and 0 is sent', () => {
+    prescriptionService.create.and.returnValue(of({ id: 'rx-new' } as PrescriptionResponse));
+    component.openCreate();
+    component.form.medicationName = 'Morphine 10 mg';
+    component.form.frequency = 'q6h';
+    component.form.quantity = 3;
+    component.form.refillsAllowed = 4;
+    component.pickedCatalogItem.set({ id: 'cat-1', controlled: true } as never);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(
+      el.querySelector<HTMLInputElement>('[data-testid="rx-refills-allowed"]')?.readOnly,
+    ).toBeTrue();
+    expect(el.querySelector('[data-testid="rx-refills-hint"]')?.textContent).toContain(
+      'PRESCRIPTIONS.REFILLS_CONTROLLED_HINT',
+    );
+
+    component.submitForm();
+
+    expect(prescriptionService.create).toHaveBeenCalledWith(
+      jasmine.objectContaining({ refillsAllowed: 0 }),
+    );
+  });
+
+  it('QA D2926: a signed order keeps the refills it was signed with: locked, and never sent again', () => {
+    prescriptionService.update.and.returnValue(of({ id: 'rx-1' } as PrescriptionResponse));
+    component.openEdit({
+      ...rx('5dd1633b', 'SIGNED'),
+      medicationName: 'Amlodipine 5 mg',
+      refillsAllowed: 2,
+      refillsRemaining: 1,
+    } as PrescriptionResponse);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    const field = el.querySelector<HTMLInputElement>('[data-testid="rx-refills-allowed"]');
+    expect(component.form.refillsAllowed).toBe(2);
+    expect(field?.readOnly).toBeTrue();
+    expect(el.querySelector('[data-testid="rx-refills-hint"]')?.textContent).toContain(
+      'PRESCRIPTIONS.REFILLS_LOCKED_HINT',
+    );
+
+    component.form.status = 'CANCELLED';
+    component.form.withdrawalReason = 'Erreur de patient';
+    component.submitForm();
+
+    const sent = prescriptionService.update.calls.mostRecent()?.args[1];
+    if (sent) expect(sent.refillsAllowed).toBeUndefined();
+  });
+
   it('QA D660: a refused edit of a signed prescription is reported inside the open modal', () => {
     prescriptionService.update.and.returnValue(
       throwError(() => ({ status: 403, error: { message: 'Access denied' } })),

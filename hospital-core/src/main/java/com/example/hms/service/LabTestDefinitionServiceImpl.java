@@ -346,7 +346,16 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 .toList();
     }
 
+    /**
+     * r66 D2902: one transaction. Without it {@code repository.save} committed on its own and the
+     * sensitivity audit that follows read the definition's hospital, a lazy proxy whose session had just
+     * closed (open-in-view is off): the director was answered 500 for a change that WAS saved, and the
+     * audit of it was never written. Inside the transaction the audit request is built from loaded rows,
+     * is written after the commit ({@code TransactionCallbacks.afterCommit}), and a refused edit saves
+     * nothing.
+     */
     @Override
+    @org.springframework.transaction.annotation.Transactional
     public LabTestDefinitionResponseDTO update(UUID id, LabTestDefinitionRequestDTO dto) {
         requireOrderedRanges(dto.getReferenceRanges(), REFERENCE_RANGES_FIELD);
         requireValidComponents(dto.getComponents());

@@ -71,10 +71,12 @@
         <li class="deferral-card" [attr.data-testid]="'deferral-' + r.id">
           <div class="deferral-main">
             <strong>{{ r.kind | keyLabel: 'PHARMACY_MONEY.DEFERRAL.KIND.' }}</strong>
-            <span class="deferral-status" [attr.data-status]="r.status">{{
-              (r.kind === 'URGENCY_OVERRIDE' ? 'TO_REVIEW' : r.status)
-                | keyLabel: 'PHARMACY_MONEY.DEFERRAL.STATUS.'
-            }}</span>
+            <span
+              class="deferral-status"
+              [attr.data-status]="r.status"
+              [attr.data-testid]="'deferral-status-' + r.id"
+              >{{ statusOf(r) | keyLabel: 'PHARMACY_MONEY.DEFERRAL.STATUS.' }}</span
+            >
           </div>
           <dl class="deferral-meta">
             <div>
@@ -130,6 +132,19 @@
                 <dd>{{ r.stillDue | cfa: 'XOF' }}</dd>
               </div>
             }
+            <!-- QA D2928 (r66): who reviewed an override, when, and what they found. -->
+            @if (r.reviewedAt) {
+              <div data-testid="deferral-reviewed-by">
+                <dt>{{ 'PHARMACY_MONEY.DEFERRAL.REVIEWED_BY' | translate }}</dt>
+                <dd>
+                  {{ r.reviewedByName | dash }} · {{ r.reviewedAt | serverTime | date: 'short' }}
+                </dd>
+              </div>
+              <div class="deferral-meta-wide" data-testid="deferral-review-note">
+                <dt>{{ 'PHARMACY_MONEY.DEFERRAL.REVIEW_NOTE' | translate }}</dt>
+                <dd>{{ r.reviewNote | dash }}</dd>
+              </div>
+            }
           </dl>
 
           <div class="deferral-actions">
@@ -180,8 +195,8 @@
                 'PHARMACY_MONEY.DEFERRAL.WAITING_OTHER' | translate
               }}</em>
             }
-            @if (r.kind === 'URGENCY_OVERRIDE' && !r.canReview) {
-              <em class="deferral-waiting">{{
+            @if (r.kind === 'URGENCY_OVERRIDE' && !r.canReview && !r.reviewedAt) {
+              <em class="deferral-waiting" data-testid="deferral-waiting-review">{{
                 'PHARMACY_MONEY.DEFERRAL.WAITING_REVIEW' | translate
               }}</em>
             }

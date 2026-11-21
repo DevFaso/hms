@@ -40,8 +40,10 @@ class DispenseBillingDeferralFollowUpTest {
     private final UserRoleHospitalAssignmentRepository assignments = mock(UserRoleHospitalAssignmentRepository.class);
     private final com.example.hms.service.NotificationService notifications =
             mock(com.example.hms.service.NotificationService.class);
+    private final org.springframework.transaction.PlatformTransactionManager transactions =
+            mock(org.springframework.transaction.PlatformTransactionManager.class);
     private final DispenseBillingDeferralFollowUp followUp =
-            new DispenseBillingDeferralFollowUp(inBasket, assignments, notifications);
+            new DispenseBillingDeferralFollowUp(inBasket, assignments, notifications, transactions);
 
     private final UUID hospitalId = UUID.randomUUID();
     private final UUID pharmacist = UUID.randomUUID();
@@ -104,21 +106,70 @@ class DispenseBillingDeferralFollowUpTest {
         when(assignments.findLiveUsersAtHospitalWithRoleCodes(hospitalId,
                 Set.of("ROLE_ACCOUNTANT", "ROLE_HOSPITAL_ADMIN"))).thenReturn(List.of(accountant, admin, asker));
 
-        followUp.approvalNeeded(deferral(DispenseBillingDeferralKind.OUTPATIENT_CREDIT), "Awa", "Amoxicilline");
+        DispenseBillingDeferral credit = deferral(DispenseBillingDeferralKind.OUTPATIENT_CREDIT);
+        followUp.approvalNeeded(credit, "Awa", "Amoxicilline");
         verify(inBasket, never()).createItemInNewTransaction(any());
         // Review of #1244: accountants and hospital admins read no in-basket: each gets a notification, never
-        // the person who asked.
+        // the person who asked. QA D2927 (r66): about this deferral, so its decision marks it read.
         verify(notifications).createNotification(org.mockito.ArgumentMatchers.eq("pharmacy.deferral.followUp.creditRequested"),
-                any(), org.mockito.ArgumentMatchers.eq("mariam.comptable"), org.mockito.ArgumentMatchers.eq("PHARMACY_BILLING_DEFERRAL"));
-        verify(notifications).createNotification(any(), any(), org.mockito.ArgumentMatchers.eq("issa.admin"), any());
-        verify(notifications, never()).createNotification(any(), any(), org.mockito.ArgumentMatchers.eq("awa.pharmacienne"), any());
+                any(), org.mockito.ArgumentMatchers.eq("mariam.comptable"), org.mockito.ArgumentMatchers.eq("PHARMACY_BILLING_DEFERRAL"),
+                org.mockito.ArgumentMatchers.eq(credit.getId()));
+        verify(notifications).createNotification(any(), any(), org.mockito.ArgumentMatchers.eq("issa.admin"), any(), any());
+        verify(notifications, never()).createNotification(any(), any(), org.mockito.ArgumentMatchers.eq("awa.pharmacienne"), any(), any());
 
         followUp.approvalNeeded(deferral(DispenseBillingDeferralKind.THIRD_PARTY_COVER), "Awa", "Amoxicilline");
         ArgumentCaptor<CreateInBasketItemRequest> items = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
         verify(inBasket).createItemInNewTransaction(items.capture());
         assertThat(items.getValue().getPriority()).isEqualTo(InBasketPriority.URGENT);
         assertThat(items.getValue().getTitleKey()).isEqualTo("pharmacy.deferral.followUp.approvalTitle");
-        verify(notifications, times(2)).createNotification(any(), any(), any(), any());
+        verify(notifications, times(2)).createNotification(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("QA D2927 (r66): each bell is written in a transaction of its own, committed, or it is never stored after the commit")
+    void theBellIsWrittenInItsOwnTransaction() {
+        User accountant = user(UUID.randomUUID());
+        accountant.setUsername("mariam.comptable");
+        User admin = user(UUID.randomUUID());
+        admin.setUsername("issa.admin");
+        when(assignments.findLiveUsersAtHospitalWithRoleCodes(any(), any())).thenReturn(List.of(accountant, admin));
+        org.springframework.transaction.TransactionStatus own =
+                mock(org.springframework.transaction.TransactionStatus.class);
+        when(transactions.getTransaction(any())).thenReturn(own);
+
+        followUp.approvalNeeded(deferral(DispenseBillingDeferralKind.OUTPATIENT_CREDIT), "Awa", "Amoxicilline");
+
+        ArgumentCaptor<org.springframework.transaction.TransactionDefinition> opened =
+                ArgumentCaptor.forClass(org.springframework.transaction.TransactionDefinition.class);
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(transactions, notifications);
+        order.verify(transactions).getTransaction(opened.capture());
+        order.verify(notifications).createNotification(any(), any(),
+                org.mockito.ArgumentMatchers.eq("mariam.comptable"), any(), any());
+        order.verify(transactions).commit(own);
+        order.verify(transactions).getTransaction(any());
+        order.verify(notifications).createNotification(any(), any(), org.mockito.ArgumentMatchers.eq("issa.admin"),
+                any(), any());
+        order.verify(transactions).commit(own);
+        assertThat(opened.getValue().getPropagationBehavior())
+                .as("after the commit a plain save joins the finished transaction and is never flushed")
+                .isEqualTo(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
+    @Test
+    @DisplayName("QA D2927 (r66): one approver's failed bell never loses the next approver's")
+    void oneFailedBellDoesNotLoseTheOthers() {
+        User accountant = user(UUID.randomUUID());
+        accountant.setUsername("mariam.comptable");
+        User admin = user(UUID.randomUUID());
+        admin.setUsername("issa.admin");
+        when(assignments.findLiveUsersAtHospitalWithRoleCodes(any(), any())).thenReturn(List.of(accountant, admin));
+        when(notifications.createNotification(any(), any(), org.mockito.ArgumentMatchers.eq("mariam.comptable"),
+                any(), any())).thenThrow(new IllegalStateException("down"));
+
+        followUp.approvalNeeded(deferral(DispenseBillingDeferralKind.OUTPATIENT_CREDIT), "Awa", "Amoxicilline");
+
+        verify(notifications).createNotification(any(), any(), org.mockito.ArgumentMatchers.eq("issa.admin"),
+                any(), any());
     }
 
     @Test
@@ -127,11 +178,12 @@ class DispenseBillingDeferralFollowUpTest {
         User accountant = user(UUID.randomUUID());
         accountant.setUsername("mariam.comptable");
         when(assignments.findLiveUsersAtHospitalWithRoleCodes(any(), any())).thenReturn(List.of(accountant));
-        when(notifications.createNotification(any(), any(), any(), any())).thenThrow(new IllegalStateException("down"));
+        when(notifications.createNotification(any(), any(), any(), any(), any()))
+                .thenThrow(new IllegalStateException("down"));
 
         followUp.approvalNeeded(deferral(DispenseBillingDeferralKind.OUTPATIENT_CREDIT), "Awa", "Amoxicilline");
 
-        verify(notifications).createNotification(any(), any(), any(), any());
+        verify(notifications).createNotification(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -140,6 +192,8 @@ class DispenseBillingDeferralFollowUpTest {
         DispenseBillingDeferral override = deferral(DispenseBillingDeferralKind.URGENCY_OVERRIDE);
         followUp.close(override);
         verify(inBasket).removeAllItemsForReference(override.getId(), DispenseBillingDeferralFollowUp.REFERENCE_TYPE);
+        // QA D2927 (r66): the bell of the request is answered with it.
+        verify(notifications).markReadForSubject(override.getId(), Set.of("PHARMACY_BILLING_DEFERRAL"));
         followUp.close(null);
 
         when(assignments.findLiveUsersAtHospitalWithRoleCodes(any(), any())).thenThrow(new IllegalStateException("db"));

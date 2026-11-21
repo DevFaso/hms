@@ -22,6 +22,8 @@ import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.ImagingOrderRepository;
 import com.example.hms.repository.ImagingReportRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.service.imaging.ImagingRoleScope;
+import com.example.hms.service.imaging.ImagingRoleScope.Reader;
 import com.example.hms.service.support.PatientSafeView;
 import com.example.hms.service.ImagingCriticalNotificationService;
 import com.example.hms.service.ImagingReportService;
@@ -130,6 +132,8 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         }
 
         ImagingOrder imagingOrder = loadOrderScoped(request.getImagingOrderId());
+        // QA D2915: a report is written by who interprets AT the order's hospital.
+        roles().requireInterpreter(imagingOrder);
         // QA D1098 (round 19): reports were written and signed FINAL on
         // cancelled orders. A cancelled order takes no result: place a new one.
         requireOrderNotCancelled(imagingOrder);
@@ -204,7 +208,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             throw new BusinessException("imaging.report.updatePayloadRequired");
         }
 
-        ImagingReport report = loadReportScoped(reportId);
+        ImagingReport report = loadReportToWrite(reportId);
         // QA D930 class: a draft read is its author's to revise.
         requireReportAuthor(report);
 
@@ -255,7 +259,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
 
     @Override
     public ImagingReportResponseDTO signReport(UUID reportId) {
-        ImagingReport report = loadReportScoped(reportId);
+        ImagingReport report = loadReportToWrite(reportId);
         // QA D930 class: a colleague does not sign another clinician's read.
         requireReportAuthor(report);
         requireOrderNotCancelled(report.getImagingOrder());
@@ -322,7 +326,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
 
     @Override
     public ImagingReportResponseDTO acknowledgeCriticalResult(UUID reportId) {
-        ImagingReport report = loadReportScoped(reportId);
+        ImagingReport report = loadReportToWrite(reportId);
 
         if (!report.isCriticalFlagged()) {
             throw new BusinessException("imaging.report.noCriticalFinding");
@@ -360,7 +364,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             throw new com.example.hms.exception.FieldBusinessException("statusReason", "imaging.report.statusReasonRequired");
         }
 
-        ImagingReport report = loadReportScoped(reportId);
+        ImagingReport report = loadReportToWrite(reportId);
         // QA D930 class: cancelling or voiding a draft read is its author's call.
         requireReportAuthor(report);
         if (report.isSigned()) {
@@ -404,14 +408,16 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             // Staff reading their own report elsewhere read it as its patient (#754's rule).
             return PatientSafeView.imagingReport(imagingReportMapper.toResponseDTO(report));
         }
+        // QA D2915: what the caller reads is decided by what they are at the report's hospital.
+        Reader reader = roles().reader(report.getImagingOrder());
         // User decision 2026-11-14: an administrator reads released reports only;
         // a draft or a preliminary read answers as a missing id.
-        if (adminReader() && !report.isReleasedToPatient()) {
+        if (reader.administrator() && !report.isReleasedToPatient()) {
             throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
         }
         // Policy rule 3: an imaging technician reads the released reports of exams they performed
         // (one who is also an administrator reads as the administrator above: any released report).
-        if (technicianReader(report.getImagingOrder()) && !adminReader() && !technicianMayRead(report)) {
+        if (reader == Reader.TECHNICIAN && !technicianMayRead(report)) {
             throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
         }
         return imagingReportMapper.toResponseDTO(report);
@@ -438,12 +444,13 @@ public class ImagingReportServiceImpl implements ImagingReportService {
                 throw new ResourceNotFoundException(MSG_ORDER_NOT_FOUND, imagingOrderId);
             }
         }
+        // QA D2915: staff read as what they are at the order's hospital.
+        Reader reader = asPatient ? null : roles().reader(order);
         // Policy rule 3: an imaging technician too, and only for an exam they performed.
-        boolean technician = !asPatient && technicianReader(order);
-        if (technician && !adminReader() && !performedByCaller(order)) {
+        if (reader == Reader.TECHNICIAN && !performedByCaller(order)) {
             throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, imagingOrderId);
         }
-        if (!asPatient && (adminReader() || technician)) {
+        if (reader != null && reader != Reader.CLINICAL) {
             // An administrator reads the newest RELEASED version; work in progress is not theirs.
             return imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(imagingOrderId).stream()
                 .filter(ImagingReport::isReleasedToPatient)
@@ -468,12 +475,13 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     @Transactional(readOnly = true)
     public List<ImagingReportResponseDTO> getReportsForOrder(UUID imagingOrderId) {
         ImagingOrder order = loadOrderScoped(imagingOrderId);
-        boolean technician = technicianReader(order) && !adminReader();
+        // QA D2915: read as what the caller is at the order's hospital.
+        Reader reader = roles().reader(order);
         // Policy rule 3: an exam somebody else performed has no report a technician reads.
-        if (technician && !performedByCaller(order)) {
+        if (reader == Reader.TECHNICIAN && !performedByCaller(order)) {
             return List.of();
         }
-        boolean releasedOnly = adminReader() || technician;
+        boolean releasedOnly = reader != Reader.CLINICAL;
         return imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(imagingOrderId).stream()
             .filter(report -> !releasedOnly || report.isReleasedToPatient())
             .map(imagingReportMapper::toResponseDTO)
@@ -486,9 +494,10 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         if (status == null) {
             throw new BusinessException("imaging.report.statusFilterRequired");
         }
+        UUID readableHospitalId = requireReadableHospital(hospitalId);
         return imagingReportRepository
-            .findByHospital_IdAndReportStatusOrderByPerformedAtDesc(requireReadableHospital(hospitalId), status).stream()
-            .filter(releasedFilter(hospitalId))
+            .findByHospital_IdAndReportStatusOrderByPerformedAtDesc(readableHospitalId, status).stream()
+            .filter(releasedFilter(readableHospitalId))
             .map(imagingReportMapper::toResponseDTO)
             .toList();
     }
@@ -499,9 +508,10 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         if (modality == null) {
             throw new BusinessException("imaging.report.modalityFilterRequired");
         }
+        UUID readableHospitalId = requireReadableHospital(hospitalId);
         return imagingReportRepository
-            .findByHospital_IdAndModalityOrderByPerformedAtDesc(requireReadableHospital(hospitalId), modality).stream()
-            .filter(releasedFilter(hospitalId))
+            .findByHospital_IdAndModalityOrderByPerformedAtDesc(readableHospitalId, modality).stream()
+            .filter(releasedFilter(readableHospitalId))
             .map(imagingReportMapper::toResponseDTO)
             .toList();
     }
@@ -512,7 +522,8 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         UUID userId = roleValidator.getCurrentUserId();
         // A super-admin in global view has no hospital, and no read waits on them there.
-        if (hospitalId == null || userId == null) {
+        // QA D2915: nor on a caller who does not interpret at this hospital, whatever their token names.
+        if (hospitalId == null || userId == null || !roles().interpretsAt(hospitalId)) {
             return List.of();
         }
         return imagingReportRepository.findAwaitingSignatureBy(hospitalId, userId,
@@ -521,40 +532,31 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             .toList();
     }
 
-    // ── Administrative readers (user decision 2026-11-14) ───────────────
+    // ── Readers by what they are at the hospital (QA D2915) ──────────────
 
     /**
-     * The caller reads imaging as an administrator only (super-admin, hospital
-     * admin, admin, with no clinical imaging role of their own): released
-     * reports only — signed, not cancelled or in error — never a draft or a
-     * preliminary read.
+     * What the caller is at the order's hospital, never the role their token names
+     * ({@code ImagingRoleScope}). The care team there reads every report. An administrator (user
+     * decision 2026-11-14) reads released reports only: signed, not cancelled or in error, never a
+     * draft or a preliminary read. An imaging technician there (policy rule 3, provisional) reads
+     * the released reports of the exams they performed, never a draft, never another's exam.
+     * Anybody else is refused.
      */
-    boolean adminReader() {
-        return com.example.hms.security.ClinicalActor.isAdministrativeImagingReader();
+    private ImagingRoleScope roles() {
+        return new ImagingRoleScope(roleValidator);
     }
 
+    /**
+     * The hospital lists. Policy rule 3, belt and braces: they do not admit a technician; one who
+     * reaches them on another role of their token gets the reports of exams they performed,
+     * released, and no others (QA D2915).
+     */
     private java.util.function.Predicate<ImagingReport> releasedFilter(UUID hospitalId) {
-        boolean releasedOnly = adminReader();
-        // Policy rule 3, belt and braces: the hospital lists do not admit a technician; if one ever
-        // reaches them they get the reports of exams they performed, released, and no others.
-        boolean technician = technicians().readsAsTechnicianAt(hospitalId) && !releasedOnly;
-        return report -> technician ? technicianMayRead(report) : !releasedOnly || report.isReleasedToPatient();
-    }
-
-    // ── The imaging technician (policy rule 3, 2026-11-20, provisional) ──
-
-    /**
-     * The caller reads imaging as a technician only AT THE ORDER'S HOSPITAL (a technician there,
-     * with no clinical imaging role there): released reports of the exams they performed, never a
-     * draft, never another's exam. A technician of another hospital admitted on that role alone
-     * is refused ({@code ImagingTechnicianScope}).
-     */
-    private boolean technicianReader(ImagingOrder order) {
-        return technicians().readsAsTechnician(order);
-    }
-
-    private com.example.hms.service.imaging.ImagingTechnicianScope technicians() {
-        return new com.example.hms.service.imaging.ImagingTechnicianScope(roleValidator);
+        Reader reader = roles().readerAt(hospitalId);
+        if (reader == Reader.CLINICAL) {
+            return report -> true;
+        }
+        return reader == Reader.TECHNICIAN ? this::technicianMayRead : ImagingReport::isReleasedToPatient;
     }
 
     private boolean technicianMayRead(ImagingReport report) {
@@ -581,6 +583,20 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         ImagingReport report = imagingReportRepository.findById(reportId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId));
         return requireReportInScope(report);
+    }
+
+    /**
+     * QA D2915: a report is revised, signed, voided or acknowledged by who interprets AT its
+     * hospital. A radiologist of another hospital who is a technician here wrote reports here.
+     */
+    private ImagingReport loadReportToWrite(UUID reportId) {
+        ImagingReport report = loadReportScoped(reportId);
+        if (report.getHospital() != null && report.getHospital().getId() != null) {
+            roles().requireInterpreterAt(report.getHospital().getId());
+        } else {
+            roles().requireInterpreter(report.getImagingOrder());
+        }
+        return report;
     }
 
     private ImagingReport requireReportInScope(ImagingReport report) {

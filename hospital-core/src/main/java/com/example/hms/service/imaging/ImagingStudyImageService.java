@@ -15,7 +15,6 @@ import com.example.hms.payload.dto.imaging.ImagingStudyImageWithdrawalDTO;
 import com.example.hms.repository.ImagingOrderRepository;
 import com.example.hms.repository.ImagingReportRepository;
 import com.example.hms.repository.ImagingStudyImageRepository;
-import com.example.hms.security.ClinicalActor;
 import com.example.hms.security.SecurityUtils;
 import com.example.hms.security.audit.ActingAssignments;
 import com.example.hms.service.AuditEventLogService;
@@ -79,7 +78,6 @@ public class ImagingStudyImageService {
 
     private static final String MSG_ORDER_NOT_FOUND = "imaging.order.notFound";
     private static final String MSG_IMAGE_NOT_FOUND = "imaging.image.notFound";
-    private static final String RADIOLOGIST = "RADIOLOGIST";
 
     private final ImagingStudyImageRepository imageRepository;
     private final ImagingOrderRepository orderRepository;
@@ -113,7 +111,7 @@ public class ImagingStudyImageService {
         ImagingReport report = null;
         // Policy rule 3 (provisional): a technician attaches images to the study, never to a
         // report (they add nothing to a report).
-        boolean technician = technicians().actsAsTechnician(order);
+        boolean technician = roles().actsAsTechnician(order);
         if (reportId != null && technician) {
             throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("imaging.image.technicianStudyOnly"));
         }
@@ -167,7 +165,7 @@ public class ImagingStudyImageService {
         boolean studyReleased = reports.stream().anyMatch(ImagingReport::isReleasedToPatient);
         // What the technician may still edit is decided once, for the screen's flags (never a refusal).
         boolean technicianWriter = reach != Reach.AS_PATIENT && order.getHospital() != null
-            && technicians().technicianWriterAt(order.getHospital().getId());
+            && roles().technicianWriterAt(order.getHospital().getId());
         return imageRepository.findByImagingOrder_IdOrderByCreatedAtAsc(orderId).stream()
             // QA D2464: a withdrawn image is kept for the record and shown to no reader.
             .filter(image -> !image.isWithdrawn())
@@ -211,8 +209,8 @@ public class ImagingStudyImageService {
         if (!orderInScope(order) || image.isWithdrawn()) {
             throw new ResourceNotFoundException(MSG_IMAGE_NOT_FOUND, imageId);
         }
-        // Policy rule 3: a technician of another hospital, admitted on that role alone, is refused.
-        technicians().actsAsTechnician(order);
+        // QA D2915: whoever holds no exam role at the order's hospital is refused, whatever their token names.
+        roles().actsAsTechnician(order);
         List<ImagingReport> reports = reportRepository.findByImagingOrder_IdOrderByReportVersionDesc(order.getId());
         if (locked(image, reports)) {
             throw new BusinessException("imaging.image.locked");
@@ -255,6 +253,8 @@ public class ImagingStudyImageService {
         if (!locked(image, reports)) {
             throw new BusinessException("imaging.image.withdrawNotLocked");
         }
+        // QA D2915: a signed record is changed by who interprets AT the order's hospital.
+        roles().requireInterpreter(image.getImagingOrder());
         if (!mayWithdraw(image, reports)) {
             throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("imaging.image.withdrawNotAllowed"));
         }
@@ -279,7 +279,7 @@ public class ImagingStudyImageService {
         }
         // Policy rule 3 (provisional): once the image is locked by a signature it belongs to the
         // signed record; a technician no longer changes its caption (a radiologist does).
-        boolean technician = technicians().actsAsTechnician(image.getImagingOrder());
+        boolean technician = roles().actsAsTechnician(image.getImagingOrder());
         if (technician && technicianLockedOut(image)) {
             throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("imaging.image.technicianCaptionLocked"));
         }
@@ -304,12 +304,11 @@ public class ImagingStudyImageService {
     }
 
     /**
-     * A radiologist, or the clinician who signed the report the image belongs to
-     * (for an image on the study itself, a signed report of the study).
+     * A radiologist of the order's hospital, or the clinician who signed the report the image
+     * belongs to (for an image on the study itself, a signed report of the study).
      */
     private boolean mayWithdraw(ImagingStudyImage image, List<ImagingReport> studyReports) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (ClinicalActor.holdsOwnRoleQuietly(auth, RADIOLOGIST)) {
+        if (roles().radiologistAt(image.getImagingOrder())) {
             return true;
         }
         UUID caller = roleValidator.getCurrentUserId();
@@ -335,7 +334,12 @@ public class ImagingStudyImageService {
         ImagingOrder order = loadOrderInScope(orderId);
         // Policy rule 3: a technician reads what became of the study's images, and of a report's
         // only where they read the report (a withdrawn image was signed, hence released).
-        Reach reach = technicians().readsAsTechnician(order) ? technicianReach() : Reach.CLINICAL;
+        // An administrator reads the whole trail (metadata only), as the care team does.
+        Reach reach = switch (roles().reader(order)) {
+            case TECHNICIAN -> Reach.TECHNICIAN;
+            case TECHNICIAN_ADMINISTRATOR -> Reach.TECHNICIAN_ADMIN;
+            case CLINICAL, ADMINISTRATOR -> Reach.CLINICAL;
+        };
         return imageRepository.findByImagingOrder_IdOrderByCreatedAtAsc(order.getId()).stream()
             .filter(ImagingStudyImage::isWithdrawn)
             .filter(image -> readable(reach, image, true, order))
@@ -374,10 +378,6 @@ public class ImagingStudyImageService {
         return released(image, studyReleased);
     }
 
-    private Reach technicianReach() {
-        return ClinicalActor.isAdministrativeImagingReader() ? Reach.TECHNICIAN_ADMIN : Reach.TECHNICIAN;
-    }
-
     /** The exam record names the caller as who performed it (stamped from the session at its start). */
     private boolean performedByCaller(ImagingOrder order) {
         UUID caller = roleValidator.getCurrentUserId();
@@ -402,12 +402,15 @@ public class ImagingStudyImageService {
             }
             return Reach.AS_PATIENT;
         }
+        // QA D2915: staff read as what they are at the order's hospital, never as their token names.
         // Policy rule 3: an imaging technician reads the study's images and, of a report's, only
         // those of the reports they read (readable), whatever administrative role they also hold.
-        if (technicians().readsAsTechnician(order)) {
-            return technicianReach();
-        }
-        return ClinicalActor.isAdministrativeImagingReader() ? Reach.ADMIN : Reach.CLINICAL;
+        return switch (roles().reader(order)) {
+            case CLINICAL -> Reach.CLINICAL;
+            case TECHNICIAN -> Reach.TECHNICIAN;
+            case TECHNICIAN_ADMINISTRATOR -> Reach.TECHNICIAN_ADMIN;
+            case ADMINISTRATOR -> Reach.ADMIN;
+        };
     }
 
     private ImagingOrder loadOrderInScope(UUID orderId) {
@@ -445,9 +448,9 @@ public class ImagingStudyImageService {
         return studyReports.stream().anyMatch(ImagingReport::isSigned);
     }
 
-    /** Policy rule 3: where the imaging technician role counts (the order's hospital) and how far it reaches. */
-    private com.example.hms.service.imaging.ImagingTechnicianScope technicians() {
-        return new com.example.hms.service.imaging.ImagingTechnicianScope(roleValidator);
+    /** QA D2915: what the caller is at the order's hospital; never the role their token names. */
+    private ImagingRoleScope roles() {
+        return new ImagingRoleScope(roleValidator);
     }
 
     /** For a caller acting as a technician: an image a signature has locked, or a report's own image. */
@@ -461,8 +464,7 @@ public class ImagingStudyImageService {
         if (caller != null && caller.equals(image.getUploadedByUserId())) {
             return true;
         }
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        return ClinicalActor.holdsOwnRoleQuietly(auth, RADIOLOGIST);
+        return roles().radiologistAt(image.getImagingOrder());
     }
 
     private static String cleanCaption(String caption) {

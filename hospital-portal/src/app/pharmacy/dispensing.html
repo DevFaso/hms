@@ -539,13 +539,28 @@
                 <dd data-testid="hand-over-due">{{ pay.due | cfa: 'XOF' }}</dd>
               </div>
             </dl>
-            <p
-              class="handover-payment-status"
-              [class.handover-unpaid]="pay.status === 'UNPAID'"
-              data-testid="hand-over-payment-status"
-            >
-              {{ pay.status | keyLabel: 'PHARMACY_MONEY.HANDOVER.STATUS.' }}
-            </p>
+            <!-- QA D2931 (r66): a claim was sent for this fill but does not cover it for the reader:
+                 the form says why, and what to do, before the server refuses. -->
+            @if (pay.claimCoverGap) {
+              <p
+                class="handover-payment-status handover-unpaid"
+                role="status"
+                data-testid="hand-over-claim-gap"
+              >
+                {{ pay.claimCoverGap | keyLabel: 'PHARMACY_MONEY.HANDOVER.CLAIM_GAP.' }}
+              </p>
+            }
+            <!-- QA D2930 (r66): an unpaid fill is said once. When the choice of a basis is shown
+                 below, it says so itself (or that the amount goes on the stay). -->
+            @if (!(pay.status === 'UNPAID' && handOverNeedsDeferral())) {
+              <p
+                class="handover-payment-status"
+                [class.handover-unpaid]="pay.status === 'UNPAID'"
+                data-testid="hand-over-payment-status"
+              >
+                {{ pay.status | keyLabel: 'PHARMACY_MONEY.HANDOVER.STATUS.' }}
+              </p>
+            }
           } @else if (handOverPaymentFailed()) {
             <p class="handover-payment-status">
               {{ 'PHARMACY_MONEY.HANDOVER.LOAD_FAILED' | translate }}
