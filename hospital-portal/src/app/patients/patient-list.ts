@@ -22,6 +22,12 @@ import { TranslateModule } from '@ngx-translate/core';
 
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { DashPipe } from '../shared/pipes/dash.pipe';
+import {
+  CardSortChange,
+  CardSortColumn,
+  CardSortComponent,
+  CardSortDirection,
+} from '../shared/card-sort/card-sort.component';
 type SortField = 'name' | 'mrn' | 'gender' | 'status' | 'createdAt';
 type SortDir = 'asc' | 'desc';
 
@@ -36,6 +42,7 @@ type SortDir = 'asc' | 'desc';
     FormsModule,
     TranslateModule,
     EnumLabelPipe,
+    CardSortComponent,
   ],
   templateUrl: './patient-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -307,13 +314,31 @@ export class PatientListComponent implements OnInit, OnDestroy {
     this.currentPage.set(Math.max(0, Math.min(this.currentPage(), this.totalPages - 1)));
   }
 
+  /** The sortable headers, for the card-mode « Trier par » (the header row is hidden there). */
+  readonly sortColumns: readonly (CardSortColumn & { field: SortField })[] = [
+    { field: 'name', label: 'PATIENTS.PATIENT_NAME' },
+    { field: 'mrn', label: 'PATIENTS.MRN' },
+    { field: 'gender', label: 'PATIENTS.GENDER' },
+    { field: 'status', label: 'COMMON.STATUS' },
+  ];
+
   sort(field: SortField): void {
     if (this.sortField() === field) {
-      this.sortDir.set(this.sortDir() === 'asc' ? 'desc' : 'asc');
+      this.setSort(field, this.sortDir() === 'asc' ? 'desc' : 'asc');
     } else {
-      this.sortField.set(field);
-      this.sortDir.set('asc');
+      this.setSort(field, 'asc');
     }
+  }
+
+  /** The card-mode sort control: the same sort state as a header click. */
+  onCardSort(change: CardSortChange): void {
+    const field = this.sortColumns.find((c) => c.field === change.field)?.field;
+    if (field) this.setSort(field, change.direction);
+  }
+
+  private setSort(field: SortField, dir: CardSortDirection): void {
+    this.sortField.set(field);
+    this.sortDir.set(dir);
     this.currentPage.set(0);
     this.applyFilter();
   }

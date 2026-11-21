@@ -307,4 +307,32 @@ describe('PatientListComponent directory', () => {
     expect(c.sortDir()).toBe('asc');
     expect(c.currentPage()).toBe(0);
   });
+
+  it('#1247: the card-mode « Trier par » drives the same sort as the headers', () => {
+    const c = make().componentInstance;
+    c.loadPatients();
+    c.currentPage.set(1);
+    c.onCardSort({ field: 'name', direction: 'desc' });
+    expect(c.sortField()).toBe('name');
+    expect(c.sortDir()).toBe('desc');
+    expect(c.currentPage()).toBe(0);
+    expect(c.filtered().map((p) => p.id)).toEqual(['cdx-2', 'cdx-1']);
+    // A header click afterwards continues from the control's state.
+    c.sort('name');
+    expect(c.sortDir()).toBe('asc');
+    // A field the headers do not sort by is ignored.
+    c.onCardSort({ field: 'bloodType', direction: 'desc' });
+    expect(c.sortField()).toBe('name');
+    expect(c.sortDir()).toBe('asc');
+  });
+
+  it('#1247: the card-mode sort offers exactly the sortable headers', () => {
+    const fixture = make();
+    fixture.componentInstance.loadPatients();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const headerCount = el.querySelectorAll('thead th[aria-sort]').length;
+    expect(headerCount).toBeGreaterThan(0);
+    expect(el.querySelectorAll('app-card-sort option').length).toBe(headerCount);
+  });
 });
