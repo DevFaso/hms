@@ -27,9 +27,36 @@
  */
 import { tags } from './html-tags.mjs';
 
-export const LEGACY_HEX = ['#6366f1', '#4f46e5', '#7c3aed', '#1976d2', '#0284c7', '#0891b2'];
+/**
+ * The pre-rebrand action colours: the six the r65 audit named, then the other
+ * blues that stood in for a primary (Tailwind, Material, Bootstrap).
+ */
+export const LEGACY_HEX = [
+  '#6366f1',
+  '#4f46e5',
+  '#7c3aed',
+  '#1976d2',
+  '#0284c7',
+  '#0891b2',
+  '#2563eb',
+  '#1d4ed8',
+  '#3b82f6',
+  '#1a73e8',
+  '#0d6efd',
+  '#2b6cb0',
+  '#4a6cf7',
+  '#667eea',
+  '#0085ca',
+];
+/**
+ * The same colours written as `rgb()` / `rgba()` (a halo, a tint), in the comma
+ * syntax and in the space syntax (`rgb(124 58 237 / 15%)`).
+ */
+export const LEGACY_RGB = LEGACY_HEX.map((hex) =>
+  [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16)),
+);
 const LEGACY = new RegExp(
-  `(${LEGACY_HEX.join('|')})\\b|rgba?\\(\\s*(?:37,\\s*99,\\s*235|99,\\s*102,\\s*241)\\b`,
+  `(${LEGACY_HEX.join('|')})\\b|rgba?\\(\\s*(?:${LEGACY_RGB.map((rgb) => rgb.join('[\\s,]+')).join('|')})\\b`,
   'gi',
 );
 /** Greys that are below 4.5:1 on the #f1f5f9 page background. */

@@ -158,6 +158,9 @@ export function isCardTable(table: HTMLTableElement): boolean {
     head.rows.length === 1 &&
     head.rows[0].cells.length >= 2 &&
     Array.from(head.rows[0].cells).every((c) => c.colSpan === 1 && c.rowSpan === 1) &&
+    // The header row is not shown in card mode: a « select all » box or a
+    // column filter in it would be out of reach on a phone.
+    head.querySelector('input, select, textarea') === null &&
     bodyCells(table).every(
       (c) => c.rowSpan === 1 && (!c.hasAttribute('data-label') || ownLabels.has(c)),
     )

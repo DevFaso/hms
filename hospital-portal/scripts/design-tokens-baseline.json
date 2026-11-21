@@ -8,6 +8,10 @@
       "count": 2,
       "why": "a chart or data-series colour (categorical), not a brand surface"
     },
+    "src/app/dashboard/credential-renewal/credential-renewal.component.scss::legacy-colour::#2b6cb0": {
+      "count": 2,
+      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
+    },
     "src/app/dashboard/dashboard.html::legacy-colour::#7c3aed": {
       "count": 3,
       "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
@@ -200,6 +204,10 @@
       "count": 2,
       "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
     },
+    "src/app/onboarding/role-welcome/role-welcome.scss::legacy-colour::legacy-halo": {
+      "count": 5,
+      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
+    },
     "src/app/onboarding/role-welcome/role-welcome.scss::low-contrast-text::#6b7280": {
       "count": 5,
       "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
@@ -362,6 +370,10 @@
     },
     "src/app/super-admin/subscriptions/subscriptions.scss::low-contrast-text::#64748b": {
       "count": 3,
+      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
+    },
+    "src/app/super-admin/super-admin.scss::legacy-colour::#2563eb": {
+      "count": 1,
       "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
     },
     "src/app/super-admin/super-admin.ts::legacy-colour::#0284c7": {

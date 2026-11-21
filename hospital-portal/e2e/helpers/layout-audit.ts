@@ -331,6 +331,9 @@ export async function auditLayout(page: Page): Promise<LayoutOffender[]> {
         if (!head || head.rows.length !== 1) return;
         const cells = Array.from(head.rows[0].cells);
         if (cells.length < 2 || cells.some((c) => c.colSpan !== 1 || c.rowSpan !== 1)) return;
+        // A header row holding a form control (select all, a column filter) is
+        // kept: its table stays a table (design-conventions.ts `isCardTable`).
+        if (head.querySelector('input, select, textarea')) return;
         // A body cell that spans rows shifts the columns under it: such a table
         // is left as a table on purpose (design-conventions.ts `isCardTable`).
         const spansRows = Array.from(table.tBodies).some((body) =>

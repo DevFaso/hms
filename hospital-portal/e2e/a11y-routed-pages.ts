@@ -45,8 +45,9 @@ const CONTRAST_PENDING = new Set(
         '/super-admin/data-residency/policy',
       ],
 );
-/** The e-Keneya wordmark's amber half: a logotype has no contrast requirement (WCAG 1.4.3). */
-const LOGOTYPE = '.brand-word';
+// The e-Keneya wordmark's amber half is a logotype: no contrast requirement
+// (WCAG 1.4.3). Its nodes are dropped from the `color-contrast` result below,
+// and from that rule alone.
 
 test.describe('all routed pages', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
@@ -165,7 +166,6 @@ test.describe('all routed pages', () => {
       });
       const results = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-        .exclude(LOGOTYPE)
         .disableRules(CONTRAST_PENDING.has(screen.path) ? ['color-contrast'] : [])
         .analyze();
       await testInfo.attach('route-audit', {
@@ -189,9 +189,22 @@ test.describe('all routed pages', () => {
       }
       expect(design.spokenIcons, 'icons are hidden from screen readers (QA D2792)').toEqual([]);
       expect(
-        results.violations.filter(
-          (entry) => entry.impact === 'serious' || entry.impact === 'critical',
-        ),
+        results.violations
+          .map((entry) =>
+            // The wordmark is left out of the contrast rule only; every other
+            // rule still reads it.
+            entry.id === 'color-contrast'
+              ? {
+                  ...entry,
+                  nodes: entry.nodes.filter(
+                    (node) =>
+                      !node.html.includes('brand-word') && !node.html.includes('brand-accent'),
+                  ),
+                }
+              : entry,
+          )
+          .filter((entry) => entry.nodes.length > 0)
+          .filter((entry) => entry.impact === 'serious' || entry.impact === 'critical'),
       ).toEqual([]);
     });
   }

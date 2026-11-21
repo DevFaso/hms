@@ -1042,7 +1042,10 @@ table:not(.fc table, .fc) > thead > tr > th {
    search boxes, pagination, row actions and the three shared buttons printed
    with the data. Pages with a print layout of their own keep using
    .no-print / .print-only. The chips that name the ACTIVE filters stay on
-   paper (.active-chips): a printed list that is a subset says so.
+   paper (.active-chips): a printed list that is a subset says so. So does
+   the break-glass notice, less its buttons: a record printed under emergency
+   access said so before r65, and whether it may stop saying so is not a
+   design decision.
    ───────────────────────────────────────────────────────────────────────── */
 @media print {
   .page-actions,
@@ -1067,8 +1070,8 @@ table:not(.fc table, .fc) > thead > tr > th {
   .tab-bar,
   .tab-nav,
   [role='tablist'],
-  app-break-glass-banner,
-  .sidebar-backdrop {
+  .sidebar-backdrop,
+  app-break-glass-banner button {
     display: none !important;
   }
 

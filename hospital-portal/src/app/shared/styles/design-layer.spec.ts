@@ -281,5 +281,12 @@ describe('global design layer (QA r65)', () => {
       // A printed list that is a subset says so.
       expect(hiddenOnPaper('.active-chips')).toBeFalse();
     });
+
+    it('keeps the break-glass notice on a printed record, less its buttons', () => {
+      // A record printed under emergency access said so before r65: whether it
+      // may stop saying so is not a design decision.
+      expect(hiddenOnPaper('app-break-glass-banner')).toBeFalse();
+      expect(hiddenOnPaper('app-break-glass-banner button')).toBeTrue();
+    });
   });
 });

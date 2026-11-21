@@ -7,6 +7,8 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  LEGACY_HEX,
+  LEGACY_RGB,
   classifyButtonSelector,
   contrast,
   rootTokens,
@@ -34,6 +36,41 @@ test('a pre-rebrand colour is reported wherever it is written', () => {
     'legacy-colour:legacy-halo',
     'legacy-colour:legacy-halo',
   ]);
+});
+
+test('an old colour written as rgb() is reported in either syntax, for every listed colour', () => {
+  // The halos the first pass left: Bootstrap and Material blues, the purple in
+  // the space syntax, the tint of a listed hex.
+  const lines = [
+    '.a:focus { box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15); }',
+    '.b:focus { box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.15); }',
+    '.c:focus { box-shadow: 0 0 0 2px rgb(124 58 237 / 15%); }',
+    '.d { background: rgba(74,108,247,.06); }',
+    '.e { outline: 3px solid rgb(37 99 235 / 10%); }',
+    '.f { color: #1A73E8; border-color: #0d6efd; }',
+  ];
+  for (const line of lines) {
+    assert.ok(
+      scssFindings(line).some((h) => h.rule === 'legacy-colour'),
+      line,
+    );
+  }
+  // every listed hex has its rgb form in the pattern
+  assert.equal(LEGACY_RGB.length, LEGACY_HEX.length);
+  for (const [r, g, b] of LEGACY_RGB) {
+    assert.equal(
+      scssFindings(`.x { box-shadow: 0 0 0 3px rgba(${r}, ${g}, ${b}, 0.2); }`).length,
+      1,
+    );
+    assert.equal(scssFindings(`.x { box-shadow: 0 0 0 3px rgb(${r} ${g} ${b} / 20%); }`).length, 1);
+  }
+  // the brand halo and a neutral shadow are not findings
+  assert.deepEqual(
+    scssFindings(
+      '.ok { box-shadow: 0 0 0 3px rgba(14, 124, 107, 0.25), 0 1px 2px rgb(0 0 0 / 8%); }',
+    ),
+    [],
+  );
 });
 
 test('the brand tokens and a comment that names an old colour are not reported', () => {

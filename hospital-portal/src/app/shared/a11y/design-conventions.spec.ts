@@ -154,6 +154,12 @@ describe('design conventions (QA D2798 / D2792 / D2807)', () => {
            <tbody><tr><td>1</td><td>2</td></tr></tbody></table></div>`,
         `<table data-no-cards><thead><tr><th>L</th><th>M</th></tr></thead>
            <tbody><tr><td>1</td><td>2</td></tr></tbody></table>`,
+        // The header row is not shown in card mode: a « select all » box or a
+        // column filter in it would be out of reach on a phone.
+        `<table><thead><tr><th><input type="checkbox" aria-label="Tout sélectionner" /></th><th>Nom</th></tr></thead>
+           <tbody><tr><td><input type="checkbox" /></td><td>Awa</td></tr></tbody></table>`,
+        `<table><thead><tr><th>Nom</th><th><select aria-label="Statut"><option>Tous</option></select></th></tr></thead>
+           <tbody><tr><td>Awa</td><td>Actif</td></tr></tbody></table>`,
       ]) {
         page.innerHTML = html;
         const table = page.querySelector('table')!;
