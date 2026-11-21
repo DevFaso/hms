@@ -132,6 +132,21 @@ public class UserRoleHospitalAssignmentController {
         }
     }
 
+    @WriteAudited(skip = true, reason = "service emits DATA_ACCESS for the reveal, without the code")
+    @Operation(summary = "Show the registrar the one-time activation code of a pending assignment",
+        description = "QA r65 D2764: for handing the code over in person when the SMS and the e-mail "
+            + "went nowhere. Only the registrar of the assignment, only while it is unverified.")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
+    @PostMapping("/{assignmentId}/activation-code")
+    public ResponseEntity<com.example.hms.payload.dto.AssignmentActivationCodeDTO> revealActivationCode(
+            @PathVariable UUID assignmentId) {
+        // The code is never logged: only that it was asked for.
+        log.info("🔑 Activation code asked for assignment '{}'", assignmentId);
+        return ResponseEntity.ok()
+            .cacheControl(org.springframework.http.CacheControl.noStore())
+            .body(assignmentService.revealActivationCode(assignmentId));
+    }
+
     @WriteAudited(skip = true, reason = "service emits ROLE_ASSIGNED / ASSIGNMENT_CONFIRMED")
     @Operation(summary = "Confirm an assignment using the registrar's confirmation code")
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")

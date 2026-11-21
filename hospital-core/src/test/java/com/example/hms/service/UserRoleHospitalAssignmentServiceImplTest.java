@@ -1492,4 +1492,117 @@ class UserRoleHospitalAssignmentServiceImplTest {
         assertThat(assignment.getActive()).isFalse();
         verify(assignmentRepository, never()).save(any());
     }
+
+    // -----------------------------------------------------------------------
+    // QA r65 D2764 / D2772: the activation code handed over in person
+    // -----------------------------------------------------------------------
+
+    private User actAsRegistrar(boolean callerIsTheRegistrar) {
+        User registrar = new User();
+        registrar.setId(UUID.randomUUID());
+        registrar.setUsername("registrar");
+        assignment.setRegisteredBy(registrar);
+        User caller = registrar;
+        if (!callerIsTheRegistrar) {
+            caller = new User();
+            caller.setId(UUID.randomUUID());
+            caller.setUsername("another-admin");
+        }
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        org.mockito.Mockito.lenient().when(accountAccess.currentUserId()).thenReturn(Optional.of(caller.getId()));
+        org.mockito.Mockito.lenient().when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
+        return registrar;
+    }
+
+    @Test
+    void revealActivationCode_showsTheRegistrarTheCodeAndItsExpiry_andAuditsWithoutTheCode() {
+        actAsRegistrar(true);
+        LocalDateTime sentAt = LocalDateTime.now().minusHours(1);
+        assignment.setConfirmationSentAt(sentAt);
+
+        com.example.hms.payload.dto.AssignmentActivationCodeDTO shown =
+            service.revealActivationCode(assignment.getId());
+
+        assertThat(shown.confirmationCode()).isEqualTo(VALID_PIN);
+        assertThat(shown.expiresAt()).isEqualTo(sentAt.plusHours(48));
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.DATA_ACCESS);
+        assertThat(audit.getValue().getEventDescription()).isEqualTo("Activation code shown to the registrar");
+        // The reveal is on the trail; the code is not.
+        assertThat(String.valueOf(audit.getValue().getDetails())).doesNotContain(VALID_PIN);
+        assertThat(audit.getValue().getEventDescription()).doesNotContain(VALID_PIN);
+        // Showing the code changes nothing on the row.
+        verify(assignmentRepository, never()).save(any());
+    }
+
+    @Test
+    void revealActivationCode_isRefusedToAnyoneButTheRegistrar_evenAnAdminWhoMayChangeTheRow() {
+        actAsRegistrar(false);
+        assignment.setConfirmationSentAt(LocalDateTime.now());
+
+        assertThatThrownBy(() -> service.revealActivationCode(assignment.getId()))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageNotContaining(VALID_PIN);
+        verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    @Test
+    void revealActivationCode_answersARowOutsideTheCallersScopeAsAMissingOne() {
+        actAsRegistrar(true);
+        // A hospital admin of another hospital: the row is not theirs to change.
+        when(accountAccess.assignmentScope())
+            .thenReturn(new com.example.hms.service.support.UserAccountAccess.AssignmentScope(
+                false, java.util.Set.of(UUID.randomUUID())));
+
+        assertThatThrownBy(() -> service.revealActivationCode(assignment.getId()))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    @Test
+    void revealActivationCode_isRefusedOnceTheAssignmentIsVerified() {
+        actAsRegistrar(true);
+        assignment.setConfirmationSentAt(LocalDateTime.now());
+        assignment.setConfirmationVerifiedAt(LocalDateTime.now());
+
+        assertThatThrownBy(() -> service.revealActivationCode(assignment.getId()))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    @Test
+    void revealActivationCode_refusesAnExpiredCode_soADeadCodeIsNeverHandedOver() {
+        actAsRegistrar(true);
+        assignment.setConfirmationSentAt(LocalDateTime.now().minusHours(49));
+
+        assertThatThrownBy(() -> service.revealActivationCode(assignment.getId()))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageContaining("expired");
+        verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    @Test
+    void confirmAssignment_auditNeverCarriesTheConfirmationCode() {
+        // QA r65 D2772: 61 ASSIGNMENT_CONFIRMED rows held the 6-digit code in their details.
+        User registrar = actAsRegistrar(true);
+        assignee.setActive(false);
+        when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.confirmAssignment(assignment.getId(), VALID_PIN);
+
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService, org.mockito.Mockito.atLeastOnce()).logEvent(audit.capture());
+        assertThat(audit.getAllValues())
+            .filteredOn(event -> event.getEventType() == com.example.hms.enums.AuditEventType.ASSIGNMENT_CONFIRMED)
+            .isNotEmpty()
+            .allSatisfy(event -> {
+                assertThat(String.valueOf(event.getDetails())).doesNotContain("confirmationCode");
+                assertThat(String.valueOf(event.getDetails())).doesNotContain(VALID_PIN);
+            });
+        assertThat(registrar.getId()).isNotNull();
+    }
 }

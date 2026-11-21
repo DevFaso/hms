@@ -137,6 +137,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final String MSG_ASSIGNMENT_INVALID_CODE = "assignment.confirmation.invalid";
     private static final String MSG_ASSIGNMENT_ALREADY_CONFIRMED = "assignment.confirmation.already";
     private static final String MSG_ASSIGNMENT_ACTOR_MISMATCH = "assignment.confirmation.actor-mismatch";
+    private static final String MSG_ASSIGNMENT_CODE_REGISTRAR_ONLY = "assignment.activationCode.registrarOnly";
+    private static final String MSG_ASSIGNMENT_CODE_EXPIRED = "assignment.activationCode.expired";
     private static final String MSG_ASSIGNMENT_NOT_FOUND_BY_CODE = "assignment.notfound.bycode";
     private static final String MSG_ACCOUNT_DISABLED_BY_ADMIN = "assignment.confirmation.accountDisabled";
     private static final String DEFAULT_HOLDER_CHANGE = "assignment.holderChange.superAdminOnly";
@@ -937,6 +939,62 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         recordAssignmentConfirmationAudit(assignment, actor);
         log.info("✅ Assignment '{}' confirmed by actor '{}'", assignment.getId(), actor.getId());
         return toDtoWithLinks(assignment);
+    }
+
+    /**
+     * QA r65 D2764: "Remettez le code en main propre" was a dead end, since
+     * the code was shown nowhere. The registrar already receives this code (it
+     * is the one {@link #confirmAssignment} asks them for), so showing it to
+     * that same person widens nothing: the checks are the ones the confirm
+     * makes, in the same order, before the code is read.
+     */
+    @Override
+    public com.example.hms.payload.dto.AssignmentActivationCodeDTO revealActivationCode(UUID assignmentId) {
+        // A row the caller may not change answers exactly as a missing id.
+        UserRoleHospitalAssignment assignment = findChangeable(assignmentId);
+
+        if (assignment.getConfirmationVerifiedAt() != null) {
+            throw new BusinessException(MSG_ASSIGNMENT_ALREADY_CONFIRMED);
+        }
+        User registrar = assignment.getRegisteredBy();
+        User actor = requireCallerAccount();
+        if (registrar == null || registrar.getId() == null || !registrar.getId().equals(actor.getId())) {
+            throw new BusinessException(MSG_ASSIGNMENT_CODE_REGISTRAR_ONLY);
+        }
+        String code = assignment.getConfirmationCode();
+        LocalDateTime sentAt = assignment.getConfirmationSentAt();
+        LocalDateTime expiresAt = sentAt != null ? sentAt.plusHours(CONFIRMATION_CODE_EXPIRY_HOURS) : null;
+        if (code == null || code.isBlank() || (expiresAt != null && expiresAt.isBefore(LocalDateTime.now()))) {
+            // A dead code handed over in person fails at the holder's first try: say so here.
+            throw new BusinessException(MSG_ASSIGNMENT_CODE_EXPIRED);
+        }
+        recordActivationCodeShownAudit(assignment, actor);
+        return new com.example.hms.payload.dto.AssignmentActivationCodeDTO(assignment.getId(), code, expiresAt);
+    }
+
+    /** The reveal is on the trail; the code is not (QA r65 D2772: a credential value has no place there). */
+    private void recordActivationCodeShownAudit(UserRoleHospitalAssignment assignment, User actor) {
+        try {
+            Map<String, Object> details = new HashMap<>();
+            details.put("assignmentCode", assignment.getAssignmentCode());
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .userId(actor.getId())
+                .assignmentId(assignment.getId())
+                .userName(resolveDisplayName(actor, null))
+                .hospitalName(resolveHospitalName(assignment.getHospital()))
+                .hospitalId(assignment.getHospital() != null ? assignment.getHospital().getId() : null)
+                .resourceName(resolveDisplayName(assignment.getUser(), UNKNOWN_USER))
+                .resourceId(assignment.getId() != null ? assignment.getId().toString() : null)
+                .entityType(AUDIT_ENTITY_ASSIGNMENT)
+                .eventType(AuditEventType.DATA_ACCESS)
+                .eventDescription("Activation code shown to the registrar")
+                .status(AuditStatus.SUCCESS)
+                .details(details)
+                .build());
+        } catch (RuntimeException ex) {
+            log.warn("⚠️ Failed to record the activation-code audit for assignment '{}': {}",
+                assignment.getId(), ex.getMessage());
+        }
     }
 
     @Override
@@ -2685,7 +2743,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         try {
             Map<String, Object> details = new HashMap<>();
             details.put("assignmentCode", assignment.getAssignmentCode());
-            details.put("confirmationCode", assignment.getConfirmationCode());
+            // QA r65 D2772: never the confirmation code. Spent or not, it is a
+            // credential value, and the audit search returned it.
             details.put("confirmedAt", assignment.getConfirmationVerifiedAt());
             details.put("confirmationChannel", "PORTAL");
             if (assignment.getRole() != null) {
