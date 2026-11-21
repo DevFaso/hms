@@ -105,7 +105,7 @@
                     }
                     <button
                       class="btn-icon"
-                      [class.btn-danger]="vt.active"
+                      [class.danger]="vt.active"
                       [class.btn-restore]="!vt.active"
                       (click)="toggleVisitTypeActive(vt)"
                       [attr.data-testid]="'vt-toggle-' + vt.id"
@@ -207,7 +207,7 @@
                     }
                     <button
                       class="btn-icon"
-                      [class.btn-danger]="tpl.active"
+                      [class.danger]="tpl.active"
                       [class.btn-restore]="!tpl.active"
                       (click)="toggleTemplateActive(tpl)"
                       [attr.data-testid]="'tpl-toggle-' + tpl.id"
@@ -346,7 +346,7 @@
                   <td class="actions-cell">
                     @if (slot.status === 'OPEN') {
                       <button
-                        class="btn-icon btn-danger"
+                        class="btn-icon danger"
                         (click)="confirmBlock(slot)"
                         [attr.data-testid]="'slot-block-' + slot.id"
                         [attr.aria-label]="'SLOT_ADMIN.BLOCK' | translate"

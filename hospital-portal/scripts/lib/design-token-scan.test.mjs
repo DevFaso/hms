@@ -159,6 +159,29 @@ test('a template: the bare .btn base on a shared button, and inline colours', ()
   ]);
 });
 
+test('a shared button class bound onto a page-owned button base is the same finding', () => {
+  // The confirm button of a dialog: a local `.btn { background: #fff }` under a
+  // bound `.btn-danger` printed white on white. And an icon button marked
+  // `btn-danger` took the filled button's height.
+  const hits = templateFindings(`
+    <button
+      class="btn"
+      [class.btn-danger]="cfg.destructive"
+      [class.btn-primary]="!cfg.destructive"
+      [disabled]="a > b"
+    >Confirmer</button>
+    <button class="btn-icon btn-danger" aria-label="Supprimer"><span>delete</span></button>
+    <button class="btn-icon" [class.btn-danger]="row.active"><span>block</span></button>
+    <button class="btn-icon danger" aria-label="Supprimer"><span>delete</span></button>
+    <button class="btn-small" [class.btn-primary]="view() === 'PENDING'">En attente</button>
+    <button [class]="approve() ? 'btn-primary' : 'btn-danger'">Valider</button>
+  `);
+  assert.deepEqual(
+    hits.map((h) => `${h.line}:${h.anchor}`),
+    ['2:btn-primary', '8:btn-danger', '9:btn-danger'],
+  );
+});
+
 test('a component source: a legacy hex in inline styles or a palette', () => {
   assert.deepEqual(rules(sourceFindings("const c = { CONFIRMED: '#6366f1', DONE: '#059669' };")), [
     'legacy-colour:#6366f1',

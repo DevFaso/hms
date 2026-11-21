@@ -16,14 +16,16 @@
  *                         are defined once, in shared/styles/_page-common.scss.
  *                         A page may place one (margin, width, flex) and may own
  *                         a variant (`.btn-primary.small`, `[aria-pressed]`);
- *  - `btn-base-class`     a template giving a shared button the bare `.btn`
- *                         class as well: a page's scoped `.btn` rule would then
- *                         outrank the shared look.
+ *  - `btn-base-class`     a template giving a shared button a page's own
+ *                         button base as well (`btn`, `btn-icon`; a static
+ *                         class or a `[class.x]` binding): the page's scoped
+ *                         rule for that base would outrank the shared look.
  *
  * SCSS is read with a small brace walker (no parser dependency): comments are
  * blanked, blocks are nested by braces, `&` and descendant nesting are
  * resolved, at-rules are transparent.
  */
+import { tags } from './html-tags.mjs';
 
 export const LEGACY_HEX = ['#6366f1', '#4f46e5', '#7c3aed', '#1976d2', '#0284c7', '#0891b2'];
 const LEGACY = new RegExp(
@@ -303,23 +305,41 @@ export function scssFindings(scss, options = {}) {
   return hits;
 }
 
-const CLASS_ATTR = /\bclass="([^"{}]*)"/g;
 const STYLE_ATTR = /\bstyle="([^"]*)"/g;
+/**
+ * Classes of a page's OWN button family. On the same element as a shared
+ * button class, the page's scoped rule for it outranks the shared look: a
+ * local `.btn { background: #fff }` under `.btn-danger` printed white on
+ * white, and `.btn-icon.btn-danger` made an icon button 40 px tall.
+ */
+const OWN_BUTTON_BASES = ['btn', 'btn-icon'];
 
-/** A template: inline `style=""` colours and the bare `.btn` base on a shared button. */
+/**
+ * A template: inline `style=""` colours, and a shared button class on an
+ * element that also carries a page's own button base. Read per tag, static
+ * `class=""` and `[class.x]` bindings together.
+ */
 export function templateFindings(html) {
   const hits = [];
   let m;
-  CLASS_ATTR.lastIndex = 0;
-  while ((m = CLASS_ATTR.exec(html))) {
-    const tokens = m[1].split(/\s+/);
-    const shared = tokens.find((t) => SHARED_BUTTONS.includes(t));
-    if (shared && tokens.includes('btn')) {
+  for (const tag of tags(html)) {
+    if (tag.type !== 'open') continue;
+    const classes = new Set((tag.attrs.get('class') ?? '').split(/\s+/).filter(Boolean));
+    for (const name of tag.attrs.keys()) {
+      const bound = /^\[class\.([\w-]+)\]$/.exec(name);
+      if (bound) classes.add(bound[1]);
+    }
+    const shared = SHARED_BUTTONS.find((c) => classes.has(c));
+    const base = OWN_BUTTON_BASES.find((c) => classes.has(c));
+    if (shared && base) {
       hits.push({
-        line: lineOf(html, m.index),
+        line: tag.line,
         rule: 'btn-base-class',
         anchor: shared,
-        message: `class="${m[1]}": drop the bare \`btn\`; \`${shared}\` alone carries the shared look`,
+        message:
+          base === 'btn'
+            ? `\`${base}\` with \`${shared}\`: drop the bare \`btn\`; \`${shared}\` alone carries the shared look`
+            : `\`${base}\` with \`${shared}\`: an icon button is not a shared button; mark it \`${base} danger\` and style that`,
       });
     }
   }

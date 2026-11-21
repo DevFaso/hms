@@ -104,10 +104,9 @@
   }
 }
 
-// The one size modifier: a button in a table row, a card header or a toolbar.
-.btn-primary.btn-sm,
-.btn-secondary.btn-sm,
-.btn-danger.btn-sm {
+// The one small size: a button in a table row, a card header or a toolbar.
+// `.btn-small` and `.small` are older spellings of the same modifier.
+:is(.btn-primary, .btn-secondary, .btn-danger):is(.btn-sm, .btn-small, .small) {
   min-height: 2rem;
   padding: 0.25rem 0.75rem;
   font-size: 0.8125rem;

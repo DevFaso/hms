@@ -209,7 +209,7 @@
       "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
     },
     "src/app/platform/platform.html::btn-base-class::btn-primary": {
-      "count": 11,
+      "count": 12,
       "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
     },
     "src/app/platform/platform.scss::legacy-colour::legacy-halo": {
