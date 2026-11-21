@@ -770,7 +770,7 @@ textarea {
   line-height: 1.25 !important;
   letter-spacing: -0.01em !important;
 }
-@media (max-width: 599px) {
+@media screen and (max-width: 599px) {
   .content h1 {
     font-size: 1.25rem !important;
   }
@@ -808,10 +808,11 @@ table:not(.fc table, .fc) > thead > tr > th {
    scroll cue. A row paints its own background and the sticky cell inherits
    it, so a hovered or tinted row stays one colour. At 1024 px and wider every
    column is on screen (guarded since r64), so nothing changes there.
-   Opt out with `data-no-sticky`. Guarded by shared/styles/design-layer.spec.ts
-   and e2e/layout-overflow.spec.ts.
+   Opt out with `data-no-sticky`. Screen only: paper has no scroll box (and a
+   receipt printer's page is narrower than a phone). Guarded by
+   shared/styles/design-layer.spec.ts and e2e/layout-overflow.spec.ts.
    ───────────────────────────────────────────────────────────────────────── */
-@media (max-width: 1023px) {
+@media screen and (max-width: 1023px) {
   :where(table:not(.fc table, .fc, [data-no-sticky]) > tbody > tr) {
     background-color: var(--surface, #fff);
   }
@@ -879,7 +880,7 @@ table:not(.fc table, .fc) > thead > tr > th {
    every page styles its own cells. Opt out with `data-no-cards`.
    Guarded by shared/styles/design-layer.spec.ts and e2e/layout-overflow.spec.ts.
    ───────────────────────────────────────────────────────────────────────── */
-@media (max-width: 599px) {
+@media screen and (max-width: 599px) {
   table[data-cards]:not(.fc table, .fc) {
     display: block !important;
     width: 100% !important;

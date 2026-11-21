@@ -52,10 +52,19 @@ export function visibleText(el: Element): string {
   return squash(out);
 }
 
-/** The header a cell in column `column` answers to; the text a screen reader hears, hidden text included. */
+/**
+ * The label of a column: an explicit `data-label` on the header, else the
+ * header's text (visually hidden text included, icon names left out), else its
+ * `aria-label`. The text comes before the `aria-label` because a sortable
+ * header's label is often the command (« Trier par nom »), not the column.
+ */
 function headerLabel(th: HTMLTableCellElement): string {
-  const explicit = th.getAttribute('data-label') ?? th.getAttribute('aria-label');
+  const explicit = th.getAttribute('data-label');
   if (explicit !== null) return squash(explicit);
+  return headerText(th) || squash(th.getAttribute('aria-label'));
+}
+
+function headerText(th: HTMLTableCellElement): string {
   let out = '';
   const walk = (el: Element) => {
     for (const node of Array.from(el.childNodes)) {
@@ -110,11 +119,17 @@ export function labelTable(table: HTMLTableElement): boolean {
   return true;
 }
 
-/** `aria-hidden` on an icon, unless it is the whole name of its control. */
+/**
+ * `aria-hidden` on an icon, unless it is the whole name of its control, or the
+ * template gave it a meaning of its own (a label, a title, `role="img"`): a
+ * lone « verified » icon with a title is information, not decoration.
+ */
 export function hideIcon(icon: Element): void {
   if (
     icon.hasAttribute('aria-hidden') ||
     icon.hasAttribute('aria-label') ||
+    icon.hasAttribute('aria-labelledby') ||
+    icon.hasAttribute('title') ||
     icon.getAttribute('role') === 'img'
   ) {
     return;

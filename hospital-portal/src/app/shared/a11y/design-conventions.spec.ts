@@ -45,6 +45,22 @@ describe('design conventions (QA D2798 / D2792 / D2807)', () => {
       expect(cells[2].getAttribute('data-label')).toBe('Actions');
     });
 
+    it('names a column by its text, not by the command its header carries', () => {
+      page.innerHTML = `<table><thead><tr>
+          <th aria-label="Trier par nom du patient"><button>Nom du patient</button></th>
+          <th aria-label="Actions"></th>
+          <th data-label="Solde" aria-label="Trier par solde">Reste à payer</th>
+        </tr></thead>
+        <tbody><tr><td>Awa</td><td><button>Ouvrir</button></td><td>0</td></tr></tbody></table>`;
+      labelTable(page.querySelector('table')!);
+      const cells = page.querySelectorAll('tbody td');
+      expect(cells[0].getAttribute('data-label')).toBe('Nom du patient');
+      // A header with no text at all falls back to its accessible name…
+      expect(cells[1].getAttribute('data-label')).toBe('Actions');
+      // …and an explicit data-label on the header always wins.
+      expect(cells[2].getAttribute('data-label')).toBe('Solde');
+    });
+
     it('leaves a full-width row (an empty state, an expanded detail) without a label', () => {
       page.innerHTML = `<table><thead><tr><th>A</th><th>B</th><th>C</th></tr></thead>
         <tbody>
@@ -118,11 +134,14 @@ describe('design conventions (QA D2798 / D2792 / D2807)', () => {
 
     it('never overrides what a template chose', () => {
       page.innerHTML = `<span class="material-icons" aria-hidden="false">warning</span>
-        <span class="material-icons" role="img" aria-label="Alerte">warning</span>`;
+        <span class="material-icons" role="img" aria-label="Alerte">warning</span>
+        <span class="material-symbols-outlined" title="Identité vérifiée">verified</span>`;
       applyDesignConventions(document);
-      const [explicit, image] = Array.from(page.querySelectorAll('span'));
+      const [explicit, image, titled] = Array.from(page.querySelectorAll('span'));
       expect(explicit.getAttribute('aria-hidden')).toBe('false');
       expect(image.hasAttribute('aria-hidden')).toBeFalse();
+      // A lone icon with a title is information: it is not silenced.
+      expect(titled.hasAttribute('aria-hidden')).toBeFalse();
     });
   });
 
