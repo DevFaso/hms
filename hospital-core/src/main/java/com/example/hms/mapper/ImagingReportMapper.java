@@ -118,7 +118,7 @@ public class ImagingReportMapper {
         }
         com.example.hms.model.Patient patient = patientOf(report);
 
-        ImagingReportResponseDTO dto = ImagingReportResponseDTO.builder()
+        ImagingReportResponseDTO.ImagingReportResponseDTOBuilder response = ImagingReportResponseDTO.builder()
             .id(report.getId())
             .imagingOrderId(report.getImagingOrder() != null ? report.getImagingOrder().getId() : null)
             .patientId(patient != null ? patient.getId() : null)
@@ -183,25 +183,27 @@ public class ImagingReportMapper {
             .updatedAt(report.getUpdatedAt())
             .measurements(toMeasurementDTOs(report.getMeasurements()))
             .attachments(toAttachmentDTOs(report.getAttachments()))
-            .statusHistory(toStatusDTOs(report.getStatusHistory()))
-            .build();
-        showExamRecord(dto, report.getImagingOrder());
-        return dto;
+            .statusHistory(toStatusDTOs(report.getStatusHistory()));
+        return withExamRecord(response, report.getImagingOrder()).build();
     }
 
     /**
      * QA D2912 (r66): the exam record stays on the order (policy rule 3); the report's reader sees
-     * it beside the read. Read from the order every time, never written into the report.
+     * it beside the read. A projection of what whoever ran the exam submitted, read from the order
+     * every time: nothing is written into the report or anywhere else.
      */
-    private static void showExamRecord(ImagingReportResponseDTO dto, com.example.hms.model.ImagingOrder exam) {
+    private static ImagingReportResponseDTO.ImagingReportResponseDTOBuilder withExamRecord(
+            ImagingReportResponseDTO.ImagingReportResponseDTOBuilder response,
+            com.example.hms.model.ImagingOrder exam) {
         if (exam == null) {
-            return;
+            return response;
         }
-        dto.setExamPerformedByName(exam.getPerformedByName());
-        dto.setExamStartedAt(exam.getExamStartedAt());
-        dto.setExamContrastAdministered(exam.getExamContrastAdministered());
-        dto.setExamContrastDetails(exam.getExamContrastDetails());
-        dto.setExamRadiationDoseMgy(exam.getExamRadiationDoseMgy());
+        return response
+            .examPerformedByName(exam.getPerformedByName())
+            .examStartedAt(exam.getExamStartedAt())
+            .examContrastAdministered(exam.getExamContrastAdministered())
+            .examContrastDetails(exam.getExamContrastDetails())
+            .examRadiationDoseMgy(exam.getExamRadiationDoseMgy());
     }
 
     /**
