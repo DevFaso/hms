@@ -135,3 +135,11 @@
 .claims__table td.actions button + button {
   margin-left: 6px;
 }
+
+// QA D2925 (r66): who answers a claim the reader cannot answer, and a claim nobody confirmed.
+.claim-waiting {
+  display: block;
+  color: var(--text-muted, #5b6472);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}

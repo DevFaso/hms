@@ -28,6 +28,7 @@ public class RoleValidator {
     private static final String SURGEON_ROLE = "SURGEON";
     private static final String NURSE_ROLE = "NURSE";
     private static final String MIDWIFE_ROLE = "MIDWIFE";
+    private static final String RADIOLOGIST_ROLE = "RADIOLOGIST";
     private static final String ACCOUNTANT_ROLE = "ACCOUNTANT";
     private static final String PHARMACIST_ROLE = "PHARMACIST";
     private static final String BILLING_SPECIALIST_ROLE = "BILLING_SPECIALIST";
@@ -228,7 +229,7 @@ public class RoleValidator {
      * (MedicalCertificateServiceImplTest pins the two lists together).
      */
     public static final java.util.List<String> LICENSED_PHYSICIAN_ROLE_CODES = java.util.List.of(
-        DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, "ANESTHESIOLOGIST", "RADIOLOGIST");
+        DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, "ANESTHESIOLOGIST", RADIOLOGIST_ROLE);
 
     /**
      * QA D1164 (round 21): the roles a visit takes as its provider - every
@@ -277,6 +278,47 @@ public class RoleValidator {
             || isLabManager(userId, hospitalId);
     }
     public boolean hasRole(UUID userId, UUID hospitalId, String roleCode) { return hasAnyCode(userId, hospitalId, roleCode); }
+
+    /**
+     * QA D2915 (r66): the imaging roles, each read AT {@code hospitalId} in one query. A token names
+     * the role its user picked at login, wherever it is held; an imaging service asks these with the
+     * order's hospital instead ({@code ImagingRoleScope}).
+     *
+     * <p>Who interprets a study and decides for the imaging department there: a doctor, a physician,
+     * a surgeon or a radiologist.
+     */
+    public boolean interpretsImaging(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, RADIOLOGIST_ROLE);
+    }
+
+    /** QA D2915: the care team that reads a study in full there: who interprets it, the nurse and the midwife. */
+    public boolean readsImagingClinically(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, RADIOLOGIST_ROLE,
+            NURSE_ROLE, MIDWIFE_ROLE);
+    }
+
+    /**
+     * Review of #1251: who reads imaging there as an administrator (orders and released reports,
+     * user decision 2026-11-14): a hospital admin or an admin OF that hospital. A hospital admin of
+     * another hospital is not one here; the verified super-admin is asked separately.
+     */
+    public boolean administersImagingReads(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, "ADMIN");
+    }
+
+    /**
+     * Review of #1251: the verified super-admin (a live SUPER_ADMIN assignment) where they act: in
+     * global view, or at the very hospital they selected. Asked of the one tenant resolver
+     * ({@code CallerIdentity.isSuperAdminFor}); never the token's authority.
+     */
+    public boolean isSuperAdminActingAt(UUID hospitalId) {
+        return com.example.hms.security.CallerIdentity.isSuperAdminFor(hospitalId);
+    }
+
+    /** QA D2915: who places an imaging order there: a doctor, a physician, a surgeon, a nurse or a midwife. */
+    public boolean ordersImaging(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, NURSE_ROLE, MIDWIFE_ROLE);
+    }
 
     /**
      * Billing-money plan PR 2 (owner decision D-1, 2026-11-15): who maintains a hospital's price list - a hospital
@@ -361,6 +403,19 @@ public class RoleValidator {
      * or recorded covers nothing at the counter.
      */
     public boolean vouchesForClaimCover(UUID userId, UUID hospitalId) {
+        return userId != null && hospitalId != null
+            && hasAnyCode(userId, hospitalId, BILLING_SPECIALIST_ROLE, CLAIMS_REVIEWER_ROLE, ACCOUNTANT_ROLE,
+                HOSPITAL_ADMIN_ROLE);
+    }
+
+    /**
+     * QA D2925 (r66; owner's delegate 2026-11-20): who records the PAYER's decision on a pharmacy claim (accepted,
+     * rejected, paid) at {@code hospitalId}: a money desk (billing specialist, claims reviewer, accountant) or a
+     * hospital admin. The pharmacy creates and sends a claim; it never records the answer to its own claim. A
+     * pharmacist who "accepted" a claim left it ACCEPTED with nobody behind it, and billing could no longer accept
+     * it: the fill stayed blocked until the payer's payment, which can take weeks.
+     */
+    public boolean canRecordPayerDecision(UUID userId, UUID hospitalId) {
         return userId != null && hospitalId != null
             && hasAnyCode(userId, hospitalId, BILLING_SPECIALIST_ROLE, CLAIMS_REVIEWER_ROLE, ACCOUNTANT_ROLE,
                 HOSPITAL_ADMIN_ROLE);

@@ -272,6 +272,11 @@ public class PrescriptionMapper {
         // QA D706: the prescribed quantity the pharmacy caps dispenses at.
         e.setQuantity(dto.getQuantity());
         e.setQuantityUnit(dto.getQuantityUnit());
+        // QA D2926 (r66): the refills the prescriber writes on the order; all of them remain on a new order.
+        if (dto.getRefillsAllowed() != null) {
+            e.setRefillsAllowed(dto.getRefillsAllowed());
+            e.setRefillsRemaining(dto.getRefillsAllowed());
+        }
 
         if (dto.getStatus() != null) {
             e.setStatus(dto.getStatus());

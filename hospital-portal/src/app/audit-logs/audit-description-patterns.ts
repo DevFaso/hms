@@ -1939,6 +1939,16 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { from: 'enum', to: 'enum' },
   },
   // Policy 2026-11-20: the hospital's adolescent confidentiality age (before and after are in the details).
+  // r66 D2904: French counts 0 and 1 in the singular (« fixé à 0 an », « fixé à 1 an », it read « 1 ans »),
+  // Spanish only 1: each has its own sentence, before the general one.
+  {
+    key: 'AUDIT.DESC.ADOLESCENT_AGE_SET_ZERO',
+    re: /^Adolescent confidentiality age set to 0$/,
+  },
+  {
+    key: 'AUDIT.DESC.ADOLESCENT_AGE_SET_ONE',
+    re: /^Adolescent confidentiality age set to 1$/,
+  },
   {
     key: 'AUDIT.DESC.ADOLESCENT_AGE_SET',
     re: /^Adolescent confidentiality age set to (\d+)$/,
@@ -1994,6 +2004,18 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
   {
     key: 'AUDIT.DESC.DISPENSE_POSTED_TO_ADMISSION_ACCOUNT',
     re: /^Fill charged to the account of the open stay$/,
+    params: [],
+  },
+  // QA r66 (D2929, D2925): a deferral the hand-over closed because the order left paid, and a money
+  // desk confirming a claim the pharmacy had accepted itself (constant descriptions, ids on the row).
+  {
+    key: 'AUDIT.DESC.DISPENSE_BILLING_DEFERRAL_CLOSED_SETTLED',
+    re: /^Deferred billing of a fill closed: the order left the counter with nothing due$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED',
+    re: /^Pharmacy claim acceptance confirmed by a money desk$/,
     params: [],
   },
 ];

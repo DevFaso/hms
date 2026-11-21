@@ -74,6 +74,8 @@ class StoredAlertReaderLanguageGuardTest {
         Map.entry("service/maternity/MidwifeNewbornCare.java", NOTICE),
         // Policy rule 6 (V345): the billing task of an urgency override or a third-party cover to check; keyed.
         Map.entry("service/pharmacy/DispenseBillingDeferralFollowUp.java", NOTICE),
+        // QA D2929 (r66): the reason recorded on a deferral the hand-over closed, beside the reasons users type.
+        Map.entry("service/pharmacy/DispenseBillingDeferralService.java", STORED_RECORD),
         // QA D1516: the note on an appointment a death entered in error had cancelled, beside the closure's own.
         Map.entry("service/impl/MortalityServiceImpl.java", STORED_RECORD),
         Map.entry("service/impl/OrderReviewAfterCommit.java", NOTICE),

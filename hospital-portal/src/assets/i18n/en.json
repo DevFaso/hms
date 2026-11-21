@@ -2135,7 +2135,11 @@
       "DISPENSE_BILLING_DEFERRAL_CANCELLED": "Deferred billing of a fill withdrawn",
       "DISPENSE_BILLING_URGENCY_OVERRIDE": "Fill handed over unpaid on an urgency override",
       "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Urgency override of a fill’s billing reviewed",
-      "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay"
+      "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay",
+      "DISPENSE_BILLING_DEFERRAL_CLOSED_SETTLED": "Deferred billing closed: the prescription left the pharmacy with nothing due",
+      "PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED": "Pharmacy claim acceptance confirmed by billing or accounting",
+      "ADOLESCENT_AGE_SET_ZERO": "Adolescent confidentiality age set to 0",
+      "ADOLESCENT_AGE_SET_ONE": "Adolescent confidentiality age set to 1"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -2956,7 +2960,8 @@
         "PHARMACY_PAYMENT": "Dispense payment",
         "COUNTER_SALE": "Counter sale",
         "REFUND": "Refund handed back",
-        "REVERSAL": "Reversal handed back"
+        "REVERSAL": "Reversal handed back",
+        "PHARMACY_REFUND": "Pharmacy refund handed back"
       },
       "CLOSED_TOAST": "Till closed.",
       "CLOSE_FAILED": "The till could not be closed.",
@@ -8832,7 +8837,12 @@
     "PRN_MIN_INTERVAL_HINT": "Required for an as-needed (PRN) order: the MAR offers the next dose once this time has passed since the last one.",
     "PRN_MIN_INTERVAL_REQUIRED": "Enter the minimum interval between two doses (1 to 72 hours).",
     "FREQUENCY_REQUIRED": "Enter the frequency: how often the medicine is given.",
-    "PRN_MIN_INTERVAL_VALUE": "At least {{hours}} h between doses"
+    "PRN_MIN_INTERVAL_VALUE": "At least {{hours}} h between doses",
+    "REFILLS_ALLOWED": "Refills written on the prescription",
+    "REFILLS_ALLOWED_HINT": "How many refills the pharmacy may dispense without a new decision (0 = none). One more needs the prescriber’s approval. Provisional rule.",
+    "REFILLS_CONTROLLED_HINT": "Controlled substance: no refill. Every further supply needs a new prescription.",
+    "REFILLS_LOCKED_HINT": "The number of refills cannot be changed after the signature.",
+    "REFILLS_ALLOWED_INVALID": "The number of refills is a whole number, from 0 to {{max}}."
   },
   "PROFILE": {
     "RECOVERY_CONFIRM_TITLE": "Confirm your recovery contact",
@@ -14283,7 +14293,10 @@
       "REJECTED": "Rejected",
       "PAID": "Paid"
     },
-    "PATIENT_UNNAMED": "Patient (no name on file)"
+    "PATIENT_UNNAMED": "Patient (no name on file)",
+    "CONFIRM_ACCEPTANCE": "Confirm acceptance",
+    "AWAITING_DESK": "The payer’s answer is recorded by billing, the claims reviewers or accounting.",
+    "ACCEPTANCE_UNCONFIRMED": "Acceptance not confirmed by billing: this claim does not cover the fill yet."
   },
   "PHARMACY_CHECKOUT": {
     "TITLE": "Pharmacy checkout",
@@ -15174,7 +15187,11 @@
       "DEFER_LABEL": "Hand over « to be billed »: reason",
       "DEFER_HINT": "For example: inpatient, on the stay's invoice. Pharmacist or administrator only; the fill appears in the day's reconciliation.",
       "DEFER_REQUIRED": "This fill is not paid: give the « to be billed » reason or take the payment first.",
-      "LOAD_FAILED": "The payment status could not be loaded; the server checks the payment at hand-over."
+      "LOAD_FAILED": "The payment status could not be loaded; the server checks the payment at hand-over.",
+      "CLAIM_GAP": {
+        "OWN_VOUCHER": "A claim was sent for this fill, but you are the only person standing behind it: another person of billing or accounting must confirm it, or another person hands the fill over.",
+        "NO_VOUCHER": "A claim was sent for this fill, but nobody of billing or accounting has confirmed it yet: it does not cover the fill."
+      }
     },
     "PACK": {
       "TITLE": "Pack size: {{name}}",
@@ -15326,7 +15343,8 @@
         "REJECTED": "Rejected",
         "EXECUTED": "Used",
         "CANCELLED": "Withdrawn",
-        "TO_REVIEW": "To review"
+        "TO_REVIEW": "To review",
+        "REVIEWED": "Reviewed"
       },
       "MEDICATION": "Medicine",
       "ASKED": "Asked by",
@@ -15364,7 +15382,8 @@
       "VIEW_DUE": "Left unpaid, still due",
       "STILL_DUE": "Still due now",
       "NONE_DUE": "No fill that left unpaid still owes money.",
-      "VIEWS": "Lists of deferrals"
+      "VIEWS": "Lists of deferrals",
+      "REVIEWED_BY": "Reviewed by"
     },
     "POLICY": {
       "TITLE": "Hospital billing policy",
@@ -15493,7 +15512,8 @@
       "RELEASE_FAILED": "Could not release the result.",
       "REASON_TOO_SHORT": "The reason needs at least {{min}} characters.",
       "ATTEST_REQUIRED": "Confirm that you verified this person’s relationship to the patient.",
-      "NOT_RELEASABLE": "Cannot be released to the family (only an HIV result can)."
+      "NOT_RELEASABLE": "Cannot be released to the family (only an HIV result can).",
+      "NOT_RELEASABLE_VIOLENCE": "Cannot be released to the family: a result linked to violence never is."
     },
     "AGE": {
       "TITLE": "Adolescent confidentiality",
@@ -15538,7 +15558,9 @@
     "DISCONTINUE_TITLE": "Discontinue this exam?",
     "DISCONTINUE_MESSAGE": "The request is closed and its prescriber sees the reason. A new request is needed to do the exam later.",
     "DISCONTINUED": "Exam discontinued.",
-    "ULTRASOUND_PHYSICIANS_ONLY": "Ultrasound: at this hospital the exam is performed by a physician. You can check the patient in and attach images. Provisional rule, pending approval by the radiologist or the medical director."
+    "ULTRASOUND_PHYSICIANS_ONLY": "Ultrasound: at this hospital the exam is performed by a physician. You can check the patient in and attach images. Provisional rule, pending approval by the radiologist or the medical director.",
+    "RECORDED_AT_EXAM": "Recorded at the exam",
+    "AWAITS_PREAUTH_NUMBER": "The pre-authorisation number of this exam is not recorded yet: a doctor or a radiologist records it before the exam can start."
   },
   "IMAGING_REPORTING_SETTINGS": {
     "TITLE": "Ultrasound",

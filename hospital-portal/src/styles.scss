@@ -581,6 +581,57 @@ textarea {
     min-width: 0;
   }
 }
+/* ─────────────────────────────────────────────────────────────────────────
+   QA D2938 (r66): no dialog is ever taller than the screen, and its actions
+   stay in reach. The nurse-station vitals dialog had no height limit: the
+   maternal « préoccupations » list pushed « Enregistrer » below a 1366×768
+   laptop screen, and on a phone it could never be reached (nothing scrolled).
+   One rule for every dialog family (the D2461 list): at most the screen less
+   a 16 px gutter, scrolling inside itself, with its action row stuck to the
+   bottom edge while the fields scroll. Zero specificity: a dialog that already
+   scrolls its own body keeps its layout. Screen only: a printed dialog (the
+   visit summary) is not cut to one screen.
+   Guarded by e2e/layout-overflow.spec.ts (`dialog-height`) and
+   shared/styles/overflow-class.spec.ts.
+   ───────────────────────────────────────────────────────────────────────── */
+@media screen {
+  :where(
+    .modal,
+    .modal-content,
+    .modal-panel,
+    .modal-card,
+    .modal-box,
+    .dialog-box,
+    .dialog-panel,
+    [role='dialog'][aria-modal='true']:not([class*='drawer'], [class*='panel'], [class*='overlay'])
+  ) {
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    /* A field the keyboard moves to is scrolled clear of the stuck action row. */
+    scroll-padding-bottom: 5rem;
+  }
+  :where(
+      .modal,
+      .modal-content,
+      .modal-panel,
+      .modal-card,
+      .modal-box,
+      .dialog-box,
+      .dialog-panel,
+      [role='dialog'][aria-modal='true']:not(
+          [class*='drawer'],
+          [class*='panel'],
+          [class*='overlay']
+        )
+    )
+    > :where(.modal-actions, .modal-footer, .dialog-actions, .dialog-footer) {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    background: inherit;
+  }
+}
 /* A select's automatic minimum is its longest option (« M1-04 · Médecine
    interne B · chambre 12 »): in a dialog it shrinks to the dialog instead
    (QA D2286: the bed select 350 px in a 302 px dialog). */

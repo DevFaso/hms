@@ -199,6 +199,18 @@ class PharmacyServiceImplTest {
     }
 
     @Test
+    void deactivate_inTheSuperAdminsGlobalView_findsThePharmacyByItsId() {
+        // r66 D2901 (class): the portal's delete names no hospital; a null scope is the global view.
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        when(pharmacyRepository.save(any(Pharmacy.class))).thenReturn(pharmacy);
+
+        service.deactivate(pharmacyId, null);
+
+        assertThat(pharmacy.isActive()).isFalse();
+        verify(pharmacyRepository, never()).findByIdAndHospital_Id(any(), any());
+    }
+
+    @Test
     void deactivate_notFound_throws() {
         when(pharmacyRepository.findByIdAndHospital_Id(pharmacyId, hospitalId))
                 .thenReturn(Optional.empty());

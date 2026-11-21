@@ -37,7 +37,8 @@ import java.util.UUID;
         @Index(name = "idx_prefund_hospital_status", columnList = "hospital_id,status"),
         @Index(name = "idx_prefund_pharmacy_paid", columnList = "pharmacy_id,paid_at"),
         @Index(name = "idx_prefund_sale", columnList = "sale_id"),
-        @Index(name = "idx_prefund_dispense", columnList = "dispense_id")
+        @Index(name = "idx_prefund_dispense", columnList = "dispense_id"),
+        @Index(name = "idx_prefund_cash_session", columnList = "cash_session_id")
     }
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
@@ -108,6 +109,13 @@ public class PharmacyRefund extends BaseEntity {
 
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
+
+    /**
+     * QA D2950 (r66, V352): the cash session the refund was handed over from, the payer's PHARMACY till of the day.
+     * It is money out of that till; null until the refund is paid.
+     */
+    @Column(name = "cash_session_id")
+    private UUID cashSessionId;
 
     @Column(name = "cancelled_by")
     private UUID cancelledBy;

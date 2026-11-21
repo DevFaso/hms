@@ -30,6 +30,7 @@ describe('PharmacyClaimsComponent', () => {
     pharmacy = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
       'listClaimsByHospital',
       'rejectClaim',
+      'acceptClaim',
     ]);
     pharmacy.listClaimsByHospital.and.returnValue(of({ data: { content: rows } }) as never);
     await TestBed.configureTestingModule({
@@ -72,6 +73,46 @@ describe('PharmacyClaimsComponent', () => {
     answerReasonDialog(fixture, 'Ordonnance illisible');
     expect(pharmacy.rejectClaim).toHaveBeenCalledWith('c-1', 'Ordonnance illisible');
     expect(reasonDialog(fixture)).toBeNull();
+  });
+
+  // QA D2925 (r66): the payer's answer is the money desks'; the pharmacy creates and sends.
+  it('QA D2925: the pharmacy sees no accept, reject or pay, and is told who answers', async () => {
+    const el = await render([
+      claim({ id: 'c-sub', claimStatus: 'SUBMITTED', canRecordPayerDecision: false }),
+      claim({ id: 'c-acc', claimStatus: 'ACCEPTED', canRecordPayerDecision: false }),
+      claim({ id: 'c-draft', claimStatus: 'DRAFT', canRecordPayerDecision: false }),
+    ]);
+    for (const step of ['accept', 'reject', 'pay', 'confirm']) {
+      expect(el.querySelector(`[data-testid^="claim-${step}-"]`)).toBeNull();
+    }
+    expect(el.querySelector('[data-testid="claim-waiting-c-sub"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="claim-waiting-c-acc"]')).not.toBeNull();
+    // A draft is still the pharmacy's to send.
+    expect(el.querySelector('[data-testid="claim-waiting-c-draft"]')).toBeNull();
+    expect(el.querySelector('tbody')!.textContent).toContain('PHARMACY_CLAIMS.SUBMIT');
+  });
+
+  it('QA D2925: a money desk records the payer’s answer, and confirms an acceptance nobody stands behind', async () => {
+    const el = await render([
+      claim({ id: 'c-sub', claimStatus: 'SUBMITTED', canRecordPayerDecision: true }),
+      claim({
+        id: 'c-stuck',
+        claimStatus: 'ACCEPTED',
+        canRecordPayerDecision: true,
+        acceptanceUnconfirmed: true,
+      }),
+      claim({ id: 'c-acc', claimStatus: 'ACCEPTED', canRecordPayerDecision: true }),
+    ]);
+    expect(el.querySelector('[data-testid="claim-accept-c-sub"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="claim-reject-c-sub"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="claim-pay-c-acc"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="claim-confirm-c-acc"]')).toBeNull();
+    expect(el.querySelector('[data-testid="claim-unconfirmed-c-stuck"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid^="claim-waiting-"]')).toBeNull();
+
+    pharmacy.acceptClaim.and.returnValue(of({ data: claim() }) as never);
+    el.querySelector<HTMLButtonElement>('[data-testid="claim-confirm-c-stuck"]')!.click();
+    expect(pharmacy.acceptClaim).toHaveBeenCalledWith('c-stuck');
   });
 
   it('keeps status chips, rendered rows and the mobile select in sync', async () => {

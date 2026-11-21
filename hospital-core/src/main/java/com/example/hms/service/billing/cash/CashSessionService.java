@@ -15,6 +15,7 @@ import com.example.hms.model.InvoiceRefund;
 import com.example.hms.model.PaymentTransaction;
 import com.example.hms.model.User;
 import com.example.hms.model.pharmacy.PharmacyPayment;
+import com.example.hms.model.pharmacy.PharmacyRefund;
 import com.example.hms.model.pharmacy.PharmacySale;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.billing.CashSessionCloseRequestDTO;
@@ -25,6 +26,7 @@ import com.example.hms.repository.InvoiceRefundRepository;
 import com.example.hms.repository.PaymentTransactionRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.pharmacy.PharmacyPaymentRepository;
+import com.example.hms.repository.pharmacy.PharmacyRefundRepository;
 import com.example.hms.repository.pharmacy.PharmacySaleRepository;
 import com.example.hms.security.context.ImpersonationLimits;
 import com.example.hms.security.tenant.ActingScopeResolver;
@@ -60,13 +62,15 @@ import java.util.UUID;
  * Billing-money plan PR 10 (V309; QA r65 D2325, D2326, D2672, D2714): cash sessions.
  *
  * <p><b>Stamp.</b> Every money movement (an invoice payment taken or a declaration confirmed, a check-in copay, a
- * pharmacy dispense payment, a counter sale, a refund or a reversal paid out) calls {@link #stamp} in its own
- * transaction: the cashier's session for that till today is opened if needed, row-locked, and refused with 409 when
- * it is closed. {@code CashSessionStampGuardTest} keeps every writer on it.
+ * pharmacy dispense payment, a counter sale, a refund, a reversal or a pharmacy refund paid out) calls
+ * {@link #stamp} in its own transaction: the cashier's session for that till today is opened if needed, row-locked,
+ * and refused with 409 when it is closed. {@code CashSessionStampGuardTest} keeps every writer on it.
  *
  * <p><b>Expected.</b> Per method (and mobile-money operator): money in - money out of the session. Money out is
  * only a refund (or a reversal) approved by another person and paid out; a reversal or a void never lowers what the
- * till expects by itself (QA D2702). The cash to count is the CASH line alone (QA D2714).
+ * till expects by itself (QA D2702). The cash to count is the CASH line alone (QA D2714). QA D2950 (r66): a pharmacy
+ * refund paid out is money out too, of the payer's PHARMACY session; {@code CashSessionStampGuardTest} requires every
+ * stamped money row to be read by {@link #figures}.
  *
  * <p><b>Close.</b> The session's cashier counts each method; a non-zero difference needs an explanation; the session
  * is then CLOSED and takes no new movement. A hospital admin or an accountant (not the cashier) reopens it with a
@@ -96,6 +100,7 @@ public class CashSessionService {
     private final InvoiceRefundRepository refundRepository;
     private final PharmacyPaymentRepository pharmacyPaymentRepository;
     private final PharmacySaleRepository saleRepository;
+    private final PharmacyRefundRepository pharmacyRefundRepository;
     private final UserRepository userRepository;
     private final RoleValidator roleValidator;
     private final ActingScopeResolver actingScopeResolver;
@@ -111,6 +116,7 @@ public class CashSessionService {
                               InvoiceRefundRepository refundRepository,
                               PharmacyPaymentRepository pharmacyPaymentRepository,
                               PharmacySaleRepository saleRepository,
+                              PharmacyRefundRepository pharmacyRefundRepository,
                               UserRepository userRepository,
                               RoleValidator roleValidator,
                               ActingScopeResolver actingScopeResolver,
@@ -124,6 +130,7 @@ public class CashSessionService {
         this.refundRepository = refundRepository;
         this.pharmacyPaymentRepository = pharmacyPaymentRepository;
         this.saleRepository = saleRepository;
+        this.pharmacyRefundRepository = pharmacyRefundRepository;
         this.userRepository = userRepository;
         this.roleValidator = roleValidator;
         this.actingScopeResolver = actingScopeResolver;
@@ -355,6 +362,11 @@ public class CashSessionService {
         if (refunds != null) {
             refunds.forEach(r -> movements.add(movement(r)));
         }
+        // QA D2950 (r66): a pharmacy refund handed over is money out of the till it was paid from.
+        List<PharmacyRefund> pharmacyRefunds = pharmacyRefundRepository.findByCashSessionIdOrderByPaidAtAsc(id);
+        if (pharmacyRefunds != null) {
+            pharmacyRefunds.forEach(r -> movements.add(movement(r)));
+        }
         movements.sort(Comparator.comparing(CashSessionDTO.Movement::getAt,
             Comparator.nullsFirst(Comparator.naturalOrder())));
         Map<String, CashSessionDTO.MethodLine> lines = new LinkedHashMap<>();
@@ -435,6 +447,23 @@ public class CashSessionService {
             .at(r.getPaidAt())
             .document(refundDocument(r, invoice))
             .patientName(invoice != null && invoice.getPatient() != null ? invoice.getPatient().getFullName() : null)
+            .method(r.getMethod() != null ? r.getMethod().name() : null)
+            .operator(r.getMobileMoneyOperator() != null ? r.getMobileMoneyOperator().name() : null)
+            .reference(r.getReference())
+            .amount(r.getAmount())
+            .status(r.getStatus() != null ? r.getStatus().name() : null)
+            .build();
+    }
+
+    /** QA D2950 (r66): a pharmacy refund paid out, money out of the payer's PHARMACY session. */
+    private static CashSessionDTO.Movement movement(PharmacyRefund r) {
+        return CashSessionDTO.Movement.builder()
+            .id(r.getId())
+            .kind("PHARMACY_REFUND")
+            .direction(OUT)
+            .at(r.getPaidAt())
+            .document(null)
+            .patientName(null)
             .method(r.getMethod() != null ? r.getMethod().name() : null)
             .operator(r.getMobileMoneyOperator() != null ? r.getMobileMoneyOperator().name() : null)
             .reference(r.getReference())

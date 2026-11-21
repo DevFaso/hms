@@ -33,4 +33,10 @@ public class DispensePaymentStatusDTO {
     private LocalDateTime billingDeferredAt;
     /** Policy rule 6 (V345): an inpatient item: what is due goes on the account of the open stay, nobody approves. */
     private boolean onOpenStay;
+    /**
+     * QA D2931 (r66): why a claim sent for this fill does not cover it for the caller, when money is still due:
+     * {@code OWN_VOUCHER} (the caller alone stands behind the claim: another person confirms it or hands over),
+     * {@code NO_VOUCHER} (no money desk recorded it yet), or null.
+     */
+    private String claimCoverGap;
 }

@@ -17,7 +17,9 @@ import java.util.UUID;
  */
 public record MinorResultReleaseRequestDTO(
     @NotNull UUID grantId,
-    @NotBlank @Size(min = 10, max = 1000) String reason,
+    // r66 D2904: one sentence that says what to write, not « motif : la taille doit être comprise entre 10 et 1000 ».
+    @NotBlank(message = "{proxyRelease.reason.length}")
+    @Size(min = 10, max = 1000, message = "{proxyRelease.reason.length}") String reason,
     Boolean relationshipVerified
 ) {
 }

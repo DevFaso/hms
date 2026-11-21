@@ -28,6 +28,8 @@ import type { Page } from '@playwright/test';
  *  - `no-scroll-cue`   narrower, a table scrolls in place with nothing showing
  *                      that it does (no sticky-cell shadow, no fading edge);
  *  - `dialog-overflow` a dialog is wider than the screen;
+ *  - `dialog-height` a dialog runs above or below the screen, or keeps an action
+ *    button where nothing scrolls to it (QA D2938);
  *  - `squeezed-text`   a text box squeezed so narrow it prints one letter per
  *                      line (D2431: nothing spills, so `text-overflow` misses it).
  *
@@ -49,6 +51,7 @@ export interface LayoutOffender {
     | 'hidden-columns'
     | 'no-scroll-cue'
     | 'dialog-overflow'
+    | 'dialog-height'
     | 'squeezed-text'
     | 'no-card-mode'
     | 'hidden-last-column';
@@ -372,11 +375,64 @@ export async function auditLayout(page: Page): Promise<LayoutOffender[]> {
         }
       });
 
+    // (f) QA D2938 (r66): a dialog is never taller than the screen, and what it
+    // holds can be reached. The vitals dialog ran from -109 to 877 px on a 768 px
+    // screen with nothing that scrolled, so « Enregistrer » could not be clicked.
+    const scrolls = (el: Element) => {
+      const overflow = getComputedStyle(el).overflowY;
+      return (
+        (overflow === 'auto' || overflow === 'scroll') && el.scrollHeight > el.clientHeight + 1
+      );
+    };
+    document
+      .querySelectorAll(
+        '[role="dialog"][aria-modal="true"]:not([class*="drawer"], [class*="panel"], [class*="overlay"]), .modal, .modal-content, .modal-panel, .modal-card, .modal-box, .dialog-box, .dialog-panel',
+      )
+      .forEach((el) => {
+        if (!visible(el)) return;
+        const rect = el.getBoundingClientRect();
+        if (rect.top < -1 || rect.bottom > window.innerHeight + 1) {
+          push(
+            'dialog-height',
+            el,
+            `dialog ${Math.round(rect.height)}px spans ${Math.round(rect.top)}–${Math.round(rect.bottom)}px in a ${window.innerHeight}px-high screen`,
+          );
+          return;
+        }
+        // Inside the screen: every button is on screen, or in a box that scrolls to it.
+        el.querySelectorAll('button, [role="button"], input[type="submit"]').forEach((button) => {
+          if (!visible(button)) return;
+          const b = button.getBoundingClientRect();
+          if (b.top >= rect.top - 1 && b.bottom <= rect.bottom + 1) return;
+          let scroller: Element | null = button.parentElement;
+          while (scroller && scroller !== el.parentElement) {
+            if (scrolls(scroller)) return;
+            scroller = scroller.parentElement;
+          }
+          push(
+            'dialog-height',
+            button,
+            `button at ${Math.round(b.top)}–${Math.round(b.bottom)}px is outside its dialog (${Math.round(rect.top)}–${Math.round(rect.bottom)}px) and nothing scrolls to it`,
+          );
+        });
+      });
+
     return out as LayoutOffender[];
   });
 }
 
 export const LAYOUT_WIDTHS = [1366, 1024, 768, 390] as const;
+
+/**
+ * The screen height each width is measured at. QA D2938 (r66): 1366 is the
+ * 1366×768 laptop the wards use, not a 900 px desktop: a dialog that fits in
+ * 900 px can still put its Save button under a laptop's screen. A phone is
+ * 390×844.
+ */
+export function heightFor(width: number): number {
+  if (width < 600) return 844;
+  return width === 1366 ? 768 : 900;
+}
 
 /** Run the audit at every width, resizing in place (no reload: keeps the guard fast). */
 export async function auditAtWidths(
@@ -385,7 +441,7 @@ export async function auditAtWidths(
 ): Promise<{ where: string; width: number; offender: LayoutOffender }[]> {
   const found: { where: string; width: number; offender: LayoutOffender }[] = [];
   for (const width of LAYOUT_WIDTHS) {
-    await page.setViewportSize({ width, height: width < 600 ? 844 : 900 });
+    await page.setViewportSize({ width, height: heightFor(width) });
     // A phone opens with the navigation drawer closed; resizing a desktop page
     // down leaves it open over the content. Close it as a phone user would.
     await page.evaluate(() => {

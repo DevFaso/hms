@@ -23,6 +23,11 @@ export interface DispensePaymentStatus {
   billingDeferredAt?: string | null;
   /** Policy rule 6: an inpatient item; what is due goes on the account of the open stay. */
   onOpenStay?: boolean;
+  /**
+   * QA D2931 (r66): why a claim sent for this fill does not cover it for the reader, when money is
+   * still due: they alone stand behind it, or no money desk has confirmed it yet.
+   */
+  claimCoverGap?: 'OWN_VOUCHER' | 'NO_VOUCHER' | null;
 }
 
 /** QA D2674: set once, the stock is counted in `unit`, `unitsPerPack` to a pack. */

@@ -117,7 +117,7 @@ public class WithdrawnOrderPartnerHandler {
         tellPartnerOfReviewAfterCommit(decision);
         audit(AuditEventType.PRESCRIPTION_ROUTED_EXTERNAL, AuditStatus.SUCCESS,
                 "Partner offer recalled: prescription " + prescription.getId() + " is held for review",
-                decision.getId());
+                decision);
         return saved;
     }
 
@@ -129,7 +129,7 @@ public class WithdrawnOrderPartnerHandler {
         audit(AuditEventType.SECURITY_ALERT_TRIGGERED, AuditStatus.FAILURE,
                 source + " confirmed dispensing prescription " + prescription.getId() + ", which is held for review; "
                         + "the hold stands. A person must check with the patient and the partner.",
-                decision.getId());
+                decision);
     }
 
     /**
@@ -146,7 +146,7 @@ public class WithdrawnOrderPartnerHandler {
         audit(AuditEventType.PRESCRIPTION_ROUTED_EXTERNAL, AuditStatus.SUCCESS,
                 what + " on prescription " + prescription.getId() + ", which is " + prescription.getStatus()
                         + ": the prescription was not changed; offer closed",
-                decision.getId());
+                decision);
         return saved;
     }
 
@@ -171,7 +171,7 @@ public class WithdrawnOrderPartnerHandler {
                 source + " confirmed dispensing prescription " + prescription.getId() + ", which is "
                         + prescription.getStatus() + "; the prescription was not changed. A person must "
                         + "check with the patient and the partner.",
-                decision.getId());
+                decision);
         try {
             prescriberNotifier.notifyPrescriberOfDispenseAfterWithdrawal(prescription);
         } catch (RuntimeException ex) {
@@ -222,12 +222,24 @@ public class WithdrawnOrderPartnerHandler {
         });
     }
 
-    private void audit(AuditEventType type, AuditStatus status, String description, UUID decisionId) {
+    /**
+     * QA D2924 (r66): the hospital of the order a routing decision is about, which anchors a system audit row
+     * for that hospital's audit log. Null when the decision names no order.
+     */
+    static UUID hospitalOf(PrescriptionRoutingDecision decision) {
+        Prescription order = decision != null ? decision.getPrescription() : null;
+        return order != null && order.getHospital() != null ? order.getHospital().getId() : null;
+    }
+
+    private void audit(AuditEventType type, AuditStatus status, String description,
+                       PrescriptionRoutingDecision decision) {
+        UUID decisionId = decision != null ? decision.getId() : null;
         try {
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .eventType(type)
                     .eventDescription(description)
                     .status(status)
+                    .hospitalId(hospitalOf(decision))
                     .resourceId(decisionId != null ? decisionId.toString() : null)
                     .entityType(AUDIT_ENTITY)
                     .build());

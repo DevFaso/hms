@@ -148,21 +148,54 @@ public class MidwifeNewbornCare {
      * @return true when a physician must be asked to review (a NICU cot assigned by a midwife)
      */
     public boolean requireBedAMidwifeMayAssign(Admission admission, UUID bedId) {
+        return requireBedAMidwifeMayAssign(admission, bedId, BedAssignmentService.FIELD_BED_ID);
+    }
+
+    /**
+     * QA D2917 (r66): the same rule on every path that gives a stay a bed. A transfer order did
+     * not ask it, so a midwife moved a patient between general-ward beds through {@code /transfers}
+     * while {@code /admissions/{id}/assign-bed} refused her the same bed.
+     *
+     * @param field the request field the refusal is reported on (a transfer's {@code toBedId}), or
+     *     null where the request names no bed (completing a transfer)
+     */
+    public boolean requireBedAMidwifeMayAssign(Admission admission, UUID bedId, String field) {
+        return requireHerWards(admission, bedId, field, true);
+    }
+
+    /**
+     * Carrying out a transfer order (decision taken in the review of #1251, PROVISIONAL like the
+     * rest of policy rule 2): a midwife receives a patient INTO a maternity bed (or a neonatal cot,
+     * for a newborn) from any ward when a doctor or a nurse of the hospital ordered the move, the
+     * woman in labour sent up from the emergency ward. The destination is always one of her wards.
+     * The bed the stay leaves must be hers too unless a doctor or a nurse ordered the move.
+     * Ordering a move stays held to {@link #requireBedAMidwifeMayAssign} on both beds.
+     *
+     * @param orderedByUserId who ordered the transfer, or null when nobody is recorded
+     * @return true when a physician must be asked to review (a NICU cot given by a midwife)
+     */
+    public boolean requireTransferAMidwifeMayComplete(Admission admission, UUID bedId, UUID orderedByUserId) {
         UUID hospitalId = hospitalIdOf(admission);
-        if (hospitalId == null || bedId == null
-                || !narrowedToHerWards(hospitalId, BedAssignmentService.FIELD_BED_ID)) {
+        boolean orderedByADoctorOrANurse = hospitalId != null && orderedByUserId != null
+            && nurseOrPhysicianAt(orderedByUserId, hospitalId);
+        return requireHerWards(admission, bedId, null, !orderedByADoctorOrANurse);
+    }
+
+    private boolean requireHerWards(Admission admission, UUID bedId, String field, boolean theBedSheFreesToo) {
+        UUID hospitalId = hospitalIdOf(admission);
+        if (hospitalId == null || bedId == null || !narrowedToHerWards(hospitalId, field)) {
             return false;
         }
         // Assigning a bed frees the one the stay holds (BedAssignmentService): that bed must be
         // hers to free too, or a move into maternity would release a bed of another ward.
         Bed held = admission.getBed();
         boolean sameBedAgain = held != null && bedId.equals(held.getId());
-        if (held != null && !sameBedAgain) {
-            requireHerWard(held, admission, BedAssignmentService.FIELD_BED_ID);
+        if (theBedSheFreesToo && held != null && !sameBedAgain) {
+            requireHerWard(held, admission, field);
         }
         // A bed of another hospital answers as not found in the assignment itself.
         Bed bed = bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId).orElse(null);
-        boolean neonatalCot = bed != null && requireHerWard(bed, admission, BedAssignmentService.FIELD_BED_ID);
+        boolean neonatalCot = bed != null && requireHerWard(bed, admission, field);
         // The cot the stay already holds is no placement (the assignment itself changes nothing):
         // the physicians are not asked again, and the task they have, read or not, is left alone.
         return neonatalCot && !sameBedAgain;

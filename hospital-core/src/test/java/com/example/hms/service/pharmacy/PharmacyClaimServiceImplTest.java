@@ -33,6 +33,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -101,6 +102,9 @@ class PharmacyClaimServiceImplTest {
 
         user = new User();
         user.setId(userId);
+        // QA D2925 (r66): by default the caller is of a money desk of the hospital; actingAs(false) is the pharmacy.
+        org.mockito.Mockito.lenient().when(roleValidator.canRecordPayerDecision(any(), eq(hospitalId)))
+                .thenReturn(true);
     }
 
     private PharmacyClaimRequestDTO request() {
@@ -241,29 +245,40 @@ class PharmacyClaimServiceImplTest {
         org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(actor);
         org.mockito.Mockito.lenient().when(userRepository.findById(actor)).thenReturn(Optional.of(who));
         org.mockito.Mockito.lenient().when(roleValidator.vouchesForClaimCover(actor, hospitalId)).thenReturn(moneyDesk);
+        org.mockito.Mockito.lenient().when(roleValidator.canRecordPayerDecision(actor, hospitalId))
+                .thenReturn(moneyDesk);
         return actor;
     }
 
     @Test
-    @DisplayName("review round 2: a pharmacist alone creates, sends, accepts and settles a claim: nobody is ever recorded behind it")
-    void thePharmacyAloneVouchesForNothing() {
+    @DisplayName("QA D2925 (r66): the pharmacy creates and sends a claim; it never records the payer's answer to it")
+    void thePharmacyNeverAnswersItsOwnClaim() {
         PharmacyClaim claim = aClaimIn(PharmacyClaimStatus.DRAFT);
         UUID pharmacist = actingAs(false);
 
         service.submitClaim(UUID.randomUUID());
-        service.markAccepted(UUID.randomUUID(), null);
-        service.markPaid(UUID.randomUUID(), null);
+        assertThat(claim.getClaimStatus()).isEqualTo(PharmacyClaimStatus.SUBMITTED);
+        assertThat(claim.getVouchedBy()).as("the pharmacy stands behind nothing").isNull();
 
-        assertThat(claim.getClaimStatus()).isEqualTo(PharmacyClaimStatus.PAID);
-        assertThat(claim.getVouchedBy()).isNull();
-        assertThat(claim.getSecondVouchedBy()).isNull();
-        assertThat(FillClaimCover.counts(claim, pharmacist)).isFalse();
-        assertThat(FillClaimCover.counts(claim, UUID.randomUUID())).as("nor for a colleague").isFalse();
+        UUID id = UUID.randomUUID();
+        assertThatThrownBy(() -> service.markAccepted(id, null))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThatThrownBy(() -> service.markRejected(id, "Assuré inconnu"))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(claim.getClaimStatus()).as("still waiting for a money desk").isEqualTo(PharmacyClaimStatus.SUBMITTED);
+        assertThat(claim.getRejectionReason()).isNull();
+
+        // The state D2925 left behind is no longer reachable: billing accepts the claim the pharmacist sent.
+        UUID clerk = actingAs(true);
+        service.markAccepted(id, null);
+        assertThat(claim.getClaimStatus()).isEqualTo(PharmacyClaimStatus.ACCEPTED);
+        assertThat(claim.getVouchedBy()).isEqualTo(clerk);
+        assertThat(FillClaimCover.counts(claim, pharmacist)).as("the fill may leave").isTrue();
     }
 
     @Test
-    @DisplayName("review round 2 (A): billing accepts, the pharmacist later records the payment: billing still stands behind the claim")
-    void aLaterPaymentByThePharmacistKeepsTheVoucher() {
+    @DisplayName("QA D2925 (r66): a payment the pharmacist tries to record is refused; an accountant records it, and the first voucher stays")
+    void aPaymentIsRecordedByAMoneyDeskAndKeepsTheVoucher() {
         PharmacyClaim claim = aClaimIn(PharmacyClaimStatus.SUBMITTED);
         UUID clerk = actingAs(true);
         service.markAccepted(UUID.randomUUID(), null);
@@ -272,13 +287,66 @@ class PharmacyClaimServiceImplTest {
         assertThat(vouchedAt).isNotNull();
 
         UUID pharmacist = actingAs(false);
-        service.markPaid(UUID.randomUUID(), null);
+        UUID id = UUID.randomUUID();
+        assertThatThrownBy(() -> service.markPaid(id, null))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(claim.getClaimStatus()).isEqualTo(PharmacyClaimStatus.ACCEPTED);
+
+        UUID accountant = actingAs(true);
+        service.markPaid(id, null);
 
         assertThat(claim.getClaimStatus()).isEqualTo(PharmacyClaimStatus.PAID);
-        assertThat(claim.getVouchedBy()).isEqualTo(clerk);
+        assertThat(claim.getVouchedBy()).as("written once").isEqualTo(clerk);
         assertThat(claim.getVouchedAt()).isEqualTo(vouchedAt);
-        assertThat(claim.getSecondVouchedBy()).isNull();
+        assertThat(claim.getSecondVouchedBy()).isEqualTo(accountant);
         assertThat(FillClaimCover.counts(claim, pharmacist)).isTrue();
+        assertThat(FillClaimCover.counts(claim, clerk)).as("somebody else stands behind it too").isTrue();
+    }
+
+    @Test
+    @DisplayName("QA D2925 (r66): a claim left ACCEPTED with nobody behind it is confirmed by a money desk, once")
+    void anUnvouchedAcceptedClaimIsConfirmedOnce() {
+        // What the pharmacist's own "accept" left before it was refused: ACCEPTED, no voucher, billing locked out.
+        PharmacyClaim claim = aClaimIn(PharmacyClaimStatus.ACCEPTED);
+        UUID clerk = actingAs(true);
+        UUID id = UUID.randomUUID();
+
+        service.markAccepted(id, null);
+
+        assertThat(claim.getClaimStatus()).isEqualTo(PharmacyClaimStatus.ACCEPTED);
+        assertThat(claim.getVouchedBy()).isEqualTo(clerk);
+        assertThat(claim.getVouchedAt()).isNotNull();
+        assertThat(FillClaimCover.counts(claim, UUID.randomUUID())).isTrue();
+
+        // Somebody stands behind it now: it is not accepted a second time, by the same person or another.
+        assertThatThrownBy(() -> service.markAccepted(id, null)).isInstanceOf(BusinessException.class)
+                .isNotInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        actingAs(true);
+        assertThatThrownBy(() -> service.markAccepted(id, null)).isInstanceOf(BusinessException.class);
+        assertThat(claim.getVouchedBy()).isEqualTo(clerk);
+        assertThat(claim.getSecondVouchedBy()).isNull();
+    }
+
+    @Test
+    @DisplayName("QA D2925 (r66): the payer's decisions are closed to the pharmacy and the super-admin at the endpoint; the accountant reads and decides")
+    void thePayerDecisionEndpointsAreForTheMoneyDesks() throws Exception {
+        Class<?> controller = com.example.hms.controller.pharmacy.PharmacyClaimController.class;
+        for (String decision : java.util.List.of("accept", "reject", "pay")) {
+            String roles = java.util.Arrays.stream(controller.getDeclaredMethods())
+                    .filter(m -> m.getName().equals(decision)).findFirst().orElseThrow()
+                    .getAnnotation(org.springframework.security.access.prepost.PreAuthorize.class).value();
+            assertThat(roles).as(decision).contains("'BILLING_SPECIALIST'", "'CLAIMS_REVIEWER'", "'ACCOUNTANT'",
+                    "'HOSPITAL_ADMIN'").doesNotContain("PHARMACIST").doesNotContain("SUPER_ADMIN");
+        }
+        for (String pharmacyStep : java.util.List.of("create", "submit")) {
+            String roles = java.util.Arrays.stream(controller.getDeclaredMethods())
+                    .filter(m -> m.getName().equals(pharmacyStep)).findFirst().orElseThrow()
+                    .getAnnotation(org.springframework.security.access.prepost.PreAuthorize.class).value();
+            assertThat(roles).as(pharmacyStep).contains("'PHARMACIST'");
+        }
+        String readers = controller.getDeclaredMethod("listByHospital", org.springframework.data.domain.Pageable.class)
+                .getAnnotation(org.springframework.security.access.prepost.PreAuthorize.class).value();
+        assertThat(readers).contains("'ACCOUNTANT'", "'PHARMACIST'");
     }
 
     @Test

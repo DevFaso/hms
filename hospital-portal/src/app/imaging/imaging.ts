@@ -31,6 +31,7 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { ImagingReadingService } from '../services/imaging-reading.service';
 import { ImagingReadingContextComponent } from './reading-context/imaging-reading-context.component';
 import { printOnly } from '../shared/print/print-only';
+import { MeasurePipe } from '../shared/pipes/measure.pipe';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -212,6 +213,7 @@ const ORDER_FIELD_LABELS: Readonly<Record<string, string>> = {
     ImagingExamRecordComponent,
     ImagingStudyViewerComponent,
     ImagingReadingContextComponent,
+    MeasurePipe,
   ],
   templateUrl: './imaging.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -483,8 +485,39 @@ export class ImagingComponent implements OnInit {
    */
   canStartStudy(o: ImagingOrderResponse): boolean {
     return (
-      this.canCancelOrder() && STARTABLE_ORDER_STATUSES.includes(o.status) && this.mayPerform(o)
+      this.canCancelOrder() &&
+      STARTABLE_ORDER_STATUSES.includes(o.status) &&
+      this.mayPerform(o) &&
+      !this.technicianAwaitsAuthorizationNumber(o)
     );
+  }
+
+  /**
+   * QA D2914 (r66): a routine study whose pre-authorisation number is not recorded does not start
+   * (the server refuses), and a technician cannot record the number: they are not offered
+   * « Démarrer l'examen », and are told who records it. An urgent or STAT study starts without it.
+   */
+  technicianAwaitsAuthorizationNumber(o: ImagingOrderResponse): boolean {
+    return (
+      this.actsAsTechnician &&
+      STARTABLE_ORDER_STATUSES.includes(o.status) &&
+      this.awaitsAuthorizationNumber(o) &&
+      o.priority !== 'URGENT' &&
+      o.priority !== 'STAT'
+    );
+  }
+
+  /**
+   * QA D2914 (r66): « Voir le compte rendu » from a request. A technician reads the released
+   * report of an exam they performed and no other (the server answers a missing report), so the
+   * link is offered to them only there. Everyone else as before.
+   */
+  canViewReportOfOrder(o: ImagingOrderResponse): boolean {
+    if (!this.actsAsTechnician) {
+      return o.status === 'COMPLETED' || o.status === 'RESULTS_AVAILABLE';
+    }
+    const me = this.auth.getUserProfile()?.id;
+    return o.status === 'RESULTS_AVAILABLE' && !!me && o.performedByUserId === me;
   }
 
   canCompleteStudy(o: ImagingOrderResponse): boolean {
@@ -1475,6 +1508,12 @@ export class ImagingComponent implements OnInit {
     this.showReportModal.set(true);
   }
 
+  /** QA D2912 (r66): the study's exam record holds a contrast answer or a dose to show with the report. */
+  reportHasExamRecord(report: ImagingReportResponse): boolean {
+    const recorded = (value: unknown): boolean => value !== null && value !== undefined;
+    return recorded(report.examContrastAdministered) || recorded(report.examRadiationDoseMgy);
+  }
+
   /** r63: print the open report alone (the shared print isolation). */
   printReport(): void {
     const panel = this.host.nativeElement.querySelector<HTMLElement>(
@@ -1754,6 +1793,9 @@ export class ImagingComponent implements OnInit {
       // Policy rule 3 (provisional): the imaging technician attaches the study's key images too.
       this.roleContext.hasAnyActiveRole(actionRoles('imagingImageUpload')) &&
       order.status !== 'CANCELLED' &&
+      // QA D2914 (r66): a study with results has a signed report, whether or not this reader may
+      // open it (a technician reads no report of an exam somebody else performed).
+      order.status !== 'RESULTS_AVAILABLE' &&
       !this.selectedOrderReports().some((r) => r.signed)
     );
   }

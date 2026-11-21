@@ -49,8 +49,10 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -381,6 +383,200 @@ class TransferServiceImplTest {
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(BusinessException.class)
             .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.overrideReasonRequired"));
+    }
+
+    // ── QA D2917 (r66): the midwife's ward rule holds on a transfer as on a bed assignment ──
+
+    private static final UUID MIDWIFE = UUID.randomUUID();
+
+    private com.example.hms.service.InBasketService inBasket;
+
+    /** The caller is a midwife of this hospital and nothing wider there; the real rule decides. */
+    private void asAMidwifeOfThisHospital() {
+        inBasket = mock(com.example.hms.service.InBasketService.class);
+        service.setMidwifeNewbornCare(new com.example.hms.service.maternity.MidwifeNewbornCare(
+            mock(com.example.hms.repository.DeliveryNewbornRepository.class), bedRepository,
+            roleValidator, inBasket,
+            mock(com.example.hms.repository.UserRoleHospitalAssignmentRepository.class)));
+        when(roleValidator.getCurrentUserId()).thenReturn(MIDWIFE);
+        when(roleValidator.isMidwife(MIDWIFE, hospitalId)).thenReturn(true);
+    }
+
+    private void refusedOnHerWards(org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {
+        assertThatThrownBy(call).isInstanceOfSatisfying(BusinessException.class,
+            e -> assertThat(e.getMessageKey()).isEqualTo("admission.bed.midwifeWards"));
+    }
+
+    @Test
+    void d2917_aMidwifeOrdersNoTransferIntoABedOfAnotherWard_andNothingIsHeld() {
+        // MIDWIFE_A: POST /transfers for a stay in general bed M-01 to general bed M-02 answered 201.
+        Ward medicine = ward("Médecine", "MED", WardType.GENERAL);
+        admission.setBed(bed(medicine, "M-01", BedStatus.OCCUPIED));
+        destinationBed = bed(medicine, "M-02", BedStatus.AVAILABLE);
+        asAMidwifeOfThisHospital();
+
+        assertThatThrownBy(() -> service.requestTransfer(base().build()))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, e -> {
+                assertThat(e.getMessageKey()).isEqualTo("admission.bed.midwifeWards");
+                assertThat(e.getField()).isEqualTo(BedAssignmentService.FIELD_TO_BED_ID);
+            });
+        // Out of a maternity bed into a general one, and out of a general one into maternity: neither.
+        admission.setBed(originBed);
+        refusedOnHerWards(() -> service.requestTransfer(base().build()));
+        admission.setBed(bed(medicine, "M-03", BedStatus.OCCUPIED));
+        destinationBed = bed(generalWard, "3", BedStatus.AVAILABLE);
+        refusedOnHerWards(() -> service.requestTransfer(base().build()));
+
+        verify(bedAssignmentService, never()).reserveBed(any(), any());
+        verify(transferOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void d2917_aMidwifeCarriesOutNoTransferIntoABedOfAnotherWard_whoeverOrderedIt() {
+        // A nurse ordered it; POST /transfers/{id}/complete by the midwife answered 200.
+        Ward medicine = ward("Médecine", "MED", WardType.GENERAL);
+        destinationBed = bed(medicine, "M-02", BedStatus.RESERVED);
+        TransferOrder order = pendingOrder(destinationBed);
+        when(transferOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        asAMidwifeOfThisHospital();
+
+        refusedOnHerWards(() -> service.completeTransfer(order.getId(), TransferCompletionRequestDTO.builder().build()));
+
+        assertThat(order.getStatus()).isEqualTo(TransferOrderStatus.REQUESTED);
+        verify(bedAssignmentService, never()).assignBed(any(), any(), any());
+        verify(admissionRepository, never()).save(any());
+    }
+
+    /** The order was placed by this staff member of the hospital. */
+    private UUID orderedBy(TransferOrder order) {
+        UUID requester = UUID.randomUUID();
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(requester);
+        Staff staff = new Staff();
+        staff.setId(UUID.randomUUID());
+        staff.setUser(user);
+        order.setRequestedBy(staff);
+        return requester;
+    }
+
+    @Test
+    void review1251_aMidwifeReceivesInMaternityAPatientADoctorOrANurseSentFromAnotherWard() {
+        // A woman in labour in an emergency bed; a nurse (then a doctor) ordered her move to maternity.
+        Ward emergency = ward("Urgences", "URG", WardType.EMERGENCY);
+        for (String orderer : new String[] {"nurse", "doctor"}) {
+            admission.setBed(bed(emergency, "U-01", BedStatus.OCCUPIED));
+            destinationBed = bed(generalWard, "4", BedStatus.RESERVED);
+            TransferOrder order = pendingOrder(destinationBed);
+            UUID requester = orderedBy(order);
+            when(roleValidator.isNurse(requester, hospitalId)).thenReturn("nurse".equals(orderer));
+            when(roleValidator.isDoctor(requester, hospitalId)).thenReturn("doctor".equals(orderer));
+            when(transferOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+            asAMidwifeOfThisHospital();
+
+            TransferOrderResponseDTO done =
+                service.completeTransfer(order.getId(), TransferCompletionRequestDTO.builder().build());
+
+            assertThat(done.getStatus()).as(orderer).isEqualTo(TransferOrderStatus.COMPLETED);
+            verify(bedAssignmentService).assignBed(admission, destinationBed.getId(),
+                Set.of(BedStatus.AVAILABLE, BedStatus.RESERVED));
+        }
+    }
+
+    @Test
+    void review1251_theSourceWardIsOpenOnlyWhenADoctorOrANurseOrderedTheMove() {
+        Ward emergency = ward("Urgences", "URG", WardType.EMERGENCY);
+        admission.setBed(bed(emergency, "U-01", BedStatus.OCCUPIED));
+        destinationBed = bed(generalWard, "4", BedStatus.RESERVED);
+        asAMidwifeOfThisHospital();
+
+        // Nobody recorded as having ordered it.
+        TransferOrder unsigned = pendingOrder(destinationBed);
+        when(transferOrderRepository.findById(unsigned.getId())).thenReturn(Optional.of(unsigned));
+        refusedOnHerWards(() -> service.completeTransfer(unsigned.getId(), TransferCompletionRequestDTO.builder().build()));
+
+        // Ordered by another midwife (neither a nurse nor a physician of the hospital).
+        TransferOrder aColleagues = pendingOrder(destinationBed);
+        UUID colleague = orderedBy(aColleagues);
+        when(roleValidator.isMidwife(colleague, hospitalId)).thenReturn(true);
+        when(transferOrderRepository.findById(aColleagues.getId())).thenReturn(Optional.of(aColleagues));
+        refusedOnHerWards(() -> service.completeTransfer(aColleagues.getId(), TransferCompletionRequestDTO.builder().build()));
+
+        verify(bedAssignmentService, never()).assignBed(any(), any(), any());
+    }
+
+    @Test
+    void review1251_theDestinationStaysOneOfHerWardsWhoeverOrderedTheMove_andSheStillOrdersNoneOutOfAnotherWard() {
+        Ward emergency = ward("Urgences", "URG", WardType.EMERGENCY);
+        Ward medicine = ward("Médecine", "MED", WardType.GENERAL);
+        admission.setBed(bed(emergency, "U-01", BedStatus.OCCUPIED));
+        asAMidwifeOfThisHospital();
+
+        // A doctor ordered a move into a general bed: not hers to carry out.
+        destinationBed = bed(medicine, "M-02", BedStatus.RESERVED);
+        TransferOrder toMedicine = pendingOrder(destinationBed);
+        when(roleValidator.isDoctor(orderedBy(toMedicine), hospitalId)).thenReturn(true);
+        when(transferOrderRepository.findById(toMedicine.getId())).thenReturn(Optional.of(toMedicine));
+        refusedOnHerWards(() -> service.completeTransfer(toMedicine.getId(), TransferCompletionRequestDTO.builder().build()));
+        verify(bedAssignmentService, never()).assignBed(any(), any(), any());
+
+        // Ordering the move from the emergency bed into maternity herself: still refused.
+        destinationBed = bed(generalWard, "5", BedStatus.AVAILABLE);
+        refusedOnHerWards(() -> service.requestTransfer(base().build()));
+        verify(bedAssignmentService, never()).reserveBed(any(), any());
+    }
+
+    @Test
+    void d2917_aMidwifeStillMovesHerPatientBetweenMaternityBeds() {
+        // setUp: the stay is in maternity bed 1, the destination is maternity bed 2.
+        asAMidwifeOfThisHospital();
+
+        service.requestTransfer(base().build());
+        verify(bedAssignmentService).reserveBed(destinationBed.getId(), hospitalId);
+
+        TransferOrder order = pendingOrder(destinationBed);
+        when(transferOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        service.completeTransfer(order.getId(), TransferCompletionRequestDTO.builder().build());
+        verify(bedAssignmentService).assignBed(admission, destinationBed.getId(),
+            Set.of(BedStatus.AVAILABLE, BedStatus.RESERVED));
+        // A maternity bed is no neonatal cot: nobody is asked to review.
+        verifyNoInteractions(inBasket);
+    }
+
+    @Test
+    void d2917_aNeonatalCotSheGivesANewbornByTransferAsksAPhysicianToReview() {
+        // The rule's one exception, as on a direct assignment: allowed, and a physician is asked.
+        Ward neonatology = ward("Néonatologie", "NEO", WardType.NICU);
+        destinationBed = bed(neonatology, "N1", BedStatus.RESERVED);
+        admission.setAdmissionType(com.example.hms.enums.AdmissionType.NEWBORN);
+        TransferOrder order = pendingOrder(destinationBed);
+        when(transferOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        asAMidwifeOfThisHospital();
+
+        service.completeTransfer(order.getId(), TransferCompletionRequestDTO.builder().build());
+
+        verify(bedAssignmentService).assignBed(admission, destinationBed.getId(),
+            Set.of(BedStatus.AVAILABLE, BedStatus.RESERVED));
+        verify(inBasket).removeAllItemsForReference(admission.getId(),
+            com.example.hms.service.maternity.MidwifeNewbornCare.REFERENCE_TYPE);
+
+        // The same cot for an adult stay is not hers to give.
+        admission.setAdmissionType(com.example.hms.enums.AdmissionType.ELECTIVE);
+        TransferOrder adult = pendingOrder(destinationBed);
+        when(transferOrderRepository.findById(adult.getId())).thenReturn(Optional.of(adult));
+        refusedOnHerWards(() -> service.completeTransfer(adult.getId(), TransferCompletionRequestDTO.builder().build()));
+    }
+
+    @Test
+    void d2917_aNurseOfTheHospitalKeepsEveryWard_evenIfSheIsAlsoAMidwifeThere() {
+        Ward medicine = ward("Médecine", "MED", WardType.GENERAL);
+        admission.setBed(bed(medicine, "M-01", BedStatus.OCCUPIED));
+        destinationBed = bed(medicine, "M-02", BedStatus.AVAILABLE);
+        asAMidwifeOfThisHospital();
+        when(roleValidator.isNurse(MIDWIFE, hospitalId)).thenReturn(true);
+
+        service.requestTransfer(base().build());
+
+        verify(bedAssignmentService).reserveBed(destinationBed.getId(), hospitalId);
     }
 
     // ── Completion ──────────────────────────────────────────────────────

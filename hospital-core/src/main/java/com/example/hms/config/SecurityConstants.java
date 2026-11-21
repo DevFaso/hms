@@ -34,7 +34,7 @@ public class SecurityConstants {
     /**
      * Policy rule 3 (owner 2026-11-20, provisional): « Technicien d'imagerie médicale /
      * Manipulateur ». Acquires, documents and completes an exam at their hospital; never orders
-     * one and never writes, signs or adds to a report ({@code ImagingTechnicianScope}).
+     * one and never writes, signs or adds to a report ({@code ImagingRoleScope}).
      */
     public static final String ROLE_IMAGING_TECHNICIAN = "ROLE_IMAGING_TECHNICIAN";
     public static final String ROLE_SURGEON = "ROLE_SURGEON";

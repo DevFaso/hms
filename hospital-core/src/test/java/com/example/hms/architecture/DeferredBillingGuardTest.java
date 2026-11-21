@@ -289,6 +289,34 @@ class DeferredBillingGuardTest {
     }
 
     @Test
+    @DisplayName("QA D2925 (r66): the payer's decision on a claim is recorded by a money desk or a hospital admin, never the pharmacy nor the super-admin alone")
+    void thePharmacyNeverRecordsThePayersDecision() throws IOException {
+        UUID user = UUID.randomUUID();
+        UUID hospital = UUID.randomUUID();
+        for (String role : PHARMACY_ROLES) {
+            assertThat(rolesOf(Set.of(role)).canRecordPayerDecision(user, hospital)).as(role).isFalse();
+        }
+        for (String role : List.of("BILLING_SPECIALIST", "CLAIMS_REVIEWER", "ACCOUNTANT", "HOSPITAL_ADMIN")) {
+            assertThat(rolesOf(Set.of(role)).canRecordPayerDecision(user, hospital)).as(role).isTrue();
+        }
+        assertThat(rolesOf(Set.of("SUPER_ADMIN")).canRecordPayerDecision(user, hospital)).isFalse();
+        assertThat(rolesOf(Set.of("BILLING_SPECIALIST")).canRecordPayerDecision(user, null)).isFalse();
+
+        // Accepted, rejected and paid all go through the one transition, which asks before it writes anything.
+        String claims = SourceScan.stripComments(Files.readString(
+            MAIN.resolve("service/pharmacy/PharmacyClaimServiceImpl.java"), StandardCharsets.UTF_8));
+        String transition = SourceScan.methodBody(claims, "transition");
+        assertThat(transition).contains("requirePayerDecisionDesk(claim)");
+        assertThat(transition.indexOf("requirePayerDecisionDesk(claim)"))
+            .as("the desk is asked before the claim changes state").isLessThan(transition.indexOf("setClaimStatus("));
+        for (String decision : List.of("markAccepted", "markRejected", "markPaid")) {
+            assertThat(SourceScan.methodBody(claims, decision)).as(decision).contains("transition(");
+        }
+        assertThat(SourceScan.methodBody(claims, "requirePayerDecisionDesk"))
+            .contains("canRecordPayerDecision(", "claim.getHospital()");
+    }
+
+    @Test
     @DisplayName("review of #1244: who stands behind a claim as cover is a money desk or a hospital admin, never the pharmacy")
     void thePharmacyStandsBehindNoClaim() {
         UUID user = UUID.randomUUID();

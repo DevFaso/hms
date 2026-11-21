@@ -338,6 +338,32 @@ class MinorResultReleaseServiceImplTest {
     }
 
     @Test
+    @DisplayName("r66 D2903: the overview says why a hidden result cannot be released, violence or not an HIV result")
+    void theOverviewSaysWhyAResultIsNotReleasable() {
+        when(patientProxyRepository.findByGrantorPatient_IdAndStatus(minor.getId(), ProxyStatus.ACTIVE))
+            .thenReturn(List.of(mother));
+        LabOrder hepatitis = order(minor, "AgHBs");
+        // An HIV serology ordered in a visit that violence is on, and a hepatitis result.
+        when(proxyRecordFilter.familyHidingOf(hivOrder))
+            .thenReturn(new ProxyRecordFilter.FamilyHiding(SensitivityCategory.HIV, false, true));
+        when(proxyRecordFilter.familyHidingOf(hepatitis))
+            .thenReturn(new ProxyRecordFilter.FamilyHiding(SensitivityCategory.VIRAL_HEPATITIS, false));
+        when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(minor.getId(), hospitalId,
+            Pageable.unpaged())).thenReturn(List.of(resultOf(hivOrder, true), resultOf(hepatitis, true)));
+
+        MinorReleaseOverviewDTO overview = service.overview(minor.getId(), doctorId);
+
+        assertThat(overview.results())
+            .extracting(MinorReleaseOverviewDTO.HiddenResult::category,
+                MinorReleaseOverviewDTO.HiddenResult::releasable,
+                MinorReleaseOverviewDTO.HiddenResult::notReleasableReason)
+            .containsExactlyInAnyOrder(
+                org.assertj.core.groups.Tuple.tuple(SensitivityCategory.HIV, false, MinorReleaseOverviewDTO.VIOLENCE),
+                org.assertj.core.groups.Tuple.tuple(SensitivityCategory.VIRAL_HEPATITIS, false,
+                    MinorReleaseOverviewDTO.NOT_HIV));
+    }
+
+    @Test
     @DisplayName("only an HIV result is released: a hidden hepatitis or a result that violence is on is refused")
     void onlyHivIsReleased() {
         mother.setRelationshipVerifiedAt(LocalDateTime.now());
@@ -423,6 +449,7 @@ class MinorResultReleaseServiceImplTest {
             assertThat(result.testName()).isEqualTo("Sérologie VIH");
             assertThat(result.category()).isEqualTo(SensitivityCategory.HIV);
             assertThat(result.releasable()).isTrue();
+            assertThat(result.notReleasableReason()).isNull();
             assertThat(result.releases()).singleElement().satisfies(release -> {
                 assertThat(release.getHolderName()).isEqualTo("Awa Sawadogo");
                 assertThat(release.getReason()).isEqualTo(REASON);

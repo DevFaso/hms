@@ -3900,4 +3900,17 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V352 (QA r66 D2950): clinical.pharmacy_refunds.cash_session_id, the
+         till a pharmacy refund was paid out of (money out of the payer's
+         PHARMACY session), with a backfill of the refunds already paid.
+         Additive, IF NOT EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V352-pharmacy-refund-cash-session" author="hms-team" runOnChange="false">
+        <sqlFile path="V352__pharmacy_refund_cash_session.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

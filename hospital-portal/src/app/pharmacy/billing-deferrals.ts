@@ -112,6 +112,15 @@ export class BillingDeferralsComponent implements OnInit {
     });
   }
 
+  /**
+   * QA D2928 (r66): the chip of a row. An urgency override is « to review » until somebody reviewed
+   * it, then « reviewed »: it read « to review » for ever, on the « still due » list too.
+   */
+  statusOf(row: BillingDeferral): string {
+    if (row.kind !== 'URGENCY_OVERRIDE') return row.status;
+    return row.reviewedAt ? 'REVIEWED' : 'TO_REVIEW';
+  }
+
   /** Whoever asked for it, or an approver, may withdraw a deferral no fill left on yet. */
   canWithdraw(row: BillingDeferral): boolean {
     return row.status === 'REQUESTED' || row.status === 'APPROVED';

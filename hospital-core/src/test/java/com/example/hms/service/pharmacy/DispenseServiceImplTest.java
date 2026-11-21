@@ -617,7 +617,7 @@ class DispenseServiceImplTest {
             assertThat(entity.getBillingDeferredBy()).isEqualTo(userId);
             assertThat(entity.getBillingDeferredAt()).isNotNull().isEqualTo(entity.getDispensedAt());
             verify(support).logAudit(eq(AuditEventType.DISPENSE_BILLING_URGENCY_OVERRIDE), any(),
-                    eq(dispenseId.toString()), any());
+                    eq(dispenseId.toString()), any(), any());
         }
 
         /** QA D1555: the patient's allergies, read by the real re-check (no catalogue, no audit). */

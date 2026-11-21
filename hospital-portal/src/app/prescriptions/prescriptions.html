@@ -1207,6 +1207,31 @@
                 [placeholder]="'PRESCRIPTIONS.PRESCRIBED_QUANTITY_UNIT_PLACEHOLDER' | translate"
               />
             </div>
+            <div class="field">
+              <!-- QA D2926 (r66), policy rule 1 (provisional): the refills the prescriber writes on
+                   the order. The pharmacist releases a written refill as ordinary dispensing; one
+                   more is a renewal a prescriber approves. Never on a controlled substance, and
+                   never rewritten after the signature (the server refuses both). -->
+              <label for="rx-refillsAllowed">{{
+                'PRESCRIPTIONS.REFILLS_ALLOWED' | translate
+              }}</label>
+              <input
+                id="rx-refillsAllowed"
+                data-server-field="refillsAllowed"
+                data-testid="rx-refills-allowed"
+                type="number"
+                inputmode="numeric"
+                min="0"
+                [max]="maxWrittenRefills"
+                step="1"
+                aria-describedby="rx-refillsAllowed-hint"
+                [(ngModel)]="form.refillsAllowed"
+                [readonly]="refillsLocked()"
+              />
+              <p class="field-hint" id="rx-refillsAllowed-hint" data-testid="rx-refills-hint">
+                {{ refillsHintKey() | translate }}
+              </p>
+            </div>
           </div>
           <div class="form-row">
             <div class="field">

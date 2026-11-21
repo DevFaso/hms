@@ -159,7 +159,8 @@ describe('LabSensitivityRecommendationsComponent (policy 2026-11-20)', () => {
     fixture.detectChanges();
 
     expect(fixture.componentInstance.applied).toBe(1);
-    expect(toast.success).toHaveBeenCalled();
+    // r66 D2905: one confirmation, saying how many tests were classified, as the dialog closes.
+    expect(toast.success).toHaveBeenCalledOnceWith('Catégories appliquées : 1.');
     expect(q('reco-dialog')).toBeNull();
   });
 

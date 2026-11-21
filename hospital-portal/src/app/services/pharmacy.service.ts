@@ -781,6 +781,10 @@ export interface PharmacyClaimResponse {
   notes?: string;
   createdAt: string;
   updatedAt: string;
+  /** QA D2925 (r66): the reader may record the payer's answer (a money desk or a hospital admin). */
+  canRecordPayerDecision?: boolean;
+  /** QA D2925 (r66): accepted, but no money desk stands behind it yet: it covers no fill. */
+  acceptanceUnconfirmed?: boolean;
 }
 /* ───────────────────────────── Service ───────────────────────────── */
 
