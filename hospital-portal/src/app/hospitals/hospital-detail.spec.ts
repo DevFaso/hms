@@ -83,7 +83,12 @@ describe('HospitalDetailComponent (MVP-c2-frontend)', () => {
       'create',
       'update',
       'delete',
+      'onboardingReadiness',
     ]);
+    // The page embeds the onboarding checklist (QA r65 D2731); its own spec covers it.
+    hospitalService.onboardingReadiness.and.returnValue(
+      of({ hospitalId: 'h-1', patientBookable: false, items: [] }),
+    );
     lifecycleService = jasmine.createSpyObj<HospitalLifecycleService>('HospitalLifecycleService', [
       'get',
       'suspend',
@@ -306,7 +311,7 @@ describe('HospitalDetailComponent (MVP-c2-frontend)', () => {
     hospitalService.getById.and.returnValue(of(fakeHospital()));
     lifecycleService.get.and.returnValue(of(fakeLifecycle()));
     const cmp = setup();
-    expect(cmp.stateColor(null)).toBe('#94a3b8');
+    expect(cmp.stateColor(null)).toBe('#566579');
     expect(cmp.stateColor('PURGED')).toBe('#1e293b');
   });
 });

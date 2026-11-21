@@ -484,7 +484,7 @@ const EMPTY_FORM: IntakeFormState = {
       }
       .adt-intake__subtitle {
         margin-top: 0;
-        color: var(--muted, #64748b);
+        color: var(--text-secondary);
       }
       .adt-intake__error,
       .adt-intake__field-error {
@@ -518,7 +518,7 @@ const EMPTY_FORM: IntakeFormState = {
         margin-bottom: 0.25rem;
       }
       .form-row small {
-        color: var(--muted, #64748b);
+        color: var(--text-secondary);
         margin-top: 0.25rem;
       }
       .form-row--checkbox {

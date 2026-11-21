@@ -715,7 +715,7 @@ summary:focus-visible,
 }
 .control-tower a:focus-visible,
 .control-tower button:focus-visible {
-  outline: 3px solid #2563eb;
+  outline: 3px solid var(--primary);
   outline-offset: 3px;
 }
 @media (max-width: 1000px) {

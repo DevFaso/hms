@@ -1057,11 +1057,15 @@ export interface SchedulingHospital {
   id: string;
   name: string;
   address: string;
+  /** QA r65 D2731: whom to call when the hospital offers nothing to book online. */
+  phoneNumber?: string | null;
 }
 
 export interface SchedulingDepartment {
   id: string;
   name: string;
+  /** QA r65 D2731: false when the department has no published slot still to come. */
+  hasOpenSlots?: boolean;
 }
 
 export interface SchedulingProvider {
@@ -1837,15 +1841,17 @@ export class PatientPortalService {
     );
   }
 
+  /**
+   * QA r65 D2731: a failure is the caller's to show. It used to come back as
+   * an empty list, and an empty list now means "this hospital offers no
+   * online booking yet", which must never be said because a request failed.
+   */
   getSchedulingDepartments(hospitalId: string): Observable<SchedulingDepartment[]> {
     return this.http
       .get<ApiWrapper<SchedulingDepartment[]>>(
         `${this.base}/booking/hospitals/${hospitalId}/departments`,
       )
-      .pipe(
-        map((r) => r.data ?? []),
-        catchError(() => of([])),
-      );
+      .pipe(map((r) => r.data ?? []));
   }
 
   /** QA D1093: the published, free slots of a day (narrowed to a clinician when one is chosen). */

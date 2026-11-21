@@ -17,7 +17,7 @@
 
 .last-refreshed {
   font-size: 0.78rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .refresh-btn {
@@ -51,7 +51,7 @@
   border-radius: 20px;
   border: 1px solid #d1d5db;
   background: #fff;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 0.85rem;
   font-weight: 500;
   cursor: pointer;
@@ -106,8 +106,8 @@
     color: #065f46;
   }
   &.orders {
-    background: #e0e7ff;
-    color: #3730a3;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &.overdue-icon {
     background: #fee2e2;
@@ -126,12 +126,12 @@
 }
 .card-label {
   font-size: 0.85rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 /* QA D1402: what the tile's number leaves out of the list of the same name. */
 .card-hint {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 /* ── Station Layout ───────────────────────────────────────── */
@@ -195,7 +195,7 @@
     padding: 0.75rem 1rem;
     font-weight: 600;
     font-size: 0.8rem;
-    color: #6b7280;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     border-bottom: 1px solid #e5e7eb;
@@ -465,7 +465,7 @@
 .handoff-dir {
   font-size: 0.78rem;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--text-secondary);
   text-transform: uppercase;
 }
 .handoff-note {
@@ -489,7 +489,7 @@
 }
 .handoff-time {
   font-size: 0.78rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 /* ── Announcements Sidebar ────────────────────────────────── */
@@ -512,7 +512,7 @@
 }
 .no-announcements {
   font-size: 0.85rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 .announcement-card {
   padding: 0.75rem;
@@ -534,13 +534,13 @@
   border-radius: 4px;
   font-size: 0.7rem;
   font-weight: 600;
-  background: #e0e7ff;
-  color: #3730a3;
+  background: var(--primary-tint);
+  color: var(--primary-deep);
   text-transform: uppercase;
 }
 .announcement-time {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 /* ── Hold/Refuse Reason Modal ─────────────────────────────── */
@@ -570,7 +570,7 @@
   }
   p {
     font-size: 0.9rem;
-    color: #6b7280;
+    color: var(--text-secondary);
     margin-bottom: 0.75rem;
   }
 }
@@ -593,7 +593,7 @@
   &:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+    box-shadow: 0 0 0 2px rgba(14, 124, 107, 0.15);
   }
 }
 
@@ -711,7 +711,7 @@
   flex-wrap: wrap;
   gap: 0.4rem;
   font-size: 0.78rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 
   .meta-item {
     display: flex;
@@ -831,7 +831,7 @@
     background: #dc2626;
   }
   &.flow-header-discharge {
-    background: #7c3aed;
+    background: var(--accent-violet);
   }
 }
 
@@ -868,13 +868,13 @@
   }
 
   .flow-card-room {
-    color: #6b7280;
+    color: var(--text-secondary);
     font-size: 0.75rem;
     margin-bottom: 0.2rem;
   }
 
   .flow-card-wait {
-    color: #6b7280;
+    color: var(--text-secondary);
     font-size: 0.72rem;
     margin-top: 0.25rem;
   }
@@ -969,10 +969,10 @@
 
     &:focus {
       border-color: var(--primary);
-      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+      box-shadow: 0 0 0 2px rgba(14, 124, 107, 0.15);
     }
     &::placeholder {
-      color: #6b7280;
+      color: var(--text-muted);
     }
   }
 }
@@ -1059,15 +1059,15 @@
 
 .priority-stat .task-priority-badge {
   background: #fef2f2;
-  color: #dc2626;
+  color: var(--danger);
 }
 .priority-urgent .task-priority-badge {
   background: #fffbeb;
-  color: #d97706;
+  color: var(--warning-text);
 }
 .task-priority-badge {
   background: #f3f4f6;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .task-card-body {
@@ -1082,21 +1082,21 @@
 .task-mrn {
   margin-left: 0.5rem;
   font-size: 0.78rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .task-description {
   margin: 0.15rem 0;
   font-size: 0.82rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .task-due {
   font-size: 0.78rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 
   &.overdue-text {
-    color: #dc2626;
+    color: var(--danger);
     font-weight: 600;
   }
 }
@@ -1107,7 +1107,7 @@
   padding: 0.1rem 0.35rem;
   border-radius: 6px;
   background: #fef2f2;
-  color: #dc2626;
+  color: var(--danger);
   font-size: 0.65rem;
   font-weight: 700;
 }
@@ -1120,7 +1120,7 @@
 
 .task-completed-info {
   font-size: 0.78rem;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-style: italic;
 }
 
@@ -1172,7 +1172,7 @@
 .inbox-icon {
   .material-symbols-outlined {
     font-size: 1.25rem;
-    color: #6b7280;
+    color: var(--text-secondary);
   }
 
   .inbox-unread & .material-symbols-outlined {
@@ -1194,7 +1194,7 @@
 
 .inbox-time {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .badge-count {
@@ -1264,7 +1264,7 @@
   background: #fff;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.15s;
 

@@ -18,7 +18,7 @@
 
     p {
       margin: 0;
-      color: #6b7280;
+      color: var(--text-secondary);
       font-size: 0.85rem;
 
       code {
@@ -112,7 +112,7 @@
 
   &__hint {
     margin: 0 0 0.5rem;
-    color: #6b7280;
+    color: var(--text-secondary);
     font-size: 0.82rem;
   }
 
@@ -160,7 +160,7 @@
     }
 
     small {
-      color: #6b7280;
+      color: var(--text-secondary);
       font-size: 0.7rem;
       letter-spacing: 0.04em;
       text-transform: uppercase;
@@ -168,7 +168,7 @@
 
     &:hover,
     &.is-highlighted {
-      background: #eef2ff;
+      background: var(--primary-soft);
     }
   }
 }

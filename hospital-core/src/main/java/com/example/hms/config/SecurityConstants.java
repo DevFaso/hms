@@ -107,9 +107,26 @@ public class SecurityConstants {
     public static final String USER_DIRECTORY_AUTHORITIES =
         "'ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN'";
 
-    /** Every authority admitted to {@code POST /users/admin-register}: both registrar lists. */
+    /**
+     * Platform admin rules 2026-11-20, rule 1a: the organisation's
+     * administrator registers staff at every hospital of its own organisation.
+     * Kept OUT of {@link #USER_REGISTRAR_AUTHORITIES} like the provider
+     * registrar: every role on that list may register PATIENT accounts, and an
+     * organisation admin never may (it reads no patient record).
+     */
+    public static final String ORGANISATION_REGISTRAR_AUTHORITIES = "'ROLE_ADMIN'";
+
+    /**
+     * Who works the invitations of {@code /assignments} (create, read, the
+     * code paths, switch off): the two hospital-level administrators and the
+     * organisation's. What each may reach is {@code UserAccountAccess.assignmentScope}.
+     */
+    public static final String ASSIGNMENT_ADMIN_AUTHORITIES =
+        "'ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','ROLE_ADMIN'";
+
+    /** Every authority admitted to {@code POST /users/admin-register}: the three registrar lists. */
     public static final String ADMIN_REGISTER_AUTHORITIES =
-        USER_REGISTRAR_AUTHORITIES + "," + PROVIDER_REGISTRAR_AUTHORITIES;
+        USER_REGISTRAR_AUTHORITIES + "," + PROVIDER_REGISTRAR_AUTHORITIES + "," + ORGANISATION_REGISTRAR_AUTHORITIES;
 
     /**
      * The authorities of a quoted SpEL fragment such as

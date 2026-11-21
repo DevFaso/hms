@@ -17,11 +17,11 @@
     font-weight: 600;
   }
   .page-subtitle {
-    color: #64748b;
+    color: var(--text-secondary);
     margin: 0;
   }
   .back-link {
-    color: #6366f1;
+    color: var(--primary);
     text-decoration: none;
     display: inline-flex;
     gap: 6px;
@@ -47,15 +47,6 @@
 
   .btn-primary {
     margin-left: auto;
-    background: #16a34a;
-    color: #fff;
-    border: none;
-    padding: 8px 14px;
-    border-radius: 6px;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
   }
 }
 
@@ -129,8 +120,8 @@
   }
 
   .tier-pill {
-    background: #eef2ff;
-    color: #4338ca;
+    background: var(--primary-soft);
+    color: var(--primary-dark);
     padding: 2px 8px;
     border-radius: 999px;
     font-size: 12px;
@@ -154,7 +145,7 @@
     gap: 4px;
 
     .features {
-      color: #64748b;
+      color: var(--text-secondary);
       font-size: 12px;
       word-break: break-word;
     }
@@ -194,7 +185,7 @@
 
   .grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
 
     label {
@@ -205,7 +196,7 @@
       span {
         font-size: 12px;
         font-weight: 500;
-        color: #64748b;
+        color: var(--text-secondary);
         text-transform: uppercase;
         letter-spacing: 0.04em;
       }
@@ -223,6 +214,27 @@
     .span-2 {
       grid-column: span 2;
     }
+
+    /* QA D3050 (r68): the select is styled as its neighbours, not a bare
+       browser control. */
+    select {
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 14px;
+      font-family: inherit;
+      background: #fff;
+    }
+
+    /* QA D3050 (r68): one column on a phone (« Code de palier » and « Prix
+       mensuel » were cut off at the right edge). */
+    @media (max-width: 599px) {
+      grid-template-columns: minmax(0, 1fr);
+
+      .span-2 {
+        grid-column: auto;
+      }
+    }
   }
 
   .form-error {
@@ -239,14 +251,6 @@
     display: flex;
     gap: 8px;
 
-    .btn-primary {
-      background: #16a34a;
-      color: #fff;
-      border: none;
-      padding: 8px 14px;
-      border-radius: 6px;
-      cursor: pointer;
-    }
     .btn-ghost {
       background: #f1f5f9;
       border: 1px solid #cbd5e1;

@@ -67,6 +67,12 @@ class HospitalIdNarrowingInterceptorTest {
             // shape only: the interceptor reads the signature, never calls it
         }
 
+        @GetMapping("/org")
+        @OrganisationScopedHospitalId(reason = "the service bounds the listing by the organisation scope")
+        public void organisationListing(@RequestParam(required = false) UUID hospitalId) {
+            // shape only: the interceptor reads the signature, never calls it
+        }
+
         @GetMapping("/y")
         public void noHospital(@RequestParam UUID patientId) {
             // shape only: the interceptor reads the signature, never calls it
@@ -81,7 +87,44 @@ class HospitalIdNarrowingInterceptorTest {
         ActingScopeResolver resolver = ActingScopeTestSupport.resolver(assignments, auditProvider);
         ObjectProvider<ActingScopeResolver> provider = mock(ObjectProvider.class);
         when(provider.getIfAvailable()).thenReturn(resolver);
-        interceptor = new HospitalIdNarrowingInterceptor(provider);
+        ObjectProvider<com.example.hms.service.support.UserAccountAccess> accessProvider = mock(ObjectProvider.class);
+        when(accessProvider.getIfAvailable()).thenReturn(accountAccess);
+        interceptor = new HospitalIdNarrowingInterceptor(provider, accessProvider);
+    }
+
+    private final com.example.hms.service.support.UserAccountAccess accountAccess =
+        mock(com.example.hms.service.support.UserAccountAccess.class);
+
+    @Test
+    @DisplayName("QA D3058: an organisation listing lets through a hospital of the caller's organisation, "
+        + "un-narrowed, and still refuses one outside it or on an unmarked handler")
+    void organisationListingAcceptsTheOrganisationOnly() throws Exception {
+        UUID outside = UUID.randomUUID();
+        when(accountAccess.organisationHospitalIds()).thenReturn(java.util.Set.of(B));
+
+        ActingScopeTestSupport.actingAt(USER, A);
+        MockHttpServletRequest inOrg = new MockHttpServletRequest("GET", "/org");
+        inOrg.setParameter("hospitalId", B.toString());
+        assertThat(interceptor.preHandle(inOrg, new MockHttpServletResponse(), handler("organisationListing")))
+            .isTrue();
+        assertThat(HospitalContextHolder.getContextOrEmpty().pinnedHospitalId()).as("not narrowed").isEqualTo(A);
+
+        HospitalContextHolder.clear();
+        ActingScopeTestSupport.actingAt(USER, A);
+        MockHttpServletRequest notInOrg = new MockHttpServletRequest("GET", "/org");
+        notInOrg.setParameter("hospitalId", outside.toString());
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        HandlerMethod listing = handler("organisationListing");
+        assertThatThrownBy(() -> interceptor.preHandle(notInOrg, response, listing))
+            .isInstanceOf(HospitalScopeRefusedException.class);
+
+        HospitalContextHolder.clear();
+        ActingScopeTestSupport.actingAt(USER, A);
+        MockHttpServletRequest unmarked = new MockHttpServletRequest("GET", "/x");
+        unmarked.setParameter("hospitalId", B.toString());
+        HandlerMethod byParam = handler("byParam");
+        assertThatThrownBy(() -> interceptor.preHandle(unmarked, response, byParam))
+            .isInstanceOf(HospitalScopeRefusedException.class);
     }
 
     @AfterEach

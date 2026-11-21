@@ -22,6 +22,12 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { localDateString } from '../shared/date-utils';
 import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
+import {
+  CardSortChange,
+  CardSortColumn,
+  CardSortComponent,
+  CardSortDirection,
+} from '../shared/card-sort/card-sort.component';
 type SortField = 'patient' | 'doctor' | 'date' | 'status';
 type SortDir = 'asc' | 'desc';
 
@@ -36,6 +42,7 @@ type SortDir = 'asc' | 'desc';
     FormsModule,
     TranslateModule,
     EnumLabelPipe,
+    CardSortComponent,
   ],
   templateUrl: './appointment-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -227,13 +234,31 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
     this.filtered.set(result);
   }
 
+  /** The sortable headers, for the card-mode « Trier par » (the header row is hidden there). */
+  readonly sortColumns: readonly (CardSortColumn & { field: SortField })[] = [
+    { field: 'patient', label: 'PATIENTS.PATIENT_NAME' },
+    { field: 'doctor', label: 'APPOINTMENTS.DOCTOR' },
+    { field: 'date', label: 'APPOINTMENTS.DATE_TIME' },
+    { field: 'status', label: 'COMMON.STATUS' },
+  ];
+
   sort(field: SortField): void {
     if (this.sortField() === field) {
-      this.sortDir.set(this.sortDir() === 'asc' ? 'desc' : 'asc');
+      this.setSort(field, this.sortDir() === 'asc' ? 'desc' : 'asc');
     } else {
-      this.sortField.set(field);
-      this.sortDir.set(field === 'date' ? 'desc' : 'asc');
+      this.setSort(field, field === 'date' ? 'desc' : 'asc');
     }
+  }
+
+  /** The card-mode sort control: the same sort state as a header click. */
+  onCardSort(change: CardSortChange): void {
+    const field = this.sortColumns.find((c) => c.field === change.field)?.field;
+    if (field) this.setSort(field, change.direction);
+  }
+
+  private setSort(field: SortField, dir: CardSortDirection): void {
+    this.sortField.set(field);
+    this.sortDir.set(dir);
     this.currentPage.set(0);
     this.applyFilter();
   }

@@ -27,6 +27,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { OnboardingChecklistComponent } from '../shared/onboarding-checklist/onboarding-checklist.component';
 type ActionKind = 'suspend' | 'restore' | 'archive' | 'schedule-purge' | 'cancel-purge';
 
 interface ActionDialog {
@@ -52,6 +53,7 @@ interface ActionDialog {
     RouterLink,
     TranslateModule,
     OrgTextPipe,
+    OnboardingChecklistComponent,
   ],
   templateUrl: './hospital-detail.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -244,18 +246,22 @@ export class HospitalDetailComponent implements OnInit {
 
   stateColor(state: HospitalLifecycleState | null): string {
     switch (state) {
+      // QA D2793 (r65): the chip prints the state IN this colour, on an 8 %
+      // tint of it, so each is a text colour (4.5:1 or more on its tint): the
+      // values of --success-text, --warning-text, --text-secondary, --danger
+      // and --text-muted (a bound style cannot take a var() and an alpha).
       case 'ACTIVE':
-        return '#10b981';
+        return '#047857';
       case 'SUSPENDED':
-        return '#f59e0b';
+        return '#b45309';
       case 'ARCHIVED':
-        return '#64748b';
+        return '#475569';
       case 'PENDING_PURGE':
-        return '#dc2626';
+        return '#b91c1c';
       case 'PURGED':
         return '#1e293b';
       default:
-        return '#94a3b8';
+        return '#566579';
     }
   }
 }

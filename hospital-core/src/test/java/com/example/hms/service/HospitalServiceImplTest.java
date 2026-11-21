@@ -79,6 +79,9 @@ class HospitalServiceImplTest {
         lenient().when(hospitalRepository.findClinicalById(any()))
             .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
                 .filter(ClinicalHospitals::isClinical));
+        // updateHospital loads the row under a lock (review of #1246): the same row, when it is a hospital.
+        lenient().when(hospitalRepository.findByIdForUpdate(any()))
+            .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0)));
         hospitalMapper = new HospitalMapper();
         hospitalService = new HospitalServiceImpl(hospitalRepository, organizationRepository, hospitalMapper, messageSource, roleValidator,
             providerVerificationRepository);
@@ -350,6 +353,25 @@ class HospitalServiceImplTest {
 
             HospitalResponseDTO result = hospitalService.getHospitalById(id, Locale.ENGLISH);
             assertEquals("Test Hospital", result.getName());
+        }
+
+        @Test
+        @DisplayName("QA D3059: the single read says which of the code and the currency are locked")
+        void saysWhatIsLocked() {
+            UUID id = UUID.randomUUID();
+            setSuperAdminContext();
+            when(hospitalRepository.findById(id)).thenReturn(Optional.of(buildHospital(id, "A", "TST-01")));
+
+            when(hospitalRepository.hasPriceListItem(id)).thenReturn(true);
+            HospitalResponseDTO priced = hospitalService.getHospitalById(id, Locale.ENGLISH);
+            assertEquals(Boolean.FALSE, priced.getCodeLocked());
+            assertEquals(Boolean.TRUE, priced.getCurrencyLocked());
+
+            when(hospitalRepository.hasPriceListItem(id)).thenReturn(false);
+            when(hospitalRepository.hasAllocatedInvoiceNumber(id)).thenReturn(true);
+            HospitalResponseDTO billed = hospitalService.getHospitalById(id, Locale.ENGLISH);
+            assertEquals(Boolean.TRUE, billed.getCodeLocked());
+            assertEquals(Boolean.TRUE, billed.getCurrencyLocked());
         }
 
         @Test

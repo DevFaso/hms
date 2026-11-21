@@ -67,6 +67,7 @@ import { refuseFields } from '../shared/forms/invalid-fields';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
+import { PrintLabelService } from '../services/print-label.service';
 import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import {
@@ -268,6 +269,7 @@ export class PrescriptionsComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly auth = inject(AuthService);
   private readonly mfa = inject(MfaService);
+  private readonly printService = inject(PrintLabelService);
 
   /**
    * QA D427: the actions the API admits for this caller, so nobody is offered
@@ -551,6 +553,49 @@ export class PrescriptionsComponent implements OnInit {
    * Judged against the hospital the requests are pinned to (RoleContextService.effectiveHospitalIdForRequest),
    * not the home hospital: a scoped super-admin's selected hospital's own rows are not foreign.
    */
+  /**
+   * Still to be dispensed, by nobody else yet: the server's PRINTABLE_STATUSES
+   * (OrdonnancePdfService). A dispensed, partly filled, partner-held or
+   * clarification-pending order has no new ordonnance.
+   */
+  private static readonly ORDONNANCE_STATUSES = [
+    'SIGNED',
+    'TRANSMITTED',
+    'TRANSMISSION_FAILED',
+    'PENDING_STOCK',
+    'PARTNER_REJECTED',
+  ];
+
+  protected readonly canPrintOrdonnanceRole = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('prescriptionOrdonnance')),
+  );
+
+  /**
+   * QA D3054 (r68): the ordonnance is the prescriber's own document: offered on
+   * their own order of this hospital, while it is still to be dispensed.
+   */
+  canPrintOrdonnance(p: PrescriptionResponse): boolean {
+    const own = this.ownPrescriberStaffId();
+    return (
+      this.canPrintOrdonnanceRole() &&
+      !this.isForeign(p) &&
+      !!own &&
+      p.staffId === own &&
+      !!p.status &&
+      PrescriptionsComponent.ORDONNANCE_STATUSES.includes(p.status)
+    );
+  }
+
+  printOrdonnance(p: PrescriptionResponse): void {
+    this.prescriptionService.getOrdonnancePdf(p.id).subscribe({
+      next: (blob) => this.printService.openForPrint(blob),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PRESCRIPTIONS.ORDONNANCE_FAILED'),
+        ),
+    });
+  }
+
   isForeign(p: PrescriptionResponse): boolean {
     // The hospital the requests are pinned to: a scoped super-admin's selected hospital, a
     // staff member's own; null in global view, where no row is "elsewhere".

@@ -54,6 +54,6 @@ describe('Error403Component', () => {
     const el = render();
 
     expect(el.querySelector('.role-hint')).toBeNull();
-    expect(el.querySelector('h2')?.textContent).toContain('ERROR_403.TITLE');
+    expect(el.querySelector('h1')?.textContent).toContain('ERROR_403.TITLE');
   });
 });

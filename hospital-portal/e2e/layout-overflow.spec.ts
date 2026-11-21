@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import process from 'node:process';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
@@ -178,12 +179,17 @@ async function seedBilling(page: Page) {
   );
 }
 
-/** LAYOUT_SHOTS=<dir> [LAYOUT_SHOTS_TAG=before|after]: save the PR's evidence screenshots. */
+/**
+ * LAYOUT_SHOTS=<dir> [LAYOUT_SHOTS_TAG=before|after]: save the PR's evidence screenshots.
+ * LAYOUT_SHOTS_FOCUS=<selector> (r65): scroll that element to the top first. The shell
+ * scrolls inside `.content`, so a plain shot shows the first screen only; `table` shows
+ * each list's table instead (its cards on a phone, its sticky last column on a tablet).
+ */
 async function shoot(
   page: Page,
   name: string,
   widths: readonly number[] = [1366, 390],
-  focus?: string,
+  focus: string | undefined = process.env['LAYOUT_SHOTS_FOCUS'],
 ) {
   const dir = process.env['LAYOUT_SHOTS'];
   if (!dir) return;
@@ -194,7 +200,12 @@ async function shoot(
       const backdrop = document.querySelector<HTMLElement>('.sidebar-backdrop');
       if (backdrop && getComputedStyle(backdrop).display !== 'none') backdrop.click();
     });
-    if (focus) await page.locator(focus).first().scrollIntoViewIfNeeded();
+    if (focus && (await page.locator(focus).count()) > 0) {
+      await page
+        .locator(focus)
+        .first()
+        .evaluate((el) => el.scrollIntoView({ block: 'start' }));
+    }
     await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(dir, `${name}-${width}-${tag}.png`) });
   }
@@ -1167,6 +1178,120 @@ const DIALOGS: {
       await expect(p.getByText(LONG_NAME).first()).toBeVisible();
     },
   },
+  /* ── r68 (D3050 / D3055 / D3057): three views #1246 / #1247 left past a phone's edge ── */
+  {
+    label: '/super-admin/subscriptions [Nouveau plan] (D3050)',
+    route: '/super-admin/subscriptions',
+    role: 'ROLE_SUPER_ADMIN',
+    focus: '[data-test="edit-card"]',
+    seed: (p) =>
+      p.route('**/api/super-admin/subscriptions/plans**', (r) =>
+        r.fulfill({
+          json: [
+            {
+              id: RECORD_ID,
+              code: 'ESSENTIEL-CLINIQUE-2026',
+              name: 'Essentiel clinique de district',
+              description:
+                'Dossier patient, rendez-vous, facturation et pharmacie pour une clinique',
+              monthlyPriceCents: 12_500_000,
+              currency: 'XOF',
+              active: true,
+              features: [],
+            },
+          ],
+        }),
+      ),
+    then: async (p) => {
+      await p.locator('.toolbar .btn-primary').first().click();
+      await expect(p.locator('[data-test="edit-card"]')).toBeVisible();
+    },
+  },
+  {
+    label: '/dashboard [hospital admin: schedule, quick navigation] (D3055)',
+    route: '/dashboard',
+    role: 'ROLE_HOSPITAL_ADMIN',
+    focus: '.admin-workspace',
+    seed: async (p) => {
+      await p.route('**/api/appointments**', (r) => r.fulfill({ json: DESK_ROWS }));
+    },
+    then: async (p) => {
+      await expect(p.locator('.admin-workspace .sched-row').first()).toBeVisible();
+      await expect(p.locator('.admin-workspace .nav-tile').first()).toBeVisible();
+    },
+  },
+  {
+    label: '/admin-assignments [details: e-mail, checklist, footer] (D3051)',
+    route: '/admin-assignments',
+    role: 'ROLE_HOSPITAL_ADMIN',
+    seed: (p) =>
+      p.route('**/api/assignments?**', (r) =>
+        r.fulfill({
+          json: page1([
+            {
+              id: RECORD_ID,
+              userId: TEST_ID,
+              userName: 'Aminata Sawadogo-Kaboré',
+              userEmail:
+                'aminata.sawadogo.kabore.medecin-chef@centre-hospitalier-wend-panga.example.invalid',
+              roleCode: 'ROLE_DOCTOR',
+              roleName: 'ROLE_DOCTOR',
+              hospitalId: TEST_ID,
+              hospitalName: HOSPITAL,
+              hospitalCode: 'CHU-WP-OUAGA-2026',
+              active: true,
+              assignmentCode: 'ASG-CHUWP-2026-000123',
+              assignedAt: NOW,
+              profileChecklist: [
+                'Numéro d’ordre du médecin à renseigner',
+                'Département de rattachement à choisir',
+                'Spécialité à préciser',
+                'Photo du profil à ajouter',
+              ],
+            },
+          ]),
+        }),
+      ),
+    then: async (p) => {
+      await p.locator('tbody tr').first().locator('.icon-btn').first().click();
+      await expect(p.locator('#admin-assignments-dialog-3-title')).toBeVisible();
+    },
+  },
+  {
+    label: '/organizations [cards: name and description] (D3057)',
+    route: '/organizations',
+    role: 'ROLE_SUPER_ADMIN',
+    seed: (p) =>
+      p.route('**/api/organizations?**', (r) =>
+        r.fulfill({
+          json: page1(
+            [
+              'Centre Hospitalier Universitaire Wend-Panga de Ouagadougou',
+              'Org Démo Wend-Panga — FICTIF',
+              'Réseau-de-santé-Wend-Panga-et-centres-associés-du-Kadiogo',
+            ].map((name, i) => ({
+              id: `${RECORD_ID.slice(0, -1)}${i + 1}`,
+              name,
+              code: `CHU-WP-OUAGA-202${i}`,
+              description: 'demo-r68 — organisation de démonstration fictive du réseau Wend-Panga',
+              type: 'HOSPITAL_CHAIN',
+              active: true,
+              createdAt: NOW,
+              updatedAt: NOW,
+              primaryContactEmail: 'direction.generale@wend-panga.example.invalid',
+              primaryContactPhone: '+226 70 00 00 00',
+              defaultTimezone: 'Africa/Ouagadougou',
+              onboardingNotes: '',
+              lifecycleState: i === 2 ? 'SUSPENDED' : 'ACTIVE',
+              hospitals: [],
+            })),
+          ),
+        }),
+      ),
+    then: async (p) => {
+      await expect(p.locator('tbody .org-name').first()).toBeVisible();
+    },
+  },
 ];
 
 test.describe('layout overflow: r64 dialogs and money screens', () => {
@@ -1352,5 +1477,74 @@ test.describe('layout overflow: lab outbox message dialog', () => {
     const found = await auditAtWidths(page, '/lab-outbox message dialog');
     await shoot(page, 'lab-outbox-dialog', LAYOUT_WIDTHS);
     expect(found, formatOffenders(found)).toEqual([]);
+  });
+});
+
+/* ── #1247 follow-up (Rex): a sortable list sorts in card mode ───────────────
+   Under 600 px the header row (and its sort buttons) is hidden; the shared
+   « Trier par » control takes its place and drives the same sort. At 768 and
+   1366 the header sorts and the control is not shown. */
+
+const SORT_ROWS = ['MRN-B-0002', 'MRN-C-0003', 'MRN-A-0001'].map((mrn, n) => ({
+  ...DESK,
+  id: `${RECORD_ID.slice(0, -1)}${n + 1}`,
+  mrn,
+}));
+
+test.describe('card mode: sortable lists keep their sort (#1247)', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  // The page opens at phone width: resizing down from a desktop leaves the
+  // shell's phone drawer open, and the page behind it is inert (QA D1153).
+  test('/patients sorts by « Trier par » on a phone', async ({ page }, testInfo) => {
+    await page.route('**/api/patients', (r) => r.fulfill({ json: SORT_ROWS }));
+    await page.route('**/api/patients?**', (r) => r.fulfill({ json: SORT_ROWS }));
+    await page.setViewportSize({ width: 390, height: heightFor(390) });
+    await open(page, testInfo.project.use.baseURL as string, 'ROLE_RECEPTIONIST', '/patients');
+    const control = page.locator('app-card-sort');
+    const firstRow = page.locator('table tbody tr').first();
+
+    await expect(control).toBeVisible();
+    await expect(page.locator('table thead')).toBeHidden();
+    // axe on the control itself: labelled select, named toggle, contrast.
+    const axe = await new AxeBuilder({ page }).include('app-card-sort').analyze();
+    expect(axe.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
+    const field = control.getByRole('combobox');
+    await field.selectOption('mrn');
+    await expect(firstRow).toContainText('MRN-A-0001');
+    // Keyboard: Tab to the direction toggle and press Enter.
+    await field.focus();
+    await page.keyboard.press('Tab');
+    await expect(control.getByRole('button')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(firstRow).toContainText('MRN-C-0003');
+
+    // Wider, the header sorts, shows the same sort, and the control is gone.
+    for (const width of [768, 1366]) {
+      await page.setViewportSize({ width, height: heightFor(width) });
+      await expect(control).toBeHidden();
+      await expect(page.locator('table thead')).toBeVisible();
+      await expect(page.locator('th[aria-sort="descending"]')).toHaveCount(1);
+    }
+    const found = await auditAtWidths(page, '/patients [card sort]');
+    await shoot(page, 'card-sort-patients', [1366, 768, 390]);
+    expect(found, formatOffenders(found)).toEqual([]);
+  });
+
+  test('/appointments shows the control on a phone only', async ({ page }, testInfo) => {
+    await page.route('**/api/appointments**', (r) => r.fulfill({ json: SORT_ROWS }));
+    await page.setViewportSize({ width: 390, height: heightFor(390) });
+    await open(page, testInfo.project.use.baseURL as string, 'ROLE_RECEPTIONIST', '/appointments');
+    const control = page.locator('app-card-sort');
+    await expect(control).toBeVisible();
+    await expect(control.getByRole('combobox')).toHaveValue('date');
+    await control.getByRole('combobox').selectOption('status');
+    for (const width of [768, 1366]) {
+      await page.setViewportSize({ width, height: heightFor(width) });
+      await expect(control).toBeHidden();
+      await expect(
+        page.locator('th[aria-sort="descending"], th[aria-sort="ascending"]'),
+      ).toHaveCount(1);
+    }
   });
 });

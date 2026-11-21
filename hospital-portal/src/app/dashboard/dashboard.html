@@ -130,13 +130,21 @@
       @if (!hasQuickActionsStrip()) {
         <!-- QA D997: offered for the role the user is acting in, not every role held. -->
         @if (permissions.hasActivePermission('Create Appointments')) {
-          <a class="hero-btn hero-btn-primary" routerLink="/appointments/new">
+          <a
+            class="hero-btn hero-btn-primary"
+            [routerLink]="linkFor('/appointments/new')"
+            [class.link-off]="!canOpen('/appointments/new')"
+          >
             <span class="material-symbols-outlined">calendar_add_on</span>
             {{ 'DASHBOARD.NEW_APPOINTMENT' | translate }}
           </a>
         }
         @if (permissions.hasActivePermission('Create Encounters')) {
-          <a class="hero-btn hero-btn-secondary" routerLink="/encounters">
+          <a
+            class="hero-btn hero-btn-secondary"
+            [routerLink]="linkFor('/encounters')"
+            [class.link-off]="!canOpen('/encounters')"
+          >
             <span class="material-symbols-outlined">stethoscope</span>
             {{ 'DASHBOARD.START_ENCOUNTER' | translate }}
           </a>
@@ -145,7 +153,11 @@
           permissions.hasActivePermission('Register Patients') &&
           !permissions.hasActivePermission('Create Encounters')
         ) {
-          <a class="hero-btn hero-btn-secondary" routerLink="/patients/new">
+          <a
+            class="hero-btn hero-btn-secondary"
+            [routerLink]="linkFor('/patients/new')"
+            [class.link-off]="!canOpen('/patients/new')"
+          >
             <span class="material-symbols-outlined">person_add</span>
             {{ 'DASHBOARD.REGISTER_PATIENT' | translate }}
           </a>
@@ -219,6 +231,39 @@
        ① HOSPITAL ADMIN DASHBOARD
        (Super-admin landing page is /super-admin — see MVP-5.)
        ══════════════════════════════════════════ -->
+  <!-- Platform admin rules 2026-11-20, rules 1a and 1b: the organisation's
+       administrator. Staff registration, assignments and its organisation's
+       totals: no counter, list or panel about a patient. -->
+  @if (!loading() && activeView() === 'orgadmin') {
+    @if (organisationAdminActions().length > 0) {
+      <section class="card" data-testid="org-admin-actions">
+        <div class="card-head">
+          <div class="card-title-group">
+            <span class="material-symbols-outlined card-title-icon">bolt</span>
+            <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
+          </div>
+        </div>
+        <div class="qa-grid">
+          @for (action of organisationAdminActions(); track action.route) {
+            <a
+              class="qa-card"
+              [routerLink]="action.route"
+              [style.--qa-color]="action.color"
+              [style.--qa-bg]="action.bgColor"
+            >
+              <div class="qa-icon-wrap">
+                <span class="material-symbols-outlined qa-icon">{{ action.icon }}</span>
+              </div>
+              <span class="qa-label">{{ action.label }}</span>
+              <span class="qa-desc">{{ action.description }}</span>
+            </a>
+          }
+        </div>
+      </section>
+    }
+    <app-organisation-totals />
+  }
+
   @if (!loading() && activeView() === 'hospitaladmin') {
     <section class="stat-strip">
       @for (card of hospitalAdminStatCards(); track card.key) {
@@ -236,7 +281,7 @@
         </a>
       }
       @if (hospitalAdminStatCards().length === 0) {
-        <a class="stat-card" routerLink="/appointments">
+        <a class="stat-card" [routerLink]="linkFor('/appointments')">
           <div class="stat-icon-wrap">
             <span class="material-symbols-outlined stat-icon">calendar_today</span>
           </div>
@@ -247,7 +292,7 @@
             >
           </div>
         </a>
-        <a class="stat-card" routerLink="/appointments">
+        <a class="stat-card" [routerLink]="linkFor('/appointments')">
           <div class="stat-icon-wrap">
             <span class="material-symbols-outlined stat-icon">task_alt</span>
           </div>
@@ -257,7 +302,7 @@
             }}</span>
           </div>
         </a>
-        <a class="stat-card" routerLink="/patients">
+        <a class="stat-card" [routerLink]="linkFor('/patients')">
           <div class="stat-icon-wrap">
             <span class="material-symbols-outlined stat-icon">people</span>
           </div>
@@ -267,7 +312,7 @@
             }}</span>
           </div>
         </a>
-        <a class="stat-card" routerLink="/appointments">
+        <a class="stat-card" [routerLink]="linkFor('/appointments')">
           <div class="stat-icon-wrap">
             <span class="material-symbols-outlined stat-icon">pending</span>
           </div>
@@ -277,7 +322,7 @@
             }}</span>
           </div>
         </a>
-        <a class="stat-card" routerLink="/appointments">
+        <a class="stat-card" [routerLink]="linkFor('/appointments')">
           <div class="stat-icon-wrap">
             <span class="material-symbols-outlined stat-icon">person_play</span>
           </div>
@@ -321,16 +366,26 @@
       </section>
     }
 
+    <!-- QA r65 D2731: what the hospital still needs before patients can book
+         (shown to its hospital admin until every step is done). -->
+    <app-onboarding-checklist [hospitalId]="checklistHospitalId()" [hideWhenComplete]="true" />
+
     <div class="admin-workspace">
       <div class="admin-workspace-left">
-        <section class="schedule-panel card">
+        <!-- QA r65 D2761: no schedule panel for a role that cannot open the appointments. -->
+        <section class="schedule-panel card" [class.link-off]="!canOpen('/appointments')">
           <div class="card-head">
             <div class="card-title-group">
               <span class="material-symbols-outlined card-title-icon">calendar_clock</span>
               <h2 class="card-title">{{ 'DASHBOARD.TODAYS_SCHEDULE' | translate }}</h2>
               <span class="count-badge">{{ todayAppointments().length }}</span>
             </div>
-            <a routerLink="/appointments" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
+            <a
+              [routerLink]="linkFor('/appointments')"
+              [class.link-off]="!canOpen('/appointments')"
+              class="card-link"
+              >{{ 'COMMON.VIEW_ALL' | translate }}</a
+            >
           </div>
           @if (scheduleSlots().length === 0) {
             <div class="empty-schedule">
@@ -418,9 +473,12 @@
                 <span class="material-symbols-outlined card-title-icon">group</span>
                 <h2 class="card-title">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</h2>
               </div>
-              <a routerLink="/patients" class="card-link">{{
-                'DASHBOARD.ALL_PATIENTS' | translate
-              }}</a>
+              <a
+                [routerLink]="linkFor('/patients')"
+                [class.link-off]="!canOpen('/patients')"
+                class="card-link"
+                >{{ 'DASHBOARD.ALL_PATIENTS' | translate }}</a
+              >
             </div>
             <div class="patient-list">
               @for (p of recentPatients(); track p.id) {
@@ -486,7 +544,12 @@
               <span class="material-symbols-outlined card-title-icon">event_busy</span>
               <h2 class="card-title">{{ 'DASHBOARD.WORKFORCE_ABSENCE' | translate }}</h2>
             </div>
-            <a routerLink="/staff" class="card-link">{{ 'DASHBOARD.VIEW_STAFF' | translate }}</a>
+            <a
+              [routerLink]="linkFor('/staff')"
+              [class.link-off]="!canOpen('/staff')"
+              class="card-link"
+              >{{ 'DASHBOARD.VIEW_STAFF' | translate }}</a
+            >
           </div>
           <div class="metric-pair">
             <div
@@ -520,9 +583,12 @@
               <span class="material-symbols-outlined card-title-icon">cancel</span>
               <h2 class="card-title">{{ 'DASHBOARD.WRITE_OFFS' | translate }}</h2>
             </div>
-            <a routerLink="/billing" class="card-link">{{
-              'DASHBOARD.VIEW_BILLING' | translate
-            }}</a>
+            <a
+              [routerLink]="linkFor('/billing')"
+              [class.link-off]="!canOpen('/billing')"
+              class="card-link"
+              >{{ 'DASHBOARD.VIEW_BILLING' | translate }}</a
+            >
           </div>
           <div class="metric-pair">
             <div class="metric-block" style="--metric-color: #b91c1c; --metric-bg: #fee2e2">
@@ -599,9 +665,12 @@
               <span class="material-symbols-outlined card-title-icon">receipt_long</span>
               <h2 class="card-title">{{ 'DASHBOARD.INVOICE_AGING' | translate }}</h2>
             </div>
-            <a routerLink="/billing" class="card-link">{{
-              'DASHBOARD.VIEW_BILLING' | translate
-            }}</a>
+            <a
+              [routerLink]="linkFor('/billing')"
+              [class.link-off]="!canOpen('/billing')"
+              class="card-link"
+              >{{ 'DASHBOARD.VIEW_BILLING' | translate }}</a
+            >
           </div>
           <div style="padding: 0 16px 16px">
             <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px">
@@ -617,7 +686,7 @@
                   [style.background]="getAgingBucketColor(i) + '15'"
                   [style.border-left]="'3px solid ' + getAgingBucketColor(i)"
                 >
-                  <div style="font-size: 11px; color: #64748b; font-weight: 500">
+                  <div style="font-size: 11px; color: var(--text-secondary); font-weight: 500">
                     {{ agingBucketLabelKeys[i] | translate }}
                   </div>
                   <div
@@ -663,7 +732,7 @@
               <span style="font-size: 13px; color: #475569; font-weight: 500">{{
                 'DASHBOARD.COLLECTION_RATE' | translate
               }}</span>
-              <span style="font-size: 16px; font-weight: 700; color: #059669">{{
+              <span style="font-size: 16px; font-weight: 700; color: var(--success-text)">{{
                 paymentCollectionRate() | measure: '%'
               }}</span>
             </div>
@@ -677,9 +746,12 @@
               <span class="material-symbols-outlined card-title-icon">trending_up</span>
               <h2 class="card-title">{{ 'DASHBOARD.DAILY_COLLECTIONS_30D' | translate }}</h2>
             </div>
-            <a routerLink="/billing" class="card-link">{{
-              'DASHBOARD.VIEW_BILLING' | translate
-            }}</a>
+            <a
+              [routerLink]="linkFor('/billing')"
+              [class.link-off]="!canOpen('/billing')"
+              class="card-link"
+              >{{ 'DASHBOARD.VIEW_BILLING' | translate }}</a
+            >
           </div>
           <div style="padding: 0 16px 16px">
             <div
@@ -714,7 +786,7 @@
                 display: flex;
                 justify-content: space-between;
                 font-size: 10px;
-                color: #64748b;
+                color: var(--text-secondary);
                 margin-top: 4px;
               "
             >
@@ -752,9 +824,15 @@
                 <span style="flex: 1; font-size: 13px; font-weight: 500; color: #334155">{{
                   formatMethodLabel(pm.method)
                 }}</span>
-                <span style="font-size: 12px; color: #64748b; min-width: 30px; text-align: right">{{
-                  pm.count
-                }}</span>
+                <span
+                  style="
+                    font-size: 12px;
+                    color: var(--text-secondary);
+                    min-width: 30px;
+                    text-align: right;
+                  "
+                  >{{ pm.count }}</span
+                >
                 <span
                   style="
                     font-size: 13px;
@@ -780,7 +858,7 @@
                 <span style="font-size: 13px; font-weight: 600; color: #475569">{{
                   'DASHBOARD.TOTAL_COLLECTED' | translate
                 }}</span>
-                <span style="font-size: 15px; font-weight: 700; color: #059669">{{
+                <span style="font-size: 15px; font-weight: 700; color: var(--success-text)">{{
                   formatInvoiceAmount(paymentMethodTotal())
                 }}</span>
               </div>
@@ -796,7 +874,12 @@
               <h2 class="card-title">{{ 'DASHBOARD.STAFFING_BY_DEPARTMENT' | translate }}</h2>
               <span class="count-badge">{{ staffingByDepartment().length }}</span>
             </div>
-            <a routerLink="/staff" class="card-link">{{ 'DASHBOARD.MANAGE_STAFF' | translate }}</a>
+            <a
+              [routerLink]="linkFor('/staff')"
+              [class.link-off]="!canOpen('/staff')"
+              class="card-link"
+              >{{ 'DASHBOARD.MANAGE_STAFF' | translate }}</a
+            >
           </div>
           <div style="overflow-x: auto; padding: 0 16px 16px">
             <table style="width: 100%; border-collapse: collapse; font-size: 13px">
@@ -829,14 +912,14 @@
                     <td style="padding: 8px 12px; text-align: center">
                       {{ row.scheduledShifts }}
                     </td>
-                    <td style="padding: 8px 12px; text-align: center; color: #dc2626">
+                    <td style="padding: 8px 12px; text-align: center; color: var(--danger)">
                       {{ row.cancelledShifts }}
                     </td>
                     <td
                       style="
                         padding: 8px 12px;
                         text-align: center;
-                        color: #059669;
+                        color: var(--success-text);
                         font-weight: 600;
                       "
                     >
@@ -860,12 +943,17 @@
                 {{ ' '
                 }}<span
                   class="count-badge"
-                  style="background: #fee2e2; color: #dc2626; margin-left: 4px"
+                  style="background: #fee2e2; color: var(--danger); margin-left: 4px"
                   >{{ overdueConsults() }} {{ 'DASHBOARD.OVERDUE' | translate }}</span
                 >
               }
             </div>
-            <a routerLink="/consultations" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
+            <a
+              [routerLink]="linkFor('/consultations')"
+              [class.link-off]="!canOpen('/consultations')"
+              class="card-link"
+              >{{ 'COMMON.VIEW_ALL' | translate }}</a
+            >
           </div>
           <div class="schedule-list">
             @for (c of consultBacklog(); track c.consultationId) {
@@ -885,7 +973,7 @@
                     c.status | enumLabel: 'consultationStatus'
                   }}</span>
                   @if (c.overdue) {
-                    <span style="font-size: 11px; color: #dc2626; font-weight: 600">{{
+                    <span style="font-size: 11px; color: var(--danger); font-weight: 600">{{
                       'DASHBOARD.SLA_OVERDUE' | translate
                     }}</span>
                   }
@@ -906,12 +994,17 @@
                 {{ ' '
                 }}<span
                   class="count-badge"
-                  style="background: #fee2e2; color: #dc2626; margin-left: 4px"
+                  style="background: #fee2e2; color: var(--danger); margin-left: 4px"
                   >{{ expiredLicenseCount() }} {{ 'DASHBOARD.EXPIRED' | translate }}</span
                 >
               }
             </div>
-            <a routerLink="/staff" class="card-link">{{ 'DASHBOARD.MANAGE_STAFF' | translate }}</a>
+            <a
+              [routerLink]="linkFor('/staff')"
+              [class.link-off]="!canOpen('/staff')"
+              class="card-link"
+              >{{ 'DASHBOARD.MANAGE_STAFF' | translate }}</a
+            >
           </div>
           <div class="schedule-list">
             @for (alert of licenseAlerts(); track alert.staffId) {
@@ -988,7 +1081,10 @@
                   border-bottom: 1px solid #f1f5f9;
                 "
               >
-                <span class="material-symbols-outlined" style="font-size: 20px; color: #64748b">
+                <span
+                  class="material-symbols-outlined"
+                  style="font-size: 20px; color: var(--text-secondary)"
+                >
                   @switch (svc.serviceType) {
                     @case ('EHR') {
                       clinical_notes
@@ -1014,7 +1110,7 @@
                   <div style="font-size: 13px; font-weight: 600; color: #0f172a">
                     {{ svc.provider ?? (svc.serviceType | enumLabel: 'platformServiceType') }}
                   </div>
-                  <div style="font-size: 11px; color: #64748b">
+                  <div style="font-size: 11px; color: var(--text-secondary)">
                     {{ svc.serviceType | enumLabel: 'platformServiceType' }}
                   </div>
                 </div>
@@ -1090,19 +1186,19 @@
                   <tr style="border-bottom: 1px solid #f1f5f9">
                     <td style="padding: 8px 12px">
                       <div>{{ row.wardName }}</div>
-                      <div style="font-size: 11px; color: #64748b">
+                      <div style="font-size: 11px; color: var(--text-secondary)">
                         {{ row.wardType | enumLabel: 'wardType' }}
                       </div>
                     </td>
                     <td style="padding: 8px 12px; text-align: center">{{ row.totalBeds }}</td>
-                    <td style="padding: 8px 12px; text-align: center; color: #dc2626">
+                    <td style="padding: 8px 12px; text-align: center; color: var(--danger)">
                       {{ row.occupiedBeds }}
                     </td>
                     <td
                       style="
                         padding: 8px 12px;
                         text-align: center;
-                        color: #059669;
+                        color: var(--success-text);
                         font-weight: 600;
                       "
                     >
@@ -1135,7 +1231,12 @@
               <h2 class="card-title">{{ 'DASHBOARD.RECENT_ACTIVITY' | translate }}</h2>
               <span class="count-badge">{{ hospitalAdminAuditEvents().length }}</span>
             </div>
-            <a routerLink="/audit-logs" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
+            <a
+              [routerLink]="linkFor('/audit-logs')"
+              [class.link-off]="!canOpen('/audit-logs')"
+              class="card-link"
+              >{{ 'COMMON.VIEW_ALL' | translate }}</a
+            >
           </div>
           <div class="audit-list">
             @for (evt of hospitalAdminAuditEvents(); track evt.id) {
@@ -1260,9 +1361,12 @@
             </div>
             <div class="card-head-right">
               <span class="schedule-date-pill">{{ todayLabel() }}</span>
-              <a routerLink="/appointments" class="card-link">{{
-                'COMMON.VIEW_ALL' | translate
-              }}</a>
+              <a
+                [routerLink]="linkFor('/appointments')"
+                [class.link-off]="!canOpen('/appointments')"
+                class="card-link"
+                >{{ 'COMMON.VIEW_ALL' | translate }}</a
+              >
             </div>
           </div>
           @if (scheduleLoading()) {
@@ -1343,7 +1447,12 @@
                 <span class="count-badge count-badge-red">{{ inboxItems().length }}</span>
               }
             </div>
-            <a routerLink="/chat" class="card-link">{{ 'DASHBOARD.OPEN' | translate }}</a>
+            <a
+              [routerLink]="linkFor('/chat')"
+              [class.link-off]="!canOpen('/chat')"
+              class="card-link"
+              >{{ 'DASHBOARD.OPEN' | translate }}</a
+            >
           </div>
           @if (inboxItems().length === 0) {
             <div class="inbox-empty">
@@ -1429,9 +1538,12 @@
                 <span class="material-symbols-outlined card-title-icon">group</span>
                 <h2 class="card-title">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</h2>
               </div>
-              <a routerLink="/patients" class="card-link">{{
-                'DASHBOARD.ALL_PATIENTS' | translate
-              }}</a>
+              <a
+                [routerLink]="linkFor('/patients')"
+                [class.link-off]="!canOpen('/patients')"
+                class="card-link"
+                >{{ 'DASHBOARD.ALL_PATIENTS' | translate }}</a
+              >
             </div>
             <div class="patient-list">
               @for (p of recentPatients(); track p.id) {
@@ -1470,7 +1582,8 @@
                   >
                     <a
                       class="row-action-btn"
-                      routerLink="/encounters"
+                      [routerLink]="linkFor('/encounters')"
+                      [class.link-off]="!canOpen('/encounters')"
                       [title]="'DASHBOARD.NEW_ENCOUNTER' | translate"
                       [attr.aria-label]="'DASHBOARD.NEW_ENCOUNTER' | translate"
                     >
@@ -1478,7 +1591,8 @@
                     </a>
                     <a
                       class="row-action-btn"
-                      routerLink="/lab"
+                      [routerLink]="linkFor('/lab')"
+                      [class.link-off]="!canOpen('/lab')"
                       [title]="'DASHBOARD.VIEW_RESULTS' | translate"
                       [attr.aria-label]="'DASHBOARD.VIEW_RESULTS' | translate"
                     >
@@ -1695,7 +1809,12 @@
               <h2 class="card-title">{{ 'DASHBOARD.PATIENT_SCHEDULE' | translate }}</h2>
               <span class="count-badge">{{ todayAppointments().length }}</span>
             </div>
-            <a routerLink="/appointments" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
+            <a
+              [routerLink]="linkFor('/appointments')"
+              [class.link-off]="!canOpen('/appointments')"
+              class="card-link"
+              >{{ 'COMMON.VIEW_ALL' | translate }}</a
+            >
           </div>
           @if (scheduleSlots().length === 0) {
             <div class="empty-schedule">
@@ -1861,7 +1980,12 @@
                 <span class="material-symbols-outlined card-title-icon">group</span>
                 <h2 class="card-title">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</h2>
               </div>
-              <a routerLink="/patients" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
+              <a
+                [routerLink]="linkFor('/patients')"
+                [class.link-off]="!canOpen('/patients')"
+                class="card-link"
+                >{{ 'COMMON.VIEW_ALL' | translate }}</a
+              >
             </div>
             <div class="patient-list">
               @for (p of recentPatients(); track p.id) {
@@ -1890,7 +2014,7 @@
        ══════════════════════════════════════════ -->
   @if (!loading() && activeView() === 'receptionist') {
     <section class="stat-strip">
-      <a class="stat-card" routerLink="/appointments">
+      <a class="stat-card" [routerLink]="linkFor('/appointments')">
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">calendar_today</span>
         </div>
@@ -1901,7 +2025,7 @@
           >
         </div>
       </a>
-      <a class="stat-card" routerLink="/appointments">
+      <a class="stat-card" [routerLink]="linkFor('/appointments')">
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">how_to_reg</span>
         </div>
@@ -1912,7 +2036,7 @@
           }}</span>
         </div>
       </a>
-      <a class="stat-card" routerLink="/appointments">
+      <a class="stat-card" [routerLink]="linkFor('/appointments')">
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">pending</span>
         </div>
@@ -1922,7 +2046,7 @@
           }}</span>
         </div>
       </a>
-      <a class="stat-card" routerLink="/patients">
+      <a class="stat-card" [routerLink]="linkFor('/patients')">
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">people</span>
         </div>
@@ -1977,7 +2101,12 @@
               <h2 class="card-title">{{ 'DASHBOARD.APPOINTMENT_QUEUE' | translate }}</h2>
               <span class="count-badge">{{ todayAppointments().length }}</span>
             </div>
-            <a routerLink="/appointments" class="card-link">{{ 'DASHBOARD.MANAGE' | translate }}</a>
+            <a
+              [routerLink]="linkFor('/appointments')"
+              [class.link-off]="!canOpen('/appointments')"
+              class="card-link"
+              >{{ 'DASHBOARD.MANAGE' | translate }}</a
+            >
           </div>
           @if (scheduleSlots().length === 0) {
             <div class="empty-schedule">
@@ -2025,9 +2154,12 @@
                 <span class="material-symbols-outlined card-title-icon">person_search</span>
                 <h2 class="card-title">{{ 'DASHBOARD.PATIENT_LOOKUP' | translate }}</h2>
               </div>
-              <a routerLink="/patients" class="card-link">{{
-                'DASHBOARD.ALL_PATIENTS' | translate
-              }}</a>
+              <a
+                [routerLink]="linkFor('/patients')"
+                [class.link-off]="!canOpen('/patients')"
+                class="card-link"
+                >{{ 'DASHBOARD.ALL_PATIENTS' | translate }}</a
+              >
             </div>
             <div class="patient-list">
               @for (p of recentPatients(); track p.id) {
@@ -2101,7 +2233,12 @@
               <span class="material-symbols-outlined card-title-icon">approval</span>
               <h2 class="card-title">{{ 'DASHBOARD.LAB_APPROVAL_QUEUE' | translate }}</h2>
             </div>
-            <a routerLink="/lab" class="card-link">{{ 'DASHBOARD.OPEN_LAB_MODULE' | translate }}</a>
+            <a
+              [routerLink]="linkFor('/lab')"
+              [class.link-off]="!canOpen('/lab')"
+              class="card-link"
+              >{{ 'DASHBOARD.OPEN_LAB_MODULE' | translate }}</a
+            >
           </div>
           @if ((labDirectorDashboard()?.pendingDirectorApproval ?? 0) === 0) {
             <div class="empty-state">
@@ -2111,7 +2248,7 @@
             </div>
           } @else {
             <div class="empty-state">
-              <span class="material-symbols-outlined empty-icon-lg" style="color: #dc2626"
+              <span class="material-symbols-outlined empty-icon-lg" style="color: var(--danger)"
                 >approval</span
               >
               <h3>
@@ -2119,9 +2256,13 @@
                 {{ 'DASHBOARD.PENDING_DIRECTOR_APPROVAL' | translate }}
               </h3>
               <p>{{ 'DASHBOARD.PENDING_DIRECTOR_APPROVAL_DESC' | translate }}</p>
-              <a routerLink="/lab" class="card-link" style="margin-top: 12px">{{
-                'DASHBOARD.REVIEW_NOW' | translate
-              }}</a>
+              <a
+                [routerLink]="linkFor('/lab')"
+                [class.link-off]="!canOpen('/lab')"
+                class="card-link"
+                style="margin-top: 12px"
+                >{{ 'DASHBOARD.REVIEW_NOW' | translate }}</a
+              >
             </div>
           }
         </section>
@@ -2132,12 +2273,19 @@
               <span class="material-symbols-outlined card-title-icon">analytics</span>
               <h2 class="card-title">{{ 'DASHBOARD.VALIDATION_STUDIES' | translate }}</h2>
             </div>
-            <a routerLink="/lab" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
+            <a
+              [routerLink]="linkFor('/lab')"
+              [class.link-off]="!canOpen('/lab')"
+              class="card-link"
+              >{{ 'COMMON.VIEW_ALL' | translate }}</a
+            >
           </div>
           <div class="stat-strip" style="padding: 16px; gap: 12px">
             <div class="stat-card" style="flex: 1; min-width: 0">
               <div class="stat-icon-wrap" style="background: #ede9fe">
-                <span class="material-symbols-outlined stat-icon" style="color: #7c3aed"
+                <span
+                  class="material-symbols-outlined stat-icon"
+                  style="color: var(--accent-violet)"
                   >biotech</span
                 >
               </div>
@@ -2223,7 +2371,7 @@
               style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
             >
               <div class="stat-icon-wrap" style="background: #d1fae5">
-                <span class="material-symbols-outlined stat-icon" style="color: #059669"
+                <span class="material-symbols-outlined stat-icon" style="color: var(--success-text)"
                   >task_alt</span
                 >
               </div>
@@ -2239,7 +2387,7 @@
               style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
             >
               <div class="stat-icon-wrap" style="background: #fef3c7">
-                <span class="material-symbols-outlined stat-icon" style="color: #d97706"
+                <span class="material-symbols-outlined stat-icon" style="color: var(--warning-text)"
                   >hourglass_top</span
                 >
               </div>
@@ -2253,7 +2401,7 @@
               style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
             >
               <div class="stat-icon-wrap" style="background: #fee2e2">
-                <span class="material-symbols-outlined stat-icon" style="color: #dc2626"
+                <span class="material-symbols-outlined stat-icon" style="color: var(--danger)"
                   >cancel</span
                 >
               </div>
@@ -2269,7 +2417,9 @@
               style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
             >
               <div class="stat-icon-wrap" style="background: #ede9fe">
-                <span class="material-symbols-outlined stat-icon" style="color: #7c3aed"
+                <span
+                  class="material-symbols-outlined stat-icon"
+                  style="color: var(--accent-violet)"
                   >timer</span
                 >
               </div>
@@ -2334,7 +2484,12 @@
               <span class="material-symbols-outlined card-title-icon">fact_check</span>
               <h2 class="card-title">{{ 'DASHBOARD.QA_REVIEW_QUEUE' | translate }}</h2>
             </div>
-            <a routerLink="/lab" class="card-link">{{ 'DASHBOARD.OPEN_LAB_MODULE' | translate }}</a>
+            <a
+              [routerLink]="linkFor('/lab')"
+              [class.link-off]="!canOpen('/lab')"
+              class="card-link"
+              >{{ 'DASHBOARD.OPEN_LAB_MODULE' | translate }}</a
+            >
           </div>
           @if ((qualityManagerDashboard()?.pendingQaReview ?? 0) === 0) {
             <div class="empty-state">
@@ -2344,7 +2499,7 @@
             </div>
           } @else {
             <div class="empty-state">
-              <span class="material-symbols-outlined empty-icon-lg" style="color: #dc2626"
+              <span class="material-symbols-outlined empty-icon-lg" style="color: var(--danger)"
                 >fact_check</span
               >
               <h3>
@@ -2352,9 +2507,13 @@
                 {{ 'DASHBOARD.PENDING_QA_REVIEW' | translate }}
               </h3>
               <p>{{ 'DASHBOARD.PENDING_QA_REVIEW_DESC' | translate }}</p>
-              <a routerLink="/lab" class="card-link" style="margin-top: 12px">{{
-                'DASHBOARD.REVIEW_NOW' | translate
-              }}</a>
+              <a
+                [routerLink]="linkFor('/lab')"
+                [class.link-off]="!canOpen('/lab')"
+                class="card-link"
+                style="margin-top: 12px"
+                >{{ 'DASHBOARD.REVIEW_NOW' | translate }}</a
+              >
             </div>
           }
         </section>
@@ -2365,17 +2524,22 @@
               <span class="material-symbols-outlined card-title-icon">biotech</span>
               <h2 class="card-title">{{ 'DASHBOARD.VALIDATION_STUDIES' | translate }}</h2>
             </div>
-            <a routerLink="/lab" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
+            <a
+              [routerLink]="linkFor('/lab')"
+              [class.link-off]="!canOpen('/lab')"
+              class="card-link"
+              >{{ 'COMMON.VIEW_ALL' | translate }}</a
+            >
           </div>
           <div class="stat-strip" style="padding: 16px; gap: 12px">
             <div class="stat-card" style="flex: 1; min-width: 0">
               <div class="stat-icon-wrap" style="background: #d1fae5">
-                <span class="material-symbols-outlined stat-icon" style="color: #059669"
+                <span class="material-symbols-outlined stat-icon" style="color: var(--success-text)"
                   >thumb_up</span
                 >
               </div>
               <div class="stat-body">
-                <span class="stat-value" style="color: #059669">{{
+                <span class="stat-value" style="color: var(--success-text)">{{
                   qualityManagerDashboard()?.passedValidationStudies ?? 0
                 }}</span>
                 <span class="stat-label">{{ 'DASHBOARD.PASSED' | translate }}</span>
@@ -2383,12 +2547,12 @@
             </div>
             <div class="stat-card" style="flex: 1; min-width: 0">
               <div class="stat-icon-wrap" style="background: #fee2e2">
-                <span class="material-symbols-outlined stat-icon" style="color: #dc2626"
+                <span class="material-symbols-outlined stat-icon" style="color: var(--danger)"
                   >thumb_down</span
                 >
               </div>
               <div class="stat-body">
-                <span class="stat-value" style="color: #dc2626">{{
+                <span class="stat-value" style="color: var(--danger)">{{
                   qualityManagerDashboard()?.failedValidationStudies ?? 0
                 }}</span>
                 <span class="stat-label">{{ 'DASHBOARD.FAILED' | translate }}</span>
@@ -2396,12 +2560,12 @@
             </div>
             <div class="stat-card" style="flex: 1; min-width: 0">
               <div class="stat-icon-wrap" style="background: #d1fae5">
-                <span class="material-symbols-outlined stat-icon" style="color: #059669"
+                <span class="material-symbols-outlined stat-icon" style="color: var(--success-text)"
                   >verified</span
                 >
               </div>
               <div class="stat-body">
-                <span class="stat-value" style="color: #059669">
+                <span class="stat-value" style="color: var(--success-text)">
                   @if ((qualityManagerDashboard()?.qualityPassRate ?? null) !== null) {
                     {{ qualityManagerDashboard()!.qualityPassRate! | measure: '%' }}
                   } @else {
@@ -2450,7 +2614,12 @@
               <span class="material-symbols-outlined card-title-icon">pending_actions</span>
               <h2 class="card-title">{{ 'DASHBOARD.DIRECTOR_APPROVAL_STATUS' | translate }}</h2>
             </div>
-            <a routerLink="/lab" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
+            <a
+              [routerLink]="linkFor('/lab')"
+              [class.link-off]="!canOpen('/lab')"
+              class="card-link"
+              >{{ 'COMMON.VIEW_ALL' | translate }}</a
+            >
           </div>
           <div class="stat-strip" style="padding: 16px; flex-direction: column; gap: 10px">
             <div
@@ -2458,7 +2627,7 @@
               style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
             >
               <div class="stat-icon-wrap" style="background: #fef3c7">
-                <span class="material-symbols-outlined stat-icon" style="color: #d97706"
+                <span class="material-symbols-outlined stat-icon" style="color: var(--warning-text)"
                   >pending_actions</span
                 >
               </div>
@@ -2476,7 +2645,7 @@
               style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
             >
               <div class="stat-icon-wrap" style="background: #d1fae5">
-                <span class="material-symbols-outlined stat-icon" style="color: #059669"
+                <span class="material-symbols-outlined stat-icon" style="color: var(--success-text)"
                   >science</span
                 >
               </div>
@@ -2494,7 +2663,7 @@
               style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
             >
               <div class="stat-icon-wrap" style="background: #fee2e2">
-                <span class="material-symbols-outlined stat-icon" style="color: #dc2626"
+                <span class="material-symbols-outlined stat-icon" style="color: var(--danger)"
                   >cancel</span
                 >
               </div>
@@ -2516,7 +2685,7 @@
        ══════════════════════════════════════════ -->
   @if (!loading() && activeView() === 'lab') {
     <section class="stat-strip">
-      <a class="stat-card" routerLink="/lab">
+      <a class="stat-card" [routerLink]="linkFor('/lab')">
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">science</span>
         </div>
@@ -2526,7 +2695,7 @@
           }}</span>
         </div>
       </a>
-      <a class="stat-card" routerLink="/lab">
+      <a class="stat-card" [routerLink]="linkFor('/lab')">
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">task_alt</span>
         </div>
@@ -2537,7 +2706,7 @@
           >
         </div>
       </a>
-      <a class="stat-card" routerLink="/lab">
+      <a class="stat-card" [routerLink]="linkFor('/lab')">
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">biotech</span>
         </div>
@@ -2548,7 +2717,7 @@
           >
         </div>
       </a>
-      <a class="stat-card" routerLink="/patients">
+      <a class="stat-card" [routerLink]="linkFor('/patients')">
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">people</span>
         </div>
@@ -2579,7 +2748,12 @@
               <span class="material-symbols-outlined card-title-icon">biotech</span>
               <h2 class="card-title">{{ 'DASHBOARD.LAB_WORK_QUEUE' | translate }}</h2>
             </div>
-            <a routerLink="/lab" class="card-link">{{ 'DASHBOARD.OPEN_LAB_MODULE' | translate }}</a>
+            <a
+              [routerLink]="linkFor('/lab')"
+              [class.link-off]="!canOpen('/lab')"
+              class="card-link"
+              >{{ 'DASHBOARD.OPEN_LAB_MODULE' | translate }}</a
+            >
           </div>
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon-lg">science</span>
@@ -2625,7 +2799,12 @@
                 <span class="material-symbols-outlined card-title-icon">group</span>
                 <h2 class="card-title">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</h2>
               </div>
-              <a routerLink="/patients" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
+              <a
+                [routerLink]="linkFor('/patients')"
+                [class.link-off]="!canOpen('/patients')"
+                class="card-link"
+                >{{ 'COMMON.VIEW_ALL' | translate }}</a
+              >
             </div>
             <div class="patient-list">
               @for (p of recentPatients(); track p.id) {
@@ -2654,7 +2833,7 @@
        ══════════════════════════════════════════ -->
   @if (!loading() && activeView() === 'pharmacist') {
     <section class="stat-strip">
-      <a class="stat-card" routerLink="/prescriptions">
+      <a class="stat-card" [routerLink]="linkFor('/prescriptions')">
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">local_pharmacy</span>
         </div>
@@ -2665,7 +2844,7 @@
           >
         </div>
       </a>
-      <a class="stat-card" routerLink="/prescriptions">
+      <a class="stat-card" [routerLink]="linkFor('/prescriptions')">
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">loop</span>
         </div>
@@ -2676,7 +2855,7 @@
           >
         </div>
       </a>
-      <a class="stat-card" routerLink="/patients">
+      <a class="stat-card" [routerLink]="linkFor('/patients')">
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">people</span>
         </div>
@@ -2707,9 +2886,12 @@
               <span class="material-symbols-outlined card-title-icon">medication_liquid</span>
               <h2 class="card-title">{{ 'DASHBOARD.PRESCRIPTION_QUEUE' | translate }}</h2>
             </div>
-            <a routerLink="/prescriptions" class="card-link">{{
-              'DASHBOARD.OPEN_PRESCRIPTIONS' | translate
-            }}</a>
+            <a
+              [routerLink]="linkFor('/prescriptions')"
+              [class.link-off]="!canOpen('/prescriptions')"
+              class="card-link"
+              >{{ 'DASHBOARD.OPEN_PRESCRIPTIONS' | translate }}</a
+            >
           </div>
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon-lg">local_pharmacy</span>
@@ -2755,7 +2937,12 @@
                 <span class="material-symbols-outlined card-title-icon">group</span>
                 <h2 class="card-title">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</h2>
               </div>
-              <a routerLink="/patients" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
+              <a
+                [routerLink]="linkFor('/patients')"
+                [class.link-off]="!canOpen('/patients')"
+                class="card-link"
+                >{{ 'COMMON.VIEW_ALL' | translate }}</a
+              >
             </div>
             <div class="patient-list">
               @for (p of recentPatients(); track p.id) {
@@ -2784,7 +2971,7 @@
        ══════════════════════════════════════════ -->
   @if (!loading() && activeView() === 'radiologist') {
     <section class="stat-strip">
-      <a class="stat-card" routerLink="/imaging">
+      <a class="stat-card" [routerLink]="linkFor('/imaging')">
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">radiology</span>
         </div>
@@ -2795,7 +2982,7 @@
           >
         </div>
       </a>
-      <a class="stat-card" routerLink="/imaging">
+      <a class="stat-card" [routerLink]="linkFor('/imaging')">
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">pending</span>
         </div>
@@ -2806,7 +2993,7 @@
           >
         </div>
       </a>
-      <a class="stat-card" routerLink="/patients">
+      <a class="stat-card" [routerLink]="linkFor('/patients')">
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">people</span>
         </div>
@@ -2837,9 +3024,12 @@
               <span class="material-symbols-outlined card-title-icon">radiology</span>
               <h2 class="card-title">{{ 'DASHBOARD.IMAGING_WORKLIST' | translate }}</h2>
             </div>
-            <a routerLink="/imaging" class="card-link">{{
-              'DASHBOARD.OPEN_IMAGING' | translate
-            }}</a>
+            <a
+              [routerLink]="linkFor('/imaging')"
+              [class.link-off]="!canOpen('/imaging')"
+              class="card-link"
+              >{{ 'DASHBOARD.OPEN_IMAGING' | translate }}</a
+            >
           </div>
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon-lg">radiology</span>
@@ -2885,7 +3075,12 @@
                 <span class="material-symbols-outlined card-title-icon">group</span>
                 <h2 class="card-title">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</h2>
               </div>
-              <a routerLink="/patients" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
+              <a
+                [routerLink]="linkFor('/patients')"
+                [class.link-off]="!canOpen('/patients')"
+                class="card-link"
+                >{{ 'COMMON.VIEW_ALL' | translate }}</a
+              >
             </div>
             <div class="patient-list">
               @for (p of recentPatients(); track p.id) {
@@ -2932,21 +3127,31 @@
       <section class="card patient-card">
         <div class="card-head">
           <div class="card-title-group">
-            <span class="material-symbols-outlined card-title-icon" style="color: #059669"
+            <span
+              class="material-symbols-outlined card-title-icon"
+              style="color: var(--success-text)"
               >calendar_month</span
             >
             <h2 class="card-title">{{ 'DASHBOARD.UPCOMING_APPOINTMENTS' | translate }}</h2>
           </div>
-          <a routerLink="/my-appointments" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
+          <a
+            [routerLink]="linkFor('/my-appointments')"
+            [class.link-off]="!canOpen('/my-appointments')"
+            class="card-link"
+            >{{ 'COMMON.VIEW_ALL' | translate }}</a
+          >
         </div>
         <div class="patient-card-body">
           @if (upcomingAppointments().length === 0) {
             <div class="patient-empty-state">
               <span class="material-symbols-outlined empty-icon">event_available</span>
               <p>{{ 'DASHBOARD.NO_UPCOMING_APPOINTMENTS' | translate }}</p>
-              <a routerLink="/my-appointments" class="patient-btn-sm">{{
-                'DASHBOARD.SCHEDULE_NOW' | translate
-              }}</a>
+              <a
+                [routerLink]="linkFor('/my-appointments')"
+                [class.link-off]="!canOpen('/my-appointments')"
+                class="patient-btn-sm"
+                >{{ 'DASHBOARD.SCHEDULE_NOW' | translate }}</a
+              >
             </div>
           } @else {
             @for (appt of upcomingAppointments(); track appt.id) {
@@ -2985,7 +3190,12 @@
             >
             <h2 class="card-title">{{ 'DASHBOARD.CURRENT_MEDICATIONS' | translate }}</h2>
           </div>
-          <a routerLink="/my-medications" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
+          <a
+            [routerLink]="linkFor('/my-medications')"
+            [class.link-off]="!canOpen('/my-medications')"
+            class="card-link"
+            >{{ 'COMMON.VIEW_ALL' | translate }}</a
+          >
         </div>
         <div class="patient-card-body">
           @if (myMedications().length === 0) {
@@ -3024,12 +3234,19 @@
       <section class="card patient-card">
         <div class="card-head">
           <div class="card-title-group">
-            <span class="material-symbols-outlined card-title-icon" style="color: #7c3aed"
+            <span
+              class="material-symbols-outlined card-title-icon"
+              style="color: var(--accent-violet)"
               >science</span
             >
             <h2 class="card-title">{{ 'DASHBOARD.RECENT_TEST_RESULTS' | translate }}</h2>
           </div>
-          <a routerLink="/my-lab-results" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
+          <a
+            [routerLink]="linkFor('/my-lab-results')"
+            [class.link-off]="!canOpen('/my-lab-results')"
+            class="card-link"
+            >{{ 'COMMON.VIEW_ALL' | translate }}</a
+          >
         </div>
         <div class="patient-card-body">
           @if (myLabResults().length === 0) {
@@ -3096,12 +3313,19 @@
       <section class="card patient-card" data-testid="dashboard-billing">
         <div class="card-head">
           <div class="card-title-group">
-            <span class="material-symbols-outlined card-title-icon" style="color: #d97706"
+            <span
+              class="material-symbols-outlined card-title-icon"
+              style="color: var(--warning-text)"
               >receipt_long</span
             >
             <h2 class="card-title">{{ 'BILLING.TITLE' | translate }}</h2>
           </div>
-          <a routerLink="/my-billing" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
+          <a
+            [routerLink]="linkFor('/my-billing')"
+            [class.link-off]="!canOpen('/my-billing')"
+            class="card-link"
+            >{{ 'COMMON.VIEW_ALL' | translate }}</a
+          >
         </div>
         <div class="patient-card-body">
           @if (myInvoices().length === 0) {
@@ -3188,7 +3412,7 @@
           <section class="card patient-card patient-card-wide">
             <div class="card-head">
               <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon" style="color: #dc2626"
+                <span class="material-symbols-outlined card-title-icon" style="color: var(--danger)"
                   >health_and_safety</span
                 >
                 <h2 class="card-title">{{ 'DASHBOARD.HEALTH_AT_A_GLANCE' | translate }}</h2>
@@ -3198,7 +3422,9 @@
               @if (hs.allergies.length) {
                 <div class="health-glance-section">
                   <h4 class="hg-label">
-                    <span class="material-symbols-outlined" style="font-size: 16px; color: #dc2626"
+                    <span
+                      class="material-symbols-outlined"
+                      style="font-size: 16px; color: var(--danger)"
                       >warning</span
                     >
                     {{ 'DASHBOARD.ALLERGIES' | translate }}
@@ -3276,9 +3502,12 @@
               <span class="material-symbols-outlined card-title-icon">medication_liquid</span>
               <h2 class="card-title">{{ 'DASHBOARD.DISPENSE_QUEUE' | translate }}</h2>
             </div>
-            <a routerLink="/pharmacy/dispensing" class="card-link">{{
-              'COMMON.VIEW_ALL' | translate
-            }}</a>
+            <a
+              [routerLink]="linkFor('/pharmacy/dispensing')"
+              [class.link-off]="!canOpen('/pharmacy/dispensing')"
+              class="card-link"
+              >{{ 'COMMON.VIEW_ALL' | translate }}</a
+            >
           </div>
           <div class="schedule-list">
             <div class="sched-row">
@@ -3297,9 +3526,12 @@
               <span class="material-symbols-outlined card-title-icon">request_quote</span>
               <h2 class="card-title">{{ 'DASHBOARD.PHARMACY_CLAIMS' | translate }}</h2>
             </div>
-            <a routerLink="/pharmacy/claims" class="card-link">{{
-              'COMMON.VIEW_ALL' | translate
-            }}</a>
+            <a
+              [routerLink]="linkFor('/pharmacy/claims')"
+              [class.link-off]="!canOpen('/pharmacy/claims')"
+              class="card-link"
+              >{{ 'COMMON.VIEW_ALL' | translate }}</a
+            >
           </div>
           <div class="schedule-list">
             <div class="sched-row">
@@ -3318,7 +3550,12 @@
               <span class="material-symbols-outlined card-title-icon">receipt_long</span>
               <h2 class="card-title">{{ 'DASHBOARD.BILLING_SNAPSHOT' | translate }}</h2>
             </div>
-            <a routerLink="/billing" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
+            <a
+              [routerLink]="linkFor('/billing')"
+              [class.link-off]="!canOpen('/billing')"
+              class="card-link"
+              >{{ 'COMMON.VIEW_ALL' | translate }}</a
+            >
           </div>
           <div class="schedule-list">
             <div class="sched-row">
@@ -3331,7 +3568,7 @@
               </div>
             </div>
             @for (inv of billingRecentInvoices(); track inv.id) {
-              <a routerLink="/billing" class="sched-row">
+              <a [routerLink]="linkFor('/billing')" class="sched-row">
                 <div class="sched-info">
                   <span class="sched-name"
                     >{{ inv.invoiceNumber }} — {{ inv.patientFullName }}</span
@@ -3356,7 +3593,12 @@
               <span class="material-symbols-outlined card-title-icon">calendar_month</span>
               <h2 class="card-title">{{ 'DASHBOARD.TODAYS_APPOINTMENTS' | translate }}</h2>
             </div>
-            <a routerLink="/appointments" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
+            <a
+              [routerLink]="linkFor('/appointments')"
+              [class.link-off]="!canOpen('/appointments')"
+              class="card-link"
+              >{{ 'COMMON.VIEW_ALL' | translate }}</a
+            >
           </div>
           <div class="schedule-list">
             @for (appt of todayAppointments(); track appt.id) {
@@ -3383,9 +3625,12 @@
               <span class="material-symbols-outlined card-title-icon">people</span>
               <h2 class="card-title">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</h2>
             </div>
-            <a routerLink="/patients" class="card-link">{{
-              'DASHBOARD.ALL_PATIENTS' | translate
-            }}</a>
+            <a
+              [routerLink]="linkFor('/patients')"
+              [class.link-off]="!canOpen('/patients')"
+              class="card-link"
+              >{{ 'DASHBOARD.ALL_PATIENTS' | translate }}</a
+            >
           </div>
           <div class="patient-list">
             @for (p of recentPatients(); track p.id) {

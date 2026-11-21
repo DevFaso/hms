@@ -215,7 +215,9 @@ export function formatCfa(
 ): string {
   const value = Number(amount ?? 0);
   const code = (currency || 'XOF').toUpperCase();
-  if (code !== 'XOF') {
+  // QA r65 D2501: XAF is the Central African CFA franc: the same « F CFA »
+  // (Intl printed "FCFA 4,000" in English and "XAF" in Spanish).
+  if (code !== 'XOF' && code !== 'XAF') {
     return new Intl.NumberFormat(locale, {
       style: 'currency',
       currency: code,

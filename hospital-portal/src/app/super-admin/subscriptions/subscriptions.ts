@@ -24,6 +24,7 @@ import { InlineDiscardAskComponent } from '../../shared/a11y/inline-discard-ask.
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 import { ToastService } from '../../core/toast.service';
+import { PlanAssignmentsComponent } from './plan-assignments.component';
 
 /**
  * QA D865: the currencies a plan can be priced in, as ISO 4217 codes. The
@@ -56,6 +57,7 @@ const FRESH_REQUEST: SubscriptionPlanRequest = {
     InlineSubFormDirective,
     InlineDiscardAskComponent,
     SubmitGuardDirective,
+    PlanAssignmentsComponent,
   ],
   templateUrl: './subscriptions.html',
   changeDetection: ChangeDetectionStrategy.Eager,

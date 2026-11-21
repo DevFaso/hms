@@ -122,7 +122,7 @@ type UltrasoundReporting = 'PHYSICIANS_ONLY' | 'NON_PHYSICIAN';
     }
     .reporting-settings__note {
       margin: 0 0 12px;
-      color: #64748b;
+      color: var(--text-secondary);
       overflow-wrap: anywhere;
     }
   `,

@@ -58,6 +58,24 @@ public interface AppointmentSlotRepository extends JpaRepository<AppointmentSlot
                                      @Param("now") LocalDateTime now,
                                      org.springframework.data.domain.Pageable pageable);
 
+    /**
+     * QA r65 D2731: the departments of ONE hospital that have a published slot
+     * still to come, by the predicate of {@link #searchOpen}: a slot starts
+     * after {@code notBefore} (the hospital's wall clock) and is open, or held
+     * past its hold on {@code now} (the server's clock). The patient booking
+     * form and the onboarding checklist both read it through
+     * {@code AppointmentSlotPolicy.departmentsWithOpenSlots}, so "nothing to
+     * book here" means the same thing in both.
+     */
+    @Query("SELECT DISTINCT s.department.id FROM AppointmentSlot s "
+        + "WHERE s.hospital.id = :hospitalId "
+        + "AND s.startAt > :notBefore "
+        + "AND (s.status = com.example.hms.enums.SlotStatus.OPEN "
+        + "     OR (s.status = com.example.hms.enums.SlotStatus.HELD AND s.heldUntil < :now))")
+    java.util.Set<UUID> findDepartmentIdsWithOpenSlots(@Param("hospitalId") UUID hospitalId,
+                                                       @Param("notBefore") LocalDateTime notBefore,
+                                                       @Param("now") LocalDateTime now);
+
     /** Holds whose window has passed, for the reclaim sweep. */
     List<AppointmentSlot> findByStatusAndHeldUntilBefore(SlotStatus status, LocalDateTime cutoff);
 

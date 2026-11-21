@@ -36,7 +36,7 @@
     }
 
     .muted {
-      color: #6b7280;
+      color: var(--text-secondary);
       font-family: monospace;
     }
 
@@ -59,7 +59,7 @@
   }
 
   .hint {
-    color: #6b7280;
+    color: var(--text-secondary);
     font-style: italic;
   }
 

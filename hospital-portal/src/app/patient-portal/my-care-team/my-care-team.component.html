@@ -90,7 +90,9 @@
           @for (e of previous(); track e.id) {
             <div class="ct-card">
               <div class="ct-avatar" style="background: #f1f5f9">
-                <span class="material-symbols-outlined" style="color: #64748b">person</span>
+                <span class="material-symbols-outlined" style="color: var(--text-secondary)"
+                  >person</span
+                >
               </div>
               <div class="ct-info">
                 <span class="ct-name">{{ e.doctorDisplay || '—' }}</span>

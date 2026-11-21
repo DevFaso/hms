@@ -20,7 +20,7 @@
 
 .page-subtitle {
   margin: 0.35rem 0 0;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.95rem;
 }
 
@@ -162,7 +162,7 @@
   small {
     display: block;
     margin-top: 0.15rem;
-    color: #64748b;
+    color: var(--text-secondary);
     font-size: 0.75rem;
   }
 }
@@ -218,7 +218,7 @@
   }
 
   small {
-    color: #64748b;
+    color: var(--text-secondary);
     font-size: 0.75rem;
   }
 }

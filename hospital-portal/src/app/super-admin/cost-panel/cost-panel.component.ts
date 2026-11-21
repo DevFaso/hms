@@ -117,7 +117,7 @@ interface WindowState {
       }
       .cost-panel__subtitle {
         margin-top: 0;
-        color: var(--muted, #64748b);
+        color: var(--text-secondary);
       }
       .cost-panel__filters {
         display: flex;
@@ -138,7 +138,7 @@ interface WindowState {
         color: var(--danger, #b00020);
       }
       .cost-panel__empty {
-        color: var(--muted, #64748b);
+        color: var(--text-secondary);
         font-style: italic;
       }
       .num {

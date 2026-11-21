@@ -15,6 +15,17 @@ const publicPaths = new Set([
   '/onboarding/role-welcome',
 ]);
 
+/**
+ * QA D2793 (r65): axe's `color-contrast` rule runs on EVERY routed page, with
+ * no route left out (it was suppressed everywhere while the palette carried
+ * slate-500 text at 4.34:1 and a light-blue primary; the platform track's
+ * pages, the last 13 exempted by name, were converted when that track
+ * merged). A new route is scanned from its first day.
+ */
+// The e-Keneya wordmark's amber half is a logotype: no contrast requirement
+// (WCAG 1.4.3). Its nodes are dropped from the `color-contrast` result below,
+// and from that rule alone.
+
 test.describe('all routed pages', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -79,10 +90,59 @@ test.describe('all routed pages', () => {
       await expect(page).toHaveURL((url) => url.pathname === pathname);
       await expect(page.locator('h1, h2, [role="heading"]').first()).toBeVisible();
       await page.evaluate(() => document.fonts.ready.then(() => undefined));
+      // Two frames: the design conventions (shared/a11y/design-conventions.ts)
+      // work once per animation frame after the page renders.
+      await page.evaluate(
+        () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+      );
+      const design = await page.evaluate(() => {
+        const shown = (el: Element) => (el as HTMLElement).getClientRects().length > 0;
+        const ICON = '.material-symbols-outlined, .material-icons';
+        return {
+          // QA D2791 (r65): one page title, whatever the page's own stylesheet says.
+          titles: Array.from(document.querySelectorAll('.content h1'))
+            .filter(shown)
+            .map((h) => {
+              const style = getComputedStyle(h);
+              return `${style.fontSize}/${style.fontWeight}`;
+            })
+            .filter((style) => style !== '24px/700'),
+          // QA D2792 (r65): an icon's ligature name is not read as part of a
+          // heading, a column header or a navigation link that has a name of
+          // its own. (An icon that is the host's ONLY name is left readable.)
+          spokenIcons: Array.from(
+            document.querySelectorAll(
+              ['h1', 'h2', 'th', '.sidebar a', '.sidebar button']
+                .flatMap((host) => ICON.split(', ').map((icon) => `${host} ${icon}`))
+                .join(', '),
+            ),
+          )
+            .filter((icon) => shown(icon) && icon.getAttribute('aria-hidden') !== 'true')
+            .filter(
+              (icon) =>
+                !icon.hasAttribute('aria-label') &&
+                !icon.hasAttribute('title') &&
+                icon.getAttribute('role') !== 'img',
+            )
+            .filter((icon) => {
+              const host = icon.closest('h1, h2, th, a, button');
+              if (!host) return false;
+              const named = (node: Element): boolean =>
+                Array.from(node.childNodes).some((child) =>
+                  child.nodeType === Node.TEXT_NODE
+                    ? (child.textContent ?? '').trim() !== ''
+                    : child instanceof Element &&
+                      !child.matches(ICON) &&
+                      shown(child) &&
+                      named(child),
+                );
+              return host.hasAttribute('aria-label') || host.hasAttribute('title') || named(host);
+            })
+            .map((icon) => `${icon.parentElement?.tagName.toLowerCase()} «${icon.textContent}»`),
+        };
+      });
       const results = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-        // Preserve the existing smoke's documented contrast exception; no new suppression.
-        .disableRules(['color-contrast'])
         .analyze();
       await testInfo.attach('route-audit', {
         contentType: 'application/json',
@@ -100,10 +160,27 @@ test.describe('all routed pages', () => {
         ),
       });
       expect(errors, 'route must render without application exceptions').toEqual([]);
+      if (!publicPage) {
+        expect(design.titles, 'one page title: every h1 is 24px/700 (QA D2791)').toEqual([]);
+      }
+      expect(design.spokenIcons, 'icons are hidden from screen readers (QA D2792)').toEqual([]);
       expect(
-        results.violations.filter(
-          (entry) => entry.impact === 'serious' || entry.impact === 'critical',
-        ),
+        results.violations
+          .map((entry) =>
+            // The wordmark is left out of the contrast rule only; every other
+            // rule still reads it.
+            entry.id === 'color-contrast'
+              ? {
+                  ...entry,
+                  nodes: entry.nodes.filter(
+                    (node) =>
+                      !node.html.includes('brand-word') && !node.html.includes('brand-accent'),
+                  ),
+                }
+              : entry,
+          )
+          .filter((entry) => entry.nodes.length > 0)
+          .filter((entry) => entry.impact === 'serious' || entry.impact === 'critical'),
       ).toEqual([]);
     });
   }

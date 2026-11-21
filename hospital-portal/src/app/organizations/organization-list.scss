@@ -53,6 +53,13 @@
   white-space: nowrap;
 }
 
+/* QA D3057 (r68): an e-mail address breaks where it must, so the Status and
+   Actions columns stay in view on a 1024 px laptop. */
+.contact-cell {
+  overflow-wrap: anywhere;
+  min-width: 8rem;
+}
+
 .code-badge {
   background: #f1f5f9;
   padding: 3px 10px;
@@ -208,10 +215,10 @@
     transition: border-color 0.2s;
     &:focus {
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+      box-shadow: 0 0 0 3px rgba(14, 124, 107, 0.1);
     }
     &::placeholder {
-      color: #6b7280;
+      color: var(--text-muted);
     }
   }
   textarea {
@@ -266,7 +273,7 @@
     }
   }
   &.delete {
-    color: #dc2626;
+    color: var(--danger);
     &:hover {
       background: #fef2f2;
     }
@@ -277,7 +284,7 @@
   padding: 12px;
   .warning-icon {
     font-size: 48px;
-    color: #dc2626;
+    color: var(--danger);
   }
   p {
     margin: 8px 0;
@@ -286,21 +293,5 @@
     font-style: italic;
     color: var(--text-secondary);
     font-size: 0.9rem;
-  }
-}
-.btn-danger {
-  background: #dc2626;
-  color: #fff;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  &:hover {
-    background: #b91c1c;
-  }
-  &:disabled {
-    opacity: 0.5;
-    cursor: default;
   }
 }

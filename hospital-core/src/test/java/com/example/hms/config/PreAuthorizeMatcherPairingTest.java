@@ -229,7 +229,6 @@ public class PreAuthorizeMatcherPairingTest extends BaseIT {
     private static Map<String, String> acceptedNarrowerMatchers() {
         String labPr = "Found by this ratchet; the lab files are owned by another PR of this batch, recorded on the PR";
         Map<String, String> accepted = new TreeMap<>();
-        accepted.put("GET /lab-qc-events/summary ROLE_ADMIN", labPr);
         accepted.put("GET /lab-specimens/{specimenId}/label.pdf ROLE_HOSPITAL_ADMIN", labPr);
         return accepted;
     }

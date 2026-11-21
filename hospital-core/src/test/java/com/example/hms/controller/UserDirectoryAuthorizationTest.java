@@ -28,7 +28,7 @@ class UserDirectoryAuthorizationTest {
     @DisplayName("GET /users and GET /users/search admit the administrators only")
     void directoryEndpointsAreAdminOnly() throws NoSuchMethodException {
         for (Method m : List.of(
-                UserController.class.getMethod("getAllUsers", int.class, int.class, boolean.class, boolean.class),
+                UserController.class.getMethod("getAllUsers", int.class, int.class, boolean.class, boolean.class, java.util.UUID.class),
                 UserController.class.getMethod("searchUsers", String.class, String.class, String.class,
                     int.class, int.class, boolean.class, boolean.class))) {
             PreAuthorize gate = m.getAnnotation(PreAuthorize.class);
@@ -44,7 +44,7 @@ class UserDirectoryAuthorizationTest {
     @DisplayName("the annotation value reads the shared constant, so the two cannot drift")
     void annotationReadsTheConstant() throws NoSuchMethodException {
         PreAuthorize gate = UserController.class
-            .getMethod("getAllUsers", int.class, int.class, boolean.class, boolean.class)
+            .getMethod("getAllUsers", int.class, int.class, boolean.class, boolean.class, java.util.UUID.class)
             .getAnnotation(PreAuthorize.class);
         // Constant folding: the compiled annotation carries the constant's text.
         assertThat(gate.value()).isEqualTo("hasAnyAuthority(" + SecurityConstants.USER_DIRECTORY_AUTHORITIES + ")");

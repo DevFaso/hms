@@ -41,7 +41,7 @@
   border: none;
   font-size: 1.2rem;
   cursor: pointer;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   padding: 4px 8px;
   border-radius: 6px;
 
@@ -68,7 +68,7 @@
   border: none;
   background: none;
   font-size: 0.8rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   cursor: pointer;
   border-radius: 6px;
   white-space: nowrap;
@@ -99,7 +99,7 @@
   justify-content: center;
   gap: 8px;
   padding: 32px;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .spinner {
@@ -107,7 +107,7 @@
   width: 18px;
   height: 18px;
   border: 2px solid var(--border, #e5e7eb);
-  border-top-color: var(--primary, var(--primary));
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
@@ -121,7 +121,7 @@
 .empty-state {
   text-align: center;
   padding: 32px;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   font-size: 0.875rem;
 }
 
@@ -228,7 +228,7 @@
 
 .item-body {
   font-size: 0.8rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -238,7 +238,7 @@
   display: flex;
   gap: 12px;
   font-size: 0.75rem;
-  color: var(--text-muted, #9ca3af);
+  color: var(--text-muted);
 }
 
 .item-actions {
@@ -251,9 +251,9 @@
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  border: 2px solid var(--primary, var(--primary));
+  border: 2px solid var(--primary);
   background: transparent;
-  color: var(--primary, var(--primary));
+  color: var(--primary);
   font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
@@ -262,7 +262,7 @@
   justify-content: center;
 
   &:hover {
-    background: var(--primary, var(--primary));
+    background: var(--primary);
     color: #fff;
   }
 }
@@ -315,7 +315,7 @@
 }
 .last-updated {
   font-size: 0.75rem;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
 }
 .btn-refresh {
   display: inline-flex;
@@ -362,7 +362,7 @@
     padding: 16px;
     border-radius: 50%;
     background: #f1f5f9;
-    color: #64748b;
+    color: var(--text-secondary);
   }
   h3 {
     margin: 0;

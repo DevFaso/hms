@@ -18,6 +18,9 @@ import java.util.UUID;
 
 public final class UserRoleHospitalAssignmentSpecification {
 
+    /** The assignment's hospital association. */
+    private static final String HOSPITAL = "hospital";
+
     private UserRoleHospitalAssignmentSpecification() {
     }
 
@@ -28,8 +31,59 @@ public final class UserRoleHospitalAssignmentSpecification {
         }
         return (root, query, cb) -> {
             query.distinct(true);
-            return cb.equal(root.join("hospital", JoinType.LEFT).get("id"), hospitalId);
+            return cb.equal(root.join(HOSPITAL, JoinType.LEFT).get("id"), hospitalId);
         };
+    }
+
+    /**
+     * The rows at one of these hospitals (an organisation admin's list: the
+     * hospitals of its own organisation). An empty set matches nothing: it is
+     * never "no filter".
+     */
+    public static Specification<UserRoleHospitalAssignment> belongsToAnyHospital(
+            java.util.Collection<UUID> hospitalIds) {
+        return (root, query, cb) -> {
+            if (hospitalIds == null || hospitalIds.isEmpty()) {
+                return cb.disjunction();
+            }
+            query.distinct(true);
+            return root.join(HOSPITAL, JoinType.LEFT).get("id").in(hospitalIds);
+        };
+    }
+
+    /**
+     * Staff rows only: never a PATIENT assignment. An organisation admin's
+     * list (platform admin rules, rule 1b): a patient row is a patient's name
+     * and contact, and that role reads no patient list.
+     */
+    /**
+     * QA D3062 / review of #1264: no row of a platform super-admin's account (one holding SUPER_ADMIN by an
+     * assignment or a global role, active or not). The rule the user directory applies
+     * (UserRepository.DIRECTORY_VISIBLE): a hospital-scoped listing never shows the platform's own accounts.
+     */
+    public static Specification<UserRoleHospitalAssignment> notAPlatformAccount() {
+        return (root, query, cb) -> {
+            jakarta.persistence.criteria.Subquery<UUID> byAssignment = query.subquery(UUID.class);
+            jakarta.persistence.criteria.Root<UserRoleHospitalAssignment> other =
+                byAssignment.from(UserRoleHospitalAssignment.class);
+            byAssignment.select(other.get("id")).where(
+                cb.equal(other.get("user"), root.get("user")),
+                cb.upper(other.join("role").get("code")).in(PLATFORM_ROLE_CODES));
+            jakarta.persistence.criteria.Subquery<UUID> byGlobalRole = query.subquery(UUID.class);
+            jakarta.persistence.criteria.Root<com.example.hms.model.UserRole> global =
+                byGlobalRole.from(com.example.hms.model.UserRole.class);
+            byGlobalRole.select(global.get("user").get("id")).where(
+                cb.equal(global.get("user"), root.get("user")),
+                cb.upper(global.join("role").get("code")).in(PLATFORM_ROLE_CODES));
+            return cb.and(cb.not(cb.exists(byAssignment)), cb.not(cb.exists(byGlobalRole)));
+        };
+    }
+
+    private static final List<String> PLATFORM_ROLE_CODES = List.of("ROLE_SUPER_ADMIN", "SUPER_ADMIN");
+
+    public static Specification<UserRoleHospitalAssignment> staffRowsOnly() {
+        return (root, query, cb) ->
+            cb.not(cb.upper(root.join("role", JoinType.LEFT).get("code")).in("PATIENT", "ROLE_PATIENT"));
     }
 
     @Nullable
@@ -52,7 +106,7 @@ public final class UserRoleHospitalAssignmentSpecification {
             query.distinct(true);
 
             Join<UserRoleHospitalAssignment, User> userJoin = root.join("user", JoinType.LEFT);
-            Join<UserRoleHospitalAssignment, Hospital> hospitalJoin = root.join("hospital", JoinType.LEFT);
+            Join<UserRoleHospitalAssignment, Hospital> hospitalJoin = root.join(HOSPITAL, JoinType.LEFT);
             Join<UserRoleHospitalAssignment, Role> roleJoin = root.join("role", JoinType.LEFT);
 
             // The assignment's own holder, role, code and hospital only. The

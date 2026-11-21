@@ -42,6 +42,20 @@ export function concurrentInsert(err: unknown): boolean {
   return !!fieldErrors && ('code' in fieldErrors || 'linkKey' in fieldErrors);
 }
 
+/** The CSV columns a refusal can name (the import's header), each with a label on screen. */
+export const PRICE_LIST_CSV_COLUMNS: readonly string[] = [
+  'code',
+  'libelle',
+  'categorie',
+  'prix',
+  'date_effet',
+  'liaison_type',
+  'liaison_cle',
+];
+
+/** The two columns that link a price to a lab test, an imaging exam or a medicine. */
+const LINK_COLUMNS: readonly string[] = ['liaison_type', 'liaison_cle'];
+
 /** The server's limit, checked here first so a too-large file is refused before it is sent. */
 export const PRICE_LIST_CSV_MAX_BYTES = 1_048_576;
 
@@ -109,6 +123,29 @@ export class PriceListImportComponent {
     const rows = this.report()?.rows ?? [];
     return this.onlyRefused() ? rows.filter((row) => row.outcome === 'REFUSED') : rows;
   });
+
+  /**
+   * QA r65 D2765: a refusal on the link columns. A new hospital's file linked
+   * its lab prices to tests that did not exist (or were not active) yet, got
+   * « liaison_cle : Aucun test de laboratoire… » on every such line, and was
+   * told neither that the tests come first nor that a price can be imported
+   * unlinked and linked later from the grid.
+   */
+  readonly linkRefused = computed(() =>
+    (this.report()?.rows ?? []).some((row) =>
+      (row.refusals ?? []).some((r) => !!r.column && LINK_COLUMNS.includes(r.column)),
+    ),
+  );
+
+  /**
+   * The column of a refusal as the reader knows it: its label, then the CSV
+   * header name to look for in the file (« Clé de liaison (liaison_cle) »).
+   * A column this build does not know is shown as the server named it.
+   */
+  columnLabel(column: string): string {
+    if (!PRICE_LIST_CSV_COLUMNS.includes(column)) return column;
+    return `${this.translate.instant('PLATFORM_SETUP.IMPORT.COLUMN.' + column)} (${column})`;
+  }
 
   /** Apply only after a clean dry run of the file and option now chosen. */
   readonly canApply = computed(() => {

@@ -77,6 +77,7 @@ import { IntegrationMessagesComponent } from '../super-admin/integration-message
 import { ProviderDetailComponent } from '../super-admin/providers/provider-detail/provider-detail';
 import { ProviderFormComponent } from '../super-admin/providers/provider-form/provider-form';
 import { ProviderListComponent } from '../super-admin/providers/provider-list/provider-list';
+import { PlanAssignmentsComponent } from '../super-admin/subscriptions/plan-assignments.component';
 import { SubscriptionsComponent } from '../super-admin/subscriptions/subscriptions';
 import { SuperAdminComponent } from '../super-admin/super-admin';
 
@@ -420,6 +421,11 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'ProviderListComponent',
     file: 'super-admin/providers/provider-list/provider-list',
     type: ProviderListComponent,
+  },
+  {
+    name: 'PlanAssignmentsComponent',
+    file: 'super-admin/subscriptions/plan-assignments.component',
+    type: PlanAssignmentsComponent,
   },
   {
     name: 'SubscriptionsComponent',

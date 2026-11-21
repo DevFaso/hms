@@ -232,7 +232,7 @@ function today(): string {
         text-align: right;
       }
       tr.reversed td {
-        color: #6b7280;
+        color: var(--text-secondary);
         text-decoration: line-through;
       }
       .reversed-tag {

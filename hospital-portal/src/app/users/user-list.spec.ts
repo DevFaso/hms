@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { By } from '@angular/platform-browser';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import fr from '../../assets/i18n/fr.json';
@@ -60,7 +60,10 @@ describe('UserListComponent registration', () => {
           useValue: { list: () => of({ content: [] }), getMyHospitalAsResponse: () => of(null) },
         },
         { provide: ToastService, useValue: toast },
-        { provide: RoleContextService, useValue: { isSuperAdmin: () => true } },
+        {
+          provide: RoleContextService,
+          useValue: { isSuperAdmin: () => true, hasAnyActiveRole: () => true },
+        },
         { provide: ImpersonationService, useValue: { active: () => null } },
       ],
     });
@@ -295,7 +298,10 @@ describe('UserListComponent create modal as a hospital admin (QA D189, D195)', (
             'warning',
           ]),
         },
-        { provide: RoleContextService, useValue: { isSuperAdmin: () => false } },
+        {
+          provide: RoleContextService,
+          useValue: { isSuperAdmin: () => false, hasAnyActiveRole: () => true },
+        },
         { provide: ImpersonationService, useValue: { active: () => null } },
       ],
     });
@@ -373,7 +379,10 @@ describe('UserListComponent onboarding as a hospital admin (D201)', () => {
           provide: ToastService,
           useValue: jasmine.createSpyObj('ToastService', ['success', 'error', 'warning']),
         },
-        { provide: RoleContextService, useValue: { isSuperAdmin: () => false } },
+        {
+          provide: RoleContextService,
+          useValue: { isSuperAdmin: () => false, hasAnyActiveRole: () => true },
+        },
         { provide: ImpersonationService, useValue: { active: () => null } },
       ],
     });
@@ -424,7 +433,10 @@ describe('UserListComponent — the Profil column is labelled (QA D528/D663)', (
           provide: ToastService,
           useValue: jasmine.createSpyObj('ToastService', ['success', 'error', 'warning', 'info']),
         },
-        { provide: RoleContextService, useValue: { isSuperAdmin: () => false } },
+        {
+          provide: RoleContextService,
+          useValue: { isSuperAdmin: () => false, hasAnyActiveRole: () => true },
+        },
         { provide: ImpersonationService, useValue: { active: () => null } },
       ],
     });
@@ -489,13 +501,72 @@ describe('UserListComponent — no archived hospital in the create picker (QA D8
             'warning',
           ]),
         },
-        { provide: RoleContextService, useValue: { isSuperAdmin: () => true } },
+        {
+          provide: RoleContextService,
+          useValue: { isSuperAdmin: () => true, hasAnyActiveRole: () => true },
+        },
         { provide: ImpersonationService, useValue: { active: () => null } },
       ],
     });
     const component = TestBed.createComponent(UserListComponent).componentInstance;
     component.loadHospitals();
     expect(component.availableHospitals().map((h) => h.id)).toEqual(['h1']);
+  });
+});
+
+describe('UserListComponent — the onboarding checklist link opens one hospital (QA D3058)', () => {
+  it('lists that hospital only, starts « Inscrire » there, and lifts the filter on request', () => {
+    const scope = '00000000-0000-0000-0000-0000000000b2';
+    const users = jasmine.createSpyObj<UserService>('UserService', ['list', 'search']);
+    users.list.and.returnValue(
+      of({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 }) as never,
+    );
+    TestBed.configureTestingModule({
+      imports: [UserListComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: AuthService, useValue: { getUserProfile: () => null, getUserId: () => null } },
+        provideRouter([]),
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap({ hospitalId: scope }) } },
+        },
+        { provide: UserService, useValue: users },
+        { provide: RoleService, useValue: { list: () => of([]) } },
+        {
+          provide: HospitalService,
+          useValue: {
+            list: () =>
+              of([
+                { id: 'h1', name: 'CMA Pissy', lifecycleState: 'ACTIVE' },
+                { id: scope, name: 'Clinique B', lifecycleState: 'ACTIVE' },
+              ]),
+            getMyHospitalAsResponse: () => of(null),
+          },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj<ToastService>('ToastService', [
+            'success',
+            'error',
+            'warning',
+          ]),
+        },
+        {
+          provide: RoleContextService,
+          useValue: { isSuperAdmin: () => true, hasAnyActiveRole: () => true },
+        },
+        { provide: ImpersonationService, useValue: { active: () => null } },
+      ],
+    });
+    const fixture = TestBed.createComponent(UserListComponent);
+    const component = fixture.componentInstance;
+    fixture.detectChanges();
+    expect(users.list.calls.mostRecent().args[4]).toBe(scope);
+    component.loadHospitals();
+    component.openCreate();
+    expect(component.createForm.hospitalId).toBe(scope);
+    component.clearHospitalScope();
+    expect(users.list.calls.mostRecent().args[4]).toBeNull();
   });
 });
 
@@ -529,7 +600,10 @@ describe('UserListComponent — no edit or delete on an account the caller may n
           provide: ToastService,
           useValue: jasmine.createSpyObj('ToastService', ['success', 'error', 'warning', 'info']),
         },
-        { provide: RoleContextService, useValue: { isSuperAdmin: () => superAdmin } },
+        {
+          provide: RoleContextService,
+          useValue: { isSuperAdmin: () => superAdmin, hasAnyActiveRole: () => true },
+        },
         { provide: ImpersonationService, useValue: { active: () => null } },
       ],
     });
@@ -612,7 +686,10 @@ describe('UserListComponent — no edit or delete on an account the caller may n
           provide: ToastService,
           useValue: jasmine.createSpyObj('ToastService', ['success', 'error', 'warning', 'info']),
         },
-        { provide: RoleContextService, useValue: { isSuperAdmin: () => false } },
+        {
+          provide: RoleContextService,
+          useValue: { isSuperAdmin: () => false, hasAnyActiveRole: () => true },
+        },
         { provide: ImpersonationService, useValue: { active: () => null } },
       ],
     });
@@ -675,7 +752,10 @@ describe('UserListComponent — two-step verification reset', () => {
           useValue: { list: () => of({ content: [] }), getMyHospitalAsResponse: () => of(null) },
         },
         { provide: ToastService, useValue: toast },
-        { provide: RoleContextService, useValue: { isSuperAdmin: () => false } },
+        {
+          provide: RoleContextService,
+          useValue: { isSuperAdmin: () => false, hasAnyActiveRole: () => true },
+        },
         { provide: ImpersonationService, useValue: { active: () => null } },
       ],
     });

@@ -3913,4 +3913,16 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V349 (QA r65 D2500, D2501; track I): hospital.hospitals.currency_code
+         (ISO 4217, XOF by default) and time_zone (IANA id, NULL = the
+         organisation's default). Additive, IF NOT EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V349-hospital-currency-time-zone" author="hms-team" runOnChange="false">
+        <sqlFile path="V349__hospital_currency_time_zone.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

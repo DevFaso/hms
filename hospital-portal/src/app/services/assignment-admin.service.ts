@@ -44,6 +44,14 @@ export interface AssignmentResponse {
   profileChecklist?: string[];
 }
 
+/** QA r65 D2764: a pending assignment's one-time activation code and when it stops working. */
+export interface AssignmentActivationCode {
+  assignmentId: string;
+  confirmationCode: string;
+  /** Server clock, without a zone (as every assignment timestamp). */
+  expiresAt?: string | null;
+}
+
 /** Provide exactly one of roleId/roleName and one of userId/userIdentifier. */
 export interface AssignmentRequest {
   userId?: string;
@@ -159,6 +167,16 @@ export class AssignmentAdminService {
     return this.http.post<AssignmentResponse>(`${this.baseUrl}/${id}/regenerate-code`, null, {
       params,
     });
+  }
+
+  /**
+   * QA r65 D2764: the pending assignment's one-time activation code, for the
+   * registrar who hands it over in person. The server shows it only to the
+   * person who created the assignment, only while it is unverified, and
+   * records that it was shown (never the code).
+   */
+  revealActivationCode(id: string): Observable<AssignmentActivationCode> {
+    return this.http.post<AssignmentActivationCode>(`${this.baseUrl}/${id}/activation-code`, null);
   }
 
   resendNotification(id: string): Observable<NotificationDeliveryStatus[]> {

@@ -15,8 +15,9 @@ import java.time.ZoneId;
  * one day of grace, so an invoice could carry tomorrow's date. The grace
  * existed because the server's clock is not the hospital's: a clerk ahead of
  * UTC could be refused today's date near midnight. The right answer is the
- * hospital's own calendar day: its organisation's time zone when one is set
- * (an IANA id such as {@code Africa/Ouagadougou}), else the server's zone.
+ * hospital's own calendar day: the hospital's time zone when it names one
+ * (V349), else its organisation's (an IANA id such as
+ * {@code Africa/Ouagadougou}), else the server's zone.
  * An unparseable zone falls back the same way rather than failing a write.
  */
 public final class HospitalCalendar {
@@ -26,6 +27,11 @@ public final class HospitalCalendar {
 
     /** The hospital's zone, or the clock's when the hospital names none (or an invalid one). */
     public static ZoneId zoneOf(Hospital hospital, Clock clock) {
+        // V349 (QA r65 D2501): the hospital's own zone first, then its organisation's.
+        String own = hospital != null ? hospital.getTimeZone() : null;
+        if (own != null && !own.isBlank()) {
+            return zoneOf(own, clock);
+        }
         Organization organization = hospital != null ? hospital.getOrganization() : null;
         return zoneOf(organization != null ? organization.getDefaultTimezone() : null, clock);
     }

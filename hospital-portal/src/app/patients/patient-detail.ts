@@ -69,6 +69,7 @@ import { isGrowthAge } from '../shared/patient-measures';
 import { refusalReason, refusedFieldReasons } from '../shared/refusal-reason';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { DashPipe } from '../shared/pipes/dash.pipe';
+import { PhonePipe } from '../shared/pipes/phone.pipe';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { ElapsedPipe } from '../shared/pipes/elapsed.pipe';
@@ -104,6 +105,7 @@ type TabKey =
     DateTimePipe,
     ElapsedPipe,
     DashPipe,
+    PhonePipe,
     SubmitGuardDirective,
     LocaleNumberPipe,
     MeasurePipe,

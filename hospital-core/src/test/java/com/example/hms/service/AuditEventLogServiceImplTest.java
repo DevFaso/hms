@@ -353,6 +353,91 @@ class AuditEventLogServiceImplTest {
         assertThat(saved.getValue().getHospitalId()).isNull();
     }
 
+    // ─── Review of #1246: an organisation admin's act is filed at the hospital acted on ───
+
+    private UserRoleHospitalAssignment adminRowOf(User actor, UUID hospitalId) {
+        UserRoleHospitalAssignment row = assignmentOf(actor, hospitalId, "Hospital A");
+        com.example.hms.model.Role admin = new com.example.hms.model.Role();
+        admin.setCode("ROLE_ADMIN");
+        admin.setName("ADMIN");
+        row.setRole(admin);
+        row.setActive(true);
+        return row;
+    }
+
+    private AuditEventLog savedRowOf(User actor, UUID namedHospital) {
+        when(userRepository.findById(actor.getId())).thenReturn(Optional.of(actor));
+        when(auditRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
+
+        auditService.logEvent(AuditEventRequestDTO.builder()
+            .userId(actor.getId()).hospitalId(namedHospital).hospitalName("Hospital B")
+            .eventType(AuditEventType.ROLE_ASSIGNED).eventDescription("Assigned role 'ROLE_NURSE' to Test Nurse")
+            .status(AuditStatus.SUCCESS).entityType("ASSIGNMENT").resourceId(UUID.randomUUID().toString())
+            .build());
+
+        org.mockito.ArgumentCaptor<AuditEventLog> saved = org.mockito.ArgumentCaptor.forClass(AuditEventLog.class);
+        verify(auditRepository).save(saved.capture());
+        return saved.getValue();
+    }
+
+    @Test
+    @DisplayName("an organisation admin's grant at a sister hospital is filed at that hospital, where its administrator reads it")
+    void organisationAdminActIsFiledAtTheHospitalActedOn() {
+        User actor = new User();
+        actor.setId(UUID.randomUUID());
+        UUID hospitalA = UUID.randomUUID();
+        UUID hospitalB = UUID.randomUUID();
+        // No assignment at B: only the ADMIN one at A, whose organisation owns B.
+        when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(actor.getId(), hospitalB))
+            .thenReturn(java.util.List.of());
+        when(assignmentRepository.findByUser_IdAndActiveTrue(actor.getId()))
+            .thenReturn(java.util.List.of(adminRowOf(actor, hospitalA)));
+        when(assignmentRepository.findClinicalHospitalIdsInOrganisationsOf(java.util.Set.of(hospitalA)))
+            .thenReturn(java.util.Set.of(hospitalA, hospitalB));
+
+        AuditEventLog row = savedRowOf(actor, hospitalB);
+
+        assertThat(row.getAssignment()).isNull();
+        assertThat(row.getHospitalId()).isEqualTo(hospitalB);
+        assertThat(row.getHospitalName()).isEqualTo("Hospital B");
+        assertThat(row.getUser()).isSameAs(actor);
+    }
+
+    @Test
+    @DisplayName("...and never at a hospital its organisation does not own, whatever the emitter names")
+    void organisationAdminActIsNotFiledOutsideItsOrganisation() {
+        User actor = new User();
+        actor.setId(UUID.randomUUID());
+        UUID hospitalA = UUID.randomUUID();
+        UUID hospitalOfAnotherOrganisation = UUID.randomUUID();
+        when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(actor.getId(), hospitalOfAnotherOrganisation))
+            .thenReturn(java.util.List.of());
+        when(assignmentRepository.findByUser_IdAndActiveTrue(actor.getId()))
+            .thenReturn(java.util.List.of(adminRowOf(actor, hospitalA)));
+        when(assignmentRepository.findClinicalHospitalIdsInOrganisationsOf(java.util.Set.of(hospitalA)))
+            .thenReturn(java.util.Set.of(hospitalA));
+
+        assertThat(savedRowOf(actor, hospitalOfAnotherOrganisation).getHospitalId()).isNull();
+    }
+
+    @Test
+    @DisplayName("...and only for the ADMIN role: a nurse of A naming B files nothing at B (the D521/D533 rule stands)")
+    void anotherRoleNamingASisterHospitalFilesNothingThere() {
+        User actor = new User();
+        actor.setId(UUID.randomUUID());
+        UUID hospitalA = UUID.randomUUID();
+        UUID hospitalB = UUID.randomUUID();
+        UserRoleHospitalAssignment nurseRow = adminRowOf(actor, hospitalA);
+        nurseRow.getRole().setCode("ROLE_NURSE");
+        when(assignmentRepository.findAllByUser_IdAndHospital_IdAndActiveTrue(actor.getId(), hospitalB))
+            .thenReturn(java.util.List.of());
+        when(assignmentRepository.findByUser_IdAndActiveTrue(actor.getId())).thenReturn(java.util.List.of(nurseRow));
+
+        assertThat(savedRowOf(actor, hospitalB).getHospitalId()).isNull();
+        verify(assignmentRepository, never()).findClinicalHospitalIdsInOrganisationsOf(any());
+    }
+
     // ─── SYSTEM actor ─────────────────────────────────────────────────
 
     @Test

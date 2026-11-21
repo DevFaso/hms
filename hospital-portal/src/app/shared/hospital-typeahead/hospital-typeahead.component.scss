@@ -19,7 +19,7 @@
 
   &__icon {
     font-size: 18px;
-    color: var(--muted, #64748b);
+    color: var(--muted, var(--text-secondary));
   }
 
   &__input {
@@ -31,7 +31,7 @@
     color: var(--text, #0f172a);
 
     &::placeholder {
-      color: var(--muted, #94a3b8);
+      color: var(--muted, var(--text-muted));
     }
   }
 
@@ -76,7 +76,7 @@
 
     &--empty {
       cursor: default;
-      color: var(--muted, #64748b);
+      color: var(--muted, var(--text-secondary));
       font-style: italic;
       padding: 12px;
       text-align: center;
@@ -92,7 +92,7 @@
   }
 
   &__item-meta {
-    color: var(--muted, #64748b);
+    color: var(--muted, var(--text-secondary));
     font-size: 12px;
   }
 }

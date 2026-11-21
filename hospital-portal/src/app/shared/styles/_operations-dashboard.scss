@@ -337,12 +337,6 @@
     flex-wrap: wrap;
     gap: 12px;
   }
-  .operations-dashboard .page-actions .btn-primary {
-    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-    &:hover {
-      background: var(--primary-dark);
-    }
-  }
   .patient-name {
     display: block;
     font-weight: 600;

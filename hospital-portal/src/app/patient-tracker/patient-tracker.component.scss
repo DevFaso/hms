@@ -31,8 +31,8 @@
 }
 
 .meta-badge {
-  background: #e0e7ff;
-  color: #3730a3;
+  background: var(--primary-tint);
+  color: var(--primary-deep);
   border-radius: 1rem;
   padding: 0.25rem 0.75rem;
   font-size: 0.85rem;
@@ -40,7 +40,7 @@
 }
 
 .meta-muted {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.8rem;
 }
 
@@ -69,7 +69,7 @@
 .tracker-loading {
   text-align: center;
   padding: 3rem 0;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 /* Kanban board */
@@ -126,7 +126,7 @@
 
 .column-empty {
   text-align: center;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.8rem;
   padding: 1.5rem 0;
   list-style: none;
@@ -183,7 +183,7 @@
 
 .patient-mrn {
   font-size: 0.75rem;
-  color: #64748b;
+  color: var(--text-secondary);
   font-family: monospace;
 }
 
@@ -201,7 +201,7 @@
 
 .field-label {
   font-weight: 600;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .card-footer {
@@ -240,8 +240,8 @@
   font-weight: 600;
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
-  background: #e0e7ff;
-  color: #3730a3;
+  background: var(--primary-tint);
+  color: var(--primary-deep);
 }
 
 .precheckin-badge {
@@ -272,8 +272,8 @@
 
 /* Check-Out button (MVP 6) */
 .btn-complete-triage {
-  background: #7c3aed;
-  color: #faf5ff;
+  background: var(--primary);
+  color: #fff;
   border: none;
   border-radius: 4px;
   padding: 0.2rem 0.55rem;
@@ -284,7 +284,7 @@
   margin-left: auto;
 
   &:hover:not(:disabled) {
-    background: #6d28d9;
+    background: var(--primary-dark);
   }
 
   &:disabled {

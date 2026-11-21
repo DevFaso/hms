@@ -22,10 +22,6 @@
   .drug-interactions-container .page-subtitle {
     color: #52677a;
   }
-  .btn.btn-primary {
-    background: #08796c;
-    color: white;
-  }
   .btn.btn-warning {
     background: #fef3c7;
     color: #854d0e;
@@ -63,7 +59,7 @@
     line-height: 1.25;
     letter-spacing: -0.6px;
     margin: 0;
-    color: #152e43;
+    color: var(--text-primary);
   }
   .page-subtitle,
   .subtitle {
@@ -127,8 +123,6 @@
   button:disabled {
     cursor: not-allowed;
   }
-  .btn-primary,
-  .btn-secondary,
   .claims button,
   .btn-refresh {
     display: inline-flex;
@@ -142,19 +136,10 @@
     font-weight: 650;
     border: 1px solid #cdd9e2;
   }
-  .btn-primary {
-    background: #08796c;
-    border-color: #08796c;
-    color: white;
-  }
-  .btn-secondary,
   .claims button,
   .btn-refresh {
     background: white;
     color: #244259;
-  }
-  .btn-primary:hover:not(:disabled) {
-    background: #075e55;
   }
   button:focus-visible,
   input:focus-visible,

@@ -20,7 +20,7 @@
     .page-title {
       font-size: clamp(24px, 2.1vw, 32px);
       letter-spacing: -0.7px;
-      color: #122d45;
+      color: var(--text-primary);
     }
     .page-subtitle {
       margin-top: 8px;
@@ -33,16 +33,6 @@
       flex-wrap: wrap;
       align-items: center;
       gap: 12px;
-    }
-    .btn-primary {
-      background: #087568;
-      border-radius: 10px;
-      min-height: 44px;
-      box-shadow: 0 3px 8px #123e3012;
-    }
-    .btn-secondary {
-      min-height: 40px;
-      border-radius: 9px;
     }
     .pharmacy-select {
       min-height: 44px;

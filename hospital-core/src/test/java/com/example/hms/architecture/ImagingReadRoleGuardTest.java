@@ -42,13 +42,15 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>QA D1841: GET /imaging/orders refused RADIOLOGIST while every sibling read admitted him, so
  * the radiologist's dashboard and worklist answered 403. User decision 2026-11-14: the admin roles
- * (SUPER_ADMIN, HOSPITAL_ADMIN, ADMIN) READ Imagerie — orders and released reports, scoped by the
- * services — and never act on it; every imaging write goes through a clinical role the caller
+ * (SUPER_ADMIN, HOSPITAL_ADMIN) READ Imagerie — orders and released reports, scoped by the
+ * services — and never act on it. ADMIN was the third until the platform admin rules of 2026-11-20
+ * (rule 1b): it is the organisation's administrator and reads no patient or clinical data
+ * (OrganisationAdminNoPatientDataGuardTest); every imaging write goes through a clinical role the caller
  * holds on their own ({@link ClinicalActor#holdsOwnRole}), since a super-admin's token carries
  * ROLE_DOCTOR and ROLE_NURSE by inheritance.
  *
  * <ul>
- *   <li>Every imaging read admits RADIOLOGIST and the three admin roles.</li>
+ *   <li>Every imaging read admits RADIOLOGIST and the two admin roles, and never ADMIN.</li>
  *   <li>Every imaging write is a {@code ClinicalActor.holdsOwnRole} gate naming no admin role.</li>
  *   <li>The worklist order reads share one role set, and every role the portal /imaging route lets
  *       in can load it.</li>
@@ -61,7 +63,7 @@ class ImagingReadRoleGuardTest {
         List.of(ImagingOrderController.class, ImagingResultController.class, DicomProxyController.class,
             ImagingStudyImageController.class, ImagingReadingContextController.class);
 
-    private static final Set<String> ADMIN_ROLES = Set.of("SUPER_ADMIN", "HOSPITAL_ADMIN", "ADMIN");
+    private static final Set<String> ADMIN_ROLES = Set.of("SUPER_ADMIN", "HOSPITAL_ADMIN");
 
     /** The read that belongs to ordering: gated like a write. */
     private static final String ORDERING_READ = "ImagingOrderController.getDuplicatePreview";
@@ -118,6 +120,10 @@ class ImagingReadRoleGuardTest {
                 missing.removeAll(roles(controller, method));
                 if (!missing.isEmpty()) {
                     refused.add(name + " refuses " + missing);
+                }
+                // Platform admin rules 2026-11-20, rule 1b: never the organisation's administrator.
+                if (roles(controller, method).contains("ADMIN")) {
+                    refused.add(name + " admits ADMIN, the organisation admin, who reads no clinical data");
                 }
             }
         }

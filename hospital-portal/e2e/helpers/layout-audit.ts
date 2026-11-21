@@ -32,6 +32,21 @@ import type { Page } from '@playwright/test';
  *    button where nothing scrolls to it (QA D2938);
  *  - `squeezed-text`   a text box squeezed so narrow it prints one letter per
  *                      line (D2431: nothing spills, so `text-overflow` misses it).
+ *
+ *  r65 (D2798) adds two, so every table goes through the responsive layer:
+ *  - `no-card-mode`       under 600 px, a list table (one plain header row, two
+ *                         columns or more) is not shown as cards: it was not
+ *                         labelled (shared/a11y/design-conventions.ts) or a page
+ *                         rule outranked the card layer. A table that is not a
+ *                         list opts out with `data-no-cards`;
+ *  - `hidden-last-column` from 600 to 1023 px, a table scrolls in place and its
+ *                         last column is not on screen (the sticky last column
+ *                         of styles.scss did not apply).
+ *
+ *  r68 (D3057) adds one: a card's content stayed inside the table's own scroll
+ *  box, so nothing above saw the organisation's name run past its card.
+ *  - `card-overflow`      under 600 px, something a card holds (a name, a
+ *                         description, a badge) reaches past the card's edge.
  */
 export interface LayoutOffender {
   kind:
@@ -42,7 +57,10 @@ export interface LayoutOffender {
     | 'no-scroll-cue'
     | 'dialog-overflow'
     | 'dialog-height'
-    | 'squeezed-text';
+    | 'squeezed-text'
+    | 'no-card-mode'
+    | 'hidden-last-column'
+    | 'card-overflow';
   selector: string;
   detail: string;
 }
@@ -279,6 +297,23 @@ export async function auditLayout(page: Page): Promise<LayoutOffender[]> {
         );
         return;
       }
+      // QA D2798 (r65): between a phone and a desktop the LAST column stays on
+      // screen whatever it holds (« État », « Adresse IP », a price).
+      const last = cells[cells.length - 1];
+      if (
+        window.innerWidth >= 600 &&
+        cells.length >= 2 &&
+        last.colSpan === 1 &&
+        !table.closest('.fc, .mat-calendar, [data-no-sticky]') &&
+        last.getBoundingClientRect().right > viewRight + 2
+      ) {
+        push(
+          'hidden-last-column',
+          table,
+          `last column « ${(last.textContent ?? '').replace(/\s+/g, ' ').trim()} » is off screen in ` +
+            `${describe(scroller)} (position ${getComputedStyle(last).position})`,
+        );
+      }
       const shadowed = sticky.some((c) => getComputedStyle(c).boxShadow !== 'none');
       const faded =
         parseFloat(getComputedStyle(scroller).getPropertyValue('--scroll-fade') || '0') > 0;
@@ -290,6 +325,61 @@ export async function auditLayout(page: Page): Promise<LayoutOffender[]> {
         );
       }
     });
+
+    // (d2) QA D2798 (r65): on a phone a list table is a list of cards. Every
+    // table with one plain header row of two columns or more must have been
+    // labelled and must really render as cards (a page rule that outranks the
+    // card layer, or a table the labeller missed, fails here).
+    if (window.innerWidth < 600) {
+      document.querySelectorAll('table').forEach((table) => {
+        if (!visible(table) || table.closest('.fc, .mat-calendar, [data-no-cards]')) return;
+        const head = table.tHead;
+        if (!head || head.rows.length !== 1) return;
+        const cells = Array.from(head.rows[0].cells);
+        if (cells.length < 2 || cells.some((c) => c.colSpan !== 1 || c.rowSpan !== 1)) return;
+        // A header row holding a form control (select all, a column filter) is
+        // kept: its table stays a table (design-conventions.ts `isCardTable`).
+        if (head.querySelector('input, select, textarea')) return;
+        // A body cell that spans rows shifts the columns under it: such a table
+        // is left as a table on purpose (design-conventions.ts `isCardTable`).
+        const spansRows = Array.from(table.tBodies).some((body) =>
+          Array.from(body.rows).some((r) => Array.from(r.cells).some((c) => c.rowSpan > 1)),
+        );
+        if (spansRows) return;
+        // A page with a card layout of its own writes its own data-label and is
+        // never marked (the till closing): its table is not the labeller's.
+        const ownCards =
+          !table.hasAttribute('data-cards') &&
+          Array.from(table.tBodies).some((body) =>
+            body.querySelector(':scope > tr > [data-label]'),
+          );
+        if (ownCards) return;
+        const row = Array.from(table.tBodies)
+          .flatMap((body) => Array.from(body.rows))
+          .find((r) => visible(r));
+        const cell = row
+          ? Array.from(row.cells).find((c) => c.colSpan === 1 && c.rowSpan === 1 && visible(c))
+          : undefined;
+        const problems: string[] = [];
+        if (!table.hasAttribute('data-cards')) problems.push('not marked data-cards');
+        if (getComputedStyle(table).display !== 'block') {
+          problems.push(`table display ${getComputedStyle(table).display}`);
+        }
+        if (row && getComputedStyle(row).display !== 'table') {
+          problems.push(`row display ${getComputedStyle(row).display}`);
+        }
+        if (cell) {
+          if (!cell.hasAttribute('data-label')) problems.push('cell without data-label');
+          else if (
+            cell.getAttribute('data-label') !== '' &&
+            getComputedStyle(cell).display !== 'table-row'
+          ) {
+            problems.push(`cell display ${getComputedStyle(cell).display}`);
+          }
+        }
+        if (problems.length) push('no-card-mode', table, problems.join('; '));
+      });
+    }
 
     // (e) QA D2461 (r64): a dialog is never wider than the screen.
     document
@@ -349,6 +439,28 @@ export async function auditLayout(page: Page): Promise<LayoutOffender[]> {
           );
         });
       });
+
+    // (g) QA D3057 (r68): in card mode, what a card holds stays inside the card.
+    if (window.innerWidth < 600) {
+      document.querySelectorAll('table[data-cards] > tbody > tr').forEach((row) => {
+        if (!visible(row)) return;
+        const card = row.getBoundingClientRect();
+        if (card.width === 0) return;
+        for (const el of Array.from(row.querySelectorAll('*'))) {
+          if (!visible(el)) continue;
+          const r = el.getBoundingClientRect();
+          if (r.width === 0 || r.height === 0) continue;
+          if (r.right > card.right + 1 || r.left < card.left - 1) {
+            push(
+              'card-overflow',
+              el,
+              `spans ${Math.round(r.left)}–${Math.round(r.right)}px in a card at ${Math.round(card.left)}–${Math.round(card.right)}px`,
+            );
+            break;
+          }
+        }
+      });
+    }
 
     return out as LayoutOffender[];
   });

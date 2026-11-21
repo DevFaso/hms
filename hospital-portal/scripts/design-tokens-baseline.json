@@ -1,0 +1,80 @@
+{
+  "$comment": [
+    "Pre-rebrand colours, low-contrast text colours and local restyling of the shared buttons (QA r65: D2790 / D2793 / D2804).",
+    "A pin is a deliberate exception with its reason. A new site is never pinned to pass."
+  ],
+  "pinned": {
+    "src/app/analytics/analytics.ts::legacy-colour::#6366f1": {
+      "count": 2,
+      "why": "a chart or data-series colour (categorical), not a brand surface"
+    },
+    "src/app/dashboard/dashboard.ts::legacy-colour::#0284c7": {
+      "count": 3,
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
+    },
+    "src/app/dashboard/dashboard.ts::legacy-colour::#0891b2": {
+      "count": 12,
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
+    },
+    "src/app/dashboard/dashboard.ts::legacy-colour::#1d4ed8": {
+      "count": 1,
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
+    },
+    "src/app/dashboard/dashboard.ts::legacy-colour::#4f46e5": {
+      "count": 8,
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
+    },
+    "src/app/dashboard/dashboard.ts::legacy-colour::#7c3aed": {
+      "count": 14,
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
+    },
+    "src/app/dashboard/doctor-patient-flow/doctor-patient-flow.ts::legacy-colour::#0891b2": {
+      "count": 1,
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
+    },
+    "src/app/dashboard/doctor-patient-flow/doctor-patient-flow.ts::legacy-colour::#6366f1": {
+      "count": 1,
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
+    },
+    "src/app/dashboard/doctor-patient-flow/doctor-patient-flow.ts::legacy-colour::#7c3aed": {
+      "count": 1,
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
+    },
+    "src/app/dashboard/doctor-worklist/doctor-worklist.ts::legacy-colour::#0891b2": {
+      "count": 1,
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
+    },
+    "src/app/dashboard/doctor-worklist/doctor-worklist.ts::legacy-colour::#7c3aed": {
+      "count": 1,
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
+    },
+    "src/app/lab/lab-ops-dashboard/lab-ops-dashboard.ts::legacy-colour::#0891b2": {
+      "count": 1,
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
+    },
+    "src/app/lab/lab-ops-dashboard/lab-ops-dashboard.ts::legacy-colour::#6366f1": {
+      "count": 1,
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
+    },
+    "src/app/lab/lab-ops-dashboard/lab-ops-dashboard.ts::legacy-colour::#7c3aed": {
+      "count": 1,
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
+    },
+    "src/app/maternity/partograph-chart.component.ts::legacy-colour::#6366f1": {
+      "count": 3,
+      "why": "a chart or data-series colour (categorical), not a brand surface"
+    },
+    "src/app/platform/platform.html::btn-base-class::btn-primary": {
+      "count": 1,
+      "why": "the pressed option of the page's own .btn toggle group (bound class); that base sets no fill and no border colour, so the shared look shows"
+    },
+    "src/app/reception/empi-candidates-panel/empi-candidates-panel.component.scss::local-button::.empi-panel__merge-bar .btn-primary": {
+      "count": 1,
+      "why": "the identity-merge confirmation keeps its amber warning tone: the merge cannot be undone"
+    },
+    "src/app/super-admin/super-admin.ts::legacy-colour::#6366f1": {
+      "count": 2,
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
+    }
+  }
+}

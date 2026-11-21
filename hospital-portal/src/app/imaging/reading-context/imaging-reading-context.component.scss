@@ -33,7 +33,7 @@
   dt {
     font-size: 12px;
     font-weight: 600;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 
   dd {
@@ -51,7 +51,7 @@
 }
 
 .muted {
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .prior-list {

@@ -231,6 +231,18 @@
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
+                  @if (canPrintOrdonnance(p)) {
+                    <button
+                      type="button"
+                      class="action-link print-link"
+                      (click)="printOrdonnance(p)"
+                      [title]="'PRESCRIPTIONS.PRINT_ORDONNANCE' | translate"
+                      [attr.aria-label]="'PRESCRIPTIONS.PRINT_ORDONNANCE' | translate"
+                      [attr.data-testid]="'rx-ordonnance-' + p.id"
+                    >
+                      <span class="material-symbols-outlined">print</span>
+                    </button>
+                  }
                   @if (!isForeign(p)) {
                     @if (canEditRow(p)) {
                       <button
@@ -363,6 +375,17 @@
       >
         <div class="detail-header">
           <h2 id="prescriptions-panel-1-title">{{ 'PRESCRIPTIONS.DETAILS' | translate }}</h2>
+          @if (canPrintOrdonnance(rx)) {
+            <button
+              type="button"
+              class="btn-secondary"
+              (click)="printOrdonnance(rx)"
+              data-testid="rx-detail-ordonnance"
+            >
+              <span class="material-symbols-outlined">print</span>
+              {{ 'PRESCRIPTIONS.PRINT_ORDONNANCE' | translate }}
+            </button>
+          }
           <button
             class="btn-close"
             (click)="closeDetail()"

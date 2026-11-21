@@ -38,10 +38,11 @@ class PrescriptionControllerPatientCopyTest {
     @Mock private PrescriptionClarificationService clarificationService;
     @Mock private PrescriptionSmsDispatchService smsDispatchService;
     @Mock private MessageSource messageSource;
+    @Mock private com.example.hms.service.pharmacy.OrdonnancePdfService ordonnancePdfService;
 
     private PrescriptionController controller() {
         return new PrescriptionController(prescriptionService, pharmacistVerificationService,
-                clarificationService, smsDispatchService, messageSource);
+                clarificationService, smsDispatchService, messageSource, ordonnancePdfService);
     }
 
     private static Authentication with(String... roles) {
@@ -89,5 +90,23 @@ class PrescriptionControllerPatientCopyTest {
         assertThat(PrescriptionController.isPatientOnly(with("ROLE_PHARMACIST"))).isFalse();
         assertThat(PrescriptionController.isPatientOnly(with("ROLE_PATIENT", "ROLE_NURSE"))).isFalse();
         assertThat(PrescriptionController.isPatientOnly(null)).isFalse();
+    }
+
+    /** QA D3054 (r68): the ordonnance answers inline, never cached, as ordonnance.pdf. */
+    @org.junit.jupiter.api.Test
+    void theOrdonnanceIsAnInlineUncachedPdf() {
+        java.util.UUID id = java.util.UUID.randomUUID();
+        byte[] pdf = "%PDF-1.4".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        when(ordonnancePdfService.forPrescriber(id)).thenReturn(pdf);
+
+        org.springframework.http.ResponseEntity<byte[]> answer = controller().ordonnance(id);
+
+        org.assertj.core.api.Assertions.assertThat(answer.getBody()).isEqualTo(pdf);
+        org.assertj.core.api.Assertions.assertThat(answer.getHeaders().getContentType())
+            .isEqualTo(org.springframework.http.MediaType.APPLICATION_PDF);
+        org.assertj.core.api.Assertions.assertThat(answer.getHeaders().getCacheControl()).contains("no-store");
+        org.assertj.core.api.Assertions.assertThat(
+            answer.getHeaders().getFirst(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION))
+            .contains("inline").contains("ordonnance.pdf");
     }
 }

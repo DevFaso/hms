@@ -442,11 +442,50 @@ export class MyAppointmentsComponent implements OnInit {
     this.departments.set([]);
     this.providers.set([]);
     this.loadSlots();
+    this.departmentsState.set('idle');
     if (this.selectedHospitalId) {
-      this.portal.getSchedulingDepartments(this.selectedHospitalId).subscribe({
-        next: (d) => this.departments.set(d),
+      const hospitalId = this.selectedHospitalId;
+      this.departmentsState.set('loading');
+      this.portal.getSchedulingDepartments(hospitalId).subscribe({
+        next: (d) => {
+          // An answer for a hospital the patient has since left is dropped.
+          if (this.selectedHospitalId !== hospitalId) return;
+          this.departments.set(d);
+          this.departmentsState.set('loaded');
+        },
+        error: () => {
+          if (this.selectedHospitalId !== hospitalId) return;
+          this.departmentsState.set('failed');
+        },
       });
     }
+  }
+
+  /**
+   * QA r65 D2731: where the Service list of the chosen hospital stands. On a
+   * freshly set-up hospital it came back empty (no clinician attached to a
+   * department) and the form said nothing at all.
+   */
+  readonly departmentsState = signal<'idle' | 'loading' | 'loaded' | 'failed'>('idle');
+
+  /** The chosen hospital answered, and it has no service a patient can book online. */
+  bookingNotOffered(): boolean {
+    return this.departmentsState() === 'loaded' && this.departments().length === 0;
+  }
+
+  /** The chosen hospital's phone number, to call when nothing can be booked online. */
+  selectedHospitalPhone(): string | null {
+    const hospital = this.hospitals().find((h) => h.id === this.selectedHospitalId);
+    return hospital?.phoneNumber?.trim() || null;
+  }
+
+  /**
+   * The chosen service has no published slot still to come: said at once,
+   * rather than « Aucun créneau libre ce jour-là » on every date the patient tries.
+   */
+  selectedDepartmentHasNoSlots(): boolean {
+    const department = this.departments().find((d) => d.id === this.selectedDepartmentId);
+    return department?.hasOpenSlots === false;
   }
 
   onDepartmentChange(): void {
@@ -569,6 +608,7 @@ export class MyAppointmentsComponent implements OnInit {
     this.appointmentReason = '';
     this.appointmentNotes = '';
     this.departments.set([]);
+    this.departmentsState.set('idle');
     this.providers.set([]);
     this.openSlots.set([]);
     this.slotsLoaded.set(false);

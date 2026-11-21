@@ -2139,7 +2139,9 @@
       "DISPENSE_BILLING_DEFERRAL_CLOSED_SETTLED": "Aplazamiento cerrado: la receta salió de la farmacia sin nada pendiente",
       "PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED": "Aceptación de la solicitud de cobertura de farmacia confirmada por facturación o contabilidad",
       "ADOLESCENT_AGE_SET_ZERO": "Edad de confidencialidad de los adolescentes fijada en 0 años",
-      "ADOLESCENT_AGE_SET_ONE": "Edad de confidencialidad de los adolescentes fijada en 1 año"
+      "ADOLESCENT_AGE_SET_ONE": "Edad de confidencialidad de los adolescentes fijada en 1 año",
+      "ACTIVATION_CODE_SHOWN": "Código de activación mostrado a la persona que creó la asignación",
+      "ORDONNANCE_PRINTED": "Receta impresa por su prescriptor (recetas {{ids}})"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -3756,7 +3758,9 @@
     "SENSITIVITY_SEXUAL_DOMESTIC_VIOLENCE": "Violencia sexual y doméstica",
     "SENSITIVITY_GENETIC": "Pruebas genéticas",
     "SENSITIVITY_SICKLE_CELL": "Drepanocitosis (genotipo)",
-    "SENSITIVITY_TUBERCULOSIS": "Tuberculosis (acceso restringido)"
+    "SENSITIVITY_TUBERCULOSIS": "Tuberculosis (acceso restringido)",
+    "HOSPITAL_SCOPE": "Hospital: {{name}}",
+    "HOSPITAL_SCOPE_CLEAR": "Mostrar todos los hospitales"
   },
   "COST_PANEL": {
     "TITLE": "Costes por centro",
@@ -8842,7 +8846,9 @@
     "REFILLS_ALLOWED_HINT": "Número de renovaciones que la farmacia puede dispensar sin una nueva decisión (0 = ninguna). Una más requiere la aprobación del prescriptor. Regla provisional.",
     "REFILLS_CONTROLLED_HINT": "Sustancia controlada: ninguna renovación. Cada nueva dispensación requiere una nueva receta.",
     "REFILLS_LOCKED_HINT": "El número de renovaciones no se modifica después de la firma.",
-    "REFILLS_ALLOWED_INVALID": "El número de renovaciones es un número entero, de 0 a {{max}}."
+    "REFILLS_ALLOWED_INVALID": "El número de renovaciones es un número entero, de 0 a {{max}}.",
+    "PRINT_ORDONNANCE": "Imprimir la receta",
+    "ORDONNANCE_FAILED": "No se pudo imprimir la receta. Inténtelo de nuevo."
   },
   "PROFILE": {
     "RECOVERY_CONFIRM_TITLE": "Confirme su contacto de recuperación",
@@ -10211,7 +10217,9 @@
       "CONFIRM": "Restablecer",
       "DONE": "La verificación en dos pasos se restableció.",
       "FAILED": "No se pudo restablecer la verificación en dos pasos."
-    }
+    },
+    "HOSPITAL_SCOPE": "Hospital: {{name}}",
+    "HOSPITAL_SCOPE_CLEAR": "Mostrar todos los hospitales"
   },
   "TRIAGE": {
     "ACUITY": "Nivel de gravedad",
@@ -15580,5 +15588,187 @@
     "INCREASED_PAIN": "Dolor aumentado",
     "VAGINAL_BLEEDING": "Sangrado vaginal importante",
     "REDUCED_URINE_OUTPUT": "Diuresis disminuida"
+  },
+  "PLATFORM_SETUP": {
+    "ROLE_ADMIN": "Administrador",
+    "CHECKLIST": {
+      "TITLE": "Puesta en marcha del establecimiento",
+      "PROGRESS": "{{done}} de {{total}} pasos terminados",
+      "BOOKABLE": "Los pacientes pueden pedir cita en línea",
+      "NOT_BOOKABLE": "Los pacientes aún no pueden pedir cita en línea",
+      "NEEDED_FOR_BOOKING": "necesario para las citas en línea",
+      "OPEN": "Abrir",
+      "LOAD_FAILED": "No se pudo cargar la lista de puesta en marcha. Recargue la página.",
+      "STEP": {
+        "HOSPITAL_ADMIN": {
+          "TITLE": "Administrador del hospital",
+          "DONE": "Administradores del hospital inscritos: {{count}}",
+          "TODO": "Inscriba al administrador de este hospital (rol de administrador de hospital). Los departamentos se crean después."
+        },
+        "DEPARTMENTS": {
+          "TITLE": "Departamentos",
+          "DONE": "Departamentos creados: {{count}}",
+          "TODO": "Cree al menos un departamento (medicina general, maternidad…)."
+        },
+        "STAFF": {
+          "TITLE": "Personal",
+          "DONE": "Miembros del personal activos: {{count}}",
+          "TODO": "Inscriba al personal. Cada persona debe después activar su cuenta con el código recibido."
+        },
+        "PROVIDERS_IN_DEPARTMENT": {
+          "TITLE": "Profesionales asignados a un departamento",
+          "DONE": "Departamentos con al menos un médico, un enfermero o una matrona: {{count}}",
+          "TODO": "Ningún profesional está asignado a un departamento: abra la ficha de un médico, un enfermero o una matrona y elija su departamento."
+        },
+        "SESSION_TEMPLATES": {
+          "TITLE": "Plantillas de sesión",
+          "DONE": "Plantillas de sesión activas: {{count}}",
+          "TODO": "Cree las sesiones de consulta de cada profesional (día, horas, duración de una visita)."
+        },
+        "OPEN_SLOTS": {
+          "TITLE": "Franjas publicadas",
+          "DONE": "Departamentos donde un paciente puede reservar una franja futura: {{count}}",
+          "TODO": "Ninguna franja libre futura en un departamento con un profesional: genere las franjas a partir de las plantillas de sesión."
+        },
+        "BEDS": {
+          "TITLE": "Camas",
+          "DONE": "Camas activas: {{count}}",
+          "TODO": "Añada las unidades y las camas si el establecimiento hospitaliza."
+        },
+        "PRICE_LIST": {
+          "TITLE": "Lista de precios",
+          "DONE": "Precios activos: {{count}}",
+          "TODO": "Introduzca o importe los precios: sin ellos, ninguna línea de factura encuentra su precio."
+        },
+        "PAYERS": {
+          "TITLE": "Entidades pagadoras",
+          "DONE": "Entidades pagadoras activas: {{count}}",
+          "TODO": "Añada las mutuas y los seguros si el establecimiento atiende a pacientes asegurados."
+        }
+      }
+    },
+    "HOSPITAL": {
+      "CODE": "Código del hospital",
+      "CODE_PLACEHOLDER": "p. ej. HSP-01",
+      "CODE_HINT_NEW": "Opcional: déjelo vacío para que se genere un código. Figura al principio de cada número de factura.",
+      "CODE_HINT_EDIT": "Se puede modificar mientras el hospital no haya emitido ninguna factura: el código figura al principio de cada número de factura.",
+      "CODE_INVALID": "El código tiene de 2 a 20 caracteres: mayúsculas, cifras y guiones, empezando y terminando por una letra o una cifra.",
+      "CURRENCY": "Moneda",
+      "CURRENCY_NAME": {
+        "XOF": "Franco CFA de la UEMOA (F CFA)",
+        "XAF": "Franco CFA de la CEMAC (F CFA)"
+      },
+      "TIME_ZONE": "Zona horaria",
+      "TIME_ZONE_INHERIT": "La de la organización",
+      "TIME_ZONE_HINT": "Fija el día del hospital: la fecha de una factura, el inicio de un precio, una franja ya pasada.",
+      "TIME_ZONE_FROM_ORG": "(la de la organización)",
+      "TIME_ZONE_NONE": "Sin definir: se aplica la hora del servidor",
+      "CURRENCY_HINT": "La moneda ya no puede modificarse en cuanto el hospital tiene una factura o una tarifa.",
+      "CODE_LOCKED": "Bloqueado: este hospital ya emitió facturas y su código figura en cada número de factura.",
+      "CURRENCY_LOCKED": "Bloqueada: este hospital ya tiene una factura o una lista de precios en esta moneda."
+    },
+    "BOOKING": {
+      "NOT_OFFERED": "Este establecimiento aún no ofrece la cita en línea.",
+      "NO_SLOTS_PUBLISHED": "Este servicio no tiene ninguna franja libre publicada por el momento.",
+      "CALL": "Para pedir cita, llame al {{phone}}.",
+      "CONTACT": "Para pedir cita, contacte con el establecimiento.",
+      "DEPARTMENTS_FAILED": "No se pudieron cargar los servicios de este establecimiento. Inténtelo de nuevo."
+    },
+    "ACTIVATION": {
+      "TITLE": "Código de activación",
+      "HELP": "Si el SMS o el correo de activación no ha llegado, muestre el código y entrégueselo a la persona en mano.",
+      "SHOW": "Mostrar el código de activación",
+      "HOW_TO": "La persona abre la página de inicio de sesión, elige «Tengo un código de activación» e introduce su número de teléfono y este código. La visualización del código queda registrada en el registro de auditoría.",
+      "EXPIRES": "Este código es válido hasta el {{date}}.",
+      "REGISTRAR_ONLY": "Solo la persona que creó esta asignación ({{name}}) puede mostrar su código de activación.",
+      "SHOW_FAILED": "No se pudo mostrar el código de activación.",
+      "WHERE_IS_CODE": "Para entregar el código en mano: Asignaciones, «Detalles» de la persona y «Mostrar el código de activación»."
+    },
+    "IMPORT": {
+      "BLOCKED": "Líneas rechazadas: {{refused}}. No se importa nada mientras haya una línea rechazada: corrija el archivo y verifíquelo de nuevo.",
+      "LINK_HINT": "Una línea vinculada (columnas liaison_type y liaison_cle) debe designar un elemento que exista y esté activo en este establecimiento. Para un examen de laboratorio, créelo y actívelo primero en «Config. de pruebas de laboratorio». Si no, vacíe ambas columnas: el precio se importa sin vínculo y podrá vincularlo después desde la lista («Editar»).",
+      "COLUMN": {
+        "code": "Código",
+        "libelle": "Descripción",
+        "categorie": "Categoría",
+        "prix": "Precio",
+        "date_effet": "Fecha de efecto",
+        "liaison_type": "Tipo de vínculo",
+        "liaison_cle": "Clave de vínculo"
+      }
+    },
+    "PLANS": {
+      "TITLE": "Asignación de planes a las organizaciones",
+      "HELP": "Elija una organización para ver su plan y asignarle uno. Asignar un nuevo plan pone fin al plan en curso.",
+      "ORGANISATION": "Organización",
+      "CHOOSE_ORGANISATION": "Elegir una organización",
+      "CURRENT": "Plan en curso:",
+      "CURRENT_DETAIL": "{{seats}} licencias, facturación {{period}}, desde el {{since}}",
+      "NO_PLAN": "Esta organización no tiene ningún plan en curso.",
+      "PLAN": "Plan",
+      "CHOOSE_PLAN": "Elegir un plan",
+      "SEATS": "Licencias de usuario",
+      "SEATS_INVALID": "Introduzca un número entero de licencias, cero o más.",
+      "BILLING_PERIOD": "Periodo de facturación",
+      "PERIOD": {
+        "MONTHLY": "mensual",
+        "QUARTERLY": "trimestral",
+        "ANNUAL": "anual"
+      },
+      "ASSIGN": "Asignar el plan",
+      "CHANGE": "Cambiar de plan",
+      "ASSIGNED": "Plan {{plan}} asignado.",
+      "ASSIGN_FAILED": "No se pudo asignar el plan.",
+      "END": "Poner fin al plan",
+      "END_CONFIRM": "¿Poner fin al plan {{plan}} de esta organización?",
+      "ENDED": "El plan ha finalizado.",
+      "END_FAILED": "No se pudo finalizar el plan.",
+      "NO_ACTIVE_PLAN": "Ningún plan activo que asignar: cree uno más arriba.",
+      "HISTORY": "Planes anteriores",
+      "HISTORY_LINE": "del {{from}} al {{to}}",
+      "LOAD_FAILED": "No se pudieron cargar las asignaciones. Inténtelo de nuevo."
+    },
+    "AUDIT_TABS": {
+      "LABEL": "Pantallas de auditoría",
+      "LOG": "Registro",
+      "SEARCH": "Búsqueda avanzada"
+    },
+    "ORG_ADMIN": {
+      "HOSPITAL_REQUIRED": "Elija el hospital donde trabajará esta persona.",
+      "REGISTER_SCOPE": "Puede inscribir personal en cada hospital de su organización.",
+      "ASSIGNMENTS_SCOPE": "Usted gestiona las asignaciones del personal en cada hospital de su organización. Los roles de administración los concede un superadministrador.",
+      "ACTION_USERS": "Inscribir personal en sus hospitales",
+      "ACTION_ASSIGNMENTS": "Asignar o retirar un rol a un miembro del personal"
+    },
+    "ORG_TOTALS": {
+      "TITLE": "Cifras de la organización",
+      "PERIOD": "Del {{from}} al {{to}}",
+      "NOTE": "Solo totales por hospital: ninguna lista de pacientes, ninguna factura, ninguna nota.",
+      "LOADING": "Cargando las cifras…",
+      "LOAD_FAILED": "No se pudieron cargar las cifras.",
+      "RETRY": "Reintentar",
+      "EMPTY": "Ningún hospital en su organización por ahora.",
+      "STAFF": "Personal activo",
+      "APPOINTMENTS": "Citas",
+      "ADMISSIONS": "Hospitalizaciones",
+      "INVOICED": "Facturado",
+      "COLLECTED": "Cobrado",
+      "DEATHS": "Fallecimientos",
+      "FEWER_THAN": "Menos de {{threshold}}",
+      "SMALL_COUNTS": "Un número de fallecimientos inferior a {{threshold}} no se muestra, para proteger a las personas afectadas."
+    }
+  },
+  "ERROR_404": {
+    "TITLE": "Página no encontrada",
+    "BODY": "Esta página no existe o se ha movido. Compruebe la dirección o vuelva a su panel.",
+    "BACK": "Volver al panel"
+  },
+  "CARD_SORT": {
+    "GROUP": "Ordenar la lista",
+    "SORT_BY": "Ordenar por",
+    "ASCENDING": "Ascendente",
+    "DESCENDING": "Descendente",
+    "ASCENDING_FLIP": "Ascendente, cambiar a descendente",
+    "DESCENDING_FLIP": "Descendente, cambiar a ascendente"
   }
 }

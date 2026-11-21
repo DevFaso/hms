@@ -72,7 +72,7 @@ import { AllergyReviewState } from './allergy-acknowledgement';
       background: var(--surface-2, transparent);
     }
     .allergy-review-state--continue {
-      border-left-color: var(--info, #1d4ed8);
+      border-left-color: var(--info, var(--info-text));
     }
     .allergy-review-state--stop {
       border-left-color: var(--danger, #b91c1c);

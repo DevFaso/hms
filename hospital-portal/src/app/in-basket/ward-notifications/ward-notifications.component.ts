@@ -73,7 +73,7 @@ import { refusalReason } from '../../shared/refusal-reason';
     }
     .ward-notifications__state {
       margin: 0;
-      color: #64748b;
+      color: var(--text-secondary);
       font-size: 0.875rem;
     }
     .ward-notifications__list {
@@ -104,7 +104,7 @@ import { refusalReason } from '../../shared/refusal-reason';
       align-items: center;
       gap: 8px;
       font-size: 0.8rem;
-      color: #64748b;
+      color: var(--text-secondary);
     }
   `,
 })

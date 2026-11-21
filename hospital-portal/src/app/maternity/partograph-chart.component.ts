@@ -198,7 +198,7 @@ interface ChartPoint {
         gap: 0.5rem 1rem;
         margin-top: 0.4rem;
         font-size: 0.75rem;
-        color: #6b7280;
+        color: var(--text-secondary);
       }
       .legend-item {
         display: inline-flex;

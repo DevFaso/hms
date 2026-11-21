@@ -17,20 +17,20 @@
 
     .header-icon {
       font-size: 2rem;
-      color: #6366f1;
+      color: var(--primary);
     }
 
     h1 {
       margin: 0;
       font-size: 1.5rem;
       font-weight: 700;
-      color: #1e293b;
+      color: var(--text-primary);
     }
 
     .subtitle {
       margin: 0;
       font-size: 0.875rem;
-      color: #64748b;
+      color: var(--text-secondary);
     }
   }
 }
@@ -40,7 +40,7 @@
   flex-direction: column;
   align-items: center;
   padding: 3rem;
-  color: #64748b;
+  color: var(--text-secondary);
 
   .spin {
     animation: spin 1s linear infinite;
@@ -107,7 +107,7 @@
 
     .stat-label {
       font-size: 0.8rem;
-      color: #64748b;
+      color: var(--text-secondary);
     }
   }
 }
@@ -131,7 +131,7 @@
 
     .material-icons {
       font-size: 1.2rem;
-      color: #6366f1;
+      color: var(--primary);
     }
   }
 }
@@ -160,7 +160,7 @@
   .bar {
     width: 100%;
     max-width: 40px;
-    background: #6366f1;
+    background: var(--primary);
     border-radius: 4px 4px 0 0;
     min-height: 4px;
     transition: height 0.3s ease;
@@ -168,7 +168,7 @@
 
   .bar-label {
     font-size: 0.7rem;
-    color: #64748b;
+    color: var(--text-secondary);
     margin-top: 0.25rem;
     white-space: nowrap;
   }
@@ -228,7 +228,7 @@
 
   .status-count {
     font-size: 0.8rem;
-    color: #64748b;
+    color: var(--text-secondary);
     white-space: nowrap;
     min-width: 80px;
     text-align: right;
@@ -254,7 +254,7 @@
 
   th {
     font-weight: 600;
-    color: #64748b;
+    color: var(--text-secondary);
     font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.03em;

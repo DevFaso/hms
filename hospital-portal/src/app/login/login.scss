@@ -44,12 +44,12 @@
   h1 {
     font-size: 1.5rem;
     font-weight: 700;
-    color: #1e293b;
+    color: var(--text-primary);
     margin: 0 0 0.25rem;
   }
 
   .subtitle {
-    color: #64748b;
+    color: var(--text-secondary);
     font-size: 0.875rem;
     margin: 0;
   }
@@ -114,7 +114,7 @@
   .input-icon {
     position: absolute;
     left: 12px;
-    color: #6b7280;
+    color: var(--text-secondary);
     pointer-events: none;
   }
 
@@ -134,12 +134,12 @@
     &:focus {
       outline: none;
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+      box-shadow: 0 0 0 3px rgba(14, 124, 107, 0.1);
       background: #fff;
     }
 
     &::placeholder {
-      color: #6b7280;
+      color: var(--text-muted);
     }
 
     &:disabled {
@@ -152,7 +152,7 @@
     right: 8px;
     background: none;
     border: none;
-    color: #6b7280;
+    color: var(--text-secondary);
     cursor: pointer;
     padding: 4px;
     display: flex;
@@ -172,7 +172,7 @@
 }
 
 .form-group .field-hint {
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .form-group .field-error {
@@ -226,7 +226,7 @@
 }
 
 .link-separator {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.875rem;
 }
 
@@ -250,7 +250,7 @@
 
   &:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+    box-shadow: 0 4px 12px rgba(14, 124, 107, 0.4);
   }
 
   &:active:not(:disabled) {
@@ -294,7 +294,7 @@
 
   p {
     font-size: 0.75rem;
-    color: #6b7280;
+    color: var(--text-secondary);
     margin: 0;
   }
 }
@@ -405,7 +405,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   padding: 0.25rem;
@@ -419,7 +419,7 @@
 
 .fp-instruction {
   font-size: 0.9rem;
-  color: #6b7280;
+  color: var(--text-secondary);
   line-height: 1.6;
   margin: 0;
 }
@@ -457,7 +457,7 @@
   border: none;
   cursor: pointer;
   font-size: 0.875rem;
-  color: #6b7280;
+  color: var(--text-secondary);
   text-decoration: underline;
   padding: 0.25rem 0;
   text-align: center;
@@ -541,7 +541,7 @@
 .role-picker-subtitle {
   margin: 0 0 20px;
   font-size: 0.875rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .role-picker-grid {
@@ -569,7 +569,7 @@
   &:hover:not(:disabled) {
     border-color: var(--primary-light);
     background: var(--primary-soft);
-    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+    box-shadow: 0 2px 8px rgba(14, 124, 107, 0.15);
   }
 
   &:active:not(:disabled) {
@@ -612,7 +612,7 @@
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: transparent;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -641,7 +641,7 @@
   display: flex;
   align-items: center;
   text-align: center;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 0.85rem;
   margin: 1rem 0;
   &::before,

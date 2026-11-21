@@ -51,3 +51,20 @@ describe('formatCfa (QA D621)', () => {
     expect(plain(formatCfa(15000, 'XOF', 'es-ES'))).toMatch(/^15[.\s]000 F CFA$/);
   });
 });
+
+/** QA r65 D2501: a hospital may bill in the Central African CFA franc, which reads « F CFA » too. */
+describe('formatCfa — the Central African CFA franc (QA r65 D2501)', () => {
+  const plain = (s: string) => s.replace(/[\u00a0\u202f]/g, ' ');
+
+  it('reads "F CFA" for XAF exactly as for XOF, in every language', () => {
+    for (const locale of ['fr-FR', 'en-US', 'es-ES']) {
+      expect(formatCfa(4000, 'XAF', locale)).toBe(formatCfa(4000, 'XOF', locale));
+      expect(formatCfa(4000, 'xaf', locale)).not.toContain('XAF');
+    }
+    expect(plain(formatCfa(4000, 'XAF', 'fr-FR'))).toBe('4 000 F CFA');
+  });
+
+  it('another currency still takes its own symbol', () => {
+    expect(formatCfa(4000, 'EUR', 'fr-FR')).toContain('€');
+  });
+});

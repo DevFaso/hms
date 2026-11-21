@@ -19,6 +19,17 @@ import java.util.UUID;
  */
 public interface PriceListItemRepository extends JpaRepository<PriceListItem, UUID> {
 
+    /**
+     * Review of #1246: the hospital row, share-locked while a price-list item
+     * is inserted. The hospital's currency is locked by its first price
+     * ({@code HospitalServiceImpl.updateHospital} takes this row for update
+     * before it looks), so a first price is either committed before that look
+     * or inserted after the edit. Shared: inserts do not wait for each other.
+     */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("SELECT h FROM Hospital h WHERE h.id = :hospitalId")
+    Optional<com.example.hms.model.Hospital> lockHospitalWhilePricing(@Param("hospitalId") UUID hospitalId);
+
     Optional<PriceListItem> findByIdAndHospitalId(UUID id, UUID hospitalId);
 
     List<PriceListItem> findByHospitalIdOrderByCodeAsc(UUID hospitalId);
@@ -27,6 +38,10 @@ public interface PriceListItemRepository extends JpaRepository<PriceListItem, UU
     List<PriceListItem> findAllByOrderByCodeAsc();
 
     boolean existsByHospitalIdAndCode(UUID hospitalId, String code);
+
+    /** QA r65 D2731 (onboarding checklist): how many active price-list items ONE hospital has. */
+    @Query("SELECT COUNT(i) FROM PriceListItem i WHERE i.hospitalId = :hospitalId AND i.active = true")
+    long countByHospitalIdAndActiveTrue(@Param("hospitalId") UUID hospitalId);
 
     /**
      * Review of #1242: the items an invoice's lines were priced from, at the invoice's own hospital, read WITHOUT

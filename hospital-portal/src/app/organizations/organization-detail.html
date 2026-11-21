@@ -114,11 +114,7 @@
             </button>
           }
           @if (lc.canRestore) {
-            <button
-              class="btn btn-primary"
-              (click)="openAction('restore')"
-              data-test="action-restore"
-            >
+            <button class="btn-primary" (click)="openAction('restore')" data-test="action-restore">
               <span class="material-symbols-outlined">restart_alt</span>
               {{ 'TENANT_LIFECYCLE.ACTION.RESTORE' | translate }}
             </button>
@@ -131,7 +127,7 @@
           }
           @if (lc.canSchedulePurge) {
             <button
-              class="btn btn-danger"
+              class="btn-danger"
               (click)="openAction('schedule-purge')"
               data-test="action-schedule-purge"
             >
@@ -141,7 +137,7 @@
           }
           @if (lc.canCancelPurge) {
             <button
-              class="btn btn-primary"
+              class="btn-primary"
               (click)="openAction('cancel-purge')"
               data-test="action-cancel-purge"
             >
@@ -264,7 +260,6 @@
           </button>
           <button
             submitGuardRequired
-            class="btn"
             [class.btn-danger]="cfg.destructive"
             [class.btn-primary]="!cfg.destructive"
             [disabled]="submitting()"

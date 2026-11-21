@@ -40,6 +40,15 @@ public class HospitalResponseDTO {
 
     private boolean active;
 
+    /** QA r65 D2501: ISO 4217 code of the currency the hospital bills in (XOF by default). */
+    private String currencyCode;
+
+    /** QA r65 D2501: the hospital's own IANA zone id; null when it follows its organisation. */
+    private String timeZone;
+
+    /** The zone its day is counted in: its own, else the organisation's default; null when neither is set. */
+    private String effectiveTimeZone;
+
     /**
      * MVP-c2-frontend — current lifecycle state so the hospital list
      * can render a state chip per row without an N+1 lookup. Mirrors
@@ -49,4 +58,12 @@ public class HospitalResponseDTO {
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    /**
+     * QA D3059 (r68): the single read only (GET /hospitals/{id}); null on lists. The code is fixed
+     * once an invoice number was issued, the currency once an invoice or a price exists: the edit
+     * form shows them locked instead of letting the save be refused.
+     */
+    private Boolean codeLocked;
+    private Boolean currencyLocked;
 }

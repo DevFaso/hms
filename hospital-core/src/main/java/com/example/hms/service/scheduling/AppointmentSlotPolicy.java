@@ -185,6 +185,16 @@ public class AppointmentSlotPolicy {
     }
 
     /**
+     * QA r65 D2731: the departments of one hospital where a slot can still be
+     * taken (published, starting after {@code notBefore} on the hospital's
+     * wall clock, open or held past its hold). An empty set is the "nothing to
+     * book here yet" of the patient form and of the onboarding checklist.
+     */
+    public java.util.Set<UUID> departmentsWithOpenSlots(UUID hospitalId, LocalDateTime notBefore) {
+        return slotRepository.findDepartmentIdsWithOpenSlots(hospitalId, notBefore, LocalDateTime.now(clock));
+    }
+
+    /**
      * QA D1093: marks the published slot BOOKED by {@code appointment}, so the
      * slot inventory, the waitlist offers and the next patient see it taken.
      * The version column turns a concurrent taker into a friendly refusal,

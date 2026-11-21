@@ -241,6 +241,12 @@
   }
 
   @if (!loading() && pagedFiltered.length > 0) {
+    <app-card-sort
+      [columns]="sortColumns"
+      [field]="sortField()"
+      [direction]="sortDir()"
+      (sortChange)="onCardSort($event)"
+    />
     <div class="table-wrapper">
       <table class="data-table">
         <thead>

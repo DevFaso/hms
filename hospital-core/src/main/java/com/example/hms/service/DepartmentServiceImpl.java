@@ -12,9 +12,7 @@ import com.example.hms.model.Organization;
 import com.example.hms.model.Role;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
-import com.example.hms.model.UserRole;
 import com.example.hms.model.UserRoleHospitalAssignment;
-import com.example.hms.model.UserRoleId;
 import com.example.hms.payload.dto.DepartmentFilterDTO;
 import com.example.hms.payload.dto.DepartmentMinimalDTO;
 import com.example.hms.payload.dto.DepartmentRequestDTO;
@@ -26,9 +24,7 @@ import com.example.hms.payload.dto.StaffResponseDTO;
 import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.RoleRepository;
-import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
-import com.example.hms.repository.UserRoleRepository;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Join;
@@ -45,8 +41,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -72,9 +66,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     private final MessageSource messageSource;
     private final AuthService authService;
     private final UserRoleHospitalAssignmentRepository roleAssignmentRepository;
-    private final UserRepository userRepository;
     private final RoleRepository roleRepository;
-    private final UserRoleRepository userRoleRepository;
     private final RoleValidator roleValidator;
 
     private static final String ROLE_HOSPITAL_ADMIN = "ROLE_HOSPITAL_ADMIN";
@@ -609,10 +601,17 @@ public class DepartmentServiceImpl implements DepartmentService {
             throw new ResourceNotFoundException("assignment.notFoundForUserHospital", currentUserId, hospital.getId());
         }
 
+        // Review of #1246 (platform admin rules, rule 1c: no self-grant). A
+        // super-admin creating the first department used to be handed a
+        // HOSPITAL_ADMIN assignment on its own account here, silently. The
+        // department is filed under the hospital's own administrator: when the
+        // hospital has none yet, it is registered first (the onboarding
+        // checklist's first step), by this same super-admin, for another person.
         Role hospitalAdminRole = resolveHospitalAdminRole();
         return roleAssignmentRepository
             .findFirstByHospitalIdAndRole_Name(hospital.getId(), hospitalAdminRole.getName())
-            .orElseGet(() -> provisionHospitalAdminAssignmentForSuperAdmin(currentUserId, hospital, hospitalAdminRole));
+            .orElseThrow(() -> new ConflictException(
+                com.example.hms.utility.MessageUtil.resolve("department.hospitalAdmin.required")));
     }
 
     private void updateHeadDepartmentIfNeeded(Department department, Staff headOfDepartment, Locale locale) {
@@ -874,52 +873,5 @@ public class DepartmentServiceImpl implements DepartmentService {
             .or(() -> roleRepository.findByNameIgnoreCase("HOSPITAL_ADMIN"))
             .orElseThrow(() -> new ResourceNotFoundException("role.notfound", ROLE_HOSPITAL_ADMIN));
     }
-
-    private UserRoleHospitalAssignment provisionHospitalAdminAssignmentForSuperAdmin(UUID superAdminId,
-                                                                                     Hospital hospital,
-                                                                                     Role hospitalAdminRole) {
-        log.warn("[dept:create] Super admin {} lacks hospital admin assignment for hospital {} – auto provisioning",
-            superAdminId, hospital.getId());
-
-        User user = userRepository.findById(superAdminId)
-            .orElseThrow(() -> new ResourceNotFoundException("user.notfound", superAdminId));
-
-        // QA D789: an archived hospital takes no new role, auto-provisioned ones included.
-        com.example.hms.security.provider.FacilityAssignmentGuard.requireOpenForAssignment(hospital);
-        ensureUserHasRole(user, hospitalAdminRole);
-
-        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
-            .user(user)
-            .hospital(hospital)
-            .role(hospitalAdminRole)
-            .active(true)
-            .startDate(LocalDate.now())
-            .registeredBy(user)
-            .description("Auto-provisioned hospital admin assignment for department creation")
-            .assignmentCode(generateAssignmentCode(hospital))
-            .build();
-
-        assignment.setAssignedAt(LocalDateTime.now());
-        return roleAssignmentRepository.save(assignment);
-    }
-
-    private void ensureUserHasRole(User user, Role role) {
-        if (!userRoleRepository.existsByUserIdAndRoleId(user.getId(), role.getId())) {
-            UserRole userRole = UserRole.builder()
-                .id(new UserRoleId(user.getId(), role.getId()))
-                .user(user)
-                .role(role)
-                .build();
-            userRoleRepository.save(userRole);
-        }
-    }
-
-    private String generateAssignmentCode(Hospital hospital) {
-        String prefix = hospital.getCode() != null && !hospital.getCode().isBlank()
-            ? hospital.getCode().trim().toUpperCase(Locale.ROOT)
-            : "HOSP";
-        return prefix + "-AUTO-" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase(Locale.ROOT);
-    }
-
 }
 

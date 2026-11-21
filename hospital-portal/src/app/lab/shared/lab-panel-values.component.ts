@@ -71,7 +71,7 @@ import { LabCorrectionBadgeComponent } from './lab-correction-badge.component';
       color: #475569;
     }
     .code {
-      color: #64748b;
+      color: var(--text-secondary);
     }
     .value {
       font-weight: 600;

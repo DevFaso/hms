@@ -22,19 +22,19 @@
 
 .header-icon {
   font-size: 2rem;
-  color: #7c3aed;
+  color: var(--primary);
 }
 
 .page-title {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--text-primary);
   margin: 0;
 }
 
 .page-subtitle {
   font-size: 0.875rem;
-  color: #64748b;
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -47,8 +47,8 @@
 .count-badge {
   font-size: 0.8125rem;
   font-weight: 600;
-  color: #7c3aed;
-  background: #ede9fe;
+  color: var(--primary-deep);
+  background: var(--primary-soft);
   padding: 0.25rem 0.75rem;
   border-radius: 999px;
 }
@@ -62,7 +62,7 @@
   border-radius: 0.5rem;
   padding: 0.4rem;
   cursor: pointer;
-  color: #64748b;
+  color: var(--text-secondary);
   transition: background 0.15s;
 
   &:hover:not(:disabled) {
@@ -84,7 +84,7 @@
   align-items: center;
   gap: 0.75rem;
   padding: 3rem 1rem;
-  color: #64748b;
+  color: var(--text-secondary);
 
   .material-symbols-outlined {
     font-size: 2.5rem;
@@ -92,21 +92,7 @@
 }
 
 .error-state {
-  color: #dc2626;
-}
-
-.btn-primary {
-  background: #7c3aed;
-  color: #fff;
-  border: none;
-  padding: 0.5rem 1.25rem;
-  border-radius: 0.5rem;
-  cursor: pointer;
-  font-weight: 600;
-
-  &:hover {
-    background: #6d28d9;
-  }
+  color: var(--danger);
 }
 
 /* ── Spin animation ─────────────────────────────────────── */
@@ -148,7 +134,7 @@
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      color: #64748b;
+      color: var(--text-secondary);
     }
   }
 
@@ -176,7 +162,7 @@
 
 .avatar-icon {
   font-size: 1.25rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .actions-col {
@@ -223,7 +209,7 @@
   background: #fff;
 
   &:focus {
-    outline: 2px solid #7c3aed;
+    outline: 2px solid var(--primary);
     outline-offset: 1px;
   }
 }
@@ -250,7 +236,7 @@
 }
 
 .btn-save {
-  color: #16a34a;
+  color: var(--success-text);
 
   &:hover:not(:disabled) {
     background: #dcfce7;
@@ -258,7 +244,7 @@
 }
 
 .btn-cancel {
-  color: #dc2626;
+  color: var(--danger);
 
   &:hover:not(:disabled) {
     background: #fee2e2;
@@ -266,7 +252,7 @@
 }
 
 .btn-edit {
-  color: #7c3aed;
+  color: var(--primary);
 
   &:hover {
     background: #ede9fe;
@@ -276,7 +262,7 @@
 .director-lock {
   display: inline-flex;
   align-items: center;
-  color: #64748b;
+  color: var(--text-secondary);
 
   .material-symbols-outlined {
     font-size: 1rem;

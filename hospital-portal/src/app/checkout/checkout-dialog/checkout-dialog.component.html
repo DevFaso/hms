@@ -138,12 +138,12 @@
         </fieldset>
 
         <footer class="dialog-footer">
-          <button type="button" class="btn btn-secondary" (click)="close()">
+          <button type="button" class="btn-secondary" (click)="close()">
             {{ 'CHECKOUT.CANCEL' | translate }}
           </button>
           <button
             type="submit"
-            class="btn btn-primary"
+            class="btn-primary"
             [disabled]="saving()"
             [appSubmitGuard]="checkoutBlockReason()"
             [submitGuardFields]="['checkout-diagnoses', 'checkout-instructions']"
@@ -174,7 +174,7 @@
         </div>
 
         <footer class="dialog-footer">
-          <button type="button" class="btn btn-primary" (click)="close()">
+          <button type="button" class="btn-primary" (click)="close()">
             {{ 'CHECKOUT.DONE' | translate }}
           </button>
         </footer>

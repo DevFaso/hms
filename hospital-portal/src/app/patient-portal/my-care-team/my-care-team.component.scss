@@ -55,13 +55,13 @@
 }
 .ct-role {
   font-size: 13px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 .ct-contact {
   display: flex;
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-top: 2px;
 }

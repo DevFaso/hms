@@ -1,7 +1,10 @@
 <div class="account-setup-container">
   <div class="setup-card">
     <div class="setup-header">
-      <span class="material-icons header-icon">security</span>
+      <div class="logo">
+        <app-brand-mark [size]="44" tone="onLight" />
+        <span class="brand-word">e-<span class="brand-accent">Keneya</span></span>
+      </div>
       <h1>{{ 'SETUP.TITLE' | translate }}</h1>
       <p class="subtitle">{{ 'SETUP.SUBTITLE' | translate }}</p>
     </div>
@@ -131,7 +134,7 @@
 
         <button
           type="submit"
-          class="btn btn-primary"
+          class="btn-primary"
           [disabled]="loading"
           [appSubmitGuard]="!canSubmit"
         >

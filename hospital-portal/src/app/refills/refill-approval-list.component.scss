@@ -36,13 +36,13 @@
     font-size: 0.9rem;
 
     &.active {
-      background: var(--primary, #1a73e8);
+      background: var(--primary);
       color: #fff;
-      border-color: var(--primary, #1a73e8);
+      border-color: var(--primary);
     }
 
     &:focus-visible {
-      outline: 2px solid var(--primary, #1a73e8);
+      outline: 2px solid var(--primary);
       outline-offset: 2px;
     }
   }
@@ -137,39 +137,6 @@
   justify-content: flex-end;
 }
 
-.btn-primary,
-.btn-secondary,
-.btn-danger {
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  border: 0;
-  font-weight: 500;
-  cursor: pointer;
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-}
-
-.btn-primary {
-  background: var(--primary, #1a73e8);
-  color: #fff;
-}
-
-// Deferring is neither the affirmative nor the destructive action, so it reads
-// as an outline rather than competing with the two filled buttons beside it.
-.btn-secondary {
-  background: transparent;
-  color: var(--text-primary, #202124);
-  border: 1px solid var(--border, #dadce0);
-}
-
-.btn-danger {
-  background: var(--danger, #b00020);
-  color: #fff;
-}
-
 .badge {
   display: inline-block;
   padding: 0.2rem 0.6rem;
@@ -198,8 +165,8 @@
   }
 
   &--info {
-    background: rgba(26, 115, 232, 0.12);
-    color: #1a73e8;
+    background: #e0f2fe;
+    color: var(--info-text);
   }
 }
 

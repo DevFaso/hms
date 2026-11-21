@@ -26,7 +26,6 @@ const STAFF_ACCOUNT_SCREENS = new Map([
 
 /** `.ts` sites that join a first and last name but do not display a patient. */
 const TS_NOT_A_PATIENT = new Map([
-  ['src/app/admin/admin.ts', 'the signed-in admin profile (a User, no middle name)'],
   ['src/app/chat/chat.ts', 'search fields of a staff ChatRecipient (a User, no middle name)'],
   [
     'src/app/admissions/admissions.ts',

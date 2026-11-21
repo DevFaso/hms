@@ -1,4 +1,12 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -82,6 +90,30 @@ export class DepartmentListComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly profileService = inject(ProfileService);
   private readonly translate = inject(TranslateService);
+  private readonly activatedRoute = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+
+  /**
+   * QA D3058 (r68): the onboarding checklist opens /departments?hospitalId=:
+   * the list is that hospital's departments and « Nouveau département » starts
+   * there (a super-admin's choice; anyone else's hospital is locked anyway).
+   */
+  readonly hospitalScope = signal<string | null>(null);
+  readonly hospitalScopeName = computed(() => {
+    const id = this.hospitalScope();
+    return id ? (this.hospitals().find((h) => h.id === id)?.name ?? null) : null;
+  });
+
+  clearHospitalScope(): void {
+    this.hospitalScope.set(null);
+    void this.router.navigate([], {
+      relativeTo: this.activatedRoute,
+      queryParams: { hospitalId: null },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+    this.applyFilter();
+  }
 
   departments = signal<Department[]>([]);
   filtered = signal<Department[]>([]);
@@ -126,6 +158,8 @@ export class DepartmentListComponent implements OnInit {
   deleting = signal(false);
 
   ngOnInit(): void {
+    const scoped = this.activatedRoute.snapshot.queryParamMap.get('hospitalId');
+    if (scoped && /^[0-9a-f-]{36}$/i.test(scoped)) this.hospitalScope.set(scoped);
     this.loadDepartments();
     this.loadAssignedHospitals();
   }
@@ -212,12 +246,16 @@ export class DepartmentListComponent implements OnInit {
 
   applyFilter(): void {
     const term = this.searchTerm.toLowerCase().trim();
+    const scope = this.hospitalScope();
+    const inScope = scope
+      ? this.departments().filter((d) => d.hospitalId === scope)
+      : this.departments();
     if (!term) {
-      this.filtered.set(this.departments());
+      this.filtered.set(inScope);
       return;
     }
     this.filtered.set(
-      this.departments().filter(
+      inScope.filter(
         (d) =>
           d.name.toLowerCase().includes(term) ||
           (d.departmentCode ?? '').toLowerCase().includes(term) ||
@@ -234,6 +272,11 @@ export class DepartmentListComponent implements OnInit {
     const h = this.hospitals();
     if (this.hospitalLocked && h.length === 1) {
       this.form.hospitalId = h[0].id;
+    }
+    // QA D3058: opened from a hospital's checklist, the form starts at that hospital.
+    const scope = this.hospitalScope();
+    if (!this.hospitalLocked && scope && h.some((x) => x.id === scope)) {
+      this.form.hospitalId = scope;
     }
     this.editing.set(null);
     this.staffForHospital.set([]);

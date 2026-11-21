@@ -45,6 +45,14 @@ import java.util.UUID;
 @Slf4j
 public class UserRoleHospitalAssignmentController {
 
+    /**
+     * Platform admin rules 2026-11-20, rule 1a: the endpoints an organisation admin works too
+     * (create one assignment, read, the invitation code paths, switch off). Editing, deleting, the
+     * multi-hospital grant and the bulk import stay the hospital admin's and the super-admin's.
+     */
+    private static final String ASSIGNMENT_ADMIN =
+        "hasAnyAuthority(" + com.example.hms.config.SecurityConstants.ASSIGNMENT_ADMIN_AUTHORITIES + ")";
+
     private static final String CONFIRMATION_CODE = "confirmationCode";
 
     private final UserRoleHospitalAssignmentService assignmentService;
@@ -67,7 +75,7 @@ public class UserRoleHospitalAssignmentController {
 
     @WriteAudited(skip = true, reason = "service emits ROLE_ASSIGNED / ASSIGNMENT_CONFIRMED")
     @Operation(summary = "Assign a role to a user in a hospital")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
+    @PreAuthorize(ASSIGNMENT_ADMIN)
     @PostMapping
     public ResponseEntity<UserRoleHospitalAssignmentResponseDTO> createAssignment(
             @Valid @RequestBody UserRoleHospitalAssignmentRequestDTO requestDTO) {
@@ -86,7 +94,7 @@ public class UserRoleHospitalAssignmentController {
     }
 
     @Operation(summary = "Get a specific assignment by ID")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
+    @PreAuthorize(ASSIGNMENT_ADMIN)
     @GetMapping("/{id}")
     public ResponseEntity<UserRoleHospitalAssignmentResponseDTO> getAssignment(@PathVariable UUID id) {
         log.info("📥 Fetching assignment by ID {}", id);
@@ -94,7 +102,7 @@ public class UserRoleHospitalAssignmentController {
     }
 
     @Operation(summary = "Regenerate an assignment code and optionally resend notifications")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
+    @PreAuthorize(ASSIGNMENT_ADMIN)
     @PostMapping("/{assignmentId}/regenerate-code")
     public ResponseEntity<UserRoleHospitalAssignmentResponseDTO> regenerateAssignmentCode(
             @PathVariable UUID assignmentId,
@@ -118,7 +126,7 @@ public class UserRoleHospitalAssignmentController {
         description = "Returns the per-channel delivery report so the caller can tell a real "
             + "send from a deployment with no mail/SMS transport — the send paths themselves "
             + "never throw for delivery failures.")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
+    @PreAuthorize(ASSIGNMENT_ADMIN)
     @PostMapping("/{assignmentId}/resend-notification")
     public ResponseEntity<java.util.List<com.example.hms.payload.dto.NotificationDeliveryStatusDTO>>
             resendNotification(@PathVariable UUID assignmentId) {
@@ -132,9 +140,24 @@ public class UserRoleHospitalAssignmentController {
         }
     }
 
+    @WriteAudited(skip = true, reason = "service emits DATA_ACCESS for the reveal, without the code")
+    @Operation(summary = "Show the registrar the one-time activation code of a pending assignment",
+        description = "QA r65 D2764: for handing the code over in person when the SMS and the e-mail "
+            + "went nowhere. Only the registrar of the assignment, only while it is unverified.")
+    @PreAuthorize(ASSIGNMENT_ADMIN)
+    @PostMapping("/{assignmentId}/activation-code")
+    public ResponseEntity<com.example.hms.payload.dto.AssignmentActivationCodeDTO> revealActivationCode(
+            @PathVariable UUID assignmentId) {
+        // The code is never logged: only that it was asked for.
+        log.info("🔑 Activation code asked for assignment '{}'", assignmentId);
+        return ResponseEntity.ok()
+            .cacheControl(org.springframework.http.CacheControl.noStore())
+            .body(assignmentService.revealActivationCode(assignmentId));
+    }
+
     @WriteAudited(skip = true, reason = "service emits ROLE_ASSIGNED / ASSIGNMENT_CONFIRMED")
     @Operation(summary = "Confirm an assignment using the registrar's confirmation code")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
+    @PreAuthorize(ASSIGNMENT_ADMIN)
     @PostMapping("/{assignmentId}/confirm")
     public ResponseEntity<UserRoleHospitalAssignmentResponseDTO> confirmAssignment(
             @PathVariable UUID assignmentId,
@@ -144,8 +167,10 @@ public class UserRoleHospitalAssignmentController {
     }
 
     @Operation(summary = "Get all role assignments with pagination")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
+    @PreAuthorize(ASSIGNMENT_ADMIN)
     @GetMapping
+    @com.example.hms.security.tenant.OrganisationScopedHospitalId(reason = "getAllAssignments lists a named "
+        + "hospital only inside the caller's assignment scope (scopedListing), else its own reach")
     public ResponseEntity<Page<UserRoleHospitalAssignmentResponseDTO>> getAllAssignments(
             @Parameter(description = "Page number", example = "0")
             @RequestParam(defaultValue = "0") int page,
@@ -233,7 +258,7 @@ public class UserRoleHospitalAssignmentController {
         description = "Soft-deactivates the assignment by setting active=false. " +
                       "The record is preserved for audit and historical integrity. " +
                       "Use this instead of DELETE whenever a staff member's role ends.")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
+    @PreAuthorize(ASSIGNMENT_ADMIN)
     @PatchMapping("/{id}/deactivate")
     public ResponseEntity<Void> deactivateAssignment(@PathVariable UUID id) {
         log.info("🔒 Deactivating assignment ID {}", id);

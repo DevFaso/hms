@@ -7,7 +7,7 @@
   gap: 6px;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: #64748b;
+  color: var(--text-secondary);
   text-decoration: none;
   margin-bottom: 1.25rem;
 
@@ -36,7 +36,7 @@
   width: 72px;
   height: 72px;
   border-radius: 16px;
-  background: linear-gradient(135deg, #7c3aed, #5b21b6);
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
   color: #fff;
   display: flex;
   align-items: center;
@@ -46,7 +46,7 @@
   flex-shrink: 0;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+  box-shadow: 0 4px 12px rgba(14, 124, 107, 0.3);
 }
 
 .header-info {
@@ -57,7 +57,7 @@
     margin: 0;
     font-size: 1.375rem;
     font-weight: 700;
-    color: #0f172a;
+    color: var(--text-primary);
   }
 }
 
@@ -113,7 +113,7 @@
 .header-sub {
   margin: 0.25rem 0 0;
   font-size: 0.8125rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 // ---------- Tabs ----------
@@ -134,7 +134,7 @@
   border-radius: 8px;
   border: none;
   background: transparent;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
@@ -186,7 +186,7 @@
 
     .material-symbols-outlined {
       font-size: 20px;
-      color: #7c3aed;
+      color: var(--primary);
     }
   }
 }
@@ -211,7 +211,7 @@
 
   .label {
     font-size: 0.8125rem;
-    color: #64748b;
+    color: var(--text-secondary);
     font-weight: 500;
   }
 
@@ -238,10 +238,10 @@
   align-items: center;
   gap: 6px;
   padding: 0.5rem 0.875rem;
-  border: 1px solid #ddd6fe;
+  border: 1px solid var(--primary-tint);
   border-radius: 8px;
-  background: #f5f3ff;
-  color: #6d28d9;
+  background: var(--primary-soft);
+  color: var(--primary-dark);
   font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
@@ -302,11 +302,11 @@
   background: #f8fafc;
   border-radius: 8px;
   font-size: 0.8125rem;
-  color: #64748b;
+  color: var(--text-secondary);
 
   .material-symbols-outlined {
     font-size: 20px;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 }
 
@@ -415,7 +415,7 @@
 
     .material-symbols-outlined {
       font-size: 20px;
-      color: #7c3aed;
+      color: var(--primary);
     }
   }
 }
@@ -426,7 +426,7 @@
   gap: 8px;
   padding: 1.5rem;
   justify-content: center;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.8125rem;
 }
 
@@ -434,7 +434,7 @@
   width: 18px;
   height: 18px;
   border: 2px solid #e2e8f0;
-  border-top-color: #7c3aed;
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
@@ -451,12 +451,12 @@
   align-items: center;
   gap: 6px;
   padding: 2rem;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.8125rem;
 
   .material-symbols-outlined {
     font-size: 32px;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 
   p {
@@ -530,11 +530,11 @@
   background: #fafbfc;
 
   &.today {
-    border-color: #7c3aed;
-    box-shadow: 0 0 0 1px #7c3aed;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 1px var(--primary);
 
     .day-header {
-      background: #7c3aed;
+      background: var(--primary);
 
       .day-name,
       .day-date {
@@ -562,7 +562,7 @@
   .day-date {
     display: block;
     font-size: 0.75rem;
-    color: #64748b;
+    color: var(--text-secondary);
     margin-top: 1px;
   }
 }
@@ -580,7 +580,7 @@
   align-items: center;
   justify-content: center;
   flex: 1;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.75rem;
 }
 
@@ -602,19 +602,19 @@
   &[data-type='MORNING'] {
     border-left: 3px solid #f59e0b;
     .shift-type-icon .material-symbols-outlined {
-      color: #f59e0b;
+      color: var(--warning-text);
     }
   }
   &[data-type='AFTERNOON'] {
     border-left: 3px solid #f97316;
     .shift-type-icon .material-symbols-outlined {
-      color: #f97316;
+      color: var(--warning-text);
     }
   }
   &[data-type='EVENING'] {
-    border-left: 3px solid #6366f1;
+    border-left: 3px solid var(--primary);
     .shift-type-icon .material-symbols-outlined {
-      color: #6366f1;
+      color: var(--primary);
     }
   }
   &[data-type='NIGHT'] {
@@ -624,9 +624,9 @@
     }
   }
   &[data-type='FLEX'] {
-    border-left: 3px solid #7c3aed;
+    border-left: 3px solid var(--accent-violet);
     .shift-type-icon .material-symbols-outlined {
-      color: #7c3aed;
+      color: var(--accent-violet);
     }
   }
 
@@ -638,7 +638,7 @@
   // Cross-midnight shift: subtle dashed border to hint it spans midnight.
   &.cross-midnight {
     border-style: dashed;
-    border-color: #c7d2fe;
+    border-color: var(--primary-tint);
   }
 
   // End-date column rendering: muted to indicate it's a continuation.
@@ -671,7 +671,7 @@
   .shift-meta {
     display: block;
     font-size: 0.5625rem;
-    color: #64748b;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.3px;
   }
@@ -682,8 +682,8 @@
   display: inline-block;
   font-size: 0.5rem;
   font-weight: 600;
-  color: #3730a3;
-  background: #e0e7ff;
+  color: var(--primary-deep);
+  background: var(--primary-tint);
   border-radius: 4px;
   padding: 1px 4px;
   margin-top: 1px;
@@ -754,7 +754,7 @@
 
   .material-symbols-outlined {
     font-size: 20px;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 }
 
@@ -815,12 +815,12 @@
 
   .material-symbols-outlined {
     font-size: 16px;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 }
 
 .leave-reason {
-  color: #64748b;
+  color: var(--text-secondary);
   font-style: italic;
 }
 
@@ -852,12 +852,12 @@
 
 .reviewed-by {
   font-size: 0.6875rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .manager-note {
   font-size: 0.6875rem;
-  color: #64748b;
+  color: var(--text-secondary);
   font-style: italic;
   max-width: 180px;
   text-align: right;

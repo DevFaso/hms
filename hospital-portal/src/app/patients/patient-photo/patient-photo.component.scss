@@ -104,24 +104,8 @@
 
 .saving-hint {
   margin: 0;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 0.85rem;
-}
-
-.btn-danger {
-  border: 1px solid #fecaca;
-  background: #fff;
-  color: #b91c1c;
-  border-radius: 8px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.4rem 0.8rem;
-
-  &:hover {
-    background: #fef2f2;
-  }
 }
 
 .modal-actions {

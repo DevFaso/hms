@@ -121,7 +121,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
       }
       .cell-secondary {
         font-size: 0.78rem;
-        color: #64748b;
+        color: var(--text-secondary);
       }
       .sr-only {
         position: absolute;

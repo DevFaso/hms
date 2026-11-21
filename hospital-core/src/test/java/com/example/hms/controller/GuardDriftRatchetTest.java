@@ -266,6 +266,8 @@ class GuardDriftRatchetTest {
         listed.put("PrescriptionController.cosign", PRESCRIPTIONCONTROLLER_REASON);
         listed.put("PrescriptionController.pediatricDoseReview",
             "QA D1096: the paediatric dose review the decision support asks of 'a pharmacist or physician'; a nurse does not judge a dose");
+        listed.put("PrescriptionController.ordonnance",
+            "QA D3054: the ordonnance handed to the patient carries the signing prescriber's signature line");
         listed.put("PrescriptionController.resolveClarification", PRESCRIPTIONCONTROLLER_REASON);
         listed.put("PrescriptionController.sign", PRESCRIPTIONCONTROLLER_REASON);
         listed.put("RoiWorklistController.deny", ROIWORKLISTCONTROLLER_REASON);

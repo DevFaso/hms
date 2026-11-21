@@ -44,7 +44,7 @@
 
   &.count-badge-red {
     background: #fee2e2;
-    color: #dc2626;
+    color: var(--danger);
   }
 }
 
@@ -65,7 +65,7 @@
   justify-content: center;
   gap: 8px;
   padding: 30px 16px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.85rem;
 }
 
@@ -134,11 +134,11 @@
   align-items: center;
   gap: 6px;
   padding: 30px 16px;
-  color: #64748b;
+  color: var(--text-secondary);
 
   .material-symbols-outlined {
     font-size: 30px;
-    color: #059669;
+    color: var(--success-text);
   }
 
   p {
@@ -182,7 +182,7 @@
 .rp-section-label {
   font-size: 11px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   flex: 1;
@@ -191,7 +191,7 @@
 .rp-section-count {
   font-size: 11px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 // ── Rows ──
@@ -241,7 +241,7 @@
 
 .rp-test-name {
   font-size: 11px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .rp-value {
@@ -251,7 +251,7 @@
   white-space: nowrap;
 
   &.rp-value-critical {
-    color: #dc2626;
+    color: var(--danger);
     background: #fee2e2;
     padding: 2px 6px;
     border-radius: 4px;
@@ -267,7 +267,7 @@
 
 .rp-time {
   font-size: 11px;
-  color: #64748b;
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
@@ -278,7 +278,7 @@
   width: 28px;
   height: 28px;
   border-radius: 6px;
-  color: #64748b;
+  color: var(--text-secondary);
   text-decoration: none;
   transition: all 0.15s;
 
@@ -301,13 +301,13 @@
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #64748b;
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.15s;
 
   &:hover {
     background: #dcfce7;
-    color: #16a34a;
+    color: var(--success-text);
   }
 
   .material-symbols-outlined {

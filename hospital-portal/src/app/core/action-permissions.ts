@@ -32,7 +32,7 @@ export const ACTION_PERMISSIONS = {
   },
   labOrderDelete: {
     endpoint: 'LabOrderController#deleteLabOrder',
-    roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
+    roles: ['ROLE_SUPER_ADMIN'],
   },
   labOrderVoid: {
     endpoint: 'LabOrderController#voidLabOrder',
@@ -108,13 +108,7 @@ export const ACTION_PERMISSIONS = {
   },
   imagingReportsByHospital: {
     endpoint: 'ImagingResultController#getReportsByHospital',
-    roles: [
-      'ROLE_SUPER_ADMIN',
-      'ROLE_HOSPITAL_ADMIN',
-      'ROLE_ADMIN',
-      'ROLE_DOCTOR',
-      'ROLE_RADIOLOGIST',
-    ],
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_HOSPITAL_ADMIN', 'ROLE_DOCTOR', 'ROLE_RADIOLOGIST'],
   },
   imagingReportCreate: {
     endpoint: 'ImagingResultController#createReport',
@@ -295,6 +289,12 @@ export const ACTION_PERMISSIONS = {
   prescriptionCosign: {
     endpoint: 'PrescriptionController#cosign',
     roles: ['ROLE_DOCTOR'],
+  },
+  // QA D3054 (r68): the ordonnance PDF handed to the patient (a read; the
+  // prescribing roles that sign a take-home order).
+  prescriptionOrdonnance: {
+    endpoint: 'PrescriptionController#ordonnance',
+    roles: ['ROLE_DOCTOR', 'ROLE_MIDWIFE'],
   },
   // Policy 4: a prescriber reviews an allergy conflict on a signed order (the service narrows it to
   // a prescriber of the order's hospital).

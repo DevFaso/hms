@@ -1,7 +1,7 @@
 .empty-state {
   padding: 2.5rem;
   text-align: center;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .issues-table {
@@ -15,7 +15,7 @@
     background: #f9fafb;
     border-bottom: 1px solid #e5e7eb;
     font-weight: 600;
-    color: #6b7280;
+    color: var(--text-secondary);
   }
 
   td {
@@ -72,7 +72,7 @@
   border: 1px solid #d1d5db;
   background: none;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--text-secondary);
 
   .material-symbols-outlined {
     font-size: 1.1rem;

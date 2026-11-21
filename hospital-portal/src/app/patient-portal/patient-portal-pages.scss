@@ -17,12 +17,12 @@
     gap: 10px;
     font-size: 22px;
     font-weight: 800;
-    color: #1e293b;
+    color: var(--text-primary);
     margin: 0;
 
     .material-symbols-outlined {
       font-size: 28px;
-      color: #059669;
+      color: var(--success-text);
     }
   }
 }
@@ -34,7 +34,7 @@
   align-items: center;
   gap: 12px;
   padding: 60px 20px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .portal-spinner {
@@ -63,7 +63,7 @@
 
   .material-symbols-outlined {
     font-size: 48px;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 
   h3 {
@@ -75,7 +75,7 @@
 
   p {
     font-size: 13px;
-    color: #64748b;
+    color: var(--text-secondary);
     margin: 0;
   }
 }
@@ -169,7 +169,7 @@
 
 .pli-meta {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 // ── Status Chip ──────────────────────────────────────────────
@@ -180,13 +180,13 @@
   border-radius: 20px;
   white-space: nowrap;
   background: #f1f5f9;
-  color: #64748b;
+  color: var(--text-secondary);
   flex-shrink: 0;
 
   &[data-status='COMPLETED'],
   &[data-status='DISCHARGED'] {
     background: #d1fae5;
-    color: #059669;
+    color: var(--success-text);
   }
 
   &[data-status='IN_PROGRESS'],
@@ -198,12 +198,12 @@
   &[data-status='SCHEDULED'],
   &[data-status='CONFIRMED'] {
     background: #fef3c7;
-    color: #d97706;
+    color: var(--warning-text);
   }
 
   &[data-status='CANCELLED'] {
     background: #fee2e2;
-    color: #dc2626;
+    color: var(--danger);
   }
 }
 
@@ -243,7 +243,7 @@
 .pac-month {
   font-size: 10px;
   font-weight: 700;
-  color: #059669;
+  color: var(--success-text);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -271,12 +271,12 @@
 
 .pac-detail {
   font-size: 13px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .pac-time {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -289,7 +289,7 @@
   border-radius: 20px;
   white-space: nowrap;
   background: #f1f5f9;
-  color: #64748b;
+  color: var(--text-secondary);
   flex-shrink: 0;
 
   &[data-status='SCHEDULED'],
@@ -300,17 +300,17 @@
 
   &[data-status='COMPLETED'] {
     background: #d1fae5;
-    color: #059669;
+    color: var(--success-text);
   }
 
   &[data-status='IN_PROGRESS'] {
     background: #fef3c7;
-    color: #d97706;
+    color: var(--warning-text);
   }
 
   &[data-status='CANCELLED'] {
     background: #fee2e2;
-    color: #dc2626;
+    color: var(--danger);
   }
 }
 
@@ -391,7 +391,7 @@
   padding: 8px 14px;
   border: none;
   background: none;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -404,10 +404,10 @@
   }
 
   &:hover {
-    color: #059669;
+    color: var(--success-text);
   }
   &.active {
-    color: #059669;
+    color: var(--success-text);
     border-bottom-color: #059669;
   }
 }
@@ -433,7 +433,7 @@
   .info-label {
     font-size: 11px;
     font-weight: 600;
-    color: #64748b;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
@@ -461,13 +461,13 @@
 
   &.rec-chip-danger {
     background: #fee2e2;
-    color: #dc2626;
+    color: var(--danger);
   }
 }
 
 .rec-muted {
   font-size: 13px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -488,7 +488,7 @@
   border-radius: 6px;
   border: 1px solid #fca5a5;
   background: #fff;
-  color: #dc2626;
+  color: var(--danger);
   cursor: pointer;
   transition: all 0.15s;
 
@@ -555,7 +555,7 @@
 .avs-month {
   font-size: 10px;
   font-weight: 700;
-  color: #059669;
+  color: var(--success-text);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -581,11 +581,11 @@
 
 .avs-dept {
   font-size: 13px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .avs-expand-icon {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 24px;
 }
 
