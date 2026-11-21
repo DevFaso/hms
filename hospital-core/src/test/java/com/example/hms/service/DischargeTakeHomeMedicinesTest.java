@@ -73,10 +73,11 @@ class DischargeTakeHomeMedicinesTest {
         stayEncounter = new Encounter();
         stayEncounter.setId(UUID.randomUUID());
         stayEncounter.setAdmissionId(stay.getId());
+        stayEncounter.setPatient(patient);
+        stayEncounter.setHospital(hospital);
         summary = new DischargeSummary();
         summary.setEncounter(stayEncounter);
         summary.setMedicationReconciliation(new ArrayList<>());
-        when(admissionRepository.findById(stay.getId())).thenReturn(Optional.of(stay));
         when(admissionRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospital.getId()))
             .thenReturn(List.of(stay));
         when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(stay.getId()))

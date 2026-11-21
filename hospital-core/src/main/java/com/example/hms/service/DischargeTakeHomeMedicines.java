@@ -148,8 +148,17 @@ public class DischargeTakeHomeMedicines {
             .toList();
     }
 
+    /**
+     * The stay's admission, read among the patient's admissions at the encounter's own hospital, never
+     * by its id alone: the encounter came from a tenant-checked flow, and its hospital scopes this read.
+     */
     private Optional<Admission> stayOf(Encounter stay) {
-        return stay.getAdmissionId() == null ? Optional.empty() : admissionRepository.findById(stay.getAdmissionId());
+        UUID admissionId = stay.getAdmissionId();
+        if (admissionId == null || stay.getPatient() == null || stay.getHospital() == null) {
+            return Optional.empty();
+        }
+        return admissionRepository.findByPatient_IdAndHospital_Id(stay.getPatient().getId(), stay.getHospital().getId())
+            .stream().filter(a -> admissionId.equals(a.getId())).findFirst();
     }
 
     private static boolean within(LocalDateTime discharged, LocalDateTime written) {

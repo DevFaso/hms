@@ -44,7 +44,11 @@ final class ArtemetherLumefantrineWhoBands {
         "WHO Guidelines for the treatment of malaria, 3rd ed. 2015, section 4 (artemether + lumefantrine,"
             + " 20/120 mg tablets twice daily for 3 days) - provisoire";
 
-    private static final Pattern STRENGTH = Pattern.compile("(\\d+(?:[.,]\\d+)?)\\s*(?:mg)?\\s*/\\s*(\\d+(?:[.,]\\d+)?)");
+    /** Bounded and possessive (CodeQL java/polynomial-redos): a prescriber's text is read in linear time. */
+    private static final Pattern STRENGTH = Pattern.compile(
+        "(\\d{1,6}+(?:[.,]\\d{1,3}+)?+)\\s{0,3}+(?:mg)?+\\s{0,3}+/\\s{0,3}+(\\d{1,6}+(?:[.,]\\d{1,3}+)?+)");
+    /** No drug name or strength is longer; a longer text is read up to here. */
+    private static final int MAX_READ = 300;
 
     private ArtemetherLumefantrineWhoBands() {
     }
@@ -82,7 +86,7 @@ final class ArtemetherLumefantrineWhoBands {
             if (candidate == null) {
                 continue;
             }
-            Matcher m = STRENGTH.matcher(candidate);
+            Matcher m = STRENGTH.matcher(candidate.length() > MAX_READ ? candidate.substring(0, MAX_READ) : candidate);
             if (m.find()) {
                 return m;
             }
