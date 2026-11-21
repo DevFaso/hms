@@ -92,6 +92,8 @@ class PatientSnapshotServiceImplTest {
     @Mock private com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier;
     @Mock private com.example.hms.service.recordaccess.BreakGlassGate breakGlassGate;
 
+    @org.mockito.Spy private com.example.hms.mapper.LabResultMapper labResultMapper = new com.example.hms.mapper.LabResultMapper();
+
     @InjectMocks
     private PatientSnapshotServiceImpl service;
 
@@ -477,6 +479,40 @@ class PatientSnapshotServiceImplTest {
         assertEquals("HbA1c", lab.getTest());
         assertEquals("6.5%", lab.getValue());
         assertEquals("NORMAL", lab.getFlag());
+    }
+
+    @Test
+    void d2640_rangeGradedResultWithNoStoredFlag_readsAbnormalHigh() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+
+        LabTestDefinition testDef = new LabTestDefinition();
+        testDef.setName("Créatinine");
+        testDef.setReferenceRanges(new java.util.ArrayList<>(List.of(com.example.hms.model.LabTestReferenceRange.builder()
+                .minValue(62.0).maxValue(106.0).unit("µmol/L").build())));
+        LabOrder order = new LabOrder();
+        order.setLabTestDefinition(testDef);
+        LabResult labResult = new LabResult();
+        labResult.setReleased(true);
+        labResult.setLabOrder(order);
+        labResult.setResultValue("118");
+        labResult.setResultUnit("µmol/L");
+
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(List.of(labResult));
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
+
+        PatientSnapshotDTO.LabItem lab = service.getSnapshot(patientId, HOSPITAL_ID).getLatestLabs().get(0);
+
+        // QA D2640 (the class): the stored flag is null on a range-graded row; the lab's grade is HIGH.
+        assertEquals("ABNORMAL", lab.getFlag());
+        assertEquals(com.example.hms.enums.AbnormalDirection.HIGH, lab.getAbnormalDirection());
     }
 
     @Test

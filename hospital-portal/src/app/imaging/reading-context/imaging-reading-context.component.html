@@ -61,11 +61,21 @@
               >{{ cr.value }} {{ cr.unit }}
               <app-lab-correction-badge [corrected]="cr.corrected" audience="staff"
             /></strong>
-            @if (cr.abnormalFlag && cr.abnormalFlag !== 'NORMAL') {
+            @if (cr.severityFlag && cr.severityFlag !== 'NORMAL') {
               {{ ' '
-              }}<span class="context-flag">{{
-                cr.abnormalFlag | enumLabel: 'labSeverityFlag'
-              }}</span>
+              }}<span
+                class="context-flag"
+                [class.context-flag-muted]="cr.severityFlag === 'UNSPECIFIED'"
+                data-testid="imaging-context-creatinine-flag"
+                >{{ cr.severityFlag | enumLabel: 'labSeverityFlag' }}</span
+              >
+            }
+            @if (cr.referenceRange) {
+              {{ ' '
+              }}<small class="muted" data-testid="imaging-context-creatinine-range">{{
+                'IMAGING_COMPLETION.CONTEXT.REFERENCE_RANGE'
+                  | translate: { range: cr.referenceRange }
+              }}</small>
             }
             @if (cr.resultDate) {
               {{ ' ' }}<small class="muted">{{ cr.resultDate | serverTime | dateTime }}</small>
