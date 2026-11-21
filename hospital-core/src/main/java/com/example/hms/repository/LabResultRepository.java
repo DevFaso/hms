@@ -550,8 +550,13 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      * ({@code criticalNotifiedAt}), or an analyzer's CRITICAL flag. Keyed on
      * the analyzer flag alone, a hand-entered critical (which never carries
      * one) was paged and still counted 0 on the tile.
+     *
+     * <p>QA D2951 (r66): released results only. An analyzer's CRITICAL flag on
+     * a row the laboratory has not released counted on the tile, for a result
+     * the doctor cannot open, acknowledge or read back.
      */
     @Query("SELECT COUNT(r) FROM LabResult r WHERE r.labOrder.orderingStaff.id = :staffId "
+        + "AND r.released = true "
         + "AND r.acknowledged = false AND r.createdAt > :floor "
         + "AND (r.criticalNotifiedAt IS NOT NULL "
         + "OR r.abnormalFlag = com.example.hms.enums.AbnormalFlag.CRITICAL)")

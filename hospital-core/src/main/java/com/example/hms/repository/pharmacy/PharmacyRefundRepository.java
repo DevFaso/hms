@@ -68,6 +68,9 @@ public interface PharmacyRefundRepository extends JpaRepository<PharmacyRefund, 
     List<UUID> findRefundedReturnIds(@Param("returnIds") Collection<UUID> returnIds,
                                      @Param("statuses") Collection<PharmacyRefundStatus> statuses);
 
+    /** QA D2950 (r66): the refunds handed over from one cash session, money out of that till, oldest first. */
+    List<PharmacyRefund> findByCashSessionIdOrderByPaidAtAsc(UUID cashSessionId);
+
     /** Refunds paid out at one pharmacy of the hospital in [from, to): money out of the day. */
     @Query("SELECT r FROM PharmacyRefund r WHERE r.hospitalId = :hospitalId AND r.pharmacyId = :pharmacyId "
          + "AND r.status = com.example.hms.enums.PharmacyRefundStatus.PAID AND r.paidAt >= :from AND r.paidAt < :to "

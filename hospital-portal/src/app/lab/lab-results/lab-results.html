@@ -562,20 +562,21 @@
                   {{ r.criticalReadBackBy || '—' }}</span
                 >
               </div>
-            } @else if (r.criticalReadBackValue) {
+            } @else if (r.criticalReadBackRefusedValue) {
               <!--
-                A repeated value with no read-back stamp is a persisted MISMATCH
-                — the event the REQUIRES_NEW write exists to preserve. Until
-                2026-08-22 this record was invisible to every UI.
+                A refused read-back is a persisted MISMATCH — the event the
+                REQUIRES_NEW write exists to preserve. Until 2026-08-22 this
+                record was invisible to every UI. QA D2952 (r66): the server
+                sends it under its own fields, never as « read back by ».
               -->
               <div class="detail-field detail-mismatch" data-testid="read-back-mismatch">
                 <span class="field-label">{{ 'LAB_RESULTS.READ_BACK_MISMATCH' | translate }}</span>
                 <span class="field-value"
                   >{{
                     'LAB_RESULTS.QUOTED_READ_BACK_VALUE'
-                      | translate: { value: r.criticalReadBackValue }
+                      | translate: { value: r.criticalReadBackRefusedValue }
                   }}
-                  — {{ r.criticalReadBackBy || '—' }}</span
+                  — {{ r.criticalReadBackRefusedBy || '—' }}</span
                 >
               </div>
             }

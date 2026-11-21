@@ -2956,7 +2956,8 @@
         "PHARMACY_PAYMENT": "Paiement de dispensation",
         "COUNTER_SALE": "Vente au comptoir",
         "REFUND": "Remboursement remis",
-        "REVERSAL": "Contre-passation remise"
+        "REVERSAL": "Contre-passation remise",
+        "PHARMACY_REFUND": "Remboursement pharmacie remis"
       },
       "CLOSED_TOAST": "Caisse clôturée.",
       "CLOSE_FAILED": "La caisse n’a pas pu être clôturée.",
