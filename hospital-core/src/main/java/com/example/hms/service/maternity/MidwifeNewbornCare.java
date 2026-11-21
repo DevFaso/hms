@@ -160,6 +160,28 @@ public class MidwifeNewbornCare {
      *     null where the request names no bed (completing a transfer)
      */
     public boolean requireBedAMidwifeMayAssign(Admission admission, UUID bedId, String field) {
+        return requireHerWards(admission, bedId, field, true);
+    }
+
+    /**
+     * Carrying out a transfer order (decision taken in the review of #1251, PROVISIONAL like the
+     * rest of policy rule 2): a midwife receives a patient INTO a maternity bed (or a neonatal cot,
+     * for a newborn) from any ward when a doctor or a nurse of the hospital ordered the move, the
+     * woman in labour sent up from the emergency ward. The destination is always one of her wards.
+     * The bed the stay leaves must be hers too unless a doctor or a nurse ordered the move.
+     * Ordering a move stays held to {@link #requireBedAMidwifeMayAssign} on both beds.
+     *
+     * @param orderedByUserId who ordered the transfer, or null when nobody is recorded
+     * @return true when a physician must be asked to review (a NICU cot given by a midwife)
+     */
+    public boolean requireTransferAMidwifeMayComplete(Admission admission, UUID bedId, UUID orderedByUserId) {
+        UUID hospitalId = hospitalIdOf(admission);
+        boolean orderedByADoctorOrANurse = hospitalId != null && orderedByUserId != null
+            && nurseOrPhysicianAt(orderedByUserId, hospitalId);
+        return requireHerWards(admission, bedId, null, !orderedByADoctorOrANurse);
+    }
+
+    private boolean requireHerWards(Admission admission, UUID bedId, String field, boolean theBedSheFreesToo) {
         UUID hospitalId = hospitalIdOf(admission);
         if (hospitalId == null || bedId == null || !narrowedToHerWards(hospitalId, field)) {
             return false;
@@ -168,7 +190,7 @@ public class MidwifeNewbornCare {
         // hers to free too, or a move into maternity would release a bed of another ward.
         Bed held = admission.getBed();
         boolean sameBedAgain = held != null && bedId.equals(held.getId());
-        if (held != null && !sameBedAgain) {
+        if (theBedSheFreesToo && held != null && !sameBedAgain) {
             requireHerWard(held, admission, field);
         }
         // A bed of another hospital answers as not found in the assignment itself.

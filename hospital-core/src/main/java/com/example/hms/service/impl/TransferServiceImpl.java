@@ -189,10 +189,15 @@ public class TransferServiceImpl implements TransferService {
             staffRepository, request.getCompletedByStaffId(), hospitalId);
 
         // QA D2917: carrying the move out assigns the bed, so the midwife's ward rule holds here
-        // too, whoever ordered it. A neonatal cot she gives a newborn asks a physician to review,
-        // as on a direct assignment (a task, never a refusal).
+        // too: the destination is always one of her wards. Review of #1251 (provisional): the bed
+        // the patient leaves may be of another ward when a doctor or a nurse ordered the move (a
+        // woman in labour sent up from the emergency ward). A neonatal cot she gives a newborn asks
+        // a physician to review, as on a direct assignment (a task, never a refusal).
+        com.example.hms.model.Staff orderedBy = order.getRequestedBy();
+        UUID orderedByUserId = orderedBy == null || orderedBy.getUser() == null ? null : orderedBy.getUser().getId();
         boolean askPhysician = midwifeNewbornCare != null
-            && midwifeNewbornCare.requireBedAMidwifeMayAssign(order.getAdmission(), order.getToBed().getId(), null);
+            && midwifeNewbornCare.requireTransferAMidwifeMayComplete(order.getAdmission(),
+                order.getToBed().getId(), orderedByUserId);
 
         // The destination has been RESERVED for this order since it was
         // raised, so completion claims it from that state. The bed change
