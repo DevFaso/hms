@@ -32,6 +32,32 @@ public final class UserRoleHospitalAssignmentSpecification {
         };
     }
 
+    /**
+     * The rows at one of these hospitals (an organisation admin's list: the
+     * hospitals of its own organisation). An empty set matches nothing: it is
+     * never "no filter".
+     */
+    public static Specification<UserRoleHospitalAssignment> belongsToAnyHospital(
+            java.util.Collection<UUID> hospitalIds) {
+        return (root, query, cb) -> {
+            if (hospitalIds == null || hospitalIds.isEmpty()) {
+                return cb.disjunction();
+            }
+            query.distinct(true);
+            return root.join("hospital", JoinType.LEFT).get("id").in(hospitalIds);
+        };
+    }
+
+    /**
+     * Staff rows only: never a PATIENT assignment. An organisation admin's
+     * list (platform admin rules, rule 1b): a patient row is a patient's name
+     * and contact, and that role reads no patient list.
+     */
+    public static Specification<UserRoleHospitalAssignment> staffRowsOnly() {
+        return (root, query, cb) ->
+            cb.not(cb.upper(root.join("role", JoinType.LEFT).get("code")).in("PATIENT", "ROLE_PATIENT"));
+    }
+
     @Nullable
     public static Specification<UserRoleHospitalAssignment> hasActive(@Nullable Boolean active) {
         if (active == null) {

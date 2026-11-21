@@ -103,6 +103,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
     private static final String MSG_REMOVE_OWN = "users.assignment.removeOwn";
+    private static final String MSG_GRANT_OWN = "users.assignment.grantOwn";
     private static final String MSG_STAFF_ACCESS_OUT_OF_REACH = "staff.deactivate.accessOutOfReach";
     /** QA D902: the codes the super-admin role is stored under. */
     private static final Set<String> SUPER_ADMIN_CODES = Set.of(ROLE_SUPER_ADMIN, "SUPER_ADMIN");
@@ -291,6 +292,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // QA D789: an archived hospital takes no new role (a 409 before anything is saved).
         FacilityAssignmentGuard.requireOpenForAssignment(hospital);
         User user = resolveUser(dto);
+        if (adminRequest) {
+            requireNotSelfGrant(user);
+        }
         facilityAssignmentGuard.requireSingleFacilityKind(user, roleCode, hospital, null);
         checkActiveDoctorConflict(dto, user, role, hospital, locale);
         checkExistingAssignment(user, role, hospital, locale);
@@ -448,6 +452,15 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (takesGrantAway(target, newUser, newRole, activeAfter)) {
             requireNotCallersOwn(target);
             requireSuperAdminRemains(List.of(target));
+        }
+        // Rule 1c: nor does an edit hand a row to the caller, or switch the
+        // caller's own row on.
+        boolean handedOver = target.getUser() == null || newUser == null
+            || !Objects.equals(newUser.getId(), target.getUser().getId());
+        boolean switchedOn = !Boolean.TRUE.equals(target.getActive()) && activeAfter;
+        boolean movedElsewhere = !Objects.equals(idOf(newHospital), idOf(target.getHospital()));
+        if (handedOver || switchedOn || movedElsewhere) {
+            requireNotSelfGrant(newUser);
         }
 
         if (Boolean.TRUE.equals(dto.getActive())) {
@@ -741,6 +754,23 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         Specification<UserRoleHospitalAssignment> specification = buildAssignmentSpec(
             hospitalId, active, search, assignmentCode);
 
+        // Platform admin rules 2026-11-20, rule 1a: an organisation admin lists
+        // the assignments of every hospital of its own organisation (one of
+        // them when the request names it), never another organisation's. The
+        // set comes from the caller's own assignments, not from the request.
+        Set<UUID> organisationHospitals = activeHospitalId != null ? accountAccess.organisationHospitalIds() : Set.of();
+        if (!organisationHospitals.isEmpty()) {
+            Set<UUID> listed = requestedHospitalId != null && organisationHospitals.contains(requestedHospitalId)
+                ? Set.of(requestedHospitalId)
+                : organisationHospitals;
+            specification = combineSpec(
+                combineSpec(
+                    buildAssignmentSpec(null, active, search, assignmentCode),
+                    UserRoleHospitalAssignmentSpecification.belongsToAnyHospital(listed)),
+                // Rule 1b: staff rows only; a PATIENT row is a patient list.
+                UserRoleHospitalAssignmentSpecification.staffRowsOnly());
+        }
+
         if (specification == null) {
             log.info("📄 Fetching assignments without filters (page {}, size {})", pageable.getPageNumber(),
                 pageable.getPageSize());
@@ -869,7 +899,11 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public UserRoleHospitalAssignmentResponseDTO regenerateAssignmentCode(UUID assignmentId, boolean resendNotifications) {
-        return toDtoWithLinks(reissueCode(findChangeable(assignmentId), resendNotifications));
+        UserRoleHospitalAssignment target = findChangeable(assignmentId);
+        // Rule 1c: a fresh code is how a switched-off row comes back on, so
+        // nobody sends one to their own account.
+        requireNotSelfGrant(target.getUser());
+        return toDtoWithLinks(reissueCode(target, resendNotifications));
     }
 
     @Override
@@ -1711,6 +1745,24 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (row.getUser() != null && accountAccess.isSelf(row.getUser())) {
             throw new ConflictException(com.example.hms.utility.MessageUtil.resolve(MSG_REMOVE_OWN));
         }
+    }
+
+    /**
+     * Platform admin rules 2026-11-20, rule 1c (separation of duties): no
+     * administrator grants a role to their own account, whatever their own
+     * role is, a super-admin included. {@link #requireNotCallersOwn} already
+     * stops them removing or re-roling their own row; this stops the grant.
+     * Another administrator does it, and the grant is audited under that
+     * person's name.
+     */
+    private void requireNotSelfGrant(User holder) {
+        if (holder != null && accountAccess.isSelf(holder)) {
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve(MSG_GRANT_OWN));
+        }
+    }
+
+    private static UUID idOf(Hospital hospital) {
+        return hospital != null ? hospital.getId() : null;
     }
 
     /** {@link #requireNotCallersOwn} for every row of an account at once. */

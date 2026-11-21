@@ -106,6 +106,24 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
 
     List<UserRoleHospitalAssignment> findByUser_IdAndActiveTrue(UUID userId);
 
+    /**
+     * Platform admin rules 2026-11-20, rule 1a: every CLINICAL hospital that
+     * shares an organisation with one of these hospitals. The organisation
+     * admin's scope ({@code UserAccountAccess.organisationHospitalIds}) is
+     * built from it: from the hospitals of the caller's own ADMIN assignments,
+     * never from a hospital or an organisation the request names. Clinical
+     * hospitals only, on both sides: a pharmacy or laboratory row is never
+     * returned, and an assignment held at one opens nothing. A clinical
+     * hospital with no organisation returns itself alone.
+     */
+    @Query("SELECT h2.id FROM Hospital h2 "
+        + "WHERE h2.facilityType = com.example.hms.enums.FacilityType.HOSPITAL "
+        + "AND (h2.id IN :hospitalIds OR h2.organization.id IN ("
+        + "SELECT h.organization.id FROM Hospital h WHERE h.id IN :hospitalIds "
+        + "AND h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL))")
+    java.util.Set<UUID> findClinicalHospitalIdsInOrganisationsOf(
+        @Param("hospitalIds") java.util.Collection<UUID> hospitalIds);
+
     Optional<UserRoleHospitalAssignment> findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(UUID userId, String roleCode);
 
     List<UserRoleHospitalAssignment> findByRoleId(UUID roleId);

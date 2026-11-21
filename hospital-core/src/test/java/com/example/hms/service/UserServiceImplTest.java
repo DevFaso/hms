@@ -2940,6 +2940,33 @@ class UserServiceImplTest {
             verify(staffRepository, never()).findUserIdByLicense(any());
             assertThat(savedUser().getUsername()).isNotBlank();
         }
+
+        @Test
+        @DisplayName("rule 1c: a staff registration that lands on the registrar's own account is refused before anything is written")
+        void staffRegistrationResolvingToTheRegistrarIsRefused() {
+            Role nurse = new Role();
+            nurse.setId(UUID.randomUUID());
+            nurse.setCode("ROLE_NURSE");
+            stubCreation(nurse);
+            UUID hospitalId = UUID.randomUUID();
+            Hospital hospital = new Hospital();
+            hospital.setId(hospitalId);
+            lenient().when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            User registrar = new User();
+            registrar.setId(UUID.randomUUID());
+            when(staffRepository.findUserIdByLicense("LIC-REGISTRAR-1")).thenReturn(Optional.of(registrar.getId()));
+            when(userRepository.findById(registrar.getId())).thenReturn(Optional.of(registrar));
+            when(accountAccess.isSelf(registrar)).thenReturn(true);
+            AdminSignupRequest req = request("ROLE_NURSE", "nurse.rule1c@example.com", "70202023");
+            req.setHospitalId(hospitalId);
+            req.setLicenseNumber("LIC-REGISTRAR-1");
+
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class)
+                .hasMessageContaining("your own account");
+            verify(userRepository, never()).saveAndFlush(any());
+            verify(staffRepository, never()).save(any());
+        }
     }
 
     @Test

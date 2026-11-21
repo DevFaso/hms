@@ -448,6 +448,13 @@ public class UserServiceImpl implements UserService {
         final boolean newUserCreated = existingByIdentity.isEmpty() && existingByLicense.isEmpty();
         final boolean passwordSupplied = request.getPassword() != null && !request.getPassword().isBlank();
         final boolean reclaimed = existingByIdentity.map(this::isDiscardedRegistration).orElse(false);
+        // Platform admin rules 2026-11-20, rule 1c: a staff registration that
+        // resolves to the registrar's own account (their own licence number)
+        // would grant them the roles they are typing. Refused before anything
+        // is written; another administrator does it.
+        if (!isPatient && existingByLicense.filter(accountAccess::isSelf).isPresent()) {
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve("users.assignment.grantOwn"));
+        }
         final User user = existingByIdentity.or(() -> existingByLicense)
                 .orElseGet(() -> createNewUser(request, request.getUsername(), email, phone, roles));
         if (reclaimed) {

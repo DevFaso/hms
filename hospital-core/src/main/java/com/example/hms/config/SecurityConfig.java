@@ -870,9 +870,11 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/assignments/public/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/assignments/public/**").permitAll()
 
-                // All other assignment endpoints — admin only
+                // All other assignment endpoints — admin only. The organisation
+                // admin (platform admin rules, rule 1a) is admitted at the edge;
+                // each handler's annotation says which ones it really works.
                 .requestMatchers("/assignments/**")
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+                .hasAnyAuthority(SecurityConstants.authorities(SecurityConstants.ASSIGNMENT_ADMIN_AUTHORITIES))
 
                 // -------------------- Staff --------------------
                 // Narrow scheduling matcher FIRST (first-match-wins): the
@@ -928,6 +930,10 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, API_DEPARTMENTS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
+                // The role list of the register form: the organisation admin
+                // reads it too (rule 1a); everything else under /roles is unchanged.
+                .requestMatchers(HttpMethod.GET, "/roles")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_ADMIN)
                 .requestMatchers("/roles/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
