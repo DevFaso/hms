@@ -47,4 +47,11 @@ public class AdmissionDischargeRequestDTO {
      * Follow-up appointments to schedule
      */
     private List<Map<String, Object>> followUpAppointments;
+
+    /** QA D2553: the follow-up the discharge dialog takes; it reaches the summary as an appointment. */
+    private java.time.LocalDate followUpDate;
+
+    /** QA D2553: what the follow-up is for (the summary's follow-up entry holds 1000). */
+    @jakarta.validation.constraints.Size(max = 500, message = "{admissionDischarge.followUpPurpose.size}")
+    private String followUpPurpose;
 }

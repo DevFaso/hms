@@ -51,9 +51,10 @@ public class AdmissionStayEncounterService {
     private final org.springframework.context.MessageSource messageSource;
     /** D426: a discharged stay gets its discharge-summary record, as a checkout does. */
     private final com.example.hms.repository.DischargeSummaryRepository dischargeSummaryRepository;
-    private final com.example.hms.repository.PrescriptionRepository prescriptionRepository;
     /** QA D757: ends the stay's ward orders at discharge. */
     private final StayOrderDiscontinuation stayOrders;
+    /** QA D2553: carries the stay's take-home orders into its summary, whenever it was written. */
+    private final DischargeTakeHomeMedicines takeHomeMedicines;
 
     /**
      * The attending physician runs the stay; the admitting provider stands in
@@ -366,7 +367,14 @@ public class AdmissionStayEncounterService {
         java.util.Optional<DischargeSummary> written = dischargeSummaryRepository.findByEncounter_Id(enc.getId());
         if (written.isPresent()) {
             DischargeSummary summary = written.get();
-            if (carryInstructions(summary, admission.getDischargeInstructions())) {
+            // QA D2553: a summary written on the discharge screen before the discharge gets the
+            // take-home medicines and the follow-ups too, not only the instructions (D1596).
+            boolean changed = carryInstructions(summary, admission.getDischargeInstructions());
+            if (!Boolean.TRUE.equals(summary.getIsFinalized())) {
+                changed |= carryTakeHome(summary);
+                changed |= addStayFollowUps(summary, admission);
+            }
+            if (changed) {
                 dischargeSummaryRepository.save(summary);
             }
             return;
@@ -396,7 +404,7 @@ public class AdmissionStayEncounterService {
         if (!isBlank(admission.getDischargeSummary())) {
             summary.setHospitalCourse(admission.getDischargeSummary());
         }
-        addStayMedications(summary, enc);
+        carryTakeHome(summary);
         addStayFollowUps(summary, admission);
         dischargeSummaryRepository.save(summary);
     }
@@ -415,49 +423,33 @@ public class AdmissionStayEncounterService {
             org.springframework.context.i18n.LocaleContextHolder.getLocale());
     }
 
-    private void addStayMedications(com.example.hms.model.discharge.DischargeSummary summary, Encounter enc) {
-        var prescriptions = prescriptionRepository
-            .findByEncounter_Id(enc.getId(), com.example.hms.repository.PrescriptionRepository.EVERY_ORDER_OF_THE_VISIT)
-            .getContent();
-        for (com.example.hms.model.Prescription rx : prescriptions) {
-            // QA D757: a ward order ends with the stay; only an order the
-            // prescriber marked for home goes home.
-            if (!goesHome(rx)) {
-                continue;
-            }
-            summary.addMedicationReconciliation(com.example.hms.model.discharge.MedicationReconciliationEntry.builder()
-                .medicationName(rx.getMedicationName())
-                .dosage(rx.getDosage())
-                .route(rx.getRoute())
-                .frequency(rx.getFrequency())
-                .reconciliationAction(com.example.hms.enums.MedicationReconciliationAction.CONTINUED)
-                .continueAtDischarge(true)
-                .prescriptionId(rx.getId())
-                .build());
-        }
+    /** QA D757 / D2553: only an order the prescriber marked for home goes on the summary. */
+    private boolean carryTakeHome(DischargeSummary summary) {
+        return takeHomeMedicines != null && takeHomeMedicines.carryInto(summary);
     }
 
-    private static boolean goesHome(com.example.hms.model.Prescription rx) {
-        if (!rx.isTakeHome()) {
+    /** The follow-ups the discharging physician entered; one already on the summary is not added twice. */
+    private static boolean addStayFollowUps(com.example.hms.model.discharge.DischargeSummary summary, Admission admission) {
+        if (admission.getFollowUpAppointments() == null) {
             return false;
         }
-        // As at checkout (QA D152): an unsigned or withdrawn order does not go home.
-        var status = rx.getStatus();
-        return status != com.example.hms.enums.PrescriptionStatus.DRAFT
-            && status != com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE
-            && (status == null || !status.isWithdrawn());
-    }
-
-    private static void addStayFollowUps(com.example.hms.model.discharge.DischargeSummary summary, Admission admission) {
-        if (admission.getFollowUpAppointments() == null) {
-            return;
-        }
+        boolean added = false;
         for (java.util.Map<String, Object> f : admission.getFollowUpAppointments()) {
             com.example.hms.model.discharge.FollowUpAppointmentEntry entry = toFollowUp(f);
-            if (entry != null) {
+            if (entry != null && !alreadyListed(summary, entry)) {
                 summary.addFollowUpAppointment(entry);
+                added = true;
             }
         }
+        return added;
+    }
+
+    private static boolean alreadyListed(com.example.hms.model.discharge.DischargeSummary summary,
+                                         com.example.hms.model.discharge.FollowUpAppointmentEntry entry) {
+        return summary.getFollowUpAppointments() != null && summary.getFollowUpAppointments().stream()
+            .anyMatch(f -> java.util.Objects.equals(f.getAppointmentDate(), entry.getAppointmentDate())
+                && java.util.Objects.equals(f.getAppointmentType(), entry.getAppointmentType())
+                && java.util.Objects.equals(f.getPurpose(), entry.getPurpose()));
     }
 
     /** One follow-up the physician entered, or null when the row says nothing usable. */
