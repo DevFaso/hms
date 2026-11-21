@@ -1236,6 +1236,9 @@ test.describe('layout overflow: r66 dialog height (D2938)', () => {
     await page.locator('.action-record').first().click();
     const dialog = page.locator('.modal-vitals');
     await expect(dialog).toBeVisible();
+    // The list is the last field but one: scrolled to the end of the dialog, it is clear of the
+    // action row stuck to the bottom edge.
+    await dialog.evaluate((el) => (el.scrollTop = el.scrollHeight));
     await dialog.locator('[data-testid="maternal-concerns"] summary').click();
     await expect(dialog.locator('[data-testid^="maternal-concern-"]').first()).toBeVisible();
 
@@ -1254,6 +1257,12 @@ test.describe('layout overflow: r66 dialog height (D2938)', () => {
         expect(box.y + box.height, `dialog bottom @${width}px`).toBeLessThanOrEqual(
           heightFor(width),
         );
+        // The action row reaches the dialog's bottom edge: no strip of fields scrolls under the buttons.
+        const row = (await dialog.locator('.modal-actions').boundingBox())!;
+        expect(
+          Math.abs(row.y + row.height - (box.y + box.height)),
+          `action row at the dialog's edge @${width}px, scrolled to ${top}`,
+        ).toBeLessThanOrEqual(2);
       }
       // A real pointer reaches it (Playwright refuses a click outside the viewport).
       await save.click({ trial: true, timeout: 5_000 });

@@ -598,6 +598,8 @@ textarea {
     max-height: calc(100vh - 32px);
     max-height: calc(100dvh - 32px);
     overflow-y: auto;
+    /* A field the keyboard moves to is scrolled clear of the stuck action row. */
+    scroll-padding-bottom: 5rem;
   }
   :where(
       .modal,

@@ -605,11 +605,14 @@
 }
 
 /* QA D2938 (r66): the dialog scrolls inside the screen (styles.scss) and its
-   action row is stuck to the bottom edge. The row fills the dialog's bottom
-   padding, so it sits in the same place whether the fields are scrolled or not,
-   and a hairline separates it from the fields passing under it. */
+   action row is stuck to the bottom edge. A stuck row stops at the dialog's
+   padding, which would leave a strip of scrolling fields under the buttons, so
+   the row carries the bottom padding itself and reaches the dialog's edge; a
+   hairline separates it from the fields passing under it. */
+.modal-content:has(> .modal-actions) {
+  padding-bottom: 0;
+}
 .modal-content > .modal-actions {
-  margin-bottom: -1.5rem;
   padding: 0.75rem 0 1.5rem;
   border-top: 1px solid #f1f5f9;
 }
