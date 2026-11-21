@@ -59,6 +59,7 @@ public class LabResultMapper {
             demographicsOf(result));
         Grading grading = gradingOf(result, context);
         String severityFlag = severityOf(result, grading, context);
+        boolean readBackConfirmed = result.getCriticalReadBackAt() != null;
 
         return LabResultResponseDTO.builder()
             .id(result.getId() != null ? result.getId().toString() : null)
@@ -108,10 +109,14 @@ public class LabResultMapper {
             .criticalEscalatedAt(result.getCriticalEscalatedAt())
             .criticalEscalationLevel(result.getCriticalEscalationLevel())
             .criticalReadBackAt(result.getCriticalReadBackAt())
-            .criticalReadBackBy(result.getCriticalReadBackByDisplay())
-            // The recorded read-back, including a mismatched one — a clinician
-            // repeating the wrong value is the event the audit trail is for.
-            .criticalReadBackValue(result.getCriticalReadBackValue())
+            // QA D2952 (r66): who read back and what, only once the read-back is
+            // confirmed. A refused one (a clinician repeating the wrong value is
+            // the event the audit trail is for) is told apart, under its own
+            // fields: it used to fill these two on an unacknowledged result.
+            .criticalReadBackBy(readBackConfirmed ? result.getCriticalReadBackByDisplay() : null)
+            .criticalReadBackValue(readBackConfirmed ? result.getCriticalReadBackValue() : null)
+            .criticalReadBackRefusedBy(readBackConfirmed ? null : result.getCriticalReadBackByDisplay())
+            .criticalReadBackRefusedValue(readBackConfirmed ? null : result.getCriticalReadBackValue())
             .acknowledgedAt(result.getAcknowledgedAt())
             .acknowledgedBy(result.getAcknowledgedByDisplay())
         .released(result.isReleased())

@@ -81,9 +81,19 @@ public class LabResultResponseDTO {
     private LocalDateTime criticalEscalatedAt;
     private short criticalEscalationLevel;
     private LocalDateTime criticalReadBackAt;
+    /** Who read the value back: only for a CONFIRMED read-back ({@code criticalReadBackAt} set). */
     private String criticalReadBackBy;
-    /** What was repeated back — persisted even on a mismatch, for the audit. */
+    /** What was read back: only for a CONFIRMED read-back ({@code criticalReadBackAt} set). */
     private String criticalReadBackValue;
+    /**
+     * QA D2952 (r66): the last REFUSED read-back (the repeated value did not match), kept for the audit under its
+     * own name. It used to fill {@code criticalReadBackBy} and {@code criticalReadBackValue} while the result
+     * stayed unacknowledged, so the record read as if the value had been read back. Null once a read-back is
+     * confirmed.
+     */
+    private String criticalReadBackRefusedValue;
+    /** QA D2952 (r66): who made the last refused read-back; null once a read-back is confirmed. */
+    private String criticalReadBackRefusedBy;
     private boolean released;
     private LocalDateTime releasedAt;
     private String releasedByFullName;

@@ -107,9 +107,14 @@ export interface LabResultResponse {
   criticalEscalatedAt?: string | null;
   criticalEscalationLevel?: number;
   criticalReadBackAt?: string | null;
+  /** Who read the value back; only for a confirmed read-back (criticalReadBackAt set). */
   criticalReadBackBy?: string | null;
-  /** What was repeated back — persisted even on a mismatch, for the audit. */
+  /** What was read back; only for a confirmed read-back (criticalReadBackAt set). */
   criticalReadBackValue?: string | null;
+  /** QA D2952: the last refused (mismatched) read-back, kept for the audit; null once one is confirmed. */
+  criticalReadBackRefusedValue?: string | null;
+  /** QA D2952: who made the last refused read-back. */
+  criticalReadBackRefusedBy?: string | null;
   released: boolean;
   releasedAt: string | null;
   releasedByFullName: string | null;
