@@ -38,6 +38,8 @@ import { serverInstant } from '../shared/date-utils';
 import { PatientPortalService } from '../services/patient-portal.service';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
+import { PhonePipe } from '../shared/pipes/phone.pipe';
+import { DashPipe } from '../shared/pipes/dash.pipe';
 import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
 import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
 type ProfileTab = 'overview' | 'edit' | 'security' | 'activity';
@@ -56,6 +58,8 @@ const PASSWORD_FIELD_IDS = ['pwdNew', 'pwdConfirm'];
     SubmitGuardDirective,
     FocusOnRenderDirective,
     MeasurePipe,
+    PhonePipe,
+    DashPipe,
     FormsModule,
     TranslateModule,
     EnumLabelPipe,
@@ -1384,7 +1388,7 @@ export class ProfileComponent implements OnInit {
     if (eventType.includes('CREATE')) return '#059669';
     if (eventType.includes('UPDATE') || eventType.includes('EDIT')) return '#0e7c6b';
     if (eventType.includes('DELETE') || eventType.includes('REMOVE')) return '#dc2626';
-    if (eventType.includes('LOGIN')) return '#7c3aed';
+    if (eventType.includes('LOGIN')) return '#6d28d9';
     if (eventType.includes('LOGOUT')) return '#64748b';
     if (eventType.includes('PASSWORD')) return '#d97706';
     return '#64748b';

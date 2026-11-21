@@ -461,13 +461,13 @@
               </div>
               <div class="info-row">
                 <span class="label">{{ 'PATIENTS.PHONE' | translate }}</span
-                ><span class="value">{{ p.phoneNumberPrimary | dash }}</span>
+                ><span class="value">{{ p.phoneNumberPrimary | appPhone | dash }}</span>
               </div>
               <!-- QA D1036 / D926: the second number and the postal code were
                    stored at registration and shown nowhere. -->
               <div class="info-row">
                 <span class="label">{{ 'PATIENTS.PHONE_SECONDARY' | translate }}</span
-                ><span class="value">{{ p.phoneNumberSecondary || '—' }}</span>
+                ><span class="value">{{ p.phoneNumberSecondary | appPhone | dash }}</span>
               </div>
               <div class="info-row">
                 <span class="label">{{ 'PATIENTS.DOB' | translate }}</span
