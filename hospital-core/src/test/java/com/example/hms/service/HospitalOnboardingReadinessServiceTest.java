@@ -56,6 +56,7 @@ class HospitalOnboardingReadinessServiceTest {
     @Mock private BedRepository bedRepository;
     @Mock private PriceListItemRepository priceListItemRepository;
     @Mock private PayerRepository payerRepository;
+    @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private AppointmentSlotPolicy slotPolicy;
 
     @InjectMocks private HospitalOnboardingReadinessService service;
@@ -124,6 +125,22 @@ class HospitalOnboardingReadinessServiceTest {
 
         assertThat(ready.patientBookable()).isTrue();
         assertThat(item(ready, Step.OPEN_SLOTS)).isEqualTo(new Item(Step.OPEN_SLOTS, true, 1, true));
+    }
+
+    @Test
+    @DisplayName("review of #1246: the first step is the hospital's own administrator; without one, a department cannot be created")
+    void theFirstStepIsTheHospitalsAdministrator() {
+        when(staffRepository.findDepartmentIdsWithActiveProviders(hospitalId)).thenReturn(Set.of());
+        when(slotPolicy.departmentsWithOpenSlots(eq(hospitalId), any())).thenReturn(Set.of());
+
+        HospitalOnboardingReadinessDTO fresh = service.readiness(hospitalId);
+
+        assertThat(fresh.items().get(0)).isEqualTo(new Item(Step.HOSPITAL_ADMIN, false, 0, true));
+        assertThat(fresh.items().get(1).step()).isEqualTo(Step.DEPARTMENTS);
+
+        // Registered, activated or still waiting for the code: the step is done.
+        when(assignmentRepository.countHospitalAdminAssignmentsAt(hospitalId)).thenReturn(1L);
+        assertThat(service.readiness(hospitalId).items().get(0)).isEqualTo(new Item(Step.HOSPITAL_ADMIN, true, 1, true));
     }
 
     @Test

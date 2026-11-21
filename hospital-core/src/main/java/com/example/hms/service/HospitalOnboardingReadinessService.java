@@ -11,6 +11,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PayerRepository;
 import com.example.hms.repository.PriceListItemRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.scheduling.SessionTemplateRepository;
 import com.example.hms.service.scheduling.AppointmentSlotPolicy;
 import com.example.hms.utility.HospitalCalendar;
@@ -49,6 +50,7 @@ public class HospitalOnboardingReadinessService {
     private final BedRepository bedRepository;
     private final PriceListItemRepository priceListItemRepository;
     private final PayerRepository payerRepository;
+    private final UserRoleHospitalAssignmentRepository assignmentRepository;
     /** Owns what "a slot can still be taken" means, for the patient form and for this checklist. */
     private final AppointmentSlotPolicy slotPolicy;
 
@@ -58,6 +60,7 @@ public class HospitalOnboardingReadinessService {
         Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
 
+        long hospitalAdmins = assignmentRepository.countHospitalAdminAssignmentsAt(hospitalId);
         long departments = departmentRepository.countByHospitalId(hospitalId);
         long staff = staffRepository.countActiveByHospitalId(hospitalId);
         Set<UUID> staffedDepartments = staffRepository.findDepartmentIdsWithActiveProviders(hospitalId);
@@ -72,6 +75,8 @@ public class HospitalOnboardingReadinessService {
         long payers = payerRepository.countByHospitalIdAndActiveTrue(hospitalId);
 
         List<Item> items = List.of(
+            // First: a department cannot be created until the hospital has its administrator.
+            item(Step.HOSPITAL_ADMIN, hospitalAdmins, true),
             item(Step.DEPARTMENTS, departments, true),
             item(Step.STAFF, staff, true),
             item(Step.PROVIDERS_IN_DEPARTMENT, staffedDepartments.size(), true),

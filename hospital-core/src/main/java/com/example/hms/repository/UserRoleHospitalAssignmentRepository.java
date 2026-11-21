@@ -133,6 +133,14 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
 
     Optional<UserRoleHospitalAssignment> findFirstByHospitalIdAndRole_Name(UUID hospitalId, String roleName);
 
+    /**
+     * Review of #1246: how many HOSPITAL_ADMIN assignments this hospital has, activated or still waiting
+     * for their code. The onboarding checklist's first step: a department is filed under one of them.
+     */
+    @Query("SELECT COUNT(a) FROM UserRoleHospitalAssignment a WHERE a.hospital.id = :hospitalId "
+        + "AND UPPER(a.role.code) IN ('ROLE_HOSPITAL_ADMIN', 'HOSPITAL_ADMIN')")
+    long countHospitalAdminAssignmentsAt(@Param("hospitalId") UUID hospitalId);
+
     Optional<UserRoleHospitalAssignment> findByUserIdAndHospitalIdAndRole_Name(UUID userId, UUID hospitalId, String roleName);
 
     @EntityGraph(attributePaths = {"user", "hospital", "role"})

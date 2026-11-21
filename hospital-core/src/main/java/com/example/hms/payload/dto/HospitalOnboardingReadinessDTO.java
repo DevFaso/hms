@@ -19,6 +19,11 @@ public record HospitalOnboardingReadinessDTO(UUID hospitalId, boolean patientBoo
 
     /** The steps of the checklist. The portal owns their wording and where each one is done. */
     public enum Step {
+        /**
+         * The hospital has an administrator of its own (registered, activated or not). A department is
+         * filed under that person: nobody, a super-admin included, is given the role on their own account.
+         */
+        HOSPITAL_ADMIN,
         /** At least one department. */
         DEPARTMENTS,
         /** At least one activated staff account. */
