@@ -140,6 +140,12 @@ export class HospitalListComponent implements OnInit {
    * (« Africa/Ouagadougou (GMT) », « Africa/Nairobi (GMT+3) »), so two zones
    * that share a clock are told apart and one with another clock is seen at once.
    */
+  /** The currency's name and its ISO 4217 code: « Franc CFA de l'UEMOA (F CFA) · XOF ». */
+  currencyLabel(currency: string): string {
+    const name = this.translate.instant('PLATFORM_SETUP.HOSPITAL.CURRENCY_NAME.' + currency);
+    return `${name} · ${currency}`;
+  }
+
   zoneLabel(zone: string): string {
     try {
       const offset = new Intl.DateTimeFormat('en-GB', {

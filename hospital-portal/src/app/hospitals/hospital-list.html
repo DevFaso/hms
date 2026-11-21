@@ -399,14 +399,16 @@
                   id="hCurrency"
                   [(ngModel)]="form.currencyCode"
                   name="currencyCode"
+                  aria-describedby="hCurrencyHint"
                   data-testid="hospital-currency"
                 >
                   @for (currency of currencies; track currency) {
-                    <option [value]="currency">
-                      {{ 'PLATFORM_SETUP.HOSPITAL.CURRENCY_NAME.' + currency | translate }}
-                    </option>
+                    <option [value]="currency">{{ currencyLabel(currency) }}</option>
                   }
                 </select>
+                <small id="hCurrencyHint" class="field-hint">
+                  {{ 'PLATFORM_SETUP.HOSPITAL.CURRENCY_HINT' | translate }}
+                </small>
               </div>
             </div>
             <div class="field">

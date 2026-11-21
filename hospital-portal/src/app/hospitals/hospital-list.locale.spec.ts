@@ -193,6 +193,43 @@ describe('HospitalListComponent — code, currency and time zone (QA r65 D2500 /
     expect(component.showModal()).toBeTrue();
   });
 
+  // Platform admin rules 2026-11-20, rule 3: one currency per facility, locked once it has billed.
+  it('each currency is named with its ISO code, and the form says when the currency locks', () => {
+    const fixture = render();
+    fixture.componentInstance.openCreate();
+    fixture.detectChanges();
+
+    const select = field(fixture, 'hospital-currency')!;
+    const labels = Array.from(select.querySelectorAll('option')).map(
+      (option) => option.textContent?.trim() ?? '',
+    );
+    expect(labels.map((label) => label.split(' · ').pop())).toEqual([...HOSPITAL_CURRENCIES]);
+    expect(HOSPITAL_CURRENCIES).toEqual(['XOF', 'XAF']);
+    const hint = (fixture.nativeElement as HTMLElement).querySelector('#hCurrencyHint');
+    expect(hint?.textContent).toContain('PLATFORM_SETUP.HOSPITAL.CURRENCY_HINT');
+    expect(select.getAttribute('aria-describedby')).toContain('hCurrencyHint');
+  });
+
+  it('a currency the server refuses (locked by a first invoice or price) is marked on the currency field', () => {
+    const fixture = render();
+    const component = fixture.componentInstance;
+    component.openEdit(stored);
+    fixture.detectChanges();
+    const refusal =
+      'Cet hôpital a déjà une facture ou un tarif dans sa devise actuelle : la devise ne peut plus être modifiée.';
+    hospitalService.update.and.returnValue(
+      throwError(() => fieldErrorsResponse({ currencyCode: refusal })),
+    );
+
+    component.form.currencyCode = 'XOF';
+    component.submitForm();
+    fixture.detectChanges();
+
+    expectFieldsMarked(fixture, { hCurrency: refusal });
+    expect(component.saving()).toBeFalse();
+    expect(component.showModal()).toBeTrue();
+  });
+
   it('the pattern is the server’s: letters, digits and hyphens, 2 to 20, alphanumeric at both ends', () => {
     for (const good of ['TWP', 'CMT-C5F20', 'A1', 'ABCDEFGHIJKLMNOPQRST']) {
       expect(HOSPITAL_CODE_PATTERN.test(good)).withContext(good).toBeTrue();
