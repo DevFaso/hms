@@ -226,7 +226,8 @@ class LabDefinitionSensitivityChangePersistenceTest {
         body.setUnit("mUI/mL");
         body.setSensitivityCategory(SensitivityCategory.HIV);
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.update(definition.getId(), body))
+        UUID definitionId = definition.getId();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.update(definitionId, body))
             .isInstanceOf(IllegalStateException.class);
 
         assertThat(definitionRepository.findById(definition.getId()).orElseThrow().getSensitivityCategory())

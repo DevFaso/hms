@@ -21,6 +21,8 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -118,22 +120,22 @@ class MedicationCatalogControllerTest {
      */
     @Test
     void list_superAdminWithoutHospitalId_returns200() throws Exception {
-        when(authUtils.resolveHospitalScope(any(), org.mockito.ArgumentMatchers.isNull(), eq(false)))
+        when(authUtils.resolveHospitalScope(any(), isNull(), eq(false)))
                 .thenReturn(null);
         when(authUtils.hasAuthority(any(), eq("ROLE_SUPER_ADMIN"))).thenReturn(true);
-        when(catalogService.listByHospital(org.mockito.ArgumentMatchers.isNull(), any(Pageable.class)))
+        when(catalogService.listByHospital(isNull(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(sampleResponse())));
 
         mockMvc.perform(get("/medication-catalog"))
                 .andExpect(status().isOk());
 
-        verify(catalogService).listByHospital(org.mockito.ArgumentMatchers.isNull(), any(Pageable.class));
+        verify(catalogService).listByHospital(isNull(), any(Pageable.class));
     }
 
     /** Guard: clinician without scope still 400s on the GET path. */
     @Test
     void list_clinicianWithoutHospitalScope_returns400() throws Exception {
-        when(authUtils.resolveHospitalScope(any(), org.mockito.ArgumentMatchers.isNull(), eq(false)))
+        when(authUtils.resolveHospitalScope(any(), isNull(), eq(false)))
                 .thenReturn(null);
         when(authUtils.hasAuthority(any(), eq("ROLE_SUPER_ADMIN"))).thenReturn(false);
 
@@ -161,7 +163,7 @@ class MedicationCatalogControllerTest {
     @Test
     void search_withoutHospitalId_usesTheActingHospital() throws Exception {
         // QA D922: the portal never sends hospitalId; every search answered 400.
-        when(authUtils.resolveHospitalScope(any(), org.mockito.ArgumentMatchers.isNull(), eq(false)))
+        when(authUtils.resolveHospitalScope(any(), isNull(), eq(false)))
                 .thenReturn(hospitalId);
         when(catalogService.search(eq(hospitalId), eq("morph"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(sampleResponse())));
@@ -181,7 +183,7 @@ class MedicationCatalogControllerTest {
     void search_superAdminInGlobalView_searchesTheWholeCatalogue() throws Exception {
         // Review of #975: the list served the super-admin's global view; the search refused it.
         when(authUtils.hasAuthority(any(), eq("ROLE_SUPER_ADMIN"))).thenReturn(true);
-        when(catalogService.search(org.mockito.ArgumentMatchers.isNull(), eq("morph"), any(Pageable.class)))
+        when(catalogService.search(isNull(), eq("morph"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(sampleResponse())));
 
         mockMvc.perform(get("/medication-catalog/search").param("q", "morph"))
@@ -248,7 +250,7 @@ class MedicationCatalogControllerTest {
         org.assertj.core.api.Assertions.assertThat(sent.getValue().getHospitalId()).isNull();
         org.assertj.core.api.Assertions.assertThat(sent.getValue().getSensitivityCategory())
             .isEqualTo(com.example.hms.enums.SensitivityCategory.HIV);
-        verify(authUtils, org.mockito.Mockito.never()).resolveHospitalScope(any(), any(), eq(false));
+        verify(authUtils, never()).resolveHospitalScope(any(), any(), eq(false));
     }
 
     @Test
@@ -267,12 +269,12 @@ class MedicationCatalogControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().is4xxClientError());
 
-        verify(catalogService, org.mockito.Mockito.never()).update(any(), any());
+        verify(catalogService, never()).update(any(), any());
     }
 
     @Test
     void getById_withoutHospitalId_readsAtTheActingHospital() throws Exception {
-        when(authUtils.resolveHospitalScope(any(), org.mockito.ArgumentMatchers.isNull(), eq(false))).thenReturn(hospitalId);
+        when(authUtils.resolveHospitalScope(any(), isNull(), eq(false))).thenReturn(hospitalId);
         when(catalogService.getById(itemId, hospitalId)).thenReturn(sampleResponse());
 
         mockMvc.perform(get("/medication-catalog/{id}", itemId))

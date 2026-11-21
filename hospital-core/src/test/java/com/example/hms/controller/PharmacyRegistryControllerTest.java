@@ -22,6 +22,8 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -118,10 +120,10 @@ class PharmacyRegistryControllerTest {
      */
     @Test
     void list_superAdminWithoutHospitalId_returns200() throws Exception {
-        when(authUtils.resolveHospitalScope(any(), org.mockito.ArgumentMatchers.isNull(), eq(false)))
+        when(authUtils.resolveHospitalScope(any(), isNull(), eq(false)))
                 .thenReturn(null);
         when(authUtils.hasAuthority(any(), eq("ROLE_SUPER_ADMIN"))).thenReturn(true);
-        when(pharmacyService.listByHospital(org.mockito.ArgumentMatchers.isNull(), any(Pageable.class)))
+        when(pharmacyService.listByHospital(isNull(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(sampleResponse())));
 
         mockMvc.perform(get("/pharmacy-registry"))
@@ -129,13 +131,13 @@ class PharmacyRegistryControllerTest {
 
         // Null hospitalId must be carried through to the service so the
         // repository's JPQL can drop its hospital filter.
-        verify(pharmacyService).listByHospital(org.mockito.ArgumentMatchers.isNull(), any(Pageable.class));
+        verify(pharmacyService).listByHospital(isNull(), any(Pageable.class));
     }
 
     /** Guard: clinician without scope still 400s on the GET path. */
     @Test
     void list_clinicianWithoutHospitalScope_returns400() throws Exception {
-        when(authUtils.resolveHospitalScope(any(), org.mockito.ArgumentMatchers.isNull(), eq(false)))
+        when(authUtils.resolveHospitalScope(any(), isNull(), eq(false)))
                 .thenReturn(null);
         when(authUtils.hasAuthority(any(), eq("ROLE_SUPER_ADMIN"))).thenReturn(false);
 
@@ -176,7 +178,7 @@ class PharmacyRegistryControllerTest {
     @Test
     void search_superAdminInGlobalView_searchesEveryTenant() throws Exception {
         when(authUtils.hasAuthority(any(), eq("ROLE_SUPER_ADMIN"))).thenReturn(true);
-        when(pharmacyService.search(org.mockito.ArgumentMatchers.isNull(), eq("centrale"), any(Pageable.class)))
+        when(pharmacyService.search(isNull(), eq("centrale"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(sampleResponse())));
 
         mockMvc.perform(get("/pharmacy-registry/search").param("q", "centrale"))
@@ -239,7 +241,7 @@ class PharmacyRegistryControllerTest {
 
     @Test
     void deactivate_withoutHospitalId_actsAtTheActingHospital() throws Exception {
-        when(authUtils.resolveHospitalScope(any(), org.mockito.ArgumentMatchers.isNull(), eq(false))).thenReturn(hospitalId);
+        when(authUtils.resolveHospitalScope(any(), isNull(), eq(false))).thenReturn(hospitalId);
 
         mockMvc.perform(delete("/pharmacy-registry/{id}", pharmacyId))
                 .andExpect(status().isNoContent());
@@ -262,6 +264,6 @@ class PharmacyRegistryControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().is4xxClientError());
 
-        verify(pharmacyService, org.mockito.Mockito.never()).update(any(), any());
+        verify(pharmacyService, never()).update(any(), any());
     }
 }
