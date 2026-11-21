@@ -250,4 +250,79 @@ class HospitalCodeCurrencyTimeZoneTest {
         service.updateHospital(hospital.getId(), clear, Locale.FRENCH);
         assertThat(hospital.getTimeZone()).isNull();
     }
+
+    // ── Platform admin rules 2026-11-20, rule 3: one currency per facility, locked once it has billed ──
+
+    @Test
+    @DisplayName("update: the currency changes while the hospital has no invoice and no price")
+    void updateChangesTheCurrencyBeforeTheFirstInvoiceOrPrice() {
+        Hospital hospital = stored("TWP");
+        HospitalRequestDTO dto = request();
+        dto.setCurrencyCode("XAF");
+        when(hospitalRepository.hasPriceListItem(hospital.getId())).thenReturn(false);
+        when(hospitalRepository.hasInvoice(hospital.getId())).thenReturn(false);
+
+        service.updateHospital(hospital.getId(), dto, Locale.FRENCH);
+
+        assertThat(hospital.getCurrencyCode()).isEqualTo("XAF");
+    }
+
+    @Test
+    @DisplayName("update: once a price exists, another currency is refused on its field and nothing is saved")
+    void updateLocksTheCurrencyAfterTheFirstPrice() {
+        assertTheCurrencyIsLocked(true, false);
+    }
+
+    @Test
+    @DisplayName("update: once an invoice exists (a draft included), another currency is refused the same way")
+    void updateLocksTheCurrencyAfterTheFirstInvoice() {
+        assertTheCurrencyIsLocked(false, true);
+    }
+
+    private void assertTheCurrencyIsLocked(boolean hasPrice, boolean hasInvoice) {
+        Hospital hospital = stored("TWP");
+        HospitalRequestDTO dto = request();
+        dto.setCurrencyCode("XAF");
+        lenient().when(hospitalRepository.hasPriceListItem(hospital.getId())).thenReturn(hasPrice);
+        lenient().when(hospitalRepository.hasInvoice(hospital.getId())).thenReturn(hasInvoice);
+
+        UUID id = hospital.getId();
+
+        assertThatThrownBy(() -> service.updateHospital(id, dto, Locale.FRENCH))
+            .isInstanceOfSatisfying(FieldBusinessException.class,
+                r -> assertThat(r.getField()).isEqualTo("currencyCode"));
+        assertThat(hospital.getCurrencyCode()).isEqualTo("XOF");
+        verify(hospitalRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("update: the same currency, or none, is no change: a locked hospital still saves its other fields")
+    void updateWithTheSameCurrencyIsNoChange() {
+        Hospital hospital = stored("TWP");
+        HospitalRequestDTO same = request();
+        same.setCurrencyCode("xof");
+
+        service.updateHospital(hospital.getId(), same, Locale.FRENCH);
+        service.updateHospital(hospital.getId(), request(), Locale.FRENCH);
+
+        assertThat(hospital.getCurrencyCode()).isEqualTo("XOF");
+        verify(hospitalRepository, never()).hasPriceListItem(any());
+        verify(hospitalRepository, never()).hasInvoice(any());
+    }
+
+    @Test
+    @DisplayName("only the two CFA francs are offered: any other currency is refused, locked or not")
+    void onlyTheTwoCfaFrancs() {
+        assertThat(com.example.hms.utility.HospitalLocaleRules.SUPPORTED_CURRENCIES)
+            .containsExactlyInAnyOrder("XOF", "XAF");
+        Hospital hospital = stored("TWP");
+        HospitalRequestDTO dto = request();
+        dto.setCurrencyCode("EUR");
+
+        UUID id = hospital.getId();
+
+        assertThatThrownBy(() -> service.updateHospital(id, dto, Locale.FRENCH))
+            .isInstanceOf(FieldBusinessException.class);
+        assertThat(hospital.getCurrencyCode()).isEqualTo("XOF");
+    }
 }

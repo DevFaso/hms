@@ -215,9 +215,24 @@ public class HospitalServiceImpl implements HospitalService {
      * a blank time zone on a request that carries the field clears it, which
      * means "the organisation's default" ({@code HospitalCalendar.zoneOf}).
      */
-    private static void applyLocale(HospitalRequestDTO dto, Hospital hospital) {
+    /** Rule 3: a hospital that has a price or an invoice has amounts in its currency. */
+    private boolean hasInvoiceOrPrice(UUID hospitalId) {
+        return hospitalRepository.hasPriceListItem(hospitalId) || hospitalRepository.hasInvoice(hospitalId);
+    }
+
+    private void applyLocale(HospitalRequestDTO dto, Hospital hospital) {
         if (!HospitalLocaleRules.isBlank(dto.getCurrencyCode())) {
-            hospital.setCurrencyCode(HospitalLocaleRules.requireCurrency(dto.getCurrencyCode()));
+            String currency = HospitalLocaleRules.requireCurrency(dto.getCurrencyCode());
+            // Platform admin rules 2026-11-20, rule 3: one currency per
+            // facility, locked once it has billed. Every stored amount is a
+            // bare whole number in the facility's currency, so a change after
+            // the first invoice or the first price would silently relabel them.
+            if (hospital.getId() != null && !currency.equals(hospital.getCurrencyCode())
+                    && hasInvoiceOrPrice(hospital.getId())) {
+                throw new com.example.hms.exception.FieldBusinessException(
+                    HospitalLocaleRules.FIELD_CURRENCY, "hospital.currency.locked");
+            }
+            hospital.setCurrencyCode(currency);
         }
         if (dto.getTimeZone() != null) {
             hospital.setTimeZone(dto.getTimeZone().isBlank()

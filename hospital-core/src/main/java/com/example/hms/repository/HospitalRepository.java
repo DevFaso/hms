@@ -99,6 +99,20 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     @Query("SELECT COUNT(s) > 0 FROM InvoiceNumberSequence s WHERE s.hospitalId = :hospitalId")
     boolean hasAllocatedInvoiceNumber(@Param("hospitalId") UUID hospitalId);
 
+    /**
+     * Platform admin rules 2026-11-20, rule 3: whether this hospital has priced
+     * anything: a price-list item, a retired one included. With
+     * {@link #hasInvoice} it locks the hospital's currency
+     * ({@code HospitalServiceImpl.applyLocale}), because every one of those
+     * amounts is a whole number in that currency.
+     */
+    @Query("SELECT COUNT(pli) > 0 FROM PriceListItem pli WHERE pli.hospitalId = :hospitalId")
+    boolean hasPriceListItem(@Param("hospitalId") UUID hospitalId);
+
+    /** Rule 3, the other half: whether this hospital has any invoice, a draft included. */
+    @Query("SELECT COUNT(bi) > 0 FROM BillingInvoice bi WHERE bi.hospital.id = :hospitalId")
+    boolean hasInvoice(@Param("hospitalId") UUID hospitalId);
+
     Optional<Hospital> findByNameIgnoreCase(String hospitalName);
 
     Optional<Hospital> findByName(String name);

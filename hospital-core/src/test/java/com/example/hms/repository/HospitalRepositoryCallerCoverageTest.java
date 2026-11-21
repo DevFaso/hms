@@ -171,7 +171,14 @@ class HospitalRepositoryCallerCoverageTest {
             "duplicate check on a hospital code the super-admin typed: codes are unique across every type"),
         entry("HospitalServiceImpl#hasAllocatedInvoiceNumber",
             "whether the hospital being edited has issued an invoice number (its code is then locked);"
-                + " a count on the invoice sequence, not a read of a destination"));
+                + " a count on the invoice sequence, not a read of a destination"),
+        // Platform admin rules 2026-11-20, rule 3 (track I).
+        entry("HospitalServiceImpl#hasPriceListItem",
+            "whether the hospital being edited has a price (its currency is then locked);"
+                + " an existence check by the edited hospital's own id, not a read of a destination"),
+        entry("HospitalServiceImpl#hasInvoice",
+            "whether the hospital being edited has an invoice (its currency is then locked);"
+                + " an existence check by the edited hospital's own id, not a read of a destination"));
 
     @Test
     @DisplayName("every unfiltered HospitalRepository caller is recorded with its reason")
