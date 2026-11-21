@@ -95,6 +95,12 @@ public final class PatientSafeView {
             .contrastAdministered(staff.getContrastAdministered())
             .signed(staff.getSigned())
             .updatedAt(staff.getUpdatedAt())
+            // QA D2643 (r65): the printed sheet names the hospital, the patient and the prescriber.
+            .hospitalName(staff.getHospitalName())
+            .hospitalAddress(staff.getHospitalAddress())
+            .patientDateOfBirth(staff.getPatientDateOfBirth())
+            .orderingProviderName(staff.getOrderingProviderName())
+            .orderedAt(staff.getOrderedAt())
             .build();
     }
 

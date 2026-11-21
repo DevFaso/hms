@@ -31,6 +31,7 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { ImagingReadingService } from '../services/imaging-reading.service';
 import { ImagingReadingContextComponent } from './reading-context/imaging-reading-context.component';
 import { printOnly } from '../shared/print/print-only';
+import { PrintIdentityComponent } from '../shared/print/print-identity.component';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
@@ -213,6 +214,7 @@ const ORDER_FIELD_LABELS: Readonly<Record<string, string>> = {
     ImagingStudyViewerComponent,
     ImagingReadingContextComponent,
     MeasurePipe,
+    PrintIdentityComponent,
   ],
   templateUrl: './imaging.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -1511,6 +1513,11 @@ export class ImagingComponent implements OnInit {
   reportHasExamRecord(report: ImagingReportResponse): boolean {
     const recorded = (value: unknown): boolean => value !== null && value !== undefined;
     return recorded(report.examContrastAdministered) || recorded(report.examRadiationDoseMgy);
+  }
+
+  /** QA D2642 (r65): when the study was done: the report's performed time, else the exam's start. */
+  reportExamDate(report: ImagingReportResponse): string | null {
+    return report.performedAt || report.examStartedAt || null;
   }
 
   /** r63: print the open report alone (the shared print isolation). */

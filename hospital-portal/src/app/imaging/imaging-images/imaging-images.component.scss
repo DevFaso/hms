@@ -384,3 +384,22 @@
   margin: 2px 0 0;
   white-space: pre-line;
 }
+
+/* QA D2642 (r65): on a printed report, a caption is read in full, the image's
+   controls and the withdrawn-image list (not part of the read) stay off paper. */
+@media print {
+  .thumb-caption {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  .thumb-lock,
+  .thumb-delete,
+  .drop-zone,
+  .withdrawn-images {
+    display: none !important;
+  }
+  .thumb {
+    break-inside: avoid;
+  }
+}

@@ -6942,7 +6942,8 @@
         "STATUS": "Statut",
         "TEST": "Analyse",
         "TITLE": "Données de santé de {{name}}",
-        "TITLE_FALLBACK": "Données de santé partagées"
+        "TITLE_FALLBACK": "Données de santé partagées",
+        "IMAGING_TAB": "Imagerie"
       },
       "USER_NOT_FOUND": "Aucun compte ne porte cet identifiant. Vérifiez l’orthographe auprès de la personne à qui vous voulez donner accès.",
       "REVOKE_CONFIRM_TITLE": "Révoquer cet accès ?",
@@ -15132,7 +15133,8 @@
       "NO_CREATININE": "Aucun résultat de créatinine validé dans cet établissement",
       "PRIOR_STUDIES": "Examens d'imagerie antérieurs",
       "NO_PRIOR": "Aucun examen d'imagerie antérieur dans cet établissement",
-      "OPEN_REPORT": "Ouvrir son compte rendu"
+      "OPEN_REPORT": "Ouvrir son compte rendu",
+      "REFERENCE_RANGE": "Valeurs de référence : {{range}}"
     },
     "PORTAL": {
       "TITLE": "Imagerie",
@@ -15142,7 +15144,8 @@
       "EMPTY_DESC": "Un compte rendu apparaît ici dès que le radiologue l'a signé.",
       "REPORT": "Compte rendu",
       "IMAGES": "Clichés",
-      "IMAGE_N": "Cliché {{n}}"
+      "IMAGE_N": "Cliché {{n}}",
+      "PRESCRIBED_BY": "Demandé par {{name}}"
     },
     "MAX_SIZE_LABEL": "10 Mo",
     "IMAGES": {
@@ -15770,5 +15773,11 @@
     "DESCENDING": "Décroissant",
     "ASCENDING_FLIP": "Croissant, passer en décroissant",
     "DESCENDING_FLIP": "Décroissant, passer en croissant"
+  },
+  "PRINT_IDENTITY": {
+    "PATIENT": "Patient",
+    "SEX": "Sexe",
+    "EXAM_DATE": "Date de l'examen",
+    "PRINTED_ON": "Imprimé le {{date}}"
   }
 }

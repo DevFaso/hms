@@ -597,6 +597,18 @@
           </div>
         </div>
         <div class="detail-body">
+          <!-- QA D2642 (r65): the printed report says which hospital issued it and whom it is about. -->
+          <app-print-identity
+            [hospitalName]="rep.hospitalName"
+            [hospitalAddress]="rep.hospitalAddress"
+            [title]="rep.reportTitle || rep.reportNumber || ('IMAGING.REPORT' | translate)"
+            [patientName]="rep.patientDisplayName"
+            [dateOfBirth]="rep.patientDateOfBirth"
+            [sex]="rep.patientGender"
+            [mrn]="rep.patientMrn"
+            [prescriber]="rep.orderingProviderName"
+            [examDate]="reportExamDate(rep)"
+          />
           @if (rep.signed) {
             <div class="signed-banner">
               <span class="material-symbols-outlined">verified</span>
@@ -696,6 +708,34 @@
                 >{{ rep.patientMrn || '—' }}</span
               >
             </div>
+            <!-- QA D2642 (r65): who the patient is and what was asked, on screen and on paper. -->
+            <div class="detail-field" data-testid="imaging-report-drawer-dob">
+              <span class="field-label">{{ 'PATIENTS.DATE_OF_BIRTH' | translate }}</span><span
+                class="field-value"
+                >{{
+                  rep.patientDateOfBirth
+                    ? (rep.patientDateOfBirth | serverTime | date: 'mediumDate')
+                    : '—'
+                }}
+                @if (rep.patientGender) {
+                  · {{ rep.patientGender | enumLabel: 'gender' }}
+                }
+              </span>
+            </div>
+            <div class="detail-field" data-testid="imaging-report-drawer-prescriber">
+              <span class="field-label">{{ 'IMAGING.ORDERING_PROVIDER' | translate }}</span><span
+                class="field-value"
+                >{{ rep.orderingProviderName || '—' }}</span
+              >
+            </div>
+            <div class="detail-field" data-testid="imaging-report-drawer-exam-date">
+              <span class="field-label">{{ 'PRINT_IDENTITY.EXAM_DATE' | translate }}</span><span
+                class="field-value"
+                >{{
+                  reportExamDate(rep) ? (reportExamDate(rep) | serverTime | dateTime) : '—'
+                }}</span
+              >
+            </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span><span
                 class="field-value"
@@ -773,6 +813,12 @@
                   </div>
                 }
               </div>
+            </div>
+          }
+          @if (rep.clinicalQuestion) {
+            <div class="detail-notes" data-testid="imaging-report-drawer-clinical-question">
+              <span class="field-label">{{ 'IMAGING.CLINICAL_QUESTION' | translate }}</span>
+              <p>{{ rep.clinicalQuestion }}</p>
             </div>
           }
           @if (rep.technique) {
@@ -1628,6 +1674,9 @@
               }
             </select>
           </div>
+        </div>
+        <!-- QA D2644 (r65): a full-width field takes its own row; beside it « Latéralité » was squeezed to nothing. -->
+        <div class="form-row">
           <div class="field full-width">
             <label for="img-clinicalQ">{{ 'IMAGING.CLINICAL_QUESTION' | translate }}</label>
             <input
