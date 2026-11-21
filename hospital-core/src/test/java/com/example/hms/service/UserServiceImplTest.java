@@ -2506,6 +2506,36 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D3058: one hospital's directory, never wider than the caller's own")
+        void oneHospitalWithinTheCallersScope() {
+            UUID mine = UUID.randomUUID();
+            UUID other = UUID.randomUUID();
+            when(accountAccess.requireDirectoryAccess())
+                    .thenReturn(new UserAccountAccess.DirectoryScope(false, Set.of(mine)));
+            when(userRepository.findStaffDirectoryPaged(anyBoolean(), any(), anyBoolean(), anyBoolean(), any()))
+                    .thenReturn(onePage);
+
+            assertThat(userService.getUsersAtHospital(other, 0, 10).getContent()).isEmpty();
+            verify(userRepository, never()).findStaffDirectoryPaged(anyBoolean(), any(), anyBoolean(), anyBoolean(), any());
+
+            userService.getUsersAtHospital(mine, 0, 10);
+            verify(userRepository).findStaffDirectoryPaged(eq(true), eq(Set.of(mine)), eq(false), eq(false), any());
+        }
+
+        @Test
+        @DisplayName("QA D3058: the super-admin's view of one hospital is that hospital's scoped directory")
+        void superAdminNarrowsToTheHospital() {
+            UUID hospital = UUID.randomUUID();
+            when(accountAccess.requireDirectoryAccess())
+                    .thenReturn(new UserAccountAccess.DirectoryScope(true, Set.of()));
+            when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
+                    .thenReturn(onePage);
+
+            userService.getUsersAtHospital(hospital, 0, 10);
+            verify(userRepository).findAllPaged(eq(false), eq(false), eq(true), eq(Set.of(hospital)), any());
+        }
+
+        @Test
         @DisplayName("QA D919: a scoped caller asking for the deleted worklist gets an empty page, and nothing is queried")
         void scopedCallerGetsNoDeletedWorklist() {
             Set<UUID> hospitals = Set.of(UUID.randomUUID());

@@ -37,6 +37,14 @@ public interface UserService {
                                      boolean includeDeleted, boolean onlyDeleted);
 
     /**
+     * QA D3058 (r68): the directory narrowed to ONE hospital (the onboarding
+     * checklist opens /users?hospitalId=). Never wider than the caller's own
+     * directory: a scoped caller gets the hospital only if it is in its scope,
+     * otherwise an empty page. Live accounts only.
+     */
+    Page<UserSummaryDTO> getUsersAtHospital(java.util.UUID hospitalId, int page, int size);
+
+    /**
      * QA D790: the chat's colleague picker. Active, live staff accounts at the
      * caller's hospitals (every one for a super-admin), id, name and role only.
      * Refused (403) for a caller with no active non-patient assignment.

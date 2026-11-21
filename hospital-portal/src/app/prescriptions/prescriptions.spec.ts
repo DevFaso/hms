@@ -1,3 +1,4 @@
+import { PrintLabelService } from '../services/print-label.service';
 import { EncounterResponse, EncounterService } from '../services/encounter.service';
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -363,6 +364,7 @@ describe('PrescriptionsComponent — signing', () => {
       'update',
       'create',
       'getById',
+      'getOrdonnancePdf',
     ]);
     pageFromList(prescriptionService);
     prescriptionService.list.and.returnValue(of([]));
@@ -829,6 +831,51 @@ describe('PrescriptionsComponent — signing', () => {
         .withContext(status)
         .toEqual(['DRAFT', 'PENDING_SIGNATURE', 'CANCELLED', 'DISCONTINUED']);
     }
+  });
+
+  it('QA D3054: offers the ordonnance on an order in force of this hospital, prints its PDF', () => {
+    const print = TestBed.inject(PrintLabelService);
+    spyOn(print, 'openForPrint');
+    const pdf = new Blob(['%PDF-'], { type: 'application/pdf' });
+    prescriptionService.getOrdonnancePdf.and.returnValue(of(pdf));
+    spyOn(component, 'ownPrescriberStaffId').and.returnValue('st-me');
+    const mine = (id: string, status: string): PrescriptionResponse => ({
+      ...rx(id, status),
+      staffId: 'st-me',
+    });
+    for (const status of [
+      'DRAFT',
+      'PENDING_SIGNATURE',
+      'CANCELLED',
+      'DISCONTINUED',
+      'DISPENSED',
+      'PARTIALLY_FILLED',
+      'PENDING_CLARIFICATION',
+      'SENT_TO_PARTNER',
+      'PRINTED_FOR_PATIENT',
+    ]) {
+      expect(component.canPrintOrdonnance(mine(status, status)))
+        .withContext(status)
+        .toBeFalse();
+    }
+    expect(component.canPrintOrdonnance(mine('s', 'SIGNED'))).toBeTrue();
+    // Review of #1264: a colleague's order is not mine to print.
+    expect(component.canPrintOrdonnance({ ...rx('c', 'SIGNED'), staffId: 'st-other' })).toBeFalse();
+    expect(
+      component.canPrintOrdonnance({ ...mine('f', 'SIGNED'), hospitalId: 'h-other' }),
+    ).toBeFalse();
+
+    component.filtered.set([mine('rx-1', 'SIGNED'), mine('rx-2', 'DRAFT')]);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('[data-testid="rx-ordonnance-rx-2"]')).toBeNull();
+    root.querySelector<HTMLButtonElement>('[data-testid="rx-ordonnance-rx-1"]')!.click();
+    expect(prescriptionService.getOrdonnancePdf).toHaveBeenCalledWith('rx-1');
+    expect(print.openForPrint).toHaveBeenCalledWith(pdf);
+
+    prescriptionService.getOrdonnancePdf.and.returnValue(throwError(() => new Error('down')));
+    component.printOrdonnance(mine('rx-1', 'SIGNED'));
+    expect(toast.error).toHaveBeenCalledWith('PRESCRIPTIONS.ORDONNANCE_FAILED');
   });
 
   it('offers signing only for a prescription still awaiting a signature', () => {

@@ -28,7 +28,7 @@ import { deliveryWarningKeys, hasActivationSent } from '../shared/delivery-warni
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
 import { ImpersonationService } from '../services/impersonation.service';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
@@ -169,6 +169,31 @@ export class UserListComponent implements OnInit, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly impersonation = inject(ImpersonationService);
   private readonly router = inject(Router);
+  private readonly activatedRoute = inject(ActivatedRoute);
+
+  /**
+   * QA D3058 (r68): the onboarding checklist opens /users?hospitalId=: the
+   * list is that hospital's accounts and « Inscrire » starts there. A search or
+   * a role filter (which the server reads across the caller's directory) or the
+   * chip's button lifts it.
+   */
+  readonly hospitalScope = signal<string | null>(null);
+  readonly hospitalScopeName = computed(() => {
+    const id = this.hospitalScope();
+    return id ? (this.availableHospitals().find((h) => h.id === id)?.name ?? null) : null;
+  });
+
+  clearHospitalScope(): void {
+    this.hospitalScope.set(null);
+    void this.router.navigate([], {
+      relativeTo: this.activatedRoute,
+      queryParams: { hospitalId: null },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+    this.currentPage.set(0);
+    this.loadUsers(0);
+  }
   private readonly translate = inject(TranslateService);
 
   private readonly searchSubject = new Subject<string>();
@@ -293,6 +318,8 @@ export class UserListComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    const scoped = this.activatedRoute.snapshot.queryParamMap.get('hospitalId');
+    if (scoped && /^[0-9a-f-]{36}$/i.test(scoped)) this.hospitalScope.set(scoped);
     this.searchSubject
       .pipe(debounceTime(300), distinctUntilChanged(), takeUntil(this.destroy$))
       .subscribe(() => {
@@ -315,6 +342,7 @@ export class UserListComponent implements OnInit, OnDestroy {
     // fall back to the plain list endpoint when no filters are applied.
     const term = this.searchTerm.trim();
     const hasServerFilter = !!this.roleFilter || !!term;
+    if (hasServerFilter && this.hospitalScope()) this.hospitalScope.set(null);
 
     // Deleted rows are requested on this screen because it is the admin
     // surface the Restore button lives on - without them the Deleted filter
@@ -330,7 +358,13 @@ export class UserListComponent implements OnInit, OnDestroy {
           includeDeleted: this.canSeeDeleted(),
           ...(deletedView ? { onlyDeleted: true } : {}),
         })
-      : this.userService.list(page, 20, this.canSeeDeleted(), deletedView);
+      : this.userService.list(
+          page,
+          20,
+          this.canSeeDeleted(),
+          deletedView,
+          deletedView ? null : this.hospitalScope(),
+        );
 
     request$.subscribe({
       next: (res) => {
@@ -471,6 +505,11 @@ export class UserListComponent implements OnInit, OnDestroy {
     if (!this.roleContext.isSuperAdmin()) {
       const own = this.availableHospitals();
       if (own.length === 1) this.createForm.hospitalId = own[0].id;
+    }
+    // QA D3058: opened from a hospital's checklist, the form starts at that hospital.
+    const scope = this.hospitalScope();
+    if (scope && this.availableHospitals().some((h) => h.id === scope)) {
+      this.createForm.hospitalId = scope;
     }
     this.selectedRoles = [];
     this.editing.set(null);

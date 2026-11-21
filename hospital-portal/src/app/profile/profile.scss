@@ -1462,12 +1462,21 @@ $shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
     align-items: flex-start;
   }
 
+  /* QA D3056 (r68): the tabs were icons alone on a phone, with no name. The
+     label stays, under its icon. */
   .tab-label {
-    display: none;
+    font-size: 11px;
+    line-height: 1.2;
+    text-align: center;
   }
 
   .tab-btn {
-    padding: 14px 12px;
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 4px;
+    white-space: normal;
   }
 
   .profile-tabs {

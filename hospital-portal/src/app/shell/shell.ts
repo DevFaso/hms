@@ -496,7 +496,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         // Mirrors the /staff RoleGuard.
         roles: [
           'ROLE_HOSPITAL_ADMIN',
-          'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
           'ROLE_RECEPTIONIST',
           'ROLE_LAB_DIRECTOR',
@@ -520,7 +519,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_MIDWIFE',
           'ROLE_RECEPTIONIST',
           'ROLE_HOSPITAL_ADMIN',
-          'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
           'ROLE_LAB_DIRECTOR',
           'ROLE_LAB_MANAGER',
@@ -553,7 +551,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         permission: 'View Departments',
         roles: [
           'ROLE_HOSPITAL_ADMIN',
-          'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
           'ROLE_RECEPTIONIST',
           'ROLE_LAB_DIRECTOR',

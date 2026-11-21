@@ -55,6 +55,8 @@ public class PrescriptionController {
     private final PrescriptionClarificationService clarificationService;
     private final PrescriptionSmsDispatchService smsDispatchService;
     private final MessageSource messageSource;
+    /** QA D3054 (r68): the prescriber's ordonnance. */
+    private final com.example.hms.service.pharmacy.OrdonnancePdfService ordonnancePdfService;
 
     @PostMapping
     @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
@@ -243,6 +245,21 @@ public class PrescriptionController {
         // routing it through the unguarded read would widen that surface for
         // nothing.
         return ResponseEntity.ok(prescriptionService.getPrescriptionById(id, locale));
+    }
+
+    /**
+     * QA D3054 (r68): the ordonnance a prescriber hands the patient, as a PDF (inline, never cached).
+     * The prescribing roles that sign an order to take home: doctor and midwife. The active hospital's
+     * prescriptions only, in force and not waiting on a prescriber's review.
+     */
+    @GetMapping(value = "/{id}/ordonnance", produces = MediaType.APPLICATION_PDF_VALUE)
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','MIDWIFE')")
+    @Operation(summary = "Prescription (ordonnance) PDF",
+        description = "The printable ordonnance for the patient: every in-force medicine of the same visit, "
+            + "with the prescriber and a signature line.")
+    public ResponseEntity<byte[]> ordonnance(@PathVariable UUID id) {
+        return com.example.hms.controller.pharmacy.StockOutRoutingController
+            .printedCopyResponse(ordonnancePdfService.forPrescriber(id));
     }
 
     @GetMapping("/{id}")

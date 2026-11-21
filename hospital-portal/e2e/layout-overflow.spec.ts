@@ -1178,6 +1178,120 @@ const DIALOGS: {
       await expect(p.getByText(LONG_NAME).first()).toBeVisible();
     },
   },
+  /* ── r68 (D3050 / D3055 / D3057): three views #1246 / #1247 left past a phone's edge ── */
+  {
+    label: '/super-admin/subscriptions [Nouveau plan] (D3050)',
+    route: '/super-admin/subscriptions',
+    role: 'ROLE_SUPER_ADMIN',
+    focus: '[data-test="edit-card"]',
+    seed: (p) =>
+      p.route('**/api/super-admin/subscriptions/plans**', (r) =>
+        r.fulfill({
+          json: [
+            {
+              id: RECORD_ID,
+              code: 'ESSENTIEL-CLINIQUE-2026',
+              name: 'Essentiel clinique de district',
+              description:
+                'Dossier patient, rendez-vous, facturation et pharmacie pour une clinique',
+              monthlyPriceCents: 12_500_000,
+              currency: 'XOF',
+              active: true,
+              features: [],
+            },
+          ],
+        }),
+      ),
+    then: async (p) => {
+      await p.locator('.toolbar .btn-primary').first().click();
+      await expect(p.locator('[data-test="edit-card"]')).toBeVisible();
+    },
+  },
+  {
+    label: '/dashboard [hospital admin: schedule, quick navigation] (D3055)',
+    route: '/dashboard',
+    role: 'ROLE_HOSPITAL_ADMIN',
+    focus: '.admin-workspace',
+    seed: async (p) => {
+      await p.route('**/api/appointments**', (r) => r.fulfill({ json: DESK_ROWS }));
+    },
+    then: async (p) => {
+      await expect(p.locator('.admin-workspace .sched-row').first()).toBeVisible();
+      await expect(p.locator('.admin-workspace .nav-tile').first()).toBeVisible();
+    },
+  },
+  {
+    label: '/admin-assignments [details: e-mail, checklist, footer] (D3051)',
+    route: '/admin-assignments',
+    role: 'ROLE_HOSPITAL_ADMIN',
+    seed: (p) =>
+      p.route('**/api/assignments?**', (r) =>
+        r.fulfill({
+          json: page1([
+            {
+              id: RECORD_ID,
+              userId: TEST_ID,
+              userName: 'Aminata Sawadogo-Kaboré',
+              userEmail:
+                'aminata.sawadogo.kabore.medecin-chef@centre-hospitalier-wend-panga.example.invalid',
+              roleCode: 'ROLE_DOCTOR',
+              roleName: 'ROLE_DOCTOR',
+              hospitalId: TEST_ID,
+              hospitalName: HOSPITAL,
+              hospitalCode: 'CHU-WP-OUAGA-2026',
+              active: true,
+              assignmentCode: 'ASG-CHUWP-2026-000123',
+              assignedAt: NOW,
+              profileChecklist: [
+                'Numéro d’ordre du médecin à renseigner',
+                'Département de rattachement à choisir',
+                'Spécialité à préciser',
+                'Photo du profil à ajouter',
+              ],
+            },
+          ]),
+        }),
+      ),
+    then: async (p) => {
+      await p.locator('tbody tr').first().locator('.icon-btn').first().click();
+      await expect(p.locator('#admin-assignments-dialog-3-title')).toBeVisible();
+    },
+  },
+  {
+    label: '/organizations [cards: name and description] (D3057)',
+    route: '/organizations',
+    role: 'ROLE_SUPER_ADMIN',
+    seed: (p) =>
+      p.route('**/api/organizations?**', (r) =>
+        r.fulfill({
+          json: page1(
+            [
+              'Centre Hospitalier Universitaire Wend-Panga de Ouagadougou',
+              'Org Démo Wend-Panga — FICTIF',
+              'Réseau-de-santé-Wend-Panga-et-centres-associés-du-Kadiogo',
+            ].map((name, i) => ({
+              id: `${RECORD_ID.slice(0, -1)}${i + 1}`,
+              name,
+              code: `CHU-WP-OUAGA-202${i}`,
+              description: 'demo-r68 — organisation de démonstration fictive du réseau Wend-Panga',
+              type: 'HOSPITAL_CHAIN',
+              active: true,
+              createdAt: NOW,
+              updatedAt: NOW,
+              primaryContactEmail: 'direction.generale@wend-panga.example.invalid',
+              primaryContactPhone: '+226 70 00 00 00',
+              defaultTimezone: 'Africa/Ouagadougou',
+              onboardingNotes: '',
+              lifecycleState: i === 2 ? 'SUSPENDED' : 'ACTIVE',
+              hospitals: [],
+            })),
+          ),
+        }),
+      ),
+    then: async (p) => {
+      await expect(p.locator('tbody .org-name').first()).toBeVisible();
+    },
+  },
 ];
 
 test.describe('layout overflow: r64 dialogs and money screens', () => {

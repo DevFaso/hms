@@ -2140,7 +2140,8 @@
       "PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED": "Aceptación de la solicitud de cobertura de farmacia confirmada por facturación o contabilidad",
       "ADOLESCENT_AGE_SET_ZERO": "Edad de confidencialidad de los adolescentes fijada en 0 años",
       "ADOLESCENT_AGE_SET_ONE": "Edad de confidencialidad de los adolescentes fijada en 1 año",
-      "ACTIVATION_CODE_SHOWN": "Código de activación mostrado a la persona que creó la asignación"
+      "ACTIVATION_CODE_SHOWN": "Código de activación mostrado a la persona que creó la asignación",
+      "ORDONNANCE_PRINTED": "Receta impresa por su prescriptor (recetas {{ids}})"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -3757,7 +3758,9 @@
     "SENSITIVITY_SEXUAL_DOMESTIC_VIOLENCE": "Violencia sexual y doméstica",
     "SENSITIVITY_GENETIC": "Pruebas genéticas",
     "SENSITIVITY_SICKLE_CELL": "Drepanocitosis (genotipo)",
-    "SENSITIVITY_TUBERCULOSIS": "Tuberculosis (acceso restringido)"
+    "SENSITIVITY_TUBERCULOSIS": "Tuberculosis (acceso restringido)",
+    "HOSPITAL_SCOPE": "Hospital: {{name}}",
+    "HOSPITAL_SCOPE_CLEAR": "Mostrar todos los hospitales"
   },
   "COST_PANEL": {
     "TITLE": "Costes por centro",
@@ -8843,7 +8846,9 @@
     "REFILLS_ALLOWED_HINT": "Número de renovaciones que la farmacia puede dispensar sin una nueva decisión (0 = ninguna). Una más requiere la aprobación del prescriptor. Regla provisional.",
     "REFILLS_CONTROLLED_HINT": "Sustancia controlada: ninguna renovación. Cada nueva dispensación requiere una nueva receta.",
     "REFILLS_LOCKED_HINT": "El número de renovaciones no se modifica después de la firma.",
-    "REFILLS_ALLOWED_INVALID": "El número de renovaciones es un número entero, de 0 a {{max}}."
+    "REFILLS_ALLOWED_INVALID": "El número de renovaciones es un número entero, de 0 a {{max}}.",
+    "PRINT_ORDONNANCE": "Imprimir la receta",
+    "ORDONNANCE_FAILED": "No se pudo imprimir la receta. Inténtelo de nuevo."
   },
   "PROFILE": {
     "RECOVERY_CONFIRM_TITLE": "Confirme su contacto de recuperación",
@@ -10212,7 +10217,9 @@
       "CONFIRM": "Restablecer",
       "DONE": "La verificación en dos pasos se restableció.",
       "FAILED": "No se pudo restablecer la verificación en dos pasos."
-    }
+    },
+    "HOSPITAL_SCOPE": "Hospital: {{name}}",
+    "HOSPITAL_SCOPE_CLEAR": "Mostrar todos los hospitales"
   },
   "TRIAGE": {
     "ACUITY": "Nivel de gravedad",
@@ -15656,7 +15663,9 @@
       "TIME_ZONE_HINT": "Fija el día del hospital: la fecha de una factura, el inicio de un precio, una franja ya pasada.",
       "TIME_ZONE_FROM_ORG": "(la de la organización)",
       "TIME_ZONE_NONE": "Sin definir: se aplica la hora del servidor",
-      "CURRENCY_HINT": "La moneda ya no puede modificarse en cuanto el hospital tiene una factura o una tarifa."
+      "CURRENCY_HINT": "La moneda ya no puede modificarse en cuanto el hospital tiene una factura o una tarifa.",
+      "CODE_LOCKED": "Bloqueado: este hospital ya emitió facturas y su código figura en cada número de factura.",
+      "CURRENCY_LOCKED": "Bloqueada: este hospital ya tiene una factura o una lista de precios en esta moneda."
     },
     "BOOKING": {
       "NOT_OFFERED": "Este establecimiento aún no ofrece la cita en línea.",

@@ -142,6 +142,14 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * the query: filtering a global page in memory would load other tenants'
      * rows and break the paging. An unscoped call passes DIRECTORY_UNSCOPED,
      * a sentinel no hospital has, because an empty IN list is not portable.
+     *
+     * QA D3062 (r68): a scoped directory never lists a platform super-admin
+     * account (an assignment or a global role of SUPER_ADMIN, active or not),
+     * the rule UserAccountAccess.canView already applied to the single read.
+     * A super-admin given a row at a hospital for set-up showed in that
+     * hospital's « Utilisateur » picker with its personal e-mail address. Every
+     * picker reading the directory (GET /users, /users/search, the chat
+     * recipients) goes through this clause.
      */
     String DIRECTORY_VISIBLE = """
         WHERE ((:onlyDeleted = true AND u.isDeleted = true)
@@ -162,7 +170,15 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                                LEFT JOIN ho.hospital hoh
                                WHERE ho.user = u
                                  AND ho.active = true
-                                 AND (hoh IS NULL OR hoh.id NOT IN :hospitalIds))))))
+                                 AND (hoh IS NULL OR hoh.id NOT IN :hospitalIds))))
+                   AND NOT EXISTS (
+                       SELECT 1 FROM UserRoleHospitalAssignment px JOIN px.role pxr
+                       WHERE px.user = u
+                         AND UPPER(pxr.code) IN ('ROLE_SUPER_ADMIN', 'SUPER_ADMIN'))
+                   AND NOT EXISTS (
+                       SELECT 1 FROM UserRole pu JOIN pu.role pur
+                       WHERE pu.id.userId = u.id
+                         AND UPPER(pur.code) IN ('ROLE_SUPER_ADMIN', 'SUPER_ADMIN'))))
         """;
 
     /*

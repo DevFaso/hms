@@ -55,8 +55,14 @@ public class HospitalIdNarrowingInterceptor implements HandlerInterceptor {
      */
     private final ObjectProvider<ActingScopeResolver> resolverProvider;
 
-    public HospitalIdNarrowingInterceptor(ObjectProvider<ActingScopeResolver> resolverProvider) {
+    /** QA D3058: the organisation scope, for a handler marked {@link OrganisationScopedHospitalId}. */
+    private final ObjectProvider<com.example.hms.service.support.UserAccountAccess> accountAccessProvider;
+
+    public HospitalIdNarrowingInterceptor(ObjectProvider<ActingScopeResolver> resolverProvider,
+                                          ObjectProvider<com.example.hms.service.support.UserAccountAccess>
+                                              accountAccessProvider) {
         this.resolverProvider = resolverProvider;
+        this.accountAccessProvider = accountAccessProvider;
     }
 
     /**
@@ -78,9 +84,22 @@ public class HospitalIdNarrowingInterceptor implements HandlerInterceptor {
             return true;
         }
         if (resolver.narrowTo(hospitalId) instanceof ActingScope.Refused(ActingScope.Reason reason)) {
+            if (insideOrganisationScope(method, hospitalId)) {
+                // QA D3058: a listing its service bounds by the organisation scope; left un-narrowed.
+                return true;
+            }
             throw new HospitalScopeRefusedException(reason, ActingScopeResolver.refusalMessage(reason), hospitalId);
         }
         return true;
+    }
+
+    /** True on a handler marked {@link OrganisationScopedHospitalId} for a hospital of the caller's organisation. */
+    boolean insideOrganisationScope(HandlerMethod method, UUID hospitalId) {
+        if (!method.hasMethodAnnotation(OrganisationScopedHospitalId.class)) {
+            return false;
+        }
+        com.example.hms.service.support.UserAccountAccess access = accountAccessProvider.getIfAvailable();
+        return access != null && access.organisationHospitalIds().contains(hospitalId);
     }
 
     /** True when the handler method or its class carries {@link HospitalScopeExempt}. */

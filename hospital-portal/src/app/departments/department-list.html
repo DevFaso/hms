@@ -28,6 +28,17 @@
     />
   </div>
 
+  @if (hospitalScope()) {
+    <div class="active-chips" data-testid="departments-hospital-scope">
+      <span class="chip">{{
+        'DEPARTMENTS.HOSPITAL_SCOPE' | translate: { name: hospitalScopeName() ?? '—' }
+      }}</span>
+      <button type="button" class="btn-link" (click)="clearHospitalScope()">
+        {{ 'DEPARTMENTS.HOSPITAL_SCOPE_CLEAR' | translate }}
+      </button>
+    </div>
+  }
+
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>

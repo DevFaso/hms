@@ -434,7 +434,7 @@ class RequireClinicalHospitalTest {
             request.setHospitalName("Pharmacie du Centre");
 
             Throwable thrown = catchThrowable(() ->
-                ReflectionTestUtils.invokeMethod(controller, "resolveHospitalFromName", request));
+                ReflectionTestUtils.invokeMethod(controller, "resolveHospitalFromName", request, false));
 
             // A translated 400 (BusinessException) naming an unknown hospital.
             assertThat(thrown).isInstanceOf(com.example.hms.exception.BusinessException.class);
@@ -450,7 +450,7 @@ class RequireClinicalHospitalTest {
             AdminSignupRequest request = new AdminSignupRequest();
             request.setHospitalName("CHU");
 
-            Object answer = ReflectionTestUtils.invokeMethod(controller, "resolveHospitalFromName", request);
+            Object answer = ReflectionTestUtils.invokeMethod(controller, "resolveHospitalFromName", request, false);
 
             assertThat(answer).isNull();
             assertThat(request.getHospitalId()).isEqualTo(HOSPITAL_ID);

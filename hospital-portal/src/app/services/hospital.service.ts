@@ -115,6 +115,10 @@ export interface HospitalResponse {
   timeZone?: string | null;
   /** The zone its day is counted in: its own, else its organisation's default. */
   effectiveTimeZone?: string | null;
+  /** QA D3059: on GET /hospitals/{id} only. The code is fixed once an invoice number exists. */
+  codeLocked?: boolean | null;
+  /** QA D3059: on GET /hospitals/{id} only. The currency is fixed once an invoice or a price exists. */
+  currencyLocked?: boolean | null;
 }
 
 /**

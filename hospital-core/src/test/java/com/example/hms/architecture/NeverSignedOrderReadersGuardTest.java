@@ -92,6 +92,9 @@ class NeverSignedOrderReadersGuardTest {
             "ends a stay's orders; presents nothing")),
         Map.entry("service/emar/MarWardReader.java", new Reader("ON_MAR_STATUSES",
             "the ward MAR: SIGNED and TRANSMITTED orders only")),
+        // QA D3054 (r68): the prescriber's ordonnance.
+        Map.entry("service/pharmacy/OrdonnancePdfService.java", new Reader("PRINTABLE_STATUSES",
+            "the ordonnance lists orders still to be dispensed only: no draft, none withdrawn, dispensed or with a pharmacy")),
         Map.entry("service/impl/OrderReviewHoldServiceImpl.java", new Reader("LOCKED_FOR_REVIEW",
             "review holds over the open orders and their replacement candidates; presents no medicine as taken")));
 

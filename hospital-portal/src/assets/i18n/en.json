@@ -2140,7 +2140,8 @@
       "PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED": "Pharmacy claim acceptance confirmed by billing or accounting",
       "ADOLESCENT_AGE_SET_ZERO": "Adolescent confidentiality age set to 0",
       "ADOLESCENT_AGE_SET_ONE": "Adolescent confidentiality age set to 1",
-      "ACTIVATION_CODE_SHOWN": "Activation code shown to the person who created the assignment"
+      "ACTIVATION_CODE_SHOWN": "Activation code shown to the person who created the assignment",
+      "ORDONNANCE_PRINTED": "Ordonnance printed by its prescriber (prescriptions {{ids}})"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -3757,7 +3758,9 @@
     "SENSITIVITY_SEXUAL_DOMESTIC_VIOLENCE": "Sexual and domestic violence",
     "SENSITIVITY_GENETIC": "Genetic tests",
     "SENSITIVITY_SICKLE_CELL": "Sickle cell (genotype)",
-    "SENSITIVITY_TUBERCULOSIS": "Tuberculosis (restricted)"
+    "SENSITIVITY_TUBERCULOSIS": "Tuberculosis (restricted)",
+    "HOSPITAL_SCOPE": "Hospital: {{name}}",
+    "HOSPITAL_SCOPE_CLEAR": "Show every hospital"
   },
   "COST_PANEL": {
     "TITLE": "Cost per hospital",
@@ -8843,7 +8846,9 @@
     "REFILLS_ALLOWED_HINT": "How many refills the pharmacy may dispense without a new decision (0 = none). One more needs the prescriber’s approval. Provisional rule.",
     "REFILLS_CONTROLLED_HINT": "Controlled substance: no refill. Every further supply needs a new prescription.",
     "REFILLS_LOCKED_HINT": "The number of refills cannot be changed after the signature.",
-    "REFILLS_ALLOWED_INVALID": "The number of refills is a whole number, from 0 to {{max}}."
+    "REFILLS_ALLOWED_INVALID": "The number of refills is a whole number, from 0 to {{max}}.",
+    "PRINT_ORDONNANCE": "Print the prescription",
+    "ORDONNANCE_FAILED": "The prescription could not be printed. Try again."
   },
   "PROFILE": {
     "RECOVERY_CONFIRM_TITLE": "Confirm your recovery contact",
@@ -10212,7 +10217,9 @@
       "CONFIRM": "Reset",
       "DONE": "Two-step verification was reset.",
       "FAILED": "Two-step verification could not be reset."
-    }
+    },
+    "HOSPITAL_SCOPE": "Hospital: {{name}}",
+    "HOSPITAL_SCOPE_CLEAR": "Show every hospital"
   },
   "TRIAGE": {
     "ACUITY": "Acuity Level",
@@ -15656,7 +15663,9 @@
       "TIME_ZONE_HINT": "It sets the hospital’s day: the date of an invoice, the start of a price, a slot already past.",
       "TIME_ZONE_FROM_ORG": "(the organization’s)",
       "TIME_ZONE_NONE": "Not set: the server’s time applies",
-      "CURRENCY_HINT": "The currency can no longer be changed once the hospital has an invoice or a price."
+      "CURRENCY_HINT": "The currency can no longer be changed once the hospital has an invoice or a price.",
+      "CODE_LOCKED": "Locked: this hospital has issued invoices, and its code is in every invoice number.",
+      "CURRENCY_LOCKED": "Locked: this hospital already has an invoice or a price list in this currency."
     },
     "BOOKING": {
       "NOT_OFFERED": "This hospital does not offer online booking yet.",

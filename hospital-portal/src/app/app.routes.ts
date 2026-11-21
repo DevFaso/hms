@@ -459,7 +459,6 @@ export const routes: Routes = [
         data: {
           roles: [
             'ROLE_HOSPITAL_ADMIN',
-            'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
             'ROLE_RECEPTIONIST',
             'ROLE_LAB_DIRECTOR',
@@ -492,7 +491,6 @@ export const routes: Routes = [
             'ROLE_MIDWIFE',
             'ROLE_RECEPTIONIST',
             'ROLE_HOSPITAL_ADMIN',
-            'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
             'ROLE_LAB_DIRECTOR',
             'ROLE_LAB_MANAGER',
@@ -532,7 +530,6 @@ export const routes: Routes = [
         data: {
           roles: [
             'ROLE_HOSPITAL_ADMIN',
-            'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
             'ROLE_RECEPTIONIST',
             'ROLE_LAB_DIRECTOR',

@@ -376,6 +376,7 @@
                   [class.invalid]="codeInvalid()"
                   [attr.aria-invalid]="codeInvalid() || null"
                   [(ngModel)]="form.code"
+                  [disabled]="!!editing() && codeLocked()"
                   name="code"
                   maxlength="20"
                   autocapitalize="characters"
@@ -386,9 +387,11 @@
                 />
                 <small id="hCodeHint" class="field-hint">
                   {{
-                    (editing()
-                      ? 'PLATFORM_SETUP.HOSPITAL.CODE_HINT_EDIT'
-                      : 'PLATFORM_SETUP.HOSPITAL.CODE_HINT_NEW'
+                    (editing() && codeLocked()
+                      ? 'PLATFORM_SETUP.HOSPITAL.CODE_LOCKED'
+                      : editing()
+                        ? 'PLATFORM_SETUP.HOSPITAL.CODE_HINT_EDIT'
+                        : 'PLATFORM_SETUP.HOSPITAL.CODE_HINT_NEW'
                     ) | translate
                   }}
                 </small>
@@ -398,6 +401,7 @@
                 <select
                   id="hCurrency"
                   [(ngModel)]="form.currencyCode"
+                  [disabled]="!!editing() && currencyLocked()"
                   name="currencyCode"
                   aria-describedby="hCurrencyHint"
                   data-testid="hospital-currency"
@@ -407,7 +411,12 @@
                   }
                 </select>
                 <small id="hCurrencyHint" class="field-hint">
-                  {{ 'PLATFORM_SETUP.HOSPITAL.CURRENCY_HINT' | translate }}
+                  {{
+                    (editing() && currencyLocked()
+                      ? 'PLATFORM_SETUP.HOSPITAL.CURRENCY_LOCKED'
+                      : 'PLATFORM_SETUP.HOSPITAL.CURRENCY_HINT'
+                    ) | translate
+                  }}
                 </small>
               </div>
             </div>

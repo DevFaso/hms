@@ -37,6 +37,7 @@ class UserRepositoryDirectoryScopeTest {
     @Autowired private HospitalRepository hospitalRepository;
     @Autowired private RoleRepository roleRepository;
     @Autowired private UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Autowired private UserRoleRepository userRoleRepository;
 
     private Hospital a;
     private Hospital b;
@@ -116,6 +117,49 @@ class UserRepositoryDirectoryScopeTest {
         assertThat(staffSearched).contains(pending, activeAtA).doesNotContain(patientOnly.getId());
         // The administrators' all-accounts list still sees the patient.
         assertThat(listed(atA)).contains(patientOnly.getId());
+    }
+
+    @Test
+    @DisplayName("QA D3062: no scoped directory lists a platform super-admin account, even one holding a row here")
+    void scopedDirectoryNeverListsASuperAdmin() {
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        Role superAdmin = roleRepository.findByCode("ROLE_SUPER_ADMIN").orElseGet(() -> {
+            Role r = new Role();
+            r.setName("ROLE_SUPER_ADMIN");
+            r.setCode("ROLE_SUPER_ADMIN");
+            return roleRepository.save(r);
+        });
+        Role nurse = roleRepository.findByCode("ROLE_NURSE_DIR_TEST").orElseThrow();
+        User owner = user("platform.owner");
+        // The r65 set-up: the owner's (global) super-admin account given a row at A.
+        com.example.hms.model.UserRoleId key = new com.example.hms.model.UserRoleId();
+        key.setUserId(owner.getId());
+        key.setRoleId(superAdmin.getId());
+        com.example.hms.model.UserRole global = new com.example.hms.model.UserRole();
+        global.setId(key);
+        global.setUser(owner);
+        global.setRole(superAdmin);
+        userRoleRepository.save(global);
+        assign(owner, nurse, a, true);
+        Set<UUID> atA = Set.of(a.getId());
+        PageRequest page = PageRequest.of(0, 50);
+
+        assertThat(listed(atA)).contains(activeAtA).doesNotContain(owner.getId());
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        assertThat(userRepository.findStaffDirectoryPaged(true, atA, false, false, page).map(User::getId)
+            .getContent()).contains(activeAtA).doesNotContain(owner.getId());
+        assertThat(userRepository.searchUsers("platform", null, null, null, true, false, false, true, atA, page)
+            .getContent()).isEmpty();
+        assertThat(userRepository.searchStaffDirectory("Test", null, null, null, false, false, false, true, atA,
+            page).map(User::getId).getContent()).contains(activeAtA).doesNotContain(owner.getId());
+        // Review of #1264: the hospital's assignment listing (GET /assignments) leaves it out too.
+        List<UUID> listedAssignmentUsers = assignmentRepository.findAll(
+                com.example.hms.specification.UserRoleHospitalAssignmentSpecification.notAPlatformAccount())
+            .stream().map(a -> a.getUser().getId()).toList();
+        assertThat(listedAssignmentUsers).contains(activeAtA).doesNotContain(owner.getId());
+        // The super-admin's own, unscoped directory still lists the account.
+        assertThat(userRepository.findAllPaged(false, false, false, UserRepository.DIRECTORY_UNSCOPED, page)
+            .map(User::getId).getContent()).contains(owner.getId());
     }
 
     private List<UUID> listed(Set<UUID> hospitalIds) {

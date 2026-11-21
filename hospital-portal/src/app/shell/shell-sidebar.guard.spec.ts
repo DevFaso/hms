@@ -227,9 +227,9 @@ describe('Sidebar entries (QA r65 D2760 / D2777 class guards)', () => {
     const recorded = new Set([
       'users', // the staff directory and « Inscrire »
       'admin-assignments', // the staff assignments of its organisation
-      'staff', // listed for the role since the 2026-08-23 role audit; the server refuses it (no sidebar entry)
-      'scheduling', // same
-      'departments', // same
+      // QA D3060 (r68): /staff, /scheduling and /departments were listed here although the server
+      // refuses their reads to the role: opened by URL they said « Créez votre premier
+      // département ». They are off the role now, and must stay off.
     ]);
     const admitting: string[] = [];
     const visit = (table: Route[], prefix: string) => {
@@ -242,6 +242,9 @@ describe('Sidebar entries (QA r65 D2760 / D2777 class guards)', () => {
     };
     visit(appRoutes, '');
     expect(admitting.length).toBeGreaterThan(0);
+    for (const refused of ['staff', 'scheduling', 'departments']) {
+      expect(admitting).withContext(`QA D3060: ${refused}`).not.toContain(refused);
+    }
     expect(admitting.filter((path) => !recorded.has(path)))
       .withContext(
         'a route admits ROLE_ADMIN, the organisation admin, who reads no patient or clinical data: ' +

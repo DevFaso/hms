@@ -1517,12 +1517,15 @@ public class UserServiceImpl implements UserService {
         dto.setSpecialization(staff.getSpecialization());
     }
 
+    /** The directory's order: newest accounts first. */
+    private static final String DIRECTORY_SORT = "createdAt";
+
     @Override
     @Transactional(readOnly = true)
     public Page<UserSummaryDTO> getAllUsers(int page, int size, boolean includeDeleted,
                                             boolean onlyDeleted) {
         DirectoryScope scope = accountAccess.requireDirectoryAccess();
-        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Pageable pageable = PageRequest.of(page, size, Sort.by(DIRECTORY_SORT).descending());
         if (!scope.everyone() && scope.hospitalIds().isEmpty()) {
             return Page.empty(pageable);
         }
@@ -1546,10 +1549,28 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<UserSummaryDTO> getUsersAtHospital(UUID hospitalId, int page, int size) {
+        DirectoryScope scope = accountAccess.requireDirectoryAccess();
+        Pageable pageable = PageRequest.of(page, size, Sort.by(DIRECTORY_SORT).descending());
+        if (hospitalId == null || (!scope.everyone() && !scope.hospitalIds().contains(hospitalId))) {
+            return Page.empty(pageable);
+        }
+        // Scoped to the one hospital, whoever asks: the same clause a hospital's
+        // own administrator reads through (live accounts, no platform super-admin).
+        Set<UUID> one = Set.of(hospitalId);
+        Page<User> users = scope.seesPatientContacts()
+            ? userRepository.findAllPaged(false, false, true, one, pageable)
+            : userRepository.findStaffDirectoryPaged(true, one, false, false, pageable);
+        Set<UUID> manageable = accountAccess.manageableAmong(users.getContent());
+        return users.map(u -> directoryRow(u, scope, manageable));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Page<UserSummaryDTO> searchUsers(String name, String role, String email, int page, int size,
                                             boolean includeDeleted, boolean onlyDeleted) {
         DirectoryScope scope = accountAccess.requireDirectoryAccess();
-        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Pageable pageable = PageRequest.of(page, size, Sort.by(DIRECTORY_SORT).descending());
         if (!scope.everyone() && scope.hospitalIds().isEmpty()) {
             return Page.empty(pageable);
         }

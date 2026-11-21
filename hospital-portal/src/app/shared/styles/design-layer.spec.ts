@@ -324,6 +324,51 @@ describe('global design layer (QA r65)', () => {
       expect(hiddenOnPaper('.active-chips')).toBeFalse();
     });
 
+    /** Does a global `@media print` rule that hides things match this element? */
+    function elementHiddenOnPaper(el: Element): boolean {
+      return Array.from(document.styleSheets).some((sheet) => {
+        let rules: CSSRule[];
+        try {
+          rules = Array.from(sheet.cssRules);
+        } catch {
+          return false;
+        }
+        return rules.some(
+          (rule) =>
+            rule instanceof CSSMediaRule &&
+            rule.conditionText.trim() === 'print' &&
+            Array.from(rule.cssRules).some(
+              (inner) =>
+                inner instanceof CSSStyleRule &&
+                inner.style.display === 'none' &&
+                el.matches(inner.selectorText),
+            ),
+        );
+      });
+    }
+
+    it('takes any filter or toolbar container off paper, chips aside (D3053)', () => {
+      const box = document.createElement('div');
+      document.body.appendChild(box);
+      try {
+        for (const cls of [
+          'server-filters',
+          'filter-group',
+          'section-toolbar',
+          'dashboard-filters',
+        ]) {
+          box.innerHTML = `<div class="${cls}"><select></select></div>`;
+          expect(elementHiddenOnPaper(box.firstElementChild!)).withContext(cls).toBeTrue();
+        }
+        for (const cls of ['active-chips', 'filter-chip', 'filtered-count']) {
+          box.innerHTML = `<div class="${cls}">x</div>`;
+          expect(elementHiddenOnPaper(box.firstElementChild!)).withContext(cls).toBeFalse();
+        }
+      } finally {
+        box.remove();
+      }
+    });
+
     it('keeps the break-glass notice on a printed record, less its buttons', () => {
       // A record printed under emergency access said so before r65: whether it
       // may stop saying so is not a design decision.

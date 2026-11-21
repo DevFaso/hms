@@ -356,6 +356,25 @@ class HospitalServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D3059: the single read says which of the code and the currency are locked")
+        void saysWhatIsLocked() {
+            UUID id = UUID.randomUUID();
+            setSuperAdminContext();
+            when(hospitalRepository.findById(id)).thenReturn(Optional.of(buildHospital(id, "A", "TST-01")));
+
+            when(hospitalRepository.hasPriceListItem(id)).thenReturn(true);
+            HospitalResponseDTO priced = hospitalService.getHospitalById(id, Locale.ENGLISH);
+            assertEquals(Boolean.FALSE, priced.getCodeLocked());
+            assertEquals(Boolean.TRUE, priced.getCurrencyLocked());
+
+            when(hospitalRepository.hasPriceListItem(id)).thenReturn(false);
+            when(hospitalRepository.hasAllocatedInvoiceNumber(id)).thenReturn(true);
+            HospitalResponseDTO billed = hospitalService.getHospitalById(id, Locale.ENGLISH);
+            assertEquals(Boolean.TRUE, billed.getCodeLocked());
+            assertEquals(Boolean.TRUE, billed.getCurrencyLocked());
+        }
+
+        @Test
         @DisplayName("throws when not found")
         void notFound() {
             UUID id = UUID.randomUUID();

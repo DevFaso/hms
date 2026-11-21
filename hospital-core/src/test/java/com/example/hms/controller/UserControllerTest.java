@@ -310,6 +310,50 @@ class UserControllerTest {
         }
     }
 
+    @Test
+    void adminRegister_organisationAdmin_withoutHospitalId_isRefusedNotFiledAtTheActingHospital() throws Exception {
+        // QA D3052 (r68): rule 1a, « none at all is refused ». An organisation
+        // admin registers at several hospitals: its acting hospital is not a choice.
+        UUID hospitalA = UUID.randomUUID();
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .activeHospitalId(hospitalA)
+                .permittedHospitalIds(Set.of(hospitalA))
+                .build());
+        try {
+            AdminSignupRequest req = new AdminSignupRequest();
+            req.setEmail("awa@example.com");
+            req.setFirstName("Awa");
+            req.setLastName("Traore");
+            req.setPhoneNumber("+22670000003");
+            req.setRoleNames(Set.of("ROLE_NURSE"));
+
+            mockMvc.perform(post("/users/admin-register")
+                    // The slice runs without the filter chain: the Authentication
+                    // argument is the request's principal.
+                    .principal(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        "qa.org.admin", "n", AuthorityUtils.createAuthorityList("ROLE_ADMIN")))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").isNotEmpty());
+            verify(userService, never()).createUserWithRolesAndHospital(any());
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
+    void isOrganisationAdminOnly_onlyWithoutAHospitalLevelAdminRole() {
+        org.assertj.core.api.Assertions.assertThat(UserController.isOrganisationAdminOnly(Set.of("ROLE_ADMIN"))).isTrue();
+        org.assertj.core.api.Assertions.assertThat(
+            UserController.isOrganisationAdminOnly(Set.of("ROLE_ADMIN", "ROLE_HOSPITAL_ADMIN"))).isFalse();
+        org.assertj.core.api.Assertions.assertThat(
+            UserController.isOrganisationAdminOnly(Set.of("ROLE_ADMIN", "ROLE_SUPER_ADMIN"))).isFalse();
+        org.assertj.core.api.Assertions.assertThat(
+            UserController.isOrganisationAdminOnly(Set.of("ROLE_HOSPITAL_ADMIN"))).isFalse();
+    }
+
     // -------------------------------------------------------------------------
     // PATCH /users/{id}/restore
     // -------------------------------------------------------------------------
@@ -362,6 +406,24 @@ class UserControllerTest {
     @org.junit.jupiter.api.AfterEach
     void clearSecurityContext() {
         org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void hospitalIdNarrowsTheDirectoryToThatHospital() throws Exception {
+        // QA D3058: the onboarding checklist opens /users?hospitalId=.
+        UUID hospital = UUID.randomUUID();
+        when(userService.getUsersAtHospital(hospital, 0, 10))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+        authenticateAs("owner", true, "ROLE_SUPER_ADMIN");
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .get("/users").param("hospitalId", hospital.toString()))
+            .andExpect(status().isOk());
+
+        verify(userService).getUsersAtHospital(hospital, 0, 10);
+        verify(userService, never()).getAllUsers(
+            org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt(),
+            org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     @Test

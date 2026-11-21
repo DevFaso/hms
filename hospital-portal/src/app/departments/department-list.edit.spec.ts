@@ -3,6 +3,7 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { of, Subject } from 'rxjs';
 import { TranslateModule } from '@ngx-translate/core';
+import { ActivatedRoute, convertToParamMap, Router } from '@angular/router';
 import { DepartmentListComponent } from './department-list';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -53,12 +54,17 @@ describe('DepartmentListComponent — edit form (D1790)', () => {
     { id: 's-2', name: 'Boukary Sawadogo', email: 'bou@h.bf', active: true },
   ];
 
-  function setup(superAdmin: boolean): void {
+  function setup(superAdmin: boolean, query: Record<string, string> = {}, depts = [apiDept]): void {
     TestBed.configureTestingModule({
       imports: [DepartmentListComponent, TranslateModule.forRoot()],
       providers: [
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap(query) } },
+        },
+        { provide: Router, useValue: jasmine.createSpyObj('Router', ['navigate']) },
         {
           provide: RoleContextService,
           useValue: roleContextStub({
@@ -86,7 +92,7 @@ describe('DepartmentListComponent — edit form (D1790)', () => {
     fixture = TestBed.createComponent(DepartmentListComponent);
     http = TestBed.inject(HttpTestingController);
     fixture.detectChanges();
-    http.expectOne('/departments').flush({ content: [apiDept] });
+    http.expectOne('/departments').flush({ content: depts });
     fixture.detectChanges();
   }
 
@@ -102,6 +108,19 @@ describe('DepartmentListComponent — edit form (D1790)', () => {
     if (previousLang === null) localStorage.removeItem('lang');
     else localStorage.setItem('lang', previousLang);
     resetStoredLangForTests();
+  });
+
+  it('QA D3058: opened from a hospital checklist, it lists that hospital and starts the form there', () => {
+    TestBed.resetTestingModule();
+    const scope = '00000000-0000-0000-0000-0000000000b2';
+    setup(true, { hospitalId: scope }, [apiDept, { ...apiDept, id: 'd-2', hospitalId: scope }]);
+    const cmp = fixture.componentInstance;
+    expect(cmp.filtered().map((d) => d.id)).toEqual(['d-2']);
+    cmp.hospitals.set([{ id: scope, name: 'Hopital B' } as never]);
+    cmp.openCreate();
+    expect(cmp.form.hospitalId).toBe(scope);
+    cmp.clearHospitalScope();
+    expect(cmp.filtered().map((d) => d.id)).toEqual(['d-1', 'd-2']);
   });
 
   it('opens prefilled from an API-shaped response and saves the same code', () => {
