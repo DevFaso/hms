@@ -117,8 +117,11 @@
 
       @if (approvalsFailed()) {
         <div class="dashboard-error" role="alert">
-          <span>{{ 'DISCHARGE.LOAD_APPROVALS_ERROR' | translate }}</span
-          ><button type="button" class="btn-secondary" (click)="loadApprovals()">
+          <span>{{ 'DISCHARGE.LOAD_APPROVALS_ERROR' | translate }}</span><button
+            type="button"
+            class="btn-secondary"
+            (click)="loadApprovals()"
+          >
             {{ 'COMMON.RETRY' | translate }}
           </button>
         </div>
@@ -178,8 +181,9 @@
                     @if (a.nurseSummary) {
                       <details>
                         <summary>
-                          <span>{{ a.nurseSummary | slice: 0 : 96 }}</span
-                          ><small>{{ 'DISCHARGE.READ_NOTE' | translate }}</small>
+                          <span>{{ a.nurseSummary | slice: 0 : 96 }}</span><small>{{
+                            'DISCHARGE.READ_NOTE' | translate
+                          }}</small>
                         </summary>
                         <p>{{ a.nurseSummary }}</p>
                       </details>
@@ -286,8 +290,11 @@
 
       @if (summariesFailed()) {
         <div class="dashboard-error" role="alert">
-          <span>{{ 'DISCHARGE.LOAD_SUMMARIES_ERROR' | translate }}</span
-          ><button type="button" class="btn-secondary" (click)="loadSummaries()">
+          <span>{{ 'DISCHARGE.LOAD_SUMMARIES_ERROR' | translate }}</span><button
+            type="button"
+            class="btn-secondary"
+            (click)="loadSummaries()"
+          >
             {{ 'COMMON.RETRY' | translate }}
           </button>
         </div>

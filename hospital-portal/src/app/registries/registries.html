@@ -28,22 +28,25 @@
       <div class="care-metric">
         <span class="material-symbols-outlined" aria-hidden="true">groups</span>
         <div>
-          <strong>{{ loading() || loadFailed() ? '—' : totalRows() }}</strong
-          ><span>{{ 'CARE_DASH.COHORT_TOTAL' | translate }}</span>
+          <strong>{{ loading() || loadFailed() ? '—' : totalRows() }}</strong><span>{{
+            'CARE_DASH.COHORT_TOTAL' | translate
+          }}</span>
         </div>
       </div>
       <div class="care-metric">
         <span class="material-symbols-outlined" aria-hidden="true">list_alt</span>
         <div>
-          <strong>{{ loading() || loadFailed() ? '—' : rows().length }}</strong
-          ><span>{{ 'CARE_DASH.LOADED_ROWS' | translate }}</span>
+          <strong>{{ loading() || loadFailed() ? '—' : rows().length }}</strong><span>{{
+            'CARE_DASH.LOADED_ROWS' | translate
+          }}</span>
         </div>
       </div>
       <div class="care-metric">
         <span class="material-symbols-outlined" aria-hidden="true">event_busy</span>
         <div>
-          <strong>{{ loading() || loadFailed() ? '—' : overdueCount() }}</strong
-          ><span>{{ 'CARE_DASH.OVERDUE_LOADED' | translate }}</span>
+          <strong>{{ loading() || loadFailed() ? '—' : overdueCount() }}</strong><span>{{
+            'CARE_DASH.OVERDUE_LOADED' | translate
+          }}</span>
         </div>
       </div>
     </div>

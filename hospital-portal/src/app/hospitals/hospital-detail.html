@@ -162,8 +162,7 @@
           </h2>
           <p class="dialog-confirm">
             {{ 'HOSPITAL_LIFECYCLE.DIALOG.CONFIRM_PREFIX' | translate }}
-            <strong>{{ hospital()?.name }}</strong
-            >{{ 'COMMON.QUESTION_MARK' | translate }}
+            <strong>{{ hospital()?.name }}</strong>{{ 'COMMON.QUESTION_MARK' | translate }}
           </p>
 
           @if (needsReason(state.kind)) {

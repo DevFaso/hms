@@ -58,28 +58,34 @@
           </h3>
           <div class="info-rows">
             <div class="info-row">
-              <span class="label">{{ 'DEPARTMENTS.NAME' | translate }}</span
-              ><span class="value">{{ dept.name }}</span>
+              <span class="label">{{ 'DEPARTMENTS.NAME' | translate }}</span><span class="value">{{
+                dept.name
+              }}</span>
             </div>
             <div class="info-row">
-              <span class="label">{{ 'DEPARTMENTS.CODE' | translate }}</span
-              ><span class="value">{{ dept.departmentCode }}</span>
+              <span class="label">{{ 'DEPARTMENTS.CODE' | translate }}</span><span class="value">{{
+                dept.departmentCode
+              }}</span>
             </div>
             <div class="info-row">
-              <span class="label">{{ 'DEPARTMENTS.DESCRIPTION' | translate }}</span
-              ><span class="value">{{ dept.description ?? '—' }}</span>
+              <span class="label">{{ 'DEPARTMENTS.DESCRIPTION' | translate }}</span><span
+                class="value"
+                >{{ dept.description ?? '—' }}</span
+              >
             </div>
             <div class="info-row">
-              <span class="label">{{ 'DEPARTMENTS.HEAD' | translate }}</span
-              ><span class="value">{{ dept.headOfDepartmentName ?? '—' }}</span>
+              <span class="label">{{ 'DEPARTMENTS.HEAD' | translate }}</span><span class="value">{{
+                dept.headOfDepartmentName ?? '—'
+              }}</span>
             </div>
             <div class="info-row">
-              <span class="label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
-              ><span class="value">{{ dept.hospitalName ?? '—' }}</span>
+              <span class="label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span><span
+                class="value"
+                >{{ dept.hospitalName ?? '—' }}</span
+              >
             </div>
             <div class="info-row">
-              <span class="label">{{ 'COMMON.STATUS' | translate }}</span
-              ><span class="value">{{
+              <span class="label">{{ 'COMMON.STATUS' | translate }}</span><span class="value">{{
                 dept.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate)
               }}</span>
             </div>

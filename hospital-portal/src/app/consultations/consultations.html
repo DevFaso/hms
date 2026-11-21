@@ -25,8 +25,7 @@
         <div class="card-info">
           <span class="card-value">{{
             loading() || loadFailed() || statsLoading() ? '—' : countByGroup('pending')
-          }}</span
-          ><span class="card-label">{{ 'COMMON.PENDING' | translate }}</span>
+          }}</span><span class="card-label">{{ 'COMMON.PENDING' | translate }}</span>
         </div>
       </div>
       <div class="summary-card">
@@ -34,8 +33,7 @@
         <div class="card-info">
           <span class="card-value">{{
             loading() || loadFailed() || statsLoading() ? '—' : countByGroup('active')
-          }}</span
-          ><span class="card-label">{{ 'CONSULTATIONS.IN_PROGRESS' | translate }}</span>
+          }}</span><span class="card-label">{{ 'CONSULTATIONS.IN_PROGRESS' | translate }}</span>
         </div>
       </div>
       <div class="summary-card">
@@ -43,8 +41,7 @@
         <div class="card-info">
           <span class="card-value">{{
             loading() || loadFailed() || statsLoading() ? '—' : countByGroup('completed')
-          }}</span
-          ><span class="card-label">{{ 'COMMON.COMPLETED' | translate }}</span>
+          }}</span><span class="card-label">{{ 'COMMON.COMPLETED' | translate }}</span>
         </div>
       </div>
       <div class="summary-card">
@@ -52,8 +49,7 @@
         <div class="card-info">
           <span class="card-value">{{
             loading() || loadFailed() || statsLoading() ? '—' : countByGroup('total')
-          }}</span
-          ><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
+          }}</span><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
         </div>
       </div>
       <button
@@ -69,8 +65,7 @@
         <span class="card-info">
           <span class="card-value">{{
             loading() || loadFailed() || statsLoading() ? '—' : countByGroup('overdue')
-          }}</span
-          ><span class="card-label">{{ 'CONSULTATIONS.OVERDUE' | translate }}</span>
+          }}</span><span class="card-label">{{ 'CONSULTATIONS.OVERDUE' | translate }}</span>
         </span>
       </button>
     </div>
@@ -379,105 +374,125 @@
         <div class="detail-body">
           <div class="detail-grid">
             <div class="detail-field">
-              <span class="field-label">{{ 'PATIENTS.PATIENT' | translate }}</span
-              ><span class="field-value">{{ con.patientName }}</span>
+              <span class="field-label">{{ 'PATIENTS.PATIENT' | translate }}</span><span
+                class="field-value"
+                >{{ con.patientName }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'PATIENTS.MRN' | translate }}</span
-              ><span class="field-value">{{ con.patientMrn }}</span>
+              <span class="field-label">{{ 'PATIENTS.MRN' | translate }}</span><span
+                class="field-value"
+                >{{ con.patientMrn }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'CONSULTATIONS.TYPE' | translate }}</span
-              ><span class="field-value">{{
-                con.consultationType | enumLabel: 'consultationType'
-              }}</span>
+              <span class="field-label">{{ 'CONSULTATIONS.TYPE' | translate }}</span><span
+                class="field-value"
+                >{{ con.consultationType | enumLabel: 'consultationType' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'CONSULTATIONS.SPECIALTY' | translate }}</span
-              ><span class="field-value">{{ con.specialtyRequested }}</span>
+              <span class="field-label">{{ 'CONSULTATIONS.SPECIALTY' | translate }}</span><span
+                class="field-value"
+                >{{ con.specialtyRequested }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'CONSULTATIONS.REQUESTING_PROVIDER' | translate }}</span
-              ><span class="field-value">{{ con.requestingProviderName || '—' }}</span>
+              <span class="field-label">{{
+                'CONSULTATIONS.REQUESTING_PROVIDER' | translate
+              }}</span><span class="field-value">{{ con.requestingProviderName || '—' }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'CONSULTATIONS.CONSULTANT' | translate }}</span
-              ><span class="field-value">{{
-                con.consultantName || ('COMMON.UNASSIGNED' | translate)
-              }}</span>
+              <span class="field-label">{{ 'CONSULTATIONS.CONSULTANT' | translate }}</span><span
+                class="field-value"
+                >{{ con.consultantName || ('COMMON.UNASSIGNED' | translate) }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'CONSULTATIONS.URGENCY' | translate }}</span
-              ><span class="field-value"
+              <span class="field-label">{{ 'CONSULTATIONS.URGENCY' | translate }}</span><span
+                class="field-value"
                 ><span class="urgency-badge {{ getUrgencyClass(con.urgency) }}">{{
                   con.urgency | enumLabel: 'consultationUrgency'
                 }}</span></span
               >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
-              ><span class="field-value"
+              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span><span
+                class="field-value"
                 ><span class="status-badge {{ getStatusClass(con.status) }}">{{
                   con.status | enumLabel: 'consultationStatus'
                 }}</span></span
               >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'CONSULTATIONS.REQUESTED' | translate }}</span
-              ><span class="field-value">{{
-                con.requestedAt ? (con.requestedAt | serverTime | dateTime) : '—'
-              }}</span>
+              <span class="field-label">{{ 'CONSULTATIONS.REQUESTED' | translate }}</span><span
+                class="field-value"
+                >{{ con.requestedAt ? (con.requestedAt | serverTime | dateTime) : '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'COMMON.COMPLETED' | translate }}</span
-              ><span class="field-value">{{
-                con.completedAt ? (con.completedAt | serverTime | dateTime) : '—'
-              }}</span>
+              <span class="field-label">{{ 'COMMON.COMPLETED' | translate }}</span><span
+                class="field-value"
+                >{{ con.completedAt ? (con.completedAt | serverTime | dateTime) : '—' }}</span
+              >
             </div>
             @if (con.assignedAt) {
               <div class="detail-field">
-                <span class="field-label">{{ 'CONSULTATIONS.ASSIGNED' | translate }}</span
-                ><span class="field-value">{{ con.assignedAt | serverTime | dateTime }}</span>
+                <span class="field-label">{{ 'CONSULTATIONS.ASSIGNED' | translate }}</span><span
+                  class="field-value"
+                  >{{ con.assignedAt | serverTime | dateTime }}</span
+                >
               </div>
             }
             @if (con.startedAt) {
               <div class="detail-field">
-                <span class="field-label">{{ 'CONSULTATIONS.STARTED' | translate }}</span
-                ><span class="field-value">{{ con.startedAt | serverTime | dateTime }}</span>
+                <span class="field-label">{{ 'CONSULTATIONS.STARTED' | translate }}</span><span
+                  class="field-value"
+                  >{{ con.startedAt | serverTime | dateTime }}</span
+                >
               </div>
             }
             @if (con.acknowledgedAt) {
               <div class="detail-field">
-                <span class="field-label">{{ 'CONSULTATIONS.ACKNOWLEDGED' | translate }}</span
-                ><span class="field-value">{{ con.acknowledgedAt | serverTime | dateTime }}</span>
+                <span class="field-label">{{ 'CONSULTATIONS.ACKNOWLEDGED' | translate }}</span><span
+                  class="field-value"
+                  >{{ con.acknowledgedAt | serverTime | dateTime }}</span
+                >
               </div>
             }
             @if (con.scheduledAt) {
               <div class="detail-field">
-                <span class="field-label">{{ 'CONSULTATIONS.SCHEDULED_FOR' | translate }}</span
-                ><span class="field-value">{{ con.scheduledAt | serverTime | dateTime }}</span>
+                <span class="field-label">{{
+                  'CONSULTATIONS.SCHEDULED_FOR' | translate
+                }}</span><span class="field-value">{{
+                  con.scheduledAt | serverTime | dateTime
+                }}</span>
               </div>
             }
             @if (con.declinedAt) {
               <div class="detail-field">
-                <span class="field-label">{{ 'CONSULTATIONS.DECLINED' | translate }}</span
-                ><span class="field-value">{{ con.declinedAt | serverTime | dateTime }}</span>
+                <span class="field-label">{{ 'CONSULTATIONS.DECLINED' | translate }}</span><span
+                  class="field-value"
+                  >{{ con.declinedAt | serverTime | dateTime }}</span
+                >
               </div>
             }
             @if (con.followUpRequired !== null) {
               <div class="detail-field">
-                <span class="field-label">{{ 'CONSULTATIONS.FOLLOW_UP_REQUIRED' | translate }}</span
-                ><span class="field-value">{{
+                <span class="field-label">{{
+                  'CONSULTATIONS.FOLLOW_UP_REQUIRED' | translate
+                }}</span><span class="field-value">{{
                   con.followUpRequired ? ('COMMON.YES' | translate) : ('COMMON.NO' | translate)
                 }}</span>
               </div>
             }
             @if (con.slaDueBy) {
               <div class="detail-field">
-                <span class="field-label">{{ 'CONSULTATIONS.SLA_DUE' | translate }}</span
-                ><span class="field-value" [class.overdue-text]="isOverdue(con)">{{
-                  con.slaDueBy | serverTime | dateTime
-                }}</span>
+                <span class="field-label">{{ 'CONSULTATIONS.SLA_DUE' | translate }}</span><span
+                  class="field-value"
+                  [class.overdue-text]="isOverdue(con)"
+                  >{{ con.slaDueBy | serverTime | dateTime }}</span
+                >
               </div>
             }
           </div>

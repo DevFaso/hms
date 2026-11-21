@@ -383,8 +383,7 @@
                     <span
                       class="{{ alertClass(chip.severity) }}"
                       data-testid="newborn-alert-chip"
-                      >{{ chip.type | enumLabel: 'newbornAlertType' }}</span
-                    >{{ ' ' }}
+                      >{{ chip.type | enumLabel: 'newbornAlertType' }}</span>{{ ' ' }}
                   }
                   <!-- QA D1424, D2581: every alert is read, not hovered, most severe first, coloured by its severity. -->
                   @for (alert of newbornAlertsToRead(a); track $index) {
