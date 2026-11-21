@@ -1,9 +1,22 @@
 import { allRows } from '../shared/all-pages';
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { HospitalService, HospitalResponse, HospitalRequest } from '../services/hospital.service';
+import {
+  HOSPITAL_CURRENCIES,
+  HOSPITAL_TIME_ZONES,
+  HospitalService,
+  HospitalResponse,
+  HospitalRequest,
+} from '../services/hospital.service';
 import { OrganizationService, OrganizationResponse } from '../services/organization.service';
 
 import { RoleContextService } from '../core/role-context.service';
@@ -14,8 +27,43 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
 import { missingRequiredMessage } from '../shared/required-fields';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { refusedFieldReasons } from '../shared/refusal-reason';
 
 type RequiredHospitalField = 'name' | 'phoneNumber' | 'country' | 'city' | 'address';
+
+/**
+ * QA r65 D2500: what the server accepts for a hospital code (HospitalLocaleRules):
+ * 2 to 20 letters, digits and hyphens, starting and ending with a letter or a digit.
+ */
+export const HOSPITAL_CODE_PATTERN = /^[A-Z0-9][A-Z0-9-]{0,18}[A-Z0-9]$/;
+
+/**
+ * Every request property of the hospital form and the input it is typed in,
+ * so a refusal the server pins on a field (`fieldErrors`: a taken code, a
+ * code locked by a first invoice, a phone number, a zip code…) is marked on
+ * that field and not only said in a toast.
+ */
+const FIELD_BY_PROPERTY: Readonly<Record<string, string>> = {
+  name: 'hName',
+  phoneNumber: 'hPhone',
+  email: 'hEmail',
+  website: 'hWebsite',
+  country: 'hCountry',
+  city: 'hCity',
+  province: 'hProvince',
+  region: 'hRegion',
+  sector: 'hSector',
+  address: 'hAddress',
+  poBox: 'hPoBox',
+  state: 'hState',
+  zipCode: 'hZip',
+  organizationId: 'hOrgId',
+  code: 'hCode',
+  currencyCode: 'hCurrency',
+  timeZone: 'hTimeZone',
+};
+const FORM_FIELD_IDS: readonly string[] = Object.values(FIELD_BY_PROPERTY);
 
 /** The form's required fields, in the order they appear, with their input ids. */
 const REQUIRED_HOSPITAL_FIELDS: readonly {
@@ -53,6 +101,7 @@ export class HospitalListComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /**
    * Copilot review fix — the lifecycle detail page is gated to
@@ -76,6 +125,36 @@ export class HospitalListComponent implements OnInit {
   form: HospitalRequest = this.emptyForm();
   /** QA D817: set by a refused submit, so the empty required fields are marked. */
   showMissing = signal(false);
+
+  /** QA r65 D2501: the currencies and time zones a hospital may be given. */
+  readonly currencies = HOSPITAL_CURRENCIES;
+  /** The offered zones, plus the one this hospital already has when it is not among them. */
+  timeZones(): readonly string[] {
+    const current = this.form.timeZone;
+    return current && !HOSPITAL_TIME_ZONES.includes(current)
+      ? [current, ...HOSPITAL_TIME_ZONES]
+      : HOSPITAL_TIME_ZONES;
+  }
+  /**
+   * A zone as the form lists it: its IANA id and its offset today
+   * (« Africa/Ouagadougou (GMT) », « Africa/Nairobi (GMT+3) »), so two zones
+   * that share a clock are told apart and one with another clock is seen at once.
+   */
+  zoneLabel(zone: string): string {
+    try {
+      const offset = new Intl.DateTimeFormat('en-GB', {
+        timeZone: zone,
+        timeZoneName: 'shortOffset',
+      })
+        .formatToParts(new Date())
+        .find((part) => part.type === 'timeZoneName')?.value;
+      return offset ? `${zone} (${offset})` : zone;
+    } catch {
+      return zone;
+    }
+  }
+  /** QA r65 D2500: set by a refused submit when the typed code is malformed. */
+  codeInvalid = signal(false);
 
   // Delete
   showDeleteConfirm = signal(false);
@@ -126,6 +205,7 @@ export class HospitalListComponent implements OnInit {
   // ---------- Create ----------
   openCreate(): void {
     this.showMissing.set(false);
+    this.codeInvalid.set(false);
     this.form = this.emptyForm();
     this.editing.set(null);
     this.showModal.set(true);
@@ -151,7 +231,11 @@ export class HospitalListComponent implements OnInit {
       website: hospital.website ?? '',
       organizationId: hospital.organizationId ?? '',
       active: hospital.active,
+      code: hospital.code ?? '',
+      currencyCode: hospital.currencyCode || 'XOF',
+      timeZone: hospital.timeZone ?? '',
     };
+    this.codeInvalid.set(false);
     this.showModal.set(true);
   }
 
@@ -196,19 +280,39 @@ export class HospitalListComponent implements OnInit {
           })),
         ) ?? this.translate.instant('COMMON.SUBMIT_BLOCKED_REQUIRED'),
       );
-      const first = REQUIRED_HOSPITAL_FIELDS.find((f) => f.key === missing[0]);
-      if (first) {
-        // After the change detection that applies the marks.
-        setTimeout(() => document.getElementById(first.inputId)?.focus());
-      }
+      // Each blank field is marked under itself, and the first one focused.
+      refuseFields(
+        this.host.nativeElement,
+        REQUIRED_HOSPITAL_FIELDS.filter((f) => missing.includes(f.key)).map((f) => f.inputId),
+        FORM_FIELD_IDS,
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       return;
     }
     this.showMissing.set(false);
+
+    // QA r65 D2500: a typed code is checked here first (the server refuses the
+    // same values); none typed means "generate one" on create, "keep it" on edit.
+    const code = (this.form.code ?? '').trim().toUpperCase();
+    if (code && !HOSPITAL_CODE_PATTERN.test(code)) {
+      this.codeInvalid.set(true);
+      // Marked under the field (and focused), not only said in a toast.
+      const message = this.translate.instant('PLATFORM_SETUP.HOSPITAL.CODE_INVALID');
+      refuseFields(this.host.nativeElement, ['hCode'], FORM_FIELD_IDS, message);
+      this.toast.error(message);
+      return;
+    }
+    this.codeInvalid.set(false);
+    refuseFields(this.host.nativeElement, [], FORM_FIELD_IDS);
     this.saving.set(true);
 
     // Remove empty optional strings before sending
     const payload: HospitalRequest = { ...this.form };
     if (!payload.organizationId) delete payload.organizationId;
+    if (code) payload.code = code;
+    else delete payload.code;
+    // An empty time zone is sent as such: it means "the organisation's".
+    payload.timeZone = payload.timeZone ?? '';
 
     const existing = this.editing();
     const request$ = existing
@@ -234,6 +338,15 @@ export class HospitalListComponent implements OnInit {
         } else if (body?.message) {
           msg = body.message;
         }
+        // QA r65 D2500 / D2501: a refused code, currency or time zone (taken,
+        // locked by a first invoice, unsupported) is marked on its own field.
+        const refused = refusedFieldReasons(err, FIELD_BY_PROPERTY);
+        refuseFields(
+          this.host.nativeElement,
+          refused.map(([id, message]) => ({ id, message })),
+          FORM_FIELD_IDS,
+        );
+        this.codeInvalid.set(refused.some(([id]) => id === 'hCode'));
         this.toast.error(msg);
         this.saving.set(false);
       },
@@ -287,6 +400,9 @@ export class HospitalListComponent implements OnInit {
       website: '',
       organizationId: '',
       active: true,
+      code: '',
+      currencyCode: 'XOF',
+      timeZone: '',
     };
   }
 }

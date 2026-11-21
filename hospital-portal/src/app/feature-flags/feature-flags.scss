@@ -386,3 +386,58 @@
   padding: 1rem 1.25rem;
   border-top: 1px solid #e2e8f0;
 }
+
+// QA r65 D2768: at 390 px each row was 423 to 470 px wide inside a 316 px
+// card (`1fr` cannot shrink below a long monospace key), so the state badge
+// and the delete button were cut off outside any scroll area. The key column
+// may now shrink and wrap, and on a phone the actions go under the key.
+.flags-table {
+  .table-header,
+  .flag-row {
+    grid-template-columns: 80px minmax(0, 1fr) auto;
+    column-gap: 8px;
+  }
+
+  .col-status,
+  .col-actions {
+    min-width: 0;
+  }
+
+  .col-key {
+    flex-wrap: wrap;
+    min-width: 0;
+
+    .flag-name {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .flags-table {
+    .table-header {
+      display: none;
+    }
+
+    .flag-row {
+      grid-template-columns: auto minmax(0, 1fr);
+      grid-template-areas:
+        'status key'
+        'actions actions';
+      row-gap: 6px;
+    }
+
+    .col-status {
+      grid-area: status;
+    }
+
+    .col-key {
+      grid-area: key;
+    }
+
+    .col-actions {
+      grid-area: actions;
+    }
+  }
+}

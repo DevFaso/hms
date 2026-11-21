@@ -6,6 +6,54 @@ import { Observable, catchError, map, shareReplay, throwError } from 'rxjs';
 export interface HospitalMinimal {
   id: string;
   name: string;
+  /** QA r65 D2501: ISO 4217 code of the hospital's currency (XOF by default). */
+  currencyCode?: string | null;
+  /** The zone the hospital's day is counted in: its own, else its organisation's. */
+  timeZone?: string | null;
+}
+
+/** QA r65 D2501: the currencies a hospital may bill in today (the CFA francs; the server decides). */
+export const HOSPITAL_CURRENCIES: readonly string[] = ['XOF', 'XAF'];
+
+/**
+ * QA r65 D2501: the time zones offered for a hospital, the same list the
+ * organisation form offers. The server accepts any IANA zone it knows.
+ */
+export const HOSPITAL_TIME_ZONES: readonly string[] = [
+  'Africa/Ouagadougou',
+  'Africa/Abidjan',
+  'Africa/Accra',
+  'Africa/Bamako',
+  'Africa/Dakar',
+  'Africa/Lagos',
+  'Africa/Douala',
+  'Africa/Nairobi',
+  'Africa/Johannesburg',
+  'Africa/Cairo',
+  'Africa/Casablanca',
+];
+
+/** The steps of a hospital's onboarding checklist (HospitalOnboardingReadinessDTO.Step). */
+export type OnboardingStep =
+  | 'DEPARTMENTS'
+  | 'STAFF'
+  | 'PROVIDERS_IN_DEPARTMENT'
+  | 'SESSION_TEMPLATES'
+  | 'OPEN_SLOTS'
+  | 'BEDS'
+  | 'PRICE_LIST'
+  | 'PAYERS';
+
+/** QA r65 D2731: what a hospital still needs, and whether a patient can book online yet. */
+export interface HospitalOnboardingReadiness {
+  hospitalId: string;
+  patientBookable: boolean;
+  items: {
+    step: OnboardingStep;
+    done: boolean;
+    count: number;
+    requiredForBooking: boolean;
+  }[];
 }
 
 export interface HospitalRequest {
@@ -24,6 +72,12 @@ export interface HospitalRequest {
   website?: string;
   organizationId?: string;
   active?: boolean;
+  /** QA r65 D2500: the super-admin's own code; blank on create generates one, blank on edit keeps it. */
+  code?: string;
+  /** QA r65 D2501: ISO 4217 code; blank keeps XOF (create) or the stored one (edit). */
+  currencyCode?: string;
+  /** QA r65 D2501: IANA zone id; '' means "the organisation's default time zone". */
+  timeZone?: string;
 }
 
 export interface HospitalResponse {
@@ -54,6 +108,12 @@ export interface HospitalResponse {
   lifecycleState?: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED' | 'PENDING_PURGE' | 'PURGED';
   createdAt: string;
   updatedAt: string;
+  /** QA r65 D2501: ISO 4217 code of the currency the hospital bills in. */
+  currencyCode?: string | null;
+  /** The hospital's own IANA zone; null when it follows its organisation. */
+  timeZone?: string | null;
+  /** The zone its day is counted in: its own, else its organisation's default. */
+  effectiveTimeZone?: string | null;
 }
 
 /**
@@ -107,6 +167,16 @@ export class HospitalService {
 
   getById(id: string): Observable<HospitalResponse> {
     return this.http.get<HospitalResponse>(`/hospitals/${id}`);
+  }
+
+  /**
+   * QA r65 D2731: the onboarding checklist of a hospital. The hospital admin
+   * of that hospital and the super-admin only (the server refuses anyone else).
+   */
+  onboardingReadiness(hospitalId: string): Observable<HospitalOnboardingReadiness> {
+    return this.http.get<HospitalOnboardingReadiness>(
+      `/hospitals/${hospitalId}/onboarding-readiness`,
+    );
   }
 
   create(req: HospitalRequest): Observable<HospitalResponse> {

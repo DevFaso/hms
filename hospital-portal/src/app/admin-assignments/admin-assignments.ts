@@ -13,6 +13,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
 import {
   AssignmentAdminService,
+  AssignmentActivationCode,
   AssignmentBatchResponse,
   AssignmentBulkImportResponse,
   AssignmentResponse,
@@ -288,7 +289,49 @@ export class AdminAssignmentsComponent implements OnInit {
 
   openDetail(row: AssignmentResponse): void {
     this.selected.set(row);
+    this.resetActivationCode();
     this.modal.set('detail');
+  }
+
+  // ── QA r65 D2764: the activation code, handed over in person ──────────
+
+  /** The code the server showed for the open detail; never kept once the dialog closes. */
+  readonly activationCode = signal<AssignmentActivationCode | null>(null);
+  readonly activationBusy = signal(false);
+  readonly activationError = signal<string | null>(null);
+
+  /**
+   * The signed-in account created this assignment: the server shows the code
+   * to that person only (the one it already asks the code from to confirm).
+   */
+  isRegistrar(row: AssignmentResponse): boolean {
+    const me = this.auth.getUserProfile()?.id ?? this.auth.getUserId();
+    return !!me && !!row.registeredByUserId && row.registeredByUserId === me;
+  }
+
+  showActivationCode(row: AssignmentResponse): void {
+    if (this.activationBusy()) return;
+    this.activationBusy.set(true);
+    this.activationError.set(null);
+    this.service.revealActivationCode(row.id).subscribe({
+      next: (shown) => {
+        this.activationBusy.set(false);
+        // The dialog may have moved to another row meanwhile: that row never shows this code.
+        if (this.selected()?.id === row.id) this.activationCode.set(shown);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.activationBusy.set(false);
+        this.activationError.set(
+          err.error?.message ?? this.translate.instant('PLATFORM_SETUP.ACTIVATION.SHOW_FAILED'),
+        );
+      },
+    });
+  }
+
+  private resetActivationCode(): void {
+    this.activationCode.set(null);
+    this.activationBusy.set(false);
+    this.activationError.set(null);
   }
 
   openRegen(row: AssignmentResponse): void {
@@ -313,6 +356,7 @@ export class AdminAssignmentsComponent implements OnInit {
   closeModal(): void {
     this.modal.set(null);
     this.selected.set(null);
+    this.resetActivationCode();
   }
 
   /* ── Actions ── */

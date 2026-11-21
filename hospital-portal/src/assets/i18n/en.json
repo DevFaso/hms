@@ -2135,7 +2135,8 @@
       "DISPENSE_BILLING_DEFERRAL_CANCELLED": "Deferred billing of a fill withdrawn",
       "DISPENSE_BILLING_URGENCY_OVERRIDE": "Fill handed over unpaid on an urgency override",
       "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Urgency override of a fill’s billing reviewed",
-      "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay"
+      "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay",
+      "ACTIVATION_CODE_SHOWN": "Activation code shown to the person who created the assignment"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -15558,5 +15559,142 @@
     "INCREASED_PAIN": "Increased pain",
     "VAGINAL_BLEEDING": "Significant vaginal bleeding",
     "REDUCED_URINE_OUTPUT": "Reduced urine output"
+  },
+  "PLATFORM_SETUP": {
+    "ROLE_ADMIN": "Administrator",
+    "CHECKLIST": {
+      "TITLE": "Getting this hospital ready",
+      "PROGRESS": "{{done}} of {{total}} steps done",
+      "BOOKABLE": "Patients can book online",
+      "NOT_BOOKABLE": "Patients cannot book online yet",
+      "NEEDED_FOR_BOOKING": "needed for online booking",
+      "OPEN": "Open",
+      "LOAD_FAILED": "The checklist could not be loaded. Reload the page.",
+      "STEP": {
+        "DEPARTMENTS": {
+          "TITLE": "Departments",
+          "DONE": "Departments created: {{count}}",
+          "TODO": "Create at least one department (General medicine, Maternity…)."
+        },
+        "STAFF": {
+          "TITLE": "Staff",
+          "DONE": "Active staff members: {{count}}",
+          "TODO": "Register the staff. Each person then activates their account with the code they receive."
+        },
+        "PROVIDERS_IN_DEPARTMENT": {
+          "TITLE": "Clinicians attached to a department",
+          "DONE": "Departments with at least one doctor, nurse or midwife: {{count}}",
+          "TODO": "No clinician is attached to a department: open a doctor’s, nurse’s or midwife’s record and choose their department."
+        },
+        "SESSION_TEMPLATES": {
+          "TITLE": "Session templates",
+          "DONE": "Active session templates: {{count}}",
+          "TODO": "Create each clinician’s consultation sessions (day, hours, length of a visit)."
+        },
+        "OPEN_SLOTS": {
+          "TITLE": "Published slots",
+          "DONE": "Departments where a patient can book an upcoming slot: {{count}}",
+          "TODO": "No free upcoming slot in a department that has a clinician: generate the slots from the session templates."
+        },
+        "BEDS": {
+          "TITLE": "Beds",
+          "DONE": "Active beds: {{count}}",
+          "TODO": "Add the wards and beds if the hospital admits patients."
+        },
+        "PRICE_LIST": {
+          "TITLE": "Price list",
+          "DONE": "Active prices: {{count}}",
+          "TODO": "Enter or import the prices: without them no invoice line finds its price."
+        },
+        "PAYERS": {
+          "TITLE": "Payers",
+          "DONE": "Active payers: {{count}}",
+          "TODO": "Add the mutual and insurance payers if the hospital sees insured patients."
+        }
+      }
+    },
+    "HOSPITAL": {
+      "CODE": "Hospital code",
+      "CODE_PLACEHOLDER": "e.g. TWP",
+      "CODE_HINT_NEW": "Optional: leave empty to have a code generated. It starts every invoice number.",
+      "CODE_HINT_EDIT": "Can be changed until the hospital issues its first invoice: the code starts every invoice number.",
+      "CODE_INVALID": "The code takes 2 to 20 characters: capital letters, digits and hyphens, starting and ending with a letter or a digit.",
+      "CURRENCY": "Currency",
+      "CURRENCY_NAME": {
+        "XOF": "West African CFA franc (F CFA)",
+        "XAF": "Central African CFA franc (F CFA)"
+      },
+      "TIME_ZONE": "Time zone",
+      "TIME_ZONE_INHERIT": "The organization’s",
+      "TIME_ZONE_HINT": "It sets the hospital’s day: the date of an invoice, the start of a price, a slot already past.",
+      "TIME_ZONE_FROM_ORG": "(the organization’s)",
+      "TIME_ZONE_NONE": "Not set: the server’s time applies"
+    },
+    "BOOKING": {
+      "NOT_OFFERED": "This hospital does not offer online booking yet.",
+      "NO_SLOTS_PUBLISHED": "This department has no free slot published at the moment.",
+      "CALL": "To make an appointment, call {{phone}}.",
+      "CONTACT": "To make an appointment, contact the hospital.",
+      "DEPARTMENTS_FAILED": "This hospital’s departments could not be loaded. Try again."
+    },
+    "ACTIVATION": {
+      "TITLE": "Activation code",
+      "HELP": "If the activation SMS or e-mail did not arrive, show the code and hand it to the person.",
+      "SHOW": "Show the activation code",
+      "HOW_TO": "The person opens the sign-in page, chooses “I have an activation code”, then enters their phone number and this code. Showing the code is recorded in the audit log.",
+      "EXPIRES": "This code works until {{date}}.",
+      "REGISTRAR_ONLY": "Only the person who created this assignment ({{name}}) can show its activation code.",
+      "SHOW_FAILED": "The activation code could not be shown.",
+      "WHERE_IS_CODE": "To hand the code over in person: Assignments, the person’s “Details”, then “Show the activation code”."
+    },
+    "IMPORT": {
+      "BLOCKED": "Refused lines: {{refused}}. Nothing is imported while a line is refused: correct the file, then check it again.",
+      "LINK_HINT": "A linked line (columns liaison_type and liaison_cle) must name an item that exists and is active in this hospital. For a lab test, create and activate it first in “Lab test config”. Otherwise empty both columns: the price is imported unlinked, and you link it afterwards from the list (“Edit”).",
+      "COLUMN": {
+        "code": "Code",
+        "libelle": "Label",
+        "categorie": "Category",
+        "prix": "Price",
+        "date_effet": "Effective date",
+        "liaison_type": "Link type",
+        "liaison_cle": "Link key"
+      }
+    },
+    "PLANS": {
+      "TITLE": "Plans assigned to organizations",
+      "HELP": "Choose an organization to see its plan and assign one. Assigning a new plan ends the current one.",
+      "ORGANISATION": "Organization",
+      "CHOOSE_ORGANISATION": "Choose an organization",
+      "CURRENT": "Current plan:",
+      "CURRENT_DETAIL": "{{seats}} seats, billed {{period}}, since {{since}}",
+      "NO_PLAN": "This organization has no current plan.",
+      "PLAN": "Plan",
+      "CHOOSE_PLAN": "Choose a plan",
+      "SEATS": "User seats",
+      "SEATS_INVALID": "Enter a whole number of seats, zero or more.",
+      "BILLING_PERIOD": "Billing period",
+      "PERIOD": {
+        "MONTHLY": "monthly",
+        "QUARTERLY": "quarterly",
+        "ANNUAL": "yearly"
+      },
+      "ASSIGN": "Assign the plan",
+      "CHANGE": "Change plan",
+      "ASSIGNED": "Plan {{plan}} assigned.",
+      "ASSIGN_FAILED": "The plan could not be assigned.",
+      "END": "End the plan",
+      "END_CONFIRM": "End this organization’s plan {{plan}}?",
+      "ENDED": "The plan has ended.",
+      "END_FAILED": "The plan could not be ended.",
+      "NO_ACTIVE_PLAN": "No active plan to assign: create one above.",
+      "HISTORY": "Previous plans",
+      "HISTORY_LINE": "from {{from}} to {{to}}",
+      "LOAD_FAILED": "The assignments could not be loaded. Try again."
+    },
+    "AUDIT_TABS": {
+      "LABEL": "Audit screens",
+      "LOG": "Log",
+      "SEARCH": "Advanced search"
+    }
   }
 }

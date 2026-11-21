@@ -535,6 +535,51 @@
             <code class="wrap-code">{{ row.profileCompletionUrl }}</code>
           </p>
         }
+        <!-- QA r65 D2764: « Remettez le code en main propre » needs the code to be somewhere. -->
+        @if (!row.confirmationVerified) {
+          <section class="activation-code" data-testid="activation-code">
+            <h3>{{ 'PLATFORM_SETUP.ACTIVATION.TITLE' | translate }}</h3>
+            @if (isRegistrar(row)) {
+              @if (activationCode(); as shown) {
+                <p class="activation-code-value" data-testid="activation-code-value">
+                  <code>{{ shown.confirmationCode }}</code>
+                </p>
+                <p class="form-static">{{ 'PLATFORM_SETUP.ACTIVATION.HOW_TO' | translate }}</p>
+                @if (shown.expiresAt) {
+                  <p class="form-static" data-testid="activation-code-expiry">
+                    {{
+                      'PLATFORM_SETUP.ACTIVATION.EXPIRES'
+                        | translate: { date: (shown.expiresAt | serverTime | dateTime) }
+                    }}
+                  </p>
+                }
+              } @else {
+                <p class="form-static">{{ 'PLATFORM_SETUP.ACTIVATION.HELP' | translate }}</p>
+                <button
+                  type="button"
+                  class="btn-secondary"
+                  data-testid="activation-code-show"
+                  [disabled]="activationBusy()"
+                  (click)="showActivationCode(row)"
+                >
+                  {{ 'PLATFORM_SETUP.ACTIVATION.SHOW' | translate }}
+                </button>
+              }
+              @if (activationError(); as reason) {
+                <p class="field-error" role="alert" data-testid="activation-code-error">
+                  {{ reason }}
+                </p>
+              }
+            } @else {
+              <p class="form-static" data-testid="activation-code-registrar-only">
+                {{
+                  'PLATFORM_SETUP.ACTIVATION.REGISTRAR_ONLY'
+                    | translate: { name: row.registeredByUserName || '—' }
+                }}
+              </p>
+            }
+          </section>
+        }
         @if (row.profileChecklist && row.profileChecklist.length > 0) {
           <div class="checklist">
             <strong>{{ 'ASSIGN_ADMIN.CHECKLIST' | translate }}</strong>

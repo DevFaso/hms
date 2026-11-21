@@ -20,6 +20,40 @@
     </a>
   </div>
 
+  <!-- QA r65 D2500 / D2501 / D2731: what the hospital is (code, currency, time
+       zone) and what it still needs before patients can book. A provider
+       facility has no checklist (the server answers 404, and nothing shows). -->
+  @if (hospital(); as h) {
+    <dl class="hospital-facts" data-testid="hospital-facts">
+      <div>
+        <dt>{{ 'PLATFORM_SETUP.HOSPITAL.CODE' | translate }}</dt>
+        <dd>{{ h.code }}</dd>
+      </div>
+      <div>
+        <dt>{{ 'PLATFORM_SETUP.HOSPITAL.CURRENCY' | translate }}</dt>
+        <dd>
+          {{ 'PLATFORM_SETUP.HOSPITAL.CURRENCY_NAME.' + (h.currencyCode || 'XOF') | translate }}
+        </dd>
+      </div>
+      <div>
+        <dt>{{ 'PLATFORM_SETUP.HOSPITAL.TIME_ZONE' | translate }}</dt>
+        <dd>
+          @if (h.effectiveTimeZone) {
+            {{ h.effectiveTimeZone }}
+            @if (!h.timeZone) {
+              <span class="hospital-facts-note">{{
+                'PLATFORM_SETUP.HOSPITAL.TIME_ZONE_FROM_ORG' | translate
+              }}</span>
+            }
+          } @else {
+            {{ 'PLATFORM_SETUP.HOSPITAL.TIME_ZONE_NONE' | translate }}
+          }
+        </dd>
+      </div>
+    </dl>
+    <app-onboarding-checklist [hospitalId]="h.id" [scopedLinks]="true" />
+  }
+
   @if (loading()) {
     <div class="state-panel" data-test="loading">
       <span class="material-symbols-outlined spin" aria-hidden="true">progress_activity</span>
