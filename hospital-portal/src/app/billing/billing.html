@@ -72,29 +72,37 @@
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon total">receipt_long</span>
       <div class="card-info">
-        <span class="card-value">{{ statsUnknown() ? '—' : stats().total }}</span
-        ><span class="card-label">{{ 'BILLING.TOTAL_INVOICES' | translate }}</span>
+        <span class="card-value">{{ statsUnknown() ? '—' : stats().total }}</span><span
+          class="card-label"
+          >{{ 'BILLING.TOTAL_INVOICES' | translate }}</span
+        >
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon paid">check_circle</span>
       <div class="card-info">
-        <span class="card-value">{{ statsUnknown() ? '—' : stats().paid }}</span
-        ><span class="card-label">{{ 'BILLING.PAID' | translate }}</span>
+        <span class="card-value">{{ statsUnknown() ? '—' : stats().paid }}</span><span
+          class="card-label"
+          >{{ 'BILLING.PAID' | translate }}</span
+        >
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon pending">schedule</span>
       <div class="card-info">
-        <span class="card-value">{{ statsUnknown() ? '—' : stats().outstanding }}</span
-        ><span class="card-label">{{ 'BILLING.OUTSTANDING_COUNT' | translate }}</span>
+        <span class="card-value">{{ statsUnknown() ? '—' : stats().outstanding }}</span><span
+          class="card-label"
+          >{{ 'BILLING.OUTSTANDING_COUNT' | translate }}</span
+        >
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon overdue">warning</span>
       <div class="card-info">
-        <span class="card-value">{{ statsUnknown() ? '—' : stats().overdue }}</span
-        ><span class="card-label">{{ 'BILLING.OVERDUE' | translate }}</span>
+        <span class="card-value">{{ statsUnknown() ? '—' : stats().overdue }}</span><span
+          class="card-label"
+          >{{ 'BILLING.OVERDUE' | translate }}</span
+        >
       </div>
     </div>
     <div class="summary-card">
@@ -102,15 +110,15 @@
       <div class="card-info">
         <span class="card-value">{{
           statsUnknown() ? '—' : formatCurrency(stats().totalRevenue)
-        }}</span
-        ><span class="card-label">{{ 'BILLING.REVENUE' | translate }}</span>
+        }}</span><span class="card-label">{{ 'BILLING.REVENUE' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon outstanding">account_balance</span>
       <div class="card-info">
-        <span class="card-value">{{ statsUnknown() ? '—' : formatCurrency(stats().balance) }}</span
-        ><span class="card-label">{{ 'BILLING.OUTSTANDING' | translate }}</span>
+        <span class="card-value">{{
+          statsUnknown() ? '—' : formatCurrency(stats().balance)
+        }}</span><span class="card-label">{{ 'BILLING.OUTSTANDING' | translate }}</span>
       </div>
     </div>
   </div>
@@ -404,34 +412,43 @@
         <div class="panel-body">
           <div class="detail-grid">
             <div class="detail-field">
-              <span class="field-label">{{ 'APPOINTMENTS.PATIENT' | translate }}</span
-              ><span class="field-value">{{ inv.patientFullName }}</span>
+              <span class="field-label">{{ 'APPOINTMENTS.PATIENT' | translate }}</span><span
+                class="field-value"
+                >{{ inv.patientFullName }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'PATIENTS.EMAIL' | translate }}</span
-              ><span class="field-value">{{ inv.patientEmail || '—' }}</span>
+              <span class="field-label">{{ 'PATIENTS.EMAIL' | translate }}</span><span
+                class="field-value"
+                >{{ inv.patientEmail || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
-              ><span class="field-value">{{ inv.hospitalName || '—' }}</span>
+              <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span><span
+                class="field-value"
+                >{{ inv.hospitalName || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'BILLING.ENCOUNTER_REFERENCE' | translate }}</span
-              ><span class="field-value">{{ inv.encounterCode || '—' }}</span>
+              <span class="field-label">{{ 'BILLING.ENCOUNTER_REFERENCE' | translate }}</span><span
+                class="field-value"
+                >{{ inv.encounterCode || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'BILLING.INVOICE_DATE' | translate }}</span
-              ><span class="field-value">{{
-                inv.invoiceDate | serverTime | date: 'longDate'
-              }}</span>
+              <span class="field-label">{{ 'BILLING.INVOICE_DATE' | translate }}</span><span
+                class="field-value"
+                >{{ inv.invoiceDate | serverTime | date: 'longDate' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'BILLING.DUE_DATE' | translate }}</span
-              ><span class="field-value">{{ inv.dueDate | serverTime | date: 'longDate' }}</span>
+              <span class="field-label">{{ 'BILLING.DUE_DATE' | translate }}</span><span
+                class="field-value"
+                >{{ inv.dueDate | serverTime | date: 'longDate' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
-              >{{ ' '
+              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span>{{ ' '
               }}<span class="status-badge" [class]="getStatusClass(inv.status)">{{
                 (inv.status | enumLabel: 'invoiceStatus') || '—'
               }}</span>
@@ -443,20 +460,22 @@
               }
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'BILLING.TOTAL_AMOUNT' | translate }}</span
-              ><span class="field-value amount-lg">{{ formatCurrency(inv.totalAmount) }}</span>
+              <span class="field-label">{{ 'BILLING.TOTAL_AMOUNT' | translate }}</span><span
+                class="field-value amount-lg"
+                >{{ formatCurrency(inv.totalAmount) }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'BILLING.AMOUNT_PAID' | translate }}</span
-              ><span class="field-value amount-lg paid-amount">{{
-                formatCurrency(inv.amountPaid)
-              }}</span>
+              <span class="field-label">{{ 'BILLING.AMOUNT_PAID' | translate }}</span><span
+                class="field-value amount-lg paid-amount"
+                >{{ formatCurrency(inv.amountPaid) }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'BILLING.BALANCE_DUE' | translate }}</span
-              ><span class="field-value amount-lg balance-amount">{{
-                formatCurrency(inv.balanceDue)
-              }}</span>
+              <span class="field-label">{{ 'BILLING.BALANCE_DUE' | translate }}</span><span
+                class="field-value amount-lg balance-amount"
+                >{{ formatCurrency(inv.balanceDue) }}</span
+              >
               @if (inv.refundDue) {
                 {{ ' '
                 }}<span class="field-hint" data-testid="refund-due-detail">{{

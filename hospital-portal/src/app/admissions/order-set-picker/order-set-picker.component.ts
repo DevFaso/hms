@@ -138,8 +138,8 @@ const ROUTE_CODES: Readonly<Record<string, string>> = {
           <ul>
             @for (item of sel.orderItems; track item; let i = $index) {
               <li data-testid="order-set-picker-preview-item">
-                <strong>{{ orderItemType(item) }}</strong
-                >{{ 'COMMON.COLON' | translate }} {{ orderItemLabel(item) }}
+                <strong>{{ orderItemType(item) }}</strong>{{ 'COMMON.COLON' | translate }}
+                {{ orderItemLabel(item) }}
                 @if (orderItemDetail(item); as detail) {
                   <small class="order-set-picker__item-detail">{{ detail }}</small>
                 }
