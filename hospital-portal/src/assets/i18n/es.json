@@ -15753,5 +15753,13 @@
     "TITLE": "Página no encontrada",
     "BODY": "Esta página no existe o se ha movido. Compruebe la dirección o vuelva a su panel.",
     "BACK": "Volver al panel"
+  },
+  "CARD_SORT": {
+    "GROUP": "Ordenar la lista",
+    "SORT_BY": "Ordenar por",
+    "ASCENDING": "Ascendente",
+    "DESCENDING": "Descendente",
+    "ASCENDING_FLIP": "Ascendente, cambiar a descendente",
+    "DESCENDING_FLIP": "Descendente, cambiar a ascendente"
   }
 }
