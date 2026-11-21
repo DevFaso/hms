@@ -156,12 +156,6 @@ public class UserController {
     }
 
     /**
-     * A staff registration with no hospital id: by name when one is given,
-     * otherwise the hospital the caller acts at (a hospital admin onboards
-     * into their own hospital, D201; never an organisation admin, D3052).
-     * With neither, a translated 400 body instead of an empty one.
-     */
-    /**
      * QA D3052 (r68): an organisation admin ({@code ROLE_ADMIN}) with no
      * hospital-level admin role registers at several hospitals, so it names
      * one. Platform rule 1a (#1246): « a hospital outside the organisation, or
@@ -173,6 +167,12 @@ public class UserController {
             && !callerAuthorities.contains("ROLE_HOSPITAL_ADMIN");
     }
 
+    /**
+     * A staff registration with no hospital id: by name when one is given,
+     * otherwise the hospital the caller acts at (a hospital admin onboards
+     * into their own hospital, D201; never an organisation admin, D3052).
+     * With neither, a translated 400 body instead of an empty one.
+     */
     private void resolveHospitalFromName(AdminSignupRequest request, boolean mustNameTheHospital) {
         if (request.getHospitalName() != null && !request.getHospitalName().isBlank()) {
             // By NAME a hospital only: a provider facility is named by id (the

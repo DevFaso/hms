@@ -855,6 +855,10 @@ describe('PrescriptionsComponent — signing', () => {
     root.querySelector<HTMLButtonElement>('[data-testid="rx-ordonnance-rx-1"]')!.click();
     expect(prescriptionService.getOrdonnancePdf).toHaveBeenCalledWith('rx-1');
     expect(print.openForPrint).toHaveBeenCalledWith(pdf);
+
+    prescriptionService.getOrdonnancePdf.and.returnValue(throwError(() => new Error('down')));
+    component.printOrdonnance(rx('rx-1', 'SIGNED'));
+    expect(toast.error).toHaveBeenCalledWith('PRESCRIPTIONS.ORDONNANCE_FAILED');
   });
 
   it('offers signing only for a prescription still awaiting a signature', () => {

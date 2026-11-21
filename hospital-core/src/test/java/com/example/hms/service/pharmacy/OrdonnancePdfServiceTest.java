@@ -164,6 +164,47 @@ class OrdonnancePdfServiceTest {
     }
 
     @Test
+    void theHeaderAndEachLineCarryWhatTheRecordsHold() throws Exception {
+        hospital.setAddress("Secteur 15, avenue Kwame Nkrumah");
+        hospital.setPhoneNumber("+226 25 00 00 00");
+        hospital.setEmail("contact@chu-bogodogo.example.invalid");
+        staff.setSpecialization("Médecine interne");
+        staff.setLicenseNumber("CNOM-BF-0001");
+        com.example.hms.model.PatientHospitalRegistration registration =
+                new com.example.hms.model.PatientHospitalRegistration();
+        registration.setHospital(hospital);
+        registration.setPatient(patient);
+        registration.setMrn("MRN-BOG-0042");
+        registration.setActive(true);
+        patient.getHospitalRegistrations().add(registration);
+        rx.setAsNeeded(true);
+        rx.setPrnMinIntervalHours(6);
+        rx.setRefillsAllowed(2);
+        rx.setInstructions("Pendant les repas");
+        rx.setControlledSubstance(true);
+        rx.setRoute("ORAL");
+
+        String text = textOf(service.forPrescriber(rx.getId()));
+
+        assertThat(text)
+                .contains("Secteur 15, avenue Kwame Nkrumah, Ouagadougou")
+                .contains("+226 25 00 00 00")
+                .contains("MRN-BOG-0042")
+                .contains("Médecine interne")
+                .contains("CNOM-BF-0001")
+                .contains("au moins 6 h")
+                .contains("Pendant les repas")
+                .contains("2");
+    }
+
+    @Test
+    void aPrescriptionWithNoVisitListsItselfOnly() throws Exception {
+        rx.setEncounter(null);
+        assertThat(textOf(service.forPrescriber(rx.getId()))).contains("1. Métronidazole 500 mg")
+                .doesNotContain("2. ");
+    }
+
+    @Test
     void anotherHospitalsPrescriptionIsNotFound() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
         UUID id = rx.getId();
