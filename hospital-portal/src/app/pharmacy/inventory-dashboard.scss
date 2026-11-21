@@ -34,11 +34,11 @@
   cursor: pointer;
   font-size: 0.875rem;
   font-weight: 500;
-  color: #64748b;
+  color: var(--text-secondary);
   transition: all 0.15s;
 
   &.active {
-    color: #059669;
+    color: var(--success-text);
     border-bottom-color: #059669;
   }
 
@@ -72,13 +72,13 @@
   font-size: 0.9375rem;
 
   &.stock-ok {
-    color: #059669;
+    color: var(--success-text);
   }
   &.stock-low {
-    color: #f59e0b;
+    color: var(--warning-text);
   }
   &.stock-out {
-    color: #ef4444;
+    color: var(--danger);
   }
 }
 
@@ -92,15 +92,15 @@
 
   &.stock-ok {
     background: #ecfdf5;
-    color: #059669;
+    color: var(--success-text);
   }
   &.stock-low {
     background: #fffbeb;
-    color: #d97706;
+    color: var(--warning-text);
   }
   &.stock-out {
     background: #fef2f2;
-    color: #ef4444;
+    color: var(--danger);
   }
 }
 
@@ -159,7 +159,7 @@
   color: #78350f;
 
   &.reorder {
-    color: #059669;
+    color: var(--success-text);
     font-weight: 600;
   }
 }
@@ -199,16 +199,16 @@
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 4px;
-  color: #059669;
+  color: var(--success-text);
   background: #ecfdf5;
 
   &.urgent {
-    color: #d97706;
+    color: var(--warning-text);
     background: #fffbeb;
   }
 
   &.expired {
-    color: #ef4444;
+    color: var(--danger);
     background: #fef2f2;
   }
 }
@@ -231,7 +231,7 @@ tr.expiring-soon td {
 
 .page-info {
   font-size: 0.875rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .btn-sm {

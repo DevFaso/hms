@@ -1,0 +1,233 @@
+/**
+ * QA r65 design audit (D2790 / D2791 / D2793 / D2797 / D2798 / D2804): the
+ * global design layer, measured as the browser computes it. This reads the
+ * GLOBAL stylesheet the app loads (angular.json test styles), like
+ * overflow-class.spec.ts; scripts/check-design-tokens.mjs reads the sources
+ * (no component restates a shared button or a pre-rebrand colour), and
+ * e2e/layout-overflow.spec.ts measures the real pages.
+ *
+ * The responsive rules depend on the width of the SCREEN, which a Karma page
+ * cannot change: they are measured inside an iframe of that width holding a
+ * copy of the page's stylesheets (testing/screen-frame.ts).
+ */
+import { closeScreens, openScreen } from '../../testing/screen-frame';
+
+function luminance(rgb: string): number {
+  const [r, g, b] = (rgb.match(/[\d.]+/g) ?? []).slice(0, 3).map((v) => {
+    const c = Number(v) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contrast(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** The computed colour of a CSS custom property. */
+function tokenColour(host: HTMLElement, name: string): string {
+  const probe = document.createElement('span');
+  probe.style.color = `var(${name})`;
+  host.appendChild(probe);
+  const colour = getComputedStyle(probe).color;
+  probe.remove();
+  return colour;
+}
+
+const WHITE = 'rgb(255, 255, 255)';
+const BRAND = 'rgb(14, 124, 107)';
+
+describe('global design layer (QA r65)', () => {
+  let box: HTMLDivElement;
+
+  beforeEach(() => {
+    box = document.createElement('div');
+    document.body.appendChild(box);
+  });
+  afterEach(() => box.remove());
+
+  describe('contrast tokens (D2793)', () => {
+    it('keeps secondary and muted text at 4.5:1 or more on white and on the page background', () => {
+      const page = tokenColour(box, '--surface-page');
+      expect(page).toBe('rgb(241, 245, 249)');
+      for (const token of ['--text-primary', '--text-secondary', '--text-muted']) {
+        const colour = tokenColour(box, token);
+        expect(contrast(colour, WHITE))
+          .withContext(`${token} on white`)
+          .toBeGreaterThanOrEqual(4.5);
+        expect(contrast(colour, page))
+          .withContext(`${token} on the page`)
+          .toBeGreaterThanOrEqual(4.5);
+      }
+    });
+
+    it('keeps white text readable on the brand and the danger fills', () => {
+      for (const token of ['--primary', '--primary-dark', '--danger', '--danger-dark']) {
+        expect(contrast(WHITE, tokenColour(box, token)))
+          .withContext(`white on ${token}`)
+          .toBeGreaterThanOrEqual(4.5);
+      }
+      expect(contrast(tokenColour(box, '--accent-violet'), WHITE)).toBeGreaterThanOrEqual(4.5);
+    });
+
+    it('prints an empty state and a page subtitle in the secondary token', () => {
+      box.innerHTML = `<div class="content"><p class="page-subtitle">x</p></div>
+        <div class="empty-state"><p>Aucun résultat</p></div>`;
+      const secondary = tokenColour(box, '--text-secondary');
+      expect(getComputedStyle(box.querySelector('.page-subtitle')!).color).toBe(secondary);
+      expect(getComputedStyle(box.querySelector('.empty-state p')!).color).toBe(secondary);
+    });
+  });
+
+  describe('one button system (D2790 / D2804)', () => {
+    it('gives the three shared buttons one shape and the brand colours', () => {
+      box.innerHTML = `<button class="btn-primary">Créer</button>
+        <button class="btn-secondary">Annuler</button>
+        <button class="btn-danger">Supprimer</button>`;
+      const [primary, secondary, danger] = Array.from(box.querySelectorAll('button')).map((b) =>
+        getComputedStyle(b),
+      );
+      for (const style of [primary, secondary, danger]) {
+        expect(style.minHeight).toBe('40px');
+        expect(style.borderTopLeftRadius).toBe('8px');
+        expect(style.fontSize).toBe('14px');
+        expect(style.fontWeight).toBe('600');
+        expect(style.display).toBe('inline-flex');
+      }
+      expect(primary.backgroundColor).toBe(BRAND);
+      expect(primary.color).toBe(WHITE);
+      expect(secondary.backgroundColor).toBe(WHITE);
+      expect(secondary.borderTopWidth).toBe('1px');
+      expect(secondary.borderTopColor).not.toBe(WHITE);
+      expect(danger.backgroundColor).toBe('rgb(185, 28, 28)');
+      expect(danger.color).toBe(WHITE);
+    });
+
+    it('has one small size, and a disabled look', () => {
+      box.innerHTML = `<button class="btn-primary btn-sm">x</button>
+        <button class="btn-primary" disabled>x</button>`;
+      const [small, disabled] = Array.from(box.querySelectorAll('button')).map((b) =>
+        getComputedStyle(b),
+      );
+      expect(small.minHeight).toBe('32px');
+      expect(Number(disabled.opacity)).toBeLessThan(1);
+      expect(disabled.cursor).toBe('not-allowed');
+    });
+
+    it('styles a button built at run time, outside any component (the Escape question)', () => {
+      box.innerHTML = `<div class="dialog-discard"><button class="btn-secondary">Rester</button>
+        <button class="btn-danger">Abandonner</button></div>`;
+      expect(getComputedStyle(box.querySelector('.btn-danger')!).backgroundColor).toBe(
+        'rgb(185, 28, 28)',
+      );
+    });
+  });
+
+  describe('one page title, one table header (D2791 / D2797)', () => {
+    it('fixes the h1 of a page at one size and weight, whatever the page wrote', () => {
+      box.innerHTML = `<main class="content">
+        <h1 style="font-size: 32px; font-weight: 800">Consultations</h1>
+        <h1 class="page-title" style="font-size: 22px; font-weight: 600">Utilisateurs</h1></main>`;
+      for (const h1 of Array.from(box.querySelectorAll('h1'))) {
+        const style = getComputedStyle(h1);
+        // 24 px on a desktop, 20 px on a phone-wide test window: one size either way.
+        expect(style.fontSize).toBe(window.innerWidth < 600 ? '20px' : '24px');
+        expect(style.fontWeight).toBe('700');
+      }
+    });
+
+    it('writes every column header in sentence case at one size', () => {
+      box.innerHTML = `<table><thead><tr>
+          <th style="text-transform: uppercase; font-size: 10px; letter-spacing: 1px">Patient</th>
+          <th style="font-size: 14.4px; font-weight: 500">Statut</th>
+        </tr></thead><tbody><tr><td>x</td><td>y</td></tr></tbody></table>`;
+      for (const th of Array.from(box.querySelectorAll('th'))) {
+        const style = getComputedStyle(th);
+        expect(style.textTransform).toBe('none');
+        expect(style.fontSize).toBe('12px');
+        expect(style.fontWeight).toBe('600');
+        expect(style.letterSpacing).toBe('normal');
+      }
+    });
+  });
+
+  describe('responsive tables (D2798)', () => {
+    const screen = openScreen;
+
+    afterEach(closeScreens);
+
+    const TABLE = `<div style="overflow-x:auto;width:100%"><table data-cards style="min-width:900px;width:100%">
+        <thead><tr><th>Numéro</th><th>Patient</th><th>Total</th><th>Statut</th></tr></thead>
+        <tbody>
+          <tr><td data-label="Numéro">CHWF2396-2026-000001</td><td data-label="Patient">Évelyne Démo-Ouédraogo</td>
+              <td data-label="Total" style="white-space:nowrap">13 550 F CFA</td><td data-label="Statut">Payée</td></tr>
+          <tr><td colspan="4">Aucune autre facture</td></tr>
+        </tbody></table></div>`;
+
+    it('sticks the last column of ANY table below the desktop width, not only a column of buttons', async () => {
+      const doc = await screen(800);
+      doc.body.innerHTML = TABLE;
+      const view = doc.defaultView!;
+      const last = doc.querySelector<HTMLElement>('tbody tr:first-child td:last-child')!;
+      const head = doc.querySelector<HTMLElement>('thead th:last-child')!;
+      const spanning = doc.querySelector<HTMLElement>('td[colspan]')!;
+      expect(view.getComputedStyle(last).position).toBe('sticky');
+      expect(view.getComputedStyle(last).right).toBe('0px');
+      expect(view.getComputedStyle(head).position).toBe('sticky');
+      // The sticky cell is opaque: it takes its row's background.
+      expect(view.getComputedStyle(last).backgroundColor).toBe(WHITE);
+      // A full-width row is not a column.
+      expect(view.getComputedStyle(spanning).position).toBe('static');
+      // And the last column really is on screen while the table scrolls under it.
+      const scroller = doc.body.firstElementChild as HTMLElement;
+      expect(scroller.scrollWidth).toBeGreaterThan(scroller.clientWidth);
+      expect(last.getBoundingClientRect().right).toBeLessThanOrEqual(801);
+    });
+
+    it('leaves a desktop table alone', async () => {
+      const doc = await screen(1200);
+      doc.body.innerHTML = TABLE;
+      const last = doc.querySelector<HTMLElement>('tbody tr:first-child td:last-child')!;
+      expect(doc.defaultView!.getComputedStyle(last).position).toBe('static');
+      expect(doc.defaultView!.getComputedStyle(last).display).toBe('table-cell');
+    });
+
+    it('shows a marked table as cards under 600 px: one card per row, a label per cell, no sideways scroll', async () => {
+      const doc = await screen(390);
+      doc.body.innerHTML = TABLE;
+      const view = doc.defaultView!;
+      const table = doc.querySelector('table')!;
+      const row = doc.querySelector<HTMLElement>('tbody tr')!;
+      const cell = row.querySelector<HTMLElement>('td:last-child')!;
+      expect(view.getComputedStyle(table).display).toBe('block');
+      expect(view.getComputedStyle(row).display).toBe('table');
+      expect(view.getComputedStyle(cell).display).toBe('table-row');
+      expect(view.getComputedStyle(cell).position).toBe('static');
+      expect(view.getComputedStyle(cell, '::before').content).toBe('"Statut"');
+      // The header row is gone (its sort buttons would stay in the Tab order,
+      // invisible): each cell carries its header as its label.
+      const head = doc.querySelector<HTMLElement>('thead')!;
+      expect(view.getComputedStyle(head).display).toBe('none');
+      for (const labelled of Array.from(row.querySelectorAll<HTMLElement>('td'))) {
+        expect(view.getComputedStyle(labelled, '::before').content).toBe(
+          `"${labelled.dataset['label']}"`,
+        );
+      }
+      // Nothing scrolls sideways, the long invoice number included.
+      const scroller = doc.body.firstElementChild as HTMLElement;
+      expect(scroller.scrollWidth).toBeLessThanOrEqual(scroller.clientWidth + 1);
+      expect(row.getBoundingClientRect().right).toBeLessThanOrEqual(391);
+      // A full-width row is a plain block with no label.
+      const spanning = doc.querySelector<HTMLElement>('td[colspan]')!;
+      expect(view.getComputedStyle(spanning).display).toBe('block');
+    });
+
+    it('leaves an unmarked table (a matrix, a calendar) as a table on a phone', async () => {
+      const doc = await screen(390);
+      doc.body.innerHTML = TABLE.replace(' data-cards', '');
+      const row = doc.querySelector<HTMLElement>('tbody tr')!;
+      expect(doc.defaultView!.getComputedStyle(row).display).toBe('table-row');
+    });
+  });
+});

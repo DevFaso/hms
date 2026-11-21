@@ -94,15 +94,20 @@ test('every button the Escape question builds at run time has a global style', (
     join(src, 'app', 'shared', 'a11y', 'escape-keeps-typed-text.ts'),
     'utf8',
   );
+  // r65 (D2790): the three buttons have ONE definition, in the shared sheet
+  // the global stylesheet loads, so a run-time button is styled by it.
   const styles = readFileSync(join(src, 'styles.scss'), 'utf8');
+  const shared = readFileSync(join(src, 'app', 'shared', 'styles', '_page-common.scss'), 'utf8');
+  assert.match(styles, /@use 'app\/shared\/styles\/page-common'/);
   const classes = [...script.matchAll(/(?:keep|discard)\.className = '([\w-]+)'/g)].map(
     (m) => m[1],
   );
   assert.deepEqual(classes.sort(), ['btn-danger', 'btn-secondary']);
   for (const name of classes) {
-    assert.ok(
-      styles.includes(`.dialog-discard .${name}`),
-      `.dialog-discard .${name} in styles.scss`,
+    assert.match(
+      shared,
+      new RegExp(`^[.]${name}(,| [{])`, 'm'),
+      `.${name} in the global shared sheet`,
     );
   }
 });

@@ -22,7 +22,7 @@
 
 .images-count,
 .images-empty {
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .images-empty {
@@ -42,8 +42,8 @@
   text-align: center;
 
   &.drag-over {
-    border-color: var(--primary, #2563eb);
-    background: var(--primary-light, rgba(37, 99, 235, 0.06));
+    border-color: var(--primary);
+    background: var(--primary-light, rgba(14, 124, 107, 0.06));
   }
 }
 
@@ -134,7 +134,7 @@
   cursor: zoom-in;
 
   &:focus-visible {
-    outline: 3px solid var(--primary, #2563eb);
+    outline: 3px solid var(--primary);
     outline-offset: 2px;
   }
 
@@ -318,7 +318,7 @@
   }
 
   small {
-    color: #9ca3af;
+    color: var(--text-muted);
   }
 }
 

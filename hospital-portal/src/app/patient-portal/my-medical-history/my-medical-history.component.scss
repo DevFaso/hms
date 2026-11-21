@@ -24,7 +24,7 @@
 
 .empty-message {
   font-size: 14px;
-  color: #64748b;
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -40,12 +40,12 @@
 
   .empty-icon {
     font-size: 40px;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 
   p {
     font-size: 14px;
-    color: #64748b;
+    color: var(--text-secondary);
     margin: 0;
   }
 }
@@ -125,7 +125,7 @@
 
 .social-label {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .social-value {
@@ -142,7 +142,8 @@
 .notes-link {
   font-size: 14px;
   font-weight: 600;
-  color: var(--primary);
+  // on the #f0f0f0 note strip --primary is 4.47:1; the dark brand is 6.6:1
+  color: var(--primary-dark);
   cursor: pointer;
   text-decoration: none;
 
@@ -153,7 +154,7 @@
 
 .notes-disclaimer {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
   margin: 2px 0 8px;
 }
 
@@ -170,7 +171,7 @@
   &:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    box-shadow: 0 0 0 3px rgba(14, 124, 107, 0.1);
   }
 }
 

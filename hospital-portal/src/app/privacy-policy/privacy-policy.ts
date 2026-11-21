@@ -439,15 +439,15 @@ import { Component, ChangeDetectionStrategy } from '@angular/core';
         border: 1px solid #d1d5db;
         border-radius: 6px;
         background: #f9fafb;
-        color: #6b7280;
+        color: var(--text-secondary);
         font-size: 0.85rem;
         cursor: pointer;
         transition: all 0.2s;
       }
       .lang-toggle button.active {
-        background: #0085ca;
+        background: var(--primary);
         color: #fff;
-        border-color: #0085ca;
+        border-color: var(--primary);
       }
       h1 {
         font-size: 2rem;

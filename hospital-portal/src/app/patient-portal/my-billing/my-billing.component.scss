@@ -49,7 +49,7 @@
   color: #1e293b;
 }
 .pli-amount.has-balance {
-  color: #d97706;
+  color: var(--warning-text);
 }
 .pli-status {
   font-size: 11px;
@@ -57,16 +57,16 @@
   padding: 2px 8px;
   border-radius: 12px;
   background: #f1f5f9;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 .pli-status[data-status='PAID'] {
   background: #d1fae5;
-  color: #059669;
+  color: var(--success-text);
 }
 .pli-status[data-status='PENDING'],
 .pli-status[data-status='OVERDUE'] {
   background: #fef3c7;
-  color: #d97706;
+  color: var(--warning-text);
 }
 .pay-btn {
   display: inline-flex;
@@ -129,7 +129,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: #64748b;
+  color: var(--text-secondary);
   padding: 4px;
   border-radius: 6px;
 }
@@ -147,7 +147,7 @@
 }
 .pay-label {
   font-size: 13px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 .pay-value {
@@ -156,7 +156,7 @@
   color: #1e293b;
 }
 .pay-balance {
-  color: #d97706;
+  color: var(--warning-text);
 }
 .pay-field {
   margin-top: 16px;
@@ -183,7 +183,7 @@
 .pay-field input:focus,
 .pay-field select:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  box-shadow: 0 0 0 3px rgba(14, 124, 107, 0.12);
 }
 .pay-hint {
   margin: 6px 0 0;
@@ -233,7 +233,7 @@
   margin-top: 12px;
   padding: 10px 14px;
   background: #fef2f2;
-  color: #dc2626;
+  color: var(--danger);
   border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
@@ -242,7 +242,7 @@
   margin-top: 12px;
   padding: 10px 14px;
   background: #f0fdf4;
-  color: #16a34a;
+  color: var(--success-text);
   border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
@@ -268,7 +268,7 @@
   background: none;
   border: none;
   padding: 0;
-  color: var(--primary, #0e7c6b);
+  color: var(--primary);
   font-weight: 600;
   cursor: pointer;
   text-decoration: underline;

@@ -38,8 +38,8 @@
   cursor: pointer;
 
   &.active {
-    background: var(--primary, #0e7c6b);
-    border-color: var(--primary, #0e7c6b);
+    background: var(--primary);
+    border-color: var(--primary);
     color: #fff;
   }
 }
@@ -129,7 +129,7 @@
 .link-btn {
   background: none;
   border: none;
-  color: var(--primary, #0e7c6b);
+  color: var(--primary);
   cursor: pointer;
   padding: 0;
   font-size: 0.85rem;

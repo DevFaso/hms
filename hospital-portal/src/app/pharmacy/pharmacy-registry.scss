@@ -53,7 +53,7 @@
   display: inline-block;
   font-size: 0.6875rem;
   font-weight: 600;
-  color: #059669;
+  color: var(--success-text);
   background: #ecfdf5;
   padding: 2px 8px;
   border-radius: 4px;
@@ -65,7 +65,7 @@
 .pharmacy-detail {
   margin: 0.25rem 0 0;
   font-size: 0.8125rem;
-  color: #64748b;
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   gap: 0.25rem;
@@ -86,8 +86,8 @@
 .meta-chip {
   font-size: 0.6875rem;
   font-weight: 600;
-  color: #6366f1;
-  background: #eef2ff;
+  color: var(--primary);
+  background: var(--primary-soft);
   padding: 2px 8px;
   border-radius: 4px;
 }
@@ -102,7 +102,7 @@
 
 .page-info {
   font-size: 0.875rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .btn-sm {

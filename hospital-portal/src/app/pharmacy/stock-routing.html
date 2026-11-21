@@ -52,7 +52,7 @@
         (keyup.enter)="pickFirstMatch()"
       />
       <button
-        class="btn btn-primary"
+        class="btn-primary"
         (click)="checkStock()"
         [disabled]="checking()"
         [appSubmitGuard]="!prescriptionId.trim() && ('SUBMIT_GUARD.PRESCRIPTION' | translate)"
@@ -112,7 +112,7 @@
           @if (!queueAtLimit()) {
             <button
               type="button"
-              class="btn btn-secondary btn-sm"
+              class="btn-secondary btn-sm"
               data-testid="routing-rx-load-older"
               [disabled]="queueLoadingMore()"
               (click)="loadOlderQueue()"
@@ -208,7 +208,7 @@
       @if (canAct && isPrinted()) {
         <div class="routing-options" data-testid="printed-copy-panel">
           <p>{{ 'PHARMACY.PRINTED_COPY_HINT' | translate }}</p>
-          <button class="btn btn-secondary" (click)="reprintCopy()" data-testid="reprint-copy">
+          <button class="btn-secondary" (click)="reprintCopy()" data-testid="reprint-copy">
             {{ 'PHARMACY.REPRINT_COPY' | translate }}
           </button>
         </div>
@@ -232,7 +232,7 @@
               {{ 'PHARMACY.BACK_ORDER' | translate }}
             </button>
             <button
-              class="btn btn-secondary"
+              class="btn-secondary"
               (click)="printForPatient()"
               [disabled]="saving()"
               [appSubmitGuard]="routeBlockReason()"
@@ -276,7 +276,7 @@
                       </td>
                       <td>
                         <button
-                          class="btn btn-sm btn-primary"
+                          class="btn-sm btn-primary"
                           (click)="openPartnerForm(partner)"
                           [disabled]="saving()"
                           [appSubmitGuard]="
@@ -332,11 +332,11 @@
         ></textarea>
       </div>
       <div class="form-actions">
-        <button class="btn btn-secondary" (click)="closePartnerForm()" [disabled]="saving()">
+        <button class="btn-secondary" (click)="closePartnerForm()" [disabled]="saving()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
-          class="btn btn-primary"
+          class="btn-primary"
           (click)="submitRouteToPartner()"
           [disabled]="saving()"
           [appSubmitGuard]="!scopeReady() && ('SUBMIT_GUARD.SCOPE' | translate)"
@@ -367,7 +367,7 @@
         />
       </div>
       <div class="form-actions">
-        <button class="btn btn-secondary" (click)="closeBackOrderForm()" [disabled]="saving()">
+        <button class="btn-secondary" (click)="closeBackOrderForm()" [disabled]="saving()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
@@ -483,7 +483,7 @@
                     {{ 'PHARMACY.ACCEPT' | translate }}
                   </button>
                   <button
-                    class="btn btn-sm btn-danger"
+                    class="btn-sm btn-danger"
                     (click)="respondToPartner(d.id, false)"
                     [disabled]="saving()"
                     [appSubmitGuard]="!scopeReady() && ('SUBMIT_GUARD.SCOPE' | translate)"

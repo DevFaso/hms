@@ -61,7 +61,7 @@
 
 .card-label {
   font-size: 0.75rem;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-top: 2px;
 }
 
@@ -79,7 +79,7 @@
   background: none;
   font-size: 0.875rem;
   font-weight: 500;
-  color: #6b7280;
+  color: var(--text-secondary);
   cursor: pointer;
   border-bottom: 2px solid transparent;
   margin-bottom: -2px;
@@ -108,7 +108,7 @@
 
   .material-symbols-outlined {
     font-size: 1.25rem;
-    color: #6b7280;
+    color: var(--text-secondary);
   }
 
   input {
@@ -120,7 +120,7 @@
     background: transparent;
 
     &::placeholder {
-      color: #6b7280;
+      color: var(--text-muted);
     }
   }
 }
@@ -132,7 +132,7 @@
   align-items: center;
   justify-content: center;
   padding: 3rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 
   p {
     margin-top: 1rem;
@@ -158,7 +158,7 @@
 .empty-state {
   text-align: center;
   padding: 3rem 1rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 
   .empty-icon {
     font-size: 3rem;
@@ -198,7 +198,7 @@
       font-weight: 600;
       font-size: 0.75rem;
       text-transform: uppercase;
-      color: #6b7280;
+      color: var(--text-secondary);
       border-bottom: 1px solid #e5e7eb;
     }
   }
@@ -226,16 +226,16 @@
 }
 .cell-secondary {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .order-code {
   font-weight: 600;
-  color: #7c3aed !important;
+  color: var(--primary) !important;
 }
 
 .date-cell {
-  color: #64748b !important;
+  color: var(--text-secondary) !important;
   white-space: nowrap;
   font-size: 0.8125rem;
 }
@@ -246,7 +246,7 @@
   cursor: pointer;
   padding: 0.375rem;
   border-radius: 6px;
-  color: #6b7280;
+  color: var(--text-secondary);
   transition: all 0.15s;
 
   &:hover {
@@ -276,8 +276,8 @@
     color: #92400e;
   }
   &.status-collected {
-    background: #e0e7ff;
-    color: #3730a3;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &.status-resulted {
     background: #d1fae5;
@@ -345,7 +345,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--text-secondary);
   padding: 0.375rem;
   border-radius: 6px;
 
@@ -374,7 +374,7 @@
 .field-label {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--text-secondary);
   text-transform: uppercase;
 }
 
@@ -400,24 +400,6 @@
 .page-actions {
   display: flex;
   gap: 0.75rem;
-  .btn-primary {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.6rem 1.25rem;
-    background: #6366f1;
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
-    &:hover {
-      background: #4f46e5;
-    }
-    .material-symbols-outlined {
-      font-size: 1.15rem;
-    }
-  }
 }
 .action-group {
   display: flex;
@@ -430,7 +412,7 @@
   cursor: pointer;
   padding: 0.35rem;
   border-radius: 6px;
-  color: #64748b;
+  color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
   transition: all 0.15s;
@@ -439,14 +421,14 @@
     color: #0f172a;
   }
   &.view-link:hover {
-    color: #6366f1;
+    color: var(--primary);
   }
   &.edit-link:hover {
-    color: #0ea5e9;
+    color: var(--info-text);
   }
   &.delete-link:hover,
   &.void-link:hover {
-    color: #ef4444;
+    color: var(--danger);
     background: #fef2f2;
   }
   .material-symbols-outlined {
@@ -508,7 +490,7 @@
   cursor: pointer;
   padding: 0.4rem;
   border-radius: 8px;
-  color: #64748b;
+  color: var(--text-secondary);
   &:hover {
     background: #f1f5f9;
     color: #0f172a;
@@ -544,8 +526,8 @@
     transition: border-color 0.15s;
     &:focus {
       outline: none;
-      border-color: #6366f1;
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(14, 124, 107, 0.1);
     }
   }
   textarea {
@@ -606,38 +588,6 @@
     font-size: 0.9rem;
     cursor: pointer;
   }
-  .btn-secondary {
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
-    color: #475569;
-    &:hover {
-      background: #e2e8f0;
-    }
-  }
-  .btn-primary {
-    background: #6366f1;
-    border: none;
-    color: #fff;
-    &:hover {
-      background: #4f46e5;
-    }
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-  }
-  .btn-danger {
-    background: #ef4444;
-    border: none;
-    color: #fff;
-    &:hover {
-      background: #dc2626;
-    }
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-  }
 }
 
 // ── Responsive ──
@@ -664,7 +614,7 @@
 
 .field-hint {
   font-size: 0.74rem;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-top: 2px;
 }
 

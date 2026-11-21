@@ -20,7 +20,7 @@
 
   .header-icon {
     font-size: 2rem;
-    color: var(--color-primary, var(--primary));
+    color: var(--primary);
   }
 
   .page-title {
@@ -30,7 +30,7 @@
 
   .page-subtitle {
     margin: 0;
-    color: var(--color-text-muted, #6b7280);
+    color: var(--color-text-muted, var(--text-secondary));
     font-size: 0.9rem;
   }
 
@@ -81,7 +81,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 2.5rem 1rem;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted, var(--text-secondary));
 
   &.state-error {
     color: #991b1b;
@@ -129,7 +129,7 @@
   .order-code,
   .unit {
     margin-left: 0.4rem;
-    color: var(--color-text-muted, #6b7280);
+    color: var(--color-text-muted, var(--text-secondary));
     font-size: 0.82rem;
     font-weight: 400;
   }
@@ -172,7 +172,7 @@
   }
 
   .no-action {
-    color: var(--color-text-muted, #6b7280);
+    color: var(--color-text-muted, var(--text-secondary));
     font-size: 0.82rem;
   }
 }
@@ -207,8 +207,8 @@
   }
 
   &.flag-low {
-    background: #dbeafe;
-    color: #1e40af;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
 
   &.flag-normal {
@@ -227,8 +227,6 @@
 
 .btn-refresh,
 .btn-page,
-.btn-primary,
-.btn-secondary,
 .btn-release {
   display: inline-flex;
   align-items: center;
@@ -245,10 +243,9 @@
   }
 }
 
-.btn-primary,
 .btn-release {
-  background: var(--color-primary, var(--primary));
-  border-color: var(--color-primary, var(--primary));
+  background: var(--primary);
+  border-color: var(--primary);
   color: #fff;
 }
 
@@ -289,7 +286,7 @@
 }
 
 .confirm-note {
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted, var(--text-secondary));
   font-size: 0.85rem;
 }
 
@@ -417,7 +414,7 @@
 .patient-identity {
   display: block;
   font-size: 0.78rem;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted, var(--text-secondary));
   overflow-wrap: anywhere;
 }
 

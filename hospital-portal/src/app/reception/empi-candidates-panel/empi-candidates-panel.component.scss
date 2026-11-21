@@ -119,39 +119,12 @@ fieldset {
   padding-top: 20px;
   margin-top: 24px;
 }
-button {
-  font: inherit;
-  font-size: 13px;
-  min-height: 40px;
-  padding: 10px 16px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 650;
-}
-.btn-primary {
-  background: #0b7061;
-  color: white;
-  &:hover:not(:disabled) {
-    background: #075a50;
-  }
-}
-.btn-secondary {
-  background: white;
-  color: #294b60;
-  border-color: #cbd9e4;
-  &:hover:not(:disabled) {
-    background: #f1f7fa;
-  }
-  &[aria-pressed='true'] {
-    background: #fff4d6;
-    border-color: #a66b0b;
-    color: #78520b;
-  }
-}
-button:disabled {
-  opacity: 0.6;
-  cursor: wait;
+/* The panel's buttons are the shared .btn-primary / .btn-secondary
+   (_page-common.scss). Only the pressed state of a toggle is the panel's own. */
+.btn-secondary[aria-pressed='true'] {
+  background: #fff4d6;
+  border-color: #a66b0b;
+  color: #78520b;
 }
 :is(input, select, button, .results-scroll):focus-visible {
   outline: 3px solid #118e85;

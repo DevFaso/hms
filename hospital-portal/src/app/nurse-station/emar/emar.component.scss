@@ -66,7 +66,7 @@
   background: var(--color-surface, #ffffff);
 
   &--active {
-    border-color: var(--color-primary, #2b6cb0);
+    border-color: var(--primary);
     box-shadow: 0 0 0 2px rgba(43, 108, 176, 0.15);
   }
 }
@@ -234,8 +234,8 @@
   }
 
   &--primary {
-    background: var(--color-primary, #2b6cb0);
-    border-color: var(--color-primary, #2b6cb0);
+    background: var(--primary);
+    border-color: var(--primary);
     color: #fff;
   }
 

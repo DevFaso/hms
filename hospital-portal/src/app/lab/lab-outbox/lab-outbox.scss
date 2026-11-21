@@ -19,7 +19,7 @@
 
   .header-icon {
     font-size: 2rem;
-    color: var(--color-primary, var(--primary));
+    color: var(--primary);
   }
 
   .page-title {
@@ -29,7 +29,7 @@
 
   .page-subtitle {
     margin: 0;
-    color: var(--color-text-muted, #6b7280);
+    color: var(--color-text-muted, var(--text-secondary));
     font-size: 0.9rem;
   }
 
@@ -89,7 +89,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 2.5rem 1rem;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted, var(--text-secondary));
 
   &.state-error {
     color: #991b1b;
@@ -209,8 +209,7 @@
 }
 
 .btn-refresh,
-.btn-page,
-.btn-primary {
+.btn-page {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -224,12 +223,6 @@
     opacity: 0.5;
     cursor: default;
   }
-}
-
-.btn-primary {
-  background: var(--color-primary, var(--primary));
-  border-color: var(--color-primary, var(--primary));
-  color: #fff;
 }
 
 .pagination {
@@ -323,7 +316,7 @@
 }
 
 .muted {
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted, var(--text-secondary));
 }
 
 .result-status-badge {
@@ -344,7 +337,7 @@
   }
 
   &[data-result-status='C'] {
-    color: #1e40af;
+    color: var(--primary-deep);
   }
 }
 

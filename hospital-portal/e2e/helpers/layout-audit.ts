@@ -30,6 +30,16 @@ import type { Page } from '@playwright/test';
  *  - `dialog-overflow` a dialog is wider than the screen;
  *  - `squeezed-text`   a text box squeezed so narrow it prints one letter per
  *                      line (D2431: nothing spills, so `text-overflow` misses it).
+ *
+ *  r65 (D2798) adds two, so every table goes through the responsive layer:
+ *  - `no-card-mode`       under 600 px, a list table (one plain header row, two
+ *                         columns or more) is not shown as cards: it was not
+ *                         labelled (shared/a11y/design-conventions.ts) or a page
+ *                         rule outranked the card layer. A table that is not a
+ *                         list opts out with `data-no-cards`;
+ *  - `hidden-last-column` from 600 to 1023 px, a table scrolls in place and its
+ *                         last column is not on screen (the sticky last column
+ *                         of styles.scss did not apply).
  */
 export interface LayoutOffender {
   kind:
@@ -39,7 +49,9 @@ export interface LayoutOffender {
     | 'hidden-columns'
     | 'no-scroll-cue'
     | 'dialog-overflow'
-    | 'squeezed-text';
+    | 'squeezed-text'
+    | 'no-card-mode'
+    | 'hidden-last-column';
   selector: string;
   detail: string;
 }
@@ -276,6 +288,23 @@ export async function auditLayout(page: Page): Promise<LayoutOffender[]> {
         );
         return;
       }
+      // QA D2798 (r65): between a phone and a desktop the LAST column stays on
+      // screen whatever it holds (« État », « Adresse IP », a price).
+      const last = cells[cells.length - 1];
+      if (
+        window.innerWidth >= 600 &&
+        cells.length >= 2 &&
+        last.colSpan === 1 &&
+        !table.closest('.fc, [data-no-sticky]') &&
+        last.getBoundingClientRect().right > viewRight + 2
+      ) {
+        push(
+          'hidden-last-column',
+          table,
+          `last column « ${(last.textContent ?? '').replace(/\s+/g, ' ').trim()} » is off screen in ` +
+            `${describe(scroller)} (position ${getComputedStyle(last).position})`,
+        );
+      }
       const shadowed = sticky.some((c) => getComputedStyle(c).boxShadow !== 'none');
       const faded =
         parseFloat(getComputedStyle(scroller).getPropertyValue('--scroll-fade') || '0') > 0;
@@ -287,6 +316,44 @@ export async function auditLayout(page: Page): Promise<LayoutOffender[]> {
         );
       }
     });
+
+    // (d2) QA D2798 (r65): on a phone a list table is a list of cards. Every
+    // table with one plain header row of two columns or more must have been
+    // labelled and must really render as cards (a page rule that outranks the
+    // card layer, or a table the labeller missed, fails here).
+    if (window.innerWidth < 600) {
+      document.querySelectorAll('table').forEach((table) => {
+        if (!visible(table) || table.closest('.fc, .mat-calendar, [data-no-cards]')) return;
+        const head = table.tHead;
+        if (!head || head.rows.length !== 1) return;
+        const cells = Array.from(head.rows[0].cells);
+        if (cells.length < 2 || cells.some((c) => c.colSpan !== 1 || c.rowSpan !== 1)) return;
+        const row = Array.from(table.tBodies)
+          .flatMap((body) => Array.from(body.rows))
+          .find((r) => visible(r));
+        const cell = row
+          ? Array.from(row.cells).find((c) => c.colSpan === 1 && c.rowSpan === 1 && visible(c))
+          : undefined;
+        const problems: string[] = [];
+        if (!table.hasAttribute('data-cards')) problems.push('not marked data-cards');
+        if (getComputedStyle(table).display !== 'block') {
+          problems.push(`table display ${getComputedStyle(table).display}`);
+        }
+        if (row && getComputedStyle(row).display !== 'table') {
+          problems.push(`row display ${getComputedStyle(row).display}`);
+        }
+        if (cell) {
+          if (!cell.hasAttribute('data-label')) problems.push('cell without data-label');
+          else if (
+            cell.getAttribute('data-label') !== '' &&
+            getComputedStyle(cell).display !== 'table-row'
+          ) {
+            problems.push(`cell display ${getComputedStyle(cell).display}`);
+          }
+        }
+        if (problems.length) push('no-card-mode', table, problems.join('; '));
+      });
+    }
 
     // (e) QA D2461 (r64): a dialog is never wider than the screen.
     document

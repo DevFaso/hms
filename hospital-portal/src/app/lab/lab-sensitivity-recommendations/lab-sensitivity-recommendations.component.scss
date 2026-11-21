@@ -40,12 +40,12 @@
 }
 
 .reco-btn--primary {
-  border-color: #1d4ed8;
-  background: #1d4ed8;
+  border-color: var(--primary-dark);
+  background: var(--primary-dark);
   color: #fff;
 
   &:hover:not(:disabled) {
-    background: #1e40af;
+    background: var(--primary-deep);
   }
 }
 
@@ -196,7 +196,7 @@
 
 .reco-code {
   font-weight: 400;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .reco-category {

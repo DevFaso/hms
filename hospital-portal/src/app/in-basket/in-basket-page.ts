@@ -59,7 +59,7 @@ import { WardNotificationsComponent } from './ward-notifications/ward-notificati
     }
     .page-subtitle {
       font-size: 0.875rem;
-      color: #64748b;
+      color: var(--text-secondary);
       margin: 0;
     }
   `,

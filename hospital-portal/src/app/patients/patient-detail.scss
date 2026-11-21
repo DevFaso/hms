@@ -148,7 +148,7 @@
   &.active {
     background: var(--primary);
     color: #fff;
-    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+    box-shadow: 0 2px 8px rgba(14, 124, 107, 0.25);
   }
   &:hover:not(.active) {
     background: #f1f5f9;
@@ -331,7 +331,7 @@
 }
 .vital-by {
   font-size: 0.75rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .vital-metrics {
@@ -358,13 +358,13 @@
   }
   small {
     font-size: 0.6875rem;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 }
 
 .vital-label {
   font-size: 0.6875rem;
-  color: #64748b;
+  color: var(--text-secondary);
   text-transform: uppercase;
   font-weight: 600;
 }
@@ -378,7 +378,7 @@
   line-height: 1.5;
 
   &.no-metrics {
-    color: #64748b;
+    color: var(--text-secondary);
     font-style: italic;
   }
 }
@@ -403,7 +403,7 @@
       font-weight: 600;
       font-size: 0.75rem;
       text-transform: uppercase;
-      color: #6b7280;
+      color: var(--text-secondary);
       border-bottom: 1px solid #e5e7eb;
     }
   }
@@ -435,8 +435,8 @@
   font-weight: 600;
   padding: 0.2rem 0.5rem;
   border-radius: 6px;
-  background: #e0e7ff;
-  color: #3730a3;
+  background: var(--primary-tint);
+  color: var(--primary-deep);
 }
 
 .notes-cell {
@@ -454,7 +454,7 @@
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   .empty-icon {
     font-size: 48px;
-    color: #64748b;
+    color: var(--text-secondary);
   }
   h3 {
     margin: 12px 0 4px;
@@ -518,36 +518,6 @@
 
 // ── Button helpers ───────────────────────────────────────────────────────────
 
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 9px 18px;
-  background: var(--primary, var(--primary));
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    opacity 0.15s;
-
-  .material-symbols-outlined {
-    font-size: 18px;
-  }
-
-  &:hover:not(:disabled) {
-    background: var(--primary-dark, var(--primary-dark));
-  }
-
-  &:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-  }
-}
-
 .btn-outline {
   display: inline-flex;
   align-items: center;
@@ -598,7 +568,7 @@
 .address-history-empty {
   margin: 0.375rem 0 0;
   font-size: 0.8125rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .address-history {
@@ -625,7 +595,7 @@
     border-bottom: 1px dashed #e2e8f0;
 
     .until {
-      color: #64748b;
+      color: var(--text-secondary);
       white-space: nowrap;
     }
   }

@@ -53,11 +53,11 @@
         [attr.aria-label]="'AUDIT.DATE_TO' | translate"
         [title]="'AUDIT.DATE_TO' | translate"
       />
-      <button class="btn btn-primary btn-sm" (click)="applyDateFilter()">
+      <button class="btn-primary btn-sm" (click)="applyDateFilter()">
         {{ 'AUDIT.APPLY_FILTER' | translate }}
       </button>
       @if (fromDate || toDate) {
-        <button class="btn btn-secondary btn-sm" (click)="clearDateFilter()">
+        <button class="btn-secondary btn-sm" (click)="clearDateFilter()">
           {{ 'COMMON.CLEAR' | translate }}
         </button>
       }
@@ -134,11 +134,7 @@
       </table>
     </div>
     <div class="pagination-bar">
-      <button
-        class="btn btn-secondary btn-sm"
-        [disabled]="currentPage() === 0"
-        (click)="prevPage()"
-      >
+      <button class="btn-secondary btn-sm" [disabled]="currentPage() === 0" (click)="prevPage()">
         {{ 'AUDIT.PREV' | translate }}
       </button>
       <span class="pagination-info">
@@ -146,7 +142,7 @@
         &nbsp;({{ totalElements() }} {{ 'AUDIT.TOTAL_EVENTS' | translate | lowercase }})
       </span>
       <button
-        class="btn btn-secondary btn-sm"
+        class="btn-secondary btn-sm"
         [disabled]="currentPage() >= totalPages() - 1"
         (click)="nextPage()"
       >

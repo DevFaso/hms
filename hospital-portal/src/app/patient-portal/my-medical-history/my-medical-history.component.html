@@ -83,7 +83,7 @@
     <!-- Surgical History -->
     <section class="history-section">
       <h2 class="section-heading">
-        <span class="material-symbols-outlined" style="color: #7c3aed">surgical</span>
+        <span class="material-symbols-outlined" style="color: var(--accent-violet)">surgical</span>
         {{ 'PORTAL.MEDICAL_HISTORY.SURGICAL' | translate }}
       </h2>
 
@@ -156,7 +156,9 @@
     <!-- Family History -->
     <section class="history-section">
       <h2 class="section-heading">
-        <span class="material-symbols-outlined" style="color: #059669">family_restroom</span>
+        <span class="material-symbols-outlined" style="color: var(--success-text)"
+          >family_restroom</span
+        >
         {{ 'PORTAL.MEDICAL_HISTORY.FAMILY' | translate }}
       </h2>
 
@@ -169,7 +171,7 @@
         <div class="portal-list">
           @for (item of familyHistory(); track item.id) {
             <div class="portal-list-item">
-              <div class="pli-icon" style="background: #d1fae5; color: #059669">
+              <div class="pli-icon" style="background: #d1fae5; color: var(--success-text)">
                 <span class="material-symbols-outlined">person</span>
               </div>
               <div class="pli-body">
@@ -236,7 +238,7 @@
     <!-- Social History -->
     <section class="history-section">
       <h2 class="section-heading">
-        <span class="material-symbols-outlined" style="color: #d97706">groups</span>
+        <span class="material-symbols-outlined" style="color: var(--warning-text)">groups</span>
         {{ 'PORTAL.MEDICAL_HISTORY.SOCIAL' | translate }}
       </h2>
 

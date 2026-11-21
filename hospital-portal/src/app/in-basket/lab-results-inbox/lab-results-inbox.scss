@@ -115,21 +115,6 @@
   }
 }
 
-.btn-secondary {
-  border: 1px solid var(--border);
-  background: #fff;
-  border-radius: 8px;
-  padding: 6px 14px;
-  font-size: 0.85rem;
-  color: var(--text-primary);
-  cursor: pointer;
-
-  &:focus-visible {
-    outline: var(--focus-ring);
-    outline-offset: var(--focus-ring-offset);
-  }
-}
-
 .empty-state {
   margin: 0;
   padding: 16px 0;
@@ -268,7 +253,7 @@
   background: none;
   border: none;
   padding: 0;
-  color: var(--primary-deep, #1d4ed8);
+  color: var(--primary-deep, var(--primary-dark));
   text-decoration: underline;
   cursor: pointer;
   font-size: 0.8rem;

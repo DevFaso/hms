@@ -98,12 +98,12 @@
 
 .card-item-detail {
   font-size: 13px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .card-item-abnormal {
   .card-item-name {
-    color: #dc2626;
+    color: var(--danger);
     font-weight: 600;
   }
 }
@@ -118,13 +118,13 @@
 
 .card-empty {
   font-size: 14px;
-  color: #64748b;
+  color: var(--text-secondary);
   margin: 0;
 }
 
 .card-description {
   font-size: 14px;
-  color: #64748b;
+  color: var(--text-secondary);
   margin: 0;
   line-height: 1.5;
 }
@@ -168,7 +168,7 @@
 
   .material-symbols-outlined {
     font-size: 18px;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 
   &:hover {
@@ -194,7 +194,7 @@
 
 .rec-chip-danger {
   background: #fee2e2;
-  color: #dc2626;
+  color: var(--danger);
 }
 
 // ── Responsive ────────────────────────────────────────────

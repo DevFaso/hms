@@ -40,7 +40,7 @@
   border: none;
   border-radius: 8px;
   background: none;
-  color: #64748b;
+  color: var(--text-secondary);
   cursor: pointer;
 }
 
@@ -77,7 +77,7 @@ dl {
 }
 
 dt {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
 }
@@ -127,7 +127,7 @@ dd {
 
   strong {
     display: block;
-    color: #64748b;
+    color: var(--text-secondary);
     font-size: 12px;
   }
 }
@@ -166,7 +166,7 @@ dd {
 
 .rxdoc-primary {
   border: none;
-  background: var(--primary, #0b7061);
+  background: var(--primary);
   color: #fff;
 }
 

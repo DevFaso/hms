@@ -45,7 +45,7 @@
   gap: 4px 12px;
   margin: 4px 0 0;
   font-size: 13px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .study-print {
@@ -93,7 +93,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .report-signature {
@@ -151,7 +151,7 @@
 
   .material-symbols-outlined {
     font-size: 32px;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 
   &:focus-visible {
@@ -162,7 +162,7 @@
 
 .thumb-caption {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .image-viewer {

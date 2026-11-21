@@ -12,7 +12,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 2.5rem 1rem;
-  color: #6b7280;
+  color: var(--text-secondary);
   text-align: center;
 
   .material-symbols-outlined {
@@ -68,7 +68,7 @@
 
   .specimen-source {
     font-size: 0.82rem;
-    color: #6b7280;
+    color: var(--text-secondary);
   }
 }
 
@@ -142,7 +142,7 @@
   flex-wrap: wrap;
   gap: 0.4rem 1.25rem;
   font-size: 0.8rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .gram-stain,
@@ -168,7 +168,7 @@
 
   .isolate-number {
     font-size: 0.75rem;
-    color: #6b7280;
+    color: var(--text-secondary);
   }
 
   .organism {
@@ -177,7 +177,7 @@
 
   .quantity {
     font-size: 0.8rem;
-    color: #6b7280;
+    color: var(--text-secondary);
   }
 }
 
@@ -185,7 +185,7 @@
 .no-susceptibilities {
   margin: 0;
   font-size: 0.82rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .table-wrap {
@@ -206,7 +206,7 @@
   }
 
   th {
-    color: #6b7280;
+    color: var(--text-secondary);
     font-weight: 600;
     font-size: 0.75rem;
     text-transform: uppercase;

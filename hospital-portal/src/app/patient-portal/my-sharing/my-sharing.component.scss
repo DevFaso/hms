@@ -1,6 +1,6 @@
 .rec-muted {
   font-size: 13px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 // ── Opt-out card (E9 #66) ─────────────────────────────────────
@@ -74,7 +74,7 @@
   label {
     font-size: 12px;
     font-weight: 600;
-    color: #64748b;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
@@ -156,7 +156,7 @@
 
   .material-symbols-outlined {
     font-size: 20px;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 }
 
@@ -176,7 +176,7 @@
   background: #f1f5f9;
 
   .material-symbols-outlined {
-    color: #64748b;
+    color: var(--text-secondary);
   }
 }
 

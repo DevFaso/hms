@@ -256,7 +256,7 @@
               (keydown.enter)="toggleRx(rx.id)"
               [class.expanded]="expandedRxId() === rx.id"
             >
-              <div class="pli-icon" style="background: #ede9fe; color: #7c3aed">
+              <div class="pli-icon" style="background: #ede9fe; color: var(--accent-violet)">
                 <span class="material-symbols-outlined">local_pharmacy</span>
               </div>
               <div class="pli-body">
@@ -426,7 +426,7 @@
         <div class="portal-list">
           @for (r of refills(); track r.id) {
             <div class="portal-list-item">
-              <div class="pli-icon" style="background: #fef3c7; color: #d97706">
+              <div class="pli-icon" style="background: #fef3c7; color: var(--warning-text)">
                 <span class="material-symbols-outlined">refresh</span>
               </div>
               <div class="pli-body">

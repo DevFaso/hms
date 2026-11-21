@@ -178,12 +178,17 @@ async function seedBilling(page: Page) {
   );
 }
 
-/** LAYOUT_SHOTS=<dir> [LAYOUT_SHOTS_TAG=before|after]: save the PR's evidence screenshots. */
+/**
+ * LAYOUT_SHOTS=<dir> [LAYOUT_SHOTS_TAG=before|after]: save the PR's evidence screenshots.
+ * LAYOUT_SHOTS_FOCUS=<selector> (r65): scroll that element to the top first. The shell
+ * scrolls inside `.content`, so a plain shot shows the first screen only; `table` shows
+ * each list's table instead (its cards on a phone, its sticky last column on a tablet).
+ */
 async function shoot(
   page: Page,
   name: string,
   widths: readonly number[] = [1366, 390],
-  focus?: string,
+  focus: string | undefined = process.env['LAYOUT_SHOTS_FOCUS'],
 ) {
   const dir = process.env['LAYOUT_SHOTS'];
   if (!dir) return;
@@ -194,7 +199,12 @@ async function shoot(
       const backdrop = document.querySelector<HTMLElement>('.sidebar-backdrop');
       if (backdrop && getComputedStyle(backdrop).display !== 'none') backdrop.click();
     });
-    if (focus) await page.locator(focus).first().scrollIntoViewIfNeeded();
+    if (focus && (await page.locator(focus).count()) > 0) {
+      await page
+        .locator(focus)
+        .first()
+        .evaluate((el) => el.scrollIntoView({ block: 'start' }));
+    }
     await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(dir, `${name}-${width}-${tag}.png`) });
   }

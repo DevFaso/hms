@@ -30,7 +30,7 @@
   border-radius: 4px;
   background: var(--surface-subtle, #f1f5f9);
   border: 1px solid var(--border-color, #e2e8f0);
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   font-size: 0.72rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -63,7 +63,7 @@
 .dx-bars__empty {
   margin: 0;
   padding: 18px 0;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   font-size: 0.9rem;
 }
 

@@ -214,7 +214,7 @@ const ROUTE_CODES: Readonly<Record<string, string>> = {
       }
       .order-set-picker__item-detail {
         display: block;
-        color: var(--text-secondary, #64748b);
+        color: var(--text-secondary);
       }
       .order-set-picker__preview {
         margin-top: 1rem;

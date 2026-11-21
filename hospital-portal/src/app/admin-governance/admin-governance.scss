@@ -39,27 +39,6 @@
 .page-actions {
   display: flex;
   gap: 0.75rem;
-
-  .btn-primary {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.6rem 1.25rem;
-    background: #6366f1;
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
-
-    &:hover {
-      background: #4f46e5;
-    }
-
-    .material-symbols-outlined {
-      font-size: 1.15rem;
-    }
-  }
 }
 
 .data-table {
@@ -78,7 +57,7 @@
     padding: 0.75rem 1rem;
     font-weight: 600;
     font-size: 0.8rem;
-    color: #6b7280;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     border-bottom: 1px solid #e5e7eb;
@@ -120,8 +99,8 @@
   }
 
   &.status-in-progress {
-    background: #e0e7ff;
-    color: #3730a3;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
 
   &.status-completed {
@@ -166,8 +145,8 @@
   border-radius: 12px;
   font-size: 0.76rem;
   font-weight: 600;
-  background: #eef2ff;
-  color: #3730a3;
+  background: var(--primary-soft);
+  color: var(--primary-deep);
   margin-right: 6px;
 }
 
@@ -243,7 +222,7 @@
   cursor: pointer;
   padding: 0.4rem;
   border-radius: 8px;
-  color: #64748b;
+  color: var(--text-secondary);
 
   &:hover {
     background: #f1f5f9;
@@ -285,8 +264,8 @@
 
     &:focus {
       outline: none;
-      border-color: #6366f1;
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(14, 124, 107, 0.1);
     }
   }
 
@@ -355,39 +334,6 @@
     font-size: 0.9rem;
     cursor: pointer;
   }
-
-  .btn-secondary {
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
-    color: #475569;
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-  }
-
-  .btn-primary {
-    background: #6366f1;
-    border: none;
-    color: #fff;
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-  }
-
-  .btn-danger {
-    background: #ef4444;
-    border: none;
-    color: #fff;
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-  }
 }
 
 @media (max-width: 768px) {
@@ -421,7 +367,7 @@
 
   .subtitle {
     margin: 0;
-    color: #64748b;
+    color: var(--text-secondary);
     font-size: 0.92rem;
   }
 }
@@ -470,7 +416,7 @@
 .btn-link {
   background: none;
   border: none;
-  color: #6366f1;
+  color: var(--primary);
   font-weight: 600;
   cursor: pointer;
   font-size: 0.88rem;
@@ -503,7 +449,7 @@
 
 .cell-sub {
   font-size: 0.8rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .badge {
@@ -527,7 +473,7 @@
 
   &.badge-muted {
     background: #f1f5f9;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 
   &.badge-info {
@@ -542,7 +488,7 @@
   cursor: pointer;
   padding: 0.3rem;
   border-radius: 6px;
-  color: #64748b;
+  color: var(--text-secondary);
   display: inline-flex;
 
   .material-symbols-outlined {
@@ -612,8 +558,8 @@
 
     &:focus {
       outline: none;
-      border-color: #6366f1;
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(14, 124, 107, 0.1);
     }
   }
 }
@@ -628,7 +574,7 @@
   margin-bottom: 0.5rem;
 
   input {
-    accent-color: #6366f1;
+    accent-color: var(--primary);
   }
 }
 
@@ -652,12 +598,12 @@
 .form-hint {
   margin: 0 0 0.85rem;
   font-size: 0.85rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .file-name {
   font-size: 0.82rem;
-  color: #6366f1;
+  color: var(--primary);
   font-weight: 600;
 }
 
@@ -692,7 +638,7 @@
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 }
 
@@ -792,7 +738,7 @@
 
   .meta-text {
     font-size: 0.85rem;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 }
 
@@ -855,7 +801,7 @@
     border: none;
     cursor: pointer;
     padding: 0.2rem;
-    color: #64748b;
+    color: var(--text-secondary);
     display: inline-flex;
   }
 
@@ -868,13 +814,13 @@
 
     code {
       font-size: 0.8rem;
-      color: #6366f1;
+      color: var(--primary);
     }
   }
 
   .policy-org {
     font-size: 0.85rem;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 
   .policy-desc {
@@ -946,18 +892,6 @@
       .material-symbols-outlined {
         font-size: 1.05rem;
       }
-    }
-
-    .btn-secondary {
-      background: #f1f5f9;
-      border: 1px solid #e2e8f0;
-      color: #475569;
-    }
-
-    .btn-primary {
-      background: #6366f1;
-      border: none;
-      color: #fff;
     }
   }
 }

@@ -171,7 +171,7 @@
 }
 
 .bed-occupied {
-  border-left-color: var(--color-primary, #1a73e8);
+  border-left-color: var(--primary);
 }
 
 .bed-reserved {
@@ -361,7 +361,7 @@
   height: 22px;
   padding: 0 6px;
   border-radius: 999px;
-  background: var(--color-primary, #1a73e8);
+  background: var(--primary);
   color: #fff;
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;

@@ -20,7 +20,7 @@
 
   .header-icon {
     font-size: 2rem;
-    color: var(--color-primary, var(--primary));
+    color: var(--primary);
   }
 
   .page-title {
@@ -30,7 +30,7 @@
 
   .page-subtitle {
     margin: 0;
-    color: var(--color-text-muted, #6b7280);
+    color: var(--color-text-muted, var(--text-secondary));
     font-size: 0.9rem;
   }
 
@@ -79,7 +79,7 @@
     align-items: center;
     gap: 0.35rem;
     font-size: 0.9rem;
-    color: var(--color-text-muted, #6b7280);
+    color: var(--color-text-muted, var(--text-secondary));
   }
 }
 
@@ -89,7 +89,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 2.5rem 1rem;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted, var(--text-secondary));
 
   &.state-error {
     color: #991b1b;
@@ -147,13 +147,13 @@
   gap: 0.15rem;
 
   .code {
-    color: var(--color-text-muted, #6b7280);
+    color: var(--color-text-muted, var(--text-secondary));
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.8rem;
   }
 
   .pair-plus {
-    color: var(--color-text-muted, #9ca3af);
+    color: var(--color-text-muted, var(--text-muted));
     font-weight: 700;
   }
 }
@@ -227,8 +227,6 @@
   }
 }
 
-.btn-primary,
-.btn-secondary,
 .btn-refresh,
 .btn-danger-solid {
   display: inline-flex;
@@ -244,12 +242,6 @@
     opacity: 0.5;
     cursor: default;
   }
-}
-
-.btn-primary {
-  background: var(--color-primary, var(--primary));
-  border-color: var(--color-primary, var(--primary));
-  color: #fff;
 }
 
 .btn-danger-solid {
@@ -281,7 +273,7 @@
   }
 
   .code-hint {
-    color: var(--color-text-muted, #6b7280);
+    color: var(--color-text-muted, var(--text-secondary));
     font-size: 0.85rem;
     margin-top: -0.25rem;
   }

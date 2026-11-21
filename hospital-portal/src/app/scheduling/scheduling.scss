@@ -13,18 +13,18 @@
     margin: 0;
     font-size: 1.375rem;
     font-weight: 700;
-    color: #0f172a;
+    color: var(--text-primary);
 
     .material-symbols-outlined {
       font-size: 26px;
-      color: #7c3aed;
+      color: var(--primary);
     }
   }
 
   .subtitle {
     margin: 0.25rem 0 0 36px;
     font-size: 0.8125rem;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 }
 
@@ -64,8 +64,8 @@
     background: #ecfdf5;
   }
   &.total-card > .material-symbols-outlined {
-    color: #7c3aed;
-    background: #f5f3ff;
+    color: var(--primary);
+    background: var(--primary-soft);
   }
 }
 
@@ -83,7 +83,7 @@
 
 .summary-label {
   font-size: 0.75rem;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-top: 2px;
 }
 
@@ -105,7 +105,7 @@
   border-radius: 8px;
   border: none;
   background: transparent;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
@@ -169,7 +169,7 @@
 
     .material-symbols-outlined {
       font-size: 20px;
-      color: #7c3aed;
+      color: var(--primary);
     }
   }
 }
@@ -180,7 +180,7 @@
   gap: 8px;
   padding: 2rem;
   justify-content: center;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.8125rem;
 }
 
@@ -188,7 +188,7 @@
   width: 18px;
   height: 18px;
   border: 2px solid #e2e8f0;
-  border-top-color: #7c3aed;
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
@@ -205,11 +205,11 @@
   align-items: center;
   gap: 6px;
   padding: 3rem 2rem;
-  color: #64748b;
+  color: var(--text-secondary);
 
   .material-symbols-outlined {
     font-size: 40px;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 
   h3 {
@@ -282,11 +282,11 @@
   background: #fafbfc;
 
   &.today {
-    border-color: #7c3aed;
-    box-shadow: 0 0 0 1px #7c3aed;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 1px var(--primary);
 
     .day-header {
-      background: #7c3aed;
+      background: var(--primary);
 
       .day-name,
       .day-date {
@@ -314,7 +314,7 @@
   .day-date {
     display: block;
     font-size: 0.75rem;
-    color: #64748b;
+    color: var(--text-secondary);
     margin-top: 1px;
   }
 }
@@ -332,7 +332,7 @@
   align-items: center;
   justify-content: center;
   flex: 1;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.6875rem;
 }
 
@@ -358,13 +358,13 @@
     border-left: 3px solid #f97316;
   }
   &[data-type='EVENING'] {
-    border-left: 3px solid #6366f1;
+    border-left: 3px solid var(--primary);
   }
   &[data-type='NIGHT'] {
     border-left: 3px solid #475569;
   }
   &[data-type='FLEX'] {
-    border-left: 3px solid #7c3aed;
+    border-left: 3px solid var(--accent-violet);
   }
 
   &[data-status='CANCELLED'] {
@@ -374,7 +374,7 @@
   // Cross-midnight shift: subtle dashed border to hint it spans midnight.
   &.cross-midnight {
     border-style: dashed;
-    border-color: #c7d2fe;
+    border-color: var(--primary-tint);
   }
 
   // End-date column rendering: muted appearance to indicate it's a continuation.
@@ -388,7 +388,7 @@
   width: 24px;
   height: 24px;
   border-radius: 6px;
-  background: linear-gradient(135deg, #7c3aed, #5b21b6);
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
   color: #fff;
   display: flex;
   align-items: center;
@@ -423,7 +423,7 @@
     align-items: center;
     gap: 3px;
     font-size: 0.5625rem;
-    color: #64748b;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.3px;
     margin-top: 1px;
@@ -464,8 +464,8 @@
   display: inline-block;
   font-size: 0.5rem;
   font-weight: 600;
-  color: #3730a3;
-  background: #e0e7ff;
+  color: var(--primary-deep);
+  background: var(--primary-tint);
   border-radius: 4px;
   padding: 1px 4px;
   margin-top: 1px;
@@ -575,7 +575,7 @@
 
   .material-symbols-outlined {
     font-size: 22px;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 }
 
@@ -646,12 +646,12 @@
 
   .material-symbols-outlined {
     font-size: 16px;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 }
 
 .leave-reason {
-  color: #64748b;
+  color: var(--text-secondary);
   font-style: italic;
 }
 
@@ -684,20 +684,20 @@
 .leave-dept {
   font-size: 0.6875rem;
   font-weight: 500;
-  color: #7c3aed;
-  background: #f5f3ff;
+  color: var(--primary);
+  background: var(--primary-soft);
   padding: 2px 8px;
   border-radius: 99px;
 }
 
 .reviewed-by {
   font-size: 0.6875rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .manager-note {
   font-size: 0.6875rem;
-  color: #64748b;
+  color: var(--text-secondary);
   font-style: italic;
   max-width: 180px;
   text-align: right;
@@ -812,7 +812,7 @@ dialog.modal-panel {
 
   .modal-icon {
     font-size: 2rem;
-    color: var(--primary, #4a6cf7);
+    color: var(--primary);
     flex-shrink: 0;
   }
 }
@@ -827,7 +827,7 @@ dialog.modal-panel {
 
 .modal-subtitle {
   font-size: 0.8125rem;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
   margin: 0;
 }
 
@@ -841,7 +841,7 @@ dialog.modal-panel {
   background: transparent;
   border-radius: 8px;
   cursor: pointer;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
   flex-shrink: 0;
   transition:
     background 150ms,
@@ -903,18 +903,18 @@ dialog.modal-panel {
 
   .material-symbols-outlined {
     font-size: 1rem;
-    color: var(--text-muted, #6b7280);
+    color: var(--text-muted);
   }
 
   .required {
-    color: var(--danger, #ef4444);
+    color: var(--danger);
     margin-left: 1px;
   }
 
   .form-hint {
     font-weight: 400;
     font-size: 0.75rem;
-    color: var(--text-muted, #6b7280);
+    color: var(--text-muted);
   }
 }
 
@@ -934,7 +934,7 @@ dialog.modal-panel {
   box-sizing: border-box;
 
   &:focus {
-    border-color: var(--primary, #4a6cf7);
+    border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(74, 108, 247, 0.12);
   }
 
@@ -955,7 +955,7 @@ dialog.modal-panel {
     top: 50%;
     transform: translateY(-50%);
     font-size: 1rem;
-    color: var(--text-muted, #6b7280);
+    color: var(--text-muted);
     pointer-events: none;
   }
 
@@ -972,7 +972,7 @@ dialog.modal-panel {
     width: 14px;
     height: 14px;
     border: 2px solid #d1d5db;
-    border-top-color: var(--primary, #4a6cf7);
+    border-top-color: var(--primary);
     border-radius: 50%;
     animation: spin 0.7s linear infinite;
   }
@@ -1017,7 +1017,7 @@ dialog.modal-panel {
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #7c3aed, #4a6cf7);
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
     color: #fff;
     font-size: 0.6875rem;
     font-weight: 700;
@@ -1044,7 +1044,7 @@ dialog.modal-panel {
 
     .sug-meta {
       font-size: 0.7rem;
-      color: var(--text-muted, #6b7280);
+      color: var(--text-muted);
     }
 
     .sug-hospital {
@@ -1052,7 +1052,7 @@ dialog.modal-panel {
       align-items: center;
       gap: 3px;
       font-size: 0.6875rem;
-      color: #059669;
+      color: var(--success-text);
       font-weight: 500;
 
       .material-symbols-outlined {
@@ -1079,7 +1079,7 @@ dialog.modal-panel {
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #7c3aed, #4a6cf7);
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
     color: #fff;
     font-size: 0.6875rem;
     font-weight: 700;
@@ -1098,7 +1098,7 @@ dialog.modal-panel {
     .chip-name {
       font-size: 0.8125rem;
       font-weight: 600;
-      color: #3730a3;
+      color: var(--primary-deep);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -1106,7 +1106,7 @@ dialog.modal-panel {
 
     .chip-sub {
       font-size: 0.7rem;
-      color: #6d28d9;
+      color: var(--primary-dark);
     }
   }
 
@@ -1116,14 +1116,14 @@ dialog.modal-panel {
     border: none;
     cursor: pointer;
     padding: 2px;
-    color: #7c3aed;
+    color: var(--primary);
     display: flex;
     align-items: center;
     border-radius: 4px;
     transition: background 120ms;
 
     &:hover {
-      background: rgba(124, 58, 237, 0.1);
+      background: rgba(14, 124, 107, 0.1);
     }
 
     .material-symbols-outlined {
@@ -1146,7 +1146,7 @@ dialog.modal-panel {
 
   .lock-icon {
     font-size: 1rem;
-    color: #16a34a;
+    color: var(--success-text);
     flex-shrink: 0;
   }
 
@@ -1167,7 +1167,7 @@ dialog.modal-panel {
 
     .locked-sub {
       font-size: 0.6875rem;
-      color: #16a34a;
+      color: var(--success-text);
     }
   }
 }
@@ -1204,17 +1204,17 @@ dialog.modal-panel {
   padding: 0.25rem 0.75rem;
   font-size: 0.75rem;
   font-weight: 600;
-  border: 1.5px solid var(--primary, #4a6cf7);
+  border: 1.5px solid var(--primary);
   border-radius: 100px;
   background: transparent;
-  color: var(--primary, #4a6cf7);
+  color: var(--primary);
   cursor: pointer;
   transition:
     background 150ms,
     color 150ms;
 
   &:hover {
-    background: var(--primary, var(--primary));
+    background: var(--primary);
     color: #fff;
   }
 }
@@ -1237,14 +1237,14 @@ dialog.modal-panel {
   transition: all 150ms ease;
 
   &:hover:not(.selected) {
-    border-color: var(--primary, #4a6cf7);
-    color: var(--primary, #4a6cf7);
+    border-color: var(--primary);
+    color: var(--primary);
     background: rgba(74, 108, 247, 0.06);
   }
 
   &.selected {
-    background: var(--primary, var(--primary));
-    border-color: var(--primary, var(--primary));
+    background: var(--primary);
+    border-color: var(--primary);
     color: #fff;
     box-shadow: 0 2px 6px rgba(74, 108, 247, 0.3);
   }
@@ -1274,7 +1274,7 @@ dialog.modal-panel {
 
   .material-symbols-outlined {
     font-size: 1.125rem;
-    color: var(--primary, #4a6cf7);
+    color: var(--primary);
     flex-shrink: 0;
     margin-top: 1px;
   }
@@ -1284,7 +1284,7 @@ dialog.modal-panel {
   display: block;
   font-size: 0.75rem;
   font-weight: 400;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
   margin-top: 2px;
 }
 
@@ -1302,7 +1302,7 @@ dialog.modal-panel {
     pointer-events: none;
 
     &:checked + .toggle-track {
-      background: var(--primary, #4a6cf7);
+      background: var(--primary);
 
       .toggle-thumb {
         transform: translateX(20px);
@@ -1365,18 +1365,18 @@ dialog.modal-panel {
   }
 
   &.scheduled {
-    color: var(--success, #10b981);
+    color: var(--success, var(--success-text));
 
     .material-symbols-outlined {
-      color: var(--success, #10b981);
+      color: var(--success, var(--success-text));
     }
   }
 
   &.skipped {
-    color: var(--warning, #f59e0b);
+    color: var(--warning, var(--warning-text));
 
     .material-symbols-outlined {
-      color: var(--warning, #f59e0b);
+      color: var(--warning, var(--warning-text));
     }
   }
 }
@@ -1390,7 +1390,7 @@ dialog.modal-panel {
 .bulk-stat-lbl {
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -1419,7 +1419,7 @@ dialog.modal-panel {
 
   .skip-icon {
     font-size: 1rem;
-    color: var(--warning, #f59e0b);
+    color: var(--warning, var(--warning-text));
     flex-shrink: 0;
   }
 
@@ -1430,7 +1430,7 @@ dialog.modal-panel {
   }
 
   .skip-reason {
-    color: var(--text-muted, #6b7280);
+    color: var(--text-muted);
     font-style: italic;
   }
 }
@@ -1438,41 +1438,9 @@ dialog.modal-panel {
 // ── Shared button styles ──────────────────────────────────
 
 .btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
   // QA D2128: a command is one line; the footer wraps around it instead.
   white-space: nowrap;
   flex-shrink: 0;
-  padding: 0 1.25rem;
-  height: 2.375rem;
-  background: var(--primary, var(--primary));
-  color: #fff;
-  font-size: 0.875rem;
-  font-weight: 600;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition:
-    background 150ms,
-    transform 100ms;
-
-  &:hover:not(:disabled) {
-    background: var(--primary-dark, var(--primary-dark));
-  }
-
-  &:active:not(:disabled) {
-    transform: scale(0.97);
-  }
-
-  &:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-  }
-
-  .material-symbols-outlined {
-    font-size: 1.125rem;
-  }
 }
 
 .btn-ghost {
@@ -1592,7 +1560,7 @@ dialog.modal-panel {
   }
   p {
     margin: 0.25rem 0 0;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 }
 .today-badge {
@@ -1624,7 +1592,7 @@ dialog.modal-panel {
   border: 1px dashed #cbd5e1;
   border-radius: 6px;
   background: transparent;
-  color: var(--primary, #0f766e);
+  color: var(--primary);
   font: inherit;
   font-size: 0.6875rem;
   cursor: pointer;
@@ -1637,7 +1605,7 @@ dialog.modal-panel {
   }
 }
 button:focus-visible {
-  outline: 2px solid #7c3aed;
+  outline: 2px solid var(--primary);
   outline-offset: 3px;
 }
 .btn-ghost:disabled {

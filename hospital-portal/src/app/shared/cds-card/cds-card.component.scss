@@ -63,10 +63,10 @@
 
   &--info {
     background: #e8f0fe;
-    border-color: #1a73e8;
+    border-color: var(--primary);
     color: #14336c;
     .cds-card__indicator {
-      color: #1a73e8;
+      color: var(--primary);
     }
   }
 }

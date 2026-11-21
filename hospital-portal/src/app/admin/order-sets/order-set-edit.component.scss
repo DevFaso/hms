@@ -151,28 +151,7 @@
 
 .btn-primary,
 .btn-secondary {
-  padding: 0.55rem 1rem;
-  border-radius: 6px;
-  border: 0;
-  font-weight: 500;
-  cursor: pointer;
   align-self: flex-start;
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-}
-
-.btn-primary {
-  background: var(--primary, #1a73e8);
-  color: #fff;
-}
-
-.btn-secondary {
-  background: var(--bg-subtle, #f0f2f5);
-  color: var(--text, #222);
-  border: 1px solid var(--border, #d0d4d9);
 }
 
 // QA D859: what blocks a save, said next to the field.
