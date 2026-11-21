@@ -113,6 +113,13 @@ const SPECIALIZATIONS = [
   'OTHER',
 ];
 
+/**
+ * QA r65 D2762: the roles this page lets register a user. `user-list.spec.ts` holds it
+ * against the route (every role the route admits and this list leaves out is offered no
+ * register form).
+ */
+export const USER_REGISTRAR_ROLES: readonly string[] = ['ROLE_SUPER_ADMIN', 'ROLE_HOSPITAL_ADMIN'];
+
 @Component({
   selector: 'app-user-list',
   standalone: true,
@@ -161,6 +168,17 @@ export class UserListComponent implements OnInit, OnDestroy {
   canSeeDeleted(): boolean {
     return this.roleContext.isSuperAdmin();
   }
+
+  /**
+   * QA r65 D2762: who may register a user here: the roles `POST
+   * /users/admin-register` admits on this page (`SecurityConstants
+   * .USER_REGISTRAR_AUTHORITIES`: the super-admin and the hospital admin; the
+   * others on that list register patients from the patient form). An
+   * administrator (`ROLE_ADMIN`) reads the directory and was offered
+   * « Inscrire », a form whose submit always answered 403, and a `GET /roles`
+   * that answered 403 on every visit.
+   */
+  readonly canRegister = this.roleContext.hasAnyActiveRole([...USER_REGISTRAR_ROLES]);
   showFilters = signal(false);
 
   currentPage = signal(0);
@@ -250,8 +268,12 @@ export class UserListComponent implements OnInit, OnDestroy {
         this.loadUsers(0);
       });
     this.loadUsers();
-    this.loadRoles();
-    this.loadHospitals();
+    // QA r65 D2762: the role and hospital pickers belong to the register and
+    // edit forms; a role that has neither does not ask for them.
+    if (this.canRegister) {
+      this.loadRoles();
+      this.loadHospitals();
+    }
   }
 
   loadUsers(page = 0): void {
@@ -584,8 +606,13 @@ export class UserListComponent implements OnInit, OnDestroy {
         // to hide behind this very success toast. Warn the registrar so they
         // know to use "Resend code" once the transport is fixed.
         if (!existing) {
-          for (const key of deliveryWarningKeys(saved.activationDelivery)) {
+          const undelivered = deliveryWarningKeys(saved.activationDelivery);
+          for (const key of undelivered) {
             this.toast.warning(this.translate.instant(key));
+          }
+          // QA r65 D2764: « Remettez le code en main propre » — say where the code is.
+          if (undelivered.length > 0) {
+            this.toast.info(this.translate.instant('PLATFORM_SETUP.ACTIVATION.WHERE_IS_CODE'));
           }
           // QA D522: say so when the activation went out by e-mail, so a failed
           // SMS next to it does not read as "activation by SMS only".
@@ -755,7 +782,8 @@ export class UserListComponent implements OnInit, OnDestroy {
    * delete; saving it answered "user not found".
    */
   isManageable(user: UserSummary): boolean {
-    return user.manageable !== false;
+    // QA r65 D2762: and never for a role with no write endpoint here at all.
+    return this.canRegister && user.manageable !== false;
   }
 
   canImpersonate(user: UserSummary): boolean {

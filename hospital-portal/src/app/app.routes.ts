@@ -1679,15 +1679,12 @@ export const routes: Routes = [
           import('./pharmacy/billing-deferrals').then((m) => m.BillingDeferralsComponent),
       },
 
-      // Administration landing for ROLE_ADMIN. ROLE_SUPER_ADMIN passes the
-      // role gate but is redirected to /super-admin by SuperAdminRedirectGuard
-      // (MVP-5) so the Control Tower stays the single mission-control.
-      {
-        path: 'admin',
-        canActivate: [SuperAdminRedirectGuard, RoleGuard],
-        data: { roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
-        loadComponent: () => import('./admin/admin').then((m) => m.AdminComponent),
-      },
+      // QA r65 D2760 (owner's request): « Administration » is merged into
+      // « Tableau de bord ». The page repeated the dashboard's counters and
+      // linked to pages already in the sidebar, so it is gone; a bookmark to
+      // /admin lands on the dashboard (which sends a super-admin on to the
+      // Control Tower, as before).
+      { path: 'admin', pathMatch: 'full', redirectTo: 'dashboard' },
 
       // Assignment administration. SecurityConfig hard-gates /assignments/**
       // to HOSPITAL_ADMIN + SUPER_ADMIN at the URL layer; the route mirrors it.
@@ -1708,7 +1705,15 @@ export const routes: Routes = [
       {
         path: 'break-glass-review',
         canActivate: [RoleGuard],
-        data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        // QA r65 D2767: the register is one hospital's. Flagged, so a
+        // super-admin in global view gets the hospital directory and the
+        // scope chip here, instead of « Sélectionnez un hôpital » and no way
+        // to select one.
+        data: {
+          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+          requiresHospitalScope: true,
+          hospitalNetworkTitleKey: 'NAV.BREAK_GLASS_REVIEW',
+        },
         loadComponent: () =>
           import('./break-glass-review/break-glass-review').then(
             (m) => m.BreakGlassReviewComponent,

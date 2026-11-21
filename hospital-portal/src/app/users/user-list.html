@@ -12,10 +12,13 @@
         }
       </p>
     </div>
-    <button class="btn-primary" (click)="openCreate()">
-      <span class="material-symbols-outlined">person_add</span>
-      {{ 'USERS.REGISTER' | translate }}
-    </button>
+    <!-- QA r65 D2762: only a role the server lets register is offered « Inscrire ». -->
+    @if (canRegister) {
+      <button class="btn-primary" data-testid="users-register" (click)="openCreate()">
+        <span class="material-symbols-outlined">person_add</span>
+        {{ 'USERS.REGISTER' | translate }}
+      </button>
+    }
   </div>
 
   <!-- Filter toolbar -->
@@ -288,7 +291,7 @@
           <button class="link-btn" (click)="clearFilters()">
             {{ 'COMMON.CLEAR_ALL_FILTERS' | translate }}
           </button>
-        } @else {
+        } @else if (canRegister) {
           {{ 'USERS.REGISTER_TO_START' | translate }}
         }
       </p>

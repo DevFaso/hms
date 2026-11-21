@@ -19,6 +19,7 @@ import { EmergencyBroadcastService } from '../services/emergency-broadcast.servi
 import { DowntimeService } from '../services/downtime.service';
 import { NavOrderService } from './nav-order.service';
 import { navGroupForRoute, providerNavEntries } from './nav-groups';
+import { SHELL_GUARD_ROLES } from './shell-startup-endpoints';
 import { ProviderContextService } from '../core/provider-context.service';
 import { FacilityTypeGuard } from '../auth/facility-type.guard';
 import { settingsFixture } from '../testing/provider-fixtures';
@@ -332,7 +333,7 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(routes).toContain('/super-admin');
   });
 
-  it('keeps Administration for ROLE_ADMIN active role (non-super)', () => {
+  it('QA r65 D2760: ROLE_ADMIN has one landing entry, the dashboard, and no Administration', () => {
     const { items } = createComponent({
       activeRole: 'ROLE_ADMIN',
       roles: ['ROLE_ADMIN'],
@@ -341,8 +342,27 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
 
     const routes = items.map((i) => i.route);
     expect(routes).toContain('/dashboard');
-    expect(routes).toContain('/admin');
+    // « Administration » repeated « Tableau de bord »: it is merged into it.
+    expect(routes).not.toContain('/admin');
     expect(routes).not.toContain('/super-admin');
+  });
+
+  it('QA r65 D2760: no role at all has an Administration entry, and /admin redirects to the dashboard', () => {
+    for (const role of SHELL_GUARD_ROLES) {
+      const { items } = createComponent({
+        activeRole: role,
+        roles: [role],
+        wildcardPermission: true,
+      });
+      expect(items.map((i) => i.route))
+        .withContext(role)
+        .not.toContain('/admin');
+      TestBed.resetTestingModule();
+    }
+    const shell = routes.find((route) => route.children?.some((child) => child.path === 'admin'));
+    const admin = shell?.children?.find((child) => child.path === 'admin');
+    expect(admin?.redirectTo).toBe('dashboard');
+    expect(admin?.loadComponent).toBeUndefined();
   });
 
   it('keeps Dashboard for non-wildcard roles (e.g. ROLE_DOCTOR)', () => {
@@ -710,7 +730,7 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
   });
 
   // Role audit decision C1: ADMIN is back-office operations, not platform IT.
-  it('admin sees Users/Administration/Patients/Audit Logs but no platform-IT entries', () => {
+  it('admin sees Users/Patients/Audit Logs but no platform-IT entries', () => {
     const { items } = createComponent({
       activeRole: 'ROLE_ADMIN',
       roles: ['ROLE_ADMIN'],
@@ -725,7 +745,7 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
 
     const routes = items.map((i) => i.route);
     expect(routes).toContain('/users');
-    expect(routes).toContain('/admin');
+    expect(routes).not.toContain('/admin');
     expect(routes).toContain('/patients');
     expect(routes).toContain('/audit-logs');
     expect(routes).not.toContain('/organizations');
@@ -961,14 +981,14 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     });
     component.navItems.set(items as never);
 
-    // "admin" rather than a clinical term: this role's nav is the one the
+    // "users" rather than a clinical term: this role's nav is the one the
     // harness can build with wildcard permissions, and a search that matched
     // nothing would pass a weaker assertion by accident.
-    component.navSearch.set('admin');
+    component.navSearch.set('users');
     const routes = component.navGroups().flatMap((g) => g.entries.map((e) => e.item.route));
 
     expect(routes.length).toBeGreaterThan(0);
-    expect(routes).toContain('/admin');
+    expect(routes).toContain('/users');
     // Narrowing, not merely reordering — the point of the box. Both of these
     // are in this role's nav and neither matches, so their absence is the
     // filter working rather than a permission hiding them.
@@ -1802,6 +1822,8 @@ describe('ShellComponent — route-level hospital scope gate', () => {
         // QA D853: one hospital's wards; in global view it mixed every
         // hospital's wards and 'Nouvelle unité' could only fail.
         'bed-management',
+        // QA r65 D2767: the break-glass register is one hospital's.
+        'break-glass-review',
       ].sort(),
     );
   });
