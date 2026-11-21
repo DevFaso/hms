@@ -94,8 +94,9 @@
             @for (hospital of visibleRows(); track hospital.id) {
               <tr>
                 <td>
-                  <strong>{{ hospital.name }}</strong
-                  ><small>{{ hospital.code || hospital.id }}</small>
+                  <strong>{{ hospital.name }}</strong><small>{{
+                    hospital.code || hospital.id
+                  }}</small>
                 </td>
                 <td>{{ hospital.organizationName || '—' }}</td>
                 <td>{{ hospital.city || '—' }}</td>

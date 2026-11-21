@@ -48,14 +48,16 @@ import { AllergyReviewState } from './allergy-acknowledgement';
         }
         @if (r.state === 'CONTINUE' && r.plan) {
           <p class="allergy-review-state__plan" data-testid="allergy-review-state-plan">
-            <strong>{{ 'ALLERGY_REVIEW_STATE.PLAN' | translate }}</strong
-            >{{ 'ALLERGY_REVIEW_STATE.VALUE_SEPARATOR' | translate }}{{ r.plan }}
+            <strong>{{ 'ALLERGY_REVIEW_STATE.PLAN' | translate }}</strong>{{
+              'ALLERGY_REVIEW_STATE.VALUE_SEPARATOR' | translate
+            }}{{ r.plan }}
           </p>
         }
         @if (r.state !== 'AWAITING_REVIEW' && r.rationale) {
           <p data-testid="allergy-review-state-rationale">
-            <strong>{{ 'ALLERGY_REVIEW_STATE.RATIONALE' | translate }}</strong
-            >{{ 'ALLERGY_REVIEW_STATE.VALUE_SEPARATOR' | translate }}{{ r.rationale }}
+            <strong>{{ 'ALLERGY_REVIEW_STATE.RATIONALE' | translate }}</strong>{{
+              'ALLERGY_REVIEW_STATE.VALUE_SEPARATOR' | translate
+            }}{{ r.rationale }}
           </p>
         }
       </div>

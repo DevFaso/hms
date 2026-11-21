@@ -30,8 +30,9 @@
         <div class="care-metric">
           <span class="material-symbols-outlined" aria-hidden="true">clinical_notes</span>
           <div>
-            <strong>{{ overviewLoading() || overviewFailed() ? '—' : loadedProviders() }}</strong
-            ><span>{{ 'CARE_DASH.PROVIDERS' | translate }}</span>
+            <strong>{{
+              overviewLoading() || overviewFailed() ? '—' : loadedProviders()
+            }}</strong><span>{{ 'CARE_DASH.PROVIDERS' | translate }}</span>
           </div>
         </div>
         <div class="care-metric">
@@ -39,15 +40,15 @@
           <div>
             <strong>{{
               overviewLoading() || overviewFailed() ? '—' : overviewRows().length
-            }}</strong
-            ><span>{{ 'CARE_DASH.PROVIDER_ROLES' | translate }}</span>
+            }}</strong><span>{{ 'CARE_DASH.PROVIDER_ROLES' | translate }}</span>
           </div>
         </div>
         <div class="care-metric">
           <span class="material-symbols-outlined" aria-hidden="true">person</span>
           <div>
-            <strong>{{ overviewLoading() || overviewFailed() ? '—' : activeAssignments() }}</strong
-            ><span>{{ 'PANEL.ACTIVE_ASSIGNMENTS' | translate }}</span>
+            <strong>{{
+              overviewLoading() || overviewFailed() ? '—' : activeAssignments()
+            }}</strong><span>{{ 'PANEL.ACTIVE_ASSIGNMENTS' | translate }}</span>
           </div>
         </div>
       </div>

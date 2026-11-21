@@ -372,49 +372,60 @@
           }
           <div class="detail-grid">
             <div class="detail-field">
-              <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span
-              ><span class="field-value">{{ enc.patientName || '—' }}</span>
+              <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span><span
+                class="field-value"
+                >{{ enc.patientName || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'ENCOUNTERS.PROVIDER' | translate }}</span
-              ><span class="field-value">{{ enc.staffName || '—' }}</span>
+              <span class="field-label">{{ 'ENCOUNTERS.PROVIDER' | translate }}</span><span
+                class="field-value"
+                >{{ enc.staffName || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'STAFF.DEPARTMENT' | translate }}</span
-              ><span class="field-value">{{ enc.departmentName || '—' }}</span>
+              <span class="field-label">{{ 'STAFF.DEPARTMENT' | translate }}</span><span
+                class="field-value"
+                >{{ enc.departmentName || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
-              ><span class="field-value">{{ enc.hospitalName || '—' }}</span>
+              <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span><span
+                class="field-value"
+                >{{ enc.hospitalName || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'BILLING.ENCOUNTER_REFERENCE' | translate }}</span
-              ><span class="field-value">{{ enc.code || '—' }}</span>
+              <span class="field-label">{{ 'BILLING.ENCOUNTER_REFERENCE' | translate }}</span><span
+                class="field-value"
+                >{{ enc.code || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'COMMON.TYPE' | translate }}</span
-              ><span class="field-value">{{
-                enc.encounterType ? (enc.encounterType | enumLabel: 'encounterType') : '—'
-              }}</span>
+              <span class="field-label">{{ 'COMMON.TYPE' | translate }}</span><span
+                class="field-value"
+                >{{
+                  enc.encounterType ? (enc.encounterType | enumLabel: 'encounterType') : '—'
+                }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
-              >{{ ' '
+              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span>{{ ' '
               }}<span class="status-badge {{ getStatusClass(enc.status) }}">{{
                 enc.status | enumLabel: 'encounterStatus'
               }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'COMMON.DATE' | translate }}</span
-              ><span class="field-value">{{
-                enc.encounterDate ? (enc.encounterDate | serverTime | dateTime) : '—'
-              }}</span>
+              <span class="field-label">{{ 'COMMON.DATE' | translate }}</span><span
+                class="field-value"
+                >{{ enc.encounterDate ? (enc.encounterDate | serverTime | dateTime) : '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'ENCOUNTERS.CREATED' | translate }}</span
-              ><span class="field-value">{{
-                enc.createdAt ? (enc.createdAt | serverTime | dateTime) : '—'
-              }}</span>
+              <span class="field-label">{{ 'ENCOUNTERS.CREATED' | translate }}</span><span
+                class="field-value"
+                >{{ enc.createdAt ? (enc.createdAt | serverTime | dateTime) : '—' }}</span
+              >
             </div>
           </div>
 

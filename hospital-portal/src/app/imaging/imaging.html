@@ -73,8 +73,9 @@
       >
         <span class="material-symbols-outlined card-icon active" aria-hidden="true">radiology</span>
         <span class="card-info">
-          <span class="card-value">{{ activeOrderCount() }}</span
-          ><span class="card-label">{{ 'IMAGING.ACTIVE_ORDERS' | translate }}</span>
+          <span class="card-value">{{ activeOrderCount() }}</span><span class="card-label">{{
+            'IMAGING.ACTIVE_ORDERS' | translate
+          }}</span>
         </span>
       </button>
       <button
@@ -89,8 +90,9 @@
           >check_circle</span
         >
         <span class="card-info">
-          <span class="card-value">{{ completedOrderCount() }}</span
-          ><span class="card-label">{{ 'IMAGING.COMPLETED_ORDERS' | translate }}</span>
+          <span class="card-value">{{ completedOrderCount() }}</span><span class="card-label">{{
+            'IMAGING.COMPLETED_ORDERS' | translate
+          }}</span>
         </span>
       </button>
       <button
@@ -103,8 +105,9 @@
       >
         <span class="material-symbols-outlined card-icon cancelled" aria-hidden="true">cancel</span>
         <span class="card-info">
-          <span class="card-value">{{ cancelledOrderCount() }}</span
-          ><span class="card-label">{{ 'IMAGING.CANCELLED_ORDERS' | translate }}</span>
+          <span class="card-value">{{ cancelledOrderCount() }}</span><span class="card-label">{{
+            'IMAGING.CANCELLED_ORDERS' | translate
+          }}</span>
         </span>
       </button>
       <button
@@ -117,8 +120,9 @@
       >
         <span class="material-symbols-outlined card-icon total" aria-hidden="true">bar_chart</span>
         <span class="card-info">
-          <span class="card-value">{{ matched().length }}</span
-          ><span class="card-label">{{ 'IMAGING.TOTAL_ORDERS' | translate }}</span>
+          <span class="card-value">{{ matched().length }}</span><span class="card-label">{{
+            'IMAGING.TOTAL_ORDERS' | translate
+          }}</span>
         </span>
       </button>
     </div>
@@ -681,52 +685,62 @@
           }
           <div class="detail-grid">
             <div class="detail-field" data-testid="imaging-report-drawer-patient">
-              <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span
-              ><span class="field-value">{{
-                rep.patientDisplayName || ('COMMON.UNKNOWN' | translate)
-              }}</span>
+              <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span><span
+                class="field-value"
+                >{{ rep.patientDisplayName || ('COMMON.UNKNOWN' | translate) }}</span
+              >
             </div>
             <div class="detail-field" data-testid="imaging-report-drawer-mrn">
-              <span class="field-label">{{ 'IMAGING.MRN' | translate }}</span
-              ><span class="field-value">{{ rep.patientMrn || '—' }}</span>
+              <span class="field-label">{{ 'IMAGING.MRN' | translate }}</span><span
+                class="field-value"
+                >{{ rep.patientMrn || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
-              ><span class="field-value"
+              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span><span
+                class="field-value"
                 ><span class="status-badge {{ getReportStatusClass(rep.reportStatus) }}">{{
                   rep.reportStatus | enumLabel: 'imagingReportStatus'
                 }}</span></span
               >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'IMAGING.MODALITY' | translate }}</span
-              ><span class="field-value">{{ rep.modality | enumLabel: 'imagingModality' }}</span>
+              <span class="field-label">{{ 'IMAGING.MODALITY' | translate }}</span><span
+                class="field-value"
+                >{{ rep.modality | enumLabel: 'imagingModality' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'IMAGING.BODY_REGION' | translate }}</span
-              ><span class="field-value">{{ rep.bodyRegion || '—' }}</span>
+              <span class="field-label">{{ 'IMAGING.BODY_REGION' | translate }}</span><span
+                class="field-value"
+                >{{ rep.bodyRegion || '—' }}</span
+              >
             </div>
             <!-- QA D2912 (r66): who performed the exam, on the report (screen and print). -->
             <div class="detail-field" data-testid="imaging-report-performed-by">
-              <span class="field-label">{{ 'IMAGING_EXAM.PERFORMED_BY' | translate }}</span
-              ><span class="field-value">{{
-                rep.performedByName || rep.examPerformedByName || '—'
-              }}</span>
+              <span class="field-label">{{ 'IMAGING_EXAM.PERFORMED_BY' | translate }}</span><span
+                class="field-value"
+                >{{ rep.performedByName || rep.examPerformedByName || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'IMAGING.INTERPRETED_BY' | translate }}</span
-              ><span class="field-value">{{ rep.interpretingProviderName || '—' }}</span>
+              <span class="field-label">{{ 'IMAGING.INTERPRETED_BY' | translate }}</span><span
+                class="field-value"
+                >{{ rep.interpretingProviderName || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'IMAGING.SIGNED_BY' | translate }}</span
-              ><span class="field-value"
+              <span class="field-label">{{ 'IMAGING.SIGNED_BY' | translate }}</span><span
+                class="field-value"
                 >{{ rep.signedByName || '—' }}
                 {{ rep.signedAt ? '(' + (rep.signedAt | serverTime | dateTime) + ')' : '' }}</span
               >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'IMAGING.REPORT_VERSION' | translate }}</span
-              ><span class="field-value">{{ rep.reportVersion }}</span>
+              <span class="field-label">{{ 'IMAGING.REPORT_VERSION' | translate }}</span><span
+                class="field-value"
+                >{{ rep.reportVersion }}</span
+              >
             </div>
           </div>
           <!-- QA D2912 (r66): the contrast given and the dose, as recorded at the exam (the order's
@@ -740,8 +754,9 @@
                   rep.examContrastAdministered !== undefined
                 ) {
                   <div class="detail-field" data-testid="imaging-report-exam-contrast">
-                    <span class="field-label">{{ 'IMAGING_EXAM.CONTRAST_GIVEN' | translate }}</span
-                    ><span class="field-value"
+                    <span class="field-label">{{
+                      'IMAGING_EXAM.CONTRAST_GIVEN' | translate
+                    }}</span><span class="field-value"
                       >{{ (rep.examContrastAdministered ? 'COMMON.YES' : 'COMMON.NO') | translate }}
                       @if (rep.examContrastDetails) {
                         · {{ rep.examContrastDetails }}
@@ -751,10 +766,10 @@
                 }
                 @if (rep.examRadiationDoseMgy !== null && rep.examRadiationDoseMgy !== undefined) {
                   <div class="detail-field" data-testid="imaging-report-exam-dose">
-                    <span class="field-label">{{ 'IMAGING_EXAM.DOSE' | translate }}</span
-                    ><span class="field-value">{{
-                      rep.examRadiationDoseMgy | measure: 'mGy' : 3
-                    }}</span>
+                    <span class="field-label">{{ 'IMAGING_EXAM.DOSE' | translate }}</span><span
+                      class="field-value"
+                      >{{ rep.examRadiationDoseMgy | measure: 'mGy' : 3 }}</span
+                    >
                   </div>
                 }
               </div>
@@ -1144,79 +1159,95 @@
         <div class="detail-body">
           <div class="detail-grid">
             <div class="detail-field">
-              <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span
-              ><span class="field-value">{{ ord.patientDisplayName }}</span>
+              <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span><span
+                class="field-value"
+                >{{ ord.patientDisplayName }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'IMAGING.MRN' | translate }}</span
-              ><span class="field-value">{{ ord.patientMrn }}</span>
+              <span class="field-label">{{ 'IMAGING.MRN' | translate }}</span><span
+                class="field-value"
+                >{{ ord.patientMrn }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'IMAGING.MODALITY' | translate }}</span
-              ><span class="field-value">{{ ord.modality | enumLabel: 'imagingModality' }}</span>
+              <span class="field-label">{{ 'IMAGING.MODALITY' | translate }}</span><span
+                class="field-value"
+                >{{ ord.modality | enumLabel: 'imagingModality' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'IMAGING.STUDY_TYPE' | translate }}</span
-              ><span class="field-value">{{ ord.studyType }}</span>
+              <span class="field-label">{{ 'IMAGING.STUDY_TYPE' | translate }}</span><span
+                class="field-value"
+                >{{ ord.studyType }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'IMAGING.BODY_REGION' | translate }}</span
-              ><span class="field-value">{{ ord.bodyRegion || '—' }}</span>
+              <span class="field-label">{{ 'IMAGING.BODY_REGION' | translate }}</span><span
+                class="field-value"
+                >{{ ord.bodyRegion || '—' }}</span
+              >
             </div>
             <!-- r44: a laterality marked not applicable is not shown. -->
             @if (lateralityApplies(ord)) {
               <div class="detail-field" data-testid="imaging-order-laterality">
-                <span class="field-label">{{ 'IMAGING.LATERALITY' | translate }}</span
-                ><span class="field-value">{{
-                  ord.laterality
-                    ? (ord.laterality | enumLabel: 'imagingLaterality')
-                    : ('IMAGING.LATERALITY_NOT_RECORDED' | translate)
-                }}</span>
+                <span class="field-label">{{ 'IMAGING.LATERALITY' | translate }}</span><span
+                  class="field-value"
+                  >{{
+                    ord.laterality
+                      ? (ord.laterality | enumLabel: 'imagingLaterality')
+                      : ('IMAGING.LATERALITY_NOT_RECORDED' | translate)
+                  }}</span
+                >
               </div>
             }
             <div class="detail-field">
-              <span class="field-label">{{ 'IMAGING.PRIORITY' | translate }}</span
-              ><span class="field-value"
+              <span class="field-label">{{ 'IMAGING.PRIORITY' | translate }}</span><span
+                class="field-value"
                 ><span class="priority-badge {{ getPriorityClass(ord.priority) }}">{{
                   ord.priority | enumLabel: 'imagingOrderPriority'
                 }}</span></span
               >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
-              ><span class="field-value"
+              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span><span
+                class="field-value"
                 ><span class="status-badge {{ getStatusClass(ord.status) }}">{{
                   ord.status | enumLabel: 'imagingOrderStatus'
                 }}</span></span
               >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'IMAGING.ORDERING_PROVIDER' | translate }}</span
-              ><span class="field-value">{{ ord.orderingProviderName || '—' }}</span>
+              <span class="field-label">{{ 'IMAGING.ORDERING_PROVIDER' | translate }}</span><span
+                class="field-value"
+                >{{ ord.orderingProviderName || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'IMAGING.ORDERED_AT' | translate }}</span
-              ><span class="field-value">{{
-                ord.orderedAt ? (ord.orderedAt | serverTime | dateTime) : '—'
-              }}</span>
+              <span class="field-label">{{ 'IMAGING.ORDERED_AT' | translate }}</span><span
+                class="field-value"
+                >{{ ord.orderedAt ? (ord.orderedAt | serverTime | dateTime) : '—' }}</span
+              >
             </div>
             <!-- r44: "Planifié" with its time when one was set; absent when never scheduled. -->
             @if (scheduledAt(ord); as sched) {
               <div class="detail-field" data-testid="imaging-order-scheduled">
-                <span class="field-label">{{ 'IMAGING.SCHEDULED' | translate }}</span
-                ><span class="field-value">{{
-                  sched.withTime
-                    ? (sched.scheduledAt | dateTime)
-                    : (sched.scheduledAt | date: 'mediumDate')
-                }}</span>
+                <span class="field-label">{{ 'IMAGING.SCHEDULED' | translate }}</span><span
+                  class="field-value"
+                  >{{
+                    sched.withTime
+                      ? (sched.scheduledAt | dateTime)
+                      : (sched.scheduledAt | date: 'mediumDate')
+                  }}</span
+                >
               </div>
             }
             @if (isResulted(ord)) {
               <div class="detail-field" data-testid="imaging-order-completed">
-                <span class="field-label">{{ 'IMAGING.COMPLETED_AT' | translate }}</span
-                ><span class="field-value">{{
-                  ord.completedAt ? (ord.completedAt | serverTime | dateTime) : '—'
-                }}</span>
+                <span class="field-label">{{ 'IMAGING.COMPLETED_AT' | translate }}</span><span
+                  class="field-value"
+                  >{{ ord.completedAt ? (ord.completedAt | serverTime | dateTime) : '—' }}</span
+                >
               </div>
             }
           </div>
@@ -1240,27 +1271,34 @@
           }
           <div class="detail-grid" data-testid="imaging-order-logistics">
             <div class="detail-field" data-testid="imaging-order-contrast">
-              <span class="field-label">{{ 'IMAGING.CONTRAST_REQUIRED' | translate }}</span
-              ><span class="field-value">{{
-                ord.contrastRequired
-                  ? ('COMMON.YES' | translate) + (ord.contrastType ? ' · ' + ord.contrastType : '')
-                  : ('COMMON.NO' | translate)
-              }}</span>
+              <span class="field-label">{{ 'IMAGING.CONTRAST_REQUIRED' | translate }}</span><span
+                class="field-value"
+                >{{
+                  ord.contrastRequired
+                    ? ('COMMON.YES' | translate) +
+                      (ord.contrastType ? ' · ' + ord.contrastType : '')
+                    : ('COMMON.NO' | translate)
+                }}</span
+              >
             </div>
             @if (ord.appointmentLocation) {
               <div class="detail-field" data-testid="imaging-order-location">
-                <span class="field-label">{{ 'IMAGING.LOCATION' | translate }}</span
-                ><span class="field-value">{{ ord.appointmentLocation }}</span>
+                <span class="field-label">{{ 'IMAGING.LOCATION' | translate }}</span><span
+                  class="field-value"
+                  >{{ ord.appointmentLocation }}</span
+                >
               </div>
             }
             @if (ord.requiresAuthorization) {
               <div class="detail-field" data-testid="imaging-order-authorization">
-                <span class="field-label">{{ 'IMAGING.PRE_AUTHORIZATION' | translate }}</span
-                ><span class="field-value">{{
-                  awaitsAuthorizationNumber(ord)
-                    ? ('IMAGING.AUTHORIZATION_NUMBER_MISSING' | translate)
-                    : ord.authorizationNumber
-                }}</span>
+                <span class="field-label">{{ 'IMAGING.PRE_AUTHORIZATION' | translate }}</span><span
+                  class="field-value"
+                  >{{
+                    awaitsAuthorizationNumber(ord)
+                      ? ('IMAGING.AUTHORIZATION_NUMBER_MISSING' | translate)
+                      : ord.authorizationNumber
+                  }}</span
+                >
               </div>
             }
           </div>
@@ -1841,8 +1879,9 @@
             {{ 'IMAGING.CONFIRM_CANCEL' | translate }}
             <strong>{{ deletingItem()?.modality | enumLabel: 'imagingModality' }}</strong>
             {{ 'IMAGING.ORDER_FOR' | translate }}
-            <strong>{{ deletingItem()?.patientDisplayName }}</strong
-            >{{ 'COMMON.QUESTION_MARK' | translate }}
+            <strong>{{ deletingItem()?.patientDisplayName }}</strong>{{
+              'COMMON.QUESTION_MARK' | translate
+            }}
           </p>
         </div>
         <!-- QA D1098: every cancel states why; the reason is kept on the order. -->

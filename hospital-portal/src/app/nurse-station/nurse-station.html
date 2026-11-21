@@ -1095,8 +1095,9 @@
                   @for (p of visibleWorkboard(); track p.patientId) {
                     <tr>
                       <td>
-                        <a [routerLink]="['/patients', p.patientId]">{{ p.patientName }}</a
-                        ><small>{{ p.mrn }} · {{ p.roomBed || '—' }}</small>
+                        <a [routerLink]="['/patients', p.patientId]">{{ p.patientName }}</a><small
+                          >{{ p.mrn }} · {{ p.roomBed || '—' }}</small
+                        >
                         @if (p.acuityLevel) {
                           {{ ' '
                           }}<span class="acuity-badge {{ acuityCssClass(p.acuityLevel) }}">{{

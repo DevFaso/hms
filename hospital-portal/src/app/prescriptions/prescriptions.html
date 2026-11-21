@@ -28,22 +28,26 @@
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon draft">edit_note</span>
       <div class="card-info">
-        <span class="card-value" data-testid="rx-draft-count">{{ countInTab('draft') }}</span
-        ><span class="card-label">{{ 'PRESCRIPTIONS.TAB.DRAFT' | translate }}</span>
+        <span class="card-value" data-testid="rx-draft-count">{{ countInTab('draft') }}</span><span
+          class="card-label"
+          >{{ 'PRESCRIPTIONS.TAB.DRAFT' | translate }}</span
+        >
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon active">local_pharmacy</span>
       <div class="card-info">
-        <span class="card-value">{{ countInTab('inPharmacy') }}</span
-        ><span class="card-label">{{ 'PRESCRIPTIONS.TAB.IN_PHARMACY' | translate }}</span>
+        <span class="card-value">{{ countInTab('inPharmacy') }}</span><span class="card-label">{{
+          'PRESCRIPTIONS.TAB.IN_PHARMACY' | translate
+        }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon cancelled">cancel</span>
       <div class="card-info">
-        <span class="card-value">{{ countInTab('closed') }}</span
-        ><span class="card-label">{{ 'PRESCRIPTIONS.TAB.CLOSED' | translate }}</span>
+        <span class="card-value">{{ countInTab('closed') }}</span><span class="card-label">{{
+          'PRESCRIPTIONS.TAB.CLOSED' | translate
+        }}</span>
       </div>
     </div>
     <!-- The count that answers "is anything waiting on a prescriber?"
@@ -55,15 +59,15 @@
       <div class="card-info">
         <span class="card-value" data-testid="rx-attention-count">{{
           countInTab('attention')
-        }}</span
-        ><span class="card-label">{{ 'PRESCRIPTIONS.TAB.ATTENTION' | translate }}</span>
+        }}</span><span class="card-label">{{ 'PRESCRIPTIONS.TAB.ATTENTION' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon total">bar_chart</span>
       <div class="card-info">
-        <span class="card-value">{{ countInTab('all') }}</span
-        ><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
+        <span class="card-value">{{ countInTab('all') }}</span><span class="card-label">{{
+          'COMMON.TOTAL' | translate
+        }}</span>
       </div>
     </div>
   </div>
@@ -371,20 +375,28 @@
         <div class="detail-body">
           <div class="detail-grid">
             <div class="detail-field">
-              <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span
-              ><span class="field-value">{{ rx.patientFullName }}</span>
+              <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span><span
+                class="field-value"
+                >{{ rx.patientFullName }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'PRESCRIPTIONS.MEDICATION' | translate }}</span
-              ><span class="field-value">{{ rx.medicationDisplayName || rx.medicationName }}</span>
+              <span class="field-label">{{ 'PRESCRIPTIONS.MEDICATION' | translate }}</span><span
+                class="field-value"
+                >{{ rx.medicationDisplayName || rx.medicationName }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'PRESCRIPTIONS.DOSAGE' | translate }}</span
-              ><span class="field-value">{{ rx.dosage || '—' }}</span>
+              <span class="field-label">{{ 'PRESCRIPTIONS.DOSAGE' | translate }}</span><span
+                class="field-value"
+                >{{ rx.dosage || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'PRESCRIPTIONS.FREQUENCY' | translate }}</span
-              ><span class="field-value">{{ rx.frequency || '—' }}</span>
+              <span class="field-label">{{ 'PRESCRIPTIONS.FREQUENCY' | translate }}</span><span
+                class="field-value"
+                >{{ rx.frequency || '—' }}</span
+              >
               @if (rx.frequencyUnread) {
                 {{ ' '
                 }}<span class="cell-sub" data-testid="rx-detail-frequency-unread">{{
@@ -395,63 +407,75 @@
             @if (rx.prnMinIntervalHours) {
               <!-- QA round 30: the as-needed order's minimum interval, as the prescriber wrote it. -->
               <div class="detail-field" data-testid="rx-detail-prn-interval">
-                <span class="field-label">{{ 'PRESCRIPTIONS.PRN_MIN_INTERVAL' | translate }}</span
-                ><span class="field-value">{{
+                <span class="field-label">{{
+                  'PRESCRIPTIONS.PRN_MIN_INTERVAL' | translate
+                }}</span><span class="field-value">{{
                   'PRESCRIPTIONS.PRN_MIN_INTERVAL_VALUE'
                     | translate: { hours: rx.prnMinIntervalHours }
                 }}</span>
               </div>
             }
             <div class="detail-field">
-              <span class="field-label">{{ 'PRESCRIPTIONS.DURATION' | translate }}</span
-              ><span class="field-value">{{ rx.duration || '—' }}</span>
+              <span class="field-label">{{ 'PRESCRIPTIONS.DURATION' | translate }}</span><span
+                class="field-value"
+                >{{ rx.duration || '—' }}</span
+              >
             </div>
             <!-- Gap G13: what was ordered, and how many refills of it. -->
             @if (rx.quantity) {
               <div class="detail-field">
-                <span class="field-label">{{ 'PRESCRIPTIONS.QUANTITY' | translate }}</span
-                ><span class="field-value" data-testid="rx-quantity">{{
-                  rx.quantityUnit
-                    ? ('PRESCRIPTIONS.QUANTITY_VALUE'
-                      | translate: { value: rx.quantity, unit: rx.quantityUnit })
-                    : rx.quantity
-                }}</span>
+                <span class="field-label">{{ 'PRESCRIPTIONS.QUANTITY' | translate }}</span><span
+                  class="field-value"
+                  data-testid="rx-quantity"
+                  >{{
+                    rx.quantityUnit
+                      ? ('PRESCRIPTIONS.QUANTITY_VALUE'
+                        | translate: { value: rx.quantity, unit: rx.quantityUnit })
+                      : rx.quantity
+                  }}</span
+                >
               </div>
             }
             @if (hasRefills(rx)) {
               <div class="detail-field">
-                <span class="field-label">{{ 'PRESCRIPTIONS.REFILLS' | translate }}</span
-                ><span class="field-value" data-testid="rx-refills">{{
-                  'PRESCRIPTIONS.REFILLS_VALUE'
-                    | translate: { remaining: rx.refillsRemaining, allowed: rx.refillsAllowed }
-                }}</span>
+                <span class="field-label">{{ 'PRESCRIPTIONS.REFILLS' | translate }}</span><span
+                  class="field-value"
+                  data-testid="rx-refills"
+                  >{{
+                    'PRESCRIPTIONS.REFILLS_VALUE'
+                      | translate: { remaining: rx.refillsRemaining, allowed: rx.refillsAllowed }
+                  }}</span
+                >
               </div>
             }
             <div class="detail-field">
-              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
-              ><span class="field-value"
+              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span><span
+                class="field-value"
                 ><span class="status-badge {{ getStatusClass(rx.status) }}">{{
                   rx.status | enumLabel: 'prescriptionStatus'
                 }}</span></span
               >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'PRESCRIPTIONS.PRESCRIBED_BY' | translate }}</span
-              ><span class="field-value">{{ rx.staffFullName || '—' }}</span>
+              <span class="field-label">{{ 'PRESCRIPTIONS.PRESCRIBED_BY' | translate }}</span><span
+                class="field-value"
+                >{{ rx.staffFullName || '—' }}</span
+              >
             </div>
             @if (rx.hospitalName) {
               <div class="detail-field">
-                <span class="field-label">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</span
-                ><span class="field-value" data-testid="rx-detail-hospital">{{
+                <span class="field-label">{{
+                  'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate
+                }}</span><span class="field-value" data-testid="rx-detail-hospital">{{
                   rx.hospitalName
                 }}</span>
               </div>
             }
             <div class="detail-field">
-              <span class="field-label">{{ 'COMMON.CREATED' | translate }}</span
-              ><span class="field-value">{{
-                rx.createdAt ? (rx.createdAt | serverTime | dateTime) : '—'
-              }}</span>
+              <span class="field-label">{{ 'COMMON.CREATED' | translate }}</span><span
+                class="field-value"
+                >{{ rx.createdAt ? (rx.createdAt | serverTime | dateTime) : '—' }}</span
+              >
             </div>
           </div>
           @if (rx.notes) {
@@ -474,14 +498,17 @@
             <div class="detail-notes" data-testid="rx-evidence">
               @if (rx.signedAt) {
                 <div class="detail-field">
-                  <span class="field-label">{{ 'PRESCRIPTIONS.SIGNED_AT' | translate }}</span
-                  ><span class="field-value">{{ rx.signedAt | serverTime | dateTime }}</span>
+                  <span class="field-label">{{ 'PRESCRIPTIONS.SIGNED_AT' | translate }}</span><span
+                    class="field-value"
+                    >{{ rx.signedAt | serverTime | dateTime }}</span
+                  >
                 </div>
               }
               @if (rx.requiresCosign) {
                 <div class="detail-field">
-                  <span class="field-label">{{ 'PRESCRIPTIONS.COSIGN_STATE' | translate }}</span
-                  ><span class="field-value">{{
+                  <span class="field-label">{{
+                    'PRESCRIPTIONS.COSIGN_STATE' | translate
+                  }}</span><span class="field-value">{{
                     rx.cosignedAt
                       ? (rx.cosignedAt | serverTime | dateTime)
                       : ('PRESCRIPTIONS.COSIGN_PENDING' | translate)
@@ -492,8 +519,7 @@
                 <div class="detail-field">
                   <span class="field-label">{{
                     'PRESCRIPTIONS.CONTROLLED_SUBSTANCE' | translate
-                  }}</span
-                  ><span class="field-value">{{
+                  }}</span><span class="field-value">{{
                     rx.twoFactorVerifiedAt
                       ? (rx.twoFactorVerifiedAt | serverTime | dateTime)
                       : ('PRESCRIPTIONS.TWO_FACTOR_PENDING' | translate)
@@ -508,8 +534,7 @@
                 <div class="detail-field" data-testid="rx-pharmacist-verification">
                   <span class="field-label">{{
                     'PRESCRIPTIONS.PHARMACIST_VERIFY_STATE' | translate
-                  }}</span
-                  ><span class="field-value">{{
+                  }}</span><span class="field-value">{{
                     rx.pharmacistVerifiedAt
                       ? (rx.pharmacistVerifiedAt | serverTime | dateTime)
                       : ('PRESCRIPTIONS.PHARMACIST_VERIFY_PENDING' | translate)
@@ -519,16 +544,14 @@
                   <div class="detail-field">
                     <span class="field-label">{{
                       'PRESCRIPTIONS.PHARMACIST_VERIFIED_BY' | translate
-                    }}</span
-                    ><span class="field-value">{{ rx.pharmacistVerifiedByName }}</span>
+                    }}</span><span class="field-value">{{ rx.pharmacistVerifiedByName }}</span>
                   </div>
                 }
                 @if (rx.pharmacistVerificationNote) {
                   <div class="detail-field">
                     <span class="field-label">{{
                       'PRESCRIPTIONS.PHARMACIST_VERIFY_NOTE_RECORDED' | translate
-                    }}</span
-                    ><span class="field-value">{{ rx.pharmacistVerificationNote }}</span>
+                    }}</span><span class="field-value">{{ rx.pharmacistVerificationNote }}</span>
                   </div>
                 }
               }
@@ -541,8 +564,7 @@
                       ? 'PRESCRIPTIONS.OVERRIDE.ALLERGY_REASON'
                       : 'PRESCRIPTIONS.OVERRIDE.CDS_REASON'
                     ) | translate
-                  }}</span
-                  >{{ ' ' }}<span class="field-value">{{ rx.overrideReason }}</span>
+                  }}</span>{{ ' ' }}<span class="field-value">{{ rx.overrideReason }}</span>
                 </div>
               }
               <!-- CR-01: signed as an urgent exception; its review follows. -->
@@ -550,8 +572,7 @@
                 <div class="detail-field" data-testid="rx-urgent-exception">
                   <span class="field-label">{{
                     'PRESCRIPTIONS.SIGN_EXCEPTION.URGENT_AT' | translate
-                  }}</span
-                  ><span class="field-value">{{
+                  }}</span><span class="field-value">{{
                     rx.pediatricDoseUrgentExceptionAt | serverTime | dateTime
                   }}</span>
                 </div>
@@ -561,8 +582,7 @@
                 <div class="detail-field" data-testid="rx-dose-review-state">
                   <span class="field-label">{{
                     'PRESCRIPTIONS.DOSE_REVIEW.STATE' | translate
-                  }}</span
-                  ><span class="field-value">{{
+                  }}</span><span class="field-value">{{
                     rx.pediatricDoseReviewedAt
                       ? (rx.pediatricDoseReviewedAt | serverTime | dateTime)
                       : ('PRESCRIPTIONS.DOSE_REVIEW.DUE' | translate)
@@ -572,16 +592,15 @@
                   <div class="detail-field">
                     <span class="field-label">{{
                       'PRESCRIPTIONS.DOSE_REVIEW.REVIEWED_BY' | translate
-                    }}</span
-                    ><span class="field-value">{{ rx.pediatricDoseReviewedByName }}</span>
+                    }}</span><span class="field-value">{{ rx.pediatricDoseReviewedByName }}</span>
                   </div>
                 }
                 @if (rx.pediatricDoseReviewReason) {
                   <div class="detail-field">
                     <span class="field-label">{{
                       'PRESCRIPTIONS.DOSE_REVIEW.REASON' | translate
-                    }}</span
-                    >{{ ' ' }}<span class="field-value">{{ rx.pediatricDoseReviewReason }}</span>
+                    }}</span>{{ ' '
+                    }}<span class="field-value">{{ rx.pediatricDoseReviewReason }}</span>
                   </div>
                 }
               }
@@ -625,8 +644,7 @@
                   <div class="detail-field">
                     <span class="field-label">{{
                       'PRESCRIPTIONS.PHARMACY.HOLDER' | translate
-                    }}</span
-                    ><span class="field-value" data-testid="rx-pharmacy-name">{{
+                    }}</span><span class="field-value" data-testid="rx-pharmacy-name">{{
                       rx.pharmacyName
                     }}</span>
                   </div>
@@ -635,8 +653,7 @@
                   <div class="detail-field">
                     <span class="field-label">{{
                       'PRESCRIPTIONS.PHARMACY.CONTACT' | translate
-                    }}</span
-                    ><span class="field-value">{{ rx.pharmacyContact }}</span>
+                    }}</span><span class="field-value">{{ rx.pharmacyContact }}</span>
                   </div>
                 }
                 @if (rx.dispatchedAt) {
@@ -646,8 +663,7 @@
                         ? 'PRESCRIPTIONS.PHARMACY.DISPATCHED_AT'
                         : 'PRESCRIPTIONS.PHARMACY.LAST_DISPATCHED_AT'
                       ) | translate
-                    }}</span
-                    ><span class="field-value" data-testid="rx-dispatched-at">{{
+                    }}</span><span class="field-value" data-testid="rx-dispatched-at">{{
                       rx.dispatchedAt | serverTime | dateTime
                     }}</span>
                   </div>
@@ -659,8 +675,7 @@
                         ? 'PRESCRIPTIONS.PHARMACY.DISPATCH'
                         : 'PRESCRIPTIONS.PHARMACY.LAST_DISPATCH'
                       ) | translate
-                    }}</span
-                    ><span class="field-value" data-testid="rx-dispatch-state">
+                    }}</span><span class="field-value" data-testid="rx-dispatch-state">
                       {{ rx.dispatchChannel | enumLabel: 'prescriptionDispatchChannel' }}
                       @if (rx.dispatchStatus) {
                         — {{ rx.dispatchStatus | enumLabel: 'prescriptionDispatchStatus' }}
@@ -672,8 +687,7 @@
                   <div class="detail-field">
                     <span class="field-label">{{
                       'PRESCRIPTIONS.PHARMACY.LAST_EVENT' | translate
-                    }}</span
-                    ><span class="field-value" data-testid="rx-last-pharmacy-event">
+                    }}</span><span class="field-value" data-testid="rx-last-pharmacy-event">
                       {{ rx.lastPharmacyEvent | enumLabel: 'prescriptionStatus' }}
                       @if (rx.lastPharmacyEventAt) {
                         — {{ rx.lastPharmacyEventAt | serverTime | dateTime }}
@@ -687,8 +701,9 @@
                   <div class="detail-field">
                     <span class="field-label">{{
                       'PRESCRIPTIONS.PHARMACY.LAST_REFUSED_BY' | translate
-                    }}</span
-                    ><span class="field-value" data-testid="rx-last-refused-by">{{ refuser }}</span>
+                    }}</span><span class="field-value" data-testid="rx-last-refused-by">{{
+                      refuser
+                    }}</span>
                   </div>
                 }
                 <!-- Gap G13: the remainder carries its unit now that the
@@ -698,8 +713,7 @@
                   <div class="detail-field">
                     <span class="field-label">{{
                       'PRESCRIPTIONS.PHARMACY.OUTSTANDING' | translate
-                    }}</span
-                    ><span class="field-value" data-testid="rx-outstanding-quantity">{{
+                    }}</span><span class="field-value" data-testid="rx-outstanding-quantity">{{
                       outstandingQuantityUnit()
                         ? ('PRESCRIPTIONS.QUANTITY_VALUE'
                           | translate: { value: outstanding, unit: outstandingQuantityUnit() })
@@ -1624,8 +1638,7 @@
                 ? 'PRESCRIPTIONS.OVERRIDE.ALLERGY_REASON'
                 : 'PRESCRIPTIONS.OVERRIDE.CDS_REASON'
               ) | translate
-            }}</strong
-            >{{ 'COMMON.COLON' | translate }} {{ verifyTarget()?.overrideReason }}
+            }}</strong>{{ 'COMMON.COLON' | translate }} {{ verifyTarget()?.overrideReason }}
           </p>
         }
         <p class="muted">{{ 'PRESCRIPTIONS.PHARMACIST_VERIFY_HINT' | translate }}</p>
