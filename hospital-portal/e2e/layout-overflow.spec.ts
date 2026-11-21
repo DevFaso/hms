@@ -6,7 +6,7 @@ import { test, expect } from './fixtures/test-fixtures';
 import { routedPages } from './helpers/routed-page-inventory';
 import { installLocalIconFonts } from './helpers/local-icon-fonts';
 import { signInAs, TEST_ID } from './helpers/role-session';
-import { auditAtWidths, formatOffenders, LAYOUT_WIDTHS } from './helpers/layout-audit';
+import { auditAtWidths, formatOffenders, heightFor, LAYOUT_WIDTHS } from './helpers/layout-audit';
 
 /**
  * QA D2230 / D2231 (owner screenshots 39–41, 2026-11-18): the invoice drawer
@@ -189,7 +189,7 @@ async function shoot(
   if (!dir) return;
   const tag = process.env['LAYOUT_SHOTS_TAG'] ?? 'shot';
   for (const width of widths) {
-    await page.setViewportSize({ width, height: width < 600 ? 844 : 900 });
+    await page.setViewportSize({ width, height: heightFor(width) });
     await page.evaluate(() => {
       const backdrop = document.querySelector<HTMLElement>('.sidebar-backdrop');
       if (backdrop && getComputedStyle(backdrop).display !== 'none') backdrop.click();
@@ -1213,6 +1213,52 @@ test.describe('layout overflow: r64 dialogs and money screens', () => {
     const found = await auditAtWidths(page, '/patients/:id [Lier une assurance]');
     await shoot(page, 'coverage-link-dialog', LAYOUT_WIDTHS);
     expect(found, formatOffenders(found)).toEqual([]);
+  });
+});
+
+/* ── r66 (QA D2938): a dialog is never taller than the screen ───────────────
+   The nurse-station vitals dialog had no height limit and nothing scrolled:
+   with the maternal « préoccupations » list open, « Enregistrer » sat below a
+   1366×768 laptop screen, and on a 390×844 phone it could never be reached.
+   The `dialog-height` rule of helpers/layout-audit.ts now measures every dialog
+   this file opens; this case opens the one QA failed, list unfolded, and
+   clicks Save where a nurse would. */
+
+test.describe('layout overflow: r66 dialog height (D2938)', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test('the vitals dialog fits a laptop and a phone with the concerns list open, and Save is in reach', async ({
+    page,
+  }, testInfo) => {
+    await page.route('**/api/nurse/vitals/due**', (r) => r.fulfill({ json: DESK_ROWS }));
+    await open(page, testInfo.project.use.baseURL as string, 'ROLE_NURSE', '/nurse-station');
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await page.locator('.action-record').first().click();
+    const dialog = page.locator('.modal-vitals');
+    await expect(dialog).toBeVisible();
+    await dialog.locator('[data-testid="maternal-concerns"] summary').click();
+    await expect(dialog.locator('[data-testid^="maternal-concern-"]').first()).toBeVisible();
+
+    const found = await auditAtWidths(page, '/nurse-station [signes vitaux, préoccupations]');
+    expect(found, formatOffenders(found)).toEqual([]);
+
+    const save = dialog.locator('[data-testid="vitals-save"]');
+    for (const width of [1366, 390]) {
+      await page.setViewportSize({ width, height: heightFor(width) });
+      // Wherever the fields are scrolled, the title bar of the dialog and Save are on screen.
+      for (const top of [0, 100_000]) {
+        await dialog.evaluate((el, y) => (el.scrollTop = y), top);
+        await expect(save, `Save @${width}px, scrolled to ${top}`).toBeInViewport({ ratio: 1 });
+        const box = (await dialog.boundingBox())!;
+        expect(box.y, `dialog top @${width}px`).toBeGreaterThanOrEqual(0);
+        expect(box.y + box.height, `dialog bottom @${width}px`).toBeLessThanOrEqual(
+          heightFor(width),
+        );
+      }
+      // A real pointer reaches it (Playwright refuses a click outside the viewport).
+      await save.click({ trial: true, timeout: 5_000 });
+    }
+    await shoot(page, 'nurse-vitals-dialog-concerns', [1366, 390]);
   });
 });
 
