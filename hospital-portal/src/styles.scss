@@ -1026,6 +1026,14 @@ table:not(.fc table, .fc) > thead > tr > th {
   table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr > :is(td, th):empty {
     display: none !important;
   }
+  /* What a page hides with the `hidden` attribute stays hidden: a collapsed
+     detail row, a table kept for later. (A page that hides rows or cells by a
+     class of its own on a phone marks its table `data-no-cards`.) */
+  table[data-cards]:not(.fc table, .fc)[hidden],
+  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot)[hidden],
+  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr[hidden] {
+    display: none !important;
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -1033,7 +1041,8 @@ table:not(.fc table, .fc) > thead > tr > th {
    was already off paper; the page's own chrome was not: toolbars, filters,
    search boxes, pagination, row actions and the three shared buttons printed
    with the data. Pages with a print layout of their own keep using
-   .no-print / .print-only.
+   .no-print / .print-only. The chips that name the ACTIVE filters stay on
+   paper (.active-chips): a printed list that is a subset says so.
    ───────────────────────────────────────────────────────────────────────── */
 @media print {
   .page-actions,
@@ -1044,7 +1053,6 @@ table:not(.fc table, .fc) > thead > tr > th {
   .filter-toolbar,
   .filter-row,
   .filter-bar,
-  .active-chips,
   .status-pills,
   .search-bar,
   .search-box,

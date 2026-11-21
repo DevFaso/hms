@@ -134,13 +134,21 @@ function bodyCells(table: HTMLTableElement): HTMLTableCellElement[] {
 }
 
 /**
- * Whether every body cell of `table` answers to exactly one header: one plain
- * header row of two columns or more, and no body cell that spans rows. A cell
- * with `rowspan` takes a column of the rows under it, so the cells of those
- * rows would be counted from the wrong column: on a phone the header row is
- * not shown, and « Dose » over a drug name is a wrong reading of a chart.
- * (A cell that spans COLUMNS is fine: it carries no label and the cells after
- * it are counted past it.)
+ * The cells whose `data-label` this module wrote. A `data-label` on any other
+ * cell is the template's: the page has a card layout of its own (the till
+ * closing, billing/cash-session), and its table and labels are left alone.
+ */
+const ownLabels = new WeakSet<Element>();
+
+/**
+ * Whether every body cell of `table` answers to exactly one header, and the
+ * page has not labelled the cells itself: one plain header row of two columns
+ * or more, no body cell that spans rows, no `data-label` written by a
+ * template. A cell with `rowspan` takes a column of the rows under it, so the
+ * cells of those rows would be counted from the wrong column: on a phone the
+ * header row is not shown, and « Dose » over a drug name is a wrong reading
+ * of a chart. (A cell that spans COLUMNS is fine: it carries no label and the
+ * cells after it are counted past it.)
  */
 export function isCardTable(table: HTMLTableElement): boolean {
   const head = table.tHead;
@@ -150,20 +158,34 @@ export function isCardTable(table: HTMLTableElement): boolean {
     head.rows.length === 1 &&
     head.rows[0].cells.length >= 2 &&
     Array.from(head.rows[0].cells).every((c) => c.colSpan === 1 && c.rowSpan === 1) &&
-    bodyCells(table).every((c) => c.rowSpan === 1)
+    bodyCells(table).every(
+      (c) => c.rowSpan === 1 && (!c.hasAttribute('data-label') || ownLabels.has(c)),
+    )
   );
+}
+
+function label(cell: Element, text: string): void {
+  setAttr(cell, 'data-label', text);
+  ownLabels.add(cell);
+}
+
+function unlabel(cell: Element): void {
+  if (!ownLabels.has(cell)) return;
+  cell.removeAttribute('data-label');
+  ownLabels.delete(cell);
 }
 
 /**
  * Marks a list table for the card mode and labels its cells. Returns whether
- * the table is a card table. A table that stops being one (a spanning cell
- * rendered later) loses the mark and the labels this function wrote.
+ * the table is a card table. A table that stops being one (a spanning cell or
+ * a row with the page's own labels rendered later) loses the mark and the
+ * labels this function wrote, never a label the template wrote.
  */
 export function labelTable(table: HTMLTableElement): boolean {
   if (!isCardTable(table)) {
     if (table.hasAttribute('data-cards')) {
       table.removeAttribute('data-cards');
-      for (const cell of bodyCells(table)) cell.removeAttribute('data-label');
+      for (const cell of bodyCells(table)) unlabel(cell);
     }
     return false;
   }
@@ -173,11 +195,11 @@ export function labelTable(table: HTMLTableElement): boolean {
       let column = 0;
       for (const cell of Array.from(row.cells)) {
         if (cell.colSpan > 1) {
-          if (cell.hasAttribute('data-label')) cell.removeAttribute('data-label');
+          unlabel(cell);
           column += cell.colSpan;
           continue;
         }
-        setAttr(cell, 'data-label', labels[column] ?? '');
+        label(cell, labels[column] ?? '');
         column++;
       }
     }

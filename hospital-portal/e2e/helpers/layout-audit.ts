@@ -337,6 +337,14 @@ export async function auditLayout(page: Page): Promise<LayoutOffender[]> {
           Array.from(body.rows).some((r) => Array.from(r.cells).some((c) => c.rowSpan > 1)),
         );
         if (spansRows) return;
+        // A page with a card layout of its own writes its own data-label and is
+        // never marked (the till closing): its table is not the labeller's.
+        const ownCards =
+          !table.hasAttribute('data-cards') &&
+          Array.from(table.tBodies).some((body) =>
+            body.querySelector(':scope > tr > [data-label]'),
+          );
+        if (ownCards) return;
         const row = Array.from(table.tBodies)
           .flatMap((body) => Array.from(body.rows))
           .find((r) => visible(r));

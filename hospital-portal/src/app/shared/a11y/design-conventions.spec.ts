@@ -110,6 +110,39 @@ describe('design conventions (QA D2798 / D2792 / D2807)', () => {
       expect(page.querySelectorAll('[data-label]').length).toBe(0);
     });
 
+    it("leaves a page's own card layout alone: its labels are never overwritten", () => {
+      // The till closing writes its own data-label on each cell and styles its
+      // own phone cards; the header says « Attendu », the cell says « Attendu en caisse ».
+      page.innerHTML = `<table class="cash-methods"><thead><tr><th>Mode</th><th>Attendu</th></tr></thead>
+        <tbody><tr><td>Espèces</td><td data-label="Attendu en caisse">12 000 F CFA</td></tr></tbody></table>`;
+      const table = page.querySelector('table')!;
+      expect(isCardTable(table)).toBeFalse();
+      expect(labelTable(table)).toBeFalse();
+      expect(table.hasAttribute('data-cards')).toBeFalse();
+      expect(page.querySelector('td:last-child')!.getAttribute('data-label')).toBe(
+        'Attendu en caisse',
+      );
+      expect(page.querySelector('td:first-child')!.hasAttribute('data-label')).toBeFalse();
+    });
+
+    it('gives the table back when rows with their own labels are rendered into it later', () => {
+      page.innerHTML = `<table><thead><tr><th>Mode</th><th>Attendu</th></tr></thead>
+        <tbody><tr><td>Chèque</td><td>0</td></tr></tbody></table>`;
+      const table = page.querySelector('table')!;
+      expect(labelTable(table)).toBeTrue();
+      table.tBodies[0].insertAdjacentHTML(
+        'beforeend',
+        `<tr><td data-label="Mode de paiement">Espèces</td><td data-label="Attendu en caisse">12 000</td></tr>`,
+      );
+      expect(labelTable(table)).toBeFalse();
+      expect(table.hasAttribute('data-cards')).toBeFalse();
+      // Ours are taken back; the template's stay.
+      const rows = table.tBodies[0].rows;
+      expect(rows[0].cells[0].hasAttribute('data-label')).toBeFalse();
+      expect(rows[1].cells[0].getAttribute('data-label')).toBe('Mode de paiement');
+      expect(rows[1].cells[1].getAttribute('data-label')).toBe('Attendu en caisse');
+    });
+
     it('leaves a table without one plain header row as a table', () => {
       for (const html of [
         `<table><tbody><tr><td>x</td><td>y</td></tr></tbody></table>`,

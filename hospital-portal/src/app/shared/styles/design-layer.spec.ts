@@ -229,5 +229,57 @@ describe('global design layer (QA r65)', () => {
       const row = doc.querySelector<HTMLElement>('tbody tr')!;
       expect(doc.defaultView!.getComputedStyle(row).display).toBe('table-row');
     });
+
+    it('keeps hidden what a page hid with the hidden attribute: a row, a cell, the table', async () => {
+      const doc = await screen(390);
+      doc.body.innerHTML = `<table data-cards>
+          <thead><tr><th>Examen</th><th>Résultat</th></tr></thead>
+          <tbody>
+            <tr><td data-label="Examen">NFS</td><td data-label="Résultat" hidden>12</td></tr>
+            <tr hidden><td data-label="Examen">Détail replié</td><td data-label="Résultat">x</td></tr>
+          </tbody></table>
+        <table data-cards hidden>
+          <thead><tr><th>A</th><th>B</th></tr></thead>
+          <tbody><tr><td data-label="A">1</td><td data-label="B">2</td></tr></tbody></table>`;
+      const view = doc.defaultView!;
+      const [list, kept] = Array.from(doc.querySelectorAll('table'));
+      expect(view.getComputedStyle(list).display).toBe('block');
+      expect(view.getComputedStyle(list.querySelector('td[hidden]')!).display).toBe('none');
+      expect(view.getComputedStyle(list.querySelector('tr[hidden]')!).display).toBe('none');
+      expect(view.getComputedStyle(kept).display).toBe('none');
+    });
+  });
+
+  describe('print (D2805)', () => {
+    /** The declarations of the global sheet's `@media print` rules that hide `selector`. */
+    function hiddenOnPaper(selector: string): boolean {
+      return Array.from(document.styleSheets).some((sheet) => {
+        let rules: CSSRule[];
+        try {
+          rules = Array.from(sheet.cssRules);
+        } catch {
+          return false;
+        }
+        return rules.some(
+          (rule) =>
+            rule instanceof CSSMediaRule &&
+            rule.conditionText.trim() === 'print' &&
+            Array.from(rule.cssRules).some(
+              (inner) =>
+                inner instanceof CSSStyleRule &&
+                inner.style.display === 'none' &&
+                inner.selectorText.split(',').some((s) => s.trim() === selector),
+            ),
+        );
+      });
+    }
+
+    it('takes the filter controls off paper but leaves the chips that name the active filters', () => {
+      for (const chrome of ['.filter-row', '.filter-toolbar', '.search-bar', '.pagination-row']) {
+        expect(hiddenOnPaper(chrome)).withContext(chrome).toBeTrue();
+      }
+      // A printed list that is a subset says so.
+      expect(hiddenOnPaper('.active-chips')).toBeFalse();
+    });
   });
 });
