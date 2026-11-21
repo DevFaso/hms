@@ -97,7 +97,7 @@ class PrescriptionControllerPatientCopyTest {
     void theOrdonnanceIsAnInlineUncachedPdf() {
         java.util.UUID id = java.util.UUID.randomUUID();
         byte[] pdf = "%PDF-1.4".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
-        org.mockito.Mockito.when(ordonnancePdfService.forPrescriber(id)).thenReturn(pdf);
+        when(ordonnancePdfService.forPrescriber(id)).thenReturn(pdf);
 
         org.springframework.http.ResponseEntity<byte[]> answer = controller().ordonnance(id);
 
