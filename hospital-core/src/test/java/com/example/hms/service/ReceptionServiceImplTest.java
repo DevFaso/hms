@@ -79,6 +79,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -1196,7 +1197,7 @@ class ReceptionServiceImplTest {
                     .singleElement().satisfies(c -> assertThat(c.getConfidenceScore()).isEqualTo(50));
             // No date typed: no near-spelling source at all (a near name alone is never a duplicate).
             assertThat(service.getDuplicateCandidates("Aoua TestDiallo", null, null, hospitalId)).isEmpty();
-            verify(patientRepo, org.mockito.Mockito.times(1)).findActiveBornBetweenAtHospital(any(), any(), any(), any());
+            verify(patientRepo, times(1)).findActiveBornBetweenAtHospital(any(), any(), any(), any());
         }
 
         @Test
@@ -2028,7 +2029,7 @@ class ReceptionServiceImplTest {
             service.checkInPatient(CheckInRequestDTO.builder().appointmentId(appointment.getId())
                     .identityConfirmed(true).insuranceVerified(false).build(), hospitalId, "receptionist1");
             assertThat(current.getVerifiedAt()).isNull();
-            verify(insuranceRepo, org.mockito.Mockito.never()).save(any());
+            verify(insuranceRepo, never()).save(any());
         }
 
         @Test

@@ -324,16 +324,7 @@ public class PdfInvoiceService {
             w.down(15);
             w.text(BODY, 11, MARGIN, t.get(PATIENT, patientLine(invoice)));
             w.down(15);
-            java.time.LocalDateTime receivedAt = payment.getConfirmedAt() != null
-                ? payment.getConfirmedAt() : payment.getCreatedAt();
-            w.text(BODY, 11, MARGIN, receivedAt != null
-                ? t.get("pdf.receipt.receivedAt", t.fmt(receivedAt))
-                : t.get("pdf.receipt.date", t.fmt(payment.getPaymentDate())));
-            w.down(15);
-            if (receivedByName != null && !receivedByName.isBlank()) {
-                w.text(BODY, 11, MARGIN, t.get("pdf.receipt.receivedBy", receivedByName.strip()));
-                w.down(15);
-            }
+            receiptMoment(w, t, payment, receivedByName);
             boolean hasReference = payment.getReferenceNumber() != null && !payment.getReferenceNumber().isBlank();
             if (hasReference && payment.getPaymentMethod() == com.example.hms.enums.PaymentMethod.MOBILE_MONEY) {
                 // Billing plan PR 9: "Orange Money, réf. …" on one line.
@@ -458,6 +449,21 @@ public class PdfInvoiceService {
             return item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
         }
         return BigDecimal.ZERO;
+    }
+
+    /** QA D2523: when the money was received (with its time when known) and who received it. */
+    private static void receiptMoment(Writer w, PdfLabels t, PaymentTransaction payment, String receivedByName)
+            throws IOException {
+        java.time.LocalDateTime receivedAt = payment.getConfirmedAt() != null
+            ? payment.getConfirmedAt() : payment.getCreatedAt();
+        w.text(BODY, 11, MARGIN, receivedAt != null
+            ? t.get("pdf.receipt.receivedAt", t.fmt(receivedAt))
+            : t.get("pdf.receipt.date", t.fmt(payment.getPaymentDate())));
+        w.down(15);
+        if (receivedByName != null && !receivedByName.isBlank()) {
+            w.text(BODY, 11, MARGIN, t.get("pdf.receipt.receivedBy", receivedByName.strip()));
+            w.down(15);
+        }
     }
 
     /** How many lines the receipt names before « and N more » (a receipt is one page). */

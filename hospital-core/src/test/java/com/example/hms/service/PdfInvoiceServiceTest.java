@@ -386,8 +386,8 @@ class PdfInvoiceServiceTest {
 
         assertThat(text).contains("pdf.receipt.purpose", "Participation du patient : consultation", "1 500 F CFA",
             "pdf.receipt.receivedBy Awa Caissiere", "pdf.receipt.receivedAt",
-            "pdf.hospital.addressAndPhone Avenue Kwame Nkrumah, Ouagadougou +226 25 30 00 00");
-        assertThat(text).doesNotContain("pdf.receipt.date");
+            "pdf.hospital.addressAndPhone Avenue Kwame Nkrumah, Ouagadougou +226 25 30 00 00")
+            .doesNotContain("pdf.receipt.date");
     }
 
     @Test
