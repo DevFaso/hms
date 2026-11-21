@@ -83,6 +83,9 @@ public class ImagingReadingContextService {
         if (scope != null && !scope.equals(hospitalId)) {
             throw new ResourceNotFoundException(MSG_ORDER_NOT_FOUND, orderId);
         }
+        // QA D2915: the patient's creatinine and maternal history are the care team's OF the
+        // order's hospital, never read on a clinical role the caller holds elsewhere.
+        new ImagingRoleScope(roleValidator).requireClinicalReaderAt(hospitalId != null ? hospitalId : scope);
         Patient patient = order.getPatient();
         if (patient == null || hospitalId == null) {
             return new ImagingReadingContextDTO(order.getId(), patient != null ? patient.getId() : null,

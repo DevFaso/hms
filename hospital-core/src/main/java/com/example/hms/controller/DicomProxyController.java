@@ -58,6 +58,8 @@ public class DicomProxyController {
         if (!service.isEnabled()) {
             return ResponseEntity.notFound().build();
         }
+        // QA D2915: the role counts at the acting hospital, not on the token alone.
+        viewerService.requireInstanceListingReader();
         return ResponseEntity.ok(service.listInstancesForStudy(studyUid));
     }
 

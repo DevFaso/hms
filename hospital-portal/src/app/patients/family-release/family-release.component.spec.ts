@@ -296,6 +296,7 @@ describe('FamilyReleaseComponent (policy 2026-11-20)', () => {
             category: 'VIRAL_HEPATITIS',
             resultedAt: '2026-11-19T11:00:00',
             releasable: false,
+            notReleasableReason: 'NOT_HIV',
             releases: [],
           },
           {
@@ -304,6 +305,7 @@ describe('FamilyReleaseComponent (policy 2026-11-20)', () => {
             category: 'HIV',
             resultedAt: '2026-11-19T12:00:00',
             releasable: false,
+            notReleasableReason: 'VIOLENCE',
             releases: [],
           },
         ],
@@ -316,6 +318,9 @@ describe('FamilyReleaseComponent (policy 2026-11-20)', () => {
     const notes = host.querySelectorAll('[data-testid="result-not-releasable"]');
     expect(notes.length).toBe(2);
     expect(notes[0].textContent).toContain('seul un résultat VIH');
+    // r66 D2903: the HIV result of a visit that violence is on is not told « only an HIV result can be ».
+    expect(notes[1].textContent).toContain('un résultat lié à des violences ne l’est jamais');
+    expect(notes[1].textContent).not.toContain('seul un résultat VIH');
     expect(q('family-release')!.textContent).toContain('Seul le VIH peut être communiqué');
 
     // Not even by calling the component: the form does not open for it.

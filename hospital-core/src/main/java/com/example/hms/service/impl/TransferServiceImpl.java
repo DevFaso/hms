@@ -81,6 +81,14 @@ public class TransferServiceImpl implements TransferService {
     private final TransferOrderMapper mapper;
     private final RoleValidator roleValidator;
 
+    /** Policy rule 2: the midwife's maternity-ward reach (setter-injected, as in AdmissionServiceImpl). */
+    private com.example.hms.service.maternity.MidwifeNewbornCare midwifeNewbornCare;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setMidwifeNewbornCare(com.example.hms.service.maternity.MidwifeNewbornCare midwifeNewbornCare) {
+        this.midwifeNewbornCare = midwifeNewbornCare;
+    }
+
     @Override
     public TransferOrderResponseDTO requestTransfer(TransferOrderRequestDTO request) {
         UUID hospitalId = requireHospital();
@@ -112,6 +120,13 @@ public class TransferServiceImpl implements TransferService {
         // QA D1366 class: refused on the destination picker (toBedId), so the form marks it.
         BedAssignmentService.requireWardFitsPatient(destination, admission.getPatient(),
             BedAssignmentService.FIELD_TO_BED_ID);
+        // QA D2917 (policy rule 2, provisional): a midwife orders a move between maternity beds
+        // (and to a neonatal cot for a newborn) only, exactly as she assigns a bed. Checked when
+        // the transfer is ORDERED, before the destination is held.
+        if (midwifeNewbornCare != null) {
+            midwifeNewbornCare.requireBedAMidwifeMayAssign(admission, destination.getId(),
+                BedAssignmentService.FIELD_TO_BED_ID);
+        }
         transferOrderRepository.findPendingForDestinationBed(destination.getId())
             .ifPresent(existing -> {
                 throw new com.example.hms.exception.FieldBusinessException(BedAssignmentService.FIELD_TO_BED_ID,
@@ -173,12 +188,28 @@ public class TransferServiceImpl implements TransferService {
         com.example.hms.model.Staff completedBy = com.example.hms.security.CallerIdentity.resolveActor(
             staffRepository, request.getCompletedByStaffId(), hospitalId);
 
+        // QA D2917: carrying the move out assigns the bed, so the midwife's ward rule holds here
+        // too: the destination is always one of her wards. Review of #1251 (provisional): the bed
+        // the patient leaves may be of another ward when a doctor or a nurse ordered the move (a
+        // woman in labour sent up from the emergency ward). A neonatal cot she gives a newborn asks
+        // a physician to review, as on a direct assignment (a task, never a refusal).
+        com.example.hms.model.Staff orderedBy = order.getRequestedBy();
+        UUID orderedByUserId = orderedBy == null || orderedBy.getUser() == null ? null : orderedBy.getUser().getId();
+        boolean askPhysician = midwifeNewbornCare != null
+            && midwifeNewbornCare.requireTransferAMidwifeMayComplete(order.getAdmission(),
+                order.getToBed().getId(), orderedByUserId);
+
         // The destination has been RESERVED for this order since it was
         // raised, so completion claims it from that state. The bed change
         // still goes through BedAssignmentService: one writer of the invariant.
         bedAssignmentService.assignBed(order.getAdmission(), order.getToBed().getId(),
             Set.of(BedStatus.AVAILABLE, BedStatus.RESERVED));
         admissionRepository.save(order.getAdmission());
+        if (askPhysician) {
+            // A new placement alerts again: the task of an earlier one is withdrawn first.
+            midwifeNewbornCare.withdrawPhysicianTask(order.getAdmission().getId());
+            midwifeNewbornCare.askPhysicianAfterCommit(order.getAdmission());
+        }
 
         order.setStatus(TransferOrderStatus.COMPLETED);
         order.setCompletedAt(LocalDateTime.now(clock));

@@ -197,7 +197,7 @@ public class InvoiceRefundService {
             // uq_refund_live_reversal: a second request for the same payment raced this one.
             throw new ConflictException(MessageUtil.resolve("billing.payment.reversalPending"));
         }
-        auditAfterCommit(AuditEventType.PAYMENT_REVERSAL_REQUESTED, actor.userId(), invoice.getId(), refund.getId(),
+        auditAfterCommit(AuditEventType.PAYMENT_REVERSAL_REQUESTED, actor.userId(), invoice.getId(), refund,
             "Payment reversal requested");
         return toDto(refund, actor.userId(), null);
     }
@@ -325,7 +325,7 @@ public class InvoiceRefundService {
             .requestedAt(now())
             .clientRequestId(request.getClientRequestId())
             .build(), request.getClientRequestId());
-        auditAfterCommit(AuditEventType.REFUND_REQUESTED, actor.userId(), invoice.getId(), refund.getId(),
+        auditAfterCommit(AuditEventType.REFUND_REQUESTED, actor.userId(), invoice.getId(), refund,
             "Refund requested");
         return toDto(refund, actor.userId(), null);
     }
@@ -359,7 +359,7 @@ public class InvoiceRefundService {
         refund.setStatus(InvoiceRefundStatus.APPROVED);
         refund.setDecidedBy(actor.userId());
         refund.setDecidedAt(at);
-        auditAfterCommit(AuditEventType.REFUND_APPROVED, actor.userId(), invoice.getId(), refund.getId(),
+        auditAfterCommit(AuditEventType.REFUND_APPROVED, actor.userId(), invoice.getId(), refund,
             "Refund approved");
         return toDto(refund, actor.userId(), null);
     }
@@ -383,7 +383,7 @@ public class InvoiceRefundService {
         refund.setDecidedBy(actor.userId());
         refund.setDecidedAt(at);
         refund.setDecisionReason(reason);
-        auditAfterCommit(AuditEventType.REFUND_REJECTED, actor.userId(), invoice.getId(), refund.getId(),
+        auditAfterCommit(AuditEventType.REFUND_REJECTED, actor.userId(), invoice.getId(), refund,
             "Refund rejected");
         return toDto(refund, actor.userId(), null);
     }
@@ -439,7 +439,7 @@ public class InvoiceRefundService {
         refund.setMobileMoneyOperator(handover.operator());
         refund.setReceiptSeq(receiptSeq);
         refund.setReceiptNumber(receiptNumber);
-        auditAfterCommit(AuditEventType.REFUND_ISSUED, actor.userId(), invoice.getId(), refund.getId(),
+        auditAfterCommit(AuditEventType.REFUND_ISSUED, actor.userId(), invoice.getId(), refund,
             "Refund paid out");
         return toDto(refund, actor.userId(), null);
     }
@@ -464,7 +464,7 @@ public class InvoiceRefundService {
         payment.setReversalReason(refund.getReason());
         payment.setReversalRefundId(refund.getId());
         paymentRepository.save(payment);
-        auditAfterCommit(AuditEventType.PAYMENT_REVERSED, actorId, invoice.getId(), refund.getId(),
+        auditAfterCommit(AuditEventType.PAYMENT_REVERSED, actorId, invoice.getId(), refund,
             "Payment reversed");
     }
 
@@ -501,7 +501,7 @@ public class InvoiceRefundService {
         refund.setCancelledBy(actor.userId());
         refund.setCancelledAt(at);
         refund.setCancelReason(reason);
-        auditAfterCommit(AuditEventType.REFUND_CANCELLED, actor.userId(), invoice.getId(), refund.getId(),
+        auditAfterCommit(AuditEventType.REFUND_CANCELLED, actor.userId(), invoice.getId(), refund,
             "Refund cancelled");
         return toDto(refund, actor.userId(), null);
     }
@@ -845,18 +845,21 @@ public class InvoiceRefundService {
     // ───────────────────────────── audit ─────────────────────────────
 
     /** Ids only (no amount tied to a person, no reason text, no PHI), written after commit. */
-    private void auditAfterCommit(AuditEventType type, UUID actorId, UUID invoiceId, UUID refundId, String what) {
+    private void auditAfterCommit(AuditEventType type, UUID actorId, UUID invoiceId, InvoiceRefund refund, String what) {
         if (auditEventLogService == null) {
             return;
         }
         String invoiceIdText = String.valueOf(invoiceId);
-        String description = what + ": refund " + refundId + " on invoice " + invoiceIdText;
+        String description = what + ": refund " + refund.getId() + " on invoice " + invoiceIdText;
+        // QA D2924 (r66): the refund's hospital anchors the row for the hospital admin's audit log.
+        UUID hospitalId = refund.getHospitalId();
         TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .eventType(type)
                     .status(AuditStatus.SUCCESS)
                     .userId(actorId)
+                    .hospitalId(hospitalId)
                     .eventDescription(description)
                     .entityType(AUDIT_ENTITY)
                     .resourceId(invoiceIdText)

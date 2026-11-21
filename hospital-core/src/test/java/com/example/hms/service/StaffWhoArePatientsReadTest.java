@@ -263,6 +263,8 @@ class StaffWhoArePatientsReadTest {
         void ownEverywhere() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalA.getId());
             when(recordAccessPolicy.readableHospitalIds(any(), any(), any())).thenReturn(Set.of(hospitalA.getId()));
+            // A nurse of hospital A (QA D2915: the role counts where it is held).
+            com.example.hms.testsupport.ImagingRolesHeld.whereverTheTokenNamesThem(roleValidator);
 
             nurseWhoIsAPatient();
             service.getOrdersByPatient(ownPatientId, null);

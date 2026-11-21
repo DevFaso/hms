@@ -52,8 +52,10 @@ public class MedicationCatalogController {
     @Operation(summary = "Get a medication catalog item by ID")
     public ResponseEntity<MedicationCatalogItemResponseDTO> getById(
             @PathVariable UUID id,
-            @RequestParam UUID hospitalId) {
-        return ResponseEntity.ok(catalogService.getById(id, hospitalId));
+            @RequestParam(required = false) UUID hospitalId,
+            Authentication auth) {
+        // r66 D2901: the hospital is the caller's acting scope, as on list and search (the portal sends none).
+        return ResponseEntity.ok(catalogService.getById(id, resolveCatalogScope(auth, hospitalId)));
     }
 
     @GetMapping
@@ -119,7 +121,14 @@ public class MedicationCatalogController {
     @Operation(summary = "Update a medication catalog item")
     public ResponseEntity<MedicationCatalogItemResponseDTO> update(
             @PathVariable UUID id,
-            @Valid @RequestBody MedicationCatalogItemRequestDTO dto) {
+            @Valid @RequestBody MedicationCatalogItemRequestDTO dto,
+            Authentication auth) {
+        // r66 D2901: the portal names no hospital and the service acts at the caller's. A hospital named in
+        // the BODY is not narrowed by the interceptor, so it is narrowed here: one the caller may not act
+        // at is refused, and a super-admin naming hospital B acts (and is audited) at B.
+        if (dto.getHospitalId() != null) {
+            resolveCatalogScope(auth, dto.getHospitalId());
+        }
         return ResponseEntity.ok(catalogService.update(id, dto));
     }
 
@@ -146,7 +155,9 @@ public class MedicationCatalogController {
     @Operation(summary = "Deactivate a medication catalog item")
     public ResponseEntity<Void> deactivate(
             @PathVariable UUID id,
-            @RequestParam UUID hospitalId) {
+            @RequestParam(required = false) UUID hospitalId) {
+        // r66 D2901: the portal sends no hospitalId (every deactivation answered 400); the service acts at
+        // the caller's hospital. One that is sent is narrowed by HospitalIdNarrowingInterceptor first.
         catalogService.deactivate(id, hospitalId);
         return ResponseEntity.noContent().build();
     }

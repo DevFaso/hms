@@ -2616,13 +2616,21 @@ public class LabResultServiceImpl implements LabResultService {
      * for patients who were never surfaced, inflated every surfaced count,
      * and let a polled dashboard write without bound. The filtering happens
      * first now and only the survivors are accounted.
+     *
+     * <p>QA D2951 (r66): only a RELEASED result is listed. Before release the
+     * row is the laboratory's draft: nobody is paged for it (QA D709), its GET,
+     * acknowledge and read-back answer 404, yet both lists showed its value
+     * hospital-wide and told the reader to have it read back. An unreleased
+     * critical is chased from the release worklist, which only the laboratory
+     * reads. {@code ClinicalLabResultReadPathGuardTest} keeps both lists on
+     * this method.
      */
     private List<LabResultResponseDTO> surfaceCritical(List<LabResult> candidates,
                                                        java.util.function.Predicate<LabResult> queueFilter) {
         List<LabResult> surfaced = new ArrayList<>();
         List<LabResultResponseDTO> answer = new ArrayList<>();
         for (LabResult result : candidates) {
-            if (queueFilter.test(result)) {
+            if (ClinicalLabResultView.showsValue(result) && queueFilter.test(result)) {
                 LabResultResponseDTO dto = labResultMapper.toResponseDTO(result);
                 if (dto != null && labResultMapper.raisesCriticalAlert(dto.getSeverityFlag())) {
                     surfaced.add(result);

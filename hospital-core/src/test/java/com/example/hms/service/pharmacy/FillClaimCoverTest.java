@@ -267,4 +267,23 @@ class FillClaimCoverTest {
         d.setId(UUID.randomUUID());
         return d;
     }
+
+    @Test
+    @DisplayName("QA D2931 (r66): why a claim sent does not cover: the person handing over stands behind it alone, or nobody does")
+    void whyAClaimDoesNotCover() {
+        when(claims.findByDispenseIdAndClaimStatusIn(eq(dispenseId), any())).thenReturn(List.of());
+        assertThat(FillClaimCover.gapFor(claims, dispenseId, pharmacist)).isEqualTo(FillClaimCover.Gap.NONE);
+
+        theClaimIs(PharmacyClaimStatus.ACCEPTED, null, null);
+        assertThat(FillClaimCover.gapFor(claims, dispenseId, pharmacist)).isEqualTo(FillClaimCover.Gap.NO_VOUCHER);
+
+        theClaimIs(PharmacyClaimStatus.ACCEPTED, billing, null);
+        assertThat(FillClaimCover.gapFor(claims, dispenseId, billing)).isEqualTo(FillClaimCover.Gap.OWN_VOUCHER);
+        assertThat(FillClaimCover.gapFor(claims, dispenseId, pharmacist))
+                .as("it covers for anybody else").isEqualTo(FillClaimCover.Gap.NONE);
+
+        theClaimIs(PharmacyClaimStatus.ACCEPTED, billing, accountant);
+        assertThat(FillClaimCover.gapFor(claims, dispenseId, billing)).isEqualTo(FillClaimCover.Gap.NONE);
+        assertThat(FillClaimCover.gapFor(null, dispenseId, billing)).isEqualTo(FillClaimCover.Gap.NONE);
+    }
 }

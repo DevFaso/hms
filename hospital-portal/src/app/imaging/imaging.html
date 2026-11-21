@@ -288,9 +288,10 @@
                     >
                       <span class="material-symbols-outlined">visibility</span>
                     </button>
-                    @if (['COMPLETED', 'RESULTS_AVAILABLE'].includes(o.status)) {
+                    @if (canViewReportOfOrder(o)) {
                       <button
                         class="action-link"
+                        [attr.data-testid]="'imaging-view-report-' + o.id"
                         (click)="viewReportForOrder(o)"
                         [title]="'IMAGING.VIEW_REPORT' | translate"
                         [attr.aria-label]="'IMAGING.VIEW_REPORT' | translate"
@@ -705,6 +706,13 @@
               <span class="field-label">{{ 'IMAGING.BODY_REGION' | translate }}</span
               ><span class="field-value">{{ rep.bodyRegion || '—' }}</span>
             </div>
+            <!-- QA D2912 (r66): who performed the exam, on the report (screen and print). -->
+            <div class="detail-field" data-testid="imaging-report-performed-by">
+              <span class="field-label">{{ 'IMAGING_EXAM.PERFORMED_BY' | translate }}</span
+              ><span class="field-value">{{
+                rep.performedByName || rep.examPerformedByName || '—'
+              }}</span>
+            </div>
             <div class="detail-field">
               <span class="field-label">{{ 'IMAGING.INTERPRETED_BY' | translate }}</span
               ><span class="field-value">{{ rep.interpretingProviderName || '—' }}</span>
@@ -721,6 +729,37 @@
               ><span class="field-value">{{ rep.reportVersion }}</span>
             </div>
           </div>
+          <!-- QA D2912 (r66): the contrast given and the dose, as recorded at the exam (the order's
+               exam record). Shown with the report; the report's own text is its author's. -->
+          @if (reportHasExamRecord(rep)) {
+            <div class="detail-notes report-exam-record" data-testid="imaging-report-exam-record">
+              <span class="field-label">{{ 'IMAGING_EXAM.RECORDED_AT_EXAM' | translate }}</span>
+              <div class="detail-grid">
+                @if (
+                  rep.examContrastAdministered !== null &&
+                  rep.examContrastAdministered !== undefined
+                ) {
+                  <div class="detail-field" data-testid="imaging-report-exam-contrast">
+                    <span class="field-label">{{ 'IMAGING_EXAM.CONTRAST_GIVEN' | translate }}</span
+                    ><span class="field-value"
+                      >{{ (rep.examContrastAdministered ? 'COMMON.YES' : 'COMMON.NO') | translate }}
+                      @if (rep.examContrastDetails) {
+                        · {{ rep.examContrastDetails }}
+                      }
+                    </span>
+                  </div>
+                }
+                @if (rep.examRadiationDoseMgy !== null && rep.examRadiationDoseMgy !== undefined) {
+                  <div class="detail-field" data-testid="imaging-report-exam-dose">
+                    <span class="field-label">{{ 'IMAGING_EXAM.DOSE' | translate }}</span
+                    ><span class="field-value">{{
+                      rep.examRadiationDoseMgy | measure: 'mGy' : 3
+                    }}</span>
+                  </div>
+                }
+              </div>
+            </div>
+          }
           @if (rep.technique) {
             <div class="detail-notes">
               <span class="field-label">{{ 'IMAGING.TECHNIQUE' | translate }}</span>
@@ -1225,6 +1264,12 @@
               </div>
             }
           </div>
+          <!-- QA D2914 (r66): no « Démarrer l'examen » a technician would be refused; the reason instead. -->
+          @if (technicianAwaitsAuthorizationNumber(ord)) {
+            <p class="field-hint" role="note" data-testid="imaging-technician-awaits-preauth">
+              {{ 'IMAGING_EXAM.AWAITS_PREAUTH_NUMBER' | translate }}
+            </p>
+          }
           <!-- Provisional rule 1 (2026-11-15): an urgent study done without its pre-authorisation number. -->
           @if (ord.authorizationPending) {
             <div class="duplicate-warning" role="note" data-testid="imaging-order-preauth-pending">

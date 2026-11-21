@@ -50,6 +50,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -505,5 +506,46 @@ class PharmacyRefundServiceTest {
         PharmacyRefundRequestDTO unpaid = body();
         assertThatThrownBy(() -> service.request(unpaid))
                 .extracting("messageKey").isEqualTo("pharmacy.refund.nothingPaid");
+    }
+
+    @Test
+    @DisplayName("QA D2950: the payout is money out of the payer's PHARMACY till, stamped on the refund")
+    void payoutIsStampedOnThePayersPharmacyTill() {
+        com.example.hms.service.billing.cash.CashSessionService tills =
+                mock(com.example.hms.service.billing.cash.CashSessionService.class);
+        service.setCashSessionService(tills);
+        UUID sessionId = UUID.randomUUID();
+        when(tills.stamp(com.example.hms.enums.CashTill.PHARMACY, hospitalId, pharmacist)).thenReturn(sessionId);
+        actAs(pharmacist);
+        PharmacyRefund refund = stored(PharmacyRefundStatus.APPROVED, UUID.randomUUID());
+
+        assertThat(service.pay(refund.getId(), null).getStatus()).isEqualTo("PAID");
+
+        assertThat(refund.getCashSessionId()).isEqualTo(sessionId);
+        verify(tills, times(1)).stamp(com.example.hms.enums.CashTill.PHARMACY, hospitalId, pharmacist);
+
+        // Paid once: asking again answers the paid refund and takes nothing more out of the till.
+        assertThat(service.pay(refund.getId(), null).getStatus()).isEqualTo("PAID");
+        verify(tills, times(1)).stamp(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("QA D2950: a closed till refuses the payout; the refund stays APPROVED and names no till")
+    void aClosedTillRefusesThePayout() {
+        com.example.hms.service.billing.cash.CashSessionService tills =
+                mock(com.example.hms.service.billing.cash.CashSessionService.class);
+        service.setCashSessionService(tills);
+        when(tills.stamp(com.example.hms.enums.CashTill.PHARMACY, hospitalId, pharmacist))
+                .thenThrow(new ConflictException("closed"));
+        actAs(pharmacist);
+        PharmacyRefund refund = stored(PharmacyRefundStatus.APPROVED, UUID.randomUUID());
+        UUID id = refund.getId();
+
+        assertThatThrownBy(() -> service.pay(id, null)).isInstanceOf(ConflictException.class);
+
+        assertThat(refund.getStatus()).isEqualTo(PharmacyRefundStatus.APPROVED);
+        assertThat(refund.getCashSessionId()).isNull();
+        assertThat(refund.getPaidAt()).isNull();
+        verify(refundRepository, never()).save(any(PharmacyRefund.class));
     }
 }

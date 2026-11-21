@@ -23,7 +23,7 @@ import java.util.UUID;
  * <p>One setting, « Échographie par un non-médecin » (owner decision 2026-11-20): whether an
  * imaging technician may PERFORM an ultrasound at this hospital. It defaults to physicians only,
  * and then a technician is refused the exam's steps and its record on an ultrasound order
- * ({@code ImagingTechnicianScope}). The report stays a physician's whatever is chosen: nothing
+ * ({@code ImagingRoleScope}). The report stays a physician's whatever is chosen: nothing
  * opens reporting to anyone on it (sonographer reporting is not built). Every change is a
  * {@code CONFIGURATION_CHANGED} audit row.
  */

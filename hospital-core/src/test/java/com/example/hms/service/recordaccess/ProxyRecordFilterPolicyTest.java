@@ -492,6 +492,12 @@ class ProxyRecordFilterPolicyTest {
             // HIV test in a violence visit: hidden, never releasable.
             assertThat(filter.familyHidingOf(order(teenager,
                 visit(teenager, SensitivityCategory.SEXUAL_DOMESTIC_VIOLENCE), hiv)).releasable()).isFalse();
+            // r66 D2903: and the list says violence is why, on a row shown as an HIV result; a hepatitis
+            // result is refused for the other reason (only an HIV result is released).
+            assertThat(filter.familyHidingOf(order(teenager,
+                visit(teenager, SensitivityCategory.SEXUAL_DOMESTIC_VIOLENCE), hiv)))
+                .isEqualTo(new ProxyRecordFilter.FamilyHiding(SensitivityCategory.HIV, false, true));
+            assertThat(filter.familyHidingOf(order(teenager, visit(teenager, null), hbs)).violence()).isFalse();
             // The hospital's own adolescent age moves the line.
             hospital.setAdolescentConfidentialityAge(16);
             assertThat(filter.familyHidingOf(order(teenager, visit(teenager, null), hbs))).isNull();

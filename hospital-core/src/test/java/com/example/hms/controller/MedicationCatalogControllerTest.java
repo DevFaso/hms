@@ -21,6 +21,8 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -85,6 +87,7 @@ class MedicationCatalogControllerTest {
 
     @Test
     void getById_returnsOk() throws Exception {
+        when(authUtils.resolveHospitalScope(any(), eq(hospitalId), eq(false))).thenReturn(hospitalId);
         when(catalogService.getById(itemId, hospitalId)).thenReturn(sampleResponse());
 
         mockMvc.perform(get("/medication-catalog/{id}", itemId)
@@ -117,22 +120,22 @@ class MedicationCatalogControllerTest {
      */
     @Test
     void list_superAdminWithoutHospitalId_returns200() throws Exception {
-        when(authUtils.resolveHospitalScope(any(), org.mockito.ArgumentMatchers.isNull(), eq(false)))
+        when(authUtils.resolveHospitalScope(any(), isNull(), eq(false)))
                 .thenReturn(null);
         when(authUtils.hasAuthority(any(), eq("ROLE_SUPER_ADMIN"))).thenReturn(true);
-        when(catalogService.listByHospital(org.mockito.ArgumentMatchers.isNull(), any(Pageable.class)))
+        when(catalogService.listByHospital(isNull(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(sampleResponse())));
 
         mockMvc.perform(get("/medication-catalog"))
                 .andExpect(status().isOk());
 
-        verify(catalogService).listByHospital(org.mockito.ArgumentMatchers.isNull(), any(Pageable.class));
+        verify(catalogService).listByHospital(isNull(), any(Pageable.class));
     }
 
     /** Guard: clinician without scope still 400s on the GET path. */
     @Test
     void list_clinicianWithoutHospitalScope_returns400() throws Exception {
-        when(authUtils.resolveHospitalScope(any(), org.mockito.ArgumentMatchers.isNull(), eq(false)))
+        when(authUtils.resolveHospitalScope(any(), isNull(), eq(false)))
                 .thenReturn(null);
         when(authUtils.hasAuthority(any(), eq("ROLE_SUPER_ADMIN"))).thenReturn(false);
 
@@ -160,7 +163,7 @@ class MedicationCatalogControllerTest {
     @Test
     void search_withoutHospitalId_usesTheActingHospital() throws Exception {
         // QA D922: the portal never sends hospitalId; every search answered 400.
-        when(authUtils.resolveHospitalScope(any(), org.mockito.ArgumentMatchers.isNull(), eq(false)))
+        when(authUtils.resolveHospitalScope(any(), isNull(), eq(false)))
                 .thenReturn(hospitalId);
         when(catalogService.search(eq(hospitalId), eq("morph"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(sampleResponse())));
@@ -180,7 +183,7 @@ class MedicationCatalogControllerTest {
     void search_superAdminInGlobalView_searchesTheWholeCatalogue() throws Exception {
         // Review of #975: the list served the super-admin's global view; the search refused it.
         when(authUtils.hasAuthority(any(), eq("ROLE_SUPER_ADMIN"))).thenReturn(true);
-        when(catalogService.search(org.mockito.ArgumentMatchers.isNull(), eq("morph"), any(Pageable.class)))
+        when(catalogService.search(isNull(), eq("morph"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(sampleResponse())));
 
         mockMvc.perform(get("/medication-catalog/search").param("q", "morph"))
@@ -198,6 +201,7 @@ class MedicationCatalogControllerTest {
 
         MedicationCatalogItemResponseDTO updated = sampleResponse();
         updated.setNameFr("Paracétamol 1g");
+        when(authUtils.resolveHospitalScope(any(), eq(hospitalId), eq(false))).thenReturn(hospitalId);
         when(catalogService.update(eq(itemId), any())).thenReturn(updated);
 
         mockMvc.perform(put("/medication-catalog/{id}", itemId)
@@ -214,5 +218,67 @@ class MedicationCatalogControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(catalogService).deactivate(itemId, hospitalId);
+    }
+
+    // r66 D2901: what the portal sends. Neither call names a hospital; both answered 4xx.
+
+    @Test
+    void deactivate_withoutHospitalId_isNotABadRequest() throws Exception {
+        mockMvc.perform(delete("/medication-catalog/{id}", itemId))
+                .andExpect(status().isNoContent());
+
+        verify(catalogService).deactivate(itemId, null);
+    }
+
+    @Test
+    void update_withoutHospitalId_reachesTheService_whichActsAtTheCallersHospital() throws Exception {
+        MedicationCatalogItemRequestDTO request = MedicationCatalogItemRequestDTO.builder()
+                .nameFr("Zidovudine 300 mg")
+                .genericName("zidovudine")
+                .sensitivityCategory(com.example.hms.enums.SensitivityCategory.HIV)
+                .build();
+        when(catalogService.update(eq(itemId), any())).thenReturn(sampleResponse());
+
+        mockMvc.perform(put("/medication-catalog/{id}", itemId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+
+        org.mockito.ArgumentCaptor<MedicationCatalogItemRequestDTO> sent =
+            org.mockito.ArgumentCaptor.forClass(MedicationCatalogItemRequestDTO.class);
+        verify(catalogService).update(eq(itemId), sent.capture());
+        org.assertj.core.api.Assertions.assertThat(sent.getValue().getHospitalId()).isNull();
+        org.assertj.core.api.Assertions.assertThat(sent.getValue().getSensitivityCategory())
+            .isEqualTo(com.example.hms.enums.SensitivityCategory.HIV);
+        verify(authUtils, never()).resolveHospitalScope(any(), any(), eq(false));
+    }
+
+    @Test
+    void update_namingAHospitalTheCallerMayNotActAt_neverReachesTheService() throws Exception {
+        // A hospital in the BODY is narrowed by the controller (the interceptor only sees parameters).
+        MedicationCatalogItemRequestDTO request = MedicationCatalogItemRequestDTO.builder()
+                .nameFr("Paracétamol 1g")
+                .genericName("Paracetamol")
+                .hospitalId(hospitalId)
+                .build();
+        when(authUtils.resolveHospitalScope(any(), eq(hospitalId), eq(false)))
+                .thenThrow(new com.example.hms.exception.BusinessException("pharmacy.hospitalContext.required"));
+
+        mockMvc.perform(put("/medication-catalog/{id}", itemId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().is4xxClientError());
+
+        verify(catalogService, never()).update(any(), any());
+    }
+
+    @Test
+    void getById_withoutHospitalId_readsAtTheActingHospital() throws Exception {
+        when(authUtils.resolveHospitalScope(any(), isNull(), eq(false))).thenReturn(hospitalId);
+        when(catalogService.getById(itemId, hospitalId)).thenReturn(sampleResponse());
+
+        mockMvc.perform(get("/medication-catalog/{id}", itemId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.atcCode").value("N02BE01"));
     }
 }

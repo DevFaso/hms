@@ -589,4 +589,36 @@ class PharmacyServiceSupportTest {
         support.logAudit(AuditEventType.DISPENSE_CREATED, "d", "r", "e");
         verify(auditEventLogService).logEvent(any());
     }
+
+    @Test
+    @DisplayName("QA D2924 (r66): every audit row names the acting hospital, or the record's own when the caller gives it")
+    void logAuditNamesTheHospital() {
+        UUID acting = UUID.randomUUID();
+        UUID own = UUID.randomUUID();
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(roleValidator.getCurrentHospitalId()).thenReturn(acting);
+
+        support.logAudit(AuditEventType.DISPENSE_CREATED, "desc", "res-1", "Dispense");
+        support.logAudit(AuditEventType.DISPENSE_BILLING_DEFERRAL_REQUESTED, "desc", "res-2", "DEFERRAL", own);
+
+        org.mockito.ArgumentCaptor<AuditEventRequestDTO> rows =
+                org.mockito.ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService, times(2)).logEvent(rows.capture());
+        assertThat(rows.getAllValues().get(0).getHospitalId()).isEqualTo(acting);
+        assertThat(rows.getAllValues().get(1).getHospitalId()).isEqualTo(own);
+    }
+
+    @Test
+    @DisplayName("QA D2924 (r66): a request with no hospital scope still writes its audit row")
+    void logAuditWithNoScopeStillWrites() {
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(roleValidator.getCurrentHospitalId()).thenThrow(new IllegalStateException("no scope"));
+
+        support.logAudit(AuditEventType.DISPENSE_CREATED, "desc", "res-1", "Dispense");
+
+        org.mockito.ArgumentCaptor<AuditEventRequestDTO> row =
+                org.mockito.ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(row.capture());
+        assertThat(row.getValue().getHospitalId()).isNull();
+    }
 }

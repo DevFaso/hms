@@ -38,8 +38,8 @@ public class ImagingOrderController {
 
 	/**
 	 * Who runs an exam: the imaging technician, a radiologist or a doctor, in a role of their own.
-	 * The token carries the roles held at every hospital, so the technician role is checked again
-	 * at the order's hospital by the services ({@code ImagingTechnicianScope}).
+	 * QA D2915: a gate reads the token, which names a role wherever it is held, so every imaging
+	 * service asks again what the caller is at the order's hospital ({@code ImagingRoleScope}).
 	 */
 	static final String EXAM_ROLES =
 		"T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'IMAGING_TECHNICIAN','RADIOLOGIST','DOCTOR')";

@@ -322,6 +322,18 @@
     line-height: 1.5;
   }
 }
+/* QA D2912 (r66): the exam record shown with the report; free text wraps at every width. */
+.report-exam-record {
+  .detail-grid {
+    margin-top: 0.5rem;
+  }
+  .detail-field {
+    min-width: 0;
+  }
+  .field-value {
+    overflow-wrap: anywhere;
+  }
+}
 
 @media (max-width: 768px) {
   .summary-cards {

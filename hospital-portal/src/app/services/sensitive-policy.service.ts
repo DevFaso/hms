@@ -55,6 +55,12 @@ export interface FamilyHiddenResult {
   resultedAt: string | null;
   /** A clinician may release it: an HIV result only, never one that violence is on. */
   releasable: boolean;
+  /**
+   * r66 D2903: why it cannot be released. VIOLENCE: violence is on the visit or
+   * the test (never released to the family); NOT_HIV: only an HIV result is.
+   * Absent or null when it is releasable.
+   */
+  notReleasableReason?: 'VIOLENCE' | 'NOT_HIV' | null;
   releases: FamilyReleaseRecord[];
 }
 

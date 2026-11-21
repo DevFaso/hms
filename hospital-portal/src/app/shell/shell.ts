@@ -1179,6 +1179,25 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       });
     }
     // Pharmacy Module
+    // QA D2927 class (r66): the catalogue entry named the doctor, whom the block's gate below never
+    // let in. It has its own gate, the same list as the /medication-catalog RoleGuard (E9 #68: the
+    // catalog API admits the store manager on every read but not the clerk).
+    if (
+      this.hasAnyRole([
+        'ROLE_PHARMACIST',
+        'ROLE_STORE_MANAGER',
+        'ROLE_DOCTOR',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push({
+        icon: 'medication',
+        label: 'Medication Catalog',
+        translationKey: 'NAV.MEDICATION_CATALOG',
+        route: '/medication-catalog',
+      });
+    }
     if (
       this.hasAnyRole([
         'ROLE_PHARMACIST',
@@ -1189,21 +1208,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       ])
     ) {
       items.push(
-        {
-          icon: 'medication',
-          label: 'Medication Catalog',
-          translationKey: 'NAV.MEDICATION_CATALOG',
-          route: '/medication-catalog',
-          // Mirrors the /medication-catalog RoleGuard (E9 #68): the catalog
-          // API admits the store manager on every read but not the clerk.
-          roles: [
-            'ROLE_PHARMACIST',
-            'ROLE_STORE_MANAGER',
-            'ROLE_DOCTOR',
-            'ROLE_HOSPITAL_ADMIN',
-            'ROLE_SUPER_ADMIN',
-          ],
-        },
         {
           icon: 'local_pharmacy',
           label: 'Pharmacy Registry',
@@ -1243,28 +1247,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
             'ROLE_SUPER_ADMIN',
           ],
         },
-        {
-          // QA D2673 (r65): mirrors the /pharmacy/reconciliation RoleGuard.
-          icon: 'balance',
-          label: 'Pharmacy reconciliation',
-          translationKey: 'NAV.PHARMACY_RECONCILIATION',
-          route: '/pharmacy/reconciliation',
-          roles: ['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'],
-        },
-        {
-          // Policy rule 6 (V345): mirrors the /pharmacy/billing-deferrals RoleGuard.
-          icon: 'receipt_long',
-          label: 'Deferred billing',
-          translationKey: 'NAV.PHARMACY_BILLING_DEFERRALS',
-          route: '/pharmacy/billing-deferrals',
-          roles: [
-            'ROLE_PHARMACIST',
-            'ROLE_BILLING_SPECIALIST',
-            'ROLE_ACCOUNTANT',
-            'ROLE_HOSPITAL_ADMIN',
-          ],
-        },
-
         {
           icon: 'medication',
           label: 'Dispensing',
@@ -1319,6 +1301,35 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         },
       );
     }
+    // QA D2927 (r66): the pharmacy's two money pages are finance's too. They sat inside the block
+    // above, whose gate admits neither the accountant nor the billing specialist, so the roles their
+    // entries named never saw them: a credit waited for an approver who could only type the URL.
+    // Each has a gate of its own, the same list as its route guard (nav-nested-roles.test.mjs).
+    if (this.hasAnyRole(['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'])) {
+      items.push({
+        // QA D2673 (r65): mirrors the /pharmacy/reconciliation RoleGuard.
+        icon: 'balance',
+        label: 'Pharmacy reconciliation',
+        translationKey: 'NAV.PHARMACY_RECONCILIATION',
+        route: '/pharmacy/reconciliation',
+      });
+    }
+    if (
+      this.hasAnyRole([
+        'ROLE_PHARMACIST',
+        'ROLE_BILLING_SPECIALIST',
+        'ROLE_ACCOUNTANT',
+        'ROLE_HOSPITAL_ADMIN',
+      ])
+    ) {
+      items.push({
+        // Policy rule 6 (V345): mirrors the /pharmacy/billing-deferrals RoleGuard.
+        icon: 'receipt_long',
+        label: 'Deferred billing',
+        translationKey: 'NAV.PHARMACY_BILLING_DEFERRALS',
+        route: '/pharmacy/billing-deferrals',
+      });
+    }
     // Claims / Checkout / MTM shipped with no nav entry anywhere — for
     // CLAIMS_REVIEWER the claims page is the role's entire purpose. Each
     // gate mirrors its route guard.
@@ -1327,6 +1338,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         'ROLE_PHARMACIST',
         'ROLE_BILLING_SPECIALIST',
         'ROLE_CLAIMS_REVIEWER',
+        // QA D2925 (r66): the accountant records the payer's answer to a claim.
+        'ROLE_ACCOUNTANT',
         'ROLE_HOSPITAL_ADMIN',
         'ROLE_SUPER_ADMIN',
       ])

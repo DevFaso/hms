@@ -105,6 +105,23 @@ public class ImagingReportResponseDTO {
 
     private BigDecimal radiationDoseMgy;
 
+    /**
+     * QA D2912 (r66): the exam record of the report's study, as whoever ran the exam recorded it
+     * on the ORDER (policy rule 3, V346): who performed it, the contrast given, the dose. Read
+     * from the order every time and shown beside the report, on screen and on paper. It is never
+     * part of the read and the server never copies it into one (a report says what its author
+     * submitted). Staff only: the patient's copy leaves it out ({@code PatientSafeView}).
+     */
+    private String examPerformedByName;
+
+    private LocalDateTime examStartedAt;
+
+    private Boolean examContrastAdministered;
+
+    private String examContrastDetails;
+
+    private BigDecimal examRadiationDoseMgy;
+
     private Integer attachmentsCount;
 
     private Integer measurementsCount;

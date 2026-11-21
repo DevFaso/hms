@@ -942,12 +942,15 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         String invoiceIdText = String.valueOf(invoice.getId());
         String adjustmentIdText = String.valueOf(adjustment.getId());
         com.example.hms.enums.InvoiceAdjustmentType type = adjustment.getType();
+        // QA D2924 (r66): the invoice's hospital anchors the row for the hospital admin's audit log.
+        UUID auditHospitalId = invoice.getHospital() != null ? invoice.getHospital().getId() : null;
         com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
                     .eventType(AuditEventType.INVOICE_UPDATED)
                     .status(com.example.hms.enums.AuditStatus.SUCCESS)
                     .userId(actorId)
+                    .hospitalId(auditHospitalId)
                     .eventDescription("Invoice adjustment " + type + " " + adjustmentIdText
                         + " reversed with a recorded reason on invoice " + invoiceIdText)
                     .entityType(AUDIT_ENTITY_INVOICE)
@@ -981,12 +984,15 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             return;
         }
         String invoiceIdText = String.valueOf(invoice.getId());
+        // QA D2924 (r66): the invoice's hospital anchors the row for the hospital admin's audit log.
+        UUID auditHospitalId = invoice.getHospital() != null ? invoice.getHospital().getId() : null;
         com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
                     .eventType(AuditEventType.INVOICE_UPDATED)
                     .status(com.example.hms.enums.AuditStatus.SUCCESS)
                     .userId(actorId)
+                    .hospitalId(auditHospitalId)
                     .eventDescription("Invoice adjustment " + type + " on invoice " + invoiceIdText)
                     .entityType(AUDIT_ENTITY_INVOICE)
                     .resourceId(invoiceIdText)
@@ -1291,12 +1297,15 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             return;
         }
         String invoiceIdText = String.valueOf(invoice.getId());
+        // QA D2924 (r66): the invoice's hospital anchors the row for the hospital admin's audit log.
+        UUID auditHospitalId = invoice.getHospital() != null ? invoice.getHospital().getId() : null;
         com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
                     .eventType(AuditEventType.INVOICE_UPDATED)
                     .status(com.example.hms.enums.AuditStatus.SUCCESS)
                     .userId(actorId)
+                    .hospitalId(auditHospitalId)
                     .eventDescription("Invoice cancelled with a recorded reason: invoice " + invoiceIdText)
                     .entityType(AUDIT_ENTITY_INVOICE)
                     .resourceId(invoiceIdText)
@@ -2493,12 +2502,15 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             return;
         }
         String invoiceIdText = String.valueOf(invoice.getId());
+        // QA D2924 (r66): the invoice's hospital anchors the row for the hospital admin's audit log.
+        UUID auditHospitalId = invoice.getHospital() != null ? invoice.getHospital().getId() : null;
         com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
                     .eventType(type)
                     .status(com.example.hms.enums.AuditStatus.SUCCESS)
                     .userId(actorId)
+                    .hospitalId(auditHospitalId)
                     .eventDescription(what + ": payment " + paymentId + " on invoice " + invoiceIdText)
                     .entityType(AUDIT_ENTITY_INVOICE)
                     .resourceId(invoiceIdText)

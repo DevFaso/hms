@@ -78,6 +78,7 @@ class ImagingReadingContextServiceTest {
         current = order(LocalDateTime.of(2026, 11, 19, 8, 0));
         when(orderRepository.findById(current.getId())).thenReturn(Optional.of(current));
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        com.example.hms.testsupport.ImagingRolesHeld.whereverTheTokenNamesThem(roleValidator);
         when(labResultRepository.findReleasedCreatinineCandidates(eq(patient.getId()), eq(hospitalId), any(), any()))
             .thenAnswer(inv -> labRows);
         when(orderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(eq(patient.getId()), any()))
@@ -113,6 +114,15 @@ class ImagingReadingContextServiceTest {
         result.setReleased(true);
         labRows.add(result);
         return result;
+    }
+
+    @Test
+    @DisplayName("QA D2915: a clinical role held at another hospital reads no patient data here")
+    void d2915_aClinicalRoleHeldElsewhereReadsNoContextHere() {
+        when(roleValidator.readsImagingClinically(any(), eq(hospitalId))).thenReturn(false);
+
+        assertThatThrownBy(() -> service.contextOf(current.getId())).isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(labResultRepository, never()).findReleasedCreatinineCandidates(any(), any(), any(), any());
     }
 
     @Test

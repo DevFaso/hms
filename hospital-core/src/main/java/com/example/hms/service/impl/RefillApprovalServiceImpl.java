@@ -501,7 +501,9 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
                 .pharmacistReviewedAt(r.getPharmacistReviewedAt())
                 .decisionBasis(r.getDecisionBasis() != null ? r.getDecisionBasis().name() : null)
                 .writtenRefillLeft(r.getStatus() == RefillStatus.REQUESTED
-                        && hasWrittenRefillLeft(r.getPrescription()))
+                        && hasWrittenRefillLeft(r.getPrescription())
+                        // QA D2926 (r66): never offered for a controlled drug, which the release refuses.
+                        && !controlledResolver.isControlled(r.getPrescription()))
                 .pharmacyView(isDispensingRole())
                 .build();
     }

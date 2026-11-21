@@ -208,6 +208,15 @@ export interface ImagingReportResponse {
   contrastAdministered: boolean | null;
   contrastDetails?: string | null;
   performedByName: string;
+  /**
+   * QA D2912 (r66): the exam record of the report's study, as recorded on the order by whoever ran
+   * the exam. Shown beside the report (screen and print); never part of the read.
+   */
+  examPerformedByName?: string | null;
+  examStartedAt?: string | null;
+  examContrastAdministered?: boolean | null;
+  examContrastDetails?: string | null;
+  examRadiationDoseMgy?: number | null;
   interpretingProviderName: string;
   signedByName: string;
   signedAt: string | null;

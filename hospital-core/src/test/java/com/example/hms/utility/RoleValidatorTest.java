@@ -421,6 +421,69 @@ class RoleValidatorTest {
         assertThat(roleValidator.isLicensedPhysician(userId, hospitalId)).isFalse();
     }
 
+    // ── QA D2915 and the review of #1251: the imaging roles, read at the hospital ──
+
+    /** The role codes the last lookup asked the assignment table for, bare (each is sent bare and prefixed). */
+    private java.util.Set<String> askedFor(UUID user, UUID hospital) {
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<java.util.Set<String>> codes = org.mockito.ArgumentCaptor.forClass(java.util.Set.class);
+        Mockito.verify(assignmentRepository, Mockito.atLeastOnce())
+            .existsActiveByUserAndHospitalAndAnyRoleCode(eq(user), eq(hospital), codes.capture());
+        java.util.Set<String> bare = new java.util.TreeSet<>();
+        codes.getValue().forEach(code -> bare.add(code.startsWith("ROLE_") ? code.substring(5) : code));
+        return bare;
+    }
+
+    @Test
+    void imagingRoles_eachIsOneLookupOfTheAssignmentsAtThatHospital() {
+        UUID user = UUID.randomUUID();
+        UUID hospital = UUID.randomUUID();
+        Mockito.lenient().when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(eq(user), eq(hospital),
+            anySet())).thenReturn(true);
+
+        assertThat(roleValidator.interpretsImaging(user, hospital)).isTrue();
+        assertThat(askedFor(user, hospital)).containsExactly("DOCTOR", "PHYSICIAN", "RADIOLOGIST", "SURGEON");
+        assertThat(roleValidator.readsImagingClinically(user, hospital)).isTrue();
+        assertThat(askedFor(user, hospital))
+            .containsExactly("DOCTOR", "MIDWIFE", "NURSE", "PHYSICIAN", "RADIOLOGIST", "SURGEON");
+        assertThat(roleValidator.ordersImaging(user, hospital)).isTrue();
+        assertThat(askedFor(user, hospital)).containsExactly("DOCTOR", "MIDWIFE", "NURSE", "PHYSICIAN", "SURGEON");
+        // Review of #1251: an administrator of THAT hospital, by assignment.
+        assertThat(roleValidator.administersImagingReads(user, hospital)).isTrue();
+        assertThat(askedFor(user, hospital)).containsExactly("ADMIN", "HOSPITAL_ADMIN");
+
+        // Another hospital: nothing is held there.
+        assertThat(roleValidator.administersImagingReads(user, UUID.randomUUID())).isFalse();
+        assertThat(roleValidator.interpretsImaging(user, UUID.randomUUID())).isFalse();
+    }
+
+    @Test
+    void imagingRoles_theSuperAdminIsTheVerifiedOneWhereTheResolverSaysTheyAct() {
+        UUID selected = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        // A token naming SUPER_ADMIN is nothing: the resolved scope decides.
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("u", "n/a",
+            List.of(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"))));
+        HospitalContextHolder.setContext(HospitalContext.builder().principalUserId(UUID.randomUUID())
+            .superAdmin(false).activeHospitalId(selected).headerOverridden(true).build());
+        assertThat(roleValidator.isSuperAdminActingAt(selected)).as("the claim alone").isFalse();
+        HospitalContextHolder.clear();
+
+        // Verified, in global view: every hospital and the combined view.
+        HospitalContextHolder.setContext(HospitalContext.builder().principalUserId(UUID.randomUUID())
+            .superAdmin(true).build());
+        assertThat(roleValidator.isSuperAdminActingAt(selected)).isTrue();
+        assertThat(roleValidator.isSuperAdminActingAt(null)).isTrue();
+        HospitalContextHolder.clear();
+
+        // Verified, with a hospital selected: that hospital only.
+        HospitalContextHolder.setContext(HospitalContext.builder().principalUserId(UUID.randomUUID())
+            .superAdmin(true).activeHospitalId(selected).headerOverridden(true).build());
+        assertThat(roleValidator.isSuperAdminActingAt(selected)).isTrue();
+        assertThat(roleValidator.isSuperAdminActingAt(other)).isFalse();
+        assertThat(roleValidator.isSuperAdminActingAt(null)).isFalse();
+    }
+
     @Test
     void licensedPhysicianRoleCodes_areExactlyTheSeededPhysicianRoles() {
         assertThat(RoleValidator.LICENSED_PHYSICIAN_ROLE_CODES)
