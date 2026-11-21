@@ -35,6 +35,11 @@ public class InvoiceNumberAllocator {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public String next(Hospital hospital, LocalDate today) {
         int year = today.getYear();
+        // Review of #1246: the prefix is the hospital's code, which may be
+        // edited until the first number exists. The row is share-locked for
+        // this short transaction and the code is read from it, not from the
+        // caller's copy: an edit in flight is waited for, and its code used.
+        Hospital current = sequenceRepository.lockHospitalWhileNumbering(hospital.getId()).orElse(hospital);
         InvoiceNumberSequence sequence = sequenceRepository.findForUpdate(hospital.getId(), year)
             .orElseGet(() -> {
                 InvoiceNumberSequence created = new InvoiceNumberSequence();
@@ -46,7 +51,7 @@ public class InvoiceNumberAllocator {
         long value = sequence.getLastValue() + 1;
         sequence.setLastValue(value);
         sequenceRepository.saveAndFlush(sequence);
-        return format(prefixOf(hospital), year, value);
+        return format(prefixOf(current), year, value);
     }
 
     static String format(String prefix, int year, long value) {

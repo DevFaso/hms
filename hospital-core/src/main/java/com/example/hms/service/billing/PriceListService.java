@@ -359,6 +359,7 @@ public class PriceListService {
      */
     public PriceListPrice insertItem(Maintainer actor, NewItem fields, BigDecimal unitPrice, LocalDate from, String reason,
                               UUID importId) {
+        itemRepository.lockHospitalWhilePricing(actor.hospitalId());
         PriceListItem item = newItem(actor, fields);
         // QA D2070: named now, while the transaction can still read (a lost race aborts it).
         String linkLabel = links.label(actor.hospitalId(), fields.linkType(), fields.linkKey());
@@ -404,6 +405,7 @@ public class PriceListService {
     /** A new item and its first version, persisted without a flush (the import flushes once per batch). */
     public PriceListPrice stageItem(Maintainer actor, NewItem fields, BigDecimal unitPrice, LocalDate from,
                                     String reason, UUID importId) {
+        itemRepository.lockHospitalWhilePricing(actor.hospitalId());
         PriceListItem item = itemRepository.save(newItem(actor, fields));
         return priceRepository.save(firstVersion(actor, item, unitPrice, from, reason, importId));
     }

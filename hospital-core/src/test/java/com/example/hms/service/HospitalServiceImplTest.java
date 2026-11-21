@@ -79,6 +79,9 @@ class HospitalServiceImplTest {
         lenient().when(hospitalRepository.findClinicalById(any()))
             .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
                 .filter(ClinicalHospitals::isClinical));
+        // updateHospital loads the row under a lock (review of #1246): the same row, when it is a hospital.
+        lenient().when(hospitalRepository.findByIdForUpdate(any()))
+            .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0)));
         hospitalMapper = new HospitalMapper();
         hospitalService = new HospitalServiceImpl(hospitalRepository, organizationRepository, hospitalMapper, messageSource, roleValidator,
             providerVerificationRepository);

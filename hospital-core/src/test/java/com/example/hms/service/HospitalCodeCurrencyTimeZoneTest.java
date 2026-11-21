@@ -57,6 +57,9 @@ class HospitalCodeCurrencyTimeZoneTest {
         lenient().when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(hospitalRepository.findClinicalById(any()))
             .thenAnswer(inv -> hospitalRepository.findById(inv.getArgument(0)).filter(ClinicalHospitals::isClinical));
+        // An edit loads the row under a lock (review of #1246).
+        lenient().when(hospitalRepository.findByIdForUpdate(any()))
+            .thenAnswer(inv -> hospitalRepository.findById(inv.getArgument(0)));
     }
 
     private static HospitalRequestDTO request() {
@@ -270,21 +273,58 @@ class HospitalCodeCurrencyTimeZoneTest {
     @Test
     @DisplayName("update: once a price exists, another currency is refused on its field and nothing is saved")
     void updateLocksTheCurrencyAfterTheFirstPrice() {
-        assertTheCurrencyIsLocked(true, false);
+        assertTheCurrencyIsLocked(true, false, false);
     }
 
     @Test
     @DisplayName("update: once an invoice exists (a draft included), another currency is refused the same way")
     void updateLocksTheCurrencyAfterTheFirstInvoice() {
-        assertTheCurrencyIsLocked(false, true);
+        assertTheCurrencyIsLocked(false, true, false);
     }
 
-    private void assertTheCurrencyIsLocked(boolean hasPrice, boolean hasInvoice) {
+    @Test
+    @DisplayName("update: an invoice number allocated for an invoice not yet committed locks the currency already")
+    void updateLocksTheCurrencyAfterTheFirstInvoiceNumber() {
+        assertTheCurrencyIsLocked(false, false, true);
+    }
+
+    @Test
+    @DisplayName("update: the row is loaded under a lock, before the code and currency rules look at what the hospital has billed")
+    void updateLoadsTheRowUnderALockFirst() {
+        Hospital hospital = stored("TWP");
+        HospitalRequestDTO dto = request();
+        dto.setCurrencyCode("XAF");
+        dto.setCode("TWQ");
+
+        service.updateHospital(hospital.getId(), dto, Locale.FRENCH);
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(hospitalRepository);
+        order.verify(hospitalRepository).findByIdForUpdate(hospital.getId());
+        order.verify(hospitalRepository).hasAllocatedInvoiceNumber(hospital.getId());
+        order.verify(hospitalRepository).hasPriceListItem(hospital.getId());
+        verify(hospitalRepository, never()).findClinicalById(any());
+    }
+
+    @Test
+    @DisplayName("update: a pharmacy or laboratory row is not a hospital here, locked or not")
+    void updateRefusesAProviderRow() {
+        Hospital pharmacy = stored("PHA");
+        pharmacy.setFacilityType(com.example.hms.enums.FacilityType.PHARMACY);
+        UUID id = pharmacy.getId();
+        HospitalRequestDTO dto = request();
+
+        assertThatThrownBy(() -> service.updateHospital(id, dto, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(hospitalRepository, never()).save(any());
+    }
+
+    private void assertTheCurrencyIsLocked(boolean hasPrice, boolean hasInvoice, boolean hasNumber) {
         Hospital hospital = stored("TWP");
         HospitalRequestDTO dto = request();
         dto.setCurrencyCode("XAF");
         lenient().when(hospitalRepository.hasPriceListItem(hospital.getId())).thenReturn(hasPrice);
         lenient().when(hospitalRepository.hasInvoice(hospital.getId())).thenReturn(hasInvoice);
+        lenient().when(hospitalRepository.hasAllocatedInvoiceNumber(hospital.getId())).thenReturn(hasNumber);
 
         UUID id = hospital.getId();
 

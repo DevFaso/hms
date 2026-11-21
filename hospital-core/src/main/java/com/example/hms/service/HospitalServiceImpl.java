@@ -209,9 +209,16 @@ public class HospitalServiceImpl implements HospitalService {
         return code;
     }
 
-    /** Rule 3: a hospital that has a price or an invoice has amounts in its currency. */
+    /**
+     * Rule 3: a hospital that has a price or an invoice has amounts in its
+     * currency. An allocated invoice number counts as an invoice: the number
+     * is committed on its own before the invoice that carries it, so it is
+     * what a concurrent first invoice shows this check.
+     */
     private boolean hasInvoiceOrPrice(UUID hospitalId) {
-        return hospitalRepository.hasPriceListItem(hospitalId) || hospitalRepository.hasInvoice(hospitalId);
+        return hospitalRepository.hasPriceListItem(hospitalId)
+            || hospitalRepository.hasInvoice(hospitalId)
+            || hospitalRepository.hasAllocatedInvoiceNumber(hospitalId);
     }
 
     /**
@@ -290,7 +297,15 @@ public class HospitalServiceImpl implements HospitalService {
     @Transactional
     public HospitalResponseDTO updateHospital(UUID id, HospitalRequestDTO dto, Locale locale) {
         validateSuperAdminOrThrow(locale);
-        Hospital hospital = getClinicalHospitalOrThrow(id);
+        // Review of #1246: the row is locked for the edit. The code and the
+        // currency are refused once the hospital has billed or priced; the
+        // first invoice number and the first price take a shared lock on this
+        // same row (InvoiceNumberAllocator, PriceListService), so either they
+        // are committed before the checks below read, or they wait for this
+        // edit and bill under what it saved.
+        Hospital hospital = hospitalRepository.findByIdForUpdate(id)
+            .filter(com.example.hms.security.provider.ClinicalHospitals::isClinical)
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND, id));
         validateAddressFields(dto, hospital.getAddress(), locale);
         // An unchanged number is left as stored: a value saved before the
         // rule existed does not block an edit of another field.
