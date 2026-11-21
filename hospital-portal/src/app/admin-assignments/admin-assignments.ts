@@ -11,6 +11,7 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
+import { Observable } from 'rxjs';
 import {
   AssignmentAdminService,
   AssignmentActivationCode,
@@ -28,6 +29,21 @@ import { grantableRoles } from '../core/grantable-roles';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
+
+/**
+ * The roles that get every action of this page. An organisation admin
+ * (ROLE_ADMIN; platform admin rules 2026-11-20, rule 1a) gets the reduced set
+ * the server admits it on: one assignment at a time at a hospital of its own
+ * organisation, its details and activation code, a new code, a re-send, and
+ * the switch-off. No edit, no delete, no multi-hospital grant, no import.
+ */
+export const ASSIGNMENT_FULL_ADMIN_ROLES: readonly string[] = [
+  'ROLE_SUPER_ADMIN',
+  'ROLE_HOSPITAL_ADMIN',
+];
+
+/** What a hospital picker of this page needs. */
+type HospitalOption = Pick<HospitalResponse, 'id' | 'name'> & { lifecycleState?: string | null };
 import { deliveryWarningKeys, hasActivationSent } from '../shared/delivery-warnings';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
@@ -91,7 +107,9 @@ export class AdminAssignmentsComponent implements OnInit {
   filterCode = signal('');
 
   /* Reference data */
-  hospitals = signal<HospitalResponse[]>([]);
+  hospitals = signal<HospitalOption[]>([]);
+  /** False for an organisation admin: see {@link ASSIGNMENT_FULL_ADMIN_ROLES}. */
+  readonly fullAdmin = this.roleContext.hasAnyActiveRole([...ASSIGNMENT_FULL_ADMIN_ROLES]);
   /**
    * QA D818: the hospitals a NEW role may be granted at. The list filter keeps
    * every hospital (old assignments at an archived one are still searchable);
@@ -183,7 +201,10 @@ export class AdminAssignmentsComponent implements OnInit {
   ngOnInit(): void {
     // A hospital admin most often wants their own hospital's assignments;
     // pre-filter to the active scope (still just a filter server-side).
-    if (!this.roleContext.hasAnyActiveRole(['ROLE_SUPER_ADMIN'])) {
+    // An organisation admin lists its whole organisation: the server scopes
+    // the listing to it, and a hospital it holds no role at is not a filter
+    // it may send (the search box finds a hospital by name).
+    if (this.fullAdmin && !this.roleContext.hasAnyActiveRole(['ROLE_SUPER_ADMIN'])) {
       this.filterHospitalId.set(this.roleContext.activeHospitalId ?? '');
     }
 
@@ -201,7 +222,10 @@ export class AdminAssignmentsComponent implements OnInit {
     }
 
     this.load();
-    this.hospitalService.list().subscribe({
+    const hospitals$: Observable<HospitalOption[]> = this.fullAdmin
+      ? this.hospitalService.list()
+      : this.hospitalService.organisationHospitals();
+    hospitals$.subscribe({
       next: (h) => this.hospitals.set(h),
       error: () => this.toast.error(this.translate.instant('ASSIGN_ADMIN.HOSPITALS_LOAD_ERROR')),
     });
@@ -255,6 +279,9 @@ export class AdminAssignmentsComponent implements OnInit {
     this.formUserIdentifier.set('');
     this.formRoleId.set('');
     this.formHospitalId.set(this.filteredHospitalIfOpen());
+    // Rule 1a: an organisation admin always names the hospital; with one, it is that one.
+    const open = this.assignableHospitals();
+    if (!this.fullAdmin && open.length === 1) this.formHospitalId.set(open[0].id);
     this.formStartDate.set('');
     this.formActive.set(true);
     this.modal.set('create');
@@ -362,7 +389,8 @@ export class AdminAssignmentsComponent implements OnInit {
   /* ── Actions ── */
 
   submitCreate(): void {
-    if (!this.formUserIdentifier().trim() || !this.formRoleId()) {
+    const hospitalMissing = !this.fullAdmin && !this.formHospitalId();
+    if (!this.formUserIdentifier().trim() || !this.formRoleId() || hospitalMissing) {
       this.toast.error(this.translate.instant('ASSIGN_ADMIN.FORM_REQUIRED'));
       return;
     }

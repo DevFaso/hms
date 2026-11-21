@@ -1099,8 +1099,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/digital-signatures',
       });
     }
-    // Assignment admin — SecurityConfig gates /assignments/** to these two roles
-    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'])) {
+    // Assignment admin: SecurityConfig gates /assignments/** to these roles
+    // (the organisation admin since the platform admin rules of 2026-11-20, rule 1a).
+    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_ADMIN'])) {
       items.push({
         icon: 'assignment_ind',
         label: 'Assignments',

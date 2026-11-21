@@ -88,6 +88,7 @@ import { EnumLabelService } from '../core/enum-label.service';
 import { RoleContextService } from '../core/role-context.service';
 import { NavAccessService } from '../core/nav-access.service';
 import { OnboardingChecklistComponent } from '../shared/onboarding-checklist/onboarding-checklist.component';
+import { OrganisationTotalsComponent } from '../shared/organisation-totals/organisation-totals.component';
 import {
   CredentialRenewalComponent,
   CredentialRenewalTarget,
@@ -170,6 +171,7 @@ export { currentMedications };
     CredentialRenewalComponent,
     CfaPipe,
     OnboardingChecklistComponent,
+    OrganisationTotalsComponent,
   ],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
@@ -579,6 +581,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
       : this.auth.hasAnyRole(['ROLE_HOSPITAL_ADMIN']);
     return hospitalAdmin ? this.roleContext.effectiveHospitalIdForRequest() : null;
   });
+
+  /**
+   * Platform admin rules 2026-11-20, rule 1b: the organisation admin reads its
+   * organisation's totals here (the server admits that role alone).
+   */
+  readonly showsOrganisationTotals = computed(() => this.actsAsPlainAdmin());
 
   // ── Role display label ────────────────────────────────────────
   roleLabel = computed(() => {

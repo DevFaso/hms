@@ -15628,7 +15628,8 @@
       "TIME_ZONE_INHERIT": "Celui de l’organisation",
       "TIME_ZONE_HINT": "Il fixe le jour de l’hôpital : la date d’une facture, le début d’un tarif, un créneau déjà passé.",
       "TIME_ZONE_FROM_ORG": "(celui de l’organisation)",
-      "TIME_ZONE_NONE": "Non défini : l’heure du serveur s’applique"
+      "TIME_ZONE_NONE": "Non défini : l’heure du serveur s’applique",
+      "CURRENCY_HINT": "La devise ne peut plus être modifiée dès que l’hôpital a une facture ou un tarif."
     },
     "BOOKING": {
       "NOT_OFFERED": "Cet établissement ne propose pas encore la prise de rendez-vous en ligne.",
@@ -15695,6 +15696,28 @@
       "LABEL": "Écrans d’audit",
       "LOG": "Journal",
       "SEARCH": "Recherche avancée"
+    },
+    "ORG_ADMIN": {
+      "HOSPITAL_REQUIRED": "Choisissez l’hôpital où cette personne travaillera.",
+      "REGISTER_SCOPE": "Vous pouvez inscrire du personnel dans chaque hôpital de votre organisation.",
+      "ASSIGNMENTS_SCOPE": "Vous gérez les affectations du personnel dans chaque hôpital de votre organisation. Les rôles d’administration sont attribués par un super-administrateur."
+    },
+    "ORG_TOTALS": {
+      "TITLE": "Chiffres de l’organisation",
+      "PERIOD": "Du {{from}} au {{to}}",
+      "NOTE": "Des totaux par hôpital uniquement : aucune liste de patients, aucune facture, aucune note.",
+      "LOADING": "Chargement des chiffres…",
+      "LOAD_FAILED": "Les chiffres n’ont pas pu être chargés.",
+      "RETRY": "Réessayer",
+      "EMPTY": "Aucun hôpital dans votre organisation pour le moment.",
+      "STAFF": "Personnel actif",
+      "APPOINTMENTS": "Rendez-vous",
+      "ADMISSIONS": "Hospitalisations",
+      "INVOICED": "Facturé",
+      "COLLECTED": "Encaissé",
+      "DEATHS": "Décès",
+      "FEWER_THAN": "Moins de {{threshold}}",
+      "SMALL_COUNTS": "Un nombre de décès inférieur à {{threshold}} n’est pas affiché, pour protéger les personnes concernées."
     }
   }
 }

@@ -1691,7 +1691,9 @@ export const routes: Routes = [
       {
         path: 'admin-assignments',
         canActivate: [RoleGuard],
-        data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        // Platform admin rules 2026-11-20, rule 1a: the organisation admin works
+        // the assignments of its own organisation's hospitals (a reduced set of actions).
+        data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_ADMIN'] },
         loadComponent: () =>
           import('./admin-assignments/admin-assignments').then((m) => m.AdminAssignmentsComponent),
       },

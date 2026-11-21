@@ -131,6 +131,46 @@ export function isOpenForAssignment(hospital: { lifecycleState?: string | null }
   return !CLOSED_FOR_ASSIGNMENT.includes(hospital.lifecycleState ?? '');
 }
 
+/**
+ * Platform admin rules 2026-11-20, rule 1a: one hospital of the caller's own
+ * organisation (`GET /organization-admin/hospitals`), for an organisation
+ * admin's pickers.
+ */
+export interface OrganisationHospital {
+  id: string;
+  name: string;
+  city?: string | null;
+  code?: string | null;
+  currencyCode?: string | null;
+  lifecycleState?: string | null;
+}
+
+/** A count in a sensitive category: withheld (no value at all) when it is small. */
+export interface SensitiveCount {
+  value: number | null;
+  suppressed: boolean;
+}
+
+/** Rule 1b: one hospital's totals for a period. Totals only: nothing about a person. */
+export interface OrganisationHospitalTotals {
+  hospitalId: string;
+  hospitalName: string;
+  currencyCode: string;
+  activeStaff: number;
+  appointments: number;
+  admissions: number;
+  invoicedTotal: number;
+  collectedTotal: number;
+  deaths: SensitiveCount;
+}
+
+export interface OrganisationSummary {
+  from: string;
+  to: string;
+  smallCountThreshold: number;
+  hospitals: OrganisationHospitalTotals[];
+}
+
 /** One row of `GET /hospitals/directory`: no contact details. */
 export interface HospitalDirectoryEntry {
   id: string;
@@ -177,6 +217,20 @@ export class HospitalService {
     return this.http.get<HospitalOnboardingReadiness>(
       `/hospitals/${hospitalId}/onboarding-readiness`,
     );
+  }
+
+  /**
+   * Platform admin rules 2026-11-20, rule 1a: the hospitals of the caller's
+   * own organisation. The organisation admin only; the request names no
+   * hospital and no organisation, the server reads both from the caller.
+   */
+  organisationHospitals(): Observable<OrganisationHospital[]> {
+    return this.http.get<OrganisationHospital[]>('/organization-admin/hospitals');
+  }
+
+  /** Rule 1b: totals per hospital of the caller's organisation, for the current month to date. */
+  organisationSummary(): Observable<OrganisationSummary> {
+    return this.http.get<OrganisationSummary>('/organization-admin/summary');
   }
 
   create(req: HospitalRequest): Observable<HospitalResponse> {

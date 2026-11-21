@@ -42,7 +42,15 @@ const PATIENT_ROLE_CODES = new Set(['ROLE_PATIENT', 'PATIENT']);
 const PHONE_PATTERN = /^\+?[\d\s.()-]{8,20}$/;
 
 /** QA D1306 (round 28): the fields the create/edit form may refuse, so a fixed one loses its mark. */
-const USER_FORM_IDS = ['firstName', 'lastName', 'username', 'email', 'phoneNumber', 'user-roles'];
+const USER_FORM_IDS = [
+  'firstName',
+  'lastName',
+  'username',
+  'email',
+  'phoneNumber',
+  'user-roles',
+  'hospitalId',
+];
 /** QA r64 (lost phone): the reset's reason field, and its minimum length (MfaResetService). */
 const MFA_RESET_REASON_IDS = ['mfa-reset-reason'];
 const MFA_RESET_REASON_MIN = 5;
@@ -118,7 +126,23 @@ const SPECIALIZATIONS = [
  * against the route (every role the route admits and this list leaves out is offered no
  * register form).
  */
-export const USER_REGISTRAR_ROLES: readonly string[] = ['ROLE_SUPER_ADMIN', 'ROLE_HOSPITAL_ADMIN'];
+export const USER_REGISTRAR_ROLES: readonly string[] = [
+  'ROLE_SUPER_ADMIN',
+  'ROLE_HOSPITAL_ADMIN',
+  // Platform admin rules 2026-11-20, rule 1a: the organisation admin registers
+  // staff at any hospital of its own organisation.
+  'ROLE_ADMIN',
+];
+
+/**
+ * The roles that administer an ACCOUNT here (edit, delete, two-step reset).
+ * An organisation admin registers staff and works their assignments; it edits
+ * and deletes no account (the server's `UserAccountAccess.canAdminister`).
+ */
+export const USER_ACCOUNT_ADMIN_ROLES: readonly string[] = [
+  'ROLE_SUPER_ADMIN',
+  'ROLE_HOSPITAL_ADMIN',
+];
 
 @Component({
   selector: 'app-user-list',
@@ -172,13 +196,21 @@ export class UserListComponent implements OnInit, OnDestroy {
   /**
    * QA r65 D2762: who may register a user here: the roles `POST
    * /users/admin-register` admits on this page (`SecurityConstants
-   * .USER_REGISTRAR_AUTHORITIES`: the super-admin and the hospital admin; the
-   * others on that list register patients from the patient form). An
-   * administrator (`ROLE_ADMIN`) reads the directory and was offered
-   * « Inscrire », a form whose submit always answered 403, and a `GET /roles`
-   * that answered 403 on every visit.
+   * .ADMIN_REGISTER_AUTHORITIES`: the super-admin, the hospital admin and,
+   * since the platform admin rules of 2026-11-20, the organisation admin; the
+   * others on that list register patients from the patient form). Before that
+   * decision an administrator (`ROLE_ADMIN`) was offered « Inscrire », a form
+   * whose submit always answered 403.
    */
   readonly canRegister = this.roleContext.hasAnyActiveRole([...USER_REGISTRAR_ROLES]);
+  /** Who may edit or delete an account, or reset its two-step verification. */
+  readonly canAdministerAccounts = this.roleContext.hasAnyActiveRole([...USER_ACCOUNT_ADMIN_ROLES]);
+  /**
+   * Rule 1a: an organisation admin. It picks the hospital among those of its
+   * own organisation (the server's list, never a typed id) and is offered
+   * staff roles only.
+   */
+  readonly organisationRegistrar = this.canRegister && !this.canAdministerAccounts;
   showFilters = signal(false);
 
   currentPage = signal(0);
@@ -328,6 +360,21 @@ export class UserListComponent implements OnInit, OnDestroy {
   }
 
   loadHospitals(): void {
+    // Rule 1a: an organisation admin picks among the hospitals of its own organisation.
+    if (this.organisationRegistrar) {
+      this.hospitalService.organisationHospitals().subscribe({
+        next: (hospitals) => {
+          const open = hospitals
+            .filter(isOpenForAssignment)
+            .map((h) => ({ id: h.id, name: h.name }));
+          this.availableHospitals.set(open);
+          if (open.length === 1) this.createForm.hospitalId = open[0].id;
+        },
+        // Said, not swallowed: with no hospital to choose the form cannot be saved.
+        error: () => this.toast.error(this.translate.instant('ASSIGN_ADMIN.HOSPITALS_LOAD_ERROR')),
+      });
+      return;
+    }
     // ── TENANT ISOLATION: only SUPER_ADMIN loads full hospital list ──
     if (this.roleContext.isSuperAdmin()) {
       this.hospitalService.list().subscribe({
@@ -352,7 +399,7 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   /** True when the hospital field should be a non-editable locked indicator. */
   get hospitalLocked(): boolean {
-    return !this.roleContext.isSuperAdmin();
+    return !this.roleContext.isSuperAdmin() && !this.organisationRegistrar;
   }
 
   /** Display name of the single locked hospital. */
@@ -528,6 +575,10 @@ export class UserListComponent implements OnInit, OnDestroy {
       !isEdit && !f.phoneNumber?.trim() ? 'phoneNumber' : null,
     ].filter((id): id is string => id !== null);
     if (blank.length > 0) return { key: 'USERS.TOAST.REQUIRED_FIELDS', ids: blank };
+    // Rule 1a: every grant names one hospital; an organisation admin grants nothing "everywhere".
+    if (!isEdit && this.organisationRegistrar && !f.hospitalId) {
+      return { key: 'PLATFORM_SETUP.ORG_ADMIN.HOSPITAL_REQUIRED', ids: ['hospitalId'] };
+    }
     if (!isEdit && this.selectedRoles.length === 0) {
       return { key: 'USERS.TOAST.ROLE_REQUIRED', ids: ['user-roles'] };
     }
@@ -782,8 +833,9 @@ export class UserListComponent implements OnInit, OnDestroy {
    * delete; saving it answered "user not found".
    */
   isManageable(user: UserSummary): boolean {
-    // QA r65 D2762: and never for a role with no write endpoint here at all.
-    return this.canRegister && user.manageable !== false;
+    // QA r65 D2762: and never for a role with no account write here at all
+    // (an organisation admin registers staff; it edits and deletes no account).
+    return this.canAdministerAccounts && user.manageable !== false;
   }
 
   canImpersonate(user: UserSummary): boolean {

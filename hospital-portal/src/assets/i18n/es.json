@@ -15628,7 +15628,8 @@
       "TIME_ZONE_INHERIT": "La de la organización",
       "TIME_ZONE_HINT": "Fija el día del hospital: la fecha de una factura, el inicio de un precio, una franja ya pasada.",
       "TIME_ZONE_FROM_ORG": "(la de la organización)",
-      "TIME_ZONE_NONE": "Sin definir: se aplica la hora del servidor"
+      "TIME_ZONE_NONE": "Sin definir: se aplica la hora del servidor",
+      "CURRENCY_HINT": "La moneda ya no puede modificarse en cuanto el hospital tiene una factura o una tarifa."
     },
     "BOOKING": {
       "NOT_OFFERED": "Este establecimiento aún no ofrece la cita en línea.",
@@ -15695,6 +15696,28 @@
       "LABEL": "Pantallas de auditoría",
       "LOG": "Registro",
       "SEARCH": "Búsqueda avanzada"
+    },
+    "ORG_ADMIN": {
+      "HOSPITAL_REQUIRED": "Elija el hospital donde trabajará esta persona.",
+      "REGISTER_SCOPE": "Puede inscribir personal en cada hospital de su organización.",
+      "ASSIGNMENTS_SCOPE": "Usted gestiona las asignaciones del personal en cada hospital de su organización. Los roles de administración los concede un superadministrador."
+    },
+    "ORG_TOTALS": {
+      "TITLE": "Cifras de la organización",
+      "PERIOD": "Del {{from}} al {{to}}",
+      "NOTE": "Solo totales por hospital: ninguna lista de pacientes, ninguna factura, ninguna nota.",
+      "LOADING": "Cargando las cifras…",
+      "LOAD_FAILED": "No se pudieron cargar las cifras.",
+      "RETRY": "Reintentar",
+      "EMPTY": "Ningún hospital en su organización por ahora.",
+      "STAFF": "Personal activo",
+      "APPOINTMENTS": "Citas",
+      "ADMISSIONS": "Hospitalizaciones",
+      "INVOICED": "Facturado",
+      "COLLECTED": "Cobrado",
+      "DEATHS": "Fallecimientos",
+      "FEWER_THAN": "Menos de {{threshold}}",
+      "SMALL_COUNTS": "Un número de fallecimientos inferior a {{threshold}} no se muestra, para proteger a las personas afectadas."
     }
   }
 }

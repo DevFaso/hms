@@ -15628,7 +15628,8 @@
       "TIME_ZONE_INHERIT": "The organization’s",
       "TIME_ZONE_HINT": "It sets the hospital’s day: the date of an invoice, the start of a price, a slot already past.",
       "TIME_ZONE_FROM_ORG": "(the organization’s)",
-      "TIME_ZONE_NONE": "Not set: the server’s time applies"
+      "TIME_ZONE_NONE": "Not set: the server’s time applies",
+      "CURRENCY_HINT": "The currency can no longer be changed once the hospital has an invoice or a price."
     },
     "BOOKING": {
       "NOT_OFFERED": "This hospital does not offer online booking yet.",
@@ -15695,6 +15696,28 @@
       "LABEL": "Audit screens",
       "LOG": "Log",
       "SEARCH": "Advanced search"
+    },
+    "ORG_ADMIN": {
+      "HOSPITAL_REQUIRED": "Choose the hospital where this person will work.",
+      "REGISTER_SCOPE": "You can register staff at every hospital of your organization.",
+      "ASSIGNMENTS_SCOPE": "You manage staff assignments at every hospital of your organization. Administration roles are granted by a super administrator."
+    },
+    "ORG_TOTALS": {
+      "TITLE": "Organization figures",
+      "PERIOD": "From {{from}} to {{to}}",
+      "NOTE": "Totals per hospital only: no patient list, no invoice, no note.",
+      "LOADING": "Loading the figures…",
+      "LOAD_FAILED": "The figures could not be loaded.",
+      "RETRY": "Try again",
+      "EMPTY": "No hospital in your organization yet.",
+      "STAFF": "Active staff",
+      "APPOINTMENTS": "Appointments",
+      "ADMISSIONS": "Admissions",
+      "INVOICED": "Invoiced",
+      "COLLECTED": "Collected",
+      "DEATHS": "Deaths",
+      "FEWER_THAN": "Fewer than {{threshold}}",
+      "SMALL_COUNTS": "A number of deaths below {{threshold}} is not shown, to protect the people concerned."
     }
   }
 }

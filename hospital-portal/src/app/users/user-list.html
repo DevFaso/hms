@@ -531,7 +531,10 @@
 
             <!-- Hospital -->
             <div class="field">
-              <label for="hospitalId">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</label>
+              <label for="hospitalId"
+                >{{ 'ENCOUNTERS.HOSPITAL' | translate
+                }}{{ organisationRegistrar && !editing() ? ' *' : '' }}</label
+              >
               @if (editing()) {
                 <div class="locked-field" data-testid="edit-staff-hospital">
                   <span class="material-symbols-outlined locked-icon" aria-hidden="true"
@@ -547,12 +550,23 @@
                   {{ lockedHospitalName }}
                 </div>
               } @else {
-                <select id="hospitalId" [(ngModel)]="createForm.hospitalId" name="hospitalId">
+                <select
+                  id="hospitalId"
+                  [(ngModel)]="createForm.hospitalId"
+                  name="hospitalId"
+                  [attr.aria-required]="organisationRegistrar || null"
+                  [attr.aria-describedby]="organisationRegistrar ? 'hospitalIdScope' : null"
+                >
                   <option value="">— {{ 'COMMON.NONE' | translate }} —</option>
                   @for (h of availableHospitals(); track h.id) {
                     <option [value]="h.id">{{ h.name }}</option>
                   }
                 </select>
+                @if (organisationRegistrar) {
+                  <span id="hospitalIdScope" class="hint-text" data-testid="register-org-scope">
+                    {{ 'PLATFORM_SETUP.ORG_ADMIN.REGISTER_SCOPE' | translate }}
+                  </span>
+                }
               }
             </div>
 
