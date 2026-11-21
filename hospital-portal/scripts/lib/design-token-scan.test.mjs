@@ -188,6 +188,28 @@ test('a component source: a legacy hex in inline styles or a palette', () => {
   ]);
 });
 
+test("a component's inline styles are read as a stylesheet, one literal or several", () => {
+  const tick = String.fromCodePoint(96);
+  const source = [
+    '@Component({',
+    `  template: ${tick}<p class="hint">x</p>${tick},`,
+    '  styles: [',
+    `    ${tick}`,
+    '      .hint { color: #64748b; }',
+    `    ${tick},`,
+    `    ${tick}.btn-primary { background: var(--primary); }${tick},`,
+    '  ],',
+    '})',
+    'export class A {}',
+    `@Component({ styles: ${tick}.meta { color: #94a3b8; border: 1px solid #94a3b8 }${tick} })`,
+    'export class B {}',
+  ].join('\n');
+  assert.deepEqual(
+    sourceFindings(source).map((h) => `${h.line}:${h.rule}:${h.anchor}`),
+    ['5:low-contrast-text:#64748b', '7:local-button:.btn-primary', '11:low-contrast-text:#94a3b8'],
+  );
+});
+
 /* ── The tokens themselves (D2793) ──────────────────────────────────────── */
 
 const tokens = rootTokens(readFileSync(join(src, 'styles.scss'), 'utf8'));

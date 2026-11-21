@@ -352,8 +352,32 @@ export function templateFindings(html) {
   return hits;
 }
 
-/** The CSS of a component's inline `styles:` (one or several template literals). */
-const INLINE_STYLES = /\bstyles\s*:\s*\[?\s*((?:`[^`]*`\s*,?\s*)+)/g;
+/** Where a component's inline `styles:` begin: up to the first template literal's backtick. */
+const INLINE_STYLES_START = /\bstyles\s*:\s*\[?\s*`/g;
+
+/**
+ * The CSS of a component's inline `styles:` as `[css, offset]` pairs: one
+ * template literal, or the several of a `styles: [` array. Read by hand: a
+ * literal ends at the next backtick, and the next one may follow a comma.
+ */
+function inlineStyles(ts) {
+  const out = [];
+  let m;
+  INLINE_STYLES_START.lastIndex = 0;
+  while ((m = INLINE_STYLES_START.exec(ts))) {
+    let open = m.index + m[0].length - 1;
+    while (open >= 0 && ts[open] === '`') {
+      const close = ts.indexOf('`', open + 1);
+      if (close < 0) break;
+      out.push([ts.slice(open + 1, close), open + 1]);
+      let next = close + 1;
+      while (next < ts.length && (ts[next] === ',' || ts[next].trim() === '')) next++;
+      open = ts[next] === '`' ? next : -1;
+      INLINE_STYLES_START.lastIndex = close + 1;
+    }
+  }
+  return out;
+}
 
 /**
  * A component `.ts`: the legacy hexes anywhere in it (inline styles, chart
@@ -372,10 +396,7 @@ export function sourceFindings(ts) {
       message: `${m[0]} is a pre-rebrand colour; use var(--primary), or pin a chart series with its reason`,
     });
   }
-  INLINE_STYLES.lastIndex = 0;
-  while ((m = INLINE_STYLES.exec(ts))) {
-    const start = m.index + m[0].indexOf('`');
-    const css = ts.slice(start, m.index + m[0].length).replaceAll('`', ' ');
+  for (const [css, start] of inlineStyles(ts)) {
     const offset = lineOf(ts, start) - 1;
     for (const hit of scssFindings(css)) {
       // a legacy hex is already reported above, from the whole file
