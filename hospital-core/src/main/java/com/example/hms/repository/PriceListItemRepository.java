@@ -28,6 +28,10 @@ public interface PriceListItemRepository extends JpaRepository<PriceListItem, UU
 
     boolean existsByHospitalIdAndCode(UUID hospitalId, String code);
 
+    /** QA r65 D2731 (onboarding checklist): how many active price-list items ONE hospital has. */
+    @Query("SELECT COUNT(i) FROM PriceListItem i WHERE i.hospitalId = :hospitalId AND i.active = true")
+    long countByHospitalIdAndActiveTrue(@Param("hospitalId") UUID hospitalId);
+
     /**
      * Review of #1242: the items an invoice's lines were priced from, at the invoice's own hospital, read WITHOUT
      * the caller's tenant scope. {@code findAllById} is narrowed to the caller's hospitals, so a family proxy with

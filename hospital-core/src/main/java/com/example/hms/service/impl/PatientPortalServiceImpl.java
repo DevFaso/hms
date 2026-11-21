@@ -954,6 +954,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                     m.put("id", h.getId());
                     m.put("name", h.getName());
                     m.put("address", h.getAddress());
+                    // QA r65 D2731: whom to call when the hospital offers nothing to book online.
+                    m.put("phoneNumber", h.getPhoneNumber());
                     return m;
                 })
                 .toList();
@@ -978,12 +980,22 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         requireActiveRegistration(auth, hospitalId);
         // QA D169: only departments where someone can actually be booked.
         java.util.Set<UUID> bookable = staffRepository.findDepartmentIdsWithActiveProviders(hospitalId);
-        return departmentRepository.findByHospitalId(hospitalId).stream()
+        List<Department> departments = departmentRepository.findByHospitalId(hospitalId).stream()
                 .filter(d -> bookable.contains(d.getId()))
+                .toList();
+        if (departments.isEmpty()) {
+            return List.of();
+        }
+        // QA r65 D2731: whether each one has a published slot still to come, on the
+        // hospital's own clock, so the form can say so before the patient tries date after date.
+        java.util.Set<UUID> withSlots = departmentRepository.findIdsWithOpenSlotsAfter(
+                hospitalId, nowAt(departments.get(0).getHospital()), java.time.LocalDateTime.now());
+        return departments.stream()
                 .map(d -> {
                     Map<String, Object> m = new java.util.LinkedHashMap<>();
                     m.put("id", d.getId());
                     m.put("name", d.getName());
+                    m.put("hasOpenSlots", withSlots.contains(d.getId()));
                     return m;
                 })
                 .toList();
