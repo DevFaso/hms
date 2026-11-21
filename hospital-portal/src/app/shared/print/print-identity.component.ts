@@ -79,7 +79,7 @@ import { DateTimePipe } from '../pipes/date-time.pipe';
         }
       </dl>
       <p class="pi-printed">
-        {{ 'PRINT_IDENTITY.PRINTED_ON' | translate: { date: (printedAt | dateTime) } }}
+        {{ 'PRINT_IDENTITY.PRINTED_ON' | translate: { date: (printedAt | serverTime | dateTime) } }}
       </p>
     </header>
   `,

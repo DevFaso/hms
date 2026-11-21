@@ -16,6 +16,13 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { LabCorrectionBadgeComponent } from '../../lab/shared/lab-correction-badge.component';
+import { LabRangePipe } from '../../shared/pipes/lab-value.pipe';
+import {
+  GradedLabResult,
+  LabSeverityFlag,
+  labSeverityFlag,
+  labSeverityTone,
+} from '../../lab/shared/lab-severity';
 
 /**
  * r63 (imaging completion): the radiologist read blind. Beside the order and
@@ -34,6 +41,7 @@ import { LabCorrectionBadgeComponent } from '../../lab/shared/lab-correction-bad
     ServerTimePipe,
     DateTimePipe,
     LabCorrectionBadgeComponent,
+    LabRangePipe,
   ],
   templateUrl: './imaging-reading-context.component.html',
   styleUrl: './imaging-reading-context.component.scss',
@@ -52,6 +60,15 @@ export class ImagingReadingContextComponent implements OnChanges {
   readonly failed = signal(false);
 
   private seq = 0;
+
+  /** QA D2640 (r65): the creatinine's grade, read as every lab screen reads it (QA D969). */
+  creatinineFlag(cr: GradedLabResult): LabSeverityFlag {
+    return labSeverityFlag(cr);
+  }
+
+  creatinineTone(cr: GradedLabResult): ReturnType<typeof labSeverityTone> {
+    return labSeverityTone(labSeverityFlag(cr));
+  }
 
   ngOnChanges(): void {
     this.load();

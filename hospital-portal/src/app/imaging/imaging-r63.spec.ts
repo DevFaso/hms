@@ -364,7 +364,7 @@ describe('ImagingComponent — r63 imaging completion', () => {
       expect(flag).not.toBeNull();
       expect(flag!.textContent!.trim().length).toBeGreaterThan(0);
       expect(q('[data-testid="imaging-context-creatinine-range"]')?.textContent).toContain(
-        '62 - 106 µmol/L',
+        '62 – 106 µmol/L',
       );
     });
 
