@@ -77,7 +77,12 @@ class PharmacyPageEndpointRolesTest {
             Map.entry("medication-catalog#updatePediatricDosing", "canEditDosing()"),
             Map.entry("pharmacy-registry#createPharmacy", "canManage()"),
             Map.entry("pharmacy-registry#updatePharmacy", "canManage()"),
-            Map.entry("pharmacy-registry#deletePharmacy", "canManage()"));
+            Map.entry("pharmacy-registry#deletePharmacy", "canManage()"),
+            // QA D2925 (r66): the payer's answer to a claim is recorded by a money desk or a hospital admin; the
+            // page offers the three steps when the server says the reader is one (never the pharmacy).
+            Map.entry("pharmacy-claims#acceptClaim", "@if (c.canRecordPayerDecision)"),
+            Map.entry("pharmacy-claims#rejectClaim", "@if (c.canRecordPayerDecision)"),
+            Map.entry("pharmacy-claims#payClaim", "@if (c.canRecordPayerDecision)"));
 
     private static final Pattern PAGE_IMPORT = Pattern.compile("import\\('\\./pharmacy/([\\w-]+)'\\)");
     private static final Pattern ROLES = Pattern.compile("roles:\\s*\\[([^\\]]*)]");

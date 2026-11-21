@@ -367,6 +367,19 @@ public class RoleValidator {
     }
 
     /**
+     * QA D2925 (r66; owner's delegate 2026-11-20): who records the PAYER's decision on a pharmacy claim (accepted,
+     * rejected, paid) at {@code hospitalId}: a money desk (billing specialist, claims reviewer, accountant) or a
+     * hospital admin. The pharmacy creates and sends a claim; it never records the answer to its own claim. A
+     * pharmacist who "accepted" a claim left it ACCEPTED with nobody behind it, and billing could no longer accept
+     * it: the fill stayed blocked until the payer's payment, which can take weeks.
+     */
+    public boolean canRecordPayerDecision(UUID userId, UUID hospitalId) {
+        return userId != null && hospitalId != null
+            && hasAnyCode(userId, hospitalId, BILLING_SPECIALIST_ROLE, CLAIMS_REVIEWER_ROLE, ACCOUNTANT_ROLE,
+                HOSPITAL_ADMIN_ROLE);
+    }
+
+    /**
      * Policy rule 6: who reads what a fill may leave on before a hand-over: whoever may ask, and the pharmacy
      * verifier, who hands fills over too (and may execute an approved deferral, never override).
      */

@@ -113,6 +113,8 @@ public class PharmacyServiceImpl implements PharmacyService {
             UUID userId = roleValidator.getCurrentUserId();
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .userId(userId)
+                    // QA D2924 (r66): the acting hospital anchors the row for the hospital admin's audit log.
+                    .hospitalId(roleValidator.getCurrentHospitalId())
                     .eventType(eventType)
                     .eventDescription(description)
                     .status(AuditStatus.SUCCESS)

@@ -1064,6 +1064,55 @@ describe('DispensingComponent', () => {
     });
   });
 
+  function readPaymentStatus(data: Record<string, unknown>): HTMLElement {
+    component.openHandOver(preparedRow as any);
+    TestBed.inject(HttpTestingController)
+      .expectOne('/pharmacy/dispense/d-ready/payment-status')
+      .flush({ data: { dispenseId: 'd-ready', quantity: 10, charge: 1000, ...data } });
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  it('QA D2930: an unpaid fill is said once: the choice of a basis says it, the status line does not repeat it', () => {
+    const el = readPaymentStatus({ paid: 0, claimed: 0, due: 1000, status: 'UNPAID' });
+    expect(el.querySelector('[data-testid="deferral-choice"]')).not.toBeNull();
+    expect(el.querySelector('[data-testid="hand-over-payment-status"]')).toBeNull();
+    expect(el.querySelector('[data-testid="hand-over-due"]')).not.toBeNull();
+  });
+
+  it('QA D2930: a paid fill keeps its status line, and offers no basis to choose', () => {
+    const el = readPaymentStatus({ paid: 1000, claimed: 0, due: 0, status: 'PAID' });
+    expect(el.querySelector('[data-testid="hand-over-payment-status"]')!.textContent).toContain(
+      'PAID',
+    );
+    expect(el.querySelector('[data-testid="deferral-choice"]')).toBeNull();
+    expect(el.querySelector('[data-testid="hand-over-claim-gap"]')).toBeNull();
+  });
+
+  it('QA D2931: a claim that does not cover the fill for the reader says why before the server refuses', () => {
+    let el = readPaymentStatus({
+      paid: 0,
+      claimed: 0,
+      due: 1000,
+      status: 'UNPAID',
+      claimCoverGap: 'OWN_VOUCHER',
+    });
+    expect(el.querySelector('[data-testid="hand-over-claim-gap"]')!.textContent).toContain(
+      'OWN_VOUCHER',
+    );
+    component.closeReadyAction();
+    el = readPaymentStatus({
+      paid: 0,
+      claimed: 0,
+      due: 1000,
+      status: 'UNPAID',
+      claimCoverGap: 'NO_VOUCHER',
+    });
+    expect(el.querySelector('[data-testid="hand-over-claim-gap"]')!.textContent).toContain(
+      'NO_VOUCHER',
+    );
+  });
+
   it('policy rule 6: a hand-over the server refuses as unpaid opens the deferral choice, even with no payment status read', () => {
     pharmacySvc.handOver.and.returnValue(
       throwError(() => ({

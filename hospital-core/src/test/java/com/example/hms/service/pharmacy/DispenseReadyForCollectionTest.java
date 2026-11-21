@@ -797,6 +797,48 @@ class DispenseReadyForCollectionTest {
         }
 
         @Test
+        @DisplayName("QA D2929 (r66): a paid hand-over that completes the order closes the credit request still open for it")
+        void aPaidHandOverClosesTheOpenRequest() {
+            Dispense d = pricedPreparedFill();
+            stubLocked(d);
+            stubHandOverWrites(d);
+            wireTheDeferralGate();
+            when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(new BigDecimal("1000"));
+            noClaimCovers();
+            com.example.hms.model.pharmacy.DispenseBillingDeferral asked = approvedDeferral(null);
+            asked.setStatus(com.example.hms.enums.DispenseBillingDeferralStatus.REQUESTED);
+            when(deferralRepository.findByHospitalIdAndPrescriptionIdAndStatusInOrderByRequestedAtAsc(
+                    eq(hospitalId), eq(prescriptionId), any())).thenReturn(java.util.List.of(asked));
+
+            assertThat(service.handOver(dispenseId, null).getStatus()).isEqualTo("COMPLETED");
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+            assertThat(asked.getStatus()).isEqualTo(com.example.hms.enums.DispenseBillingDeferralStatus.CANCELLED);
+            assertThat(asked.getCancelledBy()).isEqualTo(userId);
+            assertThat(asked.getCancelReason()).isNotBlank();
+            verify(deferralFollowUp).close(asked);
+        }
+
+        @Test
+        @DisplayName("QA D2929 (r66): a paid part of an order with more to dispense keeps its deferral for the next fill")
+        void aPaidPartialFillKeepsTheDeferral() {
+            Dispense d = pricedPreparedFill();
+            stubLocked(d);
+            stubHandOverWrites(d);
+            wireTheDeferralGate();
+            when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(new BigDecimal("1000"));
+            noClaimCovers();
+            // Half of what was prescribed has left the counter.
+            prescription.setQuantity(new BigDecimal("20"));
+
+            assertThat(service.handOver(dispenseId, null).getStatus()).isEqualTo("COMPLETED");
+
+            assertThat(prescription.getStatus()).isNotEqualTo(PrescriptionStatus.DISPENSED);
+            verify(deferralRepository, never()).findByHospitalIdAndPrescriptionIdAndStatusInOrderByRequestedAtAsc(
+                    any(), any(), any());
+        }
+
+        @Test
         @DisplayName("a fill a claim sent by billing covers is handed over with no reason")
         void coveredIsHandedOver() {
             Dispense d = pricedPreparedFill();
@@ -821,10 +863,11 @@ class DispenseReadyForCollectionTest {
             // was recorded as standing behind it.
             aClaim(PharmacyClaimStatus.SUBMITTED, "1000", null, null);
 
+            // QA D2931 (r66): told why the claim does not cover, not that the fill « is not paid ».
             assertThatThrownBy(() -> service.handOver(dispenseId, null))
                     .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
                     .extracting("field", "messageKey")
-                    .containsExactly("billingDeferralId", "pharmacy.handOver.unpaid");
+                    .containsExactly("billingDeferralId", "pharmacy.handOver.claimNotVouched");
             verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
         }
 
@@ -838,16 +881,23 @@ class DispenseReadyForCollectionTest {
             when(paymentRepository.sumPostedForDispense(dispenseId)).thenReturn(BigDecimal.ZERO);
 
             // Created, sent and accepted inside the pharmacy: no money desk was ever recorded behind it.
+            wireTheDeferralGate();
             aClaim(PharmacyClaimStatus.ACCEPTED, "1000", null, null);
             assertThatThrownBy(() -> service.handOver(dispenseId, null))
                     .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
-                    .extracting("messageKey").isEqualTo("pharmacy.handOver.unpaid");
+                    .extracting("messageKey").isEqualTo("pharmacy.handOver.claimNotVouched");
+            assertThat(service.getPaymentStatus(dispenseId).getClaimCoverGap()).isEqualTo("NO_VOUCHER");
 
             // The person handing over holds a money desk too and is the only one behind the claim: never the same.
+            // QA D2931 (r66): the refusal names that reason, and the dialog reads it before the hand-over.
             aClaim(PharmacyClaimStatus.ACCEPTED, "1000", userId, null);
             assertThatThrownBy(() -> service.handOver(dispenseId, null))
                     .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
-                    .extracting("messageKey").isEqualTo("pharmacy.handOver.unpaid");
+                    .extracting("messageKey").isEqualTo("pharmacy.handOver.claimVouchedBySelf");
+            var status = service.getPaymentStatus(dispenseId);
+            assertThat(status.getStatus()).isEqualTo("UNPAID");
+            assertThat(status.getDue()).isEqualByComparingTo("1000");
+            assertThat(status.getClaimCoverGap()).isEqualTo("OWN_VOUCHER");
             verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
             // Review round 2: the counter reads what was recorded, and asks nobody what role they hold today.
             verify(roleValidator, never()).vouchesForClaimCover(any(), any());
@@ -929,8 +979,9 @@ class DispenseReadyForCollectionTest {
             assertThat(approved.getDispenseId()).isEqualTo(dispenseId);
             assertThat(approved.getAmountDue()).isEqualByComparingTo("1000");
             assertThat(d.getBillingDeferredAmount()).as("what this fill left owing").isEqualByComparingTo("1000");
+            // QA D2924 (r66): the row names the hospital of the deferral.
             verify(support).logAudit(eq(AuditEventType.DISPENSE_BILLING_DEFERRED), anyString(),
-                    eq(dispenseId.toString()), eq("DISPENSE"));
+                    eq(dispenseId.toString()), eq("DISPENSE"), eq(hospitalId));
         }
 
         @Test
@@ -1009,8 +1060,9 @@ class DispenseReadyForCollectionTest {
             assertThat(row.getValue().getDispenseId()).isEqualTo(dispenseId);
             assertThat(d.getBillingDeferralId()).isEqualTo(row.getValue().getId());
             assertThat(d.getBillingDeferredReason()).isEqualTo("Crise d'asthme, caisse fermée");
+            // QA D2924 (r66): the row names the hospital of the deferral.
             verify(support).logAudit(eq(AuditEventType.DISPENSE_BILLING_URGENCY_OVERRIDE), anyString(),
-                    eq(dispenseId.toString()), eq("DISPENSE"));
+                    eq(dispenseId.toString()), eq("DISPENSE"), eq(hospitalId));
             verify(deferralFollowUp).reviewNeeded(eq(row.getValue()), any(), any());
         }
 
