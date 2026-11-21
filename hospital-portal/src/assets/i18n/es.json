@@ -8832,7 +8832,12 @@
     "PRN_MIN_INTERVAL_HINT": "Obligatorio en una prescripción «si es necesario»: el registro ofrece la dosis siguiente cuando ha pasado este tiempo desde la anterior.",
     "PRN_MIN_INTERVAL_REQUIRED": "Indique el intervalo mínimo entre dos dosis (de 1 a 72 horas).",
     "FREQUENCY_REQUIRED": "Indique la frecuencia: cada cuánto se administra el medicamento.",
-    "PRN_MIN_INTERVAL_VALUE": "Al menos {{hours}} h entre dosis"
+    "PRN_MIN_INTERVAL_VALUE": "Al menos {{hours}} h entre dosis",
+    "REFILLS_ALLOWED": "Renovaciones inscritas",
+    "REFILLS_ALLOWED_HINT": "Número de renovaciones que la farmacia puede dispensar sin una nueva decisión (0 = ninguna). Una más requiere la aprobación del prescriptor. Regla provisional.",
+    "REFILLS_CONTROLLED_HINT": "Sustancia controlada: ninguna renovación. Cada nueva dispensación requiere una nueva receta.",
+    "REFILLS_LOCKED_HINT": "El número de renovaciones no se modifica después de la firma.",
+    "REFILLS_ALLOWED_INVALID": "El número de renovaciones es un número entero, de 0 a {{max}}."
   },
   "PROFILE": {
     "RECOVERY_CONFIRM_TITLE": "Confirme su contacto de recuperación",
@@ -14283,7 +14288,10 @@
       "REJECTED": "Rechazada",
       "PAID": "Pagada"
     },
-    "PATIENT_UNNAMED": "Paciente (sin nombre en el expediente)"
+    "PATIENT_UNNAMED": "Paciente (sin nombre en el expediente)",
+    "CONFIRM_ACCEPTANCE": "Confirmar la aceptación",
+    "AWAITING_DESK": "La respuesta del pagador la registra facturación, el control de reembolsos o contabilidad.",
+    "ACCEPTANCE_UNCONFIRMED": "Aceptación no confirmada por facturación: esta solicitud aún no cubre la dispensación."
   },
   "PHARMACY_CHECKOUT": {
     "TITLE": "Cobro en farmacia",
@@ -15174,7 +15182,11 @@
       "DEFER_LABEL": "Hand over « to be billed »: reason",
       "DEFER_HINT": "For example: inpatient, on the stay's invoice. Pharmacist or administrator only; the fill appears in the day's reconciliation.",
       "DEFER_REQUIRED": "This fill is not paid: give the « to be billed » reason or take the payment first.",
-      "LOAD_FAILED": "The payment status could not be loaded; the server checks the payment at hand-over."
+      "LOAD_FAILED": "The payment status could not be loaded; the server checks the payment at hand-over.",
+      "CLAIM_GAP": {
+        "OWN_VOUCHER": "Se envió una cobertura para esta dispensación, pero usted es la única persona que responde de ella: otra persona de facturación o contabilidad debe confirmarla, u otra persona entrega la dispensación.",
+        "NO_VOUCHER": "Se envió una cobertura para esta dispensación, pero nadie de facturación o contabilidad la ha confirmado todavía: no cubre la dispensación."
+      }
     },
     "PACK": {
       "TITLE": "Pack size: {{name}}",
@@ -15326,7 +15338,8 @@
         "REJECTED": "Rejected",
         "EXECUTED": "Used",
         "CANCELLED": "Withdrawn",
-        "TO_REVIEW": "To review"
+        "TO_REVIEW": "To review",
+        "REVIEWED": "Revisada"
       },
       "MEDICATION": "Medicine",
       "ASKED": "Asked by",
@@ -15364,7 +15377,8 @@
       "VIEW_DUE": "Left unpaid, still due",
       "STILL_DUE": "Still due now",
       "NONE_DUE": "No fill that left unpaid still owes money.",
-      "VIEWS": "Lists of deferrals"
+      "VIEWS": "Lists of deferrals",
+      "REVIEWED_BY": "Revisada por"
     },
     "POLICY": {
       "TITLE": "Hospital billing policy",

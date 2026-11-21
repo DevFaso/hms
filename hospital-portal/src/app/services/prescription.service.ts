@@ -254,6 +254,12 @@ export interface PrescriptionRequest {
   /** QA D706: the quantity to hand over per fill; the dispense is capped at it. */
   quantity?: number | null;
   quantityUnit?: string;
+  /**
+   * QA D2926 (r66): the refills the prescriber writes on the order (0 to 99); the pharmacist
+   * releases a written refill without a new decision. Never on a controlled substance. Written
+   * before the signature: undefined keeps the stored number.
+   */
+  refillsAllowed?: number | null;
   notes?: string;
   status?: PrescriptionStatusType;
   forceOverride?: boolean;

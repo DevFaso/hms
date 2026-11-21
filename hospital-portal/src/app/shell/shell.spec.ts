@@ -540,6 +540,48 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(routes).not.toContain('/announcements');
   });
 
+  // QA D2927 (r66): a credit waited for an approver who had no menu entry for the page.
+  it('QA D2927: the accountant reaches the deferrals page, the reconciliation and the claims from the menu', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_ACCOUNTANT',
+      roles: ['ROLE_ACCOUNTANT'],
+      wildcardPermission: false,
+      permissions: ['View Dashboard', 'View Billing'],
+    });
+    const routes = items.map((i) => i.route);
+    expect(routes).toContain('/pharmacy/billing-deferrals');
+    expect(routes).toContain('/pharmacy/reconciliation');
+    // QA D2925: the accountant records the payer's answer to a claim.
+    expect(routes).toContain('/pharmacy/claims');
+    // The stock pages of the pharmacy block stay closed to finance.
+    expect(routes).not.toContain('/pharmacy/inventory');
+  });
+
+  it('QA D2927: the billing specialist reaches the deferrals page from the menu', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_BILLING_SPECIALIST',
+      roles: ['ROLE_BILLING_SPECIALIST'],
+      wildcardPermission: false,
+      permissions: ['View Dashboard', 'View Billing'],
+    });
+    const routes = items.map((i) => i.route);
+    expect(routes).toContain('/pharmacy/billing-deferrals');
+    // The reconciliation's own guard does not admit billing.
+    expect(routes).not.toContain('/pharmacy/reconciliation');
+  });
+
+  it('QA D2927: the front desk sees neither the deferrals page nor the reconciliation', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_RECEPTIONIST',
+      roles: ['ROLE_RECEPTIONIST'],
+      wildcardPermission: false,
+      permissions: ['View Dashboard'],
+    });
+    const routes = items.map((i) => i.route);
+    expect(routes).not.toContain('/pharmacy/billing-deferrals');
+    expect(routes).not.toContain('/pharmacy/reconciliation');
+  });
+
   it('keeps Patients for a role inside the /patients route guard', () => {
     const { items } = createComponent({
       activeRole: 'ROLE_NURSE',
