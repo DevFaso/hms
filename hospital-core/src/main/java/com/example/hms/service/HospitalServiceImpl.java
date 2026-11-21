@@ -22,6 +22,7 @@ import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.support.HospitalScopeUtils;
+import com.example.hms.utility.HospitalLocaleRules;
 import com.example.hms.utility.RoleValidator;
 import org.springframework.context.MessageSource;
 import org.springframework.data.domain.PageRequest;
@@ -179,11 +180,70 @@ public class HospitalServiceImpl implements HospitalService {
             hospital.setOrganization(organization);
         }
 
-        // 🔐 Generate unique code before saving
-        hospital.setCode(generateHospitalCode(dto.getName()));
+        // QA r65 D2500: the super-admin's own code when one is typed (unique,
+        // validated), a generated one otherwise.
+        hospital.setCode(HospitalLocaleRules.isBlank(dto.getCode())
+            ? generateHospitalCode(dto.getName())
+            : requireFreeCode(dto.getCode(), null));
+        applyLocale(dto, hospital);
 
         Hospital saved = hospitalRepository.save(hospital);
         return hospitalMapper.toHospitalDTO(saved);
+    }
+
+    /**
+     * QA r65 D2500: a typed code, validated and not held by another facility
+     * (the comparison ignores case, as the unique lookup does).
+     *
+     * @param ownId the hospital being edited, whose own code is not a clash; null on create
+     */
+    private String requireFreeCode(String raw, UUID ownId) {
+        String code = HospitalLocaleRules.requireCode(raw);
+        boolean taken = hospitalRepository.findByCodeIgnoreCase(code)
+            .filter(other -> !other.getId().equals(ownId))
+            .isPresent();
+        if (taken) {
+            throw new ConflictException(HospitalLocaleRules.FIELD_CODE + ":"
+                + MessageUtil.resolveOrRaw("hospital.code.exists", code));
+        }
+        return code;
+    }
+
+    /**
+     * QA r65 D2501: the hospital's currency and time zone, when the request
+     * names them. A blank currency keeps what the row has (XOF on a new one);
+     * a blank time zone on a request that carries the field clears it, which
+     * means "the organisation's default" ({@code HospitalCalendar.zoneOf}).
+     */
+    private static void applyLocale(HospitalRequestDTO dto, Hospital hospital) {
+        if (!HospitalLocaleRules.isBlank(dto.getCurrencyCode())) {
+            hospital.setCurrencyCode(HospitalLocaleRules.requireCurrency(dto.getCurrencyCode()));
+        }
+        if (dto.getTimeZone() != null) {
+            hospital.setTimeZone(dto.getTimeZone().isBlank()
+                ? null
+                : HospitalLocaleRules.requireTimeZone(dto.getTimeZone()));
+        }
+    }
+
+    /**
+     * QA r65 D2500: the code on an edit. Unchanged (or not sent) is left
+     * alone. A new one is accepted only while the hospital has issued no
+     * invoice number: the code prefixes every number
+     * ({@code InvoiceNumberAllocator.prefixOf}), and a hospital whose numbers
+     * change prefix mid-year is what an auditor flags.
+     */
+    private void applyCodeChange(HospitalRequestDTO dto, Hospital hospital) {
+        if (HospitalLocaleRules.isBlank(dto.getCode())
+                || dto.getCode().trim().equalsIgnoreCase(hospital.getCode())) {
+            return;
+        }
+        String code = requireFreeCode(dto.getCode(), hospital.getId());
+        if (hospitalRepository.hasAllocatedInvoiceNumber(hospital.getId())) {
+            throw new com.example.hms.exception.FieldBusinessException(
+                HospitalLocaleRules.FIELD_CODE, "hospital.code.locked");
+        }
+        hospital.setCode(code);
     }
 
 
@@ -241,6 +301,8 @@ public class HospitalServiceImpl implements HospitalService {
             throw new ConflictException("name:" + message);
         }
         hospitalMapper.updateHospitalFromDto(dto, hospital);
+        applyCodeChange(dto, hospital);
+        applyLocale(dto, hospital);
         if (dto.getOrganizationId() != null) {
             Organization organization = getOrganizationOrThrow(dto.getOrganizationId());
             hospital.setOrganization(organization);

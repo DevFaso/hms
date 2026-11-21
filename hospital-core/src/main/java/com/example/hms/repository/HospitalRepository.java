@@ -91,6 +91,14 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
 
     Optional<Hospital> findByCodeIgnoreCase(String code);
 
+    /**
+     * QA r65 D2500: whether this hospital has ever been given an invoice
+     * number. Its code prefixes every number, so the code is the
+     * super-admin's to change only until the first one is allocated.
+     */
+    @Query("SELECT COUNT(s) > 0 FROM InvoiceNumberSequence s WHERE s.hospitalId = :hospitalId")
+    boolean hasAllocatedInvoiceNumber(@Param("hospitalId") UUID hospitalId);
+
     Optional<Hospital> findByNameIgnoreCase(String hospitalName);
 
     Optional<Hospital> findByName(String name);
@@ -143,7 +151,7 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
      * with or without an open session. Empty when the hospital is unknown or
      * names no zone.
      */
-    @Query("SELECT o.defaultTimezone FROM Hospital h JOIN h.organization o WHERE h.id = :id")
+    @Query("SELECT COALESCE(h.timeZone, o.defaultTimezone) FROM Hospital h LEFT JOIN h.organization o WHERE h.id = :id")
     Optional<String> findTimezoneIdById(@Param("id") UUID id);
 
     /**

@@ -56,6 +56,23 @@ public class HospitalRequestDTO {
 
     private UUID organizationId;
 
+    /**
+     * QA r65 D2500: the hospital's code, chosen by the super-admin (letters,
+     * digits and hyphens, unique). Blank on create means "generate one";
+     * blank on update means "leave it". The rules and the refusals are
+     * {@code HospitalLocaleRules} and {@code HospitalServiceImpl}.
+     */
+    @Size(max = 20, message = "{hospital.code.invalid}")
+    private String code;
+
+    /** QA r65 D2501: ISO 4217 code of the hospital's currency; blank keeps XOF (create) or the stored one (update). */
+    @Size(max = 3, message = "{hospital.currency.invalid}")
+    private String currencyCode;
+
+    /** QA r65 D2501: IANA zone id of the hospital; blank means the organisation's default time zone. */
+    @Size(max = 64, message = "{hospital.timeZone.invalid}")
+    private String timeZone;
+
     @Builder.Default
     private boolean active = true;
 }

@@ -165,6 +165,25 @@ public class Hospital extends BaseEntity {
     @Column(name = "pacs_auth_password", columnDefinition = "TEXT")
     private String pacsAuthPassword;
 
+    /**
+     * V349 (QA r65 D2501): the ISO 4217 code of the currency this hospital
+     * bills in. XOF unless a super-admin chose another; only a currency the
+     * platform prints truthfully is accepted ({@code HospitalLocaleRules}).
+     */
+    @Builder.Default
+    @Size(max = 3)
+    @Column(name = "currency_code", nullable = false, length = 3)
+    private String currencyCode = "XOF";
+
+    /**
+     * V349 (QA r65 D2501): this hospital's own IANA time zone
+     * ({@code Africa/Ouagadougou}). Null means "the organisation's default":
+     * {@code HospitalCalendar.zoneOf} reads this first, then the organisation.
+     */
+    @Size(max = 64)
+    @Column(name = "time_zone", length = 64)
+    private String timeZone;
+
     @Builder.Default
     @Column(nullable = false)
     private boolean active = true;
