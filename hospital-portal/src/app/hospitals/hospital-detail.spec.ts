@@ -311,7 +311,7 @@ describe('HospitalDetailComponent (MVP-c2-frontend)', () => {
     hospitalService.getById.and.returnValue(of(fakeHospital()));
     lifecycleService.get.and.returnValue(of(fakeLifecycle()));
     const cmp = setup();
-    expect(cmp.stateColor(null)).toBe('#94a3b8');
+    expect(cmp.stateColor(null)).toBe('#566579');
     expect(cmp.stateColor('PURGED')).toBe('#1e293b');
   });
 });

@@ -16,35 +16,12 @@ const publicPaths = new Set([
 ]);
 
 /**
- * QA D2793 (r65): axe's `color-contrast` rule now runs on EVERY routed page
- * (it was suppressed everywhere while the palette carried slate-500 text at
- * 4.34:1 and a light-blue primary). The routes below still fail it and are
- * left out until their owner converts them: they belong to the
- * platform/onboarding track (dashboard, hospitals, platform, super-admin),
- * which the r65 design pass did not touch. Two more land on the dashboard in
- * this sweep (its guards redirect them), so they fail with it.
- * A new route is scanned from its first day. `A11Y_CONTRAST=all` scans these
- * too, to see what is left.
+ * QA D2793 (r65): axe's `color-contrast` rule runs on EVERY routed page, with
+ * no route left out (it was suppressed everywhere while the palette carried
+ * slate-500 text at 4.34:1 and a light-blue primary; the platform track's
+ * pages, the last 13 exempted by name, were converted when that track
+ * merged). A new route is scanned from its first day.
  */
-const CONTRAST_PENDING = new Set(
-  process.env['A11Y_CONTRAST'] === 'all'
-    ? []
-    : [
-        '/dashboard',
-        '/account-setup',
-        '/reception/empi-candidates',
-        '/hospitals/:id',
-        '/platform',
-        '/super-admin/platform',
-        '/super-admin/integrations',
-        '/super-admin/audit-search',
-        '/super-admin/emergency',
-        '/super-admin/subscriptions',
-        '/super-admin/cost',
-        '/super-admin/data-residency',
-        '/super-admin/data-residency/policy',
-      ],
-);
 // The e-Keneya wordmark's amber half is a logotype: no contrast requirement
 // (WCAG 1.4.3). Its nodes are dropped from the `color-contrast` result below,
 // and from that rule alone.
@@ -166,7 +143,6 @@ test.describe('all routed pages', () => {
       });
       const results = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-        .disableRules(CONTRAST_PENDING.has(screen.path) ? ['color-contrast'] : [])
         .analyze();
       await testInfo.attach('route-audit', {
         contentType: 'application/json',

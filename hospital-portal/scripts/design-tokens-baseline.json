@@ -8,381 +8,73 @@
       "count": 2,
       "why": "a chart or data-series colour (categorical), not a brand surface"
     },
-    "src/app/dashboard/credential-renewal/credential-renewal.component.scss::legacy-colour::#2b6cb0": {
-      "count": 2,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/dashboard.html::legacy-colour::#7c3aed": {
-      "count": 3,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/dashboard.html::low-contrast-text::#059669": {
-      "count": 11,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/dashboard.html::low-contrast-text::#64748b": {
-      "count": 6,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/dashboard.html::low-contrast-text::#d97706": {
-      "count": 3,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/dashboard.html::low-contrast-text::#dc2626": {
-      "count": 13,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/dashboard.scss::legacy-colour::#0891b2": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/dashboard.scss::legacy-colour::#7c3aed": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/dashboard.scss::legacy-colour::legacy-halo": {
-      "count": 4,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/dashboard.scss::low-contrast-text::#059669": {
-      "count": 4,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/dashboard.scss::low-contrast-text::#64748b": {
-      "count": 17,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/dashboard.scss::low-contrast-text::#d97706": {
-      "count": 3,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/dashboard.scss::low-contrast-text::#dc2626": {
-      "count": 3,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
     "src/app/dashboard/dashboard.ts::legacy-colour::#0284c7": {
       "count": 3,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
     },
     "src/app/dashboard/dashboard.ts::legacy-colour::#0891b2": {
       "count": 12,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
     },
     "src/app/dashboard/dashboard.ts::legacy-colour::#1d4ed8": {
       "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
     },
     "src/app/dashboard/dashboard.ts::legacy-colour::#4f46e5": {
       "count": 8,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
     },
     "src/app/dashboard/dashboard.ts::legacy-colour::#7c3aed": {
       "count": 14,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/doctor-patient-flow/doctor-patient-flow.scss::legacy-colour::legacy-halo": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/doctor-patient-flow/doctor-patient-flow.scss::low-contrast-text::#64748b": {
-      "count": 4,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
     },
     "src/app/dashboard/doctor-patient-flow/doctor-patient-flow.ts::legacy-colour::#0891b2": {
       "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
     },
     "src/app/dashboard/doctor-patient-flow/doctor-patient-flow.ts::legacy-colour::#6366f1": {
       "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
     },
     "src/app/dashboard/doctor-patient-flow/doctor-patient-flow.ts::legacy-colour::#7c3aed": {
       "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/doctor-results-panel/doctor-results-panel.scss::low-contrast-text::#059669": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/doctor-results-panel/doctor-results-panel.scss::low-contrast-text::#16a34a": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/doctor-results-panel/doctor-results-panel.scss::low-contrast-text::#64748b": {
-      "count": 8,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/doctor-results-panel/doctor-results-panel.scss::low-contrast-text::#dc2626": {
-      "count": 2,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/doctor-worklist/doctor-worklist.scss::low-contrast-text::#64748b": {
-      "count": 9,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/doctor-worklist/doctor-worklist.scss::low-contrast-text::#d97706": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/doctor-worklist/doctor-worklist.scss::low-contrast-text::#dc2626": {
-      "count": 2,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
     },
     "src/app/dashboard/doctor-worklist/doctor-worklist.ts::legacy-colour::#0891b2": {
       "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
     },
     "src/app/dashboard/doctor-worklist/doctor-worklist.ts::legacy-colour::#7c3aed": {
       "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/in-basket-panel/in-basket-panel.scss::low-contrast-text::#64748b": {
-      "count": 2,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/in-basket-panel/in-basket-panel.scss::low-contrast-text::#6b7280": {
-      "count": 5,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/in-basket-panel/in-basket-panel.scss::low-contrast-text::#9ca3af": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/dashboard/patient-snapshot-drawer/patient-snapshot-drawer.scss::low-contrast-text::#64748b": {
-      "count": 9,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/hospitals/hospital-detail.scss::low-contrast-text::#64748b": {
-      "count": 4,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/hospitals/hospital-list.scss::legacy-colour::legacy-halo": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/hospitals/hospital-list.scss::local-button::.btn-danger": {
-      "count": 12,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/hospitals/hospital-list.scss::local-button::.btn-danger:disabled": {
-      "count": 4,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/hospitals/hospital-list.scss::local-button::.btn-danger:hover": {
-      "count": 2,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/hospitals/hospital-list.scss::low-contrast-text::#64748b": {
-      "count": 4,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/hospitals/hospital-list.scss::low-contrast-text::#6b7280": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/hospitals/hospital-list.scss::low-contrast-text::#dc2626": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
     },
     "src/app/lab/lab-ops-dashboard/lab-ops-dashboard.ts::legacy-colour::#0891b2": {
       "count": 1,
-      "why": "a chart or data-series colour (categorical), not a brand surface"
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
     },
     "src/app/lab/lab-ops-dashboard/lab-ops-dashboard.ts::legacy-colour::#6366f1": {
       "count": 1,
-      "why": "a chart or data-series colour (categorical), not a brand surface"
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
     },
     "src/app/lab/lab-ops-dashboard/lab-ops-dashboard.ts::legacy-colour::#7c3aed": {
       "count": 1,
-      "why": "a chart or data-series colour (categorical), not a brand surface"
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
     },
     "src/app/maternity/partograph-chart.component.ts::legacy-colour::#6366f1": {
       "count": 3,
       "why": "a chart or data-series colour (categorical), not a brand surface"
     },
-    "src/app/onboarding/role-welcome/role-welcome.scss::legacy-colour::#6366f1": {
-      "count": 3,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/onboarding/role-welcome/role-welcome.scss::legacy-colour::#7c3aed": {
-      "count": 2,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/onboarding/role-welcome/role-welcome.scss::legacy-colour::legacy-halo": {
-      "count": 5,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/onboarding/role-welcome/role-welcome.scss::low-contrast-text::#6b7280": {
-      "count": 5,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/platform/platform.html::btn-base-class::btn-danger": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
     "src/app/platform/platform.html::btn-base-class::btn-primary": {
-      "count": 12,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/platform/platform.scss::legacy-colour::legacy-halo": {
-      "count": 4,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/platform/platform.scss::local-button::.btn-danger": {
-      "count": 2,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/platform/platform.scss::local-button::.btn-danger:hover:not(:disabled)": {
       "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/platform/platform.scss::local-button::.btn-primary": {
-      "count": 2,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/platform/platform.scss::local-button::.btn-primary:hover:not(:disabled)": {
-      "count": 2,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/platform/platform.scss::low-contrast-text::#16a34a": {
-      "count": 2,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/platform/platform.scss::low-contrast-text::#64748b": {
-      "count": 31,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/platform/platform.scss::low-contrast-text::#d97706": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/platform/platform.scss::low-contrast-text::#dc2626": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/platform/platform.scss::low-contrast-text::#ea580c": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/platform/platform.scss::low-contrast-text::#ef4444": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
+      "why": "the pressed option of the page's own .btn toggle group (bound class); that base sets no fill and no border colour, so the shared look shows"
     },
     "src/app/reception/empi-candidates-panel/empi-candidates-panel.component.scss::local-button::.empi-panel__merge-bar .btn-primary": {
       "count": 1,
       "why": "the identity-merge confirmation keeps its amber warning tone: the merge cannot be undone"
     },
-    "src/app/super-admin/audit-search/audit-search.scss::legacy-colour::#6366f1": {
-      "count": 2,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/audit-search/audit-search.scss::local-button::.filter-card .btn-primary": {
-      "count": 7,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/audit-search/audit-search.scss::local-button::.filter-card .btn-secondary": {
-      "count": 7,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/audit-search/audit-search.scss::local-button::.filter-card .btn-secondary:disabled": {
-      "count": 2,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/audit-search/audit-search.scss::local-button::.results-card .pager .btn-secondary": {
-      "count": 5,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/audit-search/audit-search.scss::local-button::.results-card .pager .btn-secondary:disabled": {
-      "count": 2,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/audit-search/audit-search.scss::low-contrast-text::#64748b": {
-      "count": 10,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/audit-search/audit-search.scss::low-contrast-text::#dc2626": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/cost-panel/cost-panel.component.ts::low-contrast-text::#64748b": {
-      "count": 2,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/data-residency-policy/data-residency-policy.scss::low-contrast-text::#64748b": {
-      "count": 3,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/data-residency/data-residency.scss::legacy-colour::#6366f1": {
-      "count": 2,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/data-residency/data-residency.scss::local-button::.btn-primary": {
-      "count": 7,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/data-residency/data-residency.scss::local-button::.btn-primary:disabled": {
-      "count": 2,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/data-residency/data-residency.scss::local-button::.btn-primary:hover:not(:disabled)": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/data-residency/data-residency.scss::low-contrast-text::#64748b": {
-      "count": 3,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/emergency/emergency.scss::legacy-colour::#6366f1": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/emergency/emergency.scss::local-button::.action-panel .btn-danger": {
-      "count": 2,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/emergency/emergency.scss::local-button::.action-panel .btn-primary": {
-      "count": 2,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/emergency/emergency.scss::low-contrast-text::#64748b": {
-      "count": 2,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/integration-health/integration-health.scss::low-contrast-text::#10b981": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/integration-health/integration-health.scss::low-contrast-text::#64748b": {
-      "count": 7,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/integration-health/integration-health.scss::low-contrast-text::#ef4444": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/subscriptions/subscriptions.scss::legacy-colour::#6366f1": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/subscriptions/subscriptions.scss::local-button::.edit-card .actions .btn-primary": {
-      "count": 6,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/subscriptions/subscriptions.scss::local-button::.toolbar .btn-primary": {
-      "count": 9,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/subscriptions/subscriptions.scss::low-contrast-text::#64748b": {
-      "count": 3,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
-    "src/app/super-admin/super-admin.scss::legacy-colour::#2563eb": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
     "src/app/super-admin/super-admin.ts::legacy-colour::#6366f1": {
       "count": 2,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
+      "why": "a dashboard tile or flow-step colour (one hue per tile, a category), not an action"
     }
   }
 }

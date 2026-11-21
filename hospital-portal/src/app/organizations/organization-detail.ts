@@ -250,17 +250,18 @@ export class OrganizationDetailComponent implements OnInit {
 
 export function stateColor(state: OrganizationLifecycleState | undefined): string {
   switch (state) {
+    // QA D2793 (r65): text colours, like the hospital's chip (hospital-detail.ts).
     case 'ACTIVE':
-      return '#10b981';
+      return '#047857';
     case 'SUSPENDED':
-      return '#f59e0b';
+      return '#b45309';
     case 'ARCHIVED':
-      return '#64748b';
+      return '#475569';
     case 'PENDING_PURGE':
-      return '#ef4444';
+      return '#b91c1c';
     case 'PURGED':
       return '#1e293b';
     default:
-      return '#94a3b8';
+      return '#566579';
   }
 }

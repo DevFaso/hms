@@ -296,9 +296,9 @@ Carrying forward to v1.0.0 GA polish (still gaps, but smaller):
   to the axe smoke (see §11).
   **Update, r65 (2026-11-20):** the design-system pass landed. The routed
   sweep (`e2e/a11y-routed-pages.ts`, every routed page with a role that owns
-  it) now runs axe WITH `color-contrast`; 13 routes are left out by name
-  (`CONTRAST_PENDING`: the dashboard, hospital detail, platform and
-  super-admin pages, owned by the platform/onboarding track). The same sweep
+  it) now runs axe WITH `color-contrast` on every route, none left out (the
+  dashboard, hospital detail, platform and super-admin pages were converted
+  when the platform/onboarding track merged). The same sweep
   fails a page whose `h1` is not the one title size, and an icon in a
   heading, a column header or the sidebar that a screen reader would read.
 

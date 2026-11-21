@@ -30,7 +30,7 @@
   /* QA D2321 (r64): a long address breaks rather than widening the name column. */
   overflow-wrap: anywhere;
   font-size: 0.78rem;
-  color: #64748b;
+  color: var(--text-secondary);
   display: block;
   margin-top: 2px;
 }
@@ -54,7 +54,7 @@
 }
 
 .text-muted {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.8rem;
 }
 
@@ -65,7 +65,7 @@
 
 .action-link {
   &.danger:hover {
-    color: #dc2626;
+    color: var(--danger);
     background: #fef2f2;
   }
 }
@@ -103,7 +103,7 @@
 
 .page-info {
   font-size: 0.85rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 // ---------- Modal overrides ----------
@@ -193,7 +193,7 @@
   label {
     font-size: 0.82rem;
     font-weight: 500;
-    color: #64748b;
+    color: var(--text-secondary);
   }
   input,
   select,
@@ -206,10 +206,10 @@
     transition: border-color 0.2s;
     &:focus {
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+      box-shadow: 0 0 0 3px rgba(14, 124, 107, 0.1);
     }
     &::placeholder {
-      color: #6b7280;
+      color: var(--text-muted);
     }
     // QA D817: a required field left empty on submit.
     &.invalid {
@@ -253,35 +253,6 @@
   gap: 12px;
   padding: 16px 24px;
   border-top: 1px solid #f1f5f9;
-}
-
-.btn-danger {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.625rem 1.25rem;
-  background: linear-gradient(135deg, #dc2626, #b91c1c);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    transform 0.1s,
-    box-shadow 0.2s;
-
-  &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
-  }
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: default;
-    transform: none;
-    box-shadow: none;
-  }
 }
 
 // ---------- Responsive ----------
