@@ -105,14 +105,14 @@
     "@axe-core/playwright": "^4.11.3",
     "@eslint/js": "^10.0.1",
     "@fontsource-variable/material-symbols-outlined": "5.3.9",
-    "@playwright/test": "^1.65.0",
+    "@playwright/test": "^1.65.1",
     "@types/express": "^5.0.6",
     "@types/jasmine": "6.0.0",
     "@types/node": "^26.6.6",
     "@types/sockjs-client": "^1.5.4",
-    "angular-eslint": "^22.5.0",
-    "axe-core": "4.14.0",
-    "eslint": "^10.14.0",
+    "angular-eslint": "^22.7.0",
+    "axe-core": "4.14.1",
+    "eslint": "^10.15.0",
     "eslint-config-prettier": "10.1.8",
     "istanbul-lib-instrument": "^6.0.3",
     "jasmine-core": "5.9.0",
@@ -122,9 +122,9 @@
     "karma-coverage": "2.2.1",
     "karma-jasmine": "5.1.0",
     "karma-jasmine-html-reporter": "^2.3.0",
-    "prettier": "^3.9.10",
-    "puppeteer": "^25.17.0",
+    "prettier": "^3.10.1",
+    "puppeteer": "^25.18.1",
     "typescript": "6.0.3",
-    "typescript-eslint": "^8.72.2"
+    "typescript-eslint": "^8.73.0"
   }
 }
