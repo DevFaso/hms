@@ -1939,6 +1939,16 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { from: 'enum', to: 'enum' },
   },
   // Policy 2026-11-20: the hospital's adolescent confidentiality age (before and after are in the details).
+  // r66 D2904: French counts 0 and 1 in the singular (« fixé à 0 an », « fixé à 1 an », it read « 1 ans »),
+  // Spanish only 1: each has its own sentence, before the general one.
+  {
+    key: 'AUDIT.DESC.ADOLESCENT_AGE_SET_ZERO',
+    re: /^Adolescent confidentiality age set to 0$/,
+  },
+  {
+    key: 'AUDIT.DESC.ADOLESCENT_AGE_SET_ONE',
+    re: /^Adolescent confidentiality age set to 1$/,
+  },
   {
     key: 'AUDIT.DESC.ADOLESCENT_AGE_SET',
     re: /^Adolescent confidentiality age set to (\d+)$/,

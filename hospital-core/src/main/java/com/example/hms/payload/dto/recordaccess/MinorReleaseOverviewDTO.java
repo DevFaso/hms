@@ -35,9 +35,17 @@ public record MinorReleaseOverviewDTO(
     /**
      * One result a verified parent is refused, with the grants it was released to.
      * {@code releasable}: a clinician may release it (an HIV result; never one that violence is on).
+     * {@code notReleasableReason} (r66 D2903): why not, for the screen to say the right thing -
+     * {@link #VIOLENCE} (never released to the family) or {@link #NOT_HIV} (only an HIV result is);
+     * null when it is releasable.
      */
     public record HiddenResult(UUID labOrderId, String testName, SensitivityCategory category,
-                               LocalDateTime resultedAt, boolean releasable,
+                               LocalDateTime resultedAt, boolean releasable, String notReleasableReason,
                                List<ProxySensitiveReleaseDTO> releases) {
     }
+
+    /** Violence is on the visit or the test: authorities only, never the family. */
+    public static final String VIOLENCE = "VIOLENCE";
+    /** Not an HIV result: no other category is releasable for now. */
+    public static final String NOT_HIV = "NOT_HIV";
 }

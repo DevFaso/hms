@@ -8,6 +8,8 @@ import jakarta.validation.constraints.Min;
  * is meaningful: it returns the hospital to the provisional default.
  */
 public record UpdateAdolescentConfidentialityAgeRequestDTO(
-    @Min(0) @Max(18) Integer age
+    // r66 D2904: the range in one sentence, not « âge : doit être inférieur ou égal à 18 ».
+    @Min(value = 0, message = "{adolescentAge.range}")
+    @Max(value = 18, message = "{adolescentAge.range}") Integer age
 ) {
 }

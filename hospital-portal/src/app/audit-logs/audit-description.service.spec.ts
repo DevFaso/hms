@@ -360,6 +360,48 @@ describe('AuditDescriptionService (QA D894)', () => {
   });
 });
 
+describe('AuditDescriptionService: adolescent confidentiality age (r66 D2904)', () => {
+  let translate: TranslateService;
+  let service: AuditDescriptionService;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ imports: [TranslateModule.forRoot()] });
+    translate = TestBed.inject(TranslateService);
+    translate.setTranslation('en', en);
+    translate.setTranslation('fr', fr);
+    translate.setTranslation('es', es);
+    service = TestBed.inject(AuditDescriptionService);
+  });
+
+  const describeIn = (lang: string, age: number) => {
+    translate.use(lang);
+    return service.describe({ eventDescription: `Adolescent confidentiality age set to ${age}` });
+  };
+
+  it('counts 0 and 1 in the singular in French (it read « 0 ans », « 1 ans »)', () => {
+    expect(describeIn('fr', 0)).toBe('Âge de confidentialité des adolescents fixé à 0 an');
+    expect(describeIn('fr', 1)).toBe('Âge de confidentialité des adolescents fixé à 1 an');
+    expect(describeIn('fr', 2)).toBe('Âge de confidentialité des adolescents fixé à 2 ans');
+    expect(describeIn('fr', 10)).toBe('Âge de confidentialité des adolescents fixé à 10 ans');
+    expect(describeIn('fr', 11)).toBe('Âge de confidentialité des adolescents fixé à 11 ans');
+    expect(describeIn('fr', 18)).toBe('Âge de confidentialité des adolescents fixé à 18 ans');
+  });
+
+  it('keeps each language’s own plural: Spanish « 0 años », « 1 año »; English has no unit', () => {
+    expect(describeIn('es', 0)).toBe(
+      'Edad de confidencialidad de los adolescentes fijada en 0 años',
+    );
+    expect(describeIn('es', 1)).toBe(
+      'Edad de confidencialidad de los adolescentes fijada en 1 año',
+    );
+    expect(describeIn('es', 12)).toBe(
+      'Edad de confidencialidad de los adolescentes fijada en 12 años',
+    );
+    expect(describeIn('en', 1)).toBe('Adolescent confidentiality age set to 1');
+    expect(describeIn('en', 12)).toBe('Adolescent confidentiality age set to 12');
+  });
+});
+
 describe('AUDIT_DESCRIPTION_PATTERNS: emergency blood release', () => {
   const of = (key: string) => AUDIT_DESCRIPTION_PATTERNS.find((p) => p.key === key)!;
   const tail = ', O negative stated not obtainable in time, stock shown a,b,+40';

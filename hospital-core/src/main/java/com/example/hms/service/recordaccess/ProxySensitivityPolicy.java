@@ -161,6 +161,15 @@ public final class ProxySensitivityPolicy {
     }
 
     /**
+     * r66 D2903: violence is on the visit or the test, so the result is never released to the family
+     * (authorities only). The release screen says so, instead of « only an HIV result can be released »
+     * on a row that IS an HIV result.
+     */
+    public static boolean neverReleased(SensitivityCategory visitCategory, SensitivityCategory testCategory) {
+        return minorRuleOf(visitCategory) == MinorRule.NEVER || minorRuleOf(testCategory) == MinorRule.NEVER;
+    }
+
+    /**
      * A release counts while the patient is under 18 and the grant is still a
      * verified parent's or guardian's. At 18 the patient is an adult: the
      * parents' right under art. 18 has ended and the result is hidden again.
