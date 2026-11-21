@@ -50,6 +50,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -511,7 +512,7 @@ class PharmacyRefundServiceTest {
     @DisplayName("QA D2950: the payout is money out of the payer's PHARMACY till, stamped on the refund")
     void payoutIsStampedOnThePayersPharmacyTill() {
         com.example.hms.service.billing.cash.CashSessionService tills =
-                org.mockito.Mockito.mock(com.example.hms.service.billing.cash.CashSessionService.class);
+                mock(com.example.hms.service.billing.cash.CashSessionService.class);
         service.setCashSessionService(tills);
         UUID sessionId = UUID.randomUUID();
         when(tills.stamp(com.example.hms.enums.CashTill.PHARMACY, hospitalId, pharmacist)).thenReturn(sessionId);
@@ -532,7 +533,7 @@ class PharmacyRefundServiceTest {
     @DisplayName("QA D2950: a closed till refuses the payout; the refund stays APPROVED and names no till")
     void aClosedTillRefusesThePayout() {
         com.example.hms.service.billing.cash.CashSessionService tills =
-                org.mockito.Mockito.mock(com.example.hms.service.billing.cash.CashSessionService.class);
+                mock(com.example.hms.service.billing.cash.CashSessionService.class);
         service.setCashSessionService(tills);
         when(tills.stamp(com.example.hms.enums.CashTill.PHARMACY, hospitalId, pharmacist))
                 .thenThrow(new ConflictException("closed"));

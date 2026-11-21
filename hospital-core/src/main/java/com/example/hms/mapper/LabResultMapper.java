@@ -59,7 +59,6 @@ public class LabResultMapper {
             demographicsOf(result));
         Grading grading = gradingOf(result, context);
         String severityFlag = severityOf(result, grading, context);
-        boolean readBackConfirmed = result.getCriticalReadBackAt() != null;
 
         return LabResultResponseDTO.builder()
             .id(result.getId() != null ? result.getId().toString() : null)
@@ -113,10 +112,10 @@ public class LabResultMapper {
             // confirmed. A refused one (a clinician repeating the wrong value is
             // the event the audit trail is for) is told apart, under its own
             // fields: it used to fill these two on an unacknowledged result.
-            .criticalReadBackBy(readBackConfirmed ? result.getCriticalReadBackByDisplay() : null)
-            .criticalReadBackValue(readBackConfirmed ? result.getCriticalReadBackValue() : null)
-            .criticalReadBackRefusedBy(readBackConfirmed ? null : result.getCriticalReadBackByDisplay())
-            .criticalReadBackRefusedValue(readBackConfirmed ? null : result.getCriticalReadBackValue())
+            .criticalReadBackBy(ofConfirmedReadBack(result, result.getCriticalReadBackByDisplay()))
+            .criticalReadBackValue(ofConfirmedReadBack(result, result.getCriticalReadBackValue()))
+            .criticalReadBackRefusedBy(ofRefusedReadBack(result, result.getCriticalReadBackByDisplay()))
+            .criticalReadBackRefusedValue(ofRefusedReadBack(result, result.getCriticalReadBackValue()))
             .acknowledgedAt(result.getAcknowledgedAt())
             .acknowledgedBy(result.getAcknowledgedByDisplay())
         .released(result.isReleased())
@@ -169,6 +168,16 @@ public class LabResultMapper {
             .severityFlag(severityFlag)
             .corrected(com.example.hms.service.lab.LabResultCorrections.isCorrection(result))
             .build();
+    }
+
+    /** QA D2952 (r66): a stored read-back text, only when the read-back was confirmed ({@code criticalReadBackAt}). */
+    private static String ofConfirmedReadBack(LabResult result, String stored) {
+        return result.getCriticalReadBackAt() != null ? stored : null;
+    }
+
+    /** QA D2952 (r66): a stored read-back text, only while no read-back is confirmed: the last refusal. */
+    private static String ofRefusedReadBack(LabResult result, String stored) {
+        return result.getCriticalReadBackAt() == null ? stored : null;
     }
 
     /**
