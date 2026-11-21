@@ -25,8 +25,7 @@
         <div class="card-info">
           <span class="card-value">{{
             loading() || loadFailed() ? '—' : countByGroup('active')
-          }}</span
-          ><span class="card-label">{{ 'COMMON.ACTIVE' | translate }}</span>
+          }}</span><span class="card-label">{{ 'COMMON.ACTIVE' | translate }}</span>
         </div>
       </div>
       <div class="summary-card">
@@ -34,8 +33,7 @@
         <div class="card-info">
           <span class="card-value">{{
             loading() || loadFailed() ? '—' : countByGroup('draft')
-          }}</span
-          ><span class="card-label">{{ 'SPECIALIST_DASH.DRAFT_REVIEW' | translate }}</span>
+          }}</span><span class="card-label">{{ 'SPECIALIST_DASH.DRAFT_REVIEW' | translate }}</span>
         </div>
       </div>
       <div class="summary-card">
@@ -43,15 +41,15 @@
         <div class="card-info">
           <span class="card-value">{{
             loading() || loadFailed() ? '—' : countByGroup('completed')
-          }}</span
-          ><span class="card-label">{{ 'TREATMENT.COMPLETED' | translate }}</span>
+          }}</span><span class="card-label">{{ 'TREATMENT.COMPLETED' | translate }}</span>
         </div>
       </div>
       <div class="summary-card">
         <span class="material-symbols-outlined card-icon total">bar_chart</span>
         <div class="card-info">
-          <span class="card-value">{{ loading() || loadFailed() ? '—' : plans().length }}</span
-          ><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
+          <span class="card-value">{{
+            loading() || loadFailed() ? '—' : plans().length
+          }}</span><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
         </div>
       </div>
     </div>
@@ -249,40 +247,50 @@
         <div class="detail-body">
           <div class="detail-grid">
             <div class="detail-field">
-              <span class="field-label">{{ 'PATIENTS.PATIENT' | translate }}</span
-              ><span class="field-value">{{ plan.patientName }}</span>
+              <span class="field-label">{{ 'PATIENTS.PATIENT' | translate }}</span><span
+                class="field-value"
+                >{{ plan.patientName }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
-              ><span class="field-value"
+              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span><span
+                class="field-value"
                 ><span class="status-badge {{ getStatusClass(plan.status) }}">{{
                   plan.status | enumLabel: 'treatmentPlanStatus'
                 }}</span></span
               >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'TREATMENT.AUTHOR' | translate }}</span
-              ><span class="field-value">{{ plan.authorStaffName || '—' }}</span>
+              <span class="field-label">{{ 'TREATMENT.AUTHOR' | translate }}</span><span
+                class="field-value"
+                >{{ plan.authorStaffName || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'TREATMENT.SUPERVISOR' | translate }}</span
-              ><span class="field-value">{{ plan.supervisingStaffName || '—' }}</span>
+              <span class="field-label">{{ 'TREATMENT.SUPERVISOR' | translate }}</span><span
+                class="field-value"
+                >{{ plan.supervisingStaffName || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'TREATMENT.START' | translate }}</span
-              ><span class="field-value">{{
-                plan.timelineStartDate
-                  ? (plan.timelineStartDate | serverTime | date: 'mediumDate')
-                  : '—'
-              }}</span>
+              <span class="field-label">{{ 'TREATMENT.START' | translate }}</span><span
+                class="field-value"
+                >{{
+                  plan.timelineStartDate
+                    ? (plan.timelineStartDate | serverTime | date: 'mediumDate')
+                    : '—'
+                }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'TREATMENT.REVIEW' | translate }}</span
-              ><span class="field-value">{{
-                plan.timelineReviewDate
-                  ? (plan.timelineReviewDate | serverTime | date: 'mediumDate')
-                  : '—'
-              }}</span>
+              <span class="field-label">{{ 'TREATMENT.REVIEW' | translate }}</span><span
+                class="field-value"
+                >{{
+                  plan.timelineReviewDate
+                    ? (plan.timelineReviewDate | serverTime | date: 'mediumDate')
+                    : '—'
+                }}</span
+              >
             </div>
           </div>
           @if (plan.problemStatement) {
@@ -316,8 +324,9 @@
               <span class="field-label">{{ 'TREATMENT.FOLLOW_UPS' | translate }}</span>
               @for (f of plan.followUps; track f.id) {
                 <div class="followup-item">
-                  <strong>{{ f.label }}</strong
-                  ><span>{{ f.dueOn ? (f.dueOn | serverTime | date: 'mediumDate') : '—' }}</span
+                  <strong>{{ f.label }}</strong><span>{{
+                    f.dueOn ? (f.dueOn | serverTime | date: 'mediumDate') : '—'
+                  }}</span
                   >{{ ' '
                   }}<span
                     class="status-badge {{

@@ -46,8 +46,7 @@
         >
           <span class="material-symbols-outlined metric-icon" aria-hidden="true">{{
             metric.icon
-          }}</span
-          ><strong>{{ loading() || loadError() ? '—' : metric.count }}</strong
+          }}</span><strong>{{ loading() || loadError() ? '—' : metric.count }}</strong
           ><span>{{ metric.label | translate }}</span>
         </button>
       }

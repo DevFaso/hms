@@ -79,29 +79,33 @@
         <div class="workspace-stat stat-lead">
           <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span>
           <div>
-            <strong>{{ inventoryItems().length }}</strong
-            ><span>{{ 'PHARMACY_DASH.LOADED' | translate }}</span>
+            <strong>{{ inventoryItems().length }}</strong><span>{{
+              'PHARMACY_DASH.LOADED' | translate
+            }}</span>
           </div>
         </div>
         <div class="workspace-stat">
           <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
           <div>
-            <strong>{{ stockCount('stock-ok') }}</strong
-            ><span>{{ 'PHARMACY.IN_STOCK' | translate }}</span>
+            <strong>{{ stockCount('stock-ok') }}</strong><span>{{
+              'PHARMACY.IN_STOCK' | translate
+            }}</span>
           </div>
         </div>
         <div class="workspace-stat">
           <span class="material-symbols-outlined" aria-hidden="true">warning</span>
           <div>
-            <strong>{{ stockCount('stock-low') }}</strong
-            ><span>{{ 'PHARMACY_DASH.LOW' | translate }}</span>
+            <strong>{{ stockCount('stock-low') }}</strong><span>{{
+              'PHARMACY_DASH.LOW' | translate
+            }}</span>
           </div>
         </div>
         <div class="workspace-stat">
           <span class="material-symbols-outlined" aria-hidden="true">block</span>
           <div>
-            <strong>{{ stockCount('stock-out') }}</strong
-            ><span>{{ 'PHARMACY_DASH.OUT' | translate }}</span>
+            <strong>{{ stockCount('stock-out') }}</strong><span>{{
+              'PHARMACY_DASH.OUT' | translate
+            }}</span>
           </div>
         </div>
       </section>

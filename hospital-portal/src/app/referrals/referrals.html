@@ -30,8 +30,7 @@
         <div class="card-info">
           <span class="card-value">{{
             loading() || loadFailed() ? '—' : countByGroup('pending')
-          }}</span
-          ><span class="card-label">{{ 'COMMON.PENDING' | translate }}</span>
+          }}</span><span class="card-label">{{ 'COMMON.PENDING' | translate }}</span>
         </div>
       </div>
       <div class="summary-card">
@@ -39,8 +38,7 @@
         <div class="card-info">
           <span class="card-value">{{
             loading() || loadFailed() ? '—' : countByGroup('active')
-          }}</span
-          ><span class="card-label">{{ 'COMMON.ACTIVE' | translate }}</span>
+          }}</span><span class="card-label">{{ 'COMMON.ACTIVE' | translate }}</span>
         </div>
       </div>
       <div class="summary-card">
@@ -48,15 +46,15 @@
         <div class="card-info">
           <span class="card-value">{{
             loading() || loadFailed() ? '—' : countByGroup('completed')
-          }}</span
-          ><span class="card-label">{{ 'COMMON.COMPLETED' | translate }}</span>
+          }}</span><span class="card-label">{{ 'COMMON.COMPLETED' | translate }}</span>
         </div>
       </div>
       <div class="summary-card">
         <span class="material-symbols-outlined card-icon total">bar_chart</span>
         <div class="card-info">
-          <span class="card-value">{{ loading() || loadFailed() ? '—' : referrals().length }}</span
-          ><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
+          <span class="card-value">{{
+            loading() || loadFailed() ? '—' : referrals().length
+          }}</span><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
         </div>
       </div>
     </div>
@@ -327,8 +325,8 @@
         <div class="detail-body">
           <div class="detail-grid">
             <div class="detail-field">
-              <span class="field-label">{{ 'PATIENTS.PATIENT' | translate }}</span
-              ><span class="field-value"
+              <span class="field-label">{{ 'PATIENTS.PATIENT' | translate }}</span><span
+                class="field-value"
                 >{{ ref.patientName }}
                 <button
                   type="button"
@@ -346,88 +344,103 @@
               }
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'PATIENTS.MRN' | translate }}</span
-              ><span class="field-value">{{ ref.patientMrn }}</span>
+              <span class="field-label">{{ 'PATIENTS.MRN' | translate }}</span><span
+                class="field-value"
+                >{{ ref.patientMrn }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'REFERRALS.SOURCE_HOSPITAL' | translate }}</span
-              ><span class="field-value">{{ ref.hospitalName || '—' }}</span>
+              <span class="field-label">{{ 'REFERRALS.SOURCE_HOSPITAL' | translate }}</span><span
+                class="field-value"
+                >{{ ref.hospitalName || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'REFERRALS.SOURCE_DEPARTMENT' | translate }}</span
-              ><span class="field-value">{{ ref.sourceDepartmentName || '—' }}</span>
+              <span class="field-label">{{ 'REFERRALS.SOURCE_DEPARTMENT' | translate }}</span><span
+                class="field-value"
+                >{{ ref.sourceDepartmentName || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'REFERRALS.DESTINATION_HOSPITAL' | translate }}</span
-              ><span class="field-value">{{ ref.receivingHospitalName || '—' }}</span>
+              <span class="field-label">{{
+                'REFERRALS.DESTINATION_HOSPITAL' | translate
+              }}</span><span class="field-value">{{ ref.receivingHospitalName || '—' }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'REFERRALS.DESTINATION_DEPARTMENT' | translate }}</span
-              ><span class="field-value">{{ ref.targetDepartmentName || '—' }}</span>
+              <span class="field-label">{{
+                'REFERRALS.DESTINATION_DEPARTMENT' | translate
+              }}</span><span class="field-value">{{ ref.targetDepartmentName || '—' }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'REFERRALS.SPECIALTY' | translate }}</span
-              ><span class="field-value">{{ specialtyLabel(ref.targetSpecialty) }}</span>
+              <span class="field-label">{{ 'REFERRALS.SPECIALTY' | translate }}</span><span
+                class="field-value"
+                >{{ specialtyLabel(ref.targetSpecialty) }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'REFERRALS.URGENCY' | translate }}</span
-              ><span class="field-value"
+              <span class="field-label">{{ 'REFERRALS.URGENCY' | translate }}</span><span
+                class="field-value"
                 ><span class="urgency-badge {{ getUrgencyClass(ref.urgency) }}">{{
                   ref.urgency | enumLabel: 'referralUrgency'
                 }}</span></span
               >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'REFERRALS.REFERRING_PROVIDER' | translate }}</span
-              ><span class="field-value">{{ ref.referringProviderName || '—' }}</span>
+              <span class="field-label">{{ 'REFERRALS.REFERRING_PROVIDER' | translate }}</span><span
+                class="field-value"
+                >{{ ref.referringProviderName || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'REFERRALS.RECEIVING_PROVIDER' | translate }}</span
-              ><span class="field-value">{{
-                ref.receivingProviderName || ('REFERRALS.UNASSIGNED' | translate)
-              }}</span>
+              <span class="field-label">{{ 'REFERRALS.RECEIVING_PROVIDER' | translate }}</span><span
+                class="field-value"
+                >{{ ref.receivingProviderName || ('REFERRALS.UNASSIGNED' | translate) }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
-              ><span class="field-value"
+              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span><span
+                class="field-value"
                 ><span class="status-badge {{ getStatusClass(ref.status) }}">{{
                   ref.status | enumLabel: 'referralStatus'
                 }}</span></span
               >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'REFERRALS.SUBMITTED' | translate }}</span
-              ><span class="field-value">{{
-                ref.submittedAt ? (ref.submittedAt | serverTime | dateTime) : '—'
-              }}</span>
+              <span class="field-label">{{ 'REFERRALS.SUBMITTED' | translate }}</span><span
+                class="field-value"
+                >{{ ref.submittedAt ? (ref.submittedAt | serverTime | dateTime) : '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'REFERRALS.SCHEDULED_AT' | translate }}</span
-              ><span class="field-value">{{
-                ref.scheduledAppointmentAt ? (ref.scheduledAppointmentAt | dateTime) : '—'
-              }}</span>
+              <span class="field-label">{{ 'REFERRALS.SCHEDULED_AT' | translate }}</span><span
+                class="field-value"
+                >{{
+                  ref.scheduledAppointmentAt ? (ref.scheduledAppointmentAt | dateTime) : '—'
+                }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'REFERRALS.APPOINTMENT_LOCATION' | translate }}</span
-              ><span class="field-value">{{ ref.appointmentLocation || '—' }}</span>
+              <span class="field-label">{{
+                'REFERRALS.APPOINTMENT_LOCATION' | translate
+              }}</span><span class="field-value">{{ ref.appointmentLocation || '—' }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'REFERRALS.STARTED_AT' | translate }}</span
-              ><span class="field-value">{{
-                ref.startedAt ? (ref.startedAt | serverTime | dateTime) : '—'
-              }}</span>
+              <span class="field-label">{{ 'REFERRALS.STARTED_AT' | translate }}</span><span
+                class="field-value"
+                >{{ ref.startedAt ? (ref.startedAt | serverTime | dateTime) : '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'COMMON.COMPLETED' | translate }}</span
-              ><span class="field-value">{{
-                ref.completedAt ? (ref.completedAt | serverTime | dateTime) : '—'
-              }}</span>
+              <span class="field-label">{{ 'COMMON.COMPLETED' | translate }}</span><span
+                class="field-value"
+                >{{ ref.completedAt ? (ref.completedAt | serverTime | dateTime) : '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'COMMON.CREATED' | translate }}</span
-              ><span class="field-value">{{
-                ref.createdAt ? (ref.createdAt | serverTime | dateTime) : '—'
-              }}</span>
+              <span class="field-label">{{ 'COMMON.CREATED' | translate }}</span><span
+                class="field-value"
+                >{{ ref.createdAt ? (ref.createdAt | serverTime | dateTime) : '—' }}</span
+              >
             </div>
           </div>
           @if (ref.referralReason) {

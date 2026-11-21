@@ -41,15 +41,17 @@
         <div class="care-metric">
           <span class="material-symbols-outlined" aria-hidden="true">auto_stories</span>
           <div>
-            <strong>{{ resourcesLoading() || resourcesError() ? '—' : resources().length }}</strong
-            ><span>{{ 'CARE_DASH.RESOURCES' | translate }}</span>
+            <strong>{{
+              resourcesLoading() || resourcesError() ? '—' : resources().length
+            }}</strong><span>{{ 'CARE_DASH.RESOURCES' | translate }}</span>
           </div>
         </div>
         <div class="care-metric">
           <span class="material-symbols-outlined" aria-hidden="true">category</span>
           <div>
-            <strong>{{ resourcesLoading() || resourcesError() ? '—' : loadedCategories() }}</strong
-            ><span>{{ 'CARE_DASH.CATEGORIES' | translate }}</span>
+            <strong>{{
+              resourcesLoading() || resourcesError() ? '—' : loadedCategories()
+            }}</strong><span>{{ 'CARE_DASH.CATEGORIES' | translate }}</span>
           </div>
         </div>
         <div class="care-metric">
@@ -57,8 +59,7 @@
           <div>
             <strong>{{
               resourcesLoading() || resourcesError() ? '—' : filteredResources().length
-            }}</strong
-            ><span>{{ 'CARE_DASH.VISIBLE_RESOURCES' | translate }}</span>
+            }}</strong><span>{{ 'CARE_DASH.VISIBLE_RESOURCES' | translate }}</span>
           </div>
         </div>
       </div>

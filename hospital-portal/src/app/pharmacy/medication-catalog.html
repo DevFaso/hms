@@ -18,29 +18,31 @@
       <div class="workspace-stat stat-lead">
         <span class="material-symbols-outlined" aria-hidden="true">medication</span>
         <div>
-          <strong>{{ totalElements }}</strong
-          ><span>{{ 'PHARMACY_DASH.RESULTS' | translate }}</span>
+          <strong>{{ totalElements }}</strong><span>{{ 'PHARMACY_DASH.RESULTS' | translate }}</span>
         </div>
       </div>
       <div class="workspace-stat">
         <span class="material-symbols-outlined" aria-hidden="true">view_list</span>
         <div>
-          <strong>{{ filtered().length }}</strong
-          ><span>{{ 'PHARMACY_DASH.LOADED' | translate }}</span>
+          <strong>{{ filtered().length }}</strong><span>{{
+            'PHARMACY_DASH.LOADED' | translate
+          }}</span>
         </div>
       </div>
       <div class="workspace-stat">
         <span class="material-symbols-outlined" aria-hidden="true">verified</span>
         <div>
-          <strong>{{ pageCount('essentialList') }}</strong
-          ><span>{{ 'PHARMACY_DASH.ESSENTIAL' | translate }}</span>
+          <strong>{{ pageCount('essentialList') }}</strong><span>{{
+            'PHARMACY_DASH.ESSENTIAL' | translate
+          }}</span>
         </div>
       </div>
       <div class="workspace-stat">
         <span class="material-symbols-outlined" aria-hidden="true">lock</span>
         <div>
-          <strong>{{ pageCount('controlled') }}</strong
-          ><span>{{ 'PHARMACY_DASH.CONTROLLED' | translate }}</span>
+          <strong>{{ pageCount('controlled') }}</strong><span>{{
+            'PHARMACY_DASH.CONTROLLED' | translate
+          }}</span>
         </div>
       </div>
     </section>

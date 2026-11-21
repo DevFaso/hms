@@ -21,36 +21,41 @@
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon total">science</span>
       <div class="card-info">
-        <span class="card-value">{{ stats().total }}</span
-        ><span class="card-label">{{ 'LAB.TOTAL_ORDERS' | translate }}</span>
+        <span class="card-value">{{ stats().total }}</span><span class="card-label">{{
+          'LAB.TOTAL_ORDERS' | translate
+        }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon pending">pending</span>
       <div class="card-info">
-        <span class="card-value">{{ stats().pending }}</span
-        ><span class="card-label">{{ 'LAB.STATE_GROUP.OPEN' | translate }}</span>
+        <span class="card-value">{{ stats().pending }}</span><span class="card-label">{{
+          'LAB.STATE_GROUP.OPEN' | translate
+        }}</span>
       </div>
     </div>
     <div class="summary-card" data-testid="lab-card-awaiting-validation">
       <span class="material-symbols-outlined card-icon pending">hourglass_top</span>
       <div class="card-info">
-        <span class="card-value">{{ stats().awaitingValidation }}</span
-        ><span class="card-label">{{ 'LAB.STATE.AWAITING_VALIDATION' | translate }}</span>
+        <span class="card-value">{{ stats().awaitingValidation }}</span><span class="card-label">{{
+          'LAB.STATE.AWAITING_VALIDATION' | translate
+        }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon completed">check_circle</span>
       <div class="card-info">
-        <span class="card-value">{{ stats().completed }}</span
-        ><span class="card-label">{{ 'LAB.STATE_GROUP.COMPLETED' | translate }}</span>
+        <span class="card-value">{{ stats().completed }}</span><span class="card-label">{{
+          'LAB.STATE_GROUP.COMPLETED' | translate
+        }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon cancelled">cancel</span>
       <div class="card-info">
-        <span class="card-value">{{ stats().cancelled }}</span
-        ><span class="card-label">{{ 'LAB.STATE_GROUP.CANCELLED' | translate }}</span>
+        <span class="card-value">{{ stats().cancelled }}</span><span class="card-label">{{
+          'LAB.STATE_GROUP.CANCELLED' | translate
+        }}</span>
       </div>
     </div>
   </div>
@@ -288,8 +293,10 @@
         <div class="panel-body">
           <div class="detail-grid">
             <div class="detail-field">
-              <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span
-              ><span class="field-value">{{ o.patientFullName }}</span>
+              <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span><span
+                class="field-value"
+                >{{ o.patientFullName }}</span
+              >
               @if (o.patientMrn || patientAge(o.patientDateOfBirth)) {
                 <span class="cell-secondary" data-testid="detail-patient-identity">
                   @if (o.patientMrn) {
@@ -306,30 +313,38 @@
               }
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
-              ><span class="field-value">{{ actingHospitalName(o) }}</span>
+              <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span><span
+                class="field-value"
+                >{{ actingHospitalName(o) }}</span
+              >
             </div>
             @if (o.performingHospitalId) {
               <div class="detail-field" data-testid="detail-performing-lab">
-                <span class="field-label">{{ counterpartLabelKey(o) | translate }}</span
-                ><span class="field-value">{{ counterpartHospitalName(o) }}</span>
+                <span class="field-label">{{ counterpartLabelKey(o) | translate }}</span><span
+                  class="field-value"
+                  >{{ counterpartHospitalName(o) }}</span
+                >
               </div>
             }
             <div class="detail-field">
-              <span class="field-label">{{ 'LAB.TEST' | translate }}</span
-              ><span class="field-value">{{ o.labTestName }} ({{ o.labTestCode }})</span>
+              <span class="field-label">{{ 'LAB.TEST' | translate }}</span><span class="field-value"
+                >{{ o.labTestName }} ({{ o.labTestCode }})</span
+              >
             </div>
             <div class="detail-field" data-testid="detail-prescriber">
-              <span class="field-label">{{ 'LAB.PRESCRIBER' | translate }}</span
-              ><span class="field-value">{{ o.orderingStaffName || '—' }}</span>
+              <span class="field-label">{{ 'LAB.PRESCRIBER' | translate }}</span><span
+                class="field-value"
+                >{{ o.orderingStaffName || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'LAB.ORDER_DATE' | translate }}</span
-              ><span class="field-value">{{ o.orderDatetime | serverTime | dateTime }}</span>
+              <span class="field-label">{{ 'LAB.ORDER_DATE' | translate }}</span><span
+                class="field-value"
+                >{{ o.orderDatetime | serverTime | dateTime }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
-              ><span
+              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span><span
                 [class]="getStatusClass(o.status) + ' fit-content'"
                 data-testid="detail-state"
                 >{{
@@ -354,8 +369,10 @@
               }
             </div>
             <div class="detail-field" data-testid="detail-diagnosis">
-              <span class="field-label">{{ 'LAB.DIAGNOSIS_CODE' | translate }}</span
-              ><span class="field-value">{{ diagnosisText(o) }}</span>
+              <span class="field-label">{{ 'LAB.DIAGNOSIS_CODE' | translate }}</span><span
+                class="field-value"
+                >{{ diagnosisText(o) }}</span
+              >
             </div>
           </div>
 

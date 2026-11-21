@@ -466,8 +466,10 @@
             <ul class="failure-list">
               @for (f of multiResult()!.failures; track $index) {
                 <li>
-                  <strong>{{ f.scopeLabel || f.hospitalId }}</strong
-                  >{{ 'COMMON.COLON' | translate }} {{ f.message }}
+                  <strong>{{ f.scopeLabel || f.hospitalId }}</strong>{{
+                    'COMMON.COLON' | translate
+                  }}
+                  {{ f.message }}
                 </li>
               }
             </ul>

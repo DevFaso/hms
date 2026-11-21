@@ -274,8 +274,9 @@
             }}</span>
           </div>
           <div class="stat-body">
-            <span class="stat-value">{{ card.value }}</span
-            ><span class="stat-label">{{ card.label }}</span>
+            <span class="stat-value">{{ card.value }}</span><span class="stat-label">{{
+              card.label
+            }}</span>
           </div>
         </a>
       }
@@ -285,8 +286,10 @@
             <span class="material-symbols-outlined stat-icon">calendar_today</span>
           </div>
           <div class="stat-body">
-            <span class="stat-value">{{ todayAppointments().length }}</span
-            ><span class="stat-label">{{ 'DASHBOARD.TODAYS_APPOINTMENTS' | translate }}</span>
+            <span class="stat-value">{{ todayAppointments().length }}</span><span
+              class="stat-label"
+              >{{ 'DASHBOARD.TODAYS_APPOINTMENTS' | translate }}</span
+            >
           </div>
         </a>
         <a class="stat-card" [routerLink]="linkFor('/appointments')">
@@ -294,8 +297,9 @@
             <span class="material-symbols-outlined stat-icon">task_alt</span>
           </div>
           <div class="stat-body">
-            <span class="stat-value">{{ completedToday() }}</span
-            ><span class="stat-label">{{ 'DASHBOARD.COMPLETED_TODAY' | translate }}</span>
+            <span class="stat-value">{{ completedToday() }}</span><span class="stat-label">{{
+              'DASHBOARD.COMPLETED_TODAY' | translate
+            }}</span>
           </div>
         </a>
         <a class="stat-card" [routerLink]="linkFor('/patients')">
@@ -303,8 +307,9 @@
             <span class="material-symbols-outlined stat-icon">people</span>
           </div>
           <div class="stat-body">
-            <span class="stat-value">{{ recentPatients().length }}</span
-            ><span class="stat-label">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</span>
+            <span class="stat-value">{{ recentPatients().length }}</span><span class="stat-label">{{
+              'DASHBOARD.RECENT_PATIENTS' | translate
+            }}</span>
           </div>
         </a>
         <a class="stat-card" [routerLink]="linkFor('/appointments')">
@@ -312,8 +317,9 @@
             <span class="material-symbols-outlined stat-icon">pending</span>
           </div>
           <div class="stat-body">
-            <span class="stat-value">{{ pendingToday() }}</span
-            ><span class="stat-label">{{ 'DASHBOARD.PENDING' | translate }}</span>
+            <span class="stat-value">{{ pendingToday() }}</span><span class="stat-label">{{
+              'DASHBOARD.PENDING' | translate
+            }}</span>
           </div>
         </a>
         <a class="stat-card" [routerLink]="linkFor('/appointments')">
@@ -321,8 +327,9 @@
             <span class="material-symbols-outlined stat-icon">person_play</span>
           </div>
           <div class="stat-body">
-            <span class="stat-value">{{ inProgressNow() }}</span
-            ><span class="stat-label">{{ 'DASHBOARD.IN_PROGRESS' | translate }}</span>
+            <span class="stat-value">{{ inProgressNow() }}</span><span class="stat-label">{{
+              'DASHBOARD.IN_PROGRESS' | translate
+            }}</span>
           </div>
         </a>
       }
@@ -1683,8 +1690,10 @@
           <span class="material-symbols-outlined stat-icon">calendar_today</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ todayAppointments().length }}</span
-          ><span class="stat-label">{{ 'DASHBOARD.PATIENTS_TODAY' | translate }}</span>
+          <span class="stat-value">{{ todayAppointments().length }}</span><span
+            class="stat-label"
+            >{{ 'DASHBOARD.PATIENTS_TODAY' | translate }}</span
+          >
         </div>
       </a>
       <a
@@ -1697,8 +1706,9 @@
           <span class="material-symbols-outlined stat-icon">hotel</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ roomedPatients().length }}</span
-          ><span class="stat-label">{{ 'DASHBOARD.ROOMED' | translate }}</span>
+          <span class="stat-value">{{ roomedPatients().length }}</span><span class="stat-label">{{
+            'DASHBOARD.ROOMED' | translate
+          }}</span>
         </div>
       </a>
       <div
@@ -1710,8 +1720,10 @@
           <span class="material-symbols-outlined stat-icon">notification_important</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ unacknowledgedAlerts().length }}</span
-          ><span class="stat-label">{{ 'DASHBOARD.ALERTS' | translate }}</span>
+          <span class="stat-value">{{ unacknowledgedAlerts().length }}</span><span
+            class="stat-label"
+            >{{ 'DASHBOARD.ALERTS' | translate }}</span
+          >
         </div>
       </div>
       <a
@@ -1724,8 +1736,9 @@
           <span class="material-symbols-outlined stat-icon">task_alt</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ completedToday() }}</span
-          ><span class="stat-label">{{ 'ENCOUNTERS.COMPLETED' | translate }}</span>
+          <span class="stat-value">{{ completedToday() }}</span><span class="stat-label">{{
+            'ENCOUNTERS.COMPLETED' | translate
+          }}</span>
         </div>
       </a>
       <a
@@ -1739,8 +1752,9 @@
           <span class="material-symbols-outlined stat-icon">checklist</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ tasksToComplete() }}</span
-          ><span class="stat-label">{{ 'DASHBOARD.TASKS' | translate }}</span>
+          <span class="stat-value">{{ tasksToComplete() }}</span><span class="stat-label">{{
+            'DASHBOARD.TASKS' | translate
+          }}</span>
         </div>
       </a>
     </section>
@@ -1996,8 +2010,10 @@
           <span class="material-symbols-outlined stat-icon">calendar_today</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ todayAppointments().length }}</span
-          ><span class="stat-label">{{ 'DASHBOARD.TODAYS_APPOINTMENTS' | translate }}</span>
+          <span class="stat-value">{{ todayAppointments().length }}</span><span
+            class="stat-label"
+            >{{ 'DASHBOARD.TODAYS_APPOINTMENTS' | translate }}</span
+          >
         </div>
       </a>
       <a class="stat-card" [routerLink]="linkFor('/appointments')">
@@ -2006,8 +2022,9 @@
         </div>
         <div class="stat-body">
           <!-- QA D945: the tile says "checked in", so it counts the checked-in visits. -->
-          <span class="stat-value">{{ checkedInToday() }}</span
-          ><span class="stat-label">{{ 'DASHBOARD.CHECKED_IN' | translate }}</span>
+          <span class="stat-value">{{ checkedInToday() }}</span><span class="stat-label">{{
+            'DASHBOARD.CHECKED_IN' | translate
+          }}</span>
         </div>
       </a>
       <a class="stat-card" [routerLink]="linkFor('/appointments')">
@@ -2015,8 +2032,9 @@
           <span class="material-symbols-outlined stat-icon">pending</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ pendingToday() }}</span
-          ><span class="stat-label">{{ 'DASHBOARD.AWAITING_CHECKIN' | translate }}</span>
+          <span class="stat-value">{{ pendingToday() }}</span><span class="stat-label">{{
+            'DASHBOARD.AWAITING_CHECKIN' | translate
+          }}</span>
         </div>
       </a>
       <a class="stat-card" [routerLink]="linkFor('/patients')">
@@ -2024,8 +2042,9 @@
           <span class="material-symbols-outlined stat-icon">people</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ recentPatients().length }}</span
-          ><span class="stat-label">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</span>
+          <span class="stat-value">{{ recentPatients().length }}</span><span class="stat-label">{{
+            'DASHBOARD.RECENT_PATIENTS' | translate
+          }}</span>
         </div>
       </a>
     </section>
@@ -2658,8 +2677,9 @@
           <span class="material-symbols-outlined stat-icon">science</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ labPendingCount() ?? '—' }}</span
-          ><span class="stat-label">{{ 'DASHBOARD.PENDING_LAB_ORDERS' | translate }}</span>
+          <span class="stat-value">{{ labPendingCount() ?? '—' }}</span><span class="stat-label">{{
+            'DASHBOARD.PENDING_LAB_ORDERS' | translate
+          }}</span>
         </div>
       </a>
       <a class="stat-card" [routerLink]="linkFor('/lab')">
@@ -2667,8 +2687,10 @@
           <span class="material-symbols-outlined stat-icon">task_alt</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ labOpsSummary()?.completedToday ?? '—' }}</span
-          ><span class="stat-label">{{ 'DASHBOARD.COMPLETED_TODAY' | translate }}</span>
+          <span class="stat-value">{{ labOpsSummary()?.completedToday ?? '—' }}</span><span
+            class="stat-label"
+            >{{ 'DASHBOARD.COMPLETED_TODAY' | translate }}</span
+          >
         </div>
       </a>
       <a class="stat-card" [routerLink]="linkFor('/lab')">
@@ -2676,8 +2698,10 @@
           <span class="material-symbols-outlined stat-icon">biotech</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ labOpsSummary()?.statusInProgress ?? '—' }}</span
-          ><span class="stat-label">{{ 'DASHBOARD.IN_PROCESSING' | translate }}</span>
+          <span class="stat-value">{{ labOpsSummary()?.statusInProgress ?? '—' }}</span><span
+            class="stat-label"
+            >{{ 'DASHBOARD.IN_PROCESSING' | translate }}</span
+          >
         </div>
       </a>
       <a class="stat-card" [routerLink]="linkFor('/patients')">
@@ -2685,8 +2709,9 @@
           <span class="material-symbols-outlined stat-icon">people</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ recentPatients().length }}</span
-          ><span class="stat-label">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</span>
+          <span class="stat-value">{{ recentPatients().length }}</span><span class="stat-label">{{
+            'DASHBOARD.RECENT_PATIENTS' | translate
+          }}</span>
         </div>
       </a>
     </section>
@@ -2800,8 +2825,10 @@
           <span class="material-symbols-outlined stat-icon">local_pharmacy</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ dispenseQueueCount() ?? '—' }}</span
-          ><span class="stat-label">{{ 'DASHBOARD.PENDING_PRESCRIPTIONS' | translate }}</span>
+          <span class="stat-value">{{ dispenseQueueCount() ?? '—' }}</span><span
+            class="stat-label"
+            >{{ 'DASHBOARD.PENDING_PRESCRIPTIONS' | translate }}</span
+          >
         </div>
       </a>
       <a class="stat-card" [routerLink]="linkFor('/prescriptions')">
@@ -2809,8 +2836,10 @@
           <span class="material-symbols-outlined stat-icon">loop</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ refillPendingCount() ?? '—' }}</span
-          ><span class="stat-label">{{ 'DASHBOARD.REFILL_REQUESTS' | translate }}</span>
+          <span class="stat-value">{{ refillPendingCount() ?? '—' }}</span><span
+            class="stat-label"
+            >{{ 'DASHBOARD.REFILL_REQUESTS' | translate }}</span
+          >
         </div>
       </a>
       <a class="stat-card" [routerLink]="linkFor('/patients')">
@@ -2818,8 +2847,9 @@
           <span class="material-symbols-outlined stat-icon">people</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ recentPatients().length }}</span
-          ><span class="stat-label">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</span>
+          <span class="stat-value">{{ recentPatients().length }}</span><span class="stat-label">{{
+            'DASHBOARD.RECENT_PATIENTS' | translate
+          }}</span>
         </div>
       </a>
     </section>
@@ -2933,8 +2963,10 @@
           <span class="material-symbols-outlined stat-icon">radiology</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ imagingPendingCount() ?? '—' }}</span
-          ><span class="stat-label">{{ 'DASHBOARD.PENDING_STUDIES' | translate }}</span>
+          <span class="stat-value">{{ imagingPendingCount() ?? '—' }}</span><span
+            class="stat-label"
+            >{{ 'DASHBOARD.PENDING_STUDIES' | translate }}</span
+          >
         </div>
       </a>
       <a class="stat-card" [routerLink]="linkFor('/imaging')">
@@ -2942,8 +2974,10 @@
           <span class="material-symbols-outlined stat-icon">pending</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ imagingAwaitingReportCount() ?? '—' }}</span
-          ><span class="stat-label">{{ 'DASHBOARD.AWAITING_REPORT' | translate }}</span>
+          <span class="stat-value">{{ imagingAwaitingReportCount() ?? '—' }}</span><span
+            class="stat-label"
+            >{{ 'DASHBOARD.AWAITING_REPORT' | translate }}</span
+          >
         </div>
       </a>
       <a class="stat-card" [routerLink]="linkFor('/patients')">
@@ -2951,8 +2985,9 @@
           <span class="material-symbols-outlined stat-icon">people</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ recentPatients().length }}</span
-          ><span class="stat-label">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</span>
+          <span class="stat-value">{{ recentPatients().length }}</span><span class="stat-label">{{
+            'DASHBOARD.RECENT_PATIENTS' | translate
+          }}</span>
         </div>
       </a>
     </section>
