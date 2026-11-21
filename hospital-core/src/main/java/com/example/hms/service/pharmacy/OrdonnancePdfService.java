@@ -1,13 +1,18 @@
 package com.example.hms.service.pharmacy;
 
 import com.example.hms.enums.PrescriptionStatus;
+import com.example.hms.enums.AuditEventType;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ClientSafeAccessDeniedException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.Staff;
 import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.repository.StaffRepository;
+import com.example.hms.service.EndedStayOrderGuard;
+import com.example.hms.service.support.DeceasedPatientGuard;
 import com.example.hms.service.support.OrderReviewHoldGuard;
 import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.RoleValidator;
@@ -25,27 +30,40 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * QA D3054 (r68): the prescriber could not hand the patient an ordonnance. The
  * only printable prescription was the pharmacy's « copie pour le patient »,
  * which exists only once the pharmacy routed an order PRINTED_FOR_PATIENT.
  *
- * <p>This is the prescriber's ordonnance: the hospital, the date, the patient,
- * the prescriber, every medicine of the same visit that is in force (dose,
- * route, frequency, duration, quantity, instructions) and a signature line.
+ * <p>This is the prescriber's own document: the hospital, the date, the
+ * patient, the prescriber, the prescriber's own still-dispensable medicines of
+ * the same visit (dose, route, frequency, duration, quantity, instructions)
+ * and the prescriber's signature line.
  *
- * <p>Scope: the caller's active hospital only, and only that hospital's
- * prescriptions (a cross-hospital read the by-id endpoint allows is a READ, not
- * a document to sign at another hospital). An order that is not in force
- * (draft, awaiting signature, cancelled, discontinued, refused by the partner)
- * has no ordonnance, and neither has one a prescriber still has to review.
+ * <p>Who and what (review of #1264):
+ * <ul>
+ *   <li>the caller's active hospital only, and only that hospital's
+ *       prescriptions (another hospital's, or none, answers 404);</li>
+ *   <li>never for a deceased patient;</li>
+ *   <li>only the prescriber of the order asked for (403 for a colleague, with
+ *       a sentence about the caller, never about the record);</li>
+ *   <li>only an order still to be dispensed ({@link #PRINTABLE_STATUSES}): an
+ *       order already dispensed, partly filled, with a partner pharmacy, printed
+ *       for the patient by the pharmacy, or waiting on the prescriber's answer
+ *       to a pharmacist's question has no new ordonnance, or it could be filled
+ *       twice or the question bypassed;</li>
+ *   <li>not while a prescriber review holds it, nor for a ward order of an
+ *       ended stay (the rule every pharmacy action applies);</li>
+ *   <li>each print is audited (PRESCRIPTION_PRINTED, ids only).</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
@@ -53,14 +71,27 @@ public class OrdonnancePdfService {
 
     private static final String NOT_FOUND = "prescription.notfound";
     static final String NOT_IN_FORCE = "prescription.ordonnance.notInForce";
+    static final String NOT_PRESCRIBER = "prescription.ordonnance.notPrescriber";
+    private static final String AUDIT_ENTITY = "PRESCRIPTION";
 
-    /** The statuses an ordonnance lists: every status {@link PrescriptionStatus#isInForce()} admits. */
-    static final List<PrescriptionStatus> IN_FORCE = Arrays.stream(PrescriptionStatus.values())
-            .filter(PrescriptionStatus::isInForce)
-            .toList();
+    /**
+     * Still to be dispensed, by nobody else yet: the SMS dispatch's statuses
+     * less SENT_TO_PARTNER (a partner pharmacy holds the offer). Not
+     * PENDING_CLARIFICATION, PARTIALLY_FILLED, PARTNER_ACCEPTED, DISPENSED,
+     * PARTNER_DISPENSED or PRINTED_FOR_PATIENT.
+     */
+    static final Set<PrescriptionStatus> PRINTABLE_STATUSES = Set.of(
+            PrescriptionStatus.SIGNED,
+            PrescriptionStatus.TRANSMITTED,
+            PrescriptionStatus.TRANSMISSION_FAILED,
+            PrescriptionStatus.PENDING_STOCK,
+            PrescriptionStatus.PARTNER_REJECTED);
 
     private final PrescriptionRepository prescriptionRepository;
     private final RoleValidator roleValidator;
+    private final StaffRepository staffRepository;
+    private final EndedStayOrderGuard endedStayOrders;
+    private final PharmacyServiceSupport support;
 
     /** As on the pharmacy copy (QA D922): a drug the catalogue marks controlled is controlled. */
     private PrescriptionControlledResolver controlledResolver;
@@ -79,31 +110,60 @@ public class OrdonnancePdfService {
         Prescription rx = prescriptionRepository.findById(prescriptionId)
                 .filter(p -> p.getHospital() != null && hospitalId.equals(p.getHospital().getId()))
                 .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND));
-        if (rx.getStatus() == null || !rx.getStatus().isInForce()) {
+        DeceasedPatientGuard.refuseNewCare(rx.getPatient());
+        requireOwnPrescription(rx, hospitalId);
+        if (!printable(rx)) {
             throw new BusinessException(NOT_IN_FORCE);
         }
         OrderReviewHoldGuard.refuseCopyIfReviewPending(rx);
-        return render(rx, visitLines(rx, hospitalId), LocaleContextHolder.getLocale());
+        if (endedStayOrders.endedWithAStay(rx)) {
+            throw new BusinessException("pharmacy.prescription.stayEnded");
+        }
+        List<Prescription> lines = visitLines(rx, hospitalId);
+        byte[] pdf = render(rx, lines, LocaleContextHolder.getLocale());
+        support.logAudit(AuditEventType.PRESCRIPTION_PRINTED,
+                "Ordonnance printed by its prescriber: prescriptions "
+                        + lines.stream().map(l -> String.valueOf(l.getId())).collect(Collectors.joining(",")),
+                rx.getId().toString(), AUDIT_ENTITY, hospitalId);
+        return pdf;
+    }
+
+    private static boolean printable(Prescription rx) {
+        return rx.getStatus() != null && PRINTABLE_STATUSES.contains(rx.getStatus());
+    }
+
+    /** The ordonnance is the prescriber's document: the caller's staff record here wrote the order. */
+    private void requireOwnPrescription(Prescription rx, UUID hospitalId) {
+        UUID userId = roleValidator.getCurrentUserId();
+        UUID callerStaffId = userId == null ? null : staffRepository.findByUserIdAndHospitalId(userId, hospitalId)
+                .map(Staff::getId).orElse(null);
+        UUID prescriberStaffId = rx.getStaff() != null ? rx.getStaff().getId() : null;
+        if (callerStaffId == null || !callerStaffId.equals(prescriberStaffId)) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw(NOT_PRESCRIBER));
+        }
     }
 
     /**
-     * The medicines of the same visit for the same patient at the same hospital, in force, not waiting on
-     * a prescriber's review, and on the same side of the inpatient / take-home line as the one asked for
-     * (the ward's own orders are not handed to the patient with their take-home ones). The one asked for
-     * is always first among equals: it is listed even if the visit query misses it.
+     * The same prescriber's medicines of the same visit for the same patient at the same hospital, still to
+     * be dispensed, not held for review, not ended with a stay, and on the same side of the inpatient /
+     * take-home line as the one asked for. The one asked for is always listed.
      */
     List<Prescription> visitLines(Prescription rx, UUID hospitalId) {
         List<Prescription> lines = new ArrayList<>();
         lines.add(rx);
         if (rx.getEncounter() != null && rx.getEncounter().getId() != null) {
             UUID patientId = rx.getPatient() != null ? rx.getPatient().getId() : null;
+            UUID prescriberId = rx.getStaff() != null ? rx.getStaff().getId() : null;
             prescriptionRepository.findByEncounter_IdAndHospital_IdAndStatusIn(
-                            rx.getEncounter().getId(), hospitalId, IN_FORCE, Pageable.unpaged())
+                            rx.getEncounter().getId(), hospitalId, PRINTABLE_STATUSES, Pageable.unpaged())
                     .stream()
                     .filter(p -> !Objects.equals(p.getId(), rx.getId()))
                     .filter(p -> p.getPatient() != null && Objects.equals(p.getPatient().getId(), patientId))
+                    .filter(p -> p.getStaff() != null && Objects.equals(p.getStaff().getId(), prescriberId))
+                    .filter(OrdonnancePdfService::printable)
                     .filter(p -> p.isInpatientOrder() == rx.isInpatientOrder())
                     .filter(p -> OrderReviewHoldGuard.reviewPendingSince(p) == null)
+                    .filter(p -> !endedStayOrders.endedWithAStay(p))
                     .forEach(lines::add);
         }
         lines.sort(Comparator.comparing(Prescription::getCreatedAt,

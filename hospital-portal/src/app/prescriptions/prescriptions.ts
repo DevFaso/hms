@@ -553,12 +553,16 @@ export class PrescriptionsComponent implements OnInit {
    * Judged against the hospital the requests are pinned to (RoleContextService.effectiveHospitalIdForRequest),
    * not the home hospital: a scoped super-admin's selected hospital's own rows are not foreign.
    */
-  /** Statuses with no ordonnance: not signed yet, withdrawn, or refused (the server's isInForce). */
-  private static readonly NO_ORDONNANCE = [
-    'DRAFT',
-    'PENDING_SIGNATURE',
-    'CANCELLED',
-    'DISCONTINUED',
+  /**
+   * Still to be dispensed, by nobody else yet: the server's PRINTABLE_STATUSES
+   * (OrdonnancePdfService). A dispensed, partly filled, partner-held or
+   * clarification-pending order has no new ordonnance.
+   */
+  private static readonly ORDONNANCE_STATUSES = [
+    'SIGNED',
+    'TRANSMITTED',
+    'TRANSMISSION_FAILED',
+    'PENDING_STOCK',
     'PARTNER_REJECTED',
   ];
 
@@ -566,13 +570,19 @@ export class PrescriptionsComponent implements OnInit {
     this.roleContext.hasAnyActiveRole(actionRoles('prescriptionOrdonnance')),
   );
 
-  /** QA D3054 (r68): the prescriber prints the ordonnance of a signed order of their hospital. */
+  /**
+   * QA D3054 (r68): the ordonnance is the prescriber's own document: offered on
+   * their own order of this hospital, while it is still to be dispensed.
+   */
   canPrintOrdonnance(p: PrescriptionResponse): boolean {
+    const own = this.ownPrescriberStaffId();
     return (
       this.canPrintOrdonnanceRole() &&
       !this.isForeign(p) &&
+      !!own &&
+      p.staffId === own &&
       !!p.status &&
-      !PrescriptionsComponent.NO_ORDONNANCE.includes(p.status)
+      PrescriptionsComponent.ORDONNANCE_STATUSES.includes(p.status)
     );
   }
 

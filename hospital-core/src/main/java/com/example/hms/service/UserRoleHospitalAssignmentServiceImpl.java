@@ -790,6 +790,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 return Page.empty(pageable);
             }
             specification = combineSpec(buildAssignmentSpec(null, active, search, assignmentCode), reach);
+            // QA D3062 (review of #1264): the platform's own accounts are not a hospital's to list.
+            specification = combineSpec(specification, UserRoleHospitalAssignmentSpecification.notAPlatformAccount());
         }
 
         if (specification == null) {

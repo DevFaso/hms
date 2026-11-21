@@ -220,6 +220,9 @@ public class UserController {
             + "hospital's live accounts, within the caller's own directory (QA D3058).")
     @GetMapping
     @PreAuthorize("hasAnyAuthority(" + SecurityConstants.USER_DIRECTORY_AUTHORITIES + ")")
+    @com.example.hms.security.tenant.OrganisationScopedHospitalId(reason = "UserService.getUsersAtHospital "
+        + "lists the hospital only when it is in the caller's directory scope (an organisation admin's: its "
+        + "organisation's hospitals), else an empty page")
     public ResponseEntity<Page<UserSummaryDTO>> getAllUsers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,

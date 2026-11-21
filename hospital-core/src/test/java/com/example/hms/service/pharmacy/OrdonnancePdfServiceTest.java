@@ -49,7 +49,14 @@ class OrdonnancePdfServiceTest {
             (MessageSource) ReflectionTestUtils.getField(MessageUtil.class, "messageSource");
     private final PrescriptionRepository prescriptions = mock(PrescriptionRepository.class);
     private final RoleValidator roleValidator = mock(RoleValidator.class);
-    private final OrdonnancePdfService service = new OrdonnancePdfService(prescriptions, roleValidator);
+    private final com.example.hms.repository.StaffRepository staffRepository =
+            mock(com.example.hms.repository.StaffRepository.class);
+    private final com.example.hms.service.EndedStayOrderGuard endedStay =
+            mock(com.example.hms.service.EndedStayOrderGuard.class);
+    private final PharmacyServiceSupport support = mock(PharmacyServiceSupport.class);
+    private final OrdonnancePdfService service =
+            new OrdonnancePdfService(prescriptions, roleValidator, staffRepository, endedStay, support);
+    private final UUID doctorUserId = UUID.randomUUID();
 
     private final UUID hospitalId = UUID.randomUUID();
     private final UUID encounterId = UUID.randomUUID();
@@ -81,7 +88,9 @@ class OrdonnancePdfServiceTest {
         User doctor = new User();
         doctor.setFirstName("Issa");
         doctor.setLastName("Kaboré");
+        doctor.setId(doctorUserId);
         staff = new Staff();
+        staff.setId(UUID.randomUUID());
         staff.setUser(doctor);
         encounter = new Encounter();
         encounter.setId(encounterId);
@@ -89,6 +98,8 @@ class OrdonnancePdfServiceTest {
         rx = line("Métronidazole 500 mg", PrescriptionStatus.SIGNED, LocalDateTime.of(2026, 11, 21, 9, 0));
         when(prescriptions.findById(rx.getId())).thenReturn(Optional.of(rx));
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctorUserId);
+        when(staffRepository.findByUserIdAndHospitalId(doctorUserId, hospitalId)).thenReturn(Optional.of(staff));
         when(prescriptions.findByEncounter_IdAndHospital_IdAndStatusIn(eq(encounterId), eq(hospitalId), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(rx)));
     }
@@ -205,6 +216,59 @@ class OrdonnancePdfServiceTest {
     }
 
     @Test
+    void aColleagueIsRefusedTheOrdonnanceOfAnotherPrescriber() {
+        UUID colleagueUserId = UUID.randomUUID();
+        Staff colleague = new Staff();
+        colleague.setId(UUID.randomUUID());
+        when(roleValidator.getCurrentUserId()).thenReturn(colleagueUserId);
+        when(staffRepository.findByUserIdAndHospitalId(colleagueUserId, hospitalId)).thenReturn(Optional.of(colleague));
+        UUID id = rx.getId();
+        assertThatThrownBy(() -> service.forPrescriber(id))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+                .hasMessageContaining("prescripteur");
+        org.mockito.Mockito.verifyNoInteractions(support);
+    }
+
+    @Test
+    void anotherPrescribersOrADispensedLineOfTheVisitIsNotOnIt() throws Exception {
+        Staff other = new Staff();
+        other.setId(UUID.randomUUID());
+        Prescription colleagues = line("Amlodipine 5 mg", PrescriptionStatus.SIGNED, LocalDateTime.of(2026, 11, 21, 9, 1));
+        colleagues.setStaff(other);
+        Prescription dispensed = line("Ibuprofène 400 mg", PrescriptionStatus.DISPENSED, LocalDateTime.of(2026, 11, 21, 9, 2));
+        Prescription ended = line("Oméprazole 20 mg", PrescriptionStatus.SIGNED, LocalDateTime.of(2026, 11, 21, 9, 3));
+        when(endedStay.endedWithAStay(ended)).thenReturn(true);
+        when(prescriptions.findByEncounter_IdAndHospital_IdAndStatusIn(eq(encounterId), eq(hospitalId), any(), any()))
+                .thenReturn(new PageImpl<>(List.of(rx, colleagues, dispensed, ended)));
+
+        String text = textOf(service.forPrescriber(rx.getId()));
+
+        assertThat(text).contains("Métronidazole").doesNotContain("Amlodipine")
+                .doesNotContain("Ibuprofène").doesNotContain("Oméprazole");
+        org.mockito.Mockito.verify(support).logAudit(
+                eq(com.example.hms.enums.AuditEventType.PRESCRIPTION_PRINTED),
+                org.mockito.ArgumentMatchers.contains(rx.getId().toString()),
+                eq(rx.getId().toString()), eq("PRESCRIPTION"), eq(hospitalId));
+    }
+
+    @Test
+    void aWardOrderOfAnEndedStayHasNoOrdonnance() {
+        when(endedStay.endedWithAStay(rx)).thenReturn(true);
+        UUID id = rx.getId();
+        assertThatThrownBy(() -> service.forPrescriber(id))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.prescription.stayEnded");
+    }
+
+    @Test
+    void aDeceasedPatientGetsNoNewOrdonnance() {
+        patient.setDeceasedAt(LocalDateTime.of(2026, 11, 21, 8, 0));
+        UUID id = rx.getId();
+        assertThatThrownBy(() -> service.forPrescriber(id))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+    }
+
+    @Test
     void anotherHospitalsPrescriptionIsNotFound() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
         UUID id = rx.getId();
@@ -219,10 +283,15 @@ class OrdonnancePdfServiceTest {
     }
 
     @Test
-    void aPrescriptionNotInForceHasNoOrdonnance() {
+    void aPrescriptionNotStillToDispenseHasNoOrdonnance() {
         UUID id = rx.getId();
+        // Review of #1264: a dispensed order printed again could be filled twice; a pharmacist's
+        // question would be bypassed; a partner pharmacy already holds the order.
         for (PrescriptionStatus status : List.of(PrescriptionStatus.DRAFT, PrescriptionStatus.PENDING_SIGNATURE,
-                PrescriptionStatus.CANCELLED, PrescriptionStatus.DISCONTINUED)) {
+                PrescriptionStatus.CANCELLED, PrescriptionStatus.DISCONTINUED, PrescriptionStatus.DISPENSED,
+                PrescriptionStatus.PARTNER_DISPENSED, PrescriptionStatus.PRINTED_FOR_PATIENT,
+                PrescriptionStatus.PARTIALLY_FILLED, PrescriptionStatus.SENT_TO_PARTNER,
+                PrescriptionStatus.PARTNER_ACCEPTED, PrescriptionStatus.PENDING_CLARIFICATION)) {
             rx.setStatus(status);
             assertThatThrownBy(() -> service.forPrescriber(id))
                     .isInstanceOf(BusinessException.class)

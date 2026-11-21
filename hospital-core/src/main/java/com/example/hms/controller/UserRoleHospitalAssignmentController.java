@@ -169,6 +169,8 @@ public class UserRoleHospitalAssignmentController {
     @Operation(summary = "Get all role assignments with pagination")
     @PreAuthorize(ASSIGNMENT_ADMIN)
     @GetMapping
+    @com.example.hms.security.tenant.OrganisationScopedHospitalId(reason = "getAllAssignments lists a named "
+        + "hospital only inside the caller's assignment scope (scopedListing), else its own reach")
     public ResponseEntity<Page<UserRoleHospitalAssignmentResponseDTO>> getAllAssignments(
             @Parameter(description = "Page number", example = "0")
             @RequestParam(defaultValue = "0") int page,

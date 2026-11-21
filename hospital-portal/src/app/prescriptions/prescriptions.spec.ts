@@ -838,17 +838,34 @@ describe('PrescriptionsComponent — signing', () => {
     spyOn(print, 'openForPrint');
     const pdf = new Blob(['%PDF-'], { type: 'application/pdf' });
     prescriptionService.getOrdonnancePdf.and.returnValue(of(pdf));
-    for (const status of ['DRAFT', 'PENDING_SIGNATURE', 'CANCELLED', 'DISCONTINUED']) {
-      expect(component.canPrintOrdonnance(rx(status, status)))
+    spyOn(component, 'ownPrescriberStaffId').and.returnValue('st-me');
+    const mine = (id: string, status: string): PrescriptionResponse => ({
+      ...rx(id, status),
+      staffId: 'st-me',
+    });
+    for (const status of [
+      'DRAFT',
+      'PENDING_SIGNATURE',
+      'CANCELLED',
+      'DISCONTINUED',
+      'DISPENSED',
+      'PARTIALLY_FILLED',
+      'PENDING_CLARIFICATION',
+      'SENT_TO_PARTNER',
+      'PRINTED_FOR_PATIENT',
+    ]) {
+      expect(component.canPrintOrdonnance(mine(status, status)))
         .withContext(status)
         .toBeFalse();
     }
-    expect(component.canPrintOrdonnance(rx('s', 'SIGNED'))).toBeTrue();
+    expect(component.canPrintOrdonnance(mine('s', 'SIGNED'))).toBeTrue();
+    // Review of #1264: a colleague's order is not mine to print.
+    expect(component.canPrintOrdonnance({ ...rx('c', 'SIGNED'), staffId: 'st-other' })).toBeFalse();
     expect(
-      component.canPrintOrdonnance({ ...rx('f', 'SIGNED'), hospitalId: 'h-other' }),
+      component.canPrintOrdonnance({ ...mine('f', 'SIGNED'), hospitalId: 'h-other' }),
     ).toBeFalse();
 
-    component.filtered.set([rx('rx-1', 'SIGNED'), rx('rx-2', 'DRAFT')]);
+    component.filtered.set([mine('rx-1', 'SIGNED'), mine('rx-2', 'DRAFT')]);
     fixture.detectChanges();
     const root = fixture.nativeElement as HTMLElement;
     expect(root.querySelector('[data-testid="rx-ordonnance-rx-2"]')).toBeNull();
@@ -857,7 +874,7 @@ describe('PrescriptionsComponent — signing', () => {
     expect(print.openForPrint).toHaveBeenCalledWith(pdf);
 
     prescriptionService.getOrdonnancePdf.and.returnValue(throwError(() => new Error('down')));
-    component.printOrdonnance(rx('rx-1', 'SIGNED'));
+    component.printOrdonnance(mine('rx-1', 'SIGNED'));
     expect(toast.error).toHaveBeenCalledWith('PRESCRIPTIONS.ORDONNANCE_FAILED');
   });
 
