@@ -290,6 +290,12 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'PrescriptionController#cosign',
     roles: ['ROLE_DOCTOR'],
   },
+  // QA D3054 (r68): the ordonnance PDF handed to the patient (a read; the
+  // prescribing roles that sign a take-home order).
+  prescriptionOrdonnance: {
+    endpoint: 'PrescriptionController#ordonnance',
+    roles: ['ROLE_DOCTOR', 'ROLE_MIDWIFE'],
+  },
   // Policy 4: a prescriber reviews an allergy conflict on a signed order (the service narrows it to
   // a prescriber of the order's hospital).
   prescriptionAllergyReview: {

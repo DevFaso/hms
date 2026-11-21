@@ -380,6 +380,11 @@ export class PrescriptionService {
     return this.http.get<PrescriptionResponse>(`${this.baseUrl}/${id}`);
   }
 
+  /** QA D3054 (r68): the ordonnance to hand to the patient (PDF). */
+  getOrdonnancePdf(id: string): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/${id}/ordonnance`, { responseType: 'blob' });
+  }
+
   create(req: PrescriptionRequest): Observable<PrescriptionResponse> {
     return this.http.post<PrescriptionResponse>(this.baseUrl, req);
   }

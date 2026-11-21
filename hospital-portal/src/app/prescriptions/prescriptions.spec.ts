@@ -1,3 +1,4 @@
+import { PrintLabelService } from '../services/print-label.service';
 import { EncounterResponse, EncounterService } from '../services/encounter.service';
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -363,6 +364,7 @@ describe('PrescriptionsComponent — signing', () => {
       'update',
       'create',
       'getById',
+      'getOrdonnancePdf',
     ]);
     pageFromList(prescriptionService);
     prescriptionService.list.and.returnValue(of([]));
@@ -829,6 +831,30 @@ describe('PrescriptionsComponent — signing', () => {
         .withContext(status)
         .toEqual(['DRAFT', 'PENDING_SIGNATURE', 'CANCELLED', 'DISCONTINUED']);
     }
+  });
+
+  it('QA D3054: offers the ordonnance on an order in force of this hospital, prints its PDF', () => {
+    const print = TestBed.inject(PrintLabelService);
+    spyOn(print, 'openForPrint');
+    const pdf = new Blob(['%PDF-'], { type: 'application/pdf' });
+    prescriptionService.getOrdonnancePdf.and.returnValue(of(pdf));
+    for (const status of ['DRAFT', 'PENDING_SIGNATURE', 'CANCELLED', 'DISCONTINUED']) {
+      expect(component.canPrintOrdonnance(rx(status, status)))
+        .withContext(status)
+        .toBeFalse();
+    }
+    expect(component.canPrintOrdonnance(rx('s', 'SIGNED'))).toBeTrue();
+    expect(
+      component.canPrintOrdonnance({ ...rx('f', 'SIGNED'), hospitalId: 'h-other' }),
+    ).toBeFalse();
+
+    component.filtered.set([rx('rx-1', 'SIGNED'), rx('rx-2', 'DRAFT')]);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('[data-testid="rx-ordonnance-rx-2"]')).toBeNull();
+    root.querySelector<HTMLButtonElement>('[data-testid="rx-ordonnance-rx-1"]')!.click();
+    expect(prescriptionService.getOrdonnancePdf).toHaveBeenCalledWith('rx-1');
+    expect(print.openForPrint).toHaveBeenCalledWith(pdf);
   });
 
   it('offers signing only for a prescription still awaiting a signature', () => {
