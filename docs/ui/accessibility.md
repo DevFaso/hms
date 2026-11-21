@@ -204,12 +204,25 @@ fail 4.5:1 against `#fff` background:
 - `#94a3b8` on white → 2.83:1 ❌
 - `#cbd5e1` on white → 1.85:1 ❌
 
-Replacements (use these for body / label / placeholder text):
+Text is measured against the PAGE background (`#f1f5f9`), not only white:
+most subtitles, helper lines and empty states sit on it. The r65 design
+audit (D2793) found `#64748b` at 4.34:1 there and `#6b7280` at 4.41:1, so
+neither is a text colour any more. Use the tokens (`src/styles.scss` `:root`):
 
-- Body text → `#1e293b` on white → 14.7:1 ✓
-- Secondary text → `#475569` on white → 7.55:1 ✓
-- Tertiary / helper text → `#64748b` on white → 5.49:1 ✓
-- Placeholder / disabled → `#6b7280` on white → 5.0:1 ✓
+| Token | Value | On white | On the page | Use |
+|---|---|---|---|---|
+| `--text-primary` | `#1e293b` | 14.6:1 | 13.4:1 | body text, titles |
+| `--text-secondary` | `#475569` | 7.58:1 | 6.92:1 | subtitles, labels, table headers |
+| `--text-muted` | `#566579` | 5.94:1 | 5.43:1 | placeholders, hints, meta lines: the lightest text |
+| `--success-text` | `#047857` | 5.48:1 | 5.01:1 | « Payée », a success line |
+| `--warning-text` | `#b45309` | 5.02:1 | 4.58:1 | « En retard », a warning line |
+| `--danger` | `#b91c1c` | 6.47:1 | 5.91:1 | an error line; the fill of a danger button |
+| `--info-text` | `#0369a1` | 5.93:1 | 5.42:1 | an information line |
+
+The bright status colours (`#059669`, `#d97706`, `#ef4444`, `#0ea5e9`) are
+fills, dots and borders, never text. `scripts/check-design-tokens.mjs` fails
+a text `color:` written in any of the greys or status fills above;
+`scripts/lib/design-token-scan.test.mjs` recomputes the table.
 
 Status-badge backgrounds (success-green `#ecfdf5`, error-red `#fef2f2`,
 warning-amber `#fffbeb`, info-blue `#eff6ff`) must use the paired darker
@@ -281,6 +294,13 @@ Carrying forward to v1.0.0 GA polish (still gaps, but smaller):
   these is the prerequisite for dropping
   `disableRules(['color-contrast'])` and adding those four routes
   to the axe smoke (see §11).
+  **Update, r65 (2026-11-20):** the design-system pass landed. The routed
+  sweep (`e2e/a11y-routed-pages.ts`, every routed page with a role that owns
+  it) now runs axe WITH `color-contrast`; 13 routes are left out by name
+  (`CONTRAST_PENDING`: the dashboard, hospital detail, platform and
+  super-admin pages, owned by the platform/onboarding track). The same sweep
+  fails a page whose `h1` is not the one title size, and an icon in a
+  heading, a column header or the sidebar that a screen reader would read.
 
 ## 11. Test contract
 
