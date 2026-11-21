@@ -1301,8 +1301,9 @@ public class ReceptionServiceImpl implements ReceptionService {
         // 3d. QA D2522 (r65): « Assurance vérifiée » is recorded on the coverage itself (who, when),
         // as the desk's eligibility attestation is; it used to survive only in the audit text below,
         // so the snapshot and the front-desk alerts kept the coverage unverified.
-        boolean insuranceStamped = request.isInsuranceVerified()
-                && stampInsuranceVerified(patient.getId(), hospital.getId(), actorUsername, now);
+        if (request.isInsuranceVerified()) {
+            stampInsuranceVerified(patient.getId(), hospital.getId(), actorUsername, now);
+        }
 
         // 4. Audit trail
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()
@@ -1311,8 +1312,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .eventDescription("Patient checked in for appointment " + appointment.getId()
                         + ". Encounter " + encounter.getCode() + " created with status ARRIVED."
                         + (request.isIdentityConfirmed() ? " Identity confirmed." : "")
-                        + (request.isInsuranceVerified() ? " Insurance verified." : "")
-                        + (request.isInsuranceVerified() && !insuranceStamped ? " No current coverage to stamp." : ""))
+                        + (request.isInsuranceVerified() ? " Insurance verified." : ""))
                 .resourceId(encounter.getId().toString())
                 .entityType(ENTITY_TYPE_ENCOUNTER)
                 .status(AuditStatus.SUCCESS)
@@ -1327,21 +1327,20 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     /**
      * QA D2522: stamps the coverage the snapshot shows (the primary one, else the first) as verified
-     * by {@code actorUsername} at {@code at}, when it is current on that day. False when the patient
+     * by {@code actorUsername} at {@code at}, when it is current on that day. Nothing when the patient
      * has no current coverage at this hospital: an expired policy is never marked verified.
      */
-    private boolean stampInsuranceVerified(UUID patientId, UUID hospitalId, String actorUsername, LocalDateTime at) {
+    private void stampInsuranceVerified(UUID patientId, UUID hospitalId, String actorUsername, LocalDateTime at) {
         PatientInsurance coverage = snapshotCoverage(
                 insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId));
         LocalDate day = at.toLocalDate();
         if (coverage == null || (coverage.getExpirationDate() != null && coverage.getExpirationDate().isBefore(day))
                 || (coverage.getEffectiveDate() != null && coverage.getEffectiveDate().isAfter(day))) {
-            return false;
+            return;
         }
         coverage.setVerifiedAt(at);
         coverage.setVerifiedBy(actorUsername);
         insuranceRepo.save(coverage);
-        return true;
     }
 
     /** The coverage the front desk reads (snapshot, check-in stamp): the primary one, else the first. */
