@@ -1,5 +1,7 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.InstrumentOutboxStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -7,11 +9,14 @@ import com.example.hms.hl7.mllp.MllpOutboundProperties;
 import com.example.hms.model.InstrumentOutbox;
 import com.example.hms.model.LabResult;
 import com.example.hms.model.LabSpecimen;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.InstrumentOutboxPageDTO;
 import com.example.hms.payload.dto.InstrumentOutboxResponseDTO;
 import com.example.hms.payload.dto.InstrumentOutboxTransportDTO;
 import com.example.hms.repository.InstrumentOutboxRepository;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.security.SecurityUtils;
+import com.example.hms.security.audit.ActingAssignments;
 import com.example.hms.utility.Hl7v2MessageBuilder;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +24,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +46,11 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
     private final MllpOutboundProperties outboundProperties;
     /** Last, so an existing positional constructor call in a test only appends. */
     private final LabResultRepository labResultRepository;
+    /** Appended for the same reason: every payload read is a PHI read, audited like one. */
+    private final AuditEventLogService auditEventLogService;
+
+    /** Audit entity type for a payload read of one outbox message. */
+    static final String AUDIT_ENTITY_TYPE = "INSTRUMENT_OUTBOX_MESSAGE";
 
     private static final String ORU_R01 = "ORU^R01";
 
@@ -162,9 +174,12 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
     @Transactional(readOnly = true)
     public List<InstrumentOutboxResponseDTO> getMessagesByLabOrder(UUID labOrderId) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
+        // Summaries, not payloads: the monitor lists an order's other messages
+        // by type, status and OBX-11; the PHI-bearing HL7 text travels only on
+        // the audited single-message read.
         return outboxRepository.findByLabOrder_Id(labOrderId).stream()
             .filter(m -> m.getLabOrder().isHandledBy(hospitalId))
-            .map(this::toResponseDTO)
+            .map(this::toSummaryDTO)
             .toList();
     }
 
@@ -208,7 +223,44 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
     @Override
     @Transactional(readOnly = true)
     public InstrumentOutboxResponseDTO getMessage(UUID id) {
-        return toResponseDTO(loadScoped(id));
+        // The payload carries the patient's name and identifiers: it is read at
+        // a hospital the caller acts for, never from the unscoped super-admin
+        // view (which still lists the queue, payload elided).
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null) {
+            throw new BusinessException(RoleValidator.HOSPITAL_CONTEXT_REQUIRED);
+        }
+        InstrumentOutbox message = loadScoped(id);
+        auditPayloadRead(message, hospitalId);
+        return toResponseDTO(message);
+    }
+
+    /**
+     * One DATA_ACCESS row per payload read — the house pattern for a PHI
+     * document read (imaging images, patient documents). An audit failure is
+     * logged, never raised: the read itself already passed every check.
+     */
+    private void auditPayloadRead(InstrumentOutbox message, UUID hospitalId) {
+        try {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            UUID patientId = message.getLabOrder() != null && message.getLabOrder().getPatient() != null
+                ? message.getLabOrder().getPatient().getId() : null;
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .userName(SecurityUtils.getCurrentUsername())
+                .userId(roleValidator.getCurrentUserId())
+                .hospitalId(hospitalId)
+                .roleName(ActingAssignments.roleName(null, ActingAssignments.actingRoles(auth)))
+                .patientId(patientId)
+                .eventType(AuditEventType.DATA_ACCESS)
+                .entityType(AUDIT_ENTITY_TYPE)
+                .resourceId(String.valueOf(message.getId()))
+                .eventDescription("Instrument outbox message " + message.getId() + " ("
+                    + message.getMessageType() + ") viewed")
+                .status(AuditStatus.SUCCESS)
+                .build());
+        } catch (RuntimeException ex) {
+            log.warn("Audit emit failed for instrument outbox message {}: {}", message.getId(), ex.getMessage());
+        }
     }
 
     @Override
@@ -284,6 +336,8 @@ public class InstrumentOutboxServiceImpl implements InstrumentOutboxService {
             .id(msg.getId())
             .labOrderId(msg.getLabOrder() != null ? msg.getLabOrder().getId() : null)
             .messageType(msg.getMessageType())
+            // OBX-11 (F / P / C) so a preliminary + final pair does not read as a duplicate.
+            .resultStatus(Hl7v2MessageBuilder.observationStatusOf(msg.getPayload()))
             .status(msg.getStatus() != null ? msg.getStatus().name() : null)
             .createdAt(msg.getCreatedAt())
             .sentAt(msg.getSentAt())

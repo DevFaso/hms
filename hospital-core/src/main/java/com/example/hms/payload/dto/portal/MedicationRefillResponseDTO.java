@@ -55,4 +55,28 @@ public class MedicationRefillResponseDTO {
 
     @Schema(description = "When the request was last updated")
     private LocalDateTime updatedAt;
+
+    /** Policy rule 1 (QA D2308): the pharmacist's flags for the prescriber, or the reason of a refusal to dispense. */
+    @Schema(description = "Pharmacist review note (flags, or the reason of a refusal to dispense)")
+    private String pharmacistNote;
+
+    @Schema(description = "When the pharmacist reviewed the request")
+    private LocalDateTime pharmacistReviewedAt;
+
+    @Schema(description = "On what authority it was decided: PRESCRIBER_DECISION, ORIGINAL_PRESCRIPTION, PHARMACIST_REFUSAL")
+    private String decisionBasis;
+
+    /**
+     * Policy rule 1: the prescriber already wrote a refill that is not used yet, so the pharmacy may release this
+     * request as ordinary dispensing. False: only a prescriber can approve it.
+     */
+    @Schema(description = "Whether a refill written on the prescription is still unused")
+    private boolean writtenRefillLeft;
+
+    /**
+     * Policy rule 1: the answer is for a pharmacist (not also a prescriber). The queue then shows the steps of
+     * the pharmacy (review, refuse to dispense, release a written refill) and never a decision.
+     */
+    @Schema(description = "Whether the reader acts for the pharmacy: review, refuse, release; never approve")
+    private boolean pharmacyView;
 }

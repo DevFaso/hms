@@ -81,9 +81,19 @@ public class LabResultResponseDTO {
     private LocalDateTime criticalEscalatedAt;
     private short criticalEscalationLevel;
     private LocalDateTime criticalReadBackAt;
+    /** Who read the value back: only for a CONFIRMED read-back ({@code criticalReadBackAt} set). */
     private String criticalReadBackBy;
-    /** What was repeated back — persisted even on a mismatch, for the audit. */
+    /** What was read back: only for a CONFIRMED read-back ({@code criticalReadBackAt} set). */
     private String criticalReadBackValue;
+    /**
+     * QA D2952 (r66): the last REFUSED read-back (the repeated value did not match), kept for the audit under its
+     * own name. It used to fill {@code criticalReadBackBy} and {@code criticalReadBackValue} while the result
+     * stayed unacknowledged, so the record read as if the value had been read back. Null once a read-back is
+     * confirmed.
+     */
+    private String criticalReadBackRefusedValue;
+    /** QA D2952 (r66): who made the last refused read-back; null once a read-back is confirmed. */
+    private String criticalReadBackRefusedBy;
     private boolean released;
     private LocalDateTime releasedAt;
     private String releasedByFullName;
@@ -133,4 +143,51 @@ public class LabResultResponseDTO {
     private LocalDateTime specimenCollectedAt;
     /** The laboratory the order was sent to, when it was not the ordering hospital's own (B1). */
     private String performingLabName;
+
+    /** r63 (NFS panels): true when this result carries one value per panel component. */
+    private boolean panel;
+    /** r63 (NFS panels): the component values, each graded against its own ranges. */
+    @Builder.Default
+    private List<LabResultComponentResponseDTO> components = java.util.Collections.emptyList();
+
+    /** r63 D2304: why this result was released while the test's QC was rejected, and when. */
+    private String qcOverrideReason;
+    private LocalDateTime qcOverrideAt;
+
+    /** r63 D2305: the laboratory's communication of this critical result at release. */
+    private String criticalCommunicatedTo;
+    private LocalDateTime criticalCommunicatedAt;
+    private String criticalCommunicationReadBack;
+    private String criticalCommunicatedBy;
+
+    /**
+     * r65 D2614: who the patient is, to check during a critical call when two
+     * patients have near-identical names: the file number at the ordering
+     * hospital, the date of birth and the sex. Filled on the release worklist.
+     */
+    private String patientMrn;
+    private java.time.LocalDate patientDateOfBirth;
+    private String patientGender;
+
+    /**
+     * r65 D2613: the rejected QC run that holds this result's release (the
+     * same run the release gate refuses on), so the worklist says so before
+     * the release dialog is filled; null when nothing holds it. Filled on the
+     * release worklist.
+     */
+    private LabQcHoldDTO qcHold;
+
+    /** r65 D2613: the rejected QC run holding a release: which control level, when, by whom. */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class LabQcHoldDTO {
+        private java.util.UUID runId;
+        private String qcLevel;
+        private LocalDateTime recordedAt;
+        private String recordedBy;
+        private String sdFlag;
+    }
 }

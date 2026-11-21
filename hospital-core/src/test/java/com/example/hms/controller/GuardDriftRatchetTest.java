@@ -107,6 +107,9 @@ class GuardDriftRatchetTest {
         "Referrals are addressed to and worked by the receiving provider";
     private static final String IMAGINGORDERCONTROLLER_REASON =
         "The ordering provider's signature and status transitions";
+    private static final String IMAGINGEXAM_REASON =
+        "Policy rule 3: whoever runs the exam (imaging technician, radiologist, doctor) checks the patient in and"
+            + " records how it went; a nurse reads the order";
     private static final String IMAGINGSTUDYIMAGECONTROLLER_REASON =
         "V316: a study's key images are added or removed by those who author its report (radiologist, doctor); a nurse reads them";
     private static final String IMAGINGRESULTCONTROLLER_REASON =
@@ -144,11 +147,19 @@ class GuardDriftRatchetTest {
     private static final String ULTRASOUNDCONTROLLER_REASON =
         "Ultrasound ordering and reporting; maternity cluster (c) as found 2026-09-26, pending the clinical decision in tasklist \"Nurse/midwife read drift\"";
 
+    private static final String MINOR_RELEASE_REASON =
+        "Policy 2026-11-20 (provisional, Loi 030-2008 art. 17-18): a minor's sensitive result is disclosed to a"
+            + " parent after counselling by the clinician who has care of the patient, a doctor or a midwife;"
+            + " a nurse does not make that disclosure";
+
     private static Map<String, String> doctorWithoutNurse() {
         Map<String, String> listed = new TreeMap<>();
         listed.put("AdmissionController.admitPatient",
             "Doctor and midwife only (policy 2: a midwife admits a woman in labour, the service refuses her any other type); nurses never admit, QA D84");
         listed.put("AdmissionController.cancelAdmission", ADMISSIONCONTROLLER_REASON);
+        listed.put("MinorResultReleaseController.overview", MINOR_RELEASE_REASON);
+        listed.put("MinorResultReleaseController.markGuardianVerified", MINOR_RELEASE_REASON);
+        listed.put("MinorResultReleaseController.release", MINOR_RELEASE_REASON);
         listed.put("LaborController.transferEpisode",
             "Labour transfer (provisional rule, 2026-11-12): only those who may admit a labour (doctor, midwife under policy 2) hand one to another hospital; nurses never admit");
         listed.put("LaborController.recordArrivalWithoutHandover",
@@ -200,14 +211,19 @@ class GuardDriftRatchetTest {
         // Provisional rule 1: the status endpoint's roles record the pre-authorisation number of a study they may start.
         listed.put("ImagingOrderController.recordAuthorization", IMAGINGORDERCONTROLLER_REASON);
         listed.put("ImagingOrderController.updateStatus", IMAGINGORDERCONTROLLER_REASON);
+        listed.put("ImagingOrderController.checkIn", IMAGINGEXAM_REASON);
+        listed.put("ImagingOrderController.recordExam", IMAGINGEXAM_REASON);
         listed.put("ImagingResultController.acknowledgeCriticalResult", IMAGINGRESULTCONTROLLER_REASON);
         listed.put("ImagingResultController.createReport", IMAGINGRESULTCONTROLLER_REASON);
         listed.put("ImagingResultController.getReportsByHospital", IMAGINGRESULTCONTROLLER_REASON);
+        listed.put("ImagingResultController.getReportsToSign", IMAGINGRESULTCONTROLLER_REASON);
         listed.put("ImagingResultController.signReport", IMAGINGRESULTCONTROLLER_REASON);
         listed.put("ImagingResultController.updateReport", IMAGINGRESULTCONTROLLER_REASON);
         listed.put("ImagingResultController.updateReportStatus", IMAGINGRESULTCONTROLLER_REASON);
         listed.put("ImagingStudyImageController.delete", IMAGINGSTUDYIMAGECONTROLLER_REASON);
         listed.put("ImagingStudyImageController.upload", IMAGINGSTUDYIMAGECONTROLLER_REASON);
+        listed.put("ImagingStudyImageController.updateCaption", IMAGINGSTUDYIMAGECONTROLLER_REASON);
+        listed.put("ImagingStudyImageController.withdraw", IMAGINGSTUDYIMAGECONTROLLER_REASON);
         listed.put("LabResultController.signLabResult", LABRESULTCONTROLLER_REASON);
         listed.put("MaternalHistoryController.calculateRiskScore", MATERNALHISTORYCONTROLLER_REASON);
         listed.put("MaternalHistoryController.getPendingReview", MATERNALHISTORYCONTROLLER_REASON);

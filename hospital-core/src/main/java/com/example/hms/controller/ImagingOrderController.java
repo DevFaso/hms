@@ -36,6 +36,20 @@ import java.util.UUID;
 @Tag(name = "Imaging Orders", description = "Order intake and duplicate checking for radiology studies")
 public class ImagingOrderController {
 
+	/**
+	 * Who runs an exam: the imaging technician, a radiologist or a doctor, in a role of their own.
+	 * QA D2915: a gate reads the token, which names a role wherever it is held, so every imaging
+	 * service asks again what the caller is at the order's hospital ({@code ImagingRoleScope}).
+	 */
+	static final String EXAM_ROLES =
+		"T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'IMAGING_TECHNICIAN','RADIOLOGIST','DOCTOR')";
+	/**
+	 * The worklist's readers. Policy rule 3: the imaging technician reads the orders of their
+	 * hospital (indication and safety flags are on the order), never a patient's chart list.
+	 */
+	static final String WORKLIST_ROLES =
+		"hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','IMAGING_TECHNICIAN')";
+
 	private final ImagingOrderService imagingOrderService;
 	private final com.example.hms.controller.support.RecordsWithheldHeaders recordsWithheld;
 
@@ -64,8 +78,13 @@ public class ImagingOrderController {
 		return ResponseEntity.ok(responseDTO);
 	}
 
+	/**
+	 * Policy rule 3 (2026-11-20, provisional): the imaging technician starts, completes or
+	 * discontinues the exam here; the service refuses a technician any other status write
+	 * ({@code ImagingExamRecord.requireTechnicianStep}).
+	 */
 	@PutMapping("/orders/{orderId}/status")
-	@PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','RADIOLOGIST')")
+	@PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','RADIOLOGIST','IMAGING_TECHNICIAN')")
 	@Operation(summary = "Update imaging order status, scheduling, or cancellation details")
 	public ResponseEntity<ImagingOrderResponseDTO> updateStatus(
 		@PathVariable UUID orderId,
@@ -90,6 +109,29 @@ public class ImagingOrderController {
 		return ResponseEntity.ok(imagingOrderService.recordAuthorization(orderId, request));
 	}
 
+	/** Policy rule 3 (provisional): whoever runs the exam checks the patient in; recorded once, from the session. */
+	@PostMapping("/orders/{orderId}/check-in")
+	@PreAuthorize(EXAM_ROLES)
+	@Operation(summary = "Check the patient in for an imaging exam")
+	public ResponseEntity<ImagingOrderResponseDTO> checkIn(@PathVariable UUID orderId) {
+		return ResponseEntity.ok(imagingOrderService.checkInPatient(orderId));
+	}
+
+	/** Policy rule 3 (provisional): how the exam went, on the order; it pre-fills the report's own fields. */
+	@PutMapping("/orders/{orderId}/exam-record")
+	@com.example.hms.security.audit.WriteAudited(skip = true,
+		reason = "ImagingOrderServiceImpl.recordExam audits the write with what changed (the dose and the contrast flag before and after)")
+	@PreAuthorize(EXAM_ROLES)
+	@Operation(summary = "Record how an imaging exam went",
+		description = "Technical note, contrast given and radiation dose. Open from the start of the exam "
+			+ "until a report is signed. Replaces the record as sent; a record with nothing in it is refused.")
+	public ResponseEntity<ImagingOrderResponseDTO> recordExam(
+		@PathVariable UUID orderId,
+		@Valid @RequestBody com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO request
+	) {
+		return ResponseEntity.ok(imagingOrderService.recordExam(orderId, request));
+	}
+
 	@PostMapping("/orders/{orderId}/signature")
 	@PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR')")
 	@Operation(summary = "Attach ordering provider signature/attestation")
@@ -104,7 +146,7 @@ public class ImagingOrderController {
 	}
 
 	@GetMapping("/orders/{orderId}")
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST')")
+	@PreAuthorize(WORKLIST_ROLES)
 	@Operation(summary = "Retrieve imaging order by ID")
 	public ResponseEntity<ImagingOrderResponseDTO> getOrder(@PathVariable UUID orderId) {
 		ImagingOrderResponseDTO responseDTO = imagingOrderService.getOrder(orderId);
@@ -131,7 +173,7 @@ public class ImagingOrderController {
 	 * imaging order read ({@code ImagingReadRoleGuardTest}).
 	 */
 	@GetMapping("/orders")
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST')")
+	@PreAuthorize(WORKLIST_ROLES)
 	@Operation(summary = "List all imaging orders")
 	public ResponseEntity<List<ImagingOrderResponseDTO>> getAllOrders(
 		@RequestParam(required = false) ImagingOrderStatus status
@@ -141,7 +183,7 @@ public class ImagingOrderController {
 	}
 
 	@GetMapping("/orders/hospital/{hospitalId}")
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST')")
+	@PreAuthorize(WORKLIST_ROLES)
 	@Operation(summary = "List imaging orders for a hospital")
 	public ResponseEntity<List<ImagingOrderResponseDTO>> getOrdersByHospital(
 		@PathVariable UUID hospitalId,

@@ -83,6 +83,9 @@ class LabResultServiceImplWorkflowTest {
     /** QA D709: release runs the critical-value notification. */
     @Mock private CriticalValueNotificationService criticalValueNotificationService;
 
+    /** r63 D2304: the QC release gate; a mock answers "not blocked". */
+    @Mock private com.example.hms.service.LabQcReleaseGate qcReleaseGate;
+
     @InjectMocks
     private LabResultServiceImpl labResultService;
 
@@ -140,6 +143,64 @@ class LabResultServiceImplWorkflowTest {
         when(labResultMapper.toResponseDTO(unreleased)).thenReturn(mapped);
 
         assertThat(labResultService.getPendingRelease(pageable, Locale.US).getContent()).containsExactly(mapped);
+    }
+
+    /**
+     * r65 D2613 / D2614: the release worklist row says, before the dialog is
+     * filled, which rejected QC run holds the release, and carries the
+     * patient's file number, birth date and sex for the critical call. The
+     * gate is read once per test on the page.
+     */
+    @Test
+    void pendingReleaseRowsCarryTheQcHoldAndThePatientsIdentifiers() {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        Patient patient = labOrder.getPatient();
+        patient.setGender("F");
+        com.example.hms.model.PatientHospitalRegistration registration =
+            new com.example.hms.model.PatientHospitalRegistration();
+        registration.setMrn("CMT1486");
+        registration.setHospital(labOrder.getHospital());
+        patient.getHospitalRegistrations().add(registration);
+        LabResult first = buildLabResult(UUID.randomUUID());
+        LabResult second = buildLabResult(UUID.randomUUID());
+        com.example.hms.model.LabQcEvent run = new com.example.hms.model.LabQcEvent();
+        run.setId(UUID.randomUUID());
+        run.setQcLevel(com.example.hms.enums.LabQcEventLevel.HIGH_CONTROL);
+        run.setRecordedAt(LocalDateTime.of(2026, 11, 19, 7, 30));
+        run.setRecordedByDisplay("Tech Ouedraogo");
+        run.setSdFlag("3SD");
+        when(labResultRepository.findPendingReleaseHandledBy(hospitalId, pageable))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(first, second)));
+        when(labResultMapper.toResponseDTO(any(LabResult.class)))
+            .thenAnswer(inv -> LabResultResponseDTO.builder().build());
+        when(qcReleaseGate.blockingRun(labOrder)).thenReturn(java.util.Optional.of(run));
+
+        List<LabResultResponseDTO> rows = labResultService.getPendingRelease(pageable, Locale.US).getContent();
+
+        assertThat(rows).hasSize(2).allSatisfy(row -> {
+            assertThat(row.getPatientMrn()).isEqualTo("CMT1486");
+            assertThat(row.getPatientDateOfBirth()).isEqualTo(LocalDate.of(1990, 1, 1));
+            assertThat(row.getPatientGender()).isEqualTo("F");
+            assertThat(row.getQcHold()).isNotNull();
+            assertThat(row.getQcHold().getRunId()).isEqualTo(run.getId());
+            assertThat(row.getQcHold().getQcLevel()).isEqualTo("HIGH_CONTROL");
+            assertThat(row.getQcHold().getRecordedBy()).isEqualTo("Tech Ouedraogo");
+            assertThat(row.getQcHold().getRecordedAt()).isEqualTo(run.getRecordedAt());
+        });
+        verify(qcReleaseGate, org.mockito.Mockito.times(1)).blockingRun(labOrder);
+    }
+
+    @Test
+    void pendingReleaseRowWithoutAQcHoldSaysNothingHoldsIt() {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        LabResult row = buildLabResult(UUID.randomUUID());
+        when(labResultRepository.findPendingReleaseHandledBy(hospitalId, pageable))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(row)));
+        when(labResultMapper.toResponseDTO(row)).thenReturn(LabResultResponseDTO.builder().build());
+        when(qcReleaseGate.blockingRun(labOrder)).thenReturn(java.util.Optional.empty());
+
+        assertThat(labResultService.getPendingRelease(pageable, Locale.US).getContent())
+            .singleElement().satisfies(dto -> assertThat(dto.getQcHold()).isNull());
     }
 
     @Test

@@ -116,6 +116,10 @@ export class EnumLabelService implements OnDestroy {
       DELIVERY: 'Delivery room',
       PATIENT_REPORTED: 'Reported by the patient',
       MANUAL: 'Manual entry',
+      // QA D2580 (r65): maternity readings charted in the vitals (MaternityVitalCharting).
+      LABOR_PARTOGRAPH: 'Labour (partograph)',
+      POSTPARTUM: 'Postpartum check',
+      NEWBORN_ASSESSMENT: 'Newborn assessment',
     },
 
     /* ── Encounter / visit types ──────────────────────────── */
@@ -766,6 +770,7 @@ export class EnumLabelService implements OnDestroy {
       PATIENT: 'Patient',
       PROVIDER_ADMIN: 'Provider Administrator',
       RADIOLOGIST: 'Radiologist',
+      IMAGING_TECHNICIAN: 'Imaging Technician',
       SURGEON: 'Surgeon',
       THERAPIST: 'Therapist',
     },
@@ -992,6 +997,8 @@ export class EnumLabelService implements OnDestroy {
       PRO_SCREEN_POSITIVE: 'Positive PRO Screen',
       REORDER_ALERT: 'Reorder Alert',
       SEVERE_HYPERTENSION: 'Severe hypertension',
+      PHARMACY_BILLING_DEFERRAL: 'Deferred pharmacy billing',
+      MEWS_ESCALATION: 'Maternal early warning (MEWS)',
     },
 
     /* ── Order source (snapshot drawer + nurse station board) ─── */
@@ -1098,6 +1105,9 @@ export class EnumLabelService implements OnDestroy {
       NEWS2_HIGH: 'NEWS2 high: every 15 min',
       NEWS2_MEDIUM: 'NEWS2 medium: hourly',
       ROUTINE: 'Routine',
+      MEWS_HIGH: 'MEWS high: continuous observations (provisional)',
+      MEWS_MEDIUM: 'MEWS medium: close observations (provisional)',
+      MEWS_LOW_MEDIUM: 'MEWS low-medium: close observations (provisional)',
     },
 
     /* ── Staff scheduling and employment ──────────────────── */

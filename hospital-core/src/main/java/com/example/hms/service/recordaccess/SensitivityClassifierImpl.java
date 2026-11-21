@@ -57,7 +57,17 @@ public class SensitivityClassifierImpl implements SensitivityClassifier {
 
     @Override
     public SensitivityCategory effectiveCategory(PatientProblem problem) {
-        return problem == null ? null : problem.getSensitivityCategory();
+        if (problem == null) {
+            return null;
+        }
+        // QA D2730: the row's own tag wins; failing that the problem follows
+        // the visit it was recorded in (that visit's tag, else its
+        // department's default), read live so a visit tagged afterwards
+        // withholds the diagnoses made in it too.
+        if (problem.getSensitivityCategory() != null) {
+            return problem.getSensitivityCategory();
+        }
+        return effectiveCategory(problem.getSourceEncounter());
     }
 
     @Override

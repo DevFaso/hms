@@ -80,6 +80,7 @@ public class PatientVitalSignMapper {
         entity.setConsciousnessLevel(request.getConsciousnessLevel());
         entity.setNotes(request.getNotes());
         entity.setOrganDamageSymptoms(com.example.hms.enums.OrganDamageSymptom.join(request.getOrganDamageSymptoms()));
+        entity.setMaternalConcerns(com.example.hms.enums.MaternalConcern.join(request.getMaternalConcerns()));
         entity.setSource(request.getSource());
         entity.setRecordedAt(request.getRecordedAt());
         entity.setClinicallySignificant(Boolean.TRUE.equals(request.getClinicallySignificant()));

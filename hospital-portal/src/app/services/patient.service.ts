@@ -1,3 +1,4 @@
+import { SensitivityCategory, SensitivityTag } from '../shared/sensitivity/sensitivity-category';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, catchError, forkJoin, map, of } from 'rxjs';
@@ -205,10 +206,18 @@ export interface PatientProblem {
   diagnosisCodes?: string[];
   /** When the problem was last recorded or reviewed (server time). */
   lastReviewedAt?: string | null;
+  /** QA D1240: removed from the chart as entered in error. */
+  enteredInError?: boolean;
+  /** QA D2730: the sensitive category set on this entry itself. */
+  sensitivityCategory?: SensitivityCategory | null;
+  /** QA D2730: what governs: the entry's tag, else the category of the visit it was recorded in. */
+  effectiveSensitivityCategory?: SensitivityCategory | null;
 }
 
 export interface PatientDiagnosisRequest {
   hospitalId: string;
+  /** QA D2730: left out, the entry takes the category of the visit it is recorded in. */
+  sensitivityCategory?: SensitivityCategory | null;
   problemDisplay: string;
   problemCode?: string;
   icdVersion?: string;
@@ -746,6 +755,18 @@ export class PatientService {
     req: Partial<PatientDiagnosisRequest>,
   ): Observable<PatientProblem> {
     return this.http.put<PatientProblem>(`/patients/${patientId}/diagnoses/${diagnosisId}`, req);
+  }
+
+  /** QA D2730: tag one entry of the problem list; null clears the entry's own tag. */
+  setDiagnosisSensitivity(
+    patientId: string,
+    diagnosisId: string,
+    category: SensitivityCategory | null,
+  ): Observable<SensitivityTag> {
+    return this.http.put<SensitivityTag>(
+      `/patients/${patientId}/diagnoses/${diagnosisId}/sensitivity`,
+      { category },
+    );
   }
 
   deleteDiagnosis(

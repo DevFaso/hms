@@ -13,6 +13,7 @@
     "Visit summary sections (2026-11-12): allergy reaction, prescription frequency and the family-history relationship are free text a clinician typed, as on the chart pages pinned above."
   ],
   "pinned": [
+    "src/app/lab/lab-results/lab-results.html::r.qcOverrideReason",
     "src/app/nurse-station/nurse-station.html::<option>name",
     "src/app/lab/shared/result-evolution.component.ts::<option>u",
     "src/app/encounters/encounters.html::<option>department",
@@ -74,11 +75,13 @@
     "src/app/encounters/encounters.html::enc.encounterType",
     "src/app/hospitals/hospital-detail.html::lc.suspensionReason",
     "src/app/hospitals/hospital-list.html::h.state",
+    "src/app/imaging/imaging-images/imaging-images.component.html::w.withdrawalReason",
     "src/app/imaging/imaging.html::d.studyType",
     "src/app/imaging/imaging.html::h.statusReason",
     "src/app/imaging/imaging.html::o.studyType",
     "src/app/imaging/imaging.html::ord.contrastType",
     "src/app/imaging/imaging.html::ord.studyType",
+    "src/app/imaging/reading-context/imaging-reading-context.component.html::p.studyType",
     "src/app/imaging/imaging.html::rep.criticalEscalationLevel",
     "src/app/imaging/imaging.html::ref.studyType",
     "src/app/lab/lab-approval-queue/lab-approval-queue.html::def.category",
@@ -87,6 +90,9 @@
     "src/app/lab/lab-outbox/lab-outbox.html::d.message.messageType",
     "src/app/lab/lab-outbox/lab-outbox.html::row.messageType",
     "src/app/lab/lab-outbox/lab-outbox.html::sibling.messageType",
+    "src/app/lab/lab-outbox/lab-outbox.html::s.messageType",
+    "src/app/lab/lab-outbox/lab-outbox.html::s.flag",
+    "src/app/lab/lab-outbox/lab-outbox.html::s.resultStatus",
     "src/app/lab/lab-release-worklist/lab-release-worklist.html::row.observationResultStatus",
     "src/app/lab/lab-results/lab-results.html::r.expectedResult",
     "src/app/lab/lab-results/lab-results.html::rr.source",
@@ -147,6 +153,8 @@
     "src/app/patient-portal/my-medical-history/my-medical-history.component.html::socialHistory()?.tobaccoType",
     "src/app/patient-portal/my-medications/my-medications.component.html::med.frequency",
     "src/app/patient-portal/my-medications/my-medications.component.html::rx.frequency",
+    "src/app/patient-portal/prescription-document/prescription-document.component.html::item.frequency",
+    "src/app/patient-portal/prescription-document/prescription-document.component.html::item.route",
     "src/app/patient-portal/my-pharmacy-invoices/my-pharmacy-invoices.component.html::c.claimStatus",
     "src/app/patient-portal/my-pharmacy-invoices/my-pharmacy-invoices.component.html::c.rejectionReason",
     "src/app/patient-portal/my-pharmacy-invoices/my-pharmacy-invoices.component.html::p.paymentMethod",
@@ -226,7 +234,6 @@
     "src/app/procedure-orders/procedure-orders.html::o.sedationType",
     "src/app/profile/profile.html::event.eventType",
     "src/app/profile/profile.html::mfa.channel",
-    "src/app/profile/profile.html::mfa.method",
     "src/app/reception/insurance-issues-panel/insurance-issues-panel.component.html::issue.issueType",
     "src/app/reception/recalls-panel/recalls-panel.component.html::recall.reason",
     "src/app/reception/reception-cockpit/reception-cockpit.component.html::item.appointmentReason",
@@ -259,7 +266,13 @@
     "src/app/billing/price-list/price-list.component.html::p.changeReason",
     "src/app/billing/payers/payers.component.html::payer.deactivationReason",
     "src/app/billing/payers/payers.component.html::rule.endReason",
-    "src/app/billing/payers/payers.component.html::t.changeReason"
+    "src/app/billing/payers/payers.component.html::t.changeReason",
+    "src/app/pharmacy/pharmacy-reconciliation.html::f.reason",
+    "src/app/pharmacy/pharmacy-reconciliation.html::r.reason",
+    "src/app/billing/cash-session/cash-session.component.html::s.reopenReason",
+    "src/app/billing/cash-session/cash-supervisor.component.html::line.reason",
+    "src/app/patients/family-release/family-release.component.html::release.reason",
+    "src/app/pharmacy/billing-deferrals.html::r.reason"
   ],
   "reasons": {
     "src/app/billing/billing.html::it.overrideReason": "InvoiceItemRequestDTO.overrideReason is a size-bounded String (500 characters), typed in the billing.html input with data-testid line-override-reason-<id> via editLineOverrideReason and submitted by BillingComponent.saveLine. InvoiceItemServiceImpl.applyPrice trims and stores that explanation; InvoiceItemMapper returns it as InvoiceItemResponseDTO.overrideReason. It is the cashier's free text, not an enum token, and must remain as typed.",
@@ -276,6 +289,18 @@
     "src/app/billing/price-list/price-list.component.html::p.changeReason": "Billing-money plan PR 2: PriceListPriceDTO.changeReason is the free text the hospital admin or accountant typed for a price change (owner-approved pin, 2026-11-16), shown as typed; not a wire token.",
     "src/app/billing/payers/payers.component.html::payer.deactivationReason": "Billing-money plan PR 6: PayerDTO.deactivationReason is the free text the hospital admin or accountant typed when retiring a payer, shown as typed; not a wire token.",
     "src/app/billing/payers/payers.component.html::rule.endReason": "Billing-money plan PR 6: PayerPlanRuleDTO.endReason is the free text the hospital admin or accountant typed when ending a coverage rule, shown as typed; not a wire token.",
-    "src/app/billing/payers/payers.component.html::t.changeReason": "Review of #1202: PayerPlanTermsDTO.changeReason is the free text the hospital admin or accountant typed for new plan terms, shown as typed; not a wire token."
+    "src/app/billing/payers/payers.component.html::t.changeReason": "Review of #1202: PayerPlanTermsDTO.changeReason is the free text the hospital admin or accountant typed for new plan terms, shown as typed; not a wire token.",
+    "src/app/lab/lab-results/lab-results.html::r.qcOverrideReason": "r63 D2304: LabResultResponseDTO.qcOverrideReason is the free text the releaser typed to release despite a rejected QC run, shown as typed; not a wire token.",
+    "src/app/patient-portal/prescription-document/prescription-document.component.html::item.route": "QA D2353: PrescriptionResponseDTO.route is rendered through | medicationRoute (the portal's shared route vocabulary, QA D950), which the scan does not read as a label pipe; as on my-medications and the chart pages.",
+    "src/app/patient-portal/prescription-document/prescription-document.component.html::item.frequency": "QA D2353: PrescriptionResponseDTO.frequency is the free text the prescriber typed, as on my-medications (pinned above); not a wire token.",
+    "src/app/lab/lab-outbox/lab-outbox.html::s.messageType": "Outbox summary: an HL7 MSH-9 code with no plain-language name (OML^O21 and ORU^R01 are labelled through LAB_OUTBOX.TYPE_*); the raw code is the only honest rendering, as for row.messageType.",
+    "src/app/lab/lab-outbox/lab-outbox.html::s.flag": "Outbox summary: an OBX-8 code outside the labelled set (N, A, L, H, LL, HH via LAB_OUTBOX.FLAG_*), shown raw as the analyser interface code.",
+    "src/app/lab/lab-outbox/lab-outbox.html::s.resultStatus": "Outbox summary: an OBX-11 code outside F/P/C (labelled via LAB_OUTBOX.RESULT_STATUS_*), shown raw as the HL7 table 0085 code.",
+    "src/app/pharmacy/pharmacy-reconciliation.html::f.reason": "QA D2675: the « à facturer » reason a pharmacist typed at hand-over (free text)",
+    "src/app/pharmacy/pharmacy-reconciliation.html::r.reason": "QA D2676: the refund reason a pharmacist typed (free text)",
+    "src/app/billing/cash-session/cash-session.component.html::s.reopenReason": "CashSessionNoteRequestDTO.note is a size-bounded String (500 characters) a hospital admin or accountant types in cash-supervisor.component.html textarea#cash-supervisor-note; CashSessionService.reopen stores it as CashSession.reopenReason. It is a person's free text (why the till was reopened), not an enum token, and must remain as typed.",
+    "src/app/billing/cash-session/cash-supervisor.component.html::line.reason": "The delete reason is a size-bounded String (500 characters) a cashier types in billing.html input#line-remove-reason; InvoiceItemServiceImpl.deleteInvoiceItem stores it as InvoiceLineRemoval.reason and InvoiceLineRemovalDTO.reason carries it. It is a person's free text (why the line was taken off the invoice), not an enum token, and must remain as typed.",
+    "src/app/patients/family-release/family-release.component.html::release.reason": "Policy 2026-11-20: ProxySensitiveReleaseDTO.reason is the free text a doctor or a midwife typed when releasing a minor's result to a parent (textarea#family-release-reason, 10 to 1000 characters); shown as typed to the clinicians, not a wire token.",
+    "src/app/pharmacy/billing-deferrals.html::r.reason": "Policy rule 6 (V345): DispenseBillingDeferralDTO.reason is the free text a person typed, a size-bounded String (500 characters): why the fill should leave before it is paid, or the reason of an urgency override. Not an enum token; it must remain as typed."
   }
 }

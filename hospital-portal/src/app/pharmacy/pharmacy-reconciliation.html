@@ -1,0 +1,386 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <p class="workspace-eyebrow">
+        <span class="material-symbols-outlined" aria-hidden="true">balance</span
+        ><span>{{ 'PHARMACY_WORKSPACE.LABEL' | translate }}</span>
+      </p>
+      <h1 class="page-title">{{ 'PHARMACY_MONEY.RECON.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'PHARMACY_MONEY.RECON.SUBTITLE' | translate }}</p>
+    </div>
+    <div class="header-actions">
+      <button
+        class="btn-secondary"
+        type="button"
+        data-testid="recon-export"
+        [disabled]="exporting()"
+        (click)="exportCsv()"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">table</span>
+        {{ 'PHARMACY_MONEY.RECON.EXPORT' | translate }}
+      </button>
+    </div>
+  </div>
+
+  @if (pharmaciesLoaded() && pharmacies().length === 0) {
+    <p class="muted" role="status">{{ 'PHARMACY.NO_PHARMACY_HINT' | translate }}</p>
+  } @else {
+    <div class="recon-filters">
+      <label class="field">
+        {{ 'PHARMACY.SELECT_PHARMACY' | translate }}
+        <select
+          name="pharmacy"
+          data-testid="recon-pharmacy"
+          [ngModel]="selectedPharmacyId()"
+          (ngModelChange)="onPharmacyChange($event)"
+        >
+          @for (p of pharmacies(); track p.id) {
+            <option [value]="p.id">{{ p.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field">
+        {{ 'PHARMACY_MONEY.RECON.DATE' | translate }}
+        <input
+          type="date"
+          name="date"
+          data-testid="recon-date"
+          [ngModel]="date()"
+          (ngModelChange)="onDateChange($event)"
+        />
+      </label>
+    </div>
+
+    @if (loading()) {
+      <p class="muted" role="status">{{ 'COMMON.LOADING' | translate }}</p>
+    } @else if (failed()) {
+      <p class="recon-error" role="alert">{{ 'PHARMACY_MONEY.RECON.LOAD_FAILED' | translate }}</p>
+    } @else if (day(); as d) {
+      <p
+        class="recon-verdict"
+        [class.recon-ok]="reconciled()"
+        [class.recon-ko]="!reconciled()"
+        role="status"
+        data-testid="recon-verdict"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">{{
+          reconciled() ? 'check_circle' : 'error'
+        }}</span>
+        @if (reconciled()) {
+          {{ 'PHARMACY_MONEY.RECON.RECONCILED' | translate }}
+        } @else {
+          {{ 'PHARMACY_MONEY.RECON.DIFFERENCES' | translate: { count: d.differences.length } }}
+        }
+      </p>
+
+      <section class="recon-tiles" [attr.aria-label]="'PHARMACY_MONEY.RECON.MONEY' | translate">
+        <div class="recon-tile">
+          <span class="tile-label">{{ 'PHARMACY_MONEY.RECON.SALES' | translate }}</span>
+          <strong data-testid="recon-sales">{{ d.money.salesTotal | cfa: 'XOF' }}</strong>
+          <small>{{
+            'PHARMACY_MONEY.RECON.COUNT' | translate: { count: d.money.salesCount }
+          }}</small>
+          @for (m of salesMethods(); track m[0]) {
+            <small
+              >{{ 'PORTAL.ENUM.PAYMENT_METHOD.' + m[0] | translate
+              }}{{ 'COMMON.COLON' | translate }} {{ m[1] | cfa: 'XOF' }}</small
+            >
+          }
+        </div>
+        <div class="recon-tile">
+          <span class="tile-label">{{ 'PHARMACY_MONEY.RECON.DISPENSE_PAYMENTS' | translate }}</span>
+          <strong data-testid="recon-payments">{{
+            d.money.dispensePaymentsTotal | cfa: 'XOF'
+          }}</strong>
+          <small>{{
+            'PHARMACY_MONEY.RECON.COUNT' | translate: { count: d.money.dispensePaymentsCount }
+          }}</small>
+          @for (m of paymentMethods(); track m[0]) {
+            <small
+              >{{ 'PORTAL.ENUM.PAYMENT_METHOD.' + m[0] | translate
+              }}{{ 'COMMON.COLON' | translate }} {{ m[1] | cfa: 'XOF' }}</small
+            >
+          }
+        </div>
+        <div class="recon-tile">
+          <span class="tile-label">{{ 'PHARMACY_MONEY.RECON.REFUNDS' | translate }}</span>
+          <strong>{{ d.money.refundsPaid | cfa: 'XOF' }}</strong>
+          <small>{{
+            'PHARMACY_MONEY.RECON.COUNT' | translate: { count: d.money.refundsCount }
+          }}</small>
+        </div>
+        <div class="recon-tile recon-tile-net">
+          <span class="tile-label">{{ 'PHARMACY_MONEY.RECON.NET' | translate }}</span>
+          <strong data-testid="recon-net">{{ d.money.netCollected | cfa: 'XOF' }}</strong>
+        </div>
+        <div class="recon-tile">
+          <span class="tile-label">{{ 'PHARMACY_MONEY.RECON.DEFERRED' | translate }}</span>
+          <strong>{{ d.money.deferredTotal | cfa: 'XOF' }}</strong>
+          <!-- Policy rule 6: what of it left on an urgency override, and what went on an open stay. -->
+          @if ((d.money.urgencyOverrideTotal ?? 0) > 0) {
+            <small data-testid="recon-urgency-total">{{
+              'PHARMACY_MONEY.RECON.DEFERRED_URGENCY'
+                | translate: { amount: (d.money.urgencyOverrideTotal | cfa: 'XOF') }
+            }}</small>
+          }
+          @if ((d.money.admissionAccountTotal ?? 0) > 0) {
+            <small data-testid="recon-stay-total">{{
+              'PHARMACY_MONEY.RECON.DEFERRED_STAY'
+                | translate: { amount: (d.money.admissionAccountTotal | cfa: 'XOF') }
+            }}</small>
+          }
+        </div>
+        <div class="recon-tile" [class.recon-tile-ko]="d.money.unpaidTotal > 0">
+          <span class="tile-label">{{ 'PHARMACY_MONEY.RECON.UNPAID' | translate }}</span>
+          <strong>{{ d.money.unpaidTotal | cfa: 'XOF' }}</strong>
+        </div>
+      </section>
+
+      @if (d.differences.length) {
+        <h2 class="recon-h2">{{ 'PHARMACY_MONEY.RECON.DIFFERENCES_TITLE' | translate }}</h2>
+        <div
+          class="table-wrapper"
+          tabindex="0"
+          role="region"
+          [attr.aria-label]="'PHARMACY_MONEY.RECON.DIFFERENCES_TITLE' | translate"
+        >
+          <table class="data-table" data-testid="recon-differences">
+            <thead>
+              <tr>
+                <th>{{ 'PHARMACY_MONEY.RECON.COL_KIND' | translate }}</th>
+                <th>{{ 'PHARMACY.MEDICATION' | translate }}</th>
+                <th>{{ 'PHARMACY_MONEY.RECON.COL_LOT' | translate }}</th>
+                <th>{{ 'PHARMACY_MONEY.RECON.COL_EXPECTED' | translate }}</th>
+                <th>{{ 'PHARMACY_MONEY.RECON.COL_ACTUAL' | translate }}</th>
+                <th>{{ 'PHARMACY_MONEY.RECON.COL_AMOUNT' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (x of d.differences; track $index) {
+                <tr class="row-ko">
+                  <td>{{ x.type | keyLabel: 'PHARMACY_MONEY.RECON.KIND.' }}</td>
+                  <td>{{ x.medicationName | dash }}</td>
+                  <td>{{ x.lotNumber | dash }}</td>
+                  <td>{{ x.expected ?? null | dash }}</td>
+                  <td>{{ x.actual ?? null | dash }}</td>
+                  <td>
+                    {{
+                      x.amount !== null && x.amount !== undefined ? (x.amount | cfa: 'XOF') : '—'
+                    }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      <h2 class="recon-h2">{{ 'PHARMACY_MONEY.RECON.STOCK_TITLE' | translate }}</h2>
+      @if (d.stock.length === 0) {
+        <p class="muted">{{ 'PHARMACY_MONEY.RECON.NO_MOVEMENT' | translate }}</p>
+      } @else {
+        <div
+          class="table-wrapper"
+          tabindex="0"
+          role="region"
+          [attr.aria-label]="'PHARMACY_MONEY.RECON.STOCK_TITLE' | translate"
+        >
+          <table class="data-table" data-testid="recon-stock">
+            <thead>
+              <tr>
+                <th>{{ 'PHARMACY.MEDICATION' | translate }}</th>
+                <th>{{ 'PHARMACY_MONEY.RECON.COL_LOT' | translate }}</th>
+                <th>{{ 'PHARMACY_MONEY.RECON.COL_RECEIVED' | translate }}</th>
+                <th>{{ 'PHARMACY_MONEY.RECON.COL_SOLD' | translate }}</th>
+                <th>{{ 'PHARMACY_MONEY.RECON.COL_DISPENSED' | translate }}</th>
+                <th>{{ 'PHARMACY_MONEY.RECON.COL_RETURNED' | translate }}</th>
+                <th>{{ 'PHARMACY_MONEY.RECON.COL_ADJUSTED' | translate }}</th>
+                <th>{{ 'PHARMACY_MONEY.RECON.COL_TRANSFERRED' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (l of d.stock; track $index) {
+                <tr [class.row-ko]="l.difference">
+                  <td>
+                    {{ l.medicationName | dash }} <small class="muted">{{ l.unit ?? '' }}</small>
+                  </td>
+                  <td>{{ l.lotNumber | dash }}</td>
+                  <td>{{ l.received }}</td>
+                  <td>
+                    {{ l.soldRecorded }}
+                    @if (l.soldRecorded !== l.soldMoved) {
+                      <small class="recon-moved">{{
+                        'PHARMACY_MONEY.RECON.MOVED' | translate: { n: l.soldMoved }
+                      }}</small>
+                    }
+                  </td>
+                  <td>
+                    {{ l.dispensedRecorded }}
+                    @if (l.dispensedRecorded !== l.dispensedMoved) {
+                      <small class="recon-moved">{{
+                        'PHARMACY_MONEY.RECON.MOVED' | translate: { n: l.dispensedMoved }
+                      }}</small>
+                    }
+                  </td>
+                  <td>{{ l.returned }}</td>
+                  <td>{{ l.adjusted }}</td>
+                  <td>{{ l.transferred }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      @if (d.controlled.length) {
+        <h2 class="recon-h2">{{ 'PHARMACY_MONEY.RECON.CONTROLLED_TITLE' | translate }}</h2>
+        <ul class="recon-list" data-testid="recon-controlled">
+          @for (c of d.controlled; track c.inventoryItemId) {
+            <li [class.row-ko]="!c.matches">
+              {{ c.medicationName | dash }}{{ 'COMMON.COLON' | translate }}
+              {{
+                'PHARMACY_MONEY.RECON.CONTROLLED_LINE'
+                  | translate: { register: c.registerBalance, stock: c.stockBalance }
+              }}
+            </li>
+          }
+        </ul>
+      }
+
+      @if (d.deferred.length) {
+        <h2 class="recon-h2">{{ 'PHARMACY_MONEY.RECON.DEFERRED_TITLE' | translate }}</h2>
+        <ul class="recon-list" data-testid="recon-deferred">
+          @for (f of d.deferred; track f.dispenseId) {
+            <li [attr.data-kind]="f.kind">
+              <span>{{ f.medicationName | dash }} × {{ f.quantity }}</span>
+              <span class="recon-amount">{{ f.due | cfa: 'XOF' }}</span>
+              <!-- Review of #1244: who the fill was for, so finance can bill it. -->
+              @if (f.patientName) {
+                <span class="recon-deferral-who" data-testid="recon-deferral-patient"
+                  >{{ f.patientName }}
+                  @if (f.patientMrn) {
+                    ({{ f.patientMrn }})
+                  }
+                </span>
+              }
+              <!-- Policy rule 6: the deferral behind the fill: its kind and who answers for it. -->
+              <strong class="recon-deferral-kind" data-testid="recon-deferral-kind">{{
+                f.kind ?? 'UNAPPROVED' | keyLabel: 'PHARMACY_MONEY.DEFERRAL.KIND.'
+              }}</strong>
+              @if (f.reason) {
+                <em class="recon-reason">{{ f.reason }}</em>
+              }
+              @if (f.approvedByName) {
+                <span class="recon-deferral-who">{{
+                  'PHARMACY_MONEY.DEFERRAL.APPROVED_BY' | translate: { name: f.approvedByName }
+                }}</span>
+              }
+              @if (f.handedOverByName) {
+                <span class="recon-deferral-who">{{
+                  'PHARMACY_MONEY.RECON.HANDED_OVER_BY' | translate: { name: f.handedOverByName }
+                }}</span>
+              }
+              @if (f.coverReference) {
+                <span class="recon-deferral-who">{{
+                  'PHARMACY_MONEY.DEFERRAL.COVER_REFERENCE_VALUE'
+                    | translate: { ref: f.coverReference }
+                }}</span>
+              }
+              @if (f.kind === 'URGENCY_OVERRIDE') {
+                <span
+                  class="recon-deferral-who"
+                  [class.recon-deferral-open]="!f.reviewed"
+                  data-testid="recon-override-review"
+                  >{{
+                    (f.reviewed
+                      ? 'PHARMACY_MONEY.RECON.OVERRIDE_REVIEWED'
+                      : 'PHARMACY_MONEY.RECON.OVERRIDE_TO_REVIEW'
+                    ) | translate
+                  }}</span
+                >
+              }
+            </li>
+          }
+        </ul>
+      }
+    }
+  }
+
+  <h2 class="recon-h2">{{ 'PHARMACY_MONEY.REFUND.TITLE' | translate }}</h2>
+  @if (refundsFailed()) {
+    <p class="muted">{{ 'PHARMACY_MONEY.REFUND.LOAD_FAILED' | translate }}</p>
+  } @else if (refunds().length === 0) {
+    <p class="muted">{{ 'PHARMACY_MONEY.REFUND.NONE' | translate }}</p>
+  } @else {
+    <ul class="refund-list" data-testid="refund-list">
+      @for (r of refunds(); track r.id) {
+        <li class="refund-card">
+          <div class="refund-main">
+            <strong>{{ r.amount | cfa: 'XOF' }}</strong>
+            <span>{{ r.medicationName | dash }} × {{ r.quantity }}</span>
+            <span class="refund-status">{{
+              r.status | keyLabel: 'PHARMACY_MONEY.REFUND.STATUS.'
+            }}</span>
+          </div>
+          <p class="refund-meta">
+            <em class="recon-reason">{{ r.reason }}</em>
+            <span>{{ r.requestedByName | dash }}</span>
+            <span>{{ r.requestedAt | serverTime | date: 'short' }}</span>
+          </p>
+          <div class="refund-actions">
+            @if (r.canDecide) {
+              <button
+                type="button"
+                class="btn-primary btn-sm"
+                [disabled]="refundBusy() === r.id"
+                [attr.data-testid]="'refund-approve-' + r.id"
+                (click)="approve(r)"
+              >
+                {{ 'PHARMACY_MONEY.REFUND.APPROVE' | translate }}
+              </button>
+              <button type="button" class="btn-secondary btn-sm" (click)="startReject(r)">
+                {{ 'PHARMACY_MONEY.REFUND.REJECT' | translate }}
+              </button>
+            }
+            @if (r.status === 'APPROVED') {
+              <button
+                type="button"
+                class="btn-primary btn-sm"
+                [disabled]="refundBusy() === r.id"
+                [attr.data-testid]="'refund-pay-' + r.id"
+                (click)="pay(r)"
+              >
+                {{ 'PHARMACY_MONEY.REFUND.PAY' | translate }}
+              </button>
+            }
+          </div>
+          @if (rejecting() === r.id) {
+            <form class="refund-reject" (ngSubmit)="confirmReject(r)">
+              <label for="refundRejectReason"
+                >{{ 'PHARMACY_MONEY.REFUND.REJECT_REASON' | translate }} *</label
+              >
+              <input
+                id="refundRejectReason"
+                name="refundRejectReason"
+                type="text"
+                maxlength="500"
+                required
+                [(ngModel)]="rejectReason"
+              />
+              <button
+                type="submit"
+                class="btn-secondary btn-sm"
+                [disabled]="refundBusy() === r.id"
+                appSubmitGuard
+                submitGuardRequired
+                data-testid="refund-reject-confirm"
+              >
+                {{ 'PHARMACY_MONEY.REFUND.REJECT' | translate }}
+              </button>
+            </form>
+          }
+        </li>
+      }
+    </ul>
+  }
+</div>

@@ -27,6 +27,12 @@ public interface BillingInvoiceService {
     Page<BillingInvoiceResponseDTO> getInvoicesForPortalPatient(UUID patientId, Pageable pageable, Locale locale);
 
     /**
+     * QA D2730 (r65): the same invoices as a proxy reads them, less those of a
+     * sensitive visit. The caller has already verified the grant.
+     */
+    Page<BillingInvoiceResponseDTO> getInvoicesForProxy(UUID patientId, Pageable pageable, Locale locale);
+
+    /**
      * QA D974: a discount, a waiver or a credit note on an issued invoice, with
      * its mandatory reason; the total is lowered and the row audited.
      */
@@ -121,7 +127,14 @@ public interface BillingInvoiceService {
      */
     com.example.hms.model.PaymentTransaction recordCheckInCopay(com.example.hms.model.Encounter encounter,
         java.math.BigDecimal amount, com.example.hms.enums.PaymentMethod method, String reference,
-        com.example.hms.enums.MobileMoneyOperator operator, UUID recordedBy);
+        com.example.hms.enums.MobileMoneyOperator operator, UUID recordedBy, UUID clientRequestId);
+
+    /**
+     * Billing plan PR 11 (QA D2430): the payment row a client request key already recorded at
+     * {@code hospitalId}, so a retried check-in can answer with the copay it took.
+     */
+    java.util.Optional<com.example.hms.model.PaymentTransaction> findPaymentByClientRequest(UUID hospitalId,
+        UUID clientRequestId);
     /** QA D209: KPI totals over every invoice in the caller's scope. */
     com.example.hms.payload.dto.BillingSummaryDTO summarize(Locale locale);
 

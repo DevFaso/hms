@@ -162,4 +162,56 @@ describe('PatientNotificationsComponent', () => {
 
     expect(component.error()).not.toBeNull();
   });
+  // ── QA D2402: an opt-out row is dated and says what it was about ──
+
+  it('QA D2402: an opt-out row (no attempt) shows the day it was recorded, and its appointment', () => {
+    setup(
+      pageOf([
+        delivery({
+          id: 'd-9',
+          eventType: 'APPOINTMENT_CONFIRMATION',
+          channel: 'EMAIL',
+          status: 'SKIPPED',
+          attempts: 0,
+          errorCode: 'OPTED_OUT',
+          retryable: false,
+          lastAttemptAt: null,
+          createdAt: '2026-11-19T09:15:00',
+          subjectDate: '2026-11-20',
+          subjectTime: '10:30:00',
+        }),
+      ]),
+    );
+    const host = fixture.nativeElement as HTMLElement;
+
+    expect(host.querySelector('[data-testid="pn-date-d-9"]')?.textContent).not.toContain('—');
+    expect(host.querySelector('[data-testid="pn-date-d-9"]')?.textContent).toContain(
+      'PATIENT_NOTIFICATIONS.RECORDED',
+    );
+    expect(component.subject(component.rows()[0])).toEqual({
+      key: 'PATIENT_NOTIFICATIONS.SUBJECT_APPOINTMENT',
+      params: { date: '20/11/2026', time: '10:30' },
+    });
+    expect(host.querySelector('[data-testid="pn-subject-d-9"]')).not.toBeNull();
+  });
+
+  it('QA D2402: an invoice row names its invoice', () => {
+    setup(pageOf([delivery({ eventType: 'INVOICE', subjectReference: 'CHA-2026-000057' })]));
+    expect(component.subject(component.rows()[0])).toEqual({
+      key: 'PATIENT_NOTIFICATIONS.SUBJECT_INVOICE',
+      params: { number: 'CHA-2026-000057' },
+    });
+  });
+
+  it('QA D2402: the default filter says how many rows it leaves out, and shows them in one click', () => {
+    setup(pageOf([delivery({})]));
+    const host = fixture.nativeElement as HTMLElement;
+    const hint = host.querySelector('[data-testid="pn-hidden-by-filter"]');
+
+    // RETRYING 1 + SENT 12 + SKIPPED 2 are not « En échec ».
+    expect(component.hiddenByFilter()).toBe(15);
+    expect(hint).not.toBeNull();
+    (hint?.querySelector('button') as HTMLButtonElement).click();
+    expect(service.search).toHaveBeenCalledWith('ALL', 0, 25);
+  });
 });

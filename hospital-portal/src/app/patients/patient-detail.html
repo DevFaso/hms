@@ -245,6 +245,7 @@
       <app-patient-chart
         [patientId]="patient()!.id"
         [patientGender]="patient()!.gender"
+        [patientDateOfBirth]="patient()!.dateOfBirth"
         [refreshToken]="accessEpoch()"
         (openRestricted)="openRestrictedRows()"
       />
@@ -269,23 +270,32 @@
         </h3>
         <div class="info-rows">
           <div class="info-row">
-            <span class="label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
-            ><span class="value">{{ p.hospitalName | dash }}</span>
+            <span class="label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span><span class="value">{{
+              p.hospitalName | dash
+            }}</span>
           </div>
           <div class="info-row">
-            <span class="label">{{ 'PATIENTS.MRN' | translate }}</span
-            ><span class="value">{{ p.mrn | dash }}</span>
+            <span class="label">{{ 'PATIENTS.MRN' | translate }}</span><span class="value">{{
+              p.mrn | dash
+            }}</span>
           </div>
           <div class="info-row">
-            <span class="label">{{ 'PATIENTS.USERNAME' | translate }}</span
-            ><span class="value">{{ p.username || '—' }}</span>
+            <span class="label">{{ 'PATIENTS.USERNAME' | translate }}</span><span class="value">{{
+              p.username || '—'
+            }}</span>
           </div>
           <div class="info-row">
-            <span class="label">{{ 'PATIENTS.REGISTERED' | translate }}</span
-            ><span class="value">{{ p.createdAt | serverTime | date: 'mediumDate' }}</span>
+            <span class="label">{{ 'PATIENTS.REGISTERED' | translate }}</span><span class="value">{{
+              p.createdAt | serverTime | date: 'mediumDate'
+            }}</span>
           </div>
         </div>
       </div>
+    }
+
+    <!-- QA D2203: the patient's SMS / e-mail choices, seen and recorded by the desk. -->
+    @if (activeTab() === 'administration') {
+      <app-patient-channel-preferences [patientId]="p.id" />
     }
 
     @if (activeTab() === 'administration' && canManageRestriction()) {
@@ -446,56 +456,72 @@
             </h3>
             <div class="info-rows">
               <div class="info-row">
-                <span class="label">{{ 'PATIENTS.FULL_NAME' | translate }}</span
-                ><span class="value">{{ fullName(p) }}</span>
+                <span class="label">{{ 'PATIENTS.FULL_NAME' | translate }}</span><span
+                  class="value"
+                  >{{ fullName(p) }}</span
+                >
               </div>
               <div class="info-row">
-                <span class="label">{{ 'PATIENTS.EMAIL' | translate }}</span
-                ><span class="value">{{ p.email || '—' }}</span>
+                <span class="label">{{ 'PATIENTS.EMAIL' | translate }}</span><span class="value">{{
+                  p.email || '—'
+                }}</span>
               </div>
               <div class="info-row">
-                <span class="label">{{ 'PATIENTS.PHONE' | translate }}</span
-                ><span class="value">{{ p.phoneNumberPrimary | dash }}</span>
+                <span class="label">{{ 'PATIENTS.PHONE' | translate }}</span><span class="value">{{
+                  p.phoneNumberPrimary | dash
+                }}</span>
               </div>
               <!-- QA D1036 / D926: the second number and the postal code were
                    stored at registration and shown nowhere. -->
               <div class="info-row">
-                <span class="label">{{ 'PATIENTS.PHONE_SECONDARY' | translate }}</span
-                ><span class="value">{{ p.phoneNumberSecondary || '—' }}</span>
+                <span class="label">{{ 'PATIENTS.PHONE_SECONDARY' | translate }}</span><span
+                  class="value"
+                  >{{ p.phoneNumberSecondary || '—' }}</span
+                >
               </div>
               <div class="info-row">
-                <span class="label">{{ 'PATIENTS.DOB' | translate }}</span
-                ><span class="value">{{
+                <span class="label">{{ 'PATIENTS.DOB' | translate }}</span><span class="value">{{
                   p.dateOfBirth ? (p.dateOfBirth | serverTime | date: 'mediumDate') : '—'
                 }}</span>
               </div>
               <div class="info-row">
-                <span class="label">{{ 'PATIENTS.GENDER' | translate }}</span
-                ><span class="value">{{ p.gender ? (p.gender | enumLabel: 'gender') : '—' }}</span>
+                <span class="label">{{ 'PATIENTS.GENDER' | translate }}</span><span class="value">{{
+                  p.gender ? (p.gender | enumLabel: 'gender') : '—'
+                }}</span>
               </div>
               <div class="info-row">
-                <span class="label">{{ 'PATIENTS.COUNTRY' | translate }}</span
-                ><span class="value">{{ p.country | dash }}</span>
+                <span class="label">{{ 'PATIENTS.COUNTRY' | translate }}</span><span
+                  class="value"
+                  >{{ p.country | dash }}</span
+                >
               </div>
               <div class="info-row">
-                <span class="label">{{ 'PATIENTS.CITY' | translate }}</span
-                ><span class="value">{{ p.city | dash }}</span>
+                <span class="label">{{ 'PATIENTS.CITY' | translate }}</span><span class="value">{{
+                  p.city | dash
+                }}</span>
               </div>
               <div class="info-row">
-                <span class="label">{{ 'PATIENTS.STATE' | translate }}</span
-                ><span class="value">{{ p.state | dash }}</span>
+                <span class="label">{{ 'PATIENTS.STATE' | translate }}</span><span class="value">{{
+                  p.state | dash
+                }}</span>
               </div>
               <div class="info-row">
-                <span class="label">{{ 'PATIENTS.ZIP_CODE' | translate }}</span
-                ><span class="value">{{ p.zipCode || '—' }}</span>
+                <span class="label">{{ 'PATIENTS.ZIP_CODE' | translate }}</span><span
+                  class="value"
+                  >{{ p.zipCode || '—' }}</span
+                >
               </div>
               <div class="info-row">
-                <span class="label">{{ 'PATIENTS.ADDRESS' | translate }}</span
-                ><span class="value">{{ p.address | dash }}</span>
+                <span class="label">{{ 'PATIENTS.ADDRESS' | translate }}</span><span
+                  class="value"
+                  >{{ p.address | dash }}</span
+                >
               </div>
               <div class="info-row">
-                <span class="label">{{ 'PATIENTS.ETHNICITY' | translate }}</span
-                ><span class="value">{{ p.ethnicity | dash }}</span>
+                <span class="label">{{ 'PATIENTS.ETHNICITY' | translate }}</span><span
+                  class="value"
+                  >{{ p.ethnicity | dash }}</span
+                >
               </div>
             </div>
             @if (!addressHistoryLoaded()) {
@@ -575,20 +601,27 @@
             </h3>
             <div class="info-rows">
               <div class="info-row">
-                <span class="label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
-                ><span class="value">{{ p.hospitalName | dash }}</span>
+                <span class="label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span><span
+                  class="value"
+                  >{{ p.hospitalName | dash }}</span
+                >
               </div>
               <div class="info-row">
-                <span class="label">{{ 'PATIENTS.MRN' | translate }}</span
-                ><span class="value">{{ p.mrn | dash }}</span>
+                <span class="label">{{ 'PATIENTS.MRN' | translate }}</span><span class="value">{{
+                  p.mrn | dash
+                }}</span>
               </div>
               <div class="info-row">
-                <span class="label">{{ 'PATIENTS.USERNAME' | translate }}</span
-                ><span class="value">{{ p.username || '—' }}</span>
+                <span class="label">{{ 'PATIENTS.USERNAME' | translate }}</span><span
+                  class="value"
+                  >{{ p.username || '—' }}</span
+                >
               </div>
               <div class="info-row">
-                <span class="label">{{ 'PATIENTS.REGISTERED' | translate }}</span
-                ><span class="value">{{ p.createdAt | serverTime | date: 'mediumDate' }}</span>
+                <span class="label">{{ 'PATIENTS.REGISTERED' | translate }}</span><span
+                  class="value"
+                  >{{ p.createdAt | serverTime | date: 'mediumDate' }}</span
+                >
               </div>
             </div>
           </div>
@@ -624,16 +657,22 @@
           <div class="info-rows">
             @if (!isFrontDeskOnly()) {
               <div class="info-row">
-                <span class="label">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</span
-                ><span class="value">{{ p.bloodType | dash }}</span>
+                <span class="label">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</span><span
+                  class="value"
+                  >{{ p.bloodType | dash }}</span
+                >
               </div>
               <div class="info-row">
-                <span class="label">{{ 'PATIENTS.ALLERGIES' | translate }}</span
-                ><span class="value">{{
-                  p.allergies ||
-                    ((p.allergiesWithheld ? 'CHART.ALLERGIES_WITHHELD' : 'PATIENTS.NOT_DOCUMENTED')
-                      | translate)
-                }}</span>
+                <span class="label">{{ 'PATIENTS.ALLERGIES' | translate }}</span><span
+                  class="value"
+                  >{{
+                    p.allergies ||
+                      ((p.allergiesWithheld
+                        ? 'CHART.ALLERGIES_WITHHELD'
+                        : 'PATIENTS.NOT_DOCUMENTED'
+                      ) | translate)
+                  }}</span
+                >
               </div>
             }
             <!-- RCPT-CLIN: the front desk sees no allergy row, so it is still told the list is withheld. -->
@@ -657,6 +696,14 @@
     }
 
     <!-- ═══ Chart Review Tab ═══ -->
+    <!-- QA D2583 (r65): the nursing care notes on the chart, each open to an addendum. -->
+    @if (activeTab() === 'nursing-notes' && canReadNursingNotes()) {
+      <app-nursing-notes-panel
+        [patientId]="p.id"
+        [hospitalId]="scopedHospitalId()"
+        emptyKey="NURSING_NOTES.EMPTY_PATIENT"
+      />
+    }
     @if (activeTab() === 'chart-review' && canViewChartReview()) {
       <app-chart-review [patientId]="p.id" />
     }
@@ -695,6 +742,64 @@
                   >{{ 'PATIENTS.BY' | translate }} {{ v.recordedByName || '—' }}</span
                 >
               </div>
+              <!-- Policy 2026-11-20 (provisional): a pregnant or postpartum woman's maternal early warning,
+                   scored by the server, in place of « NEWS2 non validé ». Always marked « provisoire ». -->
+              @if (v.mewsTier) {
+                <div
+                  class="news-chip mews-chip"
+                  data-testid="mews-chip"
+                  [class.news-low]="v.mewsTier === 'LOW'"
+                  [class.news-low-medium]="v.mewsTier === 'LOW_MEDIUM'"
+                  [class.news-medium]="v.mewsTier === 'MEDIUM'"
+                  [class.news-high]="v.mewsTier === 'HIGH'"
+                >
+                  <span class="news-label">MEWS</span>
+                  <span class="news-value">{{ v.mewsScore }}</span>
+                  <span class="news-band">{{
+                    'PATIENTS.MEWS_TIER_' + v.mewsTier | translate
+                  }}</span>
+                  @if (v.mewsReviewWithinMinutes === 0) {
+                    <span class="mews-review">{{
+                      'PATIENTS.MEWS_REVIEW_IMMEDIATE' | translate
+                    }}</span>
+                  } @else if (v.mewsReviewWithinMinutes) {
+                    <span class="mews-review">{{
+                      'PATIENTS.MEWS_REVIEW_WITHIN'
+                        | translate: { delay: v.mewsReviewWithinMinutes | elapsed }
+                    }}</span>
+                  }
+                  @for (alert of v.mewsAlerts ?? []; track alert) {
+                    <span class="mews-alert" [class.mews-alert-yellow]="alert === 'SHOCK'">{{
+                      'PATIENTS.MEWS_ALERT_' + alert | translate
+                    }}</span>
+                  }
+                  @if (v.mewsConcerns?.length) {
+                    <span class="mews-concern">{{ 'PATIENTS.MEWS_CONCERNS' | translate }}</span>
+                  }
+                  @if (v.mewsComplete === false) {
+                    <span
+                      class="news-incomplete"
+                      [attr.title]="'PATIENTS.MEWS_INCOMPLETE_HINT' | translate"
+                      >{{ 'PATIENTS.MEWS_INCOMPLETE' | translate }}</span
+                    >
+                  }
+                  <span
+                    class="mews-provisional"
+                    data-testid="mews-provisional"
+                    [attr.title]="'PATIENTS.MEWS_PROVISIONAL_HINT' | translate"
+                    >{{ 'PATIENTS.MEWS_PROVISIONAL' | translate }}</span
+                  >
+                </div>
+              }
+              <!-- Review of #1237: in pregnancy, after a birth and for a newborn, no reassuring score. -->
+              @if (v.newsNotValidated && !v.mewsTier) {
+                <div class="news-chip news-not-validated" data-testid="news-not-validated">
+                  <span class="news-label">NEWS2</span>
+                  <span class="news-band">{{
+                    'PATIENTS.NEWS_NOT_VALIDATED_' + v.newsNotValidated | translate
+                  }}</span>
+                </div>
+              }
               @if (v.newsScore !== null && v.newsRiskBand) {
                 <div
                   class="news-chip"
@@ -722,8 +827,7 @@
                   <div class="vital-metric">
                     <span class="material-symbols-outlined">favorite</span>
                     <div>
-                      <strong>{{ v.heartRateBpm }}</strong
-                      ><small> bpm</small>
+                      <strong>{{ v.heartRateBpm }}</strong><small> bpm</small>
                     </div>
                     <span class="vital-label">{{ 'PATIENTS.HEART_RATE' | translate }}</span>
                   </div>
@@ -742,8 +846,7 @@
                   <div class="vital-metric">
                     <span class="material-symbols-outlined">thermostat</span>
                     <div>
-                      <strong>{{ v.temperatureCelsius | localeNumber }}</strong
-                      ><small> °C</small>
+                      <strong>{{ v.temperatureCelsius | localeNumber }}</strong><small> °C</small>
                     </div>
                     <span class="vital-label">{{ 'PATIENTS.TEMPERATURE' | translate }}</span>
                   </div>
@@ -762,8 +865,7 @@
                   <div class="vital-metric">
                     <span class="material-symbols-outlined">pulmonology</span>
                     <div>
-                      <strong>{{ v.respiratoryRateBpm }}</strong
-                      ><small> /min</small>
+                      <strong>{{ v.respiratoryRateBpm }}</strong><small> /min</small>
                     </div>
                     <span class="vital-label">{{ 'PATIENTS.RESP_RATE' | translate }}</span>
                   </div>
@@ -772,8 +874,9 @@
                   <div class="vital-metric">
                     <span class="material-symbols-outlined">glucose</span>
                     <div>
-                      <strong>{{ glucoseMmol(v.bloodGlucoseMgDl) }}</strong
-                      ><small> mmol/L ({{ v.bloodGlucoseMgDl }} mg/dL)</small>
+                      <strong>{{ glucoseMmol(v.bloodGlucoseMgDl) }}</strong><small>
+                        mmol/L ({{ v.bloodGlucoseMgDl }} mg/dL)</small
+                      >
                     </div>
                     <span class="vital-label">{{ 'PATIENTS.BLOOD_GLUCOSE' | translate }}</span>
                   </div>
@@ -782,8 +885,7 @@
                   <div class="vital-metric">
                     <span class="material-symbols-outlined">monitor_weight</span>
                     <div>
-                      <strong>{{ v.weightKg | localeNumber }}</strong
-                      ><small> kg</small>
+                      <strong>{{ v.weightKg | localeNumber }}</strong><small> kg</small>
                     </div>
                     <span class="vital-label">{{ 'PATIENTS.WEIGHT' | translate }}</span>
                   </div>
@@ -792,8 +894,7 @@
                   <div class="vital-metric">
                     <span class="material-symbols-outlined">height</span>
                     <div>
-                      <strong>{{ v.heightCm | localeNumber }}</strong
-                      ><small> cm</small>
+                      <strong>{{ v.heightCm | localeNumber }}</strong><small> cm</small>
                     </div>
                     <span class="vital-label">{{ 'PATIENTS.HEIGHT' | translate }}</span>
                   </div>
@@ -802,8 +903,7 @@
                   <div class="vital-metric">
                     <span class="material-symbols-outlined">child_care</span>
                     <div>
-                      <strong>{{ v.headCircumferenceCm | localeNumber }}</strong
-                      ><small> cm</small>
+                      <strong>{{ v.headCircumferenceCm | localeNumber }}</strong><small> cm</small>
                     </div>
                     <span class="vital-label">{{ 'PATIENTS.HEAD_CIRCUMFERENCE' | translate }}</span>
                   </div>

@@ -60,6 +60,9 @@ class MllpInboundLabServiceImplTest {
     @org.mockito.Spy private com.example.hms.mapper.LabResultMapper labResultMapper =
         new com.example.hms.mapper.LabResultMapper();
 
+    /** r63 D2304: the QC release gate; a mock answers "not blocked". */
+    @Mock private com.example.hms.service.LabQcReleaseGate qcReleaseGate;
+
     @InjectMocks private MllpInboundLabServiceImpl service;
 
     private Hospital hospital;

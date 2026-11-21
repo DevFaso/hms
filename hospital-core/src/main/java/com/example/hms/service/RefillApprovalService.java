@@ -31,4 +31,19 @@ public interface RefillApprovalService {
      * first. The request stays in the queue and can still be approved or denied.
      */
     MedicationRefillResponseDTO pause(Authentication auth, UUID refillId, RefillDecisionRequestDTO decision);
+
+    /**
+     * Policy rule 1 (provisional, QA D2308): the pharmacist reviews a request and forwards it to the prescriber
+     * with flags. Decides nothing.
+     */
+    MedicationRefillResponseDTO pharmacistReview(Authentication auth, UUID refillId, RefillDecisionRequestDTO review);
+
+    /** Policy rule 1: the pharmacist refuses to dispense, with a reason; the patient and the prescriber are told. */
+    MedicationRefillResponseDTO pharmacistRefuse(Authentication auth, UUID refillId, RefillDecisionRequestDTO refusal);
+
+    /**
+     * Policy rule 1: a refill the prescriber already wrote on the prescription is released by the pharmacy as
+     * ordinary dispensing. Refused once the written refills are used: that is a renewal, a prescriber's decision.
+     */
+    MedicationRefillResponseDTO releaseAsPrescribed(Authentication auth, UUID refillId);
 }

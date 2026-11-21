@@ -550,8 +550,13 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      * ({@code criticalNotifiedAt}), or an analyzer's CRITICAL flag. Keyed on
      * the analyzer flag alone, a hand-entered critical (which never carries
      * one) was paged and still counted 0 on the tile.
+     *
+     * <p>QA D2951 (r66): released results only. An analyzer's CRITICAL flag on
+     * a row the laboratory has not released counted on the tile, for a result
+     * the doctor cannot open, acknowledge or read back.
      */
     @Query("SELECT COUNT(r) FROM LabResult r WHERE r.labOrder.orderingStaff.id = :staffId "
+        + "AND r.released = true "
         + "AND r.acknowledged = false AND r.createdAt > :floor "
         + "AND (r.criticalNotifiedAt IS NOT NULL "
         + "OR r.abnormalFlag = com.example.hms.enums.AbnormalFlag.CRITICAL)")
@@ -604,5 +609,29 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
           AND COALESCE(r.labOrder.performingHospital.id, r.labOrder.hospital.id) = :hospitalId
     """)
     Page<LabResult> findPendingReleaseHandledBy(@Param("hospitalId") UUID hospitalId, Pageable pageable);
-}
 
+    /**
+     * r63 (imaging completion): the patient's released, current results at one
+     * hospital whose test reads like a creatinine (by LOINC, code or name),
+     * newest first. The caller picks the serum value; nothing is graded here.
+     */
+    @EntityGraph(attributePaths = {
+        "labOrder",
+        "labOrder.labTestDefinition"
+    })
+    @Query("""
+        SELECT r FROM LabResult r
+        WHERE r.labOrder.patient.id = :patientId
+          AND r.labOrder.hospital.id = :hospitalId
+          AND r.released = true
+          AND r.supersededByResultId IS NULL
+          AND (r.labOrder.labTestDefinition.loincCode IN :loincCodes
+               OR LOWER(r.labOrder.labTestDefinition.name) LIKE '%atinin%'
+               OR LOWER(r.labOrder.labTestDefinition.testCode) LIKE 'crea%')
+        ORDER BY r.resultDate DESC
+    """)
+    List<LabResult> findReleasedCreatinineCandidates(@Param("patientId") UUID patientId,
+                                                      @Param("hospitalId") UUID hospitalId,
+                                                      @Param("loincCodes") Collection<String> loincCodes,
+                                                      Pageable pageable);
+}

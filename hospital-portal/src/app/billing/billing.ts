@@ -35,7 +35,7 @@ import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { CashClosingComponent } from './cash-closing/cash-closing.component';
+import { CashSessionComponent } from './cash-session/cash-session.component';
 import { InvoiceRefundsComponent } from './refunds/invoice-refunds.component';
 import { InvoicePayerSharesComponent } from './payer-shares/invoice-payer-shares.component';
 import { RefundQueueComponent } from './refunds/refund-queue.component';
@@ -60,6 +60,12 @@ import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.com
 import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
 import { amountStillDue, pendingDeclared } from '../shared/payment-prefill';
 import { refusalReason } from '../shared/refusal-reason';
+import {
+  newPaymentRequestKey,
+  paymentOutcomeUnknown,
+  PAYMENT_OUTCOME_UNKNOWN_KEY,
+  retryPaymentWithSameKey,
+} from '../shared/payment-request-key';
 import { joinReasons } from '../shared/required-fields';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 import { serverFieldErrors } from '../shared/forms/server-field-errors';
@@ -86,6 +92,11 @@ const PAYMENT_FIELD_IDS = ['payment-amount', 'payment-operator', 'payment-refere
 const LINE_PRICE_REQUIRED_KEY = 'BILLING.LINE_UNIT_PRICE_REQUIRED';
 /** QA D1467: the field the server refuses an issue on while lines stand at 0 F CFA. */
 const UNPRICED_LINES_FIELD = 'confirmUnpricedLines';
+/** PR 10 review (QA D2703): the field the server refuses on while the lines at 0 F CFA have no reason. */
+const UNPRICED_REASON_FIELD = 'unpricedLinesReason';
+const UNPRICED_REASON_ID = 'bill-unpriced-reason';
+/** QA D2704: the field the server refuses a likely second payment on until the cashier confirms it. */
+const DUPLICATE_PAYMENT_FIELD = 'confirmDuplicate';
 
 /**
  * QA D1344 (round 29): what is wrong with a line quantity — blank is
@@ -114,7 +125,7 @@ export function lineQuantityMessageKey(qty: number | string | null | undefined):
     EnumLabelPipe,
     PatientPickerComponent,
     DialogA11yDirective,
-    CashClosingComponent,
+    CashSessionComponent,
     InvoiceRefundsComponent,
     InvoicePayerSharesComponent,
     RefundQueueComponent,
@@ -173,6 +184,12 @@ export class BillingComponent implements OnInit {
     'ROLE_RECEPTIONIST',
   ]);
   /** Billing-money plan PR 2: the /billing/tarifs RoleGuard's reader list (not ROLE_ADMIN). */
+  /** Billing-money plan PR 10: who sees every till of the day (CashSessionController.SUPERVISOR_READERS). */
+  readonly canSuperviseTills = this.roleContext.hasAnyActiveRole([
+    'ROLE_SUPER_ADMIN',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_ACCOUNTANT',
+  ]);
   readonly canReadPriceList = this.roleContext.hasAnyActiveRole([
     'ROLE_SUPER_ADMIN',
     'ROLE_HOSPITAL_ADMIN',
@@ -197,6 +214,14 @@ export class BillingComponent implements OnInit {
 
   invoices = signal<BillingInvoiceResponse[]>([]);
   filtered = signal<BillingInvoiceResponse[]>([]);
+  /**
+   * QA D2321 (r64): the « Hôpital » column only when the list spans more than
+   * one hospital. Repeating one name on every row took the width that Payé,
+   * Solde and Statut need at a 1024 laptop; the drawer still names it.
+   */
+  readonly showHospitalColumn = computed(
+    () => new Set(this.filtered().map((inv) => inv.hospitalName ?? '')).size > 1,
+  );
   searchTerm = '';
   loading = signal(true);
   /**
@@ -249,6 +274,13 @@ export class BillingComponent implements OnInit {
 
   /* ── Invoice lines (detail panel) ── */
   items = signal<InvoiceItemResponse[]>([]);
+  /**
+   * QA D2434: when a payer covers any line, every line says its insurer and patient parts (a line
+   * the payer does not cover shows 0 for the insurer: an exclusion is visible too).
+   */
+  readonly lineSharesShown = computed(() =>
+    this.items().some((line) => Number(line.payerShareAmount ?? 0) > 0),
+  );
   itemsLoading = signal(false);
   itemSaving = signal(false);
   newItemDescription = signal('');
@@ -283,6 +315,8 @@ export class BillingComponent implements OnInit {
   readonly operatorLabelKey = mobileMoneyOperatorLabelKey;
   readonly isMobileMoney = isMobileMoney;
   paymentSaving = signal(false);
+  /** Billing plan PR 11 (QA D2430): one key per opening of the payment dialog, sent with every press. */
+  paymentKey: string | undefined;
   readonly paymentMethods: StaffPaymentMethod[] = STAFF_PAYMENT_METHODS;
 
   /* ── Adjustments (detail panel, QA D974) ── */
@@ -498,7 +532,14 @@ export class BillingComponent implements OnInit {
     );
   }
 
+  /**
+   * PR 10 review (QA D2703): the lines at 0 F CFA the server named when the invoice was issued. While set, the
+   * form shows them with a required reason; issuing then confirms them with that reason.
+   */
+  unpricedLines = signal<string | null>(null);
+
   openCreate(): void {
+    this.unpricedLines.set(null);
     this.form = this.emptyForm();
     // One key per form: a double click or a retry creates one invoice (QA D94).
     this.form.clientRequestId = crypto.randomUUID();
@@ -511,6 +552,7 @@ export class BillingComponent implements OnInit {
   }
 
   openEdit(inv: BillingInvoiceResponse): void {
+    this.unpricedLines.set(null);
     this.form = {
       patientId: inv.patientId ?? '',
       invoiceDate: inv.invoiceDate?.substring(0, 10) ?? '',
@@ -602,6 +644,21 @@ export class BillingComponent implements OnInit {
       this.toast.error(message);
       return;
     }
+    // PR 10 review (QA D2703): lines at 0 F CFA are issued only with the reason typed under their names.
+    // Back to a draft, nothing is issued: the question and its answer are dropped.
+    if (this.unpricedLines() !== null && this.form.status !== 'SENT') {
+      this.unpricedLines.set(null);
+      this.form = { ...this.form, confirmUnpricedLines: undefined, unpricedLinesReason: undefined };
+    }
+    if (this.unpricedLines() !== null) {
+      const reason = this.form.unpricedLinesReason?.trim() ?? '';
+      if (!reason) {
+        const message = this.translate.instant('BILLING.UNPRICED_LINES_REASON_REQUIRED');
+        refuseFields(this.host.nativeElement, [UNPRICED_REASON_ID], [UNPRICED_REASON_ID], message);
+        return;
+      }
+      this.form = { ...this.form, confirmUnpricedLines: true, unpricedLinesReason: reason };
+    }
     this.saving.set(true);
     const op = this.editing()
       ? this.billingService.updateInvoice(this.editingId()!, this.form)
@@ -619,7 +676,12 @@ export class BillingComponent implements OnInit {
             }),
           );
         }
-        this.form = { ...this.form, confirmUnpricedLines: undefined };
+        this.form = {
+          ...this.form,
+          confirmUnpricedLines: undefined,
+          unpricedLinesReason: undefined,
+        };
+        this.unpricedLines.set(null);
         this.closeModal();
         this.saving.set(false);
         this.loadInvoices(this.page());
@@ -627,15 +689,13 @@ export class BillingComponent implements OnInit {
       error: (err: HttpErrorResponse) => {
         this.saving.set(false);
         // QA D1467: the server names the lines at 0 F CFA; issued only on the clerk's word.
-        const unpriced = serverFieldErrors(err).get(UNPRICED_LINES_FIELD);
+        // PR 10 review (QA D2703): and that word is a reason, typed in the form under the lines named.
+        const refused = serverFieldErrors(err);
+        const unpriced = refused.get(UNPRICED_LINES_FIELD) ?? refused.get(UNPRICED_REASON_FIELD);
         if (unpriced) {
-          void this.confirmService
-            .ask({ titleKey: 'BILLING.UNPRICED_LINES_CONFIRM', message: unpriced })
-            .then((confirmed) => {
-              if (!confirmed) return;
-              this.form = { ...this.form, confirmUnpricedLines: true };
-              this.submitForm();
-            });
+          this.unpricedLines.set(unpriced);
+          this.form = { ...this.form, confirmUnpricedLines: undefined };
+          focusWhenRendered(this.host.nativeElement, `#${UNPRICED_REASON_ID}`);
           return;
         }
         // QA D529: the stay already has an invoice. Billed twice only on purpose.
@@ -873,7 +933,16 @@ export class BillingComponent implements OnInit {
     });
   }
 
+  /** PR 10 review (QA D2703): why a line is typed by hand on a visit's invoice. */
+  newItemReason = signal('');
+
+  /** A visit's invoice: the checkout prices its charges, so a line added by hand says why. */
+  addedLineNeedsReason(inv: BillingInvoiceResponse | null): boolean {
+    return !!inv?.encounterCode;
+  }
+
   private resetNewItem(): void {
+    this.newItemReason.set('');
     this.newItemDescription.set('');
     this.newItemCategory.set('SERVICE');
     this.newItemQuantity.set(1);
@@ -908,8 +977,20 @@ export class BillingComponent implements OnInit {
         message: this.translate.instant(cfaAmountMessageKey(priceProblem, LINE_PRICE_REQUIRED_KEY)),
       });
     }
+    const reason = this.newItemReason().trim();
+    if (this.addedLineNeedsReason(inv) && !reason) {
+      refusals.push({
+        id: 'line-reason',
+        message: this.translate.instant('BILLING.ADDED_LINE_REASON_REQUIRED'),
+      });
+    }
     if (refusals.length > 0) {
-      refuseFields(this.host.nativeElement, refusals, ['line-desc', 'line-qty', 'line-price']);
+      refuseFields(this.host.nativeElement, refusals, [
+        'line-desc',
+        'line-qty',
+        'line-price',
+        'line-reason',
+      ]);
       return;
     }
     this.itemSaving.set(true);
@@ -920,6 +1001,7 @@ export class BillingComponent implements OnInit {
         itemCategory: this.newItemCategory(),
         quantity: this.newItemQuantity() ?? 1,
         unitPrice: this.newItemUnitPrice() ?? 0,
+        ...(reason ? { overrideReason: reason } : {}),
       })
       .subscribe({
         next: () => {
@@ -949,10 +1031,22 @@ export class BillingComponent implements OnInit {
     return item.tariffUnitPrice !== null && item.tariffUnitPrice !== undefined;
   }
 
-  /** Whether the price now typed overrides the price list, so a reason is required. */
+  /** QA D2703: a line standing at 0 F CFA with no price-list price; pricing it by hand asks why. */
+  isUnpricedLine(item: InvoiceItemResponse): boolean {
+    return !this.isTariffLine(item) && !(Number(item.unitPrice) > 0);
+  }
+
+  /** The line's price changes only with a reason: a price-list line, or (QA D2703) an unpriced one. */
+  lineNeedsReason(item: InvoiceItemResponse): boolean {
+    return this.isTariffLine(item) || this.isUnpricedLine(item);
+  }
+
+  /** Whether the price now typed overrides the price list, or prices an unpriced line, so a reason is required. */
   overrideReasonRequired(item: InvoiceItemResponse): boolean {
     const price = this.editLineUnitPrice();
-    if (!this.isTariffLine(item) || price === null) return false;
+    if (price === null) return false;
+    if (this.isUnpricedLine(item)) return Number(price) > 0;
+    if (!this.isTariffLine(item)) return false;
     return (
       Number(price) !== Number(item.tariffUnitPrice) && Number(price) !== Number(item.unitPrice)
     );
@@ -1026,7 +1120,7 @@ export class BillingComponent implements OnInit {
         itemCategory: item.itemCategory as InvoiceItemCategory,
         quantity: this.editLineQuantity() ?? 1,
         unitPrice: this.editLineUnitPrice() ?? 0,
-        ...(this.isTariffLine(item)
+        ...(this.lineNeedsReason(item)
           ? { overrideReason: this.editLineOverrideReason().trim() || undefined }
           : {}),
       })
@@ -1049,7 +1143,11 @@ export class BillingComponent implements OnInit {
       });
   }
 
-  /* Review #1197 M2: a price-list line is removed only with a reason, asked in place. */
+  /*
+   * Review #1197 M2: a price-list line is removed only with a reason, asked in place.
+   * PR 10 review (QA D2703): every line is: an unpriced charge removed, then typed again at
+   * another price, left no trace. The reason is kept and the day report lists the removal.
+   */
   removingLineId = signal<string | null>(null);
   removeLineReason = signal('');
 
@@ -1058,21 +1156,12 @@ export class BillingComponent implements OnInit {
     this.removeLineReason.set('');
   }
 
-  async removeItem(item: InvoiceItemResponse): Promise<void> {
+  removeItem(item: InvoiceItemResponse): void {
     const inv = this.selectedInvoice();
     if (!inv || this.itemSaving()) return;
-    if (this.isTariffLine(item)) {
-      this.removingLineId.set(item.id);
-      this.removeLineReason.set('');
-      return;
-    }
-    // QA D147: a line deletion is not silent. QA D1229: asked in the app.
-    const confirmed = await this.confirmService.ask({
-      titleKey: 'BILLING.ITEM_REMOVE_CONFIRM',
-      confirmKey: 'COMMON.DELETE',
-    });
-    if (!confirmed || this.itemSaving()) return;
-    this.deleteLine(item);
+    // QA D147: a line deletion is not silent: its reason is asked in the line's own row.
+    this.removingLineId.set(item.id);
+    this.removeLineReason.set('');
   }
 
   /** Deletes a price-list line with the reason typed in its row. */
@@ -1084,7 +1173,7 @@ export class BillingComponent implements OnInit {
         [
           {
             id: 'line-remove-reason',
-            message: this.translate.instant('BILLING.REMOVE_REASON_REQUIRED'),
+            message: this.translate.instant('BILLING.LINE_REMOVE_REASON_REQUIRED'),
           },
         ],
         ['line-remove-reason'],
@@ -1195,9 +1284,11 @@ export class BillingComponent implements OnInit {
     op.subscribe({
       next: (updated) => {
         this.paymentActionBusy.set(false);
+        // QA D2702: a reversal is only asked for here; another manager approves it, then the money is handed
+        // back from the refunds section, and only then does the payment count as reversed.
         this.toast.success(
           this.translate.instant(
-            reversing ? 'BILLING.PAYMENT_REVERSED' : 'BILLING.PAYMENT_REJECTED',
+            reversing ? 'BILLING.PAYMENT_REVERSAL_REQUESTED' : 'BILLING.PAYMENT_REJECTED',
           ),
         );
         this.closeReversal();
@@ -1319,6 +1410,7 @@ export class BillingComponent implements OnInit {
   paymentPending = signal(0);
 
   openPayment(inv: BillingInvoiceResponse): void {
+    this.paymentKey = newPaymentRequestKey();
     this.paymentInv.set(inv);
     this.paymentAmount.set(inv.balanceDue ?? null);
     this.paymentPending.set(0);
@@ -1343,6 +1435,18 @@ export class BillingComponent implements OnInit {
     });
   }
 
+  /** QA D2704: the open dialog's « Solde dû » re-read from the server (another tab may have paid since). */
+  private refreshPaymentBalance(invoiceId: string): void {
+    this.billingService.getInvoice(invoiceId).subscribe({
+      next: (fresh) => {
+        if (this.paymentInv()?.id !== invoiceId) return;
+        this.paymentInv.set(fresh);
+        this.invoices.update((list) => list.map((i) => (i.id === fresh.id ? fresh : i)));
+      },
+      error: () => undefined,
+    });
+  }
+
   /** QA D1007: the server refuses these methods without a transaction reference. */
   paymentReferenceRequired(): boolean {
     return ['MOBILE_MONEY', 'BANK_TRANSFER'].includes(this.paymentMethod());
@@ -1353,7 +1457,7 @@ export class BillingComponent implements OnInit {
     this.paymentInv.set(null);
   }
 
-  recordPayment(): void {
+  recordPayment(confirmDuplicate = false): void {
     const inv = this.paymentInv();
     const amount = this.paymentAmount();
     if (!inv) return;
@@ -1372,32 +1476,59 @@ export class BillingComponent implements OnInit {
     const reference = this.paymentReference().trim();
     this.paymentSaving.set(true);
     const operator = isMobileMoney(this.paymentMethod()) ? this.paymentOperator() : null;
+    const key = this.paymentKey;
     const payment = {
       amount,
       method: this.paymentMethod(),
       reference: reference || undefined,
       ...(operator ? { mobileMoneyOperator: operator } : {}),
+      ...(key ? { clientRequestId: key } : {}),
+      ...(confirmDuplicate ? { confirmDuplicate: true } : {}),
     };
-    this.billingService.recordPayment(inv.id, payment).subscribe({
-      next: (updated) => {
-        this.paymentSaving.set(false);
-        this.toast.success(this.translate.instant('BILLING.PAYMENT_RECORDED'));
-        this.closePayment();
-        this.invoices.update((list) => list.map((i) => (i.id === updated.id ? updated : i)));
-        this.refreshStats();
-        this.applyFilter();
-        if (this.selectedInvoice()?.id === updated.id) {
-          this.selectedInvoice.set(updated);
-          this.loadPayments(updated.id);
-        }
-      },
-      error: (err: HttpErrorResponse) => {
-        this.paymentSaving.set(false);
-        this.toast.error(err.error?.message ?? this.translate.instant('BILLING.PAYMENT_FAILED'));
-        // QA D1466: a refusal may have credited the copay: the row must say what stands now.
-        this.loadInvoices(this.page());
-      },
-    });
+    this.billingService
+      .recordPayment(inv.id, payment)
+      .pipe(retryPaymentWithSameKey(key))
+      .subscribe({
+        next: (updated) => {
+          this.paymentSaving.set(false);
+          this.toast.success(this.translate.instant('BILLING.PAYMENT_RECORDED'));
+          this.closePayment();
+          this.invoices.update((list) => list.map((i) => (i.id === updated.id ? updated : i)));
+          this.refreshStats();
+          this.applyFilter();
+          if (this.selectedInvoice()?.id === updated.id) {
+            this.selectedInvoice.set(updated);
+            this.loadPayments(updated.id);
+          }
+        },
+        error: (err: HttpErrorResponse) => {
+          this.paymentSaving.set(false);
+          // QA D2704: the same amount, method and reference were just recorded on this invoice (another tab,
+          // another dialog). Recorded again only on the cashier's word; the balance shown is re-read first.
+          const duplicate = serverFieldErrors(err).get(DUPLICATE_PAYMENT_FIELD);
+          if (duplicate) {
+            this.refreshPaymentBalance(inv.id);
+            void this.confirmService
+              .ask({ titleKey: 'BILLING.PAYMENT_DUPLICATE_CONFIRM', message: duplicate })
+              .then((confirmed) => {
+                if (confirmed) this.recordPayment(true);
+              });
+            return;
+          }
+          if (paymentOutcomeUnknown(err)) {
+            // QA D2430: no answer is not a failure. The dialog stays open with the same key, so pressing
+            // again cannot take the money twice; the list below is re-read to show what the server holds.
+            this.toast.warning(this.translate.instant(PAYMENT_OUTCOME_UNKNOWN_KEY));
+          } else {
+            this.toast.error(
+              err.error?.message ?? this.translate.instant('BILLING.PAYMENT_FAILED'),
+            );
+          }
+          // QA D1466: a refusal may have credited the copay: the row must say what stands now.
+          this.loadInvoices(this.page());
+          if (this.selectedInvoice()?.id === inv.id) this.loadPayments(inv.id);
+        },
+      });
   }
 
   /** The payment form's refused fields, each with its reason (empty: it may be sent). */

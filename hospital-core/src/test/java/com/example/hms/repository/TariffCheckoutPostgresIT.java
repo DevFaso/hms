@@ -163,7 +163,7 @@ class TariffCheckoutPostgresIT {
             treatments, mock(UserRepository.class), mock(com.example.hms.repository.HospitalRepository.class), roles, scope, audit, CLOCK, "Africa/Ouagadougou");
         resolver = new TariffResolver(items, prices, CLOCK, "Africa/Ouagadougou");
         listener = new EncounterCheckoutChargeListener(encounters, invoices, treatments, assignments, numbers, resolver,
-            List.of(new ConsultationChargeSource(given), new LabOrderChargeSource(labOrders),
+            List.of(new ConsultationChargeSource(given, null), new LabOrderChargeSource(labOrders, null),
                 new ImagingOrderChargeSource(imaging), new ProcedureOrderChargeSource(procedures),
                 new TransfusionChargeSource(transfusions, units), new BedDaysChargeSource(admissions)));
         when(scope.requirePinned()).thenReturn(hospitalA);

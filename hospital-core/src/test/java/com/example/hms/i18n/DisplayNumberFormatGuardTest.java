@@ -80,6 +80,8 @@ class DisplayNumberFormatGuardTest {
             "insurer claim export is JSON: a JSON number is written with a point",
         "service/pharmacy/ControlledDrugRegisterService.java", 1,
             "controlled-drug register CSV export: a machine-readable column, not display text",
+        "service/pharmacy/PharmacyReconciliationService.java", 1,
+            "QA D2673: pharmacy reconciliation CSV export: a machine-readable column, not display text",
         "service/PdfInvoiceService.java", 1,
             "money: the digits of an amount, grouped and suffixed F CFA by the invoice formatter itself (D621)",
         "service/CriticalValueNotificationService.java", 1,

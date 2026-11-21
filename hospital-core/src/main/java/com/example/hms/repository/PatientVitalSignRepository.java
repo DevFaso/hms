@@ -154,4 +154,16 @@ public interface PatientVitalSignRepository extends JpaRepository<PatientVitalSi
     """)
     List<PatientVitalSign> findGrowthSeries(@Param("patientId") UUID patientId,
                                             @Param("hospitalId") UUID hospitalId);
+
+    /** Review of #1237: the row a maternity record charted at this hospital (to retire it when the record is corrected). */
+    List<PatientVitalSign> findByPatient_IdAndHospital_IdAndSourceAndRecordedAt(UUID patientId, UUID hospitalId,
+                                                                               String source, LocalDateTime recordedAt);
+
+    /**
+     * Policy 2026-11-20 (provisional): was this woman paged at one of these maternal levels, here, since
+     * {@code since}? The caller passes the level about to page and every level above it. One indexed
+     * read on a vitals WRITE that is about to page (never on a ward read).
+     */
+    boolean existsByPatient_IdAndHospital_IdAndMewsPagedTierInAndMewsPagedAtGreaterThanEqual(
+        UUID patientId, UUID hospitalId, java.util.Collection<String> mewsPagedTiers, LocalDateTime since);
 }

@@ -1,4 +1,5 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { PAYMENT_RETRY_DELAY_MS } from '../../shared/payment-request-key';
 import { CheckinDialogComponent, copayAmountMessageKey } from './checkin-dialog.component';
 import { markServerFieldErrors, scopeOf } from '../../shared/forms/server-field-errors';
 import { TranslateModule } from '@ngx-translate/core';
@@ -6,7 +7,7 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { ReceptionService, ReceptionQueueItem, CheckInResponse } from '../reception.service';
 import { ToastService } from '../../core/toast.service';
-import { of, throwError } from 'rxjs';
+import { defer, of, throwError } from 'rxjs';
 import { HttpErrorResponse, HttpHeaders, HttpResponse } from '@angular/common/http';
 import { BillingService } from '../../services/billing.service';
 
@@ -48,7 +49,7 @@ describe('CheckinDialogComponent', () => {
 
   beforeEach(async () => {
     mockReceptionService = jasmine.createSpyObj('ReceptionService', ['checkInPatient']);
-    mockToastService = jasmine.createSpyObj('ToastService', ['success', 'error']);
+    mockToastService = jasmine.createSpyObj('ToastService', ['success', 'error', 'warning']);
 
     await TestBed.configureTestingModule({
       imports: [CheckinDialogComponent, TranslateModule.forRoot()],
@@ -211,6 +212,43 @@ describe('CheckinDialogComponent', () => {
     expect(sent.copayReference).toBe('OM-778812');
     expect(sent.copayMobileMoneyOperator).toBe('ORANGE_MONEY');
   });
+
+  it('PR 11 (QA D2430): a copay carries one key per dialog; a check-in without a copay carries none', () => {
+    mockReceptionService.checkInPatient.and.returnValue(of(sampleResponse));
+    component.identityConfirmed.set(true);
+    component.submit();
+    expect('copayClientRequestId' in mockReceptionService.checkInPatient.calls.mostRecent().args[0])
+      .withContext('no copay, no money, no key')
+      .toBeFalse();
+
+    component.copayAmount.set(1500);
+    component.submit();
+    const first =
+      mockReceptionService.checkInPatient.calls.mostRecent().args[0].copayClientRequestId;
+    expect(first).toEqual(jasmine.any(String));
+    component.submit();
+    expect(
+      mockReceptionService.checkInPatient.calls.mostRecent().args[0].copayClientRequestId,
+    ).toBe(first);
+  });
+
+  it('PR 11 (QA D2430): a lost answer on a copay check-in is resent once, then a warning, never « Échec »', fakeAsync(() => {
+    let sends = 0;
+    mockReceptionService.checkInPatient.and.returnValue(
+      defer(() => {
+        sends++;
+        return throwError(() => new HttpErrorResponse({ status: 504 }));
+      }),
+    );
+    component.identityConfirmed.set(true);
+    component.copayAmount.set(1500);
+    component.submit();
+    tick(PAYMENT_RETRY_DELAY_MS);
+    expect(sends).toBe(2);
+    expect(mockToastService.warning).toHaveBeenCalledWith('PAYMENT_OUTCOME.CHECK_IN_UNKNOWN');
+    expect(mockToastService.error).not.toHaveBeenCalled();
+    expect(component.saving()).toBeFalse();
+  }));
 
   it('D-15: a card number as the copay reference is refused on the field', () => {
     component.identityConfirmed.set(true);

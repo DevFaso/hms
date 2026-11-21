@@ -180,8 +180,34 @@ public class InvoiceCoverageService {
             result.total(), day, actorId);
         applyToLines(lines, result);
         invoice.setPayerShareTotal(result.total());
-        audit(AuditEventType.PAYER_SHARE_APPLIED, actorId, invoice.getId(), share.getId(), "Payer share applied");
+        audit(AuditEventType.PAYER_SHARE_APPLIED, actorId, invoice, share.getId(), "Payer share applied");
         return result.total();
+    }
+
+    /* ---------------------------------------------------------- preview */
+
+    /**
+     * QA D2437: what the patient's coverage would pay on a DRAFT if it were issued now, computed exactly as
+     * {@link #applyAtIssue} would (same coverage, plan, terms, rules, ceiling used so far), but read-only: no lock,
+     * no share written, nothing on the lines. Empty for anything but a draft with lines and an applicable coverage
+     * that pays something. An estimate: the ceiling can be used by another invoice before this one is issued.
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public Optional<CoverageCalculator.Result> previewForDraft(BillingInvoice invoice) {
+        if (invoice == null || invoice.getStatus() != com.example.hms.enums.InvoiceStatus.DRAFT
+                || invoice.isCheckInCopay() || invoice.getPatient() == null || invoice.getHospital() == null
+                || invoice.getId() == null) {
+            return Optional.empty();
+        }
+        UUID hospitalId = invoice.getHospital().getId();
+        List<InvoiceItem> lines = linesOf(invoice);
+        if (lines.isEmpty()) {
+            return Optional.empty();
+        }
+        LocalDate day = serviceDay(invoice);
+        return coverageOn(invoice.getPatient().getId(), hospitalId, day)
+            .map(coverage -> compute(invoice, hospitalId, lines, coverage, day))
+            .filter(result -> result.total().signum() > 0);
     }
 
     /* ------------------------------------------------------- credit notes */
@@ -219,12 +245,12 @@ public class InvoiceCoverageService {
         claimed(shareRepository.decide(current.getId(), hospitalId, EnumSet.of(PayerShareStatus.OPEN),
             PayerShareStatus.CANCELLED, actorId, at, null));
         current.setStatus(PayerShareStatus.CANCELLED);
-        audit(AuditEventType.PAYER_SHARE_CANCELLED, actorId, invoice.getId(), current.getId(),
+        audit(AuditEventType.PAYER_SHARE_CANCELLED, actorId, invoice, current.getId(),
             "Payer share replaced after a credit note");
         if (result.total().signum() > 0) {
             InvoicePayerShare replacement = writeShare(invoice, hospitalId, current.getPatientInsuranceId(),
                 current.getPayerPlanId(), result.total(), day, actorId);
-            audit(AuditEventType.PAYER_SHARE_APPLIED, actorId, invoice.getId(), replacement.getId(),
+            audit(AuditEventType.PAYER_SHARE_APPLIED, actorId, invoice, replacement.getId(),
                 "Payer share applied after a credit note");
         }
         applyToLines(lines, result);
@@ -255,7 +281,7 @@ public class InvoiceCoverageService {
             claimed(shareRepository.decide(share.getId(), hospitalId, EnumSet.of(PayerShareStatus.OPEN),
                 PayerShareStatus.CANCELLED, actorId, at, null));
             share.setStatus(PayerShareStatus.CANCELLED);
-            audit(AuditEventType.PAYER_SHARE_CANCELLED, actorId, invoice.getId(), share.getId(),
+            audit(AuditEventType.PAYER_SHARE_CANCELLED, actorId, invoice, share.getId(),
                 "Payer share cancelled with its invoice");
         }
         if (!live.isEmpty()) {
@@ -332,11 +358,11 @@ public class InvoiceCoverageService {
         }
         // The audit row's words for the decision (the portal reads each in the reader's language).
         switch (to) {
-            case CLAIMED -> audit(AuditEventType.PAYER_SHARE_DECIDED, userId, invoiceId, share.getId(),
+            case CLAIMED -> audit(AuditEventType.PAYER_SHARE_DECIDED, userId, invoice, share.getId(),
                 "Payer share claimed");
-            case PAID -> audit(AuditEventType.PAYER_SHARE_DECIDED, userId, invoiceId, share.getId(),
+            case PAID -> audit(AuditEventType.PAYER_SHARE_DECIDED, userId, invoice, share.getId(),
                 "Payer share paid");
-            default -> audit(AuditEventType.PAYER_SHARE_DECIDED, userId, invoiceId, share.getId(),
+            default -> audit(AuditEventType.PAYER_SHARE_DECIDED, userId, invoice, share.getId(),
                 "Payer share rejected");
         }
         return readShares(invoice);
@@ -562,11 +588,13 @@ public class InvoiceCoverageService {
     }
 
     /** Ids only in the audit row: no names, no amounts tied to a person (no PHI). */
-    private void audit(AuditEventType type, UUID actorId, UUID invoiceId, UUID shareId, String what) {
+    private void audit(AuditEventType type, UUID actorId, BillingInvoice invoice, UUID shareId, String what) {
         if (auditEventLogService == null) {
             return;
         }
-        String invoiceIdText = String.valueOf(invoiceId);
+        String invoiceIdText = String.valueOf(invoice.getId());
+        // QA D2924 (r66): the invoice's hospital anchors the row for the hospital admin's audit log.
+        UUID hospitalId = invoice.getHospital() != null ? invoice.getHospital().getId() : null;
         String description = what + ": share " + shareId + " on invoice " + invoiceIdText;
         TransactionCallbacks.afterCommit(() -> {
             try {
@@ -574,6 +602,7 @@ public class InvoiceCoverageService {
                     .eventType(type)
                     .status(AuditStatus.SUCCESS)
                     .userId(actorId)
+                    .hospitalId(hospitalId)
                     .eventDescription(description)
                     .entityType(AUDIT_ENTITY)
                     .resourceId(invoiceIdText)

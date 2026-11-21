@@ -60,6 +60,7 @@ class OrderReviewHoldGuardTest {
         StockOutRouting#printForPatient | StockOutRoutingServiceImpl#validateRoutableStatus
         StockOutRouting#backOrder | StockOutRoutingServiceImpl#validateRoutableStatus
         RefillApproval#approve | RefillApprovalServiceImpl#decide
+        RefillApproval#releaseAsPrescribed | RefillApprovalServiceImpl#releaseAsPrescribed
         """;
 
     /** {@code Controller#endpoint,endpoint | why it does not use a held order}. */
@@ -77,6 +78,7 @@ class OrderReviewHoldGuardTest {
         Transfusion#completeAdministration,stopAdministration,recordReaction | treatment already running: never held, stop and complete stay available
         StockOutRouting#confirmPartnerDispense,partnerNoShow | a partner's outcome of a routing made before the hold: a hand-over that happened is recorded and raised, the hold stands
         RefillApproval#reject,pause | refuses a refill
+        RefillApproval#pharmacistReview,pharmacistRefuse | the pharmacy flags or refuses a refill request: nothing leaves
         OrderReviewHold#continueOrder,replaceOrder,stopOrder,recordAssessment | the review itself
         """;
 

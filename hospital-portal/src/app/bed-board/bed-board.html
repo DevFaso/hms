@@ -94,21 +94,25 @@
               </header>
               <div class="capacity-values">
                 <div>
-                  <strong>{{ h.available }}</strong
-                  ><span>{{ 'BED_BOARD.AVAILABLE' | translate }}</span>
+                  <strong>{{ h.available }}</strong><span>{{
+                    'BED_BOARD.AVAILABLE' | translate
+                  }}</span>
                 </div>
                 <div>
-                  <strong>{{ h.occupied }}</strong
-                  ><span>{{ 'BED_BOARD.OCCUPIED_BEDS' | translate }}</span>
+                  <strong>{{ h.occupied }}</strong><span>{{
+                    'BED_BOARD.OCCUPIED_BEDS' | translate
+                  }}</span>
                 </div>
                 <div>
-                  <strong>{{ h.total }}</strong
-                  ><span>{{ 'BED_BOARD.CONFIGURED_BEDS' | translate }}</span>
+                  <strong>{{ h.total }}</strong><span>{{
+                    'BED_BOARD.CONFIGURED_BEDS' | translate
+                  }}</span>
                 </div>
               </div>
               <div class="occupancy-line">
-                <span>{{ 'BED_BOARD.OCCUPANCY' | translate }}</span
-                ><strong>{{ occupancy(h.occupied, h.total) | measure: '%' }}</strong>
+                <span>{{ 'BED_BOARD.OCCUPANCY' | translate }}</span><strong>{{
+                  occupancy(h.occupied, h.total) | measure: '%'
+                }}</strong>
               </div>
               <div class="occupancy-track" aria-hidden="true">
                 <span [style.width.%]="occupancy(h.occupied, h.total)"></span>
@@ -289,8 +293,11 @@
       </section>
 
       <div class="board-legend" [attr.aria-label]="'BED_BOARD.LEGEND' | translate">
-        <span class="legend-available">{{ 'PORTAL.ENUM.BED_STATUS.AVAILABLE' | translate }}</span
-        ><span class="legend-occupied">{{ 'PORTAL.ENUM.BED_STATUS.OCCUPIED' | translate }}</span
+        <span class="legend-available">{{
+          'PORTAL.ENUM.BED_STATUS.AVAILABLE' | translate
+        }}</span><span class="legend-occupied">{{
+          'PORTAL.ENUM.BED_STATUS.OCCUPIED' | translate
+        }}</span
         ><span class="legend-isolation">{{ 'BED_BOARD.ON_ISOLATION' | translate }}</span
         ><span class="legend-unavailable">{{ 'BED_BOARD.OUT_OF_SERVICE' | translate }}</span>
       </div>

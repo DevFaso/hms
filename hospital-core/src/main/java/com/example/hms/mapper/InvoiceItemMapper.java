@@ -81,6 +81,8 @@ public class InvoiceItemMapper {
         dto.setPriceSource(source != null ? source.name() : null);
         dto.setTariffUnitPrice(tariffUnitPriceOf(item));
         dto.setOverrideReason(item.getOverrideReason());
+        // QA D2434: each line's split, as stored when the coverage was applied at issue.
+        withShares(dto, item.getPayerShareAmount(), false);
 
         dto.setCreatedAt(item.getCreatedAt());
         dto.setUpdatedAt(item.getUpdatedAt());
@@ -98,6 +100,19 @@ public class InvoiceItemMapper {
             line.setPriceSource(null);
         }
         return line;
+    }
+
+    /**
+     * QA D2434 / D2437: the line's payer part and the patient's part (the line total less the payer's part, never
+     * below zero). {@code estimated}: a draft's preview, fixed only at issue.
+     */
+    public static void withShares(InvoiceItemResponseDTO dto, java.math.BigDecimal payerShare, boolean estimated) {
+        java.math.BigDecimal payer = payerShare != null ? payerShare.max(java.math.BigDecimal.ZERO)
+            : java.math.BigDecimal.ZERO;
+        java.math.BigDecimal total = dto.getTotalPrice() != null ? dto.getTotalPrice() : java.math.BigDecimal.ZERO;
+        dto.setPayerShareAmount(payer);
+        dto.setPatientShareAmount(total.subtract(payer).max(java.math.BigDecimal.ZERO));
+        dto.setPayerShareEstimated(estimated);
     }
 
     /** The price list's price for the line: the stored tariff when overridden, the line's own price when TARIFF. */

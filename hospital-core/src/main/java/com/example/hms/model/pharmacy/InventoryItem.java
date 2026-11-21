@@ -83,6 +83,25 @@ public class InventoryItem extends BaseEntity {
     @Column(name = "unit_price", precision = 12, scale = 2)
     private BigDecimal unitPrice;
 
+    /**
+     * QA D2674 (r65, V311): how many of {@link #unit} one pack holds (a "plaquette de 10 comprimés" is 10), set when
+     * stock received in packs is converted to the unit prescriptions are written in. Null on an item never converted.
+     */
+    @Column(name = "units_per_pack")
+    private Integer unitsPerPack;
+
+    /** QA D2674: the pack's own name ("plaquette", "boîte"), shown beside the stock counted in {@link #unit}. */
+    @Size(max = 60)
+    @Column(name = "pack_unit", length = 60)
+    private String packUnit;
+
+    /**
+     * Review of #1239 (V311): when the pack size was set. What was recorded before it (a sale line, a fill, a return)
+     * counts packs, what was recorded after counts {@link #unit}; a refund converts between the two.
+     */
+    @Column(name = "pack_size_set_at")
+    private java.time.LocalDateTime packSizeSetAt;
+
     @Column(name = "active", nullable = false)
     @Builder.Default
     private boolean active = true;

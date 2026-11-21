@@ -36,6 +36,8 @@ public class LabTestDefinitionResponseDTO {
     private String preparationInstructions;
     /** QA D834: the expected answer of a qualitative test. */
     private String expectedResult;
+    /** QA D2730: the sensitive category every result of this test carries, or null. */
+    private com.example.hms.enums.SensitivityCategory sensitivityCategory;
     private Integer turnaroundTime;
 
     @JsonProperty("isActive")
@@ -64,6 +66,10 @@ public class LabTestDefinitionResponseDTO {
 
     @Default
     private List<LabTestReferenceRangeDTO> referenceRanges = Collections.emptyList();
+
+    /** r63 (NFS panels): the panel's analytes; empty for a single-value test. */
+    @Default
+    private List<LabTestComponentDTO> components = Collections.emptyList();
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

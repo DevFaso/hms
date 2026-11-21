@@ -147,6 +147,7 @@ class ImagingReportServiceImplTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(callerUserId);
+        com.example.hms.testsupport.ImagingRolesHeld.whereverTheTokenNamesThem(roleValidator);
         when(staffRepository.findByUserIdAndHospitalId(callerUserId, hospitalId)).thenReturn(Optional.of(caller));
         when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(imagingOrder));
         when(imagingReportRepository.save(any(ImagingReport.class))).thenAnswer(i -> i.getArgument(0));
@@ -812,5 +813,317 @@ class ImagingReportServiceImplTest {
         assertThatThrownBy(() -> imagingReportService.getReportsByHospitalAndStatus(hospitalB, ImagingReportStatus.FINAL))
             .isInstanceOf(AccessDeniedException.class);
         verify(imagingReportRepository, never()).findByHospital_IdAndReportStatusOrderByPerformedAtDesc(eq(hospitalB), any());
+    }
+
+    // ── QA D2306 (r63): the « À signer » list ──────────────────────────
+
+    @Test
+    void toSign_readsTheCallersUnsignedLiveReadsAtTheActiveHospitalOnly() {
+        ImagingReport waiting = persistedReport();
+        when(imagingReportRepository.findAwaitingSignatureBy(eq(hospitalId), eq(callerUserId), any()))
+            .thenReturn(List.of(waiting));
+
+        assertThat(imagingReportService.getReportsAwaitingMySignature()).hasSize(1);
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<java.util.Collection<ImagingReportStatus>> closed =
+            org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(imagingReportRepository).findAwaitingSignatureBy(eq(hospitalId), eq(callerUserId), closed.capture());
+        assertThat(closed.getValue()).containsExactlyInAnyOrder(ImagingReportStatus.CANCELLED, ImagingReportStatus.ERROR);
+    }
+
+    @Test
+    void toSign_aGlobalViewWithNoHospitalHasNothingWaiting() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+
+        assertThat(imagingReportService.getReportsAwaitingMySignature()).isEmpty();
+        verify(imagingReportRepository, never()).findAwaitingSignatureBy(any(), any(), any());
+    }
+
+    // ── Policy rule 3 (2026-11-20, provisional): the imaging technician ──
+
+    @Test
+    void policyRule3_aTechnicianReadsOnlyTheReleasedReportsOfExamsTheyPerformed() {
+        ImagingReport draft = version(2, ImagingReportStatus.DRAFT, false);
+        ImagingReport finalRead = version(1, ImagingReportStatus.FINAL, true);
+        when(imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(orderId))
+            .thenReturn(List.of(draft, finalRead));
+        when(imagingReportRepository.findFirstByImagingOrder_IdAndLatestVersionIsTrue(orderId))
+            .thenReturn(Optional.of(draft));
+        when(imagingReportRepository.findById(draft.getId())).thenReturn(Optional.of(draft));
+        when(imagingReportRepository.findById(finalRead.getId())).thenReturn(Optional.of(finalRead));
+        doAnswer(inv -> ImagingReportResponseDTO.builder().id(((ImagingReport) inv.getArgument(0)).getId()).build())
+            .when(imagingReportMapper).toResponseDTO(any(ImagingReport.class));
+        signIn("ROLE_IMAGING_TECHNICIAN");
+        technicianHere();
+        UUID finalId = finalRead.getId();
+        UUID draftId = draft.getId();
+
+        // An exam somebody else performed (or nobody is recorded for): no report at all.
+        imagingOrder.setPerformedByUserId(UUID.randomUUID());
+        assertThat(imagingReportService.getReportsForOrder(orderId)).isEmpty();
+        assertThatThrownBy(() -> imagingReportService.getLatestReportForOrder(orderId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> imagingReportService.getReport(finalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        imagingOrder.setPerformedByUserId(null);
+        assertThatThrownBy(() -> imagingReportService.getReport(finalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        // Their own exam: the released reads, never the work in progress.
+        imagingOrder.setPerformedByUserId(callerUserId);
+        assertThat(imagingReportService.getReportsForOrder(orderId)).extracting(ImagingReportResponseDTO::getId)
+            .containsExactly(finalRead.getId());
+        assertThat(imagingReportService.getLatestReportForOrder(orderId).getId()).isEqualTo(finalRead.getId());
+        assertThat(imagingReportService.getReport(finalRead.getId()).getId()).isEqualTo(finalRead.getId());
+        assertThatThrownBy(() -> imagingReportService.getReport(draftId))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        // A technician who is also a nurse reads as the care team does.
+        signIn("ROLE_IMAGING_TECHNICIAN", "ROLE_NURSE");
+        when(roleValidator.readsImagingClinically(callerUserId, hospitalId)).thenReturn(true);
+        imagingOrder.setPerformedByUserId(UUID.randomUUID());
+        assertThat(imagingReportService.getReportsForOrder(orderId)).hasSize(2);
+
+        // Review of #1243: a nurse's role held at ANOTHER hospital lifts nothing here. A technician
+        // here whose token also carries a radiologist's role from elsewhere is still narrowed here.
+        when(roleValidator.readsImagingClinically(callerUserId, hospitalId)).thenReturn(false);
+        when(roleValidator.interpretsImaging(callerUserId, hospitalId)).thenReturn(false);
+        signIn("ROLE_IMAGING_TECHNICIAN", "ROLE_RADIOLOGIST");
+        assertThat(imagingReportService.getReportsForOrder(orderId)).isEmpty();
+        assertThatThrownBy(() -> imagingReportService.getReport(finalId)).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> imagingReportService.getReport(draftId)).isInstanceOf(ResourceNotFoundException.class);
+
+        // One who is also an administrator reads as the administrator: any released report, on
+        // every read alike, and still no work in progress.
+        signIn("ROLE_IMAGING_TECHNICIAN", "ROLE_HOSPITAL_ADMIN");
+        assertThat(imagingReportService.getReportsForOrder(orderId)).extracting(ImagingReportResponseDTO::getId)
+            .containsExactly(finalRead.getId());
+        assertThat(imagingReportService.getLatestReportForOrder(orderId).getId()).isEqualTo(finalRead.getId());
+        assertThat(imagingReportService.getReport(finalRead.getId()).getId()).isEqualTo(finalRead.getId());
+        assertThatThrownBy(() -> imagingReportService.getReport(draftId))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void policyRule3_theHospitalListsGiveATechnicianNothingOfAnotherPerformer() {
+        ImagingReport finalRead = version(1, ImagingReportStatus.FINAL, true);
+        when(imagingReportRepository.findByHospital_IdAndReportStatusOrderByPerformedAtDesc(hospitalId,
+            ImagingReportStatus.FINAL)).thenReturn(List.of(finalRead));
+        imagingOrder.setPerformedByUserId(UUID.randomUUID());
+        signIn("ROLE_IMAGING_TECHNICIAN");
+        technicianHere();
+
+        assertThat(imagingReportService.getReportsByHospitalAndStatus(hospitalId, ImagingReportStatus.FINAL)).isEmpty();
+    }
+
+    // ── QA D2915 (r66): the radiologist's role counts where it is held ──
+
+    private static final Class<com.example.hms.exception.ClientSafeAccessDeniedException> REFUSED =
+        com.example.hms.exception.ClientSafeAccessDeniedException.class;
+
+    private void mapsReportsById() {
+        doAnswer(inv -> ImagingReportResponseDTO.builder().id(((ImagingReport) inv.getArgument(0)).getId()).build())
+            .when(imagingReportMapper).toResponseDTO(any(ImagingReport.class));
+    }
+
+    /** A technician at this test's hospital, a radiologist at another, the RADIOLOGIST role picked at login. */
+    private void technicianHereRadiologistElsewhereUnderTheRadiologistRole() {
+        signIn("ROLE_RADIOLOGIST");
+        technicianHere();
+        when(roleValidator.interpretsImaging(callerUserId, hospitalId)).thenReturn(false);
+        when(roleValidator.readsImagingClinically(callerUserId, hospitalId)).thenReturn(false);
+    }
+
+    @Test
+    void d2915_aTechnicianAtAWhoIsARadiologistAtB_actingAtAUnderTheRadiologistRole_writesNoReportThere() {
+        ImagingReport draft = version(1, ImagingReportStatus.PRELIMINARY, false);
+        draft.setCreatedBy(callerUserId);
+        draft.setImpression("x");
+        when(imagingReportRepository.findById(draft.getId())).thenReturn(Optional.of(draft));
+        UUID draftId = draft.getId();
+        technicianHereRadiologistElsewhereUnderTheRadiologistRole();
+        ImagingReportUpsertRequestDTO write = new ImagingReportUpsertRequestDTO();
+        write.setImagingOrderId(orderId);
+        write.setFindings("f");
+        ImagingReportStatusUpdateRequestDTO voided = new ImagingReportStatusUpdateRequestDTO();
+        voided.setStatus(ImagingReportStatus.CANCELLED);
+        voided.setStatusReason("x");
+        draft.setCriticalResultFlaggedAt(LocalDateTime.now());
+
+        // POST /imaging/results answered 201: a PRELIMINARY report by « radiologue B » on a study of A.
+        assertThatThrownBy(() -> imagingReportService.createReport(write)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingReportService.updateReport(draftId, write)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingReportService.signReport(draftId)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingReportService.updateReportStatus(draftId, voided)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingReportService.acknowledgeCriticalResult(draftId)).isInstanceOf(REFUSED);
+        verify(imagingReportRepository, never()).save(any());
+        // Nothing waits for the signature of somebody who does not interpret here.
+        assertThat(imagingReportService.getReportsAwaitingMySignature()).isEmpty();
+        verify(imagingReportRepository, never()).findAwaitingSignatureBy(any(), any(), any());
+    }
+
+    @Test
+    void d2915_theSameCallerAtA_readsReportsAsTheTechnicianTheyAreThere() {
+        ImagingReport finalRead = version(2, ImagingReportStatus.FINAL, true);
+        ImagingReport draft = version(1, ImagingReportStatus.PRELIMINARY, false);
+        when(imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(orderId))
+            .thenReturn(List.of(finalRead, draft));
+        when(imagingReportRepository.findById(finalRead.getId())).thenReturn(Optional.of(finalRead));
+        when(imagingReportRepository.findById(draft.getId())).thenReturn(Optional.of(draft));
+        when(imagingReportRepository.findByHospital_IdAndReportStatusOrderByPerformedAtDesc(hospitalId,
+            ImagingReportStatus.FINAL)).thenReturn(List.of(finalRead));
+        UUID finalId = finalRead.getId();
+        UUID draftId = draft.getId();
+        mapsReportsById();
+        technicianHereRadiologistElsewhereUnderTheRadiologistRole();
+
+        // An exam another technician performed: GET /imaging/results/hospital/A and that report answered 200.
+        imagingOrder.setPerformedByUserId(UUID.randomUUID());
+        assertThat(imagingReportService.getReportsByHospitalAndStatus(hospitalId, ImagingReportStatus.FINAL)).isEmpty();
+        assertThat(imagingReportService.getReportsForOrder(orderId)).isEmpty();
+        assertThatThrownBy(() -> imagingReportService.getReport(finalId)).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> imagingReportService.getLatestReportForOrder(orderId))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        // Their own exam: the released read, never the draft.
+        imagingOrder.setPerformedByUserId(callerUserId);
+        assertThat(imagingReportService.getReport(finalId).getId()).isEqualTo(finalId);
+        assertThatThrownBy(() -> imagingReportService.getReport(draftId)).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void d2915_theSameCallerActingAtB_whereTheyAreTheRadiologist_writesAndReadsAsOne() {
+        // This test's hospital is now B: the radiologist's role is held here, whichever role was picked.
+        ImagingReport draft = version(1, ImagingReportStatus.PRELIMINARY, false);
+        when(imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(orderId)).thenReturn(List.of(draft));
+        when(imagingReportRepository.findById(draft.getId())).thenReturn(Optional.of(draft));
+        imagingOrder.setPerformedByUserId(UUID.randomUUID());
+        mapsReportsById();
+        for (String selected : new String[] {"ROLE_RADIOLOGIST", "ROLE_IMAGING_TECHNICIAN"}) {
+            signIn(selected);
+            when(roleValidator.interpretsImaging(callerUserId, hospitalId)).thenReturn(true);
+            when(roleValidator.readsImagingClinically(callerUserId, hospitalId)).thenReturn(true);
+
+            assertThat(imagingReportService.getReportsForOrder(orderId)).as(selected).hasSize(1);
+            assertThat(imagingReportService.getReport(draft.getId()).getId()).as(selected).isEqualTo(draft.getId());
+            ImagingReportUpsertRequestDTO write = new ImagingReportUpsertRequestDTO();
+            write.setImagingOrderId(orderId);
+            write.setFindings("f");
+            org.assertj.core.api.Assertions.assertThatCode(() -> imagingReportService.createReport(write))
+                .as(selected).doesNotThrowAnyException();
+        }
+    }
+
+    @Test
+    void d2915_anAdministratorWhoIsADoctorElsewhereReadsOnlyReleasedReportsHere() {
+        ImagingReport draft = version(1, ImagingReportStatus.PRELIMINARY, false);
+        when(imagingReportRepository.findById(draft.getId())).thenReturn(Optional.of(draft));
+        UUID draftId = draft.getId();
+        // Both roles in the token; the doctor's is held at another hospital.
+        signIn("ROLE_HOSPITAL_ADMIN", "ROLE_DOCTOR");
+        when(roleValidator.interpretsImaging(callerUserId, hospitalId)).thenReturn(false);
+        when(roleValidator.readsImagingClinically(callerUserId, hospitalId)).thenReturn(false);
+
+        assertThatThrownBy(() -> imagingReportService.getReport(draftId)).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // ── Review of #1251: the administrator's role counts where it is held ──
+
+    @Test
+    void review1251_aHospitalAdminOfAnotherHospitalReadsNoReleasedReportHere_andTheAdminOfThisOneDoes() {
+        ImagingReport finalRead = version(1, ImagingReportStatus.FINAL, true);
+        when(imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(orderId)).thenReturn(List.of(finalRead));
+        when(imagingReportRepository.findById(finalRead.getId())).thenReturn(Optional.of(finalRead));
+        when(imagingReportRepository.findByHospital_IdAndReportStatusOrderByPerformedAtDesc(hospitalId,
+            ImagingReportStatus.FINAL)).thenReturn(List.of(finalRead));
+        UUID finalId = finalRead.getId();
+        mapsReportsById();
+        // A hospital admin at B, a receptionist here; the admin role was picked at login.
+        signIn("ROLE_HOSPITAL_ADMIN");
+        when(roleValidator.administersImagingReads(callerUserId, hospitalId)).thenReturn(false);
+
+        assertThatThrownBy(() -> imagingReportService.getReport(finalId)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingReportService.getLatestReportForOrder(orderId)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingReportService.getReportsForOrder(orderId)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingReportService.getReportsByHospitalAndStatus(hospitalId,
+            ImagingReportStatus.FINAL)).isInstanceOf(REFUSED);
+
+        // The hospital admin OF this hospital reads its released reports, as before.
+        when(roleValidator.administersImagingReads(callerUserId, hospitalId)).thenReturn(true);
+        assertThat(imagingReportService.getReport(finalId).getId()).isEqualTo(finalId);
+        assertThat(imagingReportService.getReportsForOrder(orderId)).hasSize(1);
+        assertThat(imagingReportService.getReportsByHospitalAndStatus(hospitalId, ImagingReportStatus.FINAL)).hasSize(1);
+    }
+
+    /** Review of #1243: the technician role is held at this test's hospital. */
+    private void technicianHere() {
+        when(roleValidator.hasRole(callerUserId, hospitalId, "IMAGING_TECHNICIAN")).thenReturn(true);
+    }
+
+    @Test
+    void review1243_aTechnicianOfAnotherHospitalReadsNoReportHere() {
+        ImagingReport finalRead = version(1, ImagingReportStatus.FINAL, true);
+        when(imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(orderId)).thenReturn(List.of(finalRead));
+        when(imagingReportRepository.findById(finalRead.getId())).thenReturn(Optional.of(finalRead));
+        imagingOrder.setPerformedByUserId(callerUserId);
+        UUID finalId = finalRead.getId();
+        // The token carries the technician role, held at another hospital, and nothing else that reads imaging.
+        signIn("ROLE_IMAGING_TECHNICIAN", "ROLE_RECEPTIONIST");
+
+        assertThatThrownBy(() -> imagingReportService.getReport(finalId))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThatThrownBy(() -> imagingReportService.getLatestReportForOrder(orderId))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThatThrownBy(() -> imagingReportService.getReportsForOrder(orderId))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+    }
+
+    @Test
+    void policyRule3_aNewReportTakesWhoPerformedTheExamAndItsRecordFromTheOrder() {
+        Staff technician = new Staff();
+        technician.setId(UUID.randomUUID());
+        technician.setHospital(hospital);
+        when(staffRepository.findById(technician.getId())).thenReturn(Optional.of(technician));
+        LocalDateTime started = LocalDateTime.of(2026, 11, 20, 9, 30);
+        imagingOrder.setPerformedByStaffId(technician.getId());
+        imagingOrder.setExamStartedAt(started);
+        imagingOrder.setExamContrastAdministered(true);
+        imagingOrder.setExamContrastDetails("Iode 80 mL IV");
+        imagingOrder.setExamRadiationDoseMgy(new java.math.BigDecimal("0.150"));
+
+        imagingReportService.createReport(ImagingReportUpsertRequestDTO.builder()
+            .imagingOrderId(orderId).findings("Pas d'anomalie.").build());
+
+        ImagingReport created = capturedNewReport();
+        // The "performed by" no screen ever filled.
+        assertThat(created.getPerformedBy()).isSameAs(technician);
+        assertThat(created.getPerformedAt()).isEqualTo(started);
+        // CR-06 class: what was given is only ever what the report's author submits.
+        assertThat(created.getContrastAdministered()).isNull();
+        assertThat(created.getContrastDetails()).isNull();
+        assertThat(created.getRadiationDoseMgy()).isNull();
+    }
+
+    @Test
+    void policyRule3_whatTheAuthorSendsIsKeptOverTheExamRecord_andAStaffOfAnotherHospitalIsNotInherited() {
+        Hospital elsewhere = new Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        Staff foreign = new Staff();
+        foreign.setId(UUID.randomUUID());
+        foreign.setHospital(elsewhere);
+        when(staffRepository.findById(foreign.getId())).thenReturn(Optional.of(foreign));
+        imagingOrder.setPerformedByStaffId(foreign.getId());
+        imagingOrder.setExamContrastAdministered(true);
+        imagingOrder.setExamRadiationDoseMgy(new java.math.BigDecimal("0.150"));
+
+        imagingReportService.createReport(ImagingReportUpsertRequestDTO.builder()
+            .imagingOrderId(orderId).findings("RAS").contrastAdministered(false)
+            .radiationDoseMgy(new java.math.BigDecimal("0.300")).build());
+
+        ImagingReport created = capturedNewReport();
+        assertThat(created.getPerformedBy()).isNull();
+        assertThat(created.getContrastAdministered()).isFalse();
+        assertThat(created.getRadiationDoseMgy()).isEqualByComparingTo("0.300");
     }
 }

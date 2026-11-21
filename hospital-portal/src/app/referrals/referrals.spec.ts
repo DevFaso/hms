@@ -415,6 +415,18 @@ describe('ReferralsComponent', () => {
     expect(message).not.toContain('targetSpecialty');
   });
 
+  it('QA D2269: the create dialog says it saves a draft', () => {
+    flushInitRequests();
+    component.openCreate();
+    fixture.detectChanges();
+    const hint = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="referral-draft-hint"]',
+    );
+    expect(hint?.textContent).toContain('REFERRALS.DRAFT_HINT');
+    // The render's own reads (the list, the caller's hospital, the directory).
+    httpMock.match(() => true).forEach((r) => r.flush(r.request.url.includes('/me/') ? {} : []));
+  });
+
   it('executeSchedule is a no-op when appointment time is empty', () => {
     flushInitRequests();
     component.schedulingRef.set({ id: 'r1' } as any);

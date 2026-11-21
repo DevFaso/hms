@@ -347,8 +347,75 @@ export class ProfileComponent implements OnInit {
   startMfaReplacement(): void {
     this.mfaStepUpCode = '';
     this.mfaError.set('');
+    this.mfaRemoving.set(false);
     this.mfaReplacing.set(true);
     this.mfaStep.set('stepup');
+  }
+
+  /** QA r64: the step-up panel removes the authenticator instead of replacing it. */
+  readonly mfaRemoving = signal(false);
+
+  /** QA r64: turn two-step verification off, after a current code or an unused backup code. */
+  startMfaRemoval(): void {
+    this.mfaStepUpCode = '';
+    this.mfaError.set('');
+    this.mfaReplacing.set(false);
+    this.mfaRemoving.set(true);
+    this.mfaStep.set('stepup');
+  }
+
+  /**
+   * QA D2403: one status for the whole section, from the same rule the server signs in with (an
+   * active authenticator), so the list and the summary never disagree: on, set-up not finished, or off.
+   */
+  mfaState(): 'ACTIVE' | 'PENDING' | 'OFF' {
+    if (this.hasActiveTotp()) return 'ACTIVE';
+    return (this.credentials()?.mfaEnrollments ?? []).length > 0 ? 'PENDING' : 'OFF';
+  }
+
+  /** QA D2403: the method in plain words (« Application d'authentification »), never « TOTP ». */
+  mfaMethodKey(method: string): string {
+    switch (method) {
+      case 'SMS':
+        return 'PROFILE.MFA_METHOD_SMS';
+      case 'EMAIL':
+        return 'PROFILE.MFA_METHOD_EMAIL';
+      case 'TOTP':
+        return 'PROFILE.MFA_METHOD_TOTP';
+      default:
+        return 'PROFILE.MFA_METHOD_OTHER';
+    }
+  }
+
+  private async removeOwnMfa(code: string): Promise<void> {
+    // QA CX-010: turning off a protection is asked first.
+    const confirmed = await this.confirm.ask({
+      titleKey: 'PROFILE.MFA_REMOVE',
+      messageKey: 'PROFILE.MFA_REMOVE_ASK',
+      confirmKey: 'PROFILE.MFA_REMOVE_CONFIRM',
+    });
+    if (!confirmed) return;
+    this.mfaLoading.set(true);
+    this.mfaError.set('');
+    this.mfaService.removeOwn(code).subscribe({
+      next: () => {
+        this.mfaLoading.set(false);
+        this.finishMfaEnrollment();
+        this.toast.success(this.translate.instant('PROFILE.MFA_REMOVED'));
+        this.profileService.getCredentialHealth().subscribe({
+          next: (creds) => this.credentials.set(creds),
+        });
+      },
+      error: (err) => {
+        const refusal = MFA_STEP_UP_MESSAGES[err?.error?.code as string];
+        this.mfaError.set(
+          refusal
+            ? this.translate.instant(refusal)
+            : (refusalReason(err) ?? this.translate.instant('PROFILE.MFA_REMOVE_FAILED')),
+        );
+        this.mfaLoading.set(false);
+      },
+    });
   }
 
   submitMfaStepUp(): void {
@@ -361,6 +428,10 @@ export class ProfileComponent implements OnInit {
       return;
     }
     refuseFields(this.host.nativeElement, [], MFA_STEPUP_IDS, '');
+    if (this.mfaRemoving()) {
+      void this.removeOwnMfa(code);
+      return;
+    }
     this.requestEnrollment(code);
   }
 
@@ -439,6 +510,7 @@ export class ProfileComponent implements OnInit {
     this.mfaTotpCode = '';
     this.mfaStepUpCode = '';
     this.mfaReplacing.set(false);
+    this.mfaRemoving.set(false);
     this.mfaError.set('');
   }
 

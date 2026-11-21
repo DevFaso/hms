@@ -10,6 +10,7 @@ import { LabResultResponse } from '../../services/lab.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { AuthService } from '../../auth/auth.service';
+import { expectEmptySubmitRefusal } from '../../testing/form-refusal-behaviour';
 import { RoleContextStub, roleContextStub } from '../../testing/role-context.stub';
 
 /**
@@ -520,5 +521,197 @@ describe('LabReleaseWorklistComponent', () => {
 
     expect(component.isCritical(component.rows()[0])).toBeTrue();
     expect(host().querySelector('[data-testid="release-critical-tag"]')).not.toBeNull();
+  });
+  // ── r63 D2305 / D2304: what a release documents ──
+
+  it('r63 D2305: marks an unreleased CRITICAL row critical and lists it first', () => {
+    setup(['ROLE_LAB_DIRECTOR']);
+    fixture.detectChanges();
+    flushWorklist([
+      result({ id: 'normal-1', severityFlag: 'NORMAL' }),
+      result({ id: 'critical-1', severityFlag: 'CRITICAL' }),
+    ]);
+
+    expect(component.rows().map((r) => r.id)).toEqual(['critical-1', 'normal-1']);
+    expect(component.isCritical(component.rows()[0])).toBeTrue();
+  });
+
+  it('r63 D2305: a critical release needs who was told, when and the read-back, and sends them', () => {
+    setup(['ROLE_LAB_DIRECTOR']);
+    fixture.detectChanges();
+    const critical = result({ severityFlag: 'CRITICAL', resultValue: '6.9', resultUnit: 'mmol/L' });
+    flushWorklist([critical]);
+
+    component.askRelease(critical);
+    fixture.detectChanges();
+    expect(host().querySelector('[data-testid="release-critical-block"]')).not.toBeNull();
+    expect(component.criticalCommunicationMissing(critical)).toBeTrue();
+    component.confirmRelease();
+    httpMock.expectNone((r) => r.method === 'POST');
+
+    component.criticalTo.set('Dr Ouedraogo');
+    component.criticalReadBack.set('K 6,9');
+    fixture.detectChanges();
+    expect(component.criticalCommunicationMissing(critical)).toBeFalse();
+    component.confirmRelease();
+    const release = httpMock.expectOne(
+      (r) => r.url === '/lab-results/result-1/release' && r.method === 'POST',
+    );
+    expect(release.request.body).toEqual(
+      jasmine.objectContaining({
+        criticalCommunicatedTo: 'Dr Ouedraogo',
+        criticalReadBack: 'K 6,9',
+      }),
+    );
+    expect(release.request.body.criticalCommunicatedAt).toBeTruthy();
+    release.flush({ ...critical, released: true });
+    flushWorklist([]);
+  });
+
+  it('QA D1124: a critical release with the call left blank is refused field by field, never sent', () => {
+    setup(['ROLE_LAB_DIRECTOR']);
+    fixture.detectChanges();
+    const critical = result({ severityFlag: 'CRITICAL' });
+    flushWorklist([critical]);
+    component.askRelease(critical);
+    component.criticalAt = '';
+    fixture.detectChanges();
+
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="release-confirm-submit"]',
+    });
+    expect(marked).toEqual(
+      jasmine.arrayContaining(['release-critical-to', 'release-critical-read-back']),
+    );
+    httpMock.expectNone((r) => r.method === 'POST');
+  });
+
+  it('r63 D2304: a release held by a rejected QC run asks for the reason and resends with it', () => {
+    setup(['ROLE_LAB_DIRECTOR']);
+    fixture.detectChanges();
+    flushWorklist([result()]);
+
+    component.askRelease(result());
+    component.confirmRelease();
+    httpMock
+      .expectOne((r) => r.url === '/lab-results/result-1/release' && r.method === 'POST')
+      .flush(
+        { message: 'QC rejected', field: 'qcOverrideReason' },
+        { status: 400, statusText: 'Bad Request' },
+      );
+    fixture.detectChanges();
+
+    expect(component.releaseTarget()).not.toBeNull();
+    expect(host().querySelector('[data-testid="release-qc-override"]')).not.toBeNull();
+    expect(component.qcOverrideMissing()).toBeTrue();
+
+    component.qcOverrideReason.set('Rerun on the backup analyser, in control');
+    component.confirmRelease();
+    const retry = httpMock.expectOne(
+      (r) => r.url === '/lab-results/result-1/release' && r.method === 'POST',
+    );
+    expect(retry.request.body.qcOverrideReason).toBe('Rerun on the backup analyser, in control');
+    retry.flush({ ...result(), released: true });
+    flushWorklist([]);
+  });
+
+  it('r63: the critical block fits a phone screen without a sideways scroll', () => {
+    setup(['ROLE_LAB_DIRECTOR']);
+    fixture.detectChanges();
+    const critical = result({ severityFlag: 'CRITICAL' });
+    flushWorklist([critical]);
+    component.askRelease(critical);
+    fixture.detectChanges();
+    const block = host().querySelector<HTMLElement>('[data-testid="release-critical-block"]')!;
+    block.style.width = '340px';
+    expect(block.scrollWidth).toBeLessThanOrEqual(block.clientWidth + 1);
+  });
+
+  const heldByQc = {
+    runId: 'run-1',
+    qcLevel: 'HIGH_CONTROL',
+    recordedAt: '2026-11-19T07:30:00',
+    recordedBy: 'Tech Ouedraogo',
+    sdFlag: '3SD',
+  };
+
+  it('r65 D2613: a QC hold is on the row and in the dialog, with the reason field, before any release is tried', () => {
+    setup(['ROLE_LAB_DIRECTOR']);
+    fixture.detectChanges();
+    const held = result({ qcHold: heldByQc });
+    flushWorklist([held]);
+
+    expect(host().querySelector('[data-testid="release-qc-hold-result-1"]')).not.toBeNull();
+
+    component.askRelease(held);
+    fixture.detectChanges();
+    // Up front: the banner naming the run and the reason field, no 400 needed.
+    const banner = host().querySelector('[data-testid="release-qc-hold-banner"]');
+    expect(banner).not.toBeNull();
+    expect(host().querySelector('[data-testid="release-qc-override-reason"]')).not.toBeNull();
+    // It fits a phone screen without a sideways scroll.
+    const block = host().querySelector<HTMLElement>('[data-testid="release-qc-override"]')!;
+    block.style.width = '340px';
+    expect(block.scrollWidth).toBeLessThanOrEqual(block.clientWidth + 1);
+    expect(component.qcOverrideMissing()).toBeTrue();
+    component.confirmRelease();
+    httpMock.expectNone((r) => r.method === 'POST');
+
+    component.qcOverrideReason.set('Rerun on the backup analyser, in control');
+    component.confirmRelease();
+    const release = httpMock.expectOne(
+      (r) => r.url === '/lab-results/result-1/release' && r.method === 'POST',
+    );
+    expect(release.request.body.qcOverrideReason).toBe('Rerun on the backup analyser, in control');
+    release.flush({ ...held, released: true });
+    flushWorklist([]);
+  });
+
+  it('r65 D2613: a row nothing holds opens without the QC block', () => {
+    setup(['ROLE_LAB_DIRECTOR']);
+    fixture.detectChanges();
+    flushWorklist([result()]);
+    component.askRelease(result());
+    fixture.detectChanges();
+    expect(host().querySelector('[data-testid="release-qc-override"]')).toBeNull();
+    expect(component.qcOverrideMissing()).toBeFalse();
+  });
+
+  it('r65 D2614: the critical block names the file number, age, sex and prescriber', () => {
+    setup(['ROLE_LAB_DIRECTOR']);
+    fixture.detectChanges();
+    const years = new Date().getFullYear() - 1990;
+    const critical = result({
+      severityFlag: 'CRITICAL',
+      patientFullName: 'Awa TestDiallo',
+      patientMrn: 'CMT1486',
+      patientDateOfBirth: '1990-01-01',
+      patientGender: 'FEMALE',
+      orderedByName: 'Test Médecin 5',
+    });
+    flushWorklist([critical]);
+    expect(
+      host().querySelector('[data-testid="release-identity-result-1"]')?.textContent,
+    ).toContain('CMT1486');
+
+    component.askRelease(critical);
+    fixture.detectChanges();
+    const identity = host().querySelector('[data-testid="release-critical-identity"]')!;
+    expect(identity.textContent).toContain('Awa TestDiallo');
+    expect(identity.textContent).toContain('CMT1486');
+    expect(component.patientAge(critical)).toEqual({ key: 'LAB_RELEASE.AGE_YEARS', n: years });
+    expect(host().querySelector('[data-testid="release-critical-orderer"]')).not.toBeNull();
+  });
+
+  it('r65 D2614: an infant is aged in months, and an unknown birth date gives no age', () => {
+    setup(['ROLE_LAB_DIRECTOR']);
+    const dob = new Date();
+    dob.setMonth(dob.getMonth() - 5);
+    const iso = `${dob.getFullYear()}-${String(dob.getMonth() + 1).padStart(2, '0')}-${String(dob.getDate()).padStart(2, '0')}`;
+    expect(component.patientAge(result({ patientDateOfBirth: iso }))).toEqual({
+      key: 'LAB_RELEASE.AGE_MONTHS',
+      n: 5,
+    });
+    expect(component.patientAge(result({ patientDateOfBirth: null }))).toBeNull();
   });
 });

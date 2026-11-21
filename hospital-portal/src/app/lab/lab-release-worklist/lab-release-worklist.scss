@@ -353,3 +353,100 @@
 }
 
 @include diagnostics.workspace;
+
+/* r63 D2305: the laboratory's call about a critical result, recorded at release */
+.critical-release {
+  /* r63: a long label or an untranslated word wraps instead of widening the box. */
+  overflow-wrap: anywhere;
+  min-width: 0;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  margin: 0.5rem 0;
+}
+
+.critical-release-title {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  font-weight: 700;
+  color: #991b1b;
+}
+
+.critical-release-hint {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.85rem;
+  color: #7f1d1d;
+}
+
+.critical-release-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: 0.5rem;
+}
+
+.release-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+
+  input,
+  textarea {
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font: inherit;
+    font-weight: 400;
+  }
+}
+
+/* r63 D2304: the override reason asked for when the test's QC is rejected */
+.qc-override {
+  margin: 0.5rem 0;
+}
+
+/* r65 D2614: file number, age and sex under the name, to tell near-identical names apart. */
+.patient-identity {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--color-text-muted, #6b7280);
+  overflow-wrap: anywhere;
+}
+
+.critical-release-identity {
+  margin: 0.25rem 0;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+/* r65 D2613: the QC hold, said before the dialog is filled. */
+.qc-hold-tag {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.qc-hold-banner {
+  display: flex;
+  gap: 0.4rem;
+  align-items: flex-start;
+  margin: 0 0 0.5rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 6px;
+  background: #fef3c7;
+  color: #78350f;
+  overflow-wrap: anywhere;
+}

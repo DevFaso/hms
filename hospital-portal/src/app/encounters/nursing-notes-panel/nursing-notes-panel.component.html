@@ -9,7 +9,7 @@
   } @else if (failed()) {
     <p class="nursing-notes__state">{{ 'NURSING_NOTES.LOAD_FAILED' | translate }}</p>
   } @else if (notes().length === 0) {
-    <p class="nursing-notes__state">{{ 'NURSING_NOTES.EMPTY' | translate }}</p>
+    <p class="nursing-notes__state">{{ emptyKey | translate }}</p>
   } @else {
     <ul class="nursing-notes__list">
       @for (note of notes(); track note.id) {
@@ -40,6 +40,64 @@
             <p class="nursing-notes__part">
               <strong>{{ part.labelKey | translate }}</strong> {{ part.text }}
             </p>
+          }
+          <!-- QA D2260: the addenda filed under the nursing note. -->
+          <app-note-addenda [addenda]="note.addenda" />
+          <!-- QA D2583 (r65): a saved care note is corrected or completed by an addendum. -->
+          @if (canAddend(note)) {
+            @if (addendumFor() === note.id) {
+              <form
+                class="nursing-notes__addendum"
+                data-testid="nursing-note-addendum-form"
+                (ngSubmit)="saveAddendum(note)"
+              >
+                <label class="nursing-notes__addendum-label" [for]="'nn-addendum-' + note.id"
+                  >{{ 'NURSING_NOTES.ADDENDUM_LABEL' | translate }} *</label
+                >
+                <textarea
+                  [id]="'nn-addendum-' + note.id"
+                  name="addendumText"
+                  rows="3"
+                  maxlength="4000"
+                  required
+                  data-testid="nursing-note-addendum-text"
+                  [(ngModel)]="addendumText"
+                ></textarea>
+                <label class="nursing-notes__attest">
+                  <input
+                    type="checkbox"
+                    name="addendumAttested"
+                    data-testid="nursing-note-addendum-attest"
+                    [(ngModel)]="addendumAttested"
+                  />
+                  {{ 'NURSING_NOTES.ADDENDUM_ATTEST' | translate }}
+                </label>
+                <div class="nursing-notes__addendum-actions">
+                  <button
+                    type="submit"
+                    class="btn-primary"
+                    data-testid="nursing-note-addendum-save"
+                    [disabled]="addendumSaving()"
+                    appSubmitGuard
+                    submitGuardRequired
+                  >
+                    {{ 'COMMON.SAVE' | translate }}
+                  </button>
+                  <button type="button" class="btn-secondary" (click)="cancelAddendum()">
+                    {{ 'COMMON.CANCEL' | translate }}
+                  </button>
+                </div>
+              </form>
+            } @else {
+              <button
+                type="button"
+                class="btn-secondary nursing-notes__addendum-open"
+                data-testid="nursing-note-addendum-open"
+                (click)="openAddendum(note)"
+              >
+                {{ 'NURSING_NOTES.ADD_ADDENDUM' | translate }}
+              </button>
+            }
           }
         </li>
       }

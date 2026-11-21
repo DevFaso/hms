@@ -373,6 +373,8 @@ public class ChartReviewServiceImpl implements ChartReviewService {
                 note.getResponseSummary(), note.getDataSubjective(), note.getDataObjective(), note.getDataPlan(),
                 note.getDataImplementation(), note.getDataEvaluation(), note.getEducationSummary()))
             .source(NOTE_SOURCE_NURSING)
+            // QA D2260: the corrections filed under the note.
+            .addenda(com.example.hms.service.support.NoteAddenda.of(note))
             .build();
     }
 
@@ -716,6 +718,8 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .cosignedAt(note.getCosignedAt())
             .preview(buildNotePreview(note))
             .source(NOTE_SOURCE_ENCOUNTER)
+            // QA D2260: the corrections filed under the note.
+            .addenda(com.example.hms.service.support.NoteAddenda.of(note))
             .build();
     }
 

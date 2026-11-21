@@ -67,6 +67,15 @@ public final class PermissionCatalog {
         );
         templates.put("ROLE_PHARMACIST", template(PermissionGroup.PHARMACY_OPERATIONS));
         templates.put("ROLE_RADIOLOGIST", template(PermissionGroup.RADIOLOGY_OPERATIONS));
+        // Policy rule 3 (2026-11-20, provisional): acquires and documents; no interpreting, no report.
+        templates.put(
+            "ROLE_IMAGING_TECHNICIAN",
+            template(
+                Permission.VIEW_IMAGING_ORDERS,
+                Permission.PERFORM_IMAGING_STUDIES,
+                Permission.DOCUMENT_RADIATION_DOSAGE
+            )
+        );
         templates.put(
             "ROLE_ANESTHESIOLOGIST",
             template(

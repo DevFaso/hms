@@ -134,11 +134,24 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
      * /pattern". Stale entries fail.
      */
     private static final Map<String, String> NO_REQUIRED_FIELD = Map.ofEntries(
+        Map.entry("POST /lab-results/{id}/release",
+            "r63: the body documents a critical result's call or a QC override, each required by the service only"
+                + " when the result is critical or its QC rejected; a normal release sends none"),
         Map.entry("POST /appointments/search",
             SEARCH_FILTER),
+        Map.entry("POST /cash-sessions/{id}/review",
+            "billing plan PR 10: a supervisor's review note is optional; marking a closed till reviewed needs nothing else"),
         Map.entry("POST /billing-invoices/{invoiceId}/refunds/{refundId}/pay",
             "a cash hand-over needs nothing; the reference (and mobile-money operator) is required by the service only"
                 + " for the method that sends money (billing-money plan PR 8 review)"),
+        Map.entry("POST /pharmacy/billing-deferrals/{id}/approve",
+            "policy rule 6: what an approval needs depends on the kind of deferral (the voucher number of a"
+                + " third-party cover, the reason of a credit); the service names it then"),
+        Map.entry("PUT /billing/policy",
+            "policy rules 1 and 6: every field is optional; a field left out keeps its value"),
+        Map.entry("POST /pharmacy/refunds/{id}/pay",
+            "QA D2676: a cash hand-over needs nothing; the mobile-money reference and operator are required by the"
+                + " service only for that method"),
         Map.entry("PUT /hospitals/{hospitalId}/pacs-settings",
             "a settings form: an absent switch means off (V317); switching the viewer on requires the DICOMweb address,"
                 + " refused by name in the service"),
@@ -200,6 +213,11 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
             "a null category clears the department default (documented on SensitivityTagRequestDTO)"),
         Map.entry("PUT /encounters/{encounterId}/sensitivity",
             "a null category clears the visit's explicit tag (documented on SensitivityTagRequestDTO)"),
+        Map.entry("PUT /patients/{patientId}/diagnoses/{diagnosisId}/sensitivity",
+            "D2730: a null category clears the problem's own tag (documented on SensitivityTagRequestDTO)"),
+        Map.entry("PUT /hospitals/{hospitalId}/adolescent-confidentiality-age",
+            "policy 2026-11-20: a null age returns the hospital to the provisional default"
+                + " (documented on UpdateAdolescentConfidentialityAgeRequestDTO)"),
         Map.entry("POST /patients/{patientId}/record-sharing/opt-out",
             "the patient's own refusal to share; the reason is optional"),
         Map.entry("POST /super-admin/hospitals/{hospitalId}/restore",

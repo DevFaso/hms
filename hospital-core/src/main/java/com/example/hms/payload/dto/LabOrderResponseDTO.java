@@ -40,6 +40,12 @@ public class LabOrderResponseDTO {
     private String labTestCode;
     /** QA D1095: the test definition's unit, which a result is entered in. */
     private String labTestUnit;
+    /** r63 D2312: the test's reference ranges (critical limits included), for the warning at entry. */
+    @lombok.Builder.Default
+    private List<LabResultReferenceRangeDTO> labTestReferenceRanges = new ArrayList<>();
+    /** r63 (NFS panels): the test's components; empty for a single-value test. */
+    @lombok.Builder.Default
+    private List<LabTestComponentDTO> labTestComponents = new ArrayList<>();
     private LocalDateTime orderDatetime;
     private String status;
     private String priority;

@@ -54,6 +54,48 @@ public interface LabTestDefinitionRepository extends JpaRepository<LabTestDefini
     """)
     List<LabTestDefinition> findLiveGlobalByCode(@Param("testCode") String testCode);
 
+    /**
+     * Policy 2026-11-20 (combined panels): the ACTIVE definitions of a hospital's catalogue that carry a
+     * sensitive category. A panel that contains one of them, by component code, is withheld from a proxy.
+     */
+    @Query("""
+        SELECT l FROM LabTestDefinition l
+        WHERE l.sensitivityCategory IS NOT NULL
+          AND l.approvalStatus = com.example.hms.enums.LabTestDefinitionApprovalStatus.ACTIVE
+          AND l.hospital.id = :hospitalId
+    """)
+    List<LabTestDefinition> findLiveTaggedAtHospital(@Param("hospitalId") UUID hospitalId);
+
+    /** As {@link #findLiveTaggedAtHospital}, in the global (platform) catalogue. */
+    @Query("""
+        SELECT l FROM LabTestDefinition l
+        WHERE l.sensitivityCategory IS NOT NULL
+          AND l.approvalStatus = com.example.hms.enums.LabTestDefinitionApprovalStatus.ACTIVE
+          AND l.hospital IS NULL
+    """)
+    List<LabTestDefinition> findLiveTaggedGlobal();
+
+    /**
+     * Policy 2026-11-20 (recommended categories): every definition of a hospital's catalogue that is not
+     * retired - what the lab director is shown a recommendation for.
+     */
+    @Query("""
+        SELECT l FROM LabTestDefinition l
+        WHERE l.approvalStatus <> com.example.hms.enums.LabTestDefinitionApprovalStatus.RETIRED
+          AND l.hospital.id = :hospitalId
+        ORDER BY l.name ASC
+    """)
+    List<LabTestDefinition> findNotRetiredAtHospital(@Param("hospitalId") UUID hospitalId);
+
+    /** As {@link #findNotRetiredAtHospital}, in the global (platform) catalogue. */
+    @Query("""
+        SELECT l FROM LabTestDefinition l
+        WHERE l.approvalStatus <> com.example.hms.enums.LabTestDefinitionApprovalStatus.RETIRED
+          AND l.hospital IS NULL
+        ORDER BY l.name ASC
+    """)
+    List<LabTestDefinition> findNotRetiredGlobal();
+
     /** QA D1120: the versions that replace {@code definitionId} (a draft in progress, or retired history). */
     List<LabTestDefinition> findBySupersedesDefinitionId(UUID definitionId);
 

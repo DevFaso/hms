@@ -4,11 +4,17 @@ import { InBasketPanelComponent } from '../dashboard/in-basket-panel/in-basket-p
 import { LabResultsInboxComponent } from './lab-results-inbox/lab-results-inbox';
 import { LAB_RESULT_REVIEW_ROLES } from './lab-result-review-access';
 import { RoleContextService } from '../core/role-context.service';
+import { WardNotificationsComponent } from './ward-notifications/ward-notifications.component';
 
 @Component({
   selector: 'app-in-basket-page',
   standalone: true,
-  imports: [TranslateModule, InBasketPanelComponent, LabResultsInboxComponent],
+  imports: [
+    TranslateModule,
+    InBasketPanelComponent,
+    LabResultsInboxComponent,
+    WardNotificationsComponent,
+  ],
   template: `
     <div class="in-basket-page">
       <header class="page-header">
@@ -26,6 +32,10 @@ import { RoleContextService } from '../core/role-context.service';
         <app-lab-results-inbox />
       }
       <app-in-basket-panel [showTitle]="false" />
+      <!-- QA D2582 (r65): a nurse's or midwife's ward alerts and reminders, as on the nurse station. -->
+      @if (readsWardNotifications()) {
+        <app-ward-notifications />
+      }
     </div>
   `,
   styles: `
@@ -65,5 +75,10 @@ export class InBasketPageComponent {
    */
   readonly canReviewLabResults = computed(() =>
     this.roleContext.hasAnyActiveRole(LAB_RESULT_REVIEW_ROLES),
+  );
+
+  /** QA D2582: the ward notifications, for the roles whose alerts arrive there (`GET /nurse/inbox`). */
+  readonly readsWardNotifications = computed(() =>
+    this.roleContext.hasAnyActiveRoleExactly(['ROLE_NURSE', 'ROLE_MIDWIFE']),
   );
 }

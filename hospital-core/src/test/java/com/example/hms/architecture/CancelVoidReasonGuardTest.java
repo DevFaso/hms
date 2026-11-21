@@ -82,7 +82,7 @@ class CancelVoidReasonGuardTest {
         HANDLERS.put("POST /billing-invoices/{invoiceId}/payments/{paymentId}/reject",
             "PaymentReasonRequestDTO.reason (@NotBlank) -> service/BillingInvoiceServiceImplTest#rejectPayment_needsAReason_D1069");
         HANDLERS.put("POST /billing-invoices/{invoiceId}/payments/{paymentId}/reverse",
-            "PaymentReasonRequestDTO.reason (@NotBlank) -> service/BillingInvoiceServiceImplTest#reversePayment_needsAReasonAndAConfirmedRow_D142");
+            "PaymentReasonRequestDTO.reason (@NotBlank) -> service/billing/PaymentReversalApprovalTest#reasonRequiredAndOneLiveReversal");
         HANDLERS.put("POST /billing-invoices/{invoiceId}/adjustments/{adjustmentId}/reverse",
             "AdjustmentReversalRequestDTO.reason (@NotBlank) -> service/BillingInvoiceServiceImplTest#reverseAdjustment_needsAReasonALiveRowAndAStandingInvoice_D1105");
         // Billing-money plan PR 8: refunds. Each step that ends one names its reason; the others move money out
@@ -97,6 +97,22 @@ class CancelVoidReasonGuardTest {
             "NOT A VOID: approves a refund asked for with its reason; another person decides (D-3)");
         HANDLERS.put("POST /billing-invoices/{invoiceId}/refunds/{refundId}/pay",
             "NOT A VOID: hands over a refund already asked for with a reason and approved by another person");
+        // QA D2676 (r65, plan PR 13): pharmacy refunds of patient returns, the same steps.
+        HANDLERS.put("POST /pharmacy/refunds/{id}/reject",
+            "PharmacyRefundReasonRequestDTO.reason -> service/pharmacy/PharmacyRefundServiceTest#rejectKeepsTheReason");
+        HANDLERS.put("POST /pharmacy/refunds/{id}/cancel",
+            "PharmacyRefundReasonRequestDTO.reason -> service/pharmacy/PharmacyRefundServiceTest#cancelNeedsAReason");
+        HANDLERS.put("POST /pharmacy/refunds",
+            "NOT A VOID: asks for a refund, with a required reason (PharmacyRefundServiceTest#reasonIsRequired); nothing moves until another person approves");
+        HANDLERS.put("POST /pharmacy/refunds/{id}/approve",
+            "NOT A VOID: approves a refund asked for with its reason; another person decides (D-3)");
+        HANDLERS.put("POST /pharmacy/refunds/{id}/pay",
+            "NOT A VOID: hands over a refund already asked for with a reason and approved by another person");
+        // Policy rule 6 (V345): a deferral of a fill's billing rejected or withdrawn, each with its reason.
+        HANDLERS.put("POST /pharmacy/billing-deferrals/{id}/reject",
+            "DispenseBillingDeferralReasonDTO.reason -> service/pharmacy/DispenseBillingDeferralServiceTest#rejectAndCancelNeedAReason");
+        HANDLERS.put("POST /pharmacy/billing-deferrals/{id}/cancel",
+            "DispenseBillingDeferralReasonDTO.reason -> service/pharmacy/DispenseBillingDeferralServiceTest#rejectAndCancelNeedAReason");
         // Billing-money plan PR 7: a payer's rejection of its share names the payer's reason.
         HANDLERS.put("POST /billing-invoices/{invoiceId}/payer-shares/{shareId}/reject",
             "PayerShareRejectRequestDTO.reason -> service/billing/InvoiceCoverageServiceTest#rejectingNeedsTheReasonAndNeverACardNumber");
@@ -381,6 +397,9 @@ class CancelVoidReasonGuardTest {
             "CloseReasonRequestDTO.reason -> service/scheduling/PatientRecallServiceImplTest#aCancelWithoutAReasonIsRefused_D1157");
         CLINICAL_HANDLERS.put("POST /recalls/{id}/close",
             "NOT A WITHDRAWAL: closes the recall because the visit took place (or the need lapsed with it)");
+        CLINICAL_HANDLERS.put("POST /cash-sessions/{id}/close",
+            "NOT A WITHDRAWAL: the cashier counts and closes their own till (billing plan PR 10); a difference needs "
+                + "its explanation (CashSessionServiceTest#differenceNeedsAnExplanation)");
         CLINICAL_HANDLERS.put("POST /discharge-approvals/{id}/cancel",
             "@RequestParam reason -> service/DischargeApprovalServiceImplTest#cancelWithoutAReasonIsRefused_D1160");
         CLINICAL_HANDLERS.put("POST /discharge-approvals/{id}/reject",
@@ -427,6 +446,8 @@ class CancelVoidReasonGuardTest {
             "NOT A WITHDRAWAL: a temporary reservation of a free slot");
         CLINICAL_HANDLERS.put("PATCH /staff/scheduling/leaves/{leaveId}/cancel",
             "NOT A CLINICAL RECORD: a staff member's own leave request");
+        CLINICAL_HANDLERS.put("POST /imaging/images/{imageId}/withdraw",
+            "WithdrawRequest.reason -> service/imaging/ImagingStudyImageServiceTest#aReasonIsRequiredAndAnUnlockedImageIsRemovedInstead");
         CLINICAL_HANDLERS.put("POST /break-glass/{sessionId}/revoke",
             "NOT A CLINICAL RECORD: ends the caller's own emergency access early; the session's opening reason is required");
         CLINICAL_HANDLERS.put("PUT /api-keys/{keyId}/revoke", "NOT A CLINICAL RECORD: platform integration key");
@@ -441,6 +462,9 @@ class CancelVoidReasonGuardTest {
             "NOT A CLINICAL RECORD: provider onboarding; ProviderDecisionRequestDTO.reason is @NotBlank");
         CLINICAL_HANDLERS.put("PUT /refills/{refillId}/reject",
             "RefillDecisionRequestDTO.providerNotes (@NotBlank, OnRefusal group) -> service/impl/RefillApprovalServiceImplTest#aDenialWithoutAReasonIsRefused_D1315");
+        // Policy rule 1 (QA D2308): the pharmacist's refusal to dispense, with its reason.
+        CLINICAL_HANDLERS.put("PUT /refills/{refillId}/pharmacist-refuse",
+            "RefillDecisionRequestDTO.pharmacistNote -> service/impl/RefillApprovalServiceImplTest#thePharmacistRefusesWithAReason");
         CLINICAL_HANDLERS.put("PUT /roi-requests/{requestId}/cancel",
             "KNOWN GAP (D1157 class, standing debt): RoiDecisionDTO.note is optional on cancel (deny requires it);"
                 + " the ROI worklist dialog has no field yet");
@@ -626,6 +650,8 @@ class CancelVoidReasonGuardTest {
             "NOT A CLINICAL RECORD: subscription plan");
         DELETE_PROOFS.put("DELETE /treatments/{id}",
             "NOT A CLINICAL RECORD: treatment catalogue entry (HOSPITAL_ADMIN)");
+        DELETE_PROOFS.put("DELETE /auth/mfa",
+            "NOT A CLINICAL RECORD: the caller's own authenticator, removed after a current or backup code (QA r64)");
         DELETE_PROOFS.put("DELETE /users/{id}",
             "NOT A CLINICAL RECORD: a user account");
         DELETE_PROOFS.put("DELETE /wards/{wardId}",

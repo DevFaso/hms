@@ -71,4 +71,27 @@ public class RefillRequest extends BaseEntity {
     @Size(max = 1000)
     @Column(name = "provider_notes", length = 1000)
     private String providerNotes;
+
+    /** Policy rule 1 (V345): who decided the request (the user), and when. */
+    @Column(name = "decided_by")
+    private java.util.UUID decidedBy;
+
+    @Column(name = "decided_at")
+    private java.time.LocalDateTime decidedAt;
+
+    /** Policy rule 1: on what authority it was decided. Null on a request decided before V345, or still open. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "decision_basis", length = 30)
+    private com.example.hms.enums.RefillDecisionBasis decisionBasis;
+
+    /** Policy rule 1: the flags the pharmacist left for the prescriber, or the reason of a refusal to dispense. */
+    @Size(max = 1000)
+    @Column(name = "pharmacist_note", length = 1000)
+    private String pharmacistNote;
+
+    @Column(name = "pharmacist_reviewed_by")
+    private java.util.UUID pharmacistReviewedBy;
+
+    @Column(name = "pharmacist_reviewed_at")
+    private java.time.LocalDateTime pharmacistReviewedAt;
 }

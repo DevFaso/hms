@@ -42,13 +42,20 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/imaging")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','IMAGING_TECHNICIAN','PATIENT')")
 @Tag(name = "Imaging Images", description = "Key images and exported PDFs on an imaging study or report")
 public class ImagingStudyImageController {
 
     static final String READ_ROLES =
-        "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')";
+        "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','IMAGING_TECHNICIAN','PATIENT')";
+    /**
+     * Policy rule 3 (2026-11-20, provisional): the imaging technician attaches, captions and (before
+     * the signature) removes the study's key images. The service keeps them off a report's own images.
+     */
     static final String WRITE_ROLES =
+        "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'RADIOLOGIST','DOCTOR','IMAGING_TECHNICIAN')";
+    /** Withdrawing an image after the signature changes the signed record: never the technician. */
+    static final String WITHDRAW_ROLES =
         "T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'RADIOLOGIST','DOCTOR')";
 
     private final ImagingStudyImageService imageService;
@@ -101,6 +108,47 @@ public class ImagingStudyImageController {
     public ResponseEntity<Void> delete(@PathVariable UUID imageId) throws IOException {
         imageService.delete(imageId);
         return ResponseEntity.noContent().build();
+    }
+
+    /** QA D2464 (r64): the reason a locked image is withdrawn. */
+    public record WithdrawRequest(@jakarta.validation.constraints.NotBlank
+                                  @jakarta.validation.constraints.Size(max = 500) String reason) {
+    }
+
+    /** QA D2466 (r64): an image's corrected caption; required and not blank (a correction, not a removal). */
+    public record CaptionRequest(@jakarta.validation.constraints.NotBlank
+                                 @jakarta.validation.constraints.Size(max = 500) String caption) {
+    }
+
+    @GetMapping("/orders/{orderId}/images/withdrawn")
+    // Policy rule 3: the imaging technician too (the strip reads it on every load): when, by whom
+    // and why an image they attached was withdrawn; never the bytes, never the withdrawal itself.
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','IMAGING_TECHNICIAN')")
+    @Operation(summary = "The study's withdrawn key images, for the record",
+        description = "When, by whom and why each was withdrawn; never the bytes. Hospital-scoped.")
+    public ResponseEntity<List<com.example.hms.payload.dto.imaging.ImagingStudyImageWithdrawalDTO>> withdrawn(
+            @PathVariable UUID orderId) {
+        return ResponseEntity.ok(imageService.withdrawn(orderId));
+    }
+
+    @PostMapping("/images/{imageId}/withdraw")
+    @PreAuthorize(WITHDRAW_ROLES)
+    @Operation(summary = "Withdraw a key image after signing",
+        description = "A radiologist or the report's signer, with a reason. The file and the record are kept and "
+            + "audited; every reader, the patient included, stops seeing the image.")
+    public ResponseEntity<Void> withdraw(@PathVariable UUID imageId,
+            @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody WithdrawRequest request) {
+        imageService.withdraw(imageId, request != null ? request.reason() : null);
+        return ResponseEntity.noContent().build();
+    }
+
+    @org.springframework.web.bind.annotation.PutMapping("/images/{imageId}/caption")
+    @PreAuthorize(WRITE_ROLES)
+    @Operation(summary = "Correct a key image's caption",
+        description = "Its uploader or a radiologist; every correction is audited.")
+    public ResponseEntity<ImagingStudyImageDTO> updateCaption(@PathVariable UUID imageId,
+            @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody CaptionRequest request) {
+        return ResponseEntity.ok(imageService.updateCaption(imageId, request != null ? request.caption() : null));
     }
 
     private static String extensionOf(String contentType) {

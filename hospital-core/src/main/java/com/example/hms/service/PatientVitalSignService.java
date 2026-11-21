@@ -32,6 +32,14 @@ public interface PatientVitalSignService {
     List<PatientVitalSignResponseDTO> getRecentVitalsForPatientPortal(UUID patientId, int limit);
 
     /**
+     * QA D2730: a proxy's read of the grantor's newest vitals, less the ones
+     * taken during a sensitive visit ({@code ProxyRecordFilter}). The filter
+     * runs before the cut, so {@code limit} readable rows come back when the
+     * patient has them.
+     */
+    List<PatientVitalSignResponseDTO> getRecentVitalsForProxy(UUID patientId, int limit);
+
+    /**
      * QA D1379: the patient's OWN vitals, newest first, one page of
      * {@code size} records (at most {@link #PORTAL_PAGE_MAX}) with the total.
      */

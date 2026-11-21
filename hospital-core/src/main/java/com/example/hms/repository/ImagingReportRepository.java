@@ -86,4 +86,26 @@ public interface ImagingReportRepository extends JpaRepository<ImagingReport, UU
         + "AND (r.criticalEscalatedAt IS NULL OR r.criticalEscalatedAt < :cutoff)")
     List<ImagingReport> findCriticalAwaitingEscalation(
         @org.springframework.data.repository.query.Param("cutoff") java.time.LocalDateTime cutoff);
+
+    /**
+     * QA D2306 (r63): the radiologist's « À signer » list. Unsigned, live reads
+     * at this hospital that this caller filed or interprets (the two people
+     * {@code ImagingReportServiceImpl.requireReportAuthor} lets sign), on an
+     * order that was not cancelled. Oldest first: the longest wait on top.
+     */
+    @org.springframework.data.jpa.repository.Query("""
+        SELECT r FROM ImagingReport r
+        LEFT JOIN r.interpretingProvider ip
+        LEFT JOIN ip.user ipu
+        WHERE r.hospital.id = :hospitalId
+          AND r.signedAt IS NULL
+          AND r.reportStatus NOT IN :closed
+          AND r.imagingOrder.status <> com.example.hms.enums.ImagingOrderStatus.CANCELLED
+          AND (r.createdBy = :userId OR ipu.id = :userId)
+        ORDER BY r.createdAt ASC
+    """)
+    List<ImagingReport> findAwaitingSignatureBy(
+        @org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
+        @org.springframework.data.repository.query.Param("userId") UUID userId,
+        @org.springframework.data.repository.query.Param("closed") Collection<ImagingReportStatus> closed);
 }

@@ -964,6 +964,122 @@ class PatientServiceImplTest {
         verify(patientProblemHistoryRepository).save(any());
     }
 
+    // ── QA D2730 (r65, High): a diagnosis carries the category of the visit it is recorded in ──
+
+    private ArgumentCaptor<PatientProblem> stubDiagnosisCreation(UUID requesterUserId, Staff staff) throws Exception {
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(staffRepository.findByUserIdAndHospitalId(requesterUserId, hospitalId)).thenReturn(Optional.of(staff));
+        ArgumentCaptor<PatientProblem> saved = ArgumentCaptor.forClass(PatientProblem.class);
+        lenient().when(patientProblemRepository.save(saved.capture())).thenAnswer(invocation -> {
+            PatientProblem value = invocation.getArgument(0);
+            value.setId(UUID.randomUUID());
+            return value;
+        });
+        lenient().when(patientProblemMapper.toResponseDto(any(PatientProblem.class)))
+            .thenReturn(PatientProblemResponseDTO.builder().build());
+        lenient().when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+        return saved;
+    }
+
+    private com.example.hms.model.Encounter openVisit(Staff clinician, com.example.hms.enums.SensitivityCategory category, int hoursAgo) {
+        com.example.hms.model.Encounter visit = new com.example.hms.model.Encounter();
+        visit.setId(UUID.randomUUID());
+        visit.setPatient(patient);
+        visit.setStaff(clinician);
+        visit.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        visit.setEncounterDate(java.time.LocalDateTime.now().minusHours(hoursAgo));
+        when(sensitivityClassifier.effectiveCategory(visit)).thenReturn(category);
+        return visit;
+    }
+
+    @Test
+    void d2730_aDiagnosisAddedDuringAnHivVisitIsTaggedAndLinked() throws Exception {
+        UUID requesterUserId = UUID.randomUUID();
+        Staff doctor = new Staff();
+        doctor.setId(UUID.randomUUID());
+        ArgumentCaptor<PatientProblem> saved = stubDiagnosisCreation(requesterUserId, doctor);
+        com.example.hms.model.Encounter hivVisit = openVisit(doctor, com.example.hms.enums.SensitivityCategory.HIV, 1);
+        when(encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(
+            patientId, hospitalId, com.example.hms.enums.EncounterStatus.CLOSED)).thenReturn(List.of(hivVisit));
+
+        patientService.createPatientDiagnosis(patientId, hospitalId, requesterUserId,
+            PatientDiagnosisRequestDTO.builder().hospitalId(hospitalId).problemDisplay("Maladie due au VIH").build());
+
+        assertThat(saved.getValue().getSourceEncounter()).isSameAs(hivVisit);
+        assertThat(saved.getValue().getSensitivityCategory()).isEqualTo(com.example.hms.enums.SensitivityCategory.HIV);
+    }
+
+    @Test
+    void d2730_aDiagnosisOutsideAnyVisitHasItsOwnTagOrNone() throws Exception {
+        UUID requesterUserId = UUID.randomUUID();
+        Staff doctor = new Staff();
+        doctor.setId(UUID.randomUUID());
+        ArgumentCaptor<PatientProblem> saved = stubDiagnosisCreation(requesterUserId, doctor);
+        when(encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(
+            patientId, hospitalId, com.example.hms.enums.EncounterStatus.CLOSED)).thenReturn(List.of());
+
+        patientService.createPatientDiagnosis(patientId, hospitalId, requesterUserId,
+            PatientDiagnosisRequestDTO.builder().hospitalId(hospitalId).problemDisplay("Asthme").build());
+        assertThat(saved.getValue().getSourceEncounter()).isNull();
+        assertThat(saved.getValue().getSensitivityCategory()).isNull();
+
+        patientService.createPatientDiagnosis(patientId, hospitalId, requesterUserId,
+            PatientDiagnosisRequestDTO.builder().hospitalId(hospitalId).problemDisplay("Dépression")
+                .sensitivityCategory(com.example.hms.enums.SensitivityCategory.BEHAVIOURAL_HEALTH).build());
+        assertThat(saved.getValue().getSensitivityCategory()).isEqualTo(com.example.hms.enums.SensitivityCategory.BEHAVIOURAL_HEALTH);
+    }
+
+    @Test
+    void d2730_theRecordingDoctorsOwnVisitComesFirstThenASensitiveOne() throws Exception {
+        UUID requesterUserId = UUID.randomUUID();
+        Staff doctor = new Staff();
+        doctor.setId(UUID.randomUUID());
+        Staff colleague = new Staff();
+        colleague.setId(UUID.randomUUID());
+        ArgumentCaptor<PatientProblem> saved = stubDiagnosisCreation(requesterUserId, doctor);
+        com.example.hms.model.Encounter ownGeneral = openVisit(doctor, null, 5);
+        com.example.hms.model.Encounter colleaguesHiv = openVisit(colleague, com.example.hms.enums.SensitivityCategory.HIV, 1);
+        when(encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(
+            patientId, hospitalId, com.example.hms.enums.EncounterStatus.CLOSED))
+            .thenReturn(List.of(colleaguesHiv, ownGeneral));
+
+        patientService.createPatientDiagnosis(patientId, hospitalId, requesterUserId,
+            PatientDiagnosisRequestDTO.builder().hospitalId(hospitalId).problemDisplay("Entorse").build());
+        assertThat(saved.getValue().getSourceEncounter()).as("the doctor's own open visit").isSameAs(ownGeneral);
+        assertThat(saved.getValue().getSensitivityCategory()).isNull();
+
+        // Neither open visit is the doctor's: the choice is not certain, so the sensitive one decides.
+        ownGeneral.setStaff(colleague);
+        patientService.createPatientDiagnosis(patientId, hospitalId, requesterUserId,
+            PatientDiagnosisRequestDTO.builder().hospitalId(hospitalId).problemDisplay("Candidose").build());
+        assertThat(saved.getValue().getSourceEncounter()).isSameAs(colleaguesHiv);
+        assertThat(saved.getValue().getSensitivityCategory()).isEqualTo(com.example.hms.enums.SensitivityCategory.HIV);
+    }
+
+    @Test
+    void d2730_aNamedVisitMustBeThisPatientsAtThisHospital() throws Exception {
+        UUID requesterUserId = UUID.randomUUID();
+        Staff doctor = new Staff();
+        doctor.setId(UUID.randomUUID());
+        stubDiagnosisCreation(requesterUserId, doctor);
+        com.example.hms.model.Encounter someoneElses = new com.example.hms.model.Encounter();
+        someoneElses.setId(UUID.randomUUID());
+        Patient other = new Patient();
+        other.setId(UUID.randomUUID());
+        someoneElses.setPatient(other);
+        when(encounterRepository.findByIdAndHospital_Id(someoneElses.getId(), hospitalId))
+            .thenReturn(Optional.of(someoneElses));
+        PatientDiagnosisRequestDTO request = PatientDiagnosisRequestDTO.builder().hospitalId(hospitalId)
+            .problemDisplay("Hypertension").encounterId(someoneElses.getId()).build();
+
+        assertThatThrownBy(() -> patientService.createPatientDiagnosis(patientId, hospitalId, requesterUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "encounterId");
+        verify(patientProblemRepository, never()).save(any());
+    }
+
     @Test
     void createPatientDiagnosisAllowsNonIcdCodeWhenVersionNotStrict() throws Exception {
         UUID requesterUserId = UUID.randomUUID();

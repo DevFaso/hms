@@ -124,12 +124,9 @@ public class EncounterMapper {
             return null;
         }
         dto.setNoteEntries(null);
-        EncounterNoteResponseDTO note = toEncounterNoteResponseDTO(e.getLatestSignedEncounterNote());
-        if (note != null) {
-            note.setAuthorUserId(null);
-            note.setSignedByUserId(null);
-        }
-        dto.setNote(note);
+        // QA D2550 (r65): the patient's copy of the signed note: attested addenda only, no ceremony.
+        dto.setNote(com.example.hms.service.support.PatientSafeView.encounterNote(
+            toEncounterNoteResponseDTO(e.getLatestSignedEncounterNote())));
         dto.setNotePendingSignature(e.hasNoteAwaitingSignature());
         return dto;
     }

@@ -28,7 +28,9 @@ public class RoleValidator {
     private static final String SURGEON_ROLE = "SURGEON";
     private static final String NURSE_ROLE = "NURSE";
     private static final String MIDWIFE_ROLE = "MIDWIFE";
+    private static final String RADIOLOGIST_ROLE = "RADIOLOGIST";
     private static final String ACCOUNTANT_ROLE = "ACCOUNTANT";
+    private static final String PHARMACIST_ROLE = "PHARMACIST";
     private static final String BILLING_SPECIALIST_ROLE = "BILLING_SPECIALIST";
     private static final String RECEPTIONIST_ROLE = "RECEPTIONIST";
     private static final String CLAIMS_REVIEWER_ROLE = "CLAIMS_REVIEWER";
@@ -227,7 +229,7 @@ public class RoleValidator {
      * (MedicalCertificateServiceImplTest pins the two lists together).
      */
     public static final java.util.List<String> LICENSED_PHYSICIAN_ROLE_CODES = java.util.List.of(
-        DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, "ANESTHESIOLOGIST", "RADIOLOGIST");
+        DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, "ANESTHESIOLOGIST", RADIOLOGIST_ROLE);
 
     /**
      * QA D1164 (round 21): the roles a visit takes as its provider - every
@@ -262,7 +264,7 @@ public class RoleValidator {
     public boolean isMidwife(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, MIDWIFE_ROLE); }
     /** One query: a clinician or a pharmacist at {@code hospitalId}, not the union of the caller's assignments. */
     public boolean isClinicianOrPharmacist(UUID userId, UUID hospitalId) {
-        return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, NURSE_ROLE, MIDWIFE_ROLE, "PHARMACIST");
+        return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, NURSE_ROLE, MIDWIFE_ROLE, PHARMACIST_ROLE);
     }
     public boolean isHospitalAdmin(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE); }
     public boolean isLabScientist(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "LAB_SCIENTIST"); }
@@ -276,6 +278,47 @@ public class RoleValidator {
             || isLabManager(userId, hospitalId);
     }
     public boolean hasRole(UUID userId, UUID hospitalId, String roleCode) { return hasAnyCode(userId, hospitalId, roleCode); }
+
+    /**
+     * QA D2915 (r66): the imaging roles, each read AT {@code hospitalId} in one query. A token names
+     * the role its user picked at login, wherever it is held; an imaging service asks these with the
+     * order's hospital instead ({@code ImagingRoleScope}).
+     *
+     * <p>Who interprets a study and decides for the imaging department there: a doctor, a physician,
+     * a surgeon or a radiologist.
+     */
+    public boolean interpretsImaging(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, RADIOLOGIST_ROLE);
+    }
+
+    /** QA D2915: the care team that reads a study in full there: who interprets it, the nurse and the midwife. */
+    public boolean readsImagingClinically(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, RADIOLOGIST_ROLE,
+            NURSE_ROLE, MIDWIFE_ROLE);
+    }
+
+    /**
+     * Review of #1251: who reads imaging there as an administrator (orders and released reports,
+     * user decision 2026-11-14): a hospital admin or an admin OF that hospital. A hospital admin of
+     * another hospital is not one here; the verified super-admin is asked separately.
+     */
+    public boolean administersImagingReads(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, "ADMIN");
+    }
+
+    /**
+     * Review of #1251: the verified super-admin (a live SUPER_ADMIN assignment) where they act: in
+     * global view, or at the very hospital they selected. Asked of the one tenant resolver
+     * ({@code CallerIdentity.isSuperAdminFor}); never the token's authority.
+     */
+    public boolean isSuperAdminActingAt(UUID hospitalId) {
+        return com.example.hms.security.CallerIdentity.isSuperAdminFor(hospitalId);
+    }
+
+    /** QA D2915: who places an imaging order there: a doctor, a physician, a surgeon, a nurse or a midwife. */
+    public boolean ordersImaging(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, NURSE_ROLE, MIDWIFE_ROLE);
+    }
 
     /**
      * Billing-money plan PR 2 (owner decision D-1, 2026-11-15): who maintains a hospital's price list - a hospital
@@ -316,6 +359,155 @@ public class RoleValidator {
     /** Billing-money plan PR 8 (plan section 3.8): who hands an approved refund to the patient at a till. */
     public boolean canPayRefund(UUID userId, UUID hospitalId) {
         return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, BILLING_SPECIALIST_ROLE, RECEPTIONIST_ROLE);
+    }
+
+    /**
+     * Policy rule 6 (provisional; QA D2675): who may hand a fill over unpaid on a logged « urgence » override, with a
+     * reason that finance reviews afterwards: a pharmacist or a hospital admin assignment at {@code hospitalId}
+     * (never a verifier or the super-admin alone). This is the ONLY way the counter lets an unpaid fill go on its
+     * own word; every other deferral is approved by somebody else first.
+     */
+    public boolean canOverrideDispenseBillingForUrgency(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, PHARMACIST_ROLE, HOSPITAL_ADMIN_ROLE);
+    }
+
+    /**
+     * Policy rule 6: who may ASK for a fill to leave « à facturer » at {@code hospitalId}: the counter or the money
+     * desks (a pharmacist, a billing specialist, an accountant or a hospital admin). Asking decides nothing. Never
+     * reception: the request names a medicine, which the front desk does not read.
+     */
+    public boolean canRequestDispenseBillingDeferral(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, PHARMACIST_ROLE, BILLING_SPECIALIST_ROLE, ACCOUNTANT_ROLE,
+            HOSPITAL_ADMIN_ROLE);
+    }
+
+    /**
+     * Policy rule 6: who checks a third-party cover against its claim or voucher at {@code hospitalId}: billing
+     * (a billing specialist), finance (an accountant) or a hospital admin. Never the pharmacist.
+     */
+    public boolean canApproveThirdPartyCover(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, BILLING_SPECIALIST_ROLE, ACCOUNTANT_ROLE, HOSPITAL_ADMIN_ROLE);
+    }
+
+    /**
+     * Policy rule 6: who grants an outpatient credit at {@code hospitalId}: finance (an accountant) or a hospital
+     * admin. Never the pharmacist, never billing alone. The social service has no role in the product yet.
+     */
+    public boolean canApproveOutpatientCredit(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, ACCOUNTANT_ROLE, HOSPITAL_ADMIN_ROLE);
+    }
+
+    /**
+     * Policy rule 6 (review of #1244): who stands behind a claim as cover of a fill at {@code hospitalId}: a money
+     * desk (billing specialist, claims reviewer, accountant) or a hospital admin. A claim only a pharmacist sent
+     * or recorded covers nothing at the counter.
+     */
+    public boolean vouchesForClaimCover(UUID userId, UUID hospitalId) {
+        return userId != null && hospitalId != null
+            && hasAnyCode(userId, hospitalId, BILLING_SPECIALIST_ROLE, CLAIMS_REVIEWER_ROLE, ACCOUNTANT_ROLE,
+                HOSPITAL_ADMIN_ROLE);
+    }
+
+    /**
+     * QA D2925 (r66; owner's delegate 2026-11-20): who records the PAYER's decision on a pharmacy claim (accepted,
+     * rejected, paid) at {@code hospitalId}: a money desk (billing specialist, claims reviewer, accountant) or a
+     * hospital admin. The pharmacy creates and sends a claim; it never records the answer to its own claim. A
+     * pharmacist who "accepted" a claim left it ACCEPTED with nobody behind it, and billing could no longer accept
+     * it: the fill stayed blocked until the payer's payment, which can take weeks.
+     */
+    public boolean canRecordPayerDecision(UUID userId, UUID hospitalId) {
+        return userId != null && hospitalId != null
+            && hasAnyCode(userId, hospitalId, BILLING_SPECIALIST_ROLE, CLAIMS_REVIEWER_ROLE, ACCOUNTANT_ROLE,
+                HOSPITAL_ADMIN_ROLE);
+    }
+
+    /**
+     * Policy rule 6: who reads what a fill may leave on before a hand-over: whoever may ask, and the pharmacy
+     * verifier, who hands fills over too (and may execute an approved deferral, never override).
+     */
+    public boolean canReadDispenseBillingCounter(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, PHARMACIST_ROLE, "PHARMACY_VERIFIER", BILLING_SPECIALIST_ROLE,
+            ACCOUNTANT_ROLE, HOSPITAL_ADMIN_ROLE);
+    }
+
+    /** Policy rule 6: who reviews an urgency override afterwards: an accountant, a billing specialist or a hospital admin. */
+    public boolean canReviewDispenseBillingOverride(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, ACCOUNTANT_ROLE, BILLING_SPECIALIST_ROLE, HOSPITAL_ADMIN_ROLE);
+    }
+
+    /** Policy rules 1 and 6: who sets a hospital's billing policy: a hospital admin assignment there. */
+    public boolean canSetHospitalBillingPolicy(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE);
+    }
+
+    /**
+     * Policy rule 1 (provisional; Code de la santé publique art. 276, QA D2308): who may approve the renewal of a
+     * prescription at {@code hospitalId}. A physician (doctor, physician or surgeon) for every list; a nurse or a
+     * midwife for Lists I and II only, which the catalogue knows as "not controlled". Never a pharmacist, whatever
+     * else the request says. Narcotics and controlled drugs are not renewed by anybody: they need a new
+     * prescription, which the renewal itself refuses. The product has no dentist role yet; a dentist signs as a doctor.
+     */
+    public boolean canApproveRenewal(UUID userId, UUID hospitalId, boolean controlled) {
+        if (userId == null || hospitalId == null) {
+            return false;
+        }
+        if (isSigningPhysician(userId, hospitalId)) {
+            return true;
+        }
+        return !controlled && hasAnyCode(userId, hospitalId, NURSE_ROLE, MIDWIFE_ROLE);
+    }
+
+    /** Policy rule 1: who reviews, flags or refuses a renewal request at the pharmacy: a pharmacist there. */
+    public boolean canReviewRenewalAtPharmacy(UUID userId, UUID hospitalId) {
+        return userId != null && hospitalId != null && hasAnyCode(userId, hospitalId, PHARMACIST_ROLE);
+    }
+
+    /**
+     * Review of #1239: who sets or changes a pharmacy's selling price there - the store manager or a hospital admin,
+     * on an assignment AT that hospital. Never the pharmacist or the inventory clerk who also sells at that price.
+     */
+    public boolean canSetPharmacyPrice(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, "STORE_MANAGER", HOSPITAL_ADMIN_ROLE);
+    }
+
+    /** QA D2676 (r65, billing plan PR 13): who may ask for a pharmacy refund of a patient return there. */
+    public boolean canRequestPharmacyRefund(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, PHARMACIST_ROLE, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE,
+            BILLING_SPECIALIST_ROLE);
+    }
+
+    /** QA D2676: who hands an approved pharmacy refund to the patient. */
+    public boolean canPayPharmacyRefund(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, PHARMACIST_ROLE, HOSPITAL_ADMIN_ROLE, BILLING_SPECIALIST_ROLE);
+    }
+
+    /** QA D2673 (r65): who reads a pharmacy's daily reconciliation there. */
+    public boolean canReadPharmacyReconciliation(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, PHARMACIST_ROLE, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE);
+    }
+
+    /**
+     * Billing-money plan PR 10 (plan section 3.8): who supervises the hospital's tills: sees every cash session of
+     * the day, reopens a closed one with a reason, marks one reviewed. A hospital admin or an accountant there.
+     */
+    public boolean canSuperviseTills(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE);
+    }
+
+    /**
+     * PR 10 review: who holds a till at {@code hospitalId}, the people who can count and close their own cash
+     * session there: a hospital admin, an accountant, a billing specialist, a receptionist or a pharmacist
+     * assignment. Money taken by anyone else (the platform super-admin on their expanded authorities) would sit in
+     * a session nobody can close.
+     */
+    public boolean canHoldTill(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, ACCOUNTANT_ROLE, BILLING_SPECIALIST_ROLE,
+            RECEPTIONIST_ROLE, "PHARMACIST");
+    }
+
+    /** Billing-money plan PR 10: whether the refund payer hands money back at the billing desk (else reception). */
+    public boolean paysAtBillingDesk(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, BILLING_SPECIALIST_ROLE, ACCOUNTANT_ROLE);
     }
 
     /** Billing-money plan PR 2 (plan section 3.8): who reads a hospital's price list there. */

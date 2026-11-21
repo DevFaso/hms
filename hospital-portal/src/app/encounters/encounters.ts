@@ -1,3 +1,4 @@
+import { NoteAddendaComponent } from '../shared/note-addenda/note-addenda.component';
 import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { textMatches, rankPeopleByName } from '../shared/person-search';
 import { VisitSummaryDialogComponent } from './visit-summary-dialog/visit-summary-dialog.component';
@@ -27,6 +28,7 @@ import {
   EncounterType,
   EncounterStatus,
   EncounterNoteResponse,
+  EncounterNoteAddendumResponse,
   AfterVisitSummary,
   EncounterNoteRequest,
 } from '../services/encounter.service';
@@ -51,7 +53,13 @@ import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-di
 import { actionRoles, SERVICE_RULE_ROLES } from '../core/action-permissions';
 import { CloseUnseenDialogComponent } from '../reception/close-unseen-dialog/close-unseen-dialog.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { serverInstant, serverLocalDate, toServerDateTime } from '../shared/date-utils';
+import {
+  localDateString,
+  nowLocalDatetime,
+  serverInstant,
+  serverLocalDate,
+  toServerDateTime,
+} from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import {
@@ -65,10 +73,14 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
 import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { SensitivitySelectComponent } from '../shared/sensitivity/sensitivity-select';
+import { SensitivityCategory, SensitivityTag } from '../shared/sensitivity/sensitivity-category';
 @Component({
   selector: 'app-encounters',
   standalone: true,
   imports: [
+    SensitivitySelectComponent,
+    NoteAddendaComponent,
     DateTimePipe,
     ListEscapeDirective,
     SubmitGuardDirective,
@@ -263,6 +275,17 @@ export class EncountersComponent implements OnInit {
   }
 
   selectedEncounter = signal<EncounterResponse | null>(null);
+
+  /**
+   * QA D2730: the open visit's sensitive category. A tagged visit's results,
+   * medicines and diagnoses are withheld from a family proxy and stay behind
+   * break-the-glass between hospitals. Null until the read answers.
+   */
+  readonly canTagSensitivity = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('encounterSensitivityTag')),
+  );
+  encounterSensitivity = signal<SensitivityTag | null>(null);
+  sensitivitySaving = signal(false);
   showNoteForm = signal(false);
   savingNote = signal(false);
   showEligibilityDialog = signal(false);
@@ -300,6 +323,11 @@ export class EncountersComponent implements OnInit {
   addendumContent = '';
   showAddendumForm = signal(false);
   addendumSaving = signal(false);
+  /**
+   * QA D2551 (r65): the author's accuracy attestation, unticked by default. An attested addendum is
+   * signed and reaches the patient's copy; an unticked one stays internal ("non attesté").
+   */
+  readonly addendumAttest = signal(false);
   /** QA D1131: Escape was pressed over typed addendum text; the form asks before discarding it. */
   readonly addendumDiscardAsk = signal(false);
   private readonly hostEl = inject(ElementRef);
@@ -668,6 +696,11 @@ export class EncountersComponent implements OnInit {
     ) {
       return this.editingOriginalDate;
     }
+    // QA D2265 (r63): a visit created today is dated now. Sent as midnight, it
+    // showed a fake « 00:00 » in its detail, the AVS and every visit picker.
+    if (day === localDateString()) {
+      return toServerDateTime(nowLocalDatetime());
+    }
     return toServerDateTime(`${day}T00:00`);
   }
 
@@ -828,10 +861,52 @@ export class EncountersComponent implements OnInit {
     this.noteState.set(enc.note ?? null);
     this.noteEntries.set(enc.noteEntries ?? []);
     this.loadNoteHistory(enc.id);
+    this.loadSensitivity(enc.id);
+  }
+
+  /** QA D2730: the visit's own tag and the category that governs it. */
+  private loadSensitivity(encounterId: string): void {
+    this.encounterSensitivity.set(null);
+    if (!this.canTagSensitivity()) return;
+    this.encounterService.getSensitivity(encounterId).subscribe({
+      next: (tag) => {
+        if (this.selectedEncounter()?.id === encounterId) this.encounterSensitivity.set(tag);
+      },
+      // A visit this caller may not classify (403/404) simply shows no control.
+      error: (err: { status?: number }) => {
+        if (err?.status !== 403 && err?.status !== 404) {
+          this.toast.error(this.translate.instant('SENSITIVITY_TAG.LOAD_FAILED'));
+        }
+      },
+    });
+  }
+
+  /** QA D2730: tag the open visit; "none" clears its own tag. */
+  setEncounterSensitivity(category: SensitivityCategory | null): void {
+    const enc = this.selectedEncounter();
+    if (!enc || !this.canTagSensitivity()) return;
+    const previous = this.encounterSensitivity();
+    this.sensitivitySaving.set(true);
+    this.encounterService.setSensitivity(enc.id, category).subscribe({
+      next: (tag) => {
+        if (this.selectedEncounter()?.id === enc.id) this.encounterSensitivity.set(tag);
+        this.sensitivitySaving.set(false);
+        this.toast.success(this.translate.instant('SENSITIVITY_TAG.SAVED'));
+      },
+      error: (err: unknown) => {
+        // The select shows what is stored: put the refused choice back.
+        this.encounterSensitivity.set(previous ? { ...previous } : null);
+        this.sensitivitySaving.set(false);
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('SENSITIVITY_TAG.SAVE_FAILED'),
+        );
+      },
+    });
   }
 
   closeDetail(): void {
     this.selectedEncounter.set(null);
+    this.encounterSensitivity.set(null);
     this.noteHistory.set([]);
     this.showEligibilityDialog.set(false);
   }
@@ -1048,6 +1123,7 @@ export class EncountersComponent implements OnInit {
   openAddendumForm(entryId: string | null | undefined): void {
     this.addendumTargetId.set(entryId ?? null);
     this.addendumContent = '';
+    this.addendumAttest.set(false);
     this.addendumDiscardAsk.set(false);
     this.showAddendumForm.set(true);
     // QA D1131: the keyboard lands in the box, not on the page body.
@@ -1063,6 +1139,7 @@ export class EncountersComponent implements OnInit {
     this.showAddendumForm.set(false);
     this.addendumTargetId.set(null);
     this.addendumContent = '';
+    this.addendumAttest.set(false);
     this.addendumDiscardAsk.set(false);
     if (returnFocus && opener) {
       this.focusSoon(`[data-addendum-for="${CSS.escape(opener)}"]`);
@@ -1106,10 +1183,17 @@ export class EncountersComponent implements OnInit {
     const noteId = this.addendumTargetId() ?? this.noteState()?.id ?? undefined;
     this.addendumSaving.set(true);
     this.encounterService
-      .addAddendum(enc.id, { content: this.addendumContent.trim(), attestAccuracy: true }, noteId)
+      // QA D2551: the box's actual value, never a hard-coded attestation.
+      .addAddendum(
+        enc.id,
+        { content: this.addendumContent.trim(), attestAccuracy: this.addendumAttest() },
+        noteId,
+      )
       .subscribe({
-        next: () => {
+        next: (addendum) => {
           this.toast.success(this.translate.instant('ENCOUNTERS.ADDENDUM_RECORDED'));
+          // QA D2260: the addendum shows under the entry it corrects at once.
+          this.showAddendumUnder(noteId, addendum);
           this.closeAddendumForm();
           this.addendumSaving.set(false);
           this.loadNoteHistory(enc.id);
@@ -1121,6 +1205,19 @@ export class EncountersComponent implements OnInit {
           this.addendumSaving.set(false);
         },
       });
+  }
+
+  /** QA D2260: files a saved addendum under its entry, as the next read of the visit will. */
+  private showAddendumUnder(
+    noteId: string | undefined,
+    addendum: EncounterNoteAddendumResponse | null | undefined,
+  ): void {
+    if (!noteId || !addendum?.content) return;
+    const add = (note: EncounterNoteResponse): EncounterNoteResponse =>
+      note.id === noteId ? { ...note, addenda: [...(note.addenda ?? []), addendum] } : note;
+    const current = this.noteState();
+    if (current) this.noteState.set(add(current));
+    this.noteEntries.update((entries) => entries.map(add));
   }
 
   /* ── Status transitions ── */

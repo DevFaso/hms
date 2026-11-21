@@ -160,9 +160,14 @@ public class LabResultController {
             @Parameter(description = "QA D1092: true confirms that the caller reviewed a result no reference "
                 + "range can grade (its unit matches none). Without it such a release answers 409.")
             @RequestParam(name = "ungradedConfirmed", defaultValue = "false") boolean ungradedConfirmed,
+            @Parameter(description = "r63: for a CRITICAL result, who was told, when and the read-back (required); "
+                + "while the test's latest QC run is rejected, the override reason (required then).")
+            @jakarta.validation.Valid
+            @org.springframework.web.bind.annotation.RequestBody(required = false)
+            com.example.hms.payload.dto.LabResultReleaseRequestDTO release,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         return ResponseEntity.ok(auditLabResult(com.example.hms.enums.AuditEventType.LAB_RESULT_RELEASED,
-            labResultService.releaseLabResult(id, selfRelease, ungradedConfirmed, locale)));
+            labResultService.releaseLabResult(id, selfRelease, ungradedConfirmed, release, locale)));
     }
 
     @PostMapping("/{id}/sign")
@@ -252,7 +257,8 @@ public class LabResultController {
     }
 
     @GetMapping("/hospital/{hospitalId}/critical")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE')")
+    // r65 D2183: HOSPITAL_ADMIN reads the critical lists (it is paged from escalation round 2), never acknowledges.
+    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE', 'HOSPITAL_ADMIN')")
     @Operation(summary = "Get Critical Lab Results", description = "Retrieves all critical lab results for a hospital since a specified time.")
     public ResponseEntity<List<LabResultResponseDTO>> getCriticalResults(
             @PathVariable UUID hospitalId,
@@ -264,7 +270,7 @@ public class LabResultController {
     }
 
     @GetMapping("/hospital/{hospitalId}/critical/unacknowledged")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE', 'HOSPITAL_ADMIN')")
     @Operation(summary = "Get Unacknowledged Critical Results", description = "Retrieves critical lab results that require acknowledgment - used for alert dashboards.")
     public ResponseEntity<List<LabResultResponseDTO>> getUnacknowledgedCriticalResults(
             @PathVariable UUID hospitalId,

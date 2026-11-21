@@ -58,6 +58,8 @@ public class DicomProxyController {
         if (!service.isEnabled()) {
             return ResponseEntity.notFound().build();
         }
+        // QA D2915: the role counts at the acting hospital, not on the token alone.
+        viewerService.requireInstanceListingReader();
         return ResponseEntity.ok(service.listInstancesForStudy(studyUid));
     }
 
@@ -70,6 +72,16 @@ public class DicomProxyController {
         return ResponseEntity.ok()
             .cacheControl(CacheControl.noStore())
             .body(viewerService.manifest(reportId, actor));
+    }
+
+    /** QA D2467 (r64): is a PACS connected for this report's hospital? No PACS is called. */
+    @GetMapping("/reports/{reportId}/viewer-ready")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, "
+        + "'DOCTOR','NURSE','MIDWIFE','RADIOLOGIST')")
+    public ResponseEntity<java.util.Map<String, Boolean>> viewerReady(@PathVariable UUID reportId) {
+        return ResponseEntity.ok()
+            .cacheControl(CacheControl.noStore())
+            .body(java.util.Map.of("ready", viewerService.viewerReady(reportId)));
     }
 
     /** One rendered frame (JPEG or PNG), streamed through e-Keneya, never cached by the browser. */

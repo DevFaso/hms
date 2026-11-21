@@ -160,8 +160,7 @@
                     }
                   </td>
                   <td class="scope-cell">
-                    <strong>{{ row.purpose }}</strong
-                    ><span>{{ row.scopeDescription }}</span>
+                    <strong>{{ row.purpose }}</strong><span>{{ row.scopeDescription }}</span>
                   </td>
                   <td>{{ row.requestedOn | serverTime | date: 'mediumDate' }}</td>
                   @if (activeStatus() !== 'PENDING') {
@@ -209,8 +208,7 @@
       <footer class="queue-footer">
         <span>{{
           'ROI.RESULTS' | translate: { shown: visibleRows().length, loaded: rows().length }
-        }}</span
-        ><span>{{ 'ROI.LOADED_SEARCH' | translate }}</span>
+        }}</span><span>{{ 'ROI.LOADED_SEARCH' | translate }}</span>
       </footer>
     }
   </section>

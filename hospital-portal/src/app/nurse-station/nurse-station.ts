@@ -97,13 +97,18 @@ import { offersHeadCircumference } from '../shared/patient-measures';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
+import { NursingNotesPanelComponent } from '../encounters/nursing-notes-panel/nursing-notes-panel.component';
+import { InBasketPanelComponent } from '../dashboard/in-basket-panel/in-basket-panel';
 import {
   announceHypertensionWarning,
+  announceMaternalWarning,
   announceNewbornWarning,
   announcePostpartumWarning,
 } from '../shared/newborn-vital-alerts';
 import { OrganDamageSymptomsComponent } from '../shared/organ-damage-symptoms/organ-damage-symptoms.component';
 import { OrganDamageSymptom } from '../shared/organ-damage-symptoms';
+import { MaternalConcernsComponent } from '../shared/maternal-concerns/maternal-concerns.component';
+import { MaternalConcern } from '../shared/maternal-concerns';
 import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 import { MarDoseHistoryComponent } from './mar-dose-history/mar-dose-history.component';
 import { earlyDoseDialogKeys, earlyDoseRefusal } from './early-dose';
@@ -151,7 +156,10 @@ export function localInputToUtcIso(value: string | undefined | null): string | u
     RouterLink,
     TranslateModule,
     TriageFormComponent,
+    NursingNotesPanelComponent,
+    InBasketPanelComponent,
     OrganDamageSymptomsComponent,
+    MaternalConcernsComponent,
     CloseUnseenDialogComponent,
     NursingIntakeFormComponent,
     EnumLabelPipe,
@@ -991,6 +999,17 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     }));
   }
 
+  /**
+   * Policy 2026-11-20 (provisional): the maternal score's additional concerns; none ticked is sent as
+   * nothing. The server reads them for a pregnant or postpartum woman only.
+   */
+  updateVitalsMaternalConcerns(concerns: MaternalConcern[]): void {
+    this.vitalsForm.update((f) => ({
+      ...f,
+      maternalConcerns: concerns.length ? concerns : undefined,
+    }));
+  }
+
   updateVitalsOnOxygen(value: boolean): void {
     this.vitalsForm.update((f) => ({ ...f, onOxygen: value }));
   }
@@ -1010,7 +1029,12 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     // r54: a ticked organ-damage sign is not a reading either.
     return Object.entries(this.vitalsForm()).some(
       ([field, v]) =>
-        field !== 'onOxygen' && field !== 'organDamageSymptoms' && v !== undefined && v !== '',
+        field !== 'onOxygen' &&
+        field !== 'organDamageSymptoms' &&
+        // Policy 2026-11-20: a ticked maternal concern is not a reading either.
+        field !== 'maternalConcerns' &&
+        v !== undefined &&
+        v !== '',
     );
   }
 
@@ -1066,11 +1090,33 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
           this.translate.instant('NURSE.TOAST.VITALS_RECORDED', { patient: target.patientName }),
         );
         // QA D1564: a newborn's set is judged against the newborn bands; saved, and warned.
-        announceNewbornWarning(response?.newbornAlerts, this.toast, this.translate);
+        announceNewbornWarning(
+          response?.newbornAlerts,
+          this.toast,
+          this.translate,
+          target.patientName,
+        );
         // QA D1890: a mother's severe pressure after birth; saved, and warned (URGENT).
-        announcePostpartumWarning(response?.postpartumAlerts, this.toast, this.translate);
+        announcePostpartumWarning(
+          response?.postpartumAlerts,
+          this.toast,
+          this.translate,
+          target.patientName,
+        );
         // r54: an adult's severe pressure; saved, and warned (a recheck; URGENT with a sign of organ damage).
-        announceHypertensionWarning(response?.hypertensionAlerts, this.toast, this.translate);
+        announceHypertensionWarning(
+          response?.hypertensionAlerts,
+          this.toast,
+          this.translate,
+          target.patientName,
+        );
+        // Policy 2026-11-20 (provisional): a pregnant or postpartum woman's maternal early warning; saved, and warned.
+        announceMaternalWarning(
+          response?.maternalAlerts,
+          this.toast,
+          this.translate,
+          target.patientName,
+        );
         this.vitalsCapturing.set(false);
         this.closeVitalsDialog();
         this.loadAll();

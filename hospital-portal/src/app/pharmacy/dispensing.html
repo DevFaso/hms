@@ -30,8 +30,9 @@
 
   <div class="workspace-strip">
     <p>
-      <strong>{{ queueLoading() ? '—' : workQueue().length }}</strong
-      ><span>{{ 'PHARMACY_WORKSPACE.LOADED_QUEUE' | translate }}</span>
+      <strong>{{ queueLoading() ? '—' : workQueue().length }}</strong><span>{{
+        'PHARMACY_WORKSPACE.LOADED_QUEUE' | translate
+      }}</span>
     </p>
     <p>{{ 'PHARMACY_WORKSPACE.DISPENSE_HINT' | translate }}</p>
   </div>
@@ -385,6 +386,32 @@
           </div>
         </div>
 
+        <!-- Review of #1239 (QA D2675), policy rule 6: a one-step fill leaves the counter before any
+             payment can exist. With a price it leaves on the account of an open stay, on a deferral
+             somebody else approved, or on a logged urgency override; « Prête » is the path that
+             takes the payment first. -->
+        @if (oneStepNeedsDeferral()) {
+          <div class="form-row">
+            <div class="field full-width" data-testid="dispense-defer">
+              <span class="field-label">{{
+                'PHARMACY_MONEY.DEFERRAL.ONESTEP_TITLE' | translate
+              }}</span>
+              @if (oneStepCharge() > 0) {
+                {{ ' '
+                }}<small class="field-hint" data-testid="dispense-defer-charge">{{
+                  'PHARMACY_MONEY.ONESTEP.CHARGE'
+                    | translate: { amount: (oneStepCharge() | cfa: 'XOF') }
+                }}</small>
+              }
+              <app-billing-deferral-choice
+                #oneStepDeferral
+                idPrefix="dispense-deferral"
+                [prescriptionId]="form.prescriptionId"
+              />
+            </div>
+          </div>
+        }
+
         <app-inline-discard-ask [form]="dispenseForm" />
         <div class="form-actions">
           <button type="button" class="btn-secondary" (click)="closeForm()">
@@ -481,9 +508,81 @@
           </section>
         }
         <p>{{ 'PHARMACY.HAND_OVER_CONFIRM' | translate }}</p>
+        <!-- QA D2675 (r65): the dialog shows the quantity, the amount and how it is settled before the
+             fill leaves the counter; an unpaid fill needs a « à facturer » reason. -->
+        <section
+          class="handover-payment"
+          data-testid="hand-over-payment"
+          [attr.aria-label]="'PHARMACY_MONEY.HANDOVER.TITLE' | translate"
+        >
+          @if (handOverPayment(); as pay) {
+            <dl class="handover-payment-grid">
+              <div>
+                <dt>{{ 'PHARMACY_MONEY.HANDOVER.QUANTITY' | translate }}</dt>
+                <dd>{{ pay.quantity }} {{ pay.unit ?? '' }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'PHARMACY_MONEY.HANDOVER.CHARGE' | translate }}</dt>
+                <dd>{{ pay.charge | cfa: 'XOF' }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'PHARMACY_MONEY.HANDOVER.PAID' | translate }}</dt>
+                <dd>{{ pay.paid | cfa: 'XOF' }}</dd>
+              </div>
+              @if (pay.claimed > 0) {
+                <div>
+                  <dt>{{ 'PHARMACY_MONEY.HANDOVER.CLAIMED' | translate }}</dt>
+                  <dd>{{ pay.claimed | cfa: 'XOF' }}</dd>
+                </div>
+              }
+              <div>
+                <dt>{{ 'PHARMACY_MONEY.HANDOVER.DUE' | translate }}</dt>
+                <dd data-testid="hand-over-due">{{ pay.due | cfa: 'XOF' }}</dd>
+              </div>
+            </dl>
+            <!-- QA D2931 (r66): a claim was sent for this fill but does not cover it for the reader:
+                 the form says why, and what to do, before the server refuses. -->
+            @if (pay.claimCoverGap) {
+              <p
+                class="handover-payment-status handover-unpaid"
+                role="status"
+                data-testid="hand-over-claim-gap"
+              >
+                {{ pay.claimCoverGap | keyLabel: 'PHARMACY_MONEY.HANDOVER.CLAIM_GAP.' }}
+              </p>
+            }
+            <!-- QA D2930 (r66): an unpaid fill is said once. When the choice of a basis is shown
+                 below, it says so itself (or that the amount goes on the stay). -->
+            @if (!(pay.status === 'UNPAID' && handOverNeedsDeferral())) {
+              <p
+                class="handover-payment-status"
+                [class.handover-unpaid]="pay.status === 'UNPAID'"
+                data-testid="hand-over-payment-status"
+              >
+                {{ pay.status | keyLabel: 'PHARMACY_MONEY.HANDOVER.STATUS.' }}
+              </p>
+            }
+          } @else if (handOverPaymentFailed()) {
+            <p class="handover-payment-status">
+              {{ 'PHARMACY_MONEY.HANDOVER.LOAD_FAILED' | translate }}
+            </p>
+          } @else {
+            <p class="handover-payment-status">{{ 'COMMON.LOADING' | translate }}</p>
+          }
+          <!-- Policy rule 6: an unpaid fill (as read above, or as the server refused it) leaves on the
+               account of an open stay, a deferral somebody else approved, or a logged urgency override. -->
+          @if (handOverNeedsDeferral()) {
+            <app-billing-deferral-choice
+              #handOverDeferral
+              idPrefix="hand-over-deferral"
+              [prescriptionId]="readyAction()!.rx.id"
+            />
+          }
+        </section>
         <div class="form-row">
           <div class="field full-width">
             <label for="handOverScan">{{ 'PHARMACY.PATIENT_SCAN' | translate }}</label>
+
             <input
               id="handOverScan"
               type="text"

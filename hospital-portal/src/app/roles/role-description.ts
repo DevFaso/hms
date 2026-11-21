@@ -55,6 +55,8 @@ export const SEEDED_ROLE_DESCRIPTIONS: Readonly<Record<string, string>> = {
     'Quality/QA Manager responsible for validation documentation review and compliance with CAP/CLIA/ISO standards before Lab Director approval',
   ROLE_RADIOLOGIST:
     'Imaging specialist interpreting X-rays, CT scans, MRIs, and generating radiology reports',
+  ROLE_IMAGING_TECHNICIAN:
+    'Imaging technician (radiographer) who checks the patient in, performs and documents imaging exams, and attaches images; never orders an exam or writes a report',
   ROLE_RECEPTIONIST:
     'Front-desk receptionist managing patient check-in, appointments, and visitor coordination',
   ROLE_SECURITY:

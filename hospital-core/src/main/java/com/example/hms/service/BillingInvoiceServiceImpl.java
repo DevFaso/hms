@@ -53,6 +53,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     /** QA D1293: a payment without a method. */
     private static final String MSG_PAYMENT_METHOD_REQUIRED = "billing.payment.methodRequired";
     private static final String MSG_REFERENCE_REQUIRED = "billing.payment.referenceRequired";
+    /** Billing plan PR 11 (QA D2430): a payment key sent again for a different payment. */
+    static final String MSG_CLIENT_REQUEST_REUSED = "billing.payment.clientRequestReused";
     /** QA D1069: the longest cancellation reason kept (the column is 500). */
     static final int CANCEL_REASON_MAX = 500;
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(BillingInvoiceServiceImpl.class);
@@ -521,27 +523,79 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
      * refused on {@code confirmUnpricedLines}, naming the lines, unless the request
      * confirms them (a line that really is free stays possible). On the server, so
      * an API call does not slip through either.
+     *
+     * <p>PR 10 review (QA D2703): the confirmation alone let an unpriced line go out at
+     * 0 F with no reason. Confirming now needs {@code unpricedLinesReason}: kept on each
+     * such line, audited ({@code INVOICE_LINE_PRICED_MANUALLY}, ids in the description,
+     * the reason in the details) and listed in the day report with the prices set by hand.
      */
     private void requireUnpricedLinesConfirmed(BillingInvoice invoice, InvoiceStatus nextStatus,
                                                BillingInvoiceRequestDTO dto) {
-        if (nextStatus != InvoiceStatus.SENT || Boolean.TRUE.equals(dto.getConfirmUnpricedLines())
-                || invoiceItemRepository == null) {
+        if (nextStatus != InvoiceStatus.SENT || invoiceItemRepository == null) {
             return;
         }
         List<InvoiceItem> lines = invoiceItemRepository.findByBillingInvoiceId(invoice.getId());
         if (lines == null) {
             return;
         }
-        String unpriced = lines.stream()
-            .filter(line -> nz(line.getTotalPrice()).signum() == 0)
-            // QA D1901: each line named in the reader's language.
+        List<InvoiceItem> free = lines.stream().filter(line -> nz(line.getTotalPrice()).signum() == 0).toList();
+        if (free.isEmpty()) {
+            return;
+        }
+        // QA D1901: each line named in the reader's language.
+        String unpriced = free.stream()
             .map(line -> com.example.hms.service.billing.BillingTextRenderer.render(line.getTextCode(), line.getTextArgs(),
                 line.getItemDescription()))
             .collect(java.util.stream.Collectors.joining(", "));
-        if (!unpriced.isEmpty()) {
+        if (!Boolean.TRUE.equals(dto.getConfirmUnpricedLines())) {
             throw new com.example.hms.exception.FieldBusinessException("confirmUnpricedLines",
                 "billing.invoice.unpricedLines", unpriced);
         }
+        String reason = dto.getUnpricedLinesReason() == null ? "" : dto.getUnpricedLinesReason().trim();
+        if (reason.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_UNPRICED_REASON,
+                "billing.invoice.unpricedLinesReasonRequired", unpriced);
+        }
+        if (reason.length() > UNPRICED_REASON_MAX) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_UNPRICED_REASON,
+                "billing.item.overrideReasonTooLong", UNPRICED_REASON_MAX);
+        }
+        com.example.hms.utility.CardNumbers.requireNone(reason, FIELD_UNPRICED_REASON);
+        UUID actorId = roleValidator.getCurrentUserId();
+        for (InvoiceItem line : free) {
+            line.setOverrideReason(reason);
+            invoiceItemRepository.save(line);
+            auditFreeLineAfterCommit(actorId, invoice, line.getId(), reason);
+        }
+    }
+
+    private static final String FIELD_UNPRICED_REASON = "unpricedLinesReason";
+    private static final int UNPRICED_REASON_MAX = 500;
+
+    /** PR 10 review (QA D2703): one row per line issued at 0 F; ids in the description, the reason in the details. */
+    private void auditFreeLineAfterCommit(UUID actorId, BillingInvoice invoice, UUID lineId, String reason) {
+        if (auditEventLogService == null) {
+            return;
+        }
+        String line = String.valueOf(lineId);
+        String invoiceIdText = String.valueOf(invoice.getId());
+        UUID hospitalId = invoice.getHospital() != null ? invoice.getHospital().getId() : null;
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.INVOICE_LINE_PRICED_MANUALLY)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .hospitalId(hospitalId)
+                    .eventDescription("Draft line " + line + " of invoice " + invoiceIdText + " priced by hand")
+                    .entityType("INVOICE_ITEM")
+                    .resourceId(line)
+                    .details(java.util.Map.of("reason", reason))
+                    .build());
+            } catch (RuntimeException ex) {
+                LOG.warn("Free line audit not written for line {}: {}", line, ex.getClass().getSimpleName());
+            }
+        });
     }
 
     /** QA D768: methods whose money can only be traced by its transaction reference. */
@@ -573,6 +627,11 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         BillingInvoiceResponseDTO dto = invoiceMapper.toBillingInvoiceResponseDTO(invoice);
         // Billing-money plan PR 7: the payers' shares with their history (a rejected one with the payer's reason).
         dto.setPayerShares(payerSharesOf(invoice));
+        // QA D2437: a draft's estimated payer part, so the cashier can tell the patient their share before issuing.
+        if (coverageService != null) {
+            coverageService.previewForDraft(invoice)
+                .ifPresent(preview -> dto.setEstimatedInsuranceCoverageAmount(preview.total()));
+        }
         return dto;
     }
 
@@ -602,6 +661,39 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // QA D101: a DRAFT invoice is not yet issued to the patient.
         return invoiceRepository.findByPatient_IdAndStatusNot(patientId, InvoiceStatus.DRAFT, pageable)
             .map(this::toPortalResponse);
+    }
+
+    /**
+     * QA D2730 (r65): the grantor's invoices as a proxy reads them. An
+     * invoice names its visit's services, so one for a sensitive visit is
+     * not a proxy's to read ({@code ProxyRecordFilter}). Filtered before it
+     * is paged, so a page is never short and the total is the proxy's.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<BillingInvoiceResponseDTO> getInvoicesForProxy(UUID patientId, Pageable pageable, Locale locale) {
+        java.util.List<BillingInvoice> shown = invoiceRepository
+            .findByPatient_IdAndStatusNot(patientId, InvoiceStatus.DRAFT,
+                org.springframework.data.domain.PageRequest.of(0, Integer.MAX_VALUE / 2, pageable.getSort()))
+            .getContent().stream()
+            .filter(proxyRecordFilter::admits)
+            .toList();
+        if (pageable.isUnpaged()) {
+            return new org.springframework.data.domain.PageImpl<>(
+                shown.stream().map(this::toPortalResponse).toList(), pageable, shown.size());
+        }
+        int from = (int) Math.min(pageable.getOffset(), shown.size());
+        int to = Math.min(from + pageable.getPageSize(), shown.size());
+        return new org.springframework.data.domain.PageImpl<>(
+            shown.subList(from, to).stream().map(this::toPortalResponse).toList(), pageable, shown.size());
+    }
+
+    /** QA D2730: what a proxy may read of the grantor's invoices. */
+    private com.example.hms.service.recordaccess.ProxyRecordFilter proxyRecordFilter;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setProxyRecordFilter(com.example.hms.service.recordaccess.ProxyRecordFilter proxyRecordFilter) {
+        this.proxyRecordFilter = proxyRecordFilter;
     }
 
     private com.example.hms.mapper.InvoiceItemMapper invoiceItemMapper;
@@ -850,12 +942,15 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         String invoiceIdText = String.valueOf(invoice.getId());
         String adjustmentIdText = String.valueOf(adjustment.getId());
         com.example.hms.enums.InvoiceAdjustmentType type = adjustment.getType();
+        // QA D2924 (r66): the invoice's hospital anchors the row for the hospital admin's audit log.
+        UUID auditHospitalId = invoice.getHospital() != null ? invoice.getHospital().getId() : null;
         com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
                     .eventType(AuditEventType.INVOICE_UPDATED)
                     .status(com.example.hms.enums.AuditStatus.SUCCESS)
                     .userId(actorId)
+                    .hospitalId(auditHospitalId)
                     .eventDescription("Invoice adjustment " + type + " " + adjustmentIdText
                         + " reversed with a recorded reason on invoice " + invoiceIdText)
                     .entityType(AUDIT_ENTITY_INVOICE)
@@ -889,12 +984,15 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             return;
         }
         String invoiceIdText = String.valueOf(invoice.getId());
+        // QA D2924 (r66): the invoice's hospital anchors the row for the hospital admin's audit log.
+        UUID auditHospitalId = invoice.getHospital() != null ? invoice.getHospital().getId() : null;
         com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
                     .eventType(AuditEventType.INVOICE_UPDATED)
                     .status(com.example.hms.enums.AuditStatus.SUCCESS)
                     .userId(actorId)
+                    .hospitalId(auditHospitalId)
                     .eventDescription("Invoice adjustment " + type + " on invoice " + invoiceIdText)
                     .entityType(AUDIT_ENTITY_INVOICE)
                     .resourceId(invoiceIdText)
@@ -1199,12 +1297,15 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             return;
         }
         String invoiceIdText = String.valueOf(invoice.getId());
+        // QA D2924 (r66): the invoice's hospital anchors the row for the hospital admin's audit log.
+        UUID auditHospitalId = invoice.getHospital() != null ? invoice.getHospital().getId() : null;
         com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
                     .eventType(AuditEventType.INVOICE_UPDATED)
                     .status(com.example.hms.enums.AuditStatus.SUCCESS)
                     .userId(actorId)
+                    .hospitalId(auditHospitalId)
                     .eventDescription("Invoice cancelled with a recorded reason: invoice " + invoiceIdText)
                     .entityType(AUDIT_ENTITY_INVOICE)
                     .resourceId(invoiceIdText)
@@ -1695,6 +1796,22 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .build();
     }
 
+    /** Billing plan PR 10 (V309): every money movement names the cash session it was taken in. */
+    private com.example.hms.service.billing.cash.CashSessionService cashSessions;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setCashSessionService(com.example.hms.service.billing.cash.CashSessionService service) {
+        this.cashSessions = service;
+    }
+
+    /** The cashier's open session for {@code till} today (opened if needed); refused when it is closed. */
+    private UUID stampCashSession(com.example.hms.enums.CashTill till, BillingInvoice invoice, UUID cashierId) {
+        if (cashSessions == null || invoice.getHospital() == null) {
+            return null;
+        }
+        return cashSessions.stamp(till, invoice.getHospital().getId(), cashierId);
+    }
+
     /** QA D1059: the pharmacy payments, for the cashier's closing. Setter-injected like the other late additions. */
     private com.example.hms.repository.pharmacy.PharmacyPaymentRepository pharmacyPaymentRepository;
 
@@ -1802,6 +1919,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .amount(p.getAmount())
             .status(p.getStatus() != null ? p.getStatus().name() : null)
             .direction(DIRECTION_IN)
+            .reversalPaidOut(p.getReversalRefundId() != null)
             .build();
     }
 
@@ -1860,7 +1978,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                 // A refund handed back: money out of the till, with its own total per method.
                 refundedCount++;
                 refunded = refunded.add(amount);
-            } else if (!stillCounted(e.getStatus())) {
+            } else if (!stillCounted(e.getStatus()) && !e.isReversalPaidOut()) {
                 reversedCount++;
                 reversed = reversed.add(amount);
                 return;
@@ -1934,7 +2052,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         requirePayable(invoice, patientId, declared);
         rejectReusedReference(invoice, method, payment.getTransactionReference(), "transactionReference");
         savePaymentRow(invoice, payment.getAmount(), new Tender(method, payment.getTransactionReference(), operator),
-            payment.getNotes(), recordedBy, PaymentStatus.PENDING);
+            payment.getNotes(), recordedBy, PaymentStatus.PENDING, null, null);
         BillingInvoiceResponseDTO response = invoiceMapper.toBillingInvoiceResponseDTO(invoice);
         response.setPendingDeclaredAmount(open.add(payment.getAmount()));
         return response;
@@ -1969,9 +2087,13 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     }
 
     /** The ledger row a cashier reconciles against: one per recorded payment, patient or staff. */
+    @SuppressWarnings("java:S107") // the row's own fields; a parameter object would only rename them
     private PaymentTransaction savePaymentRow(BillingInvoice invoice, BigDecimal amount, Tender tender,
-            String notes, UUID recordedBy, PaymentStatus status) {
+            String notes, UUID recordedBy, PaymentStatus status, UUID clientRequestId,
+            com.example.hms.enums.CashTill till) {
         boolean confirmed = status == PaymentStatus.CONFIRMED;
+        // Billing plan PR 10: money received now lands in the cashier's session of this till (a declaration waits).
+        UUID cashSessionId = confirmed ? stampCashSession(till, invoice, recordedBy) : null;
         PaymentTransaction row = PaymentTransaction.builder()
             .invoice(invoice)
             .amount(amount)
@@ -1986,9 +2108,62 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .confirmedAt(confirmed ? java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()) : null)
             // QA D228: the total as it stands when the money is received.
             .invoiceTotalAtReceipt(confirmed ? invoice.getTotalAmount() : null)
+            // Billing plan PR 11 (V310): the key is unique per hospital, so the row names its hospital.
+            .hospitalId(invoice.getHospital() != null ? invoice.getHospital().getId() : null)
+            .clientRequestId(clientRequestId)
+            .cashSessionId(cashSessionId)
             .build();
-        PaymentTransaction saved = paymentTransactionRepository.save(row);
-        return java.util.Objects.requireNonNullElse(saved, row);
+        if (clientRequestId == null) {
+            PaymentTransaction saved = paymentTransactionRepository.save(row);
+            return java.util.Objects.requireNonNullElse(saved, row);
+        }
+        try {
+            // Flushed now: a key already taken by another payment of this hospital is refused here, not at commit.
+            PaymentTransaction saved = paymentTransactionRepository.saveAndFlush(row);
+            return java.util.Objects.requireNonNullElse(saved, row);
+        } catch (org.springframework.dao.DataIntegrityViolationException refused) {
+            // Only the V310 index means "key taken" (a submit with this key on another invoice raced this one).
+            if (String.valueOf(refused.getMostSpecificCause().getMessage()).contains("uk_pt_hospital_client_request")) {
+                throw new com.example.hms.exception.ConflictException(
+                    com.example.hms.utility.MessageUtil.resolve(MSG_CLIENT_REQUEST_REUSED));
+            }
+            throw refused;
+        }
+    }
+
+    /**
+     * Billing plan PR 11 (QA D2430): the payment a staff request key already recorded, when it is the same
+     * payment (same invoice, amount and method), so a retry after a lost answer records nothing again. The
+     * same key on another invoice, or for another amount or method, is refused, never answered with the
+     * payment it first named. Called with the invoice row locked, so a second submit waits for the first.
+     */
+    private PaymentTransaction replayedStaffPayment(BillingInvoice invoice, UUID clientRequestId,
+            BigDecimal amount, PaymentMethod method) {
+        if (clientRequestId == null || invoice.getHospital() == null) {
+            return null;
+        }
+        PaymentTransaction prior = paymentTransactionRepository
+            .findByHospitalIdAndClientRequestId(invoice.getHospital().getId(), clientRequestId).orElse(null);
+        if (prior == null) {
+            return null;
+        }
+        boolean same = prior.getInvoice() != null && invoice.getId().equals(prior.getInvoice().getId())
+            && amount != null && prior.getAmount() != null && amount.compareTo(prior.getAmount()) == 0
+            && prior.getPaymentMethod() == method;
+        if (!same) {
+            throw new com.example.hms.exception.ConflictException(
+                com.example.hms.utility.MessageUtil.resolve(MSG_CLIENT_REQUEST_REUSED));
+        }
+        return prior;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.Optional<PaymentTransaction> findPaymentByClientRequest(UUID hospitalId, UUID clientRequestId) {
+        if (hospitalId == null || clientRequestId == null) {
+            return java.util.Optional.empty();
+        }
+        return paymentTransactionRepository.findByHospitalIdAndClientRequestId(hospitalId, clientRequestId);
     }
 
     /**
@@ -2100,9 +2275,16 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         // QA D1293: no method, no payment (it used to be recorded as OTHER).
         PaymentMethod method = parsePaymentMethod(payment.getMethod(), "method");
+        // Billing plan PR 11 (QA D2430): the same payment sent again (a lost answer, a double submit of one dialog)
+        // answers with the invoice as it stands, before any rule that the first payment itself changed.
+        if (replayedStaffPayment(invoice, payment.getClientRequestId(), payment.getAmount(), method) != null) {
+            return invoiceMapper.toBillingInvoiceResponseDTO(invoice);
+        }
         // QA D1611: an insurer's share is claimed, never counted as received at the till.
         com.example.hms.service.payment.TillPaymentMethods.requireReceivedAtTill(method, "method");
         requireWholeAmount(payment.getAmount());
+        // QA D2704: the same handover pressed in a second tab is asked about, never recorded twice in silence.
+        requireNoRecentDuplicate(invoice, payment, method);
         if (REFERENCE_REQUIRED.contains(method)
                 && (payment.getReference() == null || payment.getReference().isBlank())) {
             throw new FieldBusinessException("reference", MSG_REFERENCE_REQUIRED);
@@ -2121,9 +2303,47 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         BillingInvoice saved = applyPayment(invoiceId, invoice.getPatient().getId(), payment.getAmount());
         PaymentTransaction row = savePaymentRow(saved, payment.getAmount(),
             new Tender(method, payment.getReference(), operator), payment.getNotes(), recordedBy,
-            PaymentStatus.CONFIRMED);
+            PaymentStatus.CONFIRMED, payment.getClientRequestId(), com.example.hms.enums.CashTill.BILLING);
         auditPaymentAfterCommit(AuditEventType.PAYMENT_POSTED, recordedBy, saved, row.getId(), "Payment recorded");
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
+    }
+
+    /** QA D2704: how long a second payment of the same amount, method and reference is taken for a duplicate. */
+    static final java.time.Duration DUPLICATE_WINDOW = java.time.Duration.ofMinutes(10);
+
+    /**
+     * QA D2704: two tabs (or two dialogs) on one invoice each carry their own idempotency key, so the same handover
+     * pressed in both was recorded twice. A confirmed payment of the same amount and method, with the same reference
+     * (or none), recorded on this invoice in the last {@link #DUPLICATE_WINDOW}, is refused on
+     * {@code confirmDuplicate} unless the request confirms it. Called with the invoice row locked, so two submits at
+     * once meet here one after the other. A mobile-money reference is already unique (QA D1129).
+     */
+    private void requireNoRecentDuplicate(BillingInvoice invoice,
+            com.example.hms.payload.dto.StaffPaymentRequestDTO payment, PaymentMethod method) {
+        if (Boolean.TRUE.equals(payment.getConfirmDuplicate()) || payment.getAmount() == null) {
+            return;
+        }
+        java.time.LocalDateTime since = java.time.LocalDateTime.now(java.time.ZoneId.systemDefault())
+            .minus(DUPLICATE_WINDOW);
+        List<PaymentTransaction> same = paymentTransactionRepository.findRecentSamePayments(invoice.getId(),
+            payment.getAmount(), method, since);
+        if (same == null || same.isEmpty()) {
+            return;
+        }
+        String reference = normalisedReference(payment.getReference());
+        boolean duplicate = same.stream()
+            .anyMatch(p -> java.util.Objects.equals(normalisedReference(p.getReferenceNumber()), reference));
+        if (duplicate) {
+            throw new FieldBusinessException("confirmDuplicate", "billing.payment.possibleDuplicate",
+                com.example.hms.service.billing.InvoiceRefundService.francs(payment.getAmount()));
+        }
+    }
+
+    private static String normalisedReference(String reference) {
+        if (reference == null || reference.isBlank()) {
+            return null;
+        }
+        return reference.replaceAll("\\s+", "").toUpperCase(java.util.Locale.ROOT);
     }
 
     /**
@@ -2194,12 +2414,15 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // The balance may have moved since the patient declared it: the same
         // checks as a cashier's payment apply now.
         requirePayable(invoice, invoice.getPatient().getId(), row.getAmount());
+        // Billing plan PR 10: a declaration confirmed lands in the confirming cashier's session, today.
+        UUID cashSessionId = stampCashSession(com.example.hms.enums.CashTill.BILLING, invoice, staffId);
         claimTransition(row, invoice, PaymentStatus.PENDING, PaymentStatus.CONFIRMED, "billing.payment.notPending");
         BillingInvoice saved = settle(invoice, row.getAmount());
         row.setStatus(PaymentStatus.CONFIRMED);
         row.setConfirmedBy(staffId);
         row.setConfirmedAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
         row.setInvoiceTotalAtReceipt(invoice.getTotalAmount()); // QA D228
+        row.setCashSessionId(cashSessionId);
         paymentTransactionRepository.save(row);
         auditPaymentAfterCommit(AuditEventType.PAYMENT_POSTED, staffId, saved, row.getId(), "Pending payment confirmed");
         // QA D1466: the copay that waited for this declaration counts now.
@@ -2230,50 +2453,26 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     }
 
     /**
-     * QA D142: a confirmed payment entered in error is reversed by billing
-     * staff with a reason. The row stays in the ledger as REVERSED, and the
-     * amount paid and the status are recomputed from what is still counted,
-     * so the totals stay consistent.
-     *
-     * <p>Billing-money plan PR 8: a reversal is not a refund. Money handed
-     * back to a patient is an {@code InvoiceRefund} (approved by another
-     * person, counted as money out on the day it is paid); this is audited
-     * as {@code PAYMENT_REVERSED}, never {@code REFUND_ISSUED}. A reversal
-     * cannot take the money held below what refunds already handed back.
+     * QA D142, D2702: a confirmed payment entered in error is reversed by billing staff with a reason, but never by
+     * one person alone: this only asks for the reversal. It is a refund of that payment (billing-money plan PR 8,
+     * owner decision D-3): another hospital admin or accountant approves it, and it reverses the payment only when the
+     * cashier hands the money back, as money out of that cashier's till. Until then the payment stays CONFIRMED and
+     * the till still expects its money.
      */
     @Override
     @Transactional
     public BillingInvoiceResponseDTO reversePayment(UUID invoiceId, UUID paymentId, String reason, UUID staffId,
             Locale locale) {
-        BillingInvoice invoice = loadInScopeForUpdate(invoiceId);
-        PaymentTransaction row = loadPaymentRow(invoice, paymentId);
-        if (row.getStatus() != PaymentStatus.CONFIRMED) {
-            throw new BusinessException("billing.payment.notConfirmed");
-        }
-        String why = requireReason(reason);
-        BigDecimal paid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
-        BigDecimal remaining = paid.subtract(row.getAmount());
-        if (remaining.signum() < 0) {
-            // A ledger that disagrees with the invoice is not settled by a guess.
-            throw new BusinessException("billing.payment.ledgerMismatch");
-        }
-        // Billing-money plan PR 8: money already handed back on a refund came out of what was received.
-        BigDecimal refunded = invoice.getAmountRefunded() != null ? invoice.getAmountRefunded() : BigDecimal.ZERO;
-        if (remaining.compareTo(refunded) < 0) {
-            throw new BusinessException("billing.payment.reversalBelowRefunded");
-        }
-        claimTransition(row, invoice, PaymentStatus.CONFIRMED, PaymentStatus.REVERSED, "billing.payment.notConfirmed");
-        invoice.setAmountPaid(remaining);
-        // PR 7: the status follows the money held against the patient's share.
-        invoice.setStatus(com.example.hms.utility.InvoiceBalance.settledStatusOf(invoice));
-        row.setStatus(PaymentStatus.REVERSED);
-        row.setReversedBy(staffId);
-        row.setReversedAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
-        row.setReversalReason(why);
-        paymentTransactionRepository.save(row);
-        BillingInvoice saved = invoiceRepository.save(invoice);
-        auditPaymentAfterCommit(AuditEventType.PAYMENT_REVERSED, staffId, saved, row.getId(), "Payment reversed");
-        return invoiceMapper.toBillingInvoiceResponseDTO(saved);
+        java.util.Objects.requireNonNull(refundService).requestReversal(invoiceId, paymentId, reason);
+        return invoiceMapper.toBillingInvoiceResponseDTO(loadInScope(invoiceId));
+    }
+
+    /** QA D2702: a reversal goes through the refund approval. Setter-injected like the other late additions. */
+    private com.example.hms.service.billing.InvoiceRefundService refundService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setInvoiceRefundService(com.example.hms.service.billing.InvoiceRefundService service) {
+        this.refundService = service;
     }
 
     /**
@@ -2303,12 +2502,15 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             return;
         }
         String invoiceIdText = String.valueOf(invoice.getId());
+        // QA D2924 (r66): the invoice's hospital anchors the row for the hospital admin's audit log.
+        UUID auditHospitalId = invoice.getHospital() != null ? invoice.getHospital().getId() : null;
         com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
                     .eventType(type)
                     .status(com.example.hms.enums.AuditStatus.SUCCESS)
                     .userId(actorId)
+                    .hospitalId(auditHospitalId)
                     .eventDescription(what + ": payment " + paymentId + " on invoice " + invoiceIdText)
                     .entityType(AUDIT_ENTITY_INVOICE)
                     .resourceId(invoiceIdText)
@@ -2322,22 +2524,24 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Override
     @Transactional
     public void recordCheckInCopay(Encounter encounter, BigDecimal amount, UUID recordedBy) {
-        doRecordCheckInCopay(encounter, amount, PaymentMethod.CASH, null, null, recordedBy);
+        doRecordCheckInCopay(encounter, amount, new Tender(PaymentMethod.CASH, null, null), recordedBy, null);
     }
 
     @Override
     @Transactional
     public PaymentTransaction recordCheckInCopay(Encounter encounter, BigDecimal amount, PaymentMethod method,
                                                  String reference, com.example.hms.enums.MobileMoneyOperator operator,
-                                                 UUID recordedBy) {
-        return doRecordCheckInCopay(encounter, amount, method, reference, operator, recordedBy);
+                                                 UUID recordedBy, UUID clientRequestId) {
+        return doRecordCheckInCopay(encounter, amount, new Tender(method, reference, operator), recordedBy,
+            clientRequestId);
     }
 
     /** Both entry points share this body (Sonar S6809: no self-call through a transactional method). */
-    private PaymentTransaction doRecordCheckInCopay(Encounter encounter, BigDecimal amount, PaymentMethod method,
-                                                    String reference,
-                                                    com.example.hms.enums.MobileMoneyOperator operator,
-                                                    UUID recordedBy) {
+    private PaymentTransaction doRecordCheckInCopay(Encounter encounter, BigDecimal amount, Tender tender,
+                                                    UUID recordedBy, UUID clientRequestId) {
+        PaymentMethod method = tender.method();
+        String reference = tender.reference();
+        com.example.hms.enums.MobileMoneyOperator operator = tender.operator();
         if (amount == null || amount.signum() <= 0) {
             return null;
         }
@@ -2393,7 +2597,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         rejectReusedReference(saved, copayMethod, copayReference, "copayReference");
         BillingInvoice settled = settle(saved, amount);
         PaymentTransaction row = savePaymentRow(settled, amount, new Tender(copayMethod, copayReference, copayOperator),
-            null, recordedBy, PaymentStatus.CONFIRMED);
+            null, recordedBy, PaymentStatus.CONFIRMED, clientRequestId, com.example.hms.enums.CashTill.RECEPTION);
         auditPaymentAfterCommit(AuditEventType.PAYMENT_POSTED, recordedBy, settled, row.getId(), "Check-in copay recorded");
         return row;
     }

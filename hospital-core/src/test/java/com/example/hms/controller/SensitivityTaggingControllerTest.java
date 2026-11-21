@@ -169,4 +169,41 @@ class SensitivityTaggingControllerTest {
 
         verify(taggingService).setDepartmentDefault(departmentId, null, null);
     }
+
+    @Test
+    @DisplayName("D2730: PUT tags a problem-list entry, and a null category clears its own tag")
+    void tagProblem() throws Exception {
+        UUID patientId = UUID.randomUUID();
+        UUID problemId = UUID.randomUUID();
+        when(taggingService.tagProblem(patientId, problemId, SensitivityCategory.HIV, userId))
+            .thenReturn(new SensitivityTagResponseDTO(problemId, SensitivityCategory.HIV,
+                SensitivityCategory.HIV, null, false));
+        when(taggingService.tagProblem(patientId, problemId, null, userId))
+            .thenReturn(new SensitivityTagResponseDTO(problemId, null,
+                SensitivityCategory.BEHAVIOURAL_HEALTH, SensitivityCategory.BEHAVIOURAL_HEALTH, false));
+
+        mockMvc.perform(put("/patients/{patientId}/diagnoses/{id}/sensitivity", patientId, problemId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"category\":\"HIV\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.explicitCategory").value("HIV"))
+            .andExpect(jsonPath("$.travelsCrossHospital").value(false));
+
+        // Its own tag cleared: the visit it was recorded in still governs.
+        mockMvc.perform(put("/patients/{patientId}/diagnoses/{id}/sensitivity", patientId, problemId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"category\":null}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.explicitCategory").doesNotExist())
+            .andExpect(jsonPath("$.effectiveCategory").value("BEHAVIOURAL_HEALTH"));
+    }
+
+    @Test
+    @DisplayName("D2730: a problem tag is a clinical write - doctor, nurse or midwife on their own role, no super-admin alone")
+    void problemTagRoles() {
+        org.assertj.core.api.Assertions.assertThat(SensitivityTaggingController.PROBLEM_TAG_ROLES)
+            .contains("ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','MIDWIFE')")
+            .doesNotContain("SUPER_ADMIN")
+            .doesNotContain("HOSPITAL_ADMIN");
+    }
 }

@@ -1170,6 +1170,13 @@ public class ReceptionServiceImpl implements ReceptionService {
             throw new AccessDeniedException("Appointment does not belong to this hospital");
         }
 
+        // Billing plan PR 11 (QA D2430): the same check-in sent again after its answer was lost answers with the
+        // check-in and copay already recorded, instead of "not eligible" (which the desk read as a failure).
+        CheckInResponseDTO replay = replayedCheckIn(request, appointment);
+        if (replay != null) {
+            return replay;
+        }
+
         // Validate appointment is in a check-in-eligible status
         AppointmentStatus currentStatus = appointment.getStatus();
         if (currentStatus != AppointmentStatus.SCHEDULED && currentStatus != AppointmentStatus.CONFIRMED) {
@@ -1266,7 +1273,7 @@ public class ReceptionServiceImpl implements ReceptionService {
             UUID actorUserId = userRepo.findByUsername(actorUsername).map(u -> u.getId()).orElse(null);
             copayPayment = billingInvoiceService.recordCheckInCopay(encounter, copay,
                 request.getCopayMethod(), request.getCopayReference(), request.getCopayMobileMoneyOperator(),
-                actorUserId);
+                actorUserId, request.getCopayClientRequestId());
         }
 
         // 4. Audit trail
@@ -1286,6 +1293,12 @@ public class ReceptionServiceImpl implements ReceptionService {
                 patient.getId(), appointment.getId(), encounter.getCode(), actorUsername);
 
         // 5. Build response
+        return checkInResponse(appointment, encounter, copayPayment);
+    }
+
+    private CheckInResponseDTO checkInResponse(Appointment appointment, Encounter encounter,
+                                               com.example.hms.model.PaymentTransaction copayPayment) {
+        Patient patient = encounter.getPatient();
         String patientName = patient.getFullName();
         return CheckInResponseDTO.builder()
                 .appointmentId(appointment.getId())
@@ -1303,6 +1316,36 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .message(messageSource.getMessage("reception.r7.checkedIn", new Object[] {patientName},
                         org.springframework.context.i18n.LocaleContextHolder.getLocale()))
                 .build();
+    }
+
+    /**
+     * Billing plan PR 11 (QA D2430): the check-in whose copay this request's key already recorded, answered
+     * again (null when the key is absent or unknown). Called with the appointment row locked, so a second
+     * submit waits for the first. The key on another appointment, or for another amount or method, is
+     * refused, never answered with the check-in it first named.
+     */
+    private CheckInResponseDTO replayedCheckIn(CheckInRequestDTO request, Appointment appointment) {
+        if (request.getCopayClientRequestId() == null) {
+            return null;
+        }
+        com.example.hms.model.PaymentTransaction prior = billingInvoiceService
+                .findPaymentByClientRequest(appointment.getHospital().getId(), request.getCopayClientRequestId())
+                .orElse(null);
+        if (prior == null) {
+            return null;
+        }
+        Encounter encounter = prior.getInvoice() != null ? prior.getInvoice().getEncounter() : null;
+        boolean same = encounter != null && encounter.getAppointment() != null
+                && appointment.getId().equals(encounter.getAppointment().getId())
+                && request.getCopayAmount() != null && prior.getAmount() != null
+                && request.getCopayAmount().compareTo(prior.getAmount()) == 0
+                && prior.getPaymentMethod() == request.getCopayMethod();
+        if (!same) {
+            throw new com.example.hms.exception.ConflictException(
+                    com.example.hms.utility.MessageUtil.resolve("billing.payment.clientRequestReused"));
+        }
+        log.info("Check-in of appointment {} replayed by its copay key; nothing recorded again", appointment.getId());
+        return checkInResponse(appointment, encounter, prior);
     }
 
     private boolean isPrivilegedRoleCode(String roleCode) {

@@ -42,6 +42,27 @@ export interface VitalSignResponse {
   newsRiskBand: NewsRiskBand | null;
   newsComplete: boolean | null;
   newsMissing: string[] | null;
+  /**
+   * Review of #1237: OBSTETRIC or NEWBORN when NEWS2 is not validated for this patient at this reading
+   * (server News2Applicability); the score fields are then null and the chart says why.
+   */
+  newsNotValidated?: 'OBSTETRIC' | 'NEWBORN' | null;
+  /* Maternal early warning (policy 2026-11-20, PROVISIONAL, pending a named obstetric clinician's
+     sign-off). For a pregnant or postpartum woman the server scores the set and the chart shows this
+     in place of « NEWS2 non validé »; the portal computes nothing and always says « provisoire ». */
+  /** The additional concerns ticked on the set. */
+  maternalConcerns?: string[] | null;
+  mewsScore?: number | null;
+  /** The level the set is answered at (a concern or a RED add-on alert raises it). */
+  mewsTier?: MewsTier | null;
+  mewsComplete?: boolean | null;
+  mewsMissing?: string[] | null;
+  mewsConcerns?: string[] | null;
+  /** CRADLE add-on alerts. */
+  mewsAlerts?: MewsAlert[] | null;
+  /** Medical review within this many minutes (0 = immediate); null at the low level. */
+  mewsReviewWithinMinutes?: number | null;
+  mewsPostBirthPulse?: boolean | null;
   recordedAt: string;
   createdAt: string;
   updatedAt: string | null;
@@ -49,6 +70,8 @@ export interface VitalSignResponse {
 
 export type ConsciousnessLevel = 'ALERT' | 'NEW_CONFUSION' | 'VOICE' | 'PAIN' | 'UNRESPONSIVE';
 export type NewsRiskBand = 'LOW' | 'LOW_MEDIUM' | 'MEDIUM' | 'HIGH';
+export type MewsTier = 'LOW' | 'LOW_MEDIUM' | 'MEDIUM' | 'HIGH';
+export type MewsAlert = 'SEVERE_HYPERTENSION' | 'SHOCK' | 'SEVERE_SHOCK';
 
 /** Mirrors PatientVitalSignRequestDTO (measurement subset). */
 export interface VitalSignRequest {

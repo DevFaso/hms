@@ -43,8 +43,9 @@ import { labSeverityFlag } from './lab-severity';
         </div>
         <div class="scale" aria-hidden="true">
           <div class="labels">
-            <span>{{ 'LOW' | enumLabel: 'labSeverityFlag' }}</span
-            ><span>{{ 'NORMAL' | enumLabel: 'labSeverityFlag' }}</span
+            <span>{{ 'LOW' | enumLabel: 'labSeverityFlag' }}</span><span>{{
+              'NORMAL' | enumLabel: 'labSeverityFlag'
+            }}</span
             ><span>{{ 'HIGH' | enumLabel: 'labSeverityFlag' }}</span>
           </div>
           <div class="bar">
@@ -55,8 +56,7 @@ import { labSeverityFlag } from './lab-severity';
             ></span>
           </div>
           <div class="bounds">
-            <span>{{ point.min | labValue }}</span
-            ><span>{{ point.max | labValue }}</span>
+            <span>{{ point.min | labValue }}</span><span>{{ point.max | labValue }}</span>
           </div>
         </div>
         <p class="reference" [id]="id() + '-limits'">

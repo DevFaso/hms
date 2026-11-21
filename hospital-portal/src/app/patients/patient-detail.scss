@@ -286,6 +286,42 @@
     color: #b91c1c;
     border-color: #fecaca;
   }
+  /* Policy 2026-11-20 (provisional): the maternal early warning. It wraps on a narrow card. */
+  &.mews-chip {
+    flex-wrap: wrap;
+    max-width: 100%;
+
+    .mews-review,
+    .mews-concern {
+      font-weight: 600;
+    }
+    .mews-alert {
+      font-weight: 700;
+      padding: 0 0.4rem;
+      border-radius: 8px;
+      background: #b91c1c;
+      color: #fff;
+    }
+    .mews-alert-yellow {
+      background: #fde68a;
+      color: #78350f;
+    }
+    .mews-provisional {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      text-decoration: underline dotted;
+      cursor: help;
+    }
+  }
+  /* Review of #1237: no score, never green; it says why and where to look instead. */
+  &.news-not-validated {
+    background: #f1f5f9;
+    color: #334155;
+    border-color: #cbd5e1;
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
 }
 
 .vital-date {

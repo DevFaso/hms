@@ -99,20 +99,31 @@
         <tbody>
           @for (row of rows(); track row.id) {
             <tr [attr.data-testid]="'outbox-row-' + row.id">
-              <td class="mono">{{ row.messageType }}</td>
+              <td class="type-cell">
+                <span class="mono">{{ row.messageType }}</span>
+                @if (resultStatusKey(row.resultStatus); as rsKey) {
+                  {{ ' '
+                  }}<span
+                    class="result-status-badge"
+                    [attr.data-result-status]="row.resultStatus"
+                    [attr.data-testid]="'outbox-result-status-' + row.id"
+                    >{{ rsKey | translate }}</span
+                  >
+                }
+              </td>
               <td>
                 <span class="status-badge" [attr.data-status]="row.status">
                   {{ 'LAB_OUTBOX.STATUS_' + row.status | translate }}
                 </span>
               </td>
               <td class="numeric">{{ row.attempts }}</td>
-              <td>
+              <td class="date-cell">
                 {{ row.lastAttemptAt ? (row.lastAttemptAt | serverTime | date: 'short') : '—' }}
               </td>
               <td class="error-cell" [title]="row.lastError ?? ''">
                 {{ row.lastError ?? '—' }}
               </td>
-              <td>{{ row.createdAt | serverTime | date: 'short' }}</td>
+              <td class="date-cell">{{ row.createdAt | serverTime | date: 'short' }}</td>
               <td class="actions-cell">
                 <button
                   class="btn-icon"
@@ -201,14 +212,103 @@
               <span class="detail-error">{{ d.message.lastError }}</span>
             }
           </p>
-          <h3>{{ 'LAB_OUTBOX.PAYLOAD' | translate }}</h3>
-          <pre class="payload" data-testid="outbox-detail-payload">{{ d.message.payload }}</pre>
+          <h3>{{ 'LAB_OUTBOX.SUMMARY' | translate }}</h3>
+          @if (detailSummary(); as s) {
+            <dl class="summary" data-testid="outbox-detail-summary">
+              <dt>{{ 'LAB_OUTBOX.SUMMARY_TYPE' | translate }}</dt>
+              <dd data-testid="outbox-summary-type">
+                @if (messageTypeKey(s.messageType); as typeKey) {
+                  {{ typeKey | translate }} <span class="mono muted">({{ s.messageType }})</span>
+                } @else {
+                  <span class="mono">{{ s.messageType }}</span>
+                }
+              </dd>
+              @if (s.patientName) {
+                <dt>{{ 'LAB_OUTBOX.SUMMARY_PATIENT' | translate }}</dt>
+                <dd data-testid="outbox-summary-patient">{{ s.patientName }}</dd>
+              }
+              @if (s.test) {
+                <dt>{{ 'LAB_OUTBOX.SUMMARY_TEST' | translate }}</dt>
+                <dd data-testid="outbox-summary-test">{{ s.test }}</dd>
+              }
+              @if (s.value) {
+                <dt>{{ 'LAB_OUTBOX.SUMMARY_VALUE' | translate }}</dt>
+                <dd data-testid="outbox-summary-value">
+                  {{ s.unit ? s.value + ' ' + s.unit : s.value }}
+                </dd>
+              }
+              @if (s.flag) {
+                <dt>{{ 'LAB_OUTBOX.SUMMARY_FLAG' | translate }}</dt>
+                <dd data-testid="outbox-summary-flag">
+                  @if (flagKey(s.flag); as fKey) {
+                    {{ fKey | translate }} <span class="mono muted">({{ s.flag }})</span>
+                  } @else {
+                    <span class="mono">{{ s.flag }}</span>
+                  }
+                </dd>
+              }
+              @if (s.resultStatus) {
+                <dt>{{ 'LAB_OUTBOX.SUMMARY_RESULT_STATUS' | translate }}</dt>
+                <dd data-testid="outbox-summary-result-status">
+                  @if (resultStatusKey(s.resultStatus); as rsKey) {
+                    <span class="result-status-badge" [attr.data-result-status]="s.resultStatus">{{
+                      rsKey | translate
+                    }}</span>
+                  } @else {
+                    <span class="mono">{{ s.resultStatus }}</span>
+                  }
+                </dd>
+              }
+              <dt>{{ 'LAB_OUTBOX.SUMMARY_QUEUED' | translate }}</dt>
+              <dd data-testid="outbox-summary-queued">
+                {{ d.message.createdAt | serverTime | date: 'short' }}
+              </dd>
+              @if (waitingReason(); as w) {
+                <dt>{{ 'LAB_OUTBOX.SUMMARY_WAITING' | translate }}</dt>
+                <dd class="waiting" data-testid="outbox-summary-waiting">
+                  {{ w.key | translate: w.params }}
+                </dd>
+              }
+            </dl>
+          } @else {
+            <p class="muted" data-testid="outbox-detail-unparseable">
+              {{ 'LAB_OUTBOX.UNPARSEABLE' | translate }}
+            </p>
+          }
+          <div class="payload-header">
+            <h3>{{ 'LAB_OUTBOX.PAYLOAD' | translate }}</h3>
+            <button
+              type="button"
+              class="btn-page btn-copy"
+              (click)="copyPayload()"
+              data-testid="outbox-detail-copy"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+              {{ 'LAB_OUTBOX.COPY' | translate }}
+            </button>
+          </div>
+          <!-- One HL7 segment per line (the stored CR terminators render as
+               nothing in a <pre>); long values scroll sideways, never break. -->
+          <div class="payload" data-testid="outbox-detail-payload" tabindex="0">
+            @for (line of detailLines(); track $index) {
+              <code class="segment">{{ line }}</code>
+            }
+          </div>
           @if (d.siblings.length > 0) {
             <h3>{{ 'LAB_OUTBOX.SIBLINGS' | translate }}</h3>
             <ul class="siblings">
               @for (sibling of d.siblings; track sibling.id) {
                 <li>
                   <span class="mono">{{ sibling.messageType }}</span>
+                  @if (resultStatusKey(sibling.resultStatus); as sKey) {
+                    {{ ' '
+                    }}<span
+                      class="result-status-badge"
+                      [attr.data-result-status]="sibling.resultStatus"
+                      [attr.data-testid]="'outbox-sibling-result-status-' + sibling.id"
+                      >{{ sKey | translate }}</span
+                    >
+                  }
                   {{ ' '
                   }}<span class="status-badge" [attr.data-status]="sibling.status">
                     {{ 'LAB_OUTBOX.STATUS_' + sibling.status | translate }}

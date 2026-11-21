@@ -1024,6 +1024,18 @@
                         {{ 'NURSE.VITALS' | translate }}
                       </button>
                     }
+                    <!-- QA D2583 (r65): write a care note, and read back the earlier ones. -->
+                    @if (canDocumentCare()) {
+                      <button
+                        class="action-btn action-notes"
+                        data-testid="workboard-care-notes"
+                        (click)="openCareNote(p.patientId, p.patientName)"
+                        [title]="'NURSING_NOTES.TITLE' | translate"
+                      >
+                        <span class="material-symbols-outlined">description</span>
+                        {{ 'NURSING_NOTES.OPEN' | translate }}
+                      </button>
+                    }
                     @if (canTriage()) {
                       <button
                         class="action-btn action-triage"
@@ -1083,8 +1095,9 @@
                   @for (p of visibleWorkboard(); track p.patientId) {
                     <tr>
                       <td>
-                        <a [routerLink]="['/patients', p.patientId]">{{ p.patientName }}</a
-                        ><small>{{ p.mrn }} · {{ p.roomBed || '—' }}</small>
+                        <a [routerLink]="['/patients', p.patientId]">{{ p.patientName }}</a><small
+                          >{{ p.mrn }} · {{ p.roomBed || '—' }}</small
+                        >
                         @if (p.acuityLevel) {
                           {{ ' '
                           }}<span class="acuity-badge {{ acuityCssClass(p.acuityLevel) }}">{{
@@ -1437,6 +1450,10 @@
 
         <!-- ═══════════ INBOX TAB ═══════════ -->
         @if (!loading() && activeSection() === 'inbox') {
+          <!-- QA D2582 (r65): the items to acknowledge, as on the in-basket page: one inbox, two lists. -->
+          <div class="inbox-in-basket" data-testid="nurse-inbox-in-basket">
+            <app-in-basket-panel />
+          </div>
           <div class="inbox-header">
             <h3>{{ 'NURSE.COMMUNICATION_INBOX' | translate }}</h3>
             @if (inboxUnreadCount() > 0) {
@@ -1830,6 +1847,13 @@
           <app-organ-damage-symptoms
             [selected]="vitalsForm().organDamageSymptoms ?? []"
             (selectedChange)="updateVitalsOrganDamage($event)"
+          />
+        </div>
+        <!-- Policy 2026-11-20 (provisional): optional additional concerns, read by the server's maternal early warning. -->
+        <div class="vitals-field vitals-field-full">
+          <app-maternal-concerns
+            [selected]="vitalsForm().maternalConcerns ?? []"
+            (selectedChange)="updateVitalsMaternalConcerns($event)"
           />
         </div>
         <div class="vitals-field vitals-field-full">
@@ -2334,6 +2358,15 @@
             [value]="careNoteForm().narrative ?? ''"
             (input)="updateCareNoteField('narrative', $any($event.target).value)"
           ></textarea>
+        </div>
+        <!-- QA D2583 (r65): the patient's saved care notes, read back here with their
+             addenda, each open to « Ajouter un complément ». -->
+        <div class="care-note-history" data-testid="care-note-history">
+          <app-nursing-notes-panel
+            [patientId]="careNoteFor()!.patientId"
+            [hospitalId]="hospitalId()"
+            emptyKey="NURSING_NOTES.EMPTY_PATIENT"
+          />
         </div>
       </div>
       <div class="modal-actions">

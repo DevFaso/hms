@@ -44,4 +44,18 @@ public interface PatientLabResultService {
      * through, counted after the same superseded / corrected-away filter.
      */
     long countLabResultsForPatientPortal(UUID patientId);
+
+    /**
+     * QA D2730 (r65): the grantor's results as a proxy reads them - the
+     * patient's own view less every row a proxy may not see
+     * ({@code ProxyRecordFilter}: a sensitive visit or test). The caller has
+     * already verified the grant.
+     */
+    List<PatientLabResultResponseDTO> getLabResultsForProxy(UUID patientId, int limit);
+
+    /** QA D2730: the paged proxy view, filtered before the offset is skipped. */
+    List<PatientLabResultResponseDTO> getLabResultsForProxy(UUID patientId, int offset, int limit);
+
+    /** QA D2730: the proxy's total, counted after the same filter. */
+    long countLabResultsForProxy(UUID patientId);
 }

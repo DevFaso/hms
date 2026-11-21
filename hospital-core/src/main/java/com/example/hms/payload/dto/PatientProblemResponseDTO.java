@@ -43,4 +43,8 @@ public class PatientProblemResponseDTO {
     private boolean enteredInError;
     private Boolean chronic;
     private List<String> diagnosisCodes;
+    /** QA D2730: the tag set on this problem itself; null when it has none. */
+    private com.example.hms.enums.SensitivityCategory sensitivityCategory;
+    /** QA D2730: what governs - the tag, else the category of the visit it was recorded in. */
+    private com.example.hms.enums.SensitivityCategory effectiveSensitivityCategory;
 }

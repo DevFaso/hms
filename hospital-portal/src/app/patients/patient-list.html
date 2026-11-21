@@ -41,8 +41,9 @@
             aria-hidden="true"
             >{{ metric.icon }}</span
           >
-          <strong class="card-value">{{ loading() || loadError() ? '—' : metric.count }}</strong
-          ><span class="card-label">{{ metric.label | translate }}</span>
+          <strong class="card-value">{{
+            loading() || loadError() ? '—' : metric.count
+          }}</strong><span class="card-label">{{ metric.label | translate }}</span>
         </button>
       }
     </div>
@@ -168,8 +169,7 @@
         <div class="filter-group">
           <label class="filter-label" for="contactFilter">{{
             'PATIENTS.CONTACT_DETAILS' | translate
-          }}</label
-          ><select
+          }}</label><select
             id="contactFilter"
             class="filter-select"
             [(ngModel)]="contactFilter"
@@ -439,8 +439,11 @@
                       'PATIENTS.OPEN_PATIENT' | translate: { name: (patient | personName) }
                     "
                   >
-                    <span>{{ 'PATIENTS.OPEN_RECORD' | translate }}</span
-                    ><span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
+                    <span>{{ 'PATIENTS.OPEN_RECORD' | translate }}</span><span
+                      class="material-symbols-outlined"
+                      aria-hidden="true"
+                      >arrow_forward</span
+                    >
                   </a>
                 </td>
               </tr>

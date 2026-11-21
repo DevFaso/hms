@@ -45,3 +45,27 @@ describe('DoctorPatientFlowComponent — card source label (QA D994)', () => {
     );
   });
 });
+
+describe('DoctorPatientFlowComponent — empty columns (QA D2267)', () => {
+  it('shows the stage name of an empty column on screen, not only in a tooltip', async () => {
+    await TestBed.configureTestingModule({
+      imports: [DoctorPatientFlowComponent, TranslateModule.forRoot()],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(DoctorPatientFlowComponent);
+    document.body.appendChild(fixture.nativeElement as HTMLElement);
+    fixture.componentRef.setInput('flowData', {});
+    fixture.detectChanges();
+    const labels = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
+        '.flow-col-empty .flow-col-label',
+      ),
+    );
+    expect(labels.length).toBeGreaterThan(0);
+    for (const label of labels) {
+      expect(getComputedStyle(label).position).not.toBe('absolute');
+      expect(label.getBoundingClientRect().width).toBeGreaterThan(1);
+    }
+    (fixture.nativeElement as HTMLElement).remove();
+  });
+});

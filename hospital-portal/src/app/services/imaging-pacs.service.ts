@@ -29,6 +29,16 @@ export interface ImagingStudyViewer {
   truncated: boolean;
 }
 
+/**
+ * Policy rule 3 (V346, provisional; owner decision 2026-11-20): « Échographie par un non-médecin ».
+ * False (the default) keeps the ultrasound exam with physicians; true lets an imaging technician
+ * perform it. The report stays a physician's either way.
+ */
+export interface ImagingReportingSettings {
+  hospitalId: string;
+  ultrasoundByNonPhysician: boolean;
+}
+
 /** A hospital's PACS settings as the admin reads them: never the password. */
 export interface PacsSettings {
   hospitalId: string;
@@ -76,6 +86,13 @@ export interface PacsConnectionTest {
 export class ImagingPacsService {
   private readonly http = inject(HttpClient);
 
+  /** QA D2467 (r64): is a PACS connected for this report's hospital? (No PACS is called.) */
+  viewerReady(reportId: string): Observable<{ ready: boolean }> {
+    return this.http.get<{ ready: boolean }>(
+      `/imaging/dicom/reports/${encodeURIComponent(reportId)}/viewer-ready`,
+    );
+  }
+
   viewer(reportId: string): Observable<ImagingStudyViewer> {
     return this.http.get<ImagingStudyViewer>(
       `/imaging/dicom/reports/${encodeURIComponent(reportId)}/viewer`,
@@ -102,6 +119,23 @@ export class ImagingPacsService {
     return this.http.put<PacsSettings>(
       `/hospitals/${encodeURIComponent(hospitalId)}/pacs-settings`,
       body,
+    );
+  }
+
+  /** Policy rule 3 (V346, provisional): a hospital's imaging reporting settings. */
+  reportingSettings(hospitalId: string): Observable<ImagingReportingSettings> {
+    return this.http.get<ImagingReportingSettings>(
+      `/hospitals/${encodeURIComponent(hospitalId)}/imaging-reporting-settings`,
+    );
+  }
+
+  setReportingSettings(
+    hospitalId: string,
+    ultrasoundByNonPhysician: boolean,
+  ): Observable<ImagingReportingSettings> {
+    return this.http.put<ImagingReportingSettings>(
+      `/hospitals/${encodeURIComponent(hospitalId)}/imaging-reporting-settings`,
+      { ultrasoundByNonPhysician },
     );
   }
 

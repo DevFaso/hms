@@ -89,6 +89,9 @@ class NewbornAssessmentServiceImplTest {
     private Patient patient;
     private Hospital hospital;
 
+    @Mock
+    private com.example.hms.service.vitals.MaternityVitalCharting maternityVitalCharting;
+
     @BeforeEach
     void setUp() {
         service = new NewbornAssessmentServiceImpl(
@@ -108,7 +111,8 @@ class NewbornAssessmentServiceImplTest {
             TestMessageSources.bundles(),
             new com.example.hms.service.maternity.StillbornNeonatalAlerts(deliveryNewbornRepository,
                 assessmentRepository, org.mockito.Mockito.mock(
-                    com.example.hms.repository.ObstetricAlertEscalationRepository.class))
+                    com.example.hms.repository.ObstetricAlertEscalationRepository.class)),
+            maternityVitalCharting
         );
 
         patientId = UUID.randomUUID();
@@ -156,6 +160,8 @@ class NewbornAssessmentServiceImplTest {
             .build();
 
         NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, request, recorderId);
+        // QA D2580: the assessment is charted where the chart reads.
+        verify(maternityVitalCharting).chartNewbornAssessment(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyBoolean());
 
         assertNotNull(response);
         assertEquals(2, response.getAlerts().size(), "Expected urgent alerts for low Apgar scores");

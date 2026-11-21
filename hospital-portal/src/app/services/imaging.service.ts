@@ -27,6 +27,14 @@ export type ImagingOrderStatus =
 export type ImagingPriority = 'ROUTINE' | 'URGENT' | 'STAT';
 export type ImagingLaterality = 'LEFT' | 'RIGHT' | 'BILATERAL' | 'MIDLINE' | 'NOT_APPLICABLE';
 
+/** Policy rule 3 (V346): how the exam went. Replaces the record: a field left out is cleared. */
+export interface ImagingExamRecordRequest {
+  technicalNote: string | null;
+  contrastAdministered: boolean | null;
+  contrastDetails: string | null;
+  radiationDoseMgy: number | null;
+}
+
 export interface ImagingOrderResponse {
   /** QA D1081: the user the server's author check compares with (shared/authorship.service). */
   authorUserId?: string | null;
@@ -55,6 +63,19 @@ export interface ImagingOrderResponse {
   scheduledTime: string;
   /** When the study was completed (r44, V294); null while it is not. */
   completedAt: string | null;
+  /** Policy rule 3 (V346): the exam record, written by whoever ran the exam. */
+  checkedInAt?: string | null;
+  checkedInByName?: string | null;
+  examStartedAt?: string | null;
+  performedByUserId?: string | null;
+  performedByName?: string | null;
+  examTechnicalNote?: string | null;
+  examContrastAdministered?: boolean | null;
+  examContrastDetails?: string | null;
+  examRadiationDoseMgy?: number | null;
+  examRecordedAt?: string | null;
+  /** False for an ultrasound where the hospital keeps ultrasound with physicians (the default). */
+  technicianMayPerform?: boolean | null;
   /** QA D1922 (r53): contrast, the patient's contrast allergy, where, and the pre-authorisation. */
   contrastRequired?: boolean | null;
   contrastType?: string | null;
@@ -187,6 +208,15 @@ export interface ImagingReportResponse {
   contrastAdministered: boolean | null;
   contrastDetails?: string | null;
   performedByName: string;
+  /**
+   * QA D2912 (r66): the exam record of the report's study, as recorded on the order by whoever ran
+   * the exam. Shown beside the report (screen and print); never part of the read.
+   */
+  examPerformedByName?: string | null;
+  examStartedAt?: string | null;
+  examContrastAdministered?: boolean | null;
+  examContrastDetails?: string | null;
+  examRadiationDoseMgy?: number | null;
   interpretingProviderName: string;
   signedByName: string;
   signedAt: string | null;
@@ -225,6 +255,50 @@ export interface ImagingReportResponse {
  * and FINAL only from signing it. `changedByStaffId` is gone: the server
  * resolves the actor from the authenticated caller.
  */
+/** r63: one prior imaging study of the same patient, at the order's hospital. */
+export interface ImagingPriorStudy {
+  imagingOrderId: string;
+  modality?: ImagingModality | null;
+  studyType?: string | null;
+  bodyRegion?: string | null;
+  orderedAt?: string | null;
+  status?: ImagingOrderStatus | null;
+  /** Its signed conclusion, when it has one. */
+  reportId?: string | null;
+  reportStatus?: ImagingReportStatus | null;
+  signedAt?: string | null;
+  impression?: string | null;
+}
+
+/**
+ * r63 (imaging completion): what the record holds about the order's patient,
+ * read-only and ungraded (ImagingReadingContextController).
+ */
+export interface ImagingReadingContext {
+  imagingOrderId: string;
+  patientId?: string | null;
+  dateOfBirth?: string | null;
+  ageYears?: number | null;
+  sex?: string | null;
+  pregnancy?: {
+    estimatedDueDate?: string | null;
+    lastMenstrualPeriod?: string | null;
+    recordedAt?: string | null;
+    ongoing: boolean;
+  } | null;
+  requiresPregnancyTest?: boolean | null;
+  creatinine?: {
+    testName?: string | null;
+    value?: string | null;
+    unit?: string | null;
+    resultDate?: string | null;
+    abnormalFlag?: string | null;
+    /** It corrects an earlier released value (QA D1016). */
+    corrected?: boolean;
+  } | null;
+  priorStudies: ImagingPriorStudy[];
+}
+
 export interface ImagingReportStatusUpdateRequest {
   status: Extract<ImagingReportStatus, 'CANCELLED' | 'ERROR'>;
   statusReason: string;
@@ -295,6 +369,19 @@ export class ImagingService {
   }
 
   /** Provisional rule 1: the pre-authorisation number obtained after an urgent study. */
+  /** Policy rule 3: the patient's arrival at the imaging desk; recorded once, from the session. */
+  checkInPatient(orderId: string): Observable<ImagingOrderResponse> {
+    return this.http.post<ImagingOrderResponse>(`${this.baseUrl}/orders/${orderId}/check-in`, {});
+  }
+
+  /** Policy rule 3: the exam record (technical note, contrast given, radiation dose). */
+  recordExam(orderId: string, record: ImagingExamRecordRequest): Observable<ImagingOrderResponse> {
+    return this.http.put<ImagingOrderResponse>(
+      `${this.baseUrl}/orders/${orderId}/exam-record`,
+      record,
+    );
+  }
+
   recordAuthorization(
     orderId: string,
     authorizationNumber: string,

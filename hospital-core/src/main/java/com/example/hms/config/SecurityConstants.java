@@ -31,6 +31,12 @@ public class SecurityConstants {
     /** General administrative user (seeded) — back-office operations, not platform config. */
     public static final String ROLE_ADMIN = "ROLE_ADMIN";
     public static final String ROLE_RADIOLOGIST = "ROLE_RADIOLOGIST";
+    /**
+     * Policy rule 3 (owner 2026-11-20, provisional): « Technicien d'imagerie médicale /
+     * Manipulateur ». Acquires, documents and completes an exam at their hospital; never orders
+     * one and never writes, signs or adds to a report ({@code ImagingRoleScope}).
+     */
+    public static final String ROLE_IMAGING_TECHNICIAN = "ROLE_IMAGING_TECHNICIAN";
     public static final String ROLE_SURGEON = "ROLE_SURGEON";
     public static final String ROLE_ANESTHESIOLOGIST = "ROLE_ANESTHESIOLOGIST";
     public static final String ROLE_PHYSIOTHERAPIST = "ROLE_PHYSIOTHERAPIST";
@@ -185,7 +191,7 @@ public class SecurityConstants {
         ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
         ROLE_PHARMACIST, ROLE_PHARMACY_VERIFIER, ROLE_CLAIMS_REVIEWER, ROLE_INVENTORY_CLERK,
         ROLE_STORE_MANAGER, ROLE_ACCOUNTANT, ROLE_BILLING_SPECIALIST, ROLE_RADIOLOGIST, ROLE_SURGEON,
-        ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, "ROLE_PROVIDER_ADMIN");
+        ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, "ROLE_PROVIDER_ADMIN", ROLE_IMAGING_TECHNICIAN);
 
     /** Whether this stored role code is one the platform ships with ({@link #BUILT_IN_ROLE_CODES}). */
     public static boolean isBuiltInRoleCode(String code) {

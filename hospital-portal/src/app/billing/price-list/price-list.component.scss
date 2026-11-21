@@ -141,3 +141,11 @@ tr.inactive {
     display: none;
   }
 }
+
+/* QA D2700: a lab-test link with no active version left. */
+.link-retired {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.8rem;
+  color: var(--danger-text, #b42318);
+}

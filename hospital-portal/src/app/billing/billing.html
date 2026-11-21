@@ -32,6 +32,13 @@
           {{ 'BILLING.PAYERS.TITLE' | translate }}
         </a>
       }
+      <!-- Billing-money plan PR 10 (QA r65 D2326): every till of the day, for the admin and the accountant -->
+      @if (canSuperviseTills) {
+        <a class="btn-secondary" routerLink="/billing/caisses" data-testid="cash-supervisor-link">
+          <span class="material-symbols-outlined" aria-hidden="true">account_balance</span>
+          {{ 'BILLING.CASH_SESSION.SUPERVISOR_LINK' | translate }}
+        </a>
+      }
       <!-- QA D1059: the cashier's daily cash closing -->
       @if (canRecordPayment) {
         <button
@@ -54,7 +61,8 @@
   </div>
 
   @if (showCashClosing()) {
-    <app-cash-closing />
+    <!-- Billing-money plan PR 10 (QA r65 D2325, D2714): the counted close of the cashier's own tills. -->
+    <app-cash-session />
   }
   @if (showRefundQueue()) {
     <app-refund-queue (openInvoice)="openInvoiceById($event)" />
@@ -64,29 +72,37 @@
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon total">receipt_long</span>
       <div class="card-info">
-        <span class="card-value">{{ statsUnknown() ? '—' : stats().total }}</span
-        ><span class="card-label">{{ 'BILLING.TOTAL_INVOICES' | translate }}</span>
+        <span class="card-value">{{ statsUnknown() ? '—' : stats().total }}</span><span
+          class="card-label"
+          >{{ 'BILLING.TOTAL_INVOICES' | translate }}</span
+        >
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon paid">check_circle</span>
       <div class="card-info">
-        <span class="card-value">{{ statsUnknown() ? '—' : stats().paid }}</span
-        ><span class="card-label">{{ 'BILLING.PAID' | translate }}</span>
+        <span class="card-value">{{ statsUnknown() ? '—' : stats().paid }}</span><span
+          class="card-label"
+          >{{ 'BILLING.PAID' | translate }}</span
+        >
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon pending">schedule</span>
       <div class="card-info">
-        <span class="card-value">{{ statsUnknown() ? '—' : stats().outstanding }}</span
-        ><span class="card-label">{{ 'BILLING.OUTSTANDING_COUNT' | translate }}</span>
+        <span class="card-value">{{ statsUnknown() ? '—' : stats().outstanding }}</span><span
+          class="card-label"
+          >{{ 'BILLING.OUTSTANDING_COUNT' | translate }}</span
+        >
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon overdue">warning</span>
       <div class="card-info">
-        <span class="card-value">{{ statsUnknown() ? '—' : stats().overdue }}</span
-        ><span class="card-label">{{ 'BILLING.OVERDUE' | translate }}</span>
+        <span class="card-value">{{ statsUnknown() ? '—' : stats().overdue }}</span><span
+          class="card-label"
+          >{{ 'BILLING.OVERDUE' | translate }}</span
+        >
       </div>
     </div>
     <div class="summary-card">
@@ -94,15 +110,15 @@
       <div class="card-info">
         <span class="card-value">{{
           statsUnknown() ? '—' : formatCurrency(stats().totalRevenue)
-        }}</span
-        ><span class="card-label">{{ 'BILLING.REVENUE' | translate }}</span>
+        }}</span><span class="card-label">{{ 'BILLING.REVENUE' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon outstanding">account_balance</span>
       <div class="card-info">
-        <span class="card-value">{{ statsUnknown() ? '—' : formatCurrency(stats().balance) }}</span
-        ><span class="card-label">{{ 'BILLING.OUTSTANDING' | translate }}</span>
+        <span class="card-value">{{
+          statsUnknown() ? '—' : formatCurrency(stats().balance)
+        }}</span><span class="card-label">{{ 'BILLING.OUTSTANDING' | translate }}</span>
       </div>
     </div>
   </div>
@@ -220,7 +236,9 @@
           <tr>
             <th scope="col">{{ 'BILLING.INVOICE_NUM' | translate }}</th>
             <th scope="col">{{ 'APPOINTMENTS.PATIENT' | translate }}</th>
-            <th scope="col">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</th>
+            @if (showHospitalColumn()) {
+              <th scope="col">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</th>
+            }
             <th scope="col">{{ 'COMMON.DATE' | translate }}</th>
             <th scope="col">{{ 'BILLING.DUE_DATE' | translate }}</th>
             <th scope="col">{{ 'COMMON.TOTAL' | translate }}</th>
@@ -238,7 +256,9 @@
                 <div class="cell-primary">{{ inv.patientFullName || '—' }}</div>
                 <div class="cell-secondary">{{ inv.patientEmail || '' }}</div>
               </td>
-              <td>{{ inv.hospitalName || '—' }}</td>
+              @if (showHospitalColumn()) {
+                <td>{{ inv.hospitalName || '—' }}</td>
+              }
               <td class="date-cell">
                 {{ inv.invoiceDate ? (inv.invoiceDate | serverTime | date: 'mediumDate') : '—' }}
               </td>
@@ -392,34 +412,43 @@
         <div class="panel-body">
           <div class="detail-grid">
             <div class="detail-field">
-              <span class="field-label">{{ 'APPOINTMENTS.PATIENT' | translate }}</span
-              ><span class="field-value">{{ inv.patientFullName }}</span>
+              <span class="field-label">{{ 'APPOINTMENTS.PATIENT' | translate }}</span><span
+                class="field-value"
+                >{{ inv.patientFullName }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'PATIENTS.EMAIL' | translate }}</span
-              ><span class="field-value">{{ inv.patientEmail || '—' }}</span>
+              <span class="field-label">{{ 'PATIENTS.EMAIL' | translate }}</span><span
+                class="field-value"
+                >{{ inv.patientEmail || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
-              ><span class="field-value">{{ inv.hospitalName || '—' }}</span>
+              <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span><span
+                class="field-value"
+                >{{ inv.hospitalName || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'BILLING.ENCOUNTER_REFERENCE' | translate }}</span
-              ><span class="field-value">{{ inv.encounterCode || '—' }}</span>
+              <span class="field-label">{{ 'BILLING.ENCOUNTER_REFERENCE' | translate }}</span><span
+                class="field-value"
+                >{{ inv.encounterCode || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'BILLING.INVOICE_DATE' | translate }}</span
-              ><span class="field-value">{{
-                inv.invoiceDate | serverTime | date: 'longDate'
-              }}</span>
+              <span class="field-label">{{ 'BILLING.INVOICE_DATE' | translate }}</span><span
+                class="field-value"
+                >{{ inv.invoiceDate | serverTime | date: 'longDate' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'BILLING.DUE_DATE' | translate }}</span
-              ><span class="field-value">{{ inv.dueDate | serverTime | date: 'longDate' }}</span>
+              <span class="field-label">{{ 'BILLING.DUE_DATE' | translate }}</span><span
+                class="field-value"
+                >{{ inv.dueDate | serverTime | date: 'longDate' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
-              >{{ ' '
+              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span>{{ ' '
               }}<span class="status-badge" [class]="getStatusClass(inv.status)">{{
                 (inv.status | enumLabel: 'invoiceStatus') || '—'
               }}</span>
@@ -431,20 +460,22 @@
               }
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'BILLING.TOTAL_AMOUNT' | translate }}</span
-              ><span class="field-value amount-lg">{{ formatCurrency(inv.totalAmount) }}</span>
+              <span class="field-label">{{ 'BILLING.TOTAL_AMOUNT' | translate }}</span><span
+                class="field-value amount-lg"
+                >{{ formatCurrency(inv.totalAmount) }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'BILLING.AMOUNT_PAID' | translate }}</span
-              ><span class="field-value amount-lg paid-amount">{{
-                formatCurrency(inv.amountPaid)
-              }}</span>
+              <span class="field-label">{{ 'BILLING.AMOUNT_PAID' | translate }}</span><span
+                class="field-value amount-lg paid-amount"
+                >{{ formatCurrency(inv.amountPaid) }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'BILLING.BALANCE_DUE' | translate }}</span
-              ><span class="field-value amount-lg balance-amount">{{
-                formatCurrency(inv.balanceDue)
-              }}</span>
+              <span class="field-label">{{ 'BILLING.BALANCE_DUE' | translate }}</span><span
+                class="field-value amount-lg balance-amount"
+                >{{ formatCurrency(inv.balanceDue) }}</span
+              >
               @if (inv.refundDue) {
                 {{ ' '
                 }}<span class="field-hint" data-testid="refund-due-detail">{{
@@ -551,13 +582,26 @@
                           />
                           <!-- Billing-money plan PR 3 (D-2): a price-list line shows its tariff, and
                                changing its price asks why; the reason is kept with the line. -->
-                          @if (isTariffLine(it)) {
-                            <div class="cell-secondary" [attr.data-testid]="'line-tariff-' + it.id">
-                              {{
-                                'BILLING.TARIFF_PRICE_VALUE'
-                                  | translate: { amount: formatCurrency(it.tariffUnitPrice ?? 0) }
-                              }}
-                            </div>
+                          @if (lineNeedsReason(it)) {
+                            @if (isTariffLine(it)) {
+                              <div
+                                class="cell-secondary"
+                                [attr.data-testid]="'line-tariff-' + it.id"
+                              >
+                                {{
+                                  'BILLING.TARIFF_PRICE_VALUE'
+                                    | translate: { amount: formatCurrency(it.tariffUnitPrice ?? 0) }
+                                }}
+                              </div>
+                            } @else {
+                              <!-- QA D2703: an unpriced line priced by hand says why; the day report lists it. -->
+                              <div
+                                class="cell-secondary"
+                                [attr.data-testid]="'line-unpriced-' + it.id"
+                              >
+                                {{ 'BILLING.UNPRICED_LINE_HINT' | translate }}
+                              </div>
+                            }
                             <label class="line-edit-label" for="line-edit-override-reason"
                               >{{ 'BILLING.OVERRIDE_REASON' | translate }}
                               @if (overrideReasonRequired(it)) {
@@ -630,9 +674,37 @@
                                   | translate: { reason: it.overrideReason }
                               }}
                             </div>
+                          } @else if (it.overrideReason) {
+                            <div
+                              class="cell-secondary"
+                              [attr.data-testid]="'line-priced-reason-' + it.id"
+                            >
+                              {{
+                                'BILLING.OVERRIDE_REASON_VALUE'
+                                  | translate: { reason: it.overrideReason }
+                              }}
+                            </div>
                           }
                         </td>
-                        <td class="amount">{{ formatCurrency(it.totalPrice) }}</td>
+                        <td class="amount">
+                          {{ formatCurrency(it.totalPrice) }}
+                          <!-- QA D2434 / D2437: each line's insurer and patient parts. -->
+                          @if (lineSharesShown()) {
+                            <div class="cell-secondary" [attr.data-testid]="'line-shares-' + it.id">
+                              {{
+                                (it.payerShareEstimated
+                                  ? 'BILLING.LINE_SHARES_ESTIMATED'
+                                  : 'BILLING.LINE_SHARES'
+                                )
+                                  | translate
+                                    : {
+                                        payer: formatCurrency(it.payerShareAmount ?? 0),
+                                        patient: formatCurrency(it.patientShareAmount ?? 0),
+                                      }
+                              }}
+                            </div>
+                          }
+                        </td>
                         @if (canDelete || canEditLines(inv)) {
                           <td class="line-actions">
                             @if (canEditLines(inv)) {
@@ -677,7 +749,7 @@
                         >
                           <td colspan="5">
                             <label class="line-edit-label" for="line-remove-reason"
-                              >{{ 'BILLING.REMOVE_REASON' | translate }} *</label
+                              >{{ 'BILLING.LINE_REMOVE_REASON' | translate }} *</label
                             >
                             <input
                               required
@@ -686,7 +758,7 @@
                               id="line-remove-reason"
                               class="line-edit-input"
                               [attr.data-testid]="'line-remove-reason-' + it.id"
-                              [placeholder]="'BILLING.REMOVE_REASON_PLACEHOLDER' | translate"
+                              [placeholder]="'BILLING.LINE_REMOVE_REASON_PLACEHOLDER' | translate"
                               [ngModel]="removeLineReason()"
                               (ngModelChange)="removeLineReason.set($event)"
                               (keydown.enter)="confirmRemoveTariffLine(it)"
@@ -767,6 +839,23 @@
                     (ngModelChange)="newItemUnitPrice.set($event)"
                   />
                 </div>
+                <!-- PR 10 review (QA D2703): a line typed on a visit's invoice says why; the day report lists it. -->
+                @if (addedLineNeedsReason(inv)) {
+                  <div class="field">
+                    <label for="line-reason">{{ 'BILLING.ADDED_LINE_REASON' | translate }} *</label>
+                    <input
+                      required
+                      id="line-reason"
+                      data-server-field="overrideReason"
+                      data-testid="line-add-reason"
+                      type="text"
+                      maxlength="500"
+                      [placeholder]="'BILLING.ADDED_LINE_REASON_PLACEHOLDER' | translate"
+                      [ngModel]="newItemReason()"
+                      (ngModelChange)="newItemReason.set($event)"
+                    />
+                  </div>
+                }
                 <button
                   type="button"
                   class="btn-primary"
@@ -934,7 +1023,7 @@
                           </div>
                         }
                       </td>
-                      <td>{{ p.referenceNumber || '—' }}</td>
+                      <td class="ref-cell">{{ p.referenceNumber || '—' }}</td>
                       <td class="amount">{{ formatCurrency(p.amount) }}</td>
                       <td>
                         {{ p.status | keyLabel: 'BILLING.PAYMENT_STATUSES.' }}
@@ -1077,6 +1166,27 @@
                 required
                 [attr.aria-invalid]="!form.cancelReason?.trim()"
                 [placeholder]="'INVOICE_CANCEL.REASON_PLACEHOLDER' | translate"
+              ></textarea>
+            </div>
+          </div>
+        }
+        <!-- PR 10 review (QA D2703): lines at 0 F CFA are issued only with a reason, under the lines named -->
+        @if (unpricedLines(); as lines) {
+          <div class="form-row">
+            <div class="field">
+              <label for="bill-unpriced-reason"
+                >{{ 'BILLING.UNPRICED_LINES_REASON' | translate }} *</label
+              >
+              <p class="field-hint" data-testid="unpriced-lines-named">{{ lines }}</p>
+              <textarea
+                id="bill-unpriced-reason"
+                data-testid="unpriced-lines-reason"
+                data-server-field="unpricedLinesReason"
+                [(ngModel)]="form.unpricedLinesReason"
+                maxlength="500"
+                rows="2"
+                required
+                [placeholder]="'BILLING.UNPRICED_LINES_REASON_PLACEHOLDER' | translate"
               ></textarea>
             </div>
           </div>

@@ -45,7 +45,8 @@ class ClinicalLabResultReadPathGuardTest {
         "com/example/hms/fhir/provider/ObservationFhirResourceProvider.java",
         "com/example/hms/fhir/provider/DiagnosticReportFhirResourceProvider.java",
         "com/example/hms/fhir/bulk/FhirBulkExportRunner.java",
-        "com/example/hms/fhir/everything/PatientEverythingService.java"
+        "com/example/hms/fhir/everything/PatientEverythingService.java",
+        "com/example/hms/service/imaging/ImagingReadingContextService.java" // r63: the radiologist's latest creatinine
     );
 
     /** Paths that see every row, with the reason. */
@@ -53,6 +54,8 @@ class ClinicalLabResultReadPathGuardTest {
         Map.entry("com/example/hms/service/notification/PatientNotificationRenderer.java",
             "V312: is any result of the order released, before a content-free notice; no values"),
         Map.entry("com/example/hms/repository/LabResultRepository.java", "the repository itself"),
+        Map.entry("com/example/hms/service/recordaccess/MinorResultReleaseServiceImpl.java",
+            "policy 2026-11-20: which orders have a released result, for the family-release screen; test names, no values"),
         Map.entry("com/example/hms/repository/ImagingReportRepository.java", "javadoc reference only"),
         Map.entry("com/example/hms/bootstrap/DevSyntheticDataSeeder.java", "dev seeding, writes only"),
         Map.entry("com/example/hms/fhir/write/ObservationFhirWriteService.java", "write path"),
@@ -91,14 +94,17 @@ class ClinicalLabResultReadPathGuardTest {
         Map.entry("com/example/hms/service/LabResultServiceImpl.java#doReleaseLabResult", "release write"),
         Map.entry("com/example/hms/service/LabResultServiceImpl.java#signLabResult", "signature write"),
         Map.entry("com/example/hms/service/LabResultServiceImpl.java#getLabResultsByLabOrderId", "no endpoint; laboratory list"),
-        Map.entry("com/example/hms/service/LabResultServiceImpl.java#getCriticalResults", "critical-value callback, chased before release"),
-        Map.entry("com/example/hms/service/LabResultServiceImpl.java#getCriticalResultsRequiringAcknowledgment", "critical-value callback, chased before release"),
         Map.entry("com/example/hms/service/impl/PatientLabResultServiceImpl.java#fetchRows", "rows handed to the clinical view by its caller"),
         Map.entry("com/example/hms/service/impl/PatientLabResultServiceImpl.java#withSiblingsOfSupersedableRows", "sibling rows for the clinical view")
     );
 
-    /** Methods that apply the clinical view for their callers. */
-    private static final Set<String> CLINICAL_DELEGATES = Set.of("currentForReader", "isCurrentForReader");
+    /**
+     * Methods that apply the clinical view for their callers. QA D2951 (r66): {@code surfaceCritical} lists only
+     * released critical results; the two critical lists were workflow exceptions ("chased before release") and
+     * showed unreleased values hospital-wide.
+     */
+    private static final Set<String> CLINICAL_DELEGATES = Set.of("currentForReader", "isCurrentForReader",
+        "surfaceCritical");
 
     private static final Pattern METHOD = Pattern.compile(
         "^    (?:(?:public|private|protected|static|final|synchronized)\\s++)++(?:[\\w<>\\[\\],.?]++\\s++)+?(\\w+)\\s*+\\(",
@@ -139,6 +145,23 @@ class ClinicalLabResultReadPathGuardTest {
             }
         }
         assertThat(missing).as("lab-result reads on a clinical path without ClinicalLabResultView").isEmpty();
+    }
+
+    /** QA D2951 (r66): a delegate is trusted by name above, so it must apply the clinical view in its own body. */
+    @Test
+    void everyDelegateAppliesTheClinicalViewItself() throws IOException {
+        Set<String> hollow = new TreeSet<>(CLINICAL_DELEGATES);
+        for (String path : CLINICAL_READ_PATHS) {
+            String source = Files.readString(MAIN.resolve(path), StandardCharsets.UTF_8);
+            Map<String, String> methods = methods(source);
+            for (String delegate : CLINICAL_DELEGATES) {
+                String body = methods.get(delegate);
+                if (body != null && body.contains("ClinicalLabResultView.")) {
+                    hollow.remove(delegate);
+                }
+            }
+        }
+        assertThat(hollow).as("a clinical delegate that does not go through ClinicalLabResultView").isEmpty();
     }
 
     @Test

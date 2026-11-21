@@ -49,6 +49,9 @@ public class LabTestDefinitionController {
     private static final String VIEW_ROLES = "hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'SUPER_ADMIN', 'DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_DIRECTOR', 'QUALITY_MANAGER')";
     // Gate-level check: all roles that may initiate any approval transition.
     // Per-action role enforcement is performed inside LabTestDefinitionServiceImpl.
+    // Policy 2026-11-20: who may be shown, and confirm, the recommended sensitive categories. The service
+    // checks the director's assignment at the acting hospital, as it does for the tag itself (QA D2730).
+    private static final String CLASSIFY_ROLES = "hasAnyRole('LAB_DIRECTOR', 'SUPER_ADMIN')";
     private static final String APPROVAL_ROLES = "hasAnyRole('LAB_DIRECTOR', 'LAB_MANAGER', 'LAB_SCIENTIST', 'QUALITY_MANAGER', 'SUPER_ADMIN')";
 
     // Only ADMIN/LAB_MANAGER/SCIENTIST/SUPER_ADMIN can create lab tests
@@ -182,6 +185,31 @@ public class LabTestDefinitionController {
         @PathVariable UUID id,
         @Valid @RequestBody java.util.List<LabTestReferenceRangeDTO> ranges) {
         return ResponseEntity.ok(ApiResponseWrapper.success(service.updateReferenceRanges(id, ranges)));
+    }
+
+    /**
+     * Policy 2026-11-20 (provisional): the tests the curated mapping recommends a sensitive category
+     * for. A suggestion: the lab director sees each match and confirms it with the POST below.
+     */
+    @GetMapping("/sensitivity-recommendations")
+    @PreAuthorize(CLASSIFY_ROLES)
+    @Operation(summary = "Recommended sensitive categories for the catalogue (provisional, read-only)")
+    public ResponseEntity<ApiResponseWrapper<List<com.example.hms.payload.dto.LabSensitivityRecommendationDTO>>>
+            sensitivityRecommendations() {
+        return ResponseEntity.ok(ApiResponseWrapper.success(service.recommendedSensitivity()));
+    }
+
+    @PostMapping("/sensitivity-recommendations/apply")
+    @PreAuthorize(CLASSIFY_ROLES)
+    @com.example.hms.security.audit.WriteAudited(skip = true,
+        reason = "service emits LAB_SENSITIVITY_RECOMMENDATION_APPLIED per test after commit")
+    @Operation(summary = "Apply the recommended sensitive categories the lab director confirmed",
+        description = "Each item names a test and the category recommended for it. A test the mapping does not "
+            + "name, or another category, refuses the request. Each tag applied is audited.")
+    public ResponseEntity<ApiResponseWrapper<List<com.example.hms.payload.dto.LabSensitivityRecommendationDTO>>>
+            applySensitivityRecommendations(@jakarta.validation.Valid @RequestBody
+                com.example.hms.payload.dto.ApplyLabSensitivityRecommendationsRequestDTO body) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(service.applyRecommendedSensitivity(body.items())));
     }
 
     @GetMapping("/export/pdf")

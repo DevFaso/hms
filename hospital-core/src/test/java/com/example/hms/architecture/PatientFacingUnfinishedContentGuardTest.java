@@ -44,8 +44,9 @@ class PatientFacingUnfinishedContentGuardTest {
     private static final Pattern IDENTIFIER_CALL = Pattern.compile("\\b(\\w++)\\s*+\\(");
 
     private static boolean isPortalReadName(String name) {
+        // QA D2730: a proxy's read of the grantor's record is patient-facing too.
         return name.contains("ForPortalPatient") || name.contains("ForPatientPortal")
-            || name.startsWith("toPatientPortal");
+            || name.startsWith("toPatientPortal") || name.endsWith("ForProxy");
     }
 
     /** A reader of a visit's note entries. */
@@ -78,11 +79,27 @@ class PatientFacingUnfinishedContentGuardTest {
         Map.entry("service/impl/PatientLabResultServiceImpl.java#getLabResultsForPatientPortal",
             new Rule("true", "B3: portalView=true redacts an unreleased result to PENDING")),
         Map.entry("service/impl/PatientLabResultServiceImpl.java#countLabResultsForPatientPortal",
-            new Rule("true", "counted as the portal list filters")),
+            new Rule("countCurrent(", "counted as the portal list filters")),
+        Map.entry("service/impl/PatientLabResultServiceImpl.java#getLabResultsForProxy",
+            new Rule("true", "B3: portalView=true redacts an unreleased result to PENDING for the proxy too")),
+        Map.entry("service/impl/PatientLabResultServiceImpl.java#countLabResultsForProxy",
+            new Rule("countCurrent(", "counted as the proxy list filters")),
         Map.entry("service/impl/PatientMedicationServiceImpl.java#getMedicationsForPatientPortal",
             new Rule("", "delegates to the issued-only reader (NeverSignedOrderReadersGuardTest)")),
+        Map.entry("service/impl/PatientMedicationServiceImpl.java#getMedicationsForProxy",
+            new Rule("", "delegates to the issued-only reader (NeverSignedOrderReadersGuardTest)")),
         Map.entry("service/impl/PatientMedicationServiceImpl.java#getMedicationsPageForPatientPortal",
-            new Rule("PrescriptionIssuance::wasIssued", "issued orders only")),
+            new Rule("medicationsPage(", "issued orders only (issuedFor, pinned below)")),
+        Map.entry("service/impl/PatientMedicationServiceImpl.java#getMedicationsPageForProxy",
+            new Rule("medicationsPage(", "issued orders only (issuedFor, pinned below)")),
+        Map.entry("service/impl/PatientMedicationServiceImpl.java#countMedicationsForProxy",
+            new Rule("issuedFor(", "issued orders only (issuedFor, pinned below)")),
+        Map.entry("service/BillingInvoiceServiceImpl.java#getInvoicesForProxy",
+            new Rule("InvoiceStatus.DRAFT", "D101: a draft invoice is not issued; no clinical narrative")),
+        Map.entry("service/impl/ImmunizationServiceImpl.java#getImmunizationsForProxy",
+            new Rule("", "administration records: no author draft state")),
+        Map.entry("service/AppointmentServiceImpl.java#getAppointmentsForProxy",
+            new Rule("", "bookings: no clinician narrative")),
         Map.entry("service/impl/PatientMedicationServiceImpl.java#countMedicationsForPatientPortal",
             new Rule("PrescriptionIssuance.PROPOSALS", "issued orders only, counted in the database")),
         Map.entry("service/BillingInvoiceServiceImpl.java#getInvoicesForPortalPatient",
@@ -92,7 +109,11 @@ class PatientFacingUnfinishedContentGuardTest {
         Map.entry("service/impl/PatientVitalSignServiceImpl.java#getRecentVitalsForPatientPortal",
             new Rule("", "measurements: no author draft state")),
         Map.entry("service/impl/PatientVitalSignServiceImpl.java#getVitalsPageForPatientPortal",
-            new Rule("", "measurements: no author draft state")));
+            new Rule("", "measurements: no author draft state")),
+        Map.entry("service/impl/PatientVitalSignServiceImpl.java#getRecentVitalsForProxy",
+            new Rule("", "D2730: measurements, no author draft state")),
+        Map.entry("service/impl/PatientPortalServiceImpl.java#activeDiagnosesForProxy",
+            new Rule("ProblemStatus.ACTIVE", "D2730: active problem-list entries, no author draft state")));
 
     private static final String NO_VOID_STATE = "the record type has no entered-in-error state";
 
@@ -118,25 +139,46 @@ class PatientFacingUnfinishedContentGuardTest {
             new Rule("", "D1912: LabResult's @SQLRestriction hides every result of a voided order (pinned below)")),
         Map.entry("service/impl/PatientLabResultServiceImpl.java#countLabResultsForPatientPortal",
             new Rule("", "D1912: LabResult's @SQLRestriction hides every result of a voided order (pinned below)")),
+        Map.entry("service/impl/PatientLabResultServiceImpl.java#getLabResultsForProxy",
+            new Rule("", "D1912: LabResult's @SQLRestriction hides every result of a voided order (pinned below)")),
+        Map.entry("service/impl/PatientLabResultServiceImpl.java#countLabResultsForProxy",
+            new Rule("", "D1912: LabResult's @SQLRestriction hides every result of a voided order (pinned below)")),
         Map.entry("service/impl/PatientMedicationServiceImpl.java#getMedicationsForPatientPortal",
             new Rule("", "issued orders only (NeverSignedOrderReadersGuardTest)")),
+        Map.entry("service/impl/PatientMedicationServiceImpl.java#getMedicationsForProxy",
+            new Rule("", "issued orders only (NeverSignedOrderReadersGuardTest)")),
         Map.entry("service/impl/PatientMedicationServiceImpl.java#getMedicationsPageForPatientPortal",
-            new Rule("PrescriptionIssuance::wasIssued", "issued orders only")),
+            new Rule("medicationsPage(", "issued orders only (issuedFor, pinned below)")),
+        Map.entry("service/impl/PatientMedicationServiceImpl.java#getMedicationsPageForProxy",
+            new Rule("medicationsPage(", "issued orders only (issuedFor, pinned below)")),
+        Map.entry("service/impl/PatientMedicationServiceImpl.java#countMedicationsForProxy",
+            new Rule("issuedFor(", "issued orders only (issuedFor, pinned below)")),
+        Map.entry("service/BillingInvoiceServiceImpl.java#getInvoicesForProxy", new Rule("", NO_VOID_STATE)),
+        Map.entry("service/impl/ImmunizationServiceImpl.java#getImmunizationsForProxy",
+            new Rule("portalImmunizations(", "round 54: through the live-record reader (pinned below)")),
+        Map.entry("service/AppointmentServiceImpl.java#getAppointmentsForProxy", new Rule("", NO_VOID_STATE)),
         Map.entry("service/impl/PatientMedicationServiceImpl.java#countMedicationsForPatientPortal",
             new Rule("PrescriptionIssuance.PROPOSALS", "issued orders only")),
         Map.entry("service/BillingInvoiceServiceImpl.java#getInvoicesForPortalPatient", new Rule("", NO_VOID_STATE)),
         Map.entry("service/impl/ImmunizationServiceImpl.java#getImmunizationsForPatientPortal",
-            new Rule("ImmunizationServiceImpl::isLiveRecord",
-                "round 54: a dose removed or marked ENTERED_IN_ERROR reached the portal, the apps and the summary")),
+            new Rule("portalImmunizations(", "round 54: through the live-record reader (pinned below)")),
         Map.entry("service/impl/PatientVitalSignServiceImpl.java#getRecentVitalsForPatientPortal",
             new Rule("", NO_VOID_STATE)),
         Map.entry("service/impl/PatientVitalSignServiceImpl.java#getVitalsPageForPatientPortal",
-            new Rule("", NO_VOID_STATE)));
+            new Rule("", NO_VOID_STATE)),
+        Map.entry("service/impl/PatientVitalSignServiceImpl.java#getRecentVitalsForProxy",
+            new Rule("", NO_VOID_STATE)),
+        Map.entry("service/impl/PatientPortalServiceImpl.java#activeDiagnosesForProxy",
+            new Rule("ProblemStatus.ACTIVE", "D1240: a diagnosis removed as entered in error is INACTIVE")));
 
     /** Patient-facing record sources outside the read methods above: "file" to the token it must hold. */
     private static final Map<String, Rule> VOIDED_ELSEWHERE = Map.ofEntries(
         Map.entry("model/LabResult.java", new Rule("lab.lab_orders.status = 'ENTERED_IN_ERROR'",
             "D1912: a voided order's results load nowhere")),
+        Map.entry("service/impl/PatientMedicationServiceImpl.java", new Rule(".filter(PrescriptionIssuance::wasIssued)",
+            "issuedFor: issued orders only, for the patient and the proxy")),
+        Map.entry("service/impl/ImmunizationServiceImpl.java", new Rule(".filter(ImmunizationServiceImpl::isLiveRecord)",
+            "round 54: a dose removed or marked ENTERED_IN_ERROR reached the portal, the apps and the summary")),
         Map.entry("service/allergy/PatientAllergySummarySync.java",
             new Rule("AllergyVerificationStatus.ENTERED_IN_ERROR",
                 "round 54: the allergy summary the portal and the apps show leaves out an entered-in-error allergy")),
@@ -165,7 +207,9 @@ class PatientFacingUnfinishedContentGuardTest {
         Map.entry("service/TreatingClinician.java", new Rule("", "an authorship check; presents nothing")),
         Map.entry("service/MedicalCertificateServiceImpl.java", new Rule("TreatingClinician.isCaller(",
             "an authorship check only; the certificate prints no note text")),
-        Map.entry("service/UnsignedNoteFollowUp.java", new Rule("", "reminds the author to sign: staff")));
+        Map.entry("service/UnsignedNoteFollowUp.java", new Rule("", "reminds the author to sign: staff")),
+        Map.entry("service/DoctorWorklistServiceImpl.java", new Rule("awaitsSignature",
+            "QA D2261: counts the doctor's own notes awaiting signature for the dashboard tile: staff")));
 
     @Test
     @DisplayName("every patient-facing read method is listed and still withholds unfinished content")

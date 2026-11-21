@@ -42,8 +42,12 @@ public interface AppointmentService {
      * rejects them, and passing {@code null} for username throws before any
      * query runs — which is exactly what the proxy Appointments tab did in
      * production while its test stubbed the null away.
+     *
+     * <p>QA D2730 (r65): the proxy's view, so an appointment in a sensitive
+     * department, or one whose visit was tagged sensitive, is left out
+     * ({@code ProxyRecordFilter}).
      */
-    List<AppointmentResponseDTO> getAppointmentsForVerifiedPatient(UUID patientId);
+    List<AppointmentResponseDTO> getAppointmentsForProxy(UUID patientId);
 
     // GET BY STAFF ID, filtered/scoped by user
     List<AppointmentResponseDTO> getAppointmentsByStaffId(UUID staffId, Locale locale, String username);

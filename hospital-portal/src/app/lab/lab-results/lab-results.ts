@@ -14,7 +14,7 @@ import {
 import { actionRoles } from '../../core/action-permissions';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   LabService,
@@ -24,6 +24,7 @@ import {
   LabResultRequest,
   LabOrderResponse,
   LabResultComparison,
+  LabTestComponent,
 } from '../../services/lab.service';
 import { ToastService } from '../../core/toast.service';
 import { ProfileService } from '../../services/profile.service';
@@ -46,6 +47,8 @@ import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { DayMonthPipe } from '../../shared/pipes/day-month.pipe';
 import { formatDecimal } from '../../shared/i18n/app-locale';
 import { deltaPrecision, previousObservation } from '../shared/result-evolution';
+import { criticalAtEntry, CriticalEntryVerdict } from '../shared/lab-critical-entry';
+import { LabPanelValuesComponent } from '../shared/lab-panel-values.component';
 /**
  * D49: the order code the API sends is the order's UUID. Readers get its first
  * eight characters, enough to tell two orders apart on one screen.
@@ -88,6 +91,7 @@ export const ORDER_STATUSES_AWAITING_SPECIMEN: ReadonlySet<string> = new Set([
   selector: 'app-lab-results',
   standalone: true,
   imports: [
+    LabPanelValuesComponent,
     ResultEvolutionComponent,
     ResultRangeComponent,
     DateTimePipe,
@@ -116,6 +120,7 @@ export class LabResultsComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
@@ -419,6 +424,8 @@ export class LabResultsComponent implements OnInit {
   correcting = signal<LabResultResponse | null>(null);
   saving = signal(false);
   form: LabResultRequest = this.emptyForm();
+  /** r63 (NFS panels): the value typed for each component of a panel test, by component code. */
+  panelValues: Record<string, string> = {};
 
   showDeleteConfirm = signal(false);
   /** D58: the result whose self-release is being confirmed; null when no dialog is open. */
@@ -512,6 +519,7 @@ export class LabResultsComponent implements OnInit {
 
   openCreate(): void {
     this.form = this.emptyForm();
+    this.panelValues = {};
     this.editing.set(false);
     this.editingId.set(null);
     this.correcting.set(null);
@@ -532,6 +540,7 @@ export class LabResultsComponent implements OnInit {
       resultUnit: r.resultUnit ?? '',
       supersedesResultId: r.id,
     };
+    this.panelValues = {};
     this.editing.set(false);
     this.editingId.set(null);
     this.correcting.set(r);
@@ -554,6 +563,8 @@ export class LabResultsComponent implements OnInit {
       resultDate: r.resultDate ? toLocalInputValue(r.resultDate) : nowLocalDatetime(),
       notes: r.notes ?? '',
     };
+    // r63: a panel result is edited component by component.
+    this.panelValues = Object.fromEntries((r.components ?? []).map((c) => [c.code, c.value ?? '']));
     this.editing.set(true);
     this.editingId.set(r.id);
     this.correcting.set(null);
@@ -583,6 +594,53 @@ export class LabResultsComponent implements OnInit {
     return /^\s*[<>\u2264\u2265]/.test(this.form.resultValue ?? '');
   }
 
+  /** The order the form is entering a result for. */
+  private selectedOrder(): LabOrderResponse | undefined {
+    return this.orders().find((o) => o.id === this.form.labOrderId);
+  }
+
+  /** r63 (NFS panels): the selected test's components; empty for a single-value test. */
+  panelComponents(): LabTestComponent[] {
+    return this.selectedOrder()?.labTestComponents ?? [];
+  }
+
+  isPanelEntry(): boolean {
+    return this.panelComponents().length > 0;
+  }
+
+  /** r63: a panel is saved with at least one component value. */
+  hasPanelValue(): boolean {
+    return this.panelComponents().some((c) => (this.panelValues[c.code] ?? '').trim() !== '');
+  }
+
+  /** r63 D2312: the typed value is beyond the test's critical limits. */
+  singleValueCritical(): CriticalEntryVerdict {
+    const order = this.selectedOrder();
+    return criticalAtEntry(
+      this.form.resultValue,
+      order?.labTestReferenceRanges,
+      this.form.resultUnit,
+      order?.labTestUnit,
+    );
+  }
+
+  /** r63 D2312: a panel component's typed value is beyond its own critical limits. */
+  componentCritical(component: LabTestComponent): CriticalEntryVerdict {
+    return criticalAtEntry(
+      this.panelValues[component.code],
+      component.referenceRanges,
+      component.unit,
+      component.unit,
+    );
+  }
+
+  /** r63 D2312: any value in the form is critical, so the dialog says so above the buttons. */
+  anyCriticalEntry(): boolean {
+    return this.isPanelEntry()
+      ? this.panelComponents().some((c) => this.componentCritical(c) !== null)
+      : this.singleValueCritical() !== null;
+  }
+
   selectedTestUnit(): string {
     return (
       this.orders()
@@ -595,8 +653,9 @@ export class LabResultsComponent implements OnInit {
     const selectedOrder = this.orders().find((o) => o.id === this.form.labOrderId);
     this.form.assignmentId = this.activeAssignmentId;
     this.form.patientId = selectedOrder?.patientId ?? this.form.patientId ?? '';
+    const panel = this.isPanelEntry();
     // QA D1095: a test with a unit takes its result in a unit (blank was saved as "0,40").
-    if (!this.form.resultUnit?.trim() && this.selectedTestUnit()) {
+    if (!panel && !this.form.resultUnit?.trim() && this.selectedTestUnit()) {
       this.form.resultUnit = this.selectedTestUnit();
     }
     if (!this.form.labOrderId || !this.form.assignmentId || !this.form.patientId) {
@@ -610,6 +669,15 @@ export class LabResultsComponent implements OnInit {
       ...this.form,
       resultDate: toServerDateTime(this.form.resultDate),
     };
+    if (panel) {
+      // r63 (NFS panels): one value per component; the server composes the summary value.
+      payload.components = this.panelComponents().map((c) => ({
+        code: c.code,
+        value: (this.panelValues[c.code] ?? '').trim(),
+      }));
+      payload.resultValue = '';
+      payload.resultUnit = '';
+    }
     const op =
       this.editing() && id
         ? this.labService.updateResult(id, payload)
@@ -623,6 +691,10 @@ export class LabResultsComponent implements OnInit {
         // QA D1394: the server graded it and could not: say so at once, not at release.
         if (labReleaseNeedsReview(saved ?? {})) {
           this.toast.warning(this.translate.instant('LAB_RESULTS.SAVED_NOT_GRADED'));
+        }
+        // r63 D2312: the saved value graded CRITICAL; releasing it will ask who was told.
+        if (labSeverityFlag(saved ?? {}) === 'CRITICAL') {
+          this.toast.warning(this.translate.instant('LAB_RESULTS.SAVED_CRITICAL'));
         }
         this.closeModal();
         this.saving.set(false);
@@ -707,6 +779,13 @@ export class LabResultsComponent implements OnInit {
   }
 
   releaseResult(r: LabResultResponse): void {
+    // r63 D2305: a critical result is released with the call recorded (who was
+    // told, when, the read-back); that form lives on the release worklist.
+    if (labSeverityFlag(r) === 'CRITICAL') {
+      this.toast.info(this.translate.instant('LAB_RESULTS.RELEASE_CRITICAL_FROM_WORKLIST'));
+      void this.router.navigate(['/lab-release-worklist']);
+      return;
+    }
     // QA D1092: a value no range can grade is released only once someone
     // has read the warning, in the same confirmation dialog.
     if (this.isSelfRelease(r) || labReleaseNeedsReview(r)) {
@@ -737,6 +816,15 @@ export class LabResultsComponent implements OnInit {
         // 409: the API knows this reader entered the result — ask, explicitly.
         if (!selfRelease && (err as { status?: number } | null)?.status === 409) {
           this.selfReleaseTarget.set(r);
+          return;
+        }
+        // r63 D2304 / D2305: a release that must be documented (a rejected QC run,
+        // a critical value) is refused here with the reason; the worklist asks for it.
+        const field = (err as { error?: { field?: string } } | null)?.error?.field ?? '';
+        if (field === 'qcOverrideReason' || field.startsWith('critical')) {
+          this.toast.error(
+            `${refusalReason(err) ?? ''} ${this.translate.instant('LAB_RESULTS.RELEASE_FROM_WORKLIST')}`.trim(),
+          );
           return;
         }
         this.toast.error(this.translate.instant('LAB_RESULTS.RELEASE_ERROR'));
@@ -957,6 +1045,8 @@ export class LabResultsComponent implements OnInit {
   readBackTarget = signal<LabResultResponse | null>(null);
   readBackValue = signal('');
   readBackSubmitting = signal(false);
+  /** QA D2266: the last confirmed read-back, kept on screen until dismissed. */
+  readonly readBackConfirmation = signal<string | null>(null);
 
   /**
    * A critical result asks for a read-back rather than a bare acknowledge: the
@@ -999,6 +1089,13 @@ export class LabResultsComponent implements OnInit {
     this.labService.readBackCriticalValue(target.id, value).subscribe({
       next: (updated) => {
         this.toast.success(this.translate.instant('LAB_RESULTS.READ_BACK_CONFIRMED'));
+        this.readBackConfirmation.set(
+          this.translate.instant('LAB_RESULTS.READ_BACK_CONFIRMED_DETAIL', {
+            test: target.labTestName ?? '',
+            value,
+            patient: target.patientFullName ?? '',
+          }),
+        );
         const patch = (list: LabResultResponse[]): LabResultResponse[] =>
           list.map((row) => (row.id === target.id ? { ...row, ...updated } : row));
         this.results.update(patch);

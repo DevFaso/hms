@@ -76,6 +76,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
     @Override
     public LabTestDefinitionResponseDTO create(LabTestDefinitionRequestDTO dto) {
         requireOrderedRanges(dto.getReferenceRanges(), REFERENCE_RANGES_FIELD);
+        requireValidComponents(dto.getComponents());
         String username = SecurityUtils.getCurrentUsername();
         if (username == null) {
             throw new AccessDeniedException("Unauthenticated access to lab test creation");
@@ -116,6 +117,10 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         // QA D1120: a code already live in this catalogue is refused, not
         // silently duplicated; a changed test is a new version of it.
         requireCodeFree(dto.getTestCode(), hospital != null ? hospital.getId() : null, null);
+        // QA D2730: which tests are sensitive is the lab director's decision.
+        if (dto.getSensitivityCategory() != null) {
+            assertMayClassify(currentUser, hospital != null ? hospital.getId() : null);
+        }
         LabTestDefinition entity = mapper.toEntity(dto, assignment);
         entity.setHospital(hospital);
         return mapper.toDto(repository.save(entity));
@@ -185,7 +190,9 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             .turnaroundTimeMinutes(current.getTurnaroundTimeMinutes())
             .expectedResult(current.getExpectedResult())
             .pointOfCare(current.isPointOfCare())
+            .sensitivityCategory(current.getSensitivityCategory())
             .referenceRanges(copyRanges(current.getReferenceRanges()))
+            .components(copyComponents(current.getComponents()))
             .assignment(current.getAssignment())
             .hospital(current.getHospital())
             // A DRAFT, not orderable, through the same four-eyes approval.
@@ -201,6 +208,64 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
     private static UUID hospitalIdOf(LabTestDefinition definition) {
         return definition.getHospital() != null ? definition.getHospital().getId() : null;
+    }
+
+    /** r63: a new version carries its own copy of the panel's components and their ranges. */
+    private static List<com.example.hms.model.LabTestComponent> copyComponents(
+            List<com.example.hms.model.LabTestComponent> components) {
+        List<com.example.hms.model.LabTestComponent> copies = new java.util.ArrayList<>();
+        if (components != null) {
+            components.stream().filter(Objects::nonNull).forEach(component -> copies.add(
+                component.toBuilder().referenceRanges(copyRanges(component.getReferenceRanges())).build()));
+        }
+        return copies;
+    }
+
+    /**
+     * r63 (NFS panels): each component's ranges obey the rules a test's own
+     * ranges do, and two components of one panel never share a code.
+     */
+    static void requireValidComponents(List<com.example.hms.payload.dto.LabTestComponentDTO> components) {
+        if (components == null) {
+            return;
+        }
+        java.util.Set<String> codes = new java.util.HashSet<>();
+        for (int i = 0; i < components.size(); i++) {
+            com.example.hms.payload.dto.LabTestComponentDTO component = components.get(i);
+            if (component == null) {
+                continue;
+            }
+            String field = "components[" + i + "]";
+            if (component.getCode() == null || component.getCode().isBlank()) {
+                throw new com.example.hms.exception.FieldBusinessException(field + ".code", "lab.component.codeRequired");
+            }
+            if (component.getName() == null || component.getName().isBlank()) {
+                throw new com.example.hms.exception.FieldBusinessException(field + ".name", "lab.component.nameRequired");
+            }
+            if (!codes.add(component.getCode().trim().toUpperCase(java.util.Locale.ROOT))) {
+                throw new com.example.hms.exception.FieldBusinessException(field + ".code", "lab.component.duplicateCode",
+                    component.getCode().trim());
+            }
+            requireOrderedRanges(component.getReferenceRanges(), field + ".referenceRanges");
+        }
+    }
+
+    /**
+     * r63: a panel's components carry reference ranges, so they lock with the
+     * test's own ranges (QA D159) once the definition is under review.
+     */
+    private void assertComponentsEditable(LabTestDefinition definition,
+                                          List<com.example.hms.model.LabTestComponent> proposed) {
+        if (!RANGES_LOCKED.contains(definition.getApprovalStatus())) {
+            return;
+        }
+        List<com.example.hms.model.LabTestComponent> current = definition.getComponents() == null
+            ? List.of() : definition.getComponents();
+        List<com.example.hms.model.LabTestComponent> next = proposed == null ? List.of() : proposed;
+        if (!current.equals(next)) {
+            throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw(
+                "lab.definition.rangesLocked", statusLabel(definition.getApprovalStatus())));
+        }
     }
 
     /** QA D1120: the ranges as independent copies, every field kept, so editing the draft never touches the live ones. */
@@ -281,9 +346,19 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 .toList();
     }
 
+    /**
+     * r66 D2902: one transaction. Without it {@code repository.save} committed on its own and the
+     * sensitivity audit that follows read the definition's hospital, a lazy proxy whose session had just
+     * closed (open-in-view is off): the director was answered 500 for a change that WAS saved, and the
+     * audit of it was never written. Inside the transaction the audit request is built from loaded rows,
+     * is written after the commit ({@code TransactionCallbacks.afterCommit}), and a refused edit saves
+     * nothing.
+     */
     @Override
+    @org.springframework.transaction.annotation.Transactional
     public LabTestDefinitionResponseDTO update(UUID id, LabTestDefinitionRequestDTO dto) {
         requireOrderedRanges(dto.getReferenceRanges(), REFERENCE_RANGES_FIELD);
+        requireValidComponents(dto.getComponents());
         String username = SecurityUtils.getCurrentUsername();
         if (username == null) {
             throw new AccessDeniedException("Unauthenticated access to lab test update");
@@ -303,6 +378,9 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         if (dto.getReferenceRanges() != null) {
             assertRangesEditable(existing, mapper.mapRangeDtosToEntities(dto.getReferenceRanges()));
         }
+        if (dto.getComponents() != null) {
+            assertComponentsEditable(existing, mapper.mapComponentDtosToEntities(dto.getComponents()));
+        }
         assertClinicalFieldsEditable(existing, dto);
         // QA D1120: a version keeps the code of the test it replaces; any
         // other changed code must not already be live in the catalogue.
@@ -320,8 +398,20 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             throw new IllegalStateException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.activateViaApproval"));
         }
+        // QA D2730: the tag a proxy's read obeys. Left out, it stays; a change
+        // (or the explicit clear) is the lab director's, and is on the audit trail.
+        com.example.hms.enums.SensitivityCategory tagBefore = existing.getSensitivityCategory();
+        com.example.hms.enums.SensitivityCategory tagAfter = proposedSensitivity(dto, tagBefore);
+        if (tagAfter != tagBefore) {
+            assertMayClassify(currentUser, hospitalIdOf(existing));
+        }
         mapper.updateEntityFromDto(dto, existing);
-        return mapper.toDto(repository.save(existing));
+        existing.setSensitivityCategory(tagAfter);
+        LabTestDefinition saved = repository.save(existing);
+        if (tagAfter != tagBefore) {
+            auditSensitivityChange(currentUser, saved, tagBefore, tagAfter);
+        }
+        return mapper.toDto(saved);
     }
 
     /**
@@ -472,6 +562,180 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             case "isactive" -> "active";
             default -> property;
         };
+    }
+
+    /** QA D2730: the tag an update asks for - cleared on the explicit flag, kept when the body names none. */
+    private static com.example.hms.enums.SensitivityCategory proposedSensitivity(
+            LabTestDefinitionRequestDTO dto, com.example.hms.enums.SensitivityCategory current) {
+        if (Boolean.TRUE.equals(dto.getClearSensitivityCategory())) {
+            return null;
+        }
+        return dto.getSensitivityCategory() != null ? dto.getSensitivityCategory() : current;
+    }
+
+    /**
+     * QA D2730: tagging a test sensitive (or untagging it) decides what a
+     * family proxy reads of every result of it, at once and for the versions
+     * already retired. It is the lab director's call at the definition's
+     * hospital, or a super-admin's; the other catalogue roles edit the rest.
+     */
+    private void assertMayClassify(User user, UUID hospitalId) {
+        if (isSuperAdmin(user)) {
+            return;
+        }
+        if (hospitalId == null || !assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                user.getId(), hospitalId, Set.of(ROLE_LAB_DIRECTOR))) {
+            throw new AccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.sensitivityDirectorOnly"));
+        }
+    }
+
+    /** QA D2730: category names only, after commit - as the visit and problem tags are audited. */
+    private void auditSensitivityChange(User actor, LabTestDefinition definition,
+                                        com.example.hms.enums.SensitivityCategory before,
+                                        com.example.hms.enums.SensitivityCategory after) {
+        if (auditEventLogService == null) {
+            return;
+        }
+        com.example.hms.model.Hospital hospital = definition.getHospital();
+        java.util.Map<String, Object> details = new java.util.LinkedHashMap<>();
+        details.put("from", String.valueOf(before));
+        details.put("to", String.valueOf(after));
+        details.put("testCode", definition.getTestCode());
+        com.example.hms.payload.dto.AuditEventRequestDTO request = com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+            .eventType(com.example.hms.enums.AuditEventType.CONFIGURATION_CHANGED)
+            .status(com.example.hms.enums.AuditStatus.SUCCESS)
+            .userId(actor.getId())
+            .hospitalName(hospital != null ? hospital.getName() : null)
+            .hospitalId(hospital != null ? hospital.getId() : null)
+            .eventDescription("Sensitivity category changed from " + before + " to " + after)
+            .entityType("LAB_TEST_DEFINITION_SENSITIVITY")
+            .resourceId(definition.getId() != null ? definition.getId().toString() : null)
+            .details(details)
+            .build();
+        UUID definitionId = definition.getId();
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(request);
+            } catch (RuntimeException ex) {
+                org.slf4j.LoggerFactory.getLogger(LabTestDefinitionServiceImpl.class)
+                    .warn("Sensitivity audit not written for definition {}: {}", definitionId,
+                        ex.getClass().getSimpleName());
+            }
+        });
+    }
+
+    // ── Policy 2026-11-20 (provisional): recommended sensitive categories ───
+
+    /**
+     * The catalogue's tests the curated mapping ({@code RecommendedLabSensitivity})
+     * recommends a category for. A suggestion only: it reads, and tags nothing.
+     * The lab director's (or a super-admin's), like the tag itself.
+     */
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.LabSensitivityRecommendationDTO> recommendedSensitivity() {
+        UUID hospitalId = pinnedHospitalId();
+        assertMayClassify(requireCurrentUser(), hospitalId);
+        return recommendationsOf(catalogueOf(hospitalId));
+    }
+
+    /**
+     * Tags the tests the lab director confirmed in the editor, one audit row
+     * each. Never silent, never wider than the list: an item is applied only
+     * when the mapping still recommends exactly that category for that test of
+     * the caller's catalogue; anything else refuses the whole request.
+     */
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public List<com.example.hms.payload.dto.LabSensitivityRecommendationDTO> applyRecommendedSensitivity(
+            List<com.example.hms.payload.dto.ApplyLabSensitivityRecommendationsRequestDTO.Item> confirmed) {
+        User currentUser = requireCurrentUser();
+        UUID hospitalId = pinnedHospitalId();
+        assertMayClassify(currentUser, hospitalId);
+        for (com.example.hms.payload.dto.ApplyLabSensitivityRecommendationsRequestDTO.Item item : confirmed) {
+            LabTestDefinition definition = repository.findById(item.definitionId())
+                .filter(found -> Objects.equals(hospitalIdOf(found), hospitalId))
+                .orElseThrow(() -> new ResourceNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
+            assertNotRetired(definition);
+            com.example.hms.service.recordaccess.RecommendedLabSensitivity.Match match =
+                com.example.hms.service.recordaccess.RecommendedLabSensitivity.recommend(definition).orElse(null);
+            if (match == null || match.category() != item.category()) {
+                throw new com.example.hms.exception.BusinessException(
+                    "lab.sensitivityRecommendation.notRecommended", definition.getTestCode());
+            }
+            com.example.hms.enums.SensitivityCategory before = definition.getSensitivityCategory();
+            if (before == match.category()) {
+                continue;
+            }
+            definition.setSensitivityCategory(match.category());
+            auditRecommendationApplied(currentUser, repository.save(definition), before, match);
+        }
+        return recommendationsOf(catalogueOf(hospitalId));
+    }
+
+    private User requireCurrentUser() {
+        User user = currentUserOrNull();
+        if (user == null) {
+            throw new AccessDeniedException(CURRENT_USER_RESOLUTION_ERROR);
+        }
+        return user;
+    }
+
+    /** The definitions a tag can be set on from here: the acting hospital's own, or the platform's in global view. */
+    private List<LabTestDefinition> catalogueOf(UUID hospitalId) {
+        return hospitalId == null ? repository.findNotRetiredGlobal() : repository.findNotRetiredAtHospital(hospitalId);
+    }
+
+    private static List<com.example.hms.payload.dto.LabSensitivityRecommendationDTO> recommendationsOf(
+            List<LabTestDefinition> catalogue) {
+        List<com.example.hms.payload.dto.LabSensitivityRecommendationDTO> recommendations = new ArrayList<>();
+        for (LabTestDefinition definition : catalogue) {
+            com.example.hms.service.recordaccess.RecommendedLabSensitivity.recommend(definition).ifPresent(match ->
+                recommendations.add(new com.example.hms.payload.dto.LabSensitivityRecommendationDTO(
+                    definition.getId(), definition.getTestCode(), definition.getName(), definition.isPanel(),
+                    definition.getSensitivityCategory(), match.category(), match.matchedOn().name(),
+                    match.matchedText(), definition.getSensitivityCategory() == match.category(),
+                    com.example.hms.service.recordaccess.RecommendedLabSensitivity.PROVISIONAL)));
+        }
+        return recommendations;
+    }
+
+    /** One row per test tagged from the recommended list: who confirmed it, what matched, which list. */
+    private void auditRecommendationApplied(User actor, LabTestDefinition definition,
+                                            com.example.hms.enums.SensitivityCategory before,
+                                            com.example.hms.service.recordaccess.RecommendedLabSensitivity.Match match) {
+        if (auditEventLogService == null) {
+            return;
+        }
+        com.example.hms.model.Hospital hospital = definition.getHospital();
+        java.util.Map<String, Object> details = new java.util.LinkedHashMap<>();
+        details.put("from", String.valueOf(before));
+        details.put("to", match.category().name());
+        details.put("testCode", definition.getTestCode());
+        details.put("matchedOn", match.matchedOn().name());
+        details.put("mapping", com.example.hms.service.recordaccess.RecommendedLabSensitivity.VERSION);
+        com.example.hms.payload.dto.AuditEventRequestDTO request = com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+            .eventType(com.example.hms.enums.AuditEventType.LAB_SENSITIVITY_RECOMMENDATION_APPLIED)
+            .status(com.example.hms.enums.AuditStatus.SUCCESS)
+            .userId(actor.getId())
+            .hospitalName(hospital != null ? hospital.getName() : null)
+            .hospitalId(hospital != null ? hospital.getId() : null)
+            .eventDescription("Recommended sensitivity category applied: " + before + " to " + match.category())
+            .entityType("LAB_TEST_DEFINITION_SENSITIVITY")
+            .resourceId(definition.getId() != null ? definition.getId().toString() : null)
+            .details(details)
+            .build();
+        UUID definitionId = definition.getId();
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(request);
+            } catch (RuntimeException ex) {
+                org.slf4j.LoggerFactory.getLogger(LabTestDefinitionServiceImpl.class)
+                    .warn("Recommendation audit not written for definition {}: {}", definitionId,
+                        ex.getClass().getSimpleName());
+            }
+        });
     }
 
     /** D30: authority over a definition is decided at ITS hospital, not by who created it. */

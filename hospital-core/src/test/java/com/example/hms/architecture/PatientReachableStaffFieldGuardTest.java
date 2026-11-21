@@ -99,7 +99,9 @@ class PatientReachableStaffFieldGuardTest {
             site("service/impl/ImagingOrderServiceImpl.java#getOrdersByPatient", "PatientSafeView::imagingOrder"))),
         Map.entry("ImagingReportResponseDTO", Rule.projected("D1960: the patient's released imaging report",
             site("service/impl/ImagingReportServiceImpl.java#getReport", "PatientSafeView.imagingReport("),
-            site("service/impl/ImagingReportServiceImpl.java#getLatestReportForOrder", "PatientSafeView.imagingReport("))),
+            site("service/impl/ImagingReportServiceImpl.java#getLatestReportForOrder", "PatientSafeView.imagingReport("),
+            // D2342 (r63): the portal's « Imagerie » page, the patient's and their proxy's.
+            site("service/imaging/PatientImagingPortalService.java#toStudy", "PatientSafeView::imagingReport"))),
         Map.entry("ImagingReportStatusDTO", Rule.projected("D1960: the status trail is left out of the patient's report",
             site("service/support/PatientSafeView.java#imagingReport", ".build()"))),
         Map.entry("ImagingReportMeasurementDTO", Rule.projected("D1960: measurements are left out of the patient's report",
@@ -128,7 +130,9 @@ class PatientReachableStaffFieldGuardTest {
             site("service/EncounterServiceImpl.java#getEncountersForPortalPatient", "toPatientPortalEncounterResponseDTO"),
             site("service/EncounterServiceImpl.java#getEncounterById", "toPatientPortalEncounterResponseDTO("))),
         Map.entry("EncounterNoteResponseDTO", Rule.projected("D1910/D1960: only the signed note reaches the patient",
-            site("mapper/EncounterMapper.java#toPatientPortalEncounterResponseDTO", "getLatestSignedEncounterNote()"))),
+            site("mapper/EncounterMapper.java#toPatientPortalEncounterResponseDTO", "getLatestSignedEncounterNote()"),
+            // QA D2550: attested addenda only, no signature ceremony.
+            site("mapper/EncounterMapper.java#toPatientPortalEncounterResponseDTO", "PatientSafeView.encounterNote("))),
         Map.entry("InvoiceItemResponseDTO", Rule.projected(
             "#1197 M1: the patient's line shows the price charged, never the cashier's override or the grid price",
             site("service/BillingInvoiceServiceImpl.java#getPortalInvoiceDetail", "InvoiceItemMapper::forPatient"))),

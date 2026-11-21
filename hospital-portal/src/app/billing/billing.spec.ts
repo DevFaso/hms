@@ -9,7 +9,8 @@ import {
 } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of, Subject, throwError } from 'rxjs';
+import { defer, of, Subject, throwError } from 'rxjs';
+import { PAYMENT_RETRY_DELAY_MS } from '../shared/payment-request-key';
 
 import { BillingComponent, lineQuantityMessageKey } from './billing';
 import { markServerFieldErrors, scopeOf } from '../shared/forms/server-field-errors';
@@ -91,7 +92,7 @@ describe('BillingComponent', () => {
     );
     billingSpy.searchInvoices.and.returnValue(of(mockPage([mockInvoice()])));
     billingSpy.getInvoiceItems.and.returnValue(of([]));
-    toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'info']);
+    toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'info', 'warning']);
     const permissionSpy = jasmine.createSpyObj('PermissionService', ['hasAnyPermission']);
     permissionSpy.hasAnyPermission.and.returnValue(true);
     const roleCtx = {
@@ -328,11 +329,40 @@ describe('BillingComponent', () => {
       amount: 1000,
       method: 'CASH',
       reference: undefined,
+      clientRequestId: jasmine.any(String),
     });
     expect(component.invoices()[0].status).toBe('PAID');
     expect(component.showPaymentModal()).toBeFalse();
     expect(toastSpy.success).toHaveBeenCalled();
   });
+
+  it('QA D2704: the same payment just recorded in another tab is asked about, then sent confirmed', fakeAsync(() => {
+    fixture.detectChanges();
+    const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+    billingSpy.getInvoice.and.returnValue(of(mockInvoice({ balanceDue: 2000, totalAmount: 3000 })));
+    billingSpy.recordPayment.and.returnValues(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            error: {
+              message: 'Un paiement de 1 000 F CFA a déjà été enregistré.',
+              fieldErrors: {
+                confirmDuplicate: 'Un paiement de 1 000 F CFA a déjà été enregistré.',
+              },
+            },
+          }),
+      ),
+      of(mockInvoice({ status: 'PAID' })),
+    );
+    component.openPayment(component.invoices()[0]);
+    component.recordPayment();
+    tick();
+    expect(ask).toHaveBeenCalled();
+    expect(billingSpy.getInvoice).toHaveBeenCalledWith('inv-1');
+    expect(billingSpy.recordPayment).toHaveBeenCalledTimes(2);
+    expect(billingSpy.recordPayment.calls.mostRecent().args[1].confirmDuplicate).toBeTrue();
+  }));
 
   it('QA D146: recordPayment sends the chosen method and reference', () => {
     fixture.detectChanges();
@@ -348,7 +378,51 @@ describe('BillingComponent', () => {
       method: 'MOBILE_MONEY',
       reference: 'MM-778',
       mobileMoneyOperator: 'ORANGE_MONEY',
+      clientRequestId: jasmine.any(String),
     });
+  });
+
+  it('PR 11 (QA D2430): a lost answer is not « Échec »: the same key is sent again, then the cashier is told to check', fakeAsync(() => {
+    fixture.detectChanges();
+    let sends = 0;
+    billingSpy.recordPayment.and.returnValue(
+      defer(() => {
+        sends++;
+        return throwError(() => new HttpErrorResponse({ status: 0, statusText: 'Unknown Error' }));
+      }),
+    );
+    component.openPayment(component.invoices()[0]);
+    component.recordPayment();
+    tick(PAYMENT_RETRY_DELAY_MS);
+
+    // One automatic resend of the same request (same body, same key), then a warning, never the failure toast.
+    expect(sends).toBe(2);
+    expect(toastSpy.error).not.toHaveBeenCalled();
+    expect(toastSpy.warning).toHaveBeenCalledWith('PAYMENT_OUTCOME.UNKNOWN');
+    expect(component.showPaymentModal()).toBeTrue();
+    const firstKey = billingSpy.recordPayment.calls.mostRecent().args[1].clientRequestId;
+    expect(firstKey).toEqual(jasmine.any(String));
+
+    // The cashier presses again in the same dialog: the same key, so the server answers the first.
+    billingSpy.recordPayment.and.returnValue(of(mockInvoice({ status: 'PAID' })));
+    component.recordPayment();
+    expect(billingSpy.recordPayment.calls.mostRecent().args[1].clientRequestId).toBe(firstKey);
+
+    // A new opening of the dialog is a new payment: a new key.
+    component.openPayment(component.invoices()[0]);
+    component.recordPayment();
+    expect(billingSpy.recordPayment.calls.mostRecent().args[1].clientRequestId).not.toBe(firstKey);
+  }));
+
+  it('PR 11: a refusal is still a failure, shown as the server said it', () => {
+    fixture.detectChanges();
+    billingSpy.recordPayment.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 400, error: { message: 'Refusé' } })),
+    );
+    component.openPayment(component.invoices()[0]);
+    component.recordPayment();
+    expect(toastSpy.error).toHaveBeenCalledWith('Refusé');
+    expect(toastSpy.warning).not.toHaveBeenCalled();
   });
 
   it('billing plan PR 9: the operator picker shows for Mobile Money only, with the manual-entry notice', () => {
@@ -402,6 +476,7 @@ describe('BillingComponent', () => {
       amount: 500,
       method: 'CASH',
       reference: undefined,
+      clientRequestId: jasmine.any(String),
     });
   });
 
@@ -1292,9 +1367,9 @@ describe('BillingComponent', () => {
       expect(component.editLineOverrideReason()).toBe('');
     });
 
-    it('#1197 M2: removing a price-list line asks the reason in place and sends it', async () => {
+    it('#1197 M2: removing a price-list line asks the reason in place and sends it', () => {
       const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
-      await component.removeItem(tariffLine);
+      component.removeItem(tariffLine);
       expect(ask).not.toHaveBeenCalled();
       expect(component.removingLineId()).toBe('line-t');
       fixture.detectChanges();
@@ -1313,11 +1388,46 @@ describe('BillingComponent', () => {
       expect(billingSpy.deleteInvoiceItem).toHaveBeenCalledWith('line-t', 'Doublon');
     });
 
-    it('#1197 M2: a typed line is still removed through the confirmation, with no reason', async () => {
-      spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+    it('PR 10 review (QA D2703): a typed line is removed only with a reason too, asked in its row', () => {
+      const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
       billingSpy.deleteInvoiceItem.and.returnValue(of('ok'));
-      await component.removeItem(typedLine);
-      expect(billingSpy.deleteInvoiceItem).toHaveBeenCalledWith('line-m', undefined);
+      component.removeItem(typedLine);
+      expect(ask).not.toHaveBeenCalled();
+      expect(component.removingLineId()).toBe('line-m');
+      expect(billingSpy.deleteInvoiceItem).not.toHaveBeenCalled();
+
+      component.confirmRemoveTariffLine(typedLine);
+      expect(billingSpy.deleteInvoiceItem).not.toHaveBeenCalled();
+
+      component.removeLineReason.set(' Acte non réalisé ');
+      component.confirmRemoveTariffLine(typedLine);
+      expect(billingSpy.deleteInvoiceItem).toHaveBeenCalledWith('line-m', 'Acte non réalisé');
+    });
+
+    it('PR 10 review (QA D2703): a line typed on a visit invoice needs a reason, sent as overrideReason', () => {
+      const visit = mockInvoice({ id: 'inv-visit', status: 'DRAFT', encounterCode: 'ENC-1' });
+      billingSpy.getInvoice.and.returnValue(of(visit));
+      component.viewInvoice(visit);
+      fixture.detectChanges();
+      expect(component.addedLineNeedsReason(component.selectedInvoice())).toBeTrue();
+      component.newItemDescription.set('Radiographie thorax');
+      component.newItemQuantity.set(1);
+      component.newItemUnitPrice.set(7500);
+
+      component.addItem();
+      expect(billingSpy.createInvoiceItem).not.toHaveBeenCalled();
+
+      billingSpy.createInvoiceItem.and.returnValue(of(typedLine));
+      component.newItemReason.set('  Radio refaite, tarif convenu  ');
+      component.addItem();
+      expect(billingSpy.createInvoiceItem.calls.mostRecent().args[0].overrideReason).toBe(
+        'Radio refaite, tarif convenu',
+      );
+      expect(component.newItemReason()).toBe('');
+    });
+
+    it('PR 10 review: a line on an invoice with no visit is added with no reason', () => {
+      expect(component.addedLineNeedsReason(mockInvoice({ encounterCode: undefined }))).toBeFalse();
     });
 
     it('keeps the tariff price without asking for a reason', () => {
@@ -1362,6 +1472,11 @@ describe('BillingComponent', () => {
       expect(component.editLineUnitPrice()).toBeNull();
       expect(component.canSaveLine()).toBeFalse();
       component.editLineUnitPrice.set(7500);
+      // QA D2703: pricing an unpriced line by hand asks why; nothing is sent without the reason.
+      expect(component.overrideReasonRequired(zeroLine)).toBeTrue();
+      component.saveLine(zeroLine);
+      expect(billingSpy.updateInvoiceItem).not.toHaveBeenCalled();
+      component.editLineOverrideReason.set('Radio du jour, pas de prix dans la grille');
       component.saveLine(zeroLine);
       expect(billingSpy.updateInvoiceItem).toHaveBeenCalledWith('line-0', {
         billingInvoiceId: 'inv-1',
@@ -1369,6 +1484,7 @@ describe('BillingComponent', () => {
         itemCategory: 'SERVICE',
         quantity: 1,
         unitPrice: 7500,
+        overrideReason: 'Radio du jour, pas de prix dans la grille',
       });
       expect(billingSpy.createInvoiceItem).not.toHaveBeenCalled();
       expect(billingSpy.deleteInvoiceItem).not.toHaveBeenCalled();
@@ -1798,12 +1914,13 @@ describe('BillingComponent', () => {
       expect(toastSpy.error).toHaveBeenCalled();
     });
 
-    it('does not remove a line the user did not confirm (QA D147)', async () => {
+    it('does not remove a line whose reason was not given (QA D147, D2703)', () => {
       fixture.detectChanges();
       component.viewInvoice(component.invoices()[0]);
-      spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
-      await component.removeItem({ id: 'item-1' } as never);
+      component.removeItem({ id: 'item-1' } as never);
       expect(billingSpy.deleteInvoiceItem).not.toHaveBeenCalled();
+      component.cancelRemoveLine();
+      expect(component.removingLineId()).toBeNull();
     });
   });
 
@@ -1864,26 +1981,74 @@ describe('BillingComponent', () => {
       component.submitForm();
     };
 
-    it('asks, naming the lines; on yes the same issue goes out confirmed', fakeAsync(() => {
-      const ask = spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
+    it('PR 10 review (QA D2703): names the lines and asks a reason; with it the issue goes out confirmed', fakeAsync(() => {
       billingSpy.updateInvoice.and.returnValues(
         throwError(() => refusal),
         of(mockInvoice({ id: 'inv-1' })),
       );
       issue();
       tick();
-      expect(ask.calls.mostRecent().args[0].message).toContain('TDR');
+      // Nothing is re-sent on its own: the lines are named in the form, with a required reason.
+      expect(billingSpy.updateInvoice).toHaveBeenCalledTimes(1);
+      expect(component.unpricedLines()).toContain('TDR');
+
+      component.submitForm();
+      expect(billingSpy.updateInvoice).toHaveBeenCalledTimes(1);
+
+      component.form = {
+        ...component.form,
+        unpricedLinesReason: '  Test offert, campagne paludisme  ',
+      };
+      component.submitForm();
+      tick();
       expect(billingSpy.updateInvoice).toHaveBeenCalledTimes(2);
       const sent = billingSpy.updateInvoice.calls.mostRecent().args[1];
       expect(sent.confirmUnpricedLines).toBeTrue();
+      expect(sent.unpricedLinesReason).toBe('Test offert, campagne paludisme');
+      expect(component.unpricedLines()).toBeNull();
     }));
 
-    it('on no, nothing more is sent', fakeAsync(() => {
-      spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+    it('the server refusing the reason itself shows the same field', fakeAsync(() => {
+      billingSpy.updateInvoice.and.returnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 400,
+              error: {
+                message: 'Motif obligatoire',
+                fieldErrors: { unpricedLinesReason: 'Motif obligatoire : TDR.' },
+              },
+            }),
+        ),
+      );
+      issue();
+      tick();
+      expect(component.unpricedLines()).toContain('TDR');
+    }));
+
+    it('saved back as a draft, no reason is asked and none is sent', fakeAsync(() => {
+      billingSpy.updateInvoice.and.returnValues(
+        throwError(() => refusal),
+        of(mockInvoice({ id: 'inv-1' })),
+      );
+      issue();
+      tick();
+      component.form = { ...component.form, status: 'DRAFT' };
+      component.submitForm();
+      tick();
+      expect(billingSpy.updateInvoice).toHaveBeenCalledTimes(2);
+      const sent = billingSpy.updateInvoice.calls.mostRecent().args[1];
+      expect(sent.confirmUnpricedLines).toBeUndefined();
+      expect(sent.unpricedLinesReason).toBeUndefined();
+    }));
+
+    it('opening another invoice forgets the lines named for the last one', fakeAsync(() => {
       billingSpy.updateInvoice.and.returnValue(throwError(() => refusal));
       issue();
       tick();
-      expect(billingSpy.updateInvoice).toHaveBeenCalledTimes(1);
+      component.openEdit(mockInvoice({ id: 'inv-2' }));
+      expect(component.unpricedLines()).toBeNull();
+      expect(component.form.unpricedLinesReason).toBeUndefined();
     }));
   });
 

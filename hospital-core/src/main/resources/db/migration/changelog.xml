@@ -3750,4 +3750,167 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V314 (wave 1, lab) - lab.qc_targets (director's target mean/SD per
+         test and control level); qc_events lot, operator, target snapshot and
+         SD flag; components on lab_test_definitions and lab_results (panel
+         results such as the NFS); lab_results QC override and critical-result
+         communication log. Additive: IF NOT EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V314-lab-qc-targets-panels-critical-communication" author="hms-team" runOnChange="false">
+        <sqlFile path="V314__lab_qc_targets_panels_critical_communication.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V310 (billing-money plan PR 11, scorecard M2, QA D2430): payment
+         idempotency. client_request_id on billing.payment_transactions,
+         billing.pharmacy_payments and clinical.pharmacy_sales, unique per
+         hospital when present; payment_transactions gains hospital_id,
+         backfilled from its invoice. Plain idempotent DDL, no DO block.
+         ================================================================= -->
+    <changeSet id="V310-payment-client-request-id" author="hms-team" runOnChange="false">
+        <sqlFile path="V310__payment_client_request_id.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V313: a key image withdrawn after signing, with its reason, and
+         the last caption correction (QA D2464 / D2466, r64). Number
+         pre-allocated to wave 1; registered after V317. Additive: five
+         nullable columns, IF NOT EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V313-imaging-study-image-withdrawal" author="hms-team" runOnChange="false">
+        <sqlFile path="V313__imaging_study_image_withdrawal.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V311 (billing-money plan PR 13, scorecard M4; QA r65 D2670-D2676):
+         pharmacy pack size on inventory items, "à facturer" on a dispense,
+         and clinical.pharmacy_refunds (two-person refund of a patient
+         return). Pre-allocated; registered after V313. Plain idempotent
+         DDL, no DO block.
+         ================================================================= -->
+    <changeSet id="V311-pharmacy-sale-stock-refunds" author="hms-team" runOnChange="false">
+        <sqlFile path="V311__pharmacy_sale_stock_refunds_reconciliation.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V309 (billing-money plan PR 10, QA r65 D2325/D2326/D2714/D2672,
+         D2702, D2700): cash sessions and their counted close, cash_session_id
+         on every money row, payment reversals as approved refunds, and lab
+         price links moved to the test lineage's first version, and the
+         lines taken off draft invoices (D2703). Number pre-allocated to wave
+         1; registered after V317. Plain idempotent DDL and DML, no DO block.
+         ================================================================= -->
+    <changeSet id="V309-billing-cash-sessions" author="hms-team" runOnChange="false">
+        <sqlFile path="V309__billing_cash_sessions.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V341: a sensitive category on a lab test definition (QA D2730,
+         r65). Additive: one nullable column, IF NOT EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V341-lab-test-definition-sensitivity-category" author="hms-team" runOnChange="false">
+        <sqlFile path="V341__lab_test_definition_sensitivity_category.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V344: the visit a problem was recorded in (QA D2730, r65), so a
+         problem follows that visit's sensitivity category. Additive: one
+         nullable column, its foreign key and a partial index; IF NOT
+         EXISTS / DROP IF EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V344-patient-problem-source-encounter" author="hms-team" runOnChange="false">
+        <sqlFile path="V344__patient_problem_source_encounter.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V347: sensitive-data defaults and the release of a minor's result
+         (policy 2026-11-20, provisional). One new table
+         (clinical.proxy_sensitive_releases), the verification stamp of a
+         family-access grant, the per-hospital adolescent confidentiality
+         age, and a sensitive category on a catalogue medicine. Additive:
+         IF NOT EXISTS / DROP IF EXISTS, no DO block, no backfill.
+         ================================================================= -->
+    <changeSet id="V347-sensitive-defaults-minor-result-release" author="hms-team" runOnChange="false">
+        <sqlFile path="V347__sensitive_defaults_minor_result_release.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V346: the imaging technician (policy rule 3, 2026-11-20,
+         provisional). One role row, the exam record columns on
+         imaging_orders (check-in, performed by, technical note, contrast,
+         dose) and a per-hospital "ultrasound by a non-physician" setting. Additive:
+         IF NOT EXISTS / ON CONFLICT DO NOTHING, no DO block.
+         ================================================================= -->
+    <changeSet id="V346-imaging-technician-and-exam-record" author="hms-team" runOnChange="false">
+        <sqlFile path="V346__imaging_technician_and_exam_record.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V345 (policy rules 1 and 6, owner decision 2026-11-20; QA r63 D2308,
+         r65 D2675): hospital.hospital_billing_policies (per-hospital
+         consultation default and the pharmacist-renewal flag, OFF),
+         clinical.dispense_billing_deferrals (approve-then-execute, two
+         people), dispenses.billing_deferral_id and the decision columns of
+         refill_requests. Additive, IF NOT EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V345-policy-deferred-billing-and-renewals" author="hms-team" runOnChange="false">
+        <sqlFile path="V345__policy_deferred_billing_and_renewals.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V348: the additional concerns of the maternal early warning score
+         on a vital set (policy 2026-11-20, provisional). Additive: one
+         nullable column, IF NOT EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V348-vital-sign-maternal-concerns" author="hms-team" runOnChange="false">
+        <sqlFile path="V348__vital_sign_maternal_concerns.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V352 (QA r66 D2950): clinical.pharmacy_refunds.cash_session_id, the
+         till a pharmacy refund was paid out of (money out of the payer's
+         PHARMACY session), with a backfill of the refunds already paid.
+         Additive, IF NOT EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V352-pharmacy-refund-cash-session" author="hms-team" runOnChange="false">
+        <sqlFile path="V352__pharmacy_refund_cash_session.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

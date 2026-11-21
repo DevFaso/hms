@@ -402,6 +402,26 @@ class PatientRecordPdfServiceTest {
         assertThat(textOf(pdf)).contains("pdf.record.allergies.summary Penicillin");
     }
 
+    /** QA D2260 (r63): an addendum prints under its note, dated and signed, in the reader's language. */
+    @Test
+    void aNotesAddendumIsPrintedUnderIt_D2260() throws Exception {
+        org.springframework.context.MessageSource real = com.example.hms.i18n.TestMessageSources.bundles();
+        ChartReviewDTO chart = chart();
+        chart.getNotes().get(0).setAddenda(List.of(ChartReviewDTO.NoteAddendumEntryDTO.builder()
+            .content("CRP 85 mg/L, confirme l infection")
+            .authorName("Aminata Ouedraogo")
+            .signedAt(LocalDateTime.of(2026, 11, 19, 4, 13))
+            .build(), ChartReviewDTO.NoteAddendumEntryDTO.builder()
+            .content("second addendum")
+            .documentedAt(LocalDateTime.of(2026, 11, 19, 5, 0))
+            .build()));
+        byte[] pdf = PatientRecordPdfService.write(PatientStoryboardDTO.builder().allergies(List.of()).build(), chart,
+            null, PdfLabels.of(real, Locale.FRENCH));
+        String text = textOf(pdf).replaceAll("\\s+", " ");
+        assertThat(text).contains("Addendum").contains("Aminata Ouedraogo").contains("CRP 85 mg/L, confirme l infection")
+            .contains("second addendum");
+    }
+
     @Test
     void aStoredCodeIsNeverPrintedRaw() {
         PdfLabels t = PdfLabels.of(messageSource, Locale.FRENCH);

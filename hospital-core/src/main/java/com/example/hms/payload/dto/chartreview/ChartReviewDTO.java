@@ -150,6 +150,29 @@ public class ChartReviewDTO {
         private String preview;
         /** QA D1076: {@code ENCOUNTER} (the visit's clinical note) or {@code NURSING} (a ward nursing note). */
         private String source;
+        /**
+         * QA D2260 (r63): the addenda filed under the note, oldest first. A signed note is
+         * corrected only by an addendum, so a reader that shows the note shows these too
+         * ({@code SignedNoteAddendaGuardTest}).
+         */
+        @Builder.Default
+        private List<NoteAddendumEntryDTO> addenda = new java.util.ArrayList<>();
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(description = "QA D2260: one addendum to a note, dated and signed by its author.")
+    public static class NoteAddendumEntryDTO {
+        private UUID id;
+        private String content;
+        private String authorName;
+        private String authorCredentials;
+        private LocalDateTime documentedAt;
+        private LocalDateTime signedAt;
     }
 
     @Getter

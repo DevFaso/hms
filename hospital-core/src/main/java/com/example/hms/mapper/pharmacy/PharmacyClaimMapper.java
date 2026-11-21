@@ -33,6 +33,9 @@ public class PharmacyClaimMapper {
             .notes(entity.getNotes())
             .createdAt(entity.getCreatedAt())
             .updatedAt(entity.getUpdatedAt())
+            // QA D2925 (r66): accepted, and no money desk recorded behind it yet.
+            .acceptanceUnconfirmed(entity.getClaimStatus() == com.example.hms.enums.PharmacyClaimStatus.ACCEPTED
+                && entity.getVouchedBy() == null)
             .build();
     }
 

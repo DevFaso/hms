@@ -304,6 +304,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           route: '/my-lab-results',
         },
         {
+          icon: 'radiology',
+          label: 'Imaging',
+          translationKey: 'NAV.MY_IMAGING',
+          route: '/my-imaging',
+        },
+        {
           icon: 'monitor_heart',
           label: 'Vitals',
           translationKey: 'NAV.VITALS',
@@ -836,6 +842,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_NURSE',
           'ROLE_MIDWIFE',
           'ROLE_RADIOLOGIST',
+          // Policy rule 3 (2026-11-20, provisional): the imaging technician's worklist.
+          'ROLE_IMAGING_TECHNICIAN',
           // User decision 2026-11-14: read-only Imagerie for the admin roles.
           'ROLE_HOSPITAL_ADMIN',
           'ROLE_ADMIN',
@@ -1171,6 +1179,25 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       });
     }
     // Pharmacy Module
+    // QA D2927 class (r66): the catalogue entry named the doctor, whom the block's gate below never
+    // let in. It has its own gate, the same list as the /medication-catalog RoleGuard (E9 #68: the
+    // catalog API admits the store manager on every read but not the clerk).
+    if (
+      this.hasAnyRole([
+        'ROLE_PHARMACIST',
+        'ROLE_STORE_MANAGER',
+        'ROLE_DOCTOR',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push({
+        icon: 'medication',
+        label: 'Medication Catalog',
+        translationKey: 'NAV.MEDICATION_CATALOG',
+        route: '/medication-catalog',
+      });
+    }
     if (
       this.hasAnyRole([
         'ROLE_PHARMACIST',
@@ -1181,21 +1208,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       ])
     ) {
       items.push(
-        {
-          icon: 'medication',
-          label: 'Medication Catalog',
-          translationKey: 'NAV.MEDICATION_CATALOG',
-          route: '/medication-catalog',
-          // Mirrors the /medication-catalog RoleGuard (E9 #68): the catalog
-          // API admits the store manager on every read but not the clerk.
-          roles: [
-            'ROLE_PHARMACIST',
-            'ROLE_STORE_MANAGER',
-            'ROLE_DOCTOR',
-            'ROLE_HOSPITAL_ADMIN',
-            'ROLE_SUPER_ADMIN',
-          ],
-        },
         {
           icon: 'local_pharmacy',
           label: 'Pharmacy Registry',
@@ -1289,6 +1301,35 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         },
       );
     }
+    // QA D2927 (r66): the pharmacy's two money pages are finance's too. They sat inside the block
+    // above, whose gate admits neither the accountant nor the billing specialist, so the roles their
+    // entries named never saw them: a credit waited for an approver who could only type the URL.
+    // Each has a gate of its own, the same list as its route guard (nav-nested-roles.test.mjs).
+    if (this.hasAnyRole(['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_ACCOUNTANT'])) {
+      items.push({
+        // QA D2673 (r65): mirrors the /pharmacy/reconciliation RoleGuard.
+        icon: 'balance',
+        label: 'Pharmacy reconciliation',
+        translationKey: 'NAV.PHARMACY_RECONCILIATION',
+        route: '/pharmacy/reconciliation',
+      });
+    }
+    if (
+      this.hasAnyRole([
+        'ROLE_PHARMACIST',
+        'ROLE_BILLING_SPECIALIST',
+        'ROLE_ACCOUNTANT',
+        'ROLE_HOSPITAL_ADMIN',
+      ])
+    ) {
+      items.push({
+        // Policy rule 6 (V345): mirrors the /pharmacy/billing-deferrals RoleGuard.
+        icon: 'receipt_long',
+        label: 'Deferred billing',
+        translationKey: 'NAV.PHARMACY_BILLING_DEFERRALS',
+        route: '/pharmacy/billing-deferrals',
+      });
+    }
     // Claims / Checkout / MTM shipped with no nav entry anywhere — for
     // CLAIMS_REVIEWER the claims page is the role's entire purpose. Each
     // gate mirrors its route guard.
@@ -1297,6 +1338,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         'ROLE_PHARMACIST',
         'ROLE_BILLING_SPECIALIST',
         'ROLE_CLAIMS_REVIEWER',
+        // QA D2925 (r66): the accountant records the payer's answer to a claim.
+        'ROLE_ACCOUNTANT',
         'ROLE_HOSPITAL_ADMIN',
         'ROLE_SUPER_ADMIN',
       ])
@@ -1321,6 +1364,15 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         label: 'Pharmacy Checkout',
         translationKey: 'NAV.PHARMACY_CHECKOUT',
         route: '/pharmacy/checkout',
+      });
+    }
+    // Billing-money plan PR 10 (QA r65 D2672): the pharmacist's till close; mirrors the /pharmacy/caisse guard.
+    if (this.hasAnyRole(['ROLE_PHARMACIST'])) {
+      items.push({
+        icon: 'savings',
+        label: 'Pharmacy Till Close',
+        translationKey: 'NAV.PHARMACY_TILL_CLOSE',
+        route: '/pharmacy/caisse',
       });
     }
     if (this.hasAnyRole(['ROLE_PHARMACIST', 'ROLE_SUPER_ADMIN'])) {
@@ -1391,6 +1443,35 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         label: 'Release Worklist',
         translationKey: 'NAV.LAB_RELEASE_WORKLIST',
         route: '/lab-release-worklist',
+      });
+    }
+    // r65 D2183: the hospital admin is paged from escalation round 2; this is
+    // where the paged results are, read-only (read-back stays clinical).
+    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN'])) {
+      items.push({
+        icon: 'notification_important',
+        label: 'Critical results awaiting read-back',
+        translationKey: 'NAV.LAB_CRITICAL_PENDING',
+        route: '/lab-critical-pending',
+      });
+    }
+    // r63 D2304: the bench records the daily QC, so the technician and the
+    // scientist reach the QC dashboard (not the ops dashboard).
+    if (
+      this.hasAnyRole(['ROLE_LAB_TECHNICIAN', 'ROLE_LAB_SCIENTIST']) &&
+      !this.hasAnyRole([
+        'ROLE_LAB_MANAGER',
+        'ROLE_LAB_DIRECTOR',
+        'ROLE_QUALITY_MANAGER',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push({
+        icon: 'monitoring',
+        label: 'QC Dashboard',
+        translationKey: 'NAV.QC_DASHBOARD',
+        route: '/lab-qc-dashboard',
       });
     }
     if (

@@ -190,6 +190,9 @@ export const PRESCRIPTION_TABS: readonly { id: PrescriptionTab; labelKey: string
 
 /** The prescribed quantity, refused when blank or not positive (QA D1306). */
 const RX_QUANTITY_IDS = ['rx-quantity'];
+/** QA D2926 (r66): the written refills (server key refillsAllowed), a whole number from 0 to this. */
+const RX_REFILLS_IDS = ['rx-refillsAllowed'];
+const MAX_WRITTEN_REFILLS = 99;
 /** QA round 30: the as-needed order's minimum interval (server key prnMinIntervalHours). */
 /** QA D1472: `PRESCRIPTIONS.FREQUENCY_CHOICES`; FrequencyWordingTest reads each in EN, FR and ES. */
 const FREQUENCY_CHOICES = [
@@ -606,9 +609,44 @@ export class PrescriptionsComponent implements OnInit {
       duration: '',
       quantity: null,
       quantityUnit: '',
+      refillsAllowed: 0,
       notes: '',
       status: 'DRAFT',
     };
+  }
+
+  // ── QA D2926 (r66): the refills a prescriber writes on an order ──
+
+  readonly maxWrittenRefills = MAX_WRITTEN_REFILLS;
+
+  /** The order being edited is a controlled substance (ticked, or flagged by the catalogue). */
+  private readonly editingControlled = signal(false);
+
+  /** A controlled substance carries no refill: every further supply needs a new prescription. */
+  refillsControlled(): boolean {
+    return !!this.pickedCatalogItem()?.controlled || this.editingControlled();
+  }
+
+  /** Written before the signature: a signed or issued order keeps the number it was signed with. */
+  refillsLocked(): boolean {
+    return this.editingSigned() || this.editingIssued() || this.refillsControlled();
+  }
+
+  refillsHintKey(): string {
+    if (this.refillsControlled()) return 'PRESCRIPTIONS.REFILLS_CONTROLLED_HINT';
+    if (this.editingSigned() || this.editingIssued()) return 'PRESCRIPTIONS.REFILLS_LOCKED_HINT';
+    return 'PRESCRIPTIONS.REFILLS_ALLOWED_HINT';
+  }
+
+  /** What the form sends: none for a controlled drug, a whole number from 0 to the maximum, or null when it is neither. */
+  private writtenRefills(): number | null {
+    if (this.refillsControlled()) return 0;
+    const raw = this.form.refillsAllowed;
+    if (raw == null || `${raw}`.trim() === '') return 0;
+    const refills = Number(raw);
+    return Number.isInteger(refills) && refills >= 0 && refills <= MAX_WRITTEN_REFILLS
+      ? refills
+      : null;
   }
 
   /**
@@ -652,6 +690,8 @@ export class PrescriptionsComponent implements OnInit {
 
   onMedicationNameChange(value: string): void {
     this.form.medicationName = value;
+    // QA D2926 (r66): another drug is typed: the pick (and the server) say whether it is controlled.
+    this.editingControlled.set(false);
     // Review of #975: two options reading the same must not resolve to the
     // first one's id; the server then resolves (or refuses) the typed name.
     const matches = this.catalogOptions().filter((o) => this.catalogLabel(o) === value);
@@ -775,6 +815,7 @@ export class PrescriptionsComponent implements OnInit {
     this.editingSigned.set(false);
     this.editingClarification.set(false);
     this.editingIssued.set(false);
+    this.editingControlled.set(false);
     this.selectedPatient.set(null);
     this.patientQuery.set('');
     this.formError.set('');
@@ -806,6 +847,7 @@ export class PrescriptionsComponent implements OnInit {
       duration: p.duration ?? '',
       quantity: p.quantity ?? null,
       quantityUnit: p.quantityUnit ?? '',
+      refillsAllowed: p.refillsAllowed ?? 0,
       notes: p.notes ?? '',
       status: (p.status as PrescriptionRequest['status']) ?? 'DRAFT',
       takeHome: !!p.takeHome,
@@ -828,6 +870,8 @@ export class PrescriptionsComponent implements OnInit {
     this.editingSigned.set(signed);
     this.editingClarification.set(p.status === 'PENDING_CLARIFICATION');
     this.editingIssued.set(isIssuedStatus(p.status));
+    // QA D2926 (r66): a controlled order (ticked, or flagged by the catalogue) carries no refill.
+    this.editingControlled.set(!!p.controlledSubstance);
     this.editingPrescriberName.set(p.staffFullName ?? '');
     if (signed) {
       // No withdrawal is pre-selected: the prescriber chooses one, deliberately.
@@ -1017,9 +1061,22 @@ export class PrescriptionsComponent implements OnInit {
       return;
     }
     refuseFields(this.host.nativeElement, [], RX_PRN_INTERVAL_IDS, '');
+    // QA D2926 (r66): the written refills are a whole number from 0 to the maximum (a signed or
+    // issued order echoes the number it carries, which the server leaves as it is).
+    const refills = this.writtenRefills();
+    if (!this.refillsLocked() && refills === null) {
+      const message = this.translate.instant('PRESCRIPTIONS.REFILLS_ALLOWED_INVALID', {
+        max: MAX_WRITTEN_REFILLS,
+      });
+      refuseFields(this.host.nativeElement, RX_REFILLS_IDS, RX_REFILLS_IDS, message);
+      this.formError.set(message);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], RX_REFILLS_IDS, '');
     this.saving.set(true);
     const body: PrescriptionRequest = {
       ...this.form,
+      refillsAllowed: this.editingSigned() || this.editingIssued() ? undefined : (refills ?? 0),
       asNeeded: !!this.form.asNeeded,
       prnMinIntervalHours: this.prnIntervalShown() ? this.form.prnMinIntervalHours : null,
       frequencyConfirmed:
@@ -1384,8 +1441,42 @@ export class PrescriptionsComponent implements OnInit {
     this.roleContext.hasAnyActiveRole(actionRoles('prescriptionAllergyReview')),
   );
 
+  /**
+   * QA D2264 (r63): the review was offered on every issued order, so a dose
+   * exception (`allergyOverride` false, no allergy at all) showed « Revoir le
+   * conflit allergique » and a button that only closed the drawer. Offered
+   * now when the order passed an allergy alert, or when the server reports a
+   * conflict it meets now (an allergy recorded after signing).
+   */
   canReviewAllergy(p: PrescriptionResponse): boolean {
-    return this.canReviewAllergyRole() && !this.isForeign(p) && isIssuedStatus(p.status);
+    return (
+      this.canReviewAllergyRole() &&
+      !this.isForeign(p) &&
+      isIssuedStatus(p.status) &&
+      (p.allergyOverride === true || this.allergyConflictFound()[p.id] === true)
+    );
+  }
+
+  /** QA D2264: prescription id → the server found an allergy conflict on it now. */
+  readonly allergyConflictFound = signal<Record<string, boolean>>({});
+
+  private checkAllergyConflict(p: PrescriptionResponse): void {
+    if (
+      !this.canReviewAllergyRole() ||
+      this.isForeign(p) ||
+      !isIssuedStatus(p.status) ||
+      p.allergyOverride === true ||
+      p.id in this.allergyConflictFound()
+    ) {
+      return;
+    }
+    this.prescriptionService.getAllergyConflict(p.id).subscribe({
+      next: (c) =>
+        this.allergyConflictFound.update((found) => ({ ...found, [p.id]: c?.conflict === true })),
+      error: () => {
+        /* no button: the order holds no conflict we can show */
+      },
+    });
   }
 
   onAllergyReviewed(): void {
@@ -2407,6 +2498,7 @@ export class PrescriptionsComponent implements OnInit {
   viewDetail(p: PrescriptionResponse): void {
     this.selectedPrescription.set(p);
     this.loadPharmacyHistory(p);
+    this.checkAllergyConflict(p);
   }
 
   closeDetail(): void {

@@ -49,6 +49,7 @@ import { FluidBalanceTabComponent } from './fluid-balance/fluid-balance-tab.comp
 import { MicroTabComponent } from './micro/micro-tab.component';
 import { PatientPhotoComponent } from './patient-photo/patient-photo.component';
 import { PrintLabelService } from '../services/print-label.service';
+import { PatientChannelPreferencesComponent } from './channel-preferences/patient-channel-preferences.component';
 import { CoverageTabComponent } from './coverage-tab/coverage-tab.component';
 import { DocumentsTabComponent } from './documents-tab/documents-tab.component';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
@@ -70,6 +71,7 @@ import { refuseFields } from '../shared/forms/invalid-fields';
 import { DashPipe } from '../shared/pipes/dash.pipe';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { ElapsedPipe } from '../shared/pipes/elapsed.pipe';
 import { NationalUniqueIdViewComponent } from './national-unique-id-view.component';
 
 /** The chart-restriction reason box: the server names it `reason` in a 400. */
@@ -92,13 +94,15 @@ type TabKey =
   | 'encounters'
   | 'appointments'
   | 'directives'
-  | 'documents';
+  | 'documents'
+  | 'nursing-notes';
 
 @Component({
   selector: 'app-patient-detail',
   standalone: true,
   imports: [
     DateTimePipe,
+    ElapsedPipe,
     DashPipe,
     SubmitGuardDirective,
     LocaleNumberPipe,
@@ -121,6 +125,7 @@ type TabKey =
     MicroTabComponent,
     PatientPhotoComponent,
     CoverageTabComponent,
+    PatientChannelPreferencesComponent,
     DocumentsTabComponent,
     HospitalScopeChipComponent,
     MedicalHistoryTabComponent,
@@ -188,6 +193,13 @@ export class PatientDetailComponent implements OnInit {
         visible: this.canViewFluidBalance(),
       },
       { key: 'micro', section: 'clinical', label: 'MICRO.TAB', visible: this.canViewMicro() },
+      {
+        // QA D2583 (r65): the nursing care notes, with their addenda, on the chart itself.
+        key: 'nursing-notes',
+        section: 'clinical',
+        label: 'NURSING_NOTES.TAB',
+        visible: this.canReadNursingNotes(),
+      },
       {
         key: 'chart-review',
         section: 'clinical',

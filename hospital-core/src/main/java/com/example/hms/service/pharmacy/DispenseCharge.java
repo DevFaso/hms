@@ -1,11 +1,9 @@
 package com.example.hms.service.pharmacy;
 
 import com.example.hms.model.pharmacy.Dispense;
-import com.example.hms.model.pharmacy.InventoryItem;
 import com.example.hms.repository.pharmacy.InventoryItemRepository;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.Optional;
 
 /**
@@ -26,11 +24,8 @@ public final class DispenseCharge {
                 || dispense.getQuantityDispensed() == null) {
             return Optional.empty();
         }
-        return inventoryItemRepository
-                .findByPharmacyIdAndMedicationCatalogItemId(dispense.getPharmacy().getId(),
-                        dispense.getMedicationCatalogItem().getId())
-                .map(InventoryItem::getUnitPrice)
-                .filter(price -> price.signum() > 0)
-                .map(price -> price.multiply(dispense.getQuantityDispensed()).setScale(0, RoundingMode.HALF_UP));
+        return PharmacyListPrice.of(dispense.getPharmacy().getId(), dispense.getMedicationCatalogItem().getId(),
+                        inventoryItemRepository)
+                .map(price -> PharmacyListPrice.amount(price, dispense.getQuantityDispensed()));
     }
 }

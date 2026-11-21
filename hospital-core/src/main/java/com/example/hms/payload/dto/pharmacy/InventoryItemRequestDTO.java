@@ -40,5 +40,13 @@ public class InventoryItemRequestDTO {
     @jakarta.validation.constraints.Digits(integer = 10, fraction = 0)
     private BigDecimal unitPrice;
 
+    /**
+     * Review of #1239: why the selling price changes. Required when {@link #unitPrice} differs from the item's
+     * current price; kept in the price history with who and when. Never card data.
+     */
+    @Size(max = 500)
+    @com.example.hms.validation.NoCardNumber
+    private String priceChangeReason;
+
     private Boolean active;
 }

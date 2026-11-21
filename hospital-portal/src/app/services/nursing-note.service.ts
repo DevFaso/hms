@@ -1,3 +1,4 @@
+import { NoteAddendumView } from '../shared/note-addenda/note-addendum-view';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
@@ -27,6 +28,8 @@ export interface NursingNote {
   documentedAt?: string | null;
   signedAt?: string | null;
   signedByName?: string | null;
+  /** QA D2260: the addenda filed under the note (NursingNoteResponseDTO.addenda). */
+  addenda?: NoteAddendumView[] | null;
 }
 
 /**
@@ -44,5 +47,28 @@ export class NursingNoteService {
     let params = new HttpParams().set('patientId', patientId).set('limit', limit);
     if (hospitalId) params = params.set('hospitalId', hospitalId);
     return this.http.get<NursingNote[]>('/nurse/notes', { params });
+  }
+
+  /** Roles `POST /nurse/notes/{id}/addenda` admits (NursingNoteController, ClinicalActor). */
+  static readonly ADDENDUM_ROLES = ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR'];
+
+  /**
+   * QA D2583 (r65): a saved care note is final; a correction or a later
+   * finding is an addendum under it. Attested (both attestations) it is
+   * signed; otherwise every reader shows it « Non attesté ».
+   */
+  appendAddendum(
+    noteId: string,
+    content: string,
+    attested: boolean,
+    hospitalId?: string | null,
+  ): Observable<NursingNote> {
+    let params = new HttpParams();
+    if (hospitalId) params = params.set('hospitalId', hospitalId);
+    return this.http.post<NursingNote>(
+      `/nurse/notes/${encodeURIComponent(noteId)}/addenda`,
+      { content, attestAccuracy: attested, attestNoAbbreviations: attested },
+      { params },
+    );
   }
 }

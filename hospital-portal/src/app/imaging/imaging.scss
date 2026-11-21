@@ -322,6 +322,18 @@
     line-height: 1.5;
   }
 }
+/* QA D2912 (r66): the exam record shown with the report; free text wraps at every width. */
+.report-exam-record {
+  .detail-grid {
+    margin-top: 0.5rem;
+  }
+  .detail-field {
+    min-width: 0;
+  }
+  .field-value {
+    overflow-wrap: anywhere;
+  }
+}
 
 @media (max-width: 768px) {
   .summary-cards {
@@ -789,4 +801,37 @@
 /* QA D1923 (r53): whose report the form writes. */
 .report-patient {
   margin: 0 0 12px;
+}
+
+// r63 (imaging completion): the « À signer » count, and the other versions of a report.
+.tab-count {
+  display: inline-block;
+  min-width: 18px;
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: #b45309;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.report-versions .report-version {
+  margin-top: 8px;
+  padding: 8px 0 0 10px;
+  border-left: 3px solid #0e7c6b;
+  overflow-wrap: anywhere;
+
+  p {
+    margin: 2px 0;
+    white-space: pre-line;
+  }
+}
+
+.report-version-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
 }

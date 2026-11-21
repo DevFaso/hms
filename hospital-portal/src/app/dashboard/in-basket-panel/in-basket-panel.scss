@@ -297,6 +297,22 @@
   font-size: 0.75rem;
   color: var(--text-secondary, #475569);
 }
+/* QA D2287 (r63/r64): « 31 non lus » and « Dernière actualisation » were
+   glued together; they sit side by side with a gap, and wrap on a phone. */
+.header-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  min-width: 0;
+}
+/* QA D2288 (r63/r64): on the /in-basket page the list is the page, so it
+   takes the page's height instead of a 440 px box of about two items. The
+   dashboard widget keeps its box. */
+.in-basket-panel.full-page .item-list {
+  max-height: none;
+  overflow-y: visible;
+}
 .last-updated {
   font-size: 0.75rem;
   color: var(--text-secondary, #64748b);

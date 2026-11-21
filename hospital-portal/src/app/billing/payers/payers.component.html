@@ -38,48 +38,50 @@
   } @else if (payers().length === 0) {
     <p class="field-hint" data-testid="payers-empty">{{ 'BILLING.PAYERS.EMPTY' | translate }}</p>
   } @else {
-    <table class="data-table" data-testid="payers-table">
-      <caption class="sr-only">
-        {{
-          'BILLING.PAYERS.TITLE' | translate
-        }}
-      </caption>
-      <thead>
-        <tr>
-          <th scope="col">{{ 'BILLING.PAYERS.CODE' | translate }}</th>
-          <th scope="col">{{ 'BILLING.PAYERS.NAME' | translate }}</th>
-          <th scope="col">{{ 'BILLING.PAYERS.TYPE' | translate }}</th>
-          <th scope="col">{{ 'BILLING.PAYERS.PLANS' | translate }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (payer of payers(); track payer.id) {
-          <tr [class.inactive]="!payer.active" [attr.data-testid]="'payers-row-' + payer.code">
-            <td>
-              <button type="button" class="link-button" (click)="open(payer)">
-                {{ payer.code }}
-              </button>
-            </td>
-            <td>
-              {{ payer.name }}
-              @if (!payer.active) {
-                <span class="badge badge-muted">{{ 'BILLING.PAYERS.INACTIVE' | translate }}</span>
-              }
-            </td>
-            <td>{{ payer.payerType | enumLabel: 'payerType' }}</td>
-            <td>
-              @for (plan of payer.plans; track plan.id; let last = $last) {
-                {{ plan.name }} ({{ plan.defaultCoveragePercent | measure: '%' }}){{
-                  last ? '' : ', '
-                }}
-              } @empty {
-                <span class="muted">{{ 'BILLING.PAYERS.NO_PLAN' | translate }}</span>
-              }
-            </td>
+    <div class="table-scroll">
+      <table class="data-table" data-testid="payers-table">
+        <caption class="sr-only">
+          {{
+            'BILLING.PAYERS.TITLE' | translate
+          }}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'BILLING.PAYERS.CODE' | translate }}</th>
+            <th scope="col">{{ 'BILLING.PAYERS.NAME' | translate }}</th>
+            <th scope="col">{{ 'BILLING.PAYERS.TYPE' | translate }}</th>
+            <th scope="col">{{ 'BILLING.PAYERS.PLANS' | translate }}</th>
           </tr>
-        }
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          @for (payer of payers(); track payer.id) {
+            <tr [class.inactive]="!payer.active" [attr.data-testid]="'payers-row-' + payer.code">
+              <td>
+                <button type="button" class="link-button" (click)="open(payer)">
+                  {{ payer.code }}
+                </button>
+              </td>
+              <td>
+                {{ payer.name }}
+                @if (!payer.active) {
+                  <span class="badge badge-muted">{{ 'BILLING.PAYERS.INACTIVE' | translate }}</span>
+                }
+              </td>
+              <td>{{ payer.payerType | enumLabel: 'payerType' }}</td>
+              <td>
+                @for (plan of payer.plans; track plan.id; let last = $last) {
+                  {{ plan.name }} ({{ plan.defaultCoveragePercent | measure: '%' }}){{
+                    last ? '' : ', '
+                  }}
+                } @empty {
+                  <span class="muted">{{ 'BILLING.PAYERS.NO_PLAN' | translate }}</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
   }
 
   <!-- ═══ PAYER DETAIL: PLANS AND RULES ═══ -->
@@ -214,141 +216,147 @@
           }
           @if (plan.terms && plan.terms.length > 0) {
             <h5>{{ 'BILLING.PAYERS.TERMS_HISTORY' | translate }}</h5>
-            <table class="data-table" [attr.data-testid]="'payers-terms-' + plan.code">
-              <caption class="sr-only">
-                {{
-                  'BILLING.PAYERS.TERMS_HISTORY' | translate
-                }}
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col">{{ 'BILLING.PAYERS.DEFAULT_RATE' | translate }}</th>
-                  <th scope="col">{{ 'BILLING.PAYERS.INVOICE_CEILING' | translate }}</th>
-                  <th scope="col">{{ 'BILLING.PAYERS.ANNUAL_CEILING' | translate }}</th>
-                  <th scope="col">{{ 'BILLING.PAYERS.FROM' | translate }}</th>
-                  <th scope="col">{{ 'BILLING.PAYERS.TO' | translate }}</th>
-                  <th scope="col">{{ 'BILLING.PAYERS.STATUS' | translate }}</th>
-                  <th scope="col">{{ 'BILLING.PAYERS.TERMS_REASON' | translate }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (t of plan.terms; track t.id) {
+            <div class="table-scroll">
+              <table class="data-table" [attr.data-testid]="'payers-terms-' + plan.code">
+                <caption class="sr-only">
+                  {{
+                    'BILLING.PAYERS.TERMS_HISTORY' | translate
+                  }}
+                </caption>
+                <thead>
                   <tr>
-                    <td>{{ t.defaultCoveragePercent | measure: '%' }}</td>
-                    <td>
-                      {{
-                        t.perInvoiceCeiling
-                          ? (t.perInvoiceCeiling | cfa)
-                          : ('BILLING.PAYERS.NO_CEILING' | translate)
-                      }}
-                    </td>
-                    <td>
-                      {{
-                        t.annualCeilingPerBeneficiary
-                          ? (t.annualCeilingPerBeneficiary | cfa)
-                          : ('BILLING.PAYERS.NO_CEILING' | translate)
-                      }}
-                    </td>
-                    <td>{{ t.effectiveFrom | serverTime | date: 'mediumDate' }}</td>
-                    <td>
-                      {{ t.effectiveTo ? (t.effectiveTo | serverTime | date: 'mediumDate') : '—' }}
-                    </td>
-                    <td>{{ t.status | enumLabel: 'payerCoverageStatus' }}</td>
-                    <td>{{ t.changeReason || '—' }}</td>
+                    <th scope="col">{{ 'BILLING.PAYERS.DEFAULT_RATE' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.PAYERS.INVOICE_CEILING' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.PAYERS.ANNUAL_CEILING' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.PAYERS.FROM' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.PAYERS.TO' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.PAYERS.STATUS' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.PAYERS.TERMS_REASON' | translate }}</th>
                   </tr>
-                }
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  @for (t of plan.terms; track t.id) {
+                    <tr>
+                      <td>{{ t.defaultCoveragePercent | measure: '%' }}</td>
+                      <td>
+                        {{
+                          t.perInvoiceCeiling
+                            ? (t.perInvoiceCeiling | cfa)
+                            : ('BILLING.PAYERS.NO_CEILING' | translate)
+                        }}
+                      </td>
+                      <td>
+                        {{
+                          t.annualCeilingPerBeneficiary
+                            ? (t.annualCeilingPerBeneficiary | cfa)
+                            : ('BILLING.PAYERS.NO_CEILING' | translate)
+                        }}
+                      </td>
+                      <td>{{ t.effectiveFrom | serverTime | date: 'mediumDate' }}</td>
+                      <td>
+                        {{
+                          t.effectiveTo ? (t.effectiveTo | serverTime | date: 'mediumDate') : '—'
+                        }}
+                      </td>
+                      <td>{{ t.status | enumLabel: 'payerCoverageStatus' }}</td>
+                      <td>{{ t.changeReason || '—' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
           }
           <h5>{{ 'BILLING.PAYERS.RULES' | translate }}</h5>
           @if (plan.rules.length === 0) {
             <p class="field-hint">{{ 'BILLING.PAYERS.NO_RULES' | translate }}</p>
           } @else {
-            <table class="data-table" [attr.data-testid]="'payers-rules-' + plan.code">
-              <caption class="sr-only">
-                {{
-                  'BILLING.PAYERS.RULES' | translate
-                }}
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col">{{ 'BILLING.PAYERS.RULE_TARGET' | translate }}</th>
-                  <th scope="col">{{ 'BILLING.PAYERS.RULE_TERMS' | translate }}</th>
-                  <th scope="col">{{ 'BILLING.PAYERS.FROM' | translate }}</th>
-                  <th scope="col">{{ 'BILLING.PAYERS.TO' | translate }}</th>
-                  <th scope="col">{{ 'BILLING.PAYERS.STATUS' | translate }}</th>
-                  <th scope="col">{{ 'BILLING.PAYERS.END_REASON' | translate }}</th>
-                  <th scope="col">
-                    <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (rule of plan.rules; track rule.id) {
+            <div class="table-scroll">
+              <table class="data-table" [attr.data-testid]="'payers-rules-' + plan.code">
+                <caption class="sr-only">
+                  {{
+                    'BILLING.PAYERS.RULES' | translate
+                  }}
+                </caption>
+                <thead>
                   <tr>
-                    <td>
-                      @if (ruleTargetIsItem(rule)) {
-                        {{ rule.priceListItemCode }} — {{ rule.priceListItemLabel }}
-                      } @else {
-                        {{ rule.category | enumLabel: 'priceListCategory' }}
-                      }
-                    </td>
-                    <td>
-                      @if (rule.excluded) {
-                        <strong>{{ 'BILLING.PAYERS.EXCLUDED' | translate }}</strong>
-                      } @else {
-                        @if ((rule.coveragePercent ?? null) !== null) {
-                          {{
-                            'BILLING.PAYERS.RATE_VALUE'
-                              | translate: { rate: (rule.coveragePercent | number) }
-                          }}
-                        } @else {
-                          {{ 'BILLING.PAYERS.RATE_DEFAULT' | translate }}
-                        }
-                        @if (rule.perActCeiling) {
-                          ·
-                          {{
-                            'BILLING.PAYERS.ACT_CEILING_VALUE'
-                              | translate: { amount: (rule.perActCeiling | cfa) }
-                          }}
-                        }
-                      }
-                    </td>
-                    <td>{{ rule.effectiveFrom | serverTime | date: 'mediumDate' }}</td>
-                    <td>
-                      {{
-                        rule.effectiveTo
-                          ? (rule.effectiveTo | serverTime | date: 'mediumDate')
-                          : '—'
-                      }}
-                    </td>
-                    <td>{{ rule.status | enumLabel: 'payerCoverageStatus' }}</td>
-                    <td>
-                      @if (rule.endReason) {
-                        {{ rule.endReason }}
-                        @if (rule.endedByName) {
-                          · {{ rule.endedByName }}
-                        }
-                      } @else {
-                        —
-                      }
-                    </td>
-                    <td>
-                      @if (canEditRules && payer.active && canEnd(rule)) {
-                        <button
-                          type="button"
-                          class="btn-secondary btn-sm"
-                          [attr.data-testid]="'payers-end-rule-' + rule.id"
-                          (click)="askEndRule(plan, rule)"
-                        >
-                          {{ 'BILLING.PAYERS.END_RULE' | translate }}
-                        </button>
-                      }
-                    </td>
+                    <th scope="col">{{ 'BILLING.PAYERS.RULE_TARGET' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.PAYERS.RULE_TERMS' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.PAYERS.FROM' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.PAYERS.TO' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.PAYERS.STATUS' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.PAYERS.END_REASON' | translate }}</th>
+                    <th scope="col">
+                      <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
+                    </th>
                   </tr>
-                }
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  @for (rule of plan.rules; track rule.id) {
+                    <tr>
+                      <td>
+                        @if (ruleTargetIsItem(rule)) {
+                          {{ rule.priceListItemCode }} — {{ rule.priceListItemLabel }}
+                        } @else {
+                          {{ rule.category | enumLabel: 'priceListCategory' }}
+                        }
+                      </td>
+                      <td>
+                        @if (rule.excluded) {
+                          <strong>{{ 'BILLING.PAYERS.EXCLUDED' | translate }}</strong>
+                        } @else {
+                          @if ((rule.coveragePercent ?? null) !== null) {
+                            {{
+                              'BILLING.PAYERS.RATE_VALUE'
+                                | translate: { rate: (rule.coveragePercent | number) }
+                            }}
+                          } @else {
+                            {{ 'BILLING.PAYERS.RATE_DEFAULT' | translate }}
+                          }
+                          @if (rule.perActCeiling) {
+                            ·
+                            {{
+                              'BILLING.PAYERS.ACT_CEILING_VALUE'
+                                | translate: { amount: (rule.perActCeiling | cfa) }
+                            }}
+                          }
+                        }
+                      </td>
+                      <td>{{ rule.effectiveFrom | serverTime | date: 'mediumDate' }}</td>
+                      <td>
+                        {{
+                          rule.effectiveTo
+                            ? (rule.effectiveTo | serverTime | date: 'mediumDate')
+                            : '—'
+                        }}
+                      </td>
+                      <td>{{ rule.status | enumLabel: 'payerCoverageStatus' }}</td>
+                      <td>
+                        @if (rule.endReason) {
+                          {{ rule.endReason }}
+                          @if (rule.endedByName) {
+                            · {{ rule.endedByName }}
+                          }
+                        } @else {
+                          —
+                        }
+                      </td>
+                      <td>
+                        @if (canEditRules && payer.active && canEnd(rule)) {
+                          <button
+                            type="button"
+                            class="btn-secondary btn-sm"
+                            [attr.data-testid]="'payers-end-rule-' + rule.id"
+                            (click)="askEndRule(plan, rule)"
+                          >
+                            {{ 'BILLING.PAYERS.END_RULE' | translate }}
+                          </button>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
           }
         </article>
       } @empty {

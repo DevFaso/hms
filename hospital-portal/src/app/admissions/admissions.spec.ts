@@ -188,18 +188,70 @@ describe('AdmissionsComponent', () => {
       expect(Object.values(gates()).every(Boolean)).toBeTrue();
     });
 
-    it('a midwife is offered New admission for labour and delivery only, and no other write (policy 2)', () => {
+    it('a midwife is offered New admission for labour and for her newborn, and the maternity beds (policy 2, policy rule 2)', () => {
       activeRoles = ['ROLE_MIDWIFE'];
       expect(gates()).toEqual({
         admit: true,
         edit: false,
         orderSets: false,
-        assignBed: false,
-        unassignBed: false,
+        // Policy rule 2 (2026-11-20, provisional): she assigns and frees maternity-ward beds.
+        assignBed: true,
+        unassignBed: true,
         discharge: false,
         cancel: false,
       });
-      expect(component['formAdmissionTypes']()).toEqual(['LABOR_DELIVERY']);
+      expect(component['formAdmissionTypes']()).toEqual(['LABOR_DELIVERY', 'NEWBORN']);
+      expect(component['midwifeBedsOnly']()).toBeTrue();
+    });
+
+    it('Review of #1243: a midwife is offered the bed actions of a stay only where its bed is hers to free', () => {
+      const stay = (bedWardType: string | null, admissionType = 'LABOR_DELIVERY') =>
+        ({
+          id: 'a1',
+          bedId: bedWardType ? 'b1' : null,
+          bedWardType,
+          admissionType,
+        }) as unknown as AdmissionResponse;
+      activeRoles = ['ROLE_MIDWIFE'];
+      // No bed yet: she assigns one from her picker; nothing to free.
+      expect(component['canAssignBedFor'](stay(null))).toBeTrue();
+      expect(component['canUnassignBedFor'](stay(null))).toBeFalse();
+      // A maternity bed, and a neonatal cot of a newborn stay, are hers.
+      expect(component['canAssignBedFor'](stay('MATERNITY'))).toBeTrue();
+      expect(component['canUnassignBedFor'](stay('MATERNITY'))).toBeTrue();
+      expect(component['canAssignBedFor'](stay('NICU', 'NEWBORN'))).toBeTrue();
+      expect(component['canUnassignBedFor'](stay('NICU', 'NEWBORN'))).toBeTrue();
+      // Every other ward's bed, and a neonatal cot of a stay that is not a newborn's: no button.
+      for (const ward of ['GENERAL', 'SURGICAL', 'ICU', 'PEDIATRIC']) {
+        expect(component['canAssignBedFor'](stay(ward)))
+          .withContext(ward)
+          .toBeFalse();
+        expect(component['canUnassignBedFor'](stay(ward)))
+          .withContext(ward)
+          .toBeFalse();
+      }
+      expect(component['canAssignBedFor'](stay('NICU'))).toBeFalse();
+    });
+
+    it('Review of #1243: a nurse, or a midwife who is also one, keeps the bed actions of every stay', () => {
+      activeRoles = ['ROLE_MIDWIFE', 'ROLE_NURSE'];
+      const inSurgery = {
+        id: 'a1',
+        bedId: 'b1',
+        bedWardType: 'SURGICAL',
+        admissionType: 'ELECTIVE',
+      } as unknown as AdmissionResponse;
+      expect(component['canAssignBedFor'](inSurgery)).toBeTrue();
+      expect(component['canUnassignBedFor'](inSurgery)).toBeTrue();
+    });
+
+    it('Policy rule 2: a midwife who is also a nurse, and a nurse, keep every ward in the bed picker', () => {
+      activeRoles = ['ROLE_MIDWIFE', 'ROLE_NURSE'];
+      expect(component['midwifeBedsOnly']()).toBeFalse();
+      activeRoles = ['ROLE_NURSE'];
+      expect(component['midwifeBedsOnly']()).toBeFalse();
+      // A nurse gains no admission of any type.
+      expect(gates().admit).toBeFalse();
     });
 
     it('D1634: a midwife admitting sees a neutral provider label', () => {

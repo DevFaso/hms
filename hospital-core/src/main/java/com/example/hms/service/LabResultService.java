@@ -103,6 +103,16 @@ public interface LabResultService {
     LabResultResponseDTO releaseLabResult(UUID id, Locale locale);
 
     /**
+     * r63: as {@link #releaseLabResult(UUID, boolean, boolean, Locale)}, with
+     * what the release documents: for a CRITICAL result who was told, when and
+     * the read-back (D2305, required); while the test's latest QC run is
+     * rejected, the override reason (D2304, required then). Null documents nothing.
+     */
+    LabResultResponseDTO releaseLabResult(UUID id, boolean selfReleaseConfirmed, boolean ungradedConfirmed,
+                                          com.example.hms.payload.dto.LabResultReleaseRequestDTO release,
+                                          Locale locale);
+
+    /**
      * QA D938/D178: everything a release tells people (the ordering
      * clinician's in-basket item, the patient's notification), for a result a
      * path OUTSIDE this service released - today the HL7 auto-release. Call it

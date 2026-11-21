@@ -44,6 +44,8 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
 
 
     private static final String AUDIT_ENTITY = "PHARMACY_PAYMENT";
+    /** Billing plan PR 11 (QA D2430): a payment key sent again for a different payment. */
+    private static final String MSG_CLIENT_REQUEST_REUSED = "billing.payment.clientRequestReused";
 
     private final PharmacyPaymentRepository paymentRepository;
     private final DispenseRepository dispenseRepository;
@@ -157,6 +159,11 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
 
         Dispense dispense = loadDispenseForPayment(dto, hospitalId);
 
+        // Billing plan PR 11 (QA D2430): the same checkout sent again after its answer was lost.
+        PharmacyPayment keyed = findKeyedPayment(hospitalId, dispense, dto);
+        if (keyed != null) {
+            return toResponse(keyed);
+        }
         java.util.Optional<PharmacyPayment> replay = findReplayedPayment(dispense, dto);
         if (replay.isPresent()) {
             return toResponse(replay.get());
@@ -180,6 +187,9 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         }
         User receivedBy = userRepository.findById(currentUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));
+        // Billing plan PR 10 (QA D2672): the pharmacist's till today, before any operator is charged; a closed till
+        // refuses the payment and nothing is written.
+        java.util.UUID cashSessionId = stampPharmacyTill(hospitalId, currentUserId);
 
         String providerReference = dto.getReferenceNumber();
         String currency = dto.getCurrency() != null ? dto.getCurrency() : "XOF";
@@ -201,7 +211,9 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         entity.setMobileMoneyOperator(operator);
         entity.setCurrency(currency);
         entity.setReceiptNumber(allocateReceiptNumber(hospital));
-        PharmacyPayment saved = paymentRepository.save(entity);
+        entity.setClientRequestId(dto.getClientRequestId());
+        entity.setCashSessionId(cashSessionId);
+        PharmacyPayment saved = saveKeyed(entity);
 
         support.logAudit(AuditEventType.PAYMENT_POSTED,
                 "Pharmacy payment " + saved.getPaymentMethod() + " " + saved.getAmount() + " "
@@ -210,6 +222,47 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
                 AUDIT_ENTITY);
 
         return toResponse(saved);
+    }
+
+    /**
+     * Billing plan PR 11 (QA D2430): the payment this request's key already recorded at this hospital, when it
+     * is the same payment (same dispense, amount and method). The key on another dispense, or for another
+     * amount or method, is refused, never answered with the payment it first named. Called with the dispense
+     * row locked, so a second submit waits for the first.
+     */
+    private PharmacyPayment findKeyedPayment(UUID hospitalId, Dispense dispense, PharmacyPaymentRequestDTO dto) {
+        if (dto.getClientRequestId() == null) {
+            return null;
+        }
+        PharmacyPayment prior = paymentRepository
+                .findByHospital_IdAndClientRequestId(hospitalId, dto.getClientRequestId()).orElse(null);
+        if (prior == null) {
+            return null;
+        }
+        boolean same = prior.getDispense() != null && dispense.getId().equals(prior.getDispense().getId())
+                && prior.getAmount() != null && prior.getAmount().compareTo(dto.getAmount()) == 0
+                && prior.getPaymentMethod() == dto.getPaymentMethod();
+        if (!same) {
+            throw new com.example.hms.exception.ConflictException(
+                    com.example.hms.utility.MessageUtil.resolve(MSG_CLIENT_REQUEST_REUSED));
+        }
+        return prior;
+    }
+
+    /** Saves the payment; a keyed one is flushed so a key another dispense took is refused here (V310). */
+    private PharmacyPayment saveKeyed(PharmacyPayment entity) {
+        if (entity.getClientRequestId() == null) {
+            return paymentRepository.save(entity);
+        }
+        try {
+            return paymentRepository.saveAndFlush(entity);
+        } catch (org.springframework.dao.DataIntegrityViolationException refused) {
+            if (String.valueOf(refused.getMostSpecificCause().getMessage()).contains("uk_pp_hospital_client_request")) {
+                throw new com.example.hms.exception.ConflictException(
+                        com.example.hms.utility.MessageUtil.resolve(MSG_CLIENT_REQUEST_REUSED));
+            }
+            throw refused;
+        }
     }
 
     /** QA D1033: a configured provider, not the development fallback. */
@@ -357,5 +410,18 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         if (!hospitalId.equals(dto.getHospitalId())) {
             throw new com.example.hms.exception.FieldBusinessException("hospitalId", "pharmacy.payment.hospitalMismatch");
         }
+    }
+
+    /** Billing plan PR 10 (V309, QA D2672): pharmacy money lands in the pharmacist's PHARMACY cash session. */
+    private com.example.hms.service.billing.cash.CashSessionService cashSessions;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setCashSessionService(com.example.hms.service.billing.cash.CashSessionService service) {
+        this.cashSessions = service;
+    }
+
+    private java.util.UUID stampPharmacyTill(java.util.UUID hospitalId, java.util.UUID cashierId) {
+        return cashSessions == null ? null
+                : cashSessions.stamp(com.example.hms.enums.CashTill.PHARMACY, hospitalId, cashierId);
     }
 }

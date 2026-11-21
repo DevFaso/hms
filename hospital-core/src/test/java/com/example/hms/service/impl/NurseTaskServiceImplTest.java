@@ -653,6 +653,41 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
+    void review1237_aMotherInLabourKeepsTheShortRoundButNoNews2Number_onOneQueryForTheWard() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        LocalDateTime fixedNow = LocalDateTime.of(2026, 10, 19, 10, 0);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "A Three", "A", "Three")));
+        PatientVitalSign last = PatientVitalSign.builder()
+            .recordedAt(fixedNow.minusMinutes(20))
+            .temperatureCelsius(38.9).heartRateBpm(112).respiratoryRateBpm(26)
+            .systolicBpMmHg(95).diastolicBpMmHg(60).spo2Percent(91)
+            .build();
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId)).thenReturn(Optional.of(last));
+        com.example.hms.repository.LaborEpisodeRepository episodes =
+            org.mockito.Mockito.mock(com.example.hms.repository.LaborEpisodeRepository.class);
+        when(episodes.obstetricPatientIdsAt(any(), org.mockito.ArgumentMatchers.eq(hospitalId), any(), any()))
+            .thenReturn(List.of(patientId));
+        service.setLaborEpisodeRepository(episodes);
+
+        try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
+            mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
+            List<NurseVitalTaskResponseDTO> vitals = service.getDueVitals(nurseId, hospitalId, null);
+
+            assertThat(vitals).singleElement().satisfies(v -> {
+                // The safety net stays: the raised band still shortens the round.
+                assertThat(v.getType()).isEqualTo("NEWS2_HIGH");
+                assertThat(v.getDueTime()).isEqualTo(fixedNow.minusMinutes(5));
+                // But NEWS2 is not validated in labour: no number is shown.
+                assertThat(v.getNews2Score()).isNull();
+            });
+        }
+        verify(episodes, org.mockito.Mockito.times(1)).obstetricPatientIdsAt(any(), any(), any(), any());
+    }
+
+    @Test
     void createHandoffPersistsSbarRecord() {
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
@@ -5839,5 +5874,137 @@ class NurseTaskServiceImplTest {
             }
         }
         verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+    }
+
+    /* ── Policy 2026-11-20 (provisional): the vitals round of a pregnant or postpartum woman ── */
+
+    private com.example.hms.repository.DeliveryRecordRepository wardDeliveries;
+    private com.example.hms.repository.MaternalHistoryRepository wardHistories;
+    private com.example.hms.repository.LaborEpisodeRepository wardEpisodes;
+
+    private void withTheMaternalWarningOnTheWard() {
+        wardDeliveries = mock(com.example.hms.repository.DeliveryRecordRepository.class);
+        wardHistories = mock(com.example.hms.repository.MaternalHistoryRepository.class);
+        wardEpisodes = mock(com.example.hms.repository.LaborEpisodeRepository.class);
+        service.setLaborEpisodeRepository(wardEpisodes);
+        service.setMaternalEarlyWarning(new com.example.hms.service.vitals.MaternalEarlyWarningService(
+                new com.example.hms.service.vitals.MaternalEarlyWarningRules(), null, null, null, null, null, null,
+                java.time.Clock.systemUTC()),
+            new com.example.hms.service.vitals.MaternalWardScope(wardDeliveries, wardHistories));
+    }
+
+    private static PatientVitalSign.PatientVitalSignBuilder calmSet(LocalDateTime at) {
+        return PatientVitalSign.builder().recordedAt(at).temperatureCelsius(36.8).heartRateBpm(80)
+            .respiratoryRateBpm(16).systolicBpMmHg(118).diastolicBpMmHg(74).spo2Percent(98);
+    }
+
+    @Test
+    void policy20261120_theRoundFollowsTheMaternalLevel_onThreeQueriesForTheWard() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID inLabour = UUID.randomUUID();
+        UUID concerned = UUID.randomUUID();
+        UUID calm = UUID.randomUUID();
+        LocalDateTime fixedNow = LocalDateTime.of(2026, 11, 20, 10, 0);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null)).thenReturn(List.of(
+            patient(inLabour, "A One", "A", "One"), patient(concerned, "B Two", "B", "Two"),
+            patient(calm, "C Three", "C", "Three")));
+        // Pulse 125 = 2 points: low-medium, a 30-minute round. NEWS2 would have left her on the routine round.
+        when(vitalSignRepository.findLatestObservationSet(inLabour, hospitalId))
+            .thenReturn(Optional.of(calmSet(fixedNow.minusMinutes(20)).heartRateBpm(125).build()));
+        // No points, one additional concern: observations at least every 30 minutes.
+        when(vitalSignRepository.findLatestObservationSet(concerned, hospitalId))
+            .thenReturn(Optional.of(calmSet(fixedNow.minusMinutes(25)).maternalConcerns("STAFF_CONCERNED").build()));
+        // A calm set: the routine round, not due inside the look-ahead.
+        when(vitalSignRepository.findLatestObservationSet(calm, hospitalId))
+            .thenReturn(Optional.of(calmSet(fixedNow.minusMinutes(20)).build()));
+        withTheMaternalWarningOnTheWard();
+        when(wardEpisodes.obstetricPatientIdsAt(any(), eq(hospitalId), any(), any()))
+            .thenReturn(List.of(inLabour, concerned, calm));
+
+        try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class, org.mockito.Mockito.CALLS_REAL_METHODS)) {
+            mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
+            List<NurseVitalTaskResponseDTO> vitals = service.getDueVitals(nurseId, hospitalId, null);
+
+            assertThat(vitals).extracting(NurseVitalTaskResponseDTO::getPatientId).containsExactly(concerned, inLabour);
+            NurseVitalTaskResponseDTO round = vitals.stream().filter(v -> v.getPatientId().equals(inLabour)).findFirst()
+                .orElseThrow();
+            assertThat(round.getType()).isEqualTo("MEWS_LOW_MEDIUM");
+            assertThat(round.getDueTime()).isEqualTo(fixedNow.plusMinutes(10));
+            assertThat(round.getMewsScore()).isEqualTo(2);
+            assertThat(round.getMewsTier()).isEqualTo("LOW_MEDIUM");
+            assertThat(round.getNews2Score()).as("NEWS2 is never shown for her").isNull();
+            NurseVitalTaskResponseDTO flagged = vitals.get(0);
+            assertThat(flagged.getDueTime()).isEqualTo(fixedNow.plusMinutes(5));
+            assertThat(flagged.getMewsScore()).isZero();
+            assertThat(flagged.getMewsTier()).isEqualTo("LOW_MEDIUM");
+        }
+        // QA D1314: the whole ward in three queries, however many women it holds.
+        verify(wardEpisodes, times(1)).obstetricPatientIdsAt(any(), any(), any(), any());
+        verify(wardDeliveries, times(1)).latestBirthTimesAt(any(), any(), any());
+        verify(wardHistories, times(1)).pregnancyDatesAt(any(), any());
+        org.mockito.Mockito.verifyNoMoreInteractions(wardDeliveries, wardHistories);
+    }
+
+    @Test
+    void policy20261120_thePulseTableOfTheRoundSwitches48HoursAfterTheBirth() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID dayThree = UUID.randomUUID();
+        UUID dayOne = UUID.randomUUID();
+        LocalDateTime fixedNow = LocalDateTime.of(2026, 11, 20, 10, 0);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null)).thenReturn(List.of(
+            patient(dayThree, "A One", "A", "One"), patient(dayOne, "B Two", "B", "Two")));
+        // The same pulse of 110: 2 points from 48 h after the birth (a 30-minute round), 0 before (routine).
+        when(vitalSignRepository.findLatestObservationSet(dayThree, hospitalId))
+            .thenReturn(Optional.of(calmSet(fixedNow.minusMinutes(20)).heartRateBpm(110).systolicBpMmHg(130).build()));
+        when(vitalSignRepository.findLatestObservationSet(dayOne, hospitalId))
+            .thenReturn(Optional.of(calmSet(fixedNow.minusMinutes(20)).heartRateBpm(110).systolicBpMmHg(130).build()));
+        withTheMaternalWarningOnTheWard();
+        when(wardEpisodes.obstetricPatientIdsAt(any(), eq(hospitalId), any(), any())).thenReturn(List.of(dayThree, dayOne));
+        when(wardDeliveries.latestBirthTimesAt(any(), eq(hospitalId), any())).thenReturn(List.of(
+            new Object[]{dayThree, fixedNow.minusHours(50)}, new Object[]{dayOne, fixedNow.minusHours(20)}));
+
+        try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class, org.mockito.Mockito.CALLS_REAL_METHODS)) {
+            mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
+            List<NurseVitalTaskResponseDTO> vitals = service.getDueVitals(nurseId, hospitalId, null);
+
+            assertThat(vitals).singleElement().satisfies(v -> {
+                assertThat(v.getPatientId()).isEqualTo(dayThree);
+                assertThat(v.getType()).isEqualTo("MEWS_LOW_MEDIUM");
+                assertThat(v.getMewsScore()).isEqualTo(2);
+            });
+        }
+    }
+
+    @Test
+    void policy20261120_anAntenatalInpatientIsUnderTheMaternalWarningByHerMaternalHistory() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID antenatal = UUID.randomUUID();
+        LocalDateTime fixedNow = LocalDateTime.of(2026, 11, 20, 10, 0);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(antenatal, "A One", "A", "One")));
+        // 164/104 alone: MEWS 4 (low-medium) with a RED add-on alert, answered as high: a 15-minute round.
+        when(vitalSignRepository.findLatestObservationSet(antenatal, hospitalId))
+            .thenReturn(Optional.of(calmSet(fixedNow.minusMinutes(20)).systolicBpMmHg(164).diastolicBpMmHg(104).build()));
+        withTheMaternalWarningOnTheWard();
+        // Not in labour and not delivered: only her maternal history dates the pregnancy (due in two months).
+        when(wardEpisodes.obstetricPatientIdsAt(any(), eq(hospitalId), any(), any())).thenReturn(List.of());
+        when(wardHistories.pregnancyDatesAt(any(), eq(hospitalId))).thenReturn(java.util.Collections.singletonList(
+            new Object[]{antenatal, null, fixedNow.toLocalDate().plusDays(60), null}));
+
+        try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class, org.mockito.Mockito.CALLS_REAL_METHODS)) {
+            mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
+            List<NurseVitalTaskResponseDTO> vitals = service.getDueVitals(nurseId, hospitalId, null);
+
+            assertThat(vitals).singleElement().satisfies(v -> {
+                assertThat(v.getType()).isEqualTo("MEWS_HIGH");
+                assertThat(v.getDueTime()).isEqualTo(fixedNow.minusMinutes(5));
+                assertThat(v.getMewsScore()).isEqualTo(4);
+                assertThat(v.getMewsTier()).isEqualTo("HIGH");
+                assertThat(v.getNews2Score()).isNull();
+            });
+        }
     }
 }

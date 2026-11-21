@@ -1,6 +1,7 @@
 package com.example.hms.model;
 
 import com.example.hms.enums.LabTestDefinitionApprovalStatus;
+import com.example.hms.enums.SensitivityCategory;
 import com.example.hms.model.converter.LabTestReferenceRangeConverter;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
@@ -119,6 +120,18 @@ public class LabTestDefinition extends BaseEntity {
     private boolean active = true;
 
     /**
+     * QA D2730 (r65): the sensitive category every result of this test
+     * carries, whatever visit ordered it (a syphilis or HIV serology ordered
+     * in a general consultation). NULL, the default, means the result takes
+     * its category from its visit only. Never seeded: which tests carry one
+     * is each hospital's clinical decision. A proxy never sees a result of a
+     * tagged test ({@code ProxyRecordFilter}).
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sensitivity_category", length = 32)
+    private SensitivityCategory sensitivityCategory;
+
+    /**
      * True when this test is performed at the bedside rather than in the
      * laboratory — glucometer, urine dipstick, rapid malaria, haemoglobin.
      *
@@ -141,6 +154,21 @@ public class LabTestDefinition extends BaseEntity {
     @Column(name = "reference_ranges", columnDefinition = "TEXT")
     @Builder.Default
     private List<LabTestReferenceRange> referenceRanges = new ArrayList<>();
+
+    /**
+     * r63 (NFS panels): the analytes of a panel test, each with its own unit
+     * and reference ranges. Empty for a single-value test. A panel result
+     * records one value per component, in one entry and one release.
+     */
+    @Convert(converter = com.example.hms.model.converter.LabTestComponentConverter.class)
+    @Column(name = "components", columnDefinition = "TEXT")
+    @Builder.Default
+    private List<LabTestComponent> components = new ArrayList<>();
+
+    /** r63: true when this test is a panel (it declares components). */
+    public boolean isPanel() {
+        return components != null && !components.isEmpty();
+    }
 
 
     @OneToMany(mappedBy = "labTestDefinition", fetch = FetchType.LAZY)
@@ -208,6 +236,12 @@ public class LabTestDefinition extends BaseEntity {
 
     /** QA D213 / D834: something a result can be graded against, a reference range or an expected answer. */
     public boolean hasGradingBasis() {
+        // r63: a panel grades each value against its component's ranges, so
+        // every component must have at least one.
+        if (isPanel()) {
+            return components.stream().allMatch(c -> c != null && c.getReferenceRanges() != null
+                && !c.getReferenceRanges().isEmpty());
+        }
         return (referenceRanges != null && !referenceRanges.isEmpty()) || hasExpectedResult();
     }
 

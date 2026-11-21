@@ -55,6 +55,8 @@ export interface BillingInvoiceResponse {
   insuranceCoverageAmount: number;
   /** Billing-money plan PR 7: the patient's share of the bill before payments ("Part patient"). */
   patientResponsibilityAmount: number;
+  /** QA D2437: on a draft's detail, what the coverage would pay if it were issued now (an estimate). */
+  estimatedInsuranceCoverageAmount?: number | null;
   /** Billing-money plan PR 7: the payers' shares (on GET by id), a rejected one with the payer's reason. */
   payerShares?: InvoicePayerShare[];
   status: InvoiceStatus;
@@ -104,6 +106,12 @@ export interface InvoiceItemResponse {
   tariffUnitPrice?: number | null;
   /** Why the price-list price was overridden, as typed. */
   overrideReason?: string | null;
+  /** QA D2434: the payer's part of this line ("Part assureur"); 0 when no payer covers it. */
+  payerShareAmount?: number;
+  /** QA D2434: the line total less the payer's part ("Part patient"). */
+  patientShareAmount?: number;
+  /** QA D2437: on a draft, the payer's part is an estimate, fixed when the invoice is issued. */
+  payerShareEstimated?: boolean;
 }
 
 /** Backend InvoiceLinePriceSource. */
@@ -124,7 +132,10 @@ export interface InvoiceItemRequest {
   itemCategory: InvoiceItemCategory;
   quantity: number;
   unitPrice: number;
-  /** Billing-money plan PR 3 (D-2): required when a price-list price is changed. */
+  /**
+   * Billing-money plan PR 3 (D-2): required when a price-list price is changed. PR 10 review
+   * (QA D2703): also required to add a line by hand to a visit's invoice.
+   */
   overrideReason?: string;
 }
 
@@ -158,6 +169,11 @@ export interface BillingInvoiceRequest {
    * (the server refuses on this field otherwise, naming them).
    */
   confirmUnpricedLines?: boolean;
+  /**
+   * PR 10 review (QA D2703): why the lines at 0 F CFA go out free. Required with
+   * `confirmUnpricedLines`; kept on each such line and listed in the day report.
+   */
+  unpricedLinesReason?: string;
 }
 
 /**
@@ -185,6 +201,10 @@ export interface StaffPaymentRequest {
   notes?: string;
   /** Billing plan PR 9: required by the server when the method is MOBILE_MONEY. */
   mobileMoneyOperator?: MobileMoneyOperator;
+  /** Billing plan PR 11 (QA D2430): one key per payment dialog; a retry with it records nothing twice. */
+  clientRequestId?: string;
+  /** QA D2704: the cashier confirms a second same payment just recorded on this invoice (another tab). */
+  confirmDuplicate?: boolean;
 }
 
 export type PaymentStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'REVERSED';
@@ -329,6 +349,8 @@ export interface InvoiceRefund {
   cancelledByName?: string | null;
   cancelledAt?: string | null;
   cancelReason?: string | null;
+  /** QA D2702: set when this refund reverses that payment (asked, approved by another person, paid out). */
+  reversedPaymentId?: string | null;
 }
 
 export interface InvoiceRefundRequest {

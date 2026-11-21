@@ -39,7 +39,9 @@ class TriageAndIntakeContentRuleTest {
         "weightKg", "heightCm", "onOxygen", "consciousnessLevel", "painScale", "fundalHeightCm", "chiefComplaint",
         "fallRisk", "fallRiskScore", "roomAssignment",
         // r54: the organ-damage signs ticked with a blood pressure.
-        "organDamageSymptoms");
+        "organDamageSymptoms",
+        // Policy 2026-11-20: the maternal early warning's additional concerns, ticked with a vital set.
+        "maternalConcerns");
 
     /** The rank itself and the class property. */
     private static final Set<String> METADATA = Set.of("class", "esiScore", "bloodPressureOrdered");
@@ -65,7 +67,7 @@ class TriageAndIntakeContentRuleTest {
             }
             TriageSubmissionRequestDTO request = new TriageSubmissionRequestDTO();
             request.setEsiScore(3);
-            new BeanWrapperImpl(request).setPropertyValue(name, sample(p.getPropertyType()));
+            new BeanWrapperImpl(request).setPropertyValue(name, sample(p.getPropertyType(), name));
             boolean accepted = accepted(request);
             if (accepted != VITALS.contains(name)) {
                 wrong.add(name + (accepted ? " alone was accepted as a vital sign" : " alone was refused"));
@@ -111,7 +113,7 @@ class TriageAndIntakeContentRuleTest {
         }
     }
 
-    private static Object sample(Class<?> type) {
+    private static Object sample(Class<?> type, String property) {
         if (type == Boolean.class || type == boolean.class) {
             return Boolean.TRUE;
         }
@@ -128,8 +130,11 @@ class TriageAndIntakeContentRuleTest {
             return type.getEnumConstants()[0];
         }
         if (type == List.class) {
-            // The one list on the triage request (r54).
-            return List.of(com.example.hms.enums.OrganDamageSymptom.CHEST_PAIN);
+            // The two lists on the triage request: the maternal concerns (policy 2026-11-20) and the
+            // organ-damage signs (r54).
+            return "maternalConcerns".equals(property)
+                ? List.of(com.example.hms.enums.MaternalConcern.VAGINAL_BLEEDING)
+                : List.of(com.example.hms.enums.OrganDamageSymptom.CHEST_PAIN);
         }
         throw new IllegalStateException("no sample for " + type);
     }

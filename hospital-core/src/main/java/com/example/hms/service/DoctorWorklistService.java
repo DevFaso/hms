@@ -18,6 +18,12 @@ public interface DoctorWorklistService {
     CriticalStripDTO getCriticalStrip(UUID userId);
 
     /**
+     * QA D2261: the strip at the hospital the caller acts at ({@code null}: no single hospital
+     * resolved; the unsigned-notes tile then counts the caller's own notes everywhere).
+     */
+    CriticalStripDTO getCriticalStrip(UUID userId, UUID hospitalId);
+
+    /**
      * Build the merged physician worklist.
      *
      * @param userId     the doctor's user ID

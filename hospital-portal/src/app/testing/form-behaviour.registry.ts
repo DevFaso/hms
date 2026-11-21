@@ -8,6 +8,8 @@ import { AppointmentFormComponent } from '../appointments/appointment-form';
 import { AppointmentListComponent } from '../appointments/appointment-list';
 import { BillingComponent } from '../billing/billing';
 import { CashClosingComponent } from '../billing/cash-closing/cash-closing.component';
+import { CashSessionComponent } from '../billing/cash-session/cash-session.component';
+import { CashSupervisorComponent } from '../billing/cash-session/cash-supervisor.component';
 import { InvoicePayerSharesComponent } from '../billing/payer-shares/invoice-payer-shares.component';
 import { PayersComponent } from '../billing/payers/payers.component';
 import { PriceListImportComponent } from '../billing/price-list/price-list-import.component';
@@ -27,8 +29,10 @@ import { MySharingComponent } from '../patient-portal/my-sharing/my-sharing.comp
 import { AdvanceDirectivesTabComponent } from '../patients/advance-directives/advance-directives-tab.component';
 import { BpaPanelComponent } from '../patients/bpa-panel/bpa-panel.component';
 import { BreakGlassBannerComponent } from '../patients/break-glass-banner/break-glass-banner.component';
+import { PatientChannelPreferencesComponent } from '../patients/channel-preferences/patient-channel-preferences.component';
 import { CoverageTabComponent } from '../patients/coverage-tab/coverage-tab.component';
 import { DocumentsTabComponent } from '../patients/documents-tab/documents-tab.component';
+import { FamilyReleaseComponent } from '../patients/family-release/family-release.component';
 import { FluidBalanceTabComponent } from '../patients/fluid-balance/fluid-balance-tab.component';
 import { MedicalHistoryTabComponent } from '../patients/medical-history-tab/medical-history-tab.component';
 import { NationalUniqueIdEditorComponent } from '../patients/national-unique-id-editor.component';
@@ -40,6 +44,8 @@ import { PatientFormComponent } from '../patients/patient-form';
 import { PatientListComponent } from '../patients/patient-list';
 import { PatientPhotoComponent } from '../patients/patient-photo/patient-photo.component';
 import { SafeguardingBannerComponent } from '../patients/safeguarding-banner/safeguarding-banner.component';
+import { BillingDeferralChoiceComponent } from '../pharmacy/billing-deferral-choice';
+import { BillingDeferralsComponent } from '../pharmacy/billing-deferrals';
 import { ControlledRegisterComponent } from '../pharmacy/controlled-register';
 import { DispensingComponent } from '../pharmacy/dispensing';
 import { DrugInteractionsComponent } from '../pharmacy/drug-interactions';
@@ -49,6 +55,7 @@ import { MedicationCatalogComponent } from '../pharmacy/medication-catalog';
 import { MtmReviewComponent } from '../pharmacy/mtm-review';
 import { PharmacyCheckoutComponent } from '../pharmacy/pharmacy-checkout';
 import { PharmacyClaimsComponent } from '../pharmacy/pharmacy-claims';
+import { PharmacyReconciliationComponent } from '../pharmacy/pharmacy-reconciliation';
 import { PharmacyRegistryComponent } from '../pharmacy/pharmacy-registry';
 import { StockAdjustmentComponent } from '../pharmacy/stock-adjustment';
 import { StockRoutingComponent } from '../pharmacy/stock-routing';
@@ -104,6 +111,16 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'CashClosingComponent',
     file: 'billing/cash-closing/cash-closing.component',
     type: CashClosingComponent,
+  },
+  {
+    name: 'CashSessionComponent',
+    file: 'billing/cash-session/cash-session.component',
+    type: CashSessionComponent,
+  },
+  {
+    name: 'CashSupervisorComponent',
+    file: 'billing/cash-session/cash-supervisor.component',
+    type: CashSupervisorComponent,
   },
   {
     name: 'InvoicePayerSharesComponent',
@@ -197,6 +214,11 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     type: BreakGlassBannerComponent,
   },
   {
+    name: 'PatientChannelPreferencesComponent',
+    file: 'patients/channel-preferences/patient-channel-preferences.component',
+    type: PatientChannelPreferencesComponent,
+  },
+  {
     name: 'CoverageTabComponent',
     file: 'patients/coverage-tab/coverage-tab.component',
     type: CoverageTabComponent,
@@ -205,6 +227,11 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'DocumentsTabComponent',
     file: 'patients/documents-tab/documents-tab.component',
     type: DocumentsTabComponent,
+  },
+  {
+    name: 'FamilyReleaseComponent',
+    file: 'patients/family-release/family-release.component',
+    type: FamilyReleaseComponent,
   },
   {
     name: 'FluidBalanceTabComponent',
@@ -250,6 +277,16 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     type: SafeguardingBannerComponent,
   },
   {
+    name: 'BillingDeferralChoiceComponent',
+    file: 'pharmacy/billing-deferral-choice',
+    type: BillingDeferralChoiceComponent,
+  },
+  {
+    name: 'BillingDeferralsComponent',
+    file: 'pharmacy/billing-deferrals',
+    type: BillingDeferralsComponent,
+  },
+  {
     name: 'ControlledRegisterComponent',
     file: 'pharmacy/controlled-register',
     type: ControlledRegisterComponent,
@@ -281,6 +318,11 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'PharmacyClaimsComponent',
     file: 'pharmacy/pharmacy-claims',
     type: PharmacyClaimsComponent,
+  },
+  {
+    name: 'PharmacyReconciliationComponent',
+    file: 'pharmacy/pharmacy-reconciliation',
+    type: PharmacyReconciliationComponent,
   },
   {
     name: 'PharmacyRegistryComponent',

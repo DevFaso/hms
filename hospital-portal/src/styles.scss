@@ -403,7 +403,8 @@ fieldset {
   right: 0;
   z-index: 1;
   background: var(--surface, #fff);
-  box-shadow: -6px 0 6px -6px rgba(15, 23, 42, 0.18);
+  /* QA D2462 (r64): no shadow on a table that does not scroll; the scroll cue
+     below draws one only while columns sit underneath this cell. */
 }
 :where(
   table:has(
@@ -429,4 +430,363 @@ textarea {
 }
 :where(input, select, textarea) {
   max-width: 100%;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   QA D2462 (r64): the scroll cue. A table that scrolls in place shows it does.
+   - The sticky actions cell grows a strong left shadow and an accent edge while
+     data columns sit underneath it, fading out once the table is scrolled to
+     its end.
+   - A scrolling table without a sticky cell fades its right edge instead.
+   Both are driven by the table's own sideways scroll (scroll-driven
+   animations): a table that fits has no active timeline, so no cue at all.
+   Browsers without scroll timelines (Firefox today) keep the plain table.
+   Guarded by e2e/layout-overflow.spec.ts (`no-scroll-cue`).
+   ───────────────────────────────────────────────────────────────────────── */
+@property --scroll-fade {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@keyframes table-scroll-cue-cell {
+  from {
+    box-shadow:
+      -14px 0 12px -10px rgba(15, 23, 42, 0.45),
+      inset 3px 0 0 var(--primary, #0e7c6b);
+  }
+  to {
+    box-shadow: none;
+  }
+}
+/* mask-image lives in the keyframes, so only a box that really scrolls gets a
+   mask (a mask clips anything painted outside the box, e.g. a dropdown). */
+@keyframes table-scroll-cue-edge {
+  from {
+    --scroll-fade: 48px;
+    mask-image: linear-gradient(to right, #000 calc(100% - var(--scroll-fade)), rgb(0 0 0 / 15%));
+  }
+  to {
+    --scroll-fade: 0px;
+    mask-image: linear-gradient(to right, #000 calc(100% - var(--scroll-fade)), rgb(0 0 0 / 15%));
+  }
+}
+@supports (animation-timeline: scroll()) {
+  :where(
+    td:has(> :where(.action-group, .row-actions, .table-actions)),
+    td:last-child:has(> :where(button, a, .btn-sm)),
+    table:has(
+        > tbody
+          > tr
+          > td:last-child
+          > :where(.action-group, .row-actions, .table-actions, button, a, .btn-sm)
+      )
+      > thead
+      > tr
+      > th:last-child
+  ) {
+    animation: table-scroll-cue-cell linear both;
+    animation-timeline: scroll(nearest inline);
+  }
+  /* Any box holding a table: scroll(self) is inactive unless the box itself
+     scrolls sideways, so a page that does not scroll never gets the cue. */
+  :where(
+    :has(> table):not(
+      :has(
+        > table
+          > tbody
+          > tr
+          > td:last-child
+          > :where(.action-group, .row-actions, .table-actions, button, a, .btn-sm)
+      )
+    )
+  ) {
+    animation: table-scroll-cue-edge linear both;
+    animation-timeline: scroll(self inline);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   QA D2462 / D2321 (r64): at a desktop width every column is on screen.
+   Below 1280 px (a 1024 laptop with the sidebar leaves ~714 px) a data table
+   goes compact: tighter cell padding and headers that wrap at their spaces.
+   That is what lets the invoice list, /users and /organizations keep Statut and
+   the money columns out from under the sticky actions column. !important
+   because every page styles its own cells; FullCalendar's layout tables are
+   left alone. Guarded by e2e/layout-overflow.spec.ts (`hidden-columns`).
+   ───────────────────────────────────────────────────────────────────────── */
+@media (max-width: 1279px) {
+  table:not(.fc table, .fc) > :is(thead, tbody, tfoot) > tr > :is(th, td) {
+    padding-left: 0.375rem !important;
+    padding-right: 0.375rem !important;
+  }
+  /* A one-word header (« RENOUVELLEMENT ») hyphenates in the page's language
+     rather than setting its column's width. */
+  table:not(.fc table, .fc) > thead > tr > th {
+    white-space: normal !important;
+    hyphens: auto;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   QA D2461 (r64): no dialog is ever wider than the screen. One rule for every
+   dialog family the portal uses (a fixed 600 px .modal-lg, a 560 px min-width,
+   a form row that will not shrink): at most the screen less a 16 px gutter on
+   each side. On a phone the cap outranks a component's own width and
+   min-width. Drawers are left alone (they are full-width on a phone by design).
+   Guarded by e2e/layout-overflow.spec.ts (`dialog-overflow`) and
+   shared/styles/overflow-class.spec.ts.
+   ───────────────────────────────────────────────────────────────────────── */
+:where(
+  .modal,
+  .modal-content,
+  .modal-panel,
+  .modal-card,
+  .modal-box,
+  .dialog-box,
+  .dialog-panel,
+  [role='dialog'][aria-modal='true']:not([class*='drawer'], [class*='panel'], [class*='overlay'])
+) {
+  box-sizing: border-box;
+  max-width: calc(100vw - 32px);
+}
+@media (max-width: 640px) {
+  :is(
+    .modal,
+    .modal-content,
+    .modal-panel,
+    .modal-card,
+    .modal-box,
+    .dialog-box,
+    .dialog-panel,
+    [role='dialog'][aria-modal='true']:not([class*='drawer'], [class*='panel'], [class*='overlay'])
+  ) {
+    min-width: 0 !important;
+    max-width: calc(100vw - 32px) !important;
+  }
+  /* What a dialog holds shrinks with it: a grid or flex child's automatic
+     minimum is its content's width, which is what pushed the referral form
+     (« Hôpital de destination ») and the bed select past the edge. */
+  :where(.modal-body, .dialog-body, .modal-content, .modal-panel)
+    :where(.form-row, .form-group, .field, .form-field) {
+    min-width: 0;
+  }
+}
+/* ─────────────────────────────────────────────────────────────────────────
+   QA D2938 (r66): no dialog is ever taller than the screen, and its actions
+   stay in reach. The nurse-station vitals dialog had no height limit: the
+   maternal « préoccupations » list pushed « Enregistrer » below a 1366×768
+   laptop screen, and on a phone it could never be reached (nothing scrolled).
+   One rule for every dialog family (the D2461 list): at most the screen less
+   a 16 px gutter, scrolling inside itself, with its action row stuck to the
+   bottom edge while the fields scroll. Zero specificity: a dialog that already
+   scrolls its own body keeps its layout. Screen only: a printed dialog (the
+   visit summary) is not cut to one screen.
+   Guarded by e2e/layout-overflow.spec.ts (`dialog-height`) and
+   shared/styles/overflow-class.spec.ts.
+   ───────────────────────────────────────────────────────────────────────── */
+@media screen {
+  :where(
+    .modal,
+    .modal-content,
+    .modal-panel,
+    .modal-card,
+    .modal-box,
+    .dialog-box,
+    .dialog-panel,
+    [role='dialog'][aria-modal='true']:not([class*='drawer'], [class*='panel'], [class*='overlay'])
+  ) {
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    /* A field the keyboard moves to is scrolled clear of the stuck action row. */
+    scroll-padding-bottom: 5rem;
+  }
+  :where(
+      .modal,
+      .modal-content,
+      .modal-panel,
+      .modal-card,
+      .modal-box,
+      .dialog-box,
+      .dialog-panel,
+      [role='dialog'][aria-modal='true']:not(
+          [class*='drawer'],
+          [class*='panel'],
+          [class*='overlay']
+        )
+    )
+    > :where(.modal-actions, .modal-footer, .dialog-actions, .dialog-footer) {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    background: inherit;
+  }
+}
+/* A select's automatic minimum is its longest option (« M1-04 · Médecine
+   interne B · chambre 12 »): in a dialog it shrinks to the dialog instead
+   (QA D2286: the bed select 350 px in a 302 px dialog). */
+:where(
+    .modal,
+    .modal-content,
+    .modal-panel,
+    .modal-card,
+    .modal-box,
+    .dialog-box,
+    .dialog-panel,
+    [role='dialog']
+  )
+  :where(select, input, textarea) {
+  min-width: 0;
+}
+
+/* QA D2284 (r63/r64): house look for the dialog parts some screens leave
+   unstyled: the icon close button, a text-link button, and a dialog's fields
+   (the bed board's « Précautions » and « Transfert » showed a bare browser ✕,
+   a small native select and plain inputs). Zero specificity. */
+:where(.btn-close) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #475569;
+  cursor: pointer;
+}
+:where(.btn-close):hover {
+  background: #e2e8f0;
+}
+:where(.btn-link) {
+  padding: 0.125rem 0.25rem;
+  border: none;
+  background: none;
+  color: var(--primary, #0e7c6b);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+:where(.btn-link.danger) {
+  color: #b91c1c;
+}
+:where(.modal-body, .dialog-body)
+  :where(
+    input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'], [type='color']),
+    select,
+    textarea
+  ) {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+/* QA D2246 (r63/r64): a stat card's label (« ENREGISTREMENTS ») hyphenates at
+   a syllable in the page's language instead of breaking mid-word where the
+   card happens to end. */
+:where(.stat-label, .kpi-label, .card-label, .tile-label, .metric-label, .summary-label) {
+  hyphens: auto;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   QA D2463 (r64): house styles for the shared search box, filter fields and
+   summary cards, which several pages (billing, audit log) use without styling
+   them, so they rendered as bare browser controls (the search icon outside its
+   box, a 1990s date input). Zero specificity: a page that styles its own wins.
+   ───────────────────────────────────────────────────────────────────────── */
+:where(.search-box) {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  margin-bottom: 1rem;
+  padding: 0.5rem 0.75rem;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+}
+:where(.search-box):focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgb(14 124 107 / 15%);
+}
+:where(.search-box) > :where(.material-symbols-outlined, .material-icons) {
+  flex-shrink: 0;
+  color: #6b7280;
+  font-size: 1.25rem;
+}
+:where(.search-box) > :where(input) {
+  flex: 1;
+  min-width: 0;
+  padding: 0.25rem 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 0.9rem;
+}
+:where(.filter-input, .filter-select) {
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  font-size: 0.875rem;
+}
+:where(.summary-cards) {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+:where(.summary-card) {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+:where(.summary-card) > :where(.card-info) {
+  display: flex;
+  flex-direction: column;
+}
+:where(.summary-card .card-value) {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #111827;
+}
+:where(.summary-card .card-label) {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+/* QA D2285 (r63/r64): a small toggle or toolbar button (« Terminées » on the
+   nurse station's Transmissions) that no page styled showed as a bare browser
+   button. Same house look as a secondary button; .btn-primary still wins. */
+:where(.btn-small) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #374151;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
 }

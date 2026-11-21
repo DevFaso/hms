@@ -38,7 +38,11 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
 
     private static final String NOTIFICATION_TYPE = "MEDICATION_REFILL";
     private static final String MSG_MEDICATION_FALLBACK = "refill.decision.medicationFallback";
-    /** Shared opening clause of every refill-decision notification. */
+    private static final String MSG_NOT_FOUND = "refillRequest.notFound";
+    private static final String MSG_NOT_PENDING = "patient.refill.decision.notPending";
+    private static final String MSG_USER_UNRESOLVED = "patient.refill.decision.userUnresolved";
+    /** Policy rule 1 (QA D2308): only an authorised prescriber approves, holds or refuses a renewal. */
+    static final String MSG_PRESCRIBER_ONLY = "patient.refill.decision.prescriberOnly";
 
     private final RefillRequestRepository refillRequestRepository;
     private final PrescriptionRepository prescriptionRepository;
@@ -49,6 +53,8 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
     private final RoleValidator roleValidator;
     /** QA D792 (#953 review, round 3): a ward order of an ended stay is not refillable. */
     private final com.example.hms.service.EndedStayOrderGuard endedStayOrders;
+    /** Policy rule 1: when a request was decided or reviewed. */
+    private final java.time.Clock clock;
 
     @Override
     @Transactional(readOnly = true)
@@ -140,19 +146,25 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
                                                UUID refillId,
                                                RefillDecisionRequestDTO decision,
                                                RefillStatus newStatus) {
+        // Policy rule 1 (QA D2308): a renewal is a prescriber's decision. Whoever comes here only as a pharmacist
+        // is refused before any lookup, so an unknown id answers them as a known one does.
+        if (isDispensingRole()) {
+            throw new AccessDeniedException(MSG_PRESCRIBER_ONLY);
+        }
         UUID staffId = resolveStaffId(auth);
 
         RefillRequest refill = refillRequestRepository.findById(refillId)
-                .orElseThrow(() -> new ResourceNotFoundException("refillRequest.notFound", refillId));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_NOT_FOUND, refillId));
 
         Prescription prescription = refill.getPrescription();
         Staff prescriber = prescription != null ? prescription.getStaff() : null;
         if (prescriber == null || !staffId.equals(prescriber.getId())) {
             throw new AccessDeniedException("patient.refill.decision.notOwnPrescription");
         }
+        UUID deciderId = requireAuthorisedPrescriber(auth, prescription, newStatus);
 
         if (!isActionable(refill.getStatus(), newStatus)) {
-            throw new BusinessException("patient.refill.decision.notPending",
+            throw new BusinessException(MSG_NOT_PENDING,
                 String.valueOf(refill.getStatus()));
         }
 
@@ -170,11 +182,182 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         if (decision != null && decision.getProviderNotes() != null && !decision.getProviderNotes().isBlank()) {
             refill.setProviderNotes(decision.getProviderNotes().trim());
         }
+        if (newStatus != RefillStatus.PAUSED) {
+            stampDecision(refill, deciderId, com.example.hms.enums.RefillDecisionBasis.PRESCRIBER_DECISION);
+        }
         refill = refillRequestRepository.save(refill);
 
         notifyPatient(refill, newStatus);
         log.info("Staff {} marked refill {} as {}", staffId, refillId, newStatus);
         return toResponseDTO(refill);
+    }
+
+    /**
+     * Policy rule 1 (provisional; CSP art. 276, QA D2308): the caller is an authorised prescriber at the
+     * prescription's own hospital, on an assignment there: a physician for every list, a nurse or a midwife for
+     * Lists I and II only (never a controlled drug). Never a pharmacist. Returns the caller's user id.
+     */
+    private UUID requireAuthorisedPrescriber(Authentication auth, Prescription prescription, RefillStatus decision) {
+        UUID userId = authUtils.resolveUserId(auth)
+                .orElseThrow(() -> new BusinessException(MSG_USER_UNRESOLVED));
+        UUID hospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        boolean controlled = decision == RefillStatus.APPROVED && controlledResolver.isControlled(prescription);
+        if (!roleValidator.canApproveRenewal(userId, hospitalId, controlled)) {
+            throw new AccessDeniedException(MSG_PRESCRIBER_ONLY);
+        }
+        return userId;
+    }
+
+    private void stampDecision(RefillRequest refill, UUID userId, com.example.hms.enums.RefillDecisionBasis basis) {
+        refill.setDecidedBy(userId);
+        refill.setDecidedAt(java.time.LocalDateTime.now(clock));
+        refill.setDecisionBasis(basis);
+    }
+
+    // ── Policy rule 1: what the pharmacist may do with a renewal request ─────────
+
+    /**
+     * The pharmacist reviews a request and forwards it to the prescriber with flags (an interaction, an early
+     * request, a stock question). It decides nothing: the request stays open and the prescriber is told.
+     */
+    @Override
+    @Transactional
+    public MedicationRefillResponseDTO pharmacistReview(Authentication auth, UUID refillId,
+                                                        RefillDecisionRequestDTO review) {
+        String note = requirePharmacistNote(review);
+        PharmacyReview at = requirePharmacist(auth, refillId);
+        RefillRequest refill = at.refill();
+        if (!isOpen(refill.getStatus())) {
+            throw new BusinessException(MSG_NOT_PENDING, String.valueOf(refill.getStatus()));
+        }
+        refill.setPharmacistNote(note);
+        refill.setPharmacistReviewedBy(at.userId());
+        refill.setPharmacistReviewedAt(java.time.LocalDateTime.now(clock));
+        refill = refillRequestRepository.save(refill);
+        notifyPrescriber(refill, "refill.pharmacist.flagged", note);
+        log.info("Pharmacist {} forwarded refill {} to its prescriber with flags", at.userId(), refillId);
+        return toResponseDTO(refill);
+    }
+
+    /**
+     * The pharmacist refuses to dispense, with a reason: the request is denied, the refusal is recorded as the
+     * pharmacist's (never as a prescriber's decision), the patient is told and so is the prescriber.
+     */
+    @Override
+    @Transactional
+    public MedicationRefillResponseDTO pharmacistRefuse(Authentication auth, UUID refillId,
+                                                        RefillDecisionRequestDTO refusal) {
+        String reason = requirePharmacistNote(refusal);
+        PharmacyReview at = requirePharmacist(auth, refillId);
+        RefillRequest refill = at.refill();
+        if (!isOpen(refill.getStatus())) {
+            throw new BusinessException(MSG_NOT_PENDING, String.valueOf(refill.getStatus()));
+        }
+        refill.setStatus(RefillStatus.DENIED);
+        refill.setPharmacistNote(reason);
+        refill.setPharmacistReviewedBy(at.userId());
+        refill.setPharmacistReviewedAt(java.time.LocalDateTime.now(clock));
+        stampDecision(refill, at.userId(), com.example.hms.enums.RefillDecisionBasis.PHARMACIST_REFUSAL);
+        refill = refillRequestRepository.save(refill);
+        notifyPatient(refill, RefillStatus.DENIED);
+        notifyPrescriber(refill, "refill.pharmacist.refused", reason);
+        log.info("Pharmacist {} refused to dispense refill {}", at.userId(), refillId);
+        return toResponseDTO(refill);
+    }
+
+    /**
+     * A refill the prescriber already wrote on the prescription is ordinary dispensing: the pharmacist releases it
+     * without a new decision. Only while the prescription still counts a refill; one refill beyond what was written
+     * is a renewal, and only a prescriber approves that ({@link #approve}). Never a controlled drug, and never a
+     * request its prescriber put on hold.
+     */
+    @Override
+    @Transactional
+    public MedicationRefillResponseDTO releaseAsPrescribed(Authentication auth, UUID refillId) {
+        PharmacyReview at = requirePharmacist(auth, refillId);
+        RefillRequest refill = at.refill();
+        // Only a request nobody decided: a prescriber's hold (PAUSED) is a decision, and the pharmacy never
+        // releases past it. The prescriber lifts their own hold by approving or refusing.
+        if (refill.getStatus() == RefillStatus.PAUSED) {
+            throw new BusinessException("patient.refill.release.onHold");
+        }
+        if (refill.getStatus() != RefillStatus.REQUESTED) {
+            throw new BusinessException(MSG_NOT_PENDING, String.valueOf(refill.getStatus()));
+        }
+        Prescription prescription = refill.getPrescription();
+        if (!hasWrittenRefillLeft(prescription)) {
+            throw new BusinessException("patient.refill.release.noneLeft");
+        }
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(prescription.getPatient());
+        com.example.hms.service.support.OrderReviewHoldGuard.refusePrescriptionIfHeld(prescription.getId(), "prescriptionId");
+        releaseRefillToPharmacy(prescription);
+        refill.setStatus(RefillStatus.APPROVED);
+        stampDecision(refill, at.userId(), com.example.hms.enums.RefillDecisionBasis.ORIGINAL_PRESCRIPTION);
+        refill = refillRequestRepository.save(refill);
+        notifyPatient(refill, RefillStatus.APPROVED);
+        log.info("Pharmacist {} released refill {} as written on the prescription", at.userId(), refillId);
+        return toResponseDTO(refill);
+    }
+
+    /** Whether the prescriber wrote a refill that has not been used yet. */
+    static boolean hasWrittenRefillLeft(Prescription prescription) {
+        Integer remaining = prescription != null ? prescription.getRefillsRemaining() : null;
+        return remaining != null && remaining > 0;
+    }
+
+    private record PharmacyReview(RefillRequest refill, UUID userId) {
+    }
+
+    /**
+     * The request, for a pharmacist of its prescription's own hospital, acting there. A request of another hospital
+     * answers as a missing one.
+     */
+    private PharmacyReview requirePharmacist(Authentication auth, UUID refillId) {
+        UUID userId = authUtils.resolveUserId(auth)
+                .orElseThrow(() -> new BusinessException(MSG_USER_UNRESOLVED));
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (!roleValidator.canReviewRenewalAtPharmacy(userId, hospitalId)) {
+            throw new AccessDeniedException("patient.refill.pharmacist.only");
+        }
+        RefillRequest refill = refillRequestRepository.findById(refillId)
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_NOT_FOUND, refillId));
+        Prescription prescription = refill.getPrescription();
+        if (prescription == null || prescription.getHospital() == null
+                || !hospitalId.equals(prescription.getHospital().getId())) {
+            throw new ResourceNotFoundException(MSG_NOT_FOUND, refillId);
+        }
+        return new PharmacyReview(refill, userId);
+    }
+
+    private static String requirePharmacistNote(RefillDecisionRequestDTO body) {
+        String note = body != null && body.getPharmacistNote() != null ? body.getPharmacistNote().trim() : "";
+        if (note.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException("pharmacistNote", "patient.refill.pharmacist.noteRequired");
+        }
+        return note;
+    }
+
+    private static boolean isOpen(RefillStatus status) {
+        return status == RefillStatus.REQUESTED || status == RefillStatus.PAUSED;
+    }
+
+    /** Tells the prescriber what the pharmacy flagged or refused, in the language they read it in. */
+    private void notifyPrescriber(RefillRequest refill, String messageKey, String note) {
+        Prescription prescription = refill.getPrescription();
+        Staff prescriber = prescription != null ? prescription.getStaff() : null;
+        String username = prescriber != null && prescriber.getUser() != null ? prescriber.getUser().getUsername() : null;
+        if (username == null || username.isBlank()) {
+            return;
+        }
+        Object medicationName = prescription.getMedicationName() != null
+                ? prescription.getMedicationName() : NotificationLocalizer.key(MSG_MEDICATION_FALLBACK);
+        String patientName = refill.getPatient() != null ? refill.getPatient().getFullName() : "";
+        try {
+            notificationService.createNotification(messageKey, new Object[]{medicationName, patientName, note},
+                    username, NOTIFICATION_TYPE);
+        } catch (Exception ex) {
+            log.warn("Failed to tell the prescriber about the pharmacy review of refill {}", refill.getId(), ex);
+        }
     }
 
     /**
@@ -239,7 +422,7 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
     private UUID resolveStaffId(Authentication auth) {
         authUtils.requireAuth(auth);
         UUID userId = authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("patient.refill.decision.userUnresolved"));
+                .orElseThrow(() -> new BusinessException(MSG_USER_UNRESOLVED));
         List<Staff> staffList = staffRepository.findByUserId(userId);
         if (staffList.isEmpty()) {
             throw new BusinessException("patient.refill.decision.noStaffRecord");
@@ -314,6 +497,14 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
                 .providerNotes(r.getProviderNotes())
                 .requestedAt(r.getCreatedAt())
                 .updatedAt(r.getUpdatedAt())
+                .pharmacistNote(r.getPharmacistNote())
+                .pharmacistReviewedAt(r.getPharmacistReviewedAt())
+                .decisionBasis(r.getDecisionBasis() != null ? r.getDecisionBasis().name() : null)
+                .writtenRefillLeft(r.getStatus() == RefillStatus.REQUESTED
+                        && hasWrittenRefillLeft(r.getPrescription())
+                        // QA D2926 (r66): never offered for a controlled drug, which the release refuses.
+                        && !controlledResolver.isControlled(r.getPrescription()))
+                .pharmacyView(isDispensingRole())
                 .build();
     }
 }

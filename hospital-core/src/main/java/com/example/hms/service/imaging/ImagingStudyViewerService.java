@@ -132,6 +132,15 @@ public class ImagingStudyViewerService {
         return template;
     }
 
+    /**
+     * QA D2467 (r64): whether the report's hospital has a PACS the viewer can reach, known
+     * without calling the PACS, so the portal offers no « Voir les images » that can only
+     * answer « not enabled ». Scoped as the manifest is (another hospital's report is 404).
+     */
+    public boolean viewerReady(UUID reportId) {
+        return loadScoped(reportId).resolution().ready();
+    }
+
     /** The viewer manifest of a report: its state and, when AVAILABLE, its instances. */
     public ImagingStudyViewerDTO manifest(UUID reportId, UUID actorUserId) {
         Target report = loadScoped(reportId);
@@ -191,6 +200,19 @@ public class ImagingStudyViewerService {
     }
 
     /**
+     * QA D2915: the legacy instance listing (DicomProxyService, study UIDs of the acting hospital)
+     * is read by the care team of that hospital, or by an administrator as before; a technician
+     * there, or a caller whose clinical role is held elsewhere, is refused.
+     */
+    public void requireInstanceListingReader() {
+        UUID acting = roleValidator.getCurrentHospitalId();
+        ImagingRoleScope roles = new ImagingRoleScope(roleValidator);
+        if (roles.readerAt(acting) == ImagingRoleScope.Reader.TECHNICIAN) {
+            roles.requireClinicalReaderAt(acting);
+        }
+    }
+
+    /**
      * The report, held to the caller's hospital (out of scope answers as a
      * missing id), read in one short read-only transaction.
      */
@@ -203,6 +225,9 @@ public class ImagingStudyViewerService {
             if (reportHospital == null || (scope != null && !scope.equals(reportHospital))) {
                 throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, reportId);
             }
+            // QA D2915: pixels are read by the care team OF the report's hospital, never on a
+            // clinical role the token names and the caller holds elsewhere.
+            new ImagingRoleScope(roleValidator).requireClinicalReaderAt(reportHospital);
             UUID patientId = report.getImagingOrder() == null || report.getImagingOrder().getPatient() == null
                 ? null : report.getImagingOrder().getPatient().getId();
             return new Target(report.getId(), reportHospital, patientId, report.getStudyInstanceUid(),

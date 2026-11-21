@@ -155,7 +155,9 @@ final class ComputedKeys {
             "ActingScopeResolver.java|hospitalScope.refused.");
         r.put("com/example/hms/service/CriticalValueNotificationService.java|text.key()",
             new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
-        r.put("com/example/hms/service/CriticalValueNotificationService.java|text.key() #2",
+        // r65 D2183: the escalation text, the orderer's or the tier-2 coordinator's
+        // (COORDINATOR_ESCALATION_KEY), both NotificationText.of literal sites.
+        r.put("com/example/hms/service/CriticalValueNotificationService.java|sent.key()",
             new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
         site(r, d, "com/example/hms/service/EmailServiceImpl.java|\"email.role.label.\" + code",
             "EmailServiceImpl.java|email.role.label.");
@@ -192,6 +194,19 @@ final class ComputedKeys {
             "PdfInvoiceService.java|pdf.payment.operator.");
         site(r, d, "com/example/hms/service/PdfInvoiceService.java|\"pdf.invoice.category.\" + category.name()",
             "PdfInvoiceService.java|pdf.invoice.category.");
+        // Billing plan PR 10 (V309): the cash report names a till, a session status, a method and an operator.
+        site(r, d, "com/example/hms/service/PdfInvoiceService.java|\"pdf.cash.till.\" + s.getTill()",
+            "PdfInvoiceService.java|pdf.cash.till.");
+        site(r, d, "com/example/hms/service/PdfInvoiceService.java|\"pdf.cash.status.\" + s.getStatus()",
+            "PdfInvoiceService.java|pdf.cash.status.");
+        site(r, d, "com/example/hms/service/PdfInvoiceService.java|\"pdf.payment.method.\" + safe(method)",
+            "PdfInvoiceService.java|pdf.payment.method.");
+        site(r, d, "com/example/hms/service/PdfInvoiceService.java|\"pdf.payment.operator.\" + o",
+            "PdfInvoiceService.java|pdf.payment.operator.");
+        site(r, d, "com/example/hms/service/billing/cash/CashSessionService.java|\"pdf.payment.method.\" + m",
+            "PdfInvoiceService.java|pdf.payment.method.");
+        site(r, d, "com/example/hms/service/billing/cash/CashSessionService.java|\"pdf.payment.operator.\" + o",
+            "PdfInvoiceService.java|pdf.payment.operator.");
         site(r, d, "com/example/hms/service/PrenatalSchedulingServiceImpl.java|\"prenatal.schedule.recommendation.\" + recommendationKey(type)",
             "PrenatalSchedulingServiceImpl.java|prenatal.schedule.recommendation.");
         site(r, d, "com/example/hms/service/PrenatalSchedulingServiceImpl.java|\"prenatal.schedule.notes.\" + recommendationKey(type)",
@@ -287,7 +302,26 @@ final class ComputedKeys {
         // QA D1564: the shared vitals judgement raises NewbornAlertRules' own codes and types.
         // r54: the shared severe-blood-pressure rule's sentence, one per scope and level.
         r.put("com/example/hms/service/vitals/VitalSignJudgement.java|bloodPressure.messageKey()", severeHypertensionMessages());
-        r.put("com/example/hms/service/vitals/VitalSignJudgement.java|bloodPressure.messageKey() #2", severeHypertensionMessages());
+        // Policy 2026-11-20 (provisional): the maternal early warning's level, alert, concern and vital-sign words.
+        // Review of #1241: the level named in the obstetric pressure notice.
+        r.put("com/example/hms/service/vitals/VitalSignJudgement.java|MEWS_TIER_LABEL_PREFIX + maternal.responseTier().name()",
+            enumValues("cds.bpa.mews.tier.", com.example.hms.service.vitals.MaternalEarlyWarning.Tier.class));
+        r.put("com/example/hms/service/vitals/VitalSignJudgement.java|MEWS_MESSAGE_PREFIX + tier.name()",
+            values("vitals.alert.msg.mews.", List.of("LOW_MEDIUM", "MEDIUM", "HIGH")));
+        r.put("com/example/hms/service/vitals/VitalSignJudgement.java|MATERNAL_ALERT_MESSAGE_PREFIX + alert.name()",
+            values("vitals.alert.msg.maternal.", List.of("SHOCK", "SEVERE_SHOCK")));
+        r.put("com/example/hms/service/vitals/MaternalEarlyWarningService.java|key",
+            values("mews.escalation.", List.of("lowMedium", "medium", "high", "red")));
+        r.put("com/example/hms/service/vitals/MaternalEarlyWarningService.java|ALERT_LABEL_PREFIX + a.name()",
+            enumValues("mews.alert.", com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert.class));
+        r.put("com/example/hms/cdshooks/bpa/NewsScoreProtocolRule.java|MaternalEarlyWarningService.ALERT_LABEL_PREFIX + a.name()",
+            enumValues("mews.alert.", com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert.class));
+        r.put("com/example/hms/cdshooks/bpa/NewsScoreProtocolRule.java|\"cds.bpa.mews.tier.\" + tier.name()",
+            enumValues("cds.bpa.mews.tier.", com.example.hms.service.vitals.MaternalEarlyWarning.Tier.class));
+        r.put("com/example/hms/cdshooks/bpa/NewsScoreProtocolRule.java|\"cds.bpa.mews.param.\" + m.name()",
+            enumValues("cds.bpa.mews.param.", com.example.hms.service.vitals.MaternalEarlyWarning.Parameter.class));
+        r.put("com/example/hms/cdshooks/bpa/NewsScoreProtocolRule.java|\"cds.bpa.mews.concern.\" + c.name()",
+            enumValues("cds.bpa.mews.concern.", com.example.hms.enums.MaternalConcern.class));
         r.put("com/example/hms/service/vitals/VitalSignJudgement.java|verdict.messageKey()", severeHypertensionMessages());
         site(r, d, "com/example/hms/service/vitals/VitalSignJudgement.java|ALERT_MSG_PREFIX + f.code()",
             "NewbornAssessmentServiceImpl.java|newborn.alert.msg.");
@@ -477,6 +511,10 @@ final class ComputedKeys {
         r.put("PdfInvoiceService.java|pdf.invoice.category.", enumValues("pdf.invoice.category.", ItemCategory.class));
         r.put("PdfInvoiceService.java|pdf.invoice.statusValue.", enumValues("pdf.invoice.statusValue.", InvoiceStatus.class));
         r.put("PdfInvoiceService.java|pdf.payment.method.", enumValues("pdf.payment.method.", PaymentMethod.class));
+        r.put("PdfInvoiceService.java|pdf.cash.till.",
+            enumValues("pdf.cash.till.", com.example.hms.enums.CashTill.class));
+        r.put("PdfInvoiceService.java|pdf.cash.status.",
+            enumValues("pdf.cash.status.", com.example.hms.enums.CashSessionStatus.class));
         // Billing plan PR 9: a Mobile Money operator, or NOT_STATED for a row recorded before V308.
         r.put("PdfInvoiceService.java|pdf.payment.operator.", union(
             enumValues("pdf.payment.operator.", com.example.hms.enums.MobileMoneyOperator.class),

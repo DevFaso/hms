@@ -28,6 +28,10 @@ import {
   IMAGING_DUPLICATE_OVERRIDE_REASONS,
 } from '../services/imaging.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
+import { ImagingReadingService } from '../services/imaging-reading.service';
+import { ImagingReadingContextComponent } from './reading-context/imaging-reading-context.component';
+import { printOnly } from '../shared/print/print-only';
+import { MeasurePipe } from '../shared/pipes/measure.pipe';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -38,6 +42,8 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
 import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ImagingImagesComponent } from './imaging-images/imaging-images.component';
+import { ImagingExamRecordComponent } from './exam-record/imaging-exam-record.component';
+import { IMAGING_EXAM_WIDER_ROLES, IMAGING_TECHNICIAN_ROLES } from '../shared/imaging-access';
 import {
   labelledRefusalReason,
   refusalReason,
@@ -204,7 +210,10 @@ const ORDER_FIELD_LABELS: Readonly<Record<string, string>> = {
     InlineSubFormDirective,
     InlineDiscardAskComponent,
     ImagingImagesComponent,
+    ImagingExamRecordComponent,
     ImagingStudyViewerComponent,
+    ImagingReadingContextComponent,
+    MeasurePipe,
   ],
   templateUrl: './imaging.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -212,6 +221,8 @@ const ORDER_FIELD_LABELS: Readonly<Record<string, string>> = {
 })
 export class ImagingComponent implements OnInit {
   private readonly imagingService = inject(ImagingService);
+  /** r63: the « À signer » list and the order's reading context. */
+  private readonly readingService = inject(ImagingReadingService);
   private readonly authorship = inject(AuthorshipService);
   private readonly hospitalService = inject(HospitalService);
   private readonly patientService = inject(PatientService);
@@ -307,6 +318,15 @@ export class ImagingComponent implements OnInit {
   reportModalityFilter = signal<ImagingModality | ''>('');
   criticalOnly = signal(false);
   selectedReport = signal<ImagingReportResponse | null>(null);
+  /**
+   * QA D2307 (r63): every other version of the open report's study (the
+   * signed original and its addenda), so an addendum is read with the report.
+   */
+  readonly selectedReportVersions = signal<ImagingReportResponse[]>([]);
+  /** QA D2306 (r63): the results list shows the reads waiting for my signature. */
+  readonly toSignOnly = signal(false);
+  /** How many reads wait for my signature; null until read. */
+  readonly toSignCount = signal<number | null>(null);
   reportLoading = signal(false);
 
   showStatusModal = signal(false);
@@ -432,12 +452,22 @@ export class ImagingComponent implements OnInit {
     this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderStatus')),
   );
   /**
+   * Policy rule 3 (2026-11-20, provisional): the caller acts on a study as an imaging technician
+   * (the role, and neither a doctor's nor a radiologist's wider reach on its status).
+   */
+  readonly actsAsTechnician =
+    this.roleContext.hasAnyActiveRole([...IMAGING_TECHNICIAN_ROLES]) &&
+    !this.roleContext.hasAnyActiveRole([...IMAGING_EXAM_WIDER_ROLES]);
+  /**
    * QA D1081: cancelling an imaging order is its author's (the server refuses
    * any other clinician after the confirm). Per row, through the shared rule.
    */
   canCancelThisOrder(o: ImagingOrderResponse): boolean {
     return (
       this.canCancelOrder() &&
+      // Policy rule 3 (provisional): a technician never cancels an order; they discontinue a
+      // started exam, with a reason, from the exam record block.
+      !this.actsAsTechnician &&
       // QA D1098: a resulted order (RESULTS_AVAILABLE) offered "Annuler la demande".
       isOrderCancellable(o.status) &&
       this.authorship.isAuthor({ authorUserId: o.authorUserId ?? o.orderingProviderUserId })
@@ -454,11 +484,53 @@ export class ImagingComponent implements OnInit {
    * completed before it is started.
    */
   canStartStudy(o: ImagingOrderResponse): boolean {
-    return this.canCancelOrder() && STARTABLE_ORDER_STATUSES.includes(o.status);
+    return (
+      this.canCancelOrder() &&
+      STARTABLE_ORDER_STATUSES.includes(o.status) &&
+      this.mayPerform(o) &&
+      !this.technicianAwaitsAuthorizationNumber(o)
+    );
+  }
+
+  /**
+   * QA D2914 (r66): a routine study whose pre-authorisation number is not recorded does not start
+   * (the server refuses), and a technician cannot record the number: they are not offered
+   * « Démarrer l'examen », and are told who records it. An urgent or STAT study starts without it.
+   */
+  technicianAwaitsAuthorizationNumber(o: ImagingOrderResponse): boolean {
+    return (
+      this.actsAsTechnician &&
+      STARTABLE_ORDER_STATUSES.includes(o.status) &&
+      this.awaitsAuthorizationNumber(o) &&
+      o.priority !== 'URGENT' &&
+      o.priority !== 'STAT'
+    );
+  }
+
+  /**
+   * QA D2914 (r66): « Voir le compte rendu » from a request. A technician reads the released
+   * report of an exam they performed and no other (the server answers a missing report), so the
+   * link is offered to them only there. Everyone else as before.
+   */
+  canViewReportOfOrder(o: ImagingOrderResponse): boolean {
+    if (!this.actsAsTechnician) {
+      return o.status === 'COMPLETED' || o.status === 'RESULTS_AVAILABLE';
+    }
+    const me = this.auth.getUserProfile()?.id;
+    return o.status === 'RESULTS_AVAILABLE' && !!me && o.performedByUserId === me;
   }
 
   canCompleteStudy(o: ImagingOrderResponse): boolean {
-    return this.canCancelOrder() && o.status === 'IN_PROGRESS';
+    return this.canCancelOrder() && o.status === 'IN_PROGRESS' && this.mayPerform(o);
+  }
+
+  /**
+   * Owner decision 2026-11-20 (provisional): an ultrasound is performed by a physician unless the
+   * hospital's setting lets an imaging technician do it. The server says so on the order
+   * (`technicianMayPerform`) and refuses the step otherwise; nobody else is concerned.
+   */
+  private mayPerform(o: ImagingOrderResponse): boolean {
+    return !this.actsAsTechnician || o.technicianMayPerform !== false;
   }
 
   /** The order whose status write is in flight; its buttons stay disabled until it answers. */
@@ -509,14 +581,57 @@ export class ImagingComponent implements OnInit {
     });
   }
 
+  /**
+   * Policy rule 3 (provisional): the exam record block answered (a check-in, a saved record, a
+   * discontinued exam). The drawer shows the order as the server returned it; the list reloads.
+   */
+  onExamChanged(updated: ImagingOrderResponse): void {
+    if (this.selectedOrder()?.id === updated.id) {
+      this.selectedOrder.set(updated);
+    }
+    this.load();
+  }
+
   /** From the request drawer: the authoring form opens over the list, the drawer closes. */
   authorFromDrawer(o: ImagingOrderResponse): void {
     this.closeDetail();
-    this.openAuthorReport(o, o.status === 'RESULTS_AVAILABLE');
+    this.authorForOrder(o);
+  }
+
+  /**
+   * QA D2306 (r63): « Rédiger le compte rendu » opened a blank form even when
+   * the study already had a saved, unsigned read, which would file a second
+   * report. It now reopens that read; after a signature it opens an addendum
+   * (QA D2307); only a study with no live read gets a new one.
+   */
+  authorForOrder(o: ImagingOrderResponse): void {
+    this.imagingService.getReportsForOrder(o.id).subscribe({
+      next: (reports) => {
+        const live = (reports ?? []).filter(
+          (r) => r.reportStatus !== 'CANCELLED' && r.reportStatus !== 'ERROR',
+        );
+        const draft = live.find((r) => !r.signed);
+        if (draft) {
+          this.openEditReport(draft);
+        } else {
+          this.openAuthorReport(
+            o,
+            live.some((r) => r.signed),
+          );
+        }
+      },
+      error: () => this.openAuthorReport(o, o.status === 'RESULTS_AVAILABLE'),
+    });
   }
 
   /** RADIOLOGIST joins DOCTOR here — the endpoint has admitted the role since item 26. */
   readonly canAckCritical = this.roleContext.hasAnyActiveRole(actionRoles('imagingCriticalAck'));
+  /** QA D2306 (r63): the « À signer » list. */
+  readonly canSeeToSign = this.roleContext.hasAnyActiveRole(actionRoles('imagingReportsToSign'));
+  /** r63: age, sex, pregnancy, creatinine and prior studies beside the order (clinical readers). */
+  readonly canSeeReadingContext = this.roleContext.hasAnyActiveRole(
+    actionRoles('imagingReadingContext'),
+  );
 
   modalities: ImagingModality[] = [
     'XRAY',
@@ -1025,11 +1140,15 @@ export class ImagingComponent implements OnInit {
   }
 
   /**
-   * Provisional rule 1: whoever may start a study (the status endpoint's
-   * roles) records the number of a study done without it.
+   * Provisional rule 1: a doctor or a radiologist records the number of a study done without it
+   * (PUT /imaging/orders/{id}/authorization). Review of #1243: its own action entry, since the
+   * status endpoint now also admits the imaging technician, whom this endpoint refuses.
    */
   canRecordAuthorization(o: ImagingOrderResponse): boolean {
-    return this.canCancelOrder() && !!o.authorizationPending;
+    return (
+      this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderAuthorization')) &&
+      !!o.authorizationPending
+    );
   }
 
   recordAuthorization(o: ImagingOrderResponse): void {
@@ -1163,6 +1282,21 @@ export class ImagingComponent implements OnInit {
     if (view === 'results' && this.reports().length === 0) {
       this.loadReports();
     }
+    if (view === 'results') this.refreshToSignCount();
+  }
+
+  /** QA D2306 (r63): the « À signer » tab of the results list. */
+  showToSign(): void {
+    this.toSignOnly.set(true);
+    this.loadReports();
+  }
+
+  private refreshToSignCount(): void {
+    if (!this.canSeeToSign) return;
+    this.readingService.toSign().subscribe({
+      next: (list) => this.toSignCount.set(Array.isArray(list) ? list.length : 0),
+      error: () => this.toSignCount.set(null),
+    });
   }
 
   private resultsHospitalId(): string | null {
@@ -1186,6 +1320,10 @@ export class ImagingComponent implements OnInit {
 
   loadReports(): void {
     this.reportsFailedHospitals.set([]);
+    if (this.toSignOnly()) {
+      this.loadToSign();
+      return;
+    }
     const hospitalId = this.resultsHospitalId();
     if (!hospitalId) {
       if (this.canPickHospital) this.loadReportsEverywhere();
@@ -1206,6 +1344,23 @@ export class ImagingComponent implements OnInit {
           this.reportsLoading.set(false);
         },
       });
+  }
+
+  /** QA D2306 (r63): the reads waiting for my signature, at the active hospital. */
+  private loadToSign(): void {
+    this.reportsLoading.set(true);
+    this.readingService.toSign().subscribe({
+      next: (list) => {
+        const reports = Array.isArray(list) ? list : [];
+        this.reports.set(reports);
+        this.toSignCount.set(reports.length);
+        this.reportsLoading.set(false);
+      },
+      error: () => {
+        this.toast.error(this.translate.instant('IMAGING.RESULTS_LOAD_ERROR'));
+        this.reportsLoading.set(false);
+      },
+    });
   }
 
   /**
@@ -1247,6 +1402,7 @@ export class ImagingComponent implements OnInit {
   }
 
   setReportStatusFilter(status: ImagingReportStatus): void {
+    this.toSignOnly.set(false);
     this.reportStatusFilter.set(status);
     this.loadReports();
   }
@@ -1276,10 +1432,94 @@ export class ImagingComponent implements OnInit {
 
   openReport(report: ImagingReportResponse): void {
     this.selectedReport.set(report);
+    this.loadVersions(report);
   }
 
   closeReport(): void {
     this.selectedReport.set(null);
+    this.selectedReportVersions.set([]);
+  }
+
+  /** QA D2306 (r63): from the order drawer (or a prior study), open that report. */
+  openReportById(reportId: string): void {
+    this.reportLoading.set(true);
+    this.imagingService.getReport(reportId).subscribe({
+      next: (report) => {
+        this.reportLoading.set(false);
+        this.selectedOrder.set(null);
+        this.openReport(report);
+      },
+      error: () => {
+        this.reportLoading.set(false);
+        this.toast.error(this.translate.instant('IMAGING.NO_REPORT_FOR_ORDER'));
+      },
+    });
+  }
+
+  /** QA D2307 (r63): the other versions of the report's study, read with it. */
+  private loadVersions(report: ImagingReportResponse): void {
+    this.selectedReportVersions.set([]);
+    if (!report?.imagingOrderId) return;
+    this.imagingService.getReportsForOrder(report.imagingOrderId)?.subscribe({
+      next: (all) => {
+        if (this.selectedReport()?.id !== report.id) return;
+        this.selectedReportVersions.set(
+          (all ?? [])
+            .filter((r) => r.id !== report.id)
+            .sort((a, b) => (a.reportVersion ?? 0) - (b.reportVersion ?? 0)),
+        );
+      },
+      error: () => this.selectedReportVersions.set([]),
+    });
+  }
+
+  /**
+   * QA D2307 (r63): a signed report offered only « Fermer ». The addendum is a
+   * new, separately signed version; the signed original is never edited.
+   */
+  canAddAddendum(report: ImagingReportResponse): boolean {
+    return (
+      this.canAuthorReports &&
+      !!report.signed &&
+      report.reportStatus !== 'CANCELLED' &&
+      report.reportStatus !== 'ERROR' &&
+      !this.reportOrderCancelled(report)
+    );
+  }
+
+  openAddendum(report: ImagingReportResponse): void {
+    this.reportForm = {
+      ...this.emptyReportForm(),
+      reportTitle: report.reportTitle ?? '',
+      modality: report.modality,
+      bodyRegion: report.bodyRegion ?? '',
+      accessionNumber: report.accessionNumber ?? '',
+      studyInstanceUid: report.studyInstanceUid ?? '',
+      reportStatus: 'ADDENDUM',
+    };
+    this.reportOrderId.set(report.imagingOrderId);
+    this.reportEditId.set(null);
+    this.reportPatient.set({
+      name: report.patientDisplayName ?? null,
+      mrn: report.patientMrn ?? null,
+    });
+    this.selectedReport.set(null);
+    this.selectedReportVersions.set([]);
+    this.showReportModal.set(true);
+  }
+
+  /** QA D2912 (r66): the study's exam record holds a contrast answer or a dose to show with the report. */
+  reportHasExamRecord(report: ImagingReportResponse): boolean {
+    const recorded = (value: unknown): boolean => value !== null && value !== undefined;
+    return recorded(report.examContrastAdministered) || recorded(report.examRadiationDoseMgy);
+  }
+
+  /** r63: print the open report alone (the shared print isolation). */
+  printReport(): void {
+    const panel = this.host.nativeElement.querySelector<HTMLElement>(
+      '[data-testid="imaging-report-panel"]',
+    );
+    if (panel) printOnly(panel);
   }
 
   /** Open the latest report for an order (from the orders table/detail). */
@@ -1289,7 +1529,7 @@ export class ImagingComponent implements OnInit {
       next: (report) => {
         this.reportLoading.set(false);
         this.selectedOrder.set(null);
-        this.selectedReport.set(report);
+        this.openReport(report);
       },
       error: () => {
         this.reportLoading.set(false);
@@ -1336,8 +1576,10 @@ export class ImagingComponent implements OnInit {
       findings: '',
       impression: '',
       recommendations: '',
-      contrastAdministered: false,
-      contrastDetails: '',
+      // Policy rule 3 (provisional): the first read opens on the contrast the exam record says was
+      // given, for its author to confirm or correct; the server stores only what the author submits.
+      contrastAdministered: !existingSigned && order.examContrastAdministered === true,
+      contrastDetails: existingSigned ? '' : (order.examContrastDetails ?? ''),
       criticalFinding: false,
       reportStatus: existingSigned ? 'ADDENDUM' : 'PRELIMINARY',
     };
@@ -1420,8 +1662,9 @@ export class ImagingComponent implements OnInit {
         );
         this.reportSubmitting.set(false);
         this.closeReportModal();
-        this.selectedReport.set(saved);
+        this.openReport(saved);
         this.loadReports();
+        this.refreshToSignCount();
       },
       error: (err: unknown) => {
         this.toast.error(refusalReason(err) ?? this.translate.instant('IMAGING.REPORT_SAVE_ERROR'));
@@ -1448,8 +1691,9 @@ export class ImagingComponent implements OnInit {
       next: (signed) => {
         this.toast.success(this.translate.instant('IMAGING.REPORT_SIGNED'));
         this.signing.set(false);
-        this.selectedReport.set(signed);
+        this.openReport(signed);
         this.loadReports();
+        this.refreshToSignCount();
       },
       error: (err: unknown) => {
         this.toast.error(refusalReason(err) ?? this.translate.instant('IMAGING.REPORT_SIGN_ERROR'));
@@ -1546,8 +1790,12 @@ export class ImagingComponent implements OnInit {
    */
   canAddStudyImages(order: ImagingOrderResponse): boolean {
     return (
-      this.canAuthorReports &&
+      // Policy rule 3 (provisional): the imaging technician attaches the study's key images too.
+      this.roleContext.hasAnyActiveRole(actionRoles('imagingImageUpload')) &&
       order.status !== 'CANCELLED' &&
+      // QA D2914 (r66): a study with results has a signed report, whether or not this reader may
+      // open it (a technician reads no report of an exam somebody else performed).
+      order.status !== 'RESULTS_AVAILABLE' &&
       !this.selectedOrderReports().some((r) => r.signed)
     );
   }

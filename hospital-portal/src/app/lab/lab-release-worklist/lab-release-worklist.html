@@ -96,6 +96,14 @@
             <tr [class.is-critical]="isCritical(row)" [attr.data-testid]="'release-row-' + row.id">
               <td>
                 <span class="patient-name">{{ row.patientFullName }}</span>
+                @if (hasPatientIdentity(row)) {
+                  <!-- r65 D2614: near-identical names exist; the file number, age and sex tell them apart -->
+                  <span class="patient-identity" [attr.data-testid]="'release-identity-' + row.id">
+                    <ng-container
+                      *ngTemplateOutlet="identity; context: { $implicit: row }"
+                    ></ng-container>
+                  </span>
+                }
                 @if (isCritical(row)) {
                   <span class="critical-tag" data-testid="release-critical-tag">
                     {{ 'LAB_RELEASE.CRITICAL' | translate }}
@@ -104,6 +112,13 @@
               </td>
               <td>
                 <span class="test-name">{{ row.labTestName }}</span>
+                @if (row.qcHold) {
+                  <!-- r65 D2613: the QC hold is said on the row, before the dialog is filled -->
+                  {{ ' '
+                  }}<span class="qc-hold-tag" [attr.data-testid]="'release-qc-hold-' + row.id">{{
+                    'LAB_RELEASE.QC_HOLD_TAG' | translate
+                  }}</span>
+                }
                 @if (isUrgentPriority(row)) {
                   {{ ' '
                   }}<span
@@ -248,6 +263,120 @@
                   }
           }}
         </p>
+        @if (target.components?.length) {
+          <!-- r63 (NFS panels): every component value is released together -->
+          <app-lab-panel-values
+            [components]="target.components"
+            [corrected]="!!target.supersedesResultId"
+          />
+        }
+        @if (isCritical(target)) {
+          <!-- r63 D2305: a critical result is released with the laboratory's call recorded -->
+          <div
+            class="critical-release"
+            role="group"
+            data-testid="release-critical-block"
+            [attr.aria-label]="'LAB_RELEASE.CRITICAL_TITLE' | translate"
+          >
+            <p class="critical-release-title">
+              <span class="material-symbols-outlined" aria-hidden="true">priority_high</span>
+              {{ 'LAB_RELEASE.CRITICAL_TITLE' | translate }}
+            </p>
+            <!-- r65 D2614: who the patient is, checked aloud during the call -->
+            <p class="critical-release-identity" data-testid="release-critical-identity">
+              <strong>{{ target.patientFullName }}</strong>
+              @if (hasPatientIdentity(target)) {
+                ·
+                <ng-container
+                  *ngTemplateOutlet="identity; context: { $implicit: target }"
+                ></ng-container>
+              }
+              @if (target.orderedByName) {
+                <br />
+                <span data-testid="release-critical-orderer">{{
+                  'LAB_RELEASE.ORDERED_BY' | translate: { name: target.orderedByName }
+                }}</span>
+              }
+            </p>
+            <p class="critical-release-hint">{{ 'LAB_RELEASE.CRITICAL_HINT' | translate }}</p>
+            <div class="critical-release-fields">
+              <label class="release-field">
+                <span>{{ 'LAB_RELEASE.CRITICAL_TO' | translate }} *</span>
+                <input
+                  type="text"
+                  maxlength="255"
+                  required
+                  id="release-critical-to"
+                  data-testid="release-critical-to"
+                  [value]="criticalTo()"
+                  (input)="criticalTo.set(inputValue($event))"
+                  [placeholder]="'LAB_RELEASE.CRITICAL_TO_PLACEHOLDER' | translate"
+                />
+              </label>
+              <label class="release-field">
+                <span>{{ 'LAB_RELEASE.CRITICAL_AT' | translate }} *</span>
+                <input
+                  type="datetime-local"
+                  required
+                  id="release-critical-at"
+                  data-testid="release-critical-at"
+                  [value]="criticalAt"
+                  (input)="criticalAt = inputValue($event)"
+                />
+              </label>
+              <label class="release-field">
+                <span>{{ 'LAB_RELEASE.CRITICAL_READ_BACK' | translate }} *</span>
+                <input
+                  type="text"
+                  maxlength="255"
+                  required
+                  id="release-critical-read-back"
+                  data-testid="release-critical-read-back"
+                  [value]="criticalReadBack()"
+                  (input)="criticalReadBack.set(inputValue($event))"
+                  [placeholder]="'LAB_RELEASE.CRITICAL_READ_BACK_PLACEHOLDER' | translate"
+                />
+              </label>
+            </div>
+          </div>
+        }
+        @if (qcOverrideRequired(target)) {
+          <!-- r63 D2304: the test's latest QC run was rejected; a release needs a documented reason.
+               r65 D2613: shown when the dialog opens, naming the run, not after a refused release. -->
+          <div class="qc-override" role="group" data-testid="release-qc-override">
+            @if (target.qcHold; as hold) {
+              <p class="qc-hold-banner" role="note" data-testid="release-qc-hold-banner">
+                <span class="material-symbols-outlined" aria-hidden="true">block</span>
+                {{
+                  'LAB_RELEASE.QC_HOLD_BANNER'
+                    | translate
+                      : {
+                          test: target.labTestName,
+                          level: qcLevelKey(hold) | translate,
+                          at: hold.recordedAt
+                            ? (hold.recordedAt | serverTime | date: 'short')
+                            : '—',
+                          by: hold.recordedBy || '—',
+                        }
+                }}
+              </p>
+            } @else if (qcOverrideNotice(); as notice) {
+              <p class="modal-error" role="alert">{{ notice }}</p>
+            }
+            <label class="release-field">
+              <span>{{ 'LAB_RELEASE.QC_OVERRIDE_REASON' | translate }} *</span>
+              <textarea
+                rows="3"
+                maxlength="2048"
+                required
+                id="release-qc-override-reason"
+                data-testid="release-qc-override-reason"
+                [value]="qcOverrideReason()"
+                (input)="qcOverrideReason.set(inputValue($event))"
+              ></textarea>
+            </label>
+          </div>
+        }
         @if (target.supersedesResultId) {
           <!-- QA D1016: validating a correction replaces a value already validated -->
           <p class="self-release-note" role="note" data-testid="release-correction-note">
@@ -292,6 +421,8 @@
             class="btn-primary"
             (click)="confirmRelease()"
             [disabled]="releasingId() !== null"
+            [appSubmitGuard]="criticalCommunicationMissing(target) || qcOverrideMissing()"
+            submitGuardRequired
             data-testid="release-confirm-submit"
           >
             @if (releasingId()) {
@@ -307,3 +438,22 @@
     </div>
   }
 </div>
+
+<!-- r65 D2614: « MRN · 35 ans · F », the parts that are known -->
+<ng-template #identity let-r>
+  @if (r.patientMrn) {
+    <span class="mono">{{ r.patientMrn }}</span>
+  }
+  @if (patientAge(r); as age) {
+    @if (r.patientMrn) {
+      ·
+    }
+    {{ age.key | translate: { n: age.n } }}
+  }
+  @if (r.patientGender) {
+    @if (r.patientMrn || patientAge(r)) {
+      ·
+    }
+    {{ r.patientGender | enumLabel: 'gender' }}
+  }
+</ng-template>

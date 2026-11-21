@@ -78,4 +78,28 @@ class PrescriptionMapperQuantityFieldsTest {
         assertThat(dto.getQuantity()).isEqualByComparingTo("30.00");
         assertThat(dto.getQuantityUnit()).isEqualTo("comprimés");
     }
+
+    @Test
+    @DisplayName("QA D2926 (r66): the refills the prescriber writes are stored, and all of them remain on a new order")
+    void writtenRefillsAreStored() {
+        com.example.hms.payload.dto.PrescriptionRequestDTO request = com.example.hms.payload.dto.PrescriptionRequestDTO
+            .builder().medicationName("Amlodipine 5 mg").refillsAllowed(3).build();
+
+        Prescription order = mapper.toEntity(request, null, null, null);
+
+        assertThat(order.getRefillsAllowed()).isEqualTo(3);
+        assertThat(order.getRefillsRemaining()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("QA D2926 (r66): an order written with no refill count carries none, as before")
+    void noRefillCountStaysAbsent() {
+        com.example.hms.payload.dto.PrescriptionRequestDTO request = com.example.hms.payload.dto.PrescriptionRequestDTO
+            .builder().medicationName("Amlodipine 5 mg").build();
+
+        Prescription order = mapper.toEntity(request, null, null, null);
+
+        assertThat(order.getRefillsAllowed()).isNull();
+        assertThat(order.getRefillsRemaining()).isNull();
+    }
 }

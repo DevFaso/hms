@@ -14,20 +14,136 @@
     -->
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2" />
     <link rel="alternate icon" type="image/x-icon" href="favicon.ico?v=2" />
+    <!--
+      QA D2351 (r63, slow 3G): the three font stylesheets are render-blocking
+      cross-origin requests, so open both Google hosts at once instead of
+      after the HTML. The icon font asks for one fixed instance (24 px optical
+      size, weight 400, no fill or grade: the portal varies none of them):
+      317 kB instead of the 3.9 MB variable font, which took about 85 s on
+      slow 3G. `display=block` keeps an icon's ligature
+      name ("check_circle") from showing as words while the font loads; the
+      styles below hold each icon to a 1em box and hide it until the font is
+      there, so a long name can never cover the menu button.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <link
-      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=block"
       rel="stylesheet"
     />
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/icon?family=Material+Icons&display=block"
+      rel="stylesheet"
+    />
+    <style>
+      .material-symbols-outlined,
+      .material-icons {
+        display: inline-block;
+        width: 1em;
+        min-width: 1em;
+        overflow: hidden;
+        white-space: nowrap;
+      }
+      html:not(.icons-ready) .material-symbols-outlined,
+      html:not(.icons-ready) .material-icons {
+        visibility: hidden;
+      }
+      /* QA D2351: what a slow phone shows until the application has started. */
+      .boot-screen {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        min-height: 100vh;
+        margin: 0;
+        padding: 16px;
+        font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+        color: #1e293b;
+        background: #f1f5f9;
+        text-align: center;
+      }
+      .boot-screen strong {
+        font-size: 22px;
+        color: #0b7061;
+      }
+      .boot-spinner {
+        width: 36px;
+        height: 36px;
+        border: 4px solid #cbd5e1;
+        border-top-color: #0b7061;
+        border-radius: 50%;
+        animation: boot-spin 0.9s linear infinite;
+      }
+      @keyframes boot-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-spinner {
+          animation: none;
+        }
+      }
+    </style>
+    <script>
+      // QA D2351: icons stay hidden until their font is loaded (never their names as words).
+      (function () {
+        var root = document.documentElement;
+        function iconsLoaded() {
+          if (!document.fonts) return true;
+          var ok = false;
+          document.fonts.forEach(function (f) {
+            if (/Material (Symbols|Icons)/.test(f.family) && f.status === 'loaded') ok = true;
+          });
+          return ok;
+        }
+        function check() {
+          if (iconsLoaded()) {
+            root.classList.add('icons-ready');
+            return true;
+          }
+          return false;
+        }
+        if (!document.fonts) return check();
+        document.fonts.addEventListener('loadingdone', check);
+        var started = Date.now();
+        var timer = setInterval(function () {
+          // A font that never arrives (blocked host) must not hide icon-only buttons for good.
+          if (check() || Date.now() - started > 20000) {
+            root.classList.add('icons-ready');
+            clearInterval(timer);
+          }
+        }, 500);
+      })();
+    </script>
 
     <!-- Google Analytics is bootstrapped at runtime by AnalyticsService when
          environment.gaTrackingId is configured. -->
   </head>
   <body>
-    <app-root></app-root>
+    <app-root>
+      <!-- QA D2351: replaced by the application once it has started. -->
+      <div class="boot-screen" role="status" aria-live="polite">
+        <strong>e-Keneya</strong>
+        <div class="boot-spinner" aria-hidden="true"></div>
+        <p id="boot-message">Chargement de l’application…</p>
+        <noscript>JavaScript est nécessaire pour utiliser e-Keneya.</noscript>
+      </div>
+      <script>
+        (function () {
+          var lang = 'fr';
+          try {
+            lang = localStorage.getItem('lang') || 'fr';
+          } catch (e) {}
+          var text = { en: 'Loading the application…', es: 'Cargando la aplicación…' }[lang];
+          if (text) document.getElementById('boot-message').textContent = text;
+        })();
+      </script>
+    </app-root>
   </body>
 </html>

@@ -91,6 +91,13 @@ public class PatientVitalSignRequestDTO {
      */
     private java.util.List<com.example.hms.enums.OrganDamageSymptom> organDamageSymptoms;
 
+    /**
+     * Policy 2026-11-20 (provisional): the additional concerns of the maternal early warning score
+     * (staff or family concern, added therapy, more pain, bleeding, less urine, less responsive).
+     * Optional; read only for a pregnant or postpartum woman, where they raise the level of concern.
+     */
+    private java.util.List<com.example.hms.enums.MaternalConcern> maternalConcerns;
+
     private Boolean clinicallySignificant;
 
     @PastOrPresent

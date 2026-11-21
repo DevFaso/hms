@@ -278,6 +278,41 @@ describe('TriageFormComponent', () => {
     );
   });
 
+  it('policy 2026-11-20: sends the ticked maternal concerns and shows the maternal warning from the server', () => {
+    mockEncounterService.submitTriage.and.returnValue(
+      of({
+        ...sampleResponse,
+        maternalAlerts: [
+          {
+            code: 'mews-high',
+            severity: 'URGENT',
+            type: 'MATERNAL_EARLY_WARNING',
+            message: 'Score 9: immediate review.',
+          },
+        ],
+      }),
+    );
+    fillMinimum();
+    component.maternalConcerns.set(['REDUCED_URINE_OUTPUT']);
+    component.submit();
+    const sent = mockEncounterService.submitTriage.calls.mostRecent().args[1];
+    expect(sent.maternalConcerns).toEqual(['REDUCED_URINE_OUTPUT']);
+    expect(mockToastService.push).toHaveBeenCalledWith(
+      'error',
+      jasmine.stringMatching(/MATERNAL_EWS_PAGED.*Score 9: immediate review\./),
+      jasmine.any(Number),
+    );
+  });
+
+  it('policy 2026-11-20: no ticked concern is sent as nothing', () => {
+    mockEncounterService.submitTriage.and.returnValue(of(sampleResponse));
+    fillMinimum();
+    component.submit();
+    expect(
+      mockEncounterService.submitTriage.calls.mostRecent().args[1].maternalConcerns,
+    ).toBeUndefined();
+  });
+
   it('r54: no ticked sign is sent as nothing', () => {
     mockEncounterService.submitTriage.and.returnValue(of(sampleResponse));
     fillMinimum();

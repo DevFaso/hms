@@ -46,6 +46,8 @@ class LabQcEventServiceImplTest {
     @Mock private LabTestDefinitionRepository labTestDefinitionRepository;
     @Mock private LabQcEventMapper qcEventMapper;
     @Mock private RoleValidator roleValidator;
+    @Mock private com.example.hms.repository.LabQcTargetRepository qcTargetRepository;
+    @Mock private com.example.hms.repository.UserRepository userRepository;
 
     @InjectMocks
     private LabQcEventServiceImpl service;
@@ -425,5 +427,109 @@ class LabQcEventServiceImplTest {
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getPassRate()).isZero();
+    }
+
+    // r63 D2304: the operator's decision, the director's target and the hospital boundary.
+
+    @Test
+    void recordQcEvent_operatorDecisionIsKeptOverTheLegacyComputation() {
+        LabQcEventRequestDTO request = LabQcEventRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .qcLevel("LOW_CONTROL")
+            .measuredValue(new BigDecimal("100"))
+            .expectedValue(new BigDecimal("100"))
+            .accepted(false)
+            .lotNumber(" LOT-42 ")
+            .build();
+        when(qcEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.recordQcEvent(request, Locale.ENGLISH);
+
+        ArgumentCaptor<LabQcEvent> captor = ArgumentCaptor.forClass(LabQcEvent.class);
+        verify(qcEventRepository).save(captor.capture());
+        assertThat(captor.getValue().isPassed()).isFalse();
+        assertThat(captor.getValue().getLotNumber()).isEqualTo("LOT-42");
+    }
+
+    @Test
+    void recordQcEvent_withATargetUsesItsMeanAndFlagsTheSdDistance() {
+        LabTestDefinition testDef = new LabTestDefinition();
+        testDef.setId(testDefId);
+        com.example.hms.model.LabQcTarget target = com.example.hms.model.LabQcTarget.builder()
+            .hospitalId(hospitalId).testDefinition(testDef).qcLevel(LabQcEventLevel.HIGH_CONTROL)
+            .targetMean(new BigDecimal("5.0")).targetSd(new BigDecimal("0.2")).build();
+        when(labTestDefinitionRepository.findById(testDefId)).thenReturn(Optional.of(testDef));
+        when(qcTargetRepository.findByHospitalIdAndTestDefinition_IdAndQcLevel(hospitalId, testDefId,
+            LabQcEventLevel.HIGH_CONTROL)).thenReturn(Optional.of(target));
+        when(qcEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.recordQcEvent(LabQcEventRequestDTO.builder()
+            .hospitalId(hospitalId).testDefinitionId(testDefId).qcLevel("HIGH_CONTROL")
+            .measuredValue(new BigDecimal("5.5")).accepted(true).build(), Locale.ENGLISH);
+
+        ArgumentCaptor<LabQcEvent> captor = ArgumentCaptor.forClass(LabQcEvent.class);
+        verify(qcEventRepository).save(captor.capture());
+        assertThat(captor.getValue().getExpectedValue()).isEqualByComparingTo("5.0");
+        assertThat(captor.getValue().getTargetSd()).isEqualByComparingTo("0.2");
+        assertThat(captor.getValue().getSdFlag()).isEqualTo("OUTSIDE_2SD");
+        assertThat(captor.getValue().isPassed()).isTrue();
+    }
+
+    @Test
+    void recordQcEvent_withoutATargetHasNoFlag() {
+        when(qcEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.recordQcEvent(LabQcEventRequestDTO.builder()
+            .hospitalId(hospitalId).qcLevel("LOW_CONTROL")
+            .measuredValue(new BigDecimal("9")).expectedValue(new BigDecimal("5")).accepted(true).build(),
+            Locale.ENGLISH);
+
+        ArgumentCaptor<LabQcEvent> captor = ArgumentCaptor.forClass(LabQcEvent.class);
+        verify(qcEventRepository).save(captor.capture());
+        assertThat(captor.getValue().getSdFlag()).isNull();
+    }
+
+    @Test
+    void recordQcEvent_anotherHospitalsTestDefinitionIsNotFound() {
+        LabTestDefinition foreign = new LabTestDefinition();
+        com.example.hms.model.Hospital other = new com.example.hms.model.Hospital();
+        other.setId(UUID.randomUUID());
+        foreign.setHospital(other);
+        when(labTestDefinitionRepository.findById(testDefId)).thenReturn(Optional.of(foreign));
+
+        LabQcEventRequestDTO foreignRun = LabQcEventRequestDTO.builder()
+            .hospitalId(hospitalId).testDefinitionId(testDefId).qcLevel("LOW_CONTROL")
+            .measuredValue(BigDecimal.ONE).expectedValue(BigDecimal.ONE).build();
+        assertThatThrownBy(() -> service.recordQcEvent(foreignRun, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void recordQcEvent_aRunDatedInTheFutureIsRefused() {
+        LabQcEventRequestDTO future = LabQcEventRequestDTO.builder()
+            .hospitalId(hospitalId).qcLevel("LOW_CONTROL")
+            .measuredValue(BigDecimal.ONE).expectedValue(BigDecimal.ONE)
+            .recordedAt(LocalDateTime.now().plusDays(1)).build();
+
+        assertThatThrownBy(() -> service.recordQcEvent(future, Locale.ENGLISH))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("recordedAt"));
+    }
+
+    @Test
+    void recordQcEvent_namesTheOperator() {
+        com.example.hms.model.User tech = new com.example.hms.model.User();
+        tech.setFirstName("Paul");
+        tech.setLastName("K");
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(tech));
+        when(qcEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.recordQcEvent(LabQcEventRequestDTO.builder().hospitalId(hospitalId).qcLevel("HIGH_CONTROL")
+            .measuredValue(BigDecimal.ONE).expectedValue(BigDecimal.ONE).accepted(true).build(), Locale.ENGLISH);
+
+        ArgumentCaptor<LabQcEvent> captor = ArgumentCaptor.forClass(LabQcEvent.class);
+        verify(qcEventRepository).save(captor.capture());
+        assertThat(captor.getValue().getRecordedByDisplay()).isEqualTo("Paul K");
     }
 }

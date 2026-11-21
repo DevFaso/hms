@@ -164,6 +164,7 @@ public class DashboardConfigService {
         rolePriority.put("ROLE_MIDWIFE", 55);
         rolePriority.put("ROLE_PHARMACIST", 50);
         rolePriority.put("ROLE_RADIOLOGIST", 50);
+        rolePriority.put("ROLE_IMAGING_TECHNICIAN", 44);
         rolePriority.put("ROLE_LAB_SCIENTIST", 45);
         rolePriority.put("ROLE_PHYSIOTHERAPIST", 40);
         rolePriority.put("ROLE_PHARMACY_VERIFIER", 48);
@@ -547,6 +548,11 @@ public class DashboardConfigService {
                 "Update Diagnoses",
                 "Request Imaging Studies",
                 PERM_VIEW_IMAGING_RESULTS));
+        // Policy rule 3 (2026-11-20, provisional): the worklist, the exam and its record; no report.
+        map.put("ROLE_IMAGING_TECHNICIAN", List.of(
+                "View Imaging Orders",
+                "Perform Imaging Studies",
+                "Document Radiation Dosage"));
         map.put("ROLE_STAFF", List.of(
                 "View Dashboard",
                 "View Appointments",

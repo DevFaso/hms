@@ -166,6 +166,25 @@ class LabResultControllerTest {
         assertThat(roles).containsExactlyInAnyOrder("HOSPITAL_ADMIN", "SUPER_ADMIN");
     }
 
+    /**
+     * r65 D2183: whoever the escalation pages from round 2 (ROLE_HOSPITAL_ADMIN)
+     * can open the critical lists it is paged about; acknowledging and reading
+     * back stay with the clinical roles.
+     */
+    @Test
+    void criticalLists_admitTheRoleTheEscalationPages_acknowledgeStaysClinical() throws Exception {
+        String paged = ((String) org.springframework.test.util.ReflectionTestUtils.getField(
+            com.example.hms.service.CriticalValueNotificationService.class, "TIER_TWO_ROLE")).replace("ROLE_", "");
+        assertThat(extractRolesFromMethod("getUnacknowledgedCriticalResults", java.util.UUID.class, Locale.class))
+            .contains(paged);
+        assertThat(extractRolesFromMethod("getCriticalResults", java.util.UUID.class,
+            java.time.LocalDateTime.class, Locale.class)).contains(paged);
+        String readBack = LabResultController.class.getMethod("readBackCriticalValue",
+                java.util.UUID.class, com.example.hms.payload.dto.CriticalValueReadBackRequestDTO.class, Locale.class)
+            .getAnnotation(org.springframework.security.access.prepost.PreAuthorize.class).value();
+        assertThat(readBack).doesNotContain(paged);
+    }
+
     // ── getAllLabResults must include SUPER_ADMIN for cross-tenant browsing ──
 
     @Test
@@ -182,7 +201,8 @@ class LabResultControllerTest {
     void releaseLabResult_preAuthorize_excludesLabTechnician() throws Exception {
         // QA D1092: the endpoint also takes ungradedConfirmed.
         List<String> roles = extractRolesFromMethod("releaseLabResult",
-                UUID.class, boolean.class, boolean.class, Locale.class);
+                UUID.class, boolean.class, boolean.class,
+                com.example.hms.payload.dto.LabResultReleaseRequestDTO.class, Locale.class);
         assertThat(roles).isNotEmpty()
                 .doesNotContain("LAB_TECHNICIAN");
     }

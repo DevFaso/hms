@@ -1,0 +1,279 @@
+<div class="page-container cash-supervisor" data-testid="cash-supervisor">
+  <div class="cash-session-head">
+    <div>
+      <h1>{{ 'BILLING.CASH_SESSION.SUPERVISOR_TITLE' | translate }}</h1>
+      <p class="field-hint">{{ 'BILLING.CASH_SESSION.SUPERVISOR_SUBTITLE' | translate }}</p>
+    </div>
+    <div class="page-actions">
+      <a class="btn-secondary" routerLink="/billing">
+        {{ 'BILLING.PRICE_LIST.BACK_TO_BILLING' | translate }}
+      </a>
+      <label for="cash-supervisor-date">{{ 'BILLING.CASH_CLOSING.DATE' | translate }}</label>
+      <input
+        id="cash-supervisor-date"
+        type="date"
+        [max]="maxDate"
+        [ngModel]="date()"
+        (ngModelChange)="pick($event)"
+      />
+      <button
+        type="button"
+        class="btn-secondary"
+        data-testid="cash-day-report"
+        (click)="dayReport()"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span>
+        {{ 'BILLING.CASH_SESSION.DAY_REPORT' | translate }}
+      </button>
+      <button type="button" class="btn-secondary" data-testid="cash-journal" (click)="journal()">
+        <span class="material-symbols-outlined" aria-hidden="true">download</span>
+        {{ 'BILLING.CASH_SESSION.JOURNAL' | translate }}
+      </button>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <p class="field-hint" role="status">{{ 'BILLING.CASH_CLOSING.LOADING' | translate }}</p>
+  } @else if (failed()) {
+    <p class="field-hint" role="alert">{{ 'BILLING.CASH_CLOSING.LOAD_FAILED' | translate }}</p>
+  } @else if (sessions().length === 0) {
+    <p class="field-hint" data-testid="cash-supervisor-empty">
+      {{ 'BILLING.CASH_SESSION.SUPERVISOR_EMPTY' | translate }}
+    </p>
+  } @else {
+    <div class="table-scroll">
+      <table class="data-table" data-testid="cash-supervisor-table">
+        <caption class="sr-only">
+          {{
+            'BILLING.CASH_SESSION.SUPERVISOR_TITLE' | translate
+          }}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'BILLING.CASH_SESSION.TILL' | translate }}</th>
+            <th scope="col">{{ 'BILLING.CASH_SESSION.CASHIER' | translate }}</th>
+            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+            <th scope="col" class="numeric">{{ 'BILLING.CASH_SESSION.IN' | translate }}</th>
+            <th scope="col" class="numeric">{{ 'BILLING.CASH_SESSION.OUT' | translate }}</th>
+            <th scope="col" class="numeric">
+              {{ 'BILLING.CASH_SESSION.CASH_TO_COUNT' | translate }}
+            </th>
+            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (s of sessions(); track s.id) {
+            <tr [attr.data-testid]="'cash-supervisor-row-' + s.id">
+              <td>{{ s.till | keyLabel: 'BILLING.CASH_SESSION.TILLS.' }}</td>
+              <td>{{ s.cashierName || '—' }}</td>
+              <td>
+                <span class="status-badge" [attr.data-status]="s.status">
+                  {{ s.status | keyLabel: 'BILLING.CASH_SESSION.STATUSES.' }}
+                </span>
+              </td>
+              <td class="numeric">{{ s.totalIn | cfa }}</td>
+              <td class="numeric">{{ s.totalOut > 0 ? '−' : '' }}{{ s.totalOut | cfa }}</td>
+              <!-- PR 10 review: under the cash to count, the drawer's own difference (never a sum that nets a
+                   shortage against a surplus) and a flag as soon as any line differs. In the same cell: an
+                   eighth column of amounts did not fit a 1024 px screen (#1224 guard). -->
+              <td class="numeric">
+                {{ s.cashToCount | cfa }}
+                @if (s.cashDifference !== null && s.cashDifference !== undefined) {
+                  <span
+                    class="gap-flag"
+                    [class.gap]="s.cashDifference !== 0"
+                    [attr.data-testid]="'cash-difference-' + s.id"
+                  >
+                    {{
+                      'BILLING.CASH_SESSION.CASH_DIFFERENCE_VALUE'
+                        | translate: { amount: (s.cashDifference | cfa) }
+                    }}
+                  </span>
+                }
+                @if ((s.differenceLines ?? 0) > 0) {
+                  <span class="gap-flag gap" [attr.data-testid]="'cash-difference-flag-' + s.id">
+                    {{
+                      'BILLING.CASH_SESSION.LINES_WITH_DIFFERENCE'
+                        | translate: { count: s.differenceLines }
+                    }}
+                  </span>
+                }
+              </td>
+              <td class="row-actions">
+                <button
+                  type="button"
+                  class="btn-secondary btn-sm"
+                  [attr.aria-expanded]="expanded() === s.id"
+                  (click)="toggle(s)"
+                >
+                  {{ 'BILLING.CASH_SESSION.DETAILS' | translate }}
+                </button>
+                @if (!s.mine && s.status !== 'OPEN') {
+                  <button
+                    type="button"
+                    class="btn-secondary btn-sm"
+                    [attr.data-testid]="'cash-reopen-' + s.id"
+                    (click)="ask(s, 'reopen')"
+                  >
+                    {{ 'BILLING.CASH_SESSION.REOPEN' | translate }}
+                  </button>
+                }
+                @if (!s.mine && s.status === 'CLOSED') {
+                  <button
+                    type="button"
+                    class="btn-secondary btn-sm"
+                    [attr.data-testid]="'cash-review-' + s.id"
+                    (click)="ask(s, 'review')"
+                  >
+                    {{ 'BILLING.CASH_SESSION.REVIEW' | translate }}
+                  </button>
+                }
+              </td>
+            </tr>
+            @if (pending()?.session?.id === s.id) {
+              <tr>
+                <td colspan="7">
+                  <div class="field">
+                    <label for="cash-supervisor-note">
+                      {{
+                        (pending()?.mode === 'reopen'
+                          ? 'BILLING.CASH_SESSION.REOPEN_REASON'
+                          : 'BILLING.CASH_SESSION.REVIEW_NOTE'
+                        ) | translate
+                      }}
+                      @if (pending()?.mode === 'reopen') {
+                        *
+                      }
+                    </label>
+                    <textarea
+                      id="cash-supervisor-note"
+                      rows="2"
+                      [required]="pending()?.mode === 'reopen'"
+                      maxlength="500"
+                      [class.invalid]="noteRefused()"
+                      [attr.aria-invalid]="noteRefused()"
+                      [ngModel]="note()"
+                      (ngModelChange)="note.set($event)"
+                    ></textarea>
+                  </div>
+                  <div class="page-actions">
+                    <button type="button" class="btn-secondary" (click)="cancelAsk()">
+                      {{ 'COMMON.CANCEL' | translate }}
+                    </button>
+                    <button
+                      type="button"
+                      class="btn-primary"
+                      data-testid="cash-supervisor-confirm"
+                      [disabled]="busy()"
+                      (click)="submitAsk()"
+                    >
+                      {{ 'COMMON.CONFIRM' | translate }}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            }
+            @if (expanded() === s.id) {
+              <tr>
+                <td colspan="7">
+                  <div class="table-scroll">
+                    <table class="data-table">
+                      <thead>
+                        <tr>
+                          <th scope="col">{{ 'BILLING.PAYMENT_METHOD' | translate }}</th>
+                          <th scope="col" class="numeric">
+                            {{ 'BILLING.CASH_SESSION.IN' | translate }}
+                          </th>
+                          <th scope="col" class="numeric">
+                            {{ 'BILLING.CASH_SESSION.OUT' | translate }}
+                          </th>
+                          <th scope="col" class="numeric">
+                            {{ 'BILLING.CASH_SESSION.EXPECTED' | translate }}
+                          </th>
+                          <th scope="col" class="numeric">
+                            {{ 'BILLING.CASH_SESSION.COUNTED' | translate }}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (line of s.methods; track line.method + (line.operator ?? '')) {
+                          <tr>
+                            <th scope="row">
+                              {{ line.method | keyLabel: 'BILLING.PAYMENT_METHODS.' }}
+                              @if (isMobileMoney(line.method)) {
+                                — {{ operatorLabelKey(line.operator) | translate }}
+                              }
+                            </th>
+                            <td class="numeric">{{ line.inAmount | cfa }}</td>
+                            <td class="numeric">{{ line.outAmount | cfa }}</td>
+                            <td class="numeric">{{ line.expected | cfa }}</td>
+                            <td class="numeric">
+                              {{ countedOf(s, line) === null ? '—' : (countedOf(s, line) | cfa) }}
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                  @for (text of explanationsOf(s); track $index) {
+                    <p class="field-hint">
+                      {{ 'BILLING.CASH_SESSION.EXPLANATION_VALUE' | translate: { text: text } }}
+                    </p>
+                  }
+                  @if (s.reviewNote) {
+                    <p class="field-hint">
+                      {{
+                        'BILLING.CASH_SESSION.REVIEW_NOTE_VALUE' | translate: { text: s.reviewNote }
+                      }}
+                    </p>
+                  }
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- PR 10 review (QA D2703): the lines taken off draft invoices that day, each with who and why. -->
+  @if (removed().length > 0) {
+    <h2 class="cash-removed-title">{{ 'BILLING.CASH_SESSION.REMOVED_LINES' | translate }}</h2>
+    <div class="table-scroll">
+      <table class="data-table" data-testid="cash-removed-lines">
+        <caption class="sr-only">
+          {{
+            'BILLING.CASH_SESSION.REMOVED_LINES' | translate
+          }}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'BILLING.CASH_SESSION.REMOVED_INVOICE' | translate }}</th>
+            <th scope="col">{{ 'BILLING.CASH_SESSION.REMOVED_LINE' | translate }}</th>
+            <th scope="col" class="numeric">{{ 'BILLING.LINE_QUANTITY' | translate }}</th>
+            <th scope="col" class="numeric">{{ 'BILLING.LINE_UNIT_PRICE' | translate }}</th>
+            <th scope="col">{{ 'BILLING.CASH_SESSION.REMOVED_REASON' | translate }}</th>
+            <th scope="col">{{ 'BILLING.CASH_SESSION.REMOVED_BY' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (line of removed(); track line.id) {
+            <tr [attr.data-testid]="'cash-removed-line-' + line.id">
+              <td>{{ line.invoiceNumber || '—' }}</td>
+              <td>{{ line.line }}</td>
+              <td class="numeric">{{ line.quantity }}</td>
+              <td class="numeric">{{ line.unitPrice | cfa }}</td>
+              <td>{{ line.reason }}</td>
+              <td>
+                {{ line.removedByName || '—' }}
+                @if (line.removedAt) {
+                  <span class="field-hint">{{ line.removedAt | serverTime | date: 'short' }}</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

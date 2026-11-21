@@ -150,6 +150,17 @@ public class SecurityConfig {
     /** V317: a hospital's PACS connection; same admins as the posture, controller narrows further. */
     static final String API_HOSPITAL_PACS_SETTINGS = "/hospitals/*/pacs-settings";
 
+    /** V346 (policy rule 3): a hospital's imaging reporting settings; the same admins as the PACS connection. */
+    static final String API_HOSPITAL_IMAGING_REPORTING_SETTINGS = "/hospitals/*/imaging-reporting-settings";
+
+    /**
+     * Policy 2026-11-20 (V347): a hospital's adolescent confidentiality age. As the posture: its
+     * controller admits HOSPITAL_ADMIN on PUT and QUALITY_MANAGER on GET, which the /hospitals/**
+     * matchers below would refuse at the edge. The controller pins a hospital admin to the hospital
+     * they are acting in.
+     */
+    static final String API_HOSPITAL_ADOLESCENT_AGE = "/hospitals/*/adolescent-confidentiality-age";
+
     /**
      * The HAPI FHIR servlet ({@code FhirConfig}, mounted at {@code /fhir/*}).
      * It answers with the whole chart — Encounter, Condition,
@@ -805,12 +816,23 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN, ROLE_QUALITY_MANAGER)
                 .requestMatchers(HttpMethod.PUT, API_HOSPITAL_POSTURE)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                // Policy 2026-11-20: the adolescent confidentiality age, ahead of the /hospitals
+                // matchers as the posture, so the controller's own role sets decide.
+                .requestMatchers(HttpMethod.GET, API_HOSPITAL_ADOLESCENT_AGE)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN, ROLE_QUALITY_MANAGER)
+                .requestMatchers(HttpMethod.PUT, API_HOSPITAL_ADOLESCENT_AGE)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
                 // V317 PACS connection: ahead of the /hospitals matchers, as the posture.
                 .requestMatchers(HttpMethod.GET, API_HOSPITAL_PACS_SETTINGS)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.PUT, API_HOSPITAL_PACS_SETTINGS)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.POST, API_HOSPITAL_PACS_SETTINGS + "/test")
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                // V346 imaging reporting settings: ahead of the /hospitals matchers, as the PACS connection.
+                .requestMatchers(HttpMethod.GET, API_HOSPITAL_IMAGING_REPORTING_SETTINGS)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.PUT, API_HOSPITAL_IMAGING_REPORTING_SETTINGS)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
                 .requestMatchers(HttpMethod.GET, API_HOSPITALS, API_HOSPITALS + "/", API_HOSPITALS_PATTERN)
@@ -1029,6 +1051,16 @@ public class SecurityConfig {
                 // anyRequest().authenticated() + their own @PreAuthorize.
                 .requestMatchers(HttpMethod.POST, API_LAB_ORDERS)
                 .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
+
+                // r65 D2183: the hospital's critical lists only, for the
+                // HOSPITAL_ADMIN the escalation pages from round 2; the union
+                // of the two @PreAuthorize lists, which stay the precise gate.
+                // Acknowledge and read-back stay clinical (matcher below).
+                .requestMatchers(HttpMethod.GET,
+                        API_LAB_RESULTS + "/hospital/*/critical",
+                        API_LAB_RESULTS + "/hospital/*/critical/unacknowledged")
+                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
+                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
                 // E9 #69: PHARMACIST reads results (renal function before verifying, V139).
                 .requestMatchers(HttpMethod.GET, API_LAB_RESULTS, API_LAB_RESULTS_PATTERN)

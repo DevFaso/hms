@@ -356,51 +356,76 @@
               </button>
             </div>
           }
+          @if (canTagSensitivity() && encounterSensitivity(); as tag) {
+            <!-- QA D2730: the visit's sensitive category, set by the clinicians who write it. -->
+            <div class="encounter-sensitivity" data-testid="encounter-sensitivity">
+              <app-sensitivity-select
+                controlId="encounter-sensitivity-select"
+                labelKey="SENSITIVITY_TAG.ENCOUNTER_LABEL"
+                hintKey="SENSITIVITY_TAG.ENCOUNTER_HINT"
+                [value]="tag.explicitCategory"
+                [inherited]="tag.effectiveCategory"
+                [disabled]="sensitivitySaving()"
+                (picked)="setEncounterSensitivity($event)"
+              />
+            </div>
+          }
           <div class="detail-grid">
             <div class="detail-field">
-              <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span
-              ><span class="field-value">{{ enc.patientName || '—' }}</span>
+              <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span><span
+                class="field-value"
+                >{{ enc.patientName || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'ENCOUNTERS.PROVIDER' | translate }}</span
-              ><span class="field-value">{{ enc.staffName || '—' }}</span>
+              <span class="field-label">{{ 'ENCOUNTERS.PROVIDER' | translate }}</span><span
+                class="field-value"
+                >{{ enc.staffName || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'STAFF.DEPARTMENT' | translate }}</span
-              ><span class="field-value">{{ enc.departmentName || '—' }}</span>
+              <span class="field-label">{{ 'STAFF.DEPARTMENT' | translate }}</span><span
+                class="field-value"
+                >{{ enc.departmentName || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
-              ><span class="field-value">{{ enc.hospitalName || '—' }}</span>
+              <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span><span
+                class="field-value"
+                >{{ enc.hospitalName || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'BILLING.ENCOUNTER_REFERENCE' | translate }}</span
-              ><span class="field-value">{{ enc.code || '—' }}</span>
+              <span class="field-label">{{ 'BILLING.ENCOUNTER_REFERENCE' | translate }}</span><span
+                class="field-value"
+                >{{ enc.code || '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'COMMON.TYPE' | translate }}</span
-              ><span class="field-value">{{
-                enc.encounterType ? (enc.encounterType | enumLabel: 'encounterType') : '—'
-              }}</span>
+              <span class="field-label">{{ 'COMMON.TYPE' | translate }}</span><span
+                class="field-value"
+                >{{
+                  enc.encounterType ? (enc.encounterType | enumLabel: 'encounterType') : '—'
+                }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
-              >{{ ' '
+              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span>{{ ' '
               }}<span class="status-badge {{ getStatusClass(enc.status) }}">{{
                 enc.status | enumLabel: 'encounterStatus'
               }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'COMMON.DATE' | translate }}</span
-              ><span class="field-value">{{
-                enc.encounterDate ? (enc.encounterDate | serverTime | dateTime) : '—'
-              }}</span>
+              <span class="field-label">{{ 'COMMON.DATE' | translate }}</span><span
+                class="field-value"
+                >{{ enc.encounterDate ? (enc.encounterDate | serverTime | dateTime) : '—' }}</span
+              >
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'ENCOUNTERS.CREATED' | translate }}</span
-              ><span class="field-value">{{
-                enc.createdAt ? (enc.createdAt | serverTime | dateTime) : '—'
-              }}</span>
+              <span class="field-label">{{ 'ENCOUNTERS.CREATED' | translate }}</span><span
+                class="field-value"
+                >{{ enc.createdAt ? (enc.createdAt | serverTime | dateTime) : '—' }}</span
+              >
             </div>
           </div>
 
@@ -481,6 +506,8 @@
                         <strong>{{ section.labelKey | translate }}</strong> {{ section.text }}
                       </p>
                     }
+                    <!-- QA D2260: an addendum row shows the addendum it records. -->
+                    <app-note-addenda [addenda]="n.addenda" />
                   </div>
                 }
               </div>
@@ -513,6 +540,25 @@
                 rows="3"
                 [placeholder]="'ENCOUNTERS.ADDENDUM_PLACEHOLDER' | translate"
               ></textarea>
+              <!-- QA D2551: the author attests (unticked by default); an attested addendum reaches the patient. -->
+              <label class="addendum-attest" for="addendum-attest">
+                <input
+                  id="addendum-attest"
+                  type="checkbox"
+                  data-testid="addendum-attest"
+                  aria-describedby="addendum-attest-hint"
+                  [checked]="addendumAttest()"
+                  (change)="addendumAttest.set($any($event.target).checked)"
+                />
+                <span>{{ 'ENCOUNTERS.ADDENDUM_ATTEST' | translate }}</span>
+              </label>
+              <p
+                id="addendum-attest-hint"
+                class="addendum-attest-hint"
+                data-testid="addendum-attest-hint"
+              >
+                {{ 'ENCOUNTERS.ADDENDUM_ATTEST_HINT' | translate }}
+              </p>
               <div class="note-actions">
                 <button
                   class="btn-primary"
@@ -574,6 +620,8 @@
                       <strong>{{ section.labelKey | translate }}</strong> {{ section.text }}
                     </p>
                   }
+                  <!-- QA D2260: the corrections filed under this entry. -->
+                  <app-note-addenda [addenda]="view.entry.addenda" />
                   @if (!view.entry.signedAt && isNoteAuthor(view.entry)) {
                     <button
                       class="btn-secondary"
@@ -678,6 +726,8 @@
                   </p>
                 }
               }
+              <!-- QA D2260: the corrections filed under the signed note, dated and signed. -->
+              <app-note-addenda [addenda]="note.addenda" />
               @if (note.requiresCosign) {
                 @if (note.cosignedAt) {
                   <p class="note-meta" data-testid="note-cosigned-line">

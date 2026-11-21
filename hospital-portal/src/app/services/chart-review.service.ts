@@ -1,3 +1,4 @@
+import { NoteAddendumView } from '../shared/note-addenda/note-addendum-view';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
@@ -43,6 +44,8 @@ export interface ChartReviewNote {
   preview?: string | null;
   /** QA D1076: a nurse's note (DAR / SOAPIE) or the visit's clinical note. */
   source?: 'ENCOUNTER' | 'NURSING' | null;
+  /** QA D2260: the addenda filed under the note, oldest first. */
+  addenda?: NoteAddendumView[] | null;
 }
 
 export interface ChartReviewResult {

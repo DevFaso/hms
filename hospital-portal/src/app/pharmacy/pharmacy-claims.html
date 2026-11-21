@@ -22,8 +22,9 @@
   </header>
   <div class="workspace-strip">
     <p>
-      <strong>{{ loading() ? '—' : claims().length }}</strong
-      ><span>{{ 'PHARMACY_WORKSPACE.LOADED_CLAIMS' | translate }}</span>
+      <strong>{{ loading() ? '—' : claims().length }}</strong><span>{{
+        'PHARMACY_WORKSPACE.LOADED_CLAIMS' | translate
+      }}</span>
     </p>
     <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
   </div>
@@ -105,16 +106,41 @@
                 @if (c.claimStatus === 'DRAFT') {
                   <button (click)="submit(c)">{{ 'PHARMACY_CLAIMS.SUBMIT' | translate }}</button>
                 }
-                @if (c.claimStatus === 'SUBMITTED') {
-                  <button (click)="accept(c)">{{ 'PHARMACY_CLAIMS.ACCEPT' | translate }}</button>
+                <!-- QA D2925 (r66): the payer's answer is recorded by billing, the claims reviewers,
+                     accounting or a hospital admin. The pharmacy creates and sends; it is told who
+                     answers. The server decides who the reader is (canRecordPayerDecision). -->
+                @if (c.canRecordPayerDecision) {
+                  @if (c.claimStatus === 'SUBMITTED') {
+                    <button [attr.data-testid]="'claim-accept-' + c.id" (click)="accept(c)">
+                      {{ 'PHARMACY_CLAIMS.ACCEPT' | translate }}
+                    </button>
+                    <button
+                      class="danger"
+                      [attr.data-testid]="'claim-reject-' + c.id"
+                      (click)="reject(c)"
+                    >
+                      {{ 'PHARMACY_CLAIMS.REJECT' | translate }}
+                    </button>
+                  }
+                  @if (c.claimStatus === 'ACCEPTED' && c.acceptanceUnconfirmed) {
+                    <button [attr.data-testid]="'claim-confirm-' + c.id" (click)="accept(c)">
+                      {{ 'PHARMACY_CLAIMS.CONFIRM_ACCEPTANCE' | translate }}
+                    </button>
+                  }
+                  @if (c.claimStatus === 'ACCEPTED') {
+                    <button [attr.data-testid]="'claim-pay-' + c.id" (click)="pay(c)">
+                      {{ 'PHARMACY_CLAIMS.MARK_PAID' | translate }}
+                    </button>
+                  }
+                } @else if (c.claimStatus === 'SUBMITTED' || c.claimStatus === 'ACCEPTED') {
+                  <em class="claim-waiting" [attr.data-testid]="'claim-waiting-' + c.id">{{
+                    'PHARMACY_CLAIMS.AWAITING_DESK' | translate
+                  }}</em>
                 }
-                @if (c.claimStatus === 'SUBMITTED') {
-                  <button (click)="reject(c)" class="danger">
-                    {{ 'PHARMACY_CLAIMS.REJECT' | translate }}
-                  </button>
-                }
-                @if (c.claimStatus === 'ACCEPTED') {
-                  <button (click)="pay(c)">{{ 'PHARMACY_CLAIMS.MARK_PAID' | translate }}</button>
+                @if (c.acceptanceUnconfirmed) {
+                  <em class="claim-waiting" [attr.data-testid]="'claim-unconfirmed-' + c.id">{{
+                    'PHARMACY_CLAIMS.ACCEPTANCE_UNCONFIRMED' | translate
+                  }}</em>
                 }
               </td>
             </tr>

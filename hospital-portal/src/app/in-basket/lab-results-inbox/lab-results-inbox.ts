@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
   computed,
   effect,
   inject,
@@ -20,6 +21,13 @@ import { HospitalScopeHintComponent } from '../../shared/hospital-scope-chip/hos
 import { currentLocale } from '../../shared/i18n/app-locale';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { LabValuePipe } from '../../lab/shared/lab-value.pipe';
+import { LabService } from '../../services/lab.service';
+import { ToastService } from '../../core/toast.service';
+import { TranslateService } from '@ngx-translate/core';
+import { FormsModule } from '@angular/forms';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { refusalReason, refusedFieldReasons } from '../../shared/refusal-reason';
+import { refuseFields } from '../../shared/forms/invalid-fields';
 
 /** QA D731: the server sends resultedAt as a zone-less UTC wall time. */
 const SERVER_TIME = new ServerTimePipe();
@@ -106,6 +114,8 @@ function isQualitativeValue(value: string | null | undefined): boolean {
     HospitalScopeChipComponent,
     HospitalScopeHintComponent,
     LabValuePipe,
+    FormsModule,
+    SubmitGuardDirective,
   ],
   templateUrl: './lab-results-inbox.html',
   styleUrl: './lab-results-inbox.scss',
@@ -115,6 +125,24 @@ export class LabResultsInboxComponent {
   private readonly dashboardService = inject(DashboardService);
   private readonly roleContext = inject(RoleContextService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly labService = inject(LabService);
+  private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
+
+  /**
+   * QA D2263 (r63): the rows were a dead end — no way to the result, no
+   * acknowledge or read-back, and a value already read back still listed as a
+   * bare "Critique". Each row now opens the result, acknowledges it (or takes
+   * the read-back a critical value needs first), offers a follow-up order and
+   * says where it stands.
+   */
+  readonly busyId = signal<string | null>(null);
+  /** The row whose read-back form is open. */
+  readonly readBackFor = signal<string | null>(null);
+  readBackValue = '';
+  /** QA D2266 class: what was just confirmed, kept on screen (a toast is gone in five seconds). */
+  readonly confirmation = signal<string | null>(null);
 
   /** Which read of the queue is the current one; see load(). */
   private queueRequest = 0;
@@ -288,6 +316,87 @@ export class LabResultsInboxComponent {
           this.loading.set(false);
         },
       });
+  }
+
+  acknowledge(item: DoctorResultQueueItem): void {
+    if (this.busyId()) return;
+    this.busyId.set(item.id);
+    this.labService.acknowledgeResult(item.id).subscribe({
+      next: () => {
+        this.patch(item.id, { acknowledged: true });
+        this.confirm('inBasket.resultActions.acknowledged', item);
+        this.busyId.set(null);
+      },
+      error: (err: { status?: number }) => {
+        // 400: the value is critical and wants its read-back first.
+        if (err?.status === 400) {
+          this.patch(item.id, { readBackRequired: true });
+          this.openReadBack(item);
+        }
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('inBasket.resultActions.acknowledgeFailed'),
+        );
+        this.busyId.set(null);
+      },
+    });
+  }
+
+  openReadBack(item: DoctorResultQueueItem): void {
+    this.readBackValue = '';
+    this.readBackFor.set(item.id);
+  }
+
+  closeReadBack(): void {
+    this.readBackFor.set(null);
+    this.readBackValue = '';
+  }
+
+  submitReadBack(item: DoctorResultQueueItem): void {
+    const value = this.readBackValue.trim();
+    if (!value || this.busyId()) return;
+    this.busyId.set(item.id);
+    this.labService.readBackCriticalValue(item.id, value).subscribe({
+      next: (updated) => {
+        this.patch(item.id, {
+          acknowledged: true,
+          readBackRequired: false,
+          readBackAt: updated?.criticalReadBackAt ?? null,
+        });
+        this.confirm('inBasket.resultActions.readBackConfirmed', item);
+        this.closeReadBack();
+        this.busyId.set(null);
+      },
+      error: (err: unknown) => {
+        // A 400 naming the repeated value marks the field with the server's reason.
+        const fieldId = 'read-back-' + item.id;
+        const refused = refusedFieldReasons(err, { repeatedValue: fieldId });
+        if (refused.length > 0) {
+          refuseFields(
+            this.host.nativeElement,
+            refused.map(([id, message]) => ({ id, message })),
+            [fieldId],
+          );
+        }
+        // A mismatch is explained by the server in clinical terms.
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('inBasket.resultActions.readBackFailed'),
+        );
+        this.busyId.set(null);
+      },
+    });
+  }
+
+  private patch(id: string, change: Partial<DoctorResultQueueItem>): void {
+    this.results.update((rows) => rows.map((r) => (r.id === id ? { ...r, ...change } : r)));
+  }
+
+  private confirm(key: string, item: DoctorResultQueueItem): void {
+    const message = this.translate.instant(key, {
+      test: item.testName,
+      patient: item.patientName,
+    });
+    this.toast.success(message);
+    this.confirmation.set(message);
   }
 
   flagClass(item: DoctorResultQueueItem): string {

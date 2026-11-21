@@ -102,6 +102,14 @@ class InBasketRecipientGuardTest {
         // for the hospital's billing staff, who obtain the authorisation afterwards.
         Map.entry("ImagingPreAuthorisationFollowUp.java", codes(setConstant(
             com.example.hms.service.imaging.ImagingPreAuthorisationFollowUp.class, "BILLING_ROLE_CODES"))),
+        // Policy rule 2 (2026-11-20, provisional): a newborn a midwife placed in a NICU cot, for the hospital's
+        // physicians, who review it.
+        Map.entry("MidwifeNewbornCare.java", codes(setConstant(
+            com.example.hms.service.maternity.MidwifeNewbornCare.class, "PHYSICIAN_ROLE_CODES"))),
+        // Policy rule 6 (V345): an urgency override of a fill's billing to review, and a third-party cover to
+        // check, for the hospital's billing staff.
+        Map.entry("DispenseBillingDeferralFollowUp.java", codes(setConstant(
+            com.example.hms.service.pharmacy.DispenseBillingDeferralFollowUp.class, "BILLING_ROLE_CODES"))),
         // The store itself: every sender above reaches it through createItem.
         Map.entry("InBasketServiceImpl.java", Set.of()));
 

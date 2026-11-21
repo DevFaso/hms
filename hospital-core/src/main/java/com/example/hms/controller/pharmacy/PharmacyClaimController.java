@@ -41,8 +41,22 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PharmacyClaimController {
 
+    /**
+     * Who reads, creates and sends the claims: the pharmacy and the money desks. QA D2925 (r66): the accountant is
+     * a money desk like billing and the claims reviewers (a claim an accountant sends is vouched, as theirs is),
+     * and records the payer's answer, so the accountant is one of them.
+     */
     private static final String CLAIMS_ROLES =
-            "hasAnyRole('PHARMACIST', 'BILLING_SPECIALIST', 'CLAIMS_REVIEWER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')";
+            "hasAnyRole('PHARMACIST', 'BILLING_SPECIALIST', 'CLAIMS_REVIEWER', 'ACCOUNTANT', 'HOSPITAL_ADMIN', "
+                    + "'SUPER_ADMIN')";
+
+    /**
+     * QA D2925 (r66): the payer's decision (accepted, rejected, paid) is recorded by a money desk or a hospital
+     * admin, never by the pharmacy that sent the claim and never by the super-admin alone. The service asks the
+     * same of the caller's assignment at the claim's own hospital ({@code RoleValidator#canRecordPayerDecision}).
+     */
+    private static final String PAYER_DECISION_ROLES =
+            "hasAnyRole('BILLING_SPECIALIST', 'CLAIMS_REVIEWER', 'ACCOUNTANT', 'HOSPITAL_ADMIN')";
 
     private final PharmacyClaimService claimService;
     private final PharmacyClaimExportService exportService;
@@ -65,7 +79,7 @@ public class PharmacyClaimController {
     }
 
     @PostMapping("/{id}/accept")
-    @PreAuthorize(CLAIMS_ROLES)
+    @PreAuthorize(PAYER_DECISION_ROLES)
     @Operation(summary = "Mark claim ACCEPTED (payer acknowledged)")
     public ResponseEntity<ApiResponseWrapper<PharmacyClaimResponseDTO>> accept(
             @PathVariable UUID id,
@@ -75,7 +89,7 @@ public class PharmacyClaimController {
     }
 
     @PostMapping("/{id}/reject")
-    @PreAuthorize(CLAIMS_ROLES)
+    @PreAuthorize(PAYER_DECISION_ROLES)
     @Operation(summary = "Mark claim REJECTED (requires reason)")
     public ResponseEntity<ApiResponseWrapper<PharmacyClaimResponseDTO>> reject(
             @PathVariable UUID id,
@@ -85,7 +99,7 @@ public class PharmacyClaimController {
     }
 
     @PostMapping("/{id}/pay")
-    @PreAuthorize(CLAIMS_ROLES)
+    @PreAuthorize(PAYER_DECISION_ROLES)
     @Operation(summary = "Reconcile payer payment (status = PAID)")
     public ResponseEntity<ApiResponseWrapper<PharmacyClaimResponseDTO>> pay(
             @PathVariable UUID id,

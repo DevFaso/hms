@@ -54,6 +54,7 @@ class ReadOnlyPostGuardTest {
         Map.entry("LabResultController#readBackCriticalValue", "records the read-back"),
         Map.entry("LabTestValidationStudyController#create", "creates a validation study"),
         Map.entry("ReceptionController#checkInPatient", "checks the patient in"),
+        Map.entry("ImagingOrderController#checkIn", "records the patient's arrival for an imaging exam (policy rule 3)"),
         Map.entry("SlotInventoryController#generate", "creates slots"),
         Map.entry("UltrasoundController#createOrUpdateReport", "stores the report"),
         Map.entry("EligibilityController#checkCoverage", "persists the eligibility check and answers 201"),

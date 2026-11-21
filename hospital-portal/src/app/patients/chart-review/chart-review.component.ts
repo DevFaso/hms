@@ -1,3 +1,4 @@
+import { NoteAddendaComponent } from '../../shared/note-addenda/note-addenda.component';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -81,6 +82,7 @@ const FIRST_PAGES: Record<ChartReviewTab, number> = {
   selector: 'app-chart-review',
   standalone: true,
   imports: [
+    NoteAddendaComponent,
     DateTimePipe,
     LabCorrectionBadgeComponent,
     ServerTimePipe,

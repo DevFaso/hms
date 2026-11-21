@@ -1,7 +1,9 @@
 package com.example.hms.mapper;
 
 import com.example.hms.model.LabTestDefinition;
+import com.example.hms.model.LabTestComponent;
 import com.example.hms.model.LabTestReferenceRange;
+import com.example.hms.payload.dto.LabTestComponentDTO;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.LabTestDefinitionRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionResponseDTO;
@@ -33,12 +35,14 @@ public class LabTestDefinitionMapper {
             .loincDisplay(dto.getLoincDisplay())
             .preparationInstructions(dto.getPreparationInstructions())
             .expectedResult(dto.getExpectedResult())
+            .sensitivityCategory(dto.getSensitivityCategory())
             .turnaroundTimeMinutes(dto.getTurnaroundTime())
             // QA D535: a new definition is a DRAFT, and a DRAFT is not active;
             // only the approval workflow's ACTIVATE step switches it on.
             .active(false)
             .assignment(assignment)
             .referenceRanges(mapRangeDtosToEntities(dto.getReferenceRanges()))
+            .components(mapComponentDtosToEntities(dto.getComponents()))
             .build();
     }
 
@@ -57,6 +61,7 @@ public class LabTestDefinitionMapper {
                 .sampleType(entity.getSampleType())
                 .preparationInstructions(entity.getPreparationInstructions())
                 .expectedResult(entity.getExpectedResult())
+                .sensitivityCategory(entity.getSensitivityCategory())
                 .turnaroundTime(entity.getTurnaroundTimeMinutes())
                 // QA D535: "active" means orderable - a DRAFT (or any status
                 // short of ACTIVE) is never reported active, even for rows
@@ -72,6 +77,7 @@ public class LabTestDefinitionMapper {
                 .supersedesDefinitionId(entity.getSupersedesDefinitionId())
                 .versionNumber(entity.getVersionNumber() != null ? entity.getVersionNumber() : 1)
                 .referenceRanges(mapToDtoRanges(entity.getReferenceRanges()))
+                .components(mapToDtoComponents(entity.getComponents()))
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();
@@ -91,6 +97,9 @@ public class LabTestDefinitionMapper {
         entity.setLoincDisplay(dto.getLoincDisplay());
         entity.setPreparationInstructions(dto.getPreparationInstructions());
         entity.setExpectedResult(dto.getExpectedResult());
+        if (dto.getSensitivityCategory() != null) {
+            entity.setSensitivityCategory(dto.getSensitivityCategory());
+        }
         if (dto.getTurnaroundTime() != null) {
             entity.setTurnaroundTimeMinutes(dto.getTurnaroundTime());
         }
@@ -99,6 +108,9 @@ public class LabTestDefinitionMapper {
         }
         if (dto.getReferenceRanges() != null) {
             entity.setReferenceRanges(mapRangeDtosToEntities(dto.getReferenceRanges()));
+        }
+        if (dto.getComponents() != null) {
+            entity.setComponents(mapComponentDtosToEntities(dto.getComponents()));
         }
     }
 
@@ -128,7 +140,7 @@ public class LabTestDefinitionMapper {
             .collect(Collectors.toCollection(java.util.ArrayList::new));
     }
 
-    private List<LabTestReferenceRangeDTO> mapToDtoRanges(List<LabTestReferenceRange> ranges) {
+    static List<LabTestReferenceRangeDTO> mapToDtoRanges(List<LabTestReferenceRange> ranges) {
         if (ranges == null || ranges.isEmpty()) {
             return Collections.emptyList();
         }
@@ -146,6 +158,39 @@ public class LabTestDefinitionMapper {
                 .criticalHigh(range.getCriticalHigh())
                 .ageUnit(range.getAgeUnit())
                 .source(range.getSource())
+                .build())
+            .collect(Collectors.toCollection(java.util.ArrayList::new));
+    }
+
+    /** r63 (NFS panels): codes are trimmed and upper-cased so a result names them unambiguously. */
+    public List<LabTestComponent> mapComponentDtosToEntities(List<LabTestComponentDTO> components) {
+        if (components == null || components.isEmpty()) {
+            return new java.util.ArrayList<>();
+        }
+        return components.stream()
+            .filter(Objects::nonNull)
+            .map(component -> LabTestComponent.builder()
+                .code(component.getCode() == null ? null
+                    : component.getCode().trim().toUpperCase(java.util.Locale.ROOT))
+                .name(component.getName() == null ? null : component.getName().trim())
+                .unit(component.getUnit() == null || component.getUnit().isBlank() ? null : component.getUnit().trim())
+                .referenceRanges(mapRangeDtosToEntities(component.getReferenceRanges()))
+                .build())
+            .collect(Collectors.toCollection(java.util.ArrayList::new));
+    }
+
+    /** r63: also used by the order payload, so result entry knows a panel's components. */
+    public static List<LabTestComponentDTO> mapToDtoComponents(List<LabTestComponent> components) {
+        if (components == null || components.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return components.stream()
+            .filter(Objects::nonNull)
+            .map(component -> LabTestComponentDTO.builder()
+                .code(component.getCode())
+                .name(component.getName())
+                .unit(component.getUnit())
+                .referenceRanges(mapToDtoRanges(component.getReferenceRanges()))
                 .build())
             .collect(Collectors.toCollection(java.util.ArrayList::new));
     }

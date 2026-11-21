@@ -321,6 +321,56 @@ public enum AuditEventType {
     STILLBIRTH_CERTIFICATE_CONFLICT,
     /** QA D1802 (provisional): that contradiction ended (certificate amended or voided, or outcome corrected back). */
     STILLBIRTH_CERTIFICATE_CONFLICT_RECONCILED,
+    /** QA r64 (lost phone): a user's two-step verification reset by an administrator, or removed by the user. */
+    MFA_RESET,
+    /** QA D2203: a patient's SMS / e-mail choices recorded by the desk. */
+    PATIENT_CHANNEL_PREFERENCES_UPDATED,
+    /** QA D2464 (r64, V313): a key image withdrawn after signing, with a reason; the file is kept. */
+    IMAGING_IMAGE_WITHDRAWN,
+    /** QA D2466 (r64): a key image's caption corrected after upload. */
+    IMAGING_IMAGE_CAPTION_UPDATED,
+    /** QA D2702 (V309): a payment reversal asked for, with a reason; it waits for another person's approval (ids only). */
+    PAYMENT_REVERSAL_REQUESTED,
+    /** Billing-money plan PR 10 (V309): a cash session counted and closed, reopened with a reason, or reviewed. */
+    CASH_SESSION_CLOSED,
+    CASH_SESSION_REOPENED,
+    CASH_SESSION_REVIEWED,
+    /** QA D2703: a draft line with no price-list price priced by hand, or set to 0, with a reason (ids only). */
+    INVOICE_LINE_PRICED_MANUALLY,
+    /** QA D2675 (r65, V311): a fill handed over unpaid, marked « à facturer » with a reason. */
+    DISPENSE_BILLING_DEFERRED,
+    /** QA D2676 (r65, V311): a pharmacy refund of a patient return asked for. */
+    PHARMACY_REFUND_REQUESTED,
+    /** QA D2676: a pharmacy refund approved by another hospital admin or accountant. */
+    PHARMACY_REFUND_APPROVED,
+    /** QA D2676: a pharmacy refund rejected, with the reason. */
+    PHARMACY_REFUND_REJECTED,
+    /** QA D2676: a pharmacy refund paid out to the patient (money out). */
+    PHARMACY_REFUND_PAID,
+    /** QA D2676: a pharmacy refund withdrawn before payment, with the reason. */
+    PHARMACY_REFUND_CANCELLED,
+    /** Review of #1239 (V311): a pharmacy's selling price set or changed, with the reason (price history). */
+    PHARMACY_PRICE_CHANGED,
+    /** Policy 2026-11-20 (V347): a clinician released a minor's sensitive result to a verified parent or guardian (ids and category only). */
+    SENSITIVE_RESULT_RELEASED_TO_PROXY,
+    /** Policy 2026-11-20 (V347): staff verified that the holder of a family-access grant is the patient's parent or guardian. */
+    PROXY_RELATIONSHIP_VERIFIED,
+    /** Policy 2026-11-20: the lab director applied recommended sensitive categories to the catalogue (one row per test). */
+    LAB_SENSITIVITY_RECOMMENDATION_APPLIED,
+    /** Policy rule 6 (V345): a fill asked to leave « à facturer » (third-party cover or credit); decides nothing. */
+    DISPENSE_BILLING_DEFERRAL_REQUESTED,
+    /** Policy rule 6: a requested deferral approved by another person (billing, finance or a hospital admin). */
+    DISPENSE_BILLING_DEFERRAL_APPROVED,
+    /** Policy rule 6: a requested deferral rejected, with the reason. */
+    DISPENSE_BILLING_DEFERRAL_REJECTED,
+    /** Policy rule 6: a deferral withdrawn before any hand-over, with the reason. */
+    DISPENSE_BILLING_DEFERRAL_CANCELLED,
+    /** Policy rule 6: a fill handed over unpaid on a logged urgency override; finance reviews it. */
+    DISPENSE_BILLING_URGENCY_OVERRIDE,
+    /** Policy rule 6: an urgency override reviewed by finance afterwards. */
+    DISPENSE_BILLING_OVERRIDE_REVIEWED,
+    /** Policy rule 6: an inpatient fill charged to the account of the open stay. */
+    DISPENSE_POSTED_TO_ADMISSION_ACCOUNT,
 
     OTHER
 }

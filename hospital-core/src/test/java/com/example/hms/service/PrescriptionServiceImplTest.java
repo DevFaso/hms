@@ -8140,4 +8140,168 @@ class PrescriptionServiceImplTest {
                 com.example.hms.service.allergy.CurrentAllergyRecheck.Gate.DISPENSE, rx, rx.getMedicationName()))
             .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
     }
+
+    // ═══════════════ QA D2926 (r66): the refills a prescriber writes on an order ═══════════════
+
+    private Prescription d2926_stubCreate(PrescriptionRequestDTO request) {
+        UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
+        encounterAssignment.setId(UUID.randomUUID());
+        encounterAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encounterAssignment);
+        UUID currentUser = staff.getUser().getId();
+        Prescription mappedEntity = mappedOrder();
+        mappedEntity.setQuantity(java.math.BigDecimal.TEN);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
+        org.mockito.Mockito.lenient().when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
+        org.mockito.Mockito.lenient().when(prescriptionMapper.toResponseDTO(mappedEntity))
+            .thenReturn(PrescriptionResponseDTO.builder().build());
+        return mappedEntity;
+    }
+
+    @Test
+    void d2926_anOrdinaryOrderIsCreatedWithItsWrittenRefills() {
+        PrescriptionRequestDTO request = buildRequest();
+        request.setRefillsAllowed(2);
+        Prescription order = d2926_stubCreate(request);
+        order.setRefillsAllowed(2);
+        order.setRefillsRemaining(2);
+
+        prescriptionService.createPrescription(request, Locale.ENGLISH);
+
+        verify(prescriptionRepository).save(order);
+        assertThat(order.getRefillsAllowed()).isEqualTo(2);
+        assertThat(order.getRefillsRemaining()).isEqualTo(2);
+    }
+
+    @Test
+    void d2926_aControlledSubstanceNeverCarriesAWrittenRefill() {
+        // Ticked by the prescriber.
+        PrescriptionRequestDTO ticked = buildRequest();
+        ticked.setRefillsAllowed(1);
+        Prescription order = d2926_stubCreate(ticked);
+        order.setControlledSubstance(true);
+        order.setRefillsAllowed(1);
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(ticked, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("field", "messageKey")
+            .containsExactly("refillsAllowed", "prescription.refills.controlledRefused");
+        verify(prescriptionRepository, never()).save(any());
+
+        // Zero is not a refill: the same controlled order is not refused for it.
+        order.setRefillsAllowed(0);
+        prescriptionService.createPrescription(ticked, Locale.ENGLISH);
+        verify(prescriptionRepository).save(order);
+    }
+
+    @Test
+    void d2926_aDrugTheCatalogueMarksControlledNeverCarriesAWrittenRefill() {
+        PrescriptionRequestDTO request = buildRequest();
+        request.setQuantity(java.math.BigDecimal.TEN);
+        request.setRefillsAllowed(2);
+        request.setMedicationCode(null);
+        request.setMedicationName("Morphine 10 mg");
+        UUID catalogId = UUID.randomUUID();
+        request.setMedicationCatalogItemId(catalogId);
+        com.example.hms.model.medication.MedicationCatalogItem item =
+            new com.example.hms.model.medication.MedicationCatalogItem();
+        item.setCode("N02AA01");
+        item.setControlled(true);
+        item.setNameFr("Morphine");
+        item.setGenericName("morphine");
+        Prescription order = d2926_stubCreate(request);
+        order.setRefillsAllowed(2);
+        when(catalogRepo.findByIdAndHospital_Id(catalogId, hospitalId)).thenReturn(Optional.of(item));
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("field", "messageKey")
+            .containsExactly("refillsAllowed", "prescription.refills.controlledRefused");
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    private Prescription d2926_stubEdit(UUID prescriptionId) {
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        UserRoleHospitalAssignment staffAssignment = new UserRoleHospitalAssignment();
+        staffAssignment.setId(UUID.randomUUID());
+        staffAssignment.setHospital(encounter.getHospital());
+        staff.setAssignment(staffAssignment);
+        UUID currentUser = staff.getUser().getId();
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        org.mockito.Mockito.lenient().when(prescriptionRepository.save(existing)).thenReturn(existing);
+        org.mockito.Mockito.lenient().when(prescriptionMapper.toResponseDTO(existing))
+            .thenReturn(PrescriptionResponseDTO.builder().id(prescriptionId).build());
+        return existing;
+    }
+
+    @Test
+    void d2926_anEditOfAnUnsignedOrderRewritesItsRefills() {
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = d2926_stubEdit(prescriptionId);
+        existing.setRefillsAllowed(1);
+        existing.setRefillsRemaining(1);
+        PrescriptionRequestDTO request = buildRequest();
+        request.setRefillsAllowed(3);
+
+        prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH);
+
+        assertThat(existing.getRefillsAllowed()).isEqualTo(3);
+        assertThat(existing.getRefillsRemaining()).as("all of them remain: none was released yet").isEqualTo(3);
+
+        // Null keeps what is stored.
+        request.setRefillsAllowed(null);
+        prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH);
+        assertThat(existing.getRefillsAllowed()).isEqualTo(3);
+    }
+
+    @Test
+    void d2926_theRefillsOfASignedOrderAreNotRewrittenByAnEdit() {
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = d2926_stubEdit(prescriptionId);
+        existing.setRefillsAllowed(1);
+        existing.setRefillsRemaining(0);
+        existing.setSignedAt(java.time.LocalDateTime.now());
+        PrescriptionRequestDTO request = buildRequest();
+        request.setRefillsAllowed(5);
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("field", "messageKey")
+            .containsExactly("refillsAllowed", "prescription.refills.lockedOnceSigned");
+        assertThat(existing.getRefillsAllowed()).isEqualTo(1);
+        assertThat(existing.getRefillsRemaining()).as("a used refill is not given back").isZero();
+
+        // The form echoing the stored number changes nothing and is not refused.
+        request.setRefillsAllowed(1);
+        prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH);
+        assertThat(existing.getRefillsRemaining()).isZero();
+    }
+
+    @Test
+    void d2926_anEditThatMakesTheOrderControlledRefusesItsRefills() {
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = d2926_stubEdit(prescriptionId);
+        existing.setRefillsAllowed(2);
+        existing.setRefillsRemaining(2);
+        existing.setQuantity(java.math.BigDecimal.TEN);
+        // The prescriber ticks « stupéfiant » on a draft that carries refills (the mapper sets the flag).
+        existing.setControlledSubstance(true);
+        PrescriptionRequestDTO request = buildRequest();
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.refills.controlledRefused");
+        verify(prescriptionRepository, never()).save(any());
+    }
 }

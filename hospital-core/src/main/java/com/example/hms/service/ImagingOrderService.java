@@ -25,6 +25,13 @@ public interface ImagingOrderService {
     ImagingOrderResponseDTO recordAuthorization(UUID orderId,
                                                 com.example.hms.payload.dto.imaging.ImagingOrderAuthorizationRequestDTO request);
 
+    /** Policy rule 3 (provisional): the patient is checked in at the imaging desk; recorded once. */
+    ImagingOrderResponseDTO checkInPatient(UUID orderId);
+
+    /** Policy rule 3 (provisional): how the exam went (technical note, contrast, dose), on the order. */
+    ImagingOrderResponseDTO recordExam(UUID orderId,
+                                       com.example.hms.payload.dto.imaging.ImagingExamRecordRequestDTO request);
+
     ImagingOrderResponseDTO getOrder(UUID orderId);
 
     List<ImagingOrderResponseDTO> getOrdersByPatient(UUID patientId, ImagingOrderStatus status);

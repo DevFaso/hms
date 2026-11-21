@@ -604,6 +604,19 @@
   margin-top: 1rem;
 }
 
+/* QA D2938 (r66): the dialog scrolls inside the screen (styles.scss) and its
+   action row is stuck to the bottom edge. A stuck row stops at the dialog's
+   padding, which would leave a strip of scrolling fields under the buttons, so
+   the row carries the bottom padding itself and reaches the dialog's edge; a
+   hairline separates it from the fields passing under it. */
+.modal-content:has(> .modal-actions) {
+  padding-bottom: 0;
+}
+.modal-content > .modal-actions {
+  padding: 0.75rem 0 1.5rem;
+  border-top: 1px solid #f1f5f9;
+}
+
 .modal-btn {
   padding: 0.5rem 1.25rem;
   border-radius: 8px;
@@ -977,6 +990,9 @@
 
 .task-board-header {
   display: flex;
+  /* QA D2285 (r64): the title and its toggles wrap on a phone, not overflow. */
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1rem;
@@ -1755,4 +1771,18 @@
     padding: 0.5rem;
     background: white;
   }
+}
+
+/* QA D2583 (r65): the patient's earlier care notes under the form. */
+.care-note-history {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color, #e2e8f0);
+  min-width: 0;
+}
+
+/* QA D2582 (r65): the in-basket items above the ward notifications. */
+.inbox-in-basket {
+  margin-bottom: 16px;
+  min-width: 0;
 }

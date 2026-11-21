@@ -129,4 +129,31 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
     boolean existsLiveReference(@Param("hospitalId") UUID hospitalId,
                                 @Param("reference") String reference,
                                 @Param("statuses") java.util.Collection<com.example.hms.enums.PaymentStatus> statuses);
+
+    /** Billing plan PR 11 (QA D2430): the payment a client request key already recorded at this hospital. */
+    java.util.Optional<PaymentTransaction> findByHospitalIdAndClientRequestId(UUID hospitalId, UUID clientRequestId);
+
+    /** Billing plan PR 10: the payments taken in one cash session (money in). */
+    java.util.List<PaymentTransaction> findByCashSessionIdOrderByCreatedAtAsc(UUID cashSessionId);
+
+    /** Billing plan PR 10: the payments taken in any of these sessions (the day report). */
+    java.util.List<PaymentTransaction> findByCashSessionIdIn(java.util.Collection<UUID> cashSessionIds);
+
+    /**
+     * QA D2704: confirmed payments on an invoice with this amount and method taken since {@code since}: a second tab
+     * or a second dialog submitting the same handover is asked to confirm, never recorded in silence.
+     */
+    @org.springframework.data.jpa.repository.Query("""
+           SELECT p FROM PaymentTransaction p
+            WHERE p.invoice.id = :invoiceId
+              AND p.status = com.example.hms.enums.PaymentStatus.CONFIRMED
+              AND p.amount = :amount
+              AND p.paymentMethod = :method
+              AND p.createdAt >= :since
+           """)
+    java.util.List<PaymentTransaction> findRecentSamePayments(
+        @org.springframework.data.repository.query.Param("invoiceId") UUID invoiceId,
+        @org.springframework.data.repository.query.Param("amount") java.math.BigDecimal amount,
+        @org.springframework.data.repository.query.Param("method") com.example.hms.enums.PaymentMethod method,
+        @org.springframework.data.repository.query.Param("since") java.time.LocalDateTime since);
 }

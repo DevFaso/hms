@@ -162,6 +162,12 @@
   align-items: flex-start;
   gap: 4px;
   min-width: 11rem;
+
+  /* QA D2462 (r64): at a 1024 laptop the refill notes wrap narrower so
+     Prescripteur stays out from under the sticky actions column. */
+  @media (max-width: 1279px) {
+    min-width: 0;
+  }
 }
 
 .refill-note {
@@ -426,6 +432,39 @@
   display: block;
   font-size: 0.75rem;
   color: #4b5563;
+}
+
+// QA D2675 (r65): the hand-over's payment summary; wraps on a phone.
+.handover-payment {
+  margin: 0.5rem 0 0.75rem;
+}
+
+.handover-payment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.5rem 1rem;
+  margin: 0;
+
+  dt {
+    font-size: 0.75rem;
+    color: var(--text-secondary, #5b6472);
+  }
+
+  dd {
+    margin: 0;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+}
+
+.handover-payment-status {
+  margin: 0.5rem 0 0;
+  font-size: 0.875rem;
+}
+
+.handover-unpaid {
+  color: var(--danger, #b42318);
+  font-weight: 600;
 }
 
 @include operations.workspace;

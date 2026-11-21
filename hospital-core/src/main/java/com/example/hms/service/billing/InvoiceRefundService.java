@@ -2,9 +2,12 @@ package com.example.hms.service.billing;
 
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
+import com.example.hms.enums.CashTill;
 import com.example.hms.enums.InvoiceRefundStatus;
 import com.example.hms.enums.MobileMoneyOperator;
 import com.example.hms.enums.PaymentMethod;
+import com.example.hms.enums.PaymentStatus;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ClientSafeAccessDeniedException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.FieldBusinessException;
@@ -12,6 +15,7 @@ import com.example.hms.exception.RequiredFields;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.BillingInvoice;
 import com.example.hms.model.InvoiceRefund;
+import com.example.hms.model.PaymentTransaction;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.InvoicePdfResponseDTO;
@@ -135,7 +139,125 @@ public class InvoiceRefundService {
         this.clock = clock;
     }
 
+    /** QA D2702: the payments a reversal reverses once it is paid out. Setter-injected like the other late additions. */
+    private com.example.hms.repository.PaymentTransactionRepository paymentRepository;
+    /** Billing plan PR 10 (V309): a refund paid out is money out of the payer's cash session. */
+    private com.example.hms.service.billing.cash.CashSessionService cashSessions;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setPaymentRepository(com.example.hms.repository.PaymentTransactionRepository repository) {
+        this.paymentRepository = repository;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setCashSessionService(com.example.hms.service.billing.cash.CashSessionService service) {
+        this.cashSessions = service;
+    }
+
     // ───────────────────────────── writes ─────────────────────────────
+
+    /**
+     * QA D2702: a confirmed payment entered in error is reversed only through the refund approval. This asks for it
+     * (REQUESTED, with the reason): the payment stays CONFIRMED and the till still expects its money. ANOTHER
+     * hospital admin or accountant approves it ({@link #approve}); the cashier then hands the money back
+     * ({@link #pay}), which reverses the payment and counts the money out of that cashier's session.
+     */
+    @Transactional
+    public InvoiceRefundDTO requestReversal(UUID invoiceId, UUID paymentId, String rawReason) {
+        Actor actor = requireActor(roleValidator::paysAtBillingDesk, "billing.payment.reversalRequestersOnly");
+        BillingInvoice invoice = lockInScope(invoiceId, actor.hospitalId());
+        PaymentTransaction payment = loadPayment(paymentId, invoice);
+        if (payment.getStatus() != PaymentStatus.CONFIRMED) {
+            throw new BusinessException("billing.payment.notConfirmed");
+        }
+        String reason = trimToNull(rawReason);
+        RequiredFields.check()
+            .require(reason != null, FIELD_REASON, "billing.payment.reasonRequired")
+            .orThrow();
+        requireText(reason, FIELD_REASON);
+        if (!refundRepository.findLiveReversalOf(payment.getId()).isEmpty()) {
+            throw new ConflictException(MessageUtil.resolve("billing.payment.reversalPending"));
+        }
+        requireReversalRoom(invoice, payment, null);
+        InvoiceRefund refund;
+        try {
+            refund = refundRepository.saveAndFlush(InvoiceRefund.builder()
+                .invoice(invoice)
+                .hospitalId(actor.hospitalId())
+                .amount(payment.getAmount())
+                .method(payment.getPaymentMethod())
+                .mobileMoneyOperator(payment.getMobileMoneyOperator())
+                .reason(reason)
+                .status(InvoiceRefundStatus.REQUESTED)
+                .requestedBy(actor.userId())
+                .requestedAt(now())
+                .reversedPaymentId(payment.getId())
+                .build());
+        } catch (org.springframework.dao.DataIntegrityViolationException raced) {
+            // uq_refund_live_reversal: a second request for the same payment raced this one.
+            throw new ConflictException(MessageUtil.resolve("billing.payment.reversalPending"));
+        }
+        auditAfterCommit(AuditEventType.PAYMENT_REVERSAL_REQUESTED, actor.userId(), invoice.getId(), refund,
+            "Payment reversal requested");
+        return toDto(refund, actor.userId(), null);
+    }
+
+    private PaymentTransaction loadPayment(UUID paymentId, BillingInvoice invoice) {
+        if (paymentRepository == null) {
+            throw new ResourceNotFoundException("billing.payment.notFound");
+        }
+        return paymentRepository.findByIdAndInvoice_Id(paymentId, invoice.getId())
+            .orElseThrow(() -> new ResourceNotFoundException("billing.payment.notFound"));
+    }
+
+    /**
+     * A reversal takes the payment's amount out of what was received; refunds already handed back must still fit.
+     *
+     * <p>PR 10 review: a refund and a reversal never hand the same excess back twice. Invoice 2 000, paid twice: an
+     * overpayment refund of 2 000 and the reversal of the second payment were both approved and both paid out, and
+     * the hospital kept nothing on a bill of 2 000. While a refund is asked, approved or paid on the invoice, a
+     * reversal is refused when what the hospital would keep after it (less the refunds open and the other reversals
+     * waiting) is under the patient's share. With no refund on the invoice a payment entered in error is reversed
+     * as before, whatever is left owing.
+     */
+    private void requireReversalRoom(BillingInvoice invoice, PaymentTransaction payment, UUID thisReversalId) {
+        BigDecimal paid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
+        BigDecimal refunded = invoice.getAmountRefunded() != null ? invoice.getAmountRefunded() : BigDecimal.ZERO;
+        BigDecimal remaining = paid.subtract(payment.getAmount());
+        if (remaining.signum() < 0) {
+            throw new BusinessException("billing.payment.ledgerMismatch");
+        }
+        if (remaining.compareTo(refunded) < 0) {
+            throw new BusinessException("billing.payment.reversalBelowRefunded");
+        }
+        BigDecimal openRefunds = nz(refundRepository.sumByInvoiceAndStatusIn(invoice.getId(), OPEN, null));
+        if (refunded.signum() == 0 && openRefunds.signum() == 0) {
+            return;
+        }
+        BigDecimal otherReversals = nz(refundRepository.sumReversalsByInvoiceAndStatusIn(invoice.getId(), OPEN,
+            thisReversalId));
+        BigDecimal keptAfter = remaining.subtract(refunded).subtract(openRefunds).subtract(otherReversals);
+        if (keptAfter.compareTo(InvoiceBalance.patientShareOf(invoice)) < 0) {
+            throw new ConflictException(MessageUtil.resolve("billing.payment.reversalWhileRefund"));
+        }
+    }
+
+    /**
+     * PR 10 review, the other order: what a refund may still take, less the reversals asked or approved and not yet
+     * paid out (each will lower the amount received by its payment).
+     */
+    private BigDecimal reversalsWaiting(BillingInvoice invoice) {
+        return nz(refundRepository.sumReversalsByInvoiceAndStatusIn(invoice.getId(), OPEN, null));
+    }
+
+    private static BigDecimal nz(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
+    }
+
+    /** QA D2702: whether this refund reverses a payment. */
+    static boolean isReversal(InvoiceRefund refund) {
+        return refund.getReversedPaymentId() != null;
+    }
 
     /** Asks for {@code body.amount} to be given back to the patient (REQUESTED). */
     @Transactional
@@ -178,7 +300,9 @@ public class InvoiceRefundService {
         if (due.signum() <= 0) {
             throw new FieldBusinessException(FIELD_AMOUNT, "billing.refund.nothingDue");
         }
-        BigDecimal open = refundRepository.sumByInvoiceAndStatusIn(invoice.getId(), OPEN, null);
+        // PR 10 review: a reversal waiting will take its payment out of the money received; it holds that much.
+        BigDecimal open = nz(refundRepository.sumByInvoiceAndStatusIn(invoice.getId(), OPEN, null))
+            .add(reversalsWaiting(invoice));
         BigDecimal refundable = InvoiceBalance.refundableOf(invoice, open);
         if (amount.compareTo(refundable) > 0) {
             throw new FieldBusinessException(FIELD_AMOUNT, "billing.refund.exceedsRefundable", francs(refundable));
@@ -201,7 +325,7 @@ public class InvoiceRefundService {
             .requestedAt(now())
             .clientRequestId(request.getClientRequestId())
             .build(), request.getClientRequestId());
-        auditAfterCommit(AuditEventType.REFUND_REQUESTED, actor.userId(), invoice.getId(), refund.getId(),
+        auditAfterCommit(AuditEventType.REFUND_REQUESTED, actor.userId(), invoice.getId(), refund,
             "Refund requested");
         return toDto(refund, actor.userId(), null);
     }
@@ -213,11 +337,21 @@ public class InvoiceRefundService {
         BillingInvoice invoice = lockInScope(invoiceId, actor.hospitalId());
         InvoiceRefund refund = loadRefund(refundId, invoice, actor.hospitalId());
         requireDecidable(refund, actor);
-        // The balance may have moved since the request (a reversal, a line added): the request must still fit.
-        BigDecimal others = refundRepository.sumByInvoiceAndStatusIn(invoice.getId(), OPEN, refund.getId());
-        BigDecimal room = InvoiceBalance.refundableOf(invoice, others);
-        if (refund.getAmount().compareTo(room) > 0) {
-            throw new ConflictException(MessageUtil.resolve("billing.refund.noLongerDue", francs(room)));
+        if (isReversal(refund)) {
+            // QA D2702: the payment must still be counted, and its reversal still fit what refunds handed back.
+            PaymentTransaction payment = loadPayment(refund.getReversedPaymentId(), invoice);
+            if (payment.getStatus() != PaymentStatus.CONFIRMED) {
+                throw new ConflictException(MessageUtil.resolve("billing.payment.notConfirmed"));
+            }
+            requireReversalRoom(invoice, payment, refund.getId());
+        } else {
+            // The balance may have moved since the request (a reversal, a line added): the request must still fit.
+            BigDecimal others = nz(refundRepository.sumByInvoiceAndStatusIn(invoice.getId(), OPEN, refund.getId()))
+                .add(reversalsWaiting(invoice));
+            BigDecimal room = InvoiceBalance.refundableOf(invoice, others);
+            if (refund.getAmount().compareTo(room) > 0) {
+                throw new ConflictException(MessageUtil.resolve("billing.refund.noLongerDue", francs(room)));
+            }
         }
         LocalDateTime at = now();
         claimed(refundRepository.decide(refund.getId(), refund.getHospitalId(), InvoiceRefundStatus.APPROVED,
@@ -225,7 +359,7 @@ public class InvoiceRefundService {
         refund.setStatus(InvoiceRefundStatus.APPROVED);
         refund.setDecidedBy(actor.userId());
         refund.setDecidedAt(at);
-        auditAfterCommit(AuditEventType.REFUND_APPROVED, actor.userId(), invoice.getId(), refund.getId(),
+        auditAfterCommit(AuditEventType.REFUND_APPROVED, actor.userId(), invoice.getId(), refund,
             "Refund approved");
         return toDto(refund, actor.userId(), null);
     }
@@ -249,7 +383,7 @@ public class InvoiceRefundService {
         refund.setDecidedBy(actor.userId());
         refund.setDecidedAt(at);
         refund.setDecisionReason(reason);
-        auditAfterCommit(AuditEventType.REFUND_REJECTED, actor.userId(), invoice.getId(), refund.getId(),
+        auditAfterCommit(AuditEventType.REFUND_REJECTED, actor.userId(), invoice.getId(), refund,
             "Refund rejected");
         return toDto(refund, actor.userId(), null);
     }
@@ -266,21 +400,38 @@ public class InvoiceRefundService {
         if (refund.getStatus() != InvoiceRefundStatus.APPROVED) {
             throw new ConflictException(MessageUtil.resolve("billing.refund.notApproved"));
         }
-        BigDecimal due = InvoiceBalance.refundDueOf(invoice);
-        if (refund.getAmount().compareTo(due) > 0) {
-            throw new ConflictException(MessageUtil.resolve("billing.refund.noLongerDue", francs(due)));
+        boolean reversal = isReversal(refund);
+        PaymentTransaction reversed = null;
+        if (reversal) {
+            reversed = loadPayment(refund.getReversedPaymentId(), invoice);
+            requireReversalRoom(invoice, reversed, refund.getId());
+        } else {
+            BigDecimal due = InvoiceBalance.refundableOf(invoice, reversalsWaiting(invoice));
+            if (refund.getAmount().compareTo(due) > 0) {
+                throw new ConflictException(MessageUtil.resolve("billing.refund.noLongerDue", francs(due)));
+            }
         }
         Handover handover = handover(refund, body, actor.hospitalId());
+        // Billing plan PR 10: the money leaves the payer's till today; a closed till refuses it (nothing written).
+        CashTill till = roleValidator.paysAtBillingDesk(actor.userId(), actor.hospitalId())
+            ? CashTill.BILLING : CashTill.RECEPTION;
+        UUID cashSessionId = cashSessions == null ? null
+            : cashSessions.stamp(till, actor.hospitalId(), actor.userId());
         // PR 8 review: the receipt number is assigned once, here, under the invoice lock, in payout order.
         int receiptSeq = refundRepository.maxReceiptSeq(invoice.getId()) + 1;
         String receiptNumber = invoice.getInvoiceNumber() + "-RB" + receiptSeq;
         LocalDateTime at = now();
         claimed(refundRepository.markPaid(refund.getId(), refund.getHospitalId(), new InvoiceRefundRepository.Payout(
-            actor.userId(), at, handover.reference(), handover.operator(), receiptSeq, receiptNumber)),
+            actor.userId(), at, handover.reference(), handover.operator(), receiptSeq, receiptNumber, cashSessionId)),
             "billing.refund.notApproved");
-        BigDecimal refunded = invoice.getAmountRefunded() != null ? invoice.getAmountRefunded() : BigDecimal.ZERO;
-        invoice.setAmountRefunded(refunded.add(refund.getAmount()));
+        if (reversal) {
+            reversePaidOut(invoice, reversed, refund, actor.userId(), at);
+        } else {
+            BigDecimal refunded = invoice.getAmountRefunded() != null ? invoice.getAmountRefunded() : BigDecimal.ZERO;
+            invoice.setAmountRefunded(refunded.add(refund.getAmount()));
+        }
         invoiceRepository.save(invoice);
+        refund.setCashSessionId(cashSessionId);
         refund.setStatus(InvoiceRefundStatus.PAID);
         refund.setPaidBy(actor.userId());
         refund.setPaidAt(at);
@@ -288,9 +439,33 @@ public class InvoiceRefundService {
         refund.setMobileMoneyOperator(handover.operator());
         refund.setReceiptSeq(receiptSeq);
         refund.setReceiptNumber(receiptNumber);
-        auditAfterCommit(AuditEventType.REFUND_ISSUED, actor.userId(), invoice.getId(), refund.getId(),
+        auditAfterCommit(AuditEventType.REFUND_ISSUED, actor.userId(), invoice.getId(), refund,
             "Refund paid out");
         return toDto(refund, actor.userId(), null);
+    }
+
+    /**
+     * QA D2702: the approved reversal handed back: the payment becomes REVERSED (a conditional UPDATE, so it is
+     * reversed once), the invoice's amount paid and status follow, and the payment names the refund that took the
+     * money out. The payment's own session keeps the money in on the day it came in.
+     */
+    private void reversePaidOut(BillingInvoice invoice, PaymentTransaction payment, InvoiceRefund refund,
+                                UUID actorId, LocalDateTime at) {
+        if (paymentRepository.transitionStatus(payment.getId(), invoice.getId(), PaymentStatus.CONFIRMED,
+                PaymentStatus.REVERSED) != 1) {
+            throw new ConflictException(MessageUtil.resolve("billing.payment.notConfirmed"));
+        }
+        BigDecimal paid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
+        invoice.setAmountPaid(paid.subtract(payment.getAmount()));
+        invoice.setStatus(InvoiceBalance.settledStatusOf(invoice));
+        payment.setStatus(PaymentStatus.REVERSED);
+        payment.setReversedBy(actorId);
+        payment.setReversedAt(at);
+        payment.setReversalReason(refund.getReason());
+        payment.setReversalRefundId(refund.getId());
+        paymentRepository.save(payment);
+        auditAfterCommit(AuditEventType.PAYMENT_REVERSED, actorId, invoice.getId(), refund,
+            "Payment reversed");
     }
 
     /**
@@ -326,7 +501,7 @@ public class InvoiceRefundService {
         refund.setCancelledBy(actor.userId());
         refund.setCancelledAt(at);
         refund.setCancelReason(reason);
-        auditAfterCommit(AuditEventType.REFUND_CANCELLED, actor.userId(), invoice.getId(), refund.getId(),
+        auditAfterCommit(AuditEventType.REFUND_CANCELLED, actor.userId(), invoice.getId(), refund,
             "Refund cancelled");
         return toDto(refund, actor.userId(), null);
     }
@@ -583,7 +758,7 @@ public class InvoiceRefundService {
     }
 
     /** Whole francs with the locale's grouping (spaces, never a no-break space), as the billing refusals print. */
-    static String francs(BigDecimal amount) {
+    public static String francs(BigDecimal amount) {
         java.text.NumberFormat format = java.text.NumberFormat.getIntegerInstance(LocaleContextHolder.getLocale());
         format.setGroupingUsed(true);
         return format.format(amount.setScale(0, RoundingMode.HALF_UP).longValueExact())
@@ -663,24 +838,28 @@ public class InvoiceRefundService {
             .cancelledByName(r.getCancelledBy() != null ? known.get(r.getCancelledBy()) : null)
             .cancelledAt(r.getCancelledAt())
             .cancelReason(r.getCancelReason())
+            .reversedPaymentId(r.getReversedPaymentId())
             .build();
     }
 
     // ───────────────────────────── audit ─────────────────────────────
 
     /** Ids only (no amount tied to a person, no reason text, no PHI), written after commit. */
-    private void auditAfterCommit(AuditEventType type, UUID actorId, UUID invoiceId, UUID refundId, String what) {
+    private void auditAfterCommit(AuditEventType type, UUID actorId, UUID invoiceId, InvoiceRefund refund, String what) {
         if (auditEventLogService == null) {
             return;
         }
         String invoiceIdText = String.valueOf(invoiceId);
-        String description = what + ": refund " + refundId + " on invoice " + invoiceIdText;
+        String description = what + ": refund " + refund.getId() + " on invoice " + invoiceIdText;
+        // QA D2924 (r66): the refund's hospital anchors the row for the hospital admin's audit log.
+        UUID hospitalId = refund.getHospitalId();
         TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .eventType(type)
                     .status(AuditStatus.SUCCESS)
                     .userId(actorId)
+                    .hospitalId(hospitalId)
                     .eventDescription(description)
                     .entityType(AUDIT_ENTITY)
                     .resourceId(invoiceIdText)

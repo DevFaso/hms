@@ -112,6 +112,7 @@ class DeceasedPatientCareGuardTest {
         Reception#offerWaitlistSlot | ReceptionServiceImpl#offerWaitlistSlot
         Reception#acceptWaitlistOffer | ReceptionServiceImpl#acceptWaitlistOffer
         RefillApproval#approve | RefillApprovalServiceImpl#decide
+        RefillApproval#releaseAsPrescribed | RefillApprovalServiceImpl#releaseAsPrescribed
         SlotInventory#book | SlotInventoryServiceImpl#book
         StockOutRouting#routeToPartner | StockOutRoutingServiceImpl#validateRoutableStatus
         StockOutRouting#printForPatient | StockOutRoutingServiceImpl#validateRoutableStatus
@@ -149,8 +150,9 @@ class DeceasedPatientCareGuardTest {
         GeneralReferral#acknowledgeReferral,completeReferral,rejectReferral,cancelReferral,expireOverdueReferrals | closes or follows a referral made before the death; submitting one is refused
         HighRiskPregnancyCarePlan#updatePlan,addCareTeamNote,markMilestoneComplete | late documentation
         ImagingOrder#updateOrder,updateStatus,captureSignature | closes or documents an order made before the death
-        ImagingStudyImage#upload,delete | V316: key images of a study already done document it, as its report does
+        ImagingStudyImage#upload,delete,withdraw | V316: key images of a study already done document it, as its report does; r64 D2464: withdrawing a wrong image corrects that record
         ImagingOrder#recordAuthorization | administrative: the insurer's pre-authorisation number of a study already done (provisional rule 1)
+        ImagingOrder#checkIn,recordExam | policy rule 3: the arrival and the exam record document a study ordered before the death, as its status write does
         Isolation#discontinuePrecaution | lifting a precaution
         LabOrder#updateLabOrder,deleteLabOrder,transitionLabOrderStatus,voidLabOrder | closes or corrects an order made before the death; results of its samples stay open
         LabSpecimen#receiveSpecimen,rejectSpecimen | a sample collected before the death
@@ -166,6 +168,7 @@ class DeceasedPatientCareGuardTest {
         Patient#getDoctorRecord,getDoctorTimeline | reads over POST
         Patient#createPatientAllergy,updatePatientAllergy,deactivatePatientAllergy,createPatientDiagnosis,updatePatientDiagnosis,deletePatientDiagnosis,createPatientChartUpdate | late documentation: a final diagnosis is routinely written after a death
         PatientPanel#end | closes a panel assignment
+        PatientChannelPreference#update | QA D2203: the family can still ask the desk to stop messages; never care
         PatientPortal#updateMyProfile,updateNotificationPreferences,markNotificationRead,markAllNotificationsRead | account housekeeping
         PatientPortal#payMyInvoice | billing and payments
         PatientPortal#cancelMyAppointment,cancelMyRefill | cancels
@@ -173,6 +176,7 @@ class DeceasedPatientCareGuardTest {
         PatientPortal#updateMyEducationProgress,submitMyEducationQuestion | education, not care
         PatientPrimaryCare#update,end,delete | an existing assignment
         PatientRecall#close,cancel,linkAppointment | closes a recall; the booking it links is refused itself
+        UserMfaReset#reset | QA r64: a staff account's second factor, no patient
         Prescription#pharmacistVerify,pediatricDoseReview,allergyReview,requestClarification,resolveClarification,update,delete | an order made before the death: nothing goes out, signing and dispensing it are refused
         ProResponse#acknowledge | closes a response given before the death
         ProcedureOrder#updateProcedureOrder,cancelProcedureOrder | closes an order made before the death
@@ -180,6 +184,7 @@ class DeceasedPatientCareGuardTest {
         Reception#declineWaitlistOffer,closeWaitlistEntry,updateEncounterStatus | closes; a closed visit refuses the desk's status write
         Reception#attestEligibility | billing and payments
         RefillApproval#reject,pause | refuses a refill
+        RefillApproval#pharmacistReview,pharmacistRefuse | the pharmacy flags or refuses a refill request: nothing is released
         SafeguardingReview#record | r53: documents the review a past labour admission opened; never new care
         SlotInventory#generate,hold,release,block | the schedule, no patient
         StockOutRouting#partnerRespond,confirmPartnerDispense,partnerNoShow | a partner's outcome of a routing made before the death
@@ -204,7 +209,9 @@ class DeceasedPatientCareGuardTest {
     private static final Map<String, String> WHOLE_CONTROLLER = Map.ofEntries(
         Map.entry("BillingInvoice", BILLING), Map.entry("Eligibility", BILLING), Map.entry("InvoiceEmail", BILLING),
         Map.entry("InvoiceItem", BILLING), Map.entry("InvoiceRefund", BILLING), Map.entry("InvoicePayerShare", BILLING), Map.entry("PriceList", BILLING), Map.entry("Payer", BILLING), Map.entry("PatientGuarantor", BILLING), Map.entry("PatientInsurance", BILLING),
-        Map.entry("PharmacyClaim", BILLING), Map.entry("PharmacyPayment", BILLING),
+        Map.entry("PharmacyClaim", BILLING), Map.entry("PharmacyPayment", BILLING), Map.entry("PharmacyRefund", BILLING),
+        Map.entry("DispenseBillingDeferral", BILLING), Map.entry("HospitalBillingPolicy", BILLING),
+        Map.entry("CashSession", BILLING),
         Map.entry("DischargeApproval", "discharge and stay close-out"),
         Map.entry("DischargeSummary", "discharge and stay close-out"),
         Map.entry("Mortality", "the death record, and its dispute, which is what lifts the block"),
@@ -215,6 +222,8 @@ class DeceasedPatientCareGuardTest {
         Map.entry("NursingNote", RECORDS), Map.entry("PatientEducation", RECORDS),
         Map.entry("PatientHospitalRegistration", RECORDS), Map.entry("PatientPhoto", RECORDS), Map.entry("PatientRoi", RECORDS),
         Map.entry("RecordAccess", RECORDS), Map.entry("RoiWorklist", RECORDS), Map.entry("SensitivityTagging", RECORDS),
+        // Policy 2026-11-20: releasing an existing result to a parent is a disclosure, not new care.
+        Map.entry("MinorResultRelease", RECORDS), Map.entry("HospitalAdolescentConfidentialityAge", NOT_CARE),
         Map.entry("Hl7Inbound", INBOUND), Map.entry("InstrumentOutbox", INBOUND), Map.entry("PartnerSmsWebhook", INBOUND),
         Map.entry("SuperAdminIntegrationMessage", INBOUND),
         Map.entry("AdtIntakeProviderConfig", NOT_CARE), Map.entry("Announcement", NOT_CARE), Map.entry("ApiKey", NOT_CARE),
@@ -223,9 +232,10 @@ class DeceasedPatientCareGuardTest {
         Map.entry("Dhis2Export", NOT_CARE), Map.entry("Downtime", NOT_CARE), Map.entry("DrugInteractionAdmin", NOT_CARE),
         Map.entry("EmpiProbabilistic", NOT_CARE), Map.entry("FeatureFlag", NOT_CARE), Map.entry("FrontendAudit", NOT_CARE),
         Map.entry("Hospital", NOT_CARE), Map.entry("HospitalRecordAccessPosture", NOT_CARE),
-        Map.entry("HospitalPacsSettings", NOT_CARE), Map.entry("InBasket", NOT_CARE),
+        Map.entry("HospitalPacsSettings", NOT_CARE), Map.entry("HospitalImagingReportingSettings", NOT_CARE),
+        Map.entry("InBasket", NOT_CARE),
         Map.entry("Inventory", NOT_CARE), Map.entry("LabInstrument", NOT_CARE), Map.entry("LabInventory", NOT_CARE),
-        Map.entry("LabQcEvent", NOT_CARE), Map.entry("LabReflexRule", NOT_CARE), Map.entry("LabTestDefinition", NOT_CARE),
+        Map.entry("LabQcEvent", NOT_CARE), Map.entry("LabQcTarget", NOT_CARE), Map.entry("LabReflexRule", NOT_CARE), Map.entry("LabTestDefinition", NOT_CARE),
         Map.entry("LabTestValidationStudy", NOT_CARE), Map.entry("Me", NOT_CARE), Map.entry("MedicationCatalog", NOT_CARE),
         Map.entry("Mfa", NOT_CARE), Map.entry("MllpAllowedSender", NOT_CARE), Map.entry("Notification", NOT_CARE),
         Map.entry("OnCallSchedule", NOT_CARE), Map.entry("Organization", NOT_CARE), Map.entry("OrganizationSecurity", NOT_CARE),

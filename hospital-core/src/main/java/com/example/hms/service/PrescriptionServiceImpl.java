@@ -238,6 +238,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // here without the request constraints).
         com.example.hms.service.impl.PrnMinInterval.applyTo(entity, Boolean.TRUE.equals(request.getFrequencyConfirmed()));
         requirePrescribedQuantityForControlled(entity, catalogItem);
+        refuseWrittenRefillsOnControlled(entity, catalogItem);
         recordAllergyOverride(entity, allergyOverride);
         String cdsOverride = cdsOverrideReason(request, advisories);
         recordCdsOverride(entity, cdsOverride);
@@ -2084,6 +2085,44 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
+     * QA D2926 (r66), policy rule 1 (provisional): a controlled substance never carries a written refill: every
+     * further supply needs a new prescription. Refused on the field, on create and on an edit, whether the
+     * prescriber ticked the flag or the catalogue marks the drug (D922). The release of a refill refuses a
+     * controlled drug too ({@code RefillApprovalServiceImpl}), for a drug the catalogue flags later.
+     */
+    private static void refuseWrittenRefillsOnControlled(
+            Prescription prescription, com.example.hms.model.medication.MedicationCatalogItem catalogItem) {
+        boolean controlled = prescription.isControlledSubstance() || catalogItem != null && catalogItem.isControlled();
+        if (controlled && writtenRefillsOf(prescription) > 0) {
+            throw new com.example.hms.exception.FieldBusinessException("refillsAllowed",
+                "prescription.refills.controlledRefused");
+        }
+    }
+
+    /** The refills an order carries as written; an order written before the field existed carries none. */
+    private static int writtenRefillsOf(Prescription prescription) {
+        return prescription.getRefillsAllowed() == null ? 0 : prescription.getRefillsAllowed();
+    }
+
+    /**
+     * QA D2926 (r66): the number of refills is written before the signature. Null keeps the stored number; the
+     * same number changes nothing; another number is written on an unsigned order (all of them remain) and refused
+     * on a signed one, where one more refill is a renewal the prescriber approves on a request.
+     */
+    private static void applyWrittenRefillsOnEdit(Prescription existing, PrescriptionRequestDTO request) {
+        Integer asked = request.getRefillsAllowed();
+        if (asked == null || asked == writtenRefillsOf(existing)) {
+            return;
+        }
+        if (existing.getSignedAt() != null) {
+            throw new com.example.hms.exception.FieldBusinessException("refillsAllowed",
+                "prescription.refills.lockedOnceSigned");
+        }
+        existing.setRefillsAllowed(asked);
+        existing.setRefillsRemaining(asked);
+    }
+
+    /**
      * QA D1359 (round 30): an edit of an order's content names a route the
      * route reading knows ({@code MedicationRoute} holds a new order at the
      * edge), or echoes the route the order already carries, so an older order
@@ -2195,6 +2234,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         String signedReason = existing.getSignedAt() == null ? null : existing.getOverrideReason();
         prescriptionMapper.updateEntity(existing, request, patient, staff, encounter);
         existing.setAssignment(prescriberAssignment);
+        // QA D2926 (r66): the written refills follow the edit of an unsigned order; never a controlled drug.
+        applyWrittenRefillsOnEdit(existing, request);
+        refuseWrittenRefillsOnControlled(existing, catalogItem);
         // QA round 30: an edit of an as-needed order keeps (or names) its
         // minimum interval; an edit to a fixed schedule drops it. QA D1391 /
         // D1395: the wording rule judges a frequency this edit wrote, never one
@@ -2652,6 +2694,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             flagDiffers(request.getControlledSubstance(), existing.isControlledSubstance()),
             flagDiffers(request.getRequiresCosign(), existing.isRequiresCosign()),
             flagDiffers(request.getTakeHome(), existing.isTakeHome()),
+            // QA D2926 (r66): the written refills are order content (null echoes nothing).
+            request.getRefillsAllowed() != null && request.getRefillsAllowed() != writtenRefillsOf(existing),
             Boolean.TRUE.equals(request.getForceOverride()));
         return changes.contains(Boolean.TRUE);
     }

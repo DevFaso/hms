@@ -26,6 +26,7 @@ class ImagingReportMapperPacsTest {
     @DisplayName("explicit pacs URL on report wins over the template")
     void explicitWins() {
         Hospital hosp = new Hospital();
+        hosp.setPacsEnabled(true);
         hosp.setPacsViewerUrlTemplate("https://orthanc/?studyUid={studyInstanceUid}");
         ImagingReport r = buildReport(hosp, "1.2.3", null, "https://override.example/study/1.2.3");
 
@@ -38,6 +39,7 @@ class ImagingReportMapperPacsTest {
     @DisplayName("renders template using studyInstanceUid when no explicit URL")
     void templateRenderedFromStudyUid() {
         Hospital hosp = new Hospital();
+        hosp.setPacsEnabled(true);
         hosp.setPacsViewerUrlTemplate("https://orthanc.local/viewer.html?studyUid={studyInstanceUid}");
         ImagingReport r = buildReport(hosp, "1.2.3.4.5", null, null);
 
@@ -51,6 +53,7 @@ class ImagingReportMapperPacsTest {
     @DisplayName("renders template using accessionNumber placeholder")
     void templateRendersAccessionNumber() {
         Hospital hosp = new Hospital();
+        hosp.setPacsEnabled(true);
         hosp.setPacsViewerUrlTemplate("https://pacs/?acc={accessionNumber}");
         ImagingReport r = buildReport(hosp, null, "ACC-9001", null);
 
@@ -72,8 +75,20 @@ class ImagingReportMapperPacsTest {
     @DisplayName("returns null when template is set but report has no UIDs")
     void templateButNoUids_returnsNull() {
         Hospital hosp = new Hospital();
+        hosp.setPacsEnabled(true);
         hosp.setPacsViewerUrlTemplate("https://orthanc/?studyUid={studyInstanceUid}");
         ImagingReport r = buildReport(hosp, null, null, null);
+
+        assertThat(mapper.toResponseDTO(r).getPacsViewerUrl()).isNull();
+    }
+
+    @Test
+    @DisplayName("QA D2467: a hospital with its PACS switched off offers no template link")
+    void pacsOff_noTemplateLink() {
+        Hospital hosp = new Hospital();
+        hosp.setPacsEnabled(false);
+        hosp.setPacsViewerUrlTemplate("https://orthanc.local/viewer.html?studyUid={studyInstanceUid}");
+        ImagingReport r = buildReport(hosp, "1.2.3.4.5", null, null);
 
         assertThat(mapper.toResponseDTO(r).getPacsViewerUrl()).isNull();
     }

@@ -58,6 +58,25 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     private final ActingScopeResolver actingScopeResolver;
     private final AuditEventLogService auditEventLogService;
 
+    /**
+     * QA D2437: a draft's lines carry the estimate of the payer's part. Optional so the hand-built unit tests keep
+     * working, as in BillingInvoiceServiceImpl.
+     */
+    private com.example.hms.service.billing.InvoiceCoverageService coverageService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setCoverageService(com.example.hms.service.billing.InvoiceCoverageService coverageService) {
+        this.coverageService = coverageService;
+    }
+
+    /** PR 10 review (V309, QA D2703): the lines taken off drafts, kept for the day report. Optional like the above. */
+    private com.example.hms.repository.InvoiceLineRemovalRepository lineRemovalRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setLineRemovalRepository(com.example.hms.repository.InvoiceLineRemovalRepository repository) {
+        this.lineRemovalRepository = repository;
+    }
+
     @Override
     @Transactional
     public InvoiceItemResponseDTO createInvoiceItem(InvoiceItemRequestDTO dto, Locale locale) {
@@ -71,13 +90,36 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
         Treatment related = resolveRelatedService(dto.getRelatedServiceId(), invoice);
 
         InvoiceItem item = invoiceItemMapper.toInvoiceItem(dto, invoice, assignment, related);
+        String reason = handAddedLineReason(invoice, dto.getOverrideReason());
+        item.setOverrideReason(reason);
 
         InvoiceItem saved = invoiceItemRepository.save(item);
+        if (reason != null) {
+            auditLineAfterCommit(AuditEventType.INVOICE_LINE_PRICED_MANUALLY,
+                pricedByHand(saved.getId(), invoice.getId()), saved.getId(), invoice, reason);
+        }
 
         // Keep invoice totals in sync
         billingInvoiceService.recomputeAndPersistTotals(invoice.getId());
 
         return invoiceItemMapper.toInvoiceItemResponseDTO(saved);
+    }
+
+    /**
+     * PR 10 review (QA D2703): the checkout prices a visit's charges; a line typed beside them on the visit's
+     * invoice is priced by hand, and an unpriced charge removed and typed again at any price left no trace. Such a
+     * line needs {@code overrideReason}: kept on the line, audited, listed in the day report. An invoice made by
+     * hand with no visit is hand lines throughout: a reason there is kept when given, never required.
+     */
+    private static String handAddedLineReason(BillingInvoice invoice, String rawReason) {
+        String reason = rawReason == null ? "" : rawReason.trim();
+        if (reason.isEmpty()) {
+            if (invoice.getEncounter() != null) {
+                throw new FieldBusinessException(FIELD_OVERRIDE_REASON, "billing.item.addedLineReasonRequired");
+            }
+            return null;
+        }
+        return requireOverrideReason(reason);
     }
 
     @Override
@@ -106,9 +148,18 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
                 && !activeHospitalId.equals(invoice.getHospital().getId())) {
             throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND_KEY, invoiceId);
         }
-        return invoiceItemRepository.findByBillingInvoice_Id(invoiceId).stream()
+        List<InvoiceItemResponseDTO> lines = invoiceItemRepository.findByBillingInvoice_Id(invoiceId).stream()
             .map(invoiceItemMapper::toInvoiceItemResponseDTO)
             .toList();
+        // QA D2437: a draft shows what the patient's coverage would pay if it were issued now, marked an estimate.
+        if (coverageService != null) {
+            coverageService.previewForDraft(invoice).ifPresent(preview -> lines.forEach(line ->
+                InvoiceItemMapper.withShares(line, preview.lines().stream()
+                    .filter(share -> share.id().equals(line.getId()))
+                    .map(com.example.hms.service.billing.CoverageCalculator.LineShare::share)
+                    .findFirst().orElse(java.math.BigDecimal.ZERO), true)));
+        }
+        return lines;
     }
 
     @Override
@@ -159,6 +210,10 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
             auditLineAfterCommit(AuditEventType.INVOICE_LINE_PRICE_OVERRIDDEN, "Tariff price version "
                 + saved.getPriceListPriceId() + " overridden on draft line " + saved.getId() + " of invoice "
                 + invoice.getId(), saved.getId(), invoice, null);
+        } else if (priceChange == PriceChange.PRICED_BY_HAND) {
+            // QA D2703: an unpriced line priced (or a line set to 0 F) by hand: ids in the description, reason in details.
+            auditLineAfterCommit(AuditEventType.INVOICE_LINE_PRICED_MANUALLY,
+                pricedByHand(saved.getId(), invoice.getId()), saved.getId(), invoice, saved.getOverrideReason());
         } else if (priceChange == PriceChange.RESTORED) {
             // Review #1197 L2: setting an overridden line back to the price list is audited too.
             auditLineAfterCommit(AuditEventType.INVOICE_LINE_PRICE_RESTORED, "Tariff price version "
@@ -181,7 +236,9 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
      *       (never the super-admin alone). It becomes MANUAL, keeps the tariff's price in {@code tariffUnitPrice}
      *       and the reason, and an audit row is written (returns true).</li>
      *   <li>Set back to the tariff's price, it is a TARIFF line again, with no reason.</li>
-     *   <li>Any other line priced by hand is MANUAL, with no reason (an unpriced line priced, as before).</li>
+     *   <li>Any other line priced by hand is MANUAL. QA D2703: pricing a line that stood at 0 F (an unpriced line),
+     *       or setting one to 0 F, needs {@code overrideReason}; the reason is kept on the line, an audit row is
+     *       written and the day report lists it. Any other change of a hand-priced line needs no reason.</li>
      * </ul>
      * The line's invoice is already known to be a DRAFT of the acting hospital ({@link #writableInvoice}).
      */
@@ -191,6 +248,13 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
         boolean changed = current == null || newPrice.compareTo(current) != 0;
         java.math.BigDecimal tariff = com.example.hms.mapper.InvoiceItemMapper.tariffUnitPriceOf(item);
         if (tariff == null) {
+            boolean fromZero = current == null || current.signum() == 0;
+            if (changed && (fromZero || newPrice.signum() == 0)) {
+                item.setOverrideReason(requireOverrideReason(rawReason));
+                item.setUnitPrice(newPrice);
+                item.setPriceSource(InvoiceLinePriceSource.MANUAL);
+                return PriceChange.PRICED_BY_HAND;
+            }
             item.setUnitPrice(newPrice);
             if (changed) {
                 item.setPriceSource(InvoiceLinePriceSource.MANUAL);
@@ -210,14 +274,7 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
             // Overridden before at this same price (the quantity or the label changed): the reason stands.
             return PriceChange.NONE;
         }
-        String reason = rawReason == null ? "" : rawReason.trim();
-        if (reason.isEmpty()) {
-            throw new FieldBusinessException(FIELD_OVERRIDE_REASON, "billing.item.overrideReasonRequired");
-        }
-        if (reason.length() > OVERRIDE_REASON_MAX) {
-            throw new FieldBusinessException(FIELD_OVERRIDE_REASON, "billing.item.overrideReasonTooLong",
-                OVERRIDE_REASON_MAX);
-        }
+        String reason = requireOverrideReason(rawReason);
         if (!isTariffWriter(invoice)) {
             throw new ClientSafeAccessDeniedException(
                 com.example.hms.utility.MessageUtil.resolve("billing.item.overrideNotAllowed"));
@@ -229,8 +286,27 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
         return PriceChange.OVERRIDDEN;
     }
 
-    /** What a line edit did to a price-list price. */
-    private enum PriceChange { NONE, OVERRIDDEN, RESTORED }
+    /** The reason a price is set by hand: required, at most 500 characters, never a card number. */
+    private static String requireOverrideReason(String rawReason) {
+        String reason = rawReason == null ? "" : rawReason.trim();
+        if (reason.isEmpty()) {
+            throw new FieldBusinessException(FIELD_OVERRIDE_REASON, "billing.item.overrideReasonRequired");
+        }
+        if (reason.length() > OVERRIDE_REASON_MAX) {
+            throw new FieldBusinessException(FIELD_OVERRIDE_REASON, "billing.item.overrideReasonTooLong",
+                OVERRIDE_REASON_MAX);
+        }
+        com.example.hms.utility.CardNumbers.requireNone(reason, FIELD_OVERRIDE_REASON);
+        return reason;
+    }
+
+    /** The audit description of a line priced by hand: ids only (the portal's audit pattern reads it). */
+    private static String pricedByHand(UUID lineId, UUID invoiceId) {
+        return "Draft line " + lineId + " of invoice " + invoiceId + " priced by hand";
+    }
+
+    /** What a line edit did to a price-list price (or, QA D2703, to a line with none). */
+    private enum PriceChange { NONE, OVERRIDDEN, RESTORED, PRICED_BY_HAND }
 
     /**
      * D-1/D-2: a billing specialist or a hospital admin of the invoice's hospital, never the super-admin alone.
@@ -279,7 +355,11 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     /**
      * Review #1197 M2 (D-2): taking a line priced from the price list off a draft would otherwise let a cashier
      * re-add it lower with no reason, no role check and no trace. A tariff line (overridden or not) is deleted only
-     * with a reason, by a billing specialist or a hospital admin of the hospital; every deletion is audited (ids in
+     * by a billing specialist or a hospital admin of the hospital.
+     *
+     * <p>PR 10 review (QA D2703): the same hole stood for a line with no price-list price (an unpriced charge
+     * removed, then typed again at any price). EVERY line is now removed only with a reason; the removal is kept
+     * ({@code invoice_line_removals}: the line, its price, who, when, why) for the day report, and audited (ids in
      * the description, the reason in the details).
      */
     @Override
@@ -291,29 +371,52 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
         BillingInvoice invoice = writableInvoice(invoiceId, INVOICE_ITEM_NOT_FOUND_KEY, id);
         boolean tariffLine = com.example.hms.mapper.InvoiceItemMapper.tariffUnitPriceOf(item) != null;
         String reason = rawReason == null ? "" : rawReason.trim();
-        if (tariffLine) {
-            if (reason.isEmpty()) {
-                throw new FieldBusinessException(FIELD_DELETE_REASON, "billing.item.deleteReasonRequired");
-            }
-            // QA D2101: a refused removal names the removal, not a price change.
-            if (!isTariffWriter(invoice)) {
-                throw new ClientSafeAccessDeniedException(
-                    com.example.hms.utility.MessageUtil.resolve("billing.item.deleteNotAllowed"));
-            }
+        if (reason.isEmpty()) {
+            throw new FieldBusinessException(FIELD_DELETE_REASON,
+                tariffLine ? "billing.item.deleteReasonRequired" : "billing.item.removeReasonRequired");
+        }
+        // QA D2101: a refused removal names the removal, not a price change.
+        if (tariffLine && !isTariffWriter(invoice)) {
+            throw new ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolve("billing.item.deleteNotAllowed"));
         }
         if (reason.length() > OVERRIDE_REASON_MAX) {
             throw new FieldBusinessException(FIELD_DELETE_REASON, "billing.item.overrideReasonTooLong",
                 OVERRIDE_REASON_MAX);
         }
+        com.example.hms.utility.CardNumbers.requireNone(reason, FIELD_DELETE_REASON);
         UUID priceVersion = item.getPriceListPriceId();
+        recordRemoval(item, invoice, reason);
         invoice.getInvoiceItems().remove(item);
         invoiceItemRepository.delete(item);
         auditLineAfterCommit(AuditEventType.INVOICE_LINE_DELETED, "Draft line " + id + " of invoice " + invoiceId
             + " deleted" + (priceVersion != null ? " (tariff price version " + priceVersion + ")" : ""),
-            id, invoice, reason.isEmpty() ? null : reason);
+            id, invoice, reason);
 
         // recompute after deletion
         billingInvoiceService.recomputeAndPersistTotals(invoiceId);
+    }
+
+    /** PR 10 review (QA D2703): what the removed line was, for the day report. */
+    private void recordRemoval(InvoiceItem item, BillingInvoice invoice, String reason) {
+        UUID userId = roleValidator.getCurrentUserId();
+        if (lineRemovalRepository == null || userId == null) {
+            return;
+        }
+        lineRemovalRepository.save(com.example.hms.model.InvoiceLineRemoval.builder()
+            .hospitalId(invoice.getHospital().getId())
+            .invoiceId(invoice.getId())
+            .invoiceNumber(invoice.getInvoiceNumber())
+            .itemDescription(item.getItemDescription())
+            .textCode(item.getTextCode())
+            .textArgs(item.getTextArgs())
+            .quantity(item.getQuantity())
+            .unitPrice(item.getUnitPrice() != null ? item.getUnitPrice() : java.math.BigDecimal.ZERO)
+            .tariffUnitPrice(com.example.hms.mapper.InvoiceItemMapper.tariffUnitPriceOf(item))
+            .reason(reason)
+            .removedBy(userId)
+            .removedAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()))
+            .build());
     }
 
     private BillingInvoice writableInvoice(UUID invoiceId) {

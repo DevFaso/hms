@@ -131,4 +131,16 @@ public class PharmacyPayment extends BaseEntity {
     @Size(max = 255)
     @Column(name = "void_reason", length = 255)
     private String voidReason;
+
+    /**
+     * Billing plan PR 11 (V310, QA D2430): the key the portal generates once per payment dialog.
+     * A retry or a second submit carrying it answers with this record; none is written again.
+     * Unique per hospital when present.
+     */
+    @Column(name = "client_request_id")
+    private java.util.UUID clientRequestId;
+
+    /** Billing plan PR 10 (V309, QA D2672): the pharmacy cash session the money was taken in. */
+    @Column(name = "cash_session_id")
+    private java.util.UUID cashSessionId;
 }

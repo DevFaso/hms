@@ -74,6 +74,20 @@ public class LabTestDefinitionRequestDTO {
     @Size(max = 255)
     private String expectedResult;
 
+    /**
+     * QA D2730: the sensitive category every result of this test carries
+     * (HIV, REPRODUCTIVE_HEALTH, ...). Left out, an update keeps the current
+     * tag; null on a new test means none.
+     */
+    private com.example.hms.enums.SensitivityCategory sensitivityCategory;
+
+    /**
+     * QA D2730: true removes the test's sensitive category. A separate flag
+     * because a body that merely leaves {@code sensitivityCategory} out (an
+     * older client) must keep the tag, never clear it.
+     */
+    private Boolean clearSensitivityCategory;
+
     @Min(1)
     @Max(10080)
     private Integer turnaroundTime;
@@ -87,5 +101,14 @@ public class LabTestDefinitionRequestDTO {
     @Valid
     @Builder.Default
     private List<LabTestReferenceRangeDTO> referenceRanges = new ArrayList<>();
+
+    /**
+     * r63 (NFS panels): the analytes of a panel test. Null leaves an existing
+     * definition's components as they are; an empty list makes it a
+     * single-value test.
+     */
+    @Valid
+    @jakarta.validation.constraints.Size(max = 60)
+    private List<LabTestComponentDTO> components;
 }
 

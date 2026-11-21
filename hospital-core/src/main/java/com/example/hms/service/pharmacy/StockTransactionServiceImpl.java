@@ -57,6 +57,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     private final InventoryItemRepository inventoryItemRepository;
     private final StockLotRepository stockLotRepository;
     private final com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
+    /** QA D2676 (r65): a return may name the counter sale it gives back. */
+    private final com.example.hms.repository.pharmacy.PharmacySaleRepository pharmacySaleRepository;
     private final PharmacyRepository pharmacyRepository;
     private final UserRepository userRepository;
     private final StockTransactionMapper stockTransactionMapper;
@@ -312,7 +314,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
      */
     private void requireMovementIsAccountable(StockTransactionRequestDTO dto, InventoryItem item, StockLot lot) {
         StockTransactionType type = dto.getTransactionType();
-        if (type == StockTransactionType.DISPENSE) {
+        // QA D2670 (r65): a SALE leaves stock through the counter sale, which writes it with the sale's id.
+        if (type == StockTransactionType.DISPENSE || type == StockTransactionType.SALE) {
             throw new com.example.hms.exception.FieldBusinessException("transactionType", MessageUtil.resolve("stockTransaction.dispense.viaWorkflow"));
         }
         // QA D615: a receipt here created no lot row, so an expired lot, a
@@ -371,11 +374,14 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     /** How a FEFO override follows a ledger reason; the ledger screen splits on it. */
     static final String FEFO_LEDGER_SEPARATOR = " | FEFO: ";
 
-    /** Movements that take stock off a lot or item, which a return may put back. */
-    private static final Set<StockTransactionType> ISSUED_TYPES =
-            java.util.EnumSet.of(StockTransactionType.DISPENSE, StockTransactionType.TRANSFER);
-    private static final Set<StockTransactionType> RETURNED_TYPES =
-            java.util.EnumSet.of(StockTransactionType.RETURN);
+    /**
+     * Movements that take stock off a lot or item, which a return may put back. The one list (review of #1239):
+     * the cancel of a fill counts what is still out of a lot with it too ({@code DispenseServiceImpl.lotStillOut}).
+     */
+    static final Set<StockTransactionType> ISSUED_TYPES = java.util.Collections.unmodifiableSet(
+            java.util.EnumSet.of(StockTransactionType.DISPENSE, StockTransactionType.TRANSFER, StockTransactionType.SALE));
+    static final Set<StockTransactionType> RETURNED_TYPES = java.util.Collections.unmodifiableSet(
+            java.util.EnumSet.of(StockTransactionType.RETURN));
 
     /**
      * QA D270 (bypass of D208): a manual RETURN put any quantity back, and a
@@ -422,6 +428,12 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         com.example.hms.model.pharmacy.Dispense dispense =
                 dispenseRepository.findLockedById(dto.getReferenceId()).orElse(null);
         if (dispense == null) {
+            com.example.hms.model.pharmacy.PharmacySale sale = pharmacySaleRepository == null ? null
+                    : pharmacySaleRepository.findLockedById(dto.getReferenceId()).orElse(null);
+            if (sale != null) {
+                requireReturnOfSale(dto, item, lot, sale);
+                return;
+            }
             requireReturnOfTransfer(dto, item, lot);
             return;
         }
@@ -442,6 +454,44 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 stockTransactionRepository.sumQuantityForReference(dispense.getId(), RETURNED_TYPES)));
         if (dto.getQuantity().compareTo(returnable) > 0) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_QUANTITY, "stockTransaction.return.exceedsDispensed",
+                    com.example.hms.utility.DisplayNumbers.quantity(returnable.max(BigDecimal.ZERO)));
+        }
+    }
+
+    /**
+     * QA D2676 (r65): a return that names a counter sale gives back at most what that sale took off this lot (or
+     * item) and was not returned yet. The sale row is locked so two returns are counted in turn. A sale of
+     * another pharmacy, or not completed, is refused.
+     */
+    private void requireReturnOfSale(StockTransactionRequestDTO dto, InventoryItem item, StockLot lot,
+                                     com.example.hms.model.pharmacy.PharmacySale sale) {
+        if (sale.getPharmacy() == null || item.getPharmacy() == null
+                || !sale.getPharmacy().getId().equals(item.getPharmacy().getId())
+                || sale.getStatus() != com.example.hms.enums.PharmacySaleStatus.COMPLETED) {
+            throw new com.example.hms.exception.FieldBusinessException("referenceId",
+                    "stockTransaction.return.saleNotReturnable");
+        }
+        BigDecimal sold = BigDecimal.ZERO;
+        for (com.example.hms.model.pharmacy.SaleLine line : sale.getLines()) {
+            boolean sameStock = line.getStockLot() != null
+                    ? lot != null && line.getStockLot().getId().equals(lot.getId())
+                    : lot == null && line.getMedicationCatalogItem() != null && item.getMedicationCatalogItem() != null
+                        && line.getMedicationCatalogItem().getId().equals(item.getMedicationCatalogItem().getId());
+            if (sameStock) {
+                sold = sold.add(nz(line.getQuantity()));
+            }
+        }
+        if (sold.signum() <= 0) {
+            throw new com.example.hms.exception.FieldBusinessException("referenceId",
+                    "stockTransaction.return.saleNotReturnable");
+        }
+        // What already came back of this sale on this lot (or item).
+        BigDecimal returned = lot != null
+                ? stockTransactionRepository.sumQuantityForReferenceAndLot(sale.getId(), lot.getId(), RETURNED_TYPES)
+                : stockTransactionRepository.sumQuantityForReferenceAndItem(sale.getId(), item.getId(), RETURNED_TYPES);
+        BigDecimal returnable = sold.subtract(nz(returned));
+        if (dto.getQuantity().compareTo(returnable) > 0) {
+            throw new com.example.hms.exception.FieldBusinessException(FIELD_QUANTITY, "stockTransaction.return.exceedsSold",
                     com.example.hms.utility.DisplayNumbers.quantity(returnable.max(BigDecimal.ZERO)));
         }
     }
@@ -587,7 +637,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                                      StockTransactionType type, BigDecimal quantity) {
         LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
         switch (type) {
-            case DISPENSE, TRANSFER -> takeOff(item, lot, quantity, now);
+            case DISPENSE, TRANSFER, SALE -> takeOff(item, lot, quantity, now);
             case RECEIPT, RETURN -> putOn(item, lot, quantity, now);
             // QA D143: a negative adjustment (a write-off) goes through the
             // guarded decrement, so it can never drive a lot or the item
@@ -645,7 +695,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
             case ADJUSTMENT -> AuditEventType.STOCK_ADJUSTMENT;
             case TRANSFER -> AuditEventType.STOCK_TRANSFER;
             case RETURN -> AuditEventType.STOCK_RETURN;
-            case DISPENSE -> AuditEventType.STOCK_ADJUSTMENT;
+            case DISPENSE, SALE -> AuditEventType.STOCK_ADJUSTMENT;
         };
     }
 
@@ -654,6 +704,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
             UUID userId = roleValidator.getCurrentUserId();
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .userId(userId)
+                    // QA D2924 (r66): the acting hospital anchors the row for the hospital admin's audit log.
+                    .hospitalId(roleValidator.getCurrentHospitalId())
                     .eventType(eventType)
                     .eventDescription(description)
                     .status(AuditStatus.SUCCESS)

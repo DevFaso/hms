@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import type { AllergyReviewState } from '../shared/allergy-acknowledgement/allergy-acknowledgement';
 import { CdsCard } from '../shared/cds-card/cds-card.model';
 import { MobileMoneyOperator } from '../shared/mobile-money-operator';
+import { SensitivityCategory } from '../shared/sensitivity/sensitivity-category';
 
 /* ───────────────────────────── Medication Catalog ───────────────────────────── */
 
@@ -21,6 +22,10 @@ export interface MedicationCatalogItemRequest {
   essentialList?: boolean;
   controlled?: boolean;
   description?: string;
+  /** Policy 2026-11-20: the medicine's sensitive category. Left out, the server keeps the current one. */
+  sensitivityCategory?: SensitivityCategory;
+  /** True clears the sensitive category. */
+  clearSensitivityCategory?: boolean;
 }
 
 /** Round 18 (QA D935): one weight band; min inclusive, max exclusive (null: no upper bound). */
@@ -63,6 +68,8 @@ export interface MedicationCatalogItemResponse {
   category?: string;
   essentialList: boolean;
   controlled: boolean;
+  /** Policy 2026-11-20: the sensitive category this medicine reveals; null for none. */
+  sensitivityCategory?: SensitivityCategory | null;
   /** QA D935: mg per kg per dose, or null when the catalogue holds no ceiling. */
   pediatricMaxDoseMgPerKg?: number | null;
   /** Round 18 (QA D935): the rest of the paediatric limits, their source and approval. */
@@ -139,6 +146,8 @@ export interface InventoryItemRequest {
   unit?: string;
   /** QA D264: selling price of one unit, whole XOF. */
   unitPrice?: number | null;
+  /** Review of #1239: why the price changes; required by the server when it does (price history). */
+  priceChangeReason?: string;
   active?: boolean;
 }
 
@@ -156,6 +165,13 @@ export interface InventoryItemResponse {
   active: boolean;
   /** QA D157: a controlled substance; a manual movement of it needs a witness. */
   controlled?: boolean;
+  /** QA D2674: units of `unit` in one pack, once the item is counted in units; absent otherwise. */
+  unitsPerPack?: number | null;
+  /** QA D2674: the pack's name ("plaquette"). */
+  packUnit?: string | null;
+  /** QA D2674: the stock on hand as whole packs plus loose units. */
+  fullPacksOnHand?: number | null;
+  looseUnitsOnHand?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -359,6 +375,13 @@ export interface DispenseRequest {
    * alerts (`cdsAdvisories`), which the form then shows beside this field.
    */
   cdsOverrideReason?: string;
+  /**
+   * Policy rule 6 (review of #1239, QA D2675): a one-step fill leaves the counter before it can be paid.
+   * When it has a price, it names the deferral somebody else approved for the prescription…
+   */
+  billingDeferralId?: string;
+  /** …or carries the reason of a logged urgency override, which finance reviews afterwards. */
+  billingUrgencyReason?: string;
   /**
    * Roadmap row 4 / T-68 — optional client-supplied idempotency key the
    * offline-dispense queue mints when the user clicks Dispense. Allows the
@@ -698,6 +721,8 @@ export interface PharmacyPaymentRequest {
   mobileMoneyOperator?: MobileMoneyOperator;
   receivedBy: string;
   notes?: string;
+  /** Billing plan PR 11 (QA D2430): one key per checkout; a retry with it records nothing twice. */
+  clientRequestId?: string;
 }
 
 export interface PharmacyPaymentResponse {
@@ -756,6 +781,10 @@ export interface PharmacyClaimResponse {
   notes?: string;
   createdAt: string;
   updatedAt: string;
+  /** QA D2925 (r66): the reader may record the payer's answer (a money desk or a hospital admin). */
+  canRecordPayerDecision?: boolean;
+  /** QA D2925 (r66): accepted, but no money desk stands behind it yet: it covers no fill. */
+  acceptanceUnconfirmed?: boolean;
 }
 /* ───────────────────────────── Service ───────────────────────────── */
 
@@ -1231,6 +1260,10 @@ export class PharmacyService {
     body: {
       patientScanValue?: string;
       notes?: string;
+      /** Policy rule 6 (QA D2675): the deferral somebody else approved for the prescription… */
+      billingDeferralId?: string;
+      /** …or the reason of a logged urgency override. */
+      billingUrgencyReason?: string;
     } = {},
   ): Observable<ApiResponse<DispenseResponse>> {
     return this.http.post<ApiResponse<DispenseResponse>>(

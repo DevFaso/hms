@@ -68,7 +68,7 @@ class EncounterCheckoutChargeListenerTest {
         mock(com.example.hms.repository.AdmissionRepository.class);
     private final EncounterCheckoutChargeListener listener = new EncounterCheckoutChargeListener(
         encounters, invoices, treatments, assignments, numbers, mock(TariffResolver.class), List.of(
-            new ConsultationChargeSource(given), new LabOrderChargeSource(labOrders),
+            new ConsultationChargeSource(given, null), new LabOrderChargeSource(labOrders, null),
             new ImagingOrderChargeSource(imaging), new ProcedureOrderChargeSource(procedures),
             new TransfusionChargeSource(transfusions, units), new BedDaysChargeSource(admissions)));
 

@@ -79,29 +79,33 @@
         <div class="workspace-stat stat-lead">
           <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span>
           <div>
-            <strong>{{ inventoryItems().length }}</strong
-            ><span>{{ 'PHARMACY_DASH.LOADED' | translate }}</span>
+            <strong>{{ inventoryItems().length }}</strong><span>{{
+              'PHARMACY_DASH.LOADED' | translate
+            }}</span>
           </div>
         </div>
         <div class="workspace-stat">
           <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
           <div>
-            <strong>{{ stockCount('stock-ok') }}</strong
-            ><span>{{ 'PHARMACY.IN_STOCK' | translate }}</span>
+            <strong>{{ stockCount('stock-ok') }}</strong><span>{{
+              'PHARMACY.IN_STOCK' | translate
+            }}</span>
           </div>
         </div>
         <div class="workspace-stat">
           <span class="material-symbols-outlined" aria-hidden="true">warning</span>
           <div>
-            <strong>{{ stockCount('stock-low') }}</strong
-            ><span>{{ 'PHARMACY_DASH.LOW' | translate }}</span>
+            <strong>{{ stockCount('stock-low') }}</strong><span>{{
+              'PHARMACY_DASH.LOW' | translate
+            }}</span>
           </div>
         </div>
         <div class="workspace-stat">
           <span class="material-symbols-outlined" aria-hidden="true">block</span>
           <div>
-            <strong>{{ stockCount('stock-out') }}</strong
-            ><span>{{ 'PHARMACY_DASH.OUT' | translate }}</span>
+            <strong>{{ stockCount('stock-out') }}</strong><span>{{
+              'PHARMACY_DASH.OUT' | translate
+            }}</span>
           </div>
         </div>
       </section>
@@ -129,6 +133,87 @@
         <p>{{ 'COMMON.LOADING' | translate }}</p>
       </div>
     } @else if (inventoryItems().length > 0) {
+      @if (packItem(); as pItem) {
+        <!-- QA D2674 (r65): the pack size, set once; the stock is then counted in units. -->
+        <form
+          class="form-card form-card-accent pack-size-form"
+          data-testid="pack-size-form"
+          appInlineSubForm
+          #packForm="inlineSubForm"
+          (dismissed)="packItem.set(null)"
+          (ngSubmit)="savePackSize()"
+        >
+          <h3>
+            {{ 'PHARMACY_MONEY.PACK.TITLE' | translate: { name: pItem.medicationName ?? '' } }}
+          </h3>
+          <p class="workspace-note">{{ 'PHARMACY_MONEY.PACK.EXPLAIN' | translate }}</p>
+          <div class="pack-size-fields">
+            <div class="field">
+              <label for="packUnit">{{ 'PHARMACY_MONEY.PACK.PACK_UNIT' | translate }}</label>
+              <input
+                id="packUnit"
+                name="packUnit"
+                type="text"
+                maxlength="60"
+                [(ngModel)]="packUnit"
+              />
+            </div>
+            <div class="field">
+              <label for="packUnitsPerPack"
+                >{{ 'PHARMACY_MONEY.PACK.UNITS_PER_PACK' | translate }} *</label
+              >
+              <input
+                id="packUnitsPerPack"
+                name="packUnitsPerPack"
+                type="number"
+                min="2"
+                max="10000"
+                step="1"
+                required
+                appFocusOnRender
+                [(ngModel)]="packUnitsPerPack"
+              />
+            </div>
+            <div class="field">
+              <label for="packTargetUnit">{{ 'PHARMACY_MONEY.PACK.UNIT' | translate }} *</label>
+              <input
+                id="packTargetUnit"
+                name="packTargetUnit"
+                type="text"
+                maxlength="60"
+                required
+                [placeholder]="'PHARMACY_MONEY.PACK.UNIT_PLACEHOLDER' | translate"
+                [(ngModel)]="packTargetUnit"
+              />
+            </div>
+            <div class="field pack-size-reason">
+              <label for="packReason">{{ 'PHARMACY_MONEY.PACK.REASON' | translate }} *</label>
+              <input
+                id="packReason"
+                name="packReason"
+                type="text"
+                maxlength="300"
+                required
+                [(ngModel)]="packReason"
+              />
+            </div>
+          </div>
+          <div class="form-actions">
+            <app-inline-discard-ask [form]="packForm" />
+            <button type="button" class="btn-secondary" (click)="packItem.set(null)">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
+            <button
+              type="submit"
+              class="btn-primary"
+              [disabled]="packSaving()"
+              data-testid="pack-size-save"
+            >
+              {{ 'PHARMACY_MONEY.PACK.SAVE' | translate }}
+            </button>
+          </div>
+        </form>
+      }
       @if (visibleStock().length === 0) {
         <p class="workspace-note" role="status">{{ 'PHARMACY_DASH.NO_MATCHES' | translate }}</p>
       }
@@ -158,10 +243,45 @@
                   <span class="qty" [class]="getStockStatusClass(item)">{{
                     item.quantityOnHand
                   }}</span>
+                  @if (item.unitsPerPack) {
+                    <small class="pack-breakdown" [attr.data-testid]="'packs-' + item.id">{{
+                      'PHARMACY_MONEY.PACK.BREAKDOWN'
+                        | translate
+                          : {
+                              packs: item.fullPacksOnHand ?? 0,
+                              packUnit: item.packUnit ?? '',
+                              loose: item.looseUnitsOnHand ?? 0,
+                              unit: item.unit ?? '',
+                            }
+                    }}</small>
+                  }
                 </td>
                 <td>{{ item.reorderThreshold }}</td>
                 <td>{{ item.reorderQuantity }}</td>
-                <td>{{ item.unit | dash }}</td>
+                <td>
+                  {{ item.unit | dash }}
+                  @if (item.unitsPerPack) {
+                    <small class="pack-breakdown">{{
+                      'PHARMACY_MONEY.PACK.SIZE'
+                        | translate
+                          : {
+                              packUnit: item.packUnit ?? '',
+                              n: item.unitsPerPack,
+                              unit: item.unit ?? '',
+                            }
+                    }}</small>
+                  } @else if (!item.controlled) {
+                    <button
+                      type="button"
+                      class="btn-text btn-sm"
+                      [attr.data-testid]="'pack-size-' + item.id"
+                      (click)="openPackSize(item)"
+                    >
+                      {{ 'PHARMACY_MONEY.PACK.SET' | translate }}
+                    </button>
+                  }
+                </td>
+
                 <!-- QA D835: the price is READ as text (an input's value is not
                      part of the row's text, so the column read as empty); the
                      pencil opens the box that changes it. -->
@@ -189,7 +309,19 @@
                         [value]="item.unitPrice ?? ''"
                         appFocusOnRender
                         [focusOnRenderReturn]="'[data-testid=price-edit-' + item.id + ']'"
-                        (keydown.enter)="savePrice(item, priceInput.value)"
+                        (keydown.enter)="savePrice(item, priceInput.value, priceReason.value)"
+                      />
+                      <!-- Review of #1239: a price change is kept in the price history with its reason. -->
+                      <input
+                        #priceReason
+                        [id]="'price-reason-' + item.id"
+                        type="text"
+                        maxlength="500"
+                        class="price-reason-input"
+                        [attr.aria-label]="'PHARMACY_MONEY.PRICE.REASON' | translate"
+                        [placeholder]="'PHARMACY_MONEY.PRICE.REASON' | translate"
+                        [attr.data-testid]="'price-reason-' + item.id"
+                        (keydown.enter)="savePrice(item, priceInput.value, priceReason.value)"
                       />
                       <button
                         type="button"
@@ -197,7 +329,7 @@
                         [attr.aria-label]="'PHARMACY.SAVE_PRICE' | translate"
                         [title]="'PHARMACY.SAVE_PRICE' | translate"
                         [attr.data-testid]="'price-save-' + item.id"
-                        (click)="savePrice(item, priceInput.value)"
+                        (click)="savePrice(item, priceInput.value, priceReason.value)"
                       >
                         <span class="material-symbols-outlined" aria-hidden="true">check</span>
                       </button>

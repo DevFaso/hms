@@ -216,10 +216,17 @@ public class VisitTimelineRows {
         if (visits.isEmpty()) {
             return List.of();
         }
-        return encounterNoteRepository.findByEncounter_IdIn(visits).stream()
+        List<PatientTimelineEntryDTO> rows = new ArrayList<>();
+        encounterNoteRepository.findByEncounter_IdIn(visits).stream()
             .filter(note -> note.getSignedAt() != null)
-            .map(note -> noteRow(note, s.acting()))
-            .toList();
+            .forEach(note -> {
+                rows.add(noteRow(note, s.acting()));
+                // QA D2260 (r63): each correction to the signed note, dated and signed, as its own row.
+                com.example.hms.service.support.NoteAddenda.of(note).forEach(a -> rows.add(
+                    addendumRow(a, CATEGORY_NOTE, sensitive(note.getEncounter()),
+                        provenance(new HashMap<>(), note.getHospital(), s.acting()))));
+            });
+        return rows;
     }
 
     private List<PatientTimelineEntryDTO> referralRows(Scope s) {
@@ -283,10 +290,18 @@ public class VisitTimelineRows {
 
     private List<PatientTimelineEntryDTO> nursingNoteRows(Scope s) {
         // QA D1380: every nursing note of the acting hospital (was the 50 newest).
-        return nursingNoteRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(s.patientId(),
-                Set.of(s.acting())).stream()
-            .map(note -> nursingNoteRow(note, s.acting()))
-            .toList();
+        List<PatientTimelineEntryDTO> rows = new ArrayList<>();
+        nursingNoteRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(s.patientId(),
+                Set.of(s.acting()))
+            .forEach(note -> {
+                rows.add(nursingNoteRow(note, s.acting()));
+                // QA D2260 (r63): each addendum to the nursing note, dated and signed, as its own row.
+                com.example.hms.service.support.NoteAddenda.of(note).forEach(a -> rows.add(
+                    addendumRow(a, CATEGORY_NURSING_NOTE,
+                        sensitivityClassifier.effectiveCategory(note) != null,
+                        provenance(new HashMap<>(), note.getHospital(), s.acting()))));
+            });
+        return rows;
     }
 
     private List<PatientTimelineEntryDTO> immunizationRows(Scope s) {
@@ -644,6 +659,31 @@ public class VisitTimelineRows {
             summary.toString(),
             sensitive(note.getEncounter()),
             provenance(metadata, note.getHospital(), acting));
+    }
+
+    /** QA D2260 (r63): an addendum row: its date, its author as the clinician, its text. */
+    private static PatientTimelineEntryDTO addendumRow(
+            com.example.hms.payload.dto.chartreview.ChartReviewDTO.NoteAddendumEntryDTO addendum,
+            String category, boolean sensitive, Map<String, Object> metadata) {
+        putIfNotNull(metadata, META_CLINICIAN, blankToNull(addendum.getAuthorName()));
+        return row(addendum.getId(), category,
+            com.example.hms.service.support.NoteAddenda.when(addendum),
+            addendumSummary(addendum, CATEGORY_NURSING_NOTE.equals(category)),
+            sensitive,
+            metadata);
+    }
+
+    /** An addendum saved without its author's attestation says so; literal keys, one per case. */
+    private static String addendumSummary(
+            com.example.hms.payload.dto.chartreview.ChartReviewDTO.NoteAddendumEntryDTO addendum, boolean nursing) {
+        String text = truncate(addendum.getContent());
+        boolean attested = addendum.getSignedAt() != null;
+        if (nursing) {
+            return attested ? MessageUtil.resolveOrRaw("timeline.nursingNote.addendum", text)
+                : MessageUtil.resolveOrRaw("timeline.nursingNote.addendumNotAttested", text);
+        }
+        return attested ? MessageUtil.resolveOrRaw("timeline.note.addendum", text)
+            : MessageUtil.resolveOrRaw("timeline.note.addendumNotAttested", text);
     }
 
     private PatientTimelineEntryDTO referralRow(GeneralReferral referral, UUID acting) {

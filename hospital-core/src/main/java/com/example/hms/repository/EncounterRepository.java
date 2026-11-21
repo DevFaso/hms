@@ -125,6 +125,14 @@ public interface EncounterRepository
     List<Encounter> findByAppointmentIdIn(@Param("appointmentIds") List<UUID> appointmentIds);
 
     /**
+     * QA D2730: the visits a set of rows was recorded in, with the department
+     * their sensitivity defaults from. By id only, no tenant scope: the caller
+     * already holds rows of one patient and asks only for their category.
+     */
+    @Query("SELECT e FROM Encounter e LEFT JOIN FETCH e.department WHERE e.id IN :ids")
+    List<Encounter> findWithDepartmentByIdIn(@Param("ids") java.util.Collection<UUID> ids);
+
+    /**
      * The day's walk-ins: encounters with no appointment. QA D791: a
      * prescription's anchor has no appointment either, and is not a walk-in.
      */

@@ -1,7 +1,6 @@
 package com.example.hms.hl7.mllp;
 
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 
 /**
  * Builds an HL7 v2 General Acknowledgement ({@code ACK}) message that
@@ -13,7 +12,6 @@ import java.time.format.DateTimeFormatter;
  */
 public final class Hl7AckBuilder {
 
-    private static final DateTimeFormatter HL7_DTM = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
     public static final String CR = "\r";
 
     public enum AckCode { AA, AE, AR }
@@ -21,7 +19,7 @@ public final class Hl7AckBuilder {
     private Hl7AckBuilder() {}
 
     public static String buildAck(Hl7MessageHeader inbound, AckCode code, String textMessage) {
-        return buildAck(inbound, code, textMessage, LocalDateTime.now(), generateControlId());
+        return buildAck(inbound, code, textMessage, LocalDateTime.now(java.time.ZoneOffset.UTC), generateControlId());
     }
 
     static String buildAck(
@@ -44,7 +42,8 @@ public final class Hl7AckBuilder {
             .append(safe(inbound.receivingFacility())).append(fs)
             .append(safe(inbound.sendingApplication())).append(fs)
             .append(safe(inbound.sendingFacility())).append(fs)
-            .append(HL7_DTM.format(now)).append(fs)
+            // MSH-7 as an explicit UTC instant: {@code now} is UTC wall time.
+            .append(com.example.hms.utility.Hl7Timestamps.formatUtc(now)).append(fs)
             .append(fs)             // MSH-8 security (empty)
             .append("ACK")          // MSH-9 message type
             .append(fs)

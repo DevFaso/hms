@@ -42,7 +42,22 @@ interface WarningToast {
   push(type: 'warning', message: string, durationMs?: number): void;
 }
 interface Translator {
-  instant(key: string): unknown;
+  instant(key: string, params?: Record<string, unknown>): unknown;
+}
+
+/**
+ * QA D2585 (r65): these warnings stay on screen for 20 s, long after the dialog closed and while
+ * the nurse records the next patient; a warning that does not name its patient reads as the next
+ * one's. Every announcement starts with the patient's name, when the caller knows it.
+ */
+function withPatient(
+  message: string,
+  patientName: string | null | undefined,
+  translate: Translator,
+): string {
+  const name = patientName?.trim();
+  if (!name) return message;
+  return `${String(translate.instant('VITAL_LIMITS.FOR_PATIENT', { patient: name }))} ${message}`;
 }
 
 /** Shows the newborn warning after a save, if the set raised one. Returns whether it did. */
@@ -50,11 +65,16 @@ export function announceNewbornWarning(
   alerts: NewbornVitalAlert[] | null | undefined,
   toast: WarningToast,
   translate: Translator,
+  patientName: string | null | undefined,
 ): boolean {
   const warning = newbornVitalWarning(alerts);
   if (!warning) return false;
   const heading = String(translate.instant(warning.headingKey));
-  toast.push('warning', [heading, ...warning.lines].join(' '), NEWBORN_WARNING_MS);
+  toast.push(
+    'warning',
+    withPatient([heading, ...warning.lines].join(' '), patientName, translate),
+    NEWBORN_WARNING_MS,
+  );
   return true;
 }
 
@@ -69,11 +89,16 @@ export function announcePostpartumWarning(
   alerts: NewbornVitalAlert[] | null | undefined,
   toast: { push(type: 'error', message: string, durationMs?: number): void },
   translate: Translator,
+  patientName: string | null | undefined,
 ): boolean {
   const lines = (alerts ?? []).map((a) => a.message).filter((m) => !!m);
   if (!lines.length) return false;
   const heading = String(translate.instant('VITAL_LIMITS.POSTPARTUM_WARNING_URGENT'));
-  toast.push('error', [heading, ...lines].join(' '), NEWBORN_WARNING_MS);
+  toast.push(
+    'error',
+    withPatient([heading, ...lines].join(' '), patientName, translate),
+    NEWBORN_WARNING_MS,
+  );
   return true;
 }
 
@@ -88,6 +113,7 @@ export function announceHypertensionWarning(
   alerts: NewbornVitalAlert[] | null | undefined,
   toast: { push(type: 'warning' | 'error', message: string, durationMs?: number): void },
   translate: Translator,
+  patientName: string | null | undefined,
 ): boolean {
   const lines = (alerts ?? []).map((a) => a.message).filter((m) => !!m);
   if (!lines.length) return false;
@@ -95,6 +121,46 @@ export function announceHypertensionWarning(
   const heading = String(
     translate.instant(urgent ? 'VITAL_LIMITS.ADULT_HTN_URGENT' : 'VITAL_LIMITS.ADULT_HTN_WARNING'),
   );
-  toast.push(urgent ? 'error' : 'warning', [heading, ...lines].join(' '), NEWBORN_WARNING_MS);
+  toast.push(
+    urgent ? 'error' : 'warning',
+    withPatient([heading, ...lines].join(' '), patientName, translate),
+    NEWBORN_WARNING_MS,
+  );
+  return true;
+}
+
+/** A maternal level whose page was SENT: the plain code, with no `-withheld` or `-unsent` ending. */
+const MEWS_PAGED_CODE = /^mews-(low-medium|medium|high)$/;
+
+/**
+ * Policy 2026-11-20 (provisional, pending a named obstetric clinician's sign-off): the maternal early
+ * warning of a pregnant or postpartum woman's set. The server scores the set with its one rule set
+ * (national MEWS, CRADLE shock index) and returns the level of concern when a review is due and each
+ * shock-index alert; the portal holds no band or threshold of its own. The set is saved either way,
+ * and nothing waits on an acknowledgement. Only a plain level code (`mews-low-medium`, `mews-medium`,
+ * `mews-high`) means the team was paged: the server ends the code in `-withheld` when its cool-down
+ * held the page back (the team was told a moment ago) and in `-unsent` when it reached nobody, and its
+ * sentence says so. The heading then never claims the team was told. Returns whether a warning was shown.
+ */
+export function announceMaternalWarning(
+  alerts: NewbornVitalAlert[] | null | undefined,
+  toast: { push(type: 'warning' | 'error', message: string, durationMs?: number): void },
+  translate: Translator,
+  patientName: string | null | undefined,
+): boolean {
+  const lines = (alerts ?? []).map((a) => a.message).filter((m) => !!m);
+  if (!lines.length) return false;
+  const urgent = (alerts ?? []).some((a) => a.severity === 'URGENT');
+  const paged = (alerts ?? []).some((a) => MEWS_PAGED_CODE.test(a.code ?? ''));
+  const heading = String(
+    translate.instant(
+      paged ? 'VITAL_LIMITS.MATERNAL_EWS_PAGED' : 'VITAL_LIMITS.MATERNAL_EWS_WARNING',
+    ),
+  );
+  toast.push(
+    urgent ? 'error' : 'warning',
+    withPatient([heading, ...lines].join(' '), patientName, translate),
+    NEWBORN_WARNING_MS,
+  );
   return true;
 }

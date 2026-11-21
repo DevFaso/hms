@@ -95,6 +95,8 @@ public class RoleSeeder implements CommandLineRunner {
         roles.put("ROLE_STAFF",              "General hospital support staff with schedule and appointment visibility");
         roles.put("ROLE_PHARMACY_VERIFIER",  "Pharmacy verifier performing second-person dispense verification and stock routing");
         roles.put("ROLE_CLAIMS_REVIEWER",    "Pharmacy claims reviewer adjudicating insurance claims and billing disputes");
+        // Policy rule 3 (2026-11-20, provisional): the same text as V346 seeds.
+        roles.put("ROLE_IMAGING_TECHNICIAN", "Imaging technician (radiographer) who checks the patient in, performs and documents imaging exams, and attaches images; never orders an exam or writes a report");
         return roles;
     }
 }

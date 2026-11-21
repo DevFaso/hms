@@ -18,29 +18,31 @@
       <div class="workspace-stat stat-lead">
         <span class="material-symbols-outlined" aria-hidden="true">medication</span>
         <div>
-          <strong>{{ totalElements }}</strong
-          ><span>{{ 'PHARMACY_DASH.RESULTS' | translate }}</span>
+          <strong>{{ totalElements }}</strong><span>{{ 'PHARMACY_DASH.RESULTS' | translate }}</span>
         </div>
       </div>
       <div class="workspace-stat">
         <span class="material-symbols-outlined" aria-hidden="true">view_list</span>
         <div>
-          <strong>{{ filtered().length }}</strong
-          ><span>{{ 'PHARMACY_DASH.LOADED' | translate }}</span>
+          <strong>{{ filtered().length }}</strong><span>{{
+            'PHARMACY_DASH.LOADED' | translate
+          }}</span>
         </div>
       </div>
       <div class="workspace-stat">
         <span class="material-symbols-outlined" aria-hidden="true">verified</span>
         <div>
-          <strong>{{ pageCount('essentialList') }}</strong
-          ><span>{{ 'PHARMACY_DASH.ESSENTIAL' | translate }}</span>
+          <strong>{{ pageCount('essentialList') }}</strong><span>{{
+            'PHARMACY_DASH.ESSENTIAL' | translate
+          }}</span>
         </div>
       </div>
       <div class="workspace-stat">
         <span class="material-symbols-outlined" aria-hidden="true">lock</span>
         <div>
-          <strong>{{ pageCount('controlled') }}</strong
-          ><span>{{ 'PHARMACY_DASH.CONTROLLED' | translate }}</span>
+          <strong>{{ pageCount('controlled') }}</strong><span>{{
+            'PHARMACY_DASH.CONTROLLED' | translate
+          }}</span>
         </div>
       </div>
     </section>
@@ -109,6 +111,13 @@
                     'PHARMACY.BADGE_CONTROLLED' | translate
                   }}</span>
                 }
+                @if (item.sensitivityCategory; as sensitive) {
+                  {{ ' '
+                  }}<span class="badge badge-pending" data-testid="med-sensitive">{{
+                    'SENSITIVITY_TAG.BADGE'
+                      | translate: { category: sensitivityLabelKey(sensitive) | translate }
+                  }}</span>
+                }
                 @if (hasPediatricLimits(item)) {
                   <!-- Round 18 (QA D935): who may rely on the limits, at a glance. -->
                   {{ ' '
@@ -153,7 +162,7 @@
                       <span class="material-symbols-outlined" aria-hidden="true">child_care</span>
                     </button>
                   }
-                  @if (canManage()) {
+                  @if (canManageItem(item)) {
                     <button
                       class="action-link"
                       [title]="'COMMON.EDIT' | translate"
@@ -424,6 +433,17 @@
                   {{ 'PHARMACY.CONTROLLED' | translate }}
                 </label>
               </div>
+            </div>
+
+            <!-- Policy 2026-11-20 (provisional): a medicine that reveals a sensitive category. -->
+            <div class="field" data-testid="med-sensitivity">
+              <app-sensitivity-select
+                controlId="medSensitivityCategory"
+                labelKey="SENSITIVE_POLICY.MEDICINE.LABEL"
+                hintKey="SENSITIVE_POLICY.MEDICINE.HINT"
+                [value]="medSensitivity()"
+                (picked)="medSensitivity.set($event)"
+              />
             </div>
 
             <!-- Round 18 (QA D935): the paediatric dose limits moved to their own

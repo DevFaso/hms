@@ -1,0 +1,157 @@
+.cash-session {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  min-width: 0;
+}
+
+.cash-session-head,
+.session-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.session-card {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color, #e5e7eb);
+  min-width: 0;
+}
+
+.session-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.status-badge {
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: var(--surface-muted, #f3f4f6);
+}
+
+.status-badge[data-status='CLOSED'],
+.status-badge[data-status='REVIEWED'] {
+  background: var(--success-bg, #dcfce7);
+}
+
+.cash-to-count {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.numeric {
+  text-align: right;
+}
+
+.gap {
+  color: var(--danger-text, #b42318);
+  font-weight: 600;
+}
+
+/* PR 10 review: the cash difference and "2 lignes avec écart", each on its own line under the cash to count. */
+.gap-flag {
+  display: block;
+  font-size: 0.8125rem;
+  white-space: normal;
+}
+
+.count-input {
+  width: 7rem;
+  max-width: 100%;
+  text-align: right;
+}
+
+.explanation-input {
+  width: 100%;
+  min-width: 9rem;
+}
+
+.data-table {
+  width: 100%;
+  min-width: 0;
+  margin-top: 0.75rem;
+}
+
+tr.money-out td {
+  color: #9a3412;
+}
+
+.field-error {
+  color: var(--danger-text, #b42318);
+}
+
+.movements,
+.earlier-counts {
+  margin-top: 0.75rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+/* Phone (390 px): each method becomes a card; the count input stays on screen (#1224 overflow guard). */
+@media (max-width: 640px) {
+  .cash-methods thead {
+    display: none;
+  }
+
+  .cash-methods,
+  .cash-methods tbody,
+  .cash-methods tfoot,
+  .cash-methods tr {
+    display: block;
+    width: 100%;
+  }
+
+  .cash-methods tr {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color, #e5e7eb);
+  }
+
+  .cash-methods th,
+  .cash-methods td {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    text-align: right;
+    border: 0;
+  }
+
+  .cash-methods td[data-label]::before {
+    content: attr(data-label);
+    text-align: left;
+    font-weight: 500;
+  }
+
+  .cash-methods td:empty {
+    display: none;
+  }
+
+  .count-input,
+  .explanation-input {
+    width: 9rem;
+    min-width: 0;
+  }
+}
+
+/* PR 10 review (QA D2703): the removed lines under the tills. */
+.cash-removed-title {
+  margin: 1.5rem 0 0.5rem;
+  font-size: 1.125rem;
+}
+
+/* PR 10 review: in a table cell the status badge needs no offset (it cost the 1024 px screen 8 px). */
+.cash-supervisor .data-table .status-badge {
+  margin-left: 0;
+}

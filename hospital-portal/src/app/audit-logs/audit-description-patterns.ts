@@ -984,6 +984,38 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Imaging image (\S+) removed from imaging order (\S+)$/,
     params: ['image', 'order'],
   },
+  // QA D2464 / D2466 (r64): a key image withdrawn after signing; a caption corrected (ids only).
+  {
+    key: 'AUDIT.DESC.IMAGING_IMAGE_WITHDRAWN',
+    re: /^Imaging image (\S+) withdrawn from imaging order (\S+)$/,
+    params: ['image', 'order'],
+  },
+  {
+    key: 'AUDIT.DESC.IMAGING_IMAGE_CAPTION_CORRECTED',
+    re: /^Imaging image (\S+) caption corrected on imaging order (\S+)$/,
+    params: ['image', 'order'],
+  },
+  // QA D2342 (r63): the patient's « Imagerie » page (ids only).
+  {
+    key: 'AUDIT.DESC.IMAGING_PORTAL_READ_BY_PROXY',
+    re: /^Imaging reports of patient (\S+) read on the patient portal by a proxy \((\S+) studies\)$/,
+    params: ['patient', 'count'],
+  },
+  {
+    key: 'AUDIT.DESC.IMAGING_PORTAL_READ',
+    re: /^Imaging reports of patient (\S+) read on the patient portal \((\S+) studies\)$/,
+    params: ['patient', 'count'],
+  },
+  {
+    key: 'AUDIT.DESC.IMAGING_PORTAL_IMAGE_VIEWED_BY_PROXY',
+    re: /^Imaging image (\S+) of imaging order (\S+) viewed on the patient portal by a proxy$/,
+    params: ['image', 'order'],
+  },
+  {
+    key: 'AUDIT.DESC.IMAGING_PORTAL_IMAGE_VIEWED',
+    re: /^Imaging image (\S+) of imaging order (\S+) viewed on the patient portal$/,
+    params: ['image', 'order'],
+  },
   {
     key: 'AUDIT.DESC.LAB_CORRECTION',
     re: /^Correction: result (\S+) supersedes released result (\S+)$/,
@@ -1785,9 +1817,205 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: [],
   },
   {
+    key: 'AUDIT.DESC.MFA_RESET_BY_ADMIN',
+    re: /^Two-step verification reset by an administrator: (.*)$/,
+    params: ['reason'],
+  },
+  {
+    key: 'AUDIT.DESC.MFA_RESET_REFUSED',
+    re: /^Two-step verification reset refused: the caller may not administer this account$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.MFA_REMOVED_BY_USER',
+    re: /^Two-step verification removed by the user$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PATIENT_CHANNEL_CHOICES',
+    re: /^Patient channel choices recorded at the desk: (.+)$/,
+    params: ['changes'],
+  },
+  {
     key: 'AUDIT.DESC.STATUS_WAS',
     re: /^(.+) \(was ([A-Z_]+)\)$/,
     params: ['what', 'previous'],
     localise: { previous: 'enum' },
+  },
+  // Outbox detail read (the payload carries patient name and identifiers): ids and message type only.
+  {
+    key: 'AUDIT.DESC.INSTRUMENT_OUTBOX_VIEWED',
+    re: /^Instrument outbox message (\S+) \((\S+)\) viewed$/,
+    params: ['message', 'type'],
+  },
+  // QA r65 (D2674-D2676): pharmacy money and stock (constant descriptions, ids on the row).
+  {
+    key: 'AUDIT.DESC.PHARMACY_FILL_DEFERRED',
+    re: /^Fill handed over unpaid, marked to be billed$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PHARMACY_REFUND_REQUESTED',
+    re: /^Pharmacy refund requested$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PHARMACY_REFUND_APPROVED',
+    re: /^Pharmacy refund approved$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PHARMACY_REFUND_REJECTED',
+    re: /^Pharmacy refund rejected$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PHARMACY_REFUND_PAID',
+    re: /^Pharmacy refund paid out$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PHARMACY_REFUND_CANCELLED',
+    re: /^Pharmacy refund cancelled$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PHARMACY_PACK_SIZE_SET',
+    re: /^Pack size set on an inventory item$/,
+    params: [],
+  },
+  // Review of #1239: a selling price set or changed (the figures stay on the price-history row).
+  {
+    key: 'AUDIT.DESC.PHARMACY_PRICE_CHANGED',
+    re: /^Pharmacy selling price changed$/,
+    params: [],
+  },
+  // QA D2702 (V309): a payment reversal asked for, then paid out through the refund approval (ids only).
+  {
+    key: 'AUDIT.DESC.REVERSAL_EVENT',
+    re: /^(Payment reversal requested|Payment reversed): refund (\S+) on invoice (\S+)$/,
+    params: ['what', 'refund', 'invoice'],
+    localise: { what: 'phrase:REVERSAL_EVENT' },
+  },
+  // Billing-money plan PR 10 (V309): a till closed, reopened or reviewed (ids only; a reason is in the details).
+  {
+    key: 'AUDIT.DESC.CASH_SESSION_EVENT',
+    re: /^(Cash session closed|Cash session reopened|Cash session reviewed): session (\S+)$/,
+    params: ['what', 'session'],
+    localise: { what: 'phrase:CASH_SESSION_EVENT' },
+  },
+  // QA D2703: a draft line with no price-list price priced by hand, or set to 0, with a reason (in the details).
+  {
+    key: 'AUDIT.DESC.INVOICE_LINE_PRICED_MANUALLY',
+    re: /^Draft line (\S+) of invoice (\S+) priced by hand$/,
+    params: ['line', 'invoice'],
+  },
+  // Policy 2026-11-20 (provisional): a minor's sensitive result released to a verified parent (ids and category only).
+  {
+    key: 'AUDIT.DESC.SENSITIVE_RESULT_RELEASED',
+    re: /^Sensitive result \((\S+)\) released to a verified parent or guardian$/,
+    params: ['category'],
+    localise: { category: 'enum' },
+  },
+  // Policy 2026-11-20: staff verified that the holder of a family-access grant is the parent or guardian.
+  {
+    key: 'AUDIT.DESC.PROXY_RELATIONSHIP_VERIFIED',
+    re: /^Family-access relationship verified \((\S+)\)$/,
+    params: ['relationship'],
+    localise: { relationship: 'enum' },
+  },
+  // Policy 2026-11-20: a recommended sensitive category the lab director confirmed for one test.
+  {
+    key: 'AUDIT.DESC.SENSITIVITY_RECOMMENDATION_APPLIED',
+    re: /^Recommended sensitivity category applied: (\S+) to (\S+)$/,
+    params: ['from', 'to'],
+    localise: { from: 'enum', to: 'enum' },
+  },
+  // Policy 2026-11-20: a catalogue medicine's sensitive category (category names only).
+  {
+    key: 'AUDIT.DESC.MEDICATION_SENSITIVITY_CHANGED',
+    re: /^Medication sensitivity category changed from (\S+) to (\S+)$/,
+    params: ['from', 'to'],
+    localise: { from: 'enum', to: 'enum' },
+  },
+  // Policy 2026-11-20: the hospital's adolescent confidentiality age (before and after are in the details).
+  // r66 D2904: French counts 0 and 1 in the singular (« fixé à 0 an », « fixé à 1 an », it read « 1 ans »),
+  // Spanish only 1: each has its own sentence, before the general one.
+  {
+    key: 'AUDIT.DESC.ADOLESCENT_AGE_SET_ZERO',
+    re: /^Adolescent confidentiality age set to 0$/,
+  },
+  {
+    key: 'AUDIT.DESC.ADOLESCENT_AGE_SET_ONE',
+    re: /^Adolescent confidentiality age set to 1$/,
+  },
+  {
+    key: 'AUDIT.DESC.ADOLESCENT_AGE_SET',
+    re: /^Adolescent confidentiality age set to (\d+)$/,
+    params: ['age'],
+  },
+  {
+    key: 'AUDIT.DESC.ADOLESCENT_AGE_RESET',
+    re: /^Adolescent confidentiality age reset to the default \((\d+)\)$/,
+    params: ['age'],
+  },
+  // Policy rule 3 (V346, provisional): a hospital's imaging reporting setting changed (the value is in the details).
+  {
+    key: 'AUDIT.DESC.IMAGING_REPORTING_SETTINGS_CHANGED',
+    re: /^Imaging reporting settings changed$/,
+  },
+  // Policy rule 3 (V346): an exam record written (what changed is in the details; never the free text).
+  {
+    key: 'AUDIT.DESC.IMAGING_EXAM_RECORD_UPDATED',
+    re: /^Imaging exam record updated$/,
+  },
+  // Policy rule 6 (V345): « à facturer » asked for, decided by another person, an urgency override and its
+  // review, and an inpatient fill charged to the stay (constant descriptions, ids on the row).
+  {
+    key: 'AUDIT.DESC.DISPENSE_BILLING_DEFERRAL_REQUESTED',
+    re: /^Deferred billing of a fill requested$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.DISPENSE_BILLING_DEFERRAL_APPROVED',
+    re: /^Deferred billing of a fill approved$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.DISPENSE_BILLING_DEFERRAL_REJECTED',
+    re: /^Deferred billing of a fill rejected$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.DISPENSE_BILLING_DEFERRAL_CANCELLED',
+    re: /^Deferred billing of a fill withdrawn$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.DISPENSE_BILLING_URGENCY_OVERRIDE',
+    re: /^Fill handed over unpaid on an urgency override$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.DISPENSE_BILLING_OVERRIDE_REVIEWED',
+    re: /^Urgency override of a fill's billing reviewed$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.DISPENSE_POSTED_TO_ADMISSION_ACCOUNT',
+    re: /^Fill charged to the account of the open stay$/,
+    params: [],
+  },
+  // QA r66 (D2929, D2925): a deferral the hand-over closed because the order left paid, and a money
+  // desk confirming a claim the pharmacy had accepted itself (constant descriptions, ids on the row).
+  {
+    key: 'AUDIT.DESC.DISPENSE_BILLING_DEFERRAL_CLOSED_SETTLED',
+    re: /^Deferred billing of a fill closed: the order left the counter with nothing due$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED',
+    re: /^Pharmacy claim acceptance confirmed by a money desk$/,
+    params: [],
   },
 ];

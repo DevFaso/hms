@@ -145,6 +145,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private static final String FIELD_PRESCRIPTION_ID = "prescriptionId";
 
 
+    /** The status of a running course, and of a live legacy diagnosis row. */
+    private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String PROXY_VIEW_LAB_RESULTS = "VIEW_LAB_RESULTS";
     private static final String PROXY_VIEW_MEDICATIONS = "VIEW_MEDICATIONS";
     private static final String PROXY_VIEW_APPOINTMENTS = "VIEW_APPOINTMENTS";
@@ -252,6 +254,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
      * their own transaction, so a failed card never rolls back the page.
      */
     private final com.example.hms.service.support.IsolatedReads isolatedReads;
+    /** QA D2730 (r65): what a proxy may read of the grantor's record. */
+    private final com.example.hms.service.recordaccess.ProxyRecordFilter proxyRecordFilter;
+    /** Policy 2026-11-20: carries the verified grant of a proxy read to the filter. */
+    private final com.example.hms.service.recordaccess.ProxyReadScope proxyReadScope;
 
     /**
      * QA D985: booking or cancelling the visit a recall asks for moves the
@@ -276,6 +282,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return LinkedPatientLookup.linkedPatient(patientRepository, userId)
                 .map(Patient::getId)
                 .orElseThrow(() -> new ResourceNotFoundException("patient.portal.noRecord"));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public UUID resolveProxyRecordsPatientId(Authentication auth, UUID patientId) {
+        return verifyProxyAccess(auth, patientId, PROXY_VIEW_RECORDS).getId();
     }
 
     // ── Profile ──────────────────────────────────────────────────────────
@@ -483,11 +495,42 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             }
             if (patientDiagnosisRepository != null) {
                 patientDiagnosisRepository.findByPatient_IdOrderByDiagnosedAtDesc(patientId).stream()
-                    .filter(d -> "ACTIVE".equalsIgnoreCase(d.getStatus()))
+                    .filter(d -> STATUS_ACTIVE.equalsIgnoreCase(d.getStatus()))
                     .forEach(d -> addDiagnosisLabel(out, d.getDescription(), d.getIcdCode()));
             }
         });
         return List.copyOf(out);
+    }
+
+    /**
+     * QA D2730 (r65, High): « Pathologies actives » as a proxy reads it. Only
+     * the problem list, and of it only the entries the proxy filter admits (a
+     * problem's own tag, else the visit it was recorded in). The V14-era
+     * {@code patient_diagnoses} rows name a diagnosis with no tag and no visit,
+     * so nothing can say one is ordinary: a proxy gets none of them.
+     */
+    private List<String> activeDiagnosesForProxy(UUID grantorId) {
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        isolatedReads.attempt("proxy records active diagnoses", () -> {
+            if (patientProblemRepository != null) {
+                patientProblemRepository.findByPatient_IdAndStatusOrderByCreatedAtDesc(
+                        grantorId, com.example.hms.enums.ProblemStatus.ACTIVE).stream()
+                    .filter(proxyRecordFilter::admits)
+                    .forEach(p -> addDiagnosisLabel(out, p.getProblemDisplay(), p.getProblemCode()));
+            }
+        });
+        return List.copyOf(out);
+    }
+
+    /**
+     * QA D2730: the grantor's profile as a proxy reads it - who the patient is
+     * and how to reach them. The chronic conditions are free text that names
+     * diagnoses (« VIH », « dépression ») with no tag, so they are left out.
+     */
+    private PatientProfileDTO proxyProfileOf(Patient grantor) {
+        PatientProfileDTO profile = toProfileDTO(grantor);
+        profile.setChronicConditions(null);
+        return profile;
     }
 
     private static void addDiagnosisLabel(java.util.Set<String> out, String display, String code) {
@@ -1517,7 +1560,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // the running courses at ten.
         isolatedReads.attempt("health summary medications",
             () -> out.set(medicationService.getMedicationsForPatientPortal(patientId, hospitalId, 100).stream()
-                .filter(m -> "ACTIVE".equals(m.getStatus()))
+                .filter(m -> STATUS_ACTIVE.equals(m.getStatus()))
                 .toList()));
         return out.get();
     }
@@ -1530,6 +1573,44 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private Long safeCount(String what, java.util.function.LongSupplier count) {
         java.util.concurrent.atomic.AtomicReference<Long> out = new java.util.concurrent.atomic.AtomicReference<>();
         isolatedReads.attempt(what, () -> out.set(count.getAsLong()));
+        return out.get();
+    }
+
+    /** QA D2730: the proxy view's results card, filtered by ProxyRecordFilter in the service. */
+    private List<PatientLabResultResponseDTO> safeProxyLabResults(UUID grantorId) {
+        java.util.concurrent.atomic.AtomicReference<List<PatientLabResultResponseDTO>> out =
+            new java.util.concurrent.atomic.AtomicReference<>(Collections.emptyList());
+        isolatedReads.attempt("proxy records lab results",
+            () -> out.set(labResultService.getLabResultsForProxy(grantorId, 5)));
+        return out.get();
+    }
+
+    /** QA D2730: the proxy view's running courses (QA D720), filtered by ProxyRecordFilter in the service. */
+    private List<PatientMedicationResponseDTO> safeProxyMedications(UUID grantorId) {
+        java.util.concurrent.atomic.AtomicReference<List<PatientMedicationResponseDTO>> out =
+            new java.util.concurrent.atomic.AtomicReference<>(Collections.emptyList());
+        isolatedReads.attempt("proxy records medications",
+            () -> out.set(medicationService.getMedicationsForProxy(grantorId, 100).stream()
+                .filter(m -> STATUS_ACTIVE.equals(m.getStatus()))
+                .toList()));
+        return out.get();
+    }
+
+    /** QA D2730: the proxy view's immunizations, filtered by ProxyRecordFilter in the service. */
+    private List<ImmunizationResponseDTO> safeProxyImmunizations(UUID grantorId) {
+        java.util.concurrent.atomic.AtomicReference<List<ImmunizationResponseDTO>> out =
+            new java.util.concurrent.atomic.AtomicReference<>(Collections.emptyList());
+        isolatedReads.attempt("proxy records immunizations",
+            () -> out.set(immunizationService.getImmunizationsForProxy(grantorId)));
+        return out.get();
+    }
+
+    /** QA D2730: the proxy view's vitals, filtered by ProxyRecordFilter in the service. */
+    private List<PatientVitalSignResponseDTO> safeProxyVitals(UUID grantorId) {
+        java.util.concurrent.atomic.AtomicReference<List<PatientVitalSignResponseDTO>> out =
+            new java.util.concurrent.atomic.AtomicReference<>(Collections.emptyList());
+        isolatedReads.attempt("proxy records vitals",
+            () -> out.set(vitalSignService.getRecentVitalsForProxy(grantorId, 5)));
         return out.get();
     }
 
@@ -1719,10 +1800,23 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .status(r.getStatus().name())
                 .preferredPharmacy(r.getPreferredPharmacy())
                 .notes(r.getPatientNotes())
-                .providerNotes(r.getProviderNotes())
+                .providerNotes(reasonThePatientReads(r))
                 .requestedAt(r.getCreatedAt())
                 .updatedAt(r.getUpdatedAt())
                 .build();
+    }
+
+    /**
+     * Policy rule 1 (QA D2308): what the patient reads under a decided request. A pharmacist's refusal to dispense
+     * shows the pharmacist's reason (QA D1315: a refusal the patient cannot read is no answer); the pharmacist's
+     * flags to the prescriber on a request still open are never shown to the patient.
+     */
+    private static String reasonThePatientReads(RefillRequest r) {
+        if (r.getDecisionBasis() == com.example.hms.enums.RefillDecisionBasis.PHARMACIST_REFUSAL
+                && (r.getProviderNotes() == null || r.getProviderNotes().isBlank())) {
+            return r.getPharmacistNote();
+        }
+        return r.getProviderNotes();
     }
 
     /**
@@ -1903,6 +1997,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             throw new AccessDeniedException("Your proxy access does not include " + requiredPermission);
         }
 
+        // Policy 2026-11-20: who is reading, for the exceptions ProxyRecordFilter may apply (a
+        // tuberculosis scope, a verified parent of a minor, a released result). Entered here only.
+        proxyReadScope.enter(new com.example.hms.service.recordaccess.ProxyReadContext(proxy.getId(), patientId,
+            proxy.getRelationship(), proxy.getRelationshipVerifiedAt() != null, perms));
+
         // QA D1212 (round 23): the grant is the patient's, not a hospital's. A
         // grantor registered only at another hospital than the proxy's was
         // looked up under the PROXY's hospital scope and answered 404. The
@@ -1941,7 +2040,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     /** What a grant may name: the scopes {@code verifyProxyAccess} checks, and ALL. */
     private static final Set<String> KNOWN_PROXY_PERMISSIONS = Set.of("ALL", PROXY_VIEW_APPOINTMENTS, PROXY_VIEW_MEDICATIONS,
-            PROXY_VIEW_LAB_RESULTS, PROXY_VIEW_BILLING, PROXY_VIEW_RECORDS);
+            PROXY_VIEW_LAB_RESULTS, PROXY_VIEW_BILLING, PROXY_VIEW_RECORDS,
+            // Policy 2026-11-20: the explicit scope that opens tuberculosis (RESTRICTED) records. It opens
+            // no read by itself, and ALL never implies it.
+            com.example.hms.service.recordaccess.ProxyReadContext.SCOPE_TUBERCULOSIS);
 
     /**
      * QA D1468: BANANA was saved, and listed as a grant that opened nothing. Only a new grant is
@@ -1969,29 +2071,28 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // null for username threw inside getUserOrThrow before any query ran,
         // so this tab returned 500 for every proxy while its unit test stubbed
         // the (…, isNull()) call and asserted the broken contract worked.
-        return appointmentService.getAppointmentsForVerifiedPatient(patient.getId());
+        return appointmentService.getAppointmentsForProxy(patient.getId());
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<PatientMedicationResponseDTO> getProxyMedications(Authentication auth, UUID patientId, int limit) {
         Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_MEDICATIONS);
-        UUID hospitalId = resolvePatientHospitalId(patient);
-        return medicationService.getMedicationsForPatientPortal(patient.getId(), hospitalId, limit);
+        return medicationService.getMedicationsForProxy(patient.getId(), limit);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<PatientMedicationResponseDTO> getProxyMedicationsPage(Authentication auth, UUID patientId, Pageable pageable) {
         Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_MEDICATIONS);
-        return medicationService.getMedicationsPageForPatientPortal(patient.getId(), pageable);
+        return medicationService.getMedicationsPageForProxy(patient.getId(), pageable);
     }
 
     @Override
     @Transactional(readOnly = true)
     public long countProxyLabResults(Authentication auth, UUID patientId) {
         Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_LAB_RESULTS);
-        return labResultService.countLabResultsForPatientPortal(patient.getId());
+        return labResultService.countLabResultsForProxy(patient.getId());
     }
 
     @Override
@@ -2006,42 +2107,51 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                                                 int offset, int limit) {
         Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_LAB_RESULTS);
         // QA D1213: the proxy view pages like the patient's own (the id the grant check resolved).
-        return labResultService.getLabResultsForPatientPortal(patient.getId(), offset, limit);
+        return labResultService.getLabResultsForProxy(patient.getId(), offset, limit);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<PatientLabResultResponseDTO> getProxyLabResults(Authentication auth, UUID patientId, int limit) {
         Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_LAB_RESULTS);
-        UUID hospitalId = resolvePatientHospitalId(patient);
-        return labResultService.getLabResultsForPatientPortal(patient.getId(), hospitalId, limit);
+        return labResultService.getLabResultsForProxy(patient.getId(), limit);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<BillingInvoiceResponseDTO> getProxyBilling(Authentication auth, UUID patientId, Pageable pageable, Locale locale) {
         Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_BILLING);
-        return billingInvoiceService.getInvoicesForPortalPatient(patient.getId(), pageable, locale);
+        return billingInvoiceService.getInvoicesForProxy(patient.getId(), pageable, locale);
     }
 
+    /**
+     * QA D2730 (r65, High): the caregiver's « Dossier de santé » view. Every
+     * section reads through the proxy variant of its service, so a row from a
+     * sensitive visit, test or problem never reaches the proxy
+     * ({@code ProxyRecordFilter}). A vital names no visit: it is withheld when
+     * taken during a sensitive one. The chronic conditions and the legacy
+     * diagnosis rows are free text that names diagnoses with no tag in the
+     * data model: a proxy gets none. Every field is either filtered or listed
+     * with why it is not, in {@code ProxyReadSensitivityGuardTest}.
+     */
     @Override
     @Transactional(readOnly = true)
     public HealthSummaryDTO getProxyRecords(Authentication auth, UUID patientId, Locale locale) {
         Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_RECORDS);
-        UUID hospitalId = resolvePatientHospitalId(patient);
+        UUID grantorId = patient.getId();
         return HealthSummaryDTO.builder()
-                .profile(toProfileDTO(patient))
-                .recentLabResults(safeLabResults(patient.getId(), hospitalId))
-                .currentMedications(safeMedications(patient.getId(), hospitalId))
-                .activeDiagnoses(activeDiagnosesOf(patient.getId()))
-                .recentVitals(safeVitals(patient.getId()))
-                .immunizations(safeImmunizations(patient.getId()))
+                .profile(proxyProfileOf(patient))
+                .recentLabResults(safeProxyLabResults(grantorId))
+                .currentMedications(safeProxyMedications(grantorId))
+                .activeDiagnoses(activeDiagnosesForProxy(grantorId))
+                .recentVitals(safeProxyVitals(grantorId))
+                .immunizations(safeProxyImmunizations(grantorId))
                 .allergies(splitToList(patient.getAllergies()))
-                .chronicConditions(splitToList(patient.getChronicConditions()))
+                .chronicConditions(Collections.emptyList())
                 .labResultTotal(safeCount("proxy records lab result total",
-                    () -> labResultService.countLabResultsForPatientPortal(patient.getId())))
+                    () -> labResultService.countLabResultsForProxy(grantorId)))
                 .medicationTotal(safeCount("proxy records medication total",
-                    () -> medicationService.countMedicationsForPatientPortal(patient.getId())))
+                    () -> medicationService.countMedicationsForProxy(grantorId)))
                 .build();
     }
 

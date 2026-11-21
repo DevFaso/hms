@@ -110,6 +110,25 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
             DispenseStatus status, LocalDateTime from, LocalDateTime to);
 
     /**
+     * QA D2673 (r65): every fill of one pharmacy created in [from, to) (the moment its stock left the shelf), any
+     * status, oldest first.
+     */
+    @Query("SELECT d FROM Dispense d WHERE d.pharmacy.id = :pharmacyId AND d.createdAt >= :from AND d.createdAt < :to "
+         + "ORDER BY d.createdAt")
+    List<Dispense> findCreatedForDay(@Param("pharmacyId") UUID pharmacyId, @Param("from") LocalDateTime from,
+                                     @Param("to") LocalDateTime to);
+
+    /** Review of #1239: a fill read by the reconciliation, only when it is of that pharmacy. */
+    Optional<Dispense> findByIdAndPharmacy_Id(UUID id, UUID pharmacyId);
+
+    /** QA D2673 (r65): the fills of one pharmacy handed over (COMPLETED or PARTIAL) in [from, to). */
+    @Query("SELECT d FROM Dispense d WHERE d.pharmacy.id = :pharmacyId AND d.dispensedAt >= :from "
+         + "AND d.dispensedAt < :to AND d.status IN (com.example.hms.enums.DispenseStatus.COMPLETED, "
+         + "com.example.hms.enums.DispenseStatus.PARTIAL) ORDER BY d.dispensedAt")
+    List<Dispense> findHandedOverForDay(@Param("pharmacyId") UUID pharmacyId, @Param("from") LocalDateTime from,
+                                        @Param("to") LocalDateTime to);
+
+    /**
      * The statuses that are not a fill (G15): a cancelled fill, and a fill
      * that is prepared and still waiting for collection. Pass to
      * {@link #sumQuantityDispensedForPrescription}.
@@ -229,4 +248,7 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
     /** Reminder sweep: open preparations older than the cut-off and not yet reminded. */
     List<Dispense> findByStatusAndReadyReminderSentAtIsNullAndCreatedAtBefore(
             DispenseStatus status, LocalDateTime cutoff);
+
+    /** Policy rule 6 (V345): the fills that left on one deferral (a fill split over several lots is several). */
+    List<Dispense> findByBillingDeferralId(UUID billingDeferralId);
 }

@@ -36,22 +36,25 @@
           <div class="care-metric">
             <span class="material-symbols-outlined" aria-hidden="true">medication</span>
             <div>
-              <strong>{{ tasks().length }}</strong
-              ><span>{{ 'CARE_DASH.DOSES_LOADED' | translate }}</span>
+              <strong>{{ tasks().length }}</strong><span>{{
+                'CARE_DASH.DOSES_LOADED' | translate
+              }}</span>
             </div>
           </div>
           <div class="care-metric">
             <span class="material-symbols-outlined" aria-hidden="true">groups</span>
             <div>
-              <strong>{{ patientCount() }}</strong
-              ><span>{{ 'CARE_DASH.PATIENTS_LOADED' | translate }}</span>
+              <strong>{{ patientCount() }}</strong><span>{{
+                'CARE_DASH.PATIENTS_LOADED' | translate
+              }}</span>
             </div>
           </div>
           <div class="care-metric">
             <span class="material-symbols-outlined" aria-hidden="true">local_pharmacy</span>
             <div>
-              <strong>{{ pendingPharmacyCount() }}</strong
-              ><span>{{ 'CARE_DASH.PHARMACY_PENDING' | translate }}</span>
+              <strong>{{ pendingPharmacyCount() }}</strong><span>{{
+                'CARE_DASH.PHARMACY_PENDING' | translate
+              }}</span>
             </div>
           </div>
         </div>
@@ -161,7 +164,7 @@
                     }}<span
                       class="emar__queue-chip emar__queue-chip--advisory"
                       [attr.data-testid]="'emar-advisory-chip-' + task.id"
-                      >{{ 'EMAR.ALLERGY_ADVISORY_CHIP' | translate }}</span
+                      >{{ 'EMAR.CLINICAL_ADVISORY_CHIP' | translate }}</span
                     >
                   }
                   @if (task.requiresPharmacistVerification && !task.pharmacistVerified) {
@@ -261,17 +264,20 @@
               </div>
             }
 
+            <!-- QA D2584 (r65): the cards are not all allergy cards (the paracetamol interval and
+                 dose check rides here too), so the heading names them as clinical checks; each
+                 card's own summary says what it is. -->
             <!-- QA D799 / D1563: the allergy cards (a documented allergy, recorded after signing included, and the cross-reactivity advisory), read
                  before scanning and giving the dose. A stop is acknowledged with a reason at Give. -->
             @if (allergyAdvisories().length) {
               <section
                 class="emar__advisory"
                 role="alert"
-                [attr.aria-label]="'EMAR.ALLERGY_ADVISORY_TITLE' | translate"
+                [attr.aria-label]="'EMAR.CLINICAL_ADVISORY_TITLE' | translate"
                 data-testid="emar-allergy-advisory"
               >
                 <h3 class="emar__advisory-title">
-                  {{ 'EMAR.ALLERGY_ADVISORY_TITLE' | translate }}
+                  {{ 'EMAR.CLINICAL_ADVISORY_TITLE' | translate }}
                 </h3>
                 <app-cds-card-list [cards]="allergyAdvisories()" />
                 <!-- QA D1584: reviewed or not, and the prescriber's plan to give it under. -->

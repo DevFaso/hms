@@ -41,4 +41,12 @@ public interface PharmacyClaimRepository extends JpaRepository<PharmacyClaim, UU
          + "WHERE c.dispense.id = :dispenseId AND c.claimStatus <> com.example.hms.enums.PharmacyClaimStatus.REJECTED")
     java.math.BigDecimal sumLiveForDispense(
             @org.springframework.data.repository.query.Param("dispenseId") UUID dispenseId);
+
+    /**
+     * Policy rule 6 (review of #1244): the claims of one dispense in the given states. The counter no longer adds
+     * up "claims sent": a pharmacist could create and submit one alone and hand the fill over on it. Each claim is
+     * read, and {@code FillClaimCover} decides whether somebody else stands behind it.
+     */
+    List<PharmacyClaim> findByDispenseIdAndClaimStatusIn(UUID dispenseId,
+                                                         java.util.Collection<PharmacyClaimStatus> statuses);
 }

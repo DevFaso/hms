@@ -104,4 +104,30 @@ public class PaymentTransaction extends BaseEntity {
 
     @Column(name = "reversal_reason", length = 500)
     private String reversalReason;
+
+    /**
+     * Billing plan PR 11 (V310): the invoice's hospital, stamped when the row is written, so the
+     * client request key is unique per hospital. Backfilled from the invoice on older rows.
+     */
+    @Column(name = "hospital_id")
+    private UUID hospitalId;
+
+    /**
+     * Billing plan PR 11 (V310, QA D2430): the key the portal generates once per payment dialog.
+     * A retry or a second submit carrying it answers with this row; none is written again.
+     * Unique per hospital when present.
+     */
+    @Column(name = "client_request_id")
+    private UUID clientRequestId;
+
+    /** Billing plan PR 10 (V309): the cash session the money was taken in (null on rows written before it). */
+    @Column(name = "cash_session_id")
+    private UUID cashSessionId;
+
+    /**
+     * QA D2702 (V309): the approved, paid-out refund that reversed this row. The money stays counted in on the day
+     * it came in; the outflow is that refund, on the day it left the till.
+     */
+    @Column(name = "reversal_refund_id")
+    private UUID reversalRefundId;
 }

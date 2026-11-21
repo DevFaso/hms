@@ -223,6 +223,16 @@
               <tr [class.foreign-row]="isForeignRow(p)">
                 <td>
                   <strong>{{ p.problemDisplay }}</strong>
+                  @if (p.effectiveSensitivityCategory; as category) {
+                    <!-- QA D2730: a sensitive diagnosis says so; a family proxy never reads it. -->
+                    <div class="sensitive-badge" data-testid="problem-sensitive">
+                      <span class="material-symbols-outlined" aria-hidden="true">shield_lock</span>
+                      {{
+                        'SENSITIVITY_TAG.BADGE'
+                          | translate: { category: sensitivityLabelKey(category) | translate }
+                      }}
+                    </div>
+                  }
                   @if (p.notes) {
                     <div class="cell-secondary">{{ p.notes }}</div>
                   }
@@ -253,6 +263,18 @@
                           [attr.aria-label]="'COMMON.EDIT' | translate"
                         >
                           <span class="material-symbols-outlined">edit</span>
+                        </button>
+                      }
+                      @if (canTagProblems() && !p.enteredInError) {
+                        <button
+                          type="button"
+                          class="action-link"
+                          data-testid="problem-sensitivity"
+                          (click)="openProblemSensitivity(p)"
+                          [title]="'SENSITIVITY_TAG.PROBLEM_ACTION' | translate"
+                          [attr.aria-label]="'SENSITIVITY_TAG.PROBLEM_ACTION' | translate"
+                        >
+                          <span class="material-symbols-outlined">shield_lock</span>
                         </button>
                       }
                       @if (canRemoveProblems()) {
@@ -399,6 +421,10 @@
         {{ 'CHART.LAB_REFRESH' | translate }}
       </button>
     </div>
+    @if (canReleaseToFamily()) {
+      <!-- Policy 2026-11-20 (provisional): a minor's sensitive result, released to a verified parent. -->
+      <app-family-release [patientId]="patientId" />
+    }
     <!-- ── Orders: what was asked for, and where it has got to ── -->
     @if (canViewLabOrders()) {
       <h3 class="labs-heading">{{ 'CHART.LAB_ORDERS' | translate }}</h3>
@@ -946,6 +972,18 @@
           <label for="problem-notes">{{ 'COMMON.NOTES' | translate }}</label>
           <textarea id="problem-notes" rows="2" [(ngModel)]="problemForm.notes"></textarea>
         </div>
+        @if (!editingProblemId() && canTagProblems()) {
+          <!-- QA D2730: a new diagnosis may be tagged at once; left empty, it follows its visit. -->
+          <div class="field">
+            <app-sensitivity-select
+              controlId="problem-sensitivity-new"
+              hintKey="SENSITIVITY_TAG.PROBLEM_NEW_HINT"
+              noneKey="SENSITIVITY_TAG.NONE_FOLLOWS_VISIT"
+              [value]="problemForm.sensitivityCategory ?? null"
+              (picked)="problemForm.sensitivityCategory = $event"
+            />
+          </div>
+        }
         <label class="row-check">
           <input type="checkbox" [(ngModel)]="problemForm.chronic" />
           {{ 'CHART.CHRONIC' | translate }}
@@ -1026,6 +1064,71 @@
           (click)="submitDeleteProblem()"
         >
           {{ 'COMMON.DELETE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Problem sensitivity modal (QA D2730) ══ -->
+@if (taggingProblem(); as tagged) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeProblemSensitivity()"
+    (keydown.escape)="closeProblemSensitivity()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="chart-dialog-7-title"
+      tabindex="-1"
+      data-testid="problem-sensitivity-dialog"
+      (click)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeProblemSensitivity()"
+    >
+      <div class="modal-header">
+        <h2 id="chart-dialog-7-title">{{ 'SENSITIVITY_TAG.PROBLEM_TITLE' | translate }}</h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          type="button"
+          class="modal-close"
+          (click)="closeProblemSensitivity()"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>
+          <strong>{{ tagged.problemDisplay }}</strong>
+        </p>
+        <app-sensitivity-select
+          controlId="problem-sensitivity-select"
+          hintKey="SENSITIVITY_TAG.PROBLEM_HINT"
+          noneKey="SENSITIVITY_TAG.NONE_FOLLOWS_VISIT"
+          [value]="problemTagChoice()"
+          [inherited]="
+            tagged.sensitivityCategory ? null : (tagged.effectiveSensitivityCategory ?? null)
+          "
+          [disabled]="problemTagSaving()"
+          (picked)="problemTagChoice.set($event)"
+        />
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeProblemSensitivity()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          data-testid="problem-sensitivity-save"
+          [disabled]="problemTagSaving()"
+          (click)="submitProblemSensitivity()"
+        >
+          {{ 'COMMON.SAVE' | translate }}
         </button>
       </div>
     </div>

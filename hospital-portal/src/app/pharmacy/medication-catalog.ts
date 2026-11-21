@@ -26,6 +26,11 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { blankFields, focusFirstInvalid, refuseFields } from '../shared/forms/invalid-fields';
 import { DashPipe } from '../shared/pipes/dash.pipe';
 import { missingRequiredMessage } from '../shared/required-fields';
+import { SensitivitySelectComponent } from '../shared/sensitivity/sensitivity-select';
+import {
+  SensitivityCategory,
+  sensitivityLabelKey,
+} from '../shared/sensitivity/sensitivity-category';
 
 /** The required fields of the medication form (QA D1306). */
 const MED_REQUIRED_IDS = ['nameFr', 'genericName'];
@@ -34,6 +39,7 @@ const MED_REQUIRED_IDS = ['nameFr', 'genericName'];
   selector: 'app-medication-catalog',
   standalone: true,
   imports: [
+    SensitivitySelectComponent,
     DashPipe,
     SubmitGuardDirective,
     FormsModule,
@@ -61,6 +67,21 @@ export class MedicationCatalogComponent implements OnInit {
   readonly canManage = computed(() =>
     this.roleContext.hasAnyActiveRoleExactly(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']),
   );
+
+  /**
+   * r66 D2901: a platform entry (the national list, no hospital of its own) is
+   * shared by every hospital, so only the platform administrator edits or
+   * deactivates it (MedicationCatalogItemServiceImpl.requireWritable). The
+   * hospital admin edits the hospital's own entries; a platform row shows no
+   * button the API would refuse.
+   */
+  private readonly isPlatformAdmin = computed(() =>
+    this.roleContext.hasAnyActiveRoleExactly(['ROLE_SUPER_ADMIN']),
+  );
+
+  canManageItem(item: MedicationCatalogItemResponse): boolean {
+    return this.canManage() && (!!item.hospitalId || this.isPlatformAdmin());
+  }
 
   /**
    * Round 18 (QA D935): the paediatric dose limits are the pharmacy's, as in a
@@ -179,14 +200,36 @@ export class MedicationCatalogComponent implements OnInit {
     }
   }
 
+  /**
+   * Policy 2026-11-20 (provisional): the sensitive category of the medicine in
+   * the editor, and the one it had when the editor opened. A prescription of
+   * a tagged medicine is hidden from a family proxy, whatever visit wrote it.
+   */
+  medSensitivity = signal<SensitivityCategory | null>(null);
+  private medSensitivityBefore: SensitivityCategory | null = null;
+  readonly sensitivityLabelKey = sensitivityLabelKey;
+
+  /** The form, plus the category when it changed: left out, the server keeps the one it has. */
+  private withSensitivity(form: MedicationCatalogItemRequest): MedicationCatalogItemRequest {
+    const chosen = this.medSensitivity();
+    if (chosen === this.medSensitivityBefore) return form;
+    return chosen
+      ? { ...form, sensitivityCategory: chosen }
+      : { ...form, clearSensitivityCategory: true };
+  }
+
   openCreate(): void {
     this.form = this.emptyForm();
+    this.medSensitivityBefore = null;
+    this.medSensitivity.set(null);
     this.editing.set(null);
     this.showModal.set(true);
   }
 
   openEdit(item: MedicationCatalogItemResponse): void {
     this.editing.set(item);
+    this.medSensitivityBefore = item.sensitivityCategory ?? null;
+    this.medSensitivity.set(this.medSensitivityBefore);
     this.form = {
       nameFr: item.nameFr,
       genericName: item.genericName,
@@ -264,9 +307,10 @@ export class MedicationCatalogComponent implements OnInit {
     }
     this.saving.set(true);
     const existing = this.editing();
+    const body = this.withSensitivity(this.form);
     const req$ = existing
-      ? this.svc.updateMedication(existing.id, this.form)
-      : this.svc.createMedication(this.form);
+      ? this.svc.updateMedication(existing.id, body)
+      : this.svc.createMedication(body);
 
     req$.subscribe({
       next: () => {

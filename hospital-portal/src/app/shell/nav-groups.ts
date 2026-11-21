@@ -114,12 +114,16 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
   '/pharmacy/claims': 'PHARMACY',
   '/pharmacy/checkout': 'PHARMACY',
   '/pharmacy/mtm': 'PHARMACY',
+  '/pharmacy/reconciliation': 'PHARMACY',
+  '/pharmacy/billing-deferrals': 'PHARMACY',
+  '/pharmacy/caisse': 'PHARMACY',
 
   // ── DIAGNOSTICS ──────────────────────────────────────────────────────
   '/lab': 'DIAGNOSTICS',
   '/lab-results': 'DIAGNOSTICS',
   '/lab-approval-queue': 'DIAGNOSTICS',
   '/lab-release-worklist': 'DIAGNOSTICS',
+  '/lab-critical-pending': 'DIAGNOSTICS',
   '/lab-qc-dashboard': 'DIAGNOSTICS',
   '/lab-ops-dashboard': 'DIAGNOSTICS',
   '/lab-test-config': 'DIAGNOSTICS',
@@ -190,6 +194,7 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
 
   '/my-medications': 'MY_HEALTH',
   '/my-lab-results': 'MY_HEALTH',
+  '/my-imaging': 'MY_HEALTH',
   '/my-vitals': 'MY_HEALTH',
   '/my-screenings': 'MY_HEALTH',
   '/my-medical-history': 'MY_HEALTH',

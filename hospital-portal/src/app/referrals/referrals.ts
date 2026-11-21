@@ -529,7 +529,8 @@ export class ReferralsComponent implements OnInit {
     this.saving.set(true);
     this.referralService.create(this.form).subscribe({
       next: () => {
-        this.toast.success(this.translate.instant('REFERRALS.CREATED'));
+        // QA D2269 (r63): a draft, said to be one, with how to send it.
+        this.toast.success(this.translate.instant('REFERRALS.CREATED_DRAFT'));
         this.closeModal();
         this.saving.set(false);
         this.load();

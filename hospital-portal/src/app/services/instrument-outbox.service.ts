@@ -19,6 +19,11 @@ export interface OutboxMessage {
   /** Full HL7 text. Present only on single-message reads — list rows elide it. */
   payload?: string;
   status: OutboxStatus;
+  /**
+   * OBX-11 of the message's observation (F final, P preliminary, C correction),
+   * parsed server-side so list rows can show it; absent on order messages.
+   */
+  resultStatus?: string | null;
   createdAt: string;
   sentAt?: string;
   attempts: number;

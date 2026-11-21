@@ -51,6 +51,8 @@ export interface AdmissionResponse {
   roomBed: string;
   /** Structured bed reference (P0 #4); null when only free-text roomBed is set. */
   bedId?: string | null;
+  /** The ward type of the stay's structured bed (MATERNITY, NICU, ...); absent from an older server. */
+  bedWardType?: string | null;
   admissionType: AdmissionType;
   acuityLevel: AcuityLevel;
   status: AdmissionStatus;

@@ -245,4 +245,39 @@ public class Dispense extends BaseEntity {
     @Size(max = 1024)
     @Column(name = "verification_override_reason", length = 1024)
     private String verificationOverrideReason;
+
+    /**
+     * QA D2675 (r65, V311): why this fill was handed over before it was paid ("à facturer": billed later, on the
+     * stay's invoice for instance). Null on a fill paid, covered by a claim, or with nothing to pay.
+     */
+    @Size(max = 500)
+    @Column(name = "billing_deferred_reason", length = 500)
+    private String billingDeferredReason;
+
+    /** QA D2675: who marked the fill « à facturer ». */
+    @Column(name = "billing_deferred_by")
+    private java.util.UUID billingDeferredBy;
+
+    /** QA D2675: when the fill was marked « à facturer ». */
+    @Column(name = "billing_deferred_at")
+    private LocalDateTime billingDeferredAt;
+
+    /**
+     * Policy rule 6 (V345): the {@code DispenseBillingDeferral} this fill left on: an approved deferral, an urgency
+     * override or the account of the open stay. Null on a fill marked « à facturer » before V345.
+     */
+    @Column(name = "billing_deferral_id")
+    private java.util.UUID billingDeferralId;
+
+    /** Policy rule 6 (V345): what this fill still owed when it left; a cancel gives it back to its deferral. */
+    @Column(name = "billing_deferred_amount", precision = 12, scale = 2)
+    private java.math.BigDecimal billingDeferredAmount;
+
+    /**
+     * Whether this fill left with money still due on a recorded basis: a deferral row (V345) or, before it, the
+     * reason a pharmacist gave. An inpatient item carries a deferral and no reason.
+     */
+    public boolean leftOnDeferredBilling() {
+        return billingDeferralId != null || billingDeferredReason != null;
+    }
 }

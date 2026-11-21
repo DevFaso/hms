@@ -1,4 +1,7 @@
+import { SensitivityCategory, SensitivityTag } from '../shared/sensitivity/sensitivity-category';
+import { NoteAddendumView } from '../shared/note-addenda/note-addendum-view';
 import { OrganDamageSymptom } from '../shared/organ-damage-symptoms';
+import { MaternalConcern } from '../shared/maternal-concerns';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, defer, map } from 'rxjs';
@@ -83,6 +86,8 @@ export interface EncounterNoteResponse {
   implementation?: string | null;
   evaluation?: string | null;
   patientInstructions?: string | null;
+  /** QA D2260: the addenda filed under this entry (EncounterNoteResponseDTO.addenda). */
+  addenda?: EncounterNoteAddendumResponse[] | null;
 }
 
 /**
@@ -181,6 +186,8 @@ export interface TriageSubmissionRequest {
   roomAssignment?: string;
   /** r54: the organ-damage signs ticked with the blood pressure (optional). */
   organDamageSymptoms?: OrganDamageSymptom[];
+  /** Policy 2026-11-20 (provisional): the maternal score's additional concerns ticked with the set (optional). */
+  maternalConcerns?: MaternalConcern[];
 }
 
 export interface TriageSubmissionResponse {
@@ -199,6 +206,8 @@ export interface TriageSubmissionResponse {
   postpartumAlerts?: NewbornVitalAlert[];
   /** r54: the adult severe-blood-pressure warning; empty when none. */
   hypertensionAlerts?: NewbornVitalAlert[];
+  /** Policy 2026-11-20 (provisional): the maternal early warning of a pregnant or postpartum woman's set; empty when none. */
+  maternalAlerts?: NewbornVitalAlert[];
 }
 
 export interface MedicationReconciliationEntry {
@@ -305,6 +314,8 @@ export interface AfterVisitSummary {
   currentMedications?: AvsCurrentMedication[] | null;
   clinicalAssessment?: string | null;
   clinicalPlan?: string | null;
+  /** QA D2260: the addenda of the signed note, oldest first, each dated and signed. */
+  noteAddenda?: NoteAddendumView[] | null;
   medicalHistory?: { condition: string; status?: string | null }[] | null;
   surgicalHistory?: { procedure: string; date?: string | null }[] | null;
   familyHistory?: { relationship?: string | null; condition: string }[] | null;
@@ -561,6 +572,21 @@ export class EncounterService {
       req,
       noteId ? { params: { noteId } } : {},
     );
+  }
+
+  /** QA D2730: the visit's sensitive category: its own tag, and what governs. */
+  getSensitivity(encounterId: string): Observable<SensitivityTag> {
+    return this.http.get<SensitivityTag>(`${this.baseUrl}/${encounterId}/sensitivity`);
+  }
+
+  /** QA D2730: tag the visit; null clears its own tag (its department's default then applies). */
+  setSensitivity(
+    encounterId: string,
+    category: SensitivityCategory | null,
+  ): Observable<SensitivityTag> {
+    return this.http.put<SensitivityTag>(`${this.baseUrl}/${encounterId}/sensitivity`, {
+      category,
+    });
   }
 
   getNoteHistory(encounterId: string): Observable<EncounterNoteHistoryEntry[]> {

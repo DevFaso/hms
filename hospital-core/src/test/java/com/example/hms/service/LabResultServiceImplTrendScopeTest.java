@@ -83,6 +83,9 @@ class LabResultServiceImplTrendScopeTest {
     @Mock private CrossHospitalReachRecorder reachRecorder;
     @Mock private RecordAccessPolicy recordAccessPolicy;
 
+    /** r63 D2304: the QC release gate; a mock answers "not blocked". */
+    @Mock private com.example.hms.service.LabQcReleaseGate qcReleaseGate;
+
     @InjectMocks
     private LabResultServiceImpl service;
 
