@@ -206,9 +206,11 @@
     color: #991b1b;
   }
 
+  // A LOW result is blue, as on a lab report: not the brand teal, which sits
+  // too close to the green of « normal ».
   &.flag-low {
-    background: var(--primary-tint);
-    color: var(--primary-deep);
+    background: #dbeafe;
+    color: #1e40af;
   }
 
   &.flag-normal {

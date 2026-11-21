@@ -812,14 +812,18 @@ textarea {
    weights and six colours across the modules. Inside the shell's content area
    it is now one size and one weight, whatever the page's own sheet says
    (!important, like the table layer: every page styles its own h1). Colour is
-   left to the page: a title printed on a dark hero stays white.
+   left to the page: a title printed on a dark hero stays white. Screen only:
+   a document printed from inside the shell (a prescription, a receipt) keeps
+   its own title.
    Guarded by e2e/a11y-routed-pages.ts (`one page title`).
    ───────────────────────────────────────────────────────────────────────── */
-.content h1 {
-  font-size: 1.5rem !important;
-  font-weight: 700 !important;
-  line-height: 1.25 !important;
-  letter-spacing: -0.01em !important;
+@media screen {
+  .content h1 {
+    font-size: 1.5rem !important;
+    font-weight: 700 !important;
+    line-height: 1.25 !important;
+    letter-spacing: -0.01em !important;
+  }
 }
 @media screen and (max-width: 599px) {
   .content h1 {
@@ -841,11 +845,13 @@ textarea {
    (the pharmacy module both). One convention: sentence case, 12 px, semi-bold.
    Guarded by shared/styles/design-layer.spec.ts.
    ───────────────────────────────────────────────────────────────────────── */
-table:not(.fc table, .fc) > thead > tr > th {
-  font-size: 0.75rem !important;
-  font-weight: 600 !important;
-  letter-spacing: 0 !important;
-  text-transform: none !important;
+@media screen {
+  table:not(.fc table, .fc) > thead > tr > th {
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -966,6 +972,11 @@ table:not(.fc table, .fc) > thead > tr > th {
     padding: 0.25rem 0.75rem;
     border: 1px solid var(--border) !important;
     border-radius: 10px;
+  }
+  /* The card is white unless the page tints the row (an abnormal result, an
+     overdue line, a lot about to expire): zero specificity, so a page's
+     `tr.flagged { background }` still shows on a phone. */
+  :where(table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr) {
     background-color: var(--surface);
   }
   table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr > :is(td, th):not([hidden]) {
@@ -974,8 +985,13 @@ table:not(.fc table, .fc) > thead > tr > th {
     width: auto !important;
     min-width: 0 !important;
     max-width: none !important;
-    /* a hairline between the lines of a card, drawn by the row itself */
-    background: linear-gradient(#eef2f6, #eef2f6) top / 100% 1px no-repeat !important;
+    /* A hairline between the lines of a card, drawn by the row itself as an
+       IMAGE: the cell's background colour is left to the page, so a tinted
+       cell (`tr.abnormal td`) keeps its tint. */
+    background-image: linear-gradient(#eef2f6, #eef2f6) !important;
+    background-position: top !important;
+    background-size: 100% 1px !important;
+    background-repeat: no-repeat !important;
     box-shadow: none !important;
     animation: none !important;
     text-align: right !important;
@@ -987,7 +1003,7 @@ table:not(.fc table, .fc) > thead > tr > th {
     > :is(tbody, tfoot)
     > tr
     > :is(td, th):first-child:not([hidden]) {
-    background: none !important;
+    background-image: none !important;
   }
   table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr > :is(td, th)[data-label]::before {
     content: attr(data-label);

@@ -170,8 +170,9 @@
   border-left-color: var(--color-success, #1e8e3e);
 }
 
+// Occupied is blue: the brand teal sits too close to the green of a free bed.
 .bed-occupied {
-  border-left-color: var(--primary);
+  border-left-color: var(--info-text);
 }
 
 .bed-reserved {

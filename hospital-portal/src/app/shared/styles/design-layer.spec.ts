@@ -263,6 +263,33 @@ describe('global design layer (QA r65)', () => {
       expect(view.getComputedStyle(list.querySelector('tr[hidden]')!).display).toBe('none');
       expect(view.getComputedStyle(kept).display).toBe('none');
     });
+
+    it('keeps the tint a page gives a row or a cell: an abnormal result is still red on a phone', async () => {
+      const doc = await screen(390);
+      // What a page's own (scoped) sheet writes: a tinted row, a tinted cell.
+      const page = doc.createElement('style');
+      page.textContent = `
+        tr.overdue[data-page] { background: #fef2f2; }
+        tr.abnormal[data-page] td[data-page] { background: #fff7ed; }`;
+      doc.head.appendChild(page);
+      doc.body.innerHTML = `<table data-cards>
+          <thead><tr><th>Examen</th><th>Résultat</th></tr></thead>
+          <tbody>
+            <tr><td data-label="Examen">NFS</td><td data-label="Résultat">12</td></tr>
+            <tr class="overdue" data-page><td data-label="Examen">Glycémie</td><td data-label="Résultat">—</td></tr>
+            <tr class="abnormal" data-page><td data-page data-label="Examen">Kaliémie</td><td data-page data-label="Résultat">6,8</td></tr>
+          </tbody></table>`;
+      const view = doc.defaultView!;
+      const [plain, overdue, abnormal] = Array.from(doc.querySelectorAll('tbody tr'));
+      // It IS a card (so the tint is the page's, not a table that never switched).
+      expect(view.getComputedStyle(overdue).display).toBe('table');
+      expect(view.getComputedStyle(plain).backgroundColor).toBe(WHITE);
+      expect(view.getComputedStyle(overdue).backgroundColor).toBe('rgb(254, 242, 242)');
+      const cell = abnormal.querySelector('td:last-child')!;
+      expect(view.getComputedStyle(cell).backgroundColor).toBe('rgb(255, 247, 237)');
+      // The hairline between two lines of a card is still drawn, over the tint.
+      expect(view.getComputedStyle(cell).backgroundImage).toContain('linear-gradient');
+    });
   });
 
   describe('print (D2805)', () => {

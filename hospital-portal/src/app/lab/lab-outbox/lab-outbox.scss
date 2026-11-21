@@ -336,8 +336,9 @@
     color: #065f46;
   }
 
+  // « C » (corrected) keeps its own blue among the result statuses.
   &[data-result-status='C'] {
-    color: var(--primary-deep);
+    color: #1e40af;
   }
 }
 
