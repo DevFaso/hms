@@ -155,7 +155,7 @@ class UserRepositoryDirectoryScopeTest {
         // Review of #1264: the hospital's assignment listing (GET /assignments) leaves it out too.
         List<UUID> listedAssignmentUsers = assignmentRepository.findAll(
                 com.example.hms.specification.UserRoleHospitalAssignmentSpecification.notAPlatformAccount())
-            .stream().map(a -> a.getUser().getId()).toList();
+            .stream().map(row -> row.getUser().getId()).toList();
         assertThat(listedAssignmentUsers).contains(activeAtA).doesNotContain(owner.getId());
         // The super-admin's own, unscoped directory still lists the account.
         assertThat(userRepository.findAllPaged(false, false, false, UserRepository.DIRECTORY_UNSCOPED, page)
