@@ -129,11 +129,23 @@
         class="tab-btn"
         [class.active]="activeTab() === 'overview'"
         (click)="switchTab('overview')"
+        type="button"
+        [attr.aria-label]="'PROFILE.OVERVIEW' | translate"
+        [attr.aria-pressed]="activeTab() === 'overview'"
+        [attr.data-testid]="'profile-tab-overview'"
       >
         <span class="material-symbols-outlined">person</span>
         <span class="tab-label">{{ 'PROFILE.OVERVIEW' | translate }}</span>
       </button>
-      <button class="tab-btn" [class.active]="activeTab() === 'edit'" (click)="switchTab('edit')">
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'edit'"
+        (click)="switchTab('edit')"
+        type="button"
+        [attr.aria-label]="'PROFILE.EDIT_PROFILE' | translate"
+        [attr.aria-pressed]="activeTab() === 'edit'"
+        [attr.data-testid]="'profile-tab-edit'"
+      >
         <span class="material-symbols-outlined">edit</span>
         <span class="tab-label">{{ 'PROFILE.EDIT_PROFILE' | translate }}</span>
       </button>
@@ -141,6 +153,10 @@
         class="tab-btn"
         [class.active]="activeTab() === 'security'"
         (click)="switchTab('security')"
+        type="button"
+        [attr.aria-label]="'PROFILE.SECURITY' | translate"
+        [attr.aria-pressed]="activeTab() === 'security'"
+        [attr.data-testid]="'profile-tab-security'"
       >
         <span class="material-symbols-outlined">shield</span>
         <span class="tab-label">{{ 'PROFILE.SECURITY' | translate }}</span>
@@ -149,6 +165,10 @@
         class="tab-btn"
         [class.active]="activeTab() === 'activity'"
         (click)="switchTab('activity')"
+        type="button"
+        [attr.aria-label]="'PROFILE.ACTIVITY' | translate"
+        [attr.aria-pressed]="activeTab() === 'activity'"
+        [attr.data-testid]="'profile-tab-activity'"
       >
         <span class="material-symbols-outlined">history</span>
         <span class="tab-label">{{ 'PROFILE.ACTIVITY' | translate }}</span>

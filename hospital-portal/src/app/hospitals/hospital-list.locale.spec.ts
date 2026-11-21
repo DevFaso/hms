@@ -57,8 +57,10 @@ describe('HospitalListComponent — code, currency and time zone (QA r65 D2500 /
       'list',
       'create',
       'update',
+      'getById',
     ]);
     hospitalService.list.and.returnValue(of([stored]));
+    hospitalService.getById.and.returnValue(of(stored));
     hospitalService.create.and.returnValue(of(stored));
     hospitalService.update.and.returnValue(of(stored));
     toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);
@@ -228,6 +230,28 @@ describe('HospitalListComponent — code, currency and time zone (QA r65 D2500 /
     expectFieldsMarked(fixture, { hCurrency: refusal });
     expect(component.saving()).toBeFalse();
     expect(component.showModal()).toBeTrue();
+  });
+
+  it('QA D3059: a locked code and currency open greyed out, each saying why', async () => {
+    const fixture = render();
+    hospitalService.getById.and.returnValue(
+      of({ ...stored, codeLocked: true, currencyLocked: true }),
+    );
+    fixture.componentInstance.openEdit(stored);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(hospitalService.getById).toHaveBeenCalledWith(stored.id);
+    expect((field(fixture, 'hospital-code') as HTMLInputElement).disabled).toBeTrue();
+    expect((field(fixture, 'hospital-currency') as HTMLSelectElement).disabled).toBeTrue();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('#hCodeHint')?.textContent).toContain(
+      'PLATFORM_SETUP.HOSPITAL.CODE_LOCKED',
+    );
+    expect(el.querySelector('#hCurrencyHint')?.textContent).toContain(
+      'PLATFORM_SETUP.HOSPITAL.CURRENCY_LOCKED',
+    );
   });
 
   it('the pattern is the server’s: letters, digits and hyphens, 2 to 20, alphanumeric at both ends', () => {

@@ -161,6 +161,9 @@ export class HospitalListComponent implements OnInit {
   }
   /** QA r65 D2500: set by a refused submit when the typed code is malformed. */
   codeInvalid = signal(false);
+  /** QA D3059 (r68): the locks the server enforces, read when the edit form opens. */
+  readonly codeLocked = signal(false);
+  readonly currencyLocked = signal(false);
 
   // Delete
   showDeleteConfirm = signal(false);
@@ -242,6 +245,17 @@ export class HospitalListComponent implements OnInit {
       timeZone: hospital.timeZone ?? '',
     };
     this.codeInvalid.set(false);
+    this.codeLocked.set(false);
+    this.currencyLocked.set(false);
+    this.hospitalService.getById(hospital.id).subscribe({
+      next: (fresh) => {
+        if (this.editing()?.id !== hospital.id) return;
+        this.codeLocked.set(fresh.codeLocked === true);
+        this.currencyLocked.set(fresh.currencyLocked === true);
+      },
+      // Unknown: the fields stay open and the server still refuses a locked change.
+      error: () => undefined,
+    });
     this.showModal.set(true);
   }
 

@@ -169,8 +169,10 @@ describe('HospitalListComponent (QA D36)', () => {
         'list',
         'create',
         'update',
+        'getById',
       ]);
       hospitalService.list.and.returnValue(of([hospital]));
+      hospitalService.getById.and.returnValue(of(hospital));
       hospitalService.create.and.returnValue(of({ id: 'h-9' } as HospitalResponse));
       hospitalService.update.and.returnValue(of(hospital));
       const orgService = jasmine.createSpyObj<OrganizationService>('OrganizationService', ['list']);

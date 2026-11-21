@@ -224,6 +224,19 @@ describe('ProfileComponent — editing the profile', () => {
       }
     });
 
+    it('names every section tab, with its label visible on a phone (QA D3056)', async () => {
+      const host = await overviewOn(390);
+      const tabs = Array.from(host.querySelectorAll<HTMLElement>('.profile-tabs .tab-btn'));
+      expect(tabs.length).toBe(4);
+      const edge = host.getBoundingClientRect().right;
+      for (const tab of tabs) {
+        const label = tab.querySelector<HTMLElement>('.tab-label')!;
+        expect(tab.getAttribute('aria-label')).withContext(tab.outerHTML).toBeTruthy();
+        expect(label.getBoundingClientRect().width).withContext(tab.outerHTML).toBeGreaterThan(0);
+        expect(tab.getBoundingClientRect().right).toBeLessThanOrEqual(edge + 1);
+      }
+    });
+
     it('shows the phone number grouped in pairs, not raw (QA D2799)', async () => {
       const host = await overviewOn(1024);
       expect(host.querySelector('.user-meta')!.textContent).toContain(

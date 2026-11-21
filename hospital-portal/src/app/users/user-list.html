@@ -94,6 +94,17 @@
     </button>
   </div>
 
+  @if (hospitalScope()) {
+    <div class="active-chips" data-testid="users-hospital-scope">
+      <span class="chip">{{
+        'USERS.HOSPITAL_SCOPE' | translate: { name: hospitalScopeName() ?? '—' }
+      }}</span>
+      <button type="button" class="btn-link" (click)="clearHospitalScope()">
+        {{ 'USERS.HOSPITAL_SCOPE_CLEAR' | translate }}
+      </button>
+    </div>
+  }
+
   @if (showFilters()) {
     <div class="filter-row">
       <div class="filter-group">

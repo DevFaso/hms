@@ -113,8 +113,11 @@ export class UserService {
     size = 20,
     includeDeleted = false,
     onlyDeleted = false,
+    /** QA D3058: one hospital's accounts (the onboarding checklist's link). */
+    hospitalId: string | null = null,
   ): Observable<UserSummaryPage> {
     let params = new HttpParams().set('page', String(page)).set('size', String(size));
+    if (hospitalId) params = params.set('hospitalId', hospitalId);
     if (includeDeleted) params = params.set('includeDeleted', 'true');
     // onlyDeleted pages the ghost worklist server-side: a mixed page filtered
     // client-side can show "no matches" while deleted users sit on later
