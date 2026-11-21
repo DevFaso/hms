@@ -58,4 +58,12 @@ public class HospitalResponseDTO {
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    /**
+     * QA D3059 (r68): the single read only (GET /hospitals/{id}); null on lists. The code is fixed
+     * once an invoice number was issued, the currency once an invoice or a price exists: the edit
+     * form shows them locked instead of letting the save be refused.
+     */
+    private Boolean codeLocked;
+    private Boolean currencyLocked;
 }

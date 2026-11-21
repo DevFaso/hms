@@ -143,7 +143,11 @@ public class HospitalServiceImpl implements HospitalService {
     public HospitalResponseDTO getHospitalById(UUID id, Locale locale) {
         Hospital hospital = getHospitalOrThrow(id);
         requireHospitalScope(hospital.getId(), locale);
-        return hospitalMapper.toHospitalDTO(hospital);
+        HospitalResponseDTO dto = hospitalMapper.toHospitalDTO(hospital);
+        // QA D3059 (r68): the locks applyCodeChange and applyLocale enforce, shown before the save.
+        dto.setCodeLocked(hospitalRepository.hasAllocatedInvoiceNumber(hospital.getId()));
+        dto.setCurrencyLocked(hasInvoiceOrPrice(hospital.getId()));
+        return dto;
     }
 
     @Override
