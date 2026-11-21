@@ -376,7 +376,7 @@ public class DispenseBillingDeferralService {
     @Transactional
     public DispenseBillingDeferral admit(Prescription prescription, UUID hospitalId, BigDecimal due, Choice choice,
                                          User actor) {
-        return admit(prescription, hospitalId, due, choice, actor, FillClaimCover.Gap.NONE);
+        return admitFill(prescription, hospitalId, due, choice, actor, FillClaimCover.Gap.NONE);
     }
 
     /**
@@ -387,6 +387,12 @@ public class DispenseBillingDeferralService {
     @Transactional
     public DispenseBillingDeferral admit(Prescription prescription, UUID hospitalId, BigDecimal due, Choice choice,
                                          User actor, FillClaimCover.Gap claimGap) {
+        return admitFill(prescription, hospitalId, due, choice, actor, claimGap);
+    }
+
+    /** The gate itself; both public entries bring the transaction. */
+    private DispenseBillingDeferral admitFill(Prescription prescription, UUID hospitalId, BigDecimal due,
+                                              Choice choice, User actor, FillClaimCover.Gap claimGap) {
         UUID actorId = actor != null ? actor.getId() : null;
         if (prescription == null || hospitalId == null || actorId == null) {
             throw unpaid(FillClaimCover.Gap.NONE, due);

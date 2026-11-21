@@ -874,16 +874,18 @@ class DispenseBillingDeferralServiceTest {
     @Test
     @DisplayName("QA D2931 (r66): the gate refuses with the words it is given when the counter sent no basis")
     void theRefusalSaysWhyTheClaimDoesNotCover() {
-        assertThatThrownBy(() -> service.admit(prescription, hospitalId, new BigDecimal("90"), null, user(pharmacist),
+        BigDecimal due = new BigDecimal("90");
+        User counter = user(pharmacist);
+        assertThatThrownBy(() -> service.admit(prescription, hospitalId, due, null, counter,
                 FillClaimCover.Gap.OWN_VOUCHER))
                 .isInstanceOf(FieldBusinessException.class)
                 .extracting("field", "messageKey")
                 .containsExactly("billingDeferralId", "pharmacy.handOver.claimVouchedBySelf");
-        assertThatThrownBy(() -> service.admit(prescription, hospitalId, new BigDecimal("90"), null, user(pharmacist),
+        assertThatThrownBy(() -> service.admit(prescription, hospitalId, due, null, counter,
                 FillClaimCover.Gap.NO_VOUCHER))
                 .isInstanceOf(FieldBusinessException.class)
                 .extracting("messageKey").isEqualTo("pharmacy.handOver.claimNotVouched");
-        assertThatThrownBy(() -> service.admit(prescription, hospitalId, new BigDecimal("90"), null, user(pharmacist)))
+        assertThatThrownBy(() -> service.admit(prescription, hospitalId, due, null, counter))
                 .isInstanceOf(FieldBusinessException.class)
                 .extracting("messageKey").isEqualTo("pharmacy.handOver.unpaid");
     }
