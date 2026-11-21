@@ -373,8 +373,8 @@ class ImagingReadRoleGuardTest {
 
     private static final String SCOPE = "ImagingRoleScope(roleValidator)";
     private static final Pattern SERVICE_CALL = Pattern.compile("\\b(\\w++)\\s*+\\.\\s*+(\\w++)\\s*+\\(");
-    /** A call on the class itself; {@code self.} (the proxy of the same class) is dropped before matching. */
-    private static final Pattern LOCAL_CALL = Pattern.compile("(?<![.\\w])(\\w++)\\s*+\\(");
+    /** A call; one on the class itself has no dot before it ({@code self.}, its own proxy, is dropped first). */
+    private static final Pattern LOCAL_CALL = Pattern.compile("(\\w++)\\s*+\\(");
 
     private static final Set<String> NOT_A_CALL = Set.of("if", "for", "while", "switch", "catch", "synchronized",
         "try", "return", "throw", "new", "else", "do", "super", "this", "assert", "yield");
@@ -392,10 +392,12 @@ class ImagingReadRoleGuardTest {
         if (body.contains(SCOPE)) {
             return true;
         }
-        Matcher call = LOCAL_CALL.matcher(body.replace("self.", ""));
+        String calls = body.replace("self.", "");
+        Matcher call = LOCAL_CALL.matcher(calls);
         while (call.find()) {
+            boolean onAnotherObject = call.start() > 0 && calls.charAt(call.start() - 1) == '.';
             // A keyword is not a method of the class (methodBody would return some unrelated block).
-            if (!NOT_A_CALL.contains(call.group(1)) && asksTheScope(code, call.group(1), seen)) {
+            if (!onAnotherObject && !NOT_A_CALL.contains(call.group(1)) && asksTheScope(code, call.group(1), seen)) {
                 return true;
             }
         }
