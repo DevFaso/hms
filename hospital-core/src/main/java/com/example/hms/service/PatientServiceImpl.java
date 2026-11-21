@@ -874,6 +874,13 @@ public class PatientServiceImpl implements PatientService {
             activeFilter,
             pageable
         ).getContent());
+        if (page == 0 && mrn == null && typedName == null && dob == null && emailPattern == null
+                && trimToNull(criteria.getPhone()) == null) {
+            // QA D2521 (r65): twelve digits typed into the one search box may be the patient's IU
+            // (stored encrypted, found by its keyed fingerprint), read above as a phone number and
+            // found nobody. The exact IU match comes first, in the same scope and filters.
+            prependNationalUniqueIdMatches(found, typedPhone, hospitalId, activeFilter, size);
+        }
         boolean nameOnly = mrn == null && dob == null && phonePattern == null && emailPattern == null;
         if (nameOnly && page == 0 && found.size() < size && isEmailFragmentCandidate(typedName)) {
             // QA D1274: the start of an address with no @ yet ("awa.kabore")
@@ -891,6 +898,35 @@ public class PatientServiceImpl implements PatientService {
         return found.stream()
             .map(patient -> buildPatientDto(patient, hospitalId))
             .toList();
+    }
+
+    /** QA D2521: the patients whose IU is {@code term}, first, within the search's hospital and status filters. */
+    private void prependNationalUniqueIdMatches(List<Patient> found, String term, UUID hospitalId,
+                                                Boolean activeFilter, int size) {
+        if (term == null || nationalUniqueIds == null) {
+            return;
+        }
+        PatientNationalUniqueIdService identities = nationalUniqueIds.getIfAvailable();
+        if (identities == null) {
+            return;
+        }
+        List<Patient> matches = identities.matchesForSearch(term).stream()
+            .filter(p -> activeFilter == null || activeFilter.equals(p.isActive()))
+            .filter(p -> hospitalId == null || p.getHospitalRegistrations().stream()
+                .anyMatch(r -> r.isActive() && r.getHospital() != null && hospitalId.equals(r.getHospital().getId())))
+            .toList();
+        if (matches.isEmpty()) {
+            return;
+        }
+        Set<UUID> seen = new HashSet<>();
+        matches.forEach(p -> seen.add(p.getId()));
+        List<Patient> rest = found.stream().filter(p -> !seen.contains(p.getId())).toList();
+        found.clear();
+        found.addAll(matches);
+        found.addAll(rest);
+        if (found.size() > size) {
+            found.subList(size, found.size()).clear();
+        }
     }
 
     /**

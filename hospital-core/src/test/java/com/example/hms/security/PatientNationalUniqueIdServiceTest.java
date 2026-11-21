@@ -183,4 +183,52 @@ class PatientNationalUniqueIdServiceTest {
             assertThat(identity.getChartRestrictionReason()).isNull();
         }
     }
+
+    @Test
+    @DisplayName("QA D2521 (r65): twelve digits typed into the patient search find the patient by IU, in scope")
+    void aFreeSearchFindsThePatientByItsIu() {
+        Patient patient = new Patient(); patient.setId(UUID.randomUUID());
+        when(patients.findByNationalUniqueIdHashInScope(PatientNationalUniqueId.fingerprint(VALUE)))
+            .thenReturn(List.of(patient));
+        assertThat(service.matchesForSearch("0001 2345 6789")).containsExactly(patient);
+        assertThat(service.matchesForSearch(VALUE)).containsExactly(patient);
+    }
+
+    @Test
+    @DisplayName("QA D2521: a name, a phone or a short number is not an IU; nothing is looked up")
+    void aTermThatIsNotAnIuLooksUpNothing() {
+        for (String term : new String[] {"Awa", "70001002", "00012345678", "0001234567890", "", null}) {
+            assertThat(service.matchesForSearch(term)).as(String.valueOf(term)).isEmpty();
+        }
+        verify(patients, never()).findByNationalUniqueIdHashInScope(anyString());
+    }
+
+    @Test
+    @DisplayName("QA D2521: a role that may not search by IU, or no lookup key, finds nothing by IU (and is not refused)")
+    void aRoleOutsideTheIuSearchersOrNoKeyFindsNothing() {
+        var authorities = List.of(new SimpleGrantedAuthority("ROLE_PATIENT"));
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+            new CustomUserDetails(actorId, "someone", "synthetic", true, authorities), null, authorities));
+        assertThat(service.matchesForSearch(VALUE)).isEmpty();
+        var desk = List.of(new SimpleGrantedAuthority("ROLE_RECEPTIONIST"));
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+            new CustomUserDetails(actorId, "staff", "synthetic", true, desk), null, desk));
+        EncryptionKeyHolder.setKeyForTesting(null);
+        assertThat(service.matchesForSearch(VALUE)).isEmpty();
+        verify(patients, never()).findByNationalUniqueIdHashInScope(anyString());
+    }
+
+    @Test
+    @DisplayName("QA D2521: the free search's IU roles are exactly POST /patients/national-unique-id/search's")
+    void theFreeSearchIuRolesAreTheIuSearchEndpointRoles() throws Exception {
+        var field = com.example.hms.controller.PatientNationalUniqueIdController.class.getDeclaredField("SEARCHERS");
+        field.setAccessible(true);
+        String annotation = (String) field.get(null);
+        java.util.Set<String> endpointRoles = new java.util.HashSet<>();
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("'(ROLE_[A-Z_]+)'").matcher(annotation);
+        while (m.find()) endpointRoles.add(m.group(1));
+        var serviceField = PatientNationalUniqueIdService.class.getDeclaredField("SEARCHERS");
+        serviceField.setAccessible(true);
+        assertThat(serviceField.get(null)).isEqualTo(endpointRoles);
+    }
 }

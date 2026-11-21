@@ -56,7 +56,18 @@ public final class PatientMatchKeys {
     /** A value with no digit at all is not a phone search. */
     private static final int MIN_PHONE_DIGITS = 1;
 
+    /**
+     * QA D2520: how close two spellings of one name must be for the desk to be
+     * asked "is this the same person?". Normalised edit distance on the name
+     * written without spaces, so « Awa Test Diallo », « Awa TestDialo » and
+     * « Aoua TestDiallo » (1 to 2 letters in 13) are close to « Awa TestDiallo »,
+     * while « Awa Ki » / « Ama Ki » (1 letter in 5) is not.
+     */
+    public static final double SIMILAR_NAME_MIN = 0.85;
+
     private static final Pattern SPACES = Pattern.compile("\\s+");
+    /** What separates the words of a name, ignored by {@link #similarName}. */
+    private static final Pattern NAME_JOINERS = Pattern.compile("[\\s\\-'’]+");
     private static final Pattern NON_DIGITS = Pattern.compile("\\D");
     private static final Pattern PHONE_SHAPED = Pattern.compile("\\+?[\\d\\s().\\-/]{6,}");
     /** {@code yyyy-mm-dd}, as a date input and the API send it. */
@@ -289,6 +300,49 @@ public final class PatientMatchKeys {
                                        java.time.LocalDate dob) {
         return stored != null && sameIdentity(stored.getFirstName(), stored.getLastName(), stored.getDateOfBirth(),
             first, last, dob);
+    }
+
+    /**
+     * QA D2520 (r65): whether a typed full name is a near spelling of a stored
+     * patient's name: one space more or less, one or two letters changed, in
+     * either word order, the middle name with or without. Only ever offered as
+     * a possible duplicate for the desk to decide (never a link, never a
+     * block on its own): {@link #sameIdentity} stays exact.
+     */
+    public static boolean similarName(String typed, String first, String middle, String last) {
+        String needle = compactName(typed);
+        if (needle == null) {
+            return false;
+        }
+        for (String stored : new String[] {
+            joined(first, last), joined(last, first), joined(first, middle, last), joined(last, first, middle)}) {
+            String hay = compactName(stored);
+            if (hay != null && com.example.hms.empi.probabilistic.EmpiSimilarity.nameSimilarity(needle, hay)
+                    >= SIMILAR_NAME_MIN) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The folded name with its spaces, hyphens and apostrophes removed; null when blank. */
+    static String compactName(String value) {
+        String folded = foldName(value);
+        if (folded == null) {
+            return null;
+        }
+        String compact = NAME_JOINERS.matcher(folded).replaceAll("");
+        return compact.isEmpty() ? null : compact;
+    }
+
+    private static String joined(String... parts) {
+        StringBuilder out = new StringBuilder();
+        for (String part : parts) {
+            if (part != null && !part.isBlank()) {
+                out.append(part).append(' ');
+            }
+        }
+        return out.toString();
     }
 
     /** Whether the folded {@code haystack} contains the folded {@code needle}. */

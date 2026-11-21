@@ -365,6 +365,24 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     int PHONE_SUBSCRIBER_CAP = 50;
 
     /**
+     * QA D2520 (r65): the active patients of one hospital (an active
+     * registration there) born between two days, inclusive: the candidates a
+     * near spelling of a name is compared with (in Java, by
+     * PatientMatchKeys.similarName), since a LIKE on the name cannot find
+     * « Awa TestDialo » from « Awa TestDiallo ».
+     */
+    @Query("SELECT DISTINCT p FROM Patient p JOIN p.hospitalRegistrations r"
+        + " WHERE r.hospital.id = :hospitalId AND r.active = true AND p.active = true"
+        + " AND p.dateOfBirth BETWEEN :bornFrom AND :bornTo ORDER BY p.createdAt DESC, p.id")
+    List<Patient> findActiveBornBetweenAtHospital(@Param("bornFrom") java.time.LocalDate bornFrom,
+                                                  @Param("bornTo") java.time.LocalDate bornTo,
+                                                  @Param("hospitalId") UUID hospitalId,
+                                                  Pageable pageable);
+
+    /** The candidate cap of {@link #findActiveBornBetweenAtHospital}: three birth days at one hospital. */
+    int BORN_NEAR_CAP = 200;
+
+    /**
      * Retrieves all patients registered to a specific hospital with active registrations.
      */
     @Query("""
