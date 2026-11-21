@@ -199,6 +199,7 @@ class MedicationCatalogControllerTest {
 
         MedicationCatalogItemResponseDTO updated = sampleResponse();
         updated.setNameFr("Paracétamol 1g");
+        when(authUtils.resolveHospitalScope(any(), eq(hospitalId), eq(false))).thenReturn(hospitalId);
         when(catalogService.update(eq(itemId), any())).thenReturn(updated);
 
         mockMvc.perform(put("/medication-catalog/{id}", itemId)
@@ -225,6 +226,48 @@ class MedicationCatalogControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(catalogService).deactivate(itemId, null);
+    }
+
+    @Test
+    void update_withoutHospitalId_reachesTheService_whichActsAtTheCallersHospital() throws Exception {
+        MedicationCatalogItemRequestDTO request = MedicationCatalogItemRequestDTO.builder()
+                .nameFr("Zidovudine 300 mg")
+                .genericName("zidovudine")
+                .sensitivityCategory(com.example.hms.enums.SensitivityCategory.HIV)
+                .build();
+        when(catalogService.update(eq(itemId), any())).thenReturn(sampleResponse());
+
+        mockMvc.perform(put("/medication-catalog/{id}", itemId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+
+        org.mockito.ArgumentCaptor<MedicationCatalogItemRequestDTO> sent =
+            org.mockito.ArgumentCaptor.forClass(MedicationCatalogItemRequestDTO.class);
+        verify(catalogService).update(eq(itemId), sent.capture());
+        org.assertj.core.api.Assertions.assertThat(sent.getValue().getHospitalId()).isNull();
+        org.assertj.core.api.Assertions.assertThat(sent.getValue().getSensitivityCategory())
+            .isEqualTo(com.example.hms.enums.SensitivityCategory.HIV);
+        verify(authUtils, org.mockito.Mockito.never()).resolveHospitalScope(any(), any(), eq(false));
+    }
+
+    @Test
+    void update_namingAHospitalTheCallerMayNotActAt_neverReachesTheService() throws Exception {
+        // A hospital in the BODY is narrowed by the controller (the interceptor only sees parameters).
+        MedicationCatalogItemRequestDTO request = MedicationCatalogItemRequestDTO.builder()
+                .nameFr("Paracétamol 1g")
+                .genericName("Paracetamol")
+                .hospitalId(hospitalId)
+                .build();
+        when(authUtils.resolveHospitalScope(any(), eq(hospitalId), eq(false)))
+                .thenThrow(new com.example.hms.exception.BusinessException("pharmacy.hospitalContext.required"));
+
+        mockMvc.perform(put("/medication-catalog/{id}", itemId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().is4xxClientError());
+
+        verify(catalogService, org.mockito.Mockito.never()).update(any(), any());
     }
 
     @Test

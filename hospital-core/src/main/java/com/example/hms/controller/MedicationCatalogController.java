@@ -121,7 +121,14 @@ public class MedicationCatalogController {
     @Operation(summary = "Update a medication catalog item")
     public ResponseEntity<MedicationCatalogItemResponseDTO> update(
             @PathVariable UUID id,
-            @Valid @RequestBody MedicationCatalogItemRequestDTO dto) {
+            @Valid @RequestBody MedicationCatalogItemRequestDTO dto,
+            Authentication auth) {
+        // r66 D2901: the portal names no hospital and the service acts at the caller's. A hospital named in
+        // the BODY is not narrowed by the interceptor, so it is narrowed here: one the caller may not act
+        // at is refused, and a super-admin naming hospital B acts (and is audited) at B.
+        if (dto.getHospitalId() != null) {
+            resolveCatalogScope(auth, dto.getHospitalId());
+        }
         return ResponseEntity.ok(catalogService.update(id, dto));
     }
 

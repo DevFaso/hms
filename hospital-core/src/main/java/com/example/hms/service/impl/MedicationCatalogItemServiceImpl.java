@@ -206,10 +206,14 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
      * (null) hospital answered 404 for every save since the editor shipped, and a body that did name one
      * was looked up at whatever hospital it named.
      * <ul>
-     *   <li>A hospital's own entry: its admin acting at that hospital, or a verified super-admin.</li>
-     *   <li>A platform (LNME) entry, shared by every tenant: a verified super-admin only. A hospital admin
-     *       sees it in the list, so the refusal says why rather than "not found".</li>
-     *   <li>A {@code hospitalId} that is sent must be the entry's own (the API contract before this fix).</li>
+     *   <li>A hospital's own entry: a caller acting AT that hospital. That holds for a super-admin too:
+     *       pinned to hospital A, they do not edit hospital B's entry by its id (review of #1250). Only in
+     *       global view (no hospital pinned) does a verified super-admin reach any hospital's entry.</li>
+     *   <li>A platform (LNME) entry, shared by every tenant: a verified super-admin only, pinned or not
+     *       (it is in every hospital's list). A hospital admin sees it too, so the refusal says why rather
+     *       than "not found".</li>
+     *   <li>A {@code hospitalId} that is sent must be the entry's own (the API contract before this fix);
+     *       the controller narrows the acting scope to it first.</li>
      * </ul>
      * Another hospital's entry answers "not found", as an unknown id does.
      */
@@ -230,7 +234,10 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         if (requestedHospitalId != null && !requestedHospitalId.equals(owner)) {
             throw new ResourceNotFoundException(MEDICATION_CATALOG_NOT_FOUND);
         }
-        if (!platformAdmin && !owner.equals(roleValidator.requireActiveHospitalId())) {
+        // Null only for a verified super-admin in global view; everyone else acts at one hospital.
+        UUID acting = roleValidator.requireActiveHospitalId();
+        boolean reachable = acting == null ? platformAdmin : owner.equals(acting);
+        if (!reachable) {
             throw new ResourceNotFoundException(MEDICATION_CATALOG_NOT_FOUND);
         }
         return item;

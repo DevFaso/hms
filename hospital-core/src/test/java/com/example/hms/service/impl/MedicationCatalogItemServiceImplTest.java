@@ -465,6 +465,43 @@ class MedicationCatalogItemServiceImplTest {
         service.update(itemId, requestDTO);
 
         verify(catalogRepository).save(item);
+    }
+
+    @Test
+    void update_aSuperAdminPinnedToAnotherHospital_doesNotReachThisHospitalsEntryByItsId() {
+        // Review of #1250: the super-admin bypass ignored the pin. Acting at hospital B, the id of
+        // hospital A's entry is "not found", for an edit and for a deactivation.
+        when(catalogRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        requestDTO.setHospitalId(null);
+
+        assertThatThrownBy(() -> service.update(itemId, requestDTO))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.deactivate(itemId, null))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(catalogRepository, never()).save(any());
+        assertThat(item.isActive()).isTrue();
+
+        // Pinned to the entry's own hospital, the super-admin edits it.
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
+        service.update(itemId, requestDTO);
+        verify(catalogRepository).save(item);
+    }
+
+    @Test
+    void update_aPlatformEntry_isEditedByASuperAdminPinnedToAHospital() {
+        // A platform entry is in every hospital's list: the pin does not hide it from the platform admin.
+        item.setHospital(null);
+        when(catalogRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
+        requestDTO.setHospitalId(null);
+
+        service.update(itemId, requestDTO);
+
+        verify(catalogRepository).save(item);
         verify(roleValidator, never()).requireActiveHospitalId();
     }
 
