@@ -125,6 +125,8 @@ public class ImagingReportMapper {
             .patientDisplayName(patient != null ? patient.getFullName() : null)
             .patientMrn(patientMrnOf(report))
             .hospitalId(report.getHospital() != null ? report.getHospital().getId() : null)
+            // QA D1058 / D2642: the hospital named beside its id (the printed header reads it).
+            .hospitalName(hospitalOf(report) != null ? hospitalOf(report).getName() : null)
             .organizationId(report.getOrganization() != null ? report.getOrganization().getId() : null)
             .departmentId(report.getDepartment() != null ? report.getDepartment().getId() : null)
             .reportNumber(report.getReportNumber())
@@ -194,17 +196,23 @@ public class ImagingReportMapper {
     private static ImagingReportResponseDTO.ImagingReportResponseDTOBuilder withPrintIdentity(
             ImagingReportResponseDTO.ImagingReportResponseDTOBuilder response, ImagingReport report) {
         com.example.hms.model.ImagingOrder order = report.getImagingOrder();
-        com.example.hms.model.Hospital hospital = report.getHospital() != null ? report.getHospital()
-            : order != null ? order.getHospital() : null;
+        com.example.hms.model.Hospital hospital = hospitalOf(report);
         com.example.hms.model.Patient patient = patientOf(report);
         return response
-            .hospitalName(hospital != null ? hospital.getName() : null)
             .hospitalAddress(hospital != null ? addressOf(hospital) : null)
             .patientDateOfBirth(patient != null ? patient.getDateOfBirth() : null)
             .patientGender(patient != null ? patient.getGender() : null)
             .orderingProviderName(order != null ? order.getOrderingProviderName() : null)
             .clinicalQuestion(order != null ? order.getClinicalQuestion() : null)
             .orderedAt(order != null ? order.getOrderedAt() : null);
+    }
+
+    /** The report's hospital, else its order's. */
+    private static com.example.hms.model.Hospital hospitalOf(ImagingReport report) {
+        if (report.getHospital() != null) {
+            return report.getHospital();
+        }
+        return report.getImagingOrder() != null ? report.getImagingOrder().getHospital() : null;
     }
 
     private static String addressOf(com.example.hms.model.Hospital hospital) {
