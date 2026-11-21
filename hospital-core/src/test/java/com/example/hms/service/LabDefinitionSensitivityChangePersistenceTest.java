@@ -26,13 +26,16 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionManager;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -41,6 +44,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
@@ -56,21 +60,26 @@ import static org.mockito.Mockito.verify;
  * <p>So this class runs as the request does, with NO transaction around the call
  * ({@code NOT_SUPPORTED}), and asks for the three things the director is owed: a clean answer, the new
  * category on the row, and the audit of the change (written after the commit, with the hospital's name).
+ *
+ * <p>The service is built here, behind the same annotation-driven transaction advice Spring puts around
+ * the bean ({@link TransactionInterceptor} reading {@code @Transactional}), rather than imported into the
+ * slice: an {@code @Import} or a mock bean would give this class a context, and an
+ * {@code EntityManagerFactory}, of its own (see {@link TenantScopedDataJpaTest}).
  */
 @TenantScopedDataJpaTest
-@Import({LabTestDefinitionServiceImpl.class, LabTestDefinitionMapper.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class LabDefinitionSensitivityChangePersistenceTest {
 
-    @Autowired private LabTestDefinitionService service;
     @Autowired private LabTestDefinitionRepository definitionRepository;
     @Autowired private HospitalRepository hospitalRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private RoleRepository roleRepository;
     @Autowired private UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Autowired private com.example.hms.repository.LabOrderRepository labOrderRepository;
+    @Autowired private PlatformTransactionManager transactionManager;
 
-    @MockitoBean private ActingScopeResolver actingScopeResolver;
-    @MockitoBean private AuditEventLogService auditEventLogService;
+    private final AuditEventLogService auditEventLogService = mock(AuditEventLogService.class);
+    private LabTestDefinitionService service;
 
     private final String tag = UUID.randomUUID().toString().substring(0, 8);
 
@@ -80,8 +89,19 @@ class LabDefinitionSensitivityChangePersistenceTest {
     private UserRoleHospitalAssignment assignment;
     private LabTestDefinition definition;
 
+    /** The service as the application wires it: its {@code @Transactional} methods run in a transaction. */
+    private LabTestDefinitionService transactionalService() {
+        ProxyFactory factory = new ProxyFactory(new LabTestDefinitionServiceImpl(definitionRepository,
+            new LabTestDefinitionMapper(), assignmentRepository, userRepository, hospitalRepository,
+            mock(ActingScopeResolver.class), auditEventLogService, labOrderRepository));
+        factory.addAdvice(new TransactionInterceptor((TransactionManager) transactionManager,
+            new AnnotationTransactionAttributeSource()));
+        return (LabTestDefinitionService) factory.getProxy();
+    }
+
     @BeforeEach
     void seed() {
+        service = transactionalService();
         HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
         hospital = hospitalRepository.save(Hospital.builder().name("Clinique R66 " + tag).code("R66" + tag).build());
         role = roleRepository.save(Role.builder()
