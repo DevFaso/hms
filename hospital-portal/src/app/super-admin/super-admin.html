@@ -32,27 +32,9 @@
       </button>
     </div>
   } @else {
-    <nav class="dashboard-panel admin-directory" aria-labelledby="tools-heading">
-      <h2 class="section-heading" id="tools-heading">
-        {{ 'SUPER_ADMIN.QUICK_LINKS' | translate }}
-      </h2>
-      <div class="admin-groups" data-test="links-grid">
-        @for (group of quickLinkGroups; track group.key) {
-          <section class="admin-group">
-            <h3>{{ group.key | keyLabel: 'SUPER_ADMIN.CONTROL.GROUP_' }}</h3>
-            @for (link of group.links; track link.route) {
-              <a [routerLink]="link.route" [title]="link.descKey | translate">
-                <span class="material-symbols-outlined" aria-hidden="true">{{ link.icon }}</span>
-                <span>{{ link.titleKey | translate }}</span>
-                <span class="material-symbols-outlined admin-arrow" aria-hidden="true"
-                  >arrow_forward</span
-                >
-              </a>
-            }
-          </section>
-        }
-      </div>
-    </nav>
+    <!-- QA r65 D2777: the « Liens rapides » directory that stood here repeated thirteen
+         sidebar entries (and named « Plateforme » a second way). The sidebar is the one
+         menu; this page keeps what only it shows: health, counters and activity. -->
     <section class="dashboard-panel integration-overview" aria-labelledby="integration-heading">
       <div class="panel-heading">
         <div>

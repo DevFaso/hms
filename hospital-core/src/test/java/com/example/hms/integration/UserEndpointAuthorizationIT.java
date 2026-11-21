@@ -160,6 +160,11 @@ class UserEndpointAuthorizationIT extends BaseIT {
         roleRepository.deleteAllById(createdRoles);
         hospitalRepository.deleteAll(List.of(hospitalA, hospitalB));
         organizationRepository.delete(organization);
+        if (hospitalC != null) {
+            hospitalRepository.delete(hospitalC);
+            organizationRepository.delete(otherOrganisation);
+            hospitalC = null;
+        }
     }
 
     // ------------------------------------------------------------ the hole
@@ -784,6 +789,322 @@ class UserEndpointAuthorizationIT extends BaseIT {
         deactivateAssignments(pendingAtB);
         assertThat(ids(page(get("/users/search").param("role", "NURSE").param("size", "100"), adminOfA)))
             .doesNotContain(pendingAtB.getId());
+    }
+
+    // ------------------------------------------- the organisation admin
+    // Platform admin rules 2026-11-20, rules 1a to 1c, through the real filter
+    // chain. Hospitals A and B share the test's organisation; hospital C is
+    // another organisation's. The caller is an ADMIN assigned at A.
+
+    private Organization otherOrganisation;
+    private Hospital hospitalC;
+
+    /** An organisation admin of the test's organisation (assigned at A), with hospital C created in another one. */
+    private String organisationAdmin() {
+        otherOrganisation = organizationRepository.save(Organization.builder()
+            .name("Other Network " + next()).code("OTN" + next())
+            .type(OrganizationType.HOSPITAL_CHAIN).active(true).build());
+        String id = next();
+        hospitalC = hospitalRepository.save(Hospital.builder()
+            .name("Other Gate C " + id).code("OG" + id).city("Ouagadougou").country("Burkina Faso")
+            .address("2 Main St").phoneNumber("+226557" + id).email("other-gate" + id + "@hospital.test")
+            .organization(otherOrganisation).build());
+        organisationAdminAccount = account("orgadm", "ROLE_ADMIN", hospitalA);
+        return hms(organisationAdminAccount, "ROLE_ADMIN");
+    }
+
+    private User organisationAdminAccount;
+
+    private Map<String, Object> grantOf(User holder, Hospital hospital) {
+        return Map.of(
+            "userId", holder.getId().toString(),
+            "roleId", ensureRole("ROLE_NURSE").getId().toString(),
+            "hospitalId", hospital.getId().toString());
+    }
+
+    private UUID rowOf(User holder) {
+        return assignmentRepository.findByUserId(holder.getId()).get(0).getId();
+    }
+
+    @Test
+    @DisplayName("rule 1a: an organisation admin registers staff at a sister hospital; never elsewhere, an admin role or a patient")
+    void organisationAdminRegistersStaffAcrossItsOrganisation() throws Exception {
+        String token = organisationAdmin();
+
+        Map<String, Object> receptionist = new java.util.HashMap<>(signup("orgrec", "RECEPTIONIST", hospitalB));
+        receptionist.put("jobTitle", "RECEPTIONIST");
+        MvcResult created = perform(post("/users/admin-register"), token, receptionist);
+        assertThat(created.getResponse().getStatus()).as(created.getResponse().getContentAsString()).isEqualTo(201);
+        UUID createdId = idOf(created);
+        createdUsers.add(createdId);
+        assertThat(assignmentRepository.findByUserId(createdId)).isNotEmpty()
+            .allSatisfy(a -> assertThat(a.getHospital().getId()).isEqualTo(hospitalB.getId()));
+
+        assertThat(status(post("/users/admin-register"), token, signup("orgc", "RECEPTIONIST", hospitalC)))
+            .as("another organisation's hospital").isEqualTo(403);
+        for (String adminRole : List.of("HOSPITAL_ADMIN", "ADMIN", "SUPER_ADMIN")) {
+            assertThat(status(post("/users/admin-register"), token, signup("orgad", adminRole, hospitalA)))
+                .as(adminRole).isEqualTo(403);
+        }
+        assertThat(status(post("/users/admin-register"), token, signup("orgpat", "PATIENT", hospitalA)))
+            .as("a patient").isEqualTo(403);
+        // The role list of its register form; and no account is its to edit or delete.
+        assertThat(status(get("/roles"), token, null)).isEqualTo(200);
+        assertThat(status(put("/users/" + nurseA.getId()), token, Map.of("firstName", "X"))).isEqualTo(404);
+        assertThat(status(delete("/users/" + nurseA.getId()), token, null)).isEqualTo(403);
+    }
+
+    @Test
+    @DisplayName("rules 1a and 1b: it lists and works the staff assignments of its organisation; no patient row, no other organisation's, no edit or delete")
+    void organisationAdminWorksStaffAssignmentsOfItsOrganisation() throws Exception {
+        String token = organisationAdmin();
+        User nurseC = account("nurC", "ROLE_NURSE", hospitalC);
+
+        tools.jackson.databind.JsonNode listed = page(get("/assignments").param("size", "200"), token);
+        List<String> hospitals = new ArrayList<>();
+        List<String> roles = new ArrayList<>();
+        List<String> holders = new ArrayList<>();
+        listed.get("content").forEach(row -> {
+            hospitals.add(row.get("hospitalId").asText());
+            roles.add(row.get("roleCode").asText());
+            holders.add(row.get("userId").asText());
+        });
+        assertThat(hospitals).isNotEmpty()
+            .allMatch(h -> h.equals(hospitalA.getId().toString()) || h.equals(hospitalB.getId().toString()));
+        assertThat(holders).contains(doctorB.getId().toString(), nurseA.getId().toString())
+            .doesNotContain(patientA.getId().toString(), nurseC.getId().toString());
+        assertThat(roles).doesNotContain("ROLE_PATIENT");
+        // A hospital of another organisation named as the filter is refused before the handler runs.
+        assertThat(status(get("/assignments").param("hospitalId", hospitalC.getId().toString()), token, null))
+            .isEqualTo(403);
+
+        // One row at a time. A patient's row, or one at C, answers as a missing id.
+        UUID doctorRow = rowOf(doctorB);
+        assertThat(status(get("/assignments/" + doctorRow), token, null)).isEqualTo(200);
+        assertThat(status(get("/assignments/" + rowOf(patientA)), token, null)).isEqualTo(404);
+        assertThat(status(get("/assignments/" + rowOf(nurseC)), token, null)).isEqualTo(404);
+        assertThat(status(patch("/assignments/" + rowOf(nurseC) + "/deactivate"), token, null)).isEqualTo(404);
+        // No edit, no hard delete, no multi-hospital grant, no import: those handlers keep their own roles.
+        assertThat(status(put("/assignments/" + doctorRow), token, grantOf(doctorB, hospitalB))).isEqualTo(403);
+        assertThat(status(delete("/assignments/" + doctorRow), token, null)).isEqualTo(403);
+        assertThat(status(delete("/assignments/user/" + doctorB.getId()), token, null)).isEqualTo(403);
+        assertThat(status(post("/assignments/multi-scope"), token, Map.of(
+            "userId", nurseA.getId().toString(), "roleId", ensureRole("ROLE_NURSE").getId().toString(),
+            "hospitalIds", List.of(hospitalB.getId().toString())))).isEqualTo(403);
+        assertThat(status(post("/assignments/bulk-import"), token, Map.of("csvContent", "user,role,hospital")))
+            .isEqualTo(403);
+        // The switch-off, and a new assignment for an existing account at B (never at C).
+        assertThat(status(patch("/assignments/" + doctorRow + "/deactivate"), token, null)).isEqualTo(204);
+        assertThat(assignmentRepository.findById(doctorRow).orElseThrow().getActive()).isFalse();
+        MvcResult granted = perform(post("/assignments"), token, grantOf(nurseA, hospitalB));
+        assertThat(granted.getResponse().getStatus()).as(granted.getResponse().getContentAsString()).isEqualTo(200);
+        assertThat(assignmentRepository.findByUserId(nurseA.getId()))
+            .anySatisfy(a -> assertThat(a.getHospital().getId()).isEqualTo(hospitalB.getId()));
+        assertThat(status(post("/assignments"), token, grantOf(nurseA, hospitalC))).isEqualTo(403);
+
+        // Review of #1246, item 4: the grant at B is filed at B, where B's own administrator reads it.
+        String grantedId = objectMapper.readTree(granted.getResponse().getContentAsString()).get("id").asText();
+        User adminB = account("hadmB", "ROLE_HOSPITAL_ADMIN", hospitalB);
+        MvcResult trail = readOnly(get("/audit-logs").param("size", "200"), hms(adminB, "ROLE_HOSPITAL_ADMIN"));
+        assertThat(trail.getResponse().getStatus()).as(trail.getResponse().getContentAsString()).isEqualTo(200);
+        tools.jackson.databind.JsonNode trailOfB = objectMapper.readTree(trail.getResponse().getContentAsString());
+        List<String> grantsFiledAtB = new ArrayList<>();
+        trailOfB.get("content").forEach(row -> {
+            if ("ROLE_ASSIGNED".equals(row.get("eventType").asText())) {
+                grantsFiledAtB.add(row.get("resourceId").asText());
+            }
+        });
+        assertThat(grantsFiledAtB).contains(grantedId);
+    }
+
+    @Test
+    @DisplayName("review of #1246: an organisation admin names an existing account only among its organisation's staff")
+    void organisationAdminNamesOnlyItsOrganisationsStaff() throws Exception {
+        String token = organisationAdmin();
+        User nurseC = account("nurC", "ROLE_NURSE", hospitalC);
+        String nurseRole = ensureRole("ROLE_NURSE").getId().toString();
+        String atB = hospitalB.getId().toString();
+
+        // A patient found by phone number, and another organisation's nurse found by e-mail or by id:
+        // each answers exactly as a number nobody has. Nothing is created, nothing is confirmed.
+        MvcResult aPatient = perform(post("/assignments"), token, Map.of(
+            "userIdentifier", userRepository.findById(patientA.getId()).orElseThrow().getPhoneNumber(),
+            "roleId", nurseRole, "hospitalId", atB));
+        MvcResult nobody = perform(post("/assignments"), token, Map.of(
+            "userIdentifier", "+22679999999", "roleId", nurseRole, "hospitalId", atB));
+        assertThat(aPatient.getResponse().getStatus()).isEqualTo(404);
+        assertThat(nobody.getResponse().getStatus()).isEqualTo(404);
+        assertThat(message(aPatient).replaceAll("\\+?\\d{6,}", "<n>"))
+            .isEqualTo(message(nobody).replaceAll("\\+?\\d{6,}", "<n>"));
+        assertThat(status(post("/assignments"), token, Map.of(
+            "userIdentifier", emailOf(nurseC), "roleId", nurseRole, "hospitalId", atB))).isEqualTo(404);
+        assertThat(status(post("/assignments"), token, grantOf(nurseC, hospitalB))).isEqualTo(404);
+        assertThat(assignmentRepository.findByUserId(patientA.getId())).hasSize(1);
+        assertThat(assignmentRepository.findByUserId(nurseC.getId())).hasSize(1);
+
+        // Its organisation's staff, by e-mail: granted.
+        assertThat(status(post("/assignments"), token, Map.of(
+            "userIdentifier", emailOf(nurseA), "roleId", nurseRole, "hospitalId", atB))).isEqualTo(200);
+        // A hospital admin at its own hospital is not held to this: it names a patient's account as before.
+        assertThat(status(post("/assignments"), hms(adminA, "ROLE_HOSPITAL_ADMIN"), Map.of(
+            "userIdentifier", emailOf(patientA), "roleId", ensureRole("ROLE_RECEPTIONIST").getId().toString(),
+            "hospitalId", hospitalA.getId().toString()))).isEqualTo(200);
+    }
+
+    /** A clinician's staff record with a licence number, at the hospital of their one assignment. */
+    private String licensed(User clinician, Hospital hospital) {
+        String licence = "LIC-UG-" + next();
+        staffRepository.save(com.example.hms.model.Staff.builder()
+            .user(clinician).hospital(hospital)
+            .assignment(assignmentRepository.findByUserId(clinician.getId()).get(0))
+            .jobTitle(com.example.hms.enums.JobTitle.DOCTOR)
+            .employmentType(com.example.hms.enums.EmploymentType.FULL_TIME)
+            .licenseNumber(licence).name("Dr " + clinician.getFirstName()).active(true).build());
+        return licence;
+    }
+
+    /** "A new doctor" at this hospital, with fresh identifiers and someone's licence number. */
+    private Map<String, Object> newDoctorWithLicence(String licence, Hospital hospital) {
+        Map<String, Object> request = new java.util.HashMap<>(signup("newdoc", "DOCTOR", hospital));
+        request.put("licenseNumber", licence);
+        request.put("jobTitle", "DOCTOR");
+        request.put("forcePasswordChange", true);
+        return request;
+    }
+
+    private void assertNothingOf(User account, MvcResult answer) throws Exception {
+        User stored = userRepository.findById(account.getId()).orElseThrow();
+        assertThat(answer.getResponse().getContentAsString())
+            .doesNotContain(stored.getUsername(), stored.getEmail(), stored.getPhoneNumber());
+    }
+
+    @Test
+    @DisplayName("review round 2 of #1246: a licence number never hands an organisation admin another organisation's clinician")
+    void organisationAdminCannotReachAnotherOrganisationsClinicianByLicence() throws Exception {
+        String token = organisationAdmin();
+        User doctorC = account("docC", "ROLE_DOCTOR", hospitalC);
+        String licenceOfC = licensed(doctorC, hospitalC);
+
+        MvcResult refused = perform(post("/users/admin-register"), token, newDoctorWithLicence(licenceOfC, hospitalB));
+
+        // The answer any registrar gets for a number already in use, on its field, with nothing of the account.
+        assertThat(refused.getResponse().getStatus()).as(refused.getResponse().getContentAsString())
+            .isBetween(400, 409);
+        assertThat(refused.getResponse().getContentAsString()).contains("licenseNumber");
+        assertNothingOf(doctorC, refused);
+        User untouched = userRepository.findById(doctorC.getId()).orElseThrow();
+        assertThat(untouched.isForcePasswordChange()).isFalse();
+        assertThat(assignmentRepository.findByUserId(doctorC.getId())).hasSize(1)
+            .allSatisfy(a -> assertThat(a.getHospital().getId()).isEqualTo(hospitalC.getId()));
+
+        // Soft-deleted: the same refusal, and it stays deleted. A registration is no way to restore it.
+        untouched.setDeleted(true);
+        userRepository.save(untouched);
+        MvcResult stillRefused =
+            perform(post("/users/admin-register"), token, newDoctorWithLicence(licenceOfC, hospitalB));
+        assertThat(stillRefused.getResponse().getStatus()).isBetween(400, 409);
+        assertNothingOf(doctorC, stillRefused);
+        assertThat(userRepository.findById(doctorC.getId()).orElseThrow().isDeleted()).isTrue();
+        // ...nor for a hospital admin, who does not administer that account either.
+        MvcResult byHospitalAdmin = perform(post("/users/admin-register"), hms(adminA, "ROLE_HOSPITAL_ADMIN"),
+            newDoctorWithLicence(licenceOfC, hospitalA));
+        assertThat(byHospitalAdmin.getResponse().getStatus()).isBetween(400, 409);
+        assertNothingOf(doctorC, byHospitalAdmin);
+        assertThat(userRepository.findById(doctorC.getId()).orElseThrow().isDeleted()).isTrue();
+    }
+
+    @Test
+    @DisplayName("review round 2 of #1246: attaching a colleague by licence never echoes their contact details nor forces their password")
+    void attachingByLicenceEchoesNoContactDetails() throws Exception {
+        String token = organisationAdmin();
+        String licenceOfB = licensed(doctorB, hospitalB);
+        User doctorC = account("docC", "ROLE_DOCTOR", hospitalC);
+        String licenceOfC = licensed(doctorC, hospitalC);
+
+        // The organisation admin, its own organisation's doctor: whatever the outcome, no contact detail.
+        MvcResult ownStaff = perform(post("/users/admin-register"), token, newDoctorWithLicence(licenceOfB, hospitalA));
+        assertNothingOf(doctorB, ownStaff);
+        assertThat(userRepository.findById(doctorB.getId()).orElseThrow().isForcePasswordChange()).isFalse();
+
+        // A hospital admin, a live clinician of another hospital (and another organisation).
+        MvcResult elsewhere = perform(post("/users/admin-register"), hms(adminA, "ROLE_HOSPITAL_ADMIN"),
+            newDoctorWithLicence(licenceOfC, hospitalA));
+        assertNothingOf(doctorC, elsewhere);
+        assertThat(userRepository.findById(doctorC.getId()).orElseThrow().isForcePasswordChange()).isFalse();
+    }
+
+    @Test
+    @DisplayName("review of #1246 (rule 1b): an organisation admin reads no patient, front-desk, audit or clinical data")
+    void organisationAdminReadsNoPatientOrClinicalData() throws Exception {
+        String token = organisationAdmin();
+
+        for (String path : List.of("/patients", "/patients/search", "/audit-logs", "/patient-tracker",
+            "/dashboard/hospital-admin/summary", "/dashboard/lab-ops/summary", "/reception/queue",
+            "/imaging/orders")) {
+            assertThat(readOnly(get(path), token).getResponse().getStatus()).as(path).isEqualTo(403);
+        }
+        // The hospital's own administrator keeps its reads at its own hospital.
+        String hospitalAdmin = hms(adminA, "ROLE_HOSPITAL_ADMIN");
+        assertThat(readOnly(get("/patients"), hospitalAdmin).getResponse().getStatus()).isEqualTo(200);
+        assertThat(readOnly(get("/audit-logs"), hospitalAdmin).getResponse().getStatus()).isEqualTo(200);
+    }
+
+    /** A GET as a browser sends it: the bearer token and no CSRF parameter (some reads refuse an unknown one). */
+    private MvcResult readOnly(MockHttpServletRequestBuilder request, String bearer) throws Exception {
+        return mockMvc.perform(request.header(HttpHeaders.AUTHORIZATION, "Bearer " + bearer)).andReturn();
+    }
+
+    @Test
+    @DisplayName("rule 1c: no administrator grants a role to their own account, whatever their role")
+    void noAdministratorGrantsThemselvesARole() throws Exception {
+        String token = organisationAdmin();
+
+        assertThat(status(post("/assignments"), token, grantOf(organisationAdminAccount, hospitalB))).isEqualTo(409);
+        assertThat(status(post("/assignments"), hms(superAdmin, "ROLE_SUPER_ADMIN"), grantOf(superAdmin, hospitalB)))
+            .isEqualTo(409);
+        assertThat(status(post("/assignments"), hms(adminA, "ROLE_HOSPITAL_ADMIN"), grantOf(adminA, hospitalA)))
+            .isEqualTo(409);
+        for (User administrator : List.of(organisationAdminAccount, superAdmin, adminA)) {
+            assertThat(assignmentRepository.findByUserId(administrator.getId())).hasSize(1);
+        }
+        // The same grant to someone else, by the same callers, is not refused.
+        assertThat(status(post("/assignments"), hms(adminA, "ROLE_HOSPITAL_ADMIN"), grantOf(receptionistA, hospitalA)))
+            .isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("rule 1b: it reads its organisation's hospitals and totals, and nobody else reads them")
+    void organisationAdminReadsItsOwnTotals() throws Exception {
+        String token = organisationAdmin();
+        List<String> own = List.of(hospitalA.getId().toString(), hospitalB.getId().toString());
+
+        MvcResult mine = perform(get("/organization-admin/hospitals"), token, null);
+        assertThat(mine.getResponse().getStatus()).isEqualTo(200);
+        List<String> mineIds = new ArrayList<>();
+        objectMapper.readTree(mine.getResponse().getContentAsString())
+            .forEach(row -> mineIds.add(row.get("id").asText()));
+        assertThat(mineIds).containsExactlyInAnyOrderElementsOf(own);
+
+        MvcResult summary = perform(get("/organization-admin/summary"), token, null);
+        assertThat(summary.getResponse().getStatus()).as(summary.getResponse().getContentAsString()).isEqualTo(200);
+        List<String> totalled = new ArrayList<>();
+        objectMapper.readTree(summary.getResponse().getContentAsString()).get("hospitals")
+            .forEach(row -> totalled.add(row.get("hospitalId").asText()));
+        assertThat(totalled).containsExactlyInAnyOrderElementsOf(own);
+
+        // Review of #1246, item 3: one calendar month, never a free range (nothing to subtract).
+        assertThat(status(get("/organization-admin/summary").param("month", "2026-10"), token, null)).isEqualTo(200);
+        assertThat(status(get("/organization-admin/summary").param("from", "2026-11-03").param("to", "2026-11-04"),
+            token, null)).isEqualTo(400);
+        assertThat(status(get("/organization-admin/summary").param("month", "2026-10").param("to", "2026-10-02"),
+            token, null)).isEqualTo(400);
+        assertThat(status(get("/organization-admin/summary").param("month", "2999-01"), token, null)).isEqualTo(400);
+
+        for (String outsider : new String[] {hms(adminA, "ROLE_HOSPITAL_ADMIN"), hms(nurseA, "ROLE_NURSE"),
+            hms(superAdmin, "ROLE_SUPER_ADMIN"), hms(patientA, "ROLE_PATIENT")}) {
+            assertThat(status(get("/organization-admin/summary"), outsider, null)).isEqualTo(403);
+            assertThat(status(get("/organization-admin/hospitals"), outsider, null)).isEqualTo(403);
+        }
     }
 
     private void deactivateAssignments(User user) {

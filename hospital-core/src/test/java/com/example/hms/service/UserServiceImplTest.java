@@ -2940,6 +2940,161 @@ class UserServiceImplTest {
             verify(staffRepository, never()).findUserIdByLicense(any());
             assertThat(savedUser().getUsername()).isNotBlank();
         }
+
+        @Test
+        @DisplayName("rule 1c: a staff registration that lands on the registrar's own account is refused before anything is written")
+        void staffRegistrationResolvingToTheRegistrarIsRefused() {
+            Role nurse = new Role();
+            nurse.setId(UUID.randomUUID());
+            nurse.setCode("ROLE_NURSE");
+            stubCreation(nurse);
+            UUID hospitalId = UUID.randomUUID();
+            Hospital hospital = new Hospital();
+            hospital.setId(hospitalId);
+            lenient().when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            User registrar = new User();
+            registrar.setId(UUID.randomUUID());
+            when(staffRepository.findUserIdByLicense("LIC-REGISTRAR-1")).thenReturn(Optional.of(registrar.getId()));
+            when(userRepository.findById(registrar.getId())).thenReturn(Optional.of(registrar));
+            when(accountAccess.isSelf(registrar)).thenReturn(true);
+            AdminSignupRequest req = request("ROLE_NURSE", "nurse.rule1c@example.com", "70202023");
+            req.setHospitalId(hospitalId);
+            req.setLicenseNumber("LIC-REGISTRAR-1");
+
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class)
+                .hasMessageContaining("your own account");
+            verify(userRepository, never()).saveAndFlush(any());
+            verify(staffRepository, never()).save(any());
+        }
+
+        // -- Review round 2 of #1246: an EXISTING account reached by its licence number --
+
+        private static final String LICENCE = "LIC-HELD-1";
+        private UUID licenceHospitalId;
+
+        /** A clinician who already exists, found by licence; the mapper would hand back every contact detail. */
+        private User heldByLicence(boolean deleted) {
+            Role doctor = new Role();
+            doctor.setId(UUID.randomUUID());
+            doctor.setCode("ROLE_DOCTOR");
+            stubCreation(doctor);
+            licenceHospitalId = UUID.randomUUID();
+            Hospital hospital = new Hospital();
+            hospital.setId(licenceHospitalId);
+            lenient().when(hospitalRepository.findById(licenceHospitalId)).thenReturn(Optional.of(hospital));
+            User held = new User();
+            held.setId(UUID.randomUUID());
+            held.setUsername("awa.sanou");
+            held.setEmail("awa.sanou@other-hospital.test");
+            held.setPhoneNumber("+22670000091");
+            held.setFirstName("Awa");
+            held.setLastName("Sanou");
+            held.setDeleted(deleted);
+            when(staffRepository.findUserIdByLicense(LICENCE)).thenReturn(Optional.of(held.getId()));
+            when(userRepository.findById(held.getId())).thenReturn(Optional.of(held));
+            lenient().when(userMapper.toResponseDTO(any(), any())).thenAnswer(inv -> UserResponseDTO.builder()
+                .id(held.getId()).firstName("Awa").lastName("Sanou").username("awa.sanou")
+                .email("awa.sanou@other-hospital.test").phoneNumber("+22670000091").licenseNumber(LICENCE)
+                .staffHospitalName("Other Hospital").active(true).build());
+            return held;
+        }
+
+        private AdminSignupRequest registrationWithTheLicence() {
+            AdminSignupRequest req = request("ROLE_DOCTOR", "new.doctor@example.com", "70202031");
+            req.setHospitalId(licenceHospitalId);
+            req.setLicenseNumber(LICENCE);
+            req.setForcePasswordChange(true);
+            return req;
+        }
+
+        @Test
+        @DisplayName("an organisation admin typing another organisation's clinician's licence is told the number is taken, and nothing else")
+        void organisationAdminCannotAttachAnotherOrganisationsClinician() {
+            User held = heldByLicence(false);
+            when(accountAccess.reachesOnlyThroughOrganisation(licenceHospitalId)).thenReturn(true);
+            when(accountAccess.isStaffOfCallersOrganisation(held)).thenReturn(false);
+            AdminSignupRequest req = registrationWithTheLicence();
+
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
+                .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, refusal -> {
+                    assertThat(refusal.getField()).isEqualTo("licenseNumber");
+                    // The number the caller typed, and nothing of the account behind it.
+                    assertThat(String.valueOf(refusal.getMessage()))
+                        .doesNotContain("awa", "Sanou", "other-hospital", "70000091");
+                });
+            assertThat(held.isForcePasswordChange()).isFalse();
+            verify(userRepository, never()).save(held);
+            verify(staffRepository, never()).save(any());
+            verify(assignmentService, never()).assignRole(any());
+        }
+
+        @Test
+        @DisplayName("a soft-deleted account is never restored through a licence number by someone who does not administer it")
+        void aDeletedAccountIsNotRestoredByLicence() {
+            User held = heldByLicence(true);
+            // A hospital admin (not organisation-only), who does not administer this account.
+            when(accountAccess.canAdminister(held)).thenReturn(false);
+            AdminSignupRequest req = registrationWithTheLicence();
+
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+            assertThat(held.isDeleted()).isTrue();
+            assertThat(held.isForcePasswordChange()).isFalse();
+            verify(userRepository, never()).save(held);
+        }
+
+        @Test
+        @DisplayName("an organisation admin attaching its own organisation's clinician: no forced password change, and no contact detail in the answer")
+        void organisationAdminAttachesItsOwnStaffAndIsToldTheNameOnly() {
+            User held = heldByLicence(false);
+            when(accountAccess.reachesOnlyThroughOrganisation(licenceHospitalId)).thenReturn(true);
+            when(accountAccess.isStaffOfCallersOrganisation(held)).thenReturn(true);
+            when(accountAccess.canAdminister(held)).thenReturn(false);
+
+            UserResponseDTO answer = userService.createUserWithRolesAndHospital(registrationWithTheLicence());
+
+            assertThat(held.isForcePasswordChange()).isFalse();
+            assertThat(answer.getId()).isEqualTo(held.getId());
+            assertThat(answer.getFirstName()).isEqualTo("Awa");
+            assertThat(answer.getLastName()).isEqualTo("Sanou");
+            assertThat(answer.getUsername()).isNull();
+            assertThat(answer.getEmail()).isNull();
+            assertThat(answer.getPhoneNumber()).isNull();
+            assertThat(answer.getLicenseNumber()).isNull();
+            assertThat(answer.getStaffHospitalName()).isNull();
+            assertThat(answer.getNewAccount()).isFalse();
+            assertThat(answer.getTemporaryPassword()).isNull();
+        }
+
+        @Test
+        @DisplayName("a hospital admin attaching another hospital's clinician by licence gets the same answer: the name, no contact detail, no forced rotation")
+        void hospitalAdminIsNotToldAnotherHospitalsClinicianContacts() {
+            User held = heldByLicence(false);
+            when(accountAccess.canAdminister(held)).thenReturn(false);
+
+            UserResponseDTO answer = userService.createUserWithRolesAndHospital(registrationWithTheLicence());
+
+            assertThat(held.isForcePasswordChange()).isFalse();
+            assertThat(answer.getFirstName()).isEqualTo("Awa");
+            assertThat(answer.getUsername()).isNull();
+            assertThat(answer.getEmail()).isNull();
+            assertThat(answer.getPhoneNumber()).isNull();
+        }
+
+        @Test
+        @DisplayName("an administrator of the account (its own hospital's clinician, or a super-admin) keeps the full answer and the forced rotation")
+        void theAccountsOwnAdministratorKeepsTheFullAnswer() {
+            User held = heldByLicence(false);
+            when(accountAccess.canAdminister(held)).thenReturn(true);
+
+            UserResponseDTO answer = userService.createUserWithRolesAndHospital(registrationWithTheLicence());
+
+            assertThat(held.isForcePasswordChange()).isTrue();
+            assertThat(answer.getUsername()).isEqualTo("awa.sanou");
+            assertThat(answer.getEmail()).isEqualTo("awa.sanou@other-hospital.test");
+            assertThat(answer.getPhoneNumber()).isEqualTo("+22670000091");
+        }
     }
 
     @Test

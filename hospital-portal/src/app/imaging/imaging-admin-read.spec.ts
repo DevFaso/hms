@@ -7,7 +7,8 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject, throwError } from 'rxjs';
 
-import { ImagingComponent, RELEASED_REPORT_STATUSES } from './imaging';
+import { IMAGING_ADMIN_READER_ROLES, ImagingComponent, RELEASED_REPORT_STATUSES } from './imaging';
+import { IMAGING_PAGE_ROLES } from '../shared/imaging-access';
 import {
   ImagingService,
   ImagingOrderResponse,
@@ -147,7 +148,12 @@ describe('ImagingComponent — administrators read, never act (decision 2026-11-
     }
   });
 
-  for (const role of ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN']) {
+  it('ROLE_ADMIN, the organisation admin, is not an imaging reader (platform admin rules 2026-11-20, rule 1b)', () => {
+    expect(IMAGING_ADMIN_READER_ROLES).not.toContain('ROLE_ADMIN');
+    expect(IMAGING_PAGE_ROLES).not.toContain('ROLE_ADMIN');
+  });
+
+  for (const role of ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']) {
     it(`${role}: reads the requests, with no action and released report statuses only`, () => {
       setUp([role], role === 'ROLE_SUPER_ADMIN');
       expect(fixture.nativeElement.querySelectorAll('tbody tr').length).toBe(2);

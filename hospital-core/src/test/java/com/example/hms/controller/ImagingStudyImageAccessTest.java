@@ -46,7 +46,8 @@ class ImagingStudyImageAccessTest {
         "ROLE_NURSE, true, false",
         "ROLE_MIDWIFE, true, false",
         "ROLE_HOSPITAL_ADMIN, true, false",
-        "ROLE_ADMIN, true, false",
+        // Platform admin rules 2026-11-20, rule 1b: the organisation admin reads no clinical data.
+        "ROLE_ADMIN, false, false",
         "ROLE_PATIENT, true, false",
         "ROLE_RECEPTIONIST, false, false",
         "ROLE_BILLING_SPECIALIST, false, false",

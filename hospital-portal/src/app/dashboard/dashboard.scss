@@ -3427,3 +3427,9 @@ $shadow-md:
     color: #1e293b;
   }
 }
+
+// QA r65 D2761: a link, or a panel, to a module the acting role cannot open
+// is not shown (DashboardComponent.canOpen).
+.link-off {
+  display: none !important;
+}

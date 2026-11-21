@@ -42,7 +42,15 @@ const PATIENT_ROLE_CODES = new Set(['ROLE_PATIENT', 'PATIENT']);
 const PHONE_PATTERN = /^\+?[\d\s.()-]{8,20}$/;
 
 /** QA D1306 (round 28): the fields the create/edit form may refuse, so a fixed one loses its mark. */
-const USER_FORM_IDS = ['firstName', 'lastName', 'username', 'email', 'phoneNumber', 'user-roles'];
+const USER_FORM_IDS = [
+  'firstName',
+  'lastName',
+  'username',
+  'email',
+  'phoneNumber',
+  'user-roles',
+  'hospitalId',
+];
 /** QA r64 (lost phone): the reset's reason field, and its minimum length (MfaResetService). */
 const MFA_RESET_REASON_IDS = ['mfa-reset-reason'];
 const MFA_RESET_REASON_MIN = 5;
@@ -113,6 +121,29 @@ const SPECIALIZATIONS = [
   'OTHER',
 ];
 
+/**
+ * QA r65 D2762: the roles this page lets register a user. `user-list.spec.ts` holds it
+ * against the route (every role the route admits and this list leaves out is offered no
+ * register form).
+ */
+export const USER_REGISTRAR_ROLES: readonly string[] = [
+  'ROLE_SUPER_ADMIN',
+  'ROLE_HOSPITAL_ADMIN',
+  // Platform admin rules 2026-11-20, rule 1a: the organisation admin registers
+  // staff at any hospital of its own organisation.
+  'ROLE_ADMIN',
+];
+
+/**
+ * The roles that administer an ACCOUNT here (edit, delete, two-step reset).
+ * An organisation admin registers staff and works their assignments; it edits
+ * and deletes no account (the server's `UserAccountAccess.canAdminister`).
+ */
+export const USER_ACCOUNT_ADMIN_ROLES: readonly string[] = [
+  'ROLE_SUPER_ADMIN',
+  'ROLE_HOSPITAL_ADMIN',
+];
+
 @Component({
   selector: 'app-user-list',
   standalone: true,
@@ -161,6 +192,25 @@ export class UserListComponent implements OnInit, OnDestroy {
   canSeeDeleted(): boolean {
     return this.roleContext.isSuperAdmin();
   }
+
+  /**
+   * QA r65 D2762: who may register a user here: the roles `POST
+   * /users/admin-register` admits on this page (`SecurityConstants
+   * .ADMIN_REGISTER_AUTHORITIES`: the super-admin, the hospital admin and,
+   * since the platform admin rules of 2026-11-20, the organisation admin; the
+   * others on that list register patients from the patient form). Before that
+   * decision an administrator (`ROLE_ADMIN`) was offered « Inscrire », a form
+   * whose submit always answered 403.
+   */
+  readonly canRegister = this.roleContext.hasAnyActiveRole([...USER_REGISTRAR_ROLES]);
+  /** Who may edit or delete an account, or reset its two-step verification. */
+  readonly canAdministerAccounts = this.roleContext.hasAnyActiveRole([...USER_ACCOUNT_ADMIN_ROLES]);
+  /**
+   * Rule 1a: an organisation admin. It picks the hospital among those of its
+   * own organisation (the server's list, never a typed id) and is offered
+   * staff roles only.
+   */
+  readonly organisationRegistrar = this.canRegister && !this.canAdministerAccounts;
   showFilters = signal(false);
 
   currentPage = signal(0);
@@ -250,8 +300,12 @@ export class UserListComponent implements OnInit, OnDestroy {
         this.loadUsers(0);
       });
     this.loadUsers();
-    this.loadRoles();
-    this.loadHospitals();
+    // QA r65 D2762: the role and hospital pickers belong to the register and
+    // edit forms; a role that has neither does not ask for them.
+    if (this.canRegister) {
+      this.loadRoles();
+      this.loadHospitals();
+    }
   }
 
   loadUsers(page = 0): void {
@@ -306,6 +360,21 @@ export class UserListComponent implements OnInit, OnDestroy {
   }
 
   loadHospitals(): void {
+    // Rule 1a: an organisation admin picks among the hospitals of its own organisation.
+    if (this.organisationRegistrar) {
+      this.hospitalService.organisationHospitals().subscribe({
+        next: (hospitals) => {
+          const open = hospitals
+            .filter(isOpenForAssignment)
+            .map((h) => ({ id: h.id, name: h.name }));
+          this.availableHospitals.set(open);
+          if (open.length === 1) this.createForm.hospitalId = open[0].id;
+        },
+        // Said, not swallowed: with no hospital to choose the form cannot be saved.
+        error: () => this.toast.error(this.translate.instant('ASSIGN_ADMIN.HOSPITALS_LOAD_ERROR')),
+      });
+      return;
+    }
     // ── TENANT ISOLATION: only SUPER_ADMIN loads full hospital list ──
     if (this.roleContext.isSuperAdmin()) {
       this.hospitalService.list().subscribe({
@@ -330,7 +399,7 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   /** True when the hospital field should be a non-editable locked indicator. */
   get hospitalLocked(): boolean {
-    return !this.roleContext.isSuperAdmin();
+    return !this.roleContext.isSuperAdmin() && !this.organisationRegistrar;
   }
 
   /** Display name of the single locked hospital. */
@@ -506,6 +575,10 @@ export class UserListComponent implements OnInit, OnDestroy {
       !isEdit && !f.phoneNumber?.trim() ? 'phoneNumber' : null,
     ].filter((id): id is string => id !== null);
     if (blank.length > 0) return { key: 'USERS.TOAST.REQUIRED_FIELDS', ids: blank };
+    // Rule 1a: every grant names one hospital; an organisation admin grants nothing "everywhere".
+    if (!isEdit && this.organisationRegistrar && !f.hospitalId) {
+      return { key: 'PLATFORM_SETUP.ORG_ADMIN.HOSPITAL_REQUIRED', ids: ['hospitalId'] };
+    }
     if (!isEdit && this.selectedRoles.length === 0) {
       return { key: 'USERS.TOAST.ROLE_REQUIRED', ids: ['user-roles'] };
     }
@@ -584,8 +657,13 @@ export class UserListComponent implements OnInit, OnDestroy {
         // to hide behind this very success toast. Warn the registrar so they
         // know to use "Resend code" once the transport is fixed.
         if (!existing) {
-          for (const key of deliveryWarningKeys(saved.activationDelivery)) {
+          const undelivered = deliveryWarningKeys(saved.activationDelivery);
+          for (const key of undelivered) {
             this.toast.warning(this.translate.instant(key));
+          }
+          // QA r65 D2764: « Remettez le code en main propre » — say where the code is.
+          if (undelivered.length > 0) {
+            this.toast.info(this.translate.instant('PLATFORM_SETUP.ACTIVATION.WHERE_IS_CODE'));
           }
           // QA D522: say so when the activation went out by e-mail, so a failed
           // SMS next to it does not read as "activation by SMS only".
@@ -755,7 +833,9 @@ export class UserListComponent implements OnInit, OnDestroy {
    * delete; saving it answered "user not found".
    */
   isManageable(user: UserSummary): boolean {
-    return user.manageable !== false;
+    // QA r65 D2762: and never for a role with no account write here at all
+    // (an organisation admin registers staff; it edits and deletes no account).
+    return this.canAdministerAccounts && user.manageable !== false;
   }
 
   canImpersonate(user: UserSummary): boolean {

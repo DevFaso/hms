@@ -149,6 +149,10 @@ export class PermissionService {
       'View Prescriptions',
       'Document Nursing Notes',
       'Request Imaging Studies',
+      // Platform admin rules 2026-11-20, rule 5 (surgeons are ordering clinicians):
+      // the order, its status, the images and the signed report. Performing the
+      // exam and signing the report stay with their own roles (action-permissions.ts).
+      'View Imaging Studies',
       'Request Consultations',
       'Create Treatment Plans',
       'Create Referrals',
@@ -172,6 +176,10 @@ export class PermissionService {
       'View Prescriptions',
       'Document Nursing Notes',
       'Request Imaging Studies',
+      // Platform admin rules 2026-11-20, rule 5 (surgeons are ordering clinicians):
+      // the order, its status, the images and the signed report. Performing the
+      // exam and signing the report stay with their own roles (action-permissions.ts).
+      'View Imaging Studies',
       'Request Consultations',
       'Create Treatment Plans',
       'Create Referrals',
@@ -477,18 +485,13 @@ export class PermissionService {
       'View Billing Reports',
       'View Notifications',
     ],
-    // Role audit decision C1: general administrative user — back-office
-    // operations (users, front desk oversight, patient lookup, audit
-    // trail), NOT platform config and NOT clinical surfaces. Mirrors
+    // Platform admin rules 2026-11-20, rule 1b: the organisation's
+    // administrator registers staff, works their assignments and reads its
+    // organisation's totals. No patient record, no audit trail (it names
+    // patients), no imaging, no clinical surface: this supersedes role audit
+    // decision C1 and the 2026-11-14 imaging decision for this role. Mirrors
     // DashboardConfigService's ROLE_ADMIN defaults.
-    ROLE_ADMIN: [
-      'View Dashboard',
-      'View Patient Records',
-      'View Audit Logs',
-      'View Notifications',
-      // User decision 2026-11-14: read-only Imagerie (orders, released reports).
-      'View Imaging Studies',
-    ],
+    ROLE_ADMIN: ['View Dashboard', 'View Notifications'],
   };
 
   /**

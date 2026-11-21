@@ -2312,6 +2312,72 @@ class PatientPortalServiceImplPhase2Test {
         }
 
         @Test
+        @DisplayName("QA r65 D2731: each bookable department says whether it has a published slot still to come")
+        void getDepartments_saysWhichOnesHaveOpenSlots() {
+            UUID hospId = UUID.randomUUID();
+            Hospital hospital = new Hospital();
+            hospital.setId(hospId);
+            Department medicine = new Department();
+            medicine.setId(UUID.randomUUID());
+            medicine.setName("Médecine générale");
+            medicine.setHospital(hospital);
+            Department maternity = new Department();
+            maternity.setId(UUID.randomUUID());
+            maternity.setName("Maternité");
+            maternity.setHospital(hospital);
+
+            stubPatientResolution();
+            when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospId))
+                    .thenReturn(java.util.Optional.of(new com.example.hms.model.PatientHospitalRegistration()));
+            when(departmentRepository.findByHospitalId(hospId)).thenReturn(List.of(medicine, maternity));
+            when(staffRepository.findDepartmentIdsWithActiveProviders(hospId))
+                    .thenReturn(java.util.Set.of(medicine.getId(), maternity.getId()));
+            // Slots are published for maternity only; the question is asked of THIS hospital.
+            when(slotPolicy.departmentsWithOpenSlots(eq(hospId), any()))
+                    .thenReturn(java.util.Set.of(maternity.getId()));
+
+            List<java.util.Map<String, Object>> result = service.getDepartmentsForHospital(auth, hospId);
+
+            assertThat(result).hasSize(2);
+            assertThat(result.get(0)).containsEntry("name", "Médecine générale").containsEntry("hasOpenSlots", false);
+            assertThat(result.get(1)).containsEntry("name", "Maternité").containsEntry("hasOpenSlots", true);
+        }
+
+        @Test
+        @DisplayName("QA r65 D2731: a freshly set-up hospital (nobody attached to a department) offers nothing, and no slot is asked for")
+        void getDepartments_freshHospitalOffersNothing() {
+            UUID hospId = UUID.randomUUID();
+            Department medicine = new Department();
+            medicine.setId(UUID.randomUUID());
+            medicine.setName("Médecine générale");
+
+            stubPatientResolution();
+            when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospId))
+                    .thenReturn(java.util.Optional.of(new com.example.hms.model.PatientHospitalRegistration()));
+            when(departmentRepository.findByHospitalId(hospId)).thenReturn(List.of(medicine));
+            when(staffRepository.findDepartmentIdsWithActiveProviders(hospId)).thenReturn(java.util.Set.of());
+
+            assertThat(service.getDepartmentsForHospital(auth, hospId)).isEmpty();
+            verify(slotPolicy, never()).departmentsWithOpenSlots(any(), any());
+        }
+
+        @Test
+        @DisplayName("QA r65 D2731: the booking hospitals carry their phone number, to call when nothing can be booked online")
+        void getMyHospitals_carriesThePhoneNumber() {
+            stubPatientResolution();
+            Hospital hospital = new Hospital();
+            hospital.setId(UUID.randomUUID());
+            hospital.setName("Clinique Test D");
+            hospital.setPhoneNumber("+22625300000");
+            PatientHospitalRegistration registration = new PatientHospitalRegistration();
+            registration.setHospital(hospital);
+            registration.setActive(true);
+            when(registrationRepository.findByPatientId(patientId)).thenReturn(List.of(registration));
+
+            assertThat(service.getMyHospitals(auth).get(0)).containsEntry("phoneNumber", "+22625300000");
+        }
+
+        @Test
         @DisplayName("getProvidersForDepartment — should map provider fields with fullName and a bare role token")
         void getProviders_mapsProviderFields() {
             UUID hospId = UUID.randomUUID();

@@ -34,7 +34,7 @@ describe('AdminAssignmentsComponent — patient assignments start inactive (QA D
         { provide: AssignmentAdminService, useValue: service },
         { provide: HospitalService, useValue: {} },
         { provide: RoleService, useValue: {} },
-        { provide: RoleContextService, useValue: {} },
+        { provide: RoleContextService, useValue: { hasAnyActiveRole: () => true } },
         {
           provide: ToastService,
           useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
@@ -112,7 +112,9 @@ describe('AdminAssignmentsComponent — the role dropdown lists only grantable r
           provide: RoleContextService,
           useValue: {
             isSuperAdmin: () => superAdmin,
-            hasAnyActiveRole: () => superAdmin,
+            // The caller is a super-admin, or else a hospital admin.
+            hasAnyActiveRole: (roles: string[]) =>
+              superAdmin || roles.includes('ROLE_HOSPITAL_ADMIN'),
             activeHospitalId: 'hosp-a',
           },
         },
@@ -293,7 +295,7 @@ describe('AdminAssignmentsComponent — delete refusal names what still uses the
         { provide: AssignmentAdminService, useValue: service },
         { provide: HospitalService, useValue: {} },
         { provide: RoleService, useValue: {} },
-        { provide: RoleContextService, useValue: {} },
+        { provide: RoleContextService, useValue: { hasAnyActiveRole: () => true } },
         { provide: ToastService, useValue: toast },
         { provide: TranslateService, useValue: { instant: (k: string) => k } },
         { provide: ActivatedRoute, useValue: {} },
@@ -365,7 +367,7 @@ describe('AdminAssignmentsComponent — the signed-in account cannot remove its 
         { provide: AssignmentAdminService, useValue: service },
         { provide: HospitalService, useValue: {} },
         { provide: RoleService, useValue: {} },
-        { provide: RoleContextService, useValue: {} },
+        { provide: RoleContextService, useValue: { hasAnyActiveRole: () => true } },
         { provide: ToastService, useValue: toast },
         { provide: TranslateService, useValue: { instant: (k: string) => k } },
         { provide: ActivatedRoute, useValue: {} },
@@ -470,7 +472,10 @@ describe('AdminAssignmentsComponent — a hospital admin is not offered "Active"
         { provide: AssignmentAdminService, useValue: service },
         { provide: HospitalService, useValue: {} },
         { provide: RoleService, useValue: {} },
-        { provide: RoleContextService, useValue: { isSuperAdmin: () => superAdmin } },
+        {
+          provide: RoleContextService,
+          useValue: { isSuperAdmin: () => superAdmin, hasAnyActiveRole: () => true },
+        },
         {
           provide: ToastService,
           useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),

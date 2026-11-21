@@ -14,6 +14,7 @@ import { ActivatedRoute } from '@angular/router';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { catchError, of } from 'rxjs';
+import { AuditTabsComponent } from '../audit-tabs.component';
 
 import { AuditSearchService } from '../../services/audit-search.service';
 import {
@@ -61,6 +62,7 @@ import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
     DatePipe,
     EnumLabelPipe,
     RoleLabelPipe,
+    AuditTabsComponent,
   ],
   templateUrl: './audit-search.html',
   changeDetection: ChangeDetectionStrategy.Eager,

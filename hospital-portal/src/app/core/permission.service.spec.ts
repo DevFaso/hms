@@ -45,6 +45,33 @@ describe('PermissionService', () => {
     });
   }
 
+  // ── Imagerie (platform admin rules 2026-11-20, rule 5) ──────────
+
+  for (const role of ['ROLE_DOCTOR', 'ROLE_PHYSICIAN', 'ROLE_SURGEON']) {
+    it(`${role} reads Imagerie from the static map, so the sidebar and the dashboard agree before the server answers`, () => {
+      setup([role]);
+      expect(service.hasPermission('Request Imaging Studies')).toBeTrue();
+      expect(service.hasPermission('View Imaging Studies')).toBeTrue();
+    });
+  }
+
+  it("a physician and a surgeon hold the doctor's static permissions, bar the recorded differences", () => {
+    setup(['ROLE_DOCTOR']);
+    const map = (service as unknown as { ROLE_PERMISSIONS: Record<string, string[]> })
+      .ROLE_PERMISSIONS;
+    // A doctor permission these two roles do not hold is a decision: record it here with its reason.
+    const recorded = new Set([
+      // Billing awareness was given to ROLE_DOCTOR alone; not widened here.
+      'View Billing Summary',
+    ]);
+    for (const role of ['ROLE_PHYSICIAN', 'ROLE_SURGEON']) {
+      const missing = map['ROLE_DOCTOR'].filter((p) => !map[role].includes(p) && !recorded.has(p));
+      expect(missing).withContext(`${role} lacks a permission ROLE_DOCTOR holds`).toEqual([]);
+      const extra = map[role].filter((p) => !map['ROLE_DOCTOR'].includes(p));
+      expect(extra).withContext(`${role} holds a permission ROLE_DOCTOR does not`).toEqual([]);
+    }
+  });
+
   // ── Nurse Station RBAC ──────────────────────────────────────────
 
   it('ROLE_NURSE should have Access Nurse Station', () => {

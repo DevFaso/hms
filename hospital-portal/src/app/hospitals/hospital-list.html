@@ -366,6 +366,72 @@
               </div>
             </div>
 
+            <!-- QA r65 D2500 / D2501: the hospital's own code, currency and time zone. -->
+            <div class="form-row">
+              <div class="field">
+                <label for="hCode">{{ 'PLATFORM_SETUP.HOSPITAL.CODE' | translate }}</label>
+                <input
+                  id="hCode"
+                  type="text"
+                  [class.invalid]="codeInvalid()"
+                  [attr.aria-invalid]="codeInvalid() || null"
+                  [(ngModel)]="form.code"
+                  name="code"
+                  maxlength="20"
+                  autocapitalize="characters"
+                  autocomplete="off"
+                  aria-describedby="hCodeHint"
+                  data-testid="hospital-code"
+                  [placeholder]="'PLATFORM_SETUP.HOSPITAL.CODE_PLACEHOLDER' | translate"
+                />
+                <small id="hCodeHint" class="field-hint">
+                  {{
+                    (editing()
+                      ? 'PLATFORM_SETUP.HOSPITAL.CODE_HINT_EDIT'
+                      : 'PLATFORM_SETUP.HOSPITAL.CODE_HINT_NEW'
+                    ) | translate
+                  }}
+                </small>
+              </div>
+              <div class="field">
+                <label for="hCurrency">{{ 'PLATFORM_SETUP.HOSPITAL.CURRENCY' | translate }}</label>
+                <select
+                  id="hCurrency"
+                  [(ngModel)]="form.currencyCode"
+                  name="currencyCode"
+                  aria-describedby="hCurrencyHint"
+                  data-testid="hospital-currency"
+                >
+                  @for (currency of currencies; track currency) {
+                    <option [value]="currency">{{ currencyLabel(currency) }}</option>
+                  }
+                </select>
+                <small id="hCurrencyHint" class="field-hint">
+                  {{ 'PLATFORM_SETUP.HOSPITAL.CURRENCY_HINT' | translate }}
+                </small>
+              </div>
+            </div>
+            <div class="field">
+              <label for="hTimeZone">{{ 'PLATFORM_SETUP.HOSPITAL.TIME_ZONE' | translate }}</label>
+              <select
+                id="hTimeZone"
+                [(ngModel)]="form.timeZone"
+                name="timeZone"
+                aria-describedby="hTimeZoneHint"
+                data-testid="hospital-time-zone"
+              >
+                <option value="">
+                  {{ 'PLATFORM_SETUP.HOSPITAL.TIME_ZONE_INHERIT' | translate }}
+                </option>
+                @for (zone of timeZones(); track zone) {
+                  <option [value]="zone">{{ zoneLabel(zone) }}</option>
+                }
+              </select>
+              <small id="hTimeZoneHint" class="field-hint">
+                {{ 'PLATFORM_SETUP.HOSPITAL.TIME_ZONE_HINT' | translate }}
+              </small>
+            </div>
+
             @if (editing()) {
               <div class="field">
                 <label class="toggle-label">

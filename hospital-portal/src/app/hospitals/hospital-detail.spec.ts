@@ -83,7 +83,12 @@ describe('HospitalDetailComponent (MVP-c2-frontend)', () => {
       'create',
       'update',
       'delete',
+      'onboardingReadiness',
     ]);
+    // The page embeds the onboarding checklist (QA r65 D2731); its own spec covers it.
+    hospitalService.onboardingReadiness.and.returnValue(
+      of({ hospitalId: 'h-1', patientBookable: false, items: [] }),
+    );
     lifecycleService = jasmine.createSpyObj<HospitalLifecycleService>('HospitalLifecycleService', [
       'get',
       'suspend',

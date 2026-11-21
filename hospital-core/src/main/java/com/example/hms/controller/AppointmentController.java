@@ -350,7 +350,7 @@ public class AppointmentController {
         return ResponseEntity.ok(refineForNurseView(appointments));
     }
     @GetMapping("/doctor/{staffId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DOCTOR', 'ADMIN', 'HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DOCTOR', 'HOSPITAL_ADMIN')")
     @Operation(summary = "List Appointments by Doctor", description = "Retrieve all appointments scheduled by a doctor.")
     public ResponseEntity<List<AppointmentResponseDTO>> getAppointmentsByDoctorIdForDoctorRole(
         @PathVariable UUID staffId,

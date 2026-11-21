@@ -100,7 +100,7 @@ public class PatientController {
      * {@link com.example.hms.config.SecurityConstants#CONSULTING_CLINICIANS_AUTHORITIES}.
      */
     private static final String PATIENT_READ_ROLES = "hasAnyAuthority("
-        + "'ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE',"
+        + "'ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE',"
         + "'ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_LAB_DIRECTOR','ROLE_QUALITY_MANAGER',"
         + CONSULTING_CLINICIANS_AUTHORITIES + ","
         // E9 #69: the pharmacist reads the chart (diagnoses, vitals, results) to

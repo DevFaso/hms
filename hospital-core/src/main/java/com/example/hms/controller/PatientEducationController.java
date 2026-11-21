@@ -154,7 +154,7 @@ public class PatientEducationController {
     // ==================== Patient Progress Endpoints ====================
 
     @PostMapping("/progress")
-    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'ADMIN','DOCTOR','NURSE','RECEPTIONIST')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','RECEPTIONIST')")
     @Operation(summary = "Track patient education progress",
                description = "Record patient interaction with an education resource")
     public ResponseEntity<PatientEducationProgressResponseDTO> trackProgress(
@@ -167,7 +167,7 @@ public class PatientEducationController {
     }
 
     @PutMapping("/progress/{progressId}")
-    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'ADMIN','DOCTOR','NURSE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE')")
     @Operation(summary = "Update patient education progress")
     public ResponseEntity<PatientEducationProgressResponseDTO> updateProgress(
             @PathVariable UUID progressId,
@@ -181,7 +181,7 @@ public class PatientEducationController {
     // patients received tokens for the portal — patients read their own progress
     // through GET /me/patient/education instead.
     @GetMapping("/progress/{progressId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
     @Operation(summary = "Get progress record by ID")
     public ResponseEntity<PatientEducationProgressResponseDTO> getProgressById(@PathVariable UUID progressId) {
         PatientEducationProgressResponseDTO response = educationService.getProgressById(progressId);
@@ -189,7 +189,7 @@ public class PatientEducationController {
     }
 
     @GetMapping("/progress/patient/{patientId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
     @Operation(summary = "Get all progress for a patient")
     public ResponseEntity<List<PatientEducationProgressResponseDTO>> getPatientProgress(@PathVariable UUID patientId) {
         List<PatientEducationProgressResponseDTO> response = educationService.getPatientProgress(patientId);
@@ -197,7 +197,7 @@ public class PatientEducationController {
     }
 
     @GetMapping("/progress/patient/{patientId}/in-progress")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
     @Operation(summary = "Get in-progress resources for a patient")
     public ResponseEntity<List<PatientEducationProgressResponseDTO>> getInProgressResources(@PathVariable UUID patientId) {
         List<PatientEducationProgressResponseDTO> response = educationService.getInProgressResources(patientId);
@@ -205,7 +205,7 @@ public class PatientEducationController {
     }
 
     @GetMapping("/progress/patient/{patientId}/completed")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
     @Operation(summary = "Get completed resources for a patient")
     public ResponseEntity<List<PatientEducationProgressResponseDTO>> getCompletedResources(@PathVariable UUID patientId) {
         List<PatientEducationProgressResponseDTO> response = educationService.getCompletedResources(patientId);
@@ -213,7 +213,7 @@ public class PatientEducationController {
     }
 
     @GetMapping("/progress/patient/{patientId}/count")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
     @Operation(summary = "Count completed resources for a patient")
     public ResponseEntity<Long> countCompletedResources(@PathVariable UUID patientId) {
         Long count = educationService.countCompletedResources(patientId);
@@ -231,7 +231,7 @@ public class PatientEducationController {
     // ==================== Visit Documentation Endpoints ====================
 
     @PostMapping("/visit-documentation")
-    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'ADMIN','DOCTOR','NURSE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE')")
     @Operation(summary = "Document education provided during visit",
                description = "Record topics discussed and resources provided during prenatal visit")
     public ResponseEntity<VisitEducationDocumentationResponseDTO> documentVisitEducation(
@@ -245,7 +245,7 @@ public class PatientEducationController {
     }
 
     @PutMapping("/visit-documentation/{documentationId}")
-    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'ADMIN','DOCTOR','NURSE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE')")
     @Operation(summary = "Update visit education documentation")
     public ResponseEntity<VisitEducationDocumentationResponseDTO> updateVisitDocumentation(
             @PathVariable UUID documentationId,
@@ -255,7 +255,7 @@ public class PatientEducationController {
     }
 
     @GetMapping("/visit-documentation/{documentationId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
     @Operation(summary = "Get visit documentation by ID")
     public ResponseEntity<VisitEducationDocumentationResponseDTO> getVisitDocumentationById(@PathVariable UUID documentationId) {
         VisitEducationDocumentationResponseDTO response = educationService.getVisitDocumentationById(documentationId);
@@ -263,7 +263,7 @@ public class PatientEducationController {
     }
 
     @GetMapping("/visit-documentation/patient/{patientId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
     @Operation(summary = "Get all visit documentation for a patient")
     public ResponseEntity<List<VisitEducationDocumentationResponseDTO>> getPatientVisitDocumentation(@PathVariable UUID patientId) {
         List<VisitEducationDocumentationResponseDTO> response = educationService.getPatientVisitDocumentation(patientId);
@@ -271,7 +271,7 @@ public class PatientEducationController {
     }
 
     @GetMapping("/visit-documentation/provider/recent")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
     @Operation(summary = "Get recent documentation by current provider")
     public ResponseEntity<List<VisitEducationDocumentationResponseDTO>> getRecentProviderDocumentation(
             @RequestParam(defaultValue = "30") int daysBack,
@@ -283,7 +283,7 @@ public class PatientEducationController {
     }
 
     @GetMapping("/visit-documentation/patient/{patientId}/has-discussed/{category}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
     @Operation(summary = "Check if category has been discussed with patient")
     public ResponseEntity<Boolean> hasDiscussedCategory(
             @PathVariable UUID patientId,
@@ -295,7 +295,7 @@ public class PatientEducationController {
     // ==================== Patient Question Endpoints ====================
 
     @PostMapping("/questions")
-    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'ADMIN','DOCTOR','NURSE','RECEPTIONIST')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE','RECEPTIONIST')")
     @Operation(summary = "Submit a patient question",
                description = "Patient submits a question about educational content")
     public ResponseEntity<PatientEducationQuestionResponseDTO> submitQuestion(
@@ -308,7 +308,7 @@ public class PatientEducationController {
     }
 
     @PutMapping("/questions/{questionId}/answer")
-    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'ADMIN','DOCTOR','NURSE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE')")
     @Operation(summary = "Answer a patient question")
     public ResponseEntity<PatientEducationQuestionResponseDTO> answerQuestion(
             @PathVariable UUID questionId,
@@ -320,7 +320,7 @@ public class PatientEducationController {
     }
 
     @PutMapping("/questions/{questionId}")
-    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'ADMIN','DOCTOR','NURSE')")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'DOCTOR','NURSE')")
     @Operation(summary = "Update a patient question")
     public ResponseEntity<PatientEducationQuestionResponseDTO> updateQuestion(
             @PathVariable UUID questionId,
@@ -332,7 +332,7 @@ public class PatientEducationController {
     // Staff-only for the same reason as /progress/{progressId} — patients list
     // their own questions via GET /me/patient/education/questions.
     @GetMapping("/questions/{questionId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
     @Operation(summary = "Get question by ID")
     public ResponseEntity<PatientEducationQuestionResponseDTO> getQuestionById(@PathVariable UUID questionId) {
         PatientEducationQuestionResponseDTO response = educationService.getQuestionById(questionId);
@@ -340,7 +340,7 @@ public class PatientEducationController {
     }
 
     @GetMapping("/questions/patient/{patientId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
     @Operation(summary = "Get all questions from a patient")
     public ResponseEntity<List<PatientEducationQuestionResponseDTO>> getPatientQuestions(@PathVariable UUID patientId) {
         List<PatientEducationQuestionResponseDTO> response = educationService.getPatientQuestions(patientId);
@@ -348,7 +348,7 @@ public class PatientEducationController {
     }
 
     @GetMapping("/questions/unanswered")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
     @Operation(summary = "Get all unanswered questions")
     public ResponseEntity<List<PatientEducationQuestionResponseDTO>> getUnansweredQuestions(Authentication auth) {
         UUID hospitalId = resolveHospitalScope();
@@ -357,7 +357,7 @@ public class PatientEducationController {
     }
 
     @GetMapping("/questions/urgent")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
     @Operation(summary = "Get urgent questions")
     public ResponseEntity<List<PatientEducationQuestionResponseDTO>> getUrgentQuestions(Authentication auth) {
         UUID hospitalId = resolveHospitalScope();
@@ -366,7 +366,7 @@ public class PatientEducationController {
     }
 
     @GetMapping("/questions/requiring-appointment")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
     @Operation(summary = "Get questions requiring in-person appointment")
     public ResponseEntity<List<PatientEducationQuestionResponseDTO>> getQuestionsRequiringAppointment(Authentication auth) {
         UUID hospitalId = resolveHospitalScope();

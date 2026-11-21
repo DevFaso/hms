@@ -272,7 +272,7 @@ public class AuditEventLogServiceImpl implements AuditEventLogService, RequiredA
                 .impersonatorUsername(impersonatorUsername)
                 .patientId(resolvePatientKey(requestDTO, resourceId))
                 // An assignment's hospital is stamped by the entity itself.
-                .hospitalId(systemRowHospital(requestDTO, user, assignment))
+                .hospitalId(anchoredHospital(requestDTO, user, assignment))
                 .build();
 
         AuditEventLog saved = auditRepository.save(event);
@@ -312,17 +312,51 @@ public class AuditEventLogServiceImpl implements AuditEventLogService, RequiredA
     }
 
     /**
-     * QA D786: a SYSTEM row (no actor user, so no assignment) that the server
-     * wrote for one hospital's data belongs to that hospital's audit log. Only
-     * for SYSTEM rows: a user's row is anchored on the user's own assignment
-     * there (QA D521/D533), never on a hospital it merely names.
+     * The hospital a row with no assignment is filed at.
+     *
+     * <p>QA D786: a SYSTEM row (no actor user, so no assignment) that the
+     * server wrote for one hospital's data belongs to that hospital's audit
+     * log. A user's row is anchored on the user's own assignment there (QA
+     * D521/D533), never on a hospital it merely names, with one exception.
+     *
+     * <p>Review of #1246 (platform admin rules, rule 1c): an organisation
+     * admin acts at hospitals of its organisation where it holds no
+     * assignment, so its grants, the codes it shows and its confirmations
+     * were filed nowhere a hospital could read them. When the actor holds an
+     * ACTIVE {@code ADMIN} assignment whose organisation owns the hospital the
+     * event names, the row is filed at that hospital, and its own
+     * administrator reads it. The check is the actor's assignments, not the
+     * request: an emitter cannot file a row at a hospital the actor has no
+     * reach at.
      */
-    private static UUID systemRowHospital(AuditEventRequestDTO requestDTO, User user,
-                                          UserRoleHospitalAssignment assignment) {
-        if (user != null || assignment != null) {
+    private UUID anchoredHospital(AuditEventRequestDTO requestDTO, User user,
+                                  UserRoleHospitalAssignment assignment) {
+        if (assignment != null) {
+            // Stamped by the entity from the assignment itself.
             return null;
         }
-        return requestDTO.getHospitalId();
+        UUID named = requestDTO.getHospitalId();
+        if (user == null) {
+            return named;
+        }
+        return named != null && reachesAsOrganisationAdmin(user, named) ? named : null;
+    }
+
+    private boolean reachesAsOrganisationAdmin(User actor, UUID hospitalId) {
+        List<UserRoleHospitalAssignment> held = assignmentRepository.findByUser_IdAndActiveTrue(actor.getId());
+        if (held == null) {
+            return false;
+        }
+        java.util.Set<UUID> own = held.stream()
+            .filter(row -> row.getHospital() != null && "ADMIN".equals(
+                com.example.hms.service.support.UserAccountAccess.roleCode(row.getRole())))
+            .map(row -> row.getHospital().getId())
+            .collect(java.util.stream.Collectors.toSet());
+        if (own.isEmpty()) {
+            return false;
+        }
+        java.util.Set<UUID> organisation = assignmentRepository.findClinicalHospitalIdsInOrganisationsOf(own);
+        return organisation != null && organisation.contains(hospitalId);
     }
 
     /**

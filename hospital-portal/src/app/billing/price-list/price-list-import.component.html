@@ -101,6 +101,21 @@
             </dl>
           }
         </div>
+        <!-- QA r65 D2765: what blocks the import, and what to do about it. -->
+        @if (r.refused > 0 && r.result !== 'ALREADY_IMPORTED') {
+          <div class="import-blocked" role="alert" data-testid="price-list-import-blocked">
+            <p>
+              <strong>{{
+                'PLATFORM_SETUP.IMPORT.BLOCKED' | translate: { refused: r.refused }
+              }}</strong>
+            </p>
+            @if (linkRefused()) {
+              <p data-testid="price-list-import-link-hint">
+                {{ 'PLATFORM_SETUP.IMPORT.LINK_HINT' | translate }}
+              </p>
+            }
+          </div>
+        }
         @if (r.rows.length > 0) {
           @if (r.refused > 0) {
             <label class="checkbox-inline" for="pl-import-only-refused">
@@ -172,7 +187,9 @@
                       @for (refusal of row.refusals; track $index) {
                         <p class="field-error">
                           <strong>{{
-                            refusal.column ?? ('BILLING.PRICE_LIST.IMPORT.WHOLE_ROW' | translate)
+                            refusal.column
+                              ? columnLabel(refusal.column)
+                              : ('BILLING.PRICE_LIST.IMPORT.WHOLE_ROW' | translate)
                           }}</strong>{{ 'COMMON.COLON' | translate }} {{ refusal.message }}
                         </p>
                       }

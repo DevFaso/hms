@@ -22,6 +22,7 @@ import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.support.HospitalScopeUtils;
+import com.example.hms.utility.HospitalLocaleRules;
 import com.example.hms.utility.RoleValidator;
 import org.springframework.context.MessageSource;
 import org.springframework.data.domain.PageRequest;
@@ -179,11 +180,92 @@ public class HospitalServiceImpl implements HospitalService {
             hospital.setOrganization(organization);
         }
 
-        // 🔐 Generate unique code before saving
-        hospital.setCode(generateHospitalCode(dto.getName()));
+        // QA r65 D2500: the super-admin's own code when one is typed (unique,
+        // validated), a generated one otherwise.
+        hospital.setCode(HospitalLocaleRules.isBlank(dto.getCode())
+            ? generateHospitalCode(dto.getName())
+            : requireFreeCode(dto.getCode(), null));
+        applyLocale(dto, hospital);
 
         Hospital saved = hospitalRepository.save(hospital);
         return hospitalMapper.toHospitalDTO(saved);
+    }
+
+    /**
+     * QA r65 D2500: a typed code, validated and not held by another facility
+     * (the comparison ignores case, as the unique lookup does).
+     *
+     * @param ownId the hospital being edited, whose own code is not a clash; null on create
+     */
+    private String requireFreeCode(String raw, UUID ownId) {
+        String code = HospitalLocaleRules.requireCode(raw);
+        boolean taken = hospitalRepository.findByCodeIgnoreCase(code)
+            .filter(other -> !other.getId().equals(ownId))
+            .isPresent();
+        if (taken) {
+            throw new ConflictException(HospitalLocaleRules.FIELD_CODE + ":"
+                + MessageUtil.resolveOrRaw("hospital.code.exists", code));
+        }
+        return code;
+    }
+
+    /**
+     * Rule 3: a hospital that has a price or an invoice has amounts in its
+     * currency. An allocated invoice number counts as an invoice: the number
+     * is committed on its own before the invoice that carries it, so it is
+     * what a concurrent first invoice shows this check.
+     */
+    private boolean hasInvoiceOrPrice(UUID hospitalId) {
+        return hospitalRepository.hasPriceListItem(hospitalId)
+            || hospitalRepository.hasInvoice(hospitalId)
+            || hospitalRepository.hasAllocatedInvoiceNumber(hospitalId);
+    }
+
+    /**
+     * QA r65 D2501: the hospital's currency and time zone, when the request
+     * names them. A blank currency keeps what the row has (XOF on a new one);
+     * a blank time zone on a request that carries the field clears it, which
+     * means "the organisation's default" ({@code HospitalCalendar.zoneOf}).
+     */
+    private void applyLocale(HospitalRequestDTO dto, Hospital hospital) {
+        if (!HospitalLocaleRules.isBlank(dto.getCurrencyCode())) {
+            String currency = HospitalLocaleRules.requireCurrency(dto.getCurrencyCode());
+            // Platform admin rules 2026-11-20, rule 3: one currency per
+            // facility, locked once it has billed. Every stored amount is a
+            // bare whole number in the facility's currency, so a change after
+            // the first invoice or the first price would silently relabel them.
+            if (hospital.getId() != null && !currency.equals(hospital.getCurrencyCode())
+                    && hasInvoiceOrPrice(hospital.getId())) {
+                throw new com.example.hms.exception.FieldBusinessException(
+                    HospitalLocaleRules.FIELD_CURRENCY, "hospital.currency.locked");
+            }
+            hospital.setCurrencyCode(currency);
+        }
+        if (dto.getTimeZone() != null) {
+            hospital.setTimeZone(dto.getTimeZone().isBlank()
+                ? null
+                : HospitalLocaleRules.requireTimeZone(dto.getTimeZone()));
+        }
+    }
+
+    /**
+     * QA r65 D2500: the code on an edit. Unchanged (or not sent) is left
+     * alone. A new one is accepted only while the hospital has issued no
+     * invoice number: the code prefixes every number
+     * ({@code InvoiceNumberAllocator.prefixOf}), and a hospital whose numbers
+     * change prefix mid-year is what an auditor flags.
+     */
+    private void applyCodeChange(HospitalRequestDTO dto, Hospital hospital) {
+        if (HospitalLocaleRules.isBlank(dto.getCode())
+                || dto.getCode().trim().equalsIgnoreCase(hospital.getCode())) {
+            return;
+        }
+        String code = requireFreeCode(dto.getCode(), hospital.getId());
+        if (hospitalRepository.hasAllocatedInvoiceNumber(hospital.getId())) {
+            throw new com.example.hms.exception.FieldBusinessException(
+                HospitalLocaleRules.FIELD_CODE, "hospital.code.locked");
+        }
+        hospital.setCode(code);
     }
 
 
@@ -215,7 +297,15 @@ public class HospitalServiceImpl implements HospitalService {
     @Transactional
     public HospitalResponseDTO updateHospital(UUID id, HospitalRequestDTO dto, Locale locale) {
         validateSuperAdminOrThrow(locale);
-        Hospital hospital = getClinicalHospitalOrThrow(id);
+        // Review of #1246: the row is locked for the edit. The code and the
+        // currency are refused once the hospital has billed or priced; the
+        // first invoice number and the first price take a shared lock on this
+        // same row (InvoiceNumberAllocator, PriceListService), so either they
+        // are committed before the checks below read, or they wait for this
+        // edit and bill under what it saved.
+        Hospital hospital = hospitalRepository.findByIdForUpdate(id)
+            .filter(com.example.hms.security.provider.ClinicalHospitals::isClinical)
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND, id));
         validateAddressFields(dto, hospital.getAddress(), locale);
         // An unchanged number is left as stored: a value saved before the
         // rule existed does not block an edit of another field.
@@ -241,6 +331,8 @@ public class HospitalServiceImpl implements HospitalService {
             throw new ConflictException("name:" + message);
         }
         hospitalMapper.updateHospitalFromDto(dto, hospital);
+        applyCodeChange(dto, hospital);
+        applyLocale(dto, hospital);
         if (dto.getOrganizationId() != null) {
             Organization organization = getOrganizationOrThrow(dto.getOrganizationId());
             hospital.setOrganization(organization);

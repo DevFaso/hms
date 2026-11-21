@@ -169,20 +169,6 @@ describe('SuperAdminComponent', () => {
 
   afterEach(() => TestBed.resetTestingModule());
 
-  it('keeps all administration destinations visible before the network overview', () => {
-    dashboard.getSummary.and.returnValue(of(fakeSummary()));
-    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
-    setup();
-    const dom: HTMLElement = fixture.nativeElement;
-    expect(dom.querySelectorAll('[data-test="links-grid"] a').length).toBe(13);
-    expect(dom.querySelector('details')).toBeNull();
-    expect(
-      dom
-        .querySelector('.admin-directory')!
-        .compareDocumentPosition(dom.querySelector('.network-overview')!) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-  });
   it('ignores an older health request after refresh', () => {
     dashboard.getSummary.and.returnValue(of(fakeSummary()));
     platform.getSummary.and.returnValue(of(fakePlatformSummary()));
@@ -462,37 +448,19 @@ describe('SuperAdminComponent', () => {
     expect(c.auditQueryParams().fromDate).toBe(audits.search.calls.mostRecent().args[0].fromDate);
   });
 
-  it('exposes the quick-link grid covering core super-admin destinations', () => {
+  it('has no quick-link directory: the sidebar is the one menu (QA r65 D2777)', () => {
     dashboard.getSummary.and.returnValue(of(fakeSummary()));
     platform.getSummary.and.returnValue(of(fakePlatformSummary()));
 
-    const c = setup();
-    const routes = c.quickLinks.map((l) => l.route);
+    setup();
+    const dom: HTMLElement = fixture.nativeElement;
 
-    // MVP-{6,7,8} added Audit Search / Emergency / Subscriptions cards on top of MVP-3,
-    // and MVP-9 added the Data Residency card.
-    expect(c.quickLinks.length).toBe(13);
-    expect(routes).toContain('/super-admin/integrations');
-    expect(routes).toContain('/super-admin/audit-search');
-    expect(routes).toContain('/super-admin/emergency');
-    expect(routes).toContain('/super-admin/subscriptions');
-    expect(routes).toContain('/super-admin/data-residency');
-    // MVP-5b: the four super-admin-namespaced cards now use the
-    // /super-admin/* aliases; legacy URLs are reachable via the
-    // path-rewrite guard but the Control Tower advertises the
-    // canonical paths.
-    expect(routes).toEqual(
-      jasmine.arrayContaining([
-        '/organizations',
-        '/users',
-        '/roles',
-        '/super-admin/feature-flags',
-        '/super-admin/analytics',
-        '/super-admin/platform',
-        '/super-admin/audit-logs',
-        '/hospitals',
-      ]),
-    );
+    // The « Liens rapides » grid repeated thirteen sidebar entries (and named
+    // « Plateforme » a second way, « Registre plateforme »).
+    expect(dom.querySelector('[data-test="links-grid"]')).toBeNull();
+    expect(dom.querySelector('.admin-directory')).toBeNull();
+    // What only this page shows is still there.
+    expect(dom.querySelector('.integration-overview')).not.toBeNull();
   });
 
   it('builds 9 clinical stat tiles from the summary', () => {

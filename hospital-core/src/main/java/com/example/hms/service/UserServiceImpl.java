@@ -448,6 +448,22 @@ public class UserServiceImpl implements UserService {
         final boolean newUserCreated = existingByIdentity.isEmpty() && existingByLicense.isEmpty();
         final boolean passwordSupplied = request.getPassword() != null && !request.getPassword().isBlank();
         final boolean reclaimed = existingByIdentity.map(this::isDiscardedRegistration).orElse(false);
+        // Platform admin rules 2026-11-20, rule 1c: a staff registration that
+        // resolves to the registrar's own account (their own licence number)
+        // would grant them the roles they are typing. Refused before anything
+        // is written; another administrator does it.
+        if (!isPatient && existingByLicense.filter(accountAccess::isSelf).isPresent()) {
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve("users.assignment.grantOwn"));
+        }
+        // Review round 2 of #1246: an EXISTING account reached by a licence
+        // number. Whether the caller already administers it is decided now,
+        // before this registration gives it an assignment at the caller's
+        // hospital (which would make the answer yes).
+        final boolean attachedByLicence = !isPatient && existingByLicense.isPresent();
+        final boolean administersAttached = attachedByLicence && accountAccess.canAdminister(existingByLicense.get());
+        if (attachedByLicence) {
+            requireMayAttachByLicence(existingByLicense.get(), staffContextHospitalId, lic, administersAttached);
+        }
         final User user = existingByIdentity.or(() -> existingByLicense)
                 .orElseGet(() -> createNewUser(request, request.getUsername(), email, phone, roles));
         if (reclaimed) {
@@ -469,7 +485,10 @@ public class UserServiceImpl implements UserService {
 
         // A returning patient's credentials are theirs: a registrar linking
         // them at another hospital never rotates them.
-        if (!isPatient) {
+        // ...and neither does a registrar who found a colleague by licence
+        // number without administering that account: forcing a password
+        // rotation on another hospital's clinician is not a registration.
+        if (!isPatient && (!attachedByLicence || administersAttached)) {
             applyForcePasswordChangeIfReturning(user, newUserCreated, request);
         }
 
@@ -505,7 +524,14 @@ public class UserServiceImpl implements UserService {
         }
 
         // ---- 6) Reload + map ----
-        final UserResponseDTO result = reloadAndMap(user.getId());
+        final UserResponseDTO mapped = reloadAndMap(user.getId());
+        // Review round 2 of #1246: an existing account the caller does not
+        // administer was attached by its licence number. The answer confirms
+        // who it is and nothing else: not the username, the e-mail or the
+        // phone of a clinician of another hospital, nor their roles elsewhere.
+        final UserResponseDTO result = attachedByLicence && !administersAttached
+            ? confirmationOnly(mapped)
+            : mapped;
         // The portal's compensation delete after a failed patient step may
         // only discard an account THIS call created (QA D24).
         result.setNewAccount(newUserCreated || reclaimed);
@@ -586,6 +612,49 @@ public class UserServiceImpl implements UserService {
         }
 
         return result;
+    }
+
+    /**
+     * Review round 2 of #1246: who may attach an EXISTING account found by its
+     * licence number. The lookup is platform-wide (a clinician works at more
+     * than one hospital, and the number is theirs everywhere), so the match
+     * alone decides nothing.
+     *
+     * <ul>
+     *   <li>A caller who reaches the hospital through its organisation scope
+     *       alone (the organisation admin) attaches only its organisation's
+     *       own staff. Another organisation's clinician is refused as a
+     *       licence number already in use: the answer any registrar gets for
+     *       a taken number, with nothing about the account behind it.</li>
+     *   <li>A soft-deleted account comes back through a registration only
+     *       when the caller administers it. Restoring an account is the
+     *       super-admin's ({@code PATCH /users/{id}/restore}); a licence
+     *       number typed into the register form is no way round that.</li>
+     * </ul>
+     */
+    private void requireMayAttachByLicence(User held, UUID hospitalId, String licence, boolean administersIt) {
+        boolean outsideTheOrganisation = accountAccess.reachesOnlyThroughOrganisation(hospitalId)
+            && !accountAccess.isStaffOfCallersOrganisation(held);
+        boolean deletedAndNotTheirs = held.isDeleted() && !administersIt;
+        if (outsideTheOrganisation || deletedAndNotTheirs) {
+            throw new com.example.hms.exception.FieldBusinessException(
+                "licenseNumber", "staff.license.duplicate", licence);
+        }
+    }
+
+    /**
+     * What a registrar is told about an existing account it attached without
+     * administering it: its id and name (so the form can say who was linked),
+     * and whether it is active. No username, e-mail, phone, role or staff
+     * detail from elsewhere.
+     */
+    private static UserResponseDTO confirmationOnly(UserResponseDTO full) {
+        UserResponseDTO confirmation = new UserResponseDTO();
+        confirmation.setId(full.getId());
+        confirmation.setFirstName(full.getFirstName());
+        confirmation.setLastName(full.getLastName());
+        confirmation.setActive(full.isActive());
+        return confirmation;
     }
 
     /** Apply force-password-change flags only when re-registering an existing user. */

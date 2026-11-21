@@ -171,6 +171,14 @@ public interface UserRoleHospitalAssignmentService {
     UserRoleHospitalAssignmentResponseDTO confirmAssignment(UUID assignmentId, String confirmationCode);
 
     /**
+     * QA r65 D2764: the pending assignment's one-time activation code, for the
+     * registrar to hand over in person when the SMS and the e-mail went
+     * nowhere. Only the registrar of a row the caller may change, only while
+     * the row is unverified and the code unexpired; audited without the code.
+     */
+    com.example.hms.payload.dto.AssignmentActivationCodeDTO revealActivationCode(UUID assignmentId);
+
+    /**
      * Fetch a public view of an assignment by its human-facing assignment code.
      */
     UserRoleAssignmentPublicViewDTO getAssignmentPublicView(String assignmentCode);

@@ -226,7 +226,6 @@ class StoredTextProseGuardTest {
         "service/ClinicalDashboardServiceImpl.java::Pending Results", 1, PRE_EXISTING,
         "service/ClinicalDashboardServiceImpl.java::Active Patients", 1, PRE_EXISTING,
         "service/ClinicalDashboardServiceImpl.java::Refill Requests", 1, PRE_EXISTING,
-        "service/DepartmentServiceImpl.java::Auto-provisioned hospital admin assignment for department creation", 1, PRE_EXISTING,
         "service/SecurityPolicyGovernanceServiceImpl.java::Security baseline", 1, PRE_EXISTING,
         "service/impl/PrescriptionSmsDispatchServiceImpl.java::Superseded: re-dispatched by SMS to ", 1, PRE_EXISTING,
         "service/impl/PrescriptionSmsDispatchServiceImpl.java::Not delivered: the SMS to the pharmacy failed", 1, PRE_EXISTING,
