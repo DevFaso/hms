@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { PageHeaderComponent } from '../shared/page-header/page-header.component';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   NotificationService,
@@ -26,19 +26,15 @@ interface PrefRow {
 @Component({
   selector: 'app-notification-settings',
   standalone: true,
-  imports: [SubmitGuardDirective, FormsModule, RouterLink, TranslateModule],
+  imports: [SubmitGuardDirective, FormsModule, TranslateModule, PageHeaderComponent],
   template: `
     <div class="settings-page">
-      <div class="settings-header">
-        <h1>
-          <span class="material-symbols-outlined">tune</span>
-          {{ 'NOTIFICATIONS.SETTINGS_TITLE' | translate }}
-        </h1>
-        <a routerLink="/notifications" class="back-link">
-          <span class="material-symbols-outlined">arrow_back</span>
-          {{ 'NOTIFICATIONS.SETTINGS_BACK' | translate }}
-        </a>
-      </div>
+      <app-page-header
+        [title]="'NOTIFICATIONS.SETTINGS_TITLE' | translate"
+        icon="tune"
+        backLink="/notifications"
+        [backLabel]="'NOTIFICATIONS.SETTINGS_BACK' | translate"
+      />
 
       @if (loading()) {
         <div class="settings-loading">
@@ -110,28 +106,8 @@ interface PrefRow {
         margin: 0 auto;
         padding: 2rem 1rem;
       }
-      .settings-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 1.5rem;
-      }
-      .settings-header h1 {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-size: 1.5rem;
-      }
-      .back-link {
-        display: flex;
-        align-items: center;
-        gap: 0.25rem;
-        color: var(--primary, #1976d2);
-        text-decoration: none;
-        font-size: 0.9rem;
-      }
       .settings-desc {
-        color: #666;
+        color: var(--text-secondary);
         margin-bottom: 1.5rem;
       }
       .settings-loading {
@@ -145,7 +121,7 @@ interface PrefRow {
         width: 24px;
         height: 24px;
         border: 3px solid #e0e0e0;
-        border-top-color: #1976d2;
+        border-top-color: var(--primary);
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
       }
@@ -230,7 +206,7 @@ interface PrefRow {
         transition: 0.3s;
       }
       .toggle input:checked + .slider {
-        background-color: #1976d2;
+        background-color: var(--primary);
       }
       .toggle input:checked + .slider::before {
         transform: translateX(18px);
@@ -239,19 +215,6 @@ interface PrefRow {
         margin-top: 1.5rem;
         display: flex;
         justify-content: flex-end;
-      }
-      .btn-primary {
-        background: #1976d2;
-        color: #fff;
-        border: none;
-        padding: 0.6rem 1.5rem;
-        border-radius: 6px;
-        font-weight: 600;
-        cursor: pointer;
-      }
-      .btn-primary:disabled {
-        opacity: 0.5;
-        cursor: default;
       }
     `,
   ],

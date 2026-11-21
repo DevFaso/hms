@@ -1,19 +1,27 @@
 import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { TranslateModule } from '@ngx-translate/core';
 
+/**
+ * QA D2802 / G1 (r65): a mistyped or stale link landed on the dashboard with
+ * no message (the catch-all route sent every unknown address to /login, which
+ * bounced a signed-in user to the dashboard). An unknown address now opens
+ * this page inside the shell, in the reader's language, styled like the 403
+ * page: the address was wrong, and here is the way back.
+ */
 @Component({
   selector: 'app-error-404',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, TranslateModule],
   template: `
     <div class="error-page">
-      <span class="material-symbols-outlined error-icon">search_off</span>
-      <h1>404</h1>
-      <h2>Page Not Found</h2>
-      <p>The page you're looking for doesn't exist or has been moved.</p>
-      <a routerLink="/dashboard" class="back-link">
-        <span class="material-symbols-outlined">arrow_back</span>
-        Back to Dashboard
+      <span class="material-symbols-outlined error-icon" aria-hidden="true">search_off</span>
+      <p class="error-code" aria-hidden="true">404</p>
+      <h1>{{ 'ERROR_404.TITLE' | translate }}</h1>
+      <p class="error-body">{{ 'ERROR_404.BODY' | translate }}</p>
+      <a routerLink="/dashboard" class="btn-primary">
+        <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+        {{ 'ERROR_404.BACK' | translate }}
       </a>
     </div>
   `,
@@ -30,37 +38,24 @@ import { RouterLink } from '@angular/router';
     }
     .error-icon {
       font-size: 64px;
-      color: #d97706;
+      color: var(--warning-text);
       margin-bottom: 1rem;
     }
-    h1 {
+    .error-code {
       font-size: 4rem;
       font-weight: 800;
-      color: #1e293b;
-      margin: 0;
+      line-height: 1;
+      color: var(--text-primary);
+      margin: 0 0 0.5rem;
     }
-    h2 {
-      font-size: 1.25rem;
-      color: #475569;
-      margin: 0.5rem 0;
+    h1 {
+      color: var(--text-primary);
+      margin: 0 0 0.5rem;
     }
-    p {
-      color: #64748b;
+    .error-body {
+      max-width: 34rem;
+      color: var(--text-secondary);
       margin: 0 0 2rem;
-    }
-    .back-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.625rem 1.25rem;
-      background: #0e7c6b;
-      color: #fff;
-      border-radius: 8px;
-      text-decoration: none;
-      font-weight: 500;
-    }
-    .back-link:hover {
-      background: #0a5f52;
     }
   `,
 })

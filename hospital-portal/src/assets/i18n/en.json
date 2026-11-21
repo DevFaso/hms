@@ -15558,5 +15558,10 @@
     "INCREASED_PAIN": "Increased pain",
     "VAGINAL_BLEEDING": "Significant vaginal bleeding",
     "REDUCED_URINE_OUTPUT": "Reduced urine output"
+  },
+  "ERROR_404": {
+    "TITLE": "Page not found",
+    "BODY": "This page does not exist or has moved. Check the address, or go back to your dashboard.",
+    "BACK": "Back to the dashboard"
   }
 }

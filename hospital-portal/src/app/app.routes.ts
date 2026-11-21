@@ -2087,6 +2087,8 @@ export const routes: Routes = [
     ],
   },
 
-  // Catch-all
-  { path: '**', redirectTo: 'login' },
+  // Catch-all. QA D2802 (r65): an unknown address opens the « page introuvable » page
+  // inside the shell (it used to go to /login, which bounced a signed-in user to the
+  // dashboard with no message). Signed out, the shell's AuthGuard still sends it to /login.
+  { path: '**', redirectTo: 'error/404' },
 ];

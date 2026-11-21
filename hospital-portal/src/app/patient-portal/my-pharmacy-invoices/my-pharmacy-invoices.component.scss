@@ -3,8 +3,8 @@
   grid-template-columns: 1fr auto 1fr auto;
   gap: 0.75rem 1.25rem;
   align-items: center;
-  background: var(--primary-bg, #eef5ff);
-  color: var(--primary-fg, #0a2b55);
+  background: var(--primary-soft);
+  color: var(--primary-deep);
   padding: 0.75rem 1.25rem;
   border-radius: 6px;
   margin-bottom: 1rem;
@@ -22,11 +22,9 @@
   }
 }
 
-.loading,
-.empty {
-  text-align: center;
-  padding: 2rem;
-  color: var(--text-muted, #777);
+.page-subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
 }
 
 .payment-list {
@@ -59,7 +57,7 @@
     .notes {
       margin: 0.35rem 0 0;
       font-style: italic;
-      color: var(--text-muted, #777);
+      color: var(--text-muted);
     }
   }
 }

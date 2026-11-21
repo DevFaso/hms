@@ -1,8 +1,11 @@
-<section class="patient-page">
-  <header>
-    <h2>{{ 'MY_PHARMACY_INVOICES.TITLE' | translate }}</h2>
-    <p class="subtitle">{{ 'MY_PHARMACY_INVOICES.SUBTITLE' | translate }}</p>
-  </header>
+<section class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined" aria-hidden="true">receipt</span>
+      {{ 'MY_PHARMACY_INVOICES.TITLE' | translate }}
+    </h1>
+    <p class="page-subtitle">{{ 'MY_PHARMACY_INVOICES.SUBTITLE' | translate }}</p>
+  </div>
 
   @if (!loading()) {
     <div class="total-banner">
@@ -14,11 +17,17 @@
   }
 
   @if (loading()) {
-    <div class="loading">{{ 'COMMON.LOADING' | translate }}</div>
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <p>{{ 'COMMON.LOADING' | translate }}</p>
+    </div>
   }
 
   @if (!loading() && payments().length === 0) {
-    <div class="empty">{{ 'MY_PHARMACY_INVOICES.NO_PAYMENTS' | translate }}</div>
+    <div class="portal-empty">
+      <span class="material-symbols-outlined" aria-hidden="true">receipt</span>
+      <p>{{ 'MY_PHARMACY_INVOICES.NO_PAYMENTS' | translate }}</p>
+    </div>
   }
 
   @if (payments().length > 0) {

@@ -15558,5 +15558,10 @@
     "INCREASED_PAIN": "Douleur accrue",
     "VAGINAL_BLEEDING": "Saignement vaginal important",
     "REDUCED_URINE_OUTPUT": "Diurèse diminuée"
+  },
+  "ERROR_404": {
+    "TITLE": "Page introuvable",
+    "BODY": "Cette page n'existe pas ou a été déplacée. Vérifiez l'adresse, ou revenez à votre tableau de bord.",
+    "BACK": "Retour au tableau de bord"
   }
 }
