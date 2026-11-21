@@ -1380,22 +1380,18 @@ const SORT_ROWS = ['MRN-B-0002', 'MRN-C-0003', 'MRN-A-0001'].map((mrn, n) => ({
 test.describe('card mode: sortable lists keep their sort (#1247)', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
+  // The page opens at phone width: resizing down from a desktop leaves the
+  // shell's phone drawer open, and the page behind it is inert (QA D1153).
   test('/patients sorts by « Trier par » on a phone', async ({ page }, testInfo) => {
     await page.route('**/api/patients', (r) => r.fulfill({ json: SORT_ROWS }));
     await page.route('**/api/patients?**', (r) => r.fulfill({ json: SORT_ROWS }));
+    await page.setViewportSize({ width: 390, height: heightFor(390) });
     await open(page, testInfo.project.use.baseURL as string, 'ROLE_RECEPTIONIST', '/patients');
     const control = page.locator('app-card-sort');
     const firstRow = page.locator('table tbody tr').first();
 
-    for (const width of [1366, 768]) {
-      await page.setViewportSize({ width, height: heightFor(width) });
-      await expect(control).toBeHidden();
-      await expect(page.locator('table thead')).toBeVisible();
-    }
-
-    await page.setViewportSize({ width: 390, height: heightFor(390) });
-    await expect(page.locator('table thead')).toBeHidden();
     await expect(control).toBeVisible();
+    await expect(page.locator('table thead')).toBeHidden();
     // axe on the control itself: labelled select, named toggle, contrast.
     const axe = await new AxeBuilder({ page }).include('app-card-sort').analyze();
     expect(axe.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
@@ -1409,9 +1405,13 @@ test.describe('card mode: sortable lists keep their sort (#1247)', () => {
     await page.keyboard.press('Enter');
     await expect(firstRow).toContainText('MRN-C-0003');
 
-    // The header shows the same sort once the screen is wide again.
-    await page.setViewportSize({ width: 1366, height: heightFor(1366) });
-    await expect(page.locator('th[aria-sort="descending"]')).toHaveCount(1);
+    // Wider, the header sorts, shows the same sort, and the control is gone.
+    for (const width of [768, 1366]) {
+      await page.setViewportSize({ width, height: heightFor(width) });
+      await expect(control).toBeHidden();
+      await expect(page.locator('table thead')).toBeVisible();
+      await expect(page.locator('th[aria-sort="descending"]')).toHaveCount(1);
+    }
     const found = await auditAtWidths(page, '/patients [card sort]');
     await shoot(page, 'card-sort-patients', [1366, 768, 390]);
     expect(found, formatOffenders(found)).toEqual([]);
@@ -1419,17 +1419,18 @@ test.describe('card mode: sortable lists keep their sort (#1247)', () => {
 
   test('/appointments shows the control on a phone only', async ({ page }, testInfo) => {
     await page.route('**/api/appointments**', (r) => r.fulfill({ json: SORT_ROWS }));
+    await page.setViewportSize({ width: 390, height: heightFor(390) });
     await open(page, testInfo.project.use.baseURL as string, 'ROLE_RECEPTIONIST', '/appointments');
     const control = page.locator('app-card-sort');
-    await page.setViewportSize({ width: 768, height: heightFor(768) });
-    await expect(control).toBeHidden();
-    await page.setViewportSize({ width: 390, height: heightFor(390) });
     await expect(control).toBeVisible();
     await expect(control.getByRole('combobox')).toHaveValue('date');
     await control.getByRole('combobox').selectOption('status');
-    await page.setViewportSize({ width: 1366, height: heightFor(1366) });
-    await expect(page.locator('th[aria-sort="descending"], th[aria-sort="ascending"]')).toHaveCount(
-      1,
-    );
+    for (const width of [768, 1366]) {
+      await page.setViewportSize({ width, height: heightFor(width) });
+      await expect(control).toBeHidden();
+      await expect(
+        page.locator('th[aria-sort="descending"], th[aria-sort="ascending"]'),
+      ).toHaveCount(1);
+    }
   });
 });
