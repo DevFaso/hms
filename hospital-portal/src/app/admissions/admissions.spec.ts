@@ -707,27 +707,21 @@ describe('AdmissionsComponent', () => {
       expect(goesHome({ takeHome: true, status: 'CANCELLED' })).toBeFalse();
     });
 
-    it('QA D2553: the follow-up date and purpose are sent as the discharge follow-up appointment', () => {
+    it('QA D2553: the follow-up date and purpose are sent for the stay summary', () => {
       component.confirmDischarge(adm({ encounterId: 'e1' }));
       admissionService.discharge.and.returnValue(of(adm({ status: 'DISCHARGED' })));
       component.executeDischarge();
-      expect(
-        admissionService.discharge.calls.mostRecent().args[1]['followUpAppointments'],
-      ).toBeUndefined();
+      let body = admissionService.discharge.calls.mostRecent().args[1];
+      expect(body['followUpDate']).toBeUndefined();
+      expect(body['followUpPurpose']).toBeUndefined();
 
       component.confirmDischarge(adm({ encounterId: 'e1' }));
       component.dischargeForm.followUpDate = '2026-11-26';
       component.dischargeForm.followUpPurpose = ' Contrôle glycémie ';
       component.executeDischarge();
-      expect(admissionService.discharge.calls.mostRecent().args[1]['followUpAppointments']).toEqual(
-        [
-          {
-            appointmentType: 'DISCHARGE_FOLLOW_UP',
-            appointmentDate: '2026-11-26',
-            purpose: 'Contrôle glycémie',
-          },
-        ],
-      );
+      body = admissionService.discharge.calls.mostRecent().args[1];
+      expect(body['followUpDate']).toBe('2026-11-26');
+      expect(body['followUpPurpose']).toBe('Contrôle glycémie');
     });
 
     it('QA D1596: without a written summary, the typed diagnosis is sent', () => {

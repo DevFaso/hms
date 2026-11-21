@@ -428,6 +428,7 @@ public class AdmissionServiceImpl implements AdmissionService {
         if (request.getFollowUpAppointments() != null) {
             admission.setFollowUpAppointments(request.getFollowUpAppointments());
         }
+        addDialogFollowUp(admission, request);
 
         admission = admissionRepository.save(admission);
 
@@ -905,5 +906,26 @@ public class AdmissionServiceImpl implements AdmissionService {
 
         orderSet.deactivate(reason, deactivatedBy);
         orderSetRepository.save(orderSet);
+    }
+
+    /** QA D2553: the dialog's follow-up date and purpose, as one of the stay's follow-up appointments. */
+    private static void addDialogFollowUp(Admission admission, AdmissionDischargeRequestDTO request) {
+        String purpose = request.getFollowUpPurpose() == null ? null : request.getFollowUpPurpose().trim();
+        boolean hasPurpose = purpose != null && !purpose.isEmpty();
+        if (request.getFollowUpDate() == null && !hasPurpose) {
+            return;
+        }
+        java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
+        row.put("appointmentType", "DISCHARGE_FOLLOW_UP");
+        if (request.getFollowUpDate() != null) {
+            row.put("appointmentDate", request.getFollowUpDate().toString());
+        }
+        if (hasPurpose) {
+            row.put("purpose", purpose);
+        }
+        java.util.List<java.util.Map<String, Object>> all = admission.getFollowUpAppointments() == null
+            ? new java.util.ArrayList<>() : new java.util.ArrayList<>(admission.getFollowUpAppointments());
+        all.add(row);
+        admission.setFollowUpAppointments(all);
     }
 }

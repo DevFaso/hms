@@ -931,15 +931,15 @@ export class AdmissionsComponent implements OnInit {
     });
   }
 
-  /** QA D2553: the follow-up the dialog took, as the discharge's follow-up appointment. */
-  private dischargeFollowUps(): Record<string, string>[] | undefined {
+  /** QA D2553: the follow-up the dialog took; the server files it as the stay's follow-up appointment. */
+  private dischargeFollowUp(): { followUpDate?: string; followUpPurpose?: string } {
+    if (this.staySummary()?.isFinalized) return {};
     const date = this.dischargeForm.followUpDate.trim();
     const purpose = this.dischargeForm.followUpPurpose.trim();
-    if (this.staySummary()?.isFinalized || (!date && !purpose)) return undefined;
-    const row: Record<string, string> = { appointmentType: 'DISCHARGE_FOLLOW_UP' };
-    if (date) row['appointmentDate'] = date;
-    if (purpose) row['purpose'] = purpose;
-    return [row];
+    return {
+      ...(date ? { followUpDate: date } : {}),
+      ...(purpose ? { followUpPurpose: purpose } : {}),
+    };
   }
 
   executeDischarge(): void {
@@ -958,7 +958,7 @@ export class AdmissionsComponent implements OnInit {
             ? undefined
             : this.dischargeForm.dischargeInstructions,
         dischargingProviderId: this.dischargeForm.dischargingProviderId,
-        followUpAppointments: this.dischargeFollowUps(),
+        ...this.dischargeFollowUp(),
       })
       .subscribe({
         next: () => {

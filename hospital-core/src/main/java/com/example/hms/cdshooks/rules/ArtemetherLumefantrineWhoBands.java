@@ -37,6 +37,8 @@ final class ArtemetherLumefantrineWhoBands {
 
     /** The tablet the WHO bands count. */
     static final String BANDED_STRENGTH = "20/120";
+    private static final BigDecimal ARTEMETHER_MG = new BigDecimal("20");
+    private static final BigDecimal LUMEFANTRINE_MG = new BigDecimal("120");
 
     static final String SOURCE =
         "WHO Guidelines for the treatment of malaria, 3rd ed. 2015, section 4 (artemether + lumefantrine,"
@@ -59,10 +61,22 @@ final class ArtemetherLumefantrineWhoBands {
     }
 
     /**
-     * The strength stated on the item or in the written name ("20/120", "80 mg/480"), normalised as
-     * "a/b"; {@code null} when none is written.
+     * The strength stated on the item or in the written name ("20/120", "80 mg/480"), as "a/b" in the
+     * digits it was written with; {@code null} when none is written.
      */
     static String statedStrength(String medicationName, MedicationCatalogItem item) {
+        Matcher m = strengthMatch(medicationName, item);
+        return m == null ? null : m.group(1) + "/" + m.group(2);
+    }
+
+    /** Whether the WHO bands count this product's tablets: 20/120 mg, or no strength written. */
+    static boolean bandsCountThisProduct(String medicationName, MedicationCatalogItem item) {
+        Matcher m = strengthMatch(medicationName, item);
+        return m == null || (amount(m.group(1)).compareTo(ARTEMETHER_MG) == 0
+            && amount(m.group(2)).compareTo(LUMEFANTRINE_MG) == 0);
+    }
+
+    private static Matcher strengthMatch(String medicationName, MedicationCatalogItem item) {
         String fromItem = item == null ? null : item.getStrength();
         for (String candidate : new String[] {fromItem, medicationName, item == null ? null : item.getNameFr()}) {
             if (candidate == null) {
@@ -70,16 +84,10 @@ final class ArtemetherLumefantrineWhoBands {
             }
             Matcher m = STRENGTH.matcher(candidate);
             if (m.find()) {
-                return number(m.group(1)) + "/" + number(m.group(2));
+                return m;
             }
         }
         return null;
-    }
-
-    /** Whether the WHO bands count this product's tablets: 20/120 mg, or no strength written. */
-    static boolean bandsCountThisProduct(String medicationName, MedicationCatalogItem item) {
-        String strength = statedStrength(medicationName, item);
-        return strength == null || BANDED_STRENGTH.equals(strength);
     }
 
     /**
@@ -121,8 +129,8 @@ final class ArtemetherLumefantrineWhoBands {
             .build();
     }
 
-    private static String number(String written) {
-        return new BigDecimal(written.replace(',', '.')).stripTrailingZeros().toPlainString();
+    private static BigDecimal amount(String written) {
+        return new BigDecimal(written.replace(',', '.'));
     }
 
     private static String folded(String value) {
