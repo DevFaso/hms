@@ -213,9 +213,15 @@ public class ProxyRecordFilter {
 
     /**
      * What hides an order's result from the family, as the clinician's release
-     * screen shows it: the category, and whether a clinician may release it.
+     * screen shows it: the category, whether a clinician may release it, and
+     * (r66 D2903) whether violence on the visit or the test is what forbids it.
      */
-    public record FamilyHiding(SensitivityCategory category, boolean releasable) {
+    public record FamilyHiding(SensitivityCategory category, boolean releasable, boolean violence) {
+
+        /** A hiding that violence is not part of. */
+        public FamilyHiding(SensitivityCategory category, boolean releasable) {
+            this(category, releasable, false);
+        }
     }
 
     /**
@@ -244,7 +250,8 @@ public class ProxyRecordFilter {
             return null;
         }
         SensitivityCategory shown = byTest ? testCategory : visitCategory;
-        return new FamilyHiding(shown, ProxySensitivityPolicy.releasable(visitCategory, testCategory));
+        return new FamilyHiding(shown, ProxySensitivityPolicy.releasable(visitCategory, testCategory),
+            ProxySensitivityPolicy.neverReleased(visitCategory, testCategory));
     }
 
     private boolean releasedToReader(LabOrder order, Patient subject, ReadCache cache) {

@@ -318,13 +318,22 @@ public class MinorResultReleaseServiceImpl implements MinorResultReleaseService 
                 LabTestDefinition test = order.getLabTestDefinition();
                 byOrder.put(order.getId(), new MinorReleaseOverviewDTO.HiddenResult(order.getId(),
                     test == null ? null : test.getName(), hiding.category(), result.getReleasedAt(),
-                    hiding.releasable(), releasesByOrder.getOrDefault(order.getId(), List.of())));
+                    hiding.releasable(), notReleasableReason(hiding),
+                    releasesByOrder.getOrDefault(order.getId(), List.of())));
             }
         }
         return byOrder.values().stream()
             .sorted(Comparator.comparing(MinorReleaseOverviewDTO.HiddenResult::resultedAt,
                 Comparator.nullsLast(Comparator.reverseOrder())))
             .toList();
+    }
+
+    /** r66 D2903: why a hidden result cannot be released; null when it can. */
+    private static String notReleasableReason(ProxyRecordFilter.FamilyHiding hiding) {
+        if (hiding.releasable()) {
+            return null;
+        }
+        return hiding.violence() ? MinorReleaseOverviewDTO.VIOLENCE : MinorReleaseOverviewDTO.NOT_HIV;
     }
 
     private static String holderName(User user) {

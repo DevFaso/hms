@@ -2137,7 +2137,9 @@
       "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Urgency override of a fill’s billing reviewed",
       "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay",
       "DISPENSE_BILLING_DEFERRAL_CLOSED_SETTLED": "Aplazamiento cerrado: la receta salió de la farmacia sin nada pendiente",
-      "PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED": "Aceptación de la solicitud de cobertura de farmacia confirmada por facturación o contabilidad"
+      "PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED": "Aceptación de la solicitud de cobertura de farmacia confirmada por facturación o contabilidad",
+      "ADOLESCENT_AGE_SET_ZERO": "Edad de confidencialidad de los adolescentes fijada en 0 años",
+      "ADOLESCENT_AGE_SET_ONE": "Edad de confidencialidad de los adolescentes fijada en 1 año"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -15510,7 +15512,8 @@
       "RELEASE_FAILED": "No se pudo comunicar el resultado.",
       "REASON_TOO_SHORT": "El motivo debe tener al menos {{min}} caracteres.",
       "ATTEST_REQUIRED": "Confirme que ha verificado el vínculo de esta persona con el paciente.",
-      "NOT_RELEASABLE": "No puede comunicarse a la familia (solo un resultado de VIH puede)."
+      "NOT_RELEASABLE": "No puede comunicarse a la familia (solo un resultado de VIH puede).",
+      "NOT_RELEASABLE_VIOLENCE": "No puede comunicarse a la familia: un resultado vinculado a violencias nunca se comunica."
     },
     "AGE": {
       "TITLE": "Confidencialidad de los adolescentes",

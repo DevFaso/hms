@@ -95,7 +95,11 @@ public class PharmacyServiceImpl implements PharmacyService {
 
     @Override
     public void deactivate(UUID id, UUID hospitalId) {
-        Pharmacy pharmacy = pharmacyRepository.findByIdAndHospital_Id(id, hospitalId)
+        // r66 D2901 (class): a null scope is the verified super-admin's global view (the controller refuses
+        // it for everyone else), where the pharmacy is found by its id as the list lists it.
+        Pharmacy pharmacy = (hospitalId == null
+                ? pharmacyRepository.findById(id)
+                : pharmacyRepository.findByIdAndHospital_Id(id, hospitalId))
                 .orElseThrow(() -> new ResourceNotFoundException(PHARMACY_NOT_FOUND));
         pharmacy.setActive(false);
         pharmacyRepository.save(pharmacy);

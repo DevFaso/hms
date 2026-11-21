@@ -2137,7 +2137,9 @@
       "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Dérogation d’urgence revue",
       "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Délivrance portée au compte du séjour",
       "DISPENSE_BILLING_DEFERRAL_CLOSED_SETTLED": "Report « à facturer » clos : l’ordonnance est sortie de la pharmacie sans rien devoir",
-      "PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED": "Acceptation de la demande de prise en charge pharmacie confirmée par la facturation ou la comptabilité"
+      "PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED": "Acceptation de la demande de prise en charge pharmacie confirmée par la facturation ou la comptabilité",
+      "ADOLESCENT_AGE_SET_ZERO": "Âge de confidentialité des adolescents fixé à 0 an",
+      "ADOLESCENT_AGE_SET_ONE": "Âge de confidentialité des adolescents fixé à 1 an"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -15510,7 +15512,8 @@
       "RELEASE_FAILED": "Impossible de communiquer le résultat.",
       "REASON_TOO_SHORT": "Le motif doit compter au moins {{min}} caractères.",
       "ATTEST_REQUIRED": "Confirmez que vous avez vérifié le lien de parenté de cette personne.",
-      "NOT_RELEASABLE": "Non communicable à la famille (seul un résultat VIH peut l’être)."
+      "NOT_RELEASABLE": "Non communicable à la famille (seul un résultat VIH peut l’être).",
+      "NOT_RELEASABLE_VIOLENCE": "Non communicable à la famille : un résultat lié à des violences ne l’est jamais."
     },
     "AGE": {
       "TITLE": "Confidentialité des adolescents",

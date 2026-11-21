@@ -1184,3 +1184,12 @@ Rounds 27, 28 and 29 each found 20–30 new siblings of the required-field class
 | Gate | Catches | Run |
 |---|---|---|
 | change detection (`scripts/check-change-detection.mjs`) | A component with no explicit `changeDetection`. Angular 22 defaults to OnPush, so plain fields set in an HTTP callback or timer never render (QA D2030: the national IU reveal wrote its audit row but showed nothing, button stuck disabled). Declare `Eager` for plain mutable fields, `OnPush` only for signal-driven components. No baseline: it must stay empty | `npm run guards` |
+
+## Guards added or widened by round 66 (fix/r66-catalogue-vitals-dialog)
+
+| Guard | Class it fails on | Allowlist |
+|---|---|---|
+| `architecture/WriteHospitalContextGuardTest` (new) | D2901: a POST, PUT, PATCH or DELETE handler of any controller that REQUIRES a `hospitalId` request parameter. The portal names no hospital on a write (the acting hospital is the request's scope), so such a handler answers 400: the medication catalogue's and the pharmacy registry's delete did, and the catalogue's PUT looked the row up at the body's absent hospital (404 on every save for seven months). Declare it `required = false` and resolve the acting hospital on the server. | The four DHIS2 admin handlers, each with the portal call that sends the parameter |
+| `service/LabDefinitionSensitivityChangePersistenceTest` (new) | D2902: a lab-definition entry point that audits after the commit without a transaction: `repository.save` commits alone and the audit reads a lazy proxy out of session (500, saved, no audit row). Runs against a real persistence context with no transaction around the call, and pins the four entry points that audit as `@Transactional`. | none |
+| `i18n/LabourMaternalAlertProvisionalWordingTest` (new) | D2939: a `labor-maternal-*` alert of the partograph whose text does not end with the provisional-rule sentence, in any of the four bundles (codes read from `LaborServiceImpl`). | none |
+| portal `shared/styles/overflow-class.spec.ts` (widened) and `e2e/helpers/layout-audit.ts` rule `dialog-height` (new) | D2938: a dialog taller than the screen, or an action button of a dialog that nothing scrolls to. Every dialog family of the shared modal layer is capped at the screen and scrolls with its action row stuck to the bottom; the layout e2e measures every dialog it opens, 1366 px at 768 px high and 390 px at 844. | none |

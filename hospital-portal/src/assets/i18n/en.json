@@ -2137,7 +2137,9 @@
       "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Urgency override of a fill’s billing reviewed",
       "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay",
       "DISPENSE_BILLING_DEFERRAL_CLOSED_SETTLED": "Deferred billing closed: the prescription left the pharmacy with nothing due",
-      "PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED": "Pharmacy claim acceptance confirmed by billing or accounting"
+      "PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED": "Pharmacy claim acceptance confirmed by billing or accounting",
+      "ADOLESCENT_AGE_SET_ZERO": "Adolescent confidentiality age set to 0",
+      "ADOLESCENT_AGE_SET_ONE": "Adolescent confidentiality age set to 1"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -15510,7 +15512,8 @@
       "RELEASE_FAILED": "Could not release the result.",
       "REASON_TOO_SHORT": "The reason needs at least {{min}} characters.",
       "ATTEST_REQUIRED": "Confirm that you verified this person’s relationship to the patient.",
-      "NOT_RELEASABLE": "Cannot be released to the family (only an HIV result can)."
+      "NOT_RELEASABLE": "Cannot be released to the family (only an HIV result can).",
+      "NOT_RELEASABLE_VIOLENCE": "Cannot be released to the family: a result linked to violence never is."
     },
     "AGE": {
       "TITLE": "Adolescent confidentiality",
