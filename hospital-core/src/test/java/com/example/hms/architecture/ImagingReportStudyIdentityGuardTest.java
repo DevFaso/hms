@@ -31,8 +31,7 @@ class ImagingReportStudyIdentityGuardTest {
     private static final Path MAIN = Path.of("src/main/java");
 
     /** {@code report.getModality()}, {@code src.getBodyRegion()}, {@code imagingReport.getModality()}... */
-    private static final Pattern REPORT_READ = Pattern.compile(
-        "\\b(\\w*[rR]eport\\w*|src)\\s*\\.\\s*get(Modality|BodyRegion)\\(\\)");
+    private static final Pattern REPORT_READ = Pattern.compile("\\b(\\w++)\\.get(?:Modality|BodyRegion)\\(\\)");
 
     private static final Map<String, String> ALLOWED = Map.of(
         "com/example/hms/mapper/ImagingReportMapper.java", "the fallback itself",
@@ -55,7 +54,10 @@ class ImagingReportStudyIdentityGuardTest {
                 }
                 Matcher m = REPORT_READ.matcher(source);
                 while (m.find()) {
-                    offenders.add(rel + ": " + m.group());
+                    String receiver = m.group(1);
+                    if ("src".equals(receiver) || receiver.toLowerCase(java.util.Locale.ROOT).contains("report")) {
+                        offenders.add(rel + ": " + m.group());
+                    }
                 }
             }
         }

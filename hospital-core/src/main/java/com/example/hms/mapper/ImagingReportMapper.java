@@ -126,7 +126,7 @@ public class ImagingReportMapper {
             .patientMrn(patientMrnOf(report))
             .hospitalId(report.getHospital() != null ? report.getHospital().getId() : null)
             // QA D1058 / D2642: the hospital named beside its id (the printed header reads it).
-            .hospitalName(hospitalOf(report) != null ? hospitalOf(report).getName() : null)
+            .hospitalName(hospitalNameOf(report))
             .organizationId(report.getOrganization() != null ? report.getOrganization().getId() : null)
             .departmentId(report.getDepartment() != null ? report.getDepartment().getId() : null)
             .reportNumber(report.getReportNumber())
@@ -213,6 +213,11 @@ public class ImagingReportMapper {
             return report.getHospital();
         }
         return report.getImagingOrder() != null ? report.getImagingOrder().getHospital() : null;
+    }
+
+    private static String hospitalNameOf(ImagingReport report) {
+        com.example.hms.model.Hospital hospital = hospitalOf(report);
+        return hospital != null ? hospital.getName() : null;
     }
 
     private static String addressOf(com.example.hms.model.Hospital hospital) {
