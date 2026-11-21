@@ -2025,4 +2025,10 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Activation code shown to the registrar$/,
     params: [],
   },
+  // QA D3054 (r68): the prescriber printed the ordonnance (the prescriptions on it, ids only).
+  {
+    key: 'AUDIT.DESC.ORDONNANCE_PRINTED',
+    re: /^Ordonnance printed by its prescriber: prescriptions (\S+)$/,
+    params: ['ids'],
+  },
 ];

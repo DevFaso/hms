@@ -2140,7 +2140,8 @@
       "PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED": "Aceptación de la solicitud de cobertura de farmacia confirmada por facturación o contabilidad",
       "ADOLESCENT_AGE_SET_ZERO": "Edad de confidencialidad de los adolescentes fijada en 0 años",
       "ADOLESCENT_AGE_SET_ONE": "Edad de confidencialidad de los adolescentes fijada en 1 año",
-      "ACTIVATION_CODE_SHOWN": "Código de activación mostrado a la persona que creó la asignación"
+      "ACTIVATION_CODE_SHOWN": "Código de activación mostrado a la persona que creó la asignación",
+      "ORDONNANCE_PRINTED": "Receta impresa por su prescriptor (recetas {{ids}})"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",

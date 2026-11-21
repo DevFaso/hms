@@ -2140,7 +2140,8 @@
       "PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED": "Pharmacy claim acceptance confirmed by billing or accounting",
       "ADOLESCENT_AGE_SET_ZERO": "Adolescent confidentiality age set to 0",
       "ADOLESCENT_AGE_SET_ONE": "Adolescent confidentiality age set to 1",
-      "ACTIVATION_CODE_SHOWN": "Activation code shown to the person who created the assignment"
+      "ACTIVATION_CODE_SHOWN": "Activation code shown to the person who created the assignment",
+      "ORDONNANCE_PRINTED": "Ordonnance printed by its prescriber (prescriptions {{ids}})"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
