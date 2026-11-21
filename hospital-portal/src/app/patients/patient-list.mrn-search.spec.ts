@@ -22,6 +22,8 @@ describe('PatientListComponent: an MRN search (QA D1218)', () => {
     const bare = Object.create(PatientListComponent.prototype) as PatientListComponent;
     // The hospital filter is a getter/setter over this private signal since the directory redesign.
     (bare as unknown as Record<string, unknown>)['selectedHospital'] = signal('');
+    // QA D2521: no IU match (that search is its own spec).
+    (bare as unknown as Record<string, unknown>)['iuMatchIds'] = signal(new Set<string>());
     const page = Object.assign(bare, {
       patients: signal(rows),
       currentPage: signal(0),

@@ -18,6 +18,7 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { isFrontDeskOnly } from './patient-chart/chart-access';
+import { NATIONAL_IU_SEARCH_ROLES, normalizedNationalUniqueId } from './national-unique-id';
 import { TranslateModule } from '@ngx-translate/core';
 
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
@@ -80,6 +81,12 @@ export class PatientListComponent implements OnInit, OnDestroy {
   showFilters = signal(true);
   contactFilter = '';
   readonly loadError = signal(false);
+  /**
+   * QA D2521 (r65): the patients whose IU is the typed term (12 digits). The list holds the
+   * masked IU only, so the exact IU search is asked and its patients are kept by the filter.
+   */
+  private readonly iuMatchIds = signal<ReadonlySet<string>>(new Set<string>());
+  private iuRequest = 0;
   private listRequest = 0;
   private listSubscription?: Subscription;
 
@@ -204,6 +211,7 @@ export class PatientListComponent implements OnInit, OnDestroy {
     // Debounce the search input
     this.searchInput$.pipe(debounceTime(300), takeUntil(this.destroy$)).subscribe(() => {
       this.currentPage.set(0);
+      this.lookUpNationalUniqueId();
       this.applyFilter();
     });
 
@@ -219,6 +227,31 @@ export class PatientListComponent implements OnInit, OnDestroy {
   onSearchChange(value: string): void {
     this.searchTerm = value;
     this.searchInput$.next(value);
+  }
+
+  /** QA D2521: asks the exact IU search when the term is an IU and the role may search by IU. */
+  private lookUpNationalUniqueId(): void {
+    const request = ++this.iuRequest;
+    const iu = normalizedNationalUniqueId(this.searchTerm.trim());
+    if (!iu || !this.roleContext.hasAnyActiveRoleExactly([...NATIONAL_IU_SEARCH_ROLES])) {
+      if (this.iuMatchIds().size > 0) this.iuMatchIds.set(new Set<string>());
+      return;
+    }
+    this.iuMatchIds.set(new Set<string>());
+    this.patientService
+      .searchNationalUniqueId(iu)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (rows) => {
+          if (request !== this.iuRequest) return;
+          this.iuMatchIds.set(new Set((rows ?? []).map((r) => r.id)));
+          this.applyFilter();
+        },
+        error: () => {
+          if (request !== this.iuRequest) return;
+          this.iuMatchIds.set(new Set<string>());
+        },
+      });
   }
 
   loadPatients(): void {
@@ -271,7 +304,9 @@ export class PatientListComponent implements OnInit, OnDestroy {
     const term = this.searchTerm.trim();
     if (term) {
       // QA D1274: and the birth date, in any format the desk types it.
-      result = result.filter((p) => patientMatchesTerm(p, term));
+      // QA D2521: or whose IU is the typed term (found by the exact IU search).
+      const byIu = this.iuMatchIds();
+      result = result.filter((p) => patientMatchesTerm(p, term) || byIu.has(p.id));
     }
     if (this.genderFilter) {
       result = result.filter((p) => (p.gender ?? '').toUpperCase() === this.genderFilter);
@@ -309,6 +344,11 @@ export class PatientListComponent implements OnInit, OnDestroy {
     });
     // QA D1218: the patient whose MRN is exactly what was typed comes first.
     if (term) result = exactIdentifierFirst(result, term, (p) => p.mrn);
+    // QA D2521: the patient whose IU was typed comes first of all.
+    if (term && this.iuMatchIds().size > 0) {
+      const byIu = this.iuMatchIds();
+      result = [...result.filter((p) => byIu.has(p.id)), ...result.filter((p) => !byIu.has(p.id))];
+    }
 
     this.filtered.set(result);
     this.currentPage.set(Math.max(0, Math.min(this.currentPage(), this.totalPages - 1)));
