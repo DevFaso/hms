@@ -102,6 +102,19 @@ updates:
         patterns:
           - "org.springframework*"
           - "io.spring*"
+      # iText modules (kernel, layout, barcodes, io...) are released in lockstep
+      # and must share one version. Ungrouped, #1253 bumped kernel alone to 9.x
+      # while layout and barcodes stayed on 8.x: every PDF export failed at
+      # runtime (LabTestDefinitionServiceImplTest.exportPdf_*). One PR per family.
+      itext:
+        patterns:
+          - "com.itextpdf*"
+    ignore:
+      # A major iText upgrade changes the PDF API and the rendering of every
+      # invoice, prescription and report the clinics print: it is planned work
+      # (one PR, visual check of the printed documents), not a bot bump.
+      - dependency-name: "com.itextpdf*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
