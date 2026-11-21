@@ -52,8 +52,10 @@ public class MedicationCatalogController {
     @Operation(summary = "Get a medication catalog item by ID")
     public ResponseEntity<MedicationCatalogItemResponseDTO> getById(
             @PathVariable UUID id,
-            @RequestParam UUID hospitalId) {
-        return ResponseEntity.ok(catalogService.getById(id, hospitalId));
+            @RequestParam(required = false) UUID hospitalId,
+            Authentication auth) {
+        // r66 D2901: the hospital is the caller's acting scope, as on list and search (the portal sends none).
+        return ResponseEntity.ok(catalogService.getById(id, resolveCatalogScope(auth, hospitalId)));
     }
 
     @GetMapping
@@ -146,7 +148,9 @@ public class MedicationCatalogController {
     @Operation(summary = "Deactivate a medication catalog item")
     public ResponseEntity<Void> deactivate(
             @PathVariable UUID id,
-            @RequestParam UUID hospitalId) {
+            @RequestParam(required = false) UUID hospitalId) {
+        // r66 D2901: the portal sends no hospitalId (every deactivation answered 400); the service acts at
+        // the caller's hospital. One that is sent is narrowed by HospitalIdNarrowingInterceptor first.
         catalogService.deactivate(id, hospitalId);
         return ResponseEntity.noContent().build();
     }

@@ -71,6 +71,7 @@ class PharmacyRegistryControllerTest {
                 .hospitalId(hospitalId)
                 .build();
 
+        when(authUtils.resolveHospitalScope(any(), eq(hospitalId), eq(false))).thenReturn(hospitalId);
         when(pharmacyService.create(any())).thenReturn(sampleResponse());
 
         mockMvc.perform(post("/pharmacy-registry")
@@ -82,6 +83,7 @@ class PharmacyRegistryControllerTest {
 
     @Test
     void getById_returnsOk() throws Exception {
+        when(authUtils.resolveHospitalScope(any(), eq(hospitalId), eq(false))).thenReturn(hospitalId);
         when(pharmacyService.getById(pharmacyId, hospitalId)).thenReturn(sampleResponse());
 
         mockMvc.perform(get("/pharmacy-registry/{id}", pharmacyId)
@@ -212,6 +214,7 @@ class PharmacyRegistryControllerTest {
 
         PharmacyResponseDTO updated = sampleResponse();
         updated.setName("Pharmacie Centrale Updated");
+        when(authUtils.resolveHospitalScope(any(), eq(hospitalId), eq(false))).thenReturn(hospitalId);
         when(pharmacyService.update(eq(pharmacyId), any())).thenReturn(updated);
 
         mockMvc.perform(put("/pharmacy-registry/{id}", pharmacyId)
@@ -223,10 +226,42 @@ class PharmacyRegistryControllerTest {
 
     @Test
     void deactivate_returnsNoContent() throws Exception {
+        when(authUtils.resolveHospitalScope(any(), eq(hospitalId), eq(false))).thenReturn(hospitalId);
         mockMvc.perform(delete("/pharmacy-registry/{id}", pharmacyId)
                         .param("hospitalId", hospitalId.toString()))
                 .andExpect(status().isNoContent());
 
         verify(pharmacyService).deactivate(pharmacyId, hospitalId);
+    }
+
+    // r66 D2901 (class): the portal's delete names no hospital (it answered 400), and a hospital named in a
+    // write's body is checked against the caller's scope before the service acts at it.
+
+    @Test
+    void deactivate_withoutHospitalId_actsAtTheActingHospital() throws Exception {
+        when(authUtils.resolveHospitalScope(any(), org.mockito.ArgumentMatchers.isNull(), eq(false))).thenReturn(hospitalId);
+
+        mockMvc.perform(delete("/pharmacy-registry/{id}", pharmacyId))
+                .andExpect(status().isNoContent());
+
+        verify(pharmacyService).deactivate(pharmacyId, hospitalId);
+    }
+
+    @Test
+    void update_atAHospitalTheCallerMayNotActAt_neverReachesTheService() throws Exception {
+        PharmacyRequestDTO request = PharmacyRequestDTO.builder()
+                .name("Pharmacie d'un autre établissement")
+                .fulfillmentMode(PharmacyFulfillmentMode.COMMUNITY)
+                .hospitalId(hospitalId)
+                .build();
+        when(authUtils.resolveHospitalScope(any(), eq(hospitalId), eq(false)))
+                .thenThrow(new com.example.hms.exception.BusinessException("pharmacy.hospitalContext.required"));
+
+        mockMvc.perform(put("/pharmacy-registry/{id}", pharmacyId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().is4xxClientError());
+
+        verify(pharmacyService, org.mockito.Mockito.never()).update(any(), any());
     }
 }

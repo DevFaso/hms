@@ -69,6 +69,21 @@ export class MedicationCatalogComponent implements OnInit {
   );
 
   /**
+   * r66 D2901: a platform entry (the national list, no hospital of its own) is
+   * shared by every hospital, so only the platform administrator edits or
+   * deactivates it (MedicationCatalogItemServiceImpl.requireWritable). The
+   * hospital admin edits the hospital's own entries; a platform row shows no
+   * button the API would refuse.
+   */
+  private readonly isPlatformAdmin = computed(() =>
+    this.roleContext.hasAnyActiveRoleExactly(['ROLE_SUPER_ADMIN']),
+  );
+
+  canManageItem(item: MedicationCatalogItemResponse): boolean {
+    return this.canManage() && (!!item.hospitalId || this.isPlatformAdmin());
+  }
+
+  /**
    * Round 18 (QA D935): the paediatric dose limits are the pharmacy's, as in a
    * real formulary: the pharmacist (and the hospital admin) sets and approves
    * them in their own dialog, audited server-side.

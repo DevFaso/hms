@@ -329,8 +329,7 @@ class MedicationCatalogItemServiceImplTest {
 
     @Test
     void update_success() {
-        when(catalogRepository.findByIdAndHospital_Id(itemId, hospitalId))
-                .thenReturn(Optional.of(item));
+        actingAtTheItemsHospital();
         when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
         when(mapper.toResponseDTO(item)).thenReturn(responseDTO);
 
@@ -344,7 +343,7 @@ class MedicationCatalogItemServiceImplTest {
 
     @Test
     void update_setsTheSensitiveCategory_andAuditsIt() {
-        when(catalogRepository.findByIdAndHospital_Id(itemId, hospitalId)).thenReturn(Optional.of(item));
+        actingAtTheItemsHospital();
         when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
         requestDTO.setSensitivityCategory(com.example.hms.enums.SensitivityCategory.HIV);
 
@@ -362,7 +361,7 @@ class MedicationCatalogItemServiceImplTest {
     @Test
     void update_leftOut_keepsTheSensitiveCategory_andOnlyTheExplicitClearRemovesIt() {
         item.setSensitivityCategory(com.example.hms.enums.SensitivityCategory.HIV);
-        when(catalogRepository.findByIdAndHospital_Id(itemId, hospitalId)).thenReturn(Optional.of(item));
+        actingAtTheItemsHospital();
         when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
 
         // The full-replace edit carries no category: the tag must survive it.
@@ -378,19 +377,124 @@ class MedicationCatalogItemServiceImplTest {
 
     @Test
     void update_notFound_throws() {
-        when(catalogRepository.findByIdAndHospital_Id(itemId, hospitalId))
-                .thenReturn(Optional.empty());
+        when(catalogRepository.findById(itemId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.update(itemId, requestDTO))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    /** A hospital admin acting at the hospital that owns {@link #item}. */
+    private void actingAtTheItemsHospital() {
+        when(catalogRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+    }
+
+    // ── r66 D2901: the hospital of a catalogue write is the acting hospital, never a request field ──
+
+    @Test
+    void update_withNoHospitalInTheBody_savesAtTheActingHospital_andTheSensitiveTagRoundTrips() {
+        // What the portal's editor sends: no hospitalId. Every save answered 404 since the editor shipped.
+        actingAtTheItemsHospital();
+        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
+        when(mapper.toResponseDTO(item)).thenAnswer(call -> new MedicationCatalogItemMapper().toResponseDTO(item));
+        requestDTO.setHospitalId(null);
+        requestDTO.setSensitivityCategory(com.example.hms.enums.SensitivityCategory.HIV);
+
+        MedicationCatalogItemResponseDTO saved = service.update(itemId, requestDTO);
+
+        assertThat(saved.getSensitivityCategory()).isEqualTo(com.example.hms.enums.SensitivityCategory.HIV);
+        assertThat(saved.getHospitalId()).isEqualTo(hospitalId);
+        verify(catalogRepository).save(item);
+        verify(auditEventLogService).logEvent(any());
+
+        // The next edit carries no category (unchanged in the editor): the tag stays, read back as HIV.
+        requestDTO.setSensitivityCategory(null);
+        assertThat(service.update(itemId, requestDTO).getSensitivityCategory())
+            .isEqualTo(com.example.hms.enums.SensitivityCategory.HIV);
+    }
+
+    @Test
+    void update_anotherHospitalsEntry_isNotFound_evenWhenTheBodyNamesItsHospital() {
+        // The lookup used the body's hospital as given: an admin of B naming A edited A's formulary.
+        when(catalogRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.update(itemId, requestDTO))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(catalogRepository, never()).save(any());
+    }
+
+    @Test
+    void update_aHospitalIdThatIsNotTheEntrys_isNotFound() {
+        when(catalogRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        requestDTO.setHospitalId(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.update(itemId, requestDTO))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(catalogRepository, never()).save(any());
+    }
+
+    @Test
+    void update_aPlatformEntry_isTheSuperAdminsOnly_andAHospitalAdminIsToldWhy() {
+        item.setHospital(null);
+        when(catalogRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+        requestDTO.setHospitalId(null);
+
+        assertThatThrownBy(() -> service.update(itemId, requestDTO))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessage("medication.catalog.platformEntry");
+        verify(catalogRepository, never()).save(any());
+
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
+        service.update(itemId, requestDTO);
+        verify(catalogRepository).save(item);
+    }
+
+    @Test
+    void update_aSuperAdminInGlobalView_editsAHospitalsEntryWithoutNamingTheHospital() {
+        when(catalogRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
+        requestDTO.setHospitalId(null);
+
+        service.update(itemId, requestDTO);
+
+        verify(catalogRepository).save(item);
+        verify(roleValidator, never()).requireActiveHospitalId();
+    }
+
+    @Test
+    void deactivate_withNoHospitalSent_actsAtTheActingHospital() {
+        // The portal sends no hospitalId on DELETE either.
+        actingAtTheItemsHospital();
+        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
+
+        service.deactivate(itemId, null);
+
+        assertThat(item.isActive()).isFalse();
+    }
+
+    @Test
+    void deactivate_anotherHospitalsEntry_isNotFound() {
+        when(catalogRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.deactivate(itemId, null))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThat(item.isActive()).isTrue();
     }
 
     // ── deactivate ──
 
     @Test
     void deactivate_success() {
-        when(catalogRepository.findByIdAndHospital_Id(itemId, hospitalId))
-                .thenReturn(Optional.of(item));
+        actingAtTheItemsHospital();
         when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
 
         service.deactivate(itemId, hospitalId);
@@ -403,8 +507,7 @@ class MedicationCatalogItemServiceImplTest {
     void deactivate_emitsMedicationDeactivatedAuditEvent() {
         // P-04: formulary deactivation must produce a distinct audit event so admin
         // actions are queryable independently of routine catalog edits.
-        when(catalogRepository.findByIdAndHospital_Id(itemId, hospitalId))
-                .thenReturn(Optional.of(item));
+        actingAtTheItemsHospital();
         when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
 
         service.deactivate(itemId, hospitalId);
@@ -419,8 +522,7 @@ class MedicationCatalogItemServiceImplTest {
 
     @Test
     void deactivate_notFound_throws() {
-        when(catalogRepository.findByIdAndHospital_Id(itemId, hospitalId))
-                .thenReturn(Optional.empty());
+        when(catalogRepository.findById(itemId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.deactivate(itemId, hospitalId))
                 .isInstanceOf(ResourceNotFoundException.class);

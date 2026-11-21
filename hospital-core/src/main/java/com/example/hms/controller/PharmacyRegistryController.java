@@ -43,13 +43,17 @@ public class PharmacyRegistryController {
     // P-01: pharmacy registration is a governance act — restrict to admin roles only.
     @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Register a new pharmacy")
-    public ResponseEntity<PharmacyResponseDTO> create(@Valid @RequestBody PharmacyRequestDTO dto) {
+    public ResponseEntity<PharmacyResponseDTO> create(@Valid @RequestBody PharmacyRequestDTO dto,
+                                                      Authentication auth) {
         // Validation chain (covered by tests):
         //   - Malformed JSON / unknown enum / unparseable UUID
         //     → HttpMessageNotReadableException → global handler 400.
         //   - Missing or null hospitalId on a parseable payload
         //     → @NotNull on PharmacyRequestDTO → MethodArgumentNotValidException 400.
         // No further defensive null-check is necessary here.
+        // r66 D2901 (class): a hospital named in the BODY is not narrowed by the interceptor; refuse one the
+        // caller may not act at before the service attaches a pharmacy to it.
+        resolveRegistryScope(auth, dto.getHospitalId());
         return ResponseEntity.status(HttpStatus.CREATED).body(pharmacyService.create(dto));
     }
 
@@ -58,8 +62,10 @@ public class PharmacyRegistryController {
     @Operation(summary = "Get a pharmacy by ID")
     public ResponseEntity<PharmacyResponseDTO> getById(
             @PathVariable UUID id,
-            @RequestParam UUID hospitalId) {
-        return ResponseEntity.ok(pharmacyService.getById(id, hospitalId));
+            @RequestParam(required = false) UUID hospitalId,
+            Authentication auth) {
+        // r66 D2901 (class): the hospital is the caller's acting scope, as on list and search.
+        return ResponseEntity.ok(pharmacyService.getById(id, resolveRegistryScope(auth, hospitalId)));
     }
 
     @GetMapping
@@ -113,7 +119,11 @@ public class PharmacyRegistryController {
     @Operation(summary = "Update a pharmacy")
     public ResponseEntity<PharmacyResponseDTO> update(
             @PathVariable UUID id,
-            @Valid @RequestBody PharmacyRequestDTO dto) {
+            @Valid @RequestBody PharmacyRequestDTO dto,
+            Authentication auth) {
+        // r66 D2901 (class): the service looks the pharmacy up at the body's hospital, so that hospital must
+        // be one the caller may act at.
+        resolveRegistryScope(auth, dto.getHospitalId());
         return ResponseEntity.ok(pharmacyService.update(id, dto));
     }
 
@@ -124,8 +134,11 @@ public class PharmacyRegistryController {
     @Operation(summary = "Deactivate a pharmacy")
     public ResponseEntity<Void> deactivate(
             @PathVariable UUID id,
-            @RequestParam UUID hospitalId) {
-        pharmacyService.deactivate(id, hospitalId);
+            @RequestParam(required = false) UUID hospitalId,
+            Authentication auth) {
+        // r66 D2901 (class): the portal sends no hospitalId, so every deactivation answered 400. The
+        // hospital is the caller's acting scope; null only for a verified super-admin in global view.
+        pharmacyService.deactivate(id, resolveRegistryScope(auth, hospitalId));
         return ResponseEntity.noContent().build();
     }
 }

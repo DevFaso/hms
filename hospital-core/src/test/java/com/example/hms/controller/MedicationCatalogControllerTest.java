@@ -85,6 +85,7 @@ class MedicationCatalogControllerTest {
 
     @Test
     void getById_returnsOk() throws Exception {
+        when(authUtils.resolveHospitalScope(any(), eq(hospitalId), eq(false))).thenReturn(hospitalId);
         when(catalogService.getById(itemId, hospitalId)).thenReturn(sampleResponse());
 
         mockMvc.perform(get("/medication-catalog/{id}", itemId)
@@ -214,5 +215,25 @@ class MedicationCatalogControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(catalogService).deactivate(itemId, hospitalId);
+    }
+
+    // r66 D2901: what the portal sends. Neither call names a hospital; both answered 4xx.
+
+    @Test
+    void deactivate_withoutHospitalId_isNotABadRequest() throws Exception {
+        mockMvc.perform(delete("/medication-catalog/{id}", itemId))
+                .andExpect(status().isNoContent());
+
+        verify(catalogService).deactivate(itemId, null);
+    }
+
+    @Test
+    void getById_withoutHospitalId_readsAtTheActingHospital() throws Exception {
+        when(authUtils.resolveHospitalScope(any(), org.mockito.ArgumentMatchers.isNull(), eq(false))).thenReturn(hospitalId);
+        when(catalogService.getById(itemId, hospitalId)).thenReturn(sampleResponse());
+
+        mockMvc.perform(get("/medication-catalog/{id}", itemId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.atcCode").value("N02BE01"));
     }
 }
