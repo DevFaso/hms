@@ -1,6 +1,7 @@
 import { ChunkRecoveryService } from './core/chunk-recovery.service';
 import { installDecimalCommaSupport } from './shared/decimal-comma';
 import { installFocusRescue } from './shared/a11y/focus-rescue';
+import { installDesignConventions } from './shared/a11y/design-conventions';
 import {
   installServerFieldMarks,
   serverFieldErrorsInterceptor,
@@ -92,5 +93,8 @@ export const appConfig: ApplicationConfig = {
     // QA D1341: remember where the reader acts, so a refused write's fields
     // are marked in that form (shared/forms/server-field-errors.ts).
     provideAppInitializer(() => installServerFieldMarks(inject(DOCUMENT))),
+    // QA r65 (D2798 / D2792 / D2807): card labels for every table, icons hidden
+    // from screen readers, tooltips on icon-only buttons (shared/a11y/design-conventions.ts).
+    provideAppInitializer(() => installDesignConventions(inject(DOCUMENT))),
   ],
 };

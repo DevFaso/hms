@@ -4,19 +4,26 @@
    ───────────────────────────────────────────────────────────────────────────── */
 
 // ── Tokens ─────────────────────────────────────────────────────────────────
+// QA D2793 / D2790 (r65): the values of the global tokens (styles.scss :root),
+// kept as Sass copies because this sheet derives tints from them. The fills
+// ($success, $warning, $danger) are for icons, dots and backgrounds; a status
+// WORD takes the -text variable (4.5:1 or more on white and on the page).
 $primary: #0e7c6b;
 $success: #059669;
 $warning: #d97706;
 $danger: #dc2626;
-$purple: #7c3aed;
-$cyan: #0891b2;
-$slate: #64748b;
+$success-text: #047857; // --success-text
+$warning-text: #b45309; // --warning-text
+$danger-text: #b91c1c; // --danger
+$violet: #6d28d9; // --accent-violet: a category, never an action
+$cyan: #0e7490; // a category hue, 5.4:1 on white (was #0891b2, 3.5:1)
+$slate: #475569; // --text-secondary (was slate-500, 4.34:1 on the page)
 $border: #e2e8f0;
 $bg: #f1f5f9;
 $card: #ffffff;
 $text: #0f172a;
-$text-sub: #64748b;
-$text-muted: #94a3b8;
+$text-sub: #475569; // --text-secondary
+$text-muted: #566579; // --text-muted (was slate-400, 2.56:1 on white)
 $radius: 12px;
 $radius-sm: 8px;
 $shadow:
@@ -402,11 +409,11 @@ $shadow-md:
   &.hero-btn-primary {
     background: $primary;
     color: #fff;
-    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+    box-shadow: 0 2px 8px rgba(14, 124, 107, 0.25);
     &:hover {
       background: var(--primary-dark);
       transform: translateY(-1px);
-      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+      box-shadow: 0 4px 14px rgba(14, 124, 107, 0.35);
     }
   }
 
@@ -455,12 +462,12 @@ $shadow-md:
   gap: 10px;
 
   strong {
-    color: $danger;
+    color: $danger-text;
   }
 }
 
 .critical-pulse {
-  color: $danger;
+  color: $danger-text;
   font-size: 22px;
   animation: pulse-red 1.2s ease-in-out infinite;
 }
@@ -474,7 +481,7 @@ $shadow-md:
 
 .critical-chip {
   background: #fee2e2;
-  color: $danger;
+  color: $danger-text;
   border: 1px solid #fca5a5;
   border-radius: 6px;
   padding: 2px 8px;
@@ -483,7 +490,7 @@ $shadow-md:
 }
 
 .critical-link {
-  color: $danger;
+  color: $danger-text;
   text-decoration: none;
   font-weight: 700;
   font-size: 12px;
@@ -641,11 +648,11 @@ $shadow-md:
   }
 
   &.trend-up {
-    color: $success;
+    color: $success-text;
     background: #d1fae5;
   }
   &.trend-down {
-    color: $danger;
+    color: $danger-text;
     background: #fee2e2;
   }
   &.trend-stable {
@@ -783,7 +790,7 @@ $shadow-md:
 
   &.count-badge-red {
     background: #fee2e2;
-    color: $danger;
+    color: $danger-text;
   }
 }
 
@@ -859,7 +866,7 @@ $shadow-md:
   }
 
   &.sched-row-now {
-    background: linear-gradient(90deg, rgba(37, 99, 235, 0.05) 0%, transparent 100%);
+    background: linear-gradient(90deg, rgba(14, 124, 107, 0.05) 0%, transparent 100%);
     .sched-name {
       color: $primary;
       font-weight: 700;
@@ -951,13 +958,13 @@ $shadow-md:
   }
 
   &.sum-done {
-    color: $success;
+    color: $success-text;
   }
   &.sum-active {
-    color: $warning;
+    color: $warning-text;
   }
   &.sum-pending {
-    color: $purple;
+    color: $violet;
   }
 }
 
@@ -1090,7 +1097,7 @@ $shadow-md:
 
   &.count-hot {
     background: #fee2e2;
-    color: $danger;
+    color: $danger-text;
   }
 }
 
@@ -1204,7 +1211,7 @@ $shadow-md:
   }
 
   &.prep-done {
-    color: $success;
+    color: $success-text;
     border-color: #a7f3d0;
     background: #f0fdf4;
   }
@@ -1326,7 +1333,7 @@ $shadow-md:
   }
   &.status-inprogress {
     background: #fef3c7;
-    color: $warning;
+    color: $warning-text;
     border: 1px solid #fbbf24;
   }
   &.status-requested {
@@ -1456,13 +1463,13 @@ $shadow-md:
 .severity-critical .alert-icon-wrap {
   background: #fee2e2;
   .material-symbols-outlined {
-    color: $danger;
+    color: $danger-text;
   }
 }
 .severity-urgent .alert-icon-wrap {
   background: #fef3c7;
   .material-symbols-outlined {
-    color: $warning;
+    color: $warning-text;
   }
 }
 .severity-warning .alert-icon-wrap {
@@ -1502,11 +1509,11 @@ $shadow-md:
 
   &.sev-critical {
     background: #fee2e2;
-    color: $danger;
+    color: $danger-text;
   }
   &.sev-urgent {
     background: #fef3c7;
-    color: $warning;
+    color: $warning-text;
   }
   &.sev-warning {
     background: #fef9c3;
@@ -1573,7 +1580,7 @@ $shadow-md:
 
   .material-symbols-outlined {
     font-size: 20px;
-    color: $success;
+    color: $success-text;
   }
   &:hover {
     background: #f0fdf4;
@@ -1590,7 +1597,7 @@ $shadow-md:
   align-self: flex-start;
   .material-symbols-outlined {
     font-size: 22px;
-    color: $success;
+    color: $success-text;
   }
 }
 
@@ -1624,7 +1631,7 @@ $shadow-md:
 
   &:hover {
     border-color: var(--qa-color, var(--primary));
-    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.12);
+    box-shadow: 0 4px 16px rgba(14, 124, 107, 0.12);
     transform: translateY(-2px);
   }
 }
@@ -1910,7 +1917,7 @@ $shadow-md:
   }
   &.pill-fail {
     background: #fee2e2;
-    color: $danger;
+    color: $danger-text;
   }
 }
 
@@ -2184,7 +2191,7 @@ $shadow-md:
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #64748b;
+  color: var(--text-secondary);
   font-weight: 600;
   margin-top: 2px;
 }
@@ -2197,7 +2204,7 @@ $shadow-md:
 }
 .metric-tile-label {
   font-size: 11px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -2263,7 +2270,7 @@ $shadow-md:
 }
 .trend-day {
   font-size: 10px;
-  color: #64748b;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   font-weight: 600;
@@ -2287,7 +2294,7 @@ $shadow-md:
 }
 .audit-time {
   font-size: 11px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-weight: 600;
   line-height: 1.2;
 }
@@ -2306,7 +2313,7 @@ $shadow-md:
 }
 .audit-summary {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2594,11 +2601,11 @@ $shadow-md:
   gap: 8px;
   padding: 24px 16px;
   text-align: center;
-  color: #64748b;
+  color: var(--text-secondary);
 
   .empty-icon {
     font-size: 36px;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 
   p {
@@ -2653,7 +2660,7 @@ $shadow-md:
 .appt-month {
   font-size: 10px;
   font-weight: 700;
-  color: #059669;
+  color: var(--success-text);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -2681,12 +2688,12 @@ $shadow-md:
 
 .appt-reason {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .appt-time {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
   display: flex;
   align-items: center;
   gap: 3px;
@@ -2699,7 +2706,7 @@ $shadow-md:
   border-radius: 20px;
   white-space: nowrap;
   background: #f1f5f9;
-  color: #64748b;
+  color: var(--text-secondary);
 
   &[data-status='SCHEDULED'],
   &[data-status='CONFIRMED'] {
@@ -2709,17 +2716,17 @@ $shadow-md:
 
   &[data-status='COMPLETED'] {
     background: #d1fae5;
-    color: #059669;
+    color: var(--success-text);
   }
 
   &[data-status='IN_PROGRESS'] {
     background: #fef3c7;
-    color: #d97706;
+    color: var(--warning-text);
   }
 
   &[data-status='CANCELLED'] {
     background: #fee2e2;
-    color: #dc2626;
+    color: var(--danger);
   }
 }
 
@@ -2761,7 +2768,7 @@ $shadow-md:
 
 .med-dosage {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 // ── Lab Result Rows ──────────────────────────────────────────
@@ -2786,11 +2793,11 @@ $shadow-md:
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  color: #059669;
+  color: var(--success-text);
 
   &.lab-abnormal {
     background: #fee2e2;
-    color: #dc2626;
+    color: var(--danger);
   }
 
   /* Awaiting release: amber, matching the my-lab-results treatment. Without
@@ -2828,13 +2835,13 @@ $shadow-md:
 }
 
 .lab-range {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 11px;
 }
 
 .lab-date {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
@@ -2865,7 +2872,7 @@ $shadow-md:
 
 .bill-date {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .bill-amount-wrap {
@@ -2881,7 +2888,7 @@ $shadow-md:
   color: #1e293b;
 
   &.bill-due {
-    color: #d97706;
+    color: var(--warning-text);
   }
 }
 
@@ -2891,17 +2898,17 @@ $shadow-md:
   padding: 2px 8px;
   border-radius: 12px;
   background: #f1f5f9;
-  color: #64748b;
+  color: var(--text-secondary);
 
   &[data-status='PAID'] {
     background: #d1fae5;
-    color: #059669;
+    color: var(--success-text);
   }
 
   &[data-status='PENDING'],
   &[data-status='OVERDUE'] {
     background: #fef3c7;
-    color: #d97706;
+    color: var(--warning-text);
   }
 }
 
@@ -2945,7 +2952,7 @@ $shadow-md:
 
 .ctm-role {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 // ── Health at a Glance ───────────────────────────────────────
@@ -2983,7 +2990,7 @@ $shadow-md:
 
 .hg-chip-allergy {
   background: #fee2e2;
-  color: #dc2626;
+  color: var(--danger);
 }
 
 // ── MVP 18: Integration status badges ───────────────────────
@@ -3000,7 +3007,7 @@ $shadow-md:
 }
 .integration-inactive {
   background: #f1f5f9;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 .integration-pending {
   background: #fef3c7;
@@ -3093,7 +3100,7 @@ $shadow-md:
 
   .material-symbols-outlined {
     font-size: 28px;
-    color: $success;
+    color: $success-text;
   }
 
   p {

@@ -37,14 +37,14 @@
 // ── Phone-first: optional email + SMS OTP verification ──────────────────────
 .optional-hint {
   font-weight: 400;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   font-size: 0.8rem;
 }
 .field-hint {
   display: block;
   margin-top: 4px;
   font-size: 0.75rem;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
 }
 .otp-verify-row {
   display: flex;
@@ -55,7 +55,7 @@
 }
 .otp-sent-hint {
   font-size: 0.8rem;
-  color: var(--text-secondary, #64748b);
+  color: var(--text-secondary);
   width: 100%;
 }
 .otp-code-input {
@@ -140,7 +140,7 @@
   }
   .match-meta {
     font-size: 0.8rem;
-    color: var(--text-secondary, #64748b);
+    color: var(--text-secondary);
   }
 }
 .match-here-badge {
@@ -178,7 +178,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: var(--primary, #4f46e5);
+  color: var(--primary);
   text-decoration: underline;
   font-size: inherit;
   padding: 0 4px;
@@ -216,12 +216,12 @@
   }
 }
 .warn-icon {
-  color: #d97706;
+  color: var(--warning-text);
   font-size: 26px;
 }
 .dup-modal-desc {
   font-size: 0.9rem;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-bottom: 16px;
 }
 .dup-table {
@@ -238,7 +238,7 @@
   }
   th {
     font-weight: 600;
-    color: #64748b;
+    color: var(--text-secondary);
     background: #f8fafc;
   }
 }
@@ -271,18 +271,6 @@
   justify-content: flex-end;
   gap: 12px;
   margin-top: 8px;
-}
-.btn-danger {
-  background: #dc2626;
-  color: #fff;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.875rem;
-  &:hover {
-    background: #b91c1c;
-  }
 }
 
 .link-error {

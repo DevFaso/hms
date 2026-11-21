@@ -686,7 +686,7 @@
                   [style.background]="getAgingBucketColor(i) + '15'"
                   [style.border-left]="'3px solid ' + getAgingBucketColor(i)"
                 >
-                  <div style="font-size: 11px; color: #64748b; font-weight: 500">
+                  <div style="font-size: 11px; color: var(--text-secondary); font-weight: 500">
                     {{ agingBucketLabelKeys[i] | translate }}
                   </div>
                   <div
@@ -732,7 +732,7 @@
               <span style="font-size: 13px; color: #475569; font-weight: 500">{{
                 'DASHBOARD.COLLECTION_RATE' | translate
               }}</span>
-              <span style="font-size: 16px; font-weight: 700; color: #059669">{{
+              <span style="font-size: 16px; font-weight: 700; color: var(--success-text)">{{
                 paymentCollectionRate() | measure: '%'
               }}</span>
             </div>
@@ -786,7 +786,7 @@
                 display: flex;
                 justify-content: space-between;
                 font-size: 10px;
-                color: #64748b;
+                color: var(--text-secondary);
                 margin-top: 4px;
               "
             >
@@ -824,9 +824,15 @@
                 <span style="flex: 1; font-size: 13px; font-weight: 500; color: #334155">{{
                   formatMethodLabel(pm.method)
                 }}</span>
-                <span style="font-size: 12px; color: #64748b; min-width: 30px; text-align: right">{{
-                  pm.count
-                }}</span>
+                <span
+                  style="
+                    font-size: 12px;
+                    color: var(--text-secondary);
+                    min-width: 30px;
+                    text-align: right;
+                  "
+                  >{{ pm.count }}</span
+                >
                 <span
                   style="
                     font-size: 13px;
@@ -852,7 +858,7 @@
                 <span style="font-size: 13px; font-weight: 600; color: #475569">{{
                   'DASHBOARD.TOTAL_COLLECTED' | translate
                 }}</span>
-                <span style="font-size: 15px; font-weight: 700; color: #059669">{{
+                <span style="font-size: 15px; font-weight: 700; color: var(--success-text)">{{
                   formatInvoiceAmount(paymentMethodTotal())
                 }}</span>
               </div>
@@ -906,14 +912,14 @@
                     <td style="padding: 8px 12px; text-align: center">
                       {{ row.scheduledShifts }}
                     </td>
-                    <td style="padding: 8px 12px; text-align: center; color: #dc2626">
+                    <td style="padding: 8px 12px; text-align: center; color: var(--danger)">
                       {{ row.cancelledShifts }}
                     </td>
                     <td
                       style="
                         padding: 8px 12px;
                         text-align: center;
-                        color: #059669;
+                        color: var(--success-text);
                         font-weight: 600;
                       "
                     >
@@ -937,7 +943,7 @@
                 {{ ' '
                 }}<span
                   class="count-badge"
-                  style="background: #fee2e2; color: #dc2626; margin-left: 4px"
+                  style="background: #fee2e2; color: var(--danger); margin-left: 4px"
                   >{{ overdueConsults() }} {{ 'DASHBOARD.OVERDUE' | translate }}</span
                 >
               }
@@ -967,7 +973,7 @@
                     c.status | enumLabel: 'consultationStatus'
                   }}</span>
                   @if (c.overdue) {
-                    <span style="font-size: 11px; color: #dc2626; font-weight: 600">{{
+                    <span style="font-size: 11px; color: var(--danger); font-weight: 600">{{
                       'DASHBOARD.SLA_OVERDUE' | translate
                     }}</span>
                   }
@@ -988,7 +994,7 @@
                 {{ ' '
                 }}<span
                   class="count-badge"
-                  style="background: #fee2e2; color: #dc2626; margin-left: 4px"
+                  style="background: #fee2e2; color: var(--danger); margin-left: 4px"
                   >{{ expiredLicenseCount() }} {{ 'DASHBOARD.EXPIRED' | translate }}</span
                 >
               }
@@ -1075,7 +1081,10 @@
                   border-bottom: 1px solid #f1f5f9;
                 "
               >
-                <span class="material-symbols-outlined" style="font-size: 20px; color: #64748b">
+                <span
+                  class="material-symbols-outlined"
+                  style="font-size: 20px; color: var(--text-secondary)"
+                >
                   @switch (svc.serviceType) {
                     @case ('EHR') {
                       clinical_notes
@@ -1101,7 +1110,7 @@
                   <div style="font-size: 13px; font-weight: 600; color: #0f172a">
                     {{ svc.provider ?? (svc.serviceType | enumLabel: 'platformServiceType') }}
                   </div>
-                  <div style="font-size: 11px; color: #64748b">
+                  <div style="font-size: 11px; color: var(--text-secondary)">
                     {{ svc.serviceType | enumLabel: 'platformServiceType' }}
                   </div>
                 </div>
@@ -1177,19 +1186,19 @@
                   <tr style="border-bottom: 1px solid #f1f5f9">
                     <td style="padding: 8px 12px">
                       <div>{{ row.wardName }}</div>
-                      <div style="font-size: 11px; color: #64748b">
+                      <div style="font-size: 11px; color: var(--text-secondary)">
                         {{ row.wardType | enumLabel: 'wardType' }}
                       </div>
                     </td>
                     <td style="padding: 8px 12px; text-align: center">{{ row.totalBeds }}</td>
-                    <td style="padding: 8px 12px; text-align: center; color: #dc2626">
+                    <td style="padding: 8px 12px; text-align: center; color: var(--danger)">
                       {{ row.occupiedBeds }}
                     </td>
                     <td
                       style="
                         padding: 8px 12px;
                         text-align: center;
-                        color: #059669;
+                        color: var(--success-text);
                         font-weight: 600;
                       "
                     >
@@ -2239,7 +2248,7 @@
             </div>
           } @else {
             <div class="empty-state">
-              <span class="material-symbols-outlined empty-icon-lg" style="color: #dc2626"
+              <span class="material-symbols-outlined empty-icon-lg" style="color: var(--danger)"
                 >approval</span
               >
               <h3>
@@ -2274,7 +2283,9 @@
           <div class="stat-strip" style="padding: 16px; gap: 12px">
             <div class="stat-card" style="flex: 1; min-width: 0">
               <div class="stat-icon-wrap" style="background: #ede9fe">
-                <span class="material-symbols-outlined stat-icon" style="color: #7c3aed"
+                <span
+                  class="material-symbols-outlined stat-icon"
+                  style="color: var(--accent-violet)"
                   >biotech</span
                 >
               </div>
@@ -2360,7 +2371,7 @@
               style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
             >
               <div class="stat-icon-wrap" style="background: #d1fae5">
-                <span class="material-symbols-outlined stat-icon" style="color: #059669"
+                <span class="material-symbols-outlined stat-icon" style="color: var(--success-text)"
                   >task_alt</span
                 >
               </div>
@@ -2376,7 +2387,7 @@
               style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
             >
               <div class="stat-icon-wrap" style="background: #fef3c7">
-                <span class="material-symbols-outlined stat-icon" style="color: #d97706"
+                <span class="material-symbols-outlined stat-icon" style="color: var(--warning-text)"
                   >hourglass_top</span
                 >
               </div>
@@ -2390,7 +2401,7 @@
               style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
             >
               <div class="stat-icon-wrap" style="background: #fee2e2">
-                <span class="material-symbols-outlined stat-icon" style="color: #dc2626"
+                <span class="material-symbols-outlined stat-icon" style="color: var(--danger)"
                   >cancel</span
                 >
               </div>
@@ -2406,7 +2417,9 @@
               style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
             >
               <div class="stat-icon-wrap" style="background: #ede9fe">
-                <span class="material-symbols-outlined stat-icon" style="color: #7c3aed"
+                <span
+                  class="material-symbols-outlined stat-icon"
+                  style="color: var(--accent-violet)"
                   >timer</span
                 >
               </div>
@@ -2486,7 +2499,7 @@
             </div>
           } @else {
             <div class="empty-state">
-              <span class="material-symbols-outlined empty-icon-lg" style="color: #dc2626"
+              <span class="material-symbols-outlined empty-icon-lg" style="color: var(--danger)"
                 >fact_check</span
               >
               <h3>
@@ -2521,12 +2534,12 @@
           <div class="stat-strip" style="padding: 16px; gap: 12px">
             <div class="stat-card" style="flex: 1; min-width: 0">
               <div class="stat-icon-wrap" style="background: #d1fae5">
-                <span class="material-symbols-outlined stat-icon" style="color: #059669"
+                <span class="material-symbols-outlined stat-icon" style="color: var(--success-text)"
                   >thumb_up</span
                 >
               </div>
               <div class="stat-body">
-                <span class="stat-value" style="color: #059669">{{
+                <span class="stat-value" style="color: var(--success-text)">{{
                   qualityManagerDashboard()?.passedValidationStudies ?? 0
                 }}</span>
                 <span class="stat-label">{{ 'DASHBOARD.PASSED' | translate }}</span>
@@ -2534,12 +2547,12 @@
             </div>
             <div class="stat-card" style="flex: 1; min-width: 0">
               <div class="stat-icon-wrap" style="background: #fee2e2">
-                <span class="material-symbols-outlined stat-icon" style="color: #dc2626"
+                <span class="material-symbols-outlined stat-icon" style="color: var(--danger)"
                   >thumb_down</span
                 >
               </div>
               <div class="stat-body">
-                <span class="stat-value" style="color: #dc2626">{{
+                <span class="stat-value" style="color: var(--danger)">{{
                   qualityManagerDashboard()?.failedValidationStudies ?? 0
                 }}</span>
                 <span class="stat-label">{{ 'DASHBOARD.FAILED' | translate }}</span>
@@ -2547,12 +2560,12 @@
             </div>
             <div class="stat-card" style="flex: 1; min-width: 0">
               <div class="stat-icon-wrap" style="background: #d1fae5">
-                <span class="material-symbols-outlined stat-icon" style="color: #059669"
+                <span class="material-symbols-outlined stat-icon" style="color: var(--success-text)"
                   >verified</span
                 >
               </div>
               <div class="stat-body">
-                <span class="stat-value" style="color: #059669">
+                <span class="stat-value" style="color: var(--success-text)">
                   @if ((qualityManagerDashboard()?.qualityPassRate ?? null) !== null) {
                     {{ qualityManagerDashboard()!.qualityPassRate! | measure: '%' }}
                   } @else {
@@ -2614,7 +2627,7 @@
               style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
             >
               <div class="stat-icon-wrap" style="background: #fef3c7">
-                <span class="material-symbols-outlined stat-icon" style="color: #d97706"
+                <span class="material-symbols-outlined stat-icon" style="color: var(--warning-text)"
                   >pending_actions</span
                 >
               </div>
@@ -2632,7 +2645,7 @@
               style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
             >
               <div class="stat-icon-wrap" style="background: #d1fae5">
-                <span class="material-symbols-outlined stat-icon" style="color: #059669"
+                <span class="material-symbols-outlined stat-icon" style="color: var(--success-text)"
                   >science</span
                 >
               </div>
@@ -2650,7 +2663,7 @@
               style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
             >
               <div class="stat-icon-wrap" style="background: #fee2e2">
-                <span class="material-symbols-outlined stat-icon" style="color: #dc2626"
+                <span class="material-symbols-outlined stat-icon" style="color: var(--danger)"
                   >cancel</span
                 >
               </div>
@@ -3114,7 +3127,9 @@
       <section class="card patient-card">
         <div class="card-head">
           <div class="card-title-group">
-            <span class="material-symbols-outlined card-title-icon" style="color: #059669"
+            <span
+              class="material-symbols-outlined card-title-icon"
+              style="color: var(--success-text)"
               >calendar_month</span
             >
             <h2 class="card-title">{{ 'DASHBOARD.UPCOMING_APPOINTMENTS' | translate }}</h2>
@@ -3219,7 +3234,9 @@
       <section class="card patient-card">
         <div class="card-head">
           <div class="card-title-group">
-            <span class="material-symbols-outlined card-title-icon" style="color: #7c3aed"
+            <span
+              class="material-symbols-outlined card-title-icon"
+              style="color: var(--accent-violet)"
               >science</span
             >
             <h2 class="card-title">{{ 'DASHBOARD.RECENT_TEST_RESULTS' | translate }}</h2>
@@ -3296,7 +3313,9 @@
       <section class="card patient-card" data-testid="dashboard-billing">
         <div class="card-head">
           <div class="card-title-group">
-            <span class="material-symbols-outlined card-title-icon" style="color: #d97706"
+            <span
+              class="material-symbols-outlined card-title-icon"
+              style="color: var(--warning-text)"
               >receipt_long</span
             >
             <h2 class="card-title">{{ 'BILLING.TITLE' | translate }}</h2>
@@ -3393,7 +3412,7 @@
           <section class="card patient-card patient-card-wide">
             <div class="card-head">
               <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon" style="color: #dc2626"
+                <span class="material-symbols-outlined card-title-icon" style="color: var(--danger)"
                   >health_and_safety</span
                 >
                 <h2 class="card-title">{{ 'DASHBOARD.HEALTH_AT_A_GLANCE' | translate }}</h2>
@@ -3403,7 +3422,9 @@
               @if (hs.allergies.length) {
                 <div class="health-glance-section">
                   <h4 class="hg-label">
-                    <span class="material-symbols-outlined" style="font-size: 16px; color: #dc2626"
+                    <span
+                      class="material-symbols-outlined"
+                      style="font-size: 16px; color: var(--danger)"
                       >warning</span
                     >
                     {{ 'DASHBOARD.ALLERGIES' | translate }}

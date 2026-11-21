@@ -3,7 +3,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  /* QA D2804 (r65): the same page as /login and /reset-password (it was the
+     pre-rebrand purple gradient with a blue shield and no logo). */
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);
   padding: 2rem 1rem;
 }
 
@@ -20,21 +22,34 @@
   text-align: center;
   margin-bottom: 2rem;
 
-  .header-icon {
-    font-size: 48px;
-    color: #667eea;
+  .logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.7rem;
     margin-bottom: 0.5rem;
+  }
+
+  .brand-word {
+    font-size: 1.75rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--primary);
+    line-height: 1;
+  }
+
+  .brand-accent {
+    color: #e39a2b;
   }
 
   h1 {
     font-size: 1.5rem;
     font-weight: 700;
     margin: 0.5rem 0 0.25rem;
-    color: #1a1a2e;
+    color: var(--text-primary);
   }
 
   .subtitle {
-    color: #6b7280;
+    color: var(--text-secondary);
     font-size: 0.9rem;
     margin: 0;
   }
@@ -61,7 +76,7 @@
 
   .section-icon {
     font-size: 24px;
-    color: #667eea;
+    color: var(--primary);
   }
 
   h2 {
@@ -72,12 +87,12 @@
   }
 
   .completed & .section-icon {
-    color: #10b981;
+    color: var(--success-text);
   }
 }
 
 .section-desc {
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 0.85rem;
   margin: 0 0 1rem;
 }
@@ -104,8 +119,8 @@
 
     &:focus {
       outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(14, 124, 107, 0.15);
     }
 
     &:disabled {
@@ -116,7 +131,7 @@
   .form-hint {
     display: block;
     font-size: 0.75rem;
-    color: #6b7280;
+    color: var(--text-secondary);
     margin-top: 0.25rem;
   }
 }
@@ -136,7 +151,7 @@
     background: none;
     border: none;
     cursor: pointer;
-    color: #6b7280;
+    color: var(--text-secondary);
     padding: 0.25rem;
     display: flex;
 
@@ -145,7 +160,7 @@
     }
 
     &:hover {
-      color: #667eea;
+      color: var(--primary);
     }
   }
 }
@@ -154,7 +169,7 @@
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  color: #ef4444;
+  color: var(--danger);
   font-size: 0.85rem;
   margin-bottom: 0.75rem;
 
@@ -167,7 +182,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #10b981;
+  color: var(--success-text);
   font-size: 0.9rem;
   font-weight: 500;
 
@@ -201,18 +216,9 @@
     cursor: not-allowed;
   }
 
-  &.btn-primary {
-    background: #667eea;
-    color: #fff;
-
-    &:hover:not(:disabled) {
-      background: #5a6fd6;
-    }
-  }
-
   &.btn-link {
     background: transparent;
-    color: var(--primary, #0e7c6b);
+    color: var(--primary);
     margin-top: 0.5rem;
     text-decoration: underline;
   }
@@ -251,6 +257,11 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+/* The form's one command spans the card, like the sign-in button. */
+.setup-form > .btn-primary {
+  width: 100%;
 }
 
 @media (max-width: 600px) {

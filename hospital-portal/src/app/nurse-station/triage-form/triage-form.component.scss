@@ -107,8 +107,8 @@
 
         &:focus {
           outline: none;
-          border-color: var(--primary-color, #0d6efd);
-          box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.15);
+          border-color: var(--primary);
+          box-shadow: 0 0 0 2px rgba(14, 124, 107, 0.15);
         }
       }
 
@@ -152,29 +152,6 @@
       font-size: 0.9rem;
       cursor: pointer;
       border: none;
-
-      &-secondary {
-        background: var(--surface-alt, #e9ecef);
-        color: var(--text-primary, #333);
-
-        &:hover {
-          background: var(--hover-bg, #d3d7db);
-        }
-      }
-
-      &-primary {
-        background: var(--primary-color, #0d6efd);
-        color: #fff;
-
-        &:hover:not(:disabled) {
-          background: var(--primary-dark, #0a58ca);
-        }
-
-        &:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-      }
     }
   }
 }

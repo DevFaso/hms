@@ -15748,5 +15748,10 @@
       "FEWER_THAN": "Fewer than {{threshold}}",
       "SMALL_COUNTS": "A number of deaths below {{threshold}} is not shown, to protect the people concerned."
     }
+  },
+  "ERROR_404": {
+    "TITLE": "Page not found",
+    "BODY": "This page does not exist or has moved. Check the address, or go back to your dashboard.",
+    "BACK": "Back to the dashboard"
   }
 }

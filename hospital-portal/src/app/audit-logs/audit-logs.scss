@@ -38,8 +38,8 @@
   }
 
   &.types {
-    background: #e0e7ff;
-    color: #3730a3;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
 }
 
@@ -63,7 +63,7 @@
       font-weight: 600;
       font-size: 0.75rem;
       text-transform: uppercase;
-      color: #6b7280;
+      color: var(--text-secondary);
       border-bottom: 1px solid #e5e7eb;
     }
   }
@@ -92,13 +92,13 @@
 
 .cell-secondary {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .time-cell {
   white-space: nowrap;
   font-size: 0.8125rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .desc-cell {
@@ -114,7 +114,7 @@
   min-width: 9ch;
   font-family: 'SF Mono', monospace;
   font-size: 0.8125rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .event-type-badge {
@@ -123,8 +123,8 @@
   border-radius: 6px;
   font-size: 0.75rem;
   font-weight: 600;
-  background: #e0e7ff;
-  color: #3730a3;
+  background: var(--primary-tint);
+  color: var(--primary-deep);
   white-space: nowrap;
 }
 

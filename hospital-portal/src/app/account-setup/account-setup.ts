@@ -16,6 +16,8 @@ import { AuthService } from '../auth/auth.service';
 import { ProfileService } from '../services/profile.service';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
+
 /** How long the "account set up" message stays before the sign-out. */
 export const SETUP_SIGN_OUT_DELAY_MS = 2500;
 
@@ -31,7 +33,7 @@ const USERNAME_PATTERN = /^[a-zA-Z0-9._-]+$/;
 @Component({
   selector: 'app-account-setup',
   standalone: true,
-  imports: [SubmitGuardDirective, FormsModule, TranslateModule],
+  imports: [SubmitGuardDirective, FormsModule, TranslateModule, BrandMarkComponent],
   templateUrl: './account-setup.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./account-setup.scss'],

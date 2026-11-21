@@ -30,25 +30,4 @@
   }
 }
 
-.btn-danger {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.625rem 1.25rem;
-  background: #b91c1c;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    background: #991b1b;
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-}
+// The dialog's buttons are the shared ones (_page-common.scss, global).

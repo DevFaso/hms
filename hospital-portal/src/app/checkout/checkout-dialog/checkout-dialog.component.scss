@@ -38,7 +38,7 @@
   background: none;
   font-size: 1.5rem;
   line-height: 1;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 
   &:hover {
     color: var(--text-color, #111);
@@ -84,7 +84,7 @@
   display: block;
   margin: 0.5rem 0 0.25rem;
   font-size: 0.875rem;
-  color: var(--text-muted, #6b7280);
+  color: var(--text-muted);
 }
 
 .form-control {
@@ -128,24 +128,6 @@ textarea.form-control {
   }
 }
 
-.btn-primary {
-  background: var(--primary-color, var(--primary));
-  color: #fff;
-
-  &:hover:not(:disabled) {
-    background: var(--primary-hover, var(--primary-dark));
-  }
-}
-
-.btn-secondary {
-  background: var(--secondary-bg, #f3f4f6);
-  color: var(--text-color, #374151);
-
-  &:hover:not(:disabled) {
-    background: var(--secondary-hover, #e5e7eb);
-  }
-}
-
 /* ── AVS Preview ──────────────────────────── */
 
 .avs-preview {
@@ -155,7 +137,7 @@ textarea.form-control {
 .avs-title {
   margin: 0 0 1rem;
   font-size: 1.15rem;
-  color: var(--primary-color, var(--primary));
+  color: var(--primary);
 }
 
 .avs-pending-signature {

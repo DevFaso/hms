@@ -19,7 +19,7 @@
 
   .header-icon {
     font-size: 2rem;
-    color: var(--color-primary, var(--primary));
+    color: var(--primary);
   }
 
   .page-title {
@@ -29,7 +29,7 @@
 
   .page-subtitle {
     margin: 0;
-    color: var(--color-text-muted, #6b7280);
+    color: var(--color-text-muted, var(--text-secondary));
     font-size: 0.9rem;
   }
 
@@ -62,7 +62,7 @@
   }
 
   .filter-hint {
-    color: var(--color-text-muted, #6b7280);
+    color: var(--color-text-muted, var(--text-secondary));
     font-size: 0.8rem;
     padding-bottom: 0.4rem;
   }
@@ -74,7 +74,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 2.5rem 1rem;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted, var(--text-secondary));
 
   &.state-error {
     color: #991b1b;
@@ -147,13 +147,11 @@
     background: var(--color-surface-alt, #f3f4f6);
   }
 
-  &.btn-danger {
+  &.danger {
     color: #b91c1c;
   }
 }
 
-.btn-primary,
-.btn-secondary,
 .btn-refresh,
 .btn-danger-solid {
   display: inline-flex;
@@ -169,12 +167,6 @@
     opacity: 0.5;
     cursor: default;
   }
-}
-
-.btn-primary {
-  background: var(--color-primary, var(--primary));
-  border-color: var(--color-primary, var(--primary));
-  color: #fff;
 }
 
 .btn-danger-solid {

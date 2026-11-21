@@ -51,7 +51,7 @@
   cursor: pointer;
   padding: 0.4rem;
   border-radius: 8px;
-  color: #64748b;
+  color: var(--text-secondary);
   &:hover {
     background: #f1f5f9;
     color: #0f172a;
@@ -87,8 +87,8 @@
     transition: border-color 0.15s;
     &:focus {
       outline: none;
-      border-color: #6366f1;
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(14, 124, 107, 0.1);
     }
   }
   textarea {
@@ -117,38 +117,6 @@
     font-weight: 600;
     font-size: 0.9rem;
     cursor: pointer;
-  }
-  .btn-secondary {
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
-    color: #475569;
-    &:hover {
-      background: #e2e8f0;
-    }
-  }
-  .btn-primary {
-    background: #6366f1;
-    border: none;
-    color: #fff;
-    &:hover {
-      background: #4f46e5;
-    }
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-  }
-  .btn-danger {
-    background: #ef4444;
-    border: none;
-    color: #fff;
-    &:hover {
-      background: #dc2626;
-    }
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
   }
 }
 
@@ -189,18 +157,18 @@
 }
 .cell-secondary {
   font-size: 0.78rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 .refund-status {
   font-weight: 600;
 }
 .field-hint {
   font-size: 0.85rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 .muted-note {
   font-size: 0.8rem;
-  color: #64748b;
+  color: var(--text-secondary);
   margin: 0;
 }
 .no-card-notice {

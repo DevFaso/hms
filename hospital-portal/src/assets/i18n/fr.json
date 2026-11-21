@@ -15748,5 +15748,10 @@
       "FEWER_THAN": "Moins de {{threshold}}",
       "SMALL_COUNTS": "Un nombre de décès inférieur à {{threshold}} n’est pas affiché, pour protéger les personnes concernées."
     }
+  },
+  "ERROR_404": {
+    "TITLE": "Page introuvable",
+    "BODY": "Cette page n'existe pas ou a été déplacée. Vérifiez l'adresse, ou revenez à votre tableau de bord.",
+    "BACK": "Retour au tableau de bord"
   }
 }

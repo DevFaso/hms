@@ -61,12 +61,14 @@
     }
   }
 
+  // An information card is blue, beside the amber warning and the red
+  // critical one: a severity, not a brand surface.
   &--info {
     background: #e8f0fe;
-    border-color: #1a73e8;
+    border-color: var(--info-text);
     color: #14336c;
     .cds-card__indicator {
-      color: #1a73e8;
+      color: var(--info-text);
     }
   }
 }

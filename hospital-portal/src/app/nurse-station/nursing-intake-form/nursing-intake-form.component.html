@@ -280,12 +280,12 @@
 
       <!-- Actions -->
       <footer class="intake-dialog__actions">
-        <button type="button" class="btn btn-secondary" (click)="dismissed.emit()">
+        <button type="button" class="btn-secondary" (click)="dismissed.emit()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
           type="submit"
-          class="btn btn-primary"
+          class="btn-primary"
           [disabled]="saving()"
           [appSubmitGuard]="submitBlockReason()"
           [submitGuardFields]="['nursingNotes']"

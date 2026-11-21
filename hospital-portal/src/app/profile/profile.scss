@@ -9,11 +9,13 @@ $warning: #d97706;
 $warning-light: #fef3c7;
 $danger: #dc2626;
 $danger-light: #fee2e2;
-$purple: #7c3aed;
-$purple-light: #ede9fe;
+// QA D2794 / D2793 (r65): the values of the global tokens (styles.scss :root).
+// Sass copies because this sheet derives tints with sass:color.
+$violet: #6d28d9; // --accent-violet: a category, never an action
+$violet-light: #ede9fe;
 $text-primary: #1e293b;
-$text-secondary: #64748b;
-$text-muted: #94a3b8;
+$text-secondary: #475569; // 7.58:1 on white (was slate-500, 4.34:1 on the page)
+$text-muted: #566579; // 5.94:1 on white (was slate-400, 2.56:1: the field labels)
 $border: #e2e8f0;
 $bg-page: #f1f5f9;
 $bg-card: #ffffff;
@@ -118,9 +120,12 @@ $shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
   box-shadow: $shadow;
   margin-bottom: 0;
 
+  // QA D2794: the banner is a brand band, and nothing is written on it. The
+  // avatar alone overlaps its lower edge; the name starts below it, dark on
+  // the white card (it used to sit on the dark navy-to-purple gradient).
   .header-bg {
-    height: 140px;
-    background: linear-gradient(135deg, $primary 0%, #162e6b 50%, $purple 100%);
+    height: 112px;
+    background: linear-gradient(135deg, $primary-dark 0%, $primary 60%, #23b79c 100%);
     position: relative;
     border-radius: $radius $radius 0 0; // keep banner corners rounded
     overflow: hidden; // confine the radial-gradient overlays to the banner area
@@ -136,10 +141,9 @@ $shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
 
   .header-content {
     display: flex;
-    align-items: flex-end;
+    align-items: flex-start;
     gap: 24px;
     padding: 0 32px 24px;
-    margin-top: -50px;
     position: relative;
     flex-wrap: wrap;
   }
@@ -152,6 +156,7 @@ $shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  margin-top: -56px; // the one thing that overlaps the banner
 }
 
 .avatar-wrapper {
@@ -180,7 +185,7 @@ $shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, $primary, $purple);
+    background: linear-gradient(135deg, $primary, $primary-dark);
     color: white;
     font-size: 2.4rem;
     font-weight: 700;
@@ -259,11 +264,12 @@ $shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
   padding-top: 16px;
 
   .user-name {
-    font-size: 1.75rem;
+    font-size: 1.5rem;
     font-weight: 700;
     color: $text-primary;
     margin: 0 0 2px;
-    line-height: 1.2;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
   }
 
   .user-username {
@@ -460,7 +466,7 @@ $shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
 /* ── Overview Grid ── */
 .overview-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
 
   .full-width {
@@ -469,13 +475,23 @@ $shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
 }
 
 /* ── Info Grid ── */
+// QA D2794: two fixed columns clipped « NOM D'UTILISATEUR » and the phone at
+// 1024 px (43 to 67 px past the card). The grid now fits as many 200 px
+// columns as the card holds, and a value that still does not fit wraps.
 .info-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
   gap: 20px;
 }
 
 .info-item {
+  min-width: 0;
+
+  .info-label,
+  .info-value {
+    overflow-wrap: anywhere;
+  }
+
   .info-label {
     display: block;
     font-size: 0.75rem;
@@ -758,24 +774,6 @@ $shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
   &:disabled {
     opacity: 0.6;
     cursor: not-allowed;
-  }
-}
-
-.btn-primary {
-  background: $primary;
-  color: white;
-  &:hover:not(:disabled) {
-    background: $primary-dark;
-    box-shadow: $shadow-md;
-  }
-}
-
-.btn-secondary {
-  background: $bg-page;
-  color: $text-primary;
-  border: 1px solid $border;
-  &:hover:not(:disabled) {
-    background: #e8eaee;
   }
 }
 
@@ -1429,6 +1427,12 @@ $shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
     }
   }
 
+  .user-info {
+    padding-top: 0;
+    min-width: 0;
+    width: 100%;
+  }
+
   .header-stats {
     width: 100%;
     justify-content: center;
@@ -1437,11 +1441,7 @@ $shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
   }
 
   .overview-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .info-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .form-row {

@@ -13,7 +13,7 @@
 
 .abnormal-badge {
   background: #fee2e2;
-  color: #dc2626;
+  color: var(--danger);
   font-size: 11px;
   font-weight: 700;
   padding: 3px 10px;
@@ -23,7 +23,7 @@
 }
 
 .text-danger {
-  color: #dc2626 !important;
+  color: var(--danger) !important;
 }
 
 .detail-panel {
@@ -50,7 +50,7 @@
 .dl {
   font-size: 11px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }

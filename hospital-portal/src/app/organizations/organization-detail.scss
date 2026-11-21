@@ -4,7 +4,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  color: #64748b;
+  color: var(--text-secondary);
   text-decoration: none;
   font-size: 0.85rem;
   margin-bottom: 1rem;
@@ -81,7 +81,7 @@
 }
 
 .lifecycle-label {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.85rem;
 }
 
@@ -113,15 +113,6 @@
   }
 }
 
-.btn-primary {
-  background: var(--primary-light);
-  color: #fff;
-
-  &:hover:not(:disabled) {
-    background: var(--primary);
-  }
-}
-
 .btn-warn {
   background: #fff;
   color: #92400e;
@@ -132,18 +123,9 @@
   }
 }
 
-.btn-danger {
-  background: #ef4444;
-  color: #fff;
-
-  &:hover:not(:disabled) {
-    background: #dc2626;
-  }
-}
-
 .btn-ghost {
   background: transparent;
-  color: #64748b;
+  color: var(--text-secondary);
   border-color: #e2e8f0;
 
   &:hover:not(:disabled) {
@@ -206,10 +188,10 @@
 
   .material-symbols-outlined {
     font-size: 28px;
-    color: #64748b;
+    color: var(--text-secondary);
 
     &.danger {
-      color: #ef4444;
+      color: var(--danger);
     }
   }
 }
@@ -229,7 +211,7 @@
 .field-label {
   display: block;
   font-size: 0.8rem;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-bottom: 0.35rem;
 
   code {
@@ -254,7 +236,7 @@
   &:focus {
     outline: none;
     border-color: var(--primary-light);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    box-shadow: 0 0 0 3px rgba(14, 124, 107, 0.15);
   }
 }
 

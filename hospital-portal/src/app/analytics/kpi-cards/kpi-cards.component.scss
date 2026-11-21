@@ -13,7 +13,7 @@
     padding: 1rem;
     background: var(--hms-surface-muted, #f3f4f6);
     border-radius: 0.5rem;
-    color: var(--hms-text-secondary, #6b7280);
+    color: var(--hms-text-secondary, var(--text-secondary));
   }
 
   &__grid {
@@ -52,7 +52,7 @@
 
   &__label {
     font-size: 0.85rem;
-    color: var(--hms-text-secondary, #6b7280);
+    color: var(--hms-text-secondary, var(--text-secondary));
     text-transform: uppercase;
     letter-spacing: 0.02em;
   }
@@ -65,13 +65,13 @@
 
   &__median {
     font-size: 0.8rem;
-    color: var(--hms-text-secondary, #6b7280);
+    color: var(--hms-text-secondary, var(--text-secondary));
     font-variant-numeric: tabular-nums;
   }
 
   &__sub {
     font-size: 0.8rem;
-    color: var(--hms-text-tertiary, #9ca3af);
+    color: var(--hms-text-tertiary, var(--text-muted));
   }
 
   &__sparkline {

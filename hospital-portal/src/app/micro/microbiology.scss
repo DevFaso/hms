@@ -61,7 +61,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 2.5rem 1rem;
-  color: #6b7280;
+  color: var(--text-secondary);
   text-align: center;
 
   .material-symbols-outlined {
@@ -106,7 +106,7 @@
   }
 
   th {
-    color: #6b7280;
+    color: var(--text-secondary);
     font-weight: 600;
     font-size: 0.75rem;
     text-transform: uppercase;
@@ -194,7 +194,7 @@
   .detail-sub {
     margin: 0.15rem 0 0;
     font-size: 0.82rem;
-    color: #6b7280;
+    color: var(--text-secondary);
   }
 }
 
@@ -208,7 +208,7 @@
   border: none;
   background: transparent;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--text-secondary);
   padding: 0.25rem;
 
   &:hover {
@@ -234,7 +234,7 @@
 .finalized-line {
   margin: 0;
   font-size: 0.82rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .correction-field input {
@@ -274,7 +274,7 @@
 .no-susceptibilities {
   margin: 0;
   font-size: 0.82rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .isolate-block {
@@ -293,7 +293,7 @@
 
   .isolate-number {
     font-size: 0.75rem;
-    color: #6b7280;
+    color: var(--text-secondary);
   }
 
   .organism {
@@ -302,7 +302,7 @@
 
   .quantity {
     font-size: 0.8rem;
-    color: #6b7280;
+    color: var(--text-secondary);
   }
 
   .isolate-actions {
@@ -326,7 +326,7 @@
   }
 
   th {
-    color: #6b7280;
+    color: var(--text-secondary);
     font-weight: 600;
     font-size: 0.75rem;
     text-transform: uppercase;
@@ -363,18 +363,6 @@
 .btn-small {
   padding: 0.2rem 0.55rem;
   font-size: 0.75rem;
-}
-
-.btn-danger {
-  border: 1px solid #fecaca;
-  background: #fff;
-  color: #b91c1c;
-  border-radius: 6px;
-  cursor: pointer;
-
-  &:hover {
-    background: #fef2f2;
-  }
 }
 
 .modal-backdrop {
@@ -425,7 +413,7 @@
 
   .field-hint {
     font-size: 0.72rem;
-    color: #6b7280;
+    color: var(--text-secondary);
   }
 }
 

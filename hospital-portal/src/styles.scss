@@ -16,8 +16,36 @@
   --primary-tint: #ccebe4; /* chips, selected rows (was blue-100/200) */
   --primary-soft: #e6f4f1; /* hover and info surfaces (was blue-50) */
   --text-primary: #1e293b;
-  --text-secondary: #64748b;
+  /* QA D2793 (r65): secondary text was #64748b, 4.34:1 on the #f1f5f9 page
+     background (AA needs 4.5). #475569 is 6.92:1 there and 7.58:1 on white.
+     --text-muted is the lightest text the portal prints (placeholders, hints,
+     meta lines): 5.43:1 on the page background, 5.94:1 on white. Nothing
+     lighter is text; scripts/check-design-tokens.mjs holds the line. */
+  --text-secondary: #475569;
+  --text-muted: #566579;
   --border: #e2e8f0;
+  --surface: #fff;
+  --surface-page: #f1f5f9;
+  /* One danger red for filled buttons and error text: white on it is 6.47:1
+     (the #ef4444 some pages used is 3.76:1). */
+  --danger: #b91c1c;
+  --danger-dark: #991b1b;
+  /* Status words as TEXT (« Payée », « En retard », an error line). The bright
+     fills they replace (#059669 3.77:1, #d97706 3.19:1, #ef4444 3.76:1,
+     #0ea5e9 2.77:1 on white) stay for icons, dots and borders only. Each is
+     4.5:1 or more on white and on the page background. */
+  --success-text: #047857;
+  --warning-text: #b45309;
+  --danger-text: #b91c1c;
+  --info-text: #0369a1;
+  /* The one hue besides the brand that may mark a CATEGORY (a shift type, a
+     notification kind). Never an action: buttons, links, tabs and focus are
+     brand teal (QA D2790 / D2804). 7.10:1 on white. */
+  --accent-violet: #6d28d9;
+  /* The halo a focused field or a hovered primary button grows (was the
+     pre-rebrand blue rgba(37, 99, 235)). */
+  --focus-halo: 0 0 0 3px rgba(14, 124, 107, 0.25);
+  --primary-shadow: 0 4px 12px rgba(14, 124, 107, 0.3);
 
   // ─── Accessibility tokens (v1.0 roadmap row 11) ───────────────────
   // `--focus-ring`         — primary-blue, used on light surfaces
@@ -65,7 +93,7 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
   outline-offset: 0;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+  box-shadow: var(--focus-halo);
 }
 
 /* ── Screen-reader-only utility (v1.0 roadmap row 11 / task 23) ─────
@@ -124,8 +152,8 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #f1f5f9;
-  color: #1e293b;
+  background: var(--surface-page);
+  color: var(--text-primary);
   font-size: 16px;
   line-height: 1.5;
 }
@@ -300,27 +328,9 @@ button {
   font-weight: 600;
 }
 
-/* QA D1480: a dialog's own .btn-danger is encapsulated in its component and never reaches these
-   buttons, which are built at run time. The shape and colours are the dialogs' own. */
-.dialog-discard button {
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.dialog-discard .btn-secondary {
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
-  color: #475569;
-}
-
-.dialog-discard .btn-danger {
-  background: #b42318;
-  border: none;
-  color: #fff;
-}
+/* QA D1480: these buttons are built at run time, outside any component's
+   encapsulated styles. They are the shared .btn-secondary / .btn-danger
+   (_page-common.scss, global), so nothing is restated here. */
 
 /* QA D1203 (round 22): a fieldset's default min-width is its content's
    min-content, so a row of inputs inside one widened the dialog past the
@@ -721,7 +731,7 @@ textarea {
 }
 :where(.search-box) > :where(.material-symbols-outlined, .material-icons) {
   flex-shrink: 0;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 1.25rem;
 }
 :where(.search-box) > :where(input) {
@@ -770,7 +780,7 @@ textarea {
 }
 :where(.summary-card .card-label) {
   font-size: 0.8rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 /* QA D2285 (r63/r64): a small toggle or toolbar button (« Terminées » on the
@@ -789,4 +799,307 @@ textarea {
   font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   QA r65 design audit (2026-11-20): the portal as ONE product. The layers
+   below are global on purpose: each replaces a look that 20 to 60 component
+   stylesheets had restated, each a little differently.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────────────────────────────────────────────────────
+   QA D2791 (r65): one page title. The h1 came in 9 sizes (22 to 32 px), four
+   weights and six colours across the modules. Inside the shell's content area
+   it is now one size and one weight, whatever the page's own sheet says
+   (!important, like the table layer: every page styles its own h1). Colour is
+   left to the page: a title printed on a dark hero stays white. Screen only:
+   a document printed from inside the shell (a prescription, a receipt) keeps
+   its own title.
+   Guarded by e2e/a11y-routed-pages.ts (`one page title`).
+   ───────────────────────────────────────────────────────────────────────── */
+@media screen {
+  .content h1 {
+    font-size: 1.5rem !important;
+    font-weight: 700 !important;
+    line-height: 1.25 !important;
+    letter-spacing: -0.01em !important;
+  }
+}
+@media screen and (max-width: 599px) {
+  .content h1 {
+    font-size: 1.25rem !important;
+  }
+}
+/* The icon some pages put in the title follows the title's size. */
+.content h1 > :where(.material-symbols-outlined, .material-icons) {
+  font-size: 1.2em;
+  vertical-align: -0.2em;
+}
+:where(.content) :where(.page-subtitle) {
+  color: var(--text-secondary);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   QA D2797 (r65): one table header. Half the modules wrote column headers in
+   UPPERCASE at 10 to 12.8 px, the other half in sentence case at 11 to 14.4 px
+   (the pharmacy module both). One convention: sentence case, 12 px, semi-bold.
+   Guarded by shared/styles/design-layer.spec.ts.
+   ───────────────────────────────────────────────────────────────────────── */
+@media screen {
+  table:not(.fc table, .fc) > thead > tr > th {
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   QA D2798 (r65): the LAST column of every table stays on screen, not only a
+   column of buttons. Below the desktop width a wide table scrolls in place;
+   « État », « Statut », « Adresse IP », the price columns sat past that scroll
+   on the tables the r63 rule (a last cell holding buttons) did not match:
+   /audit-logs, /pharmacy/drug-interactions, /pharmacy/inventory,
+   /billing/tarifs, /lab-qc-dashboard. Now the last cell of any table sticks to
+   the right edge and the data columns scroll underneath it, with the same
+   scroll cue. A row paints its own background and the sticky cell inherits
+   it, so a hovered or tinted row stays one colour. At 1024 px and wider every
+   column is on screen (guarded since r64), so nothing changes there.
+   Opt out with `data-no-sticky` on the table or a box around it; a
+   calendar's table is never a list (the same tables the card labels skip,
+   shared/a11y/design-conventions.ts). Screen only: paper has no scroll box (and a
+   receipt printer's page is narrower than a phone). Guarded by
+   shared/styles/design-layer.spec.ts and e2e/layout-overflow.spec.ts.
+   ───────────────────────────────────────────────────────────────────────── */
+@media screen and (max-width: 1023px) {
+  :where(
+    table:not(.fc table, .fc, .mat-calendar table, [data-no-sticky], [data-no-sticky] table)
+      > tbody
+      > tr
+  ) {
+    background-color: var(--surface, #fff);
+  }
+  :where(
+    table:not(.fc table, .fc, .mat-calendar table, [data-no-sticky], [data-no-sticky] table)
+      > :is(tbody, tfoot)
+      > tr
+      > :is(td, th):last-child:not([colspan], :first-child)
+  ) {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    background-color: inherit;
+  }
+  :where(
+    table:not(.fc table, .fc, .mat-calendar table, [data-no-sticky], [data-no-sticky] table)
+      > thead
+      > tr
+      > th:last-child:not([colspan], :first-child)
+  ) {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    background-color: var(--surface, #fff);
+  }
+  @supports (animation-timeline: scroll()) {
+    :where(
+      table:not(.fc table, .fc, .mat-calendar table, [data-no-sticky], [data-no-sticky] table)
+        > :is(thead, tbody, tfoot)
+        > tr
+        > :is(td, th):last-child:not([colspan], :first-child)
+    ) {
+      animation: table-scroll-cue-cell linear both;
+      animation-timeline: scroll(nearest inline);
+    }
+    /* The cue is the sticky cell's shadow: a fading edge would dim that cell.
+       A box whose table has no such cell (one column) keeps the fading edge. */
+    :where(
+      :has(
+        > table:not(.fc table, .fc, .mat-calendar table, [data-no-sticky], [data-no-sticky] table)
+          > :is(thead, tbody, tfoot)
+          > tr
+          > :is(td, th):last-child:not([colspan], :first-child)
+      )
+    ) {
+      animation: none;
+    }
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   QA D2798 / E1 (r65): card mode. Under 600 px a list table is a list of
+   cards: one card per row, one line per cell, « Label   value ». On /billing
+   the invoice number broke over four lines and Total / Solde needed a sideways
+   scroll; on /billing/tarifs the prices were off screen.
+
+   The label is the column header, copied onto each cell as `data-label` by
+   shared/a11y/design-conventions.ts, which marks an eligible table
+   `data-cards` (one plain header row, two columns or more). The header row
+   itself is not shown: every cell says its own header.
+
+   A cell becomes a table ROW of two cells: its ::before (the label) and an
+   anonymous cell wrapping everything the cell holds, so text, badges and
+   buttons keep their normal inline flow beside the label. !important because
+   every page styles its own cells. Opt out with `data-no-cards`.
+   Guarded by shared/styles/design-layer.spec.ts and e2e/layout-overflow.spec.ts.
+   ───────────────────────────────────────────────────────────────────────── */
+@media screen and (max-width: 599px) {
+  table[data-cards]:not(.fc table, .fc) {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  /* The header row is gone, not clipped: a clipped header keeps its sort
+     buttons in the Tab order, invisible. Each cell carries its header as its
+     label, which a screen reader reads with the value. */
+  table[data-cards]:not(.fc table, .fc) > thead {
+    display: none !important;
+  }
+  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) {
+    display: block !important;
+  }
+  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr {
+    display: table !important;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0;
+    box-sizing: border-box;
+    width: 100% !important;
+    margin: 0 0 0.625rem;
+    padding: 0.25rem 0.75rem;
+    border: 1px solid var(--border) !important;
+    border-radius: 10px;
+  }
+  /* The card is white unless the page tints the row (an abnormal result, an
+     overdue line, a lot about to expire): zero specificity, so a page's
+     `tr.flagged { background }` still shows on a phone. */
+  :where(table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr) {
+    background-color: var(--surface);
+  }
+  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr > :is(td, th):not([hidden]) {
+    display: table-row !important;
+    position: static !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    /* A hairline between the lines of a card, drawn by the row itself as an
+       IMAGE: the cell's background colour is left to the page, so a tinted
+       cell (`tr.abnormal td`) keeps its tint. */
+    background-image: linear-gradient(#eef2f6, #eef2f6) !important;
+    background-position: top !important;
+    background-size: 100% 1px !important;
+    background-repeat: no-repeat !important;
+    box-shadow: none !important;
+    animation: none !important;
+    text-align: right !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    vertical-align: baseline;
+  }
+  table[data-cards]:not(.fc table, .fc)
+    > :is(tbody, tfoot)
+    > tr
+    > :is(td, th):first-child:not([hidden]) {
+    background-image: none !important;
+  }
+  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr > :is(td, th)[data-label]::before {
+    content: attr(data-label);
+    display: table-cell;
+    width: 38%;
+    padding: 0.45rem 0.75rem 0.45rem 0;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.35;
+    text-align: left;
+    text-transform: none;
+    letter-spacing: 0;
+    white-space: normal;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    vertical-align: baseline;
+  }
+  /* A cell with no header to answer to (an empty-state row, an expanded
+     detail, a spanning group title) is a plain full-width block. */
+  table[data-cards]:not(.fc table, .fc)
+    > :is(tbody, tfoot)
+    > tr
+    > :is(td, th):is(:not([data-label]), [data-label='']):not([hidden]) {
+    display: block !important;
+    padding: 0.45rem 0 !important;
+    text-align: left !important;
+  }
+  table[data-cards]:not(.fc table, .fc)
+    > :is(tbody, tfoot)
+    > tr
+    > :is(td, th)[data-label='']::before {
+    content: none;
+  }
+  /* A cell with nothing in it adds no empty line to the card. */
+  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr > :is(td, th):empty {
+    display: none !important;
+  }
+  /* What a page hides with the `hidden` attribute stays hidden: a collapsed
+     detail row, a table kept for later. (A page that hides rows or cells by a
+     class of its own on a phone marks its table `data-no-cards`.) */
+  table[data-cards]:not(.fc table, .fc)[hidden],
+  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot)[hidden],
+  table[data-cards]:not(.fc table, .fc) > :is(tbody, tfoot) > tr[hidden] {
+    display: none !important;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   QA D2805 (r65): printing a list or a record prints a DOCUMENT. The shell
+   was already off paper; the page's own chrome was not: toolbars, filters,
+   search boxes, pagination, row actions and the three shared buttons printed
+   with the data. Pages with a print layout of their own keep using
+   .no-print / .print-only. The chips that name the ACTIVE filters stay on
+   paper (.active-chips): a printed list that is a subset says so. So does
+   the break-glass notice, less its buttons: a record printed under emergency
+   access said so before r65, and whether it may stop saying so is not a
+   design decision.
+   ───────────────────────────────────────────────────────────────────────── */
+@media print {
+  .page-actions,
+  .header-actions,
+  .page-header-actions,
+  .toolbar-actions,
+  .hero-actions,
+  .filter-toolbar,
+  .filter-row,
+  .filter-bar,
+  .status-pills,
+  .search-bar,
+  .search-box,
+  .pagination-row,
+  .action-group,
+  .row-actions,
+  .table-actions,
+  .btn-primary,
+  .btn-secondary,
+  .btn-danger,
+  .tabs,
+  .tab-bar,
+  .tab-nav,
+  [role='tablist'],
+  .sidebar-backdrop,
+  app-break-glass-banner button {
+    display: none !important;
+  }
+
+  /* A printed table has no sideways scroll and no sticky column. */
+  table :is(td, th) {
+    position: static !important;
+    animation: none !important;
+    box-shadow: none !important;
+  }
+  :has(> table) {
+    overflow: visible !important;
+    mask-image: none !important;
+    animation: none !important;
+  }
 }

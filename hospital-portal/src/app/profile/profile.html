@@ -92,7 +92,7 @@
             @if (user()!.phoneNumber) {
               <span class="meta-item">
                 <span class="material-symbols-outlined">phone</span>
-                {{ user()!.phoneNumber }}
+                {{ user()!.phoneNumber | appPhone }}
               </span>
             }
             <span class="meta-item">
@@ -188,7 +188,7 @@
                 </div>
                 <div class="info-item">
                   <span class="info-label">{{ 'PROFILE.PHONE' | translate }}</span>
-                  <span class="info-value">{{ user()!.phoneNumber || '—' }}</span>
+                  <span class="info-value">{{ user()!.phoneNumber | appPhone | dash }}</span>
                 </div>
                 <div class="info-item">
                   <span class="info-label">{{ 'PROFILE.ROLE' | translate }}</span>
@@ -486,13 +486,13 @@
                 </div>
 
                 <div class="form-actions">
-                  <button type="button" class="btn btn-secondary" (click)="cancelEdit()">
+                  <button type="button" class="btn-secondary" (click)="cancelEdit()">
                     {{ 'COMMON.CANCEL' | translate }}
                   </button>
                   <button
                     submitGuardRequired
                     type="submit"
-                    class="btn btn-primary"
+                    class="btn-primary"
                     [disabled]="saving()"
                     [appSubmitGuard]="
                       blankName() ||
@@ -554,12 +554,12 @@
                     </div>
                   </div>
                   <div class="form-actions">
-                    <button type="button" class="btn btn-secondary" (click)="cancelEmailChange()">
+                    <button type="button" class="btn-secondary" (click)="cancelEmailChange()">
                       {{ 'COMMON.CANCEL' | translate }}
                     </button>
                     <button
                       type="submit"
-                      class="btn btn-primary"
+                      class="btn-primary"
                       [disabled]="confirmingEmail()"
                       [appSubmitGuard]="
                         emailCode().trim().length < 6 && ('SUBMIT_GUARD.CODE' | translate)
@@ -605,7 +605,7 @@
                     }
                   </p>
                 </div>
-                <button class="btn btn-secondary" (click)="requestPasswordReset()">
+                <button class="btn-secondary" (click)="requestPasswordReset()">
                   <span class="material-symbols-outlined">mail</span>
                   {{ 'PROFILE.SEND_RESET_LINK' | translate }}
                 </button>
@@ -661,7 +661,7 @@
                   </div>
                   <button
                     type="submit"
-                    class="btn btn-primary"
+                    class="btn-primary"
                     [disabled]="changingPassword()"
                     [appSubmitGuard]="!pwdCurrent() || !pwdNew() || !pwdConfirm()"
                     [submitGuardFields]="['pwdCurrent', 'pwdNew', 'pwdConfirm']"

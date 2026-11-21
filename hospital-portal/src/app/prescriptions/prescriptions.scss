@@ -42,8 +42,8 @@
     color: #991b1b;
   }
   &.total {
-    background: #e0e7ff;
-    color: #3730a3;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   /* The same amber pair .status-pending already uses in this file —
      deliberately not a new colour, so the contrast the axe smoke has already
@@ -65,7 +65,7 @@
 }
 .card-label {
   font-size: 0.85rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .filter-bar {
@@ -118,7 +118,7 @@
     background: transparent;
   }
   .material-symbols-outlined {
-    color: #6b7280;
+    color: var(--text-secondary);
     font-size: 1.2rem;
   }
 }
@@ -137,7 +137,7 @@
     padding: 0.75rem 1rem;
     font-weight: 600;
     font-size: 0.8rem;
-    color: #6b7280;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
     border-bottom: 1px solid #e5e7eb;
@@ -193,7 +193,7 @@
   cursor: pointer;
   padding: 0.35rem;
   border-radius: 6px;
-  color: #6b7280;
+  color: var(--text-secondary);
   &:hover {
     background: #f3f4f6;
     color: #111827;
@@ -234,7 +234,7 @@
   cursor: pointer;
   padding: 0.35rem;
   border-radius: 6px;
-  color: #6b7280;
+  color: var(--text-secondary);
   &:hover {
     background: #f3f4f6;
     color: #111827;
@@ -255,7 +255,7 @@
 
 .field-label {
   font-size: 0.78rem;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -279,24 +279,6 @@
 .page-actions {
   display: flex;
   gap: 0.75rem;
-  .btn-primary {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.6rem 1.25rem;
-    background: #6366f1;
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
-    &:hover {
-      background: #4f46e5;
-    }
-    .material-symbols-outlined {
-      font-size: 1.15rem;
-    }
-  }
 }
 .action-group {
   display: flex;
@@ -309,7 +291,7 @@
   cursor: pointer;
   padding: 0.35rem;
   border-radius: 6px;
-  color: #64748b;
+  color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
   transition: all 0.15s;
@@ -318,13 +300,13 @@
     color: #0f172a;
   }
   &.view-link:hover {
-    color: #6366f1;
+    color: var(--primary);
   }
   &.edit-link:hover {
-    color: #0ea5e9;
+    color: var(--info-text);
   }
   &.delete-link:hover {
-    color: #ef4444;
+    color: var(--danger);
     background: #fef2f2;
   }
   .material-symbols-outlined {
@@ -386,7 +368,7 @@
   cursor: pointer;
   padding: 0.4rem;
   border-radius: 8px;
-  color: #64748b;
+  color: var(--text-secondary);
   &:hover {
     background: #f1f5f9;
     color: #0f172a;
@@ -422,8 +404,8 @@
     transition: border-color 0.15s;
     &:focus {
       outline: none;
-      border-color: #6366f1;
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(14, 124, 107, 0.1);
     }
   }
   textarea {
@@ -452,38 +434,6 @@
     font-weight: 600;
     font-size: 0.9rem;
     cursor: pointer;
-  }
-  .btn-secondary {
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
-    color: #475569;
-    &:hover {
-      background: #e2e8f0;
-    }
-  }
-  .btn-primary {
-    background: #6366f1;
-    border: none;
-    color: #fff;
-    &:hover {
-      background: #4f46e5;
-    }
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-  }
-  .btn-danger {
-    background: #ef4444;
-    border: none;
-    color: #fff;
-    &:hover {
-      background: #dc2626;
-    }
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
   }
 }
 
@@ -579,7 +529,7 @@
     padding: 0.25rem 0;
     font-size: 0.78rem;
     font-weight: 600;
-    color: #6b7280;
+    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
@@ -591,7 +541,7 @@
     vertical-align: top;
   }
   th {
-    color: #6b7280;
+    color: var(--text-secondary);
     font-weight: 600;
   }
   .status-badge {

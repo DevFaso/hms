@@ -182,26 +182,6 @@
     border: 1px solid #dce6ef;
     border-radius: 12px;
   }
-  .btn-primary:not(.danger),
-  .page-actions .btn-primary {
-    background: #0b7061;
-    border-color: #0b7061;
-    border-radius: 8px;
-    padding: 12px 17px;
-    font-size: 13px;
-    min-height: 42px;
-    &:hover:not(:disabled) {
-      background: #075a50;
-    }
-  }
-  .btn-secondary {
-    border-radius: 8px;
-    min-height: 38px;
-    font-size: 13px;
-    color: #294b60;
-    border: 1px solid #cbd9e4;
-    background: white;
-  }
   .tabs,
   .program-tabs {
     display: flex;

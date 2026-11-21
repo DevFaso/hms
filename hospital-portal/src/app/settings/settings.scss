@@ -31,7 +31,7 @@
 
 .settings-page-sub {
   margin: 0;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
@@ -57,7 +57,7 @@
 
   &:hover {
     border-color: var(--primary-tint);
-    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.08);
+    box-shadow: 0 6px 20px rgba(14, 124, 107, 0.08);
   }
 }
 
@@ -92,7 +92,7 @@
 
 .settings-card-desc {
   margin: 0;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.45;
 }

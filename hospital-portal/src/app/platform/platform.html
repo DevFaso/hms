@@ -174,7 +174,7 @@
                 </div>
                 <div class="automation-actions">
                   @if (taskAction(task); as action) {
-                    <button class="btn btn-sm btn-primary" (click)="switchView(action.view)">
+                    <button class="btn-sm btn-primary" (click)="switchView(action.view)">
                       <span class="material-icons">{{ action.icon }}</span>
                       {{ action.labelKey | translate }}
                     </button>
@@ -229,7 +229,7 @@
 
       <div class="toolbar-spacer"></div>
 
-      <button class="btn btn-primary" (click)="openRegisterDrawer()">
+      <button class="btn-primary" (click)="openRegisterDrawer()">
         <span class="material-icons">add</span> {{ 'PLATFORM.REGISTER_SERVICE' | translate }}
       </button>
     </div>
@@ -246,7 +246,7 @@
         <span class="material-icons empty-icon">integration_instructions</span>
         <h3>{{ 'PLATFORM.NO_SERVICES' | translate }}</h3>
         <p>{{ 'PLATFORM.NO_SERVICES_HINT' | translate }}</p>
-        <button class="btn btn-primary" (click)="openRegisterDrawer()">
+        <button class="btn-primary" (click)="openRegisterDrawer()">
           <span class="material-icons">add</span> {{ 'PLATFORM.REGISTER_SERVICE' | translate }}
         </button>
       </div>
@@ -419,7 +419,7 @@
                    instead of a dead "Provision" button with a hover-only title. -->
               @if (item.enabled) {
                 <button
-                  class="btn btn-sm btn-primary"
+                  class="btn-sm btn-primary"
                   data-test="catalog-provision"
                   (click)="openCatalogDetail(item)"
                 >
@@ -461,7 +461,7 @@
         {{ 'PLATFORM.RELEASE_WINDOWS' | translate }}
       </h2>
       <div class="toolbar-spacer"></div>
-      <button class="btn btn-primary" (click)="openReleaseForm()">
+      <button class="btn-primary" (click)="openReleaseForm()">
         <span class="material-icons">add</span> {{ 'PLATFORM.SCHEDULE_RELEASE' | translate }}
       </button>
     </div>
@@ -507,7 +507,7 @@
         <span class="material-icons empty-icon">event_busy</span>
         <h3>{{ 'PLATFORM.NO_RELEASES' | translate }}</h3>
         <p>{{ 'PLATFORM.NO_RELEASES_HINT' | translate }}</p>
-        <button class="btn btn-primary" (click)="openReleaseForm()">
+        <button class="btn-primary" (click)="openReleaseForm()">
           <span class="material-icons">add</span> {{ 'PLATFORM.SCHEDULE_RELEASE' | translate }}
         </button>
       </div>
@@ -771,7 +771,7 @@
                           }}
                         </button>
                         <button
-                          class="btn btn-sm btn-danger"
+                          class="btn-sm btn-danger"
                           [disabled]="isLinkBusy(row.hospitalId)"
                           (click)="unlinkHospital(row)"
                         >
@@ -786,7 +786,7 @@
           </div>
 
           <div class="drawer-footer">
-            <button class="btn btn-primary" (click)="startEditService()">
+            <button class="btn-primary" (click)="startEditService()">
               <span class="material-icons">edit</span> {{ 'PLATFORM.EDIT_SERVICE' | translate }}
             </button>
           </div>
@@ -935,7 +935,7 @@
               <button type="button" class="btn btn-outline" (click)="cancelEditService()">
                 {{ 'COMMON.CANCEL' | translate }}
               </button>
-              <button type="submit" class="btn btn-primary" [disabled]="saving()">
+              <button type="submit" class="btn-primary" [disabled]="saving()">
                 @if (saving()) {
                   <div class="spinner spinner-xs"></div>
                   {{ 'COMMON.SAVING' | translate }}
@@ -1125,7 +1125,7 @@
               appSubmitGuard
               submitGuardRequired
               type="submit"
-              class="btn btn-primary"
+              class="btn-primary"
               [disabled]="saving()"
             >
               @if (saving()) {
@@ -1331,7 +1331,7 @@
 
         <div class="drawer-footer">
           <button
-            class="btn btn-primary"
+            class="btn-primary"
             data-test="provision-submit"
             (click)="provisionCatalogItem(item)"
             [disabled]="saving()"
@@ -1499,7 +1499,7 @@
               appSubmitGuard
               submitGuardRequired
               type="submit"
-              class="btn btn-primary"
+              class="btn-primary"
               [disabled]="saving()"
             >
               @if (saving()) {

@@ -448,7 +448,7 @@ select:focus-visible {
       text-align: left;
       font-size: 0.8rem;
       font-weight: 600;
-      color: #64748b;
+      color: var(--text-secondary);
       text-transform: uppercase;
       letter-spacing: 0.05em;
       border-bottom: 1px solid #e2e8f0;
@@ -480,7 +480,7 @@ select:focus-visible {
 
 .cell-secondary {
   font-size: 0.75rem;
-  color: var(--text-muted, #64748b);
+  color: var(--text-muted);
 }
 
 .type-badge {
@@ -490,7 +490,7 @@ select:focus-visible {
   font-size: 0.8rem;
   .type-icon {
     font-size: 1rem;
-    color: #6366f1;
+    color: var(--primary);
   }
 }
 
@@ -513,8 +513,8 @@ select:focus-visible {
     color: #065f46;
   }
   &.status-discharged {
-    background: #e0e7ff;
-    color: #3730a3;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
   &.status-cancelled {
     background: #fee2e2;
@@ -540,7 +540,7 @@ select:focus-visible {
   background: transparent;
   border-radius: 6px;
   cursor: pointer;
-  color: #64748b;
+  color: var(--text-secondary);
   transition: background 0.15s;
   &:hover {
     background: #f1f5f9;
@@ -606,7 +606,7 @@ select:focus-visible {
 .field-label {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #64748b;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -676,7 +676,7 @@ select:focus-visible {
   &:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    box-shadow: 0 0 0 3px rgba(14, 124, 107, 0.1);
   }
 }
 
@@ -699,7 +699,7 @@ select:focus-visible {
     margin: 0 auto 1rem;
   }
   p {
-    color: #64748b;
+    color: var(--text-secondary);
   }
 }
 
@@ -708,14 +708,14 @@ select:focus-visible {
   padding: 3rem;
   .empty-icon {
     font-size: 3rem;
-    color: #64748b;
+    color: var(--text-secondary);
   }
   h3 {
     margin: 0.75rem 0 0.25rem;
     color: #334155;
   }
   p {
-    color: #64748b;
+    color: var(--text-secondary);
     font-size: 0.875rem;
   }
 }
@@ -738,7 +738,7 @@ select:focus-visible {
   cursor: pointer;
   padding: 0.35rem;
   border-radius: 6px;
-  color: #64748b;
+  color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
   transition: all 0.15s;
@@ -747,13 +747,13 @@ select:focus-visible {
     color: #0f172a;
   }
   &.view-link:hover {
-    color: #6366f1;
+    color: var(--primary);
   }
   &.edit-link:hover {
-    color: #0ea5e9;
+    color: var(--info-text);
   }
   &.delete-link:hover {
-    color: #ef4444;
+    color: var(--danger);
     background: #fef2f2;
   }
   .material-symbols-outlined {
@@ -817,7 +817,7 @@ select:focus-visible {
   cursor: pointer;
   padding: 0.4rem;
   border-radius: 8px;
-  color: #64748b;
+  color: var(--text-secondary);
   &:hover {
     background: #f1f5f9;
     color: #0f172a;
@@ -856,8 +856,8 @@ select:focus-visible {
     transition: border-color 0.15s;
     &:focus {
       outline: none;
-      border-color: #6366f1;
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(14, 124, 107, 0.1);
     }
   }
   textarea {
@@ -879,7 +879,7 @@ select:focus-visible {
     cursor: not-allowed;
     .locked-icon {
       font-size: 1.1rem;
-      color: #64748b;
+      color: var(--text-secondary);
     }
   }
 }
@@ -906,38 +906,6 @@ select:focus-visible {
     font-weight: 600;
     font-size: 0.9rem;
     cursor: pointer;
-  }
-  .btn-secondary {
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
-    color: #475569;
-    &:hover {
-      background: #e2e8f0;
-    }
-  }
-  .btn-primary {
-    background: #6366f1;
-    border: none;
-    color: #fff;
-    &:hover {
-      background: #4f46e5;
-    }
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-  }
-  .btn-danger {
-    background: #ef4444;
-    border: none;
-    color: #fff;
-    &:hover {
-      background: #dc2626;
-    }
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
   }
 }
 

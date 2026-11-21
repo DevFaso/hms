@@ -263,7 +263,7 @@ const RECORD_OPEN: readonly ImagingOrderStatus[] = ['IN_PROGRESS', 'COMPLETED'];
     }
     .exam-record__facts dt {
       font-size: 0.8rem;
-      color: #64748b;
+      color: var(--text-secondary);
     }
     .exam-record__facts dd {
       margin: 0;

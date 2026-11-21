@@ -55,7 +55,7 @@
       </span>
       <button
         type="button"
-        class="btn btn-sm btn-primary"
+        class="btn-sm btn-primary"
         [disabled]="syncing()"
         (click)="replayQueue()"
         data-testid="offline-sync-now"
@@ -1076,10 +1076,10 @@
           </div>
         }
         <div class="field">
-          <button type="button" class="btn btn-secondary" (click)="cancelWitnessFor.set(null)">
+          <button type="button" class="btn-secondary" (click)="cancelWitnessFor.set(null)">
             {{ 'COMMON.CANCEL' | translate }}
           </button>
-          <button type="button" class="btn btn-primary" (click)="confirmWitnessedCancel()">
+          <button type="button" class="btn-primary" (click)="confirmWitnessedCancel()">
             {{ 'COMMON.CONFIRM' | translate }}
           </button>
         </div>

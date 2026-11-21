@@ -90,29 +90,6 @@
     margin-top: 1rem;
   }
 
-  .btn-primary {
-    background: var(--primary, #0066cc);
-    color: #fff;
-    border: 0;
-    padding: 0.5rem 1.25rem;
-    border-radius: 4px;
-    cursor: pointer;
-
-    &:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-  }
-
-  .btn-secondary {
-    background: #fff;
-    color: var(--primary, #0066cc);
-    border: 1px solid var(--primary, #0066cc);
-    padding: 0.5rem 1.25rem;
-    border-radius: 4px;
-    cursor: pointer;
-  }
-
   /* ─── Receipt ─── */
   .receipt {
     background: #fff;

@@ -18,8 +18,9 @@
   font-size: 0.8rem;
   font-weight: 700;
   flex-shrink: 0;
+  // QA D2793: white initials on #94a3b8 were 2.56:1; on --text-muted 5.94:1.
   &.inactive {
-    background: #94a3b8;
+    background: var(--text-muted);
   }
 }
 
@@ -197,10 +198,10 @@
     background: #fff;
     &:focus {
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+      box-shadow: 0 0 0 3px rgba(14, 124, 107, 0.1);
     }
     &::placeholder {
-      color: #6b7280;
+      color: var(--text-muted);
     }
   }
 }
@@ -309,13 +310,13 @@ fieldset.field {
     }
   }
   &.delete {
-    color: #dc2626;
+    color: var(--danger);
     &:hover {
       background: #fef2f2;
     }
   }
   &.restore {
-    color: #16a34a;
+    color: var(--success-text);
     &:hover {
       background: #f0fdf4;
     }
@@ -325,7 +326,7 @@ fieldset.field {
     }
   }
   &.impersonate {
-    color: #7c3aed;
+    color: var(--primary);
     &:hover {
       background: #f5f3ff;
     }
@@ -336,7 +337,7 @@ fieldset.field {
   padding: 12px;
   .warning-icon {
     font-size: 48px;
-    color: #dc2626;
+    color: var(--danger);
   }
   p {
     margin: 8px 0;
@@ -345,22 +346,6 @@ fieldset.field {
     font-style: italic;
     color: var(--text-secondary);
     font-size: 0.9rem;
-  }
-}
-.btn-danger {
-  background: #dc2626;
-  color: #fff;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  &:hover {
-    background: #b91c1c;
-  }
-  &:disabled {
-    opacity: 0.5;
-    cursor: default;
   }
 }
 
@@ -380,7 +365,7 @@ select.input-error {
   display: block;
   margin-top: 4px;
   font-size: 0.78rem;
-  color: #dc2626;
+  color: var(--danger);
   font-weight: 500;
   line-height: 1.3;
 }

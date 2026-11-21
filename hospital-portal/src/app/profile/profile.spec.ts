@@ -5,6 +5,7 @@ import { signal, WritableSignal } from '@angular/core';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject, throwError } from 'rxjs';
 import { ProfileComponent } from './profile';
+import { NO_BREAK_SPACE } from '../shared/pipes/phone.pipe';
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { MfaService } from '../auth/mfa.service';
 import { OidcAuthService } from '../auth/oidc-auth.service';
@@ -20,6 +21,7 @@ import { PatientPortalService, PatientProfileDTO } from '../services/patient-por
 import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
 import { fieldControlFor, markServerFieldErrors } from '../shared/forms/server-field-errors';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { closeScreens, openScreen } from '../testing/screen-frame';
 import en from '../../assets/i18n/en.json';
 import fr from '../../assets/i18n/fr.json';
 import es from '../../assets/i18n/es.json';
@@ -159,6 +161,76 @@ describe('ProfileComponent — editing the profile', () => {
         .withContext(role)
         .not.toBeNull();
     }
+  });
+
+  describe('header and grid layout (QA D2794, r65)', () => {
+    /**
+     * The overview tab in a box as wide as the content area of a 1024 px
+     * laptop, for a real-looking account: a role badge, and a username and an
+     * e-mail with no space to wrap at (what clipped at 1024 px).
+     */
+    async function overviewOn(screenWidth: number): Promise<HTMLElement> {
+      profiles.getUserProfile.and.returnValue(
+        of({
+          ...profile('awa.mariam.traore-ouedraogo@centre-hospitalier-wend-panga.example.invalid'),
+          username: 'awa.mariam.traore-ouedraogo.medecin',
+          roles: [{ id: 'r1', code: 'ROLE_DOCTOR', name: 'Doctor' }],
+        } as UserProfile),
+      );
+      const f = TestBed.createComponent(ProfileComponent);
+      f.detectChanges();
+      // A window of that width (a media query follows the window, not a box),
+      // less the shell: the sidebar and the content padding leave 714 px of a
+      // 1024 px laptop and 358 px of a 390 px phone.
+      const screen = await openScreen(screenWidth);
+      const host = screen.createElement('div');
+      host.style.width = `${screenWidth >= 1024 ? 714 : screenWidth - 32}px`;
+      screen.body.appendChild(host);
+      host.appendChild(f.nativeElement);
+      return host;
+    }
+
+    afterEach(closeScreens);
+
+    it('writes the name below the banner, never on it', async () => {
+      const host = await overviewOn(1024);
+      const banner = host.querySelector<HTMLElement>('.header-bg')!.getBoundingClientRect();
+      const name = host.querySelector<HTMLElement>('.user-name')!.getBoundingClientRect();
+      expect(name.height).toBeGreaterThan(0);
+      expect(name.top).toBeGreaterThanOrEqual(banner.bottom);
+      // Only the avatar overlaps the banner's lower edge.
+      const avatar = host.querySelector<HTMLElement>('.avatar-wrapper')!.getBoundingClientRect();
+      expect(avatar.top).toBeLessThan(banner.bottom);
+    });
+
+    it('fits every label and value of the information grid on a laptop and on a phone', async () => {
+      for (const width of [1024, 390]) {
+        const host = await overviewOn(width);
+        const items = Array.from(host.querySelectorAll<HTMLElement>('.info-grid .info-item'));
+        expect(items.length).toBeGreaterThan(3);
+        const edge = host.getBoundingClientRect().right;
+        for (const item of items) {
+          for (const part of Array.from(
+            item.querySelectorAll<HTMLElement>('.info-label, .info-value'),
+          )) {
+            expect(part.scrollWidth)
+              .withContext(`${width}px: ${part.textContent?.trim()}`)
+              .toBeLessThanOrEqual(part.clientWidth + 1);
+            expect(part.getBoundingClientRect().right)
+              .withContext(`${width}px: ${part.textContent?.trim()}`)
+              .toBeLessThanOrEqual(edge + 1);
+          }
+        }
+      }
+    });
+
+    it('shows the phone number grouped in pairs, not raw (QA D2799)', async () => {
+      const host = await overviewOn(1024);
+      expect(host.querySelector('.user-meta')!.textContent).toContain(
+        ['+226', '70', '00', '00', '00'].join(NO_BREAK_SPACE),
+      );
+      expect(host.textContent).not.toContain('+22670000000');
+    });
   });
 
   describe('patient phone (QA D939)', () => {

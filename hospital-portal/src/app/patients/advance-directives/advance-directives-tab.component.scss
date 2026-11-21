@@ -25,7 +25,7 @@
   align-items: center;
   gap: 0.35rem;
   font-size: 0.9rem;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted, var(--text-secondary));
 }
 
 .state-block {
@@ -34,7 +34,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 2rem 1rem;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted, var(--text-secondary));
 
   &.state-error {
     color: #991b1b;
@@ -72,7 +72,7 @@
   }
 
   .description-row td {
-    color: var(--color-text-muted, #6b7280);
+    color: var(--color-text-muted, var(--text-secondary));
     font-size: 0.85rem;
     border-bottom-width: 2px;
   }
@@ -107,7 +107,7 @@
 .reviewed-at {
   margin-left: 0.5rem;
   font-size: 0.78rem;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted, var(--text-secondary));
 }
 
 .btn-icon {
@@ -124,13 +124,11 @@
     background: var(--color-surface-alt, #f3f4f6);
   }
 
-  &.btn-danger {
+  &.danger {
     color: #b91c1c;
   }
 }
 
-.btn-primary,
-.btn-secondary,
 .btn-danger-solid {
   display: inline-flex;
   align-items: center;
@@ -145,12 +143,6 @@
     opacity: 0.5;
     cursor: default;
   }
-}
-
-.btn-primary {
-  background: var(--color-primary, var(--primary));
-  border-color: var(--color-primary, var(--primary));
-  color: #fff;
 }
 
 .btn-danger-solid {

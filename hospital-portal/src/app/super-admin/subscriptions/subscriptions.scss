@@ -17,11 +17,11 @@
     font-weight: 600;
   }
   .page-subtitle {
-    color: #64748b;
+    color: var(--text-secondary);
     margin: 0;
   }
   .back-link {
-    color: #6366f1;
+    color: var(--primary);
     text-decoration: none;
     display: inline-flex;
     gap: 6px;
@@ -47,15 +47,6 @@
 
   .btn-primary {
     margin-left: auto;
-    background: #16a34a;
-    color: #fff;
-    border: none;
-    padding: 8px 14px;
-    border-radius: 6px;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
   }
 }
 
@@ -129,8 +120,8 @@
   }
 
   .tier-pill {
-    background: #eef2ff;
-    color: #4338ca;
+    background: var(--primary-soft);
+    color: var(--primary-dark);
     padding: 2px 8px;
     border-radius: 999px;
     font-size: 12px;
@@ -154,7 +145,7 @@
     gap: 4px;
 
     .features {
-      color: #64748b;
+      color: var(--text-secondary);
       font-size: 12px;
       word-break: break-word;
     }
@@ -205,7 +196,7 @@
       span {
         font-size: 12px;
         font-weight: 500;
-        color: #64748b;
+        color: var(--text-secondary);
         text-transform: uppercase;
         letter-spacing: 0.04em;
       }
@@ -239,14 +230,6 @@
     display: flex;
     gap: 8px;
 
-    .btn-primary {
-      background: #16a34a;
-      color: #fff;
-      border: none;
-      padding: 8px 14px;
-      border-radius: 6px;
-      cursor: pointer;
-    }
     .btn-ghost {
       background: #f1f5f9;
       border: 1px solid #cbd5e1;

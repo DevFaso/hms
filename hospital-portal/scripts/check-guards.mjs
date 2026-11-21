@@ -35,6 +35,7 @@ import { gate as destructiveConfirm } from './check-destructive-confirm.mjs';
 import { gate as eventCancel } from './check-event-cancel.mjs';
 import { gate as changeDetection } from './check-change-detection.mjs';
 import { gate as superAdminClinical } from './check-superadmin-clinical-gates.mjs';
+import { gate as designTokens } from './check-design-tokens.mjs';
 
 const argv = process.argv.slice(2);
 // The `.ts` sources are read once and handed to the template loader, so a
@@ -59,6 +60,7 @@ for (const gate of [
   eventCancel,
   changeDetection,
   superAdminClinical,
+  designTokens,
 ]) {
   if (!evaluateGate(gate, argv, ctx)) failed++;
 }

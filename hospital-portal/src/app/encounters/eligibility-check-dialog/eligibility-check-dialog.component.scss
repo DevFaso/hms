@@ -48,7 +48,7 @@
     font-size: 1.4rem;
     line-height: 1;
     cursor: pointer;
-    color: #6b7280;
+    color: var(--text-secondary);
   }
 
   &__body {
@@ -113,7 +113,7 @@
       }
 
       dt {
-        color: #6b7280;
+        color: var(--text-secondary);
       }
 
       dd {
@@ -124,7 +124,7 @@
   }
 
   &__empty {
-    color: #6b7280;
+    color: var(--text-secondary);
     font-size: 0.85rem;
     margin: 0;
   }
@@ -155,8 +155,8 @@
   }
 
   &--unknown {
-    background: #e0e7ff;
-    color: #3730a3;
+    background: var(--primary-tint);
+    color: var(--primary-deep);
   }
 
   &--error {

@@ -17,7 +17,7 @@
 
   dt {
     font-size: 0.8rem;
-    color: var(--color-text-muted, #64748b);
+    color: var(--color-text-muted, var(--text-secondary));
   }
 
   dd {
@@ -44,7 +44,7 @@
 .payer-shares-hint {
   flex-basis: 100%;
   font-size: 0.85rem;
-  color: var(--color-text-muted, #64748b);
+  color: var(--color-text-muted, var(--text-secondary));
 }
 
 .payer-shares-actions {
@@ -79,6 +79,6 @@
 .payer-shares-estimate {
   font-size: 0.85rem;
   font-style: italic;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-muted, var(--text-secondary));
   margin: 0.25rem 0 0;
 }

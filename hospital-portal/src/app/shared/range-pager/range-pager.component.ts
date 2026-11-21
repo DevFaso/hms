@@ -60,7 +60,7 @@ import { TranslateModule } from '@ngx-translate/core';
       }
       .range-pager__info {
         font-size: 0.8125rem;
-        color: var(--text-secondary, #64748b);
+        color: var(--text-secondary);
       }
       .range-pager__controls {
         display: inline-flex;

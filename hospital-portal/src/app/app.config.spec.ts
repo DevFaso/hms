@@ -4,6 +4,10 @@ import { TestBed } from '@angular/core/testing';
 import { appConfig } from './app.config';
 import { OidcAuthService } from './auth/oidc-auth.service';
 import { focusRescueInstalledOn, uninstallFocusRescue } from './shared/a11y/focus-rescue';
+import {
+  designConventionsInstalledOn,
+  uninstallDesignConventions,
+} from './shared/a11y/design-conventions';
 
 /**
  * QA D505: the comma-decimal fix lives entirely in one app initializer;
@@ -42,6 +46,21 @@ describe('appConfig start-up (QA D505 wiring)', () => {
     });
     await TestBed.inject(ApplicationInitStatus).donePromise;
     expect(focusRescueInstalledOn()).toBe(doc);
+    uninstallFocusRescue();
+  });
+
+  it('QA r65 (D2798 / D2792 / D2807): installs the design conventions on the document', async () => {
+    const doc = document.implementation.createHTMLDocument('d2798');
+    TestBed.configureTestingModule({
+      providers: [
+        ...appConfig.providers,
+        { provide: DOCUMENT, useValue: doc },
+        { provide: OidcAuthService, useValue: { initialize: () => Promise.resolve() } },
+      ],
+    });
+    await TestBed.inject(ApplicationInitStatus).donePromise;
+    expect(designConventionsInstalledOn()).toBe(doc);
+    uninstallDesignConventions();
     uninstallFocusRescue();
   });
 });

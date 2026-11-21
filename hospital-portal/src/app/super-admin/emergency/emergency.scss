@@ -17,11 +17,11 @@
     font-weight: 600;
   }
   .page-subtitle {
-    color: #64748b;
+    color: var(--text-secondary);
     margin: 0;
   }
   .back-link {
-    color: #6366f1;
+    color: var(--primary);
     text-decoration: none;
     display: inline-flex;
     gap: 6px;
@@ -87,7 +87,7 @@
     span {
       font-size: 12px;
       font-weight: 500;
-      color: #64748b;
+      color: var(--text-secondary);
       text-transform: uppercase;
       letter-spacing: 0.04em;
     }
@@ -115,16 +115,9 @@
     cursor: not-allowed;
   }
 
-  .btn-danger {
-    background: #dc2626;
-    color: #fff;
-  }
+  // White on #d97706 was 3.19:1; on the warning text colour it is 5.02:1.
   .btn-warn {
-    background: #d97706;
-    color: #fff;
-  }
-  .btn-primary {
-    background: var(--primary);
+    background: var(--warning-text);
     color: #fff;
   }
 

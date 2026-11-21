@@ -15,55 +15,13 @@
   h1 {
     margin: 0;
     font-size: 1.375rem;
-    color: #0f172a;
+    color: var(--text-primary);
   }
 
   .subtitle {
     margin: 0.25rem 0 0;
     font-size: 0.8125rem;
-    color: #64748b;
-  }
-}
-
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0.5rem 0.875rem;
-  border: none;
-  border-radius: 8px;
-  background: #7c3aed;
-  color: #fff;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  cursor: pointer;
-
-  .material-symbols-outlined {
-    font-size: 18px;
-  }
-
-  &:hover {
-    background: #6d28d9;
-  }
-
-  &:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-}
-
-.btn-secondary {
-  padding: 0.5rem 0.875rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #fff;
-  color: #334155;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  cursor: pointer;
-
-  &:hover {
-    background: #f8fafc;
+    color: var(--text-secondary);
   }
 }
 
@@ -83,12 +41,12 @@
   background: none;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: #64748b;
+  color: var(--text-secondary);
   cursor: pointer;
 
   &.active {
-    color: #7c3aed;
-    border-bottom-color: #7c3aed;
+    color: var(--primary);
+    border-bottom-color: var(--primary);
     font-weight: 600;
   }
 
@@ -119,9 +77,9 @@
   cursor: pointer;
 
   &.active {
-    border-color: #7c3aed;
-    background: #f5f3ff;
-    color: #6d28d9;
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    color: var(--primary-deep);
     font-weight: 600;
   }
 
@@ -154,7 +112,7 @@
   align-items: center;
   gap: 0.75rem;
   padding: 3rem 1rem;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.875rem;
 }
 
@@ -165,14 +123,14 @@
 }
 
 .error-state .material-symbols-outlined {
-  color: #dc2626;
+  color: var(--danger);
 }
 
 .spinner {
   width: 28px;
   height: 28px;
   border: 3px solid #e2e8f0;
-  border-top-color: #7c3aed;
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -200,7 +158,7 @@
     text-align: left;
     padding: 0.75rem 1rem;
     background: #f8fafc;
-    color: #64748b;
+    color: var(--text-secondary);
     font-weight: 600;
     font-size: 0.75rem;
     text-transform: uppercase;
@@ -235,14 +193,14 @@
 
   .patient-meta {
     font-size: 0.75rem;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 }
 
 // #64748b, not the lighter grey: 13px text needs 4.5:1 on white (WCAG AA)
 // and #94a3b8 only reaches 2.56:1.
 .muted {
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .overdue-chip {
@@ -276,8 +234,8 @@
   }
 
   &.reg-status-transferred_out {
-    background: #e0e7ff;
-    color: #4338ca;
+    background: var(--primary-tint);
+    color: var(--primary-dark);
   }
 
   &.reg-status-lost_to_follow_up {
@@ -304,7 +262,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.6875rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .col-actions {
@@ -391,7 +349,7 @@
     color: #1e293b;
 
     &:focus-visible {
-      outline: 2px solid #7c3aed;
+      outline: 2px solid var(--primary);
       outline-offset: 1px;
     }
   }
@@ -399,7 +357,7 @@
 
 .hint {
   font-size: 0.6875rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .counts-unavailable {
@@ -409,13 +367,13 @@
 }
 
 .chip-count--unavailable {
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .truncation-note {
   margin: 0 0 0.5rem;
   font-size: 0.75rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .modal-actions {

@@ -8,6 +8,7 @@ import { SuperAdminRedirectGuard } from './auth/super-admin-redirect.guard';
 import { superAdminPathRewriteGuard } from './auth/super-admin-path-rewrite.guard';
 import { FacilityTypeGuard, ProviderHomeRedirectGuard } from './auth/facility-type.guard';
 import { AppointmentLinkGuard } from './patient-portal/my-appointments/appointment-link.guard';
+import { unknownAddressRedirect } from './errors/unknown-address.redirect';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -2087,6 +2088,9 @@ export const routes: Routes = [
     ],
   },
 
-  // Catch-all
-  { path: '**', redirectTo: 'login' },
+  // Catch-all. QA D2802 (r65): an unknown address opens the « page introuvable » page
+  // inside the shell (it used to go to /login, which bounced a signed-in user to the
+  // dashboard with no message). Signed out, it still goes to /login, with no return
+  // address: errors/unknown-address.redirect.ts.
+  { path: '**', redirectTo: unknownAddressRedirect },
 ];

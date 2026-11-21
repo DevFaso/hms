@@ -5,7 +5,7 @@
 .flow-empty {
   padding: 2.5rem;
   text-align: center;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .flow-grid {
@@ -60,7 +60,7 @@
 
 .col-empty {
   text-align: center;
-  color: #6b7280;
+  color: var(--text-secondary);
   padding: 1rem 0;
   font-size: 0.875rem;
 }
@@ -114,13 +114,13 @@
 
 .card-meta {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--text-secondary);
   margin-top: 0.1rem;
 }
 
 .card-wait {
   font-size: 0.7rem;
-  color: #d97706;
+  color: var(--warning-text);
   font-weight: 600;
   margin-top: 0.2rem;
 }
@@ -175,7 +175,7 @@
   top: 0.25rem;
   left: 0.25rem;
   cursor: grab;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 0.85rem;
   line-height: 1;
   user-select: none;
@@ -215,7 +215,7 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--primary, #0e7c6b);
+    outline: 2px solid var(--primary);
     outline-offset: 2px;
   }
 }

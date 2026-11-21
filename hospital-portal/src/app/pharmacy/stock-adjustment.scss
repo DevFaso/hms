@@ -83,12 +83,12 @@
 
   &.tx-in {
     background: #ecfdf5;
-    color: #059669;
+    color: var(--success-text);
   }
 
   &.tx-out {
     background: #fef2f2;
-    color: #ef4444;
+    color: var(--danger);
   }
 }
 
@@ -97,10 +97,10 @@
   font-size: 0.9375rem;
 
   &.tx-in {
-    color: #059669;
+    color: var(--success-text);
   }
   &.tx-out {
-    color: #ef4444;
+    color: var(--danger);
   }
 }
 

@@ -42,28 +42,7 @@
 .form-grid input:focus,
 .form-grid select:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
-}
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #fff;
-  background: var(--primary);
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.btn-primary:hover:not(:disabled) {
-  background: var(--primary-dark);
-}
-.btn-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  box-shadow: 0 0 0 3px rgba(14, 124, 107, 0.12);
 }
 .portal-table-wrapper {
   overflow-x: auto;
@@ -79,7 +58,7 @@
   padding: 12px 16px;
   font-size: 12px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   border-bottom: 2px solid #e2e8f0;
@@ -103,7 +82,7 @@
   color: #475569;
 }
 .text-muted {
-  color: #64748b;
+  color: var(--text-secondary);
 }
 .btn-danger-sm {
   display: inline-flex;
@@ -112,7 +91,7 @@
   padding: 6px 12px;
   font-size: 12px;
   font-weight: 600;
-  color: #dc2626;
+  color: var(--danger);
   background: #fef2f2;
   border: 1px solid #fecaca;
   border-radius: 8px;

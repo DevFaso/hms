@@ -67,7 +67,7 @@
 
 .drawer-meta {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .drawer-header-actions {
@@ -110,7 +110,7 @@
   border: none;
   background: transparent;
   border-radius: 6px;
-  color: #64748b;
+  color: var(--text-secondary);
   cursor: pointer;
 
   &:hover {
@@ -187,12 +187,12 @@
   padding: 1px 6px;
   border-radius: 99px;
   background: #f1f5f9;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .toggle-arrow {
   font-size: 20px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .section-body {
@@ -201,7 +201,7 @@
 
 .no-data {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-style: italic;
 }
 
@@ -253,7 +253,7 @@
 
 .med-dose {
   font-size: 11px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 // ── Vitals ──
@@ -274,7 +274,7 @@
 .vital-type {
   font-size: 10px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -370,7 +370,7 @@
 
 .note-author {
   font-size: 11px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .note-snippet {
@@ -393,7 +393,7 @@
 .team-role {
   font-size: 11px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--text-secondary);
   min-width: 80px;
 }
 

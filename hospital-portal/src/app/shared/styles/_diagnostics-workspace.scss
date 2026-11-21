@@ -27,7 +27,7 @@
       font-size: clamp(23px, 2vw, 30px);
       line-height: 1.25;
       letter-spacing: -0.5px;
-      color: #17334a;
+      color: var(--text-primary);
     }
     .page-subtitle,
     .page-header > div > p:not(.diagnostics-eyebrow) {
@@ -207,7 +207,6 @@
       font-size: 13px;
       color: #19334b;
     }
-    .btn-primary,
     .btn-export,
     .btn-search,
     .btn-refresh {
@@ -223,7 +222,6 @@
       font-weight: 650;
       border: 1px solid #cbd8e2;
     }
-    .btn-primary,
     .btn-search {
       background: #08796c;
       border-color: #08796c;
@@ -234,7 +232,6 @@
       background: white;
       color: #244259;
     }
-    .btn-primary:disabled,
     .btn-search:disabled,
     .btn-refresh:disabled {
       opacity: 0.5;

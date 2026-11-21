@@ -92,12 +92,12 @@
   }
 
   &.active .dot {
-    background: var(--primary-color, var(--primary));
+    background: var(--primary);
     color: #f0f0f0;
   }
 
   &.active .label {
-    color: var(--primary-color, var(--primary));
+    color: var(--primary);
     font-weight: 600;
   }
 
@@ -163,8 +163,8 @@
 
     &:focus {
       outline: none;
-      border-color: var(--primary-color, var(--primary-light));
-      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(14, 124, 107, 0.15);
     }
   }
 }
@@ -184,7 +184,7 @@
 /* Questionnaires */
 .no-data {
   text-align: center;
-  color: var(--text-secondary, #888);
+  color: var(--text-secondary);
   padding: 2rem 0;
 }
 
@@ -201,7 +201,7 @@
 }
 
 .q-description {
-  color: var(--text-secondary, #777);
+  color: var(--text-secondary);
   font-size: 0.85rem;
   margin-bottom: 1rem;
 }
@@ -218,7 +218,7 @@
 }
 
 .required {
-  color: #ef4444;
+  color: var(--danger);
 }
 
 .yesno-toggle {
@@ -285,42 +285,6 @@
   padding-top: 1rem;
   border-top: 1px solid var(--border-color, #eee);
   margin-top: 1rem;
-}
-
-.btn-primary {
-  padding: 0.6rem 1.5rem;
-  background: var(--primary-color, var(--primary));
-  color: #f0f0f0;
-  border: none;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.2s;
-
-  &:hover:not(:disabled) {
-    background: var(--primary-hover, var(--primary));
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-}
-
-.btn-secondary {
-  padding: 0.6rem 1.5rem;
-  background: var(--surface-card, #fff);
-  color: var(--text-primary, #333);
-  border: 1px solid var(--border-color, #d0d0d0);
-  border-radius: 6px;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: background 0.2s;
-
-  &:hover {
-    background: var(--surface-hover, #f5f5f5);
-  }
 }
 
 /* Banners */

@@ -16,65 +16,109 @@
 .page-title {
   font-size: 1.375rem;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--text-primary);
   margin: 0;
 }
 
 .page-subtitle {
   font-size: 0.875rem;
-  color: #64748b;
+  color: var(--text-secondary);
   margin: 0.25rem 0 0;
 }
 
-.btn-primary {
+// ---------- Buttons ----------
+// QA D2790 / D2804 (r65): THE button system. Primary, secondary and danger are
+// defined here and nowhere else: 63 component stylesheets each carried their
+// own copy (8 colours, 34 to 50 px tall, four radii). A component may still
+// place a button (margin, width, flex) or size one with a modifier class; it
+// may not restyle these three. Guarded by scripts/check-design-tokens.mjs
+// (`local-button`).
+.btn-primary,
+.btn-secondary,
+.btn-danger {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
-  padding: 0.625rem 1.25rem;
-  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-  color: #fff;
-  border: none;
+  min-height: 2.5rem;
+  padding: 0.5rem 1.125rem;
+  border: 1px solid transparent;
   border-radius: 8px;
+  font-family: inherit;
   font-size: 0.875rem;
   font-weight: 600;
+  line-height: 1.25;
   text-decoration: none;
   cursor: pointer;
   transition:
-    transform 0.1s,
-    box-shadow 0.2s;
+    background-color 0.15s,
+    border-color 0.15s,
+    box-shadow 0.15s;
 
-  &:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-  }
-
-  // QA D539: a disabled primary button (e.g. the EPDS screening one) looked
-  // enabled - the shared style had no disabled state.
-  &:disabled {
+  // QA D539: a disabled button (e.g. the EPDS screening one) looked enabled.
+  &:disabled,
+  &[aria-disabled='true'] {
     opacity: 0.5;
     cursor: not-allowed;
     box-shadow: none;
-    transform: none;
+  }
+
+  // An icon inside a button is sized to the label, whatever the page's default.
+  .material-symbols-outlined,
+  .material-icons {
+    font-size: 1.125rem;
+  }
+}
+
+.btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+
+  &:hover:not(:disabled) {
+    background: var(--primary-dark);
+    border-color: var(--primary-dark);
+    box-shadow: var(--primary-shadow);
   }
 }
 
 .btn-secondary {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.625rem 1.25rem;
-  background: #fff;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  text-decoration: none;
-  cursor: pointer;
+  background: var(--surface);
+  border-color: #cbd5e1;
+  color: #334155;
 
-  &:hover {
-    background: #f9fafb;
-    border-color: #9ca3af;
+  &:hover:not(:disabled) {
+    background: #f8fafc;
+    border-color: #94a3b8;
+  }
+}
+
+// `.btn-primary.danger` is the same button: a confirm button that a page
+// turns destructive by binding one class (« Refuser » on a release request).
+// Without it the red fill kept the primary's teal border and teal hover glow.
+.btn-danger,
+.btn-primary.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+
+  &:hover:not(:disabled) {
+    background: var(--danger-dark);
+    border-color: var(--danger-dark);
+    box-shadow: none;
+  }
+}
+
+// The one small size: a button in a table row, a card header or a toolbar.
+// `.btn-small` and `.small` are older spellings of the same modifier.
+:is(.btn-primary, .btn-secondary, .btn-danger):is(.btn-sm, .btn-small, .small) {
+  min-height: 2rem;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8125rem;
+
+  .material-symbols-outlined,
+  .material-icons {
+    font-size: 1rem;
   }
 }
 
@@ -89,9 +133,9 @@
     top: 50%;
     transform: translateY(-50%);
     // v1.0 row 11: aria-hidden via pointer-events:none, but axe still
-    // counts SVG fill against the surrounding text-contrast budget. #6b7280
-    // (5.0:1 on white) replaces #9ca3af (2.84:1).
-    color: #6b7280;
+    // counts SVG fill against the surrounding text-contrast budget, so the
+    // icon takes a text token (r65: --text-secondary, 7.58:1 on white).
+    color: var(--text-secondary);
     pointer-events: none;
   }
 
@@ -107,7 +151,7 @@
     &:focus {
       outline: none;
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+      box-shadow: 0 0 0 3px rgba(14, 124, 107, 0.1);
     }
   }
 }
@@ -218,7 +262,7 @@ div.data-table {
 }
 
 .action-link {
-  color: #64748b;
+  color: var(--text-secondary);
   padding: 4px;
   border-radius: 4px;
   display: inline-flex;
@@ -237,7 +281,7 @@ div.data-table {
 .loading-state {
   text-align: center;
   padding: 3rem;
-  color: #64748b;
+  color: var(--text-secondary);
 
   .spinner {
     width: 32px;
@@ -260,7 +304,7 @@ div.data-table {
 
 .empty-icon {
   font-size: 48px;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-bottom: 0.75rem;
 }
 
@@ -273,10 +317,10 @@ div.data-table {
 .empty-state p {
   margin: 0;
   font-size: 0.875rem;
-  // v1.0 row 11: bumped from #94a3b8 (2.83:1 on white) to #64748b
-  // (5.49:1) so empty-state body text passes WCAG AA. See
+  // v1.0 row 11 took this from #94a3b8 to #64748b, which is 4.34:1 on the
+  // page background; r65 (D2793) uses the token (6.92:1 there). See
   // docs/ui/accessibility.md §8.
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 @keyframes spin {
@@ -296,7 +340,7 @@ div.data-table {
     top: 50%;
     transform: translateY(-50%);
     font-size: 1rem;
-    color: #6b7280;
+    color: var(--text-secondary);
     pointer-events: none;
   }
 
@@ -400,7 +444,7 @@ div.data-table {
 
     .opt-meta {
       font-size: 0.7rem;
-      color: #6b7280;
+      color: var(--text-secondary);
     }
   }
 }
@@ -465,7 +509,7 @@ div.data-table {
     line-height: 1;
 
     &:hover {
-      background: rgba(59, 130, 246, 0.12);
+      background: rgba(14, 124, 107, 0.12);
     }
 
     .material-symbols-outlined {
@@ -593,7 +637,7 @@ div.data-table {
   label {
     font-size: 0.82rem;
     font-weight: 500;
-    color: #64748b;
+    color: var(--text-secondary);
   }
 
   input,
@@ -611,18 +655,18 @@ div.data-table {
 
     &:focus {
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+      box-shadow: 0 0 0 3px rgba(14, 124, 107, 0.1);
     }
 
     &::placeholder {
       // v1.0 row 11: #9ca3af (2.84:1) was below WCAG AA 4.5:1 on white.
-      // #6b7280 (5.0:1) keeps the visual hierarchy without failing axe.
-      color: #6b7280;
+      // --text-muted (5.94:1) is the lightest text and keeps the hierarchy.
+      color: var(--text-muted);
     }
 
     &:disabled {
       background: #f8fafc;
-      color: #64748b;
+      color: var(--text-secondary);
       cursor: not-allowed;
     }
   }
@@ -680,7 +724,7 @@ div.data-table {
     &:focus {
       outline: none;
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+      box-shadow: 0 0 0 3px rgba(14, 124, 107, 0.1);
       background: #fff;
     }
   }
@@ -796,7 +840,7 @@ div.data-table {
   margin: 6px 0 0;
   font-size: 0.8125rem;
   font-weight: 500;
-  color: #dc2626;
+  color: var(--danger);
 
   .material-symbols-outlined {
     font-size: 16px;
@@ -825,7 +869,7 @@ div.data-table {
       background: transparent;
       border: none;
       cursor: pointer;
-      color: #6b7280;
+      color: var(--text-secondary);
       display: flex;
       align-items: center;
       padding: 2px;
@@ -912,7 +956,7 @@ div.data-table {
 .filter-label {
   font-size: 0.75rem;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -929,7 +973,7 @@ div.data-table {
   &:focus {
     outline: none;
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    box-shadow: 0 0 0 3px rgba(14, 124, 107, 0.1);
   }
 }
 
@@ -941,7 +985,7 @@ div.data-table {
   background: transparent;
   border: 1px solid #fca5a5;
   border-radius: 7px;
-  color: #dc2626;
+  color: var(--danger);
   font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
@@ -989,7 +1033,7 @@ div.data-table {
     transition: background 0.12s;
 
     &:hover {
-      background: rgba(59, 130, 246, 0.15);
+      background: rgba(14, 124, 107, 0.15);
     }
 
     .material-symbols-outlined {
@@ -1036,7 +1080,7 @@ div.data-table {
 
 .pagination-info {
   font-size: 0.8125rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .pagination-controls {
@@ -1095,7 +1139,7 @@ div.data-table {
   justify-content: center;
   min-width: 32px;
   height: 32px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.875rem;
   -webkit-user-select: none;
   user-select: none;
@@ -1115,7 +1159,7 @@ div.data-table {
 
 .name-sub {
   font-size: 0.7rem;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .mrn-code {
@@ -1184,7 +1228,7 @@ div.data-table {
   border-radius: 999px;
   border: 1.5px solid #e2e8f0;
   background: #f8fafc;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.78rem;
   font-weight: 500;
   cursor: pointer;
@@ -1278,7 +1322,7 @@ div.data-table {
   .date-time {
     display: block;
     font-size: 0.75rem;
-    color: #64748b;
+    color: var(--text-secondary);
     margin-top: 0.1rem;
   }
 }
@@ -1358,19 +1402,19 @@ div.data-table {
     }
     &.ql-hospital {
       background: #fef2f2;
-      color: #dc2626;
+      color: var(--danger);
     }
     &.ql-dept {
       background: #f0fdf4;
-      color: #16a34a;
+      color: var(--success-text);
     }
     &.ql-roles {
       background: #faf5ff;
-      color: #7c3aed;
+      color: var(--accent-violet);
     }
     &.ql-users {
       background: #fff7ed;
-      color: #ea580c;
+      color: var(--warning-text);
     }
     &.ql-audit {
       background: #f0f9ff;
@@ -1378,7 +1422,7 @@ div.data-table {
     }
     &.ql-patients {
       background: #f0fdf4;
-      color: #059669;
+      color: var(--success-text);
     }
     &.ql-appts {
       background: #fefce8;
@@ -1412,7 +1456,7 @@ a.list-item {
   background: #f8fafc;
   border: 1.5px dashed #cbd5e1;
   border-radius: 8px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.8125rem;
   font-style: italic;
   -webkit-user-select: none;

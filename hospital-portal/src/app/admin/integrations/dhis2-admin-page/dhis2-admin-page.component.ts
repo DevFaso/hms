@@ -20,6 +20,8 @@ import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
 import { refusalReason } from '../../../shared/refusal-reason';
 
 import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directive';
+import { PageHeaderComponent } from '../../../shared/page-header/page-header.component';
+
 type Tab = 'config' | 'mappings' | 'exports';
 
 /**
@@ -41,13 +43,12 @@ type Tab = 'config' | 'mappings' | 'exports';
     TranslateModule,
     Dhis2ExportPanelComponent,
     Dhis2MappingEditorComponent,
+    PageHeaderComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="dhis2-admin" data-testid="dhis2-admin-page">
-      <header class="dhis2-admin__header">
-        <h1>{{ 'DHIS2.ADMIN.HEADING' | translate }}</h1>
-      </header>
+      <app-page-header [title]="'DHIS2.ADMIN.HEADING' | translate" />
 
       <nav role="tablist" class="dhis2-admin__tabs">
         <button
@@ -233,7 +234,7 @@ type Tab = 'config' | 'mappings' | 'exports';
       }
       .dhis2-admin__tabs button[aria-selected='true'] {
         font-weight: 600;
-        border-bottom: 2px solid var(--primary, #1a73e8);
+        border-bottom: 2px solid var(--primary);
       }
       .dhis2-admin__config-form {
         display: flex;
