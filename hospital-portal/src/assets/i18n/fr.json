@@ -15775,7 +15775,7 @@
     "DESCENDING_FLIP": "Décroissant, passer en croissant"
   },
   "PRINT_IDENTITY": {
-    "PATIENT": "Patient",
+    "PATIENT": "Nom du patient",
     "SEX": "Sexe",
     "EXAM_DATE": "Date de l'examen",
     "PRINTED_ON": "Imprimé le {{date}}"
