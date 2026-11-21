@@ -361,6 +361,9 @@ class CashSessionLockPostgresIT {
         visit.setVersion(0L);
         visit.setHospital(hospital);
         visit.setPatient(patient);
+        // QA D2523: the copay line is owned by the visit's assignment, as on a real visit (never null there).
+        visit.setAssignment(assignments.findFirstByUser_IdAndHospital_IdAndActiveTrue(receptionist.getId(),
+            hospital.getId()).orElseThrow());
         UUID receptionistId = receptionist.getId();
 
         refusedByTheClosedTill("a check-in copay", () -> tx.executeWithoutResult(status -> {
