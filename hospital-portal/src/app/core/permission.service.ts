@@ -149,6 +149,10 @@ export class PermissionService {
       'View Prescriptions',
       'Document Nursing Notes',
       'Request Imaging Studies',
+      // Platform admin rules 2026-11-20, rule 5 (surgeons are ordering clinicians):
+      // the order, its status, the images and the signed report. Performing the
+      // exam and signing the report stay with their own roles (action-permissions.ts).
+      'View Imaging Studies',
       'Request Consultations',
       'Create Treatment Plans',
       'Create Referrals',
@@ -172,6 +176,10 @@ export class PermissionService {
       'View Prescriptions',
       'Document Nursing Notes',
       'Request Imaging Studies',
+      // Platform admin rules 2026-11-20, rule 5 (surgeons are ordering clinicians):
+      // the order, its status, the images and the signed report. Performing the
+      // exam and signing the report stay with their own roles (action-permissions.ts).
+      'View Imaging Studies',
       'Request Consultations',
       'Create Treatment Plans',
       'Create Referrals',
