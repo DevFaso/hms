@@ -15571,6 +15571,11 @@
       "OPEN": "Abrir",
       "LOAD_FAILED": "No se pudo cargar la lista de puesta en marcha. Recargue la página.",
       "STEP": {
+        "HOSPITAL_ADMIN": {
+          "TITLE": "Administrador del hospital",
+          "DONE": "Administradores del hospital inscritos: {{count}}",
+          "TODO": "Inscriba al administrador de este hospital (rol de administrador de hospital). Los departamentos se crean después."
+        },
         "DEPARTMENTS": {
           "TITLE": "Departamentos",
           "DONE": "Departamentos creados: {{count}}",
@@ -15700,7 +15705,9 @@
     "ORG_ADMIN": {
       "HOSPITAL_REQUIRED": "Elija el hospital donde trabajará esta persona.",
       "REGISTER_SCOPE": "Puede inscribir personal en cada hospital de su organización.",
-      "ASSIGNMENTS_SCOPE": "Usted gestiona las asignaciones del personal en cada hospital de su organización. Los roles de administración los concede un superadministrador."
+      "ASSIGNMENTS_SCOPE": "Usted gestiona las asignaciones del personal en cada hospital de su organización. Los roles de administración los concede un superadministrador.",
+      "ACTION_USERS": "Inscribir personal en sus hospitales",
+      "ACTION_ASSIGNMENTS": "Asignar o retirar un rol a un miembro del personal"
     },
     "ORG_TOTALS": {
       "TITLE": "Cifras de la organización",

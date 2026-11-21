@@ -35,6 +35,7 @@ export const HOSPITAL_TIME_ZONES: readonly string[] = [
 
 /** The steps of a hospital's onboarding checklist (HospitalOnboardingReadinessDTO.Step). */
 export type OnboardingStep =
+  | 'HOSPITAL_ADMIN'
   | 'DEPARTMENTS'
   | 'STAFF'
   | 'PROVIDERS_IN_DEPARTMENT'

@@ -220,17 +220,76 @@ describe('Sidebar entries (QA r65 D2760 / D2777 class guards)', () => {
     expect(admin?.loadComponent).toBeUndefined();
   });
 
+  // ── Platform admin rules 2026-11-20, rule 1b: no patient or clinical page ──
+
+  it('class guard: ROLE_ADMIN, the organisation admin, is admitted by a recorded list of routes only', () => {
+    // A route that admits the role is a decision: record it here with the reason it shows no patient.
+    const recorded = new Set([
+      'users', // the staff directory and « Inscrire »
+      'admin-assignments', // the staff assignments of its organisation
+      'staff', // listed for the role since the 2026-08-23 role audit; the server refuses it (no sidebar entry)
+      'scheduling', // same
+      'departments', // same
+    ]);
+    const admitting: string[] = [];
+    const visit = (table: Route[], prefix: string) => {
+      for (const route of table) {
+        const path = [prefix, route.path].filter(Boolean).join('/');
+        const roles = route.data?.['roles'] as string[] | undefined;
+        if (roles?.includes('ROLE_ADMIN')) admitting.push(path);
+        if (route.children) visit(route.children, path);
+      }
+    };
+    visit(appRoutes, '');
+    expect(admitting.length).toBeGreaterThan(0);
+    expect(admitting.filter((path) => !recorded.has(path)))
+      .withContext(
+        'a route admits ROLE_ADMIN, the organisation admin, who reads no patient or clinical data: ' +
+          'remove the role (a hospital’s own administrator is ROLE_HOSPITAL_ADMIN) or record why here',
+      )
+      .toEqual([]);
+  });
+
+  it('the organisation admin’s sidebar lists its pages and no patient or clinical module', () => {
+    const { listed } = bootAs('ROLE_ADMIN');
+    expect(listed).toContain('/users');
+    expect(listed).toContain('/admin-assignments');
+    for (const refused of [
+      '/patients',
+      '/audit-logs',
+      '/imaging',
+      '/reception',
+      '/patient-tracker',
+      '/mortality',
+    ]) {
+      expect(listed).withContext(refused).not.toContain(refused);
+    }
+  });
+
   // ── D2761: the shell says what the role can open ────────────────────
 
   it('publishes the sidebar, so a page linking to another module can ask before offering the link', () => {
     const { published, model } = bootAs('ROLE_ADMIN');
     expect(published.snapshot()).toEqual(new Set(model));
-    // The administrator's own modules, and anything under them.
-    expect(published.canOpen('/patients')).toBeTrue();
-    expect(published.canOpen('/patients/new')).toBeTrue();
+    // The organisation admin's own modules, and anything under them.
     expect(published.canOpen('/users')).toBeTrue();
-    // The modules whose every request is refused to the role (QA r65 D2761).
-    for (const refused of ['/appointments', '/billing', '/staff', '/departments', '/admissions']) {
+    expect(published.canOpen('/admin-assignments')).toBeTrue();
+    // The modules whose every request is refused to the role (QA r65 D2761), and, since the
+    // platform admin rules of 2026-11-20 (rule 1b), every patient and clinical page.
+    for (const refused of [
+      '/patients',
+      '/patients/new',
+      '/audit-logs',
+      '/imaging',
+      '/reception',
+      '/patient-tracker',
+      '/mortality',
+      '/appointments',
+      '/billing',
+      '/staff',
+      '/departments',
+      '/admissions',
+    ]) {
       expect(published.canOpen(refused)).withContext(refused).toBeFalse();
     }
     // The top bar's pages are never in the sidebar and always open.

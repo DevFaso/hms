@@ -12,8 +12,9 @@ export const IMAGING_PAGE_ROLES: readonly string[] = [
   'ROLE_RADIOLOGIST',
   // Policy rule 3 (2026-11-20, provisional): the imaging technician works the worklist.
   'ROLE_IMAGING_TECHNICIAN',
+  // The hospital's administrator and the super-admin read Imagerie (2026-11-14).
+  // Not ROLE_ADMIN, the organisation's administrator (platform admin rules 2026-11-20).
   'ROLE_HOSPITAL_ADMIN',
-  'ROLE_ADMIN',
   'ROLE_SUPER_ADMIN',
 ];
 

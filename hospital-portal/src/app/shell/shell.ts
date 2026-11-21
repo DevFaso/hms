@@ -455,7 +455,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_MIDWIFE',
           'ROLE_RECEPTIONIST',
           'ROLE_HOSPITAL_ADMIN',
-          'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
           'ROLE_LAB_DIRECTOR',
           'ROLE_LAB_MANAGER',
@@ -484,7 +483,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_MIDWIFE',
           'ROLE_RECEPTIONIST',
           'ROLE_HOSPITAL_ADMIN',
-          'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
           'ROLE_STAFF',
         ],
@@ -571,7 +569,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/encounters',
         permission: 'Create Encounters',
         // Mirrors the /encounters RoleGuard.
-        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'hotel',
@@ -580,7 +578,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/admissions',
         permission: 'Admit Patients',
         // Mirrors the /admissions RoleGuard.
-        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'grid_view',
@@ -805,7 +803,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_MIDWIFE',
           'ROLE_RECEPTIONIST',
           'ROLE_HOSPITAL_ADMIN',
-          'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
       },
@@ -848,9 +845,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_RADIOLOGIST',
           // Policy rule 3 (2026-11-20, provisional): the imaging technician's worklist.
           'ROLE_IMAGING_TECHNICIAN',
-          // User decision 2026-11-14: read-only Imagerie for the admin roles.
+          // User decision 2026-11-14: read-only Imagerie for the hospital admin and the super-admin.
           'ROLE_HOSPITAL_ADMIN',
-          'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
       },
@@ -861,7 +857,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/consultations',
         permission: 'Request Consultations',
         // Mirrors the /consultations RoleGuard.
-        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'assignment',
@@ -876,7 +872,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_NURSE',
           'ROLE_MIDWIFE',
           'ROLE_PHYSIOTHERAPIST',
-          'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
       },
@@ -887,7 +882,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/referrals',
         permission: 'Create Referrals',
         // Mirrors the /referrals RoleGuard (midwife added there in this change).
-        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'receipt_long',
@@ -900,7 +895,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         roles: [
           'ROLE_SUPER_ADMIN',
           'ROLE_HOSPITAL_ADMIN',
-          'ROLE_ADMIN',
           'ROLE_BILLING_SPECIALIST',
           'ROLE_ACCOUNTANT',
           'ROLE_RECEPTIONIST',
@@ -1165,7 +1159,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       // trails as part of CAP/ISO 15189 quality audits.
       this.hasAnyRole([
         'ROLE_HOSPITAL_ADMIN',
-        'ROLE_ADMIN',
         'ROLE_SUPER_ADMIN',
         'ROLE_LAB_DIRECTOR',
         'ROLE_QUALITY_MANAGER',
@@ -1579,7 +1572,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         'ROLE_NURSE',
         'ROLE_QUALITY_MANAGER',
         'ROLE_HOSPITAL_ADMIN',
-        'ROLE_ADMIN',
         'ROLE_SUPER_ADMIN',
       ])
     ) {
@@ -1634,14 +1626,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/lab-outbox',
       });
     }
-    if (
-      this.hasAnyRole([
-        'ROLE_RECEPTIONIST',
-        'ROLE_HOSPITAL_ADMIN',
-        'ROLE_ADMIN',
-        'ROLE_SUPER_ADMIN',
-      ])
-    ) {
+    if (this.hasAnyRole(['ROLE_RECEPTIONIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'])) {
       items.push({
         icon: 'space_dashboard',
         label: 'Front Desk',

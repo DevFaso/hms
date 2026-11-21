@@ -133,7 +133,6 @@ export const IMAGING_ORDER_TAB_STATUSES: Readonly<
 export const IMAGING_ADMIN_READER_ROLES: readonly string[] = [
   'ROLE_SUPER_ADMIN',
   'ROLE_HOSPITAL_ADMIN',
-  'ROLE_ADMIN',
 ];
 export const IMAGING_CLINICAL_ROLES: readonly string[] = [
   'ROLE_DOCTOR',

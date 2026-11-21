@@ -523,6 +523,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * Priority matches heroGradientClass / roleLabel ordering.
    */
   activeView = computed<
+    | 'orgadmin'
     | 'hospitaladmin'
     | 'doctor'
     | 'nurse'
@@ -536,6 +537,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
     | 'fallback'
   >(() => {
     if (this.isPatient()) return 'patient';
+    // Platform admin rules 2026-11-20, rule 1b: the organisation's administrator
+    // has its own view (staff, assignments, totals). The hospital admin's view is
+    // built on counters and lists of patients' activity, which it does not read.
+    if (this.actsAsPlainAdmin()) return 'orgadmin';
     if (this.isHospitalAdmin()) return 'hospitaladmin';
     if (this.isDoctor()) return 'doctor';
     if (this.isNurse() || this.isMidwife()) return 'nurse';
@@ -583,10 +588,32 @@ export class DashboardComponent implements OnInit, OnDestroy {
   });
 
   /**
-   * Platform admin rules 2026-11-20, rule 1b: the organisation admin reads its
-   * organisation's totals here (the server admits that role alone).
+   * Platform admin rules 2026-11-20, rules 1a and 1b: what the organisation
+   * admin does from its dashboard. Each is offered only where the sidebar
+   * offers the page (QA r65 D2761).
    */
-  readonly showsOrganisationTotals = computed(() => this.actsAsPlainAdmin());
+  readonly organisationAdminActions = computed<QuickAction[]>(() => {
+    this.langTick();
+    const actions: QuickAction[] = [
+      {
+        icon: 'person_add',
+        label: this.t('NAV.USERS'),
+        description: this.t('PLATFORM_SETUP.ORG_ADMIN.ACTION_USERS'),
+        route: '/users',
+        color: '#0e7c6b',
+        bgColor: '#d1fae5',
+      },
+      {
+        icon: 'assignment_ind',
+        label: this.t('NAV.ASSIGNMENTS'),
+        description: this.t('PLATFORM_SETUP.ORG_ADMIN.ACTION_ASSIGNMENTS'),
+        route: '/admin-assignments',
+        color: '#1d4ed8',
+        bgColor: '#dbeafe',
+      },
+    ];
+    return actions.filter((action) => this.canOpen(action.route));
+  });
 
   // ── Role display label ────────────────────────────────────────
   roleLabel = computed(() => {
@@ -2492,8 +2519,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       if (--pending <= 0) this.loading.set(false);
     };
 
-    // Hospital-admin summary
-    if (this.isHospitalAdmin() && !this.isSuperAdmin()) {
+    // Hospital-admin summary. Not for the organisation's administrator: the
+    // server refuses it (the summary holds audit rows and a consult backlog).
+    if (this.isHospitalAdmin() && !this.isSuperAdmin() && !this.actsAsPlainAdmin()) {
       pending++;
       const today = localDateString();
       this.dashboardService.getHospitalAdminSummary(today).subscribe({

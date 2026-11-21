@@ -193,13 +193,23 @@ describe('Dashboard links (QA r65 D2761 class guard)', () => {
     });
   }
 
-  it('an administrator keeps the links to the modules they have, and loses the four dead ones', () => {
+  it('the organisation admin is offered its two pages, and no patient or clinical module', () => {
     // The guard above must not pass by having removed everything.
     const { dead, paths } = scan('ROLE_ADMIN');
     expect(dead).toEqual([]);
-    expect(paths).toContain('/patients');
-    expect(paths).toContain('/audit-logs');
-    for (const refused of ['/appointments', '/billing', '/staff', '/departments']) {
+    expect(paths).toContain('/users');
+    expect(paths).toContain('/admin-assignments');
+    // Platform admin rules 2026-11-20, rule 1b: no patient, no audit trail, no clinical page.
+    for (const refused of [
+      '/patients',
+      '/audit-logs',
+      '/imaging',
+      '/reception',
+      '/appointments',
+      '/billing',
+      '/staff',
+      '/departments',
+    ]) {
       expect(paths).withContext(refused).not.toContain(refused);
     }
   });

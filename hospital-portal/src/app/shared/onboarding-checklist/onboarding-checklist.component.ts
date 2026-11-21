@@ -23,6 +23,9 @@ import {
  * resolves every route against the real route table, with the roles that see it).
  */
 export const ONBOARDING_STEP_ROUTES: Readonly<Record<OnboardingStep, string>> = {
+  // Review of #1246: the hospital's own administrator is registered first («
+  // Inscrire », role administrateur d'hôpital); a department is filed under them.
+  HOSPITAL_ADMIN: '/users',
   DEPARTMENTS: '/departments',
   STAFF: '/users',
   PROVIDERS_IN_DEPARTMENT: '/staff',

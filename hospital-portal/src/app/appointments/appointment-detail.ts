@@ -53,7 +53,6 @@ const STATUS_UPDATE_ROLES: readonly string[] = [
 const CHECK_IN_ROLES: readonly string[] = [
   'ROLE_RECEPTIONIST',
   'ROLE_HOSPITAL_ADMIN',
-  'ROLE_ADMIN',
   'ROLE_SUPER_ADMIN',
 ];
 

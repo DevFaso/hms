@@ -15571,6 +15571,11 @@
       "OPEN": "Ouvrir",
       "LOAD_FAILED": "La liste de mise en route n’a pas pu être chargée. Rechargez la page.",
       "STEP": {
+        "HOSPITAL_ADMIN": {
+          "TITLE": "Administrateur de l’hôpital",
+          "DONE": "Administrateurs de l’hôpital inscrits : {{count}}",
+          "TODO": "Inscrivez l’administrateur de cet hôpital (rôle administrateur d’hôpital). Les départements se créent ensuite."
+        },
         "DEPARTMENTS": {
           "TITLE": "Départements",
           "DONE": "Départements créés : {{count}}",
@@ -15700,7 +15705,9 @@
     "ORG_ADMIN": {
       "HOSPITAL_REQUIRED": "Choisissez l’hôpital où cette personne travaillera.",
       "REGISTER_SCOPE": "Vous pouvez inscrire du personnel dans chaque hôpital de votre organisation.",
-      "ASSIGNMENTS_SCOPE": "Vous gérez les affectations du personnel dans chaque hôpital de votre organisation. Les rôles d’administration sont attribués par un super-administrateur."
+      "ASSIGNMENTS_SCOPE": "Vous gérez les affectations du personnel dans chaque hôpital de votre organisation. Les rôles d’administration sont attribués par un super-administrateur.",
+      "ACTION_USERS": "Inscrire du personnel dans vos hôpitaux",
+      "ACTION_ASSIGNMENTS": "Attribuer ou retirer un rôle à un membre du personnel"
     },
     "ORG_TOTALS": {
       "TITLE": "Chiffres de l’organisation",

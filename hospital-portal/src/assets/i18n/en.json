@@ -15571,6 +15571,11 @@
       "OPEN": "Open",
       "LOAD_FAILED": "The checklist could not be loaded. Reload the page.",
       "STEP": {
+        "HOSPITAL_ADMIN": {
+          "TITLE": "Hospital administrator",
+          "DONE": "Hospital administrators registered: {{count}}",
+          "TODO": "Register this hospital’s administrator (hospital administrator role). Departments are created after that."
+        },
         "DEPARTMENTS": {
           "TITLE": "Departments",
           "DONE": "Departments created: {{count}}",
@@ -15700,7 +15705,9 @@
     "ORG_ADMIN": {
       "HOSPITAL_REQUIRED": "Choose the hospital where this person will work.",
       "REGISTER_SCOPE": "You can register staff at every hospital of your organization.",
-      "ASSIGNMENTS_SCOPE": "You manage staff assignments at every hospital of your organization. Administration roles are granted by a super administrator."
+      "ASSIGNMENTS_SCOPE": "You manage staff assignments at every hospital of your organization. Administration roles are granted by a super administrator.",
+      "ACTION_USERS": "Register staff at your hospitals",
+      "ACTION_ASSIGNMENTS": "Grant or withdraw a staff member’s role"
     },
     "ORG_TOTALS": {
       "TITLE": "Organization figures",

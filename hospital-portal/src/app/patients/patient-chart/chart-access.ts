@@ -74,7 +74,6 @@ export const CDS_CLINICIAN_ROLES: readonly string[] = [
 export const VOIDED_CLOSURES_VIEW_ROLES: string[] = [
   'ROLE_SUPER_ADMIN',
   'ROLE_HOSPITAL_ADMIN',
-  'ROLE_ADMIN',
   ...DOCTOR_ROLES,
   'ROLE_MIDWIFE',
   'ROLE_NURSE',

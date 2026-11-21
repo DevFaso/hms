@@ -730,7 +730,9 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
   });
 
   // Role audit decision C1: ADMIN is back-office operations, not platform IT.
-  it('admin sees Users/Patients/Audit Logs but no platform-IT entries', () => {
+  it('the organisation admin sees Users and Assignments: no patient page, no audit trail, no platform-IT entry', () => {
+    // Even with the permissions the role used to hold: the role lists decide too
+    // (platform admin rules 2026-11-20, rule 1b).
     const { items } = createComponent({
       activeRole: 'ROLE_ADMIN',
       roles: ['ROLE_ADMIN'],
@@ -739,15 +741,18 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
         'View Dashboard',
         'View Patient Records',
         'View Audit Logs',
+        'View Imaging Studies',
         'View Notifications',
       ],
     });
 
     const routes = items.map((i) => i.route);
     expect(routes).toContain('/users');
+    expect(routes).toContain('/admin-assignments');
     expect(routes).not.toContain('/admin');
-    expect(routes).toContain('/patients');
-    expect(routes).toContain('/audit-logs');
+    expect(routes).not.toContain('/patients');
+    expect(routes).not.toContain('/audit-logs');
+    expect(routes).not.toContain('/imaging');
     expect(routes).not.toContain('/organizations');
     expect(routes).not.toContain('/roles');
     expect(routes).not.toContain('/platform');

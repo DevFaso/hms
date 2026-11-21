@@ -484,12 +484,7 @@ describe('ImagingComponent — r53 imaging', () => {
   });
 
   describe('D1923: every view of a report names its patient', () => {
-    for (const roles of [
-      ['ROLE_DOCTOR'],
-      ['ROLE_RADIOLOGIST'],
-      ['ROLE_HOSPITAL_ADMIN'],
-      ['ROLE_ADMIN'],
-    ]) {
+    for (const roles of [['ROLE_DOCTOR'], ['ROLE_RADIOLOGIST'], ['ROLE_HOSPITAL_ADMIN']]) {
       it(`${roles[0]}: the results list and the report drawer show the name and the MRN`, () => {
         setUp(roles);
         component.setView('results');

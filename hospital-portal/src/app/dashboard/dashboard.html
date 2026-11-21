@@ -231,6 +231,39 @@
        ① HOSPITAL ADMIN DASHBOARD
        (Super-admin landing page is /super-admin — see MVP-5.)
        ══════════════════════════════════════════ -->
+  <!-- Platform admin rules 2026-11-20, rules 1a and 1b: the organisation's
+       administrator. Staff registration, assignments and its organisation's
+       totals: no counter, list or panel about a patient. -->
+  @if (!loading() && activeView() === 'orgadmin') {
+    @if (organisationAdminActions().length > 0) {
+      <section class="card" data-testid="org-admin-actions">
+        <div class="card-head">
+          <div class="card-title-group">
+            <span class="material-symbols-outlined card-title-icon">bolt</span>
+            <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
+          </div>
+        </div>
+        <div class="qa-grid">
+          @for (action of organisationAdminActions(); track action.route) {
+            <a
+              class="qa-card"
+              [routerLink]="action.route"
+              [style.--qa-color]="action.color"
+              [style.--qa-bg]="action.bgColor"
+            >
+              <div class="qa-icon-wrap">
+                <span class="material-symbols-outlined qa-icon">{{ action.icon }}</span>
+              </div>
+              <span class="qa-label">{{ action.label }}</span>
+              <span class="qa-desc">{{ action.description }}</span>
+            </a>
+          }
+        </div>
+      </section>
+    }
+    <app-organisation-totals />
+  }
+
   @if (!loading() && activeView() === 'hospitaladmin') {
     <section class="stat-strip">
       @for (card of hospitalAdminStatCards(); track card.key) {
@@ -329,11 +362,6 @@
     <!-- QA r65 D2731: what the hospital still needs before patients can book
          (shown to its hospital admin until every step is done). -->
     <app-onboarding-checklist [hospitalId]="checklistHospitalId()" [hideWhenComplete]="true" />
-
-    <!-- Platform admin rules 2026-11-20, rule 1b: totals per hospital for the organisation admin. -->
-    @if (showsOrganisationTotals()) {
-      <app-organisation-totals />
-    }
 
     <div class="admin-workspace">
       <div class="admin-workspace-left">
