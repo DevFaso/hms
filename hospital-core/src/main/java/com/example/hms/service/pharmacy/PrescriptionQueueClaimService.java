@@ -386,6 +386,15 @@ public class PrescriptionQueueClaimService {
                 prescriptionId);
     }
 
+    /** The hospital this request acts at, or null (a scheduled expiry, a super-admin in global view). */
+    private UUID actingHospitalOrNull() {
+        try {
+            return roleValidator.getCurrentHospitalId();
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
     /**
      * Captured now, written after commit through the REQUIRES_NEW audit
      * service; only plain values cross into the callback. Best effort: a
@@ -393,10 +402,13 @@ public class PrescriptionQueueClaimService {
      */
     private void auditAfterCommit(UUID actorId, AuditEventType type, String description, UUID prescriptionId) {
         String resourceId = prescriptionId.toString();
+        // QA D2924 (r66): read now, on the request; the callback runs after the commit.
+        UUID hospitalId = actingHospitalOrNull();
         TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                         .userId(actorId)
+                        .hospitalId(hospitalId)
                         .eventType(type)
                         .eventDescription(description)
                         .status(AuditStatus.SUCCESS)

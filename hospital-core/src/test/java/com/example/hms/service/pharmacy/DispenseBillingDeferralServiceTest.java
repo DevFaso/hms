@@ -212,7 +212,7 @@ class DispenseBillingDeferralServiceTest {
             assertThat(asked.getDecidedBy()).isNull();
             assertThat(asked.isCanDecide()).as("whoever asks never decides").isFalse();
             verify(support).logAudit(eq(AuditEventType.DISPENSE_BILLING_DEFERRAL_REQUESTED), anyString(),
-                    eq(asked.getId().toString()), anyString());
+                    eq(asked.getId().toString()), anyString(), eq(hospitalId));
         }
 
         @Test
@@ -290,7 +290,7 @@ class DispenseBillingDeferralServiceTest {
             assertThat(row.getDecisionNote()).isEqualTo("Known family, pays at month end");
             assertThat(row.getCreditLimit()).isEqualByComparingTo("5000");
             verify(support).logAudit(eq(AuditEventType.DISPENSE_BILLING_DEFERRAL_APPROVED), anyString(),
-                    eq(row.getId().toString()), anyString());
+                    eq(row.getId().toString()), anyString(), eq(hospitalId));
         }
 
         @Test
@@ -574,7 +574,7 @@ class DispenseBillingDeferralServiceTest {
             assertThat(row.getReviewNote()).isEqualTo("Justified, invoice issued");
             verify(followUp).close(row);
             verify(support).logAudit(eq(AuditEventType.DISPENSE_BILLING_OVERRIDE_REVIEWED), anyString(),
-                    eq(row.getId().toString()), anyString());
+                    eq(row.getId().toString()), anyString(), eq(hospitalId));
             assertThatThrownBy(reviewing(row.getId(), new DispenseBillingDeferralReasonDTO("again")))
                     .isInstanceOf(ConflictException.class);
         }
@@ -713,8 +713,10 @@ class DispenseBillingDeferralServiceTest {
             service.executed(first, lotB, prescription);
             assertThat(first.getDispenseId()).isEqualTo(lotA.getId());
             verify(followUp, times(1)).reviewNeeded(eq(first), any(), any());
+            // QA D2924 (r66): each line names the hospital, or the hospital admin's audit log cannot list it.
             verify(support, times(2)).logAudit(
-                    eq(AuditEventType.DISPENSE_BILLING_URGENCY_OVERRIDE), anyString(), anyString(), anyString());
+                    eq(AuditEventType.DISPENSE_BILLING_URGENCY_OVERRIDE), anyString(), anyString(), anyString(),
+                    eq(hospitalId));
         }
 
         @Test
@@ -819,5 +821,70 @@ class DispenseBillingDeferralServiceTest {
         u.setFirstName(first);
         u.setLastName(last);
         return u;
+    }
+
+    @Nested
+    @DisplayName("QA D2929 (r66): an order that left the counter with nothing due closes its open deferrals")
+    class SettledOrder {
+
+        @Test
+        @DisplayName("a credit still asked for, and one approved, are withdrawn by the hand-over with the reason; task and bell closed; audited at the hospital")
+        void openDeferralsAreClosed() {
+            DispenseBillingDeferral asked = stored(DispenseBillingDeferralKind.OUTPATIENT_CREDIT,
+                    DispenseBillingDeferralStatus.REQUESTED, billing);
+            DispenseBillingDeferral approved = stored(DispenseBillingDeferralKind.THIRD_PARTY_COVER,
+                    DispenseBillingDeferralStatus.APPROVED, billing);
+            approved.setDecidedBy(accountant);
+            when(deferralRepository.findByHospitalIdAndPrescriptionIdAndStatusInOrderByRequestedAtAsc(
+                    eq(hospitalId), eq(prescriptionId), any())).thenReturn(java.util.List.of(asked, approved));
+
+            service.closeOpenOnSettledOrder(prescription, hospitalId, pharmacist);
+
+            for (DispenseBillingDeferral row : java.util.List.of(asked, approved)) {
+                assertThat(row.getStatus()).isEqualTo(DispenseBillingDeferralStatus.CANCELLED);
+                assertThat(row.getCancelledBy()).isEqualTo(pharmacist);
+                assertThat(row.getCancelledAt()).isEqualTo(LocalDateTime.now(CLOCK));
+                assertThat(row.getCancelReason()).startsWith("Clos automatiquement");
+                verify(followUp).close(row);
+                verify(support).logAudit(eq(AuditEventType.DISPENSE_BILLING_DEFERRAL_CANCELLED), anyString(),
+                        eq(row.getId().toString()), anyString(), eq(hospitalId));
+            }
+        }
+
+        @Test
+        @DisplayName("a deferral decided or used in the meantime is left as it is; nothing open, nothing written")
+        void onlyOpenOnesAreClosed() {
+            DispenseBillingDeferral listed = stored(DispenseBillingDeferralKind.OUTPATIENT_CREDIT,
+                    DispenseBillingDeferralStatus.REQUESTED, billing);
+            when(deferralRepository.findByHospitalIdAndPrescriptionIdAndStatusInOrderByRequestedAtAsc(
+                    eq(hospitalId), eq(prescriptionId), any())).thenReturn(java.util.List.of(listed));
+            // Somebody rejected it between the list and the lock.
+            listed.setStatus(DispenseBillingDeferralStatus.REJECTED);
+
+            service.closeOpenOnSettledOrder(prescription, hospitalId, pharmacist);
+            service.closeOpenOnSettledOrder(null, hospitalId, pharmacist);
+            service.closeOpenOnSettledOrder(prescription, hospitalId, null);
+
+            assertThat(listed.getStatus()).isEqualTo(DispenseBillingDeferralStatus.REJECTED);
+            assertThat(listed.getCancelledBy()).isNull();
+            verify(followUp, never()).close(any());
+        }
+    }
+
+    @Test
+    @DisplayName("QA D2931 (r66): the gate refuses with the words it is given when the counter sent no basis")
+    void theRefusalSaysWhyTheClaimDoesNotCover() {
+        assertThatThrownBy(() -> service.admit(prescription, hospitalId, new BigDecimal("90"), null, user(pharmacist),
+                FillClaimCover.Gap.OWN_VOUCHER))
+                .isInstanceOf(FieldBusinessException.class)
+                .extracting("field", "messageKey")
+                .containsExactly("billingDeferralId", "pharmacy.handOver.claimVouchedBySelf");
+        assertThatThrownBy(() -> service.admit(prescription, hospitalId, new BigDecimal("90"), null, user(pharmacist),
+                FillClaimCover.Gap.NO_VOUCHER))
+                .isInstanceOf(FieldBusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.handOver.claimNotVouched");
+        assertThatThrownBy(() -> service.admit(prescription, hospitalId, new BigDecimal("90"), null, user(pharmacist)))
+                .isInstanceOf(FieldBusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.handOver.unpaid");
     }
 }

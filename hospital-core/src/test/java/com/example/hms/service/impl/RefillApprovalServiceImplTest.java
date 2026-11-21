@@ -851,6 +851,21 @@ class RefillApprovalServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D2926 (r66): the release of a written refill is offered on the request, never for a controlled drug")
+        void theReleaseIsOfferedForAWrittenRefillOnly() {
+            actingAsPharmacist();
+            stored();
+            assertThat(service.pharmacistReview(auth, refillId,
+                    RefillDecisionRequestDTO.builder().pharmacistNote("Check the dose").build()).isWrittenRefillLeft())
+                    .as("the prescription still counts a written refill").isTrue();
+
+            when(controlledResolver.isControlled(prescription)).thenReturn(true);
+            assertThat(service.pharmacistReview(auth, refillId,
+                    RefillDecisionRequestDTO.builder().pharmacistNote("Check the dose").build()).isWrittenRefillLeft())
+                    .as("a controlled drug needs a new prescription").isFalse();
+        }
+
+        @Test
         @DisplayName("a refill already written on the prescription is ordinary dispensing: the pharmacy releases it")
         void aWrittenRefillIsReleasedByThePharmacy() {
             actingAsPharmacist();

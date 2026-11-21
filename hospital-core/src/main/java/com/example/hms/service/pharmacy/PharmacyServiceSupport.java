@@ -70,14 +70,25 @@ class PharmacyServiceSupport {
     }
 
     /**
-     * Record a SUCCESS audit event. Failures to write the audit log are swallowed
-     * to avoid breaking the caller's business transaction.
+     * Record a SUCCESS audit event at the hospital the caller acts at. Failures to write the audit log are
+     * swallowed to avoid breaking the caller's business transaction.
+     *
+     * <p>QA D2924 (r66; same class as r63 D2322): every row written here carried no hospital, so the audit service
+     * could not anchor it on the actor's assignment and the hospital admin's audit log never listed a dispense, a
+     * deferral or a claim. The acting hospital is named on every row now ({@code PharmacyAuditHospitalGuardTest}).
      */
     void logAudit(AuditEventType eventType, String description, String resourceId, String entityType) {
+        logAudit(eventType, description, resourceId, entityType, actingHospitalOrNull());
+    }
+
+    /** {@link #logAudit(AuditEventType, String, String, String)} for a record whose own hospital the caller knows. */
+    void logAudit(AuditEventType eventType, String description, String resourceId, String entityType,
+                  UUID hospitalId) {
         try {
             UUID userId = roleValidator.getCurrentUserId();
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .userId(userId)
+                    .hospitalId(hospitalId != null ? hospitalId : actingHospitalOrNull())
                     .eventType(eventType)
                     .eventDescription(description)
                     .status(AuditStatus.SUCCESS)
@@ -86,6 +97,15 @@ class PharmacyServiceSupport {
                     .build());
         } catch (Exception e) {
             log.warn("Failed to log audit event {}: {}", eventType, e.getMessage());
+        }
+    }
+
+    /** The hospital this request acts at; null for a super-admin in global view. Never refuses an audit row. */
+    private UUID actingHospitalOrNull() {
+        try {
+            return roleValidator.getCurrentHospitalId();
+        } catch (RuntimeException e) {
+            return null;
         }
     }
 

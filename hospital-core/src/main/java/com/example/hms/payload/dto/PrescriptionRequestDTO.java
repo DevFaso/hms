@@ -135,6 +135,21 @@ public class PrescriptionRequestDTO {
     @Size(max = 60)
     private String quantityUnit;
 
+    /**
+     * QA D2926 (r66), policy rule 1 (provisional): how many refills the prescriber writes on the order. The
+     * pharmacist releases a written refill as ordinary dispensing; one beyond what is written is a renewal, which
+     * only a prescriber approves. A controlled substance never carries one (refused on this field). Null on create
+     * means none; on update, null keeps the stored number. Written before the signature: a signed order keeps the
+     * number it was signed with. The ceiling is an input bound, not a clinical rule.
+     */
+    @jakarta.validation.constraints.Min(value = 0, message = "{prescription.refills.range}")
+    @jakarta.validation.constraints.Max(value = MAX_WRITTEN_REFILLS, message = "{prescription.refills.range}")
+    @tools.jackson.databind.annotation.JsonDeserialize(using = com.example.hms.validation.WholeCountDeserializer.class)
+    private Integer refillsAllowed;
+
+    /** The most refills one order may carry: an input bound (two digits), not a clinical rule. */
+    public static final int MAX_WRITTEN_REFILLS = 99;
+
     private PrescriptionStatus status;
 
     /**

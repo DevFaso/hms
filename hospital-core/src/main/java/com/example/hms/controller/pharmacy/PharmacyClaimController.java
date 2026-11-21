@@ -44,6 +44,19 @@ public class PharmacyClaimController {
     private static final String CLAIMS_ROLES =
             "hasAnyRole('PHARMACIST', 'BILLING_SPECIALIST', 'CLAIMS_REVIEWER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')";
 
+    /** Who reads the claims: whoever creates or sends them, and the accountant, who records the payer's answer. */
+    private static final String CLAIMS_READ_ROLES =
+            "hasAnyRole('PHARMACIST', 'BILLING_SPECIALIST', 'CLAIMS_REVIEWER', 'ACCOUNTANT', 'HOSPITAL_ADMIN', "
+                    + "'SUPER_ADMIN')";
+
+    /**
+     * QA D2925 (r66): the payer's decision (accepted, rejected, paid) is recorded by a money desk or a hospital
+     * admin, never by the pharmacy that sent the claim and never by the super-admin alone. The service asks the
+     * same of the caller's assignment at the claim's own hospital ({@code RoleValidator#canRecordPayerDecision}).
+     */
+    private static final String PAYER_DECISION_ROLES =
+            "hasAnyRole('BILLING_SPECIALIST', 'CLAIMS_REVIEWER', 'ACCOUNTANT', 'HOSPITAL_ADMIN')";
+
     private final PharmacyClaimService claimService;
     private final PharmacyClaimExportService exportService;
 
@@ -65,7 +78,7 @@ public class PharmacyClaimController {
     }
 
     @PostMapping("/{id}/accept")
-    @PreAuthorize(CLAIMS_ROLES)
+    @PreAuthorize(PAYER_DECISION_ROLES)
     @Operation(summary = "Mark claim ACCEPTED (payer acknowledged)")
     public ResponseEntity<ApiResponseWrapper<PharmacyClaimResponseDTO>> accept(
             @PathVariable UUID id,
@@ -75,7 +88,7 @@ public class PharmacyClaimController {
     }
 
     @PostMapping("/{id}/reject")
-    @PreAuthorize(CLAIMS_ROLES)
+    @PreAuthorize(PAYER_DECISION_ROLES)
     @Operation(summary = "Mark claim REJECTED (requires reason)")
     public ResponseEntity<ApiResponseWrapper<PharmacyClaimResponseDTO>> reject(
             @PathVariable UUID id,
@@ -85,7 +98,7 @@ public class PharmacyClaimController {
     }
 
     @PostMapping("/{id}/pay")
-    @PreAuthorize(CLAIMS_ROLES)
+    @PreAuthorize(PAYER_DECISION_ROLES)
     @Operation(summary = "Reconcile payer payment (status = PAID)")
     public ResponseEntity<ApiResponseWrapper<PharmacyClaimResponseDTO>> pay(
             @PathVariable UUID id,
@@ -95,14 +108,14 @@ public class PharmacyClaimController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize(CLAIMS_ROLES)
+    @PreAuthorize(CLAIMS_READ_ROLES)
     @Operation(summary = "Get claim by ID")
     public ResponseEntity<ApiResponseWrapper<PharmacyClaimResponseDTO>> get(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponseWrapper.success(claimService.getClaim(id)));
     }
 
     @GetMapping
-    @PreAuthorize(CLAIMS_ROLES)
+    @PreAuthorize(CLAIMS_READ_ROLES)
     @Operation(summary = "List claims for active hospital")
     public ResponseEntity<ApiResponseWrapper<Page<PharmacyClaimResponseDTO>>> listByHospital(
             @PageableDefault(size = 20) Pageable pageable) {
@@ -110,7 +123,7 @@ public class PharmacyClaimController {
     }
 
     @GetMapping("/dispense/{dispenseId}")
-    @PreAuthorize(CLAIMS_ROLES)
+    @PreAuthorize(CLAIMS_READ_ROLES)
     public ResponseEntity<ApiResponseWrapper<Page<PharmacyClaimResponseDTO>>> listByDispense(
             @PathVariable UUID dispenseId,
             @PageableDefault(size = 20) Pageable pageable) {
@@ -122,7 +135,7 @@ public class PharmacyClaimController {
     // /me/patient/pharmacy/claims which resolves the patient from the JWT,
     // preventing IDOR via arbitrary {patientId}.
     @GetMapping("/patient/{patientId}")
-    @PreAuthorize(CLAIMS_ROLES)
+    @PreAuthorize(CLAIMS_READ_ROLES)
     public ResponseEntity<ApiResponseWrapper<Page<PharmacyClaimResponseDTO>>> listByPatient(
             @PathVariable UUID patientId,
             @PageableDefault(size = 20) Pageable pageable) {
@@ -131,7 +144,7 @@ public class PharmacyClaimController {
     }
 
     @GetMapping(value = "/export/csv", produces = "text/csv")
-    @PreAuthorize(CLAIMS_ROLES)
+    @PreAuthorize(CLAIMS_READ_ROLES)
     @Operation(summary = "T-48: export claims as CSV for AMU reconciliation")
     public ResponseEntity<byte[]> exportCsv(
             @RequestParam(required = false) List<PharmacyClaimStatus> status) {
@@ -144,7 +157,7 @@ public class PharmacyClaimController {
     }
 
     @GetMapping(value = "/export/fhir", produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize(CLAIMS_ROLES)
+    @PreAuthorize(CLAIMS_READ_ROLES)
     @Operation(summary = "T-48: export claims as a minimal FHIR R4 Claim bundle")
     public ResponseEntity<byte[]> exportFhir(
             @RequestParam(required = false) List<PharmacyClaimStatus> status) {

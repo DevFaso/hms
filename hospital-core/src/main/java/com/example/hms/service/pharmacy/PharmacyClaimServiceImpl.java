@@ -101,7 +101,7 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
                 saved.getId().toString(),
                 AUDIT_ENTITY);
 
-        return claimMapper.toResponseDTO(saved);
+        return forReader(saved);
     }
 
     @Override
@@ -124,7 +124,7 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
                         + saved.getAmount() + " " + saved.getCurrency(),
                 saved.getId().toString(),
                 AUDIT_ENTITY);
-        return claimMapper.toResponseDTO(saved);
+        return forReader(saved);
     }
 
     @Override
@@ -163,7 +163,13 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
                                                 String rejectionReason,
                                                 String verb) {
         PharmacyClaim claim = loadInScope(id);
-        if (!allowedFrom.contains(claim.getClaimStatus())) {
+        requirePayerDecisionDesk(claim);
+        // QA D2925 (r66): a claim left ACCEPTED with nobody of a money desk behind it (the pharmacy recorded the
+        // acceptance itself, before that was refused) is confirmed by a money desk, once: the voucher is written
+        // and the claim covers its fill. A claim somebody already stands behind is not accepted twice.
+        boolean confirmsUnvouched = target == PharmacyClaimStatus.ACCEPTED
+                && claim.getClaimStatus() == PharmacyClaimStatus.ACCEPTED && claim.getVouchedBy() == null;
+        if (!allowedFrom.contains(claim.getClaimStatus()) && !confirmsUnvouched) {
             // QA D1000: both statuses read in the caller's language.
             throw new BusinessException("pharmacy.claim.transitionRefused",
                     com.example.hms.utility.MessageUtil.resolve("pharmacy.claim.status." + target.name()),
@@ -171,7 +177,7 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
         }
         claim.setClaimStatus(target);
         // Policy rule 6 (review round 2 of #1244): a money desk that records the payer's acceptance or payment
-        // stands behind the claim, recorded now. Somebody of the pharmacy recording it later erases nobody.
+        // stands behind the claim, recorded now, each slot once (ClaimVouching): a later decision erases nobody.
         if (target != PharmacyClaimStatus.REJECTED) {
             ClaimVouching.recordVoucher(claim, roleValidator.getCurrentUserId(), roleValidator,
                     LocalDateTime.now(java.time.ZoneId.systemDefault()));
@@ -185,16 +191,31 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
         PharmacyClaim saved = claimRepository.save(claim);
 
         support.logAudit(AuditEventType.CLAIM_SUBMITTED,
-                "Pharmacy claim " + verb + " (status=" + target + ")",
+                "Pharmacy claim " + (confirmsUnvouched ? "acceptance confirmed by a money desk" : verb)
+                        + " (status=" + target + ")",
                 saved.getId().toString(),
                 AUDIT_ENTITY);
-        return claimMapper.toResponseDTO(saved);
+        return forReader(saved);
+    }
+
+    /**
+     * QA D2925 (r66): the payer's decision on a claim (accepted, rejected, paid) is recorded by a money desk or a
+     * hospital admin of the claim's own hospital, on their assignment there: never by the pharmacy that sent the
+     * claim, and never on a role held at another hospital. Asked after the scope check, so a claim of another
+     * hospital still answers as a missing one.
+     */
+    private void requirePayerDecisionDesk(PharmacyClaim claim) {
+        UUID claimHospitalId = claim.getHospital() != null ? claim.getHospital().getId() : null;
+        if (!roleValidator.canRecordPayerDecision(roleValidator.getCurrentUserId(), claimHospitalId)) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                    com.example.hms.utility.MessageUtil.resolve("pharmacy.claim.payerDecisionDeskOnly"));
+        }
     }
 
     @Override
     @Transactional(readOnly = true)
     public PharmacyClaimResponseDTO getClaim(UUID id) {
-        return claimMapper.toResponseDTO(loadInScope(id));
+        return forReader(loadInScope(id));
     }
 
     @Override
@@ -205,7 +226,8 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
             // SUPER_ADMIN unscoped read — return claims across hospitals.
             return claimRepository.findAll(pageable).map(claimMapper::toResponseDTO);
         }
-        return claimRepository.findByHospitalId(hospitalId, pageable).map(claimMapper::toResponseDTO);
+        boolean desk = recordsPayerDecisionsAt(hospitalId);
+        return claimRepository.findByHospitalId(hospitalId, pageable).map(claim -> forReader(claim, desk));
     }
 
     @Override
@@ -215,8 +237,9 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
         if (hospitalId == null) {
             return claimRepository.findByDispenseId(dispenseId, pageable).map(claimMapper::toResponseDTO);
         }
+        boolean desk = recordsPayerDecisionsAt(hospitalId);
         return claimRepository.findByDispenseIdAndHospitalId(dispenseId, hospitalId, pageable)
-                .map(claimMapper::toResponseDTO);
+                .map(claim -> forReader(claim, desk));
     }
 
     @Override
@@ -226,8 +249,9 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
         if (hospitalId == null) {
             return claimRepository.findByPatientId(patientId, pageable).map(claimMapper::toResponseDTO);
         }
+        boolean desk = recordsPayerDecisionsAt(hospitalId);
         return claimRepository.findByPatientIdAndHospitalId(patientId, hospitalId, pageable)
-                .map(claimMapper::toResponseDTO);
+                .map(claim -> forReader(claim, desk));
     }
 
     /**
@@ -240,6 +264,24 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
     @Transactional(readOnly = true)
     public Page<PharmacyClaimResponseDTO> listByPatientForSelf(UUID patientId, Pageable pageable) {
         return claimRepository.findByPatientId(patientId, pageable).map(claimMapper::toResponseDTO);
+    }
+
+    /** QA D2925 (r66): whether the caller records the payer's answers at {@code hospitalId}; asked once per list. */
+    private boolean recordsPayerDecisionsAt(UUID hospitalId) {
+        return hospitalId != null && roleValidator.canRecordPayerDecision(roleValidator.getCurrentUserId(), hospitalId);
+    }
+
+    /** The claim as its staff reader sees it: with whether they may record the payer's answer to it. */
+    private PharmacyClaimResponseDTO forReader(PharmacyClaim claim) {
+        return forReader(claim, recordsPayerDecisionsAt(claim.getHospital() != null ? claim.getHospital().getId() : null));
+    }
+
+    private PharmacyClaimResponseDTO forReader(PharmacyClaim claim, boolean desk) {
+        PharmacyClaimResponseDTO dto = claimMapper.toResponseDTO(claim);
+        if (dto != null) {
+            dto.setCanRecordPayerDecision(desk);
+        }
+        return dto;
     }
 
     private PharmacyClaim loadInScope(UUID id) {
