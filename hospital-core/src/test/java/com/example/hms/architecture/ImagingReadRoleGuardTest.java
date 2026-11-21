@@ -372,8 +372,9 @@ class ImagingReadRoleGuardTest {
         "an operator trigger of the scheduled escalation sweep: SUPER_ADMIN or HOSPITAL_ADMIN, no clinical role");
 
     private static final String SCOPE = "ImagingRoleScope(roleValidator)";
-    private static final Pattern SERVICE_CALL = Pattern.compile("\\b(\\w+)\\s*\\.\\s*(\\w+)\\s*\\(");
-    private static final Pattern LOCAL_CALL = Pattern.compile("(?<![.\\w])(?:self\\s*\\.\\s*)?(\\w+)\\s*\\(");
+    private static final Pattern SERVICE_CALL = Pattern.compile("\\b(\\w++)\\s*+\\.\\s*+(\\w++)\\s*+\\(");
+    /** A call on the class itself; {@code self.} (the proxy of the same class) is dropped before matching. */
+    private static final Pattern LOCAL_CALL = Pattern.compile("(?<![.\\w])(\\w++)\\s*+\\(");
 
     private static final Set<String> NOT_A_CALL = Set.of("if", "for", "while", "switch", "catch", "synchronized",
         "try", "return", "throw", "new", "else", "do", "super", "this", "assert", "yield");
@@ -391,7 +392,7 @@ class ImagingReadRoleGuardTest {
         if (body.contains(SCOPE)) {
             return true;
         }
-        Matcher call = LOCAL_CALL.matcher(body);
+        Matcher call = LOCAL_CALL.matcher(body.replace("self.", ""));
         while (call.find()) {
             // A keyword is not a method of the class (methodBody would return some unrelated block).
             if (!NOT_A_CALL.contains(call.group(1)) && asksTheScope(code, call.group(1), seen)) {

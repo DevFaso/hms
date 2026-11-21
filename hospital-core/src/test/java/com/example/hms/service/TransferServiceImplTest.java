@@ -49,8 +49,10 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -391,11 +393,11 @@ class TransferServiceImplTest {
 
     /** The caller is a midwife of this hospital and nothing wider there; the real rule decides. */
     private void asAMidwifeOfThisHospital() {
-        inBasket = org.mockito.Mockito.mock(com.example.hms.service.InBasketService.class);
+        inBasket = mock(com.example.hms.service.InBasketService.class);
         service.setMidwifeNewbornCare(new com.example.hms.service.maternity.MidwifeNewbornCare(
-            org.mockito.Mockito.mock(com.example.hms.repository.DeliveryNewbornRepository.class), bedRepository,
+            mock(com.example.hms.repository.DeliveryNewbornRepository.class), bedRepository,
             roleValidator, inBasket,
-            org.mockito.Mockito.mock(com.example.hms.repository.UserRoleHospitalAssignmentRepository.class)));
+            mock(com.example.hms.repository.UserRoleHospitalAssignmentRepository.class)));
         when(roleValidator.getCurrentUserId()).thenReturn(MIDWIFE);
         when(roleValidator.isMidwife(MIDWIFE, hospitalId)).thenReturn(true);
     }
@@ -459,7 +461,7 @@ class TransferServiceImplTest {
         verify(bedAssignmentService).assignBed(admission, destinationBed.getId(),
             Set.of(BedStatus.AVAILABLE, BedStatus.RESERVED));
         // A maternity bed is no neonatal cot: nobody is asked to review.
-        org.mockito.Mockito.verifyNoInteractions(inBasket);
+        verifyNoInteractions(inBasket);
     }
 
     @Test

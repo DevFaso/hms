@@ -229,7 +229,7 @@ public class RoleValidator {
      * (MedicalCertificateServiceImplTest pins the two lists together).
      */
     public static final java.util.List<String> LICENSED_PHYSICIAN_ROLE_CODES = java.util.List.of(
-        DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, "ANESTHESIOLOGIST", "RADIOLOGIST");
+        DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, "ANESTHESIOLOGIST", RADIOLOGIST_ROLE);
 
     /**
      * QA D1164 (round 21): the roles a visit takes as its provider - every

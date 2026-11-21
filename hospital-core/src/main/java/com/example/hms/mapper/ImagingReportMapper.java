@@ -117,10 +117,8 @@ public class ImagingReportMapper {
             return null;
         }
         com.example.hms.model.Patient patient = patientOf(report);
-        // QA D2912: the exam record stays on the order; the report's reader sees it beside the read.
-        com.example.hms.model.ImagingOrder exam = report.getImagingOrder();
 
-        return ImagingReportResponseDTO.builder()
+        ImagingReportResponseDTO dto = ImagingReportResponseDTO.builder()
             .id(report.getId())
             .imagingOrderId(report.getImagingOrder() != null ? report.getImagingOrder().getId() : null)
             .patientId(patient != null ? patient.getId() : null)
@@ -162,11 +160,6 @@ public class ImagingReportMapper {
             .contrastAdministered(report.getContrastAdministered())
             .contrastDetails(report.getContrastDetails())
             .radiationDoseMgy(report.getRadiationDoseMgy())
-            .examPerformedByName(exam != null ? exam.getPerformedByName() : null)
-            .examStartedAt(exam != null ? exam.getExamStartedAt() : null)
-            .examContrastAdministered(exam != null ? exam.getExamContrastAdministered() : null)
-            .examContrastDetails(exam != null ? exam.getExamContrastDetails() : null)
-            .examRadiationDoseMgy(exam != null ? exam.getExamRadiationDoseMgy() : null)
             .attachmentsCount(report.getAttachmentsCount())
             .measurementsCount(report.getMeasurementsCount())
             .lastStatusSyncedAt(report.getLastStatusSyncedAt())
@@ -192,6 +185,23 @@ public class ImagingReportMapper {
             .attachments(toAttachmentDTOs(report.getAttachments()))
             .statusHistory(toStatusDTOs(report.getStatusHistory()))
             .build();
+        showExamRecord(dto, report.getImagingOrder());
+        return dto;
+    }
+
+    /**
+     * QA D2912 (r66): the exam record stays on the order (policy rule 3); the report's reader sees
+     * it beside the read. Read from the order every time, never written into the report.
+     */
+    private static void showExamRecord(ImagingReportResponseDTO dto, com.example.hms.model.ImagingOrder exam) {
+        if (exam == null) {
+            return;
+        }
+        dto.setExamPerformedByName(exam.getPerformedByName());
+        dto.setExamStartedAt(exam.getExamStartedAt());
+        dto.setExamContrastAdministered(exam.getExamContrastAdministered());
+        dto.setExamContrastDetails(exam.getExamContrastDetails());
+        dto.setExamRadiationDoseMgy(exam.getExamRadiationDoseMgy());
     }
 
     /**

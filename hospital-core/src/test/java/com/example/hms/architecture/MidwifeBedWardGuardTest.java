@@ -29,9 +29,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MidwifeBedWardGuardTest {
 
     private static final Path MAIN = Path.of("src/main/java/com/example/hms");
-    private static final Pattern GIVES_A_BED = Pattern.compile("bedAssignmentService\\s*\\.\\s*(assignBed|reserveBed)\\s*\\(");
-    private static final Pattern METHOD = Pattern.compile(
-        "(?:public|protected|private)\\s+(?!class\\b|record\\b|enum\\b|interface\\b)[\\w<>\\[\\], .?]+?\\s+(\\w+)\\s*\\(");
+    private static final Pattern GIVES_A_BED =
+        Pattern.compile("bedAssignmentService\\s*+\\.\\s*+(?:assignBed|reserveBed)\\s*+\\(");
+    /** A declaration up to its opening parenthesis; the method's name is its last word. */
+    private static final Pattern DECLARATION = Pattern.compile("(?:public|protected|private)\\s([^(){};=]*+)\\(");
     private static final String RULE = "requireBedAMidwifeMayAssign(";
 
     @Test
@@ -44,15 +45,17 @@ class MidwifeBedWardGuardTest {
                 if (!GIVES_A_BED.matcher(code).find()) {
                     continue;
                 }
-                Matcher method = METHOD.matcher(code);
+                Matcher method = DECLARATION.matcher(code);
                 while (method.find()) {
-                    String body = SourceScan.methodBody(code.substring(method.start()), method.group(1));
+                    String signature = method.group(1).trim();
+                    String name = signature.substring(signature.lastIndexOf(' ') + 1);
+                    String body = SourceScan.methodBody(code.substring(method.start()), name);
                     if (body == null || !GIVES_A_BED.matcher(body).find()) {
                         continue;
                     }
                     paths++;
                     if (!body.contains(RULE)) {
-                        unasked.add(file.getFileName() + "." + method.group(1));
+                        unasked.add(file.getFileName() + "." + name);
                     }
                 }
             }

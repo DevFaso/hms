@@ -679,7 +679,7 @@ class ImagingStudyImageServiceTest {
         }
 
         @Test
-        void d2915_whereTheRadiologistsRoleIsHeldTheDepartmentsDecisionsAreTheirs() throws IOException {
+        void d2915_whereTheRadiologistsRoleIsHeldTheDepartmentsDecisionsAreTheirs() {
             ImagingStudyImage colleagues = image(null, UUID.randomUUID());
             ImagingStudyImage toWithdraw = image(null, UUID.randomUUID());
             UUID withdrawId = toWithdraw.getId();
