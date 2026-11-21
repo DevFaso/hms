@@ -277,10 +277,15 @@ test('white text reaches 4.5:1 on the brand and danger fills; the accent on whit
 test('the shared sheet defines each of the three buttons exactly once', () => {
   const shared = readFileSync(join(src, 'app', 'shared', 'styles', '_page-common.scss'), 'utf8');
   for (const name of ['btn-primary', 'btn-secondary', 'btn-danger']) {
-    // the rule that gives the button its colours (the grouped shape rule aside)
-    const own = shared.match(new RegExp(`^\\.${name} \\{\\r?\\n  background:`, 'gm')) ?? [];
+    // the rule that gives the button its colours (the grouped shape rule aside;
+    // the danger rule also names the primary's destructive state)
+    const own =
+      shared.match(
+        new RegExp(`^\\.${name}(?:,\\r?\\n\\.btn-primary\\.danger)? \\{\\r?\\n  background:`, 'gm'),
+      ) ?? [];
     assert.equal(own.length, 1, `.${name} { background… } in _page-common.scss`);
   }
+  assert.match(shared, /^\.btn-danger,\r?\n\.btn-primary\.danger \{/m);
 });
 
 test('the portal carries no site beyond its pins, and every pin says why', () => {

@@ -93,7 +93,11 @@
   }
 }
 
-.btn-danger {
+// `.btn-primary.danger` is the same button: a confirm button that a page
+// turns destructive by binding one class (« Refuser » on a release request).
+// Without it the red fill kept the primary's teal border and teal hover glow.
+.btn-danger,
+.btn-primary.danger {
   background: var(--danger);
   border-color: var(--danger);
   color: #fff;
@@ -101,6 +105,7 @@
   &:hover:not(:disabled) {
     background: var(--danger-dark);
     border-color: var(--danger-dark);
+    box-shadow: none;
   }
 }
 

@@ -115,6 +115,21 @@ describe('global design layer (QA r65)', () => {
       expect(disabled.cursor).toBe('not-allowed');
     });
 
+    it('a primary button in its destructive state is the danger button, border included', () => {
+      // /roi binds `.danger` on its confirm button for « Refuser »; /panels and
+      // /webhooks write it. A red fill with the primary's teal border is two buttons at once.
+      box.innerHTML = `<button class="btn-primary danger">Refuser</button>
+        <button class="btn-danger">Supprimer</button>`;
+      const [stated, danger] = Array.from(box.querySelectorAll('button')).map((b) =>
+        getComputedStyle(b),
+      );
+      expect(stated.backgroundColor).toBe('rgb(185, 28, 28)');
+      expect(stated.borderTopColor).toBe('rgb(185, 28, 28)');
+      expect(stated.borderTopColor).toBe(danger.borderTopColor);
+      expect(stated.backgroundColor).toBe(danger.backgroundColor);
+      expect(stated.color).toBe(WHITE);
+    });
+
     it('styles a button built at run time, outside any component (the Escape question)', () => {
       box.innerHTML = `<div class="dialog-discard"><button class="btn-secondary">Rester</button>
         <button class="btn-danger">Abandonner</button></div>`;
