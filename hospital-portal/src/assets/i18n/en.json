@@ -15753,5 +15753,13 @@
     "TITLE": "Page not found",
     "BODY": "This page does not exist or has moved. Check the address, or go back to your dashboard.",
     "BACK": "Back to the dashboard"
+  },
+  "CARD_SORT": {
+    "GROUP": "Sort the list",
+    "SORT_BY": "Sort by",
+    "ASCENDING": "Ascending",
+    "DESCENDING": "Descending",
+    "ASCENDING_FLIP": "Ascending, switch to descending",
+    "DESCENDING_FLIP": "Descending, switch to ascending"
   }
 }

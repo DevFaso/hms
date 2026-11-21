@@ -81,3 +81,45 @@ describe('AppointmentListComponent — QA D1322 (round 29): the search asks the 
     expect(component.filtered().length).toBe(2);
   }));
 });
+
+describe('AppointmentListComponent — #1247: the card-mode sort', () => {
+  it('drives the same sort state as a header click', async () => {
+    await TestBed.configureTestingModule({
+      imports: [AppointmentListComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        {
+          provide: AppointmentService,
+          useValue: { list: () => of([appt('a1', 'Boukaré Sawadogo'), appt('a2', 'Awa Kaboré')]) },
+        },
+        {
+          provide: HospitalService,
+          useValue: { list: () => of([]), getMyHospitalAsResponse: () => of({ id: 'h1' }) },
+        },
+        { provide: PermissionService, useValue: { hasPermission: () => true } },
+        { provide: RoleContextService, useValue: { isSuperAdmin: () => false } },
+        { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['error']) },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(AppointmentListComponent);
+    const c = fixture.componentInstance;
+    fixture.detectChanges();
+    c.currentPage.set(1);
+    c.onCardSort({ field: 'patient', direction: 'asc' });
+    expect(c.sortField()).toBe('patient');
+    expect(c.sortDir()).toBe('asc');
+    expect(c.currentPage()).toBe(0);
+    expect(c.filtered().map((a) => a.id)).toEqual(['a2', 'a1']);
+    c.onCardSort({ field: 'patient', direction: 'desc' });
+    expect(c.filtered().map((a) => a.id)).toEqual(['a1', 'a2']);
+    c.sort('patient');
+    expect(c.sortDir()).toBe('asc');
+    c.onCardSort({ field: 'reason', direction: 'desc' });
+    expect(c.sortField()).toBe('patient');
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelectorAll('app-card-sort option').length).toBe(
+      el.querySelectorAll('thead th[aria-sort]').length,
+    );
+  });
+});

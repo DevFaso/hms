@@ -15753,5 +15753,13 @@
     "TITLE": "Page introuvable",
     "BODY": "Cette page n'existe pas ou a été déplacée. Vérifiez l'adresse, ou revenez à votre tableau de bord.",
     "BACK": "Retour au tableau de bord"
+  },
+  "CARD_SORT": {
+    "GROUP": "Trier la liste",
+    "SORT_BY": "Trier par",
+    "ASCENDING": "Croissant",
+    "DESCENDING": "Décroissant",
+    "ASCENDING_FLIP": "Croissant, passer en décroissant",
+    "DESCENDING_FLIP": "Décroissant, passer en croissant"
   }
 }

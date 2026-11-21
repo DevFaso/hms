@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import process from 'node:process';
 import path from 'node:path';
 import type { Page } from '@playwright/test';
@@ -1362,5 +1363,74 @@ test.describe('layout overflow: lab outbox message dialog', () => {
     const found = await auditAtWidths(page, '/lab-outbox message dialog');
     await shoot(page, 'lab-outbox-dialog', LAYOUT_WIDTHS);
     expect(found, formatOffenders(found)).toEqual([]);
+  });
+});
+
+/* ── #1247 follow-up (Rex): a sortable list sorts in card mode ───────────────
+   Under 600 px the header row (and its sort buttons) is hidden; the shared
+   « Trier par » control takes its place and drives the same sort. At 768 and
+   1366 the header sorts and the control is not shown. */
+
+const SORT_ROWS = ['MRN-B-0002', 'MRN-C-0003', 'MRN-A-0001'].map((mrn, n) => ({
+  ...DESK,
+  id: `${RECORD_ID.slice(0, -1)}${n + 1}`,
+  mrn,
+}));
+
+test.describe('card mode: sortable lists keep their sort (#1247)', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  // The page opens at phone width: resizing down from a desktop leaves the
+  // shell's phone drawer open, and the page behind it is inert (QA D1153).
+  test('/patients sorts by « Trier par » on a phone', async ({ page }, testInfo) => {
+    await page.route('**/api/patients', (r) => r.fulfill({ json: SORT_ROWS }));
+    await page.route('**/api/patients?**', (r) => r.fulfill({ json: SORT_ROWS }));
+    await page.setViewportSize({ width: 390, height: heightFor(390) });
+    await open(page, testInfo.project.use.baseURL as string, 'ROLE_RECEPTIONIST', '/patients');
+    const control = page.locator('app-card-sort');
+    const firstRow = page.locator('table tbody tr').first();
+
+    await expect(control).toBeVisible();
+    await expect(page.locator('table thead')).toBeHidden();
+    // axe on the control itself: labelled select, named toggle, contrast.
+    const axe = await new AxeBuilder({ page }).include('app-card-sort').analyze();
+    expect(axe.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([]);
+    const field = control.getByRole('combobox');
+    await field.selectOption('mrn');
+    await expect(firstRow).toContainText('MRN-A-0001');
+    // Keyboard: Tab to the direction toggle and press Enter.
+    await field.focus();
+    await page.keyboard.press('Tab');
+    await expect(control.getByRole('button')).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(firstRow).toContainText('MRN-C-0003');
+
+    // Wider, the header sorts, shows the same sort, and the control is gone.
+    for (const width of [768, 1366]) {
+      await page.setViewportSize({ width, height: heightFor(width) });
+      await expect(control).toBeHidden();
+      await expect(page.locator('table thead')).toBeVisible();
+      await expect(page.locator('th[aria-sort="descending"]')).toHaveCount(1);
+    }
+    const found = await auditAtWidths(page, '/patients [card sort]');
+    await shoot(page, 'card-sort-patients', [1366, 768, 390]);
+    expect(found, formatOffenders(found)).toEqual([]);
+  });
+
+  test('/appointments shows the control on a phone only', async ({ page }, testInfo) => {
+    await page.route('**/api/appointments**', (r) => r.fulfill({ json: SORT_ROWS }));
+    await page.setViewportSize({ width: 390, height: heightFor(390) });
+    await open(page, testInfo.project.use.baseURL as string, 'ROLE_RECEPTIONIST', '/appointments');
+    const control = page.locator('app-card-sort');
+    await expect(control).toBeVisible();
+    await expect(control.getByRole('combobox')).toHaveValue('date');
+    await control.getByRole('combobox').selectOption('status');
+    for (const width of [768, 1366]) {
+      await page.setViewportSize({ width, height: heightFor(width) });
+      await expect(control).toBeHidden();
+      await expect(
+        page.locator('th[aria-sort="descending"], th[aria-sort="ascending"]'),
+      ).toHaveCount(1);
+    }
   });
 });
