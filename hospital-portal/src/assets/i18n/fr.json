@@ -1527,7 +1527,13 @@
     "OVERVIEW_TITLE": "Admissions chargées",
     "MATCHING_COUNT": "Admissions correspondantes : {{count}}",
     "MISSING_BED_SUBSET": "Actifs : lit non renseigné",
-    "MISSING_BED_HINT": "Les lits non renseignés concernent un sous-ensemble des admissions actives, déjà compris dans leur total."
+    "MISSING_BED_HINT": "Les lits non renseignés concernent un sous-ensemble des admissions actives, déjà compris dans leur total.",
+    "TAKE_HOME_TITLE": "Traitement de sortie",
+    "TAKE_HOME_NONE": "Aucun traitement de sortie n'est prescrit pour ce séjour.",
+    "TAKE_HOME_HINT": "Les prescriptions signées marquées « Traitement de sortie » figurent dans le résumé de sortie, y compris celles rédigées dans les 24 h suivant la sortie.",
+    "FOLLOW_UP_DATE": "Rendez-vous de suivi",
+    "FOLLOW_UP_PURPOSE": "Motif du suivi",
+    "FOLLOW_UP_PURPOSE_PLACEHOLDER": "ex. contrôle, pansement, bilan biologique"
   },
   "ANALYTICS": {
     "LOAD_FAILED": "Impossible de charger les indicateurs. Réessayez.",

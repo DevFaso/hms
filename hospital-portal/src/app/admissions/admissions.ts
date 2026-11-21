@@ -49,6 +49,8 @@ import {
 } from '../shared/date-utils';
 import { BedService, BedResponse } from '../services/bed.service';
 import { DischargeService, DischargeSummary } from '../services/discharge.service';
+import { PrescriptionService, PrescriptionResponse } from '../services/prescription.service';
+import { localDateString } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { BackdropCloseDirective } from '../shared/a11y/backdrop-close.directive';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
@@ -124,6 +126,7 @@ export class AdmissionsComponent implements OnInit {
   private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly bedService = inject(BedService);
   private readonly dischargeService = inject(DischargeService);
+  private readonly prescriptionService = inject(PrescriptionService);
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
@@ -407,12 +410,19 @@ export class AdmissionsComponent implements OnInit {
    * takes no further instructions; a draft gets the dialog's added to it.
    */
   staySummary = signal<DischargeSummary | null>(null);
+  /** QA D2553: the stay's signed take-home orders: what the summary will list as going home. */
+  takeHomeOrders = signal<PrescriptionResponse[]>([]);
+  takeHomeLoading = signal(false);
+  /** The earliest follow-up date the dialog offers. */
+  readonly today = localDateString();
   dischargeForm = {
     dischargeDisposition: 'HOME' as string,
     dischargeSummary: '',
     dischargeDiagnosis: '',
     dischargeInstructions: '',
     dischargingProviderId: '',
+    followUpDate: '',
+    followUpPurpose: '',
   };
   readonly dispositionOptions = [
     { value: 'HOME', labelKey: 'ADMISSIONS.DISPOSITION_HOME' },
@@ -880,10 +890,14 @@ export class AdmissionsComponent implements OnInit {
       dischargeInstructions: '',
       // QA D503 class: the server records the caller as the discharging provider.
       dischargingProviderId: this.auth.getUserProfile()?.staffId ?? '',
+      followUpDate: '',
+      followUpPurpose: '',
     };
     this.staySummary.set(null);
+    this.takeHomeOrders.set([]);
     const stayEncounterId = a.encounterId;
     if (stayEncounterId) {
+      this.loadTakeHome(a.id, stayEncounterId);
       this.dischargeService.summaryForEncounter(stayEncounterId).subscribe((summary) => {
         if (!summary || this.dischargingAdm()?.id !== a.id) return;
         this.staySummary.set(summary);
@@ -898,6 +912,34 @@ export class AdmissionsComponent implements OnInit {
     this.showDischargeModal.set(false);
     this.dischargingAdm.set(null);
     this.staySummary.set(null);
+    this.takeHomeOrders.set([]);
+  }
+
+  /** QA D2553: the stay's take-home orders that are signed and not withdrawn, as the summary lists them. */
+  private loadTakeHome(admissionId: string, stayEncounterId: string): void {
+    this.takeHomeLoading.set(true);
+    this.prescriptionService.list({ encounterId: stayEncounterId }).subscribe({
+      next: (rows) => {
+        if (this.dischargingAdm()?.id !== admissionId) return;
+        this.takeHomeOrders.set(rows.filter(goesHome));
+        this.takeHomeLoading.set(false);
+      },
+      error: () => {
+        this.takeHomeOrders.set([]);
+        this.takeHomeLoading.set(false);
+      },
+    });
+  }
+
+  /** QA D2553: the follow-up the dialog took, as the discharge's follow-up appointment. */
+  private dischargeFollowUps(): Record<string, string>[] | undefined {
+    const date = this.dischargeForm.followUpDate.trim();
+    const purpose = this.dischargeForm.followUpPurpose.trim();
+    if (this.staySummary()?.isFinalized || (!date && !purpose)) return undefined;
+    const row: Record<string, string> = { appointmentType: 'DISCHARGE_FOLLOW_UP' };
+    if (date) row['appointmentDate'] = date;
+    if (purpose) row['purpose'] = purpose;
+    return [row];
   }
 
   executeDischarge(): void {
@@ -916,6 +958,7 @@ export class AdmissionsComponent implements OnInit {
             ? undefined
             : this.dischargeForm.dischargeInstructions,
         dischargingProviderId: this.dischargeForm.dischargingProviderId,
+        followUpAppointments: this.dischargeFollowUps(),
       })
       .subscribe({
         next: () => {
@@ -1140,4 +1183,11 @@ export class AdmissionsComponent implements OnInit {
   countByStatus(status: string): number {
     return this.admissions().filter((a) => a.status === status).length;
   }
+}
+
+/** QA D2553: as the server (DischargeTakeHomeMedicines.goesHome): marked for home, signed, not withdrawn. */
+const NOT_GOING_HOME = new Set(['DRAFT', 'PENDING_SIGNATURE', 'CANCELLED', 'DISCONTINUED']);
+
+export function goesHome(rx: Pick<PrescriptionResponse, 'takeHome' | 'status'>): boolean {
+  return !!rx.takeHome && !NOT_GOING_HOME.has(String(rx.status ?? '').toUpperCase());
 }

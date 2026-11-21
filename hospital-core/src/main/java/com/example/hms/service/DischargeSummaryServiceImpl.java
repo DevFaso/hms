@@ -76,6 +76,8 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     private final RecordAccessPolicy recordAccessPolicy;
     private final com.example.hms.repository.EncounterNoteRepository encounterNoteRepository;
     private final CrossHospitalReachRecorder reachRecorder;
+    /** QA D2553: a stay's summary lists its take-home orders, whoever writes it first. */
+    private final DischargeTakeHomeMedicines takeHomeMedicines;
 
     /**
      * Optional Micrometer registry. Auto-configured by spring-boot-starter-actuator in
@@ -176,6 +178,9 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
             .build();
 
         addMedications(dischargeSummary, request);
+        if (takeHomeMedicines != null) {
+            takeHomeMedicines.carryInto(dischargeSummary);
+        }
         addPendingTests(dischargeSummary, request);
         addFollowUps(dischargeSummary, request);
 

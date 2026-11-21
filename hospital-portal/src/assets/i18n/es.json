@@ -1527,7 +1527,13 @@
     "OVERVIEW_TITLE": "Admisiones cargadas",
     "MATCHING_COUNT": "Admisiones coincidentes: {{count}}",
     "MISSING_BED_SUBSET": "Activas sin datos de cama",
-    "MISSING_BED_HINT": "Los datos de cama faltantes corresponden a un subconjunto de admisiones activas ya incluido en su total."
+    "MISSING_BED_HINT": "Los datos de cama faltantes corresponden a un subconjunto de admisiones activas ya incluido en su total.",
+    "TAKE_HOME_TITLE": "Tratamiento al alta",
+    "TAKE_HOME_NONE": "No hay tratamiento al alta prescrito para esta estancia.",
+    "TAKE_HOME_HINT": "Las prescripciones firmadas marcadas « Tratamiento al alta » figuran en el resumen de alta, incluidas las redactadas en las 24 h siguientes al alta.",
+    "FOLLOW_UP_DATE": "Cita de seguimiento",
+    "FOLLOW_UP_PURPOSE": "Motivo del seguimiento",
+    "FOLLOW_UP_PURPOSE_PLACEHOLDER": "p. ej. control, curas, análisis de control"
   },
   "ANALYTICS": {
     "LOAD_FAILED": "No se pudieron cargar los indicadores. Inténtelo de nuevo.",

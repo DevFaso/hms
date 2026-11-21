@@ -1527,7 +1527,13 @@
     "OVERVIEW_TITLE": "Loaded admissions",
     "MATCHING_COUNT": "Matching admissions: {{count}}",
     "MISSING_BED_SUBSET": "Active with bed details missing",
-    "MISSING_BED_HINT": "Missing bed details are a subset of active admissions and are already included in that count."
+    "MISSING_BED_HINT": "Missing bed details are a subset of active admissions and are already included in that count.",
+    "TAKE_HOME_TITLE": "Take-home medicines",
+    "TAKE_HOME_NONE": "No take-home medicine is prescribed for this stay.",
+    "TAKE_HOME_HINT": "Signed prescriptions marked « Take-home medication » are listed in the discharge summary, including those written up to 24 h after the discharge.",
+    "FOLLOW_UP_DATE": "Follow-up appointment",
+    "FOLLOW_UP_PURPOSE": "Follow-up purpose",
+    "FOLLOW_UP_PURPOSE_PLACEHOLDER": "e.g. check-up, wound review, lab recheck"
   },
   "ANALYTICS": {
     "LOAD_FAILED": "The analytics could not be loaded. Try again.",

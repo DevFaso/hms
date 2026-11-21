@@ -152,6 +152,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
     /** Round 18: the prescriber's step-up re-authentication at a controlled signature. */
     private final PrescriberReauthenticationService prescriberReauthentication;
+    /** QA D2553: a take-home order signed joins its stay's discharge summary. */
+    private final DischargeTakeHomeMedicines takeHomeMedicines;
 
     /**
      * Round 19 (QA D1096): the reviewer written on a paediatric dose review.
@@ -598,6 +600,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             prescription.setPediatricDoseUrgentExceptionAt(signedAt);
         }
         PrescriptionResponseDTO signed = prescriptionMapper.toResponseDTO(prescriptionRepository.save(prescription));
+        if (takeHomeMedicines != null) {
+            takeHomeMedicines.onSigned(prescription);
+        }
         if (allergyAcknowledgement != null) {
             // The warning, the reason, the signer and the time together: this row (actor, its own time,
             // the allergy the warning named, the reason's digest) beside the order's signer, time and reason.
