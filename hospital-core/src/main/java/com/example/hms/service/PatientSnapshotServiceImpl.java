@@ -110,6 +110,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
     private final CrossHospitalReachRecorder reachRecorder;
     private final SensitivityClassifier sensitivityClassifier;
     private final BreakGlassGate breakGlassGate;
+    private final com.example.hms.mapper.LabResultMapper labResultMapper;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final String DIAGNOSIS_STATUS_ACTIVE = "ACTIVE";
@@ -493,7 +494,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                             .value(r.getResultValue())
                             .unit(com.example.hms.mapper.LabResultMapper.unitOf(r))
                             .flag(labResultFlag(r))
-                            .abnormalDirection(r.getAbnormalFlag() != null ? r.getAbnormalFlag().direction() : null)
+                            .abnormalDirection(labResultDirection(r))
                             .date(r.getResultDate() != null ? r.getResultDate().format(DATE_FMT) : "")
                             .corrected(com.example.hms.service.lab.LabResultCorrections.isCorrection(r))
                             .build()));
@@ -508,12 +509,40 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                 : CrossHospitalReachRecorder.hospitalIdOf(result.getLabOrder().getHospital());
     }
 
-    /** The three-value family: the drawer colours on the literal ABNORMAL / CRITICAL. */
+    /**
+     * The three-value family: the drawer colours on the literal ABNORMAL / CRITICAL.
+     *
+     * <p>QA D2640 (r65, the class): the grade is the laboratory's
+     * ({@link com.example.hms.mapper.LabResultMapper#severityFlagOf}), as the
+     * lab results screen shows it. The row's stored flag is only what an
+     * analyser or a technologist recorded, null when the reference range
+     * grades the value, so a creatinine of 118 on 62–106 read « à revoir ».
+     */
     private String labResultFlag(LabResult r) {
-        if (r.getAbnormalFlag() != null) {
-            return r.getAbnormalFlag().severity().name();
+        switch (labResultMapper.severityFlagOf(r)) {
+            case com.example.hms.mapper.LabResultMapper.FLAG_CRITICAL -> {
+                return com.example.hms.enums.AbnormalFlag.CRITICAL.name();
+            }
+            case "HIGH", "LOW", com.example.hms.mapper.LabResultMapper.FLAG_ABNORMAL -> {
+                return com.example.hms.enums.AbnormalFlag.ABNORMAL.name();
+            }
+            case FLAG_NORMAL -> {
+                return FLAG_NORMAL;
+            }
+            default -> {
+                return r.isAcknowledged() ? FLAG_NORMAL : FLAG_REVIEW;
+            }
         }
-        return r.isAcknowledged() ? FLAG_NORMAL : FLAG_REVIEW;
+    }
+
+    /** The side of the range the laboratory's grade crossed, or the analyser's, or null. */
+    private com.example.hms.enums.AbnormalDirection labResultDirection(LabResult r) {
+        String graded = labResultMapper.severityFlagOf(r);
+        if ("HIGH".equals(graded) || "LOW".equals(graded)) {
+            return com.example.hms.enums.AbnormalDirection.valueOf(graded);
+        }
+        // As the chart (ChartReviewServiceImpl#gradedDirection): an analyser's H/L on a value no range grades.
+        return r.getAbnormalFlag() != null ? r.getAbnormalFlag().direction() : null;
     }
 
     private List<PatientSnapshotDTO.OrderItem> buildPendingOrders(UUID patientId, UUID hospitalId,

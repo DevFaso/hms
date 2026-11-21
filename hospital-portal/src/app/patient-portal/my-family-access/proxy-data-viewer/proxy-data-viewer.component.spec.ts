@@ -7,11 +7,13 @@ import { of, throwError } from 'rxjs';
 
 import { ProxyDataViewerComponent } from './proxy-data-viewer.component';
 import { PatientPortalService, ProxyResponse } from '../../../services/patient-portal.service';
+import { PatientImagingService } from '../../../services/patient-imaging.service';
 
 describe('ProxyDataViewerComponent', () => {
   let fixture: ComponentFixture<ProxyDataViewerComponent>;
   let component: ProxyDataViewerComponent;
   let portal: jasmine.SpyObj<PatientPortalService>;
+  let imaging: jasmine.SpyObj<PatientImagingService>;
 
   function grant(permissions: string): ProxyResponse {
     return {
@@ -46,12 +48,18 @@ describe('ProxyDataViewerComponent', () => {
     portal.getProxyLabResultsPage.and.returnValue(of({ items: [], hasMore: false }));
     portal.getProxyLabResultTotal.and.returnValue(of(0));
     portal.getProxyBilling.and.returnValue(of([]));
+    imaging = jasmine.createSpyObj<PatientImagingService>('PatientImagingService', [
+      'studies',
+      'image',
+    ]);
+    imaging.studies.and.returnValue(of([]));
 
     await TestBed.configureTestingModule({
       imports: [ProxyDataViewerComponent, TranslateModule.forRoot()],
       providers: [
         provideRouter([]),
         { provide: PatientPortalService, useValue: portal },
+        { provide: PatientImagingService, useValue: imaging },
         {
           provide: ActivatedRoute,
           useValue: { snapshot: { paramMap: convertToParamMap({ patientId: 'p-1' }) } },
@@ -69,7 +77,7 @@ describe('ProxyDataViewerComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="proxy-no-access"]')).not.toBeNull();
   });
 
-  it('ALL scope exposes all five tabs and auto-loads the first', () => {
+  it('ALL scope exposes all six tabs and auto-loads the first', () => {
     portal.getMyProxyAccess.and.returnValue(of([grant('ALL')]));
     fixture.detectChanges();
 
@@ -79,6 +87,7 @@ describe('ProxyDataViewerComponent', () => {
       'labResults',
       'billing',
       'records',
+      'imaging',
     ]);
     expect(component.activeTab()).toBe('appointments');
     expect(portal.getProxyAppointments).toHaveBeenCalledWith('p-1');
@@ -123,6 +132,25 @@ describe('ProxyDataViewerComponent', () => {
 
     expect(portal.getProxyLabResultsPage).toHaveBeenCalledTimes(1);
     expect(portal.getProxyAppointments).toHaveBeenCalledTimes(1);
+  });
+
+  it("QA D2641: the records permission opens the grantor's imaging, read through the proxy endpoint", () => {
+    portal.getMyProxyAccess.and.returnValue(of([grant('VIEW_RECORDS')]));
+    portal.getProxyRecords.and.returnValue(of(null as never) as never);
+    fixture.detectChanges();
+
+    expect(component.tabs().map((t) => t.key)).toEqual(['records', 'imaging']);
+    component.selectTab('imaging');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="proxy-imaging"]')).not.toBeNull();
+    expect(imaging.studies).toHaveBeenCalledOnceWith('p-1');
+  });
+
+  it('QA D2641: a grant without the records permission shows no imaging tab', () => {
+    portal.getMyProxyAccess.and.returnValue(of([grant('VIEW_LAB_RESULTS')]));
+    fixture.detectChanges();
+    expect(component.tabs().map((t) => t.key)).not.toContain('imaging');
+    expect(imaging.studies).not.toHaveBeenCalled();
   });
 
   it('records tab renders the health summary cards', () => {

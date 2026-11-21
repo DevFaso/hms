@@ -58,6 +58,7 @@ class ImagingReadingContextServiceTest {
     @Mock private LabResultRepository labResultRepository;
     @Mock private MaternalHistoryRepository maternalHistoryRepository;
     @Mock private RoleValidator roleValidator;
+    @org.mockito.Spy private com.example.hms.mapper.LabResultMapper labResultMapper = new com.example.hms.mapper.LabResultMapper();
 
     @InjectMocks private ImagingReadingContextService service;
 
@@ -161,6 +162,32 @@ class ImagingReadingContextServiceTest {
         assertThat(ctx.creatinine().corrected()).isFalse();
         verify(labResultRepository).findReleasedCreatinineCandidates(eq(patient.getId()), eq(hospitalId),
             eq(ImagingReadingContextService.CREATININE_LOINC), any());
+    }
+
+    @Test
+    @DisplayName("QA D2640: the creatinine reads as the laboratory graded it, with its range, when no flag was stored")
+    void d2640_creatinineCarriesTheLabGradeAndRange() {
+        LabResult row = creatinine("Créatinine", "118", LocalDateTime.of(2026, 11, 20, 0, 0));
+        row.setResultUnit("µmol/L");
+        row.getLabOrder().getLabTestDefinition().setReferenceRanges(new ArrayList<>(List.of(
+            com.example.hms.model.LabTestReferenceRange.builder().minValue(62.0).maxValue(106.0).unit("µmol/L").build())));
+        assertThat(row.getAbnormalFlag()).as("the release path stores no flag on a range-graded row").isNull();
+
+        ImagingReadingContextDTO ctx = service.contextOf(current.getId());
+
+        assertThat(ctx.creatinine().severityFlag()).isEqualTo("HIGH");
+        assertThat(ctx.creatinine().referenceRange()).isEqualTo("62 - 106 µmol/L");
+    }
+
+    @Test
+    @DisplayName("QA D2640: a creatinine no range grades says so (UNSPECIFIED), never a made-up grade")
+    void d2640_ungradedCreatinineSaysSo() {
+        creatinine("Créatinine", "118", LocalDateTime.of(2026, 11, 20, 0, 0));
+
+        ImagingReadingContextDTO ctx = service.contextOf(current.getId());
+
+        assertThat(ctx.creatinine().severityFlag()).isEqualTo("UNSPECIFIED");
+        assertThat(ctx.creatinine().referenceRange()).isNull();
     }
 
     @Test

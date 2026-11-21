@@ -6948,7 +6948,8 @@
         "STATUS": "Estado",
         "TEST": "Prueba",
         "TITLE": "Datos de salud de {{name}}",
-        "TITLE_FALLBACK": "Datos de salud compartidos"
+        "TITLE_FALLBACK": "Datos de salud compartidos",
+        "IMAGING_TAB": "Imaging"
       },
       "USER_NOT_FOUND": "Ninguna cuenta tiene este nombre de usuario. Compruebe la ortografía con la persona a la que quiere dar acceso.",
       "REVOKE_CONFIRM_TITLE": "¿Revocar este acceso?",
@@ -15138,7 +15139,8 @@
       "NO_CREATININE": "No released creatinine result at this hospital",
       "PRIOR_STUDIES": "Prior imaging studies",
       "NO_PRIOR": "No prior imaging study at this hospital",
-      "OPEN_REPORT": "Open its report"
+      "OPEN_REPORT": "Open its report",
+      "REFERENCE_RANGE": "Reference range: {{range}}"
     },
     "PORTAL": {
       "TITLE": "Imaging",
@@ -15148,7 +15150,8 @@
       "EMPTY_DESC": "A report appears here once the radiologist has signed it.",
       "REPORT": "Report",
       "IMAGES": "Images",
-      "IMAGE_N": "Image {{n}}"
+      "IMAGE_N": "Image {{n}}",
+      "PRESCRIBED_BY": "Requested by {{name}}"
     },
     "MAX_SIZE_LABEL": "10 MB",
     "IMAGES": {
@@ -15776,5 +15779,11 @@
     "DESCENDING": "Descendente",
     "ASCENDING_FLIP": "Ascendente, cambiar a descendente",
     "DESCENDING_FLIP": "Descendente, cambiar a ascendente"
+  },
+  "PRINT_IDENTITY": {
+    "PATIENT": "Patient",
+    "SEX": "Sex",
+    "EXAM_DATE": "Exam date",
+    "PRINTED_ON": "Printed on {{date}}"
   }
 }

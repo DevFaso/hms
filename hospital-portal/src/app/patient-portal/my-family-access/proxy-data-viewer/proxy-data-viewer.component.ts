@@ -19,8 +19,10 @@ import { refusalReason } from '../../../shared/refusal-reason';
 import { LabResultPager } from '../../lab-result-pager';
 import { ShownRows } from '../../shown-rows';
 import { ClockTimePipe } from '../../../shared/pipes/clock-time.pipe';
+import { MyImagingComponent } from '../../my-imaging/my-imaging.component';
 
-export type ProxyTabKey = 'appointments' | 'medications' | 'labResults' | 'billing' | 'records';
+export type ProxyTabKey =
+  'appointments' | 'medications' | 'labResults' | 'billing' | 'records' | 'imaging';
 
 interface ProxyTab {
   key: ProxyTabKey;
@@ -65,6 +67,7 @@ function normalizeScopes(csv: string | null | undefined): Set<string> {
     EnumLabelPipe,
     TranslateModule,
     CfaPipe,
+    MyImagingComponent,
   ],
   templateUrl: './proxy-data-viewer.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -104,6 +107,14 @@ export class ProxyDataViewerComponent implements OnInit {
       scope: 'VIEW_RECORDS',
       icon: 'clinical_notes',
       labelKey: 'PORTAL.FAMILY.VIEWER.RECORDS_TAB',
+    },
+    // QA D2641 (r65): the grantor's released imaging, on the records permission the server
+    // checks (GET /me/patient/proxy-access/{id}/imaging); a sensitive visit's study is left out there.
+    {
+      key: 'imaging',
+      scope: 'VIEW_RECORDS',
+      icon: 'radiology',
+      labelKey: 'PORTAL.FAMILY.VIEWER.IMAGING_TAB',
     },
   ];
 
@@ -213,6 +224,11 @@ export class ProxyDataViewerComponent implements OnInit {
         break;
       case 'records':
         this.portal.getProxyRecords(this.patientId).subscribe(done((v) => this.records.set(v)));
+        break;
+      case 'imaging':
+        // The embedded <app-my-imaging> reads (and says when it cannot) on its own.
+        this.loadedTabs.add(key);
+        this.tabLoading.set(false);
         break;
     }
   }

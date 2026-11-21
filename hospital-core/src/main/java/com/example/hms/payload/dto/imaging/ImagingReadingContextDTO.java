@@ -1,6 +1,5 @@
 package com.example.hms.payload.dto.imaging;
 
-import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.enums.ImagingModality;
 import com.example.hms.enums.ImagingOrderStatus;
 import com.example.hms.enums.ImagingReportStatus;
@@ -46,6 +45,9 @@ public record ImagingReadingContextDTO(
     }
 
     /**
+     * @param severityFlag   QA D2640: the laboratory's grade, as the lab results screen shows it
+     *                       (CRITICAL, HIGH, LOW, ABNORMAL, NORMAL or UNSPECIFIED)
+     * @param referenceRange QA D2640: the range it was graded against ("62 - 106 µmol/L"), or null
      * @param corrected this value corrects an earlier released one (QA D1016: said wherever it is shown)
      */
     public record Creatinine(
@@ -53,7 +55,8 @@ public record ImagingReadingContextDTO(
         String value,
         String unit,
         LocalDateTime resultDate,
-        AbnormalFlag abnormalFlag,
+        String severityFlag,
+        String referenceRange,
         boolean corrected
     ) {
     }

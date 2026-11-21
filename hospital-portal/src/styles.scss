@@ -281,6 +281,24 @@ button {
   body.print-isolated *:not(:has(.print-root)):not(.print-root):not(.print-root *) {
     display: none !important;
   }
+  /* QA D2642 (r65): the element printed alone, and every box that holds it,
+     flows on paper. A drawer is a fixed, 520 px, scrolling box: its report
+     printed one page and stopped at « Images retirées », the versions and the
+     history cut off. No fixed or sticky box, no height cap, no scroll box. */
+  body.print-isolated :is(:has(.print-root), .print-root) {
+    position: static !important;
+    inset: auto !important;
+    transform: none !important;
+    width: auto !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  /* An icon is a ligature (« lock », « hide_image »): never ink on a printed document. */
+  body.print-isolated .print-root .material-symbols-outlined {
+    display: none !important;
+  }
 }
 
 /* QA D1072: the message shared/forms/invalid-fields.ts shows under a field a

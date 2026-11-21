@@ -22,6 +22,13 @@ export interface PatientImagingReport {
   signedByName?: string | null;
   signedAt?: string | null;
   performedAt?: string | null;
+  /** QA D2643 (r65): whom the printed sheet is about, and who asked for the exam. */
+  patientDisplayName?: string | null;
+  patientMrn?: string | null;
+  patientDateOfBirth?: string | null;
+  orderingProviderName?: string | null;
+  hospitalName?: string | null;
+  hospitalAddress?: string | null;
 }
 
 /** One released key image of the study (#1223), read through the patient's own endpoint. */

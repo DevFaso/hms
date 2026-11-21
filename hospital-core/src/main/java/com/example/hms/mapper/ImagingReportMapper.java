@@ -125,6 +125,8 @@ public class ImagingReportMapper {
             .patientDisplayName(patient != null ? patient.getFullName() : null)
             .patientMrn(patientMrnOf(report))
             .hospitalId(report.getHospital() != null ? report.getHospital().getId() : null)
+            // QA D1058 / D2642: the hospital named beside its id (the printed header reads it).
+            .hospitalName(hospitalNameOf(report))
             .organizationId(report.getOrganization() != null ? report.getOrganization().getId() : null)
             .departmentId(report.getDepartment() != null ? report.getDepartment().getId() : null)
             .reportNumber(report.getReportNumber())
@@ -135,8 +137,8 @@ public class ImagingReportMapper {
             .seriesInstanceUid(report.getSeriesInstanceUid())
             .accessionNumber(report.getAccessionNumber())
             .pacsViewerUrl(resolvePacsViewerUrl(report))
-            .modality(report.getModality())
-            .bodyRegion(report.getBodyRegion())
+            .modality(studyModalityOf(report))
+            .bodyRegion(studyBodyRegionOf(report))
             .reportTitle(report.getReportTitle())
             .performedByStaffId(report.getPerformedBy() != null ? report.getPerformedBy().getId() : null)
             .performedByName(report.getPerformedBy() != null ? report.getPerformedBy().getFullName() : null)
@@ -184,7 +186,46 @@ public class ImagingReportMapper {
             .measurements(toMeasurementDTOs(report.getMeasurements()))
             .attachments(toAttachmentDTOs(report.getAttachments()))
             .statusHistory(toStatusDTOs(report.getStatusHistory()));
-        return withExamRecord(response, report.getImagingOrder()).build();
+        return withPrintIdentity(withExamRecord(response, report.getImagingOrder()), report).build();
+    }
+
+    /**
+     * QA D2642 / D2643 (r65): a printed report identified nobody: no hospital, date of birth,
+     * prescriber, clinical question or exam date. Read from the order and its patient every time.
+     */
+    private static ImagingReportResponseDTO.ImagingReportResponseDTOBuilder withPrintIdentity(
+            ImagingReportResponseDTO.ImagingReportResponseDTOBuilder response, ImagingReport report) {
+        com.example.hms.model.ImagingOrder order = report.getImagingOrder();
+        com.example.hms.model.Hospital hospital = hospitalOf(report);
+        com.example.hms.model.Patient patient = patientOf(report);
+        return response
+            .hospitalAddress(hospital != null ? addressOf(hospital) : null)
+            .patientDateOfBirth(patient != null ? patient.getDateOfBirth() : null)
+            .patientGender(patient != null ? patient.getGender() : null)
+            .orderingProviderName(order != null ? order.getOrderingProviderName() : null)
+            .clinicalQuestion(order != null ? order.getClinicalQuestion() : null)
+            .orderedAt(order != null ? order.getOrderedAt() : null);
+    }
+
+    /** The report's hospital, else its order's. */
+    private static com.example.hms.model.Hospital hospitalOf(ImagingReport report) {
+        if (report.getHospital() != null) {
+            return report.getHospital();
+        }
+        return report.getImagingOrder() != null ? report.getImagingOrder().getHospital() : null;
+    }
+
+    private static String hospitalNameOf(ImagingReport report) {
+        com.example.hms.model.Hospital hospital = hospitalOf(report);
+        return hospital != null ? hospital.getName() : null;
+    }
+
+    private static String addressOf(com.example.hms.model.Hospital hospital) {
+        String joined = java.util.stream.Stream.of(hospital.getAddress(), hospital.getCity())
+            .filter(part -> part != null && !part.isBlank())
+            .map(String::trim)
+            .collect(java.util.stream.Collectors.joining(", "));
+        return joined.isEmpty() ? null : joined;
     }
 
     /**
@@ -248,6 +289,42 @@ public class ImagingReportMapper {
         applyPresentAcquisitionFields(report, request);
         synchronizeMeasurements(report, request.getMeasurements());
         synchronizeAttachments(report, request.getAttachments());
+        inheritStudyIdentity(report);
+    }
+
+    /**
+     * QA D3000 (r67): a report is the read of ITS order's study. A report its
+     * author saved without a modality or a body region (an addendum opened on
+     * such a report, an API client, the exam-record path) printed « Modalité »
+     * empty and « Région du corps — » while the order said Radiographie /
+     * Thorax. What the author leaves blank is the order's; what the author
+     * typed is kept.
+     */
+    static void inheritStudyIdentity(ImagingReport report) {
+        if (report.getModality() == null) {
+            report.setModality(studyModalityOf(report));
+        }
+        if (report.getBodyRegion() == null || report.getBodyRegion().isBlank()) {
+            report.setBodyRegion(studyBodyRegionOf(report));
+        }
+    }
+
+    /** QA D3000: the report's modality, else its order's (rows saved before the fix). */
+    public static com.example.hms.enums.ImagingModality studyModalityOf(ImagingReport report) {
+        if (report.getModality() != null) {
+            return report.getModality();
+        }
+        return report.getImagingOrder() != null ? report.getImagingOrder().getModality() : null;
+    }
+
+    /** QA D3000: the report's body region, else its order's (rows saved before the fix). */
+    public static String studyBodyRegionOf(ImagingReport report) {
+        String own = report.getBodyRegion();
+        if (own != null && !own.isBlank()) {
+            return own;
+        }
+        String ordered = report.getImagingOrder() != null ? report.getImagingOrder().getBodyRegion() : null;
+        return ordered != null && !ordered.isBlank() ? ordered : null;
     }
 
     /**
