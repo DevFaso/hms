@@ -901,6 +901,75 @@ class UserEndpointAuthorizationIT extends BaseIT {
         assertThat(assignmentRepository.findByUserId(nurseA.getId()))
             .anySatisfy(a -> assertThat(a.getHospital().getId()).isEqualTo(hospitalB.getId()));
         assertThat(status(post("/assignments"), token, grantOf(nurseA, hospitalC))).isEqualTo(403);
+
+        // Review of #1246, item 4: the grant at B is filed at B, where B's own administrator reads it.
+        String grantedId = objectMapper.readTree(granted.getResponse().getContentAsString()).get("id").asText();
+        User adminB = account("hadmB", "ROLE_HOSPITAL_ADMIN", hospitalB);
+        MvcResult trail = readOnly(get("/audit-logs").param("size", "200"), hms(adminB, "ROLE_HOSPITAL_ADMIN"));
+        assertThat(trail.getResponse().getStatus()).as(trail.getResponse().getContentAsString()).isEqualTo(200);
+        tools.jackson.databind.JsonNode trailOfB = objectMapper.readTree(trail.getResponse().getContentAsString());
+        List<String> grantsFiledAtB = new ArrayList<>();
+        trailOfB.get("content").forEach(row -> {
+            if ("ROLE_ASSIGNED".equals(row.get("eventType").asText())) {
+                grantsFiledAtB.add(row.get("resourceId").asText());
+            }
+        });
+        assertThat(grantsFiledAtB).contains(grantedId);
+    }
+
+    @Test
+    @DisplayName("review of #1246: an organisation admin names an existing account only among its organisation's staff")
+    void organisationAdminNamesOnlyItsOrganisationsStaff() throws Exception {
+        String token = organisationAdmin();
+        User nurseC = account("nurC", "ROLE_NURSE", hospitalC);
+        String nurseRole = ensureRole("ROLE_NURSE").getId().toString();
+        String atB = hospitalB.getId().toString();
+
+        // A patient found by phone number, and another organisation's nurse found by e-mail or by id:
+        // each answers exactly as a number nobody has. Nothing is created, nothing is confirmed.
+        MvcResult aPatient = perform(post("/assignments"), token, Map.of(
+            "userIdentifier", userRepository.findById(patientA.getId()).orElseThrow().getPhoneNumber(),
+            "roleId", nurseRole, "hospitalId", atB));
+        MvcResult nobody = perform(post("/assignments"), token, Map.of(
+            "userIdentifier", "+22679999999", "roleId", nurseRole, "hospitalId", atB));
+        assertThat(aPatient.getResponse().getStatus()).isEqualTo(404);
+        assertThat(nobody.getResponse().getStatus()).isEqualTo(404);
+        assertThat(message(aPatient).replaceAll("\\+?\\d{6,}", "<n>"))
+            .isEqualTo(message(nobody).replaceAll("\\+?\\d{6,}", "<n>"));
+        assertThat(status(post("/assignments"), token, Map.of(
+            "userIdentifier", emailOf(nurseC), "roleId", nurseRole, "hospitalId", atB))).isEqualTo(404);
+        assertThat(status(post("/assignments"), token, grantOf(nurseC, hospitalB))).isEqualTo(404);
+        assertThat(assignmentRepository.findByUserId(patientA.getId())).hasSize(1);
+        assertThat(assignmentRepository.findByUserId(nurseC.getId())).hasSize(1);
+
+        // Its organisation's staff, by e-mail: granted.
+        assertThat(status(post("/assignments"), token, Map.of(
+            "userIdentifier", emailOf(nurseA), "roleId", nurseRole, "hospitalId", atB))).isEqualTo(200);
+        // A hospital admin at its own hospital is not held to this: it names a patient's account as before.
+        assertThat(status(post("/assignments"), hms(adminA, "ROLE_HOSPITAL_ADMIN"), Map.of(
+            "userIdentifier", emailOf(patientA), "roleId", ensureRole("ROLE_RECEPTIONIST").getId().toString(),
+            "hospitalId", hospitalA.getId().toString()))).isEqualTo(200);
+    }
+
+    @Test
+    @DisplayName("review of #1246 (rule 1b): an organisation admin reads no patient, front-desk, audit or clinical data")
+    void organisationAdminReadsNoPatientOrClinicalData() throws Exception {
+        String token = organisationAdmin();
+
+        for (String path : List.of("/patients", "/patients/search", "/audit-logs", "/patient-tracker",
+            "/dashboard/hospital-admin/summary", "/dashboard/lab-ops/summary", "/reception/queue",
+            "/imaging/orders")) {
+            assertThat(readOnly(get(path), token).getResponse().getStatus()).as(path).isEqualTo(403);
+        }
+        // The hospital's own administrator keeps its reads at its own hospital.
+        String hospitalAdmin = hms(adminA, "ROLE_HOSPITAL_ADMIN");
+        assertThat(readOnly(get("/patients"), hospitalAdmin).getResponse().getStatus()).isEqualTo(200);
+        assertThat(readOnly(get("/audit-logs"), hospitalAdmin).getResponse().getStatus()).isEqualTo(200);
+    }
+
+    /** A GET as a browser sends it: the bearer token and no CSRF parameter (some reads refuse an unknown one). */
+    private MvcResult readOnly(MockHttpServletRequestBuilder request, String bearer) throws Exception {
+        return mockMvc.perform(request.header(HttpHeaders.AUTHORIZATION, "Bearer " + bearer)).andReturn();
     }
 
     @Test
@@ -940,6 +1009,14 @@ class UserEndpointAuthorizationIT extends BaseIT {
         objectMapper.readTree(summary.getResponse().getContentAsString()).get("hospitals")
             .forEach(row -> totalled.add(row.get("hospitalId").asText()));
         assertThat(totalled).containsExactlyInAnyOrderElementsOf(own);
+
+        // Review of #1246, item 3: one calendar month, never a free range (nothing to subtract).
+        assertThat(status(get("/organization-admin/summary").param("month", "2026-10"), token, null)).isEqualTo(200);
+        assertThat(status(get("/organization-admin/summary").param("from", "2026-11-03").param("to", "2026-11-04"),
+            token, null)).isEqualTo(400);
+        assertThat(status(get("/organization-admin/summary").param("month", "2026-10").param("to", "2026-10-02"),
+            token, null)).isEqualTo(400);
+        assertThat(status(get("/organization-admin/summary").param("month", "2999-01"), token, null)).isEqualTo(400);
 
         for (String outsider : new String[] {hms(adminA, "ROLE_HOSPITAL_ADMIN"), hms(nurseA, "ROLE_NURSE"),
             hms(superAdmin, "ROLE_SUPER_ADMIN"), hms(patientA, "ROLE_PATIENT")}) {

@@ -323,6 +323,53 @@ class OrganisationAdminScopeTest {
     }
 
     @Test
+    @DisplayName("review of #1246: HOSPITAL_ADMIN at A and ADMIN at C (another organisation): A's patient contacts never reach C")
+    void patientContactsAreDecidedPerHospital() {
+        signIn("ROLE_HOSPITAL_ADMIN", "ROLE_ADMIN");
+        callerHolds(assignment("ROLE_HOSPITAL_ADMIN", hospitalA, true), assignment("ROLE_ADMIN", hospitalC, true));
+        when(assignmentRepository.findClinicalHospitalIdsInOrganisationsOf(Set.of(hospitalC.getId())))
+            .thenReturn(Set.of(hospitalC.getId()));
+
+        UserAccountAccess.DirectoryScope scope = access.requireDirectoryAccess();
+
+        // The page has one flag: so the hospitals it lists are exactly those the flag is true for.
+        assertThat(scope.seesPatientContacts()).isTrue();
+        assertThat(scope.hospitalIds()).containsExactly(hospitalA.getId()).doesNotContain(hospitalC.getId());
+    }
+
+    @Test
+    @DisplayName("review of #1246: an ADMIN alone, at one hospital or across its organisation, never gets the patient-contact directory")
+    void anOrganisationAdminNeverGetsPatientContacts() {
+        organisationAdminOfOne();
+
+        UserAccountAccess.DirectoryScope scope = access.requireDirectoryAccess();
+
+        assertThat(scope.seesPatientContacts()).isFalse();
+        assertThat(scope.hospitalIds()).containsExactlyInAnyOrder(hospitalA.getId(), hospitalB.getId());
+    }
+
+    @Test
+    @DisplayName("review of #1246: who reaches a hospital through its organisation alone")
+    void reachingThroughTheOrganisationAlone() {
+        organisationAdminOfOne();
+        assertThat(access.reachesOnlyThroughOrganisation(hospitalA.getId())).isTrue();
+        assertThat(access.reachesOnlyThroughOrganisation(hospitalB.getId())).isTrue();
+        assertThat(access.reachesOnlyThroughOrganisation(hospitalC.getId())).isFalse();
+        assertThat(access.reachesOnlyThroughOrganisation(null)).isFalse();
+
+        // Also the hospital's own administrator: at A it names whom it likes, at B it is the organisation's.
+        signIn("ROLE_HOSPITAL_ADMIN", "ROLE_ADMIN");
+        callerHolds(assignment("ROLE_HOSPITAL_ADMIN", hospitalA, true), assignment("ROLE_ADMIN", hospitalA, true));
+        assertThat(access.reachesOnlyThroughOrganisation(hospitalA.getId())).isFalse();
+        assertThat(access.reachesOnlyThroughOrganisation(hospitalB.getId())).isTrue();
+
+        // A hospital admin alone reaches nothing through an organisation.
+        signIn("ROLE_HOSPITAL_ADMIN");
+        callerHolds(assignment("ROLE_HOSPITAL_ADMIN", hospitalA, true));
+        assertThat(access.reachesOnlyThroughOrganisation(hospitalA.getId())).isFalse();
+    }
+
+    @Test
     @DisplayName("it administers no ACCOUNT: no password reset, edit or delete, even of its own organisation's staff")
     void administersNoAccount() {
         organisationAdminOfOne();

@@ -293,6 +293,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         FacilityAssignmentGuard.requireOpenForAssignment(hospital);
         User user = resolveUser(dto);
         if (adminRequest) {
+            requireHolderWithinOrganisation(user, hospital, dto);
             requireNotSelfGrant(user);
         }
         facilityAssignmentGuard.requireSingleFacilityKind(user, roleCode, hospital, null);
@@ -336,8 +337,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     private User resolveUser(UserRoleHospitalAssignmentRequestDTO dto) {
         if (dto.getUserId() != null) {
-            return userRepository.findById(dto.getUserId()).orElseThrow(() ->
-                new ResourceNotFoundException(MSG_USER_NOT_FOUND, dto.getUserId()));
+            return userRepository.findById(dto.getUserId()).orElseThrow(() -> holderNotFound(dto));
         }
 
         String identifier = dto.getUserIdentifier();
@@ -346,10 +346,44 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             return userRepository.findByUsername(trimmed)
                 .or(() -> userRepository.findByEmail(trimmed))
                 .or(() -> userRepository.findByPhoneNumber(trimmed))
-                .orElseThrow(() -> new ResourceNotFoundException(MSG_USER_NOT_FOUND, trimmed));
+                .orElseThrow(() -> holderNotFound(dto));
         }
 
         throw new BusinessException(MSG_USER_NOT_FOUND, (Object) null);
+    }
+
+    /** The one answer for a holder that does not exist and for one the caller may not name. */
+    private static ResourceNotFoundException holderNotFound(UserRoleHospitalAssignmentRequestDTO dto) {
+        if (dto.getUserId() != null) {
+            return new ResourceNotFoundException(MSG_USER_NOT_FOUND, dto.getUserId());
+        }
+        String identifier = dto.getUserIdentifier();
+        return new ResourceNotFoundException(MSG_USER_NOT_FOUND, identifier == null ? null : identifier.trim());
+    }
+
+    /**
+     * Review of #1246 (rule 1a): a caller who reaches this hospital through its
+     * organisation scope alone names an existing account only among the
+     * organisation's STAFF: an account that already holds a non-patient
+     * assignment (active or pending) at one of its hospitals. A patient's
+     * account, or another organisation's staff, found by a username, an e-mail
+     * or a phone number, answers exactly as a missing one: no assignment is
+     * created and the lookup confirms nothing. (A brand-new person is
+     * registered through admin-register, which creates the account.)
+     */
+    private void requireHolderWithinOrganisation(User holder, Hospital hospital,
+                                                 UserRoleHospitalAssignmentRequestDTO dto) {
+        if (hospital == null || !accountAccess.reachesOnlyThroughOrganisation(hospital.getId())) {
+            return;
+        }
+        Set<UUID> organisation = accountAccess.organisationHospitalIds();
+        boolean staffOfTheOrganisation = assignmentRepository.findByUserId(holder.getId()).stream()
+            .anyMatch(row -> row.getHospital() != null
+                && organisation.contains(row.getHospital().getId())
+                && !isRoleCode(getRoleCode(row.getRole()), ROLE_PATIENT));
+        if (!staffOfTheOrganisation) {
+            throw holderNotFound(dto);
+        }
     }
 
     /**
@@ -746,21 +780,20 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         Specification<UserRoleHospitalAssignment> specification = buildAssignmentSpec(
             hospitalId, active, search, assignmentCode);
 
-        // Platform admin rules 2026-11-20, rule 1a: an organisation admin lists
-        // the assignments of every hospital of its own organisation (one of
-        // them when the request names it), never another organisation's. The
-        // set comes from the caller's own assignments, not from the request.
-        Set<UUID> organisationHospitals = activeHospitalId != null ? accountAccess.organisationHospitalIds() : Set.of();
-        if (!organisationHospitals.isEmpty()) {
-            Set<UUID> listed = requestedHospitalId != null && organisationHospitals.contains(requestedHospitalId)
-                ? Set.of(requestedHospitalId)
-                : organisationHospitals;
-            specification = combineSpec(
-                combineSpec(
-                    buildAssignmentSpec(null, active, search, assignmentCode),
-                    UserRoleHospitalAssignmentSpecification.belongsToAnyHospital(listed)),
-                // Rule 1b: staff rows only; a PATIENT row is a patient list.
-                UserRoleHospitalAssignmentSpecification.staffRowsOnly());
+        // Review of #1246: anyone but a super-admin lists what their assignment
+        // scope reaches and nothing else. The acting hospital alone used to
+        // decide, so a caller the endpoint admits but who administers nothing
+        // there (a hospital admin of A acting at B as a nurse; an ADMIN whose
+        // organisation scope is empty) read every row of that hospital, the
+        // patients' included.
+        UserAccountAccess.AssignmentScope scope = accountAccess.assignmentScope();
+        if (!scope.everywhere()) {
+            Specification<UserRoleHospitalAssignment> reach =
+                scopedListing(scope, activeHospitalId, requestedHospitalId);
+            if (reach == null) {
+                return Page.empty(pageable);
+            }
+            specification = combineSpec(buildAssignmentSpec(null, active, search, assignmentCode), reach);
         }
 
         if (specification == null) {
@@ -772,6 +805,56 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         log.info("📄 Fetching assignments with filters hospitalId={}, active={}, search='{}', assignmentCode='{}' (page {}, size {})",
             hospitalId, active, search, assignmentCode, pageable.getPageNumber(), pageable.getPageSize());
         return assignmentRepository.findAll(specification, pageable).map(this::toDtoWithLinks);
+    }
+
+    /**
+     * The rows a scoped caller's listing may hold, or {@code null} when it
+     * reaches nothing (an empty page, never an unfiltered one).
+     *
+     * <p>Where the caller administers the hospital ({@code hospitalIds}):
+     * every row. Where it reaches the hospital through its organisation alone
+     * ({@code staffOnlyHospitalIds}; platform admin rules, rules 1a and 1b):
+     * staff rows only, never a PATIENT row. A hospital the request names
+     * narrows the listing to it when it is in reach; otherwise a hospital
+     * administrator lists the hospital it is acting at, and an organisation
+     * admin its whole organisation.
+     */
+    private static Specification<UserRoleHospitalAssignment> scopedListing(
+            UserAccountAccess.AssignmentScope scope, UUID activeHospitalId, UUID requestedHospitalId) {
+        Set<UUID> full = scope.hospitalIds();
+        Set<UUID> staffOnly = new java.util.HashSet<>(scope.staffOnlyHospitalIds());
+        staffOnly.removeAll(full);
+        if (full.isEmpty() && staffOnly.isEmpty()) {
+            return null;
+        }
+        boolean requestedInReach = requestedHospitalId != null
+            && (full.contains(requestedHospitalId) || staffOnly.contains(requestedHospitalId));
+        if (requestedInReach) {
+            return listingOfOne(requestedHospitalId, full, staffOnly);
+        }
+        if (staffOnly.isEmpty() && activeHospitalId != null) {
+            // A hospital administrator's default is the hospital it is acting at.
+            return listingOfOne(activeHospitalId, full, staffOnly);
+        }
+        Specification<UserRoleHospitalAssignment> staffRows = UserRoleHospitalAssignmentSpecification
+            .belongsToAnyHospital(staffOnly)
+            .and(UserRoleHospitalAssignmentSpecification.staffRowsOnly());
+        return full.isEmpty()
+            ? staffRows
+            : UserRoleHospitalAssignmentSpecification.belongsToAnyHospital(full).or(staffRows);
+    }
+
+    /** One hospital's rows: all of them where the caller administers it, staff rows where it only reaches it. */
+    private static Specification<UserRoleHospitalAssignment> listingOfOne(UUID hospitalId, Set<UUID> full,
+                                                                          Set<UUID> staffOnly) {
+        Specification<UserRoleHospitalAssignment> there =
+            UserRoleHospitalAssignmentSpecification.belongsToAnyHospital(Set.of(hospitalId));
+        if (full.contains(hospitalId)) {
+            return there;
+        }
+        return staffOnly.contains(hospitalId)
+            ? there.and(UserRoleHospitalAssignmentSpecification.staffRowsOnly())
+            : null;
     }
 
     private Specification<UserRoleHospitalAssignment> buildAssignmentSpec(

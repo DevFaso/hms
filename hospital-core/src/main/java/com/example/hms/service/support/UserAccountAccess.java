@@ -423,6 +423,23 @@ public class UserAccountAccess {
     }
 
     /**
+     * Review of #1246: whether the caller reaches this hospital through the
+     * organisation scope ALONE (not as a super-admin, not as its hospital or
+     * provider administrator). Such a caller names an existing account only
+     * among its organisation's staff: by identifier it would otherwise find
+     * any account of the platform, a patient's phone number included.
+     */
+    public boolean reachesOnlyThroughOrganisation(UUID hospitalId) {
+        Caller caller = caller();
+        if (caller.superAdmin() || hospitalId == null) {
+            return false;
+        }
+        return !administeredHospitals(caller).contains(hospitalId)
+            && !providerAdministeredHospitals(caller).contains(hospitalId)
+            && organisationHospitals(caller).contains(hospitalId);
+    }
+
+    /**
      * The rows a provider admin may change from the provider staff page
      * ({@code /provider/staff}, provider plan AC-6), and nothing else uses
      * it: the rows at the provider facilities where they administer
@@ -539,20 +556,22 @@ public class UserAccountAccess {
         if (adminAssignments.isEmpty()) {
             throw new AccessDeniedException("Access denied");
         }
-        // QA D125: only a hospital administrator reads patients' contact details from the directory.
-        boolean administrator = adminAssignments.stream()
-            .anyMatch(a -> HOSPITAL_ADMIN.equals(roleCode(a.getRole())));
+        // QA D125: only a hospital administrator reads patients' contact details
+        // from the directory, and only at the hospitals they ADMINISTER. The
+        // flag is one for the whole page, so it is decided per hospital here:
+        // a HOSPITAL_ADMIN at A who is an ADMIN at C gets A's directory (patients
+        // and contacts) and nothing of C, never C's patients through A's role.
+        Set<UUID> administered = hospitalIdsOf(adminAssignments.stream()
+            .filter(a -> HOSPITAL_ADMIN.equals(roleCode(a.getRole())))
+            .toList());
+        if (!administered.isEmpty()) {
+            return new DirectoryScope(false, administered, true);
+        }
         // An organisation admin's directory is its organisation's STAFF (rule 1a):
         // no patient account, no contact detail (the staff-only query, QA D430).
-        // A caller who is also a hospital administrator keeps that role's
-        // directory as it was (patients and their contacts, at the hospitals
-        // they administer): the organisation's other hospitals are NOT added to
-        // it, or the one flag would show patients' contact details there too.
-        Set<UUID> hospitals = new java.util.HashSet<>(hospitalIdsOf(adminAssignments));
-        if (!administrator) {
-            hospitals.addAll(organisationHospitals(caller));
-        }
-        return new DirectoryScope(false, hospitals, administrator);
+        Set<UUID> staffOnly = new java.util.HashSet<>(hospitalIdsOf(adminAssignments));
+        staffOnly.addAll(organisationHospitals(caller));
+        return new DirectoryScope(false, staffOnly, false);
     }
 
     /**
