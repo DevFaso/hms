@@ -37,6 +37,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -226,7 +228,7 @@ class OrdonnancePdfServiceTest {
         assertThatThrownBy(() -> service.forPrescriber(id))
                 .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
                 .hasMessageContaining("prescripteur");
-        org.mockito.Mockito.verifyNoInteractions(support);
+        verifyNoInteractions(support);
     }
 
     @Test
@@ -245,7 +247,7 @@ class OrdonnancePdfServiceTest {
 
         assertThat(text).contains("Métronidazole").doesNotContain("Amlodipine")
                 .doesNotContain("Ibuprofène").doesNotContain("Oméprazole");
-        org.mockito.Mockito.verify(support).logAudit(
+        verify(support).logAudit(
                 eq(com.example.hms.enums.AuditEventType.PRESCRIPTION_PRINTED),
                 org.mockito.ArgumentMatchers.contains(rx.getId().toString()),
                 eq(rx.getId().toString()), eq("PRESCRIPTION"), eq(hospitalId));
