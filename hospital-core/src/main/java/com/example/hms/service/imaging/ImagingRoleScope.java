@@ -99,12 +99,12 @@ public final class ImagingRoleScope {
      * <ul>
      *   <li>a hospital admin or an admin OF this hospital (their assignment there);</li>
      *   <li>the verified super-admin (a live SUPER_ADMIN assignment, never the token's claim), at
-     *       the hospital they named or in global view: user decision 2026-11-14, cross-hospital
-     *       read of orders and released reports.</li>
+     *       the hospital they selected or in global view, as the one tenant resolver says: user
+     *       decision 2026-11-14, cross-hospital read of orders and released reports.</li>
      * </ul>
      */
     private boolean administratorAt(UUID caller, UUID hospitalId) {
-        if (roleValidator.isSuperAdminFromAuth()) {
+        if (roleValidator.isSuperAdminActingAt(hospitalId)) {
             return true;
         }
         return caller != null && hospitalId != null && roleValidator.administersImagingReads(caller, hospitalId);

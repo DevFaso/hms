@@ -470,7 +470,8 @@ class ImagingReadRoleGuardTest {
             "roleValidator.ordersImaging(", "roleValidator.hasRole(");
         assertThat(scope).as("the administrative roles are read where they are held (review of #1251)"
                 + SourceScan.MANDATE)
-            .contains("roleValidator.administersImagingReads(", "roleValidator.isSuperAdminFromAuth()")
+            .contains("roleValidator.administersImagingReads(", "roleValidator.isSuperAdminActingAt(hospitalId)")
+            .doesNotContain("isSuperAdminFromAuth")
             .doesNotContain("getAuthorities(")
             .doesNotContain("SecurityContextHolder")
             .doesNotContain("Authentication")
@@ -482,9 +483,12 @@ class ImagingReadRoleGuardTest {
         String validator = source("utility/RoleValidator.java");
         assertThat(SourceScan.methodBody(validator, "administersImagingReads"))
             .contains("hasAnyCode(userId, hospitalId,").contains("HOSPITAL_ADMIN_ROLE").doesNotContain("hasAuthority");
-        assertThat(SourceScan.methodBody(validator, "isSuperAdminFromAuth")).contains("isSuperAdminFromJwtClaim()");
-        assertThat(SourceScan.methodBody(validator, "isSuperAdminFromJwtClaim"))
-            .as("the verified super-admin: a live assignment").contains("actingScopeResolver.isVerifiedSuperAdmin()");
+        assertThat(SourceScan.methodBody(validator, "isSuperAdminActingAt"))
+            .as("the verified super-admin, where the one tenant resolver says they act")
+            .contains("CallerIdentity.isSuperAdminFor(hospitalId)");
+        assertThat(SourceScan.methodBody(source("security/CallerIdentity.java"), "isSuperAdminFor"))
+            .contains("isGlobalSuperAdmin()").contains("ActingScopeResolver.superAdminPinnedHospitalIdOrNull()")
+            .doesNotContain("getAuthorities");
     }
 
     private static Method method(Class<?> controller, String name) throws NoSuchMethodException {

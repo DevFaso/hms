@@ -257,8 +257,14 @@ class ImagingRoleScopeTest {
         refused(() -> scope.readerAt(HOSPITAL_A), "the claim alone");
         refused(() -> scope.readerAt(null), "the claim alone, global view");
 
-        // The verified super-admin (a live SUPER_ADMIN assignment): any hospital they name, and the global view.
-        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
+        // The verified super-admin (a live SUPER_ADMIN assignment) who selected hospital A: A, and A only.
+        when(roleValidator.isSuperAdminActingAt(HOSPITAL_A)).thenReturn(true);
+        assertThat(scope.readerAt(HOSPITAL_A)).as("the hospital filter").isEqualTo(Reader.ADMINISTRATOR);
+        refused(() -> scope.readerAt(HOSPITAL_B), "pinned to A, reading B");
+        refused(() -> scope.readerAt(null), "pinned to A, no hospital");
+
+        // In global view: every hospital, and the combined view.
+        when(roleValidator.isSuperAdminActingAt(org.mockito.ArgumentMatchers.any())).thenReturn(true);
         assertThat(scope.readerAt(HOSPITAL_A)).isEqualTo(Reader.ADMINISTRATOR);
         assertThat(scope.readerAt(HOSPITAL_B)).isEqualTo(Reader.ADMINISTRATOR);
         assertThat(scope.readerAt(null)).as("global view").isEqualTo(Reader.ADMINISTRATOR);

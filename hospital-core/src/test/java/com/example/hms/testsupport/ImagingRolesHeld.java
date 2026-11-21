@@ -48,7 +48,7 @@ public final class ImagingRolesHeld {
         // Review of #1251: the administrative roles are read where they are held too.
         lenient().when(roleValidator.administersImagingReads(any(), any()))
             .thenAnswer(call -> tokenCarries("ROLE_HOSPITAL_ADMIN", "ROLE_ADMIN"));
-        lenient().when(roleValidator.isSuperAdminFromAuth())
+        lenient().when(roleValidator.isSuperAdminActingAt(any()))
             .thenAnswer(call -> tokenCarries("ROLE_SUPER_ADMIN"));
     }
 

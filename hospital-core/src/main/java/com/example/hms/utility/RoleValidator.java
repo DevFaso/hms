@@ -306,6 +306,15 @@ public class RoleValidator {
         return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, "ADMIN");
     }
 
+    /**
+     * Review of #1251: the verified super-admin (a live SUPER_ADMIN assignment) where they act: in
+     * global view, or at the very hospital they selected. Asked of the one tenant resolver
+     * ({@code CallerIdentity.isSuperAdminFor}); never the token's authority.
+     */
+    public boolean isSuperAdminActingAt(UUID hospitalId) {
+        return com.example.hms.security.CallerIdentity.isSuperAdminFor(hospitalId);
+    }
+
     /** QA D2915: who places an imaging order there: a doctor, a physician, a surgeon, a nurse or a midwife. */
     public boolean ordersImaging(UUID userId, UUID hospitalId) {
         return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, NURSE_ROLE, MIDWIFE_ROLE);
