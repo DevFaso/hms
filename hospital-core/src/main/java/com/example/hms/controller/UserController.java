@@ -108,7 +108,7 @@ public class UserController {
             "SUPER_ADMIN".equalsIgnoreCase(r) || SUPER_ADMIN_AUTHORITY.equalsIgnoreCase(r));
 
         if (!callerIsReceptionistOnly && !isPatientOnly && !isGlobalRole && request.getHospitalId() == null) {
-            resolveHospitalFromName(request);
+            resolveHospitalFromName(request, isOrganisationAdminOnly(callerAuthorities));
         }
 
         // Delivery outcomes are recorded by the send paths — including the
@@ -158,10 +158,22 @@ public class UserController {
     /**
      * A staff registration with no hospital id: by name when one is given,
      * otherwise the hospital the caller acts at (a hospital admin onboards
-     * into their own hospital, D201). With neither, a translated 400 body
-     * instead of an empty one.
+     * into their own hospital, D201; never an organisation admin, D3052).
+     * With neither, a translated 400 body instead of an empty one.
      */
-    private void resolveHospitalFromName(AdminSignupRequest request) {
+    /**
+     * QA D3052 (r68): an organisation admin ({@code ROLE_ADMIN}) with no
+     * hospital-level admin role registers at several hospitals, so it names
+     * one. Platform rule 1a (#1246): « a hospital outside the organisation, or
+     * none at all, is refused ». Its acting hospital is not a choice it made.
+     */
+    static boolean isOrganisationAdminOnly(Set<String> callerAuthorities) {
+        return callerAuthorities.contains("ROLE_ADMIN")
+            && !callerAuthorities.contains(SUPER_ADMIN_AUTHORITY)
+            && !callerAuthorities.contains("ROLE_HOSPITAL_ADMIN");
+    }
+
+    private void resolveHospitalFromName(AdminSignupRequest request, boolean mustNameTheHospital) {
         if (request.getHospitalName() != null && !request.getHospitalName().isBlank()) {
             // By NAME a hospital only: a provider facility is named by id (the
             // path of its PROVIDER_ADMIN), and by name it answers as an unknown
@@ -175,7 +187,8 @@ public class UserController {
             request.setHospitalId(hospital.getId());
             return;
         }
-        UUID acting = com.example.hms.security.tenant.ActingScopeResolver.pinnedHospitalIdOrNull();
+        UUID acting = mustNameTheHospital ? null
+            : com.example.hms.security.tenant.ActingScopeResolver.pinnedHospitalIdOrNull();
         if (acting != null) {
             request.setHospitalId(acting);
             return;
@@ -203,14 +216,21 @@ public class UserController {
             + "they administer. includeDeleted=true also returns soft-deleted "
             + "accounts; onlyDeleted=true returns only them (the restore worklist). Both are "
             + "honoured only for SUPER_ADMIN; for anyone else includeDeleted is ignored and "
-            + "onlyDeleted returns an empty page (QA D919).")
+            + "onlyDeleted returns an empty page (QA D919). hospitalId narrows the list to that "
+            + "hospital's live accounts, within the caller's own directory (QA D3058).")
     @GetMapping
     @PreAuthorize("hasAnyAuthority(" + SecurityConstants.USER_DIRECTORY_AUTHORITIES + ")")
     public ResponseEntity<Page<UserSummaryDTO>> getAllUsers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "false") boolean includeDeleted,
-            @RequestParam(defaultValue = "false") boolean onlyDeleted) {
+            @RequestParam(defaultValue = "false") boolean onlyDeleted,
+            @RequestParam(required = false) UUID hospitalId) {
+        // QA D3058 (r68): one hospital's accounts (the onboarding checklist's
+        // link), never wider than the caller's directory; live accounts only.
+        if (hospitalId != null && !onlyDeleted) {
+            return ResponseEntity.ok(userService.getUsersAtHospital(hospitalId, page, size));
+        }
         boolean allowed = canSeeDeleted();
         // QA D919: the deleted worklist asked for by someone it is not for is
         // empty. It used to fall back to the live list, so a hospital admin
