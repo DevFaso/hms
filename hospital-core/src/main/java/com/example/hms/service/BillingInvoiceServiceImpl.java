@@ -1589,8 +1589,10 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // Billing-money plan PR 7: the payers' share standing then, so the balance printed is the patient's then.
         BigDecimal payerShareThen = coverageService != null ? coverageService.shareAt(invoice, receivedAt(row))
             : BigDecimal.ZERO;
+        // QA D2523: who took the money (the cashier who confirmed it, else who recorded it).
+        UUID receivedBy = row.getConfirmedBy() != null ? row.getConfirmedBy() : row.getRecordedBy();
         byte[] pdf = pdfInvoiceService.generateReceiptPdf(invoice, row, receiptNumber, paidThen, totalThen,
-            payerShareThen, folded, effectiveLocale);
+            payerShareThen, folded, receivedBy != null ? cashierName(receivedBy) : null, effectiveLocale);
         return new InvoicePdfResponseDTO(pdf, receiptNumber, invoice.getId());
     }
 
@@ -2536,6 +2538,34 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             clientRequestId);
     }
 
+    /**
+     * QA D2523: the one line of a check-in copay, « Participation du patient : consultation » and the
+     * clinician seen, kept as a code (shown in each reader's language; the description holds the
+     * French copy). Owned by the visit's assignment, as the visit's own lines are.
+     */
+    static InvoiceItem copayLine(Encounter encounter, BigDecimal amount) {
+        String clinician = encounter.getStaff() != null ? encounter.getStaff().getFullName() : null;
+        com.example.hms.service.billing.BillingText text = clinician == null || clinician.isBlank()
+            ? com.example.hms.service.billing.BillingText.of(COPAY_LINE_CODE)
+            : com.example.hms.service.billing.BillingText.of(COPAY_LINE_WITH_CLINICIAN_CODE,
+                com.example.hms.service.billing.BillingText.value(clinician.strip()));
+        String french = text.french();
+        return InvoiceItem.builder()
+            .itemDescription(french.length() > 255 ? french.substring(0, 255) : french)
+            .textCode(text.code())
+            .textArgs(text.argsJson())
+            .quantity(1)
+            .itemCategory(com.example.hms.enums.ItemCategory.SERVICE)
+            .unitPrice(amount)
+            .totalPrice(amount)
+            .assignment(encounter.getAssignment())
+            .priceSource(com.example.hms.enums.InvoiceLinePriceSource.MANUAL)
+            .build();
+    }
+
+    static final String COPAY_LINE_CODE = "billing.copay.line";
+    static final String COPAY_LINE_WITH_CLINICIAN_CODE = "billing.copay.lineWithClinician";
+
     /** Both entry points share this body (Sonar S6809: no self-call through a transactional method). */
     private PaymentTransaction doRecordCheckInCopay(Encounter encounter, BigDecimal amount, Tender tender,
                                                     UUID recordedBy, UUID clientRequestId) {
@@ -2592,6 +2622,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .checkInCopay(true)
             .createdBy(recordedBy) // QA D428
             .build();
+        // QA D2523 (r65): the copay invoice says what the money is for. It had no line
+        // (« Aucune ligne pour le moment »), and its receipt could not name the service.
+        invoice.addItem(copayLine(encounter, amount));
+        // addItem drafts an unpaid priced invoice and rescales its total; this one is issued, at the amount taken.
+        invoice.setTotalAmount(amount);
+        invoice.setStatus(InvoiceStatus.SENT);
         BillingInvoice saved = invoiceRepository.saveAndFlush(invoice);
         // One operator transaction pays once: the same rule as the desk payment.
         rejectReusedReference(saved, copayMethod, copayReference, "copayReference");

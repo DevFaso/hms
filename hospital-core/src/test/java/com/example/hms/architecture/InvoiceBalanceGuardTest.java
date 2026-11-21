@@ -93,8 +93,9 @@ class InvoiceBalanceGuardTest {
      * today's total (after a later discount and credit note) beside the
      * amount paid when the copay was taken, so its balance was never true.
      * A receipt is a snapshot of one moment. Every main call that renders a
-     * receipt passes the total of that moment explicitly (the eight-argument
-     * {@code generateReceiptPdf}, PR 7: with the payers' share then), and the method that assembles it reads no
+     * receipt passes the total of that moment explicitly (the nine-argument
+     * {@code generateReceiptPdf}, PR 7: with the payers' share then; QA D2523: and who received the money),
+     * and the method that assembles it reads no
      * figure of today from the invoice ({@code getTotalAmount()} /
      * {@code getAmountPaid()}): the total then is {@code totalWhenReceived},
      * the amount paid then is the receipt position.
@@ -116,9 +117,10 @@ class InvoiceBalanceGuardTest {
                     int open = m.end() - 1;
                     String args = src.substring(open + 1, com.example.hms.testsupport.SourceScan.closingParen(src, open));
                     // Billing-money plan PR 7: and the payers' share of that moment (eight arguments).
-                    if (topLevelCommas(args) != 7) {
-                        offenders.add(rel + ": a receipt rendered without the total and payer share of its own moment: "
-                            + args.trim());
+                    // QA D2523 (r65): and who received the money (nine: the full form names the cashier).
+                    if (topLevelCommas(args) != 8) {
+                        offenders.add(rel + ": a receipt rendered without the total, payer share and cashier of its"
+                            + " own moment: " + args.trim());
                     }
                     String method = AppointmentSlotRulesGuardTest.enclosingMethod(src, m.start());
                     if (method.contains("invoice.getTotalAmount()") || method.contains("invoice.getAmountPaid()")) {

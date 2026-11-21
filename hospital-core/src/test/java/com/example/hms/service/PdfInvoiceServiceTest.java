@@ -363,6 +363,47 @@ class PdfInvoiceServiceTest {
             .doesNotContain("pdf.invoice.balanceDue 0 F CFA");
     }
 
+    /**
+     * QA D2523 (r65): the copay receipt gave the hospital, number, patient, date, method and reference, and
+     * nothing of what was paid, at what time, who took the money, or how to reach the hospital.
+     */
+    @Test
+    void aReceiptSaysWhatWasPaidWhenByWhomAndHowToReachTheHospital_D2523() throws Exception {
+        invoice.getHospital().setAddress("Avenue Kwame Nkrumah");
+        invoice.getHospital().setCity("Ouagadougou");
+        invoice.getHospital().setPhoneNumber("+226 25 30 00 00");
+        invoice.addItem(InvoiceItem.builder().itemDescription("Participation du patient : consultation")
+            .itemCategory(ItemCategory.SERVICE).quantity(1)
+            .unitPrice(new BigDecimal("1500.00")).totalPrice(new BigDecimal("1500.00")).build());
+        PaymentTransaction payment = PaymentTransaction.builder()
+            .amount(new BigDecimal("1500.00")).paymentDate(LocalDate.of(2026, 11, 20))
+            .paymentMethod(PaymentMethod.CASH).status(PaymentStatus.CONFIRMED)
+            .confirmedAt(java.time.LocalDateTime.of(2026, 11, 20, 9, 42)).build();
+        payment.setId(UUID.randomUUID());
+
+        String text = textOf(service.generateReceiptPdf(invoice, payment, "INV-2042-R1", new BigDecimal("1500.00"),
+            null, BigDecimal.ZERO, false, "Awa Caissiere", Locale.FRENCH));
+
+        assertThat(text).contains("pdf.receipt.purpose", "Participation du patient : consultation", "1 500 F CFA",
+            "pdf.receipt.receivedBy Awa Caissiere", "pdf.receipt.receivedAt",
+            "pdf.hospital.addressAndPhone Avenue Kwame Nkrumah, Ouagadougou +226 25 30 00 00");
+        assertThat(text).doesNotContain("pdf.receipt.date");
+    }
+
+    @Test
+    void aReceiptWithNoLinesNoCashierAndNoContactPrintsNoneOfThem_D2523() throws Exception {
+        PaymentTransaction payment = PaymentTransaction.builder()
+            .amount(new BigDecimal("1000.00")).paymentDate(LocalDate.of(2026, 9, 15))
+            .paymentMethod(PaymentMethod.CASH).status(PaymentStatus.CONFIRMED).build();
+        payment.setId(UUID.randomUUID());
+
+        String text = textOf(service.generateReceiptPdf(invoice, payment, "INV-2042-R1", new BigDecimal("1000.00"),
+            Locale.ENGLISH));
+
+        assertThat(text).contains("pdf.receipt.date")
+            .doesNotContain("pdf.receipt.purpose", "pdf.receipt.receivedBy", "pdf.hospital.");
+    }
+
     /** QA D228 (not fixed in round 4): the total printed is the one when the money came in. */
     @Test
     void receiptKeepsTheTotalOfItsTimeAfterTheInvoiceGrows_D228() throws Exception {
