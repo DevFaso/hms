@@ -130,7 +130,8 @@ test.describe('all routed pages', () => {
             })
             .filter((style) => style !== '24px/700'),
           // QA D2792 (r65): an icon's ligature name is not read as part of a
-          // heading, a column header or a navigation link.
+          // heading, a column header or a navigation link that has a name of
+          // its own. (An icon that is the host's ONLY name is left readable.)
           spokenIcons: Array.from(
             document.querySelectorAll(
               ['h1', 'h2', 'th', '.sidebar a', '.sidebar button']
@@ -139,7 +140,26 @@ test.describe('all routed pages', () => {
             ),
           )
             .filter((icon) => shown(icon) && icon.getAttribute('aria-hidden') !== 'true')
-            .filter((icon) => !icon.hasAttribute('aria-label'))
+            .filter(
+              (icon) =>
+                !icon.hasAttribute('aria-label') &&
+                !icon.hasAttribute('title') &&
+                icon.getAttribute('role') !== 'img',
+            )
+            .filter((icon) => {
+              const host = icon.closest('h1, h2, th, a, button');
+              if (!host) return false;
+              const named = (node: Element): boolean =>
+                Array.from(node.childNodes).some((child) =>
+                  child.nodeType === Node.TEXT_NODE
+                    ? (child.textContent ?? '').trim() !== ''
+                    : child instanceof Element &&
+                      !child.matches(ICON) &&
+                      shown(child) &&
+                      named(child),
+                );
+              return host.hasAttribute('aria-label') || host.hasAttribute('title') || named(host);
+            })
             .map((icon) => `${icon.parentElement?.tagName.toLowerCase()} «${icon.textContent}»`),
         };
       });

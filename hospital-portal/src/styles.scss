@@ -859,16 +859,22 @@ table:not(.fc table, .fc) > thead > tr > th {
    scroll cue. A row paints its own background and the sticky cell inherits
    it, so a hovered or tinted row stays one colour. At 1024 px and wider every
    column is on screen (guarded since r64), so nothing changes there.
-   Opt out with `data-no-sticky`. Screen only: paper has no scroll box (and a
+   Opt out with `data-no-sticky` on the table or a box around it; a
+   calendar's table is never a list (the same tables the card labels skip,
+   shared/a11y/design-conventions.ts). Screen only: paper has no scroll box (and a
    receipt printer's page is narrower than a phone). Guarded by
    shared/styles/design-layer.spec.ts and e2e/layout-overflow.spec.ts.
    ───────────────────────────────────────────────────────────────────────── */
 @media screen and (max-width: 1023px) {
-  :where(table:not(.fc table, .fc, [data-no-sticky]) > tbody > tr) {
+  :where(
+    table:not(.fc table, .fc, .mat-calendar table, [data-no-sticky], [data-no-sticky] table)
+      > tbody
+      > tr
+  ) {
     background-color: var(--surface, #fff);
   }
   :where(
-    table:not(.fc table, .fc, [data-no-sticky])
+    table:not(.fc table, .fc, .mat-calendar table, [data-no-sticky], [data-no-sticky] table)
       > :is(tbody, tfoot)
       > tr
       > :is(td, th):last-child:not([colspan], :first-child)
@@ -879,7 +885,7 @@ table:not(.fc table, .fc) > thead > tr > th {
     background-color: inherit;
   }
   :where(
-    table:not(.fc table, .fc, [data-no-sticky])
+    table:not(.fc table, .fc, .mat-calendar table, [data-no-sticky], [data-no-sticky] table)
       > thead
       > tr
       > th:last-child:not([colspan], :first-child)
@@ -891,7 +897,7 @@ table:not(.fc table, .fc) > thead > tr > th {
   }
   @supports (animation-timeline: scroll()) {
     :where(
-      table:not(.fc table, .fc, [data-no-sticky])
+      table:not(.fc table, .fc, .mat-calendar table, [data-no-sticky], [data-no-sticky] table)
         > :is(thead, tbody, tfoot)
         > tr
         > :is(td, th):last-child:not([colspan], :first-child)
@@ -903,7 +909,7 @@ table:not(.fc table, .fc) > thead > tr > th {
        A box whose table has no such cell (one column) keeps the fading edge. */
     :where(
       :has(
-        > table:not(.fc table, .fc, [data-no-sticky])
+        > table:not(.fc table, .fc, .mat-calendar table, [data-no-sticky], [data-no-sticky] table)
           > :is(thead, tbody, tfoot)
           > tr
           > :is(td, th):last-child:not([colspan], :first-child)

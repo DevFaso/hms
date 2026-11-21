@@ -2,6 +2,7 @@ import {
   applyDesignConventions,
   hideIcon,
   installDesignConventions,
+  isCardTable,
   labelTable,
   titleIconButton,
   uninstallDesignConventions,
@@ -16,6 +17,10 @@ describe('design conventions (QA D2798 / D2792 / D2807)', () => {
   let page: HTMLElement;
 
   const frame = () => new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+  const settle = async () => {
+    await frame();
+    await frame();
+  };
 
   beforeEach(() => {
     page = document.createElement('div');
@@ -75,6 +80,36 @@ describe('design conventions (QA D2798 / D2792 / D2807)', () => {
       expect(rows[2].querySelectorAll('td')[1].getAttribute('data-label')).toBe('C');
     });
 
+    it('never labels a table with a cell that spans rows: the next row would read under the wrong headers', () => {
+      // A medication chart: the drug spans its two doses. Counted from column 0,
+      // the second row's « 500 mg » would be labelled « Médicament » and
+      // « 20:00 » would be labelled « Dose ».
+      page.innerHTML = `<table><thead><tr><th>Médicament</th><th>Dose</th><th>Heure</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="2">Amoxicilline</td><td>500 mg</td><td>08:00</td></tr>
+          <tr><td>500 mg</td><td>20:00</td></tr>
+        </tbody></table>`;
+      const table = page.querySelector('table')!;
+      expect(isCardTable(table)).toBeFalse();
+      expect(labelTable(table)).toBeFalse();
+      expect(table.hasAttribute('data-cards')).toBeFalse();
+      expect(page.querySelectorAll('[data-label]').length).toBe(0);
+    });
+
+    it('takes its labels back when a spanning cell is rendered later', () => {
+      page.innerHTML = `<table><thead><tr><th>Médicament</th><th>Dose</th></tr></thead>
+        <tbody><tr><td>Amoxicilline</td><td>500 mg</td></tr></tbody></table>`;
+      const table = page.querySelector('table')!;
+      expect(labelTable(table)).toBeTrue();
+      table.tBodies[0].insertAdjacentHTML(
+        'beforeend',
+        `<tr><td rowspan="2">Paracétamol</td><td>1 g</td></tr><tr><td>1 g</td></tr>`,
+      );
+      expect(labelTable(table)).toBeFalse();
+      expect(table.hasAttribute('data-cards')).toBeFalse();
+      expect(page.querySelectorAll('[data-label]').length).toBe(0);
+    });
+
     it('leaves a table without one plain header row as a table', () => {
       for (const html of [
         `<table><tbody><tr><td>x</td><td>y</td></tr></tbody></table>`,
@@ -100,27 +135,29 @@ describe('design conventions (QA D2798 / D2792 / D2807)', () => {
       await frame();
       const body = page.querySelector('tbody')!;
       body.innerHTML = `<tr><td>Awa</td><td>Actif</td></tr>`;
-      await frame();
-      await frame();
+      await settle();
       expect(body.querySelector('td:last-child')!.getAttribute('data-label')).toBe('Statut');
       page.querySelector('th:last-child')!.textContent = 'État';
-      await frame();
-      await frame();
+      await settle();
       expect(body.querySelector('td:last-child')!.getAttribute('data-label')).toBe('État');
     });
   });
 
   describe('icons are not text (D2792)', () => {
-    it('hides an icon beside a label, in a heading, a link and a sortable header', () => {
+    it('hides an icon beside a name: in a heading, a link, a labelled button, a sortable header', () => {
       page.innerHTML = `
         <h1><span class="material-symbols-outlined">calendar_month</span> Mes rendez-vous</h1>
         <a href="#"><span class="material-symbols-outlined nav-icon">dashboard</span><span>Tableau de bord</span></a>
         <button aria-label="Modifier"><span class="material-icons">edit</span></button>
-        <th>Médecin <span class="material-symbols-outlined sort-icon">unfold_more</span></th>`;
+        <table><thead><tr>
+          <th>Médecin <span class="material-symbols-outlined sort-icon">unfold_more</span></th>
+        </tr></thead></table>`;
       applyDesignConventions(document);
-      for (const icon of Array.from(
+      const icons = Array.from(
         page.querySelectorAll('.material-symbols-outlined, .material-icons'),
-      )) {
+      );
+      expect(icons.length).toBe(4);
+      for (const icon of icons) {
         expect(icon.getAttribute('aria-hidden')).withContext(icon.textContent!).toBe('true');
       }
     });
@@ -132,15 +169,49 @@ describe('design conventions (QA D2798 / D2792 / D2807)', () => {
       expect(icon.hasAttribute('aria-hidden')).toBeFalse();
     });
 
+    it('leaves a free-standing icon alone: it may be the only signal of its cell', () => {
+      // An abnormal-result flag beside a value, a « payé » mark in a row: the
+      // text next to them does not say what the icon says.
+      page.innerHTML = `<table><tbody><tr>
+          <td><span class="material-symbols-outlined abnormal-flag">warning</span> 12,5 g/dL</td>
+          <td><span class="material-symbols-outlined">check_circle</span></td>
+        </tr></tbody></table>
+        <p><span class="material-icons">priority_high</span></p>`;
+      applyDesignConventions(document);
+      for (const icon of Array.from(
+        page.querySelectorAll('.material-symbols-outlined, .material-icons'),
+      )) {
+        expect(icon.hasAttribute('aria-hidden')).withContext(icon.textContent!).toBeFalse();
+      }
+    });
+
+    it('gives the icon back when the label beside it is not rendered (a tab label hidden on a phone)', () => {
+      page.innerHTML = `<button class="tab-btn">
+          <span class="material-symbols-outlined">person</span>
+          <span class="tab-label">Aperçu</span>
+        </button>`;
+      const icon = page.querySelector('.material-symbols-outlined')!;
+      const label = page.querySelector<HTMLElement>('.tab-label')!;
+      applyDesignConventions(document);
+      expect(icon.getAttribute('aria-hidden')).toBe('true');
+      // The page's own phone rule hides the label: the icon is the button's only name again.
+      label.style.display = 'none';
+      applyDesignConventions(document);
+      expect(icon.hasAttribute('aria-hidden')).toBeFalse();
+      label.style.display = '';
+      applyDesignConventions(document);
+      expect(icon.getAttribute('aria-hidden')).toBe('true');
+    });
+
     it('never overrides what a template chose', () => {
-      page.innerHTML = `<span class="material-icons" aria-hidden="false">warning</span>
-        <span class="material-icons" role="img" aria-label="Alerte">warning</span>
-        <span class="material-symbols-outlined" title="Identité vérifiée">verified</span>`;
+      page.innerHTML = `<h2><span class="material-icons" aria-hidden="false">warning</span> Alerte</h2>
+        <h2><span class="material-icons" role="img" aria-label="Alerte">warning</span> Titre</h2>
+        <h2><span class="material-symbols-outlined" title="Identité vérifiée">verified</span> Awa</h2>`;
       applyDesignConventions(document);
       const [explicit, image, titled] = Array.from(page.querySelectorAll('span'));
       expect(explicit.getAttribute('aria-hidden')).toBe('false');
       expect(image.hasAttribute('aria-hidden')).toBeFalse();
-      // A lone icon with a title is information: it is not silenced.
+      // An icon with a title is information: it is not silenced.
       expect(titled.hasAttribute('aria-hidden')).toBeFalse();
     });
   });
@@ -161,6 +232,59 @@ describe('design conventions (QA D2798 / D2792 / D2807)', () => {
       const [withText, withTitle] = Array.from(page.querySelectorAll('button'));
       expect(withText.hasAttribute('title')).toBeFalse();
       expect(withTitle.title).toBe('Modifier la ligne');
+    });
+
+    it('follows the name when a toggle renames its button, on the page as it runs', async () => {
+      // « Désactiver » on an active row becomes « Réactiver » once it is off: a
+      // tooltip left on the first name would say the opposite of the button.
+      page.innerHTML = `<button aria-label="Désactiver le type de visite"><span class="material-symbols-outlined">block</span></button>`;
+      const button = page.querySelector('button')!;
+      installDesignConventions(document);
+      await settle();
+      expect(button.title).toBe('Désactiver le type de visite');
+      button.setAttribute('aria-label', 'Réactiver le type de visite');
+      await settle();
+      expect(button.title).toBe('Réactiver le type de visite');
+    });
+
+    it('takes its tooltip back when the button is no longer icon-only', () => {
+      page.innerHTML = `<button aria-label="Modifier"><span class="material-symbols-outlined">edit</span></button>
+        <button aria-label="Supprimer" title="Supprimer la ligne"><span class="material-symbols-outlined">delete</span></button>`;
+      const [auto, authored] = Array.from(page.querySelectorAll('button'));
+      applyDesignConventions(document);
+      expect(auto.title).toBe('Modifier');
+      auto.append(' Modifier');
+      authored.append(' Supprimer');
+      applyDesignConventions(document);
+      expect(auto.hasAttribute('title')).toBeFalse();
+      // A title the template wrote stays.
+      expect(authored.title).toBe('Supprimer la ligne');
+    });
+  });
+
+  describe('sidebar labels (D2803)', () => {
+    it('shows the full text of a label cut by an ellipsis, and nothing on one that fits', () => {
+      page.innerHTML = `<nav class="sidebar" style="width: 120px">
+          <a href="#"><span class="nav-label" style="display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;width:100px">Registre des stupéfiants et substances contrôlées</span></a>
+          <a href="#"><span class="nav-label" style="display:block;overflow:hidden;white-space:nowrap;width:100px">Lits</span></a>
+        </nav>`;
+      applyDesignConventions(document);
+      const [cut, fits] = Array.from(page.querySelectorAll('a'));
+      expect(cut.title).toBe('Registre des stupéfiants et substances contrôlées');
+      expect(fits.hasAttribute('title')).toBeFalse();
+      // Wide enough again: the tooltip goes, and the tooltip pass for buttons never took it.
+      cut.querySelector<HTMLElement>('.nav-label')!.style.width = '600px';
+      page.querySelector<HTMLElement>('.sidebar')!.style.width = '700px';
+      applyDesignConventions(document);
+      expect(cut.hasAttribute('title')).toBeFalse();
+    });
+
+    it('is not measured on a pass that asks to skip the navigation', () => {
+      page.innerHTML = `<nav class="sidebar"><a href="#"><span class="nav-label" style="display:block;overflow:hidden;white-space:nowrap;width:40px">Communication du dossier</span></a></nav>`;
+      applyDesignConventions(document, { navigation: false });
+      expect(page.querySelector('a')!.hasAttribute('title')).toBeFalse();
+      applyDesignConventions(document);
+      expect(page.querySelector('a')!.title).toBe('Communication du dossier');
     });
   });
 });

@@ -5,7 +5,9 @@ import { provideRouter, Router, Routes } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { routes } from '../app.routes';
+import { AuthService } from '../auth/auth.service';
 import { Error404Component } from './error-404';
+import { unknownAddressRedirect } from './unknown-address.redirect';
 
 @Component({ template: 'home', changeDetection: ChangeDetectionStrategy.OnPush })
 class HomeStub {}
@@ -47,27 +49,40 @@ describe('Error404Component (QA D2802)', () => {
     }
   });
 
-  it('the catch-all route of the application leads to it, not to the login page', () => {
+  it('the catch-all route of the application is the unknown-address redirect, and 404 is a page of the shell', () => {
     const last = routes[routes.length - 1];
     expect(last.path).toBe('**');
-    expect(last.redirectTo).toBe('error/404');
+    expect(last.redirectTo).toBe(unknownAddressRedirect);
     const shell = routes.find((r) => r.children?.some((c) => c.path === 'error/404'));
     expect(shell).withContext('error/404 is a page inside the shell').toBeDefined();
   });
 
-  it('an unknown address ends on the not-found page', async () => {
-    // The application's own catch-all, over stub pages (no guards, no shell).
+  /** The application's own catch-all, over stub pages (no shell), signed in or out. */
+  async function openUnknownAddress(signedIn: boolean): Promise<string> {
     const catchAll = routes[routes.length - 1];
     const stubRoutes: Routes = [
       { path: 'dashboard', component: HomeStub },
+      { path: 'login', component: HomeStub },
       { path: 'error/404', component: Error404Component },
       { path: catchAll.path, redirectTo: catchAll.redirectTo },
     ];
     await TestBed.configureTestingModule({
       imports: [TranslateModule.forRoot()],
-      providers: [provideRouter(stubRoutes)],
+      providers: [
+        provideRouter(stubRoutes),
+        { provide: AuthService, useValue: { isAuthenticated: () => signedIn } },
+      ],
     }).compileComponents();
     await TestBed.inject(Router).navigateByUrl('/this-route-does-not-exist');
-    expect(TestBed.inject(Location).path()).toBe('/error/404');
+    return TestBed.inject(Location).path();
+  }
+
+  it('signed in, an unknown address ends on the not-found page', async () => {
+    expect(await openUnknownAddress(true)).toBe('/error/404');
+  });
+
+  it('signed out, it ends on the login page with no return address (never « page introuvable » after sign-in)', async () => {
+    // Through /error/404 the shell's AuthGuard would keep it as the returnUrl.
+    expect(await openUnknownAddress(false)).toBe('/login');
   });
 });

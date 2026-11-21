@@ -298,7 +298,7 @@ export async function auditLayout(page: Page): Promise<LayoutOffender[]> {
         window.innerWidth >= 600 &&
         cells.length >= 2 &&
         last.colSpan === 1 &&
-        !table.closest('.fc, [data-no-sticky]') &&
+        !table.closest('.fc, .mat-calendar, [data-no-sticky]') &&
         last.getBoundingClientRect().right > viewRight + 2
       ) {
         push(
@@ -331,6 +331,12 @@ export async function auditLayout(page: Page): Promise<LayoutOffender[]> {
         if (!head || head.rows.length !== 1) return;
         const cells = Array.from(head.rows[0].cells);
         if (cells.length < 2 || cells.some((c) => c.colSpan !== 1 || c.rowSpan !== 1)) return;
+        // A body cell that spans rows shifts the columns under it: such a table
+        // is left as a table on purpose (design-conventions.ts `isCardTable`).
+        const spansRows = Array.from(table.tBodies).some((body) =>
+          Array.from(body.rows).some((r) => Array.from(r.cells).some((c) => c.rowSpan > 1)),
+        );
+        if (spansRows) return;
         const row = Array.from(table.tBodies)
           .flatMap((body) => Array.from(body.rows))
           .find((r) => visible(r));
