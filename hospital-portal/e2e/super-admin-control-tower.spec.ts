@@ -191,7 +191,8 @@ test.describe('super-admin control tower', () => {
       await page.setViewportSize({ width, height: 1000 });
       await page.goto('/super-admin');
       const screen = page.locator('app-super-admin');
-      await expect(screen.locator('.admin-directory a')).toHaveCount(13);
+      // QA r65 D2777: the quick-link directory repeated the sidebar and is gone.
+      await expect(screen.locator('.admin-directory')).toHaveCount(0);
       await expect(screen.locator('.health-card')).toHaveCount(4);
       await expect(screen.locator('#integration-heading')).toHaveCSS('color', 'rgb(23, 45, 67)');
       await page.screenshot({
@@ -310,7 +311,8 @@ test.describe('super-admin control tower', () => {
     );
     await page.goto('/super-admin');
     const screen = page.locator('app-super-admin');
-    await expect(screen.locator('.admin-directory a')).toHaveCount(13);
+    // QA r65 D2777: the quick-link directory repeated the sidebar and is gone.
+    await expect(screen.locator('.admin-directory')).toHaveCount(0);
     await expect(screen.locator('.health-grid')).toHaveCount(0);
     await expect(screen.locator('.integration-overview .availability-note')).toBeVisible();
     await expect(screen.locator('.activity-list .availability-note')).toBeVisible();

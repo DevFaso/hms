@@ -19,6 +19,8 @@ import { allRows } from '../../shared/all-pages';
 import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
+import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { OrgTextPipe } from '../../shared/pipes/org-text.pipe';
 import { refusalReason, refusedFieldReasons } from '../../shared/refusal-reason';
 import { refuseFields } from '../../shared/forms/invalid-fields';
@@ -46,7 +48,15 @@ const FORM_FIELD_IDS: readonly string[] = Object.values(FIELD_BY_PROPERTY);
 @Component({
   selector: 'app-plan-assignments',
   standalone: true,
-  imports: [FormsModule, TranslateModule, SubmitGuardDirective, DateTimePipe, OrgTextPipe],
+  imports: [
+    FormsModule,
+    TranslateModule,
+    SubmitGuardDirective,
+    DateTimePipe,
+    ServerTimePipe,
+    KeyLabelPipe,
+    OrgTextPipe,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pa-card" data-testid="plan-assignments" aria-labelledby="pa-title">
@@ -78,14 +88,15 @@ const FORM_FIELD_IDS: readonly string[] = Object.values(FIELD_BY_PROPERTY);
             <p class="pa-current-line">
               <strong>{{ 'PLATFORM_SETUP.PLANS.CURRENT' | translate }}</strong>
               <span class="pa-plan">{{ sub.planName || sub.planTierCode || '—' }}</span>
-              <span class="pa-meta">
+              {{ ' '
+              }}<span class="pa-meta">
                 {{
                   'PLATFORM_SETUP.PLANS.CURRENT_DETAIL'
                     | translate
                       : {
                           seats: sub.seatLimit,
-                          period: 'PLATFORM_SETUP.PLANS.PERIOD.' + sub.billingPeriod | translate,
-                          since: (sub.startedAt | dateTime),
+                          period: (sub.billingPeriod | keyLabel: 'PLATFORM_SETUP.PLANS.PERIOD.'),
+                          since: (sub.startedAt | serverTime | dateTime),
                         }
                 }}
               </span>
@@ -179,13 +190,14 @@ const FORM_FIELD_IDS: readonly string[] = Object.values(FIELD_BY_PROPERTY);
             @for (sub of history(); track sub.id) {
               <li>
                 <span class="pa-plan">{{ sub.planName || sub.planTierCode || '—' }}</span>
-                <span class="pa-meta">
+                {{ ' '
+                }}<span class="pa-meta">
                   {{
                     'PLATFORM_SETUP.PLANS.HISTORY_LINE'
                       | translate
                         : {
-                            from: (sub.startedAt | dateTime),
-                            to: sub.endsAt ? (sub.endsAt | dateTime) : '—',
+                            from: (sub.startedAt | serverTime | dateTime),
+                            to: sub.endsAt ? (sub.endsAt | serverTime | dateTime) : '—',
                           }
                   }}
                 </span>
@@ -281,7 +293,7 @@ const FORM_FIELD_IDS: readonly string[] = Object.values(FIELD_BY_PROPERTY);
       }
       .pa-meta {
         font-size: 0.875rem;
-        color: var(--text-secondary);
+        color: #475569;
       }
       .pa-form {
         display: flex;

@@ -121,7 +121,8 @@ interface ChecklistRow {
                 [queryParams]="linkParams()"
                 [attr.aria-label]="
                   ('PLATFORM_SETUP.CHECKLIST.OPEN' | translate) +
-                  ' : ' +
+                  ('COMMON.COLON' | translate) +
+                  ' ' +
                   ('PLATFORM_SETUP.CHECKLIST.STEP.' + row.step + '.TITLE' | translate)
                 "
               >
@@ -244,7 +245,7 @@ interface ChecklistRow {
       }
       .oc-state {
         font-size: 0.875rem;
-        color: var(--text-secondary);
+        color: #475569;
         overflow-wrap: anywhere;
       }
       .oc-link {
@@ -284,7 +285,7 @@ export class OnboardingChecklistComponent {
   protected readonly failed = signal(false);
 
   protected readonly rows = computed<ChecklistRow[]>(() =>
-    (this.readiness()?.items ?? [])
+    (Array.isArray(this.readiness()?.items) ? this.readiness()!.items : [])
       // A step this build has no page for is not shown rather than linked nowhere.
       .filter((item) => !!ONBOARDING_STEP_ROUTES[item.step])
       .map((item) => ({ ...item, route: ONBOARDING_STEP_ROUTES[item.step] })),

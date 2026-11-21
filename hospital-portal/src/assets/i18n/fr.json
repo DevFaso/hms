@@ -15574,7 +15574,7 @@
         "DEPARTMENTS": {
           "TITLE": "Départements",
           "DONE": "Départements créés : {{count}}",
-          "TODO": "Créez au moins un département (Médecine générale, Maternité…)."
+          "TODO": "Créez au moins un département (médecine générale, maternité…)."
         },
         "STAFF": {
           "TITLE": "Personnel",
@@ -15621,8 +15621,8 @@
       "CODE_INVALID": "Le code compte 2 à 20 caractères : majuscules, chiffres et tirets, en commençant et en finissant par une lettre ou un chiffre.",
       "CURRENCY": "Devise",
       "CURRENCY_NAME": {
-        "XOF": "Franc CFA d’Afrique de l’Ouest (F CFA)",
-        "XAF": "Franc CFA d’Afrique centrale (F CFA)"
+        "XOF": "Franc CFA de l’UEMOA (F CFA)",
+        "XAF": "Franc CFA de la CEMAC (F CFA)"
       },
       "TIME_ZONE": "Fuseau horaire",
       "TIME_ZONE_INHERIT": "Celui de l’organisation",

@@ -322,7 +322,7 @@ export class AdminAssignmentsComponent implements OnInit {
       error: (err: HttpErrorResponse) => {
         this.activationBusy.set(false);
         this.activationError.set(
-          err.error?.message ?? this.translate.instant('PLATFORM_SETUP.ACTIVATION.SHOW_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PLATFORM_SETUP.ACTIVATION.SHOW_FAILED'),
         );
       },
     });

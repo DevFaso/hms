@@ -12,12 +12,12 @@ import com.example.hms.repository.PayerRepository;
 import com.example.hms.repository.PriceListItemRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.scheduling.SessionTemplateRepository;
+import com.example.hms.service.scheduling.AppointmentSlotPolicy;
 import com.example.hms.utility.HospitalCalendar;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -35,7 +35,8 @@ import java.util.UUID;
  *
  * <p>"Bookable" is not a new rule: it is the two reads the patient booking
  * form already makes ({@code StaffRepository.findDepartmentIdsWithActiveProviders}
- * for the Service list, the published slots for the times), joined.
+ * for the Service list, {@code AppointmentSlotPolicy.departmentsWithOpenSlots}
+ * for the times), joined.
  */
 @Service
 @RequiredArgsConstructor
@@ -48,6 +49,8 @@ public class HospitalOnboardingReadinessService {
     private final BedRepository bedRepository;
     private final PriceListItemRepository priceListItemRepository;
     private final PayerRepository payerRepository;
+    /** Owns what "a slot can still be taken" means, for the patient form and for this checklist. */
+    private final AppointmentSlotPolicy slotPolicy;
 
     @Transactional(readOnly = true)
     public HospitalOnboardingReadinessDTO readiness(UUID hospitalId) {
@@ -60,8 +63,8 @@ public class HospitalOnboardingReadinessService {
         Set<UUID> staffedDepartments = staffRepository.findDepartmentIdsWithActiveProviders(hospitalId);
         long templates = sessionTemplateRepository.countByHospital_IdAndActiveTrue(hospitalId);
         // Slots still to come on the hospital's own clock, as the patient lookup judges them.
-        Set<UUID> departmentsWithSlots = departmentRepository.findIdsWithOpenSlotsAfter(
-            hospitalId, HospitalCalendar.now(hospital), LocalDateTime.now());
+        Set<UUID> departmentsWithSlots =
+            slotPolicy.departmentsWithOpenSlots(hospitalId, HospitalCalendar.now(hospital));
         Set<UUID> bookableDepartments = new HashSet<>(staffedDepartments);
         bookableDepartments.retainAll(departmentsWithSlots);
         long beds = bedRepository.countByWard_Hospital_IdAndActiveTrue(hospitalId);

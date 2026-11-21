@@ -139,6 +139,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final String MSG_ASSIGNMENT_ACTOR_MISMATCH = "assignment.confirmation.actor-mismatch";
     private static final String MSG_ASSIGNMENT_CODE_REGISTRAR_ONLY = "assignment.activationCode.registrarOnly";
     private static final String MSG_ASSIGNMENT_CODE_EXPIRED = "assignment.activationCode.expired";
+    /** The audit detail that names the assignment: its human-facing code, never the confirmation code. */
+    private static final String DETAIL_ASSIGNMENT_CODE = "assignmentCode";
     private static final String MSG_ASSIGNMENT_NOT_FOUND_BY_CODE = "assignment.notfound.bycode";
     private static final String MSG_ACCOUNT_DISABLED_BY_ADMIN = "assignment.confirmation.accountDisabled";
     private static final String DEFAULT_HOLDER_CHANGE = "assignment.holderChange.superAdminOnly";
@@ -964,7 +966,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         String code = assignment.getConfirmationCode();
         LocalDateTime sentAt = assignment.getConfirmationSentAt();
         LocalDateTime expiresAt = sentAt != null ? sentAt.plusHours(CONFIRMATION_CODE_EXPIRY_HOURS) : null;
-        if (code == null || code.isBlank() || (expiresAt != null && expiresAt.isBefore(LocalDateTime.now()))) {
+        // On the clock the code was stamped on (restartInvitation: the server's zone).
+        LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
+        if (code == null || code.isBlank() || (expiresAt != null && expiresAt.isBefore(now))) {
             // A dead code handed over in person fails at the holder's first try: say so here.
             throw new BusinessException(MSG_ASSIGNMENT_CODE_EXPIRED);
         }
@@ -976,7 +980,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private void recordActivationCodeShownAudit(UserRoleHospitalAssignment assignment, User actor) {
         try {
             Map<String, Object> details = new HashMap<>();
-            details.put("assignmentCode", assignment.getAssignmentCode());
+            details.put(DETAIL_ASSIGNMENT_CODE, assignment.getAssignmentCode());
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .userId(actor.getId())
                 .assignmentId(assignment.getId())
@@ -2696,7 +2700,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             Hospital hospital = assignment.getHospital();
 
             Map<String, Object> details = new HashMap<>();
-            details.put("assignmentCode", assignment.getAssignmentCode());
+            details.put(DETAIL_ASSIGNMENT_CODE, assignment.getAssignmentCode());
             if (assignment.getConfirmationSentAt() != null) {
                 details.put("confirmationSentAt", assignment.getConfirmationSentAt());
             }
@@ -2742,7 +2746,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private void recordAssignmentConfirmationAudit(UserRoleHospitalAssignment assignment, User actor) {
         try {
             Map<String, Object> details = new HashMap<>();
-            details.put("assignmentCode", assignment.getAssignmentCode());
+            details.put(DETAIL_ASSIGNMENT_CODE, assignment.getAssignmentCode());
             // QA r65 D2772: never the confirmation code. Spent or not, it is a
             // credential value, and the audit search returned it.
             details.put("confirmedAt", assignment.getConfirmationVerifiedAt());

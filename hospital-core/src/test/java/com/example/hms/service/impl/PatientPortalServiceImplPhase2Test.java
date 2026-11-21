@@ -2333,9 +2333,7 @@ class PatientPortalServiceImplPhase2Test {
             when(staffRepository.findDepartmentIdsWithActiveProviders(hospId))
                     .thenReturn(java.util.Set.of(medicine.getId(), maternity.getId()));
             // Slots are published for maternity only; the question is asked of THIS hospital.
-            when(departmentRepository.findIdsWithOpenSlotsAfter(
-                    org.mockito.ArgumentMatchers.eq(hospId), org.mockito.ArgumentMatchers.any(),
-                    org.mockito.ArgumentMatchers.any()))
+            when(slotPolicy.departmentsWithOpenSlots(eq(hospId), any()))
                     .thenReturn(java.util.Set.of(maternity.getId()));
 
             List<java.util.Map<String, Object>> result = service.getDepartmentsForHospital(auth, hospId);
@@ -2360,9 +2358,7 @@ class PatientPortalServiceImplPhase2Test {
             when(staffRepository.findDepartmentIdsWithActiveProviders(hospId)).thenReturn(java.util.Set.of());
 
             assertThat(service.getDepartmentsForHospital(auth, hospId)).isEmpty();
-            org.mockito.Mockito.verify(departmentRepository, org.mockito.Mockito.never())
-                    .findIdsWithOpenSlotsAfter(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
-                            org.mockito.ArgumentMatchers.any());
+            verify(slotPolicy, never()).departmentsWithOpenSlots(any(), any());
         }
 
         @Test

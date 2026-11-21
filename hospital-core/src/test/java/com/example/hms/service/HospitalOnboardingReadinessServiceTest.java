@@ -13,6 +13,7 @@ import com.example.hms.repository.PayerRepository;
 import com.example.hms.repository.PriceListItemRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.scheduling.SessionTemplateRepository;
+import com.example.hms.service.scheduling.AppointmentSlotPolicy;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import org.junit.jupiter.api.AfterEach;
@@ -55,6 +56,7 @@ class HospitalOnboardingReadinessServiceTest {
     @Mock private BedRepository bedRepository;
     @Mock private PriceListItemRepository priceListItemRepository;
     @Mock private PayerRepository payerRepository;
+    @Mock private AppointmentSlotPolicy slotPolicy;
 
     @InjectMocks private HospitalOnboardingReadinessService service;
 
@@ -84,7 +86,7 @@ class HospitalOnboardingReadinessServiceTest {
         when(departmentRepository.countByHospitalId(hospitalId)).thenReturn(9L);
         when(staffRepository.countActiveByHospitalId(hospitalId)).thenReturn(46L);
         when(staffRepository.findDepartmentIdsWithActiveProviders(hospitalId)).thenReturn(Set.of());
-        when(departmentRepository.findIdsWithOpenSlotsAfter(eq(hospitalId), any(), any())).thenReturn(Set.of());
+        when(slotPolicy.departmentsWithOpenSlots(eq(hospitalId), any())).thenReturn(Set.of());
 
         HospitalOnboardingReadinessDTO readiness = service.readiness(hospitalId);
 
@@ -105,7 +107,7 @@ class HospitalOnboardingReadinessServiceTest {
     void bookableNeedsTheSameDepartmentOnBothSides() {
         when(staffRepository.findDepartmentIdsWithActiveProviders(hospitalId)).thenReturn(Set.of(medicine));
         // Slots exist, but in a department nobody bookable is attached to.
-        when(departmentRepository.findIdsWithOpenSlotsAfter(eq(hospitalId), any(), any())).thenReturn(Set.of(maternity));
+        when(slotPolicy.departmentsWithOpenSlots(eq(hospitalId), any())).thenReturn(Set.of(maternity));
         when(sessionTemplateRepository.countByHospital_IdAndActiveTrue(hospitalId)).thenReturn(5L);
 
         HospitalOnboardingReadinessDTO readiness = service.readiness(hospitalId);
@@ -115,7 +117,7 @@ class HospitalOnboardingReadinessServiceTest {
         assertThat(item(readiness, Step.SESSION_TEMPLATES).done()).isTrue();
         assertThat(item(readiness, Step.OPEN_SLOTS)).isEqualTo(new Item(Step.OPEN_SLOTS, false, 0, true));
 
-        when(departmentRepository.findIdsWithOpenSlotsAfter(eq(hospitalId), any(), any()))
+        when(slotPolicy.departmentsWithOpenSlots(eq(hospitalId), any()))
             .thenReturn(Set.of(maternity, medicine));
 
         HospitalOnboardingReadinessDTO ready = service.readiness(hospitalId);
@@ -128,7 +130,7 @@ class HospitalOnboardingReadinessServiceTest {
     @DisplayName("every count is asked for the hospital named, and only that one")
     void everyCountIsScopedToTheHospital() {
         when(staffRepository.findDepartmentIdsWithActiveProviders(hospitalId)).thenReturn(Set.of());
-        when(departmentRepository.findIdsWithOpenSlotsAfter(eq(hospitalId), any(), any())).thenReturn(Set.of());
+        when(slotPolicy.departmentsWithOpenSlots(eq(hospitalId), any())).thenReturn(Set.of());
 
         service.readiness(hospitalId);
 
@@ -136,7 +138,7 @@ class HospitalOnboardingReadinessServiceTest {
         verify(staffRepository).countActiveByHospitalId(hospitalId);
         verify(staffRepository).findDepartmentIdsWithActiveProviders(hospitalId);
         verify(sessionTemplateRepository).countByHospital_IdAndActiveTrue(hospitalId);
-        verify(departmentRepository).findIdsWithOpenSlotsAfter(eq(hospitalId), any(), any());
+        verify(slotPolicy).departmentsWithOpenSlots(eq(hospitalId), any());
         verify(bedRepository).countByWard_Hospital_IdAndActiveTrue(hospitalId);
         verify(priceListItemRepository).countByHospitalIdAndActiveTrue(hospitalId);
         verify(payerRepository).countByHospitalIdAndActiveTrue(hospitalId);
@@ -150,7 +152,7 @@ class HospitalOnboardingReadinessServiceTest {
 
         assertThatThrownBy(() -> service.readiness(pharmacy)).isInstanceOf(ResourceNotFoundException.class);
         verifyNoInteractions(departmentRepository, staffRepository, sessionTemplateRepository, bedRepository,
-            priceListItemRepository, payerRepository);
+            priceListItemRepository, payerRepository, slotPolicy);
     }
 
     // ── who may read it ─────────────────────────────────────────────────────

@@ -185,7 +185,9 @@ class HospitalCodeCurrencyTimeZoneTest {
         when(hospitalRepository.findByCodeIgnoreCase("TWP")).thenReturn(Optional.empty());
         when(hospitalRepository.hasAllocatedInvoiceNumber(hospital.getId())).thenReturn(true);
 
-        assertThatThrownBy(() -> service.updateHospital(hospital.getId(), dto, Locale.FRENCH))
+        UUID id = hospital.getId();
+
+        assertThatThrownBy(() -> service.updateHospital(id, dto, Locale.FRENCH))
             .isInstanceOfSatisfying(FieldBusinessException.class, r -> assertThat(r.getField()).isEqualTo("code"));
         assertThat(hospital.getCode()).isEqualTo("CMT-C5F20");
         verify(hospitalRepository, never()).save(any());
@@ -216,7 +218,9 @@ class HospitalCodeCurrencyTimeZoneTest {
         dto.setCode("TWP");
         when(hospitalRepository.findByCodeIgnoreCase("TWP")).thenReturn(Optional.of(other));
 
-        assertThatThrownBy(() -> service.updateHospital(hospital.getId(), dto, Locale.FRENCH))
+        UUID id = hospital.getId();
+
+        assertThatThrownBy(() -> service.updateHospital(id, dto, Locale.FRENCH))
             .isInstanceOf(ConflictException.class)
             .hasMessageStartingWith("code:");
         assertThat(hospital.getCode()).isEqualTo("CMT-C5F20");

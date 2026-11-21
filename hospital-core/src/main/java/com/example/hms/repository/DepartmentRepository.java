@@ -83,24 +83,6 @@ public interface DepartmentRepository extends JpaRepository<Department, UUID>, J
     @Query("SELECT COUNT(d) FROM Department d WHERE d.hospital.id = :hospitalId")
     long countByHospitalId(@Param("hospitalId") UUID hospitalId);
 
-    /**
-     * QA r65 D2731: the departments of ONE hospital that have a published slot
-     * still to come (open, or held past its hold), by the predicate of the
-     * open-slot search ({@code AppointmentSlotRepository.searchOpen}): a slot
-     * starts after {@code notBefore}, the hospital's wall clock, and a hold has
-     * lapsed on {@code now}, the server's clock. The patient booking form and
-     * the onboarding checklist both read it, so "nothing to book here" means
-     * the same thing in both.
-     */
-    @Query("SELECT DISTINCT s.department.id FROM AppointmentSlot s "
-        + "WHERE s.hospital.id = :hospitalId "
-        + "AND s.startAt > :notBefore "
-        + "AND (s.status = com.example.hms.enums.SlotStatus.OPEN "
-        + "     OR (s.status = com.example.hms.enums.SlotStatus.HELD AND s.heldUntil < :now))")
-    java.util.Set<UUID> findIdsWithOpenSlotsAfter(@Param("hospitalId") UUID hospitalId,
-                                                  @Param("notBefore") java.time.LocalDateTime notBefore,
-                                                  @Param("now") java.time.LocalDateTime now);
-
     @Query("SELECT COUNT(s) > 0 FROM Staff s WHERE s.department.id = :departmentId")
     boolean hasStaffMembers(@Param("departmentId") UUID departmentId);
 

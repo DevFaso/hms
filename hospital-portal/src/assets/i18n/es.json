@@ -15574,7 +15574,7 @@
         "DEPARTMENTS": {
           "TITLE": "Departamentos",
           "DONE": "Departamentos creados: {{count}}",
-          "TODO": "Cree al menos un departamento (Medicina general, Maternidad…)."
+          "TODO": "Cree al menos un departamento (medicina general, maternidad…)."
         },
         "STAFF": {
           "TITLE": "Personal",
@@ -15621,8 +15621,8 @@
       "CODE_INVALID": "El código tiene de 2 a 20 caracteres: mayúsculas, cifras y guiones, empezando y terminando por una letra o una cifra.",
       "CURRENCY": "Moneda",
       "CURRENCY_NAME": {
-        "XOF": "Franco CFA de África Occidental (F CFA)",
-        "XAF": "Franco CFA de África Central (F CFA)"
+        "XOF": "Franco CFA de la UEMOA (F CFA)",
+        "XAF": "Franco CFA de la CEMAC (F CFA)"
       },
       "TIME_ZONE": "Zona horaria",
       "TIME_ZONE_INHERIT": "La de la organización",

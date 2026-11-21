@@ -60,7 +60,7 @@ export const SUPER_ADMIN_AUDIT_TABS: readonly { route: string; labelKey: string 
         margin-bottom: -1px;
         font-size: 0.9375rem;
         font-weight: 600;
-        color: var(--text-secondary);
+        color: #475569;
         text-decoration: none;
       }
       .audit-tab-active {

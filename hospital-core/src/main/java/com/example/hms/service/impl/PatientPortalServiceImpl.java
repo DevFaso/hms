@@ -988,8 +988,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
         // QA r65 D2731: whether each one has a published slot still to come, on the
         // hospital's own clock, so the form can say so before the patient tries date after date.
-        java.util.Set<UUID> withSlots = departmentRepository.findIdsWithOpenSlotsAfter(
-                hospitalId, nowAt(departments.get(0).getHospital()), java.time.LocalDateTime.now());
+        java.util.Set<UUID> withSlots = slotPolicy.departmentsWithOpenSlots(
+                hospitalId, nowAt(departments.get(0).getHospital()));
         return departments.stream()
                 .map(d -> {
                     Map<String, Object> m = new java.util.LinkedHashMap<>();
