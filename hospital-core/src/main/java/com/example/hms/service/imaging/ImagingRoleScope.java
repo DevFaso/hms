@@ -4,12 +4,8 @@ import com.example.hms.enums.ImagingModality;
 import com.example.hms.exception.ClientSafeAccessDeniedException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.ImagingOrder;
-import com.example.hms.security.ClinicalActor;
 import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.RoleValidator;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.UUID;
 
@@ -29,12 +25,12 @@ import java.util.UUID;
  *   <li>an imaging technician there, and nothing wider there, has the technician's reach (policy
  *       rule 3, owner 2026-11-20, PROVISIONAL), whatever role their token names: a technician at A
  *       who is a radiologist at B is a technician at A;</li>
- *   <li>none of these there: an administrator reads as one (user decision 2026-11-14: orders and
- *       released reports; the administrative roles are not clinical and stay the token's);
- *       anybody else is refused.</li>
+ *   <li>none of these there: an administrator OF this hospital, or the verified super-admin,
+ *       reads as one (user decision 2026-11-14: orders and released reports); anybody else is
+ *       refused.</li>
  * </ul>
- * A role is never taken from the token by an imaging service: {@code ImagingReadRoleGuardTest}
- * holds each of them to this class.
+ * No role, clinical or administrative, is taken from the token: this class never reads it, and
+ * {@code ImagingReadRoleGuardTest} holds every imaging service to this class.
  *
  * <p>Stateless: each imaging service builds one over its own {@link RoleValidator}.
  */
@@ -82,19 +78,36 @@ public final class ImagingRoleScope {
      */
     public Reader readerAt(UUID hospitalId) {
         UUID caller = roleValidator.getCurrentUserId();
-        boolean administrator = tokenNamesAnAdministrator();
         if (caller != null && hospitalId != null) {
             if (roleValidator.readsImagingClinically(caller, hospitalId)) {
                 return Reader.CLINICAL;
             }
             if (roleValidator.hasRole(caller, hospitalId, TECHNICIAN_ROLE)) {
-                return administrator ? Reader.TECHNICIAN_ADMINISTRATOR : Reader.TECHNICIAN;
+                return administratorAt(caller, hospitalId) ? Reader.TECHNICIAN_ADMINISTRATOR : Reader.TECHNICIAN;
             }
         }
-        if (administrator) {
+        if (administratorAt(caller, hospitalId)) {
             return Reader.ADMINISTRATOR;
         }
         throw notHere();
+    }
+
+    /**
+     * Review of #1251: the administrative roles count where they are held too. A hospital admin of
+     * B who is a receptionist at A, acting at A under the admin role, read A's worklist, orders,
+     * released reports and images on the token alone. An administrator here is:
+     * <ul>
+     *   <li>a hospital admin or an admin OF this hospital (their assignment there);</li>
+     *   <li>the verified super-admin (a live SUPER_ADMIN assignment, never the token's claim), at
+     *       the hospital they named or in global view: user decision 2026-11-14, cross-hospital
+     *       read of orders and released reports.</li>
+     * </ul>
+     */
+    private boolean administratorAt(UUID caller, UUID hospitalId) {
+        if (roleValidator.isSuperAdminFromAuth()) {
+            return true;
+        }
+        return caller != null && hospitalId != null && roleValidator.administersImagingReads(caller, hospitalId);
     }
 
     /** {@link #readerAt} at the order's hospital. */
@@ -226,19 +239,6 @@ public final class ImagingRoleScope {
 
     private static ClientSafeAccessDeniedException notHere() {
         return new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw(NOT_HERE_KEY));
-    }
-
-    /**
-     * The administrative roles are not clinical and are not this class's to re-read: the tenant
-     * resolver already holds the request to a hospital the caller is assigned to.
-     */
-    private static boolean tokenNamesAnAdministrator() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null) {
-            return false;
-        }
-        return authentication.getAuthorities().stream().map(GrantedAuthority::getAuthority)
-            .anyMatch(ClinicalActor.ADMIN_ROLES::contains);
     }
 
     /** The order's hospital; an order written before orders carried one is judged where the request acts. */

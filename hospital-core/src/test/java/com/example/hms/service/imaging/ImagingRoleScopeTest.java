@@ -212,35 +212,84 @@ class ImagingRoleScopeTest {
 
     // ── The administrators (user decision 2026-11-14) ──
 
+    /** A hospital admin (or an admin) of that hospital, by their assignment there. */
+    private void administratorAt(UUID hospitalId) {
+        when(roleValidator.administersImagingReads(CALLER, hospitalId)).thenReturn(true);
+    }
+
     @Test
-    void anAdministratorWithNoImagingRoleHereReadsAsOne_andNeverActs() {
-        for (String admin : new String[] {"ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN", "ROLE_ADMIN"}) {
-            // A super-admin's token carries the inherited DOCTOR and NURSE: they are not held here.
-            token(admin, "ROLE_DOCTOR", "ROLE_NURSE");
+    void anAdministratorOfTheHospitalWithNoImagingRoleThereReadsAsOne_andNeverActs() {
+        for (String admin : new String[] {"ROLE_HOSPITAL_ADMIN", "ROLE_ADMIN"}) {
+            token(admin);
+            administratorAt(HOSPITAL_A);
             assertThat(scope.readerAt(HOSPITAL_A)).as(admin).isEqualTo(Reader.ADMINISTRATOR);
-            // In global view there is no hospital: still an administrator.
-            assertThat(scope.readerAt(null)).as(admin + ", global view").isEqualTo(Reader.ADMINISTRATOR);
             refused(() -> scope.requireInterpreterAt(HOSPITAL_A), admin + ": report");
             refused(() -> scope.actsAsTechnicianAt(HOSPITAL_A), admin + ": exam step");
             refused(() -> scope.requireClinicalReaderAt(HOSPITAL_A), admin + ": pixels");
+            // Only the verified super-admin has a global view.
+            refused(() -> scope.readerAt(null), admin + ": no hospital");
         }
         assertThat(Reader.ADMINISTRATOR.administrator()).isTrue();
         assertThat(Reader.ADMINISTRATOR.technician()).isFalse();
     }
 
     @Test
-    void anAdministratorWhoIsADoctorElsewhereStillReadsAsAnAdministratorHere() {
-        // Both roles in the token; the clinical one is held at B.
+    void review1251_aHospitalAdminOfBWhoIsAReceptionistAtA_actingAtAUnderTheAdminRole_readsNothingAtA() {
+        // The token names the admin role (picked at login); it is held at B.
+        for (String admin : new String[] {"ROLE_HOSPITAL_ADMIN", "ROLE_ADMIN"}) {
+            token(admin);
+            administratorAt(HOSPITAL_B);
+
+            refused(() -> scope.readerAt(HOSPITAL_A), admin + ": worklist, orders, released reports, images at A");
+            refused(() -> scope.reader(orderAt(HOSPITAL_A)), admin + ": the same, from the order");
+            // ... and at B, where the role is held, they read as the administrator they are.
+            assertThat(scope.readerAt(HOSPITAL_B)).as(admin + " at B").isEqualTo(Reader.ADMINISTRATOR);
+            assertThat(scope.reader(orderAt(HOSPITAL_B))).isEqualTo(Reader.ADMINISTRATOR);
+        }
+    }
+
+    @Test
+    void review1251_theVerifiedSuperAdminReadsEveryHospitalAndTheGlobalView_theTokensClaimAloneReadsNone() {
+        // The token carries SUPER_ADMIN and its inherited DOCTOR and NURSE: none is held here.
+        token("ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN", "ROLE_DOCTOR", "ROLE_NURSE");
+
+        // A token still naming SUPER_ADMIN with no live assignment behind it (demoted, a stale token).
+        refused(() -> scope.readerAt(HOSPITAL_A), "the claim alone");
+        refused(() -> scope.readerAt(null), "the claim alone, global view");
+
+        // The verified super-admin (a live SUPER_ADMIN assignment): any hospital they name, and the global view.
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
+        assertThat(scope.readerAt(HOSPITAL_A)).isEqualTo(Reader.ADMINISTRATOR);
+        assertThat(scope.readerAt(HOSPITAL_B)).isEqualTo(Reader.ADMINISTRATOR);
+        assertThat(scope.readerAt(null)).as("global view").isEqualTo(Reader.ADMINISTRATOR);
+        // Reading is all: user decision 2026-11-14, a super-admin never acts on imaging alone.
+        refused(() -> scope.requireInterpreterAt(HOSPITAL_A), "report");
+        refused(() -> scope.actsAsTechnicianAt(HOSPITAL_A), "exam step");
+        refused(() -> scope.requireClinicalReaderAt(HOSPITAL_A), "pixels");
+        // With a clinical role held at a hospital, they read there as the care team.
+        radiologistAt(HOSPITAL_B);
+        assertThat(scope.readerAt(HOSPITAL_B)).isEqualTo(Reader.CLINICAL);
+    }
+
+    @Test
+    void anAdministratorHereWhoIsADoctorElsewhereStillReadsAsAnAdministratorHere() {
+        // Both roles in the token; the clinical one is held at B, the administrative one at A.
         token("ROLE_HOSPITAL_ADMIN", "ROLE_DOCTOR");
         radiologistAt(HOSPITAL_B);
+        administratorAt(HOSPITAL_A);
         assertThat(scope.readerAt(HOSPITAL_A)).isEqualTo(Reader.ADMINISTRATOR);
         assertThat(scope.readerAt(HOSPITAL_B)).isEqualTo(Reader.CLINICAL);
     }
 
     @Test
-    void aTechnicianHereWhoIsAlsoAnAdministratorReadsReportsAsTheAdministrator() {
+    void aTechnicianHereWhoIsAlsoAnAdministratorHereReadsReportsAsTheAdministrator() {
         token(TECHNICIAN, "ROLE_HOSPITAL_ADMIN");
         technicianAt(HOSPITAL_A);
+        // An administrator at another hospital only: a technician here, nothing more.
+        administratorAt(HOSPITAL_B);
+        assertThat(scope.readerAt(HOSPITAL_A)).isEqualTo(Reader.TECHNICIAN);
+
+        administratorAt(HOSPITAL_A);
         Reader reader = scope.readerAt(HOSPITAL_A);
         assertThat(reader).isEqualTo(Reader.TECHNICIAN_ADMINISTRATOR);
         assertThat(reader.technician()).isTrue();

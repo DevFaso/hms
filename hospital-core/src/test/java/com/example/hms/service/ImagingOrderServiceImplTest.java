@@ -1998,6 +1998,7 @@ class ImagingOrderServiceImplTest {
         lenient().when(roleValidator.readsImagingClinically(eq(sessionUserId), any())).thenReturn(false);
         lenient().when(roleValidator.ordersImaging(eq(sessionUserId), any())).thenReturn(false);
         lenient().when(roleValidator.isSigningPhysician(eq(sessionUserId), any())).thenReturn(false);
+        lenient().when(roleValidator.administersImagingReads(eq(sessionUserId), any())).thenReturn(false);
     }
 
     private ImagingOrder studyOfAnotherProvider(ImagingOrderStatus status) {
@@ -2396,6 +2397,30 @@ class ImagingOrderServiceImplTest {
         assertThatThrownBy(() -> imagingOrderService.getOrdersByHospital(hospitalId, null)).isInstanceOf(REFUSED);
         assertThatThrownBy(() -> imagingOrderService.getOrdersByPatient(patientId, null)).isInstanceOf(REFUSED);
         verify(imagingOrderRepository, never()).save(any());
+    }
+
+    // ═══════════════ Review of #1251: the administrator's role counts where it is held ═══════════════
+
+    @Test
+    void review1251_aHospitalAdminOfAnotherHospitalReadsNoWorklistAndNoOrderHere_andTheAdminOfThisOneDoes() {
+        ImagingOrder order = studyOfAnotherProvider(ImagingOrderStatus.ORDERED);
+        UUID caller = UUID.randomUUID();
+        // A hospital admin at B, a receptionist here; the admin role was picked at login.
+        tokenOnly(caller, "ROLE_HOSPITAL_ADMIN");
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        lenient().when(imagingOrderRepository.findByIdUnscoped(orderId)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> imagingOrderService.getOrder(orderId)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingOrderService.getOrdersByHospital(hospitalId, null)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingOrderService.getAllOrders(null)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingOrderService.getOrdersByPatient(patientId, null)).isInstanceOf(REFUSED);
+        verify(imagingOrderRepository, never()).findByHospital_IdOrderByOrderedAtDesc(any());
+
+        // The hospital admin OF this hospital reads its orders, as before.
+        when(roleValidator.administersImagingReads(caller, hospitalId)).thenReturn(true);
+        imagingOrderService.getOrder(orderId);
+        imagingOrderService.getOrdersByHospital(hospitalId, null);
+        verify(imagingOrderRepository).findByHospital_IdOrderByOrderedAtDesc(hospitalId);
     }
 
     // ═══════════════ Owner decision 2026-11-20: who performs an ultrasound ═══════════════

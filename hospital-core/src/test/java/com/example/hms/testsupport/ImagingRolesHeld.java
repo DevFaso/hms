@@ -45,6 +45,18 @@ public final class ImagingRolesHeld {
             .thenAnswer(call -> tokenNames("DOCTOR", "NURSE", "MIDWIFE"));
         lenient().when(roleValidator.isSigningPhysician(any(), any()))
             .thenAnswer(call -> tokenNames("DOCTOR"));
+        // Review of #1251: the administrative roles are read where they are held too.
+        lenient().when(roleValidator.administersImagingReads(any(), any()))
+            .thenAnswer(call -> tokenCarries("ROLE_HOSPITAL_ADMIN", "ROLE_ADMIN"));
+        lenient().when(roleValidator.isSuperAdminFromAuth())
+            .thenAnswer(call -> tokenCarries("ROLE_SUPER_ADMIN"));
+    }
+
+    /** The token names one of these authorities as they are (no inheritance, no default). */
+    private static boolean tokenCarries(String... authorities) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null && authentication.getAuthorities().stream()
+            .anyMatch(granted -> java.util.Arrays.asList(authorities).contains(granted.getAuthority()));
     }
 
     private static boolean tokenNames(String... roles) {

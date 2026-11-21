@@ -679,6 +679,24 @@ class ImagingStudyImageServiceTest {
         }
 
         @Test
+        void review1251_aHospitalAdminOfAnotherHospitalSeesNoImageHere_andTheAdminOfThisOneSeesTheReleasedOnes() {
+            ImagingStudyImage onStudy = image(null, UUID.randomUUID());
+            UUID imageId = onStudy.getId();
+            report(true, ImagingReportStatus.FINAL);
+            // A hospital admin at B, a receptionist here; the admin role was picked at login.
+            when(roleValidator.hasRole(callerId, hospitalId, "IMAGING_TECHNICIAN")).thenReturn(false);
+            as("ROLE_HOSPITAL_ADMIN");
+            when(roleValidator.administersImagingReads(callerId, hospitalId)).thenReturn(false);
+
+            assertThatThrownBy(() -> service.list(order.getId())).isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            assertThatThrownBy(() -> service.readContent(imageId)).isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            assertThatThrownBy(() -> service.withdrawn(order.getId())).isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+
+            when(roleValidator.administersImagingReads(callerId, hospitalId)).thenReturn(true);
+            assertThat(service.list(order.getId())).extracting(ImagingStudyImageDTO::id).containsExactly(imageId);
+        }
+
+        @Test
         void d2915_whereTheRadiologistsRoleIsHeldTheDepartmentsDecisionsAreTheirs() {
             ImagingStudyImage colleagues = image(null, UUID.randomUUID());
             ImagingStudyImage toWithdraw = image(null, UUID.randomUUID());

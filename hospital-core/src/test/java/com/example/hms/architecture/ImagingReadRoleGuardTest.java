@@ -444,10 +444,15 @@ class ImagingReadRoleGuardTest {
     /**
      * ... and no imaging service decides on a role the token names: not through the token-wide
      * {@code ClinicalActor}, not from the authorities, not by naming the technician role itself.
-     * The administrative roles (not clinical) are read from the token in one place, the scope.
+     *
+     * <p>Review of #1251: nor does the scope, for the administrative roles either. A hospital admin
+     * of B who is a receptionist at A, acting at A under the admin role, read A's worklist, orders,
+     * released reports and images, because the scope took "administrator" from the token. A hospital
+     * admin or an admin is one where their assignment says; the super-admin is the VERIFIED one (a
+     * live SUPER_ADMIN assignment), never the token's authority.
      */
     @Test
-    void noImagingServiceTakesAClinicalRoleFromTheToken() throws IOException {
+    void noImagingRoleClinicalOrAdministrativeIsTakenFromTheToken() throws IOException {
         for (String service : IMAGING_SERVICES.values()) {
             assertThat(source(service)).as(service + " asks the hospital-scoped rule (QA D2915)" + SourceScan.MANDATE)
                 .contains(SCOPE)
@@ -461,9 +466,23 @@ class ImagingReadRoleGuardTest {
         String scope = source("service/imaging/ImagingRoleScope.java");
         assertThat(scope).contains("roleValidator.interpretsImaging(", "roleValidator.readsImagingClinically(",
             "roleValidator.ordersImaging(", "roleValidator.hasRole(");
-        assertThat(scope.split("getAuthorities\\(", -1)).as("the token is read once, for the administrative roles")
-            .hasSize(2);
-        assertThat(scope).contains("ClinicalActor.ADMIN_ROLES").doesNotContain("holdsOwnRole");
+        assertThat(scope).as("the administrative roles are read where they are held (review of #1251)"
+                + SourceScan.MANDATE)
+            .contains("roleValidator.administersImagingReads(", "roleValidator.isSuperAdminFromAuth()")
+            .doesNotContain("getAuthorities(")
+            .doesNotContain("SecurityContextHolder")
+            .doesNotContain("Authentication")
+            .doesNotContain("ClinicalActor")
+            .doesNotContain("hasAnyAuthority(")
+            .doesNotContain("isHospitalAdminFromAuthGlobalOnly")
+            .doesNotContain("isStaffOrAdminFromAuth");
+        // ... and the two lookups it asks are assignments, not authorities.
+        String validator = source("utility/RoleValidator.java");
+        assertThat(SourceScan.methodBody(validator, "administersImagingReads"))
+            .contains("hasAnyCode(userId, hospitalId,").contains("HOSPITAL_ADMIN_ROLE").doesNotContain("hasAuthority");
+        assertThat(SourceScan.methodBody(validator, "isSuperAdminFromAuth")).contains("isSuperAdminFromJwtClaim()");
+        assertThat(SourceScan.methodBody(validator, "isSuperAdminFromJwtClaim"))
+            .as("the verified super-admin: a live assignment").contains("actingScopeResolver.isVerifiedSuperAdmin()");
     }
 
     private static Method method(Class<?> controller, String name) throws NoSuchMethodException {

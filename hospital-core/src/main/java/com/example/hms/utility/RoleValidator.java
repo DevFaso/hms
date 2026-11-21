@@ -297,6 +297,15 @@ public class RoleValidator {
             NURSE_ROLE, MIDWIFE_ROLE);
     }
 
+    /**
+     * Review of #1251: who reads imaging there as an administrator (orders and released reports,
+     * user decision 2026-11-14): a hospital admin or an admin OF that hospital. A hospital admin of
+     * another hospital is not one here; the verified super-admin is asked separately.
+     */
+    public boolean administersImagingReads(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE, "ADMIN");
+    }
+
     /** QA D2915: who places an imaging order there: a doctor, a physician, a surgeon, a nurse or a midwife. */
     public boolean ordersImaging(UUID userId, UUID hospitalId) {
         return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, NURSE_ROLE, MIDWIFE_ROLE);

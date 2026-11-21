@@ -1028,6 +1028,34 @@ class ImagingReportServiceImplTest {
         assertThatThrownBy(() -> imagingReportService.getReport(draftId)).isInstanceOf(ResourceNotFoundException.class);
     }
 
+    // ── Review of #1251: the administrator's role counts where it is held ──
+
+    @Test
+    void review1251_aHospitalAdminOfAnotherHospitalReadsNoReleasedReportHere_andTheAdminOfThisOneDoes() {
+        ImagingReport finalRead = version(1, ImagingReportStatus.FINAL, true);
+        when(imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(orderId)).thenReturn(List.of(finalRead));
+        when(imagingReportRepository.findById(finalRead.getId())).thenReturn(Optional.of(finalRead));
+        when(imagingReportRepository.findByHospital_IdAndReportStatusOrderByPerformedAtDesc(hospitalId,
+            ImagingReportStatus.FINAL)).thenReturn(List.of(finalRead));
+        UUID finalId = finalRead.getId();
+        mapsReportsById();
+        // A hospital admin at B, a receptionist here; the admin role was picked at login.
+        signIn("ROLE_HOSPITAL_ADMIN");
+        when(roleValidator.administersImagingReads(callerUserId, hospitalId)).thenReturn(false);
+
+        assertThatThrownBy(() -> imagingReportService.getReport(finalId)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingReportService.getLatestReportForOrder(orderId)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingReportService.getReportsForOrder(orderId)).isInstanceOf(REFUSED);
+        assertThatThrownBy(() -> imagingReportService.getReportsByHospitalAndStatus(hospitalId,
+            ImagingReportStatus.FINAL)).isInstanceOf(REFUSED);
+
+        // The hospital admin OF this hospital reads its released reports, as before.
+        when(roleValidator.administersImagingReads(callerUserId, hospitalId)).thenReturn(true);
+        assertThat(imagingReportService.getReport(finalId).getId()).isEqualTo(finalId);
+        assertThat(imagingReportService.getReportsForOrder(orderId)).hasSize(1);
+        assertThat(imagingReportService.getReportsByHospitalAndStatus(hospitalId, ImagingReportStatus.FINAL)).hasSize(1);
+    }
+
     /** Review of #1243: the technician role is held at this test's hospital. */
     private void technicianHere() {
         when(roleValidator.hasRole(callerUserId, hospitalId, "IMAGING_TECHNICIAN")).thenReturn(true);
