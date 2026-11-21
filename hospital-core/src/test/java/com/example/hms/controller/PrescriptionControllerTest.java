@@ -44,6 +44,15 @@ class PrescriptionControllerTest {
         assertThat(roles).containsExactlyInAnyOrder("PHARMACIST", "PHARMACY_VERIFIER"); // QA D2120: never a super-admin alone
     }
 
+    /** QA D3054 (r68): the ordonnance is the prescriber's document: doctor or midwife, own role only. */
+    @Test
+    void ordonnance_preAuthorize_isPrescriberOnly() throws Exception {
+        List<String> roles = extractRolesFromMethod("ordonnance", UUID.class);
+        assertThat(roles).containsExactlyInAnyOrder("DOCTOR", "MIDWIFE");
+        assertThat(PrescriptionController.class.getDeclaredMethod("ordonnance", UUID.class)
+                .getAnnotation(PreAuthorize.class).value()).contains("ClinicalActor).holdsOwnRole");
+    }
+
     @Test
     void resolveClarification_preAuthorize_isDoctorOnly() throws Exception {
         List<String> roles = extractRolesFromMethod("resolveClarification",

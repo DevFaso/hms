@@ -41,7 +41,7 @@ class PrescriptionControllerPatientCopyTest {
 
     private PrescriptionController controller() {
         return new PrescriptionController(prescriptionService, pharmacistVerificationService,
-                clarificationService, smsDispatchService, messageSource);
+                clarificationService, smsDispatchService, messageSource, null);
     }
 
     private static Authentication with(String... roles) {
