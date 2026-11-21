@@ -117,6 +117,8 @@ public class ImagingReportMapper {
             return null;
         }
         com.example.hms.model.Patient patient = patientOf(report);
+        // QA D2912: the exam record stays on the order; the report's reader sees it beside the read.
+        com.example.hms.model.ImagingOrder exam = report.getImagingOrder();
 
         return ImagingReportResponseDTO.builder()
             .id(report.getId())
@@ -160,6 +162,11 @@ public class ImagingReportMapper {
             .contrastAdministered(report.getContrastAdministered())
             .contrastDetails(report.getContrastDetails())
             .radiationDoseMgy(report.getRadiationDoseMgy())
+            .examPerformedByName(exam != null ? exam.getPerformedByName() : null)
+            .examStartedAt(exam != null ? exam.getExamStartedAt() : null)
+            .examContrastAdministered(exam != null ? exam.getExamContrastAdministered() : null)
+            .examContrastDetails(exam != null ? exam.getExamContrastDetails() : null)
+            .examRadiationDoseMgy(exam != null ? exam.getExamRadiationDoseMgy() : null)
             .attachmentsCount(report.getAttachmentsCount())
             .measurementsCount(report.getMeasurementsCount())
             .lastStatusSyncedAt(report.getLastStatusSyncedAt())

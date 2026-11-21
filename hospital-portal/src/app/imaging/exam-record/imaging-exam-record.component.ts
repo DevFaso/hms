@@ -28,6 +28,7 @@ import { refuseFields } from '../../shared/forms/invalid-fields';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { ReasonDialogComponent } from '../../shared/reason-dialog/reason-dialog.component';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
+import { MeasurePipe } from '../../shared/pipes/measure.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 /** An order a patient can still be checked in for: placed and not yet done (ImagingExamRecord). */
@@ -59,6 +60,7 @@ const RECORD_OPEN: readonly ImagingOrderStatus[] = ['IN_PROGRESS', 'COMPLETED'];
     SubmitGuardDirective,
     ReasonDialogComponent,
     DateTimePipe,
+    MeasurePipe,
     ServerTimePipe,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -121,7 +123,7 @@ const RECORD_OPEN: readonly ImagingOrderStatus[] = ['IN_PROGRESS', 'COMPLETED'];
             @if (hasDose()) {
               <div data-testid="imaging-exam-dose-read">
                 <dt>{{ 'IMAGING_EXAM.DOSE' | translate }}</dt>
-                <dd>{{ order().examRadiationDoseMgy }} mGy</dd>
+                <dd>{{ order().examRadiationDoseMgy | measure: 'mGy' : 3 }}</dd>
               </div>
             }
           }

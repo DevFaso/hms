@@ -15538,7 +15538,9 @@
     "DISCONTINUE_TITLE": "¿Interrumpir este examen?",
     "DISCONTINUE_MESSAGE": "La solicitud se cierra y el médico solicitante ve el motivo. Hará falta una nueva solicitud para repetir el examen.",
     "DISCONTINUED": "Examen interrumpido.",
-    "ULTRASOUND_PHYSICIANS_ONLY": "Ecografía: en este hospital el examen lo realiza un médico. Usted puede registrar la llegada del paciente y adjuntar imágenes. Regla provisional, pendiente de aprobación del radiólogo o del director médico."
+    "ULTRASOUND_PHYSICIANS_ONLY": "Ecografía: en este hospital el examen lo realiza un médico. Usted puede registrar la llegada del paciente y adjuntar imágenes. Regla provisional, pendiente de aprobación del radiólogo o del director médico.",
+    "RECORDED_AT_EXAM": "Registrado durante el examen",
+    "AWAITS_PREAUTH_NUMBER": "El número de preautorización de este examen aún no está registrado: un médico o un radiólogo lo registra antes de que el examen pueda comenzar."
   },
   "IMAGING_REPORTING_SETTINGS": {
     "TITLE": "Ecografía",
