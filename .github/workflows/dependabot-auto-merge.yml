@@ -1,0 +1,33 @@
+name: Dependabot auto-merge
+
+# Owner decision 2026-11-21: Dependabot updates merge automatically.
+# Only patch and minor updates are approved here; a major version waits for a
+# person (a major iText bump broke every PDF in #1253). The merge itself only
+# happens once the required check "Require All Jobs Pass" is green (ruleset
+# on develop/main), so a red update never lands.
+
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'DevFaso/hms'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read the update
+        id: meta
+        uses: dependabot/fetch-metadata@v2.4.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Approve and enable auto-merge (patch and minor only)
+        if: steps.meta.outputs.update-type == 'version-update:semver-patch' || steps.meta.outputs.update-type == 'version-update:semver-minor'
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr review --approve "$PR_URL" --body "Dependabot ${{ steps.meta.outputs.update-type }}: approved for auto-merge once the required checks pass."
+          gh pr merge --auto --merge "$PR_URL"
