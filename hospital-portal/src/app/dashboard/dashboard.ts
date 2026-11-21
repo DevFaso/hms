@@ -86,6 +86,9 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { localDateString } from '../shared/date-utils';
 import { EnumLabelService } from '../core/enum-label.service';
 import { RoleContextService } from '../core/role-context.service';
+import { NavAccessService } from '../core/nav-access.service';
+import { OnboardingChecklistComponent } from '../shared/onboarding-checklist/onboarding-checklist.component';
+import { OrganisationTotalsComponent } from '../shared/organisation-totals/organisation-totals.component';
 import {
   CredentialRenewalComponent,
   CredentialRenewalTarget,
@@ -167,6 +170,8 @@ export { currentMedications };
     EnumLabelPipe,
     CredentialRenewalComponent,
     CfaPipe,
+    OnboardingChecklistComponent,
+    OrganisationTotalsComponent,
   ],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
@@ -193,6 +198,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private readonly refillApproval = inject(RefillApprovalService);
   private readonly imagingService = inject(ImagingService);
   private readonly roleContext = inject(RoleContextService);
+  /** QA r65 D2761: what the acting role can open, as the sidebar decides it. */
+  private readonly navAccess = inject(NavAccessService);
 
   /**
    * False for a super-admin in global view, and for any account whose
@@ -516,6 +523,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * Priority matches heroGradientClass / roleLabel ordering.
    */
   activeView = computed<
+    | 'orgadmin'
     | 'hospitaladmin'
     | 'doctor'
     | 'nurse'
@@ -529,6 +537,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
     | 'fallback'
   >(() => {
     if (this.isPatient()) return 'patient';
+    // Platform admin rules 2026-11-20, rule 1b: the organisation's administrator
+    // has its own view (staff, assignments, totals). The hospital admin's view is
+    // built on counters and lists of patients' activity, which it does not read.
+    if (this.actsAsPlainAdmin()) return 'orgadmin';
     if (this.isHospitalAdmin()) return 'hospitaladmin';
     if (this.isDoctor()) return 'doctor';
     if (this.isNurse() || this.isMidwife()) return 'nurse';
@@ -555,11 +567,61 @@ export class DashboardComponent implements OnInit, OnDestroy {
       ) && this.quickActions().length > 0,
   );
 
+  /** The acting role is ROLE_ADMIN (the token carries it and not the hospital admin's). */
+  private actsAsPlainAdmin(): boolean {
+    const active = this.roleContext.activeRole;
+    if (active) return active === 'ROLE_ADMIN';
+    return this.auth.hasAnyRole(['ROLE_ADMIN']) && !this.auth.hasAnyRole(['ROLE_HOSPITAL_ADMIN']);
+  }
+
+  /**
+   * QA r65 D2731: the hospital whose onboarding checklist this dashboard
+   * shows: the hospital admin's own (the server admits that role and the
+   * super-admin only, and the super-admin lands on the Control Tower).
+   */
+  readonly checklistHospitalId = computed<string | null>(() => {
+    const active = this.roleContext.activeRole;
+    const hospitalAdmin = active
+      ? active === 'ROLE_HOSPITAL_ADMIN'
+      : this.auth.hasAnyRole(['ROLE_HOSPITAL_ADMIN']);
+    return hospitalAdmin ? this.roleContext.effectiveHospitalIdForRequest() : null;
+  });
+
+  /**
+   * Platform admin rules 2026-11-20, rules 1a and 1b: what the organisation
+   * admin does from its dashboard. Each is offered only where the sidebar
+   * offers the page (QA r65 D2761).
+   */
+  readonly organisationAdminActions = computed<QuickAction[]>(() => {
+    this.langTick();
+    const actions: QuickAction[] = [
+      {
+        icon: 'person_add',
+        label: this.t('NAV.USERS'),
+        description: this.t('PLATFORM_SETUP.ORG_ADMIN.ACTION_USERS'),
+        route: '/users',
+        color: '#0e7c6b',
+        bgColor: '#d1fae5',
+      },
+      {
+        icon: 'assignment_ind',
+        label: this.t('NAV.ASSIGNMENTS'),
+        description: this.t('PLATFORM_SETUP.ORG_ADMIN.ACTION_ASSIGNMENTS'),
+        route: '/admin-assignments',
+        color: '#1d4ed8',
+        bgColor: '#dbeafe',
+      },
+    ];
+    return actions.filter((action) => this.canOpen(action.route));
+  });
+
   // ── Role display label ────────────────────────────────────────
   roleLabel = computed(() => {
     this.langTick();
     if (this.isPatient()) return this.t('DASHBOARD.ROLE.PATIENT');
     if (this.isSuperAdmin()) return this.t('DASHBOARD.ROLE.SUPER_ADMIN');
+    // QA r65 D2763: ROLE_ADMIN is an administrator, not « ADMINISTRATEUR HÔPITAL ».
+    if (this.actsAsPlainAdmin()) return this.t('PLATFORM_SETUP.ROLE_ADMIN');
     if (this.isHospitalAdmin()) return this.t('DASHBOARD.ROLE.HOSPITAL_ADMIN');
     if (this.isDoctor()) return this.t('DASHBOARD.ROLE.DOCTOR');
     if (this.isMidwife()) return this.t('DASHBOARD.ROLE.MIDWIFE');
@@ -910,7 +972,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
         !seen.has(action.route) &&
         // QA D997: the acting role's actions only.
         this.permissions.hasActivePermission(perm) &&
-        this.canAccessRoute(action.route)
+        // QA r65 D2761: only where the sidebar offers the module.
+        this.canOpen(action.route) &&
+        // QA r65 D2778: « Demander des examens d'imagerie » is not an
+        // administrator's action; they read Imagerie from the sidebar.
+        !(perm === 'Request Imaging Studies' && this.isHospitalAdmin())
       ) {
         seen.add(action.route);
         actions.push(action);
@@ -933,6 +999,45 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const chain = this.collectRouteRoles(this.router.config, this.splitPath(route));
     if (!chain) return false;
     return chain.every((roles) => this.auth.hasAnyRole(roles));
+  }
+
+  /** {@link canOpen} answers, for the sidebar they were computed against. */
+  private readonly openMemo = new Map<string, boolean>();
+  private openMemoFor: ReadonlySet<string> | null | undefined;
+
+  /**
+   * QA r65 D2761 (class): whether a link to `route` leads somewhere the
+   * acting role can use. The route's own roles are not enough: `/appointments`,
+   * `/billing`, `/staff` and `/departments` admit `ROLE_ADMIN` while every
+   * request behind them is refused, so an administrator's tiles ended on a
+   * 403 page or on an empty page inviting them to create a first department.
+   * The sidebar already knows better (roles AND the backend's permissions),
+   * so a link is offered only where the sidebar offers the module
+   * ({@link NavAccessService}). Every tile, quick action and "view all" link
+   * of this page goes through here; `dashboard-links.guard.spec.ts` renders
+   * the page for each role and fails on a link that does not.
+   */
+  canOpen(route: string): boolean {
+    const sidebar = this.navAccess.snapshot();
+    if (sidebar !== this.openMemoFor) {
+      this.openMemo.clear();
+      this.openMemoFor = sidebar;
+    }
+    let open = this.openMemo.get(route);
+    if (open === undefined) {
+      open = this.canAccessRoute(route) && this.navAccess.canOpen(route);
+      this.openMemo.set(route, open);
+    }
+    return open;
+  }
+
+  /**
+   * The link target when the role can open it, else null: `[routerLink]`
+   * then renders no href, and a counter stays on screen as information
+   * without pretending to lead somewhere.
+   */
+  linkFor(route: string): string | null {
+    return this.canOpen(route) ? route : null;
   }
 
   private splitPath(route: string): string[] {
@@ -969,7 +1074,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // ── Hospital Admin navigation tiles ──────────────────────────
   hospitalAdminNavTiles = computed<NavTile[]>(() => {
     this.langTick();
-    return [
+    // QA r65 D2761: only the modules the acting role can open (canOpen).
+    const tiles: NavTile[] = [
       {
         icon: 'group',
         label: this.t('DASHBOARD.TILE.STAFF'),
@@ -1015,6 +1121,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
         bg: '#e6f4f1',
       },
     ];
+    return tiles.filter((tile) => this.canOpen(tile.route));
   });
 
   // ── Hospital Admin stat cards (from summary API) ────────────
@@ -1022,7 +1129,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.langTick();
     const s = this.hospitalAdminSummary();
     if (!s || !s.appointments) return [];
-    return [
+    // QA r65 D2761: a counter links to its module only when the role can open it.
+    const cards: StatCard[] = [
       {
         key: 'appts_today',
         label: this.t('DASHBOARD.TODAYS_APPOINTMENTS'),
@@ -1160,6 +1268,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
         route: '/billing',
       },
     ];
+    return cards.map((card) =>
+      card.route && !this.canOpen(card.route) ? { ...card, route: undefined } : card,
+    );
   });
 
   hospitalAdminAuditEvents = computed<HospitalAdminAuditSnippet[]>(() => {
@@ -2408,8 +2519,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       if (--pending <= 0) this.loading.set(false);
     };
 
-    // Hospital-admin summary
-    if (this.isHospitalAdmin() && !this.isSuperAdmin()) {
+    // Hospital-admin summary. Not for the organisation's administrator: the
+    // server refuses it (the summary holds audit rows and a consult backlog).
+    if (this.isHospitalAdmin() && !this.isSuperAdmin() && !this.actsAsPlainAdmin()) {
       pending++;
       const today = localDateString();
       this.dashboardService.getHospitalAdminSummary(today).subscribe({

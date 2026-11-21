@@ -42,12 +42,12 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/imaging")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','IMAGING_TECHNICIAN','PATIENT')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','IMAGING_TECHNICIAN','PATIENT')")
 @Tag(name = "Imaging Images", description = "Key images and exported PDFs on an imaging study or report")
 public class ImagingStudyImageController {
 
     static final String READ_ROLES =
-        "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','IMAGING_TECHNICIAN','PATIENT')";
+        "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','IMAGING_TECHNICIAN','PATIENT')";
     /**
      * Policy rule 3 (2026-11-20, provisional): the imaging technician attaches, captions and (before
      * the signature) removes the study's key images. The service keeps them off a report's own images.
@@ -123,7 +123,7 @@ public class ImagingStudyImageController {
     @GetMapping("/orders/{orderId}/images/withdrawn")
     // Policy rule 3: the imaging technician too (the strip reads it on every load): when, by whom
     // and why an image they attached was withdrawn; never the bytes, never the withdrawal itself.
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','IMAGING_TECHNICIAN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','IMAGING_TECHNICIAN')")
     @Operation(summary = "The study's withdrawn key images, for the record",
         description = "When, by whom and why each was withdrawn; never the bytes. Hospital-scoped.")
     public ResponseEntity<List<com.example.hms.payload.dto.imaging.ImagingStudyImageWithdrawalDTO>> withdrawn(

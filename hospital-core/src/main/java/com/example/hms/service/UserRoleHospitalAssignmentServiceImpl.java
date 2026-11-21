@@ -103,6 +103,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
     private static final String MSG_REMOVE_OWN = "users.assignment.removeOwn";
+    private static final String MSG_GRANT_OWN = "users.assignment.grantOwn";
     private static final String MSG_STAFF_ACCESS_OUT_OF_REACH = "staff.deactivate.accessOutOfReach";
     /** QA D902: the codes the super-admin role is stored under. */
     private static final Set<String> SUPER_ADMIN_CODES = Set.of(ROLE_SUPER_ADMIN, "SUPER_ADMIN");
@@ -137,6 +138,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final String MSG_ASSIGNMENT_INVALID_CODE = "assignment.confirmation.invalid";
     private static final String MSG_ASSIGNMENT_ALREADY_CONFIRMED = "assignment.confirmation.already";
     private static final String MSG_ASSIGNMENT_ACTOR_MISMATCH = "assignment.confirmation.actor-mismatch";
+    private static final String MSG_ASSIGNMENT_CODE_REGISTRAR_ONLY = "assignment.activationCode.registrarOnly";
+    private static final String MSG_ASSIGNMENT_CODE_EXPIRED = "assignment.activationCode.expired";
+    /** The audit detail that names the assignment: its human-facing code, never the confirmation code. */
+    private static final String DETAIL_ASSIGNMENT_CODE = "assignmentCode";
     private static final String MSG_ASSIGNMENT_NOT_FOUND_BY_CODE = "assignment.notfound.bycode";
     private static final String MSG_ACCOUNT_DISABLED_BY_ADMIN = "assignment.confirmation.accountDisabled";
     private static final String DEFAULT_HOLDER_CHANGE = "assignment.holderChange.superAdminOnly";
@@ -287,6 +292,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // QA D789: an archived hospital takes no new role (a 409 before anything is saved).
         FacilityAssignmentGuard.requireOpenForAssignment(hospital);
         User user = resolveUser(dto);
+        if (adminRequest) {
+            requireHolderWithinOrganisation(user, hospital, dto);
+            requireNotSelfGrant(user);
+        }
         facilityAssignmentGuard.requireSingleFacilityKind(user, roleCode, hospital, null);
         checkActiveDoctorConflict(dto, user, role, hospital, locale);
         checkExistingAssignment(user, role, hospital, locale);
@@ -328,8 +337,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     private User resolveUser(UserRoleHospitalAssignmentRequestDTO dto) {
         if (dto.getUserId() != null) {
-            return userRepository.findById(dto.getUserId()).orElseThrow(() ->
-                new ResourceNotFoundException(MSG_USER_NOT_FOUND, dto.getUserId()));
+            return userRepository.findById(dto.getUserId()).orElseThrow(() -> holderNotFound(dto));
         }
 
         String identifier = dto.getUserIdentifier();
@@ -338,10 +346,40 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             return userRepository.findByUsername(trimmed)
                 .or(() -> userRepository.findByEmail(trimmed))
                 .or(() -> userRepository.findByPhoneNumber(trimmed))
-                .orElseThrow(() -> new ResourceNotFoundException(MSG_USER_NOT_FOUND, trimmed));
+                .orElseThrow(() -> holderNotFound(dto));
         }
 
         throw new BusinessException(MSG_USER_NOT_FOUND, (Object) null);
+    }
+
+    /** The one answer for a holder that does not exist and for one the caller may not name. */
+    private static ResourceNotFoundException holderNotFound(UserRoleHospitalAssignmentRequestDTO dto) {
+        if (dto.getUserId() != null) {
+            return new ResourceNotFoundException(MSG_USER_NOT_FOUND, dto.getUserId());
+        }
+        String identifier = dto.getUserIdentifier();
+        return new ResourceNotFoundException(MSG_USER_NOT_FOUND, identifier == null ? null : identifier.trim());
+    }
+
+    /**
+     * Review of #1246 (rule 1a): a caller who reaches this hospital through its
+     * organisation scope alone names an existing account only among the
+     * organisation's STAFF: an account that already holds a non-patient
+     * assignment (active or pending) at one of its hospitals. A patient's
+     * account, or another organisation's staff, found by a username, an e-mail
+     * or a phone number, answers exactly as a missing one: no assignment is
+     * created and the lookup confirms nothing. (A brand-new person is
+     * registered through admin-register, which creates the account.)
+     */
+    private void requireHolderWithinOrganisation(User holder, Hospital hospital,
+                                                 UserRoleHospitalAssignmentRequestDTO dto) {
+        if (hospital == null || !accountAccess.reachesOnlyThroughOrganisation(hospital.getId())) {
+            return;
+        }
+        // One rule, shared with the licence lookup of admin-register (UserServiceImpl).
+        if (!accountAccess.isStaffOfCallersOrganisation(holder)) {
+            throw holderNotFound(dto);
+        }
     }
 
     /**
@@ -445,6 +483,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             requireNotCallersOwn(target);
             requireSuperAdminRemains(List.of(target));
         }
+        requireNoSelfGrantThroughEdit(target, newUser, newHospital, activeAfter);
 
         if (Boolean.TRUE.equals(dto.getActive())) {
             checkActiveDoctorConflict(dto, newUser, newRole, newHospital, locale);
@@ -737,6 +776,22 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         Specification<UserRoleHospitalAssignment> specification = buildAssignmentSpec(
             hospitalId, active, search, assignmentCode);
 
+        // Review of #1246: anyone but a super-admin lists what their assignment
+        // scope reaches and nothing else. The acting hospital alone used to
+        // decide, so a caller the endpoint admits but who administers nothing
+        // there (a hospital admin of A acting at B as a nurse; an ADMIN whose
+        // organisation scope is empty) read every row of that hospital, the
+        // patients' included.
+        UserAccountAccess.AssignmentScope scope = accountAccess.assignmentScope();
+        if (!scope.everywhere()) {
+            Specification<UserRoleHospitalAssignment> reach =
+                scopedListing(scope, activeHospitalId, requestedHospitalId);
+            if (reach == null) {
+                return Page.empty(pageable);
+            }
+            specification = combineSpec(buildAssignmentSpec(null, active, search, assignmentCode), reach);
+        }
+
         if (specification == null) {
             log.info("📄 Fetching assignments without filters (page {}, size {})", pageable.getPageNumber(),
                 pageable.getPageSize());
@@ -746,6 +801,56 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         log.info("📄 Fetching assignments with filters hospitalId={}, active={}, search='{}', assignmentCode='{}' (page {}, size {})",
             hospitalId, active, search, assignmentCode, pageable.getPageNumber(), pageable.getPageSize());
         return assignmentRepository.findAll(specification, pageable).map(this::toDtoWithLinks);
+    }
+
+    /**
+     * The rows a scoped caller's listing may hold, or {@code null} when it
+     * reaches nothing (an empty page, never an unfiltered one).
+     *
+     * <p>Where the caller administers the hospital ({@code hospitalIds}):
+     * every row. Where it reaches the hospital through its organisation alone
+     * ({@code staffOnlyHospitalIds}; platform admin rules, rules 1a and 1b):
+     * staff rows only, never a PATIENT row. A hospital the request names
+     * narrows the listing to it when it is in reach; otherwise a hospital
+     * administrator lists the hospital it is acting at, and an organisation
+     * admin its whole organisation.
+     */
+    private static Specification<UserRoleHospitalAssignment> scopedListing(
+            UserAccountAccess.AssignmentScope scope, UUID activeHospitalId, UUID requestedHospitalId) {
+        Set<UUID> full = scope.hospitalIds();
+        Set<UUID> staffOnly = new java.util.HashSet<>(scope.staffOnlyHospitalIds());
+        staffOnly.removeAll(full);
+        if (full.isEmpty() && staffOnly.isEmpty()) {
+            return null;
+        }
+        boolean requestedInReach = requestedHospitalId != null
+            && (full.contains(requestedHospitalId) || staffOnly.contains(requestedHospitalId));
+        if (requestedInReach) {
+            return listingOfOne(requestedHospitalId, full, staffOnly);
+        }
+        if (staffOnly.isEmpty() && activeHospitalId != null) {
+            // A hospital administrator's default is the hospital it is acting at.
+            return listingOfOne(activeHospitalId, full, staffOnly);
+        }
+        Specification<UserRoleHospitalAssignment> staffRows = UserRoleHospitalAssignmentSpecification
+            .belongsToAnyHospital(staffOnly)
+            .and(UserRoleHospitalAssignmentSpecification.staffRowsOnly());
+        return full.isEmpty()
+            ? staffRows
+            : UserRoleHospitalAssignmentSpecification.belongsToAnyHospital(full).or(staffRows);
+    }
+
+    /** One hospital's rows: all of them where the caller administers it, staff rows where it only reaches it. */
+    private static Specification<UserRoleHospitalAssignment> listingOfOne(UUID hospitalId, Set<UUID> full,
+                                                                          Set<UUID> staffOnly) {
+        Specification<UserRoleHospitalAssignment> there =
+            UserRoleHospitalAssignmentSpecification.belongsToAnyHospital(Set.of(hospitalId));
+        if (full.contains(hospitalId)) {
+            return there;
+        }
+        return staffOnly.contains(hospitalId)
+            ? there.and(UserRoleHospitalAssignmentSpecification.staffRowsOnly())
+            : null;
     }
 
     private Specification<UserRoleHospitalAssignment> buildAssignmentSpec(
@@ -865,7 +970,11 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public UserRoleHospitalAssignmentResponseDTO regenerateAssignmentCode(UUID assignmentId, boolean resendNotifications) {
-        return toDtoWithLinks(reissueCode(findChangeable(assignmentId), resendNotifications));
+        UserRoleHospitalAssignment target = findChangeable(assignmentId);
+        // Rule 1c: a fresh code is how a switched-off row comes back on, so
+        // nobody sends one to their own account.
+        requireNotSelfGrant(target.getUser());
+        return toDtoWithLinks(reissueCode(target, resendNotifications));
     }
 
     @Override
@@ -937,6 +1046,64 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         recordAssignmentConfirmationAudit(assignment, actor);
         log.info("✅ Assignment '{}' confirmed by actor '{}'", assignment.getId(), actor.getId());
         return toDtoWithLinks(assignment);
+    }
+
+    /**
+     * QA r65 D2764: "Remettez le code en main propre" was a dead end, since
+     * the code was shown nowhere. The registrar already receives this code (it
+     * is the one {@link #confirmAssignment} asks them for), so showing it to
+     * that same person widens nothing: the checks are the ones the confirm
+     * makes, in the same order, before the code is read.
+     */
+    @Override
+    public com.example.hms.payload.dto.AssignmentActivationCodeDTO revealActivationCode(UUID assignmentId) {
+        // A row the caller may not change answers exactly as a missing id.
+        UserRoleHospitalAssignment assignment = findChangeable(assignmentId);
+
+        if (assignment.getConfirmationVerifiedAt() != null) {
+            throw new BusinessException(MSG_ASSIGNMENT_ALREADY_CONFIRMED);
+        }
+        User registrar = assignment.getRegisteredBy();
+        User actor = requireCallerAccount();
+        if (registrar == null || registrar.getId() == null || !registrar.getId().equals(actor.getId())) {
+            throw new BusinessException(MSG_ASSIGNMENT_CODE_REGISTRAR_ONLY);
+        }
+        String code = assignment.getConfirmationCode();
+        LocalDateTime sentAt = assignment.getConfirmationSentAt();
+        LocalDateTime expiresAt = sentAt != null ? sentAt.plusHours(CONFIRMATION_CODE_EXPIRY_HOURS) : null;
+        // On the clock the code was stamped on (restartInvitation: the server's zone).
+        LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
+        if (code == null || code.isBlank() || (expiresAt != null && expiresAt.isBefore(now))) {
+            // A dead code handed over in person fails at the holder's first try: say so here.
+            throw new BusinessException(MSG_ASSIGNMENT_CODE_EXPIRED);
+        }
+        recordActivationCodeShownAudit(assignment, actor);
+        return new com.example.hms.payload.dto.AssignmentActivationCodeDTO(assignment.getId(), code, expiresAt);
+    }
+
+    /** The reveal is on the trail; the code is not (QA r65 D2772: a credential value has no place there). */
+    private void recordActivationCodeShownAudit(UserRoleHospitalAssignment assignment, User actor) {
+        try {
+            Map<String, Object> details = new HashMap<>();
+            details.put(DETAIL_ASSIGNMENT_CODE, assignment.getAssignmentCode());
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .userId(actor.getId())
+                .assignmentId(assignment.getId())
+                .userName(resolveDisplayName(actor, null))
+                .hospitalName(resolveHospitalName(assignment.getHospital()))
+                .hospitalId(assignment.getHospital() != null ? assignment.getHospital().getId() : null)
+                .resourceName(resolveDisplayName(assignment.getUser(), UNKNOWN_USER))
+                .resourceId(assignment.getId() != null ? assignment.getId().toString() : null)
+                .entityType(AUDIT_ENTITY_ASSIGNMENT)
+                .eventType(AuditEventType.DATA_ACCESS)
+                .eventDescription("Activation code shown to the registrar")
+                .status(AuditStatus.SUCCESS)
+                .details(details)
+                .build());
+        } catch (RuntimeException ex) {
+            log.warn("⚠️ Failed to record the activation-code audit for assignment '{}': {}",
+                assignment.getId(), ex.getMessage());
+        }
     }
 
     @Override
@@ -1649,6 +1816,40 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (row.getUser() != null && accountAccess.isSelf(row.getUser())) {
             throw new ConflictException(com.example.hms.utility.MessageUtil.resolve(MSG_REMOVE_OWN));
         }
+    }
+
+    /**
+     * Platform admin rules 2026-11-20, rule 1c (separation of duties): no
+     * administrator grants a role to their own account, whatever their own
+     * role is, a super-admin included. {@link #requireNotCallersOwn} already
+     * stops them removing or re-roling their own row; this stops the grant.
+     * Another administrator does it, and the grant is audited under that
+     * person's name.
+     */
+    private void requireNotSelfGrant(User holder) {
+        if (holder != null && accountAccess.isSelf(holder)) {
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve(MSG_GRANT_OWN));
+        }
+    }
+
+    /**
+     * Rule 1c, for an edit: it never hands a row to the caller, switches the
+     * caller's own row back on, or moves it to another hospital. Each of
+     * those is a grant to the caller's own account.
+     */
+    private void requireNoSelfGrantThroughEdit(UserRoleHospitalAssignment target, User newUser,
+                                               Hospital newHospital, boolean activeAfter) {
+        boolean handedOver = target.getUser() == null || newUser == null
+            || !Objects.equals(newUser.getId(), target.getUser().getId());
+        boolean switchedOn = !Boolean.TRUE.equals(target.getActive()) && activeAfter;
+        boolean movedElsewhere = !Objects.equals(idOf(newHospital), idOf(target.getHospital()));
+        if (handedOver || switchedOn || movedElsewhere) {
+            requireNotSelfGrant(newUser);
+        }
+    }
+
+    private static UUID idOf(Hospital hospital) {
+        return hospital != null ? hospital.getId() : null;
     }
 
     /** {@link #requireNotCallersOwn} for every row of an account at once. */
@@ -2638,7 +2839,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             Hospital hospital = assignment.getHospital();
 
             Map<String, Object> details = new HashMap<>();
-            details.put("assignmentCode", assignment.getAssignmentCode());
+            details.put(DETAIL_ASSIGNMENT_CODE, assignment.getAssignmentCode());
             if (assignment.getConfirmationSentAt() != null) {
                 details.put("confirmationSentAt", assignment.getConfirmationSentAt());
             }
@@ -2684,8 +2885,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private void recordAssignmentConfirmationAudit(UserRoleHospitalAssignment assignment, User actor) {
         try {
             Map<String, Object> details = new HashMap<>();
-            details.put("assignmentCode", assignment.getAssignmentCode());
-            details.put("confirmationCode", assignment.getConfirmationCode());
+            details.put(DETAIL_ASSIGNMENT_CODE, assignment.getAssignmentCode());
+            // QA r65 D2772: never the confirmation code. Spent or not, it is a
+            // credential value, and the audit search returned it.
             details.put("confirmedAt", assignment.getConfirmationVerifiedAt());
             details.put("confirmationChannel", "PORTAL");
             if (assignment.getRole() != null) {

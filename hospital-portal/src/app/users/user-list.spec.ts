@@ -60,7 +60,10 @@ describe('UserListComponent registration', () => {
           useValue: { list: () => of({ content: [] }), getMyHospitalAsResponse: () => of(null) },
         },
         { provide: ToastService, useValue: toast },
-        { provide: RoleContextService, useValue: { isSuperAdmin: () => true } },
+        {
+          provide: RoleContextService,
+          useValue: { isSuperAdmin: () => true, hasAnyActiveRole: () => true },
+        },
         { provide: ImpersonationService, useValue: { active: () => null } },
       ],
     });
@@ -295,7 +298,10 @@ describe('UserListComponent create modal as a hospital admin (QA D189, D195)', (
             'warning',
           ]),
         },
-        { provide: RoleContextService, useValue: { isSuperAdmin: () => false } },
+        {
+          provide: RoleContextService,
+          useValue: { isSuperAdmin: () => false, hasAnyActiveRole: () => true },
+        },
         { provide: ImpersonationService, useValue: { active: () => null } },
       ],
     });
@@ -373,7 +379,10 @@ describe('UserListComponent onboarding as a hospital admin (D201)', () => {
           provide: ToastService,
           useValue: jasmine.createSpyObj('ToastService', ['success', 'error', 'warning']),
         },
-        { provide: RoleContextService, useValue: { isSuperAdmin: () => false } },
+        {
+          provide: RoleContextService,
+          useValue: { isSuperAdmin: () => false, hasAnyActiveRole: () => true },
+        },
         { provide: ImpersonationService, useValue: { active: () => null } },
       ],
     });
@@ -424,7 +433,10 @@ describe('UserListComponent — the Profil column is labelled (QA D528/D663)', (
           provide: ToastService,
           useValue: jasmine.createSpyObj('ToastService', ['success', 'error', 'warning', 'info']),
         },
-        { provide: RoleContextService, useValue: { isSuperAdmin: () => false } },
+        {
+          provide: RoleContextService,
+          useValue: { isSuperAdmin: () => false, hasAnyActiveRole: () => true },
+        },
         { provide: ImpersonationService, useValue: { active: () => null } },
       ],
     });
@@ -489,7 +501,10 @@ describe('UserListComponent — no archived hospital in the create picker (QA D8
             'warning',
           ]),
         },
-        { provide: RoleContextService, useValue: { isSuperAdmin: () => true } },
+        {
+          provide: RoleContextService,
+          useValue: { isSuperAdmin: () => true, hasAnyActiveRole: () => true },
+        },
         { provide: ImpersonationService, useValue: { active: () => null } },
       ],
     });
@@ -529,7 +544,10 @@ describe('UserListComponent — no edit or delete on an account the caller may n
           provide: ToastService,
           useValue: jasmine.createSpyObj('ToastService', ['success', 'error', 'warning', 'info']),
         },
-        { provide: RoleContextService, useValue: { isSuperAdmin: () => superAdmin } },
+        {
+          provide: RoleContextService,
+          useValue: { isSuperAdmin: () => superAdmin, hasAnyActiveRole: () => true },
+        },
         { provide: ImpersonationService, useValue: { active: () => null } },
       ],
     });
@@ -612,7 +630,10 @@ describe('UserListComponent — no edit or delete on an account the caller may n
           provide: ToastService,
           useValue: jasmine.createSpyObj('ToastService', ['success', 'error', 'warning', 'info']),
         },
-        { provide: RoleContextService, useValue: { isSuperAdmin: () => false } },
+        {
+          provide: RoleContextService,
+          useValue: { isSuperAdmin: () => false, hasAnyActiveRole: () => true },
+        },
         { provide: ImpersonationService, useValue: { active: () => null } },
       ],
     });
@@ -675,7 +696,10 @@ describe('UserListComponent — two-step verification reset', () => {
           useValue: { list: () => of({ content: [] }), getMyHospitalAsResponse: () => of(null) },
         },
         { provide: ToastService, useValue: toast },
-        { provide: RoleContextService, useValue: { isSuperAdmin: () => false } },
+        {
+          provide: RoleContextService,
+          useValue: { isSuperAdmin: () => false, hasAnyActiveRole: () => true },
+        },
         { provide: ImpersonationService, useValue: { active: () => null } },
       ],
     });

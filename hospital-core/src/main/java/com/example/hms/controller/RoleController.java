@@ -36,7 +36,8 @@ public class RoleController {
 
     @GetMapping
     @Operation(summary = "List roles")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
+    // The organisation admin's register form lists the roles too (platform admin rules, rule 1a).
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('ADMIN')")
     public ResponseEntity<List<RoleResponseDTO>> list() {
         return ResponseEntity.ok(roleService.list());
     }

@@ -40,6 +40,15 @@ public class HospitalResponseDTO {
 
     private boolean active;
 
+    /** QA r65 D2501: ISO 4217 code of the currency the hospital bills in (XOF by default). */
+    private String currencyCode;
+
+    /** QA r65 D2501: the hospital's own IANA zone id; null when it follows its organisation. */
+    private String timeZone;
+
+    /** The zone its day is counted in: its own, else the organisation's default; null when neither is set. */
+    private String effectiveTimeZone;
+
     /**
      * MVP-c2-frontend — current lifecycle state so the hospital list
      * can render a state chip per row without an N+1 lookup. Mirrors

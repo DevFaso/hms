@@ -201,6 +201,15 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
     """)
     java.util.Set<UUID> findDepartmentIdsWithActiveProviders(@Param("hospitalId") UUID hospitalId);
 
+    /**
+     * QA r65 D2731 (onboarding checklist): how many active staff ONE hospital
+     * has, by the rule of the staff list (D221: an active row of an
+     * activated, undeleted account).
+     */
+    @Query("SELECT COUNT(s) FROM Staff s WHERE s.hospital.id = :hospitalId AND s.active = true"
+        + " AND s.user.isActive = true AND s.user.isDeleted = false")
+    long countActiveByHospitalId(@Param("hospitalId") UUID hospitalId);
+
     // ── MVP 3: Lab staff filtered by lab roles ──────────────────
     @EntityGraph(attributePaths = {"user","department","assignment","assignment.role","hospital"})
     @Query("""

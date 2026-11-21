@@ -1492,4 +1492,417 @@ class UserRoleHospitalAssignmentServiceImplTest {
         assertThat(assignment.getActive()).isFalse();
         verify(assignmentRepository, never()).save(any());
     }
+
+    // -----------------------------------------------------------------------
+    // QA r65 D2764 / D2772: the activation code handed over in person
+    // -----------------------------------------------------------------------
+
+    private User actAsRegistrar(boolean callerIsTheRegistrar) {
+        User registrar = new User();
+        registrar.setId(UUID.randomUUID());
+        registrar.setUsername("registrar");
+        assignment.setRegisteredBy(registrar);
+        User caller = registrar;
+        if (!callerIsTheRegistrar) {
+            caller = new User();
+            caller.setId(UUID.randomUUID());
+            caller.setUsername("another-admin");
+        }
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        org.mockito.Mockito.lenient().when(accountAccess.currentUserId()).thenReturn(Optional.of(caller.getId()));
+        org.mockito.Mockito.lenient().when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
+        return registrar;
+    }
+
+    @Test
+    void revealActivationCode_showsTheRegistrarTheCodeAndItsExpiry_andAuditsWithoutTheCode() {
+        actAsRegistrar(true);
+        LocalDateTime sentAt = LocalDateTime.now().minusHours(1);
+        assignment.setConfirmationSentAt(sentAt);
+
+        com.example.hms.payload.dto.AssignmentActivationCodeDTO shown =
+            service.revealActivationCode(assignment.getId());
+
+        assertThat(shown.confirmationCode()).isEqualTo(VALID_PIN);
+        assertThat(shown.expiresAt()).isEqualTo(sentAt.plusHours(48));
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.DATA_ACCESS);
+        assertThat(audit.getValue().getEventDescription()).isEqualTo("Activation code shown to the registrar");
+        // The reveal is on the trail; the code is not.
+        assertThat(String.valueOf(audit.getValue().getDetails())).doesNotContain(VALID_PIN);
+        assertThat(audit.getValue().getEventDescription()).doesNotContain(VALID_PIN);
+        // Showing the code changes nothing on the row.
+        verify(assignmentRepository, never()).save(any());
+    }
+
+    @Test
+    void revealActivationCode_isRefusedToAnyoneButTheRegistrar_evenAnAdminWhoMayChangeTheRow() {
+        actAsRegistrar(false);
+        assignment.setConfirmationSentAt(LocalDateTime.now());
+
+        assertThatThrownBy(() -> service.revealActivationCode(assignment.getId()))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageNotContaining(VALID_PIN);
+        verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    @Test
+    void revealActivationCode_answersARowOutsideTheCallersScopeAsAMissingOne() {
+        actAsRegistrar(true);
+        // A hospital admin of another hospital: the row is not theirs to change.
+        when(accountAccess.assignmentScope())
+            .thenReturn(new com.example.hms.service.support.UserAccountAccess.AssignmentScope(
+                false, java.util.Set.of(UUID.randomUUID())));
+
+        assertThatThrownBy(() -> service.revealActivationCode(assignment.getId()))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    @Test
+    void revealActivationCode_isRefusedOnceTheAssignmentIsVerified() {
+        actAsRegistrar(true);
+        assignment.setConfirmationSentAt(LocalDateTime.now());
+        assignment.setConfirmationVerifiedAt(LocalDateTime.now());
+
+        assertThatThrownBy(() -> service.revealActivationCode(assignment.getId()))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    @Test
+    void revealActivationCode_refusesAnExpiredCode_soADeadCodeIsNeverHandedOver() {
+        actAsRegistrar(true);
+        assignment.setConfirmationSentAt(LocalDateTime.now().minusHours(49));
+
+        assertThatThrownBy(() -> service.revealActivationCode(assignment.getId()))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageContaining("expired");
+        verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    @Test
+    void confirmAssignment_auditNeverCarriesTheConfirmationCode() {
+        // QA r65 D2772: 61 ASSIGNMENT_CONFIRMED rows held the 6-digit code in their details.
+        User registrar = actAsRegistrar(true);
+        assignee.setActive(false);
+        when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.confirmAssignment(assignment.getId(), VALID_PIN);
+
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService, org.mockito.Mockito.atLeastOnce()).logEvent(audit.capture());
+        assertThat(audit.getAllValues())
+            .filteredOn(event -> event.getEventType() == com.example.hms.enums.AuditEventType.ASSIGNMENT_CONFIRMED)
+            .isNotEmpty()
+            .allSatisfy(event -> {
+                assertThat(String.valueOf(event.getDetails())).doesNotContain("confirmationCode");
+                assertThat(String.valueOf(event.getDetails())).doesNotContain(VALID_PIN);
+            });
+        assertThat(registrar.getId()).isNotNull();
+    }
+
+    // -- Platform admin rules 2026-11-20, rule 1c: no administrator grants a role to their own account --
+
+    private UserRoleHospitalAssignmentRequestDTO grantOf(User holder) {
+        org.mockito.Mockito.lenient().when(userRepository.findById(holder.getId())).thenReturn(Optional.of(holder));
+        org.mockito.Mockito.lenient().when(roleRepository.findById(role.getId())).thenReturn(Optional.of(role));
+        org.mockito.Mockito.lenient().when(hospitalRepository.findById(hospital.getId()))
+            .thenReturn(Optional.of(hospital));
+        UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+        dto.setUserId(holder.getId());
+        dto.setRoleId(role.getId());
+        dto.setHospitalId(hospital.getId());
+        return dto;
+    }
+
+    @Test
+    void rule1c_anAdminNeverGrantsARoleToTheirOwnAccount() {
+        // Whatever the caller is: the fixture scope is a super-admin's, and it is refused all the same.
+        when(accountAccess.isSelf(assignee)).thenReturn(true);
+        UserRoleHospitalAssignmentRequestDTO dto = grantOf(assignee);
+
+        assertThatThrownBy(() -> service.assignRole(dto))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("your own account");
+        verify(assignmentRepository, never()).save(any());
+    }
+
+    @Test
+    void rule1c_theSameGrantToSomeoneElseIsNotRefusedByThisRule() {
+        when(accountAccess.isSelf(assignee)).thenReturn(false);
+        UserRoleHospitalAssignmentRequestDTO dto = grantOf(assignee);
+
+        // The fixture stubs no further than this rule: whatever stops the grant after it is not this rule.
+        Throwable later = org.assertj.core.api.Assertions.catchThrowable(() -> service.assignRole(dto));
+
+        assertThat(later == null ? "" : String.valueOf(later.getMessage())).doesNotContain("your own account");
+        verify(accountAccess).isSelf(assignee);
+    }
+
+    @Test
+    void rule1c_anEditNeverSwitchesTheCallersOwnRowBackOn() {
+        assignment.setActive(false);
+        assignment.setConfirmationVerifiedAt(LocalDateTime.now().minusDays(3));
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        when(accountAccess.isSelf(assignee)).thenReturn(true);
+        // Only a super-admin switches a row on directly: even that caller may not switch on its own.
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+        dto.setActive(true);
+
+        UUID ownRow = assignment.getId();
+        assertThatThrownBy(() -> service.updateAssignment(ownRow, dto))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("your own account");
+        assertThat(assignment.getActive()).isFalse();
+        verify(assignmentRepository, never()).save(any());
+    }
+
+    @Test
+    void rule1c_anEditNeverMovesTheCallersOwnRowToAnotherHospital() {
+        assignment.setActive(true);
+        Hospital elsewhere = new Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        elsewhere.setName("Other Hospital");
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        org.mockito.Mockito.lenient().when(hospitalRepository.findById(elsewhere.getId()))
+            .thenReturn(Optional.of(elsewhere));
+        when(accountAccess.isSelf(assignee)).thenReturn(true);
+        UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+        dto.setHospitalId(elsewhere.getId());
+
+        UUID ownRow = assignment.getId();
+        assertThatThrownBy(() -> service.updateAssignment(ownRow, dto))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("your own account");
+        assertThat(assignment.getHospital()).isSameAs(hospital);
+        verify(assignmentRepository, never()).save(any());
+    }
+
+    @Test
+    void rule1c_nobodySendsThemselvesAFreshActivationCode() {
+        // The other way a switched-off row comes back on: a new code, confirmed by its holder.
+        assignment.setActive(false);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        when(accountAccess.isSelf(assignee)).thenReturn(true);
+
+        UUID ownRow = assignment.getId();
+        assertThatThrownBy(() -> service.regenerateAssignmentCode(ownRow, true))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("your own account");
+        assertThat(assignment.getAssignmentCode()).isEqualTo(VALID_CODE);
+        verify(assignmentRepository, never()).save(any());
+    }
+
+    // -- Rule 1a: an organisation admin lists its organisation's assignments, and no other --
+
+    private static final org.springframework.data.domain.Pageable FIRST_TEN =
+        org.springframework.data.domain.PageRequest.of(0, 10);
+
+    private void listingAnswersAnEmptyPage() {
+        when(assignmentRepository.findAll(
+                org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<UserRoleHospitalAssignment>>any(),
+                any(org.springframework.data.domain.Pageable.class)))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of()));
+    }
+
+    private static com.example.hms.payload.dto.assignment.AssignmentSearchCriteria naming(UUID hospitalId) {
+        return com.example.hms.payload.dto.assignment.AssignmentSearchCriteria.builder()
+            .hospitalId(hospitalId.toString()).build();
+    }
+
+    @Test
+    void rule1a_anOrganisationAdminListsEveryHospitalOfItsOrganisationAndNeverTheUnfilteredListing() {
+        UUID acting = UUID.randomUUID();
+        UUID sister = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(acting);
+        when(accountAccess.assignmentScope())
+            .thenReturn(new UserAccountAccess.AssignmentScope(false, Set.of(), Set.of(acting, sister)));
+        listingAnswersAnEmptyPage();
+
+        // A hospital outside the organisation, named by the request: it never widens the listing.
+        service.getAllAssignments(FIRST_TEN, naming(UUID.randomUUID()));
+
+        verify(assignmentRepository, never()).findAll(any(org.springframework.data.domain.Pageable.class));
+        jakarta.persistence.criteria.Root<UserRoleHospitalAssignment> root = listedWith();
+        // The whole organisation and nothing else; staff rows only (rule 1b: no patient list).
+        verify(root.join("hospital", jakarta.persistence.criteria.JoinType.LEFT).get("id"))
+            .in((java.util.Collection<UUID>) Set.of(acting, sister));
+        verify(root).join("role", jakarta.persistence.criteria.JoinType.LEFT);
+    }
+
+    @Test
+    void rule1a_aHospitalOfTheOrganisationNamedByTheRequestNarrowsTheListingToIt() {
+        UUID acting = UUID.randomUUID();
+        UUID sister = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(acting);
+        when(accountAccess.assignmentScope())
+            .thenReturn(new UserAccountAccess.AssignmentScope(false, Set.of(), Set.of(acting, sister)));
+        listingAnswersAnEmptyPage();
+
+        service.getAllAssignments(FIRST_TEN, naming(sister));
+
+        jakarta.persistence.criteria.Root<UserRoleHospitalAssignment> root = listedWith();
+        verify(root.join("hospital", jakarta.persistence.criteria.JoinType.LEFT).get("id"))
+            .in((java.util.Collection<UUID>) Set.of(sister));
+        verify(root).join("role", jakarta.persistence.criteria.JoinType.LEFT);
+    }
+
+    // -- Review of #1246, item 5: the listing is bound to the caller's assignment scope --
+
+    @Test
+    void review5_aCallerWhoseScopeReachesNothingGetsAnEmptyPageAndNoQuery() {
+        // An ADMIN whose organisation scope is empty (its assignment is at a pharmacy), or a hospital
+        // admin of A signed in at B as a nurse: the endpoint admits the role, the scope reaches nothing.
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        when(accountAccess.assignmentScope())
+            .thenReturn(new UserAccountAccess.AssignmentScope(false, Set.of(), Set.of()));
+
+        assertThat(service.getAllAssignments(FIRST_TEN, null).getContent()).isEmpty();
+
+        verify(assignmentRepository, never()).findAll(
+            org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<UserRoleHospitalAssignment>>any(),
+            any(org.springframework.data.domain.Pageable.class));
+        verify(assignmentRepository, never()).findAll(any(org.springframework.data.domain.Pageable.class));
+    }
+
+    @Test
+    void review5_aHospitalAdminActingWhereItAdministersNothingGetsAnEmptyPage() {
+        UUID administered = UUID.randomUUID();
+        UUID actingElsewhere = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(actingElsewhere);
+        when(accountAccess.assignmentScope())
+            .thenReturn(new UserAccountAccess.AssignmentScope(false, Set.of(administered), Set.of()));
+
+        assertThat(service.getAllAssignments(FIRST_TEN, null).getContent()).isEmpty();
+
+        verify(assignmentRepository, never()).findAll(
+            org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<UserRoleHospitalAssignment>>any(),
+            any(org.springframework.data.domain.Pageable.class));
+    }
+
+    @Test
+    void review5_aHospitalAdminListsEveryRowOfTheHospitalItAdministersPatientsIncluded() {
+        UUID administered = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(administered);
+        when(accountAccess.assignmentScope())
+            .thenReturn(new UserAccountAccess.AssignmentScope(false, Set.of(administered), Set.of()));
+        listingAnswersAnEmptyPage();
+
+        service.getAllAssignments(FIRST_TEN, null);
+
+        jakarta.persistence.criteria.Root<UserRoleHospitalAssignment> root = listedWith();
+        verify(root.join("hospital", jakarta.persistence.criteria.JoinType.LEFT).get("id"))
+            .in((java.util.Collection<UUID>) Set.of(administered));
+        // No role filter: its own hospital's patient rows are its to read, as before.
+        verify(root, never()).join("role", jakarta.persistence.criteria.JoinType.LEFT);
+    }
+
+    // -- Review of #1246, item 2: who an organisation-only caller may name as the holder --
+
+    private UserRoleHospitalAssignmentRequestDTO grantByIdentifier(User holder, String identifier) {
+        org.mockito.Mockito.lenient().when(userRepository.findByUsername(identifier)).thenReturn(Optional.empty());
+        org.mockito.Mockito.lenient().when(userRepository.findByEmail(identifier)).thenReturn(Optional.empty());
+        org.mockito.Mockito.lenient().when(userRepository.findByPhoneNumber(identifier))
+            .thenReturn(Optional.ofNullable(holder));
+        org.mockito.Mockito.lenient().when(roleRepository.findById(role.getId())).thenReturn(Optional.of(role));
+        org.mockito.Mockito.lenient().when(hospitalRepository.findById(hospital.getId()))
+            .thenReturn(Optional.of(hospital));
+        UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+        dto.setUserIdentifier(identifier);
+        dto.setRoleId(role.getId());
+        dto.setHospitalId(hospital.getId());
+        return dto;
+    }
+
+    /** The caller is an organisation admin here; {@code staff} is what the shared rule says of the holder. */
+    private void callerReachesTheHospitalThroughItsOrganisationAlone(boolean holderIsItsStaff) {
+        when(accountAccess.reachesOnlyThroughOrganisation(hospital.getId())).thenReturn(true);
+        org.mockito.Mockito.lenient().when(accountAccess.isStaffOfCallersOrganisation(assignee))
+            .thenReturn(holderIsItsStaff);
+    }
+
+    @Test
+    void review2_aPatientFoundByPhoneAnswersExactlyAsAnUnknownNumber() {
+        // The number belongs to a patient of this very hospital: not its staff (OrganisationAdminScopeTest).
+        callerReachesTheHospitalThroughItsOrganisationAlone(false);
+        UserRoleHospitalAssignmentRequestDTO known = grantByIdentifier(assignee, "+22670000001");
+        UserRoleHospitalAssignmentRequestDTO unknown = grantByIdentifier(null, "+22670000002");
+
+        Throwable aPatient = org.assertj.core.api.Assertions.catchThrowable(() -> service.assignRole(known));
+        Throwable nobody = org.assertj.core.api.Assertions.catchThrowable(() -> service.assignRole(unknown));
+
+        assertThat(aPatient).isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThat(nobody).isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        // The same sentence but for the number typed: nothing says which of the two exists.
+        assertThat(aPatient.getMessage().replace("+22670000001", "<n>"))
+            .isEqualTo(nobody.getMessage().replace("+22670000002", "<n>"));
+        verify(assignmentRepository, never()).save(any());
+    }
+
+    @Test
+    void review2_staffOfAnotherOrganisationAnswersAsUnknown() {
+        callerReachesTheHospitalThroughItsOrganisationAlone(false);
+        UserRoleHospitalAssignmentRequestDTO dto = grantByIdentifier(assignee, "+22670000003");
+
+        assertThatThrownBy(() -> service.assignRole(dto))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(assignmentRepository, never()).save(any());
+    }
+
+    @Test
+    void review2_staffOfTheOrganisationMayBeNamedPendingInvitationIncluded() {
+        callerReachesTheHospitalThroughItsOrganisationAlone(true);
+        UserRoleHospitalAssignmentRequestDTO dto = grantByIdentifier(assignee, "+22670000004");
+
+        // The fixture stubs no further than this rule: whatever stops the grant after it is not this rule.
+        Throwable later = org.assertj.core.api.Assertions.catchThrowable(() -> service.assignRole(dto));
+
+        assertThat(later).isNotInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(accountAccess).isSelf(assignee);
+    }
+
+    @Test
+    void review2_aHospitalAdminOrSuperAdminIsNotHeldToTheOrganisationsStaff() {
+        // reachesOnlyThroughOrganisation answers false for them (the fixture's default).
+        UserRoleHospitalAssignmentRequestDTO dto = grantByIdentifier(assignee, "+22670000005");
+
+        Throwable later = org.assertj.core.api.Assertions.catchThrowable(() -> service.assignRole(dto));
+
+        assertThat(later).isNotInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(accountAccess, never()).isStaffOfCallersOrganisation(any());
+    }
+
+    /** Runs the specification the listing was asked with against a recording criteria root. */
+    @SuppressWarnings("unchecked")
+    private jakarta.persistence.criteria.Root<UserRoleHospitalAssignment> listedWith() {
+        org.mockito.ArgumentCaptor<org.springframework.data.jpa.domain.Specification<UserRoleHospitalAssignment>> asked =
+            org.mockito.ArgumentCaptor.forClass(org.springframework.data.jpa.domain.Specification.class);
+        verify(assignmentRepository).findAll(asked.capture(), any(org.springframework.data.domain.Pageable.class));
+        jakarta.persistence.criteria.Root<UserRoleHospitalAssignment> root =
+            mock(jakarta.persistence.criteria.Root.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        jakarta.persistence.criteria.CriteriaQuery<?> query =
+            mock(jakarta.persistence.criteria.CriteriaQuery.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        jakarta.persistence.criteria.CriteriaBuilder builder =
+            mock(jakarta.persistence.criteria.CriteriaBuilder.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        asked.getValue().toPredicate(root, query, builder);
+        return root;
+    }
+
+    @Test
+    void rule1a_aSuperAdminInGlobalViewStillGetsTheWholeListing() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(assignmentRepository.findAll(any(org.springframework.data.domain.Pageable.class)))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of()));
+
+        service.getAllAssignments(FIRST_TEN, null);
+
+        verify(assignmentRepository).findAll(any(org.springframework.data.domain.Pageable.class));
+        verify(accountAccess, never()).organisationHospitalIds();
+    }
 }

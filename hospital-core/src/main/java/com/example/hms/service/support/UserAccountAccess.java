@@ -55,8 +55,12 @@ import java.util.stream.Collectors;
  *       take over a peer.</li>
  *   <li><b>Grant</b> (admin-register): a super-admin grants any role at any
  *       hospital; a hospital admin grants non-admin roles at hospitals they
- *       administer; every other registrar grants PATIENT only, at a hospital
- *       where they hold a registrar role.</li>
+ *       administer; an organisation admin ({@code ADMIN}) grants staff roles
+ *       (never an admin role, never PATIENT) at any hospital of its own
+ *       organisation ({@link #organisationHospitalIds}); every other registrar
+ *       grants PATIENT only, at a hospital where they hold a registrar role.
+ *       Nobody grants themselves a role
+ *       ({@code UserRoleHospitalAssignmentServiceImpl.requireNotSelfGrant}).</li>
  *   <li><b>Self</b>: any principal may read their own account, and edit its
  *       contact fields. The credential and status fields go through their own
  *       endpoints (see {@code UserServiceImpl.updateUser}).</li>
@@ -100,6 +104,12 @@ public class UserAccountAccess {
     private static final String SUPER_ADMIN = "SUPER_ADMIN";
     private static final String HOSPITAL_ADMIN = "HOSPITAL_ADMIN";
     private static final String PATIENT = "PATIENT";
+    /**
+     * The organisation's administrator (platform admin rules 2026-11-20, rule 1a): registers staff
+     * and creates or switches off assignments at every hospital of its own organisation, never
+     * another one's. An administrative role: it reads no patient and no clinical record.
+     */
+    private static final String ORGANISATION_ADMIN = "ADMIN";
     /** The administrator of an external provider facility (provider plan §6.3). */
     private static final String PROVIDER_ADMIN = "PROVIDER_ADMIN";
 
@@ -107,10 +117,11 @@ public class UserAccountAccess {
      * QA D790: the hospital administrators who page the user directory. A provider
      * facility's administrator manages its staff through the provider pages.
      */
-    private static final Set<String> DIRECTORY_ADMIN_ROLES = Set.of(HOSPITAL_ADMIN, "ADMIN");
+    private static final Set<String> DIRECTORY_ADMIN_ROLES = Set.of(HOSPITAL_ADMIN, ORGANISATION_ADMIN);
 
     /** Roles only a super-admin grants, and whose holders only a super-admin administers. Bare codes. */
-    public static final Set<String> ADMIN_ROLES = Set.of(SUPER_ADMIN, HOSPITAL_ADMIN, "ADMIN", PROVIDER_ADMIN);
+    public static final Set<String> ADMIN_ROLES =
+        Set.of(SUPER_ADMIN, HOSPITAL_ADMIN, ORGANISATION_ADMIN, PROVIDER_ADMIN);
 
     /** The admin-register roles, bare; the same constant feeds the annotations and SecurityConfig. */
     static final Set<String> REGISTRAR_ROLES = Arrays.stream(
@@ -280,7 +291,9 @@ public class UserAccountAccess {
      *   <li>any other registrar: PATIENT only, at a hospital where they
      *       actively hold a registrar role;</li>
      *   <li>provider admin: no admin role and never PATIENT, at a provider
-     *       facility where they hold an active PROVIDER_ADMIN assignment.</li>
+     *       facility where they hold an active PROVIDER_ADMIN assignment;</li>
+     *   <li>organisation admin: no admin role and never PATIENT, at a hospital
+     *       of an organisation where they hold an active ADMIN assignment.</li>
      * </ul>
      *
      * @throws AccessDeniedException when no hospital could make this role set allowed
@@ -304,12 +317,15 @@ public class UserAccountAccess {
         // hospital admin, and never a PATIENT account: PROVIDER_ADMIN is on
         // PROVIDER_REGISTRAR_AUTHORITIES, not on the patient registrar list.
         // What may be held there is the facility guard's to say (a 400).
-        Set<UUID> providerHospitals = nonAdminRoles && !roles.contains(PATIENT)
-            ? providerAdministeredHospitals(caller)
-            : Set.of();
-        Set<UUID> grantHospitals = providerHospitals.isEmpty() ? adminHospitals
-            : java.util.stream.Stream.concat(adminHospitals.stream(), providerHospitals.stream())
-                .collect(Collectors.toUnmodifiableSet());
+        boolean staffRoles = nonAdminRoles && !roles.contains(PATIENT);
+        Set<UUID> providerHospitals = staffRoles ? providerAdministeredHospitals(caller) : Set.of();
+        // An organisation admin registers staff across its organisation, and
+        // never a patient: registering one writes a patient record, and this
+        // role reads none (platform admin rules, rule 1b).
+        Set<UUID> organisationHospitals = staffRoles ? organisationHospitals(caller) : Set.of();
+        Set<UUID> grantHospitals = java.util.stream.Stream.of(adminHospitals, providerHospitals, organisationHospitals)
+            .flatMap(Set::stream)
+            .collect(Collectors.toUnmodifiableSet());
         boolean asAdmin = nonAdminRoles && !grantHospitals.isEmpty();
         boolean asRegistrar = patientOnly && !registrarHospitals.isEmpty();
         if (!asAdmin && !asRegistrar) {
@@ -373,6 +389,8 @@ public class UserAccountAccess {
      *       HOSPITAL_ADMIN assignment; to change one, its role must not be an
      *       admin role, because admin roles are granted (and so administered)
      *       by the super-admin only;</li>
+     *   <li>an organisation admin: the same, at every hospital of its own
+     *       organisation ({@link #organisationHospitalIds});</li>
      *   <li>anyone else, a provider admin included: nothing. A provider
      *       admin's own path is {@link #providerStaffScope()}, used by the
      *       provider staff page only.</li>
@@ -382,9 +400,68 @@ public class UserAccountAccess {
      */
     public AssignmentScope assignmentScope() {
         Caller caller = caller();
-        return caller.superAdmin()
-            ? AssignmentScope.SUPER_ADMIN_SCOPE
-            : new AssignmentScope(false, administeredHospitals(caller));
+        if (caller.superAdmin()) {
+            return AssignmentScope.SUPER_ADMIN_SCOPE;
+        }
+        // The organisation's hospitals are staff-only: a PATIENT row there is a
+        // patient's name and contact, which this role never reads (rule 1b).
+        return new AssignmentScope(false, administeredHospitals(caller), organisationHospitals(caller));
+    }
+
+    /**
+     * Platform admin rules 2026-11-20, rule 1a: the hospitals of the caller's
+     * own organisation(s), when the caller acts as an organisation admin: an
+     * ACTIVE {@code ADMIN} assignment at a hospital, the role presented on the
+     * token, and then every clinical hospital that shares that hospital's
+     * organisation. Empty for anyone else, a super-admin included (whose scope
+     * is everything and is decided elsewhere). Never another organisation's
+     * hospital: the set is derived from the caller's own assignments, on every
+     * request, and from nothing the request says.
+     */
+    public Set<UUID> organisationHospitalIds() {
+        return organisationHospitals(caller());
+    }
+
+    /**
+     * Review of #1246: whether the caller reaches this hospital through the
+     * organisation scope ALONE (not as a super-admin, not as its hospital or
+     * provider administrator). Such a caller names an existing account only
+     * among its organisation's staff: by identifier it would otherwise find
+     * any account of the platform, a patient's phone number included.
+     */
+    public boolean reachesOnlyThroughOrganisation(UUID hospitalId) {
+        Caller caller = caller();
+        if (caller.superAdmin() || hospitalId == null) {
+            return false;
+        }
+        return !administeredHospitals(caller).contains(hospitalId)
+            && !providerAdministeredHospitals(caller).contains(hospitalId)
+            && organisationHospitals(caller).contains(hospitalId);
+    }
+
+    /**
+     * Review of #1246 (rule 1a): whether this account is STAFF of the caller's
+     * own organisation: it holds a non-patient assignment, active or still
+     * waiting for its code, at a hospital of that organisation. The one test
+     * for "an existing account an organisation admin may name", whichever
+     * identifier found it (a username, an e-mail, a phone, a licence number):
+     * a patient's account, or another organisation's staff, is not.
+     */
+    public boolean isStaffOfCallersOrganisation(User account) {
+        if (account == null || account.getId() == null) {
+            return false;
+        }
+        Set<UUID> organisation = organisationHospitals(caller());
+        if (organisation.isEmpty()) {
+            return false;
+        }
+        return assignmentRepository.findByUserId(account.getId()).stream()
+            .anyMatch(row -> isStaffRowAt(row, organisation));
+    }
+
+    private static boolean isStaffRowAt(UserRoleHospitalAssignment row, Set<UUID> hospitals) {
+        UUID hospitalId = hospitalIdOf(row);
+        return hospitalId != null && hospitals.contains(hospitalId) && !PATIENT.equals(roleCode(row.getRole()));
     }
 
     /**
@@ -407,21 +484,35 @@ public class UserAccountAccess {
      * @param everywhere  the super-admin's scope: every row
      * @param hospitalIds otherwise, the hospitals the caller administers; empty means none
      */
-    public record AssignmentScope(boolean everywhere, Set<UUID> hospitalIds) {
+    public record AssignmentScope(boolean everywhere, Set<UUID> hospitalIds, Set<UUID> staffOnlyHospitalIds) {
 
         static final AssignmentScope SUPER_ADMIN_SCOPE = new AssignmentScope(true, Set.of());
 
         public AssignmentScope {
             hospitalIds = Set.copyOf(hospitalIds);
+            staffOnlyHospitalIds = Set.copyOf(staffOnlyHospitalIds);
         }
 
-        /** May the caller read this row? A global (hospital-less) row is the super-admin's. */
+        /** A scope with no staff-only hospital: every row at {@code hospitalIds}. */
+        public AssignmentScope(boolean everywhere, Set<UUID> hospitalIds) {
+            this(everywhere, hospitalIds, Set.of());
+        }
+
+        /**
+         * May the caller read this row? A global (hospital-less) row is the
+         * super-admin's. At a staff-only hospital (an organisation admin's
+         * reach) a PATIENT row is not covered: it would be a patient list.
+         */
         public boolean covers(UserRoleHospitalAssignment assignment) {
             if (everywhere) {
                 return true;
             }
             UUID hospitalId = assignment == null ? null : hospitalIdOf(assignment);
-            return hospitalId != null && hospitalIds.contains(hospitalId);
+            if (hospitalId == null) {
+                return false;
+            }
+            return hospitalIds.contains(hospitalId)
+                || (staffOnlyHospitalIds.contains(hospitalId) && !PATIENT.equals(roleCode(assignment.getRole())));
         }
 
         /** May the caller change this row? Covered, and not an admin role's row unless a super-admin. */
@@ -490,10 +581,22 @@ public class UserAccountAccess {
         if (adminAssignments.isEmpty()) {
             throw new AccessDeniedException("Access denied");
         }
-        // QA D125: only a hospital administrator reads patients' contact details from the directory.
-        boolean administrator = adminAssignments.stream()
-            .anyMatch(a -> HOSPITAL_ADMIN.equals(roleCode(a.getRole())));
-        return new DirectoryScope(false, hospitalIdsOf(adminAssignments), administrator);
+        // QA D125: only a hospital administrator reads patients' contact details
+        // from the directory, and only at the hospitals they ADMINISTER. The
+        // flag is one for the whole page, so it is decided per hospital here:
+        // a HOSPITAL_ADMIN at A who is an ADMIN at C gets A's directory (patients
+        // and contacts) and nothing of C, never C's patients through A's role.
+        Set<UUID> administered = hospitalIdsOf(adminAssignments.stream()
+            .filter(a -> HOSPITAL_ADMIN.equals(roleCode(a.getRole())))
+            .toList());
+        if (!administered.isEmpty()) {
+            return new DirectoryScope(false, administered, true);
+        }
+        // An organisation admin's directory is its organisation's STAFF (rule 1a):
+        // no patient account, no contact detail (the staff-only query, QA D430).
+        Set<UUID> staffOnly = new java.util.HashSet<>(hospitalIdsOf(adminAssignments));
+        staffOnly.addAll(organisationHospitals(caller));
+        return new DirectoryScope(false, staffOnly, false);
     }
 
     /**
@@ -574,6 +677,30 @@ public class UserAccountAccess {
             return Set.of();
         }
         return caller.hospitalsWhereHolding(Set.of(HOSPITAL_ADMIN));
+    }
+
+    /**
+     * The hospitals an organisation admin administers staff at: the clinical
+     * hospitals where they hold an ACTIVE {@code ADMIN} assignment (the role
+     * itself, never one that merely implies it), and every clinical hospital of
+     * the same organisation. A hospital attached to no organisation stands alone.
+     */
+    private Set<UUID> organisationHospitals(Caller caller) {
+        if (caller.id() == null || !caller.presentsAny(Set.of(ORGANISATION_ADMIN))) {
+            return Set.of();
+        }
+        Set<UUID> own = caller.activeAssignments().stream()
+            .filter(a -> ORGANISATION_ADMIN.equals(roleCode(a.getRole())))
+            .map(UserAccountAccess::hospitalIdOf)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+        if (own.isEmpty()) {
+            return Set.of();
+        }
+        // The query returns the caller's own hospitals too, when they are clinical:
+        // an ADMIN assignment at a pharmacy or a laboratory opens nothing here.
+        Set<UUID> organisation = assignmentRepository.findClinicalHospitalIdsInOrganisationsOf(own);
+        return organisation == null ? Set.of() : Set.copyOf(organisation);
     }
 
     /** Provider facilities where the caller holds an ACTIVE PROVIDER_ADMIN assignment, if they present the role at all. */

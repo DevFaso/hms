@@ -1206,10 +1206,10 @@ describe('LabComponent — performing laboratory', () => {
 
   it('QA D820: a voided order offers neither Edit nor Delete, which the server refuses', async () => {
     // Voided before any result: the results-stage check alone let the trash through (409).
-    // A doctor who also holds ROLE_ADMIN has both the edit (labOrderUpdate) and the delete
+    // A doctor who is also a super-admin has both the edit (labOrderUpdate) and the delete
     // (labOrderDelete) role; a super-admin alone no longer edits an order (QA D2120).
     await setup(
-      ['ROLE_DOCTOR', 'ROLE_ADMIN'],
+      ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'],
       [order({ id: 'o-void', status: 'ENTERED_IN_ERROR' })],
     );
     expect(fixture.nativeElement.querySelectorAll('tbody tr').length)
@@ -1224,7 +1224,10 @@ describe('LabComponent — performing laboratory', () => {
 
     // The same caller on an open order is still offered both.
     TestBed.resetTestingModule();
-    await setup(['ROLE_DOCTOR', 'ROLE_ADMIN'], [order({ id: 'o-ordered', status: 'ORDERED' })]);
+    await setup(
+      ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'],
+      [order({ id: 'o-ordered', status: 'ORDERED' })],
+    );
     expect(fixture.nativeElement.querySelector('.edit-link')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('.delete-link')).not.toBeNull();
   });
@@ -1234,15 +1237,15 @@ describe('LabComponent — performing laboratory', () => {
     expect(fixture.nativeElement.querySelector('.edit-link')).toBeNull();
   });
 
-  it('QA D616: a lab technician who also holds ROLE_ADMIN, with no role picked, gets the trash (the reported case)', async () => {
-    // No role equivalence maps LAB_TECHNICIAN to ADMIN (only physician roles
-    // expand, to DOCTOR). The /lab icon reaches a technician only through a
-    // second, admin role held alongside, or a build from before #920 gated it.
+  it('QA D616, after the platform admin rules of 2026-11-20: ROLE_ADMIN held alongside no longer brings the trash', async () => {
+    // The reported case was a technician who also held ROLE_ADMIN: that role deleted lab
+    // orders. It is the organisation's administrator now and neither reads nor writes clinical
+    // data (the server refuses the delete), so the icon is the super-admin's alone.
     await setup(
       ['ROLE_LAB_TECHNICIAN', 'ROLE_ADMIN'],
       [order({ id: 'o-ordered', status: 'ORDERED' })],
     );
-    expect(fixture.nativeElement.querySelector('.delete-link')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.delete-link')).toBeNull();
   });
 
   it('QA D527: a lab technician is offered no Edit or Delete on her own hospital order', async () => {

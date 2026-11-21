@@ -719,10 +719,9 @@ public class SecurityConfig {
                 // -------------------- Patients --------------------
                 // PHARMACIST: the shared patient picker (/patients/search, /patients/lookup)
                 // backs pharmacist-reachable pages such as /medication-history.
-                // ROLE_ADMIN (general administrative user) reads patient
-                // demographics for front-office oversight — 2026-08-23 role
-                // audit decision C1; the /patients route guard and the
-                // patient-tracker backend admitted the role all along.
+                // ROLE_ADMIN is the organisation's administrator and reads no
+                // patient here (platform admin rules 2026-11-20, rule 1b; it
+                // supersedes role audit decision C1 of 2026-08-23).
                 // RADIOLOGIST and PHYSIOTHERAPIST join PHARMACIST for the same
                 // reason: the shared patient picker lives under /patients/**,
                 // and their pages embed it (/imaging, /treatment-plans). The
@@ -740,13 +739,13 @@ public class SecurityConfig {
                     API_PATIENTS + "/national-unique-id/*/reveal")
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.GET, API_PATIENTS + "/search", API_PATIENTS + "/lookup")
-                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
                         ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_PHARMACIST,
                         ROLE_RADIOLOGIST, ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_SUPER_ADMIN,
                         ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT)
                 .requestMatchers(HttpMethod.GET, API_PATIENTS, API_PATIENTS_PATTERN)
-                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
                         ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_PHARMACIST,
                         ROLE_RADIOLOGIST, ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_SUPER_ADMIN)
@@ -870,9 +869,11 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/assignments/public/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/assignments/public/**").permitAll()
 
-                // All other assignment endpoints — admin only
+                // All other assignment endpoints — admin only. The organisation
+                // admin (platform admin rules, rule 1a) is admitted at the edge;
+                // each handler's annotation says which ones it really works.
                 .requestMatchers("/assignments/**")
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+                .hasAnyAuthority(SecurityConstants.authorities(SecurityConstants.ASSIGNMENT_ADMIN_AUTHORITIES))
 
                 // -------------------- Staff --------------------
                 // Narrow scheduling matcher FIRST (first-match-wins): the
@@ -928,6 +929,10 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, API_DEPARTMENTS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
+                // The role list of the register form: the organisation admin
+                // reads it too (rule 1a); everything else under /roles is unchanged.
+                .requestMatchers(HttpMethod.GET, "/roles")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_ADMIN)
                 .requestMatchers("/roles/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 

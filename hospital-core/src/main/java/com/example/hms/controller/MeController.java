@@ -72,7 +72,13 @@ public class MeController {
     private final PatientSnapshotService patientSnapshotService;
     private final ActingScopeResolver actingScopeResolver;
 
-    public record HospitalMinimalDTO(UUID id, String name) {
+    /**
+     * The hospital the caller acts at. QA r65 D2501: with its currency (ISO
+     * 4217) and the zone its day is counted in (its own, else its
+     * organisation's; null when neither is set), so the portal labels money
+     * with the hospital's currency.
+     */
+    public record HospitalMinimalDTO(UUID id, String name, String currencyCode, String timeZone) {
     }
 
     public record AssignmentSummaryDTO(
@@ -110,7 +116,11 @@ public class MeController {
         Hospital h = hospitalRepository.findById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
 
-        return ResponseEntity.ok(new HospitalMinimalDTO(h.getId(), h.getName()));
+        // The zone by projection (no LAZY organisation walked): the hospital's own, else its organisation's.
+        String timeZone = hospitalRepository.findTimezoneIdById(h.getId())
+                .filter(id -> !id.isBlank())
+                .orElse(null);
+        return ResponseEntity.ok(new HospitalMinimalDTO(h.getId(), h.getName(), h.getCurrencyCode(), timeZone));
     }
 
     @Operation(summary = "Get unified clinical dashboard data for current clinical user")

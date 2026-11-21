@@ -49,7 +49,7 @@ public class DashboardController {
     }
 
     @GetMapping("/hospital-admin/summary")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Get hospital admin operations summary")
     public ResponseEntity<HospitalAdminSummaryDTO> getHospitalAdminSummary(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
@@ -92,7 +92,7 @@ public class DashboardController {
     // worklist they work from.
     @GetMapping("/lab-ops/summary")
     @PreAuthorize("hasAnyRole('LAB_DIRECTOR', 'LAB_MANAGER', 'LAB_SCIENTIST', 'LAB_TECHNICIAN',"
-        + " 'QUALITY_MANAGER', 'HOSPITAL_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+        + " 'QUALITY_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Get Lab Operations dashboard summary")
     public ResponseEntity<LabOpsSummaryDTO> getLabOpsSummary() {
         UUID hospitalId = Optional.ofNullable(ActingScopeResolver.pinnedHospitalIdOrNull())

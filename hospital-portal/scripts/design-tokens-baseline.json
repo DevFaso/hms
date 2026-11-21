@@ -68,6 +68,10 @@
       "count": 12,
       "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
     },
+    "src/app/dashboard/dashboard.ts::legacy-colour::#1d4ed8": {
+      "count": 1,
+      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
+    },
     "src/app/dashboard/dashboard.ts::legacy-colour::#4f46e5": {
       "count": 8,
       "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
@@ -376,12 +380,8 @@
       "count": 1,
       "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
     },
-    "src/app/super-admin/super-admin.ts::legacy-colour::#0284c7": {
-      "count": 1,
-      "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
-    },
     "src/app/super-admin/super-admin.ts::legacy-colour::#6366f1": {
-      "count": 3,
+      "count": 2,
       "why": "r65 split: super-admin, dashboard, platform, hospitals and onboarding belong to the platform/onboarding track; converted by the follow-up once that PR merges"
     }
   }

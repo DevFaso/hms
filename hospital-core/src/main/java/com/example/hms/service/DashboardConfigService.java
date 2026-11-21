@@ -533,10 +533,11 @@ public class DashboardConfigService {
         // role-model findings): these roles previously had NO entry, so
         // GET /me/dashboard-config contributed nothing and the portal ran
         // purely on its static fallback map.
+        // Platform admin rules 2026-11-20, rule 1b: the organisation's
+        // administrator registers staff and reads totals; no patient record,
+        // no audit trail (it names patients), no clinical surface.
         map.put("ROLE_ADMIN", List.of(
                 "View Dashboard",
-                PERM_VIEW_PATIENT_RECORDS,
-                "View Audit Logs",
                 "View Notifications"));
         map.put("ROLE_PHYSICIAN", List.of(
                 PERM_VIEW_PATIENT_RECORDS,

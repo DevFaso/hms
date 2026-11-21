@@ -10,6 +10,7 @@ import {
 } from '../services/audit-log.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { AuditTabsComponent } from '../super-admin/audit-tabs.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { AuditDescriptionService } from './audit-description.service';
@@ -31,6 +32,7 @@ const SEARCH_DEBOUNCE_MS = 300;
     TranslateModule,
     EnumLabelPipe,
     RoleLabelPipe,
+    AuditTabsComponent,
   ],
   templateUrl: './audit-logs.html',
   changeDetection: ChangeDetectionStrategy.Eager,

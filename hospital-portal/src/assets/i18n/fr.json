@@ -2139,7 +2139,8 @@
       "DISPENSE_BILLING_DEFERRAL_CLOSED_SETTLED": "Report « à facturer » clos : l’ordonnance est sortie de la pharmacie sans rien devoir",
       "PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED": "Acceptation de la demande de prise en charge pharmacie confirmée par la facturation ou la comptabilité",
       "ADOLESCENT_AGE_SET_ZERO": "Âge de confidentialité des adolescents fixé à 0 an",
-      "ADOLESCENT_AGE_SET_ONE": "Âge de confidentialité des adolescents fixé à 1 an"
+      "ADOLESCENT_AGE_SET_ONE": "Âge de confidentialité des adolescents fixé à 1 an",
+      "ACTIVATION_CODE_SHOWN": "Code d’activation affiché à la personne qui a créé l’affectation"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -15580,6 +15581,173 @@
     "INCREASED_PAIN": "Douleur accrue",
     "VAGINAL_BLEEDING": "Saignement vaginal important",
     "REDUCED_URINE_OUTPUT": "Diurèse diminuée"
+  },
+  "PLATFORM_SETUP": {
+    "ROLE_ADMIN": "Administrateur",
+    "CHECKLIST": {
+      "TITLE": "Mise en route de l’établissement",
+      "PROGRESS": "{{done}} étapes terminées sur {{total}}",
+      "BOOKABLE": "Les patients peuvent prendre rendez-vous en ligne",
+      "NOT_BOOKABLE": "Les patients ne peuvent pas encore prendre rendez-vous en ligne",
+      "NEEDED_FOR_BOOKING": "nécessaire aux rendez-vous en ligne",
+      "OPEN": "Ouvrir",
+      "LOAD_FAILED": "La liste de mise en route n’a pas pu être chargée. Rechargez la page.",
+      "STEP": {
+        "HOSPITAL_ADMIN": {
+          "TITLE": "Administrateur de l’hôpital",
+          "DONE": "Administrateurs de l’hôpital inscrits : {{count}}",
+          "TODO": "Inscrivez l’administrateur de cet hôpital (rôle administrateur d’hôpital). Les départements se créent ensuite."
+        },
+        "DEPARTMENTS": {
+          "TITLE": "Départements",
+          "DONE": "Départements créés : {{count}}",
+          "TODO": "Créez au moins un département (médecine générale, maternité…)."
+        },
+        "STAFF": {
+          "TITLE": "Personnel",
+          "DONE": "Membres du personnel actifs : {{count}}",
+          "TODO": "Inscrivez le personnel. Chaque personne doit ensuite activer son compte avec le code reçu."
+        },
+        "PROVIDERS_IN_DEPARTMENT": {
+          "TITLE": "Soignants rattachés à un département",
+          "DONE": "Départements avec au moins un médecin, un infirmier ou une sage-femme : {{count}}",
+          "TODO": "Aucun soignant n’est rattaché à un département : ouvrez la fiche d’un médecin, d’un infirmier ou d’une sage-femme et choisissez son département."
+        },
+        "SESSION_TEMPLATES": {
+          "TITLE": "Modèles de séance",
+          "DONE": "Modèles de séance actifs : {{count}}",
+          "TODO": "Créez les séances de consultation de chaque soignant (jour, heures, durée d’une visite)."
+        },
+        "OPEN_SLOTS": {
+          "TITLE": "Créneaux publiés",
+          "DONE": "Départements où un patient peut réserver un créneau à venir : {{count}}",
+          "TODO": "Aucun créneau libre à venir dans un département doté d’un soignant : générez les créneaux à partir des modèles de séance."
+        },
+        "BEDS": {
+          "TITLE": "Lits",
+          "DONE": "Lits actifs : {{count}}",
+          "TODO": "Ajoutez les unités et les lits si l’établissement hospitalise."
+        },
+        "PRICE_LIST": {
+          "TITLE": "Grille tarifaire",
+          "DONE": "Tarifs actifs : {{count}}",
+          "TODO": "Saisissez ou importez les tarifs : sans eux, aucune ligne de facture ne trouve son prix."
+        },
+        "PAYERS": {
+          "TITLE": "Organismes payeurs",
+          "DONE": "Organismes payeurs actifs : {{count}}",
+          "TODO": "Ajoutez les mutuelles et les assurances si l’établissement reçoit des patients assurés."
+        }
+      }
+    },
+    "HOSPITAL": {
+      "CODE": "Code de l’hôpital",
+      "CODE_PLACEHOLDER": "ex. CMA-01",
+      "CODE_HINT_NEW": "Facultatif : laissez vide pour qu’un code soit généré. Il figure au début de chaque numéro de facture.",
+      "CODE_HINT_EDIT": "Modifiable tant que l’hôpital n’a émis aucune facture : le code figure au début de chaque numéro de facture.",
+      "CODE_INVALID": "Le code compte 2 à 20 caractères : majuscules, chiffres et tirets, en commençant et en finissant par une lettre ou un chiffre.",
+      "CURRENCY": "Devise",
+      "CURRENCY_NAME": {
+        "XOF": "Franc CFA de l’UEMOA (F CFA)",
+        "XAF": "Franc CFA de la CEMAC (F CFA)"
+      },
+      "TIME_ZONE": "Fuseau horaire",
+      "TIME_ZONE_INHERIT": "Celui de l’organisation",
+      "TIME_ZONE_HINT": "Il fixe le jour de l’hôpital : la date d’une facture, le début d’un tarif, un créneau déjà passé.",
+      "TIME_ZONE_FROM_ORG": "(celui de l’organisation)",
+      "TIME_ZONE_NONE": "Non défini : l’heure du serveur s’applique",
+      "CURRENCY_HINT": "La devise ne peut plus être modifiée dès que l’hôpital a une facture ou un tarif."
+    },
+    "BOOKING": {
+      "NOT_OFFERED": "Cet établissement ne propose pas encore la prise de rendez-vous en ligne.",
+      "NO_SLOTS_PUBLISHED": "Ce service n’a aucun créneau libre publié pour le moment.",
+      "CALL": "Pour prendre rendez-vous, appelez le {{phone}}.",
+      "CONTACT": "Pour prendre rendez-vous, contactez l’établissement.",
+      "DEPARTMENTS_FAILED": "Les services de cet établissement n’ont pas pu être chargés. Réessayez."
+    },
+    "ACTIVATION": {
+      "TITLE": "Code d’activation",
+      "HELP": "Si le SMS ou l’e-mail d’activation n’est pas arrivé, affichez le code et remettez-le à la personne en main propre.",
+      "SHOW": "Afficher le code d’activation",
+      "HOW_TO": "La personne ouvre la page de connexion, choisit « J’ai un code d’activation », puis saisit son numéro de téléphone et ce code. L’affichage du code est inscrit au journal d’audit.",
+      "EXPIRES": "Ce code est valable jusqu’au {{date}}.",
+      "REGISTRAR_ONLY": "Seule la personne qui a créé cette affectation ({{name}}) peut afficher son code d’activation.",
+      "SHOW_FAILED": "Le code d’activation n’a pas pu être affiché.",
+      "WHERE_IS_CODE": "Pour remettre le code en main propre : Affectations, « Détails » de la personne, puis « Afficher le code d’activation »."
+    },
+    "IMPORT": {
+      "BLOCKED": "Lignes refusées : {{refused}}. Rien n’est importé tant qu’une ligne est refusée : corrigez le fichier, puis vérifiez-le à nouveau.",
+      "LINK_HINT": "Une ligne liée (colonnes liaison_type et liaison_cle) doit désigner un élément qui existe et est actif dans cet établissement. Pour un examen de laboratoire, créez-le et activez-le d’abord dans « Config. des tests labo ». Sinon, videz ces deux colonnes : le prix est importé sans lien, et vous le lierez ensuite depuis la grille (« Modifier »).",
+      "COLUMN": {
+        "code": "Code tarifaire",
+        "libelle": "Libellé",
+        "categorie": "Catégorie",
+        "prix": "Prix",
+        "date_effet": "Date d’effet",
+        "liaison_type": "Type de liaison",
+        "liaison_cle": "Clé de liaison"
+      }
+    },
+    "PLANS": {
+      "TITLE": "Affectation des plans aux organisations",
+      "HELP": "Choisissez une organisation pour voir son plan et lui en attribuer un. Attribuer un nouveau plan met fin au plan en cours.",
+      "ORGANISATION": "Organisation",
+      "CHOOSE_ORGANISATION": "Choisir une organisation",
+      "CURRENT": "Plan en cours :",
+      "CURRENT_DETAIL": "{{seats}} licences, facturation {{period}}, depuis le {{since}}",
+      "NO_PLAN": "Cette organisation n’a aucun plan en cours.",
+      "PLAN": "Plan d’abonnement",
+      "CHOOSE_PLAN": "Choisir un plan",
+      "SEATS": "Licences utilisateurs",
+      "SEATS_INVALID": "Saisissez un nombre entier de licences, zéro ou plus.",
+      "BILLING_PERIOD": "Période de facturation",
+      "PERIOD": {
+        "MONTHLY": "mensuelle",
+        "QUARTERLY": "trimestrielle",
+        "ANNUAL": "annuelle"
+      },
+      "ASSIGN": "Attribuer le plan",
+      "CHANGE": "Changer de plan",
+      "ASSIGNED": "Plan {{plan}} attribué.",
+      "ASSIGN_FAILED": "Le plan n’a pas pu être attribué.",
+      "END": "Mettre fin au plan",
+      "END_CONFIRM": "Mettre fin au plan {{plan}} de cette organisation ?",
+      "ENDED": "Le plan a pris fin.",
+      "END_FAILED": "Le plan n’a pas pu être arrêté.",
+      "NO_ACTIVE_PLAN": "Aucun plan actif à attribuer : créez-en un ci-dessus.",
+      "HISTORY": "Plans précédents",
+      "HISTORY_LINE": "du {{from}} au {{to}}",
+      "LOAD_FAILED": "Les affectations n’ont pas pu être chargées. Réessayez."
+    },
+    "AUDIT_TABS": {
+      "LABEL": "Écrans d’audit",
+      "LOG": "Journal",
+      "SEARCH": "Recherche avancée"
+    },
+    "ORG_ADMIN": {
+      "HOSPITAL_REQUIRED": "Choisissez l’hôpital où cette personne travaillera.",
+      "REGISTER_SCOPE": "Vous pouvez inscrire du personnel dans chaque hôpital de votre organisation.",
+      "ASSIGNMENTS_SCOPE": "Vous gérez les affectations du personnel dans chaque hôpital de votre organisation. Les rôles d’administration sont attribués par un super-administrateur.",
+      "ACTION_USERS": "Inscrire du personnel dans vos hôpitaux",
+      "ACTION_ASSIGNMENTS": "Attribuer ou retirer un rôle à un membre du personnel"
+    },
+    "ORG_TOTALS": {
+      "TITLE": "Chiffres de l’organisation",
+      "PERIOD": "Du {{from}} au {{to}}",
+      "NOTE": "Des totaux par hôpital uniquement : aucune liste de patients, aucune facture, aucune note.",
+      "LOADING": "Chargement des chiffres…",
+      "LOAD_FAILED": "Les chiffres n’ont pas pu être chargés.",
+      "RETRY": "Réessayer",
+      "EMPTY": "Aucun hôpital dans votre organisation pour le moment.",
+      "STAFF": "Personnel actif",
+      "APPOINTMENTS": "Rendez-vous",
+      "ADMISSIONS": "Hospitalisations",
+      "INVOICED": "Facturé",
+      "COLLECTED": "Encaissé",
+      "DEATHS": "Décès",
+      "FEWER_THAN": "Moins de {{threshold}}",
+      "SMALL_COUNTS": "Un nombre de décès inférieur à {{threshold}} n’est pas affiché, pour protéger les personnes concernées."
+    }
   },
   "ERROR_404": {
     "TITLE": "Page introuvable",

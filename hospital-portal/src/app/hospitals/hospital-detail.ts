@@ -27,6 +27,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { OnboardingChecklistComponent } from '../shared/onboarding-checklist/onboarding-checklist.component';
 type ActionKind = 'suspend' | 'restore' | 'archive' | 'schedule-purge' | 'cancel-purge';
 
 interface ActionDialog {
@@ -52,6 +53,7 @@ interface ActionDialog {
     RouterLink,
     TranslateModule,
     OrgTextPipe,
+    OnboardingChecklistComponent,
   ],
   templateUrl: './hospital-detail.html',
   changeDetection: ChangeDetectionStrategy.Eager,

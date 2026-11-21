@@ -179,6 +179,10 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
   '/super-admin/subscriptions': 'PLATFORM',
   '/super-admin/data-residency': 'PLATFORM',
   '/super-admin/providers': 'PLATFORM',
+  // QA r65 D2777: the super-admin's Analytics and Feature Flags entries name
+  // the route the rewrite guard lands on; same groups as their legacy paths.
+  '/super-admin/analytics': 'INSIGHTS',
+  '/super-admin/feature-flags': 'ADMINISTRATION',
 
   // ── FACILITY (provider shell) ────────────────────────────────────────
   '/provider': 'FACILITY',
@@ -210,6 +214,71 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
 };
 
 export const OTHER_GROUP: NavGroupId = 'OTHER';
+
+/**
+ * QA r65 D2777: the clinical workstations not listed in a super-admin's sidebar.
+ *
+ * <p>The super-admin had 72 sidebar entries, about 45 of them a hospital's
+ * work modules, for a role that cannot take a clinical action (scorecard S1:
+ * a new encounter, a note, vitals, a lab or imaging order, a prescription
+ * each answer 403 "Action clinique : elle nécessite un rôle clinique"). The
+ * rule is not a matter of taste: a hospital's own administrator, the other
+ * non-clinical admin, has no entry for these modules either. So the
+ * super-admin's sidebar lists the hospital admin's modules, the platform's,
+ * and the work queues of {@link SUPER_ADMIN_KEPT_WORK_QUEUES}.
+ *
+ * <p>Listing only. The entries stay in the nav model, so the sidebar's
+ * search still finds each module by name, and the routes and their guards
+ * are untouched: a super-admin still reads an encounter, a prescription or a
+ * lab result from the patient record or a link, exactly as before.
+ *
+ * <p>`shell.spec.ts` holds the rule both ways: every route here is absent
+ * from the hospital admin's sidebar, and every clinical-group entry a
+ * super-admin has that a hospital admin lacks is either here or a recorded
+ * exception.
+ */
+export const SUPER_ADMIN_HIDDEN_WORKSTATIONS: ReadonlySet<string> = new Set([
+  // Patients & flow
+  '/encounters',
+  '/admissions',
+  '/discharge',
+  // Care
+  '/consultations',
+  '/treatment-plans',
+  '/procedure-orders',
+  '/referrals',
+  '/nurse-station',
+  '/emar',
+  '/patient-education',
+  '/registries',
+  // Medications & pharmacy
+  '/prescriptions',
+  '/pharmacy/mtm',
+  // Diagnostics
+  '/lab',
+  '/lab-results',
+  '/microbiology',
+  '/transfusions',
+]);
+
+/**
+ * The clinical-group entries a super-admin keeps although a hospital admin
+ * has none: each is a queue the super-admin really works in, with its reason.
+ */
+export const SUPER_ADMIN_KEPT_WORK_QUEUES: Readonly<Record<string, string>> = {
+  '/lab-approval-queue':
+    'reviews and approves lab test definitions where a new hospital has no lab director or quality manager yet (r65 set-up)',
+  '/lab-release-worklist':
+    'expanded into the laboratory (RoleExpansion.SUPER_ADMIN_INHERITS): the one role that may always release',
+};
+
+/** The groups that hold a hospital's clinical work (what the two lists above are drawn from). */
+export const CLINICAL_WORK_GROUPS: readonly NavGroupId[] = [
+  'PATIENTS_FLOW',
+  'CARE',
+  'PHARMACY',
+  'DIAGNOSTICS',
+];
 
 /** Translation key for a group heading. */
 export function navGroupTranslationKey(id: NavGroupId): string {

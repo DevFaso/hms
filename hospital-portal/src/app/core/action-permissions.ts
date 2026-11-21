@@ -32,7 +32,7 @@ export const ACTION_PERMISSIONS = {
   },
   labOrderDelete: {
     endpoint: 'LabOrderController#deleteLabOrder',
-    roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
+    roles: ['ROLE_SUPER_ADMIN'],
   },
   labOrderVoid: {
     endpoint: 'LabOrderController#voidLabOrder',
@@ -108,13 +108,7 @@ export const ACTION_PERMISSIONS = {
   },
   imagingReportsByHospital: {
     endpoint: 'ImagingResultController#getReportsByHospital',
-    roles: [
-      'ROLE_SUPER_ADMIN',
-      'ROLE_HOSPITAL_ADMIN',
-      'ROLE_ADMIN',
-      'ROLE_DOCTOR',
-      'ROLE_RADIOLOGIST',
-    ],
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_HOSPITAL_ADMIN', 'ROLE_DOCTOR', 'ROLE_RADIOLOGIST'],
   },
   imagingReportCreate: {
     endpoint: 'ImagingResultController#createReport',

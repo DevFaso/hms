@@ -44,7 +44,9 @@ import {
   navGroupForRoute,
   navGroupTranslationKey,
   providerNavEntries,
+  SUPER_ADMIN_HIDDEN_WORKSTATIONS,
 } from './nav-groups';
+import { NavAccessService } from '../core/nav-access.service';
 import { ProviderContextService } from '../core/provider-context.service';
 import { SkipLinkComponent } from '../shared/a11y/skip-link.component';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
@@ -119,6 +121,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly roleContext = inject(RoleContextService);
   /** Route-level hospital scope gate: see HospitalScopeGateService. */
   protected readonly scopeGate = inject(HospitalScopeGateService);
+  /** QA r65 D2761: the sidebar's routes, published for the pages that link to other modules. */
+  private readonly navAccess = inject(NavAccessService);
   private readonly router = inject(Router);
   protected readonly toast = inject(ToastService);
   private readonly notifService = inject(NotificationService);
@@ -451,7 +455,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_MIDWIFE',
           'ROLE_RECEPTIONIST',
           'ROLE_HOSPITAL_ADMIN',
-          'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
           'ROLE_LAB_DIRECTOR',
           'ROLE_LAB_MANAGER',
@@ -480,7 +483,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_MIDWIFE',
           'ROLE_RECEPTIONIST',
           'ROLE_HOSPITAL_ADMIN',
-          'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
           'ROLE_STAFF',
         ],
@@ -567,7 +569,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/encounters',
         permission: 'Create Encounters',
         // Mirrors the /encounters RoleGuard.
-        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'hotel',
@@ -576,7 +578,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/admissions',
         permission: 'Admit Patients',
         // Mirrors the /admissions RoleGuard.
-        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'grid_view',
@@ -801,7 +803,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_MIDWIFE',
           'ROLE_RECEPTIONIST',
           'ROLE_HOSPITAL_ADMIN',
-          'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
       },
@@ -844,9 +845,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_RADIOLOGIST',
           // Policy rule 3 (2026-11-20, provisional): the imaging technician's worklist.
           'ROLE_IMAGING_TECHNICIAN',
-          // User decision 2026-11-14: read-only Imagerie for the admin roles.
+          // User decision 2026-11-14: read-only Imagerie for the hospital admin and the super-admin.
           'ROLE_HOSPITAL_ADMIN',
-          'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
       },
@@ -857,7 +857,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/consultations',
         permission: 'Request Consultations',
         // Mirrors the /consultations RoleGuard.
-        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'assignment',
@@ -872,7 +872,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_NURSE',
           'ROLE_MIDWIFE',
           'ROLE_PHYSIOTHERAPIST',
-          'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
       },
@@ -883,7 +882,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/referrals',
         permission: 'Create Referrals',
         // Mirrors the /referrals RoleGuard (midwife added there in this change).
-        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'receipt_long',
@@ -896,7 +895,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         roles: [
           'ROLE_SUPER_ADMIN',
           'ROLE_HOSPITAL_ADMIN',
-          'ROLE_ADMIN',
           'ROLE_BILLING_SPECIALIST',
           'ROLE_ACCOUNTANT',
           'ROLE_RECEPTIONIST',
@@ -1063,31 +1061,29 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
             translationKey: 'NAV.PLATFORM',
             route: '/super-admin/platform',
           },
+          // QA r65 D2777: the super-admin lands on /super-admin/analytics and
+          // /super-admin/feature-flags (superAdminPathRewriteGuard), so the
+          // entry names that route: one page, one address, and the active
+          // link lights up. A multi-role super-admin acting in another role
+          // has no such entry at all (the guards would refuse it).
           {
             icon: 'query_stats',
             label: 'Analytics',
             translationKey: 'NAV.ANALYTICS',
-            route: '/analytics',
+            route: isActiveSuperAdmin ? '/super-admin/analytics' : '/analytics',
           },
           {
             icon: 'toggle_on',
             label: 'Feature Flags',
             translationKey: 'NAV.FEATURE_FLAGS',
-            route: '/feature-flags',
+            route: isActiveSuperAdmin ? '/super-admin/feature-flags' : '/feature-flags',
           },
         );
       }
-      // MVP-5: only ROLE_ADMIN sees Administration. Super admins are
-      // redirected from /admin to /super-admin (SuperAdminRedirectGuard) and
-      // already have the Control Tower in their nav.
-      if (!isActiveSuperAdmin) {
-        items.push({
-          icon: 'admin_panel_settings',
-          label: 'Administration',
-          translationKey: 'NAV.ADMINISTRATION',
-          route: '/admin',
-        });
-      }
+      // QA r65 D2760 (owner's request): no « Administration » entry any more.
+      // It repeated « Tableau de bord » (the same three counters, and quick
+      // links to pages already in this sidebar), so the dashboard is the one
+      // landing page of an administrator; /admin redirects there.
     }
     if (this.hasAnyRole(['ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'])) {
       items.push({
@@ -1097,8 +1093,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/digital-signatures',
       });
     }
-    // Assignment admin — SecurityConfig gates /assignments/** to these two roles
-    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'])) {
+    // Assignment admin: SecurityConfig gates /assignments/** to these roles
+    // (the organisation admin since the platform admin rules of 2026-11-20, rule 1a).
+    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_ADMIN'])) {
       items.push({
         icon: 'assignment_ind',
         label: 'Assignments',
@@ -1162,7 +1159,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       // trails as part of CAP/ISO 15189 quality audits.
       this.hasAnyRole([
         'ROLE_HOSPITAL_ADMIN',
-        'ROLE_ADMIN',
         'ROLE_SUPER_ADMIN',
         'ROLE_LAB_DIRECTOR',
         'ROLE_QUALITY_MANAGER',
@@ -1589,7 +1585,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         'ROLE_NURSE',
         'ROLE_QUALITY_MANAGER',
         'ROLE_HOSPITAL_ADMIN',
-        'ROLE_ADMIN',
         'ROLE_SUPER_ADMIN',
       ])
     ) {
@@ -1644,14 +1639,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/lab-outbox',
       });
     }
-    if (
-      this.hasAnyRole([
-        'ROLE_RECEPTIONIST',
-        'ROLE_HOSPITAL_ADMIN',
-        'ROLE_ADMIN',
-        'ROLE_SUPER_ADMIN',
-      ])
-    ) {
+    if (this.hasAnyRole(['ROLE_RECEPTIONIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'])) {
       items.push({
         icon: 'space_dashboard',
         label: 'Front Desk',
@@ -1692,6 +1680,19 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         !doctorHiddenRoutes.has(item.route),
     );
   });
+
+  /**
+   * QA r65 D2777: a clinical workstation a super-admin cannot work in is not
+   * listed in their sidebar (SUPER_ADMIN_HIDDEN_WORKSTATIONS says which, and
+   * why). It stays in the nav model: the sidebar's search still finds it by
+   * name, its page keeps its title, and a saved order still replays.
+   */
+  private leftOutOfSidebar(item: NavItem): boolean {
+    return (
+      this.roleContext.activeRole === 'ROLE_SUPER_ADMIN' &&
+      SUPER_ADMIN_HIDDEN_WORKSTATIONS.has(item.route)
+    );
+  }
 
   private hasAnyRole(roles: string[]): boolean {
     const activeRole = this.roleContext.activeRole;
@@ -1743,12 +1744,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       translationKey: 'NAV.COST_CHARGEBACK',
       route: '/super-admin/cost',
     });
-    items.push({
-      icon: 'policy',
-      label: 'Audit Search',
-      translationKey: 'NAV.AUDIT_SEARCH',
-      route: '/super-admin/audit-search',
-    });
+    // QA r65 D2777: « Recherche d'audit » is no longer a second sidebar entry
+    // beside « Journaux d'audit »: the two audit screens are two tabs of one
+    // entry (AuditTabsComponent on both pages).
     items.push({
       icon: 'emergency',
       label: 'Emergency Controls',
@@ -1813,6 +1811,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       const base = this.baseNavItems();
       const saved = this.navOrder.load();
       this.navItems.set(saved ? this.navOrder.applyOrder(base, saved) : base);
+      // QA r65 D2761: what this role can open, for every page that links to
+      // another module (the dashboard's tiles and quick links).
+      this.navAccess.publish(base.map((item) => item.route));
     });
 
     // MVP-7b: subscribe to /topic/emergency-broadcast so a super-admin
@@ -1859,7 +1860,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     const entries = this.navItems()
       .map((item, flatIndex) => ({ item, flatIndex }))
-      .filter(({ item }) => !query || this.navItemMatches(item, query));
+      // QA r65 D2777: without a search, the workstations a super-admin cannot
+      // work in are not listed; a search finds any module by its name.
+      .filter(({ item }) =>
+        query ? this.navItemMatches(item, query) : !this.leftOutOfSidebar(item),
+      );
 
     return NAV_GROUP_IDS.map((id) => ({
       id,
@@ -1916,7 +1921,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     const group = navGroupForRoute(current.route);
 
     for (let i = flatIndex + direction; i >= 0 && i < items.length; i += direction) {
-      if (navGroupForRoute(items[i].route) === group) return i;
+      // An entry that is not listed is not a neighbour: swapping with it would move nothing on screen.
+      if (navGroupForRoute(items[i].route) === group && !this.leftOutOfSidebar(items[i])) return i;
     }
     return null;
   }
@@ -2003,6 +2009,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.emergencyBroadcast.disconnect();
     this.downtime.stopPolling();
     this.idle.stop();
+    // The next shell (another user after sign-out) publishes its own sidebar.
+    this.navAccess.clear();
   }
 
   private loadNotifications(): void {

@@ -40,10 +40,27 @@ public class HospitalMapper {
         .organizationName(organization != null ? trim(organization.getName()) : null)
         .organizationCode(organization != null ? trim(organization.getCode()) : null)
             .active(hospital.isActive())
+            .currencyCode(hospital.getCurrencyCode())
+            .timeZone(hospital.getTimeZone())
+            .effectiveTimeZone(effectiveTimeZone(hospital))
             .lifecycleState(hospital.getLifecycleState())
             .createdAt(hospital.getCreatedAt())
             .updatedAt(hospital.getUpdatedAt())
             .build();
+    }
+
+    /**
+     * QA r65 D2501: the zone id this hospital's day is counted in: its own,
+     * else its organisation's default. Null when neither names one (the
+     * server's zone then decides, {@code HospitalCalendar.zoneOf}).
+     */
+    private static String effectiveTimeZone(Hospital hospital) {
+        if (hospital.getTimeZone() != null && !hospital.getTimeZone().isBlank()) {
+            return hospital.getTimeZone();
+        }
+        var organization = hospital.getOrganization();
+        String inherited = organization != null ? organization.getDefaultTimezone() : null;
+        return inherited == null || inherited.isBlank() ? null : inherited.trim();
     }
 
     /* ----------------------------------------

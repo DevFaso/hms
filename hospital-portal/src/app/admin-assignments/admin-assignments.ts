@@ -11,8 +11,10 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
+import { Observable } from 'rxjs';
 import {
   AssignmentAdminService,
+  AssignmentActivationCode,
   AssignmentBatchResponse,
   AssignmentBulkImportResponse,
   AssignmentResponse,
@@ -27,6 +29,21 @@ import { grantableRoles } from '../core/grantable-roles';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
+
+/**
+ * The roles that get every action of this page. An organisation admin
+ * (ROLE_ADMIN; platform admin rules 2026-11-20, rule 1a) gets the reduced set
+ * the server admits it on: one assignment at a time at a hospital of its own
+ * organisation, its details and activation code, a new code, a re-send, and
+ * the switch-off. No edit, no delete, no multi-hospital grant, no import.
+ */
+export const ASSIGNMENT_FULL_ADMIN_ROLES: readonly string[] = [
+  'ROLE_SUPER_ADMIN',
+  'ROLE_HOSPITAL_ADMIN',
+];
+
+/** What a hospital picker of this page needs. */
+type HospitalOption = Pick<HospitalResponse, 'id' | 'name'> & { lifecycleState?: string | null };
 import { deliveryWarningKeys, hasActivationSent } from '../shared/delivery-warnings';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
@@ -90,7 +107,9 @@ export class AdminAssignmentsComponent implements OnInit {
   filterCode = signal('');
 
   /* Reference data */
-  hospitals = signal<HospitalResponse[]>([]);
+  hospitals = signal<HospitalOption[]>([]);
+  /** False for an organisation admin: see {@link ASSIGNMENT_FULL_ADMIN_ROLES}. */
+  readonly fullAdmin = this.roleContext.hasAnyActiveRole([...ASSIGNMENT_FULL_ADMIN_ROLES]);
   /**
    * QA D818: the hospitals a NEW role may be granted at. The list filter keeps
    * every hospital (old assignments at an archived one are still searchable);
@@ -182,7 +201,10 @@ export class AdminAssignmentsComponent implements OnInit {
   ngOnInit(): void {
     // A hospital admin most often wants their own hospital's assignments;
     // pre-filter to the active scope (still just a filter server-side).
-    if (!this.roleContext.hasAnyActiveRole(['ROLE_SUPER_ADMIN'])) {
+    // An organisation admin lists its whole organisation: the server scopes
+    // the listing to it, and a hospital it holds no role at is not a filter
+    // it may send (the search box finds a hospital by name).
+    if (this.fullAdmin && !this.roleContext.hasAnyActiveRole(['ROLE_SUPER_ADMIN'])) {
       this.filterHospitalId.set(this.roleContext.activeHospitalId ?? '');
     }
 
@@ -200,7 +222,10 @@ export class AdminAssignmentsComponent implements OnInit {
     }
 
     this.load();
-    this.hospitalService.list().subscribe({
+    const hospitals$: Observable<HospitalOption[]> = this.fullAdmin
+      ? this.hospitalService.list()
+      : this.hospitalService.organisationHospitals();
+    hospitals$.subscribe({
       next: (h) => this.hospitals.set(h),
       error: () => this.toast.error(this.translate.instant('ASSIGN_ADMIN.HOSPITALS_LOAD_ERROR')),
     });
@@ -254,6 +279,9 @@ export class AdminAssignmentsComponent implements OnInit {
     this.formUserIdentifier.set('');
     this.formRoleId.set('');
     this.formHospitalId.set(this.filteredHospitalIfOpen());
+    // Rule 1a: an organisation admin always names the hospital; with one, it is that one.
+    const open = this.assignableHospitals();
+    if (!this.fullAdmin && open.length === 1) this.formHospitalId.set(open[0].id);
     this.formStartDate.set('');
     this.formActive.set(true);
     this.modal.set('create');
@@ -288,7 +316,49 @@ export class AdminAssignmentsComponent implements OnInit {
 
   openDetail(row: AssignmentResponse): void {
     this.selected.set(row);
+    this.resetActivationCode();
     this.modal.set('detail');
+  }
+
+  // ── QA r65 D2764: the activation code, handed over in person ──────────
+
+  /** The code the server showed for the open detail; never kept once the dialog closes. */
+  readonly activationCode = signal<AssignmentActivationCode | null>(null);
+  readonly activationBusy = signal(false);
+  readonly activationError = signal<string | null>(null);
+
+  /**
+   * The signed-in account created this assignment: the server shows the code
+   * to that person only (the one it already asks the code from to confirm).
+   */
+  isRegistrar(row: AssignmentResponse): boolean {
+    const me = this.auth.getUserProfile()?.id ?? this.auth.getUserId();
+    return !!me && !!row.registeredByUserId && row.registeredByUserId === me;
+  }
+
+  showActivationCode(row: AssignmentResponse): void {
+    if (this.activationBusy()) return;
+    this.activationBusy.set(true);
+    this.activationError.set(null);
+    this.service.revealActivationCode(row.id).subscribe({
+      next: (shown) => {
+        this.activationBusy.set(false);
+        // The dialog may have moved to another row meanwhile: that row never shows this code.
+        if (this.selected()?.id === row.id) this.activationCode.set(shown);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.activationBusy.set(false);
+        this.activationError.set(
+          refusalReason(err) ?? this.translate.instant('PLATFORM_SETUP.ACTIVATION.SHOW_FAILED'),
+        );
+      },
+    });
+  }
+
+  private resetActivationCode(): void {
+    this.activationCode.set(null);
+    this.activationBusy.set(false);
+    this.activationError.set(null);
   }
 
   openRegen(row: AssignmentResponse): void {
@@ -313,12 +383,14 @@ export class AdminAssignmentsComponent implements OnInit {
   closeModal(): void {
     this.modal.set(null);
     this.selected.set(null);
+    this.resetActivationCode();
   }
 
   /* ── Actions ── */
 
   submitCreate(): void {
-    if (!this.formUserIdentifier().trim() || !this.formRoleId()) {
+    const hospitalMissing = !this.fullAdmin && !this.formHospitalId();
+    if (!this.formUserIdentifier().trim() || !this.formRoleId() || hospitalMissing) {
       this.toast.error(this.translate.instant('ASSIGN_ADMIN.FORM_REQUIRED'));
       return;
     }

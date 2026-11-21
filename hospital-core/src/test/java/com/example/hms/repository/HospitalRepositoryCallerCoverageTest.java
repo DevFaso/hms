@@ -99,6 +99,10 @@ class HospitalRepositoryCallerCoverageTest {
         entry("RecordAccessPolicyImpl.evaluate#findById", ANY_TYPE + "loads the acting facility to refuse a provider (AC-9)"),
         entry("RecordAccessPolicyImpl.actsAtProvider#findById", ANY_TYPE + "an empty readable set at a provider (AC-9)"),
         entry("HospitalServiceImpl.deleteHospital#findByIdForUpdate", ANY_TYPE + "super-admin delete of a never-verified provider (slice 1)"),
+        // Review of #1246: the edit loads the row under a lock, then keeps clinical hospitals only.
+        entry("HospitalServiceImpl.updateHospital#findByIdForUpdate",
+            "the super-admin's edit of a hospital, locked for the code and currency rules; filtered with"
+                + " ClinicalHospitals.isClinical on the next line, so a provider row is still a 404"),
         entry("HospitalServiceImpl.getHospitalOrThrow#findById", ANY_TYPE + "super-admin read of one facility row"),
         entry("HospitalLifecycleServiceImpl.loadOrThrow#findById", ANY_TYPE + "the lifecycle of every facility type (AC-16)"),
         entry("HospitalLifecycleServiceImpl.lockOrThrow#findByIdForUpdate", ANY_TYPE + "the lifecycle of every facility type (AC-16)"),
@@ -163,7 +167,22 @@ class HospitalRepositoryCallerCoverageTest {
         // QA D1121: moved from BY_ID_RECORDED ("CdsCardText.zoneOf#findById"), the same read as a plain value.
         entry("CdsCardText#findTimezoneIdById",
             "QA D1114/D1121: reads the hospital's time-zone id as a value to write a card time on its wall clock;"
-                + " grants, writes and lists nothing"));
+                + " grants, writes and lists nothing"),
+        // QA r65 D2500/D2501 (track I).
+        entry("MeController#findTimezoneIdById",
+            "the time-zone id of the caller's own facility (already read by id above), as a value for display"),
+        entry("HospitalServiceImpl#findByCodeIgnoreCase",
+            "duplicate check on a hospital code the super-admin typed: codes are unique across every type"),
+        entry("HospitalServiceImpl#hasAllocatedInvoiceNumber",
+            "whether the hospital being edited has issued an invoice number (its code is then locked);"
+                + " a count on the invoice sequence, not a read of a destination"),
+        // Platform admin rules 2026-11-20, rule 3 (track I).
+        entry("HospitalServiceImpl#hasPriceListItem",
+            "whether the hospital being edited has a price (its currency is then locked);"
+                + " an existence check by the edited hospital's own id, not a read of a destination"),
+        entry("HospitalServiceImpl#hasInvoice",
+            "whether the hospital being edited has an invoice (its currency is then locked);"
+                + " an existence check by the edited hospital's own id, not a read of a destination"));
 
     @Test
     @DisplayName("every unfiltered HospitalRepository caller is recorded with its reason")

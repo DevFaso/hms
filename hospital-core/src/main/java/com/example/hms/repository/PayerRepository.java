@@ -27,6 +27,10 @@ public interface PayerRepository extends JpaRepository<Payer, UUID> {
 
     boolean existsByHospitalIdAndCode(UUID hospitalId, String code);
 
+    /** QA r65 D2731 (onboarding checklist): how many active payers ONE hospital has. */
+    @Query("SELECT COUNT(p) FROM Payer p WHERE p.hospitalId = :hospitalId AND p.active = true")
+    long countByHospitalIdAndActiveTrue(@Param("hospitalId") UUID hospitalId);
+
     /**
      * The payer, locked (SELECT ... FOR UPDATE) and only at its own hospital. Every change to a payer, its plans or
      * their rules takes this lock first, so two concurrent changes to one payer's catalogue are serialised.

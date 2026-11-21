@@ -49,4 +49,22 @@ class InvoiceNumberAllocatorTest {
         assertThat(allocator.next(hospital, LocalDate.of(2026, 3, 1))).isEqualTo("INV-2026-000042");
         assertThat(row.getLastValue()).isEqualTo(42L);
     }
+
+    @Test
+    void theHospitalRowIsLockedFirstAndItsCodeIsTheOneUsed() {
+        // Review of #1246: the caller's copy still says OLD; an edit committed NEW while this waited.
+        Hospital callersCopy = hospital("old");
+        Hospital locked = hospital("new");
+        locked.setId(callersCopy.getId());
+        when(repository.lockHospitalWhileNumbering(callersCopy.getId())).thenReturn(Optional.of(locked));
+        when(repository.findForUpdate(callersCopy.getId(), 2026)).thenReturn(Optional.empty());
+        when(repository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(allocator.next(callersCopy, LocalDate.of(2026, 3, 1))).isEqualTo("NEW-2026-000001");
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(repository);
+        order.verify(repository).lockHospitalWhileNumbering(callersCopy.getId());
+        order.verify(repository).findForUpdate(callersCopy.getId(), 2026);
+        order.verify(repository).saveAndFlush(any());
+    }
 }

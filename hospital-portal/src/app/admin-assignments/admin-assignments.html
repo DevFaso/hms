@@ -3,16 +3,24 @@
     <div>
       <h1>{{ 'ASSIGN_ADMIN.TITLE' | translate }}</h1>
       <p class="subtitle">{{ 'ASSIGN_ADMIN.SUBTITLE' | translate }}</p>
+      @if (!fullAdmin) {
+        <p class="subtitle" data-testid="assignments-org-scope">
+          {{ 'PLATFORM_SETUP.ORG_ADMIN.ASSIGNMENTS_SCOPE' | translate }}
+        </p>
+      }
     </div>
     <div class="header-actions">
-      <button type="button" class="btn-secondary" (click)="openImport()">
-        <span class="material-symbols-outlined">upload_file</span>
-        {{ 'ASSIGN_ADMIN.BULK_IMPORT' | translate }}
-      </button>
-      <button type="button" class="btn-secondary" (click)="openMulti()">
-        <span class="material-symbols-outlined">stacks</span>
-        {{ 'ASSIGN_ADMIN.MULTI_SCOPE' | translate }}
-      </button>
+      <!-- Rule 1a: an organisation admin grants one role at one hospital at a time. -->
+      @if (fullAdmin) {
+        <button type="button" class="btn-secondary" (click)="openImport()">
+          <span class="material-symbols-outlined">upload_file</span>
+          {{ 'ASSIGN_ADMIN.BULK_IMPORT' | translate }}
+        </button>
+        <button type="button" class="btn-secondary" (click)="openMulti()">
+          <span class="material-symbols-outlined">stacks</span>
+          {{ 'ASSIGN_ADMIN.MULTI_SCOPE' | translate }}
+        </button>
+      }
       <button type="button" class="btn-primary" (click)="openCreate()">
         <span class="material-symbols-outlined">person_add</span>
         {{ 'ASSIGN_ADMIN.NEW' | translate }}
@@ -31,17 +39,20 @@
       (keydown.enter)="applyFilters()"
       [placeholder]="'ASSIGN_ADMIN.SEARCH' | translate"
     />
-    <select
-      class="filter-select"
-      [ngModel]="filterHospitalId()"
-      [attr.aria-label]="'ASSIGN_ADMIN.ALL_HOSPITALS' | translate"
-      (ngModelChange)="filterHospitalId.set($event)"
-    >
-      <option value="">{{ 'ASSIGN_ADMIN.ALL_HOSPITALS' | translate }}</option>
-      @for (h of hospitals(); track h.id) {
-        <option [value]="h.id">{{ h.name }}</option>
-      }
-    </select>
+    @if (fullAdmin) {
+      <select
+        class="filter-select"
+        data-testid="assignments-hospital-filter"
+        [ngModel]="filterHospitalId()"
+        [attr.aria-label]="'ASSIGN_ADMIN.ALL_HOSPITALS' | translate"
+        (ngModelChange)="filterHospitalId.set($event)"
+      >
+        <option value="">{{ 'ASSIGN_ADMIN.ALL_HOSPITALS' | translate }}</option>
+        @for (h of hospitals(); track h.id) {
+          <option [value]="h.id">{{ h.name }}</option>
+        }
+      </select>
+    }
     <select
       class="filter-select"
       [ngModel]="filterActive()"
@@ -140,24 +151,31 @@
                 >
                   <span class="material-symbols-outlined">visibility</span>
                 </button>
-                <button
-                  type="button"
-                  class="icon-btn"
-                  (click)="openEdit(row)"
-                  [title]="'COMMON.EDIT' | translate"
-                  [attr.aria-label]="'COMMON.EDIT' | translate"
-                >
-                  <span class="material-symbols-outlined">edit</span>
-                </button>
-                <button
-                  type="button"
-                  class="icon-btn"
-                  (click)="openRegen(row)"
-                  [title]="'ASSIGN_ADMIN.REGENERATE' | translate"
-                  [attr.aria-label]="'ASSIGN_ADMIN.REGENERATE' | translate"
-                >
-                  <span class="material-symbols-outlined">key</span>
-                </button>
+                @if (fullAdmin) {
+                  <button
+                    type="button"
+                    class="icon-btn"
+                    data-test="assignment-edit"
+                    (click)="openEdit(row)"
+                    [title]="'COMMON.EDIT' | translate"
+                    [attr.aria-label]="'COMMON.EDIT' | translate"
+                  >
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                }
+                <!-- Rule 1c: nobody sends a fresh activation code to their own account. -->
+                @if (!isOwnRow(row)) {
+                  <button
+                    type="button"
+                    class="icon-btn"
+                    data-test="assignment-regenerate"
+                    (click)="openRegen(row)"
+                    [title]="'ASSIGN_ADMIN.REGENERATE' | translate"
+                    [attr.aria-label]="'ASSIGN_ADMIN.REGENERATE' | translate"
+                  >
+                    <span class="material-symbols-outlined">key</span>
+                  </button>
+                }
                 <!-- QA r22: an activated account has no activation message to re-send. -->
                 @if (!row.confirmationVerified) {
                   <button
@@ -182,16 +200,18 @@
                       <span class="material-symbols-outlined">block</span>
                     </button>
                   }
-                  <button
-                    type="button"
-                    class="icon-btn danger"
-                    data-test="assignment-delete"
-                    (click)="delete(row)"
-                    [title]="'COMMON.DELETE' | translate"
-                    [attr.aria-label]="'COMMON.DELETE' | translate"
-                  >
-                    <span class="material-symbols-outlined">delete</span>
-                  </button>
+                  @if (fullAdmin) {
+                    <button
+                      type="button"
+                      class="icon-btn danger"
+                      data-test="assignment-delete"
+                      (click)="delete(row)"
+                      [title]="'COMMON.DELETE' | translate"
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
+                    >
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
+                  }
                 }
               </td>
             </tr>
@@ -273,8 +293,13 @@
           </select>
         </label>
         <label class="form-field">
-          <span>{{ 'ASSIGN_ADMIN.HOSPITAL' | translate }}</span>
-          <select [ngModel]="formHospitalId()" (ngModelChange)="formHospitalId.set($event)">
+          <span>{{ 'ASSIGN_ADMIN.HOSPITAL' | translate }}{{ fullAdmin ? '' : ' *' }}</span>
+          <select
+            data-test="assignment-hospital"
+            [required]="!fullAdmin"
+            [ngModel]="formHospitalId()"
+            (ngModelChange)="formHospitalId.set($event)"
+          >
             <option value="">—</option>
             @for (h of formHospitalOptions(); track h.id) {
               <option [value]="h.id">{{ h.name }}</option>
@@ -536,6 +561,51 @@
             >
             <code class="wrap-code">{{ row.profileCompletionUrl }}</code>
           </p>
+        }
+        <!-- QA r65 D2764: « Remettez le code en main propre » needs the code to be somewhere. -->
+        @if (!row.confirmationVerified) {
+          <section class="activation-code" data-testid="activation-code">
+            <h3>{{ 'PLATFORM_SETUP.ACTIVATION.TITLE' | translate }}</h3>
+            @if (isRegistrar(row)) {
+              @if (activationCode(); as shown) {
+                <p class="activation-code-value" data-testid="activation-code-value">
+                  <code>{{ shown.confirmationCode }}</code>
+                </p>
+                <p class="form-static">{{ 'PLATFORM_SETUP.ACTIVATION.HOW_TO' | translate }}</p>
+                @if (shown.expiresAt) {
+                  <p class="form-static" data-testid="activation-code-expiry">
+                    {{
+                      'PLATFORM_SETUP.ACTIVATION.EXPIRES'
+                        | translate: { date: (shown.expiresAt | serverTime | dateTime) }
+                    }}
+                  </p>
+                }
+              } @else {
+                <p class="form-static">{{ 'PLATFORM_SETUP.ACTIVATION.HELP' | translate }}</p>
+                <button
+                  type="button"
+                  class="btn-secondary"
+                  data-testid="activation-code-show"
+                  [disabled]="activationBusy()"
+                  (click)="showActivationCode(row)"
+                >
+                  {{ 'PLATFORM_SETUP.ACTIVATION.SHOW' | translate }}
+                </button>
+              }
+              @if (activationError(); as reason) {
+                <p class="field-error" role="alert" data-testid="activation-code-error">
+                  {{ reason }}
+                </p>
+              }
+            } @else {
+              <p class="form-static" data-testid="activation-code-registrar-only">
+                {{
+                  'PLATFORM_SETUP.ACTIVATION.REGISTRAR_ONLY'
+                    | translate: { name: row.registeredByUserName || '—' }
+                }}
+              </p>
+            }
+          </section>
         }
         @if (row.profileChecklist && row.profileChecklist.length > 0) {
           <div class="checklist">

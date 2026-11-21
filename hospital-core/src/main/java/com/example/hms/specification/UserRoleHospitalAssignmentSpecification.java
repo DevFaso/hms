@@ -18,6 +18,9 @@ import java.util.UUID;
 
 public final class UserRoleHospitalAssignmentSpecification {
 
+    /** The assignment's hospital association. */
+    private static final String HOSPITAL = "hospital";
+
     private UserRoleHospitalAssignmentSpecification() {
     }
 
@@ -28,8 +31,34 @@ public final class UserRoleHospitalAssignmentSpecification {
         }
         return (root, query, cb) -> {
             query.distinct(true);
-            return cb.equal(root.join("hospital", JoinType.LEFT).get("id"), hospitalId);
+            return cb.equal(root.join(HOSPITAL, JoinType.LEFT).get("id"), hospitalId);
         };
+    }
+
+    /**
+     * The rows at one of these hospitals (an organisation admin's list: the
+     * hospitals of its own organisation). An empty set matches nothing: it is
+     * never "no filter".
+     */
+    public static Specification<UserRoleHospitalAssignment> belongsToAnyHospital(
+            java.util.Collection<UUID> hospitalIds) {
+        return (root, query, cb) -> {
+            if (hospitalIds == null || hospitalIds.isEmpty()) {
+                return cb.disjunction();
+            }
+            query.distinct(true);
+            return root.join(HOSPITAL, JoinType.LEFT).get("id").in(hospitalIds);
+        };
+    }
+
+    /**
+     * Staff rows only: never a PATIENT assignment. An organisation admin's
+     * list (platform admin rules, rule 1b): a patient row is a patient's name
+     * and contact, and that role reads no patient list.
+     */
+    public static Specification<UserRoleHospitalAssignment> staffRowsOnly() {
+        return (root, query, cb) ->
+            cb.not(cb.upper(root.join("role", JoinType.LEFT).get("code")).in("PATIENT", "ROLE_PATIENT"));
     }
 
     @Nullable
@@ -52,7 +81,7 @@ public final class UserRoleHospitalAssignmentSpecification {
             query.distinct(true);
 
             Join<UserRoleHospitalAssignment, User> userJoin = root.join("user", JoinType.LEFT);
-            Join<UserRoleHospitalAssignment, Hospital> hospitalJoin = root.join("hospital", JoinType.LEFT);
+            Join<UserRoleHospitalAssignment, Hospital> hospitalJoin = root.join(HOSPITAL, JoinType.LEFT);
             Join<UserRoleHospitalAssignment, Role> roleJoin = root.join("role", JoinType.LEFT);
 
             // The assignment's own holder, role, code and hospital only. The

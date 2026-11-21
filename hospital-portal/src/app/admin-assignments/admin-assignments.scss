@@ -685,3 +685,32 @@
     grid-template-columns: 1fr;
   }
 }
+
+// QA r65 D2764: the activation code shown to the registrar.
+.activation-code {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--primary-soft);
+
+  h3 {
+    margin: 0 0 6px;
+    font-size: 0.9375rem;
+  }
+
+  .activation-code-value {
+    margin: 4px 0 8px;
+
+    code {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 8px;
+      background: #fff;
+      border: 1px solid var(--border);
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+    }
+  }
+}

@@ -53,7 +53,7 @@ import java.util.UUID;
 @RequestMapping("/mortality")
 @Validated
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','SURGEON','MIDWIFE',"
+@PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','SURGEON','MIDWIFE',"
     + "'NURSE','QUALITY_MANAGER')")
 @Tag(name = "Mortality", description = "Death records, the mortality register, and maternal/perinatal reporting")
 public class MortalityController {
@@ -67,7 +67,7 @@ public class MortalityController {
 
     /** Who may read the register and individual records. */
     private static final String READER =
-        "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','SURGEON','MIDWIFE',"
+        "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','SURGEON','MIDWIFE',"
             + "'NURSE','QUALITY_MANAGER')";
 
     private final MortalityService mortalityService;

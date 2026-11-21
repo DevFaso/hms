@@ -41,7 +41,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -760,7 +759,9 @@ class DepartmentServiceImplTest {
     }
 
     @Test
-    void createDepartment_superAdmin_noAssignment_autoProvisions() {
+    void createDepartment_superAdmin_noHospitalAdminYet_isRefusedAndNothingIsGranted() {
+        // Review of #1246 (rule 1c): the super-admin used to be handed a HOSPITAL_ADMIN
+        // assignment on its own account here. Nobody grants themselves a role.
         DepartmentRequestDTO dto = new DepartmentRequestDTO();
         dto.setHospitalId(hospitalId);
         dto.setName("Lab");
@@ -770,11 +771,6 @@ class DepartmentServiceImplTest {
         hospitalAdminRole.setId(UUID.randomUUID());
         hospitalAdminRole.setName("ROLE_HOSPITAL_ADMIN");
 
-        UserRoleHospitalAssignment provisioned = UserRoleHospitalAssignment.builder()
-            .user(user).hospital(hospital).role(hospitalAdminRole).active(true)
-            .startDate(LocalDate.now()).build();
-        DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
-
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Lab", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(superAdminId);
@@ -783,18 +779,13 @@ class DepartmentServiceImplTest {
         when(roleRepository.findByCode("ROLE_HOSPITAL_ADMIN")).thenReturn(Optional.of(hospitalAdminRole));
         when(roleAssignmentRepository.findFirstByHospitalIdAndRole_Name(hospitalId, "ROLE_HOSPITAL_ADMIN"))
             .thenReturn(Optional.empty());
-        when(userRepository.findById(superAdminId)).thenReturn(Optional.of(user));
-        when(userRoleRepository.existsByUserIdAndRoleId(user.getId(), hospitalAdminRole.getId())).thenReturn(false);
-        when(userRoleRepository.save(any(UserRole.class))).thenReturn(null);
-        when(roleAssignmentRepository.save(any(UserRoleHospitalAssignment.class))).thenReturn(provisioned);
-        when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(provisioned))).thenReturn(department);
-        when(departmentRepository.save(department)).thenReturn(department);
-        when(departmentMapper.toDepartmentResponseDTO(eq(department), any(Locale.class))).thenReturn(responseDto);
 
-        departmentService.createDepartment(dto, locale);
+        assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
 
-        verify(userRoleRepository).save(any(UserRole.class));
-        verify(roleAssignmentRepository).save(any(UserRoleHospitalAssignment.class));
+        verify(roleAssignmentRepository, never()).save(any(UserRoleHospitalAssignment.class));
+        verify(userRoleRepository, never()).save(any(UserRole.class));
+        verify(departmentRepository, never()).save(any());
     }
 
     @Test
@@ -1037,66 +1028,6 @@ class DepartmentServiceImplTest {
         departmentService.createDepartment(dto, locale);
 
         verify(userRepository, never()).findById(any());
-    }
-
-    @Test
-    void createDepartment_superAdmin_userNotFound_throws() {
-        DepartmentRequestDTO dto = new DepartmentRequestDTO();
-        dto.setHospitalId(hospitalId);
-        dto.setName("Lab");
-
-        UUID superAdminId = UUID.randomUUID();
-        Role hospitalAdminRole = new Role();
-        hospitalAdminRole.setId(UUID.randomUUID());
-        hospitalAdminRole.setName("ROLE_HOSPITAL_ADMIN");
-
-        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Lab", hospitalId)).thenReturn(false);
-        when(authService.getCurrentUserId()).thenReturn(superAdminId);
-        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(superAdminId, hospitalId)).thenReturn(Optional.empty());
-        when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(true);
-        when(roleRepository.findByCode("ROLE_HOSPITAL_ADMIN")).thenReturn(Optional.of(hospitalAdminRole));
-        when(roleAssignmentRepository.findFirstByHospitalIdAndRole_Name(hospitalId, "ROLE_HOSPITAL_ADMIN"))
-            .thenReturn(Optional.empty());
-        when(userRepository.findById(superAdminId)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
-            .isInstanceOf(ResourceNotFoundException.class);
-    }
-
-    @Test
-    void createDepartment_superAdmin_userAlreadyHasRole_skipsRoleCreation() {
-        DepartmentRequestDTO dto = new DepartmentRequestDTO();
-        dto.setHospitalId(hospitalId);
-        dto.setName("Lab");
-
-        UUID superAdminId = UUID.randomUUID();
-        Role hospitalAdminRole = new Role();
-        hospitalAdminRole.setId(UUID.randomUUID());
-        hospitalAdminRole.setName("ROLE_HOSPITAL_ADMIN");
-
-        UserRoleHospitalAssignment provisioned = UserRoleHospitalAssignment.builder()
-            .user(user).hospital(hospital).role(hospitalAdminRole).active(true).build();
-        DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
-
-        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Lab", hospitalId)).thenReturn(false);
-        when(authService.getCurrentUserId()).thenReturn(superAdminId);
-        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(superAdminId, hospitalId)).thenReturn(Optional.empty());
-        when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(true);
-        when(roleRepository.findByCode("ROLE_HOSPITAL_ADMIN")).thenReturn(Optional.of(hospitalAdminRole));
-        when(roleAssignmentRepository.findFirstByHospitalIdAndRole_Name(hospitalId, "ROLE_HOSPITAL_ADMIN"))
-            .thenReturn(Optional.empty());
-        when(userRepository.findById(superAdminId)).thenReturn(Optional.of(user));
-        when(userRoleRepository.existsByUserIdAndRoleId(user.getId(), hospitalAdminRole.getId())).thenReturn(true);
-        when(roleAssignmentRepository.save(any(UserRoleHospitalAssignment.class))).thenReturn(provisioned);
-        when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(provisioned))).thenReturn(department);
-        when(departmentRepository.save(department)).thenReturn(department);
-        when(departmentMapper.toDepartmentResponseDTO(eq(department), any(Locale.class))).thenReturn(responseDto);
-
-        departmentService.createDepartment(dto, locale);
-
-        verify(userRoleRepository, never()).save(any(UserRole.class));
     }
 
     @Test

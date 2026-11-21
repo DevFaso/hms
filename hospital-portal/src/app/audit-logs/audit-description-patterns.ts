@@ -2018,4 +2018,11 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Pharmacy claim acceptance confirmed by a money desk$/,
     params: [],
   },
+  // QA r65 D2764: the registrar looked at a pending assignment's activation
+  // code to hand it over in person (the code itself is never on the trail).
+  {
+    key: 'AUDIT.DESC.ACTIVATION_CODE_SHOWN',
+    re: /^Activation code shown to the registrar$/,
+    params: [],
+  },
 ];

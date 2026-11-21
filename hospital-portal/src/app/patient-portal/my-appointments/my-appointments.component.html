@@ -85,6 +85,22 @@
                 }
               </select>
             </div>
+            <!-- QA r65 D2731: an empty Service list is explained, with whom to call. -->
+            @if (bookingNotOffered()) {
+              <p class="booking-hint" role="status" data-testid="booking-not-offered">
+                {{ 'PLATFORM_SETUP.BOOKING.NOT_OFFERED' | translate }}
+                @if (selectedHospitalPhone(); as phone) {
+                  {{ 'PLATFORM_SETUP.BOOKING.CALL' | translate: { phone: phone } }}
+                } @else {
+                  {{ 'PLATFORM_SETUP.BOOKING.CONTACT' | translate }}
+                }
+              </p>
+            }
+            @if (departmentsState() === 'failed') {
+              <p class="booking-hint" role="alert" data-testid="booking-departments-failed">
+                {{ 'PLATFORM_SETUP.BOOKING.DEPARTMENTS_FAILED' | translate }}
+              </p>
+            }
 
             <div class="booking-field">
               <label for="department"
@@ -106,6 +122,16 @@
                 }
               </select>
             </div>
+            @if (selectedDepartmentHasNoSlots()) {
+              <p class="booking-hint" role="status" data-testid="booking-department-no-slots">
+                {{ 'PLATFORM_SETUP.BOOKING.NO_SLOTS_PUBLISHED' | translate }}
+                @if (selectedHospitalPhone(); as phone) {
+                  {{ 'PLATFORM_SETUP.BOOKING.CALL' | translate: { phone: phone } }}
+                } @else {
+                  {{ 'PLATFORM_SETUP.BOOKING.CONTACT' | translate }}
+                }
+              </p>
+            }
 
             <div class="booking-field">
               <label for="provider">{{

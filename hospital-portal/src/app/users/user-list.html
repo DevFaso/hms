@@ -12,10 +12,13 @@
         }
       </p>
     </div>
-    <button class="btn-primary" (click)="openCreate()">
-      <span class="material-symbols-outlined">person_add</span>
-      {{ 'USERS.REGISTER' | translate }}
-    </button>
+    <!-- QA r65 D2762: only a role the server lets register is offered « Inscrire ». -->
+    @if (canRegister) {
+      <button class="btn-primary" data-testid="users-register" (click)="openCreate()">
+        <span class="material-symbols-outlined">person_add</span>
+        {{ 'USERS.REGISTER' | translate }}
+      </button>
+    }
   </div>
 
   <!-- Filter toolbar -->
@@ -288,7 +291,7 @@
           <button class="link-btn" (click)="clearFilters()">
             {{ 'COMMON.CLEAR_ALL_FILTERS' | translate }}
           </button>
-        } @else {
+        } @else if (canRegister) {
           {{ 'USERS.REGISTER_TO_START' | translate }}
         }
       </p>
@@ -528,7 +531,10 @@
 
             <!-- Hospital -->
             <div class="field">
-              <label for="hospitalId">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</label>
+              <label for="hospitalId"
+                >{{ 'ENCOUNTERS.HOSPITAL' | translate
+                }}{{ organisationRegistrar && !editing() ? ' *' : '' }}</label
+              >
               @if (editing()) {
                 <div class="locked-field" data-testid="edit-staff-hospital">
                   <span class="material-symbols-outlined locked-icon" aria-hidden="true"
@@ -544,12 +550,23 @@
                   {{ lockedHospitalName }}
                 </div>
               } @else {
-                <select id="hospitalId" [(ngModel)]="createForm.hospitalId" name="hospitalId">
+                <select
+                  id="hospitalId"
+                  [(ngModel)]="createForm.hospitalId"
+                  name="hospitalId"
+                  [attr.aria-required]="organisationRegistrar || null"
+                  [attr.aria-describedby]="organisationRegistrar ? 'hospitalIdScope' : null"
+                >
                   <option value="">— {{ 'COMMON.NONE' | translate }} —</option>
                   @for (h of availableHospitals(); track h.id) {
                     <option [value]="h.id">{{ h.name }}</option>
                   }
                 </select>
+                @if (organisationRegistrar) {
+                  <span id="hospitalIdScope" class="hint-text" data-testid="register-org-scope">
+                    {{ 'PLATFORM_SETUP.ORG_ADMIN.REGISTER_SCOPE' | translate }}
+                  </span>
+                }
               }
             </div>
 

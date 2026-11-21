@@ -168,10 +168,11 @@ public class LabOrderController {
 
     /**
      * Delete a lab order.
-     * Only Admins can delete.
+     * The super-admin only: the organisation's administrator (ROLE_ADMIN)
+     * neither reads nor writes clinical data (platform admin rules 2026-11-20).
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Delete Lab Order", description = "Deletes a lab order")
     @ApiResponse(responseCode = "200", description = "Lab order deleted successfully")
     @ApiResponse(responseCode = "404", description = "Lab order not found")
