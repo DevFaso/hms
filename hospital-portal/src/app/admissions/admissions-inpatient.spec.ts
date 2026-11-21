@@ -8,6 +8,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { roleContextStub } from '../testing/role-context.stub';
 import { AdmissionResponse, AdmissionService } from '../services/admission.service';
 import { DischargeService } from '../services/discharge.service';
+import { PrescriptionService } from '../services/prescription.service';
 import { HospitalResponse, HospitalService } from '../services/hospital.service';
 import { StaffService } from '../services/staff.service';
 import { PatientResponse, PatientService } from '../services/patient.service';
@@ -47,6 +48,7 @@ describe('AdmissionsComponent (inpatient round 3: D153 departments and stay flow
         { provide: DepartmentLookupService, useValue: departments },
         { provide: AdmissionService, useValue: admissions },
         { provide: DischargeService, useValue: { summaryForEncounter: () => of(null) } },
+        { provide: PrescriptionService, useValue: { list: () => of([]) } },
         { provide: HospitalService, useValue: hospitals },
         { provide: StaffService, useValue: staff },
         { provide: PatientService, useValue: patients },

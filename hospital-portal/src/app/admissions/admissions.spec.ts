@@ -9,6 +9,8 @@ import { Subject, of, throwError } from 'rxjs';
 import { AdmissionsComponent } from './admissions';
 import { AdmissionResponse, AdmissionService } from '../services/admission.service';
 import { DischargeService, DischargeSummary } from '../services/discharge.service';
+import { PrescriptionService, PrescriptionResponse } from '../services/prescription.service';
+import { goesHome } from './admissions';
 import { HospitalResponse, HospitalService } from '../services/hospital.service';
 import { StaffResponse, StaffService } from '../services/staff.service';
 import { PatientResponse, PatientService } from '../services/patient.service';
@@ -36,6 +38,7 @@ describe('AdmissionsComponent', () => {
   let component: AdmissionsComponent;
   let admissionService: jasmine.SpyObj<AdmissionService>;
   let dischargeService: jasmine.SpyObj<DischargeService>;
+  let prescriptionService: jasmine.SpyObj<PrescriptionService>;
   let hospitalService: jasmine.SpyObj<HospitalService>;
   let patientService: jasmine.SpyObj<PatientService>;
   let departmentLookup: jasmine.SpyObj<DepartmentLookupService>;
@@ -74,6 +77,10 @@ describe('AdmissionsComponent', () => {
       'summaryForEncounter',
     ]);
     dischargeService.summaryForEncounter.and.returnValue(of(null));
+    prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
+      'list',
+    ]);
+    prescriptionService.list.and.returnValue(of([]));
     admissionService = jasmine.createSpyObj<AdmissionService>('AdmissionService', [
       'getAll',
       'create',
@@ -123,6 +130,7 @@ describe('AdmissionsComponent', () => {
       providers: [
         { provide: AdmissionService, useValue: admissionService },
         { provide: DischargeService, useValue: dischargeService },
+        { provide: PrescriptionService, useValue: prescriptionService },
         { provide: HospitalService, useValue: hospitalService },
         { provide: StaffService, useValue: staffService },
         { provide: PatientService, useValue: patientService },
@@ -671,6 +679,55 @@ describe('AdmissionsComponent', () => {
       expect(
         admissionService.discharge.calls.mostRecent().args[1]['dischargeInstructions'],
       ).toBeUndefined();
+    });
+
+    const rx = (overrides: Partial<PrescriptionResponse>) =>
+      ({
+        id: 'rx',
+        medicationName: 'Paracétamol',
+        status: 'SIGNED',
+        takeHome: true,
+        ...overrides,
+      }) as PrescriptionResponse;
+
+    it('QA D2553: the dialog lists the stay’s signed take-home orders, as the summary will', () => {
+      prescriptionService.list.and.returnValue(
+        of([
+          rx({ id: 'home' }),
+          rx({ id: 'ward', takeHome: false }),
+          rx({ id: 'draft', status: 'DRAFT' }),
+          rx({ id: 'stopped', status: 'DISCONTINUED' }),
+          rx({ id: 'dispensed', status: 'DISPENSED' }),
+        ]),
+      );
+      component.confirmDischarge(adm({ encounterId: 'e1' }));
+      expect(prescriptionService.list).toHaveBeenCalledWith({ encounterId: 'e1' });
+      expect(component.takeHomeOrders().map((r) => r.id)).toEqual(['home', 'dispensed']);
+      expect(goesHome({ takeHome: true, status: 'PENDING_SIGNATURE' })).toBeFalse();
+      expect(goesHome({ takeHome: true, status: 'CANCELLED' })).toBeFalse();
+    });
+
+    it('QA D2553: the follow-up date and purpose are sent as the discharge follow-up appointment', () => {
+      component.confirmDischarge(adm({ encounterId: 'e1' }));
+      admissionService.discharge.and.returnValue(of(adm({ status: 'DISCHARGED' })));
+      component.executeDischarge();
+      expect(
+        admissionService.discharge.calls.mostRecent().args[1]['followUpAppointments'],
+      ).toBeUndefined();
+
+      component.confirmDischarge(adm({ encounterId: 'e1' }));
+      component.dischargeForm.followUpDate = '2026-11-26';
+      component.dischargeForm.followUpPurpose = ' Contrôle glycémie ';
+      component.executeDischarge();
+      expect(admissionService.discharge.calls.mostRecent().args[1]['followUpAppointments']).toEqual(
+        [
+          {
+            appointmentType: 'DISCHARGE_FOLLOW_UP',
+            appointmentDate: '2026-11-26',
+            purpose: 'Contrôle glycémie',
+          },
+        ],
+      );
     });
 
     it('QA D1596: without a written summary, the typed diagnosis is sent', () => {
