@@ -2956,7 +2956,8 @@
         "PHARMACY_PAYMENT": "Dispense payment",
         "COUNTER_SALE": "Counter sale",
         "REFUND": "Refund handed back",
-        "REVERSAL": "Reversal handed back"
+        "REVERSAL": "Reversal handed back",
+        "PHARMACY_REFUND": "Pharmacy refund handed back"
       },
       "CLOSED_TOAST": "Till closed.",
       "CLOSE_FAILED": "The till could not be closed.",

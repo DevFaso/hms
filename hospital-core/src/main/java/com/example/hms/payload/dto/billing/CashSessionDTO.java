@@ -103,7 +103,7 @@ public class CashSessionDTO {
     @Builder
     public static class Movement {
         private UUID id;
-        /** PAYMENT, COPAY, PHARMACY_PAYMENT, COUNTER_SALE, REFUND, REVERSAL. */
+        /** PAYMENT, COPAY, PHARMACY_PAYMENT, COUNTER_SALE, REFUND, REVERSAL, PHARMACY_REFUND (QA D2950). */
         private String kind;
         /** IN or OUT. */
         private String direction;

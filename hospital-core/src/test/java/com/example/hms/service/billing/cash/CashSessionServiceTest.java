@@ -81,6 +81,8 @@ class CashSessionServiceTest {
     private final InvoiceRefundRepository refunds = mock(InvoiceRefundRepository.class);
     private final PharmacyPaymentRepository pharmacyPayments = mock(PharmacyPaymentRepository.class);
     private final PharmacySaleRepository sales = mock(PharmacySaleRepository.class);
+    private final com.example.hms.repository.pharmacy.PharmacyRefundRepository pharmacyRefunds =
+        mock(com.example.hms.repository.pharmacy.PharmacyRefundRepository.class);
     private final RoleValidator roles = mock(RoleValidator.class);
     private final ActingScopeResolver scope = mock(ActingScopeResolver.class);
     private final TariffResolver days = mock(TariffResolver.class);
@@ -96,7 +98,7 @@ class CashSessionServiceTest {
         UserRepository users = mock(UserRepository.class);
         when(users.findAllById(any())).thenReturn(List.of());
         service = new CashSessionService(sessionRepo, countRepo, writes, payments, refunds, pharmacyPayments, sales,
-            users, roles, scope, days, mock(AuditEventLogService.class), CLOCK);
+            pharmacyRefunds, users, roles, scope, days, mock(AuditEventLogService.class), CLOCK);
         when(scope.requirePinned()).thenReturn(HOSPITAL);
         when(days.today()).thenReturn(DAY);
         when(roles.canSuperviseTills(ACCOUNTANT, HOSPITAL)).thenReturn(true);
@@ -457,5 +459,79 @@ class CashSessionServiceTest {
         when(sessionRepo.findByHospitalIdAndBusinessDateOrderByTillAscOpenedAtAsc(HOSPITAL, DAY))
             .thenReturn(List.of(session));
         assertThat(service.dayReport(DAY).sessions()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("QA D2950: a pharmacy refund paid out is money out of the pharmacist's till (500 cash + 250 OM sold, "
+        + "250 cash handed back: 250 to count, no difference to explain)")
+    void aPaidPharmacyRefundLeavesThePharmacistsTill() {
+        CashSession till = CashSession.builder().hospitalId(HOSPITAL).cashierUserId(CASHIER).till(CashTill.PHARMACY)
+            .businessDate(DAY).status(CashSessionStatus.OPEN).openedAt(LocalDateTime.of(2026, 11, 20, 8, 0)).build();
+        till.setId(UUID.randomUUID());
+        when(sessionRepo.findLockedByIdAndHospitalId(till.getId(), HOSPITAL)).thenReturn(Optional.of(till));
+        when(sessionRepo.findByIdAndHospitalId(till.getId(), HOSPITAL)).thenReturn(Optional.of(till));
+        when(countRepo.findBySessionIdOrderByCloseRoundAscMethodAsc(till.getId())).thenReturn(savedCounts);
+        PharmacySale cashSale = PharmacySale.builder().totalAmount(new BigDecimal("500"))
+            .paymentMethod(PharmacyPaymentMethod.CASH).status(PharmacySaleStatus.COMPLETED)
+            .saleDate(LocalDateTime.of(2026, 11, 20, 9, 0)).build();
+        PharmacySale orangeSale = PharmacySale.builder().totalAmount(new BigDecimal("250"))
+            .paymentMethod(PharmacyPaymentMethod.MOBILE_MONEY).mobileMoneyOperator(MobileMoneyOperator.ORANGE_MONEY)
+            .referenceNumber("OM-9").status(PharmacySaleStatus.COMPLETED)
+            .saleDate(LocalDateTime.of(2026, 11, 20, 9, 30)).build();
+        when(sales.findByCashSessionIdOrderByCreatedAtAsc(till.getId())).thenReturn(List.of(cashSale, orangeSale));
+        com.example.hms.model.pharmacy.PharmacyRefund refund = com.example.hms.model.pharmacy.PharmacyRefund.builder()
+            .hospitalId(HOSPITAL).amount(new BigDecimal("250")).method(PharmacyPaymentMethod.CASH)
+            .status(com.example.hms.enums.PharmacyRefundStatus.PAID).paidBy(CASHIER)
+            .paidAt(LocalDateTime.of(2026, 11, 20, 10, 0)).cashSessionId(till.getId()).build();
+        refund.setId(UUID.randomUUID());
+        when(pharmacyRefunds.findByCashSessionIdOrderByPaidAtAsc(till.getId())).thenReturn(List.of(refund));
+        actAs(CASHIER);
+
+        CashSessionDTO dto = service.get(till.getId());
+
+        // 500 cash in, 250 cash handed back: 250 in the drawer. It read 500, and « Sorties 0 ».
+        assertThat(dto.getCashToCount()).isEqualByComparingTo("250");
+        assertThat(dto.getTotalIn()).isEqualByComparingTo("750");
+        assertThat(dto.getTotalOut()).isEqualByComparingTo("250");
+        assertThat(dto.getTotalExpected()).isEqualByComparingTo("500");
+        assertThat(dto.getMovements()).filteredOn(m -> "OUT".equals(m.getDirection())).singleElement()
+            .satisfies(m -> {
+                assertThat(m.getKind()).isEqualTo("PHARMACY_REFUND");
+                assertThat(m.getId()).isEqualTo(refund.getId());
+                assertThat(m.getMethod()).isEqualTo("CASH");
+                assertThat(m.getAmount()).isEqualByComparingTo("250");
+                assertThat(m.getStatus()).isEqualTo("PAID");
+                assertThat(m.getAt()).isEqualTo(LocalDateTime.of(2026, 11, 20, 10, 0));
+            });
+
+        // The pharmacist counts what is in the drawer: no difference, nothing to explain.
+        CashSessionDTO closed = service.close(till.getId(), counted("250", "250", null));
+
+        assertThat(closed.getStatus()).isEqualTo("CLOSED");
+        assertThat(closed.getTotalDifference()).isEqualByComparingTo("0");
+        assertThat(closed.getCashDifference()).isEqualByComparingTo("0");
+        assertThat(savedCounts).filteredOn(c -> "CASH".equals(c.getMethod())).singleElement()
+            .satisfies(c -> assertThat(c.getExpectedAmount()).isEqualByComparingTo("250"));
+    }
+
+    @Test
+    @DisplayName("QA D2950: a mobile-money pharmacy refund leaves its operator's line, not the cash")
+    void aMobileMoneyPharmacyRefundLeavesItsOperatorsLine() {
+        com.example.hms.model.pharmacy.PharmacyRefund refund = com.example.hms.model.pharmacy.PharmacyRefund.builder()
+            .hospitalId(HOSPITAL).amount(new BigDecimal("150")).method(PharmacyPaymentMethod.MOBILE_MONEY)
+            .mobileMoneyOperator(MobileMoneyOperator.ORANGE_MONEY).reference("OM-R1")
+            .status(com.example.hms.enums.PharmacyRefundStatus.PAID)
+            .paidAt(LocalDateTime.of(2026, 11, 20, 17, 0)).cashSessionId(session.getId()).build();
+        when(pharmacyRefunds.findByCashSessionIdOrderByPaidAtAsc(session.getId())).thenReturn(List.of(refund));
+        actAs(CASHIER);
+
+        CashSessionDTO dto = service.get(session.getId());
+
+        assertThat(dto.getCashToCount()).isEqualByComparingTo("800");
+        assertThat(dto.getMethods()).anySatisfy(line -> {
+            assertThat(line.getOperator()).isEqualTo("ORANGE_MONEY");
+            assertThat(line.getOutAmount()).isEqualByComparingTo("150");
+            assertThat(line.getExpected()).isEqualByComparingTo("700");
+        });
     }
 }

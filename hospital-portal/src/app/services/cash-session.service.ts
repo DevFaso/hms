@@ -32,7 +32,14 @@ export interface CashCount {
 /** One money movement of a session. */
 export interface CashMovement {
   id: string;
-  kind: 'PAYMENT' | 'COPAY' | 'PHARMACY_PAYMENT' | 'COUNTER_SALE' | 'REFUND' | 'REVERSAL';
+  kind:
+    | 'PAYMENT'
+    | 'COPAY'
+    | 'PHARMACY_PAYMENT'
+    | 'COUNTER_SALE'
+    | 'REFUND'
+    | 'REVERSAL'
+    | 'PHARMACY_REFUND';
   direction: 'IN' | 'OUT';
   at?: string | null;
   document?: string | null;

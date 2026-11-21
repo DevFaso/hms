@@ -65,8 +65,9 @@ import java.util.function.BiPredicate;
  *
  * <p><b>Steps.</b> REQUESTED (a pharmacist, a hospital admin, an accountant or a cashier, with a reason), APPROVED or
  * REJECTED by ANOTHER hospital admin or accountant (no self-approval; the V311 CHECK holds it in the database too),
- * PAID when handed to the patient (money out on {@code paid_at}), or CANCELLED before payment. A sale whose live
- * refunds reach its total becomes REFUNDED (the status had no path before, plan finding 8).
+ * PAID when handed to the patient (money out on {@code paid_at}, out of the payer's PHARMACY cash session: QA
+ * D2950), or CANCELLED before payment. A sale whose live refunds reach its total becomes REFUNDED (the status had no
+ * path before, plan finding 8).
  *
  * <p><b>Who and where.</b> The roles are checked on the assignment at the acting hospital before any lookup; every
  * row is read by its hospital, and another hospital's answers as a missing one. A support session impersonating a
@@ -229,6 +230,9 @@ public class PharmacyRefundService {
         }
         requireSourceStillPaid(refund);
         recordHandover(refund, body, actor);
+        // QA D2950 (r66): the money leaves the payer's PHARMACY till today, as a counter sale enters it; a closed
+        // till refuses the payout and nothing is written.
+        refund.setCashSessionId(stampPharmacyTill(actor.hospitalId(), actor.userId()));
         refund.setStatus(PharmacyRefundStatus.PAID);
         refund.setPaidBy(actor.userId());
         refund.setPaidAt(now());
@@ -236,6 +240,23 @@ public class PharmacyRefundService {
         markSaleRefundedWhenFullyPaid(refund);
         audit(AuditEventType.PHARMACY_REFUND_PAID, "Pharmacy refund paid out", refund);
         return toDto(refund, actor);
+    }
+
+    /**
+     * QA D2950 (r66, V352): a pharmacy refund paid out is money out of the payer's PHARMACY cash session, so the
+     * till's expected cash and the pharmacy reconciliation agree. {@code CashSessionStampGuardTest} keeps the payout
+     * on it.
+     */
+    private com.example.hms.service.billing.cash.CashSessionService cashSessions;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setCashSessionService(com.example.hms.service.billing.cash.CashSessionService service) {
+        this.cashSessions = service;
+    }
+
+    private UUID stampPharmacyTill(UUID hospitalId, UUID payerId) {
+        return cashSessions == null ? null
+                : cashSessions.stamp(com.example.hms.enums.CashTill.PHARMACY, hospitalId, payerId);
     }
 
     /**
