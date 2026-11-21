@@ -405,6 +405,20 @@ class DashboardConfigServiceTest {
     }
 
     @Test
+    void getDashboardConfig_organisationAdmin_isGrantedNoPatientOrAuditPermission() {
+        // Platform admin rules 2026-11-20, rule 1b: the portal's sidebar follows these permissions.
+        UserRoleHospitalAssignment admin = buildAssignment(true, "ROLE_ADMIN", "Admin");
+        when(assignmentRepository.findAllDetailedByUserId(userId)).thenReturn(List.of(admin));
+        when(permissionRepository.findByAssignment_IdIn(any())).thenReturn(Collections.emptyList());
+
+        DashboardConfigResponseDTO result = service.getDashboardConfig(userId);
+
+        assertThat(result.getMergedPermissions()).contains("View Dashboard")
+            .doesNotContain("View Patient Records", "View Audit Logs", "View Imaging Studies",
+                "View Imaging Results", "View Appointments");
+    }
+
+    @Test
     void getDashboardConfig_adminRole_hasPriority85() {
         UserRoleHospitalAssignment admin = buildAssignment(true, "ROLE_ADMIN", "Admin");
         UserRoleHospitalAssignment nurse = buildAssignment(true, "ROLE_NURSE", "Nurse");

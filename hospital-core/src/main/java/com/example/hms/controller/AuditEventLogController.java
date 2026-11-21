@@ -71,14 +71,18 @@ public class AuditEventLogController {
      * No client called it. Audit rows are written by the server, for the
      * authenticated caller; client telemetry goes to {@code /frontend-audit},
      * whose actor is the principal. AuditWriteSurfaceGuardTest keeps it so.
+     *
+     * <p>Not the organisation's administrator (ROLE_ADMIN; platform admin rules
+     * 2026-11-20, rule 1b): the trail names patients row after row (who was
+     * read, what was prescribed), and that role reads no patient data.
      */
     private static final String AUDIT_READ_ROLES =
-        "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','LAB_DIRECTOR','QUALITY_MANAGER')";
+        "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','LAB_DIRECTOR','QUALITY_MANAGER')";
     /** Longest free-text search accepted (QA D794). */
     private static final int MAX_SEARCH_LENGTH = 200;
     /** The same set as {@link #AUDIT_READ_ROLES}, as authorities, for the in-method check. */
     private static final List<String> AUDIT_READER_AUTHORITIES = List.of(
-        "ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN", "ROLE_ADMIN", "ROLE_LAB_DIRECTOR", "ROLE_QUALITY_MANAGER");
+        "ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN", "ROLE_LAB_DIRECTOR", "ROLE_QUALITY_MANAGER");
 
     private final AuditEventLogService auditService;
     private final AuditEventLogRepository auditRepository;

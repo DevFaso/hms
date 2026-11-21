@@ -33,7 +33,7 @@ public class PatientTrackerController {
     private final ControllerAuthUtils authUtils;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('DOCTOR','NURSE','RECEPTIONIST','HOSPITAL_ADMIN','ADMIN','SUPER_ADMIN','MIDWIFE')")
+    @PreAuthorize("hasAnyRole('DOCTOR','NURSE','RECEPTIONIST','HOSPITAL_ADMIN','SUPER_ADMIN','MIDWIFE')")
     @Operation(summary = "Get real-time patient tracker board",
             description = "Returns all active patients for the day grouped by encounter status lanes.")
     public ResponseEntity<ApiResponseWrapper<PatientTrackerBoardDTO>> getTrackerBoard(

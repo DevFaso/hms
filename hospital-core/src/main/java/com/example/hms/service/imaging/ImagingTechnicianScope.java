@@ -50,7 +50,7 @@ public final class ImagingTechnicianScope {
 
     /** The other roles the imaging reads admit as staff (the worklist, the images, the reports). */
     private static final Set<String> OTHER_READER_ROLES = Set.of(
-        SecurityConstants.ROLE_SUPER_ADMIN, SecurityConstants.ROLE_HOSPITAL_ADMIN, SecurityConstants.ROLE_ADMIN,
+        SecurityConstants.ROLE_SUPER_ADMIN, SecurityConstants.ROLE_HOSPITAL_ADMIN,
         SecurityConstants.ROLE_DOCTOR, SecurityConstants.ROLE_NURSE, SecurityConstants.ROLE_MIDWIFE,
         SecurityConstants.ROLE_RADIOLOGIST);
 

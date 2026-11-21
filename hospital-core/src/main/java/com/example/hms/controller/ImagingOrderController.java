@@ -48,7 +48,7 @@ public class ImagingOrderController {
 	 * hospital (indication and safety flags are on the order), never a patient's chart list.
 	 */
 	static final String WORKLIST_ROLES =
-		"hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','IMAGING_TECHNICIAN')";
+		"hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','IMAGING_TECHNICIAN')";
 
 	private final ImagingOrderService imagingOrderService;
 	private final com.example.hms.controller.support.RecordsWithheldHeaders recordsWithheld;
@@ -154,7 +154,7 @@ public class ImagingOrderController {
 	}
 
 	@GetMapping("/orders/patient/{patientId}")
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')")
 	@Operation(summary = "List imaging orders for a patient")
 	public ResponseEntity<List<ImagingOrderResponseDTO>> getOrdersByPatient(
 		@PathVariable UUID patientId,

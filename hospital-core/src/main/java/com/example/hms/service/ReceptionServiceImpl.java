@@ -1351,7 +1351,7 @@ public class ReceptionServiceImpl implements ReceptionService {
     private boolean isPrivilegedRoleCode(String roleCode) {
         if (roleCode == null) return false;
         return switch (roleCode) {
-            case "ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN", "ROLE_ADMIN", "ROLE_RECEPTIONIST" -> true;
+            case "ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN", "ROLE_RECEPTIONIST" -> true;
             default -> false;
         };
     }
