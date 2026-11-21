@@ -614,7 +614,6 @@ public class UserServiceImpl implements UserService {
         return result;
     }
 
-    /** Apply force-password-change flags only when re-registering an existing user. */
     /**
      * Review round 2 of #1246: who may attach an EXISTING account found by its
      * licence number. The lookup is platform-wide (a clinician works at more
@@ -658,6 +657,7 @@ public class UserServiceImpl implements UserService {
         return confirmation;
     }
 
+    /** Apply force-password-change flags only when re-registering an existing user. */
     private void applyForcePasswordChangeIfReturning(User user, boolean newUserCreated,
                                                       AdminSignupRequest request) {
         if (!newUserCreated && Boolean.TRUE.equals(request.getForcePasswordChange())) {
