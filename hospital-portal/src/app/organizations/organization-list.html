@@ -99,7 +99,7 @@
                 <span class="code-badge">{{ org.code }}</span>
               </td>
               <td>{{ (org.type | enumLabel: 'organizationType') || '—' }}</td>
-              <td>{{ org.primaryContactEmail || '—' }}</td>
+              <td class="contact-cell">{{ org.primaryContactEmail || '—' }}</td>
               <td>
                 <span class="count-chip">{{ org.hospitals.length }}</span>
               </td>

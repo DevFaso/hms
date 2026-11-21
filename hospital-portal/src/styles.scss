@@ -347,6 +347,17 @@ fieldset {
    main drawers at 1366 / 1024 / 768 / 390 px).
    ───────────────────────────────────────────────────────────────────────── */
 
+/* 4. QA D3050 / D3055 (r68): a form control never sets its box's minimum
+   width. An input's or a select's automatic width (about 20 characters, or its
+   longest option) is the min-content of the grid or flex item around it, so a
+   two-column form (« Nouveau plan ») or a panel could not shrink below it and
+   ran past a phone's edge. With max-width: 100% a control's minimum
+   contribution is zero and it takes the width its column gives. Zero
+   specificity: a control a page sizes on purpose keeps its size. */
+:where(input:not([type='checkbox'], [type='radio'], [type='range']), select, textarea) {
+  max-width: 100%;
+}
+
 /* 3. A page header's toolbar wraps onto a second line instead of overlapping. */
 :where(.page-actions, .header-actions, .page-header-actions, .toolbar-actions, .hero-actions) {
   flex-wrap: wrap;
@@ -1022,6 +1033,25 @@ textarea {
     hyphens: auto;
     vertical-align: baseline;
   }
+  /* QA D3057 (r68): what a cell holds wraps inside the card. A page's own
+     `white-space: nowrap` on a name, a description or a badge (sized for a
+     wide table column) is not inherited from the cell's `normal`, and kept
+     the organisation's name and description past the card's edge. */
+  table[data-cards]:not(.fc table, .fc)
+    > :is(tbody, tfoot)
+    > tr
+    > :is(td, th)
+    :not(.material-symbols-outlined, .material-icons) {
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+  }
+  table[data-cards]:not(.fc table, .fc)
+    > :is(tbody, tfoot)
+    > tr
+    > :is(td, th)
+    :is(div, span, a, p) {
+    max-width: 100% !important;
+  }
   /* A cell with no header to answer to (an empty-state row, an expanded
      detail, a spanning group title) is a plain full-width block. */
   table[data-cards]:not(.fc table, .fc)
@@ -1088,6 +1118,17 @@ textarea {
   [role='tablist'],
   .sidebar-backdrop,
   app-break-glass-banner button {
+    display: none !important;
+  }
+
+  /* QA D3053 (r68): the list above named its filter bars one by one, and
+     /billing's (.server-filters) was not on it: its status select, both date
+     inputs and « Effacer » printed. The class: any filter or toolbar
+     container, by name, except what names the ACTIVE filters (chips) and
+     what a page marks .print-only. */
+  :is([class*='filter'], [class*='toolbar']):not([class*='chip']):not([class*='filtered']):not(
+      .active-chips
+    ):not(.print-only) {
     display: none !important;
   }
 

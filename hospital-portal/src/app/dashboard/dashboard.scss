@@ -2129,7 +2129,7 @@ $shadow-md:
 // (Schedule / Recent Patients) finished above.
 .admin-analytics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr));
   gap: 20px;
   margin-top: 20px;
 }
@@ -2478,6 +2478,10 @@ $shadow-md:
 @media (max-width: 1024px) {
   .admin-workspace {
     flex-direction: column;
+    /* QA D3055 (r68): in a column, `flex-start` sized each pane to its
+       content (the schedule rows, the tile grid), not to the screen: both
+       ended at 410 px on a 390 px phone. */
+    align-items: stretch;
 
     .admin-workspace-right {
       flex: 1 1 auto;
@@ -2491,7 +2495,8 @@ $shadow-md:
 
 @media (max-width: 768px) {
   .nav-tile-grid {
-    grid-template-columns: repeat(3, 1fr);
+    /* minmax(0, …): a tile's longest word (« Rendez-vous ») does not widen its column. */
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .role-badge {

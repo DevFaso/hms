@@ -42,6 +42,11 @@ import type { Page } from '@playwright/test';
  *  - `hidden-last-column` from 600 to 1023 px, a table scrolls in place and its
  *                         last column is not on screen (the sticky last column
  *                         of styles.scss did not apply).
+ *
+ *  r68 (D3057) adds one: a card's content stayed inside the table's own scroll
+ *  box, so nothing above saw the organisation's name run past its card.
+ *  - `card-overflow`      under 600 px, something a card holds (a name, a
+ *                         description, a badge) reaches past the card's edge.
  */
 export interface LayoutOffender {
   kind:
@@ -54,7 +59,8 @@ export interface LayoutOffender {
     | 'dialog-height'
     | 'squeezed-text'
     | 'no-card-mode'
-    | 'hidden-last-column';
+    | 'hidden-last-column'
+    | 'card-overflow';
   selector: string;
   detail: string;
 }
@@ -433,6 +439,28 @@ export async function auditLayout(page: Page): Promise<LayoutOffender[]> {
           );
         });
       });
+
+    // (g) QA D3057 (r68): in card mode, what a card holds stays inside the card.
+    if (window.innerWidth < 600) {
+      document.querySelectorAll('table[data-cards] > tbody > tr').forEach((row) => {
+        if (!visible(row)) return;
+        const card = row.getBoundingClientRect();
+        if (card.width === 0) return;
+        for (const el of Array.from(row.querySelectorAll('*'))) {
+          if (!visible(el)) continue;
+          const r = el.getBoundingClientRect();
+          if (r.width === 0 || r.height === 0) continue;
+          if (r.right > card.right + 1 || r.left < card.left - 1) {
+            push(
+              'card-overflow',
+              el,
+              `spans ${Math.round(r.left)}–${Math.round(r.right)}px in a card at ${Math.round(card.left)}–${Math.round(card.right)}px`,
+            );
+            break;
+          }
+        }
+      });
+    }
 
     return out as LayoutOffender[];
   });
