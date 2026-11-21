@@ -354,24 +354,115 @@ class ImagingReadRoleGuardTest {
         assertThat(staffReportReaders).contains("ROLE_" + TECHNICIAN);
     }
 
+    // ── QA D2915 (r66): a role counts at the hospital it is held at ──
+
+    private static final Path MAIN = Path.of("src/main/java/com/example/hms");
+
+    /** The service behind each imaging controller's field, and where its source is. */
+    private static final Map<String, String> IMAGING_SERVICES = Map.of(
+        "imagingOrderService", "service/impl/ImagingOrderServiceImpl.java",
+        "imagingReportService", "service/impl/ImagingReportServiceImpl.java",
+        "imageService", "service/imaging/ImagingStudyImageService.java",
+        "viewerService", "service/imaging/ImagingStudyViewerService.java",
+        "readingContextService", "service/imaging/ImagingReadingContextService.java");
+
+    /** Endpoints no clinical role opens, each with its reason. A new entry needs one too. */
+    private static final Map<String, String> NO_CLINICAL_ROLE = Map.of(
+        "ImagingResultController.runCriticalEscalation",
+        "an operator trigger of the scheduled escalation sweep: SUPER_ADMIN or HOSPITAL_ADMIN, no clinical role");
+
+    private static final String SCOPE = "ImagingRoleScope(roleValidator)";
+    private static final Pattern SERVICE_CALL = Pattern.compile("\\b(\\w+)\\s*\\.\\s*(\\w+)\\s*\\(");
+    private static final Pattern LOCAL_CALL = Pattern.compile("(?<![.\\w])(?:self\\s*\\.\\s*)?(\\w+)\\s*\\(");
+
+    private static final Set<String> NOT_A_CALL = Set.of("if", "for", "while", "switch", "catch", "synchronized",
+        "try", "return", "throw", "new", "else", "do", "super", "this", "assert", "yield");
+
+    private static String source(String relative) throws IOException {
+        return SourceScan.stripComments(Files.readString(MAIN.resolve(relative), StandardCharsets.UTF_8));
+    }
+
+    /** Whether {@code method} of this source builds the scope, itself or through a method of the same class. */
+    private static boolean asksTheScope(String code, String method, Set<String> seen) {
+        String body = seen.add(method) ? SourceScan.methodBody(code, method) : null;
+        if (body == null) {
+            return false;
+        }
+        if (body.contains(SCOPE)) {
+            return true;
+        }
+        Matcher call = LOCAL_CALL.matcher(body);
+        while (call.find()) {
+            // A keyword is not a method of the class (methodBody would return some unrelated block).
+            if (!NOT_A_CALL.contains(call.group(1)) && asksTheScope(code, call.group(1), seen)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
-     * Review of #1243: the technician role counts at the order's hospital, so no imaging service
-     * asks the token-wide {@code ClinicalActor} about it; each asks {@code ImagingTechnicianScope}
-     * (behaviour: ImagingTechnicianScopeTest and the three services' tests).
+     * QA D2915: a technician at hospital A who is a radiologist at hospital B picked the
+     * radiologist role at login, acted at A, and scheduled orders, recorded pre-authorisation
+     * numbers, wrote reports and read every report there. The endpoint gates read the token, which
+     * names a role wherever it is held. So every imaging endpoint calls a service method that asks
+     * {@code ImagingRoleScope} what the caller is AT the order's hospital (their assignments there).
+     * Behaviour: ImagingRoleScopeTest and the services' D2915 tests.
      */
     @Test
-    void theTechnicianRoleIsReadAtTheOrdersHospitalNeverFromTheTokenAlone() throws IOException {
-        Path services = Path.of("src/main/java/com/example/hms/service");
-        for (String service : List.of("impl/ImagingOrderServiceImpl.java", "impl/ImagingReportServiceImpl.java",
-            "imaging/ImagingStudyImageService.java")) {
-            String code = SourceScan.stripComments(Files.readString(services.resolve(service), StandardCharsets.UTF_8));
-            assertThat(code).as(service + " asks the hospital-scoped technician rule" + SourceScan.MANDATE)
-                .contains("ImagingTechnicianScope(roleValidator)")
+    void everyImagingEndpointAsksWhatTheCallerIsAtTheHospital() throws IOException {
+        List<String> tokenOnly = new ArrayList<>();
+        int endpoints = 0;
+        for (Class<?> controller : IMAGING_CONTROLLERS) {
+            String controllerCode = source("controller/" + controller.getSimpleName() + ".java");
+            for (Method method : controller.getDeclaredMethods()) {
+                String name = controller.getSimpleName() + "." + method.getName();
+                if (!isEndpoint(method) || NO_CLINICAL_ROLE.containsKey(name)) {
+                    continue;
+                }
+                endpoints++;
+                String body = SourceScan.methodBody(controllerCode, method.getName());
+                assertThat(body).as(name + " was found in its source").isNotNull();
+                boolean asked = false;
+                Matcher call = SERVICE_CALL.matcher(body);
+                while (call.find() && !asked) {
+                    String service = IMAGING_SERVICES.get(call.group(1));
+                    asked = service != null && asksTheScope(source(service), call.group(2), new java.util.HashSet<>());
+                }
+                if (!asked) {
+                    tokenOnly.add(name);
+                }
+            }
+        }
+        assertThat(endpoints).as("the imaging endpoints were found").isGreaterThan(25);
+        assertThat(tokenOnly).as("an imaging endpoint whose service never asks ImagingRoleScope what the caller is at"
+            + " the order's hospital: the role its gate read from the token may be held at another hospital (QA"
+            + " D2915)" + SourceScan.MANDATE).isEmpty();
+    }
+
+    /**
+     * ... and no imaging service decides on a role the token names: not through the token-wide
+     * {@code ClinicalActor}, not from the authorities, not by naming the technician role itself.
+     * The administrative roles (not clinical) are read from the token in one place, the scope.
+     */
+    @Test
+    void noImagingServiceTakesAClinicalRoleFromTheToken() throws IOException {
+        for (String service : IMAGING_SERVICES.values()) {
+            assertThat(source(service)).as(service + " asks the hospital-scoped rule (QA D2915)" + SourceScan.MANDATE)
+                .contains(SCOPE)
+                .doesNotContain("ClinicalActor")
+                .doesNotContain("getAuthorities(")
+                .doesNotContain("hasAnyAuthority(")
                 .doesNotContain("IMAGING_TECHNICIAN");
         }
-        String actor = Files.readString(Path.of("src/main/java/com/example/hms/security/ClinicalActor.java"),
-            StandardCharsets.UTF_8);
-        assertThat(SourceScan.stripComments(actor)).doesNotContain("IMAGING_TECHNICIAN");
+        assertThat(source("security/ClinicalActor.java")).doesNotContain("IMAGING_TECHNICIAN");
+        // The scope itself reads the clinical roles from the assignments, through RoleValidator.
+        String scope = source("service/imaging/ImagingRoleScope.java");
+        assertThat(scope).contains("roleValidator.interpretsImaging(", "roleValidator.readsImagingClinically(",
+            "roleValidator.ordersImaging(", "roleValidator.hasRole(");
+        assertThat(scope.split("getAuthorities\\(", -1)).as("the token is read once, for the administrative roles")
+            .hasSize(2);
+        assertThat(scope).contains("ClinicalActor.ADMIN_ROLES").doesNotContain("holdsOwnRole");
     }
 
     private static Method method(Class<?> controller, String name) throws NoSuchMethodException {

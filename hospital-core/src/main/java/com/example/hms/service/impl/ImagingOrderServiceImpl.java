@@ -16,6 +16,8 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.ImagingOrderRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.service.imaging.ImagingRoleScope;
+import com.example.hms.service.imaging.ImagingRoleScope.Reader;
 import com.example.hms.service.ImagingOrderService;
 import com.example.hms.service.PatientSubjectReadGuard;
 import com.example.hms.service.PatientSubjectReaderRoles;
@@ -90,6 +92,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
         requireActingHospital(request.getHospitalId());
+        // QA D2915: an order is placed by a doctor, a nurse or a midwife OF this hospital.
+        roles().requireOrdererAt(hospital.getId());
         requirePatientRegisteredAtActingHospital(request.getPatientId());
 
         com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
@@ -190,6 +194,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     @Override
     public ImagingOrderResponseDTO updateOrder(UUID orderId, ImagingOrderRequestDTO request, UUID callerUserId) {
         ImagingOrder order = getOrderInScope(orderId);
+        roles().requireOrderer(order);
         requireEditableBy(order, callerUserId);
         // QA D1066 class: a cancelled order is not edited back to life either.
         com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
@@ -276,12 +281,14 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         com.example.hms.service.support.ImagingOrderTransitions.require(order.getStatus(), request.getStatus());
         // Policy rule 3 (provisional): a technician starts, completes or discontinues the exam; the
         // order itself (its schedule, its pre-authorisation, calling it off before it starts) is not theirs.
-        // The role counts at the order's hospital (ImagingTechnicianScope), never token-wide.
-        boolean technician = technicians().actsAsTechnician(order);
+        // QA D2915: what the caller is counts at the order's hospital (ImagingRoleScope), never
+        // token-wide: who interprets there keeps every step, a technician there the exam's, anybody
+        // else is refused, whatever role their token names.
+        boolean technician = roles().actsAsTechnician(order);
         if (technician) {
             com.example.hms.service.support.ImagingExamRecord.requireTechnicianStep(order.getStatus(), request);
             // Owner decision 2026-11-20 (provisional): an ultrasound is a physician's, unless the hospital says otherwise.
-            technicians().requireMayPerform(order);
+            roles().requireMayPerform(order);
         }
         ImagingOrderStatus from = order.getStatus();
         ImagingPreAuthorisationPolicy.requireStartAllowed(request.getStatus(), order.getPriority(),
@@ -452,6 +459,9 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     public ImagingOrderResponseDTO captureProviderSignature(UUID orderId, ImagingOrderSignatureRequestDTO request,
                                                             UUID signerUserId) {
         ImagingOrder order = getOrderInScope(orderId);
+        // QA D2915: an order is signed by a physician OF its hospital (a nurse there who is a doctor
+        // elsewhere does not sign her own draft).
+        roles().requireSigningPhysician(order);
         // QA D1066 class: a cancelled order is not signed into force.
         com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
             IMAGING_ORDER_CANCELLED_LOCKED);
@@ -508,6 +518,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     public ImagingOrderResponseDTO recordAuthorization(UUID orderId,
             com.example.hms.payload.dto.imaging.ImagingOrderAuthorizationRequestDTO request) {
         ImagingOrder order = getOrderInScope(orderId);
+        // QA D2915: the number is recorded by who interprets AT the order's hospital.
+        roles().requireInterpreter(order);
         if (order.getAuthorizationPendingSince() == null) {
             com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
                 IMAGING_ORDER_CANCELLED_LOCKED);
@@ -545,8 +557,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
             IMAGING_ORDER_CANCELLED_LOCKED);
         com.example.hms.service.support.ImagingExamRecord.requireCheckInOpen(order.getStatus());
-        // A technician of another hospital is refused here; the answer itself changes nothing.
-        technicians().actsAsTechnician(order);
+        // Whoever holds no exam role at the order's hospital is refused here; the answer itself changes nothing.
+        roles().actsAsTechnician(order);
         if (order.getCheckedInAt() != null) {
             return imagingOrderMapper.toResponseDTO(order);
         }
@@ -571,8 +583,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
             IMAGING_ORDER_CANCELLED_LOCKED);
         com.example.hms.service.support.ImagingExamRecord.requireRecordOpen(order.getStatus());
-        if (technicians().actsAsTechnician(order)) {
-            technicians().requireMayPerform(order);
+        if (roles().actsAsTechnician(order)) {
+            roles().requireMayPerform(order);
         }
         java.util.Map<String, String> changes = com.example.hms.service.support.ImagingExamRecord.changes(order, request);
         order.setExamTechnicalNote(blankToNull(request.getTechnicalNote()));
@@ -586,9 +598,9 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         return imagingOrderMapper.toResponseDTO(saved);
     }
 
-    /** Policy rule 3: where the imaging technician role counts (the order's hospital) and how far it reaches. */
-    private com.example.hms.service.imaging.ImagingTechnicianScope technicians() {
-        return new com.example.hms.service.imaging.ImagingTechnicianScope(roleValidator);
+    /** QA D2915: what the caller is at the order's hospital; never the role their token names. */
+    private ImagingRoleScope roles() {
+        return new ImagingRoleScope(roleValidator);
     }
 
     /** The exam record's own audit row; setter-injected so the unit tests that build this service keep working. */
@@ -662,15 +674,15 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         UUID orderHospitalId = order.getHospital() != null ? order.getHospital().getId() : null;
         if (activeHospitalId == null || orderHospitalId == null || activeHospitalId.equals(orderHospitalId)) {
-            // Policy rule 3: a caller admitted only as a technician is one at THIS hospital, or refused.
-            technicians().readsAsTechnicianAt(orderHospitalId);
+            // QA D2915: a reader of THIS hospital (care team, technician, administrator), or refused.
+            roles().reader(order);
             return order;
         }
         // User decision 2026-11-14: an administrator reads the hospitals they act at, never
         // across on a patient's treatment relationship (that is the care team's).
         // Policy rule 3: nor does an imaging technician, who works the worklist of their own hospital.
-        if (com.example.hms.security.ClinicalActor.isAdministrativeImagingReader()
-                || technicians().readsAsTechnicianAt(activeHospitalId)) {
+        // QA D2915: the care team is the one of the hospital the request acts at.
+        if (roles().readerAt(activeHospitalId) != Reader.CLINICAL) {
             throw new ResourceNotFoundException("imaging.order.notFound", orderId);
         }
         UUID patientId = order.getPatient() != null ? order.getPatient().getId() : null;
@@ -720,8 +732,14 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             // patient's whole history and keep the acting hospital's rows in
             // memory. Untagged (V158), so every foreign row travels; accounted.
             UUID requesterUserId = roleValidator.getCurrentUserId();
+            // QA D2915: the chart list is the care team's of the acting hospital; a technician there
+            // (whatever their token names) has none.
+            Reader reader = roles().readerAt(activeHospitalId);
+            if (reader == Reader.TECHNICIAN) {
+                roles().requireClinicalReaderAt(activeHospitalId);
+            }
             // User decision 2026-11-14: an administrator reads the acting hospital only.
-            Set<UUID> readable = com.example.hms.security.ClinicalActor.isAdministrativeImagingReader()
+            Set<UUID> readable = reader.administrator()
                 ? Set.of(activeHospitalId)
                 : recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
             orders = status != null
@@ -752,8 +770,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             throw new org.springframework.security.access.AccessDeniedException(
                 "Imaging orders can only be listed for your active hospital.");
         }
-        // Policy rule 3: the worklist is read by a technician of this hospital, never of another.
-        technicians().readsAsTechnicianAt(hospitalId);
+        // QA D2915: the worklist is read by the care team, a technician or an administrator of THIS hospital.
+        roles().readerAt(hospitalId);
         List<ImagingOrder> orders;
         if (status != null) {
             orders = imagingOrderRepository.findByHospital_IdAndStatusInOrderByOrderedAtDesc(hospitalId, List.of(status));
@@ -806,6 +824,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         } else {
             return Collections.emptyList();
         }
+        // QA D2915: the preview belongs to ordering: a doctor, a nurse or a midwife of that hospital.
+        roles().requireOrdererAt(targetHospitalId);
         // ...and only for a patient registered there, answered as unknown
         // otherwise, as createOrder refuses to place the order.
         if (!registrationRepository.existsByPatientIdAndHospitalId(patientId, targetHospitalId)) {
