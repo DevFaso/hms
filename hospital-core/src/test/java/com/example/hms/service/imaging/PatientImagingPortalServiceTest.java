@@ -242,6 +242,7 @@ class PatientImagingPortalServiceTest {
         "XRAY | Radiographie thorax face et profil | Thorax | Toux",
         "ULTRASOUND | Échographie abdominale | Abdomen | Douleur hypochondre droit",
         "CT | Scanner cérébral | Crâne | -",
+        "CT | Computerised tomography | Head | -",
     })
     @DisplayName("D3154: any other visit-less study reaches the proxy, mammography included")
     void anyOtherVisitlessStudyReachesTheProxy(ImagingModality modality, String studyType,

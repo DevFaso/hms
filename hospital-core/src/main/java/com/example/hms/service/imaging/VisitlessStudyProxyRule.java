@@ -41,8 +41,8 @@ public final class VisitlessStudyProxyRule {
         // pelvic
         "pelv", "bassin", "douglas",
         // gynaecological
-        "gyn", "ginec", "transvag", "endovag", "vagin", "uter", "ovar", "endometr", "salping",
-        "annex", "adnex", "trompe");
+        "gyn", "ginec", "transvag", "endovag", "vagin", "uterus", "uterin", "utero", "ovar", "endometr",
+        "salping", "annex", "adnex", "trompe");
 
     private VisitlessStudyProxyRule() {
     }
