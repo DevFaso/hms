@@ -4430,7 +4430,6 @@
     "ORDER_NO_OPEN_VISIT": "No open visit for this patient here: the order will not be linked to a visit."
   },
   "LAB": {
-    "ATTESTATION_MEANING": "I electronically attest that the information above is accurate.",
     "DUPLICATE": {
       "TITLE": "Possible duplicate order",
       "BODY": "This patient already has an active order for the same test here, placed in the last 24 hours. Check that a new order is really needed.",
@@ -4443,6 +4442,7 @@
     "ACTIVE_ORDERS": "Active Orders",
     "ALL_ORDERS": "All Orders",
     "ATTESTATION": "Attestation",
+    "ATTESTATION_MEANING": "I electronically attest that the information above is accurate.",
     "AUTO_FILLED": "Auto-filled",
     "CANCELLED": "Cancelled",
     "CANCELLING": "Cancelling...",

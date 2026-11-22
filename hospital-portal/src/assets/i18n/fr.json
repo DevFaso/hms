@@ -4430,7 +4430,6 @@
     "ORDER_NO_OPEN_VISIT": "Aucune visite ouverte pour ce patient ici : la demande ne sera rattachée à aucune visite."
   },
   "LAB": {
-    "ATTESTATION_MEANING": "J’atteste électroniquement que les informations ci-dessus sont exactes.",
     "DUPLICATE": {
       "TITLE": "Demande possiblement en double",
       "BODY": "Ce patient a déjà une demande en cours pour le même examen ici, passée dans les dernières 24 heures. Vérifiez qu'une nouvelle demande est vraiment nécessaire.",
@@ -4443,6 +4442,7 @@
     "ACTIVE_ORDERS": "Demandes actives",
     "ALL_ORDERS": "Toutes les demandes",
     "ATTESTATION": "Attestation",
+    "ATTESTATION_MEANING": "J’atteste électroniquement que les informations ci-dessus sont exactes.",
     "AUTO_FILLED": "Rempli automatiquement",
     "CANCELLED": "Annulée",
     "CANCELLING": "Annulation…",
