@@ -1055,7 +1055,7 @@ class PatientPortalServiceImplPhase2Test {
         }
 
         @Test
-        @DisplayName("requestMedicationRefill — should notify doctor and nurses in the care team")
+        @DisplayName("requestMedicationRefill — D3301: only the prescriber is told, never the care team, and never the medicine")
         void requestRefill_notifiesDoctorAndNurseCareTeam() {
             stubPatientResolution();
             UUID rxId = UUID.randomUUID();
@@ -1098,8 +1098,8 @@ class PatientPortalServiceImplPhase2Test {
             prescription.setHospital(hospital);
 
             when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
-            when(staffRepository.findActiveProvidersByHospitalAndDepartment(hospitalId, departmentId))
-                    .thenReturn(List.of(doctor, nurse));
+            // QA D3301: the department's doctors and nurses are never asked for, so nobody else can be told.
+            assertThat(nurse.getDepartment()).isSameAs(doctor.getDepartment());
             when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> {
                 RefillRequest saved = inv.getArgument(0);
                 saved.setId(UUID.randomUUID());
@@ -1117,10 +1117,50 @@ class PatientPortalServiceImplPhase2Test {
             MedicationRefillResponseDTO result = service.requestMedicationRefill(auth, dto);
 
             assertThat(result).isNotNull();
-            verify(notificationService).created(any(), eq("doctor.one"), eq("MEDICATION_REFILL"));
-            verify(notificationService).created(any(), eq("nurse.one"), eq("MEDICATION_REFILL"));
-            verify(emailService).sendHtml(eq(List.of("doctor.one@hms.test")), eq(List.of()), eq(List.of()), eq("Demande de renouvellement d'ordonnance en attente de revue"), any());
-            verify(emailService).sendHtml(eq(List.of("nurse.one@hms.test")), eq(List.of()), eq(List.of()), eq("Demande de renouvellement d'ordonnance en attente de revue"), any());
+            // QA D3301 (r70): ONE reader, the prescriber. The nurse of the same department is not the prescriber:
+            // she is told nothing, by bell or by mail, and the department is not even read.
+            ArgumentCaptor<String> bell = ArgumentCaptor.forClass(String.class);
+            verify(notificationService).created(bell.capture(), eq("doctor.one"), eq("MEDICATION_REFILL"));
+            verify(notificationService, never()).created(any(), eq("nurse.one"), any());
+            verify(staffRepository, never()).findActiveProvidersByHospitalAndDepartment(any(), any());
+            ArgumentCaptor<String> mail = ArgumentCaptor.forClass(String.class);
+            verify(emailService).sendHtml(eq(List.of("doctor.one@hms.test")), eq(List.of()), eq(List.of()), eq("Demande de renouvellement d'ordonnance en attente de revue"), mail.capture());
+            verify(emailService, never()).sendHtml(eq(List.of("nurse.one@hms.test")), any(), any(), any(), any());
+            // ... and neither names the medicine (the fixture's « Metformin 500mg »): the patient only.
+            assertThat(bell.getValue()).isEqualTo("Demande de renouvellement pour " + patient.getFullName() + ".");
+            assertThat(bell.getValue()).doesNotContain("Metformin");
+            assertThat(mail.getValue()).contains(patient.getFullName()).doesNotContain("Metformin");
+        }
+
+        @Test
+        @DisplayName("D3301: a prescriber who is no longer active is not rung, and nobody is rung in their place without a designated cover")
+        void requestRefill_inactivePrescriberIsNotRung() {
+            stubPatientResolution();
+            UUID rxId = UUID.randomUUID();
+            Hospital hospital = new Hospital();
+            hospital.setId(UUID.randomUUID());
+            User gone = new User();
+            gone.setUsername("doctor.gone");
+            gone.setEmail("doctor.gone@hms.test");
+            Staff leftTheHospital = new Staff();
+            leftTheHospital.setUser(gone);
+            leftTheHospital.setHospital(hospital);
+            leftTheHospital.setActive(false);
+            Prescription prescription = buildPrescription(rxId, patient);
+            prescription.setStaff(leftTheHospital);
+            prescription.setHospital(hospital);
+            when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+            when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> {
+                RefillRequest saved = inv.getArgument(0);
+                saved.setId(UUID.randomUUID());
+                return saved;
+            });
+
+            service.requestMedicationRefill(auth, MedicationRefillRequestDTO.builder().prescriptionId(rxId).build());
+
+            verify(notificationService, never()).created(any(), any(), any());
+            verify(emailService, never()).sendHtml(any(), any(), any(), any(), any());
+            verify(staffRepository, never()).findActiveProvidersByHospitalAndDepartment(any(), any());
         }
 
         @Test
@@ -1152,8 +1192,6 @@ class PatientPortalServiceImplPhase2Test {
             prescription.setHospital(hospital);
 
             when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
-            when(staffRepository.findActiveProvidersByHospitalAndDepartment(hospital.getId(), department.getId()))
-                    .thenReturn(List.of(doctor));
             doThrow(new RuntimeException("notification down"))
                     .when(notificationService).created(any(), any(), eq("MEDICATION_REFILL"));
             doThrow(new RuntimeException("smtp down"))

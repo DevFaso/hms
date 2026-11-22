@@ -50,23 +50,38 @@ public class DispenseBillingDeferralFollowUp {
     static final String CREDIT_REQUESTED_KEY = "pharmacy.deferral.followUp.creditRequested";
     static final String NOTIFICATION_TYPE = "PHARMACY_BILLING_DEFERRAL";
 
+    /**
+     * QA D3301 (r70), the class: a task or a bell about a hand-over is read by billing and finance, who are neither
+     * the prescriber nor the dispensing pharmacy, so it never names the medicine (an antiretroviral named next to
+     * the patient says the diagnosis). The texts say « a medicine »; the deferrals page, which they open to decide,
+     * lists the fill. The first argument stays in place, empty, for the rows already stored with the old texts.
+     */
+    static final String WITHOUT_THE_MEDICINE = "";
+
     private final InBasketService inBasketService;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final com.example.hms.service.NotificationService notificationService;
     private final org.springframework.transaction.PlatformTransactionManager transactionManager;
 
-    /** An urgency override was made: finance reviews it. */
+    /**
+     * An urgency override was made: finance reviews it.
+     *
+     * @param medicationName what was handed over; QA D3301: never written in the task (its readers are billing)
+     */
     public void reviewNeeded(DispenseBillingDeferral deferral, String patientName, String medicationName) {
-        file(deferral, patientName, medicationName, REVIEW_TITLE_KEY, REVIEW_BODY_KEY, InBasketPriority.NORMAL);
+        file(deferral, patientName, REVIEW_TITLE_KEY, REVIEW_BODY_KEY, InBasketPriority.NORMAL);
     }
 
-    /** A third-party cover was asked for: billing checks the claim or voucher. */
+    /**
+     * A third-party cover was asked for: billing checks the claim or voucher.
+     *
+     * @param medicationName what is to be handed over; QA D3301: never written in the task or the bell
+     */
     public void approvalNeeded(DispenseBillingDeferral deferral, String patientName, String medicationName) {
         if (deferral.getKind() == DispenseBillingDeferralKind.THIRD_PARTY_COVER) {
-            file(deferral, patientName, medicationName, APPROVAL_TITLE_KEY, APPROVAL_BODY_KEY,
-                InBasketPriority.URGENT);
+            file(deferral, patientName, APPROVAL_TITLE_KEY, APPROVAL_BODY_KEY, InBasketPriority.URGENT);
         } else if (deferral.getKind() == DispenseBillingDeferralKind.OUTPATIENT_CREDIT) {
-            notifyCreditApprovers(deferral, patientName, medicationName);
+            notifyCreditApprovers(deferral, patientName);
         }
     }
 
@@ -80,14 +95,14 @@ public class DispenseBillingDeferralFollowUp {
      * flushed, so five requests wrote no row and logged no warning. The notification names the deferral, so it is
      * marked read when the request is decided or withdrawn ({@link #close}).
      */
-    private void notifyCreditApprovers(DispenseBillingDeferral deferral, String patientName, String medicationName) {
+    private void notifyCreditApprovers(DispenseBillingDeferral deferral, String patientName) {
         UUID deferralId = deferral.getId();
         UUID hospitalId = deferral.getHospitalId();
         UUID actorId = deferral.getRequestedBy();
         if (deferralId == null || hospitalId == null) {
             return;
         }
-        Object[] args = {java.util.Objects.toString(medicationName, ""), java.util.Objects.toString(patientName, "")};
+        Object[] args = {WITHOUT_THE_MEDICINE, java.util.Objects.toString(patientName, "")};
         TransactionCallbacks.afterCommit(() -> {
             try {
                 assignmentRepository.findLiveUsersAtHospitalWithRoleCodes(hospitalId, CREDIT_APPROVER_ROLE_CODES)
@@ -127,7 +142,7 @@ public class DispenseBillingDeferralFollowUp {
         }
     }
 
-    private void file(DispenseBillingDeferral deferral, String patientName, String medicationName,
+    private void file(DispenseBillingDeferral deferral, String patientName,
                       String titleKey, String bodyKey, InBasketPriority priority) {
         UUID deferralId = deferral.getId();
         UUID hospitalId = deferral.getHospitalId();
@@ -136,7 +151,7 @@ public class DispenseBillingDeferralFollowUp {
         if (deferralId == null || hospitalId == null) {
             return;
         }
-        Object[] bodyArgs = {java.util.Objects.toString(medicationName, ""), java.util.Objects.toString(patientName, "")};
+        Object[] bodyArgs = {WITHOUT_THE_MEDICINE, java.util.Objects.toString(patientName, "")};
         TransactionCallbacks.afterCommit(() -> {
             try {
                 List<com.example.hms.model.User> recipients = recipients(hospitalId, actorId);
