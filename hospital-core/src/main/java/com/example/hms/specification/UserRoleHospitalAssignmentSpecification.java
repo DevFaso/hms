@@ -52,11 +52,6 @@ public final class UserRoleHospitalAssignmentSpecification {
     }
 
     /**
-     * Staff rows only: never a PATIENT assignment. An organisation admin's
-     * list (platform admin rules, rule 1b): a patient row is a patient's name
-     * and contact, and that role reads no patient list.
-     */
-    /**
      * QA D3062 / review of #1264: no row of a platform super-admin's account (one holding SUPER_ADMIN by an
      * assignment or a global role, active or not). The rule the user directory applies
      * (UserRepository.DIRECTORY_VISIBLE): a hospital-scoped listing never shows the platform's own accounts.
@@ -81,6 +76,11 @@ public final class UserRoleHospitalAssignmentSpecification {
 
     private static final List<String> PLATFORM_ROLE_CODES = List.of("ROLE_SUPER_ADMIN", "SUPER_ADMIN");
 
+    /**
+     * Staff rows only: never a PATIENT assignment. An organisation admin's
+     * list (platform admin rules, rule 1b): a patient row is a patient's name
+     * and contact, and that role reads no patient list.
+     */
     public static Specification<UserRoleHospitalAssignment> staffRowsOnly() {
         return (root, query, cb) ->
             cb.not(cb.upper(root.join("role", JoinType.LEFT).get("code")).in("PATIENT", "ROLE_PATIENT"));
