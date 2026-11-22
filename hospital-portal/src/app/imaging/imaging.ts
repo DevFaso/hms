@@ -637,10 +637,11 @@ export class ImagingComponent implements OnInit {
         if (draft) {
           this.openEditReport(draft);
         } else {
-          this.openAuthorReport(
-            o,
-            live.some((r) => r.signed),
-          );
+          const signed = live
+            .filter((r) => r.signed)
+            .sort((a, b) => (b.reportVersion ?? 0) - (a.reportVersion ?? 0));
+          this.openAuthorReport(o, signed.length > 0);
+          this.addendumSource.set(signed[0] ?? null);
         }
       },
       error: () => this.openAuthorReport(o, o.status === 'RESULTS_AVAILABLE'),
@@ -1788,7 +1789,7 @@ export class ImagingComponent implements OnInit {
    * to PRELIMINARY rather than sending a value the backend will refuse.
    */
   private authorableStatusOf(status: ImagingReportStatus): AuthorableReportStatus {
-    return (this.authorableStatuses as readonly string[]).includes(status)
+    return (this.allAuthorableStatuses as readonly string[]).includes(status)
       ? (status as AuthorableReportStatus)
       : 'PRELIMINARY';
   }
