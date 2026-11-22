@@ -135,6 +135,18 @@ class PatientControllerTest {
                 .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
         }
 
+        /** QA r70 D3223: the personal history is clinical text; the desk neither reads nor writes it. */
+        @Test
+        void aReceptionistCannotPatchTheMedicalHistory() {
+            var auth = signedInAs(ROLE_RECEPTIONIST_CODE);
+            var history = new com.example.hms.payload.dto.PatientProfileUpdateRequestDTO();
+            history.setMedicalHistorySummary("HTA depuis 2019");
+
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> controller.patchPatient(patientId, history, null, auth))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            org.mockito.Mockito.verifyNoInteractions(patientService);
+        }
+
         @Test
         void aDoctorStillWritesThem() {
             var auth = signedInAs("ROLE_DOCTOR", ROLE_RECEPTIONIST_CODE);

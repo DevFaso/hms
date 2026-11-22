@@ -62,6 +62,7 @@ import { KeyLabelPipe } from '../shared/pipes/key-label.pipe';
 import { BillingDeferralChoiceComponent } from './billing-deferral-choice';
 import { BillingDeferralChoice } from '../services/billing-deferral.service';
 import { DispensePaymentStatus, PharmacyMoneyService } from '../services/pharmacy-money.service';
+import { PatientSafetyHeaderComponent } from '../shared/patient-safety-header/patient-safety-header.component';
 
 /** The viewer's local calendar date as YYYY-MM-DD (not the UTC one). */
 function localIsoDate(d: Date): string {
@@ -183,6 +184,7 @@ export function sameDispenseUnit(
   selector: 'app-dispensing',
   standalone: true,
   imports: [
+    PatientSafetyHeaderComponent,
     SubmitGuardDirective,
     ServerTimePipe,
     PersonNamePipe,

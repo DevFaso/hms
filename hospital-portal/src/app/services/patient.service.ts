@@ -5,6 +5,14 @@ import { Observable, catchError, forkJoin, map, of } from 'rxjs';
 
 import { birthDateQuery, emailQuery, isCompactDate } from '../shared/patient-query';
 import type { NationalUniqueIdChange } from '../patients/national-unique-id';
+import type { NotificationDeliveryStatus } from '../shared/delivery-warnings';
+
+/** QA r70 D3206: a patient's pending portal activation code (server clock, no zone). */
+export interface PortalActivationCode {
+  assignmentId: string;
+  confirmationCode: string;
+  expiresAt?: string | null;
+}
 
 export interface PatientAddressHistoryEntry {
   id: string;
@@ -40,6 +48,8 @@ export interface PatientDemographicsPatch {
   emergencyContactName?: string;
   emergencyContactPhone?: string;
   emergencyContactRelationship?: string;
+  /** QA r70 D3223: the personal past medical history (doctor, nurse or midwife only). */
+  medicalHistorySummary?: string;
 }
 
 export interface PatientResponse {
@@ -580,6 +590,22 @@ export class PatientService {
   /** The chart as a printable PDF: same roles, scope and export audit as the FHIR bundle. */
   downloadRecordPdf(id: string): Observable<Blob> {
     return this.http.get(`/patients/${id}/record.pdf`, { responseType: 'blob' });
+  }
+
+  /**
+   * QA r70 D3206: the patient's pending portal activation code, shown to the desk of the acting hospital to hand
+   * over in person (audited server-side; never stored here).
+   */
+  revealPortalActivationCode(id: string): Observable<PortalActivationCode> {
+    return this.http.post<PortalActivationCode>(`/patients/${id}/portal-activation/code`, null);
+  }
+
+  /** QA r70 D3206: re-send the patient's portal activation (e-mail and SMS); answers the delivery report. */
+  resendPortalActivation(id: string): Observable<NotificationDeliveryStatus[]> {
+    return this.http.post<NotificationDeliveryStatus[]>(
+      `/patients/${id}/portal-activation/resend`,
+      null,
+    );
   }
 
   getById(id: string, hospitalId?: string): Observable<PatientResponse> {

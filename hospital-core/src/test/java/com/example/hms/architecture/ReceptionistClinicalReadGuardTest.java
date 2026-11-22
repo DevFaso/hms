@@ -204,6 +204,7 @@ class ReceptionistClinicalReadGuardTest {
             "ignored for the desk: PatientHospitalRegistrationServiceImpl keeps the stored note"),
         Map.entry("PatientProfileUpdateRequestDTO#bloodType", "refused for the desk: PatientController#patchPatient"),
         Map.entry("PatientProfileUpdateRequestDTO#careTeamNotes", "refused for the desk: PatientController#patchPatient"),
+        Map.entry("PatientProfileUpdateRequestDTO#medicalHistorySummary", "refused for the desk: PatientController#patchPatient (QA r70 D3223)"),
         Map.entry("PatientProfileUpdateRequestDTO#chronicConditions", "refused for the desk: PatientController#patchPatient"),
         Map.entry("PatientProfileUpdateRequestDTO#nationalUniqueIdDuplicateReason",
             "owner-approved X8 administrative identity override; PatientNationalUniqueIdService requires confirmation, redacts identity data and audits atomically; PatientNationalUniqueIdPostgresIT proves refusal/override/rollback"),

@@ -294,6 +294,7 @@
                     [(ngModel)]="form.hospitalName"
                     name="hospitalName"
                     required
+                    (ngModelChange)="loadDepartmentsFor($event)"
                   >
                     <option value="">{{ 'STAFF.SELECT_HOSPITAL' | translate }}</option>
                     @for (h of hospitalOptions(); track h.id) {
@@ -364,13 +365,18 @@
             <div class="form-row">
               <div class="field">
                 <label for="sDept">{{ 'STAFF.DEPARTMENT' | translate }}</label>
-                <input
-                  id="sDept"
-                  type="text"
-                  [(ngModel)]="form.departmentName"
-                  name="departmentName"
-                  [placeholder]="'STAFF.DEPARTMENT_PLACEHOLDER' | translate"
-                />
+                <!-- QA r70 D3202: the hospital's departments, not free text a typo attached to nobody. -->
+                <select id="sDept" [(ngModel)]="form.departmentName" name="departmentName">
+                  <option value="">{{ 'STAFF.NO_DEPARTMENT_OPTION' | translate }}</option>
+                  @for (d of departmentOptions(); track d) {
+                    <option [value]="d">{{ d }}</option>
+                  }
+                </select>
+                @if (departmentsFailed()) {
+                  <small class="field-hint" role="alert">{{
+                    'STAFF.DEPARTMENTS_LOAD_FAILED' | translate
+                  }}</small>
+                }
               </div>
               <div class="field">
                 <label for="sStartDate">{{ 'STAFF.START_DATE' | translate }} *</label>

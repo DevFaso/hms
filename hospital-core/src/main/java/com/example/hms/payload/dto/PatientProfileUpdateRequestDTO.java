@@ -110,5 +110,13 @@ public class PatientProfileUpdateRequestDTO {
     @Size(max = 2000)
     private String careTeamNotes;
 
+    /**
+     * QA r70 D3223: the patient's personal past medical history, as a clinician records it on the chart (the
+     * Synthèse's « Antécédents médicaux »). Written by a doctor, nurse or midwife of the acting hospital only;
+     * refused for the desk. Blank clears it.
+     */
+    @Size(max = 500, message = "{patient.medicalHistorySummary.size}")
+    private String medicalHistorySummary;
+
     private List<String> chronicConditions;
 }

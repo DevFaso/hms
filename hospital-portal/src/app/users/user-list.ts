@@ -36,6 +36,9 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { isStepUpRefusal, stepUpRefusalKey } from '../services/step-up';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
+import { DepartmentLookupService, DepartmentOption } from '../services/department-lookup.service';
+import { EnumLabelService } from '../core/enum-label.service';
+import { bareRole } from '../core/role-token';
 
 const PATIENT_ROLE_CODES = new Set(['ROLE_PATIENT', 'PATIENT']);
 
@@ -165,6 +168,7 @@ export class UserListComponent implements OnInit, OnDestroy {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly roleService = inject(RoleService);
   private readonly hospitalService = inject(HospitalService);
+  private readonly departmentLookup = inject(DepartmentLookupService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly auth = inject(AuthService);
@@ -196,6 +200,7 @@ export class UserListComponent implements OnInit, OnDestroy {
     this.loadUsers(0);
   }
   private readonly translate = inject(TranslateService);
+  private readonly roleLabels = inject(EnumLabelService);
 
   private readonly searchSubject = new Subject<string>();
   private readonly destroy$ = new Subject<void>();
@@ -292,9 +297,21 @@ export class UserListComponent implements OnInit, OnDestroy {
     return role.code === 'ROLE_STAFF' ? roleDescriptionKey(role) : null;
   }
 
-  readonly grantableRoles = computed(() =>
-    grantableRoles(this.availableRoles(), this.roleContext.isSuperAdmin()),
-  );
+  // QA r70 D3200: in the order a person reads them (by label), and never « Super administrateur » for a
+  // hospital: a hospital registration grants a hospital role (the super-admin is registered without one).
+  readonly grantableRoles = computed(() => {
+    const atHospital = !!this.createHospitalId();
+    return grantableRoles(this.availableRoles(), this.roleContext.isSuperAdmin())
+      .filter((r) => !(atHospital && bareRole(r.code ?? r.name) === 'SUPER_ADMIN'))
+      .map((r) => ({
+        role: r,
+        label: this.roleLabels.transform(bareRole(r.name || r.code), 'role'),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
+      .map((entry) => entry.role);
+  });
+  /** QA r70 D3200: the form's hospital, as a signal the role list follows. */
+  private readonly createHospitalId = signal<string | null>(null);
   availableHospitals = signal<{ id: string; name: string }[]>([]);
 
   // Form fields
@@ -523,6 +540,7 @@ export class UserListComponent implements OnInit, OnDestroy {
     if (scope && this.availableHospitals().some((h) => h.id === scope)) {
       this.createForm.hospitalId = scope;
     }
+    this.loadRegistrationDepartments(this.createForm.hospitalId);
     this.selectedRoles = [];
     this.editing.set(null);
     this.fieldErrors.set({});
@@ -592,6 +610,30 @@ export class UserListComponent implements OnInit, OnDestroy {
     this.showCreate.set(false);
     this.editing.set(null);
     this.fieldErrors.set({});
+  }
+
+  // ── QA r70 D3202: the department, chosen at registration from the hospital's own list ──
+  readonly registrationDepartments = signal<DepartmentOption[]>([]);
+  readonly registrationDepartmentsFailed = signal(false);
+
+  loadRegistrationDepartments(hospitalId: string | null | undefined): void {
+    this.createHospitalId.set(hospitalId || null);
+    this.registrationDepartments.set([]);
+    this.registrationDepartmentsFailed.set(false);
+    // Another hospital's department is never sent (the server refuses it on the field too).
+    this.createForm.departmentId = undefined;
+    if (!hospitalId) return;
+    this.departmentLookup.getActiveDepartments(hospitalId).subscribe({
+      next: (list) => {
+        if (this.createForm.hospitalId !== hospitalId) return;
+        this.registrationDepartments.set(
+          [...list].sort((a, b) =>
+            a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+          ),
+        );
+      },
+      error: () => this.registrationDepartmentsFailed.set(true),
+    });
   }
 
   onRoleToggle(roleCode: string, checked: boolean): void {
@@ -720,6 +762,12 @@ export class UserListComponent implements OnInit, OnDestroy {
           // SMS next to it does not read as "activation by SMS only".
           if (hasActivationSent(saved.activationDelivery, 'EMAIL')) {
             this.toast.info(this.translate.instant('DELIVERY.ACTIVATION_EMAIL_QUEUED'));
+          }
+          // QA r70 D3207: the generated username was shown nowhere; the registrar can now pass it on.
+          if (saved.username && !saved.temporaryUsername) {
+            this.toast.info(
+              this.translate.instant('USERS.TOAST.USERNAME_ISSUED', { username: saved.username }),
+            );
           }
           if (saved.temporaryUsername && saved.temporaryPassword) {
             this.issuedCredentials.set({

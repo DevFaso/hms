@@ -76,7 +76,9 @@ public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
             "vitalSigns", "orderedTests", "allergies", "currentMedications", "clinicalAssessment", "clinicalPlan",
             // QA D2260 (r63): the addenda of the signed note are clinical text too.
             "noteAddenda",
-            "medicalHistory", "surgicalHistory", "familyHistory", "socialHistory")),
+            "medicalHistory", "surgicalHistory", "familyHistory", "socialHistory",
+            // QA r70 D3220: the blood group printed on the summary.
+            "patientBloodType")),
         Map.entry(BedBoardDTO.OccupantDTO.class, Set.of("primaryDiagnosis")),
         Map.entry(TransferOrderResponseDTO.class, Set.of("reason", "notes", "cancellationReason", "isolationOverrideReason")),
         Map.entry(IsolationPrecautionResponseDTO.class, Set.of("reason", "suspectedOrganism", "notes", "discontinuationReason")),
@@ -199,6 +201,7 @@ public class ReceptionistResponseShaping implements ResponseBodyAdvice<Object> {
         summary.setSurgicalHistory(null);
         summary.setFamilyHistory(null);
         summary.setSocialHistory(null);
+        summary.setPatientBloodType(null);
     }
 
     private static void shapeBoard(BedBoardDTO board) {

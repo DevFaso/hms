@@ -130,19 +130,31 @@
         <div class="rw-logo-area">
           <div class="rw-logo-badge">e-Keneya</div>
         </div>
+        <!-- QA r70 review: the public read names nobody before the code is proven (no enumeration). -->
         <h1 class="rw-title">
-          {{ 'ONBOARDING.WELCOME' | translate }} {{ assignment.assigneeName
-          }}{{ 'COMMON.EXCLAMATION_MARK' | translate }}
+          @if (assignment.assigneeName) {
+            {{ 'ONBOARDING.WELCOME' | translate }} {{ assignment.assigneeName
+            }}{{ 'COMMON.EXCLAMATION_MARK' | translate }}
+          } @else {
+            {{ 'ONBOARDING.ENTER_CODE_TITLE' | translate }}
+          }
         </h1>
-        <p class="rw-subtitle">{{ 'ONBOARDING.ASSIGNED_ROLE' | translate }}</p>
+        <p class="rw-subtitle">
+          {{
+            (assignment.roleName ? 'ONBOARDING.ASSIGNED_ROLE' : 'ONBOARDING.ENTER_CODE_INTRO')
+              | translate
+          }}
+        </p>
       </div>
 
       <!-- Role / Hospital info -->
       <div class="rw-info-grid">
-        <div class="rw-info-item">
-          <span class="rw-info-label">{{ 'ONBOARDING.ROLE' | translate }}</span>
-          <span class="rw-info-value">{{ assignment.roleName | roleLabel }}</span>
-        </div>
+        @if (assignment.roleName) {
+          <div class="rw-info-item">
+            <span class="rw-info-label">{{ 'ONBOARDING.ROLE' | translate }}</span>
+            <span class="rw-info-value">{{ assignment.roleName | roleLabel }}</span>
+          </div>
+        }
         @if (assignment.hospitalName) {
           <div class="rw-info-item">
             <span class="rw-info-label">{{ 'ONBOARDING.ORGANIZATION' | translate }}</span>
@@ -305,6 +317,12 @@
               </div>
             </div>
           </div>
+          <!-- QA r70 D3201: the e-mail never arrived, so this one replaces it. -->
+          @if (assignment.credentialsReissued) {
+            <p class="rw-credentials-hint" data-testid="credentials-reissued">
+              {{ 'ONBOARDING.CREDENTIALS_REISSUED' | translate }}
+            </p>
+          }
           <p class="rw-credentials-warn">
             {{ 'ONBOARDING.CREDENTIALS_WARN' | translate }}
           </p>

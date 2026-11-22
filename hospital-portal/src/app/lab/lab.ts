@@ -65,6 +65,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { PatientSafetyHeaderComponent } from '../shared/patient-safety-header/patient-safety-header.component';
 /** One recorded step of a lab order's timeline in the drawer. */
 export interface LabTimelineStep {
   key: string;
@@ -94,6 +95,7 @@ class DialogSession {
   selector: 'app-lab',
   standalone: true,
   imports: [
+    PatientSafetyHeaderComponent,
     DateTimePipe,
     ListEscapeDirective,
     SubmitGuardDirective,

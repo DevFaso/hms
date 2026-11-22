@@ -35,6 +35,11 @@ public class AfterVisitSummaryDTO {
     private java.time.LocalDate patientDateOfBirth;
     /** The patient's MRN at the visit's hospital; null when not registered there. */
     private String patientMrn;
+    /**
+     * QA r70 D3220: the blood group recorded on the chart (A+ … O-), on the summary and its print.
+     * Clinical: {@code ReceptionistResponseShaping} removes it for the desk.
+     */
+    private String patientBloodType;
 
     /** A stay (an admission behind the encounter): its diagnoses read "at discharge". */
     private boolean inpatientStay;
