@@ -133,6 +133,20 @@ public final class ClinicalRuleRegistry {
 
     private static final Map<ClinicalRuleSetKey, ClinicalRuleSet> BY_KEY = index();
 
+    /**
+     * The public page of a rule set's main published source, where one exists (D3501): the approver opens it from the
+     * screen and reads it printed in the sign-off pack. A source that is a platform decision or has no public page
+     * has no entry; only addresses of the publisher's own catalogue pages are listed.
+     */
+    private static final Map<ClinicalRuleSetKey, String> SOURCE_URLS = Map.of(
+        ClinicalRuleSetKey.AL_WHO_WEIGHT_BANDS, "https://www.who.int/publications/i/item/9789241549127",
+        ClinicalRuleSetKey.PERINATAL_CLASSIFICATION, "https://icd.who.int/",
+        ClinicalRuleSetKey.STILLBIRTH_COUNTING, "https://icd.who.int/",
+        ClinicalRuleSetKey.ORDER_REVIEW_HOLD, "https://www.who.int/initiatives/medication-without-harm",
+        ClinicalRuleSetKey.NEWBORN_VITALS, "https://www.who.int/publications/i/item/9789240045989",
+        ClinicalRuleSetKey.LABOUR_ALERT_VALUES, "https://www.who.int/publications/i/item/9789240017566",
+        ClinicalRuleSetKey.SEVERE_HYPERTENSION_OBSTETRIC, "https://www.nice.org.uk/guidance/ng133");
+
     private ClinicalRuleRegistry() {
     }
 
@@ -143,6 +157,11 @@ public final class ClinicalRuleRegistry {
 
     public static Optional<ClinicalRuleSet> find(ClinicalRuleSetKey key) {
         return Optional.ofNullable(key == null ? null : BY_KEY.get(key));
+    }
+
+    /** The public page of the rule set's main published source, or empty when it has none. */
+    public static Optional<String> sourceUrl(ClinicalRuleSetKey key) {
+        return Optional.ofNullable(SOURCE_URLS.get(key));
     }
 
     /** The rule set named {@code key} (a stored or requested name), or empty for a name nobody defines. */

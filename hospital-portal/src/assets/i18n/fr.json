@@ -15816,6 +15816,17 @@
     "APPROVER": "Approbateur",
     "VERSION": "Version",
     "ENFORCED_IN": "Appliquée dans",
+    "SOURCE_OPEN": "Ouvrir la source",
+    "AREA": {
+      "PRESCRIBING": "Prescription",
+      "MATERNITY": "Maternité",
+      "VITALS": "Constantes vitales",
+      "DEATH": "Décès et mortinatalité",
+      "RECORDS": "Dossier patient et confidentialité",
+      "IMAGING": "Imagerie",
+      "BILLING": "Facturation",
+      "LAB": "Laboratoire et banque de sang"
+    },
     "NOTE": "Note",
     "REVOKE_REASON": "Motif de la révocation",
     "SIGNED_BY": "Validée le {{date}} par {{title}} ({{name}})",

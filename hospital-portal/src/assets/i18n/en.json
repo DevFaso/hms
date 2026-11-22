@@ -15816,6 +15816,17 @@
     "APPROVER": "Approver",
     "VERSION": "Version",
     "ENFORCED_IN": "Applied in",
+    "SOURCE_OPEN": "Open the source",
+    "AREA": {
+      "PRESCRIBING": "Prescribing",
+      "MATERNITY": "Maternity",
+      "VITALS": "Vital signs",
+      "DEATH": "Deaths and stillbirths",
+      "RECORDS": "Patient record and privacy",
+      "IMAGING": "Imaging",
+      "BILLING": "Billing",
+      "LAB": "Laboratory and blood bank"
+    },
     "NOTE": "Note",
     "REVOKE_REASON": "Reason for revoking",
     "SIGNED_BY": "Signed off on {{date}} by {{title}} ({{name}})",

@@ -52,7 +52,7 @@ class RuleSignoffPackPdfServiceTest {
                     .status(RuleSignoffStatus.SIGNED).signerName("Dr Awa Sawadogo").signerTitle("Médecin-chef")
                     .signedOn(LocalDate.of(2026, 11, 20)).recordedByName("Admin").recordedAt(LocalDateTime.now())
                     .build() : null,
-                null));
+                null, rule.key().area().name(), rule.sourceUrl()));
         }
         HospitalRuleSignoffService signoffs = mock(HospitalRuleSignoffService.class);
         when(signoffs.overview(hospitalId, null))
