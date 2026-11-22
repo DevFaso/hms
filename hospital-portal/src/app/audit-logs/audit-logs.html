@@ -38,21 +38,25 @@
           </option>
         }
       </select>
-      <input
-        type="datetime-local"
-        [(ngModel)]="fromDate"
-        class="filter-input"
-        [attr.aria-label]="'AUDIT.DATE_FROM' | translate"
-        [title]="'AUDIT.DATE_FROM' | translate"
-      />
-      <input
-        type="datetime-local"
-        [attr.min]="fromDate || null"
-        [(ngModel)]="toDate"
-        class="filter-input"
-        [attr.aria-label]="'AUDIT.DATE_TO' | translate"
-        [title]="'AUDIT.DATE_TO' | translate"
-      />
+      <label class="filter-labelled">
+        <span class="filter-label">{{ 'AUDIT.DATE_FROM' | translate }}</span>
+        <input
+          type="datetime-local"
+          [(ngModel)]="fromDate"
+          class="filter-input"
+          [title]="'AUDIT.DATE_FROM' | translate"
+        />
+      </label>
+      <label class="filter-labelled">
+        <span class="filter-label">{{ 'AUDIT.DATE_TO' | translate }}</span>
+        <input
+          type="datetime-local"
+          [attr.min]="fromDate || null"
+          [(ngModel)]="toDate"
+          class="filter-input"
+          [title]="'AUDIT.DATE_TO' | translate"
+        />
+      </label>
       <button class="btn-primary btn-sm" (click)="applyDateFilter()">
         {{ 'AUDIT.APPLY_FILTER' | translate }}
       </button>

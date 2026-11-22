@@ -103,7 +103,16 @@
       </label>
       <label class="filter-field">
         {{ 'SUPER_ADMIN.AUDIT_OVERSIGHT.HOSPITAL_FILTER' | translate }}
-        <input type="text" [ngModel]="hospitalId()" (ngModelChange)="hospitalId.set($event)" />
+        <select
+          data-testid="audit-hospital-filter"
+          [ngModel]="hospitalId()"
+          (ngModelChange)="hospitalId.set($event)"
+        >
+          <option value="">{{ 'SUPER_ADMIN.AUDIT_OVERSIGHT.ALL_HOSPITALS' | translate }}</option>
+          @for (h of hospitals(); track h.id) {
+            <option [value]="h.id">{{ h.name }}{{ h.city ? ' — ' + h.city : '' }}</option>
+          }
+        </select>
       </label>
       <div class="filter-grid">
         <label class="filter-field">

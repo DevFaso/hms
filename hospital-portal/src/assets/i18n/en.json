@@ -436,7 +436,8 @@
       "SCOPE_UNKNOWN": "Scope not recorded",
       "IMPERSONATOR": "Impersonated by {{actor}}",
       "SHOW_TEN": "Show up to 10 events",
-      "HOSPITAL_FILTER": "Hospital filter (ID)"
+      "HOSPITAL_FILTER": "Hospital",
+      "ALL_HOSPITALS": "All hospitals"
     },
     "STAT": {
       "ORGANIZATIONS": "Organizations",

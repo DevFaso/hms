@@ -436,7 +436,8 @@
       "SCOPE_UNKNOWN": "Périmètre non renseigné",
       "IMPERSONATOR": "Identité empruntée par {{actor}}",
       "SHOW_TEN": "Afficher jusqu’à 10 événements",
-      "HOSPITAL_FILTER": "Filtre hospitalier (identifiant)"
+      "HOSPITAL_FILTER": "Hôpital",
+      "ALL_HOSPITALS": "Tous les hôpitaux"
     },
     "STAT": {
       "ORGANIZATIONS": "Organisations",

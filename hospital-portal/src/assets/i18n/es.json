@@ -436,7 +436,8 @@
       "SCOPE_UNKNOWN": "Ámbito no registrado",
       "IMPERSONATOR": "Suplantado por {{actor}}",
       "SHOW_TEN": "Mostrar hasta 10 eventos",
-      "HOSPITAL_FILTER": "Filtro de hospital (ID)"
+      "HOSPITAL_FILTER": "Hospital",
+      "ALL_HOSPITALS": "Todos los hospitales"
     },
     "STAT": {
       "ORGANIZATIONS": "Organizaciones",
