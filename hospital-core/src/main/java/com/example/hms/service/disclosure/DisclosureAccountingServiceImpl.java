@@ -29,6 +29,14 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
 
     private final AuditEventLogRepository auditRepository;
 
+    /** QA D3451 (r70): what a release to the family adds to its row; null in a hand-built unit test. */
+    private FamilyReleaseDisclosure familyReleaseDisclosure;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setFamilyReleaseDisclosure(FamilyReleaseDisclosure familyReleaseDisclosure) {
+        this.familyReleaseDisclosure = familyReleaseDisclosure;
+    }
+
     @Override
     @Transactional(readOnly = true)
     public DisclosureAccountingDTO getAccounting(UUID patientId, LocalDateTime from,
@@ -280,7 +288,7 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
         DisclosureCategory category =
             DisclosureCategory.classify(event.getEventType(), event.getEntityType());
 
-        return AccessLogEntryDTO.builder()
+        AccessLogEntryDTO entry = AccessLogEntryDTO.builder()
             .id(event.getId())
             .actor(event.getUserName())
             // One choke point for both audit surfaces: legacy rows stored
@@ -296,5 +304,10 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
             .category(category)
             .externalDisclosure(category != null && category.isExternalDisclosure())
             .build();
+        // QA D3451: a release to the family says to whom, and which category of result.
+        if (category == DisclosureCategory.RELEASED_TO_FAMILY && familyReleaseDisclosure != null) {
+            familyReleaseDisclosure.describe(event, entry);
+        }
+        return entry;
     }
 }

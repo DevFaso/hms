@@ -60,4 +60,18 @@ public class AccessLogEntryDTO {
     @Schema(description = "True when the record went to someone outside the treating team "
         + "(another hospital, an insurer, or out as a file).", example = "true")
     private boolean externalDisclosure;
+
+    /**
+     * QA D3451 (r70): for a result released to the family ({@code RELEASED_TO_FAMILY}), who received it, as
+     * displayed. Null on every other row, and when the release cannot be read.
+     */
+    @Schema(description = "Who a released result went to (a parent or guardian); null on other rows.")
+    private String recipientName;
+
+    @Schema(description = "How the recipient is related to the patient.", example = "PARENT")
+    private String recipientRelationship;
+
+    /** The category of the released result, never its value. */
+    @Schema(description = "Category of the released result, never its value.", example = "HIV")
+    private String resultCategory;
 }
