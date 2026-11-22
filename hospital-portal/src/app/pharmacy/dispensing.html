@@ -111,6 +111,9 @@
         </span>
       </div>
 
+      <!-- QA r70 D3220: the patient-safety header (blood group, allergies, weight). -->
+      <app-patient-safety-header [patientId]="selectedPrescription?.patient?.id" />
+
       <!-- QA D1555: the order's allergy cards against the patient's current allergies. -->
       @if (selectedPrescription?.allergyAlerts?.length) {
         <section

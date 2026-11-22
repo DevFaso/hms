@@ -283,6 +283,8 @@ export interface AfterVisitSummary {
   /** Polish 2026-11-13: the identity band. */
   patientDateOfBirth?: string | null;
   patientMrn?: string | null;
+  /** QA r70 D3220: the chart's blood group, on the summary and its print (removed for the desk). */
+  patientBloodType?: string | null;
   /** A stay: its diagnoses read "at discharge"; an outpatient visit's do not. */
   inpatientStay?: boolean;
   /** Who signed the latest signed note, and when; absent while none is signed. */

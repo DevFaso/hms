@@ -39,6 +39,7 @@ import { refusalReason } from '../shared/refusal-reason';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { missingRequiredMessage } from '../shared/required-fields';
 import { systemFollowUpTypeKey } from './follow-up-type';
+import { PatientSafetyHeaderComponent } from '../shared/patient-safety-header/patient-safety-header.component';
 type ApprovalFilter = DischargeStatus | 'ALL';
 type SummaryFilter = 'unfinalized' | 'pending-results' | 'range';
 
@@ -46,6 +47,7 @@ type SummaryFilter = 'unfinalized' | 'pending-results' | 'range';
   selector: 'app-discharge',
   standalone: true,
   imports: [
+    PatientSafetyHeaderComponent,
     EnumLabelPipe,
     SubmitGuardDirective,
     ModalDialogDirective,

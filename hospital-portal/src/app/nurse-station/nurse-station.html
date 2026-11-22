@@ -977,6 +977,16 @@
                         {{ p.mrn }}</span
                       >
                     }
+                    <!-- QA r70 D3220: the blood group on the nurse's board, labelled. -->
+                    <span class="meta-item" data-testid="workboard-blood-group"
+                      >{{ 'PATIENT_SAFETY.BLOOD_GROUP' | translate
+                      }}{{ 'COMMON.COLON' | translate }}
+                      @if (p.bloodType) {
+                        <strong>{{ p.bloodType }}</strong>
+                      } @else {
+                        {{ 'PATIENT_SAFETY.NOT_DOCUMENTED' | translate }}
+                      }
+                    </span>
                     @if (p.departmentName) {
                       <span class="meta-item">{{ p.departmentName }}</span>
                     }
@@ -1096,7 +1106,10 @@
                     <tr>
                       <td>
                         <a [routerLink]="['/patients', p.patientId]">{{ p.patientName }}</a><small
-                          >{{ p.mrn }} · {{ p.roomBed || '—' }}</small
+                          >{{ p.mrn }} · {{ p.roomBed || '—' }} ·
+                          {{ 'PATIENT_SAFETY.BLOOD_GROUP' | translate
+                          }}{{ 'COMMON.COLON' | translate }}
+                          {{ p.bloodType || ('PATIENT_SAFETY.NOT_DOCUMENTED' | translate) }}</small
                         >
                         @if (p.acuityLevel) {
                           {{ ' '
@@ -1674,6 +1687,8 @@
         <span class="material-symbols-outlined" aria-hidden="true">monitor_heart</span>
         {{ 'NURSE.RECORD_VITALS' | translate }} — {{ vitalsCaptureFor()?.patientName }}
       </h3>
+      <!-- QA r70 D3220: the patient-safety header (blood group, allergies, weight). -->
+      <app-patient-safety-header [patientId]="vitalsCaptureFor()?.patientId" [showName]="false" />
       <div class="vitals-form-grid">
         <div class="vitals-field">
           <label for="vf-temp">{{ 'NURSE.TEMPERATURE' | translate }} (°C)</label>
@@ -2207,6 +2222,8 @@
         </button>
       </div>
       <div class="modal-body">
+        <!-- QA r70 D3220: the patient-safety header (blood group, allergies, weight). -->
+        <app-patient-safety-header [patientId]="careNoteFor()!.patientId" [showName]="false" />
         <div class="form-row">
           <label for="cn-title">{{ 'NURSE.TITLE_LABEL' | translate }}</label>
           <input
