@@ -16,7 +16,6 @@ import net.javacrumbs.shedlock.core.LockAssert;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -68,7 +67,6 @@ public class CriticalValueNotificationService {
     private final SmsService smsService;
     private final LabResultRepository labResultRepository;
     private final LabResultMapper labResultMapper;
-    private final com.example.hms.repository.StaffRepository staffRepository;
     private final MessageSource messageSource;
 
     /**
@@ -86,7 +84,6 @@ public class CriticalValueNotificationService {
         SmsService smsService,
         LabResultRepository labResultRepository,
         LabResultMapper labResultMapper,
-        com.example.hms.repository.StaffRepository staffRepository,
         org.springframework.transaction.PlatformTransactionManager transactionManager,
         MessageSource messageSource
     ) {
@@ -94,7 +91,6 @@ public class CriticalValueNotificationService {
         this.smsService = smsService;
         this.labResultRepository = labResultRepository;
         this.labResultMapper = labResultMapper;
-        this.staffRepository = staffRepository;
         this.messageSource = messageSource;
         this.mismatchTx = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
         this.mismatchTx.setPropagationBehavior(
@@ -198,6 +194,18 @@ public class CriticalValueNotificationService {
         this.users = users;
     }
 
+    /** This bean through its proxy, so a call from inside it still opens its transaction (unit tests: itself). */
+    private CriticalValueNotificationService self;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setSelf(@org.springframework.context.annotation.Lazy CriticalValueNotificationService self) {
+        this.self = self;
+    }
+
+    private CriticalValueNotificationService self() {
+        return self != null ? self : this;
+    }
+
     static final String COVER_KEY = "lab.critical.escalation.cover";
     static final String LEAD_KEY = "lab.critical.escalation.lead";
     static final String UNRESOLVED_KEY = "lab.critical.unresolved";
@@ -277,7 +285,7 @@ public class CriticalValueNotificationService {
         NotificationText escalation = buildText(result, true);
         String prescriber = resolveOrderingUsername(result);
         long minutes = result.getCriticalNotifiedAt() == null ? 0
-            : Math.max(0, Duration.between(result.getCriticalNotifiedAt(), now).toMinutes());
+            : Math.max(0, com.example.hms.utility.ElapsedTime.between(result.getCriticalNotifiedAt(), now).toMinutes());
         java.util.Set<String> chain = chainOf(result, step);
         boolean unresolved = step == CriticalResultEscalationLadder.Step.UNRESOLVED
             || step == CriticalResultEscalationLadder.Step.REMINDER;
@@ -535,10 +543,9 @@ public class CriticalValueNotificationService {
      *         already has a confirmed read-back, is not critical, or the
      *         repeated value does not match the reported one
      */
-    @Transactional
     public LabResult recordReadBack(LabResult result, String repeatedValue,
                                     UUID byUserId, String byDisplay) {
-        return recordReadBack(result, repeatedValue, byUserId, byDisplay, null, null);
+        return self().recordReadBack(result, repeatedValue, byUserId, byDisplay, null, null);
     }
 
     /**

@@ -538,14 +538,6 @@ class CriticalValueNotificationServiceTest {
     // result nobody acknowledged produced two notifications to one person and
     // then went permanently quiet.
 
-    private UUID givenHospital() {
-        UUID hospitalId = UUID.randomUUID();
-        com.example.hms.model.Hospital hospital =
-            com.example.hms.model.Hospital.builder().name("CHU").code("CHU").build();
-        hospital.setId(hospitalId);
-        result.getLabOrder().setHospital(hospital);
-        return hospitalId;
-    }
 
     // ── Read-back (P0 #5) ─────────────────────────────────────────────────
     // Never built. The acknowledge endpoint takes no body, so nothing recorded

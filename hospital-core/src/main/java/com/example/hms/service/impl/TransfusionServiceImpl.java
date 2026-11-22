@@ -998,7 +998,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             .findByRequest_IdAndBloodUnit_Id(requestId, unitId).orElse(null);
         BusinessException refusal = standingCrossmatchRefusal(request, unit, crossmatch);
         // QA D3351: red cells for an allo-immunised patient leave on a « compatibilisé » crossmatch, or on the
-        // emergency path of a declared vital emergency; nothing else, and nobody overrides it here.
+        // emergency path of an EMERGENCY request; nothing else, and nobody overrides it here.
         boolean crossmatchAfterwards = false;
         if (antibodyScreen != null) {
             if (refusal == null) {
@@ -1053,8 +1053,8 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (!AboGroup.isEmergencyRedCells(request.getProductType())) {
             throw new BusinessException("transfusion.emergency.redCellsOnly");
         }
-        // QA D3351: for an allo-immunised patient the emergency path opens on the prescriber's declaration only.
-        boolean crossmatchAfterwards = antibodyScreen != null && antibodyScreen.requireEmergencyReleaseAllowed(request);
+        // QA D3351: for an allo-immunised patient the emergency path belongs to an EMERGENCY request only.
+        boolean crossmatchAfterwards = antibodyEmergencyPath(request);
         TransfusionCrossmatch crossmatch = crossmatchRepository
             .findByRequest_IdAndBloodUnit_Id(requestId, unit.getId()).orElse(null);
         if (unit.getStatus() == BloodUnitStatus.ISSUED && documentedRelease(request, unit) != null) {
@@ -1077,12 +1077,24 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (release.getReleaseType() == EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE) {
             notifySafely(() -> fileReleaseReviewAfterCommit(request, unit, saved), saved.getId());
         }
-        // A serologically incompatible release was crossmatched (that is how it is known incompatible), and
-        // the lab director reviews that release already: no second task for the same bag.
-        if (crossmatchAfterwards && release.getReleaseType() != EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE) {
+        askCrossmatchAfterwards(crossmatchAfterwards, release.getReleaseType(), request, unit);
+        return putOut(request, unit);
+    }
+
+    /** QA D3351: whether the antibody rule holds this request and lets it take the emergency path (it refuses otherwise). */
+    private boolean antibodyEmergencyPath(TransfusionRequest request) {
+        return antibodyScreen != null && antibodyScreen.requireEmergencyReleaseAllowed(request);
+    }
+
+    /**
+     * QA D3351: the biologist's crossmatch afterwards. A serologically incompatible release was crossmatched
+     * (that is how it is known incompatible), and the lab director reviews that release already: no second task
+     * for the same bag.
+     */
+    private void askCrossmatchAfterwards(boolean due, EmergencyReleaseType type, TransfusionRequest request, BloodUnit unit) {
+        if (due && type != EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE) {
             notifySafely(() -> antibodyScreen.askRetrospectiveCrossmatch(request, unit), unit.getId());
         }
-        return putOut(request, unit);
     }
 
     /** What every way out of the lab checks; the caller locked the bag's row before reading anything. */

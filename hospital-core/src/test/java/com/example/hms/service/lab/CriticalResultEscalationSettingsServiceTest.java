@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.hms.exception.FieldBusinessException;
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.User;
 import com.example.hms.repository.HospitalRepository;
@@ -91,6 +92,57 @@ class CriticalResultEscalationSettingsServiceTest {
         assertThatThrownBy(() -> service.update(hospital.getId(), 15, 30, 60, stranger))
             .isInstanceOfSatisfying(FieldBusinessException.class,
                 e -> assertThat(e.getField()).isEqualTo("medicalLeadUserId"));
+        verify(hospitals, never()).save(any());
+    }
+
+    /**
+     * Sonar S2259 (r70): the picker is sorted by name. A doctor with no name and no sign-in name on record, and
+     * an empty entry in the list, used to be a NullPointerException on the settings page of the whole hospital.
+     */
+    @Test
+    void aDoctorWithNoNameOnRecordIsListedAndNothingFails() {
+        User nameless = new User();
+        nameless.setId(UUID.randomUUID());
+        User zoe = new User();
+        zoe.setId(UUID.randomUUID());
+        zoe.setUsername("zoe.traore");
+        User awa = new User();
+        awa.setId(UUID.randomUUID());
+        awa.setFirstName("awa");
+        awa.setLastName("Chef");
+        when(assignments.findLiveUsersAtHospitalWithRoleCodes(any(), any()))
+            .thenReturn(java.util.Arrays.asList(zoe, null, nameless, awa, zoe));
+
+        Settings settings = service.get(hospital.getId());
+
+        // Sorted without regard to case, the nameless doctor first, each person once, the empty entry dropped.
+        assertThat(settings.doctors()).extracting(CriticalResultEscalationSettingsService.Doctor::name)
+            .containsExactly("", "awa Chef", "zoe.traore");
+        assertThat(settings.doctors()).extracting(CriticalResultEscalationSettingsService.Doctor::userId)
+            .containsExactly(nameless.getId(), awa.getId(), zoe.getId());
+        assertThat(settings.usesDefaults()).isTrue();
+    }
+
+    /** A hospital that set only some of its steps reads the default for each step it left empty. */
+    @Test
+    void aHospitalWithSomeStepsSetReadsTheDefaultForTheOthers() {
+        hospital.setCriticalLeadAfterMinutes(40);
+
+        Settings settings = service.get(hospital.getId());
+
+        assertThat(settings.usesDefaults()).isFalse();
+        assertThat(settings.coverAfterMinutes()).isEqualTo(15);
+        assertThat(settings.leadAfterMinutes()).isEqualTo(40);
+        assertThat(settings.unresolvedAfterMinutes()).isEqualTo(60);
+    }
+
+    @Test
+    void aHospitalThatDoesNotExistIsNotFoundOnReadAndOnUpdate() {
+        UUID unknown = UUID.randomUUID();
+        when(hospitals.findClinicalById(unknown)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.get(unknown)).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.update(unknown, 15, 30, 60, null)).isInstanceOf(ResourceNotFoundException.class);
         verify(hospitals, never()).save(any());
     }
 }

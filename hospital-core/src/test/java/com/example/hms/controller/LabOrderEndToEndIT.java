@@ -498,6 +498,77 @@ class LabOrderEndToEndIT extends BaseIT {
             .isEqualTo((short) 2);
     }
 
+    /**
+     * QA r70 (C5), rule CRITICAL_RESULT_ESCALATION. The sweep and the read-back are reached through the Spring
+     * beans, as in production, so each runs in its own transaction and every read below is of what it
+     * committed: the step taken, the incident opened, then who closed it, in which role and by which channel.
+     */
+    @Test
+    @DisplayName("QA r70 (C5): the last step of the ladder and its incident are kept, no step is taken twice, and the read-back closes the incident with who, in which role and how")
+    void theLastStepItsIncidentAndTheReadBackAreKept() throws Exception {
+        UUID orderId = placeOrder(LocalDateTime.now().minusMinutes(120));
+        collectSpecimen(orderId);
+        UUID resultId = idOf(postResult(scientist, orderId, CRITICAL_VALUE).andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString());
+        releaseAs(director, resultId);
+
+        // Told 61 minutes ago; the cover and the médecin-chef were told in their turn: the last step is due.
+        LabResult told = labResultRepository.findById(resultId).orElseThrow();
+        told.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(61));
+        told.setCriticalEscalationLevel((short) 2);
+        told.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(31));
+        labResultRepository.save(told);
+
+        SecurityContextHolder.clearContext();
+        HospitalContextHolder.clear();
+        com.example.hms.service.CriticalValueNotificationService sweep =
+            applicationContext.getBean(com.example.hms.service.CriticalValueNotificationService.class);
+        com.example.hms.repository.CriticalResultIncidentRepository incidents =
+            applicationContext.getBean(com.example.hms.repository.CriticalResultIncidentRepository.class);
+        assertThat(runSweep(sweep)).isEqualTo(1);
+
+        LabResult unresolved = labResultRepository.findById(resultId).orElseThrow();
+        assertThat(unresolved.getCriticalEscalationLevel()).isEqualTo((short) 3);
+        assertThat(unresolved.isAcknowledged()).isFalse();
+        com.example.hms.model.CriticalResultIncident opened = incidents.findByLabResultId(resultId).orElseThrow();
+        assertThat(opened.getHospitalId()).isEqualTo(hospital.getId());
+        assertThat(opened.getMinutesUnacknowledged()).isBetween(61, 63);
+        assertThat(opened.getOpenedAt()).isNotNull();
+        assertThat(opened.getResolvedAt()).isNull();
+        assertThat(notificationRepository
+            .findByRecipientUsernameAndReadOrderByCreatedAtDesc(doctor.user().getUsername(), false))
+            .anyMatch(n -> "CRITICAL_LAB_RESULT_ESCALATION".equals(n.getType()));
+
+        // The next sweep, a moment later: the reminder is not due, so nothing is told twice and nothing moves.
+        assertThat(runSweep(sweep)).isZero();
+        assertThat(labResultRepository.findById(resultId).orElseThrow().getCriticalEscalationLevel()).isEqualTo((short) 3);
+        assertThat(incidents.findByHospitalIdOrderByOpenedAtDesc(hospital.getId())).hasSize(1);
+
+        // The prescriber is reached by telephone and reads the value back: only that ends the chain.
+        CriticalValueReadBackRequestDTO byPhone = readBack(CRITICAL_VALUE);
+        byPhone.setChannel("PHONE");
+        mockMvc.perform(post(RESULT_READ_BACK, resultId).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsBytes(byPhone))
+                .with(signedInAs(doctor)).with(csrf()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.acknowledged").value(true));
+
+        LabResult acknowledged = labResultRepository.findById(resultId).orElseThrow();
+        assertThat(acknowledged.isAcknowledged()).isTrue();
+        assertThat(acknowledged.getCriticalAckRole()).isEqualTo(ROLE_DOCTOR);
+        assertThat(acknowledged.getCriticalAckChannel()).isEqualTo("PHONE");
+        com.example.hms.model.CriticalResultIncident closed = incidents.findByLabResultId(resultId).orElseThrow();
+        assertThat(closed.getResolvedAt()).isNotNull();
+        assertThat(closed.getResolvedByUserId()).isEqualTo(doctor.user().getId());
+        assertThat(closed.getResolvedByDisplay()).isNotBlank();
+
+        SecurityContextHolder.clearContext();
+        HospitalContextHolder.clear();
+        assertThat(runSweep(sweep)).isZero();
+        assertThat(labResultRepository.findById(resultId).orElseThrow().getCriticalEscalationLevel()).isEqualTo((short) 3);
+    }
+
     @Test
     @DisplayName("QA D415: a French read-back with a decimal comma matches the reported value")
     void readBackAcceptsTheFrenchDecimalComma() throws Exception {

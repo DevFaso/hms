@@ -2,8 +2,6 @@ package com.example.hms.service.support;
 
 import com.example.hms.config.SecurityConstants;
 import com.example.hms.enums.BloodProductType;
-import com.example.hms.enums.TransfusionUrgency;
-import com.example.hms.enums.VitalUrgencyLevel;
 import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
 import com.example.hms.service.clinicalrules.ProvisionalRule;
 
@@ -72,6 +70,14 @@ public final class PositiveAntibodyScreenPolicy {
                                     LocalDateTime sampleCollectedAt) {
     }
 
+    /** The request fields a refusal names (an enum constant cannot read a constant of its own enum). */
+    private static final class Fields {
+        static final String SAMPLE = "sampleCollectedAt";
+
+        private Fields() {
+        }
+    }
+
     /** The first thing a routine issue still lacks, in the order the laboratory supplies them. */
     public enum Missing {
         /** No identification, and no referral decision for this request. */
@@ -79,9 +85,9 @@ public final class PositiveAntibodyScreenPolicy {
         ANTIGLOBULIN("transfusion.antibody.antiglobulinRequired", "antiglobulinMethod"),
         ANTIGEN_NEGATIVE("transfusion.antibody.antigenNegativeRequired", "antigenNegative"),
         RH_KELL("transfusion.antibody.rhKellRequired", "rhKellMatched"),
-        SAMPLE_TIME("transfusion.antibody.sampleTimeRequired", "sampleCollectedAt"),
-        SAMPLE_IN_FUTURE("transfusion.antibody.sampleInFuture", "sampleCollectedAt"),
-        SAMPLE_TOO_OLD("transfusion.antibody.sampleTooOld", "sampleCollectedAt");
+        SAMPLE_TIME("transfusion.antibody.sampleTimeRequired", Fields.SAMPLE),
+        SAMPLE_IN_FUTURE("transfusion.antibody.sampleInFuture", Fields.SAMPLE),
+        SAMPLE_TOO_OLD("transfusion.antibody.sampleTooOld", Fields.SAMPLE);
 
         private final String messageKey;
         private final String field;
@@ -127,16 +133,5 @@ public final class PositiveAntibodyScreenPolicy {
             return Optional.of(Missing.SAMPLE_IN_FUTURE);
         }
         return sample.isBefore(now.minusHours(SAMPLE_MAX_AGE_HOURS)) ? Optional.of(Missing.SAMPLE_TOO_OLD) : Optional.empty();
-    }
-
-    /**
-     * The declaration a new EMERGENCY request carries for a patient known allo-immunised: a vital urgency level
-     * (UVI or UV), a reason, and that the pre-transfusion sample is drawn. An URGENT request (« urgence relative »)
-     * never qualifies, whatever it carries.
-     */
-    public static boolean emergencyDeclared(TransfusionUrgency urgency, VitalUrgencyLevel level, String reason,
-                                            Boolean sampleDrawn) {
-        return urgency == TransfusionUrgency.EMERGENCY && level != null && reason != null && !reason.isBlank()
-            && Boolean.TRUE.equals(sampleDrawn);
     }
 }

@@ -78,6 +78,7 @@ public class CriticalResultEscalationSettingsService {
             hospital.getCriticalUnresolvedAfterMinutes());
         List<Doctor> doctors = assignmentRepository
             .findLiveUsersAtHospitalWithRoleCodes(hospital.getId(), DOCTOR_ROLE_CODES).stream()
+            .filter(java.util.Objects::nonNull)
             .map(CriticalResultEscalationSettingsService::doctor)
             .distinct()
             .sorted(Comparator.comparing(Doctor::name, String.CASE_INSENSITIVE_ORDER))
@@ -88,8 +89,8 @@ public class CriticalResultEscalationSettingsService {
             hospital.getCriticalMedicalLeadUserId(), doctors);
     }
 
+    /** {@code user} is never null here: the stream filters it. */
     private static Doctor doctor(User user) {
-        String name = TransfusionMapper.userName(user);
-        return new Doctor(user.getId(), name == null ? "" : name);
+        return new Doctor(user.getId(), java.util.Objects.requireNonNullElse(TransfusionMapper.userName(user), ""));
     }
 }

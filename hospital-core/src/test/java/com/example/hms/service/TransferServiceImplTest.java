@@ -816,7 +816,7 @@ class TransferServiceImplTest {
 
     private com.example.hms.repository.LaborEpisodeRepository inLabour(boolean active) {
         com.example.hms.repository.LaborEpisodeRepository episodes =
-            org.mockito.Mockito.mock(com.example.hms.repository.LaborEpisodeRepository.class);
+            mock(com.example.hms.repository.LaborEpisodeRepository.class);
         when(episodes.existsByPatient_IdAndHospital_IdAndStatus(patient.getId(), hospitalId,
             com.example.hms.enums.LaborStatus.ACTIVE)).thenReturn(active);
         service.setLabourBedMove(new com.example.hms.service.maternity.LabourBedMove(episodes));
@@ -849,7 +849,7 @@ class TransferServiceImplTest {
         com.example.hms.repository.LaborEpisodeRepository episodes = inLabour(true);
         // Labour room to delivery room: her ordinary care.
         assertThat(service.requestTransfer(base().build()).isLaborAcknowledgementRequired()).isFalse();
-        org.mockito.Mockito.verifyNoInteractions(episodes);
+        verifyNoInteractions(episodes);
 
         inLabour(false);
         Ward surgery = ward("Chirurgie", "CHI", WardType.SURGICAL);
@@ -880,7 +880,7 @@ class TransferServiceImplTest {
     @Test
     void d3308_aDirectBedChangeOutOfMaternityIsSentToTheTransferOrder() {
         com.example.hms.repository.LaborEpisodeRepository episodes =
-            org.mockito.Mockito.mock(com.example.hms.repository.LaborEpisodeRepository.class);
+            mock(com.example.hms.repository.LaborEpisodeRepository.class);
         when(episodes.existsByPatient_IdAndHospital_IdAndStatus(patient.getId(), hospitalId,
             com.example.hms.enums.LaborStatus.ACTIVE)).thenReturn(true);
         com.example.hms.service.maternity.LabourBedMove rule = new com.example.hms.service.maternity.LabourBedMove(episodes);

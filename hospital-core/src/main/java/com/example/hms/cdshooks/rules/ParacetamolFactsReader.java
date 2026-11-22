@@ -89,13 +89,15 @@ public class ParacetamolFactsReader {
     }
 
     /**
+     * An order that is not marked for home. Kept for the callers that write a ward or an outpatient order.
+     *
      * @param item          the proposed order's catalogue item (may be null)
      * @param editedOrderId the order being edited, not "another order" of itself (null on a create)
      */
     @Transactional(readOnly = true, noRollbackFor = RuntimeException.class)
     public ParacetamolFacts read(Patient patient, UUID hospitalId, String medicationName,
                                  MedicationCatalogItem item, UUID editedOrderId) {
-        return read(patient, hospitalId, medicationName, item, editedOrderId, false);
+        return readFor(patient, hospitalId, medicationName, item, new Proposed(editedOrderId, false));
     }
 
     /**
@@ -106,6 +108,12 @@ public class ParacetamolFactsReader {
     @Transactional(readOnly = true, noRollbackFor = RuntimeException.class)
     public ParacetamolFacts read(Patient patient, UUID hospitalId, String medicationName,
                                  MedicationCatalogItem item, UUID editedOrderId, boolean takeHome) {
+        return readFor(patient, hospitalId, medicationName, item, new Proposed(editedOrderId, takeHome));
+    }
+
+    /** The read itself, in the transaction either entry point opened. */
+    private ParacetamolFacts readFor(Patient patient, UUID hospitalId, String medicationName,
+                                     MedicationCatalogItem item, Proposed proposed) {
         if (patient == null) {
             return ParacetamolFacts.NONE;
         }
@@ -131,8 +139,7 @@ public class ParacetamolFactsReader {
                 ? ParacetamolFacts.NOT_RECOGNISED : ParacetamolFacts.NONE;
         }
         Orders orders = child ? new Orders(List.of(), List.of(), List.of(), List.of())
-            : otherOrders(patient.getId(), scope, new Proposed(editedOrderId, takeHome), paracetamol, combinations,
-                active);
+            : otherOrders(patient.getId(), scope, proposed, paracetamol, combinations, active);
         List<PatientProblem> live = liveProblems(patient.getId(), scope);
         List<PatientProblem> surfaced = live.stream()
             .filter(p -> CrossHospitalRows.maySurface(scope, acting, p.getSensitivityCategory()))

@@ -5,11 +5,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -28,7 +29,6 @@ import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.repository.CriticalResultIncidentRepository;
 import com.example.hms.repository.LabResultRepository;
-import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.service.CriticalValueNotificationService;
 import com.example.hms.service.SmsService;
@@ -62,7 +62,6 @@ class CriticalResultEscalationTest {
     private final SmsService sms = mock(SmsService.class);
     private final LabResultRepository results = mock(LabResultRepository.class);
     private final LabResultMapper mapper = mock(LabResultMapper.class);
-    private final StaffRepository staff = mock(StaffRepository.class);
     private final CriticalResultRecipients recipients = mock(CriticalResultRecipients.class);
     private final CriticalResultIncidentRepository incidents = mock(CriticalResultIncidentRepository.class);
     private final UserRepository users = mock(UserRepository.class);
@@ -75,7 +74,7 @@ class CriticalResultEscalationTest {
     @BeforeEach
     void setUp() {
         LockAssert.TestHelper.makeAllAssertsPass(true);
-        service = new CriticalValueNotificationService(notifications, sms, results, mapper, staff,
+        service = new CriticalValueNotificationService(notifications, sms, results, mapper,
             mock(PlatformTransactionManager.class), com.example.hms.i18n.TestMessageSources.bundles());
         service.setEscalationCollaborators(recipients, incidents, users);
 
@@ -345,7 +344,6 @@ class CriticalResultEscalationTest {
             service.escalateOverdue();
             notTold("admin.sawadogo");
         }
-        verify(staff, never()).findActiveUsernamesByHospitalAndRole(any(), eq("ROLE_HOSPITAL_ADMIN"));
     }
 
     // ── The acknowledgement ─────────────────────────────────────────────
@@ -398,5 +396,95 @@ class CriticalResultEscalationTest {
         assertThat(incident.getValue().getCareSetting()).isEqualTo("OUTPATIENT");
         // Nothing here ever texts a patient: the service's only SMS targets are staff accounts.
         verify(sms, never()).send(anyString(), anyString());
+    }
+
+    // ── The SMS of a step (a mocked gateway: nothing is sent from a test) ──────────
+
+    private static User account(String username, String phone) {
+        User user = new User();
+        user.setId(UUID.randomUUID());
+        user.setUsername(username);
+        user.setPhoneNumber(phone);
+        return user;
+    }
+
+    @Test
+    @DisplayName("with a gateway, a step texts each clinician it tells who has a number, once; a failed SMS stops neither the others nor the step")
+    void aStepTextsEachClinicianWithANumberOnce() {
+        when(sms.deliversRealSms()).thenReturn(true);
+        when(users.findByUsernameInIgnoreCase(any())).thenReturn(List.of(account("dr.diallo", "+22670000001"),
+            account("dr.garde", "+22670000002"), account("dr.sansnumero", null), account("dr.vide", " ")));
+        doThrow(new IllegalStateException("gateway down")).when(sms).send(eq("+22670000001"), anyString());
+        minutesAgo(16, 0);
+
+        assertThat(service.escalateOverdue()).isEqualTo(1);
+
+        ArgumentCaptor<List<String>> asked = ArgumentCaptor.captor();
+        verify(users).findByUsernameInIgnoreCase(asked.capture());
+        assertThat(asked.getValue()).containsExactlyInAnyOrder("dr.diallo", "dr.garde");
+        verify(sms).send(eq("+22670000001"), anyString());
+        verify(sms).send(eq("+22670000002"), anyString());
+        verify(sms, never()).send(isNull(), anyString());
+        verify(sms, never()).send(eq(" "), anyString());
+        // The notices and the stamp do not depend on the gateway.
+        told("dr.diallo", ESCALATION);
+        told("dr.garde", ESCALATION);
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 1);
+    }
+
+    @Test
+    @DisplayName("a reminder texts nobody, and no administrator is ever texted")
+    void aReminderTextsNobody() {
+        when(sms.deliversRealSms()).thenReturn(true);
+        when(users.findByUsernameInIgnoreCase(any())).thenReturn(List.of(account("dr.diallo", "+22670000001"),
+            account("admin.sawadogo", "+22670000009")));
+        minutesAgo(3 * 24 * 60, 12);
+        result.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(24 * 60 + 1));
+        when(incidents.findByLabResultId(result.getId())).thenReturn(Optional.of(new CriticalResultIncident()));
+
+        assertThat(service.escalateOverdue()).isEqualTo(1);
+
+        verify(sms, never()).send(anyString(), anyString());
+
+        // The last step itself: the clinicians of the chain are asked for, never the administrators.
+        clearInvocations(users, sms);
+        minutesAgo(61, 2);
+        result.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(31));
+        when(incidents.findByLabResultId(result.getId())).thenReturn(Optional.empty());
+
+        assertThat(service.escalateOverdue()).isEqualTo(1);
+
+        ArgumentCaptor<List<String>> asked = ArgumentCaptor.captor();
+        verify(users).findByUsernameInIgnoreCase(asked.capture());
+        assertThat(asked.getValue()).contains("dr.diallo", "dr.chef", "bio.kabore").doesNotContain("admin.sawadogo");
+    }
+
+    @Test
+    @DisplayName("the incident is opened once: a step that finds it on record writes no second one")
+    void theIncidentIsOpenedOnce() {
+        when(incidents.findByLabResultId(result.getId())).thenReturn(Optional.of(new CriticalResultIncident()));
+        minutesAgo(61, 2);
+        result.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(31));
+
+        assertThat(service.escalateOverdue()).isEqualTo(1);
+
+        verify(incidents, never()).save(any());
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 3);
+    }
+
+    @Test
+    @DisplayName("a result whose hospital cannot be resolved still tells its prescriber, and opens no incident")
+    void aResultWithNoHospitalStillTellsThePrescriber() {
+        result.getLabOrder().setHospital(null);
+        minutesAgo(61, 2);
+        result.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(31));
+
+        assertThat(service.escalateOverdue()).isEqualTo(1);
+
+        told("dr.diallo", ESCALATION);
+        notTold("dr.garde");
+        notTold("admin.sawadogo");
+        verify(incidents, never()).save(any());
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 3);
     }
 }

@@ -317,11 +317,7 @@ public class ObstetricAlertEscalationWorker {
         if (others.isEmpty()) {
             return 0;
         }
-        if (notificationType != null) {
-            for (String username : others) {
-                notifyQuietly(messageKey, args, username, notificationType, row.getId());
-            }
-        }
+        ring(others, messageKey, args, notificationType, row.getId());
         List<String> lower = others.stream().map(u -> u.toLowerCase(Locale.ROOT)).toList();
         String text = message == null ? "" : message;
         String title = text.length() > TITLE_MAX ? text.substring(0, TITLE_MAX) : text;
@@ -354,6 +350,16 @@ public class ObstetricAlertEscalationWorker {
             }
         }
         return others.size();
+    }
+
+    /** The bell notice of each recipient; none when {@code notificationType} is null (QA D3304). */
+    private void ring(List<String> usernames, String messageKey, Object[] args, String notificationType, UUID escalationId) {
+        if (notificationType == null) {
+            return;
+        }
+        for (String username : usernames) {
+            notifyQuietly(messageKey, args, username, notificationType, escalationId);
+        }
     }
 
     private void notifyQuietly(String messageKey, Object[] args, String username, String type, UUID escalationId) {

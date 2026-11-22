@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -14,7 +12,6 @@ import static org.mockito.Mockito.when;
 import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.mapper.LabResultMapper;
-import com.example.hms.model.Hospital;
 import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabResult;
 import com.example.hms.model.LabResultComponent;
@@ -42,7 +39,6 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.MessageSource;
-import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * r65 D2623: a critical NFS could not be acknowledged. Every read-back but the

@@ -42,12 +42,17 @@ final class MedicationLabelMatch {
     private static final Pattern DIGIT_THEN_LETTER = Pattern.compile("(?<=\\d)(?=[a-z\\u00B5\\u03BC%])");
     private static final Pattern SPACES = Pattern.compile("\\s+");
     private static final String UNIT = "(?:mg|g|kg|mcg|ug|\\u00B5g|\\u03BCg|ml|l|ui|iu|u|mmol|meq|%)";
-    private static final String NUMBER = "\\d+(?:\\.\\d+)?";
+    private static final String NUMBER = "\\d{1,9}(?:\\.\\d{1,6})?";
     /** "500 mg", "20/120 mg", "125 mg/5 ml", "100 ui/ml", "0.9 %". */
     private static final Pattern STRENGTH = Pattern.compile(
-        "(?<![a-z0-9.])(" + NUMBER + "(?:\\s*/\\s*" + NUMBER + ")*)\\s*(" + UNIT + ")"
-            + "(?:\\s*/\\s*(" + NUMBER + ")?\\s*(" + UNIT + "))?(?![a-z0-9])");
+        "(?<![a-z0-9.])(" + NUMBER + "(?:\\s?/\\s?" + NUMBER + "){0,4})\\s?(" + UNIT + ")"
+            + "(?:\\s?/\\s?(" + NUMBER + ")?\\s?(" + UNIT + "))?(?![a-z0-9])");
     private static final BigDecimal THOUSAND = BigDecimal.valueOf(1000);
+    /**
+     * No label is longer. A longer scan is refused outright (a scanner can send anything); the order's own
+     * texts are read up to here, so every expression below works on a bounded input.
+     */
+    private static final int MAX_READ = 300;
 
     private MedicationLabelMatch() {
     }
@@ -58,7 +63,8 @@ final class MedicationLabelMatch {
      * @param scan the scanned or typed value
      */
     static Basis match(Prescription rx, MedicationCatalogItem item, String scan) {
-        if (rx == null || blank(scan)) {
+        if (rx == null || blank(scan) || scan.length() > MAX_READ) {
+            // Longer than any label: never read as its first characters (no prefix match).
             return Basis.NONE;
         }
         if (isIdentifier(rx, item, scan)) {
@@ -164,7 +170,7 @@ final class MedicationLabelMatch {
     private record Label(String words, Set<String> strengths) {
 
         static Label of(String text) {
-            String folded = fold(text);
+            String folded = fold(text != null && text.length() > MAX_READ ? text.substring(0, MAX_READ) : text);
             folded = DECIMAL_COMMA.matcher(folded).replaceAll(".");
             folded = PUNCTUATION.matcher(folded).replaceAll(" ");
             folded = DIGIT_THEN_LETTER.matcher(folded).replaceAll(" ");

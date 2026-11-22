@@ -69,6 +69,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -2587,7 +2588,7 @@ class TransfusionServiceImplTest {
 
     private com.example.hms.service.transfusion.PositiveAntibodyScreenService antibodyRule() {
         com.example.hms.service.transfusion.PositiveAntibodyScreenService rule =
-            org.mockito.Mockito.mock(com.example.hms.service.transfusion.PositiveAntibodyScreenService.class);
+            mock(com.example.hms.service.transfusion.PositiveAntibodyScreenService.class);
         service.setAntibodyScreen(rule);
         return rule;
     }
@@ -2609,7 +2610,7 @@ class TransfusionServiceImplTest {
 
         assertThat(oNeg.getStatus()).isEqualTo(BloodUnitStatus.AVAILABLE);
         assertThat(req.getStatus()).isNotEqualTo(TransfusionRequestStatus.ISSUED);
-        org.mockito.Mockito.verify(rule, org.mockito.Mockito.never()).askRetrospectiveCrossmatch(any(), any());
+        verify(rule, never()).askRetrospectiveCrossmatch(any(), any());
     }
 
     @Test
@@ -2625,9 +2626,9 @@ class TransfusionServiceImplTest {
         service.issueUnit(req.getId(), oNeg.getId());
 
         assertThat(oNeg.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
-        org.mockito.Mockito.verify(rule).askRetrospectiveCrossmatch(req, oNeg);
+        verify(rule).askRetrospectiveCrossmatch(req, oNeg);
         // The emergency path was taken: the routine check is not the one that let it out.
-        org.mockito.Mockito.verify(rule, org.mockito.Mockito.never()).requireRoutineIssueAllowed(any(), any());
+        verify(rule, never()).requireRoutineIssueAllowed(any(), any());
     }
 
     @Test
@@ -2643,6 +2644,6 @@ class TransfusionServiceImplTest {
         service.issueUnit(req.getId(), oNeg.getId());
 
         assertThat(oNeg.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
-        org.mockito.Mockito.verify(rule, org.mockito.Mockito.never()).askRetrospectiveCrossmatch(any(), any());
+        verify(rule, never()).askRetrospectiveCrossmatch(any(), any());
     }
 }

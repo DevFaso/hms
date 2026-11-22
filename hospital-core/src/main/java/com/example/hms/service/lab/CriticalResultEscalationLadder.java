@@ -2,8 +2,8 @@ package com.example.hms.service.lab;
 
 import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
 import com.example.hms.service.clinicalrules.ProvisionalRule;
+import com.example.hms.utility.ElapsedTime;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
@@ -80,7 +80,7 @@ public final class CriticalResultEscalationLadder {
          * whole chain every half hour; they never stop.
          */
         public long reminderEveryAt(int level) {
-            int doublings = Math.min(Math.max(level - Step.UNRESOLVED.ordinal() - 1, 0), 10);
+            int doublings = Math.clamp(level - Step.UNRESOLVED.ordinal() - 1L, 0, 10);
             return Math.min(MAX_MINUTES, (long) reminderEvery() << doublings);
         }
     }
@@ -98,7 +98,7 @@ public final class CriticalResultEscalationLadder {
         if (notifiedAt == null || now == null) {
             return Optional.empty();
         }
-        long elapsed = Duration.between(notifiedAt, now).toMinutes();
+        long elapsed = ElapsedTime.between(notifiedAt, now).toMinutes();
         if (level <= 0) {
             return elapsed >= minutes.cover() ? Optional.of(Step.COVER) : Optional.empty();
         }
@@ -110,7 +110,7 @@ public final class CriticalResultEscalationLadder {
         }
         // After the final alert: never a stop. A reminder, at an interval that grows to once a day.
         LocalDateTime last = lastEscalatedAt == null ? notifiedAt.plusMinutes(minutes.unresolved()) : lastEscalatedAt;
-        return Duration.between(last, now).toMinutes() >= minutes.reminderEveryAt(level)
+        return ElapsedTime.between(last, now).toMinutes() >= minutes.reminderEveryAt(level)
             ? Optional.of(Step.REMINDER) : Optional.empty();
     }
 }

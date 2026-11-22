@@ -128,6 +128,35 @@ class MedicationLabelMatchTest {
             LocalDateTime.now()).getOutcomes().get(FiveRightsCheck.DRUG)).isTrue();
     }
 
+    /**
+     * Sonar S5998 (r70): a scanner can send anything. A text longer than any label is refused outright, in
+     * bounded time and stack, and is never read as its first characters: a real label followed by anything
+     * else is not that label.
+     */
+    @Test
+    void aVeryLongScanIsNeverTheProductAndNeverOverflows() {
+        String digits = "9".repeat(400_000);
+        String slashes = "1/".repeat(200_000) + " mg";
+        String padded = "Paracétamol 500 mg" + " ".repeat(400) + "Morphine 10 mg";
+        String repeated = "Paracétamol 500 mg ".repeat(50_000);
+
+        for (String scan : new String[] {digits, digits + " mg", slashes, padded, repeated}) {
+            assertThat(match(scan)).isEqualTo(Basis.NONE);
+        }
+        // The longest text still read as a label, and the first one that is not.
+        assertThat(match("Paracétamol 500 mg" + " ".repeat(282))).isEqualTo(Basis.DESIGNATION);
+        assertThat(match("Paracétamol 500 mg" + " ".repeat(283))).isEqualTo(Basis.NONE);
+    }
+
+    /** The order's own text is bounded too: an order with an absurd name matches nothing and overflows nothing. */
+    @Test
+    void anOrderWithAVeryLongNameOverflowsNothing() {
+        Prescription rx = new Prescription();
+        rx.setMedicationName("1/".repeat(200_000) + " mg");
+
+        assertThat(MedicationLabelMatch.match(rx, null, "Paracétamol 500 mg")).isEqualTo(Basis.NONE);
+    }
+
     private static Basis match(String scan) {
         return MedicationLabelMatch.match(order(), item(), scan);
     }

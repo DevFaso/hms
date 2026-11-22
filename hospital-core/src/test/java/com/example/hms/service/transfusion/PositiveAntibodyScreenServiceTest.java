@@ -42,6 +42,7 @@ import com.example.hms.service.InBasketService;
 import com.example.hms.service.support.PositiveAntibodyScreenPolicy;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeAll;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -128,6 +129,11 @@ class PositiveAntibodyScreenServiceTest {
             .antiglobulinMethod(true).antigenNegative(true).rhKellMatched(true).sampleCollectedAt(NOW.minusHours(10));
     }
 
+    /** The rule's call alone: the result it judges is built before, outside the lambda (Sonar S5778). */
+    private ThrowingCallable crossmatched(TransfusionRequest request, CrossmatchRequestDTO result) {
+        return () -> service.requireCompatibilised(request, result);
+    }
+
     private static String field(Throwable refusal) {
         return ((FieldBusinessException) refusal).getField();
     }
@@ -154,7 +160,8 @@ class PositiveAntibodyScreenServiceTest {
         // The routine block still stands on the newest, negative, screen.
         TransfusionRequest routine = request(TransfusionUrgency.ROUTINE, BloodProductType.PACKED_RED_CELLS);
         assertThat(service.holds(routine)).isTrue();
-        assertThatThrownBy(() -> service.requireRoutineIssueAllowed(routine, new TransfusionCrossmatch()))
+        TransfusionCrossmatch plain = new TransfusionCrossmatch();
+        assertThatThrownBy(() -> service.requireRoutineIssueAllowed(routine, plain))
             .isInstanceOf(FieldBusinessException.class);
     }
 
@@ -192,31 +199,31 @@ class PositiveAntibodyScreenServiceTest {
         TransfusionRequest routine = request(TransfusionUrgency.ROUTINE, BloodProductType.PACKED_RED_CELLS);
 
         // D3351 as filed: a plain « Compatible » crossmatch, no identification: refused.
-        assertThatThrownBy(() -> service.requireCompatibilised(routine, compatibilised().build()))
+        assertThatThrownBy(crossmatched(routine, compatibilised().build()))
             .isInstanceOf(FieldBusinessException.class)
             .hasMessageContaining("allo-immunised").hasMessageContaining("provisional");
 
         identified();
-        assertThatThrownBy(() -> service.requireCompatibilised(routine,
+        assertThatThrownBy(crossmatched(routine,
             compatibilised().antiglobulinMethod(null).build())).satisfies(e -> assertThat(field(e)).isEqualTo("antiglobulinMethod"));
-        assertThatThrownBy(() -> service.requireCompatibilised(routine,
+        assertThatThrownBy(crossmatched(routine,
             compatibilised().antigenNegative(false).build())).satisfies(e -> assertThat(field(e)).isEqualTo("antigenNegative"));
-        assertThatThrownBy(() -> service.requireCompatibilised(routine,
+        assertThatThrownBy(crossmatched(routine,
             compatibilised().rhKellMatched(null).build())).satisfies(e -> assertThat(field(e)).isEqualTo("rhKellMatched"));
-        assertThatThrownBy(() -> service.requireCompatibilised(routine,
+        assertThatThrownBy(crossmatched(routine,
             compatibilised().sampleCollectedAt(null).build())).satisfies(e -> assertThat(field(e)).isEqualTo("sampleCollectedAt"));
-        assertThatThrownBy(() -> service.requireCompatibilised(routine,
+        assertThatThrownBy(crossmatched(routine,
             compatibilised().sampleCollectedAt(NOW.plusMinutes(1)).build())).isInstanceOf(FieldBusinessException.class);
         // 72 hours and one minute: a new sample. Exactly 72 hours still stands.
-        assertThatThrownBy(() -> service.requireCompatibilised(routine,
+        assertThatThrownBy(crossmatched(routine,
             compatibilised().sampleCollectedAt(NOW.minusHours(72).minusMinutes(1)).build()))
             .isInstanceOf(FieldBusinessException.class).hasMessageContaining("72");
-        assertThatCode(() -> service.requireCompatibilised(routine,
+        assertThatCode(crossmatched(routine,
             compatibilised().sampleCollectedAt(NOW.minusHours(72)).build())).doesNotThrowAnyException();
-        assertThatCode(() -> service.requireCompatibilised(routine, compatibilised().build())).doesNotThrowAnyException();
+        assertThatCode(crossmatched(routine, compatibilised().build())).doesNotThrowAnyException();
 
         // An incompatible result is always written: it stops a bag.
-        assertThatCode(() -> service.requireCompatibilised(routine,
+        assertThatCode(crossmatched(routine,
             CrossmatchRequestDTO.builder().compatible(false).build())).doesNotThrowAnyException();
     }
 
@@ -254,10 +261,10 @@ class PositiveAntibodyScreenServiceTest {
         assertThat(service.workupServes(served)).isTrue();
         assertThat(service.workupServes(other)).isFalse();
         // The matched unit and the crossmatch are still required under the decision.
-        assertThatThrownBy(() -> service.requireCompatibilised(served, compatibilised().rhKellMatched(false).build()))
+        assertThatThrownBy(crossmatched(served, compatibilised().rhKellMatched(false).build()))
             .isInstanceOf(FieldBusinessException.class);
-        assertThatCode(() -> service.requireCompatibilised(served, compatibilised().build())).doesNotThrowAnyException();
-        assertThatThrownBy(() -> service.requireCompatibilised(other, compatibilised().build()))
+        assertThatCode(crossmatched(served, compatibilised().build())).doesNotThrowAnyException();
+        assertThatThrownBy(crossmatched(other, compatibilised().build()))
             .isInstanceOf(FieldBusinessException.class);
     }
 
@@ -394,10 +401,6 @@ class PositiveAntibodyScreenServiceTest {
         relative.setPreTransfusionSampleDrawn(true);
         assertThatThrownBy(() -> service.requireEmergencyReleaseAllowed(relative))
             .isInstanceOf(FieldBusinessException.class).hasMessageContaining("allo-immunised");
-        assertThat(PositiveAntibodyScreenPolicy.emergencyDeclared(TransfusionUrgency.URGENT, VitalUrgencyLevel.UVI,
-            "pressé", true)).isFalse();
-        assertThat(PositiveAntibodyScreenPolicy.emergencyDeclared(TransfusionUrgency.ROUTINE, VitalUrgencyLevel.UV,
-            "x", true)).isFalse();
     }
 
     @Test
@@ -410,15 +413,15 @@ class PositiveAntibodyScreenServiceTest {
         declared.setPreTransfusionSampleDrawn(true);
 
         // No work-up yet, no attestation: the result on the retained segment is still written.
-        assertThatCode(() -> service.requireCompatibilised(declared,
+        assertThatCode(crossmatched(declared,
             CrossmatchRequestDTO.builder().compatible(true).build())).doesNotThrowAnyException();
         // An emergency raised before the screen turned positive: recorded as found too.
         TransfusionRequest undeclared = request(TransfusionUrgency.EMERGENCY, BloodProductType.PACKED_RED_CELLS);
-        assertThatCode(() -> service.requireCompatibilised(undeclared,
+        assertThatCode(crossmatched(undeclared,
             CrossmatchRequestDTO.builder().compatible(true).build())).doesNotThrowAnyException();
         // « Urgence relative » is not an emergency: the same result is held.
         TransfusionRequest relative = request(TransfusionUrgency.URGENT, BloodProductType.PACKED_RED_CELLS);
-        assertThatThrownBy(() -> service.requireCompatibilised(relative,
+        assertThatThrownBy(crossmatched(relative,
             CrossmatchRequestDTO.builder().compatible(true).build())).isInstanceOf(FieldBusinessException.class);
     }
 
@@ -490,7 +493,81 @@ class PositiveAntibodyScreenServiceTest {
 
         verify(inBasket, never()).createItemInNewTransaction(any());
         TransfusionRequest routine = request(TransfusionUrgency.ROUTINE, BloodProductType.PACKED_RED_CELLS);
-        assertThatThrownBy(() -> service.requireCompatibilised(routine, compatibilised().build()))
+        assertThatThrownBy(crossmatched(routine, compatibilised().build()))
             .isInstanceOf(FieldBusinessException.class);
+    }
+
+    @Test
+    @DisplayName("a filing that fails stops neither the other biologists' tasks nor the caller")
+    void aFilingThatFailsStopsNeitherTheOthersNorTheCaller() {
+        User one = new User();
+        one.setId(UUID.randomUUID());
+        User two = new User();
+        two.setId(UUID.randomUUID());
+        when(assignments.findLiveUsersAtHospitalWithRoleCodes(hospital.getId(), PositiveAntibodyScreenPolicy.BIOLOGIST_ROLE_CODES))
+            .thenReturn(List.of(one, two, one));
+        when(inBasket.createItemInNewTransaction(any())).thenThrow(new IllegalStateException("in-basket down"))
+            .thenReturn(null);
+        PatientBloodGroup positive = screen(AntibodyScreenResult.POSITIVE, NOW);
+
+        assertThatCode(() -> service.askBiologistToIdentify(positive)).doesNotThrowAnyException();
+
+        // Each biologist once, the second one still asked after the first filing failed.
+        ArgumentCaptor<CreateInBasketItemRequest> items = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
+        verify(inBasket, times(2)).createItemInNewTransaction(items.capture());
+        assertThat(items.getAllValues()).extracting(CreateInBasketItemRequest::getRecipientUserId)
+            .containsExactly(one.getId(), two.getId());
+    }
+
+    @Test
+    @DisplayName("an incomplete call flags nobody, holds nothing and asks nobody")
+    void anIncompleteCallAsksNothing() {
+        screen(AntibodyScreenResult.POSITIVE, NOW);
+
+        assertThat(service.alloImmunised(null, hospital.getId())).isFalse();
+        assertThat(service.alloImmunised(patient.getId(), null)).isFalse();
+        assertThat(service.status(null, hospital.getId()).isAlloImmunised()).isFalse();
+        assertThat(service.status(patient.getId(), null).getWorkups()).isEmpty();
+        assertThat(service.holds(null)).isFalse();
+        TransfusionRequest nobody = request(TransfusionUrgency.ROUTINE, BloodProductType.PACKED_RED_CELLS);
+        nobody.setPatient(null);
+        assertThat(service.holds(nobody)).isFalse();
+        TransfusionRequest nowhere = request(TransfusionUrgency.ROUTINE, BloodProductType.PACKED_RED_CELLS);
+        nowhere.setHospital(null);
+        assertThat(service.holds(nowhere)).isFalse();
+
+        service.askBiologistToIdentify(null);
+        PatientBloodGroup noPatient = PatientBloodGroup.builder().hospital(hospital)
+            .antibodyScreen(AntibodyScreenResult.POSITIVE).performedAt(NOW).build();
+        service.askBiologistToIdentify(noPatient);
+        PatientBloodGroup noHospital = PatientBloodGroup.builder().patient(patient)
+            .antibodyScreen(AntibodyScreenResult.POSITIVE).performedAt(NOW).build();
+        service.askBiologistToIdentify(noHospital);
+        verify(inBasket, never()).createItemInNewTransaction(any());
+    }
+
+    @Test
+    @DisplayName("the status names the patient, the positive screen and what the biologist recorded, newest first")
+    void theStatusShowsTheScreenAndTheRecords() {
+        PatientBloodGroup positive = screen(AntibodyScreenResult.POSITIVE, NOW.minusDays(40));
+        screen(AntibodyScreenResult.NEGATIVE, NOW.minusDays(1));
+        PatientAntibodyWorkup referred = PatientAntibodyWorkup.builder().status(AntibodyWorkupStatus.REFERRED)
+            .referralCentre("CNTS").decisionReason("Hb 5").recordedAt(NOW.minusDays(39)).recordedByDisplay("Dr Kaboré").build();
+        PatientAntibodyWorkup named = PatientAntibodyWorkup.builder().status(AntibodyWorkupStatus.IDENTIFIED)
+            .antibodySpecificities("anti-K").recordedAt(NOW.minusDays(36)).recordedByDisplay("Dr Kaboré").build();
+        when(workups.findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patient.getId(), hospital.getId()))
+            .thenReturn(List.of(named, referred));
+
+        AntibodyStatusResponseDTO status = service.status(patient.getId(), hospital.getId(), "Awa Sawadogo");
+
+        assertThat(status.getPatientName()).isEqualTo("Awa Sawadogo");
+        assertThat(status.isAlloImmunised()).isTrue();
+        assertThat(status.getPositiveScreenAt()).isEqualTo(positive.getPerformedAt());
+        assertThat(status.isIdentified()).isTrue();
+        assertThat(status.getAntibodySpecificities()).isEqualTo("anti-K");
+        assertThat(status.getWorkups()).extracting(AntibodyStatusResponseDTO.Workup::getStatus)
+            .containsExactly(AntibodyWorkupStatus.IDENTIFIED, AntibodyWorkupStatus.REFERRED);
+        assertThat(status.getWorkups().get(1).getReferralCentre()).isEqualTo("CNTS");
+        assertThat(status.getWorkups().get(1).getRecordedByDisplay()).isEqualTo("Dr Kaboré");
     }
 }

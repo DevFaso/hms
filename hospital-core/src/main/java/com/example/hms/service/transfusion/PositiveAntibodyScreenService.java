@@ -39,7 +39,6 @@ import com.example.hms.utility.TransactionCallbacks;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.Clock;
@@ -55,7 +54,8 @@ import java.util.UUID;
  * where a request is raised, a crossmatch is written and a unit leaves the laboratory; it holds no way round.
  *
  * <p>Everything is read and written at the caller's hospital: the flag, the work-up and the tasks are those of the
- * hospital that holds the screen.
+ * hospital that holds the screen. It opens no transaction of its own: every call comes from
+ * {@code TransfusionServiceImpl}, inside the transaction of the request, the result or the release it guards.
  */
 @Slf4j
 @Service
@@ -87,7 +87,6 @@ public class PositiveAntibodyScreenService {
      * The patient is allo-immunised at this hospital: a positive screen is on record here (superseded ones
      * included: a later negative screen clears nothing), or a biologist recorded an antibody.
      */
-    @Transactional(readOnly = true)
     public boolean alloImmunised(UUID patientId, UUID hospitalId) {
         if (patientId == null || hospitalId == null) {
             return false;
@@ -103,13 +102,11 @@ public class PositiveAntibodyScreenService {
     }
 
     /** The flag and the biologist's records, for the screens that must show them. */
-    @Transactional(readOnly = true)
     public AntibodyStatusResponseDTO status(UUID patientId, UUID hospitalId) {
         return status(patientId, hospitalId, null);
     }
 
     /** {@link #status(UUID, UUID)} with the patient's name, for a screen that names them. */
-    @Transactional(readOnly = true)
     public AntibodyStatusResponseDTO status(UUID patientId, UUID hospitalId, String patientName) {
         List<PatientAntibodyWorkup> workups = patientId == null || hospitalId == null ? List.of()
             : workupRepository.findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId);
@@ -149,7 +146,6 @@ public class PositiveAntibodyScreenService {
      * Only a biologist of this hospital ({@link PositiveAntibodyScreenPolicy#BIOLOGIST_ROLE_CODES}, held by
      * assignment): a super-admin alone, a laboratory technician and a prescriber are refused.
      */
-    @Transactional
     public AntibodyStatusResponseDTO recordWorkup(AntibodyWorkupRequestDTO request, Patient patient, Hospital hospital) {
         UUID hospitalId = hospital.getId();
         UUID userId = roleValidator.getCurrentUserId();
@@ -203,7 +199,6 @@ public class PositiveAntibodyScreenService {
     // ── Where the rule is enforced ──────────────────────────────────────
 
     /** Whether the rule holds this request: red cells for a patient allo-immunised here. */
-    @Transactional(readOnly = true)
     public boolean holds(TransfusionRequest request) {
         return request != null && request.getPatient() != null && request.getHospital() != null
             && PositiveAntibodyScreenPolicy.appliesTo(request.getProductType())
@@ -215,7 +210,6 @@ public class PositiveAntibodyScreenService {
      * or UV), why, and that the pre-transfusion sample is drawn before the first unit. Nothing is asked of a
      * routine or an urgent request (they follow the routine rule), nor of another product or patient.
      */
-    @Transactional(readOnly = true)
     public void requireEmergencyDeclaration(TransfusionRequestRequestDTO request, UUID patientId, UUID hospitalId,
                                             TransfusionUrgency urgency) {
         if (urgency != TransfusionUrgency.EMERGENCY || !PositiveAntibodyScreenPolicy.appliesTo(request.getProductType())
@@ -240,7 +234,6 @@ public class PositiveAntibodyScreenService {
      * release the result is the laboratory's finding and is recorded as found (the crossmatch afterwards this
      * rule asks the biologist for would otherwise be impossible to record before the antibody is identified).
      */
-    @Transactional(readOnly = true)
     public void requireCompatibilised(TransfusionRequest request, CrossmatchRequestDTO result) {
         if (!Boolean.TRUE.equals(result.getCompatible()) || !holds(request) || emergency(request)) {
             return;
@@ -255,7 +248,6 @@ public class PositiveAntibodyScreenService {
      * crossmatch is « compatibilisé » NOW: the sample ages, and a crossmatch written before the positive screen
      * carries no attestation. An EMERGENCY request is not held by it: it has the emergency path.
      */
-    @Transactional(readOnly = true)
     public void requireRoutineIssueAllowed(TransfusionRequest request, TransfusionCrossmatch crossmatch) {
         if (!holds(request) || emergency(request)) {
             return;
@@ -279,7 +271,6 @@ public class PositiveAntibodyScreenService {
      * @return true when the rule holds the request and the emergency path is taken: the caller then asks the
      *         biologist for the crossmatch afterwards
      */
-    @Transactional(readOnly = true)
     public boolean requireEmergencyReleaseAllowed(TransfusionRequest request) {
         if (!holds(request)) {
             return false;
@@ -295,7 +286,6 @@ public class PositiveAntibodyScreenService {
     }
 
     /** The antibody is identified, or a referral decision serves this very request. */
-    @Transactional(readOnly = true)
     public boolean workupServes(TransfusionRequest request) {
         UUID patientId = request.getPatient().getId();
         UUID hospitalId = request.getHospital().getId();
@@ -329,8 +319,9 @@ public class PositiveAntibodyScreenService {
         CreateInBasketItemRequest item = new CreateInBasketItemRequest();
         item.setTitleKey(IDENTIFY_TITLE_KEY);
         item.setBodyKey(IDENTIFY_BODY_KEY);
-        fileForBiologists(item, screen.getHospital().getId(), patient, null, screen.getId(), SCREEN_REFERENCE_TYPE,
-            args, args);
+        item.setReferenceId(screen.getId());
+        item.setReferenceType(SCREEN_REFERENCE_TYPE);
+        fileForBiologists(item, screen.getHospital().getId(), patient, args, args);
     }
 
     /** A unit went out on the emergency path to an allo-immunised patient: the crossmatch is done afterwards. */
@@ -342,9 +333,10 @@ public class PositiveAntibodyScreenService {
         CreateInBasketItemRequest item = new CreateInBasketItemRequest();
         item.setTitleKey(RETROSPECTIVE_TITLE_KEY);
         item.setBodyKey(RETROSPECTIVE_BODY_KEY);
-        fileForBiologists(item, request.getHospital().getId(), patient,
-            request.getEncounter() == null ? null : request.getEncounter().getId(), unit.getId(),
-            RETROSPECTIVE_REFERENCE_TYPE, titleArgs, bodyArgs);
+        item.setReferenceId(unit.getId());
+        item.setReferenceType(RETROSPECTIVE_REFERENCE_TYPE);
+        item.setEncounterId(request.getEncounter() == null ? null : request.getEncounter().getId());
+        fileForBiologists(item, request.getHospital().getId(), patient, titleArgs, bodyArgs);
     }
 
     /**
@@ -352,10 +344,12 @@ public class PositiveAntibodyScreenService {
      * {@code template} carries the title and body keys; each reader's copy is rendered from them.
      */
     private void fileForBiologists(CreateInBasketItemRequest template, UUID hospitalId, Patient patient,
-                                   UUID encounterId, UUID referenceId, String referenceType,
                                    Object[] titleArgs, Object[] bodyArgs) {
         String titleKey = template.getTitleKey();
         String bodyKey = template.getBodyKey();
+        UUID referenceId = template.getReferenceId();
+        String referenceType = template.getReferenceType();
+        UUID encounterId = template.getEncounterId();
         List<UUID> biologists = assignmentRepository
             .findLiveUsersAtHospitalWithRoleCodes(hospitalId, PositiveAntibodyScreenPolicy.BIOLOGIST_ROLE_CODES)
             .stream().map(User::getId).distinct().toList();

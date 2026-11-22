@@ -716,7 +716,7 @@ class MaternalEarlyWarningServiceTest {
     @DisplayName("D3304: a filing that fails never fails the vital set, and the page still goes out")
     void d3304_aFailedFilingNeverFailsThePage() {
         com.example.hms.service.maternity.ObstetricAlertEscalationService alerts = withTheInBasket();
-        org.mockito.Mockito.doThrow(new IllegalStateException("down")).when(alerts).raiseAfterCommit(any());
+        doThrow(new IllegalStateException("down")).when(alerts).raiseAfterCommit(any());
         under(News2Applicability.Status.OBSTETRIC, null);
         PatientVitalSign vital = saved(setAt(MaternalEarlyWarning.Tier.MEDIUM), "sf.recorder", UUID.randomUUID());
 

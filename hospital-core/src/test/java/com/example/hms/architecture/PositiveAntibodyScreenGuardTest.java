@@ -12,8 +12,11 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 /**
  * QA D3351 (r70), rule TRANSFUSION_POSITIVE_ANTIBODY_SCREEN. The class this guards: a way out of the laboratory
@@ -61,11 +64,16 @@ class PositiveAntibodyScreenGuardTest {
             .contains("antibodyScreen.askRetrospectiveCrossmatch(request, unit)");
         assertThat(issue.indexOf("antibodyScreen.requireRoutineIssueAllowed")).isLessThan(issue.indexOf("return putOut("));
 
+        // The documented release asks through two helpers of its own; each is pinned to the rule's call.
         String emergency = method(code, "public BloodUnitResponseDTO emergencyRelease(");
-        assertThat(emergency).contains("antibodyScreen.requireEmergencyReleaseAllowed(request)")
+        assertThat(emergency).contains("boolean crossmatchAfterwards = antibodyEmergencyPath(request);")
+            .contains("askCrossmatchAfterwards(crossmatchAfterwards, release.getReleaseType(), request, unit);");
+        assertThat(emergency.indexOf("antibodyEmergencyPath(request)")).isLessThan(emergency.indexOf("recordRelease("));
+        assertThat(emergency.indexOf("askCrossmatchAfterwards(")).isLessThan(emergency.indexOf("return putOut("));
+        assertThat(method(code, "private boolean antibodyEmergencyPath("))
+            .contains("antibodyScreen.requireEmergencyReleaseAllowed(request)");
+        assertThat(method(code, "private void askCrossmatchAfterwards("))
             .contains("antibodyScreen.askRetrospectiveCrossmatch(request, unit)");
-        assertThat(emergency.indexOf("antibodyScreen.requireEmergencyReleaseAllowed"))
-            .isLessThan(emergency.indexOf("recordRelease("));
     }
 
     @Test
@@ -81,9 +89,8 @@ class PositiveAntibodyScreenGuardTest {
         // The flag reaches the screens that ask for blood: the group read before a request, and the request itself.
         assertThat(method(code, "public PatientBloodGroupResponseDTO getCurrentBloodGroup("))
             .contains("withAntibodyFlag(dto, patientId, hospitalId)");
-        assertThat(code).contains("detail.setAlloImmunised(true);");
-        // Required injection: the rule is never silently absent in production.
-        assertThat(code).containsPattern(
+        // The request shows the flag, and the injection is required: the rule is never silently absent.
+        assertThat(code).contains("detail.setAlloImmunised(true);").containsPattern(
             "@org\\.springframework\\.beans\\.factory\\.annotation\\.Autowired\\s+public void setAntibodyScreen\\(");
     }
 
@@ -108,5 +115,32 @@ class PositiveAntibodyScreenGuardTest {
         assertThat(rule).doesNotContain(".delete(").doesNotContain("deleteBy").doesNotContain("setSuperseded");
         assertThat(code(MAIN.resolve("repository/PatientAntibodyWorkupRepository.java")))
             .doesNotContain("delete").doesNotContain("@Modifying");
+    }
+
+    /**
+     * Sonar S6809 (r70): the rule's service opens no transaction of its own (its annotations were never applied:
+     * the methods call each other). What it reads, writes and refuses happens in the transaction of the request,
+     * the crossmatch or the release that asked, which holds only while the transfusion service, transactional as
+     * a class, is its one caller. A second caller fails here until its own transaction is decided.
+     */
+    @Test
+    @DisplayName("the rule runs in its caller's transaction: it declares none, and only the transfusion service calls it")
+    void theRuleRunsInItsCallersTransaction() throws IOException {
+        assertThat(code(MAIN.resolve("service/transfusion/PositiveAntibodyScreenService.java")))
+            .doesNotContain("@Transactional");
+        assertThat(code(SERVICE)).containsPattern("@Transactional\\s+public class TransfusionServiceImpl ");
+
+        List<String> callers = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(MAIN)) {
+            for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
+                String name = file.getFileName().toString();
+                // The service itself, and the register of rules, which names it as text.
+                if (!name.equals("PositiveAntibodyScreenService.java") && !name.equals("ClinicalRuleRegistry.java")
+                        && code(file).contains("PositiveAntibodyScreenService")) {
+                    callers.add(name);
+                }
+            }
+        }
+        assertThat(callers).containsExactly("TransfusionServiceImpl.java");
     }
 }
