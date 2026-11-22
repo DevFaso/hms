@@ -97,6 +97,8 @@ describe('Inventory pack size (QA D2674)', () => {
     expectEmptySubmitRefusal(fixture, {
       button: '[data-testid="pack-size-save"]',
       sent: m.setPackSize,
+      // QA D3400: the radio group « compté en » has no default and is marked on its first option.
+      alsoMarked: ['packCountedInUnits'],
     });
   });
 
@@ -107,13 +109,42 @@ describe('Inventory pack size (QA D2674)', () => {
     c.packUnitsPerPack = 10;
     c.packTargetUnit = 'comprimé';
     c.packReason = 'Reçu en plaquettes';
+    c.packCountedIn = 'PACKS';
     c.savePackSize();
     expect(m.setPackSize).toHaveBeenCalledWith('inv-1', {
       unitsPerPack: 10,
       unit: 'comprimé',
       packUnit: 'plaquette',
       reason: 'Reçu en plaquettes',
+      alreadyInUnits: false,
     });
+  });
+
+  it('QA D3400: asks what the stock is counted in (no default) and says when nothing is multiplied', () => {
+    const { fixture, m } = render(null);
+    const c = fixture.componentInstance;
+    c.openPackSize(c.inventoryItems()[0]);
+    expect(c.packCountedIn).toBeNull();
+    c.packUnitsPerPack = 10;
+    c.packTargetUnit = 'comprimé';
+    c.packReason = 'Plaquettes de 10';
+    c.savePackSize();
+    expect(m.setPackSize).not.toHaveBeenCalled();
+
+    const item = c.inventoryItems()[0];
+    c.packCountedIn = 'PACKS';
+    expect(c.packPreview(item).qty).toBe((item.quantityOnHand ?? 0) * 10);
+    c.packCountedIn = 'UNITS';
+    expect(c.packPreview(item)).toEqual({
+      qty: item.quantityOnHand ?? 0,
+      threshold: item.reorderThreshold ?? 0,
+      order: item.reorderQuantity ?? 0,
+    });
+    c.savePackSize();
+    expect(m.setPackSize).toHaveBeenCalledWith(
+      'inv-1',
+      jasmine.objectContaining({ alreadyInUnits: true }),
+    );
   });
 
   it('shows a converted item in packs and units, and offers no second conversion', () => {

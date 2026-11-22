@@ -1374,6 +1374,49 @@ class InventoryServiceImplTest {
                 eq(inventoryItem.getPackSizeSetAt()));
     }
 
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("QA D3400: a pack size on an item already counted in units multiplies nothing")
+    void packSizeOnAnItemAlreadyInUnits() {
+        inventoryItem.setUnit("Comprimés");
+        inventoryItem.setUnitPrice(new BigDecimal("25"));
+        inventoryItem.setReorderThreshold(new BigDecimal("50"));
+        inventoryItem.setReorderQuantity(new BigDecimal("500"));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+        when(inventoryItemRepository.lockById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+        when(inventoryItemRepository.save(any(InventoryItem.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.setPackSize(inventoryItemId, com.example.hms.payload.dto.pharmacy.PackSizeRequestDTO.builder()
+                .unitsPerPack(10).unit("comprimé").packUnit("plaquette").reason("Plaquettes de 10").build());
+
+        verify(stockLotRepository, never()).scaleQuantitiesOfItem(any(), any(), any());
+        verify(inventoryItemRepository, never()).scaleOnHand(any(), any(), any());
+        verify(stockTransactionRepository, never()).save(any());
+        verify(priceHistory, never()).keep(any(), any(), any(), any(), any(), any());
+        assertThat(inventoryItem.getUnitsPerPack()).isEqualTo(10);
+        assertThat(inventoryItem.getPackUnit()).isEqualTo("plaquette");
+        assertThat(inventoryItem.getReorderThreshold()).isEqualByComparingTo("50");
+        assertThat(inventoryItem.getReorderQuantity()).isEqualByComparingTo("500");
+        assertThat(inventoryItem.getUnitPrice()).isEqualByComparingTo("25");
+        // No conversion moment: a refund of an earlier fill is never divided by the pack size.
+        assertThat(inventoryItem.getPackSizeSetAt()).isNull();
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("QA D3400: the stock is in units when said so, or when the new unit is the item's own")
+    void alreadyInUnitsIsReadFromTheUnits() {
+        InventoryItem item = new InventoryItem();
+        item.setUnit("plaquette");
+        assertThat(InventoryServiceImpl.alreadyInUnits(item, "comprimé", null)).isFalse();
+        assertThat(InventoryServiceImpl.alreadyInUnits(item, "comprimé", true)).isTrue();
+        item.setUnit("comprimé(s)");
+        assertThat(InventoryServiceImpl.alreadyInUnits(item, "Comprime", null)).isTrue();
+        assertThat(InventoryServiceImpl.alreadyInUnits(item, "comprimé", false)).isFalse();
+        item.setUnit(null);
+        assertThat(InventoryServiceImpl.alreadyInUnits(item, "comprimé", null)).isFalse();
+    }
+
     // ── review of #1239: list price changes ──────────────────────────────
 
     private InventoryItemRequestDTO priceRequest(String price, String reason) {

@@ -327,8 +327,32 @@ public class InventoryServiceImpl implements InventoryService {
         dto.setInPacks(false);
     }
 
-    /** The pack size asked for, checked: units per pack, the new unit, the pack's name and the reason. */
-    private record PackSize(int perPack, String unit, String packUnit, String reason) {
+    /**
+     * The pack size asked for, checked: units per pack, the new unit, the pack's name, the reason, and whether the
+     * stock is already counted in that unit (QA D3400) or in packs (converted).
+     */
+    private record PackSize(int perPack, String unit, String packUnit, String reason, boolean alreadyInUnits) {
+    }
+
+    /**
+     * QA D3400 (r70): « Convertir le stock » multiplied the reorder threshold and order quantity of an item already
+     * counted in tablets, so 50 tablets showed « Stock faible ». Asked explicitly, or read from the units: the stock is
+     * already in units when the new unit is the item's current unit (accents, case and a plural « s » ignored).
+     */
+    static boolean alreadyInUnits(InventoryItem item, String newUnit, Boolean asked) {
+        if (asked != null) {
+            return asked;
+        }
+        return !trimmedOrEmpty(item.getUnit()).isEmpty() && sameUnit(item.getUnit(), newUnit);
+    }
+
+    private static boolean sameUnit(String a, String b) {
+        return unitKey(a).equals(unitKey(b));
+    }
+
+    private static String unitKey(String unit) {
+        String folded = fold(unit).replace("(s)", "").trim();
+        return folded.endsWith("s") && folded.length() > 1 ? folded.substring(0, folded.length() - 1) : folded;
     }
 
     private static PackSize requirePackSize(InventoryItem item, com.example.hms.payload.dto.pharmacy.PackSizeRequestDTO dto) {
@@ -362,7 +386,8 @@ public class InventoryServiceImpl implements InventoryService {
         if (packUnit.isEmpty()) {
             packUnit = "pack";
         }
-        return new PackSize(perPack, unit, packUnit.length() > 60 ? packUnit.substring(0, 60) : packUnit, reason);
+        return new PackSize(perPack, unit, packUnit.length() > 60 ? packUnit.substring(0, 60) : packUnit, reason,
+                alreadyInUnits(item, unit, dto.getAlreadyInUnits()));
     }
 
     private static String trimmedOrEmpty(String value) {
@@ -384,6 +409,9 @@ public class InventoryServiceImpl implements InventoryService {
         String reason = size.reason();
         BigDecimal factor = BigDecimal.valueOf(perPack);
         java.time.LocalDateTime now = java.time.LocalDateTime.now(clock);
+        if (size.alreadyInUnits()) {
+            return declarePackSize(item, size);
+        }
         java.util.List<StockLot> lots = stockLotRepository.findAllByInventoryItemIdOrderByExpiryDateAsc(item.getId());
         BigDecimal onHandBefore = item.getQuantityOnHand() != null ? item.getQuantityOnHand() : BigDecimal.ZERO;
         stockLotRepository.scaleQuantitiesOfItem(item.getId(), factor, now);
@@ -406,6 +434,21 @@ public class InventoryServiceImpl implements InventoryService {
                     now);
         }
         logAudit(AuditEventType.STOCK_ADJUSTMENT, "Pack size set on an inventory item", saved.getId().toString());
+        return inventoryItemMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * QA D3400: the stock is already counted in units; only the pack is declared. Nothing is multiplied (stock,
+     * lots, threshold, order quantity, price per unit), no ledger row is written, and no conversion moment is kept,
+     * so a refund never divides an earlier fill by the pack size.
+     */
+    private InventoryItemResponseDTO declarePackSize(InventoryItem item, PackSize size) {
+        item.setUnitsPerPack(size.perPack());
+        item.setPackUnit(size.packUnit());
+        item.setUnit(size.unit());
+        InventoryItem saved = inventoryItemRepository.save(item);
+        logAudit(AuditEventType.STOCK_ADJUSTMENT, "Pack size declared on an inventory item already counted in units: 1 "
+                + size.packUnit() + " = " + size.perPack() + " " + size.unit(), saved.getId().toString());
         return inventoryItemMapper.toResponseDTO(saved);
     }
 

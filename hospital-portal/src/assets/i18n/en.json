@@ -15235,7 +15235,13 @@
       "FAILED": "The pack size could not be saved.",
       "BREAKDOWN": "{{packs}} {{packUnit}} + {{loose}} {{unit}}",
       "SIZE": "1 {{packUnit}} = {{n}} {{unit}}",
-      "SET": "Pack size"
+      "SET": "Pack size",
+      "COUNTED_IN": "This item's current stock is counted in",
+      "COUNTED_IN_UNITS": "{{unit}} (already in units): nothing is multiplied",
+      "COUNTED_IN_PACKS": "{{packUnit}} (in packs): stock, lots, threshold and order quantity are multiplied by {{n}}",
+      "COUNTED_IN_REQUIRED": "Say what the current stock is counted in: units or packs.",
+      "PREVIEW": "After saving: stock {{qty}} {{unit}}, reorder threshold {{threshold}}, order quantity {{order}}.",
+      "DECLARE": "Save the pack size"
     },
     "REFUND": {
       "TITLE": "Refunds of returns to process",

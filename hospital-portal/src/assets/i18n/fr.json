@@ -15235,7 +15235,13 @@
       "FAILED": "Le conditionnement n’a pas pu être enregistré.",
       "BREAKDOWN": "{{packs}} {{packUnit}} + {{loose}} {{unit}}",
       "SIZE": "1 {{packUnit}} = {{n}} {{unit}}",
-      "SET": "Conditionnement"
+      "SET": "Conditionnement",
+      "COUNTED_IN": "Le stock actuel de cet article est compté en",
+      "COUNTED_IN_UNITS": "{{unit}} (déjà à l’unité) : rien n’est multiplié",
+      "COUNTED_IN_PACKS": "{{packUnit}} (en conditionnements) : stock, lots, seuil et quantité à commander multipliés par {{n}}",
+      "COUNTED_IN_REQUIRED": "Indiquez en quoi le stock actuel est compté : à l’unité ou en conditionnements.",
+      "PREVIEW": "Après l’enregistrement : stock {{qty}} {{unit}}, seuil de réapprovisionnement {{threshold}}, quantité à commander {{order}}.",
+      "DECLARE": "Enregistrer le conditionnement"
     },
     "REFUND": {
       "TITLE": "Remboursements de retours à traiter",
