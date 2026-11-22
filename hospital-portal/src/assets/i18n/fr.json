@@ -158,6 +158,7 @@
     "TITLE": "Accès refusé"
   },
   "LABOR": {
+    "PARTOGRAPH_SCROLL_HINT": "Faites défiler horizontalement pour voir toutes les observations, y compris les notes.",
     "ACTION_LINE": "Ligne d'action",
     "ACTIVE_EPISODE": "Travail en cours",
     "FOREIGN": {
@@ -8821,7 +8822,7 @@
       "DUE": "Revue de dose par un pharmacien ou un médecin requise",
       "ACTION": "Enregistrer la revue de dose",
       "TITLE": "Enregistrer la revue de dose pédiatrique",
-      "HINT": "Le contrôle de dose ne peut pas juger la dose de cet enfant. En tant que pharmacien ou médecin autre que le prescripteur, indiquez pourquoi vous l’acceptez ; l’ordonnance pourra être signée une fois la revue enregistrée.",
+      "HINT": "Une revue de dose p?diatrique est requise pour cette ordonnance. En tant que pharmacien ou m?decin autre que le prescripteur, indiquez pourquoi vous acceptez la dose ; l?ordonnance pourra ?tre sign?e une fois la revue enregistr?e.",
       "REASON": "Motif d’acceptation de la dose",
       "REASON_REQUIRED": "Indiquez le motif pour lequel vous acceptez cette dose.",
       "CONFIRM": "Enregistrer la revue",
@@ -15432,6 +15433,7 @@
     "MARK_READ": "Marquer comme lu"
   },
   "MATERNITY_STAY": {
+    "NO_NEONATAL_COT": "Aucun berceau de néonatologie n’est disponible dans cette liste. Demandez à l’équipe du service de vérifier la configuration et la disponibilité de l’unité de néonatologie.",
     "LOADING": "Vérification du séjour…",
     "NOT_ADMITTED": "non admis(e) : n'apparaît ni au poste infirmier ni au tableau des lits.",
     "ACUITY": "Niveau de gravité",
@@ -15457,7 +15459,7 @@
     "LOAD_FAILED": "séjour inconnu : les admissions n'ont pas pu être lues. Rechargez avant d'admettre.",
     "MIDWIFE_NEWBORN_RULE": "Une sage-femme admet le nouveau-né d'un accouchement auquel elle a participé et en est la clinicienne responsable. Règle provisoire, en attente d'approbation par une sage-femme ou un obstétricien désigné.",
     "MIDWIFE_BED_RULE": "Une sage-femme attribue les lits des unités de maternité. Règle provisoire, en attente d'approbation par une sage-femme ou un obstétricien désigné.",
-    "MIDWIFE_COT_RULE": "Une sage-femme attribue les berceaux des unités de maternité. Un berceau de néonatologie est attribué aussi, et un médecin est alors invité à examiner le nouveau-né. Règle provisoire, en attente d'approbation par une sage-femme ou un obstétricien désigné.",
+    "MIDWIFE_COT_RULE": "Une sage-femme attribue les berceaux de maternité. Lorsqu’un berceau de néonatologie est disponible et attribué, un médecin est invité à revoir le nouveau-né.",
     "BED_ASSIGNED_PHYSICIAN_ASKED": "Lit {{bed}} attribué. Un médecin est invité à examiner le nouveau-né."
   },
   "SENSITIVITY_TAG": {
@@ -15857,7 +15859,7 @@
     "SURFACE": {
       "MIDWIFE_NEWBORN": "Une sage-femme admet le nouveau-né d'un accouchement auquel elle a participé et en est la clinicienne responsable.",
       "MIDWIFE_BED": "Une sage-femme attribue les lits des unités de maternité.",
-      "MIDWIFE_COT": "Une sage-femme attribue les berceaux des unités de maternité. Un berceau de néonatologie est attribué aussi, et un médecin est alors invité à examiner le nouveau-né.",
+      "MIDWIFE_COT": "Une sage-femme attribue les berceaux de maternité. Lorsqu’un berceau de néonatologie est disponible et attribué, un médecin est invité à revoir le nouveau-né.",
       "IMAGING_TECHNICIAN": "En tant que technicien d'imagerie, vous accueillez le patient, réalisez et documentez l'examen et joignez ses images. La prescription de l'examen, la rédaction et la signature du compte rendu restent au médecin.",
       "ULTRASOUND_PHYSICIANS_ONLY": "Échographie : dans cet établissement, l'examen est réalisé par un médecin. Vous pouvez enregistrer l'arrivée du patient et joindre des images.",
       "MINOR_RELEASE_AGE": "À partir de {{age}} ans, les autres catégories sensibles sont aussi masquées aux parents (âge réglable par l’établissement).",

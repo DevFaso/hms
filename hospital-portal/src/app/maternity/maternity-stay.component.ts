@@ -171,6 +171,11 @@ export type MaternityStayKind = 'LABOR_DELIVERY' | 'NEWBORN';
               @if (!bedsLoading() && beds().length === 0) {
                 <p class="muted">{{ 'MATERNITY_STAY.NO_FREE_BED' | translate }}</p>
               }
+              @if (kind() === 'NEWBORN' && !bedsLoading() && noNeonatalCot()) {
+                <p class="muted" data-testid="maternity-stay-no-neonatal-cot">
+                  {{ 'MATERNITY_STAY.NO_NEONATAL_COT' | translate }}
+                </p>
+              }
               @if (midwifeOnly()) {
                 <p class="muted maternity-stay__rule" data-testid="maternity-stay-midwife-bed-rule">
                   <app-rule-status
@@ -272,6 +277,9 @@ export class MaternityStayComponent implements OnChanges {
   readonly stay = signal<AdmissionResponse | null>(null);
   readonly beds = signal<BedResponse[]>([]);
   readonly bedsLoading = signal(false);
+  noNeonatalCot(): boolean {
+    return !this.beds().some(isNeonatalCot);
+  }
   acuity: AcuityLevel | '' = '';
   bedId = '';
 

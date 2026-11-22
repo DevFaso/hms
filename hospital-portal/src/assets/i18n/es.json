@@ -158,6 +158,7 @@
     "TITLE": "Acceso denegado"
   },
   "LABOR": {
+    "PARTOGRAPH_SCROLL_HINT": "Desplácese horizontalmente para ver todas las observaciones, incluidas las notas.",
     "ACTION_LINE": "Línea de acción",
     "ACTIVE_EPISODE": "Trabajo de parto en curso",
     "FOREIGN": {
@@ -8821,7 +8822,7 @@
       "DUE": "Se requiere revisión de dosis por un farmacéutico o un médico",
       "ACTION": "Registrar la revisión de dosis",
       "TITLE": "Registrar la revisión de dosis pediátrica",
-      "HINT": "El control de dosis no puede valorar la dosis de este niño. Como farmacéutico o médico distinto del prescriptor, indique por qué la acepta; la receta podrá firmarse una vez registrada la revisión.",
+      "HINT": "Esta receta requiere una revisi?n de dosis pedi?trica. Como farmac?utico o m?dico distinto del prescriptor, indique por qu? acepta la dosis; la receta podr? firmarse una vez registrada la revisi?n.",
       "REASON": "Motivo para aceptar la dosis",
       "REASON_REQUIRED": "Indique el motivo por el que acepta esta dosis.",
       "CONFIRM": "Registrar la revisión",
@@ -15432,6 +15433,7 @@
     "MARK_READ": "Marcar como leído"
   },
   "MATERNITY_STAY": {
+    "NO_NEONATAL_COT": "No hay ninguna cuna neonatal disponible en esta lista. Pida al equipo de la unidad que compruebe la configuración y la disponibilidad de neonatología.",
     "LOADING": "Comprobando la estancia…",
     "NOT_ADMITTED": "no ingresado(a): no aparece en el puesto de enfermería ni en el tablero de camas.",
     "ACUITY": "Nivel de gravedad",
@@ -15457,7 +15459,7 @@
     "LOAD_FAILED": "estancia desconocida: no se pudieron leer los ingresos. Recargue antes de ingresar.",
     "MIDWIFE_NEWBORN_RULE": "Una matrona ingresa al recién nacido de un parto que atendió y es su clínica responsable. Regla provisional, pendiente de aprobación por una matrona o un obstetra designado.",
     "MIDWIFE_BED_RULE": "Una matrona asigna las camas de maternidad. Regla provisional, pendiente de aprobación por una matrona o un obstetra designado.",
-    "MIDWIFE_COT_RULE": "Una matrona asigna las cunas de maternidad. Una cuna de neonatología también se asigna, y entonces se pide a un médico que valore al recién nacido. Regla provisional, pendiente de aprobación por una matrona o un obstetra designado.",
+    "MIDWIFE_COT_RULE": "Una matrona asigna las cunas de maternidad. Cuando se dispone de una cuna neonatal y se asigna, se solicita a un médico que revise al recién nacido.",
     "BED_ASSIGNED_PHYSICIAN_ASKED": "Cama {{bed}} asignada. Se ha pedido a un médico que valore al recién nacido."
   },
   "SENSITIVITY_TAG": {
@@ -15857,7 +15859,7 @@
     "SURFACE": {
       "MIDWIFE_NEWBORN": "Una matrona ingresa al recién nacido de un parto que atendió y es su clínica responsable.",
       "MIDWIFE_BED": "Una matrona asigna las camas de maternidad.",
-      "MIDWIFE_COT": "Una matrona asigna las cunas de maternidad. Una cuna de neonatología también se asigna, y entonces se pide a un médico que valore al recién nacido.",
+      "MIDWIFE_COT": "Una matrona asigna las cunas de maternidad. Cuando se dispone de una cuna neonatal y se asigna, se solicita a un médico que revise al recién nacido.",
       "IMAGING_TECHNICIAN": "Como técnico de imagen, usted recibe al paciente, realiza y documenta el examen y adjunta sus imágenes. La solicitud del examen y la redacción o firma del informe corresponden al médico.",
       "ULTRASOUND_PHYSICIANS_ONLY": "Ecografía: en este hospital el examen lo realiza un médico. Usted puede registrar la llegada del paciente y adjuntar imágenes.",
       "MINOR_RELEASE_AGE": "A partir de los {{age}} años, las demás categorías sensibles también se ocultan a los padres (edad ajustable por el establecimiento).",

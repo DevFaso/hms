@@ -92,6 +92,7 @@ public class OrdonnancePdfService {
     private final StaffRepository staffRepository;
     private final EndedStayOrderGuard endedStayOrders;
     private final PharmacyServiceSupport support;
+    private final com.example.hms.repository.PatientVitalSignRepository vitalSigns;
 
     /** As on the pharmacy copy (QA D922): a drug the catalogue marks controlled is controlled. */
     private PrescriptionControlledResolver controlledResolver;
@@ -183,7 +184,7 @@ public class OrdonnancePdfService {
             pdf.field(label(locale, "pdf.ordonnance.date"),
                     prescribedOn == null ? null : date.format(prescribedOn), 11f);
             writePatient(pdf, rx, locale, date);
-            pdf.field(label(locale, "pdf.ordonnance.prescriber"), prescriberLine(rx.getStaff()), 11f);
+            pdf.field(label(locale, "pdf.ordonnance.prescriber"), prescriberLine(rx.getStaff(), locale), 11f);
             pdf.space(6f);
             pdf.rule();
             pdf.space(4f);
@@ -224,7 +225,7 @@ public class OrdonnancePdfService {
         }
     }
 
-    private static void writePatient(PharmacyPdfWriter pdf, Prescription rx, Locale locale,
+    private void writePatient(PharmacyPdfWriter pdf, Prescription rx, Locale locale,
                                      DateTimeFormatter date) throws IOException {
         Patient patient = rx.getPatient();
         pdf.field(label(locale, "pdf.ordonnance.patient"), patient == null ? null : patient.getFullName(), 11f);
@@ -233,6 +234,24 @@ public class OrdonnancePdfService {
         }
         if (patient.getDateOfBirth() != null) {
             pdf.field(label(locale, "pdf.rxcopy.birthDate"), date.format(patient.getDateOfBirth()), 11f);
+            if (rx.getCreatedAt() != null && !patient.getDateOfBirth().isAfter(rx.getCreatedAt().toLocalDate())) {
+                java.time.Period age = java.time.Period.between(patient.getDateOfBirth(), rx.getCreatedAt().toLocalDate());
+                pdf.field(label(locale, "pdf.ordonnance.age"), label(locale, "pdf.ordonnance.ageValue",
+                        age.getYears(), age.getMonths(), age.getDays()), 11f);
+            }
+        }
+        if (patient.getId() != null && rx.getHospital() != null && rx.getHospital().getId() != null) {
+            var latest = vitalSigns.findFirstByPatient_IdAndHospital_IdAndWeightKgIsNotNullOrderByRecordedAtDesc(
+                    patient.getId(), rx.getHospital().getId());
+            if (latest.isPresent()) {
+                var vital = latest.get();
+                String measuredAt = vital.getRecordedAt() == null ? null
+                        : com.example.hms.utility.DisplayDates.dateTime(
+                                com.example.hms.utility.HospitalTime.at(vital.getRecordedAt(), rx.getHospital()), locale);
+                pdf.field(label(locale, "pdf.ordonnance.latestWeight"), joinNonBlank(" - ",
+                        com.example.hms.utility.DisplayNumbers.quantity(
+                                java.math.BigDecimal.valueOf(vital.getWeightKg()), locale) + " kg", measuredAt), 11f);
+            }
         }
         String mrn = rx.getHospital() != null ? patient.getMrnForHospital(rx.getHospital().getId()) : null;
         if (mrn != null && !mrn.isBlank()) {
@@ -283,11 +302,20 @@ public class OrdonnancePdfService {
     }
 
     /** The name, then the speciality and the licence number when the staff record has them. */
-    private static String prescriberLine(Staff staff) {
+    private static String prescriberLine(Staff staff, Locale locale) {
         if (staff == null) {
             return null;
         }
-        return joinNonBlank(" - ", prescriberName(staff), staff.getSpecialization(), staff.getLicenseNumber());
+        return joinNonBlank(" - ", prescriberName(staff), specializationLabel(staff.getSpecialization(), locale), staff.getLicenseNumber());
+    }
+
+    /** Known catalogue codes are labels; an entered free-text specialty stays intact. */
+    private static String specializationLabel(String specialization, Locale locale) {
+        if (specialization == null || specialization.isBlank()) {
+            return specialization;
+        }
+        String translated = MessageUtil.resolveOrNull(locale, "pdf.ordonnance.specialty." + specialization.trim());
+        return translated == null ? specialization : translated;
     }
 
     private static String joinNonBlank(String separator, String... parts) {

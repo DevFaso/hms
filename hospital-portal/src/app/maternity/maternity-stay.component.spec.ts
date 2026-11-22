@@ -62,6 +62,19 @@ describe('MaternityStayComponent (QA D2594)', () => {
     beds.getAvailableBeds.and.returnValue(of([{ id: 'b1', label: 'MAT65A/M-01' } as never]));
   });
 
+  it('explains that no neonatal cot is available without changing the offered maternity beds', () => {
+    admissions.getCurrentByPatient.and.returnValue(of(stay(null)));
+    const fixture = render('NEWBORN');
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="maternity-stay-no-neonatal-cot"]')).not.toBeNull();
+    expect(host.querySelector('option[value="b1"]')).not.toBeNull();
+    fixture.componentInstance.beds.set([
+      { id: 'n1', label: 'NICU/N-01', wardType: 'NICU' } as never,
+    ]);
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="maternity-stay-no-neonatal-cot"]')).toBeNull();
+  });
+
   it('says a woman in labour is not admitted, and refuses an admission with no acuity at the field', () => {
     const fixture = render();
     const host = fixture.nativeElement as HTMLElement;
