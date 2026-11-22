@@ -105,6 +105,32 @@ class PatientAddressHistoryHookTest {
     }
 
     @Test
+    @DisplayName("QA r70 D3223: a nurse records the personal medical history; a hospital admin's value is ignored")
+    void theMedicalHistoryIsWrittenByAClinicianOnly() {
+        try {
+            signInAs("ROLE_NURSE");
+            PatientProfileUpdateRequestDTO request = new PatientProfileUpdateRequestDTO();
+            request.setMedicalHistorySummary("  HTA depuis 2019, drépanocytose AS  ");
+            patientService.patchPatient(patientId, request, null, Locale.FRENCH);
+            assertThat(patient.getMedicalHistorySummary()).isEqualTo("HTA depuis 2019, drépanocytose AS");
+
+            signInAs("ROLE_HOSPITAL_ADMIN");
+            PatientProfileUpdateRequestDTO byAdmin = new PatientProfileUpdateRequestDTO();
+            byAdmin.setMedicalHistorySummary("écrasé");
+            patientService.patchPatient(patientId, byAdmin, null, Locale.FRENCH);
+            assertThat(patient.getMedicalHistorySummary()).isEqualTo("HTA depuis 2019, drépanocytose AS");
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    private static void signInAs(String role) {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("u", "p",
+                List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority(role))));
+    }
+
+    @Test
     @DisplayName("patchPatient with a NEW address records the OLD one as history")
     void patchRecordsTheSupersededAddress() {
         PatientProfileUpdateRequestDTO request = new PatientProfileUpdateRequestDTO();

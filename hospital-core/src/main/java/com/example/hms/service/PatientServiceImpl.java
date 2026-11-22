@@ -561,6 +561,8 @@ public class PatientServiceImpl implements PatientService {
         // review: by a clinician of the acting hospital only.
         if (writesClinicalFields()) {
             applyNullable(request.getBloodType(), patient::setBloodType);
+            // QA r70 D3223: the personal history the Synthèse reads, written where the blood group is.
+            applyNullable(request.getMedicalHistorySummary(), patient::setMedicalHistorySummary);
         }
     }
 
