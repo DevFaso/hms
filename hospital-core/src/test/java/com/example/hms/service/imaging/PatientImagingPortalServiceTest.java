@@ -191,7 +191,8 @@ class PatientImagingPortalServiceTest {
         report(1, ImagingReportStatus.FINAL, true);
         ImagingStudyImage onStudy = image(null);
         when(imageRepository.findById(onStudy.getId())).thenReturn(Optional.of(onStudy));
-        when(fileUploadService.openStoredFile(eq(onStudy.getStorageKey()), anyString())).thenReturn(mock(StoredObject.class));
+        StoredObject stored = mock(StoredObject.class);
+        when(fileUploadService.openStoredFile(eq(onStudy.getStorageKey()), anyString())).thenReturn(stored);
 
         assertThat(service.studiesOf(patientId, Reader.PROXY)).hasSize(1);
         assertThat(service.openImage(patientId, onStudy.getId(), Reader.PROXY).imageId()).isEqualTo(onStudy.getId());

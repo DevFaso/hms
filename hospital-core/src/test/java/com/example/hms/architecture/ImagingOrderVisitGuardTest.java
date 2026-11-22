@@ -75,8 +75,8 @@ class ImagingOrderVisitGuardTest {
         int end = service.indexOf("imagingOrderRepository.save(", start);
         assertThat(start).as("createOrder").isNotNegative();
         String create = service.substring(start, end);
-        assertThat(create).as("createOrder maps the request once").containsOnlyOnce("imagingOrderMapper.toEntity(");
-        assertThat(create).as("createOrder sets the order's visit before saving it")
+        assertThat(create).as("createOrder maps the request once, and sets its visit before saving it")
+            .containsOnlyOnce("imagingOrderMapper.toEntity(")
             .contains("setEncounterId(visitOf(request.getEncounterId()");
         int visitOf = service.indexOf("private UUID visitOf(");
         assertThat(visitOf).as("visitOf").isNotNegative();
