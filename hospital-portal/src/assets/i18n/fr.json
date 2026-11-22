@@ -907,6 +907,7 @@
     "RETRY": "Réessayer",
     "EMPTY": "Aucune intégration enregistrée.",
     "ENABLED": "Activée",
+    "NOT_CONFIGURED": "Non configurée",
     "DISABLED": "Désactivée",
     "NO_ORG_HISTORY": "Aucun historique d'appel enregistré pour cette intégration.",
     "PLATFORM_WIDE": "Plateforme entière",

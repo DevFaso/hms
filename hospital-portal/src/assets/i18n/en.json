@@ -907,6 +907,7 @@
     "RETRY": "Retry",
     "EMPTY": "No integrations are registered.",
     "ENABLED": "Enabled",
+    "NOT_CONFIGURED": "Not configured",
     "DISABLED": "Disabled",
     "NO_ORG_HISTORY": "No call history recorded for this integration yet.",
     "PLATFORM_WIDE": "Platform-wide",

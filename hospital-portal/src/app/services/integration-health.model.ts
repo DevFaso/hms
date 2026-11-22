@@ -20,6 +20,8 @@ export interface IntegrationHealthRow {
   serviceType: PlatformServiceType | null;
   provider: string | null;
   enabled: boolean;
+  /** QA D2779: a reference stub or sandbox: shown as not configured, never as enabled. */
+  stub?: boolean;
   /** QA D851: a connectivity probe exists, so "Test connection" can run. */
   probeSupported: boolean;
   /** QA D851: a re-sync exists, so "Re-sync" can run. */

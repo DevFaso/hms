@@ -27,6 +27,11 @@ public class InventoryIntegrationAdapter extends AbstractToggleableIntegrationAd
     }
 
     @Override
+    protected boolean defaultStub() {
+        return true;
+    }
+
+    @Override
     protected String defaultDisplayName(Locale locale) {
         return text("platform.catalog.inventory.displayName", locale);
     }

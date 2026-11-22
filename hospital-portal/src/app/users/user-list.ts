@@ -285,7 +285,10 @@ export class UserListComponent implements OnInit, OnDestroy {
    * The explanation printed under a role whose name alone does not say what it grants (« Personnel »): the
    * seeded description in the reader's language, or null for the self-explaining clinical roles.
    */
-  protected roleHintKey(role: { code?: string | null; description?: string | null }): string | null {
+  protected roleHintKey(role: {
+    code?: string | null;
+    description?: string | null;
+  }): string | null {
     return role.code === 'ROLE_STAFF' ? roleDescriptionKey(role) : null;
   }
 

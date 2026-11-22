@@ -27,6 +27,11 @@ public class EhrIntegrationAdapter extends AbstractToggleableIntegrationAdapter 
     }
 
     @Override
+    protected boolean defaultStub() {
+        return true;
+    }
+
+    @Override
     protected String defaultDisplayName(Locale locale) {
         return text("platform.catalog.ehr.displayName", locale);
     }

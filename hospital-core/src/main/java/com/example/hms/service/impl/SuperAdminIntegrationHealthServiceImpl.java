@@ -143,6 +143,7 @@ public class SuperAdminIntegrationHealthServiceImpl implements SuperAdminIntegra
             .serviceType(descriptor.getServiceType())
             .provider(descriptor.getProvider())
             .enabled(descriptor.isEnabled())
+            .stub(descriptor.isStub())
             .probeSupported(actionService.supportsProbe(descriptor.getId()))
             .resyncSupported(actionService.supportsResync(descriptor.getId()))
             .capabilities(descriptor.getCapabilities() == null ? List.of() : descriptor.getCapabilities())
