@@ -230,6 +230,36 @@ class InvoiceCoverageServiceTest {
     }
 
     @Test
+    @DisplayName("QA D3258 / D3408 (r70): a quote is the invoice rule on one charge: payer, plan, policy and the split")
+    void quoteIsTheInvoiceRuleOnOneCharge() {
+        UUID patientId = invoice.getPatient().getId();
+        LocalDate day = LocalDate.of(2026, 11, 22);
+
+        InvoiceCoverageService.CoverageQuote quote = service.quote(patientId, HOSPITAL_A, day,
+            new BigDecimal("2000"), PriceListCategory.CONSULTATION, null).orElseThrow();
+        assertThat(quote.payerName()).isEqualTo("RAMU");
+        assertThat(quote.planName()).isEqualTo("Formule Base");
+        assertThat(quote.policyNumber()).isEqualTo("BC2-001");
+        assertThat(quote.payerShare()).isEqualByComparingTo("1600");
+        assertThat(quote.patientShare()).isEqualByComparingTo("400");
+        // An excluded category: the payer pays nothing of it.
+        assertThat(service.quote(patientId, HOSPITAL_A, day, new BigDecimal("1500"), PriceListCategory.LAB_TEST, null)
+            .orElseThrow().payerShare()).isEqualByComparingTo("0");
+        assertThat(service.billedCoverage(patientId, HOSPITAL_A, day)).contains(coverage);
+    }
+
+    @Test
+    @DisplayName("QA D3250 (r70): the only coverage, never ticked primary, is billed by the same order the desk reads")
+    void theOnlyCoverageIsBilledThoughNotPrimary() {
+        coverage.setPrimary(false);
+        UUID patientId = invoice.getPatient().getId();
+
+        assertThat(service.billedCoverage(patientId, HOSPITAL_A, LocalDate.of(2026, 11, 22))).contains(coverage);
+        assertThat(service.quote(patientId, HOSPITAL_B, LocalDate.of(2026, 11, 22), BigDecimal.TEN, null, null))
+            .as("another hospital never quotes this coverage").isEmpty();
+    }
+
+    @Test
     @DisplayName("BC2 issued with RAMU 80 %, lab excluded: payers 5 600 (1 600 + 0 + 4 000), patient 2 900")
     void issuingAppliesTheCoverage() {
         BigDecimal applied = service.applyAtIssue(invoice, BILLING_A);

@@ -146,6 +146,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
 
         PatientInsurance saved = patientInsuranceRepository.save(existing);
         auditPlanLink(planLink, saved);
+        saved = keepOnePrimary(saved, false);
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
     }
 
@@ -154,7 +155,11 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     public void deletePatientInsurance(UUID insuranceId, Locale locale) {
         PatientInsurance existing = getScopedInsuranceOrThrow(insuranceId);
         enforceSelfAccessIfPatient(existing.getPatient(), () -> insuranceNotFound(insuranceId));
+        UUID patientId = existing.getPatient() != null ? existing.getPatient().getId() : null;
+        UUID hospitalId = hospitalOf(existing);
         patientInsuranceRepository.deleteById(insuranceId);
+        // QA D3250: the primary removed, another coverage in force takes its place.
+        promotePrimary(patientId, hospitalId, null);
     }
 
     @Override
@@ -201,6 +206,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
 
         PatientInsurance saved = patientInsuranceRepository.save(insurance);
         auditPlanLink(planLink, saved);
+        saved = keepOnePrimary(saved, false);
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
     }
 
@@ -328,6 +334,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
 
         PatientInsurance saved = patientInsuranceRepository.save(insurance);
         auditPlanLink(planLink, saved);
+        saved = keepOnePrimary(saved, false);
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
     }
 
@@ -389,6 +396,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         }
 
         auditPlanLink(planLink, saved);
+        saved = keepOnePrimary(saved, !actAsPatient && Boolean.FALSE.equals(req.getPrimary()));
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
     }
 
@@ -421,6 +429,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             () -> insuranceNotFound(insuranceId));
         PatientInsurance saved = patientInsuranceRepository.save(insurance);
         auditPlanLink(planLink, saved);
+        saved = keepOnePrimary(saved, false);
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
     }
 
@@ -714,6 +723,61 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         } else {
             insurance.setPrimary(false);
         }
+    }
+
+    /**
+     * QA D3250 (r70): exactly one primary coverage per patient and hospital. A patient's only policy, linked without
+     * « Définir comme principale », stayed non-primary: the invoice billed it ({@code CoverageOrder}) while the desk
+     * said « Problème d'assurance » and the check-in tick recorded nothing. After every write of a hospital's
+     * coverage row: when no coverage of that patient at that hospital in force today is primary, the first in force
+     * ({@link com.example.hms.service.billing.CoverageOrder#ordered}: the oldest) becomes primary; a second primary
+     * is unset. A row the staff explicitly unticked ({@code declined}) is passed over while another is in force. A
+     * shared (untagged) row has no hospital and is left alone.
+     *
+     * @return the row written, as it now stands
+     */
+    private PatientInsurance keepOnePrimary(PatientInsurance saved, boolean declined) {
+        UUID hospitalId = hospitalOf(saved);
+        UUID patientId = saved.getPatient() != null ? saved.getPatient().getId() : null;
+        if (hospitalId == null || patientId == null || saved.getId() == null) {
+            return saved;
+        }
+        if (saved.isPrimary()) {
+            // The row just made (or kept) primary is the one; any other primary of this hospital is unset.
+            patientInsuranceRepository.unsetOtherPrimariesForPatientInHospital(patientId, saved.getId(), hospitalId);
+        } else {
+            promotePrimary(patientId, hospitalId, declined ? saved.getId() : null);
+        }
+        return patientInsuranceRepository.findByIdAndAssignment_Hospital_Id(saved.getId(), hospitalId).orElse(saved);
+    }
+
+    /** Makes the first coverage in force today primary when none in force is (QA D3250); {@code passOver} last. */
+    private void promotePrimary(UUID patientId, UUID hospitalId, UUID passOver) {
+        if (patientId == null || hospitalId == null) {
+            return;
+        }
+        List<PatientInsurance> rows = patientInsuranceRepository.findByPatient_IdAndAssignment_Hospital_Id(patientId,
+            hospitalId);
+        List<PatientInsurance> inForce = com.example.hms.service.billing.CoverageOrder.ordered(rows,
+            java.time.LocalDate.now());
+        if (inForce.isEmpty() || inForce.get(0).isPrimary()) {
+            return;
+        }
+        PatientInsurance chosen = inForce.stream()
+            .filter(row -> passOver == null || !passOver.equals(row.getId()))
+            .findFirst()
+            .orElse(inForce.get(0));
+        patientInsuranceRepository.unsetOtherPrimariesForPatientInHospital(patientId, chosen.getId(), hospitalId);
+        PatientInsurance fresh = patientInsuranceRepository.findByIdAndAssignment_Hospital_Id(chosen.getId(), hospitalId)
+            .orElse(chosen);
+        fresh.setPrimary(true);
+        patientInsuranceRepository.save(fresh);
+    }
+
+    /** The hospital a coverage row is tagged to, or null for a shared (untagged) row. */
+    private static UUID hospitalOf(PatientInsurance insurance) {
+        return insurance != null && insurance.getAssignment() != null && insurance.getAssignment().getHospital() != null
+            ? insurance.getAssignment().getHospital().getId() : null;
     }
 
     private UUID resolveHospitalId(LinkPatientInsuranceRequestDTO req, ActingContext ctx) {

@@ -402,6 +402,57 @@ public class InvoiceCoverageService {
         return List.copyOf(out);
     }
 
+    /**
+     * QA D2706 (r70): the « Parts assureurs » list of the acting hospital: every share OPEN or CLAIMED (or the
+     * statuses asked for), oldest first, with its invoice and patient. Read by the roles that decide a share
+     * (hospital admin, accountant, billing, claims reviewer) at that hospital; a verified super-admin pinned to it
+     * reads too. Another hospital's share is never read.
+     */
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.billing.OpenPayerShareDTO> listAtHospital(
+            java.util.Collection<PayerShareStatus> statuses) {
+        UUID hospitalId = actingScopeResolver.requirePinned();
+        UUID userId = roleValidator.getCurrentUserId();
+        boolean reader = actingScopeResolver.isVerifiedSuperAdmin()
+            || (userId != null && roleValidator.canDecidePayerShare(userId, hospitalId));
+        if (!reader) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolve("billing.payerShare.decidersOnly"));
+        }
+        java.util.Collection<PayerShareStatus> wanted = statuses == null || statuses.isEmpty()
+            ? EnumSet.of(PayerShareStatus.OPEN, PayerShareStatus.CLAIMED) : statuses;
+        Map<UUID, PayerPlan> plans = new HashMap<>();
+        Map<UUID, String> payerNames = new HashMap<>();
+        Map<UUID, Optional<BillingInvoice>> invoices = new HashMap<>();
+        List<com.example.hms.payload.dto.billing.OpenPayerShareDTO> out = new ArrayList<>();
+        for (InvoicePayerShare share : shareRepository.findByHospitalIdAndStatusInOrderByCreatedAtAsc(hospitalId,
+                wanted)) {
+            BillingInvoice invoice = invoices.computeIfAbsent(share.getInvoiceId(), id -> invoiceRepository.findById(id)
+                .filter(found -> found.getHospital() != null && hospitalId.equals(found.getHospital().getId())))
+                .orElse(null);
+            if (invoice == null) {
+                continue;
+            }
+            PayerPlan plan = plans.computeIfAbsent(share.getPayerPlanId(),
+                id -> planRepository.findByIdAndHospitalId(id, hospitalId).orElse(null));
+            String payerName = plan == null ? null : payerNames.computeIfAbsent(plan.getPayerId(),
+                id -> payerRepository.findByIdAndHospitalId(id, hospitalId).map(Payer::getName).orElse(null));
+            out.add(com.example.hms.payload.dto.billing.OpenPayerShareDTO.builder()
+                .id(share.getId())
+                .invoiceId(invoice.getId())
+                .invoiceNumber(invoice.getInvoiceNumber())
+                .invoiceDate(invoice.getInvoiceDate())
+                .patientName(invoice.getPatient() != null ? invoice.getPatient().getFullName() : null)
+                .patientMrn(invoice.getPatient() != null ? invoice.getPatient().getMrnForHospital(hospitalId) : null)
+                .payerName(payerName)
+                .planName(plan != null ? plan.getName() : null)
+                .amount(share.getAmount())
+                .status(share.getStatus().name())
+                .createdAt(share.getCreatedAt())
+                .build());
+        }
+        return List.copyOf(out);
+    }
+
     /** The shares of an invoice of the acting hospital (404 for another hospital's invoice). */
     @Transactional(readOnly = true)
     public List<InvoicePayerShareDTO> list(UUID invoiceId) {
@@ -463,12 +514,9 @@ public class InvoiceCoverageService {
         if (candidates == null) {
             return Optional.empty();
         }
-        List<PatientInsurance> ordered = candidates.stream()
+        // QA D3250: the same order the desk reads ({@link CoverageOrder}), so the coverage billed is the one shown.
+        List<PatientInsurance> ordered = CoverageOrder.ordered(candidates, day).stream()
             .filter(insurance -> insurance.getPayerPlanId() != null)
-            .filter(insurance -> insurance.getEffectiveDate() == null || !insurance.getEffectiveDate().isAfter(day))
-            .filter(insurance -> insurance.getExpirationDate() == null || !insurance.getExpirationDate().isBefore(day))
-            .sorted(Comparator.comparing((PatientInsurance insurance) -> !insurance.isPrimary())
-                .thenComparing(PatientInsurance::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
             .toList();
         for (PatientInsurance insurance : ordered) {
             Optional<Coverage> coverage = planOn(insurance, hospitalId, day);
@@ -477,6 +525,65 @@ public class InvoiceCoverageService {
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * QA D3250 (r70): the coverage an invoice issued on {@code day} would bill, by the same rule as
+     * {@link #applyAtIssue}: what the desk attests at check-in and shows in its snapshot. Empty when none applies.
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public Optional<PatientInsurance> billedCoverage(UUID patientId, UUID hospitalId, LocalDate day) {
+        if (patientId == null || hospitalId == null || day == null) {
+            return Optional.empty();
+        }
+        return coverageOn(patientId, hospitalId, day).map(Coverage::insurance);
+    }
+
+    /**
+     * What the patient's coverage would pay of one charge of {@code amount} on {@code day}, by the rule an invoice
+     * uses ({@link CoverageCalculator}: the plan's terms and rules, the per-invoice and annual ceilings). Read-only:
+     * an estimate the desk and the pharmacy show and record (QA D3258: the check-in's suggested copay; QA D3408: the
+     * insurer share of a pharmacy fill left on a third-party cover). Empty when no coverage with a plan applies.
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public Optional<CoverageQuote> quote(UUID patientId, UUID hospitalId, LocalDate day, BigDecimal amount,
+                                         PriceListCategory category, UUID priceListItemId) {
+        if (patientId == null || hospitalId == null || day == null) {
+            return Optional.empty();
+        }
+        Optional<Coverage> found = coverageOn(patientId, hospitalId, day);
+        if (found.isEmpty()) {
+            return Optional.empty();
+        }
+        Coverage coverage = found.get();
+        BigDecimal charge = amount != null ? amount.max(BigDecimal.ZERO) : BigDecimal.ZERO;
+        BigDecimal payerShare = BigDecimal.ZERO;
+        if (charge.signum() > 0) {
+            UUID lineId = new UUID(0L, 0L);
+            BigDecimal used = shareRepository.sumUsedInYear(coverage.insurance().getId(), hospitalId, day.getYear(),
+                lineId);
+            payerShare = CoverageCalculator.compute(
+                List.of(new CoverageCalculator.Line(lineId, charge, 1, category, priceListItemId)),
+                coverage.terms(), coverage.rules(), used).total();
+        }
+        String payerName = coverage.plan().getPayerId() == null ? null
+            : payerRepository.findByIdAndHospitalId(coverage.plan().getPayerId(), hospitalId)
+                .map(Payer::getName).orElse(null);
+        PatientInsurance insurance = coverage.insurance();
+        return Optional.of(new CoverageQuote(insurance.getId(), payerName, coverage.plan().getName(),
+            insurance.getPolicyNumber(), insurance.getEffectiveDate(), insurance.getExpirationDate(),
+            coverage.terms().getDefaultCoveragePercent(), charge, payerShare,
+            charge.subtract(payerShare).max(BigDecimal.ZERO)));
+    }
+
+    /**
+     * One coverage's answer for one charge: who pays, under which plan and policy, and the split.
+     *
+     * @param defaultPercent the plan's default coverage percent on the day (a rule may differ for the charge)
+     */
+    public record CoverageQuote(UUID insuranceId, String payerName, String planName, String policyNumber,
+                                LocalDate effectiveDate, LocalDate expirationDate, Integer defaultPercent,
+                                BigDecimal amount, BigDecimal payerShare, BigDecimal patientShare) {
     }
 
     /** The share's own coverage and plan on {@code day}, or null when the plan no longer has terms that day. */

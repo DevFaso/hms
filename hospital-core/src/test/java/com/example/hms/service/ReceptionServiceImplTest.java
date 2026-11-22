@@ -958,22 +958,38 @@ class ReceptionServiceImplTest {
         }
 
         @Test
-        @DisplayName("reports NO_PRIMARY when active insurance but no primary")
+        @DisplayName("QA D3250: reports NO_PRIMARY when SEVERAL coverages are in force and none is primary")
         void reportsNoPrimary() {
             Appointment appt = makeAppointment(AppointmentStatus.SCHEDULED);
             when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today))
                     .thenReturn(List.of(appt));
 
-            PatientInsurance active = mock(PatientInsurance.class);
-            when(active.getExpirationDate()).thenReturn(null);
-            when(active.isPrimary()).thenReturn(false);
+            PatientInsurance one = new PatientInsurance();
+            one.setId(UUID.randomUUID());
+            PatientInsurance two = new PatientInsurance();
+            two.setId(UUID.randomUUID());
             when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId))
-                    .thenReturn(List.of(active));
+                    .thenReturn(List.of(one, two));
 
             List<InsuranceIssueDTO> issues = service.getInsuranceIssues(today, hospitalId);
 
             assertThat(issues).hasSize(1);
             assertThat(issues.get(0).getIssueType()).isEqualTo("NO_PRIMARY");
+        }
+
+        @Test
+        @DisplayName("QA D3250 (r70): a patient's ONLY coverage in force, never ticked primary, is no insurance issue")
+        void d3250_theOnlyCoverageInForceIsNoIssue() {
+            Appointment appt = makeAppointment(AppointmentStatus.SCHEDULED);
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today))
+                    .thenReturn(List.of(appt));
+
+            PatientInsurance only = new PatientInsurance();
+            only.setId(UUID.randomUUID());
+            when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId))
+                    .thenReturn(List.of(only));
+
+            assertThat(service.getInsuranceIssues(today, hospitalId)).isEmpty();
         }
 
         @Test
@@ -2079,6 +2095,45 @@ class ReceptionServiceImplTest {
                     org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
             verify(auditEventLogService, org.mockito.Mockito.atLeastOnce()).logEvent(audit.capture());
             assertThat(audit.getAllValues()).noneSatisfy(a -> assertThat(a.getEventDescription()).contains("Insurance verified"));
+        }
+
+        @Test
+        @DisplayName("QA D3250 (r70): the patient ONLY policy, never ticked primary, is the one stamped verified")
+        void theOnlyPolicyIsStampedThoughNotPrimary_D3250() {
+            Appointment appointment = scheduledAppointment();
+            when(appointmentRepo.lockById(appointment.getId())).thenReturn(Optional.of(appointment));
+            com.example.hms.model.PatientInsurance only = coverage(false, today.plusYears(1));
+            when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patient.getId(), hospitalId))
+                    .thenReturn(List.of(only));
+
+            service.checkInPatient(CheckInRequestDTO.builder().appointmentId(appointment.getId())
+                    .identityConfirmed(true).insuranceVerified(true).build(), hospitalId, "receptionist1");
+
+            assertThat(only.getVerifiedBy()).isEqualTo("receptionist1");
+            assertThat(only.getVerifiedAt()).isNotNull();
+            verify(insuranceRepo).save(only);
+        }
+
+        @Test
+        @DisplayName("QA D3250 (r70): with several policies and none primary, the one the invoice bills is stamped")
+        void theBilledPolicyIsStamped_D3250() {
+            Appointment appointment = scheduledAppointment();
+            when(appointmentRepo.lockById(appointment.getId())).thenReturn(Optional.of(appointment));
+            com.example.hms.model.PatientInsurance first = coverage(false, null);
+            com.example.hms.model.PatientInsurance billed = coverage(false, null);
+            when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patient.getId(), hospitalId))
+                    .thenReturn(List.of(first, billed));
+            com.example.hms.service.billing.InvoiceCoverageService coverage =
+                    org.mockito.Mockito.mock(com.example.hms.service.billing.InvoiceCoverageService.class);
+            when(coverage.billedCoverage(eq(patient.getId()), eq(hospitalId), any()))
+                    .thenReturn(Optional.of(billed));
+            service.setInvoiceCoverage(coverage);
+
+            service.checkInPatient(CheckInRequestDTO.builder().appointmentId(appointment.getId())
+                    .identityConfirmed(true).insuranceVerified(true).build(), hospitalId, "receptionist1");
+
+            assertThat(billed.getVerifiedAt()).isNotNull();
+            assertThat(first.getVerifiedAt()).isNull();
         }
 
         @Test
