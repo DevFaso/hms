@@ -2090,21 +2090,121 @@ class UserRoleHospitalAssignmentServiceImplTest {
         }
     }
 
+    /** QA r70 review: the desk's re-send claims the public path's cooldown, in the database. */
     @Test
-    void resendPatientActivation_replacesAnExpiredCodeBeforeItGoesOut() {
+    void resendPatientActivation_isRefusedInsideTheCooldown_andSendsNothing() {
         try {
-            deskCaller("ROLE_HOSPITAL_ADMIN");
+            deskCaller("ROLE_RECEPTIONIST");
             UUID patientId = pendingPatientInvitation();
-            assignment.setConfirmationSentAt(LocalDateTime.now().minusHours(49));
-            when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            UUID hospitalId = hospital.getId();
+            when(assignmentRepository.claimActivationResend(eq(assignment.getId()), anyString(), any(), any(), any()))
+                .thenReturn(0);
 
-            service.resendPatientActivation(patientId, hospital.getId());
-
-            assertThat(assignment.getConfirmationSentAt()).isAfter(LocalDateTime.now().minusMinutes(1));
-            assertThat(assignment.getAssignmentCode()).isNotEqualTo(VALID_CODE);
-            verify(auditEventLogService, org.mockito.Mockito.atLeastOnce()).logEvent(any());
+            assertThatThrownBy(() -> service.resendPatientActivation(patientId, hospitalId))
+                .isInstanceOf(BusinessException.class);
+            org.mockito.Mockito.verifyNoInteractions(smsService, emailService);
+            verify(auditEventLogService, never()).logEvent(any());
         } finally {
             org.springframework.security.core.context.SecurityContextHolder.clearContext();
         }
+    }
+
+    @Test
+    void resendPatientActivation_claimsWithTheCooldown_andTextsThePatientOnly() {
+        try {
+            deskCaller("ROLE_RECEPTIONIST");
+            UUID patientId = pendingPatientInvitation();
+            User registrar = new User();
+            registrar.setId(UUID.randomUUID());
+            registrar.setPhoneNumber("+22670000001");
+            assignment.setRegisteredBy(registrar);
+            hospital.setPhoneNumber("+22670000002");
+            assignee.setPhoneNumber("+22670000003");
+            org.mockito.ArgumentCaptor<LocalDateTime> now = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
+            org.mockito.ArgumentCaptor<LocalDateTime> cutoff = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
+            when(assignmentRepository.claimActivationResend(eq(assignment.getId()), anyString(), now.capture(),
+                cutoff.capture(), any())).thenReturn(1);
+            when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+
+            service.resendPatientActivation(patientId, hospital.getId());
+
+            assertThat(java.time.Duration.between(cutoff.getValue(), now.getValue())).isEqualTo(java.time.Duration.ofMinutes(5));
+            org.mockito.ArgumentCaptor<String> to = org.mockito.ArgumentCaptor.forClass(String.class);
+            verify(smsService, org.mockito.Mockito.atLeastOnce()).send(to.capture(), anyString());
+            assertThat(to.getAllValues()).contains("+22670000003").doesNotContain("+22670000001", "+22670000002");
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    void revealPatientActivationCode_isRefusedForAPatientRecordedAsDeceased() {
+        try {
+            deskCaller("ROLE_RECEPTIONIST");
+            UUID patientId = pendingPatientInvitation();
+            patientRepository.findByIdUnscoped(patientId).orElseThrow().setDeceasedAt(LocalDateTime.now().minusDays(1));
+            UUID hospitalId = hospital.getId();
+
+            assertThatThrownBy(() -> service.revealPatientActivationCode(patientId, hospitalId))
+                .isInstanceOf(BusinessException.class);
+            verify(auditEventLogService, never()).logEvent(any());
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    /** QA r70 review: each invitation code takes 5 wrong codes; the 5th burns it, and any code then reads alike. */
+    @Test
+    void verifyAssignmentByCode_burnsTheCodeAfterFiveWrongTries() {
+        when(assignmentRepository.findByAssignmentCode(VALID_CODE)).thenReturn(Optional.of(assignment));
+        assignment.setConfirmationSentAt(LocalDateTime.now());
+        Throwable firstWrong = org.assertj.core.api.Assertions.catchThrowable(
+            () -> service.verifyAssignmentByCode(VALID_CODE, "000000"));
+        for (int i = 0; i < 3; i++) {
+            assertThatThrownBy(() -> service.verifyAssignmentByCode(VALID_CODE, "000000"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage(firstWrong.getMessage());
+        }
+        assertThat(assignment.getConfirmationCode()).isEqualTo(VALID_PIN);
+        Throwable fifth = org.assertj.core.api.Assertions.catchThrowable(
+            () -> service.verifyAssignmentByCode(VALID_CODE, "000000"));
+        assertThat(fifth).isInstanceOf(BusinessException.class);
+        assertThat(fifth.getMessage()).isNotEqualTo(firstWrong.getMessage());
+        assertThat(assignment.getConfirmationCode()).isNull();
+        verify(assignmentRepository).save(assignment);
+        // Burned: even the right code no longer works.
+        assertThatThrownBy(() -> service.verifyAssignmentByCode(VALID_CODE, VALID_PIN))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage(fifth.getMessage());
+        assertThat(assignment.getConfirmationVerifiedAt()).isNull();
+    }
+
+    @Test
+    void verifyAssignmentByCode_anUnknownCodeAnswersExactlyAsAWrongOne() {
+        when(assignmentRepository.findByAssignmentCode("NO-SUCH")).thenReturn(Optional.empty());
+        when(assignmentRepository.findByAssignmentCode(VALID_CODE)).thenReturn(Optional.of(assignment));
+        assignment.setConfirmationSentAt(LocalDateTime.now());
+
+        Throwable unknown = org.assertj.core.api.Assertions.catchThrowable(
+            () -> service.verifyAssignmentByCode("NO-SUCH", "000000"));
+        Throwable wrong = org.assertj.core.api.Assertions.catchThrowable(
+            () -> service.verifyAssignmentByCode(VALID_CODE, "000000"));
+
+        assertThat(unknown).isExactlyInstanceOf(wrong.getClass()).hasMessage(wrong.getMessage());
+    }
+
+    @Test
+    void getAssignmentPublicView_answersTheSameForAnUnknownAndARealCode() {
+        lenient().when(assignmentRepository.findByAssignmentCode(any())).thenReturn(Optional.of(assignment));
+
+        UserRoleAssignmentPublicViewDTO real = service.getAssignmentPublicView(VALID_CODE);
+        UserRoleAssignmentPublicViewDTO unknown = service.getAssignmentPublicView("NO-SUCH");
+
+        assertThat(real.getAssigneeName()).isNull();
+        assertThat(real.getRoleName()).isNull();
+        assertThat(real.getHospitalName()).isNull();
+        assertThat(real.isConfirmationVerified()).isFalse();
+        assertThat(unknown).usingRecursiveComparison().ignoringFields("assignmentCode").isEqualTo(real);
+        verify(assignmentRepository, never()).findByAssignmentCode(any());
     }
 }

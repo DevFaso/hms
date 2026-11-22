@@ -70,7 +70,6 @@ class AssignmentInvitationClosedHospitalGuardTest {
         Map.entry("regenerateAssignmentCode", "regenerateIsRefused"),
         Map.entry("regenerateProviderStaffAssignmentCodes", "regenerateIsRefused"),
         Map.entry("confirmAssignment", "registrarConfirmIsRefused"),
-        Map.entry("getAssignmentPublicView", "publicViewHasNoLink"),
         Map.entry("verifyAssignmentByCode", "activationIsRefused"),
         // QA D1123: "I have a code" activates through verifyAssignmentByCode.
         Map.entry("verifyAssignmentByPhone", "activationByPhoneIsRefused"),

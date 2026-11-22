@@ -191,6 +191,7 @@ public interface LabTestDefinitionRepository extends JpaRepository<LabTestDefini
     @Query("""
         SELECT COUNT(l) FROM LabTestDefinition l LEFT JOIN l.hospital h
         WHERE l.approvalStatus = com.example.hms.enums.LabTestDefinitionApprovalStatus.ACTIVE
+          AND l.active = true
           AND (h IS NULL OR h.id = :hospitalId)
     """)
     long countOrderableAt(@Param("hospitalId") UUID hospitalId);

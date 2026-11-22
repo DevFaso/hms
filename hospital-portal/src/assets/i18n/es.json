@@ -5790,7 +5790,9 @@
     "ERR_PHONE_REQUIRED": "Introduzca su número de teléfono.",
     "ERR_CODE_FORMAT": "El código tiene 6 dígitos.",
     "ERR_PHONE_CODE_INCORRECT": "Este número y este código no coinciden. Revise el SMS e inténtelo de nuevo.",
-    "CREDENTIALS_REISSUED": "Esta contraseña provisional sustituye a la del correo de bienvenida."
+    "CREDENTIALS_REISSUED": "Esta contraseña provisional sustituye a la del correo de bienvenida.",
+    "ENTER_CODE_TITLE": "Active su cuenta",
+    "ENTER_CODE_INTRO": "Introduzca el código de 6 dígitos recibido por SMS, por correo o en persona."
   },
   "ORGANIZATIONS": {
     "CONTACT": "Contacto",

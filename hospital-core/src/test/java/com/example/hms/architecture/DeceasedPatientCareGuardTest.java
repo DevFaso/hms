@@ -42,6 +42,8 @@ class DeceasedPatientCareGuardTest {
         Admission#admitPatient | AdmissionServiceImpl#admitPatient
         AdvanceDirective#create | AdvanceDirectiveServiceImpl#create
         Appointment#createAppointment | AppointmentServiceImpl#createAppointment
+        PatientPortalActivation#revealCode | UserRoleHospitalAssignmentServiceImpl#pendingPatientInvitation
+        PatientPortalActivation#resend | UserRoleHospitalAssignmentServiceImpl#pendingPatientInvitation
         Appointment#updateAppointment | AppointmentServiceImpl#updateAppointment
         Appointment#updateAppointmentStatus | AppointmentServiceImpl#confirmOrCancelAppointment
         BirthPlan#createBirthPlan | BirthPlanServiceImpl#createBirthPlan
@@ -139,7 +141,6 @@ class DeceasedPatientCareGuardTest {
         Appointment#runReminderSweep | the sweep already skips the deceased
         PatientNotificationDelivery#retry | requeues a notice about care given before; the sweep skips a deceased patient (PATIENT_DECEASED)
         Appointment#searchAppointments | a read over POST
-        PatientPortalActivation#revealCode,resend | QA r70 D3206: the portal account's activation, no care given
         PatientNationalUniqueId#check,search,reveal | X8 identity reads only, including after a death; ReadsOnlyPostGuardTest drives the filter and PatientNationalUniqueIdPostgresIT proves no death/identity mutation
         BirthPlan#updateBirthPlan,providerReview,deleteBirthPlan | an existing record, late documentation
         Consultation#acknowledgeConsultation,updateConsultation,completeConsultation,declineConsultation,cancelConsultation,assignConsultation,reassignConsultation | closes or documents a request made before the death

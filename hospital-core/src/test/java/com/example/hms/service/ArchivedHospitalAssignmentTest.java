@@ -488,7 +488,7 @@ class ArchivedHospitalAssignmentTest {
     }
 
     @Test
-    @DisplayName("the public view of an invitation to an archived hospital carries no link to complete it")
+    @DisplayName("QA r70 review: the public view carries no link, for an archived hospital's invitation or any other")
     void publicViewHasNoLink() {
         UserRoleHospitalAssignment closedInvite = invitation(archived);
         UserRoleHospitalAssignment openInvite = invitation(open);
@@ -500,7 +500,7 @@ class ArchivedHospitalAssignmentTest {
         assertThat(service.getAssignmentPublicView(closedInvite.getAssignmentCode()).getProfileCompletionUrl())
             .isNull();
         assertThat(service.getAssignmentPublicView(openInvite.getAssignmentCode()).getProfileCompletionUrl())
-            .isNotNull();
+            .isNull();
     }
 
     // ---------------------------------------------------------------- helpers

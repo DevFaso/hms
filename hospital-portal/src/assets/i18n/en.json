@@ -5790,7 +5790,9 @@
     "ERR_PHONE_REQUIRED": "Enter your phone number.",
     "ERR_CODE_FORMAT": "The code has 6 digits.",
     "ERR_PHONE_CODE_INCORRECT": "This number and code do not match. Check the SMS and try again.",
-    "CREDENTIALS_REISSUED": "This temporary password replaces the one in the welcome e-mail."
+    "CREDENTIALS_REISSUED": "This temporary password replaces the one in the welcome e-mail.",
+    "ENTER_CODE_TITLE": "Activate your account",
+    "ENTER_CODE_INTRO": "Enter the 6-digit code you received by SMS, by e-mail or in person."
   },
   "ORGANIZATIONS": {
     "CONTACT": "Contact",

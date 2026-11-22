@@ -5790,7 +5790,9 @@
     "ERR_PHONE_REQUIRED": "Saisissez votre numéro de téléphone.",
     "ERR_CODE_FORMAT": "Le code comporte 6 chiffres.",
     "ERR_PHONE_CODE_INCORRECT": "Ce numéro et ce code ne correspondent pas. Vérifiez le SMS et réessayez.",
-    "CREDENTIALS_REISSUED": "Ce mot de passe provisoire remplace celui de l’e-mail de bienvenue."
+    "CREDENTIALS_REISSUED": "Ce mot de passe provisoire remplace celui de l’e-mail de bienvenue.",
+    "ENTER_CODE_TITLE": "Activez votre compte",
+    "ENTER_CODE_INTRO": "Saisissez le code à 6 chiffres reçu par SMS, par e-mail ou en main propre."
   },
   "ORGANIZATIONS": {
     "CONTACT": "Contact",
