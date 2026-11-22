@@ -270,7 +270,7 @@ public class ControlledDrugRegisterService {
             for (ControlledRegisterEntryDTO e : drug.entries()) {
                 csv.append(cells(drug.medicationName(),
                         e.occurredAt() != null ? when.format(com.example.hms.utility.HospitalTime.at(e.occurredAt(), zone)) : "",
-                        movementLabel(locale, e.movementType()), plain(e.quantity()), e.lotNumber(),
+                        movementLabel(locale, e.movementType()), quantityCell(locale, e), e.lotNumber(),
                         plain(e.balanceAfter()), e.patientName(), e.prescriberName(), e.recordedBy(),
                         e.witnessedBy(), e.reason())).append("\r\n");
             }
@@ -315,7 +315,7 @@ public class ControlledDrugRegisterService {
                     pdf.tableRow(new String[] {
                         e.occurredAt() != null ? com.example.hms.utility.DisplayDates.shortDateTime(
                             com.example.hms.utility.HospitalTime.at(e.occurredAt(), zone), locale) : "",
-                        movementLabel(locale, e.movementType()), plain(e.quantity()), nz(e.lotNumber()),
+                        movementLabel(locale, e.movementType()), quantityCell(locale, e), nz(e.lotNumber()),
                         plain(e.balanceAfter()), nz(e.patientName()), nz(e.prescriberName()),
                         nz(e.recordedBy()), nz(e.witnessedBy()), nz(e.reason())});
                 }
@@ -599,6 +599,20 @@ public class ControlledDrugRegisterService {
             }
         }
         return condition;
+    }
+
+    /**
+     * Review of #1285 (Rex): a row that moves the quarantine (a QUARANTINE, a DESTRUCTION) exports what it did to
+     * the quarantine and the quarantine after it beside the stock quantity, so ten destroyed ampoules never read 0.
+     */
+    static String quantityCell(Locale locale, ControlledRegisterEntryDTO e) {
+        String stock = plain(e.quantity());
+        if (e.quarantineQuantity() == null || e.quarantineQuantity().signum() == 0) {
+            return stock;
+        }
+        BigDecimal moved = e.quarantineQuantity();
+        return stock + " " + label(locale, "pharmacy.register.quarantineMove",
+                (moved.signum() > 0 ? "+" : "") + plain(moved), plain(e.quarantineAfter()));
     }
 
     private static String movementLabel(Locale locale, String type) {

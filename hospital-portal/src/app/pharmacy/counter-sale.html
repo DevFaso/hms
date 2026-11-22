@@ -23,7 +23,7 @@
           data-server-field="pharmacyId hospitalId"
           [(ngModel)]="selectedPharmacyId"
           (ngModelChange)="onPharmacyChange()"
-          [disabled]="saving()"
+          [disabled]="saving() || !!unsettledRequest()"
         >
           @for (p of pharmacies(); track p.id) {
             <option [value]="p.id">{{ p.name }}</option>

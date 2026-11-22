@@ -406,6 +406,10 @@ class ControlledDrugRegisterServiceTest {
         try (PDDocument doc = PDDocument.load(pdf)) {
             assertThat(new PDFTextStripper().getText(doc)).contains("Destruction").contains("Quarantaine");
         }
+        // Review of #1285 (Rex): the export keeps the destroyed amount, from the quarantine.
+        String csv = new String(service.exportCsv(pharmacy.getId(), null, from, to),
+                java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(csv).contains("0 (quarantaine -2, puis 0)").contains("-1 (quarantaine +1, puis 2)");
     }
 
     @Test

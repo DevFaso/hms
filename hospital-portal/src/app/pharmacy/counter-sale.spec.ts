@@ -286,6 +286,24 @@ describe('CounterSaleComponent', () => {
     expect(component.unsettledRequest()).toBeNull();
   }));
 
+  it('review of #1285: the pharmacy cannot change while a sale waits for its answer', fakeAsync(() => {
+    addParacetamol();
+    sales.createSale.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 0, statusText: 'Unknown Error' })),
+    );
+    component.submit();
+    tick(5000);
+    const pharmacyId = component.selectedPharmacyId;
+    fixture.detectChanges();
+    tick();
+    expect(el().querySelector<HTMLSelectElement>('#salePharmacy')!.disabled).toBeTrue();
+
+    component.selectedPharmacyId = 'another-pharmacy';
+    component.onPharmacyChange();
+    expect(component.selectedPharmacyId).toBe(pharmacyId);
+    expect(component.lines().length).toBe(1);
+  }));
+
   it("shows the server's refusal and marks the field it names", () => {
     const line = addParacetamol();
     sales.createSale.and.returnValue(

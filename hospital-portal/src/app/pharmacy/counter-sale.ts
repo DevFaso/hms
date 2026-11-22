@@ -204,6 +204,13 @@ export class CounterSaleComponent implements OnInit {
   }
 
   onPharmacyChange(): void {
+    // Review of #1285 (Rex): a sale whose answer was lost belongs to its pharmacy until it is settled or
+    // abandoned (« Nouvelle vente »); the selector is locked, and a change that slips through is undone.
+    const unsettled = this.unsettledRequest();
+    if (unsettled && this.selectedPharmacyId !== unsettled.pharmacyId) {
+      this.selectedPharmacyId = unsettled.pharmacyId;
+      return;
+    }
     this.scopeVersion++;
     this.inventoryItems.set([]);
     this.lines.set([]);
