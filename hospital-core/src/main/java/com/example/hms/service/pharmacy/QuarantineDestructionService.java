@@ -67,16 +67,8 @@ public class QuarantineDestructionService {
     @Transactional(readOnly = true)
     public List<QuarantineLineDTO> list(UUID pharmacyId) {
         Pharmacy pharmacy = pharmacyInScope(pharmacyId);
-        Map<List<UUID>, BigDecimal> held = new LinkedHashMap<>();
-        List<Object[]> rows = stockTransactionRepository.sumByItemLotAndTypeForPharmacy(pharmacy.getId(),
-                QUARANTINE_TYPES);
-        for (Object[] row : rows == null ? List.<Object[]>of() : rows) {
-            if (row != null && row.length == 4 && row[0] instanceof UUID itemId
-                    && row[2] instanceof StockTransactionType type && row[3] instanceof BigDecimal total) {
-                UUID lotId = row[1] instanceof UUID id ? id : null;
-                held.merge(java.util.Arrays.asList(itemId, lotId), quarantineSigned(type, total), BigDecimal::add);
-            }
-        }
+        Map<List<UUID>, BigDecimal> held = heldByItemAndLot(stockTransactionRepository
+                .sumByItemLotAndTypeForPharmacy(pharmacy.getId(), QUARANTINE_TYPES));
         Map<UUID, InventoryItem> items = new HashMap<>();
         inventoryItemRepository.findAllWithCatalogItemByPharmacyId(pharmacy.getId())
                 .forEach(item -> items.put(item.getId(), item));
@@ -95,6 +87,22 @@ public class QuarantineDestructionService {
                         String.CASE_INSENSITIVE_ORDER)
                 .thenComparing(l -> Objects.toString(l.lotNumber(), "")));
         return out;
+    }
+
+    /** {@code [itemId, lotId, type, total]} rows as what each item and lot holds in quarantine. */
+    private static Map<List<UUID>, BigDecimal> heldByItemAndLot(List<Object[]> rows) {
+        Map<List<UUID>, BigDecimal> held = new LinkedHashMap<>();
+        if (rows == null) {
+            return held;
+        }
+        for (Object[] row : rows) {
+            if (row != null && row.length == 4 && row[0] instanceof UUID itemId
+                    && row[2] instanceof StockTransactionType type && row[3] instanceof BigDecimal total) {
+                UUID lotId = row[1] instanceof UUID id ? id : null;
+                held.merge(java.util.Arrays.asList(itemId, lotId), quarantineSigned(type, total), BigDecimal::add);
+            }
+        }
+        return held;
     }
 
     /** Destroys quarantined units: one DESTRUCTION row, witnessed for a controlled drug. */

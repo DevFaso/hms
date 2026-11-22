@@ -343,8 +343,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
      *   <li>Nothing is received into an expired lot (D108).</li>
      * </ul>
      */
-    private void requireMovementIsAccountable(StockTransactionRequestDTO dto, InventoryItem item, StockLot lot) {
-        StockTransactionType type = dto.getTransactionType();
+    /** Movements written only by their own workflow, never typed on the movement form. */
+    private static void refuseWorkflowMovements(StockTransactionType type) {
         // QA D3415 (r70): the quarantine is fed by returns and cancelled fills, and emptied by its destruction.
         if (type == StockTransactionType.QUARANTINE || type == StockTransactionType.DESTRUCTION) {
             throw new com.example.hms.exception.FieldBusinessException("transactionType",
@@ -354,6 +354,11 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         if (type == StockTransactionType.DISPENSE || type == StockTransactionType.SALE) {
             throw new com.example.hms.exception.FieldBusinessException("transactionType", MessageUtil.resolve("stockTransaction.dispense.viaWorkflow"));
         }
+    }
+
+    private void requireMovementIsAccountable(StockTransactionRequestDTO dto, InventoryItem item, StockLot lot) {
+        StockTransactionType type = dto.getTransactionType();
+        refuseWorkflowMovements(type);
         // QA D615: a receipt here created no lot row, so an expired lot, a
         // lot number re-used with another expiry and an item total above its
         // lots all went through. Goods are received through the lot receipt

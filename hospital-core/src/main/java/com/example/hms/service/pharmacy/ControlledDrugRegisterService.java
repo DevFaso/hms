@@ -220,26 +220,37 @@ public class ControlledDrugRegisterService {
                     tx.getQuantity());
             BigDecimal quarantineAfter = quarantine.getOrDefault(itemId, BigDecimal.ZERO).add(quarantined);
             quarantine.put(itemId, quarantineAfter);
-            Prescription prescription = people.prescriptionOf(tx);
-            FillRef fill = fillRef(tx.getReason());
-            entries.computeIfAbsent(itemId, k -> new ArrayList<>()).add(new ControlledRegisterEntryDTO(
-                    tx.getId(),
-                    tx.getCreatedAt(),
-                    tx.getTransactionType() != null ? tx.getTransactionType().name() : null,
-                    moved,
-                    tx.getStockLot() != null ? tx.getStockLot().getLotNumber() : tx.getLotNumber(),
-                    after,
-                    prescription != null ? patientName(prescription.getPatient()) : null,
-                    prescription != null ? prescriberName(prescription.getStaff()) : null,
-                    userName(tx.getPerformedByUser()),
-                    userName(tx.getWitnessedByUser()),
-                    reasonText(LocaleContextHolder.getLocale(), tx.getReason(), hospitalZone),
-                    fill != null ? fill.lot() : null,
-                    fill != null ? fill.at() : null,
-                    quarantined.signum() != 0 ? quarantined : null,
-                    quarantined.signum() != 0 ? quarantineAfter : null));
+            entries.computeIfAbsent(itemId, k -> new ArrayList<>()).add(entryOf(tx, people.prescriptionOf(tx),
+                    new Moves(moved, after, quarantined, quarantineAfter), hospitalZone));
         }
         return entries;
+    }
+
+    /** What one row moved: the stock and the balance after it, the quarantine and the quarantine after it. */
+    private record Moves(BigDecimal moved, BigDecimal after, BigDecimal quarantined, BigDecimal quarantineAfter) {
+    }
+
+    /** One register line (Sonar S3776: split out of {@link #entriesByItem}). */
+    private static ControlledRegisterEntryDTO entryOf(StockTransaction tx, Prescription prescription, Moves moves,
+                                                      java.time.ZoneId hospitalZone) {
+        FillRef fill = fillRef(tx.getReason());
+        boolean movesQuarantine = moves.quarantined().signum() != 0;
+        return new ControlledRegisterEntryDTO(
+                tx.getId(),
+                tx.getCreatedAt(),
+                tx.getTransactionType() != null ? tx.getTransactionType().name() : null,
+                moves.moved(),
+                tx.getStockLot() != null ? tx.getStockLot().getLotNumber() : tx.getLotNumber(),
+                moves.after(),
+                prescription != null ? patientName(prescription.getPatient()) : null,
+                prescription != null ? prescriberName(prescription.getStaff()) : null,
+                userName(tx.getPerformedByUser()),
+                userName(tx.getWitnessedByUser()),
+                reasonText(LocaleContextHolder.getLocale(), tx.getReason(), hospitalZone),
+                fill != null ? fill.lot() : null,
+                fill != null ? fill.at() : null,
+                movesQuarantine ? moves.quarantined() : null,
+                movesQuarantine ? moves.quarantineAfter() : null);
     }
 
     /** The register as CSV (';' separated, UTF-8 with BOM so a spreadsheet reads the accents). */
@@ -297,10 +308,7 @@ public class ControlledDrugRegisterService {
                         + (drug.unit() != null ? " (" + drug.unit() + ")" : ""));
                 pdf.paragraph(PharmacyPdfWriter.REGULAR, 9f, label(locale, "pharmacy.register.balances",
                         plain(drug.openingBalance()), plain(drug.closingBalance()), plain(drug.quantityOnHand())));
-                if (drug.inQuarantine() != null && drug.inQuarantine().signum() != 0) {
-                    pdf.paragraph(PharmacyPdfWriter.REGULAR, 9f, label(locale, "pharmacy.register.inQuarantine",
-                            plain(drug.inQuarantine())));
-                }
+                quarantineParagraph(pdf, locale, drug);
                 List<String> head = headers(locale).subList(1, 11);
                 pdf.tableHeader(widths, head.toArray(new String[0]));
                 for (ControlledRegisterEntryDTO e : drug.entries()) {
@@ -319,6 +327,15 @@ public class ControlledDrugRegisterService {
             return pdf.finish();
         } catch (IOException e) {
             throw new UncheckedIOException("Controlled-drug register rendering failed", e);
+        }
+    }
+
+    /** QA D3415: the drug's quarantine at the end of the period, when it holds any. */
+    private static void quarantineParagraph(PharmacyPdfWriter pdf, Locale locale, ControlledRegisterDrugDTO drug)
+            throws IOException {
+        if (drug.inQuarantine() != null && drug.inQuarantine().signum() != 0) {
+            pdf.paragraph(PharmacyPdfWriter.REGULAR, 9f, label(locale, "pharmacy.register.inQuarantine",
+                    plain(drug.inQuarantine())));
         }
     }
 
@@ -482,17 +499,9 @@ public class ControlledDrugRegisterService {
         if (r.startsWith("Dispense for prescription")) {
             return label(locale, "pharmacy.register.reason.dispense");
         }
-        // QA D3403 / D3415 (r70): set aside, destroyed, or a cancelled fill not put back on sale.
-        if (r.startsWith(StockQuarantine.REASON_PREFIX)) {
-            return label(locale, "pharmacy.register.reason.quarantined",
-                    conditionLabel(locale, r.substring(StockQuarantine.REASON_PREFIX.length()).trim()));
-        }
-        if (r.startsWith(QuarantineDestructionService.REASON_PREFIX)) {
-            return label(locale, "pharmacy.register.reason.destroyed",
-                    r.substring(QuarantineDestructionService.REASON_PREFIX.length()).trim());
-        }
-        if (r.startsWith(PreparedFillVoider.NOT_FOR_SALE_PREFIX)) {
-            return label(locale, "pharmacy.register.reason.cancelledNotForSale");
+        String quarantineReason = quarantineReasonText(locale, r);
+        if (quarantineReason != null) {
+            return quarantineReason;
         }
         if (r.startsWith("Dispense cancelled") || r.startsWith("Prepared fill cancelled")) {
             return label(locale, "pharmacy.register.reason.cancelled");
@@ -562,6 +571,25 @@ public class ControlledDrugRegisterService {
 
     private static final Pattern RETURN_FILL_REF = Pattern.compile(
         "^(?i:lot\\s+)?(?:(\\S+)\\s+)?(\\d{4}-\\d{2}-\\d{2})[T ](\\d{2}:\\d{2})$");
+
+    /**
+     * QA D3403 / D3415 (r70): a row set aside, destroyed, or a cancelled fill not put back on sale, in the reader's
+     * language; null for any other reason.
+     */
+    static String quarantineReasonText(Locale locale, String reason) {
+        if (reason.startsWith(StockQuarantine.REASON_PREFIX)) {
+            return label(locale, "pharmacy.register.reason.quarantined",
+                    conditionLabel(locale, reason.substring(StockQuarantine.REASON_PREFIX.length()).trim()));
+        }
+        if (reason.startsWith(QuarantineDestructionService.REASON_PREFIX)) {
+            return label(locale, "pharmacy.register.reason.destroyed",
+                    reason.substring(QuarantineDestructionService.REASON_PREFIX.length()).trim());
+        }
+        if (reason.startsWith(PreparedFillVoider.NOT_FOR_SALE_PREFIX)) {
+            return label(locale, "pharmacy.register.reason.cancelledNotForSale");
+        }
+        return null;
+    }
 
     /** A returned stock condition in the reader's language; an unknown word is kept as stored. */
     private static String conditionLabel(Locale locale, String condition) {

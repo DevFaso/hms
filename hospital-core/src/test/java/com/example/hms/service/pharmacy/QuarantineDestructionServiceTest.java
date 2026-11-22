@@ -147,7 +147,8 @@ class QuarantineDestructionServiceTest {
     @Test
     @DisplayName("never more than the quarantine holds")
     void neverAboveTheQuarantine() {
-        assertThatThrownBy(() -> service.destroy(destroy("3", witnessId)))
+        QuarantineDestructionRequestDTO tooMany = destroy("3", witnessId);
+        assertThatThrownBy(() -> service.destroy(tooMany))
                 .isInstanceOf(FieldBusinessException.class)
                 .hasFieldOrPropertyWithValue("field", "quantity")
                 .hasFieldOrPropertyWithValue("messageKey", "pharmacy.quarantine.aboveHeld");
@@ -157,9 +158,11 @@ class QuarantineDestructionServiceTest {
     @Test
     @DisplayName("a controlled drug is destroyed only in front of a witness, never the performer")
     void aControlledDestructionNeedsAWitness() {
-        assertThatThrownBy(() -> service.destroy(destroy("1", null)))
+        QuarantineDestructionRequestDTO noWitness = destroy("1", null);
+        QuarantineDestructionRequestDTO selfWitness = destroy("1", pharmacist.getId());
+        assertThatThrownBy(() -> service.destroy(noWitness))
                 .isInstanceOf(FieldBusinessException.class).hasFieldOrPropertyWithValue("field", "witnessedBy");
-        assertThatThrownBy(() -> service.destroy(destroy("1", pharmacist.getId())))
+        assertThatThrownBy(() -> service.destroy(selfWitness))
                 .isInstanceOf(FieldBusinessException.class).hasFieldOrPropertyWithValue("field", "witnessedBy");
         verify(stockTransactionRepository, never()).save(any());
     }
@@ -167,7 +170,8 @@ class QuarantineDestructionServiceTest {
     @Test
     @DisplayName("an empty request names its fields together")
     void emptyRequestNamesItsFields() {
-        assertThatThrownBy(() -> service.destroy(new QuarantineDestructionRequestDTO()))
+        QuarantineDestructionRequestDTO empty = new QuarantineDestructionRequestDTO();
+        assertThatThrownBy(() -> service.destroy(empty))
                 .isInstanceOf(BusinessException.class);
         verify(stockTransactionRepository, never()).save(any());
     }
@@ -176,9 +180,10 @@ class QuarantineDestructionServiceTest {
     @DisplayName("tenancy: another hospital's item is the same 404 as a missing one")
     void anotherHospitalsItemIsNotFound() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
-        assertThatThrownBy(() -> service.destroy(destroy("1", witnessId)))
-                .isInstanceOf(ResourceNotFoundException.class);
-        assertThatThrownBy(() -> service.list(pharmacy.getId())).isInstanceOf(ResourceNotFoundException.class);
+        QuarantineDestructionRequestDTO foreign = destroy("1", witnessId);
+        UUID pharmacyId = pharmacy.getId();
+        assertThatThrownBy(() -> service.destroy(foreign)).isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.list(pharmacyId)).isInstanceOf(ResourceNotFoundException.class);
         verify(stockTransactionRepository, never()).save(any());
     }
 

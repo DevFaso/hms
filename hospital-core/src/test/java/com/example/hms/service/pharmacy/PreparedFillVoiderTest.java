@@ -48,6 +48,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -174,7 +175,7 @@ class PreparedFillVoiderTest {
         verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
         // The RETURN that brought it back, then the QUARANTINE: the ledger still adds up to the lot.
         ArgumentCaptor<StockTransaction> tx = ArgumentCaptor.forClass(StockTransaction.class);
-        verify(stockTransactionRepository, org.mockito.Mockito.times(2)).save(tx.capture());
+        verify(stockTransactionRepository, times(2)).save(tx.capture());
         assertThat(tx.getAllValues()).extracting(StockTransaction::getTransactionType)
                 .containsExactly(StockTransactionType.RETURN, StockTransactionType.QUARANTINE);
         assertThat(tx.getAllValues()).allSatisfy(row -> {
