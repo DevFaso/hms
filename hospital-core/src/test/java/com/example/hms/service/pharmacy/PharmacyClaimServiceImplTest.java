@@ -34,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -164,7 +165,7 @@ class PharmacyClaimServiceImplTest {
     @Test
     @DisplayName("QA D3408 (r70): the claim is the insurer share the cover recorded; left out, it is filled in")
     void d3408_theClaimIsTheCoverInsurerShare() {
-        FillCoverShare cover = org.mockito.Mockito.mock(FillCoverShare.class);
+        FillCoverShare cover = mock(FillCoverShare.class);
         service.setFillCoverShare(cover);
         when(cover.coverShare(dispense, hospitalId)).thenReturn(Optional.of(new BigDecimal("4500")));
         claimable();
@@ -181,7 +182,7 @@ class PharmacyClaimServiceImplTest {
     @Test
     @DisplayName("QA D3408 (r70): a typed amount that is not the insurer share by the plan is refused, naming it")
     void d3408_aTypedAmountOtherThanThePlanShareIsRefused() {
-        FillCoverShare cover = org.mockito.Mockito.mock(FillCoverShare.class);
+        FillCoverShare cover = mock(FillCoverShare.class);
         service.setFillCoverShare(cover);
         when(cover.coverShare(dispense, hospitalId)).thenReturn(Optional.empty());
         when(cover.planShare(patientId, hospitalId, new BigDecimal("6000")))
@@ -192,13 +193,13 @@ class PharmacyClaimServiceImplTest {
         assertThatThrownBy(() -> service.createClaim(typed))
                 .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
                 .extracting("messageKey").isEqualTo("pharmacy.claim.amountIsInsurerShare");
-        verify(claimRepository, org.mockito.Mockito.never()).save(any());
+        verify(claimRepository, never()).save(any());
     }
 
     @Test
     @DisplayName("QA D3408 (r70): a coverage with no plan keeps the typed amount; none typed is refused")
     void d3408_aCoverageWithNoPlanKeepsTheTypedAmount() {
-        FillCoverShare cover = org.mockito.Mockito.mock(FillCoverShare.class);
+        FillCoverShare cover = mock(FillCoverShare.class);
         service.setFillCoverShare(cover);
         when(cover.coverShare(any(), any())).thenReturn(Optional.empty());
         when(cover.planShare(any(), any(), any())).thenReturn(Optional.empty());
