@@ -27,11 +27,6 @@ public class BillingIntegrationAdapter extends AbstractToggleableIntegrationAdap
     }
 
     @Override
-    protected boolean defaultStub() {
-        return true;
-    }
-
-    @Override
     protected String defaultDisplayName(Locale locale) {
         return text("platform.catalog.billing.displayName", locale);
     }

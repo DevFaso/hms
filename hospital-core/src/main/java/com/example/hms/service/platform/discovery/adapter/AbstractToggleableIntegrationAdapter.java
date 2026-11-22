@@ -86,9 +86,12 @@ public abstract class AbstractToggleableIntegrationAdapter implements PlatformIn
         return PlatformOwnershipDTO.builder().build();
     }
 
-    /** True for a catalog entry backed by a reference stub: it is shown as not configured, not as active. */
+    /**
+     * True for a catalog entry backed by a reference stub: it is shown as not configured, not as active (D2779).
+     * Every catalog adapter today is a reference stub; a real connector overrides this with false.
+     */
     protected boolean defaultStub() {
-        return false;
+        return true;
     }
 
     private static boolean isBlank(String value) {
