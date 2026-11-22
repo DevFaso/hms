@@ -35,7 +35,7 @@ public class PharmacyCoverUsage {
             return BigDecimal.ZERO;
         }
         UUID excluded = excludedPrescriptionId != null ? excludedPrescriptionId : new UUID(0L, 0L);
-        LocalDateTime from = LocalDateTime.of(year, 1, 1, 0, 0);
+        LocalDateTime from = LocalDateTime.of(year, java.time.Month.JANUARY, 1, 0, 0);
         LocalDateTime to = from.plusYears(1);
         BigDecimal used = Objects.requireNonNullElse(
                 claimRepository.sumLiveForPatientBetween(patientId, hospitalId, from, to, excluded), BigDecimal.ZERO);

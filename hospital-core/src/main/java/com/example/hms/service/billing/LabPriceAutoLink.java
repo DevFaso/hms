@@ -56,10 +56,12 @@ public class LabPriceAutoLink {
     private final PriceListLinks links;
     private final AuditEventLogService auditEventLogService;
 
-    /** The exact-code link, run in the background (a test activated, an import applied): no report is shown. */
-    @Transactional
+    /**
+     * The exact-code link, run in the background (a test activated, an import applied): no report is shown. Runs in
+     * the caller's transaction (the activation's, the import's).
+     */
     public PriceListAutoLinkReportDTO link(UUID hospitalId, UUID actorUserId) {
-        return link(hospitalId, actorUserId, false);
+        return linkIn(hospitalId, actorUserId, false);
     }
 
     /**
@@ -69,6 +71,10 @@ public class LabPriceAutoLink {
      */
     @Transactional
     public PriceListAutoLinkReportDTO link(UUID hospitalId, UUID actorUserId, boolean byPrefix) {
+        return linkIn(hospitalId, actorUserId, byPrefix);
+    }
+
+    private PriceListAutoLinkReportDTO linkIn(UUID hospitalId, UUID actorUserId, boolean byPrefix) {
         PriceListAutoLinkReportDTO report = PriceListAutoLinkReportDTO.builder()
             .linked(new ArrayList<>()).unmatched(new ArrayList<>()).ambiguous(new ArrayList<>())
             .alreadyTaken(new ArrayList<>()).build();

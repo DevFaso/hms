@@ -47,6 +47,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -160,7 +161,7 @@ class PreparedFillVoiderTest {
     @Test
     @DisplayName("review of #1284: a cancelled prepared fill withdraws the open third-party covers of its order")
     void aCancelledFillWithdrawsItsCovers() {
-        DispenseBillingDeferralService deferrals = org.mockito.Mockito.mock(DispenseBillingDeferralService.class);
+        DispenseBillingDeferralService deferrals = mock(DispenseBillingDeferralService.class);
         voider.setBillingDeferrals(deferrals);
         com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
         hospital.setId(UUID.randomUUID());

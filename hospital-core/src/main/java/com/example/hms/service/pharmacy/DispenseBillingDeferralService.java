@@ -566,10 +566,11 @@ public class DispenseBillingDeferralService {
             return;
         }
         BigDecimal unpaid = money != null ? money.unpaidByPatient() : total;
-        BigDecimal cap = coverShare != null && money != null
-                ? coverShare.capOf(recorded, prescription.getPatient() != null ? prescription.getPatient().getId() : null,
-                        hospitalId, money.charge(), prescription.getId())
-                : recorded;
+        BigDecimal cap = recorded;
+        if (coverShare != null && money != null) {
+            UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
+            cap = coverShare.capOf(recorded, patientId, hospitalId, money.charge(), prescription.getId());
+        }
         if (unpaid.compareTo(cap) > 0) {
             throw new FieldBusinessException(FIELD_DEFERRAL, "pharmacy.handOver.coverPatientShareDue",
                     DisplayNumbers.quantity(unpaid.subtract(cap)), DisplayNumbers.quantity(cap));
@@ -589,11 +590,8 @@ public class DispenseBillingDeferralService {
         for (DispenseBillingDeferral listed : deferralRepository
                 .findByHospitalIdAndPrescriptionIdAndStatusInOrderByRequestedAtAsc(hospitalId, prescription.getId(),
                         OPEN_STATUSES)) {
-            if (listed.getKind() != DispenseBillingDeferralKind.THIRD_PARTY_COVER) {
-                continue;
-            }
-            DispenseBillingDeferral deferral = deferralRepository
-                    .findLockedByIdAndHospitalId(listed.getId(), hospitalId).orElse(null);
+            DispenseBillingDeferral deferral = listed.getKind() != DispenseBillingDeferralKind.THIRD_PARTY_COVER ? null
+                    : deferralRepository.findLockedByIdAndHospitalId(listed.getId(), hospitalId).orElse(null);
             if (deferral == null || !OPEN_STATUSES.contains(deferral.getStatus())) {
                 continue;
             }
