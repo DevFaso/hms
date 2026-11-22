@@ -45,6 +45,12 @@ public class DispenseResponseDTO {
     /** QA D264: what the dispense costs (quantity x the item's unit price), or null when no price is set. */
     private BigDecimal chargeAmount;
     /**
+     * QA D3408 (r70): the insurer share of this fill (a live claim, or the third-party cover approved by the patient
+     * coverage) and the patient share the checkout takes; null when the insurer pays nothing of it.
+     */
+    private BigDecimal insurerShareAmount;
+    private BigDecimal patientShareAmount;
+    /**
      * QA D843: whether a payment is POSTED against this dispense, so the
      * checkout can leave a paid one out instead of offering it again. Set by
      * the reads the checkout uses (one dispense, a pharmacy's list); null on

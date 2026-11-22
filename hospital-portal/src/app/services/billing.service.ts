@@ -91,6 +91,21 @@ export interface InvoicePayerShare {
   createdAt?: string | null;
 }
 
+/** QA D2706 (r70): one payer share on the hospital-wide « Parts assureurs » list (OpenPayerShareDTO). */
+export interface OpenPayerShare {
+  id: string;
+  invoiceId: string;
+  invoiceNumber?: string | null;
+  invoiceDate?: string | null;
+  patientName?: string | null;
+  patientMrn?: string | null;
+  payerName?: string | null;
+  planName?: string | null;
+  amount: number;
+  status: PayerShareStatus;
+  createdAt?: string | null;
+}
+
 export interface InvoiceItemResponse {
   id: string;
   billingInvoiceId: string;
@@ -545,6 +560,14 @@ export class BillingService {
 
   listPayerShares(invoiceId: string): Observable<InvoicePayerShare[]> {
     return this.http.get<InvoicePayerShare[]>(`/billing-invoices/${invoiceId}/payer-shares`);
+  }
+
+  /** QA D2706 (r70): the hospital-wide « Parts assureurs » list (OPEN and CLAIMED by default). */
+  listHospitalPayerShares(statuses: PayerShareStatus[] = []): Observable<OpenPayerShare[]> {
+    const query = statuses.map((s) => `status=${encodeURIComponent(s)}`).join('&');
+    return this.http.get<OpenPayerShare[]>(
+      `/billing-invoices/payer-shares${query ? '?' + query : ''}`,
+    );
   }
 
   /** The payer's decision on its share: sent on a bordereau, settled, or refused with its reason. */

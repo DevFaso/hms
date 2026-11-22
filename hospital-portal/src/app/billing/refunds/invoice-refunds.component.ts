@@ -112,6 +112,8 @@ export class InvoiceRefundsComponent {
   readonly invoice = input.required<BillingInvoiceResponse>();
   /** A refund step moved money or its state: the parent re-reads the invoice. */
   readonly changed = output<void>();
+  /** QA D3252 (r70): the refunds read, so the drawer can hide « Contre-passer » on a payment already asked for. */
+  readonly refundsLoaded = output<InvoiceRefund[]>();
 
   readonly methods = REFUND_METHODS;
   readonly operators = MOBILE_MONEY_OPERATORS;
@@ -208,6 +210,7 @@ export class InvoiceRefundsComponent {
         next: (rows) => {
           if (seq !== this.request) return;
           this.refunds.set(rows ?? []);
+          this.refundsLoaded.emit(rows ?? []);
           this.loading.set(false);
         },
         error: () => {

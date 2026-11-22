@@ -961,6 +961,10 @@ public class SecurityConfig {
 
                 // Billing-money plan PR 7: an invoice's payer shares, read and decided by the claims reviewer too
                 // (plan 3.8, bordereau row); mirrors InvoicePayerShareController. Before the broader patterns.
+                // QA D2706 (r70): the hospital-wide list of payer shares, the claims reviewer's own screen.
+                .requestMatchers(HttpMethod.GET, API_BILLING_INVOICES + "/payer-shares")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_ACCOUNTANT, ROLE_BILLING_SPECIALIST,
+                    ROLE_CLAIMS_REVIEWER)
                 .requestMatchers(HttpMethod.GET, API_BILLING_INVOICES + "/*/payer-shares")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_ACCOUNTANT, ROLE_BILLING_SPECIALIST,
                     ROLE_CLAIMS_REVIEWER)

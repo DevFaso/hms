@@ -358,6 +358,12 @@ public class PdfInvoiceService {
                 w.text(BODY, 11, MARGIN, t.get("pdf.receipt.carriedOver"));
             }
             receiptPurpose(w, t, paidFor);
+            // QA D3251 (r70): money received on this invoice before this receipt (a copay credited to it).
+            BigDecimal before = nz(paidAsOfPayment).subtract(nz(payment.getAmount()));
+            if (before.signum() > 0) {
+                w.down(15);
+                w.text(BODY, 10, MARGIN + 12, t.get("pdf.receipt.paidBefore", money(before)));
+            }
             w.down(28);
             w.text(BOLD, 14, MARGIN, t.get("pdf.receipt.amount", money(payment.getAmount())));
             // QA D228: the total when this money was received, not today's.
@@ -395,11 +401,26 @@ public class PdfInvoiceService {
      */
     public byte[] generateRefundReceiptPdf(BillingInvoice invoice, com.example.hms.model.InvoiceRefund refund,
                                            String receiptNumber, String paidByName, Locale locale) {
+        return generateRefundReceiptPdf(invoice, refund, receiptNumber, paidByName, null, locale);
+    }
+
+    /**
+     * QA D3253 (r70): what a payment reversal says that a refund of an overpayment does not: the receipt of the
+     * payment it reverses, why, and who approved it. A plain refund passes {@code null}.
+     */
+    public record ReversalDetails(String reversedReceiptNumber, String reason, String approvedByName) {
+    }
+
+    /** {@link #generateRefundReceiptPdf(BillingInvoice, com.example.hms.model.InvoiceRefund, String, String, Locale)}
+     *  with the details of a payment reversal (QA D3253), or {@code null} for a refund. */
+    public byte[] generateRefundReceiptPdf(BillingInvoice invoice, com.example.hms.model.InvoiceRefund refund,
+                                           String receiptNumber, String paidByName, ReversalDetails reversal,
+                                           Locale locale) {
         PdfLabels t = PdfLabels.of(messageSource, locale);
         try (var doc = new PDDocument()) {
             var w = new Writer(doc);
             w.logo();
-            w.text(BOLD, 16, MARGIN, t.get("pdf.refund.title"));
+            w.text(BOLD, 16, MARGIN, t.get(reversal != null ? "pdf.reversal.title" : "pdf.refund.title"));
             w.down(20);
             w.text(BODY, 11, MARGIN, t.get(HOSPITAL, hospitalName(invoice)));
             w.down(15);
@@ -420,8 +441,21 @@ public class PdfInvoiceService {
                 w.text(BODY, 11, MARGIN, t.get("pdf.receipt.reference", refund.getReference()));
             }
             w.down(15);
-            // PR 8 review: the paper the patient keeps says what the money is, never the staff's typed reason.
-            w.paragraph(BODY, 11, MARGIN, t.get("pdf.refund.purpose"));
+            if (reversal == null) {
+                // PR 8 review: the paper the patient keeps says what the money is, never the staff's typed reason.
+                w.paragraph(BODY, 11, MARGIN, t.get("pdf.refund.purpose"));
+            } else {
+                // QA D3253: a reversal names the receipt it cancels, its reason and its approver.
+                w.paragraph(BODY, 11, MARGIN, t.get("pdf.reversal.purpose", safe(reversal.reversedReceiptNumber())));
+                if (reversal.reason() != null && !reversal.reason().isBlank()) {
+                    w.down(15);
+                    w.paragraph(BODY, 11, MARGIN, t.get("pdf.reversal.reason", reversal.reason().strip()));
+                }
+                if (reversal.approvedByName() != null && !reversal.approvedByName().isBlank()) {
+                    w.down(15);
+                    w.text(BODY, 11, MARGIN, t.get("pdf.reversal.approvedBy", reversal.approvedByName().strip()));
+                }
+            }
             w.down(28);
             w.text(BOLD, 14, MARGIN, t.get("pdf.refund.amount", money(refund.getAmount())));
             w.down(36);
@@ -531,8 +565,17 @@ public class PdfInvoiceService {
         for (InvoiceItem line : lines.subList(0, Math.min(lines.size(), RECEIPT_PURPOSE_LINES))) {
             w.ensureRoom(16);
             w.down(15);
-            w.paragraph(BODY, 10, MARGIN + 12, t.get("pdf.receipt.purposeLine", designation(t, line),
-                String.valueOf(line.getQuantity() != null ? line.getQuantity() : 1), money(lineTotal(line))));
+            BigDecimal payer = nz(line.getPayerShareAmount()).max(BigDecimal.ZERO);
+            String quantity = String.valueOf(line.getQuantity() != null ? line.getQuantity() : 1);
+            if (payer.signum() > 0) {
+                // QA D3251 (r70): the patient settles the line's patient share, not its full total.
+                BigDecimal total = lineTotal(line);
+                w.paragraph(BODY, 10, MARGIN + 12, t.get("pdf.receipt.purposeLineShared", designation(t, line),
+                    quantity, money(total), money(payer), money(total.subtract(payer).max(BigDecimal.ZERO))));
+            } else {
+                w.paragraph(BODY, 10, MARGIN + 12, t.get("pdf.receipt.purposeLine", designation(t, line), quantity,
+                    money(lineTotal(line))));
+            }
         }
         if (lines.size() > RECEIPT_PURPOSE_LINES) {
             w.down(15);
