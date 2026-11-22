@@ -1379,6 +1379,15 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/pharmacy/checkout',
       });
     }
+    // QA D2309: the counter (OTC) sale; mirrors the /pharmacy/counter-sale RoleGuard (POST /pharmacy-sales).
+    if (this.hasAnyRole(['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN'])) {
+      items.push({
+        icon: 'storefront',
+        label: 'Counter Sale',
+        translationKey: 'PHARMACY_SALE.NAV',
+        route: '/pharmacy/counter-sale',
+      });
+    }
     // Billing-money plan PR 10 (QA r65 D2672): the pharmacist's till close; mirrors the /pharmacy/caisse guard.
     if (this.hasAnyRole(['ROLE_PHARMACIST'])) {
       items.push({

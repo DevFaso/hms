@@ -1644,6 +1644,16 @@ export const routes: Routes = [
           import('./pharmacy/pharmacy-checkout').then((m) => m.PharmacyCheckoutComponent),
       },
       {
+        // QA D2309: counter (OTC, walk-in) sale; mirrors POST /pharmacy-sales
+        // (ClinicalActor.holdsOwnRole PHARMACIST, HOSPITAL_ADMIN).
+        path: 'pharmacy/counter-sale',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN'],
+        },
+        loadComponent: () => import('./pharmacy/counter-sale').then((m) => m.CounterSaleComponent),
+      },
+      {
         // T-50: pharmacy insurance claims management (AMU)
         path: 'pharmacy/claims',
         canActivate: [RoleGuard],
