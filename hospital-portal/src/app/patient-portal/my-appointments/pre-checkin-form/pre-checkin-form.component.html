@@ -77,6 +77,27 @@
     @if (step() === 'demographics') {
       <div class="step-content">
         <p class="step-description">{{ 'PRE_CHECKIN.STEP_DESCRIPTION' | translate }}</p>
+        @if (currentContact(); as contact) {
+          <section class="form-section" data-testid="precheckin-current-contact">
+            <h4>{{ 'PRE_CHECKIN.CURRENT_CONTACT' | translate }}</h4>
+            <p>
+              {{ 'PRE_CHECKIN.PHONE' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ contact.phoneNumberPrimary || '—' }}
+            </p>
+            <p>
+              {{ 'PRE_CHECKIN.EMAIL' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ contact.email || '—' }}
+            </p>
+            <p>
+              {{ 'PRE_CHECKIN.ADDRESS' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ currentAddress() || '—' }}
+            </p>
+          </section>
+        } @else if (contactLoadFailed()) {
+          <p role="status">
+            {{ contactFailureReason() ?? ('PRE_CHECKIN.CURRENT_CONTACT_ERROR' | translate) }}
+          </p>
+        }
 
         <div class="form-section">
           <h4>{{ 'PRE_CHECKIN.CONTACT_INFO' | translate }}</h4>

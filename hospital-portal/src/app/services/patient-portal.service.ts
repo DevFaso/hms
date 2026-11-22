@@ -19,7 +19,15 @@ export interface PatientProfileDTO {
   email: string;
   /** The record's phone, as the backend names it (the hospital calls this one). */
   phoneNumberPrimary: string;
-  address: string;
+  /** Structured address fields returned by portal.PatientProfileDTO. */
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
+  country?: string | null;
+  /** Older profile adapters may still supply a formatted address. */
+  address?: string;
   emergencyContactName: string;
   emergencyContactPhone: string;
   emergencyContactRelationship: string;

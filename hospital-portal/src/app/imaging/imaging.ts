@@ -9,6 +9,7 @@ import {
   OnInit,
   signal,
   ChangeDetectionStrategy,
+  HostListener,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -30,7 +31,7 @@ import {
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { ImagingReadingService } from '../services/imaging-reading.service';
 import { ImagingReadingContextComponent } from './reading-context/imaging-reading-context.component';
-import { printOnly } from '../shared/print/print-only';
+import { printOnly, isolatePrint } from '../shared/print/print-only';
 import { PrintIdentityComponent } from '../shared/print/print-identity.component';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -704,7 +705,10 @@ export class ImagingComponent implements OnInit {
 
   constructor() {
     // Rex on #1169: a preview still pending when the page is left is dropped.
-    inject(DestroyRef).onDestroy(() => this.clearDuplicateWarning());
+    inject(DestroyRef).onDestroy(() => {
+      this.clearDuplicateWarning();
+      this.browserPrintCleanup?.();
+    });
   }
 
   ngOnInit(): void {
@@ -1655,6 +1659,20 @@ export class ImagingComponent implements OnInit {
       '[data-testid="imaging-report-panel"]',
     );
     if (panel) printOnly(panel);
+  }
+
+  /** Ctrl+P must print the open report just as the report's print action does. */
+  private browserPrintCleanup?: () => void;
+
+  @HostListener('window:beforeprint')
+  prepareBrowserPrint(): void {
+    const panel = this.host.nativeElement.querySelector<HTMLElement>(
+      '[data-testid="imaging-report-panel"]',
+    );
+    if (panel) {
+      this.browserPrintCleanup?.();
+      this.browserPrintCleanup = isolatePrint(panel);
+    }
   }
 
   /** Open the latest report for an order (from the orders table/detail). */

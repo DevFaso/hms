@@ -9,6 +9,8 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
+import { LocaleNumberPipe } from '../../shared/pipes/lab-value.pipe';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
@@ -22,6 +24,7 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { ProfileService } from '../../services/profile.service';
 import { RoleContextService } from '../../core/role-context.service';
+import { LAB_APPROVAL_QUEUE_ROLES } from '../../core/lab-navigation-access';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
@@ -70,6 +73,8 @@ const DEF_CONTROL_IDS = [...new Set(Object.values(DEF_FIELD_IDS))];
     SubmitGuardDirective,
     ModalDialogDirective,
     CommonModule,
+    RouterLink,
+    LocaleNumberPipe,
     FormsModule,
     TranslateModule,
     EnumLabelPipe,
@@ -79,6 +84,16 @@ const DEF_CONTROL_IDS = [...new Set(Object.values(DEF_FIELD_IDS))];
   styleUrl: './lab-test-config.scss',
 })
 export class LabTestConfigComponent implements OnInit {
+  /** Navigation follows the approval queue's active-role gate, not definition visibility. */
+  canOpenApprovalQueue(): boolean {
+    return this.roleContext.hasAnyActiveRole([...LAB_APPROVAL_QUEUE_ROLES]);
+  }
+  componentRangeCount(def: LabTestDefinition): number {
+    return (def.components ?? []).reduce(
+      (total, component) => total + (component.referenceRanges?.length ?? 0),
+      0,
+    );
+  }
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly labService = inject(LabService);
   private readonly toast = inject(ToastService);
