@@ -130,10 +130,11 @@ public class PatientImagingPortalService {
     /**
      * QA D2730 (r65): a proxy never reads a study ordered in a sensitive visit
      * ({@code ProxyRecordFilter}). An order names its visit by id; a visit
-     * that cannot be read is treated as sensitive (fails closed). An order that
-     * names no visit is judged by nothing a proxy may rely on: the order carries
-     * no sensitivity category or test tag of its own, so it is not shown to a
-     * proxy either (fails closed, review of #1276). The patient reads every study.
+     * that cannot be read is treated as sensitive (fails closed); an order that
+     * names no visit carries no category of its own and is judged by the next
+     * rule only. QA D3154: whatever its visit, an obstetric, pelvic or
+     * gynaecological study, which may reveal a pregnancy, never reaches a proxy
+     * ({@link PregnancyRevealingStudyRule}, provisional). The patient reads every study.
      */
     private List<ImagingOrder> shownTo(Reader reader, List<ImagingOrder> orders) {
         if (reader != Reader.PROXY || orders.isEmpty()) {
@@ -147,7 +148,8 @@ public class PatientImagingPortalService {
                 .map(com.example.hms.model.Encounter::getId)
                 .collect(Collectors.toSet());
         return orders.stream()
-            .filter(o -> o.getEncounterId() != null && admittedVisits.contains(o.getEncounterId()))
+            .filter(o -> !PregnancyRevealingStudyRule.mayRevealPregnancy(o))
+            .filter(o -> o.getEncounterId() == null || admittedVisits.contains(o.getEncounterId()))
             .toList();
     }
 

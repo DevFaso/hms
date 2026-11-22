@@ -38,6 +38,7 @@ import { refusalReason } from '../shared/refusal-reason';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { missingRequiredMessage } from '../shared/required-fields';
+import { systemFollowUpTypeKey } from './follow-up-type';
 type ApprovalFilter = DischargeStatus | 'ALL';
 type SummaryFilter = 'unfinalized' | 'pending-results' | 'range';
 
@@ -802,6 +803,17 @@ export class DischargeComponent implements OnInit {
 
   removeFollowUp(index: number): void {
     this.summaryForm.followUpAppointments!.splice(index, 1);
+  }
+
+  /** QA D3152: a follow-up's type in the reader's words: « Suivi » for one the server wrote, else as typed. */
+  followUpTypeLabel(type: string | null | undefined): string {
+    const key = systemFollowUpTypeKey(type);
+    return key ? this.translate.instant(key) : (type ?? '').trim();
+  }
+
+  /** QA D3152: a type the server wrote is not edited as text (its code would be shown and could be broken). */
+  isSystemFollowUpType(type: string | null | undefined): boolean {
+    return systemFollowUpTypeKey(type) !== null;
   }
 
   /* ── Patient picker ── */

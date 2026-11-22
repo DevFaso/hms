@@ -10,8 +10,8 @@ import { Observable } from 'rxjs';
  *  - PUT /{id} cannot change the primary flag (mapper ignores it); primary is
  *    changed via PUT /link with the policy's payerCode + policyNumber.
  *  - DELETE returns 200 text/plain (an i18n message), not JSON/204.
- *  - payerCode/verifiedAt/verifiedBy are not in the response DTO (the
- *    reception snapshot carries verification info instead).
+ *  - payerCode is not in the response DTO. QA D3150: verifiedAt and the
+ *    verifier's name (never their login) are.
  */
 
 export interface PatientInsurance {
@@ -40,6 +40,10 @@ export interface PatientInsurance {
   planPayerCode?: string | null;
   /** As the hospital typed it: never translated. */
   planPayerName?: string | null;
+  /** QA D3150: when the desk last verified this coverage. */
+  verifiedAt?: string | null;
+  /** QA D3150: who verified it, by name (never their login). */
+  verifiedByName?: string | null;
 }
 
 export interface LinkInsuranceRequest {

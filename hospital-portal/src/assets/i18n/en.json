@@ -4425,7 +4425,9 @@
       "RECORDED": "Pre-authorisation number recorded.",
       "RECORD_ERROR": "The pre-authorisation number could not be recorded.",
       "NUMBER_REQUIRED": "Enter the pre-authorisation number."
-    }
+    },
+    "ORDER_VISIT": "Visit",
+    "ORDER_NO_OPEN_VISIT": "No open visit for this patient here: the order will not be linked to a visit."
   },
   "LAB": {
     "DUPLICATE": {
@@ -10689,7 +10691,8 @@
     "COUNT_SCOPE_HELP": "Counts reflect loaded requests and summaries under their respective filters. Request approval and summary finalization are separate workflow steps.",
     "REQUESTS_LOADED": "Requests loaded",
     "NO_FILTERED_APPROVALS": "No requests with status: {{status}}",
-    "SHOW_ALL_REQUESTS": "View all requests"
+    "SHOW_ALL_REQUESTS": "View all requests",
+    "FOLLOW_UP_KIND": "Follow-up"
   },
   "CHART": {
     "ALLERGIES_WITHHELD": "Allergies recorded at other hospitals are withheld: this patient has opted out of record sharing. This list may be incomplete.",
@@ -11821,7 +11824,8 @@
     "PICK_PLAN": "Choose the plan",
     "PLAN_HINT": "The payer plan this coverage is billed under. Without a plan, the patient pays the whole invoice.",
     "PLAN_SAVED": "Plan saved.",
-    "PLAN_SAVE_ERROR": "The plan could not be saved."
+    "PLAN_SAVE_ERROR": "The plan could not be saved.",
+    "VERIFIED": "Insurance verified"
   },
   "PATIENT_DOCUMENTS": {
     "TAB": "Documents",

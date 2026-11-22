@@ -64,6 +64,8 @@ export interface InsuranceSummary {
   hasPrimary: boolean;
   verifiedAt: string | null;
   verifiedBy: string | null;
+  /** QA D3150: the verifier's name, never their login; null when it names nobody. */
+  verifiedByName?: string | null;
 }
 
 export interface BillingSummary {

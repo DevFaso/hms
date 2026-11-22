@@ -42,6 +42,8 @@ public class FrontDeskPatientSnapshotDTO {
         // MVP 11: attestation fields
         private java.time.LocalDateTime verifiedAt;
         private String verifiedBy;
+        /** QA D3150: the name of the person who verified, never their login; null when it names nobody. */
+        private String verifiedByName;
     }
 
     @Data

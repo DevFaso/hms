@@ -150,6 +150,9 @@ class PediatricDoseWhoArtemetherLumefantrineTest {
             assertThat(c.requiresReview()).isTrue();
             assertThat(c.indicator()).isNotEqualTo(CdsCard.Indicator.INFO);
             assertThat(c.summary()).contains("could not be matched").contains("(" + shown + ")");
+            // QA D3151: the card cites the WHO guideline like the band cards, never "source not stated".
+            assertThat(c.detail()).contains("WHO Guidelines for the treatment of malaria")
+                .doesNotContain("source not stated").doesNotContain("no paediatric limit on file");
         });
     }
 
@@ -158,7 +161,11 @@ class PediatricDoseWhoArtemetherLumefantrineTest {
         MedicationCatalogItem al = adultAlWithNoLimit("20/120");
         List<CdsCard> cards = rule.evaluate(ctx("Artéméther 80 mg + Luméfantrine 480 mg", al, "1 cp", "BID", 12.0));
 
-        assertThat(cards).singleElement().satisfies(c -> assertThat(c.summary()).contains("(80/480)"));
+        assertThat(cards).singleElement().satisfies(c -> {
+            assertThat(c.summary()).contains("(80/480)");
+            assertThat(c.detail()).contains("WHO Guidelines for the treatment of malaria")
+                .doesNotContain("source not stated");
+        });
     }
 
     @org.junit.jupiter.params.ParameterizedTest(name = "{0}")

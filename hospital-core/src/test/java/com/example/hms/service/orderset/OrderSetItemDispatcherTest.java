@@ -361,6 +361,8 @@ class OrderSetItemDispatcherTest {
         assertThat(sent.getModality()).isEqualTo(ImagingModality.CT);
         assertThat(sent.getStudyType()).isEqualTo("CT abdomen with contrast");
         assertThat(sent.getClinicalQuestion()).contains("Sepsis bundle");
+        // QA D3154: the order set's imaging order is placed in the visit the set was applied in.
+        assertThat(sent.getEncounterId()).isEqualTo(ENCOUNTER_ID);
     }
 
     @Test

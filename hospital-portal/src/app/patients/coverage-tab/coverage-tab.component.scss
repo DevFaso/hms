@@ -107,6 +107,21 @@
   font-size: 0.85rem;
 }
 
+/* QA D3150: the desk's verification, under the status badge. */
+.verified-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.verified-icon {
+  font-size: 1rem;
+  color: #2e7d32;
+}
+
 .actions-cell {
   display: flex;
   gap: 6px;

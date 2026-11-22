@@ -327,6 +327,30 @@ describe('ImagingComponent — r63 imaging completion', () => {
     expect(q('[data-testid="imaging-report-panel"] [data-testid="print-identity"]')).not.toBeNull();
   });
 
+  it('QA D3153: on paper the title and the identity are printed once, in the print header', () => {
+    setUp(['ROLE_RADIOLOGIST']);
+    component.openReport(
+      report({
+        patientDateOfBirth: '1949-05-01',
+        orderingProviderName: 'Dr Awa Sawadogo',
+        clinicalQuestion: 'Toux persistante',
+      }),
+    );
+    fixture.detectChanges();
+    expect(q('[data-testid="imaging-report-panel"] [data-testid="print-identity"]')).not.toBeNull();
+    // The drawer's own title and identity fields stay on screen and off paper.
+    expect(q('#imaging-panel-1-title')!.classList).toContain('no-print');
+    for (const id of ['patient', 'mrn', 'dob', 'prescriber', 'exam-date']) {
+      expect(q(`[data-testid="imaging-report-drawer-${id}"]`)!.classList)
+        .withContext(id)
+        .toContain('no-print');
+    }
+    // What the header does not carry still prints from the drawer.
+    expect(q('[data-testid="imaging-report-drawer-clinical-question"]')!.classList).not.toContain(
+      'no-print',
+    );
+  });
+
   describe('the reading context beside the order', () => {
     it('shows age, sex, the recorded pregnancy, the creatinine and the prior study', () => {
       setUp(['ROLE_RADIOLOGIST']);

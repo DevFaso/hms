@@ -265,6 +265,9 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .hasPrimary(hasPrimary)
                 .verifiedAt(primary != null ? primary.getVerifiedAt() : null)
                 .verifiedBy(primary != null ? primary.getVerifiedBy() : null)
+                .verifiedByName(primary != null
+                        ? new com.example.hms.service.support.UserDisplayNames(userRepo).ofUsername(primary.getVerifiedBy())
+                        : null)
                 .build();
 
         // Billing

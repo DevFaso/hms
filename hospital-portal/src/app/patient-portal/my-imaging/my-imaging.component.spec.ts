@@ -163,6 +163,10 @@ describe('MyImagingComponent (D2342)', () => {
     expect(card.querySelector('[data-testid="my-imaging-prescriber"]')?.textContent).toContain(
       'Dr Awa Sawadogo',
     );
+    // QA D3153 class: the print header carries the title, so the card's own title prints no second time.
+    expect(card.querySelector('[data-testid="my-imaging-study-title"]')!.classList).toContain(
+      'no-print',
+    );
   });
 
   it("QA D2641: for a caregiver, reads the grantor's studies and images through the proxy endpoints", () => {

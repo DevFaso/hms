@@ -51,7 +51,8 @@
             }
             <div class="study-head">
               <div class="study-title">
-                <h2>
+                <!-- QA D3153 class: with the print header on the sheet, the title is printed once, there. -->
+                <h2 [class.no-print]="!!identityOf(study)" data-testid="my-imaging-study-title">
                   {{ studyTitle(study) || (study.modality | enumLabel: 'imagingModality') }}
                 </h2>
                 <p class="study-sub">

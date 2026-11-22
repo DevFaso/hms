@@ -86,15 +86,18 @@ public class DischargeSummaryController {
         return ResponseEntity.ok(response);
     }
 
-    @Operation(summary = "Get discharge summary by encounter ID")
+    @Operation(summary = "Get discharge summary by encounter ID (204 when the encounter has none yet)")
     @GetMapping("/encounter/{encounterId}")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_SCIENTIST')")
     public ResponseEntity<DischargeSummaryResponseDTO> getDischargeSummaryByEncounter(
         @PathVariable UUID encounterId,
         Locale locale
     ) {
-        DischargeSummaryResponseDTO response = dischargeSummaryService.getDischargeSummaryByEncounter(encounterId, locale);
-        return ResponseEntity.ok(response);
+        // QA D3155 (r70a): an encounter with no summary yet is an answer, not an error: 204, so the
+        // discharge dialog that asks before the summary is written logs no failed request.
+        return dischargeSummaryService.findDischargeSummaryByEncounter(encounterId, locale)
+            .map(ResponseEntity::ok)
+            .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
     @Operation(summary = "Get all discharge summaries for a patient")

@@ -874,11 +874,22 @@
         <div class="dynamic-rows">
           @for (f of summaryForm.followUpAppointments; track $index) {
             <div class="dynamic-row">
-              <input
-                type="text"
-                [placeholder]="'DISCHARGE.FOLLOW_UP_TYPE' | translate"
-                [(ngModel)]="f.appointmentType"
-              />
+              @if (isSystemFollowUpType(f.appointmentType)) {
+                <input
+                  type="text"
+                  readonly
+                  [value]="
+                    followUpTypeLabel(f.appointmentType) + (f.purpose ? ' — ' + f.purpose : '')
+                  "
+                  [attr.aria-label]="'DISCHARGE.FOLLOW_UP_TYPE' | translate"
+                />
+              } @else {
+                <input
+                  type="text"
+                  [placeholder]="'DISCHARGE.FOLLOW_UP_TYPE' | translate"
+                  [(ngModel)]="f.appointmentType"
+                />
+              }
               <input
                 type="text"
                 [placeholder]="'DISCHARGE.PROVIDER' | translate"
@@ -1026,8 +1037,15 @@
             <h4>{{ 'DISCHARGE.FOLLOW_UPS' | translate }}</h4>
             <ul>
               @for (f of s.followUpAppointments; track $index) {
-                <li>
-                  {{ f.appointmentType }} — {{ f.providerName }}
+                <!-- QA D3152: the type in words (never DISCHARGE_FOLLOW_UP), its purpose, and no dangling dash. -->
+                <li data-testid="discharge-view-follow-up">
+                  {{ followUpTypeLabel(f.appointmentType) }}
+                  @if (f.purpose) {
+                    — {{ f.purpose }}
+                  }
+                  @if (f.providerName) {
+                    · {{ f.providerName }}
+                  }
                   @if (f.appointmentDate) {
                     ({{ f.appointmentDate | serverTime | date: 'mediumDate' }})
                   }
