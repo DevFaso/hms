@@ -185,6 +185,21 @@ class PatientImagingPortalServiceTest {
     }
 
     @Test
+    @DisplayName("review of #1276: a study whose order names no visit fails closed for a proxy; the patient reads it")
+    void aStudyWithNoVisitStaysWithThePatient() {
+        order.setEncounterId(null);
+        report(1, ImagingReportStatus.FINAL, true);
+        ImagingStudyImage onStudy = image(null);
+        when(imageRepository.findById(onStudy.getId())).thenReturn(Optional.of(onStudy));
+
+        assertThat(service.studiesOf(patientId, Reader.PATIENT)).hasSize(1);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).isEmpty();
+        UUID imageId = onStudy.getId();
+        assertThatThrownBy(() -> service.openImage(patientId, imageId, Reader.PROXY))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
     @DisplayName("a draft or preliminary read never reaches the patient; nor does a study with only those")
     void unsignedReadsStayWithTheCareTeam() {
         report(1, ImagingReportStatus.PRELIMINARY, false);
@@ -242,6 +257,10 @@ class PatientImagingPortalServiceTest {
     @Test
     @DisplayName("every read is audited by ids, and says when a proxy read it")
     void readsAreAudited() {
+        com.example.hms.model.Encounter visit = new com.example.hms.model.Encounter();
+        visit.setId(UUID.randomUUID());
+        order.setEncounterId(visit.getId());
+        when(encounterRepository.findWithDepartmentByIdIn(anyCollection())).thenReturn(List.of(visit));
         report(1, ImagingReportStatus.FINAL, true);
 
         service.studiesOf(patientId, Reader.PROXY);
