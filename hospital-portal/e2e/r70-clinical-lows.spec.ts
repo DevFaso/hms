@@ -73,6 +73,11 @@ test('D3310/D3312: a newborn without a neonatal cot and a wide partograph at fou
   await expect(region).toHaveAttribute('tabindex', '0');
   for (const width of LAYOUT_WIDTHS) {
     await page.setViewportSize({ width, height: heightFor(width) });
+    await page.evaluate(() => {
+      const backdrop = document.querySelector<HTMLElement>('.sidebar-backdrop');
+      if (backdrop && getComputedStyle(backdrop).display !== 'none') backdrop.click();
+    });
+    await expect(page.locator('.sidebar-backdrop')).toBeHidden();
     expect(await empty.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true,
