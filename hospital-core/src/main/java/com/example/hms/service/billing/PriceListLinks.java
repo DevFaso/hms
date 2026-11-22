@@ -27,7 +27,8 @@ import java.util.UUID;
  *   <li>LAB_TEST_DEFINITION: a live lab test the hospital can order (its own or the platform catalogue's), given by
  *       its id or its test code (a finance lead cannot type an id, README A-1); stored as the id of the test's
  *       FIRST version (QA D2700: {@link LabTestLineage}), so a revision of the test keeps its price. Any version
- *       of a lineage that still has an active one is accepted, the stored first version included.</li>
+ *       of a lineage that still has an active one is accepted, the stored first version included; so is a test
+ *       still in validation (QA r70 D3213), whose price applies once it can be ordered.</li>
  *   <li>PROCEDURE_CODE: the procedure order's code (else its name), trimmed, single spaces, upper case
  *       ({@link #procedureKey}; PR 3, deferred from the #1179 review).</li>
  *   <li>IMAGING_STUDY: {@code <ImagingModality>:<study type>}, the study type folded to lower case without accents
@@ -186,7 +187,8 @@ public class PriceListLinks {
                 || hospitalId.equals(definition.getHospital().getId()))
             .or(() -> single(labTestDefinitionRepository.findLiveByCodeAtHospital(key, hospitalId)))
             .or(() -> single(labTestDefinitionRepository.findLiveGlobalByCode(key)))
-            .filter(definition -> definition.isActive() || lineageIsOrderable(definition));
+            .filter(definition -> definition.isActive() || lineageIsOrderable(definition)
+                || inValidation(definition));
         return found.orElseThrow(() ->
             new FieldBusinessException(FIELD_LINK_KEY, "billing.priceList.linkUnknownLabTest", key));
     }
@@ -201,6 +203,25 @@ public class PriceListLinks {
         return LabTestLineage.hasActiveVersion(LabTestLineage.rootId(definition, labTestDefinitionRepository),
             labTestDefinitionRepository);
     }
+
+    /**
+     * QA r70 D3213: a test the lab is still validating (draft, QA review, director approval, approved but not yet
+     * switched on) can be priced, so the finance lead's import does not wait for the reference ranges and the QA
+     * sign-off. The price applies once the test can be ordered: nothing is charged for a test nobody can order.
+     * Only the newest version of its lineage; a superseded or retired one is still refused.
+     */
+    private boolean inValidation(LabTestDefinition definition) {
+        return definition.getApprovalStatus() != null
+            && IN_VALIDATION.contains(definition.getApprovalStatus())
+            && labTestDefinitionRepository.findBySupersedesDefinitionId(definition.getId()).isEmpty();
+    }
+
+    private static final java.util.Set<com.example.hms.enums.LabTestDefinitionApprovalStatus> IN_VALIDATION =
+        java.util.EnumSet.of(
+            com.example.hms.enums.LabTestDefinitionApprovalStatus.DRAFT,
+            com.example.hms.enums.LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW,
+            com.example.hms.enums.LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL,
+            com.example.hms.enums.LabTestDefinitionApprovalStatus.APPROVED);
 
     private Treatment treatment(UUID hospitalId, String key) {
         return parseUuid(key)
