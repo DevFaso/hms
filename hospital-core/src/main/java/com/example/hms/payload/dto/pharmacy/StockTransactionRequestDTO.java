@@ -21,6 +21,8 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
+// Review of #1285 (QA D1300): a RETURN names its stock state at the edge, with the other missing fields.
+@com.example.hms.validation.ReturnStockStateRequired
 public class StockTransactionRequestDTO {
 
     @NotNull(message = "{stockTransaction.inventoryItemId.required}")

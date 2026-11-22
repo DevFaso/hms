@@ -18,6 +18,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@com.example.hms.validation.StockUnavailableNotIntact
 public class CancelReadyRequestDTO {
 
     @NotNull(message = "{dispense.ready.cancelReason.required}")
