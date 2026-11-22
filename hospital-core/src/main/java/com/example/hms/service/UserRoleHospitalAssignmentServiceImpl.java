@@ -213,6 +213,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private final com.example.hms.utility.RoleValidator roleValidator;
     private final ApplicationEventPublisher eventPublisher;
     private final UserAccountAccess accountAccess;
+    /** QA r70 review of #1281: burns an invitation code in its own transaction. */
+    private final com.example.hms.service.support.ActivationCodeBurner activationCodeBurner;
     /** QA r70 D3201: lazily, so this service never waits on the security configuration that defines it. */
     private final org.springframework.beans.factory.ObjectProvider<org.springframework.security.crypto.password.PasswordEncoder>
         passwordEncoderProvider;
@@ -1249,8 +1251,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     }
 
     @Override
-    // QA r70 review: the burn below is kept although the call then refuses (the refusal must not roll it back).
-    @Transactional(noRollbackFor = ActivationCodeBurnedException.class)
     public UserRoleAssignmentPublicViewDTO verifyAssignmentByCode(String assignmentCode, String confirmationCode) {
         String sanitizedCode = sanitizeRequiredInput(assignmentCode, MSG_ASSIGNMENT_NOT_FOUND_BY_CODE);
         String sanitizedConfirmation = sanitizeConfirmationInput(confirmationCode);
@@ -1284,12 +1284,11 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (expected == null || !expected.equalsIgnoreCase(sanitizedConfirmation)) {
             if (recordCodeActivationFailure(sanitizedCode) >= CODE_ACTIVATION_MAX_FAILURES) {
                 // Burned: this invitation's code works no more; the registrar or the desk issues a new one.
-                assignment.setConfirmationCode(null);
-                assignment.setTempPlainPassword(null);
-                assignmentRepository.save(assignment);
+                // In a transaction of its own (ActivationCodeBurner), so the refusal below cannot roll it back.
+                activationCodeBurner.burn(assignment.getId());
                 log.warn("🔒 Activation code of assignment '{}' burned after {} wrong codes",
                     assignment.getId(), CODE_ACTIVATION_MAX_FAILURES);
-                throw new ActivationCodeBurnedException();
+                throw new BusinessException(MSG_CODE_ACTIVATION_TOO_MANY, CODE_ACTIVATION_WINDOW_MS / 60_000);
             }
             throw invalidConfirmationCode();
         }
@@ -1339,7 +1338,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
      */
     private String issueFirstPasswordAtActivation(User holder) {
         String password = com.example.hms.utility.TemporaryPasswords.generate();
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
         holder.setPasswordHash(passwordEncoderProvider.getObject().encode(password));
         holder.setPasswordChangedAt(now);
         holder.setForcePasswordChange(true);
@@ -1473,15 +1472,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final int CODE_ACTIVATION_MAX_FAILURES = 5;
     private static final long CODE_ACTIVATION_WINDOW_MS = 15L * 60 * 1000;
     private static final String MSG_CODE_ACTIVATION_TOO_MANY = "assignment.codeActivation.tooManyAttempts";
-
-    /** QA r70 review: the refusal at the cap; its burn of the code is committed (see verifyAssignmentByCode). */
-    static final class ActivationCodeBurnedException extends BusinessException {
-        private static final long serialVersionUID = 1L;
-
-        ActivationCodeBurnedException() {
-            super(MSG_CODE_ACTIVATION_TOO_MANY, CODE_ACTIVATION_WINDOW_MS / 60_000);
-        }
-    }
 
     /** Wrong-code times per invitation code, as {@link #phoneActivationFailures} per number (per instance). */
     private final Map<String, java.util.Deque<Long>> codeActivationFailures =

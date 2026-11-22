@@ -70,6 +70,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
     @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
     @Mock private com.example.hms.service.support.AssignmentReferences assignmentReferences;
     @Mock private com.example.hms.repository.PatientRepository patientRepository;
+    @Mock private com.example.hms.service.support.ActivationCodeBurner activationCodeBurner;
     @Mock private org.springframework.beans.factory.ObjectProvider<org.springframework.security.crypto.password.PasswordEncoder>
         passwordEncoderProvider;
 
@@ -2046,8 +2047,9 @@ class UserRoleHospitalAssignmentServiceImplTest {
         try {
             deskCaller("ROLE_NURSE");
             UUID patientId = pendingPatientInvitation();
+            UUID hospitalId = hospital.getId();
 
-            assertThatThrownBy(() -> service.revealPatientActivationCode(patientId, hospital.getId()))
+            assertThatThrownBy(() -> service.revealPatientActivationCode(patientId, hospitalId))
                 .isInstanceOf(ResourceNotFoundException.class);
             verify(auditEventLogService, never()).logEvent(any());
         } finally {
@@ -2061,8 +2063,9 @@ class UserRoleHospitalAssignmentServiceImplTest {
             deskCaller("ROLE_RECEPTIONIST");
             UUID patientId = pendingPatientInvitation();
             assignment.setRole(role); // ROLE_NURSE: a staff invitation is the administrators' (#1246)
+            UUID hospitalId = hospital.getId();
 
-            assertThatThrownBy(() -> service.revealPatientActivationCode(patientId, hospital.getId()))
+            assertThatThrownBy(() -> service.revealPatientActivationCode(patientId, hospitalId))
                 .isInstanceOf(ResourceNotFoundException.class);
         } finally {
             org.springframework.security.core.context.SecurityContextHolder.clearContext();
@@ -2126,7 +2129,8 @@ class UserRoleHospitalAssignmentServiceImplTest {
                 cutoff.capture(), any())).thenReturn(1);
             service.resendPatientActivation(patientId, hospital.getId());
 
-            assertThat(java.time.Duration.between(cutoff.getValue(), now.getValue())).isEqualTo(java.time.Duration.ofMinutes(5));
+            // The cooldown: the claim refuses a code sent less than five minutes before now.
+            assertThat(cutoff.getValue().plusMinutes(5)).isEqualTo(now.getValue());
             org.mockito.ArgumentCaptor<String> to = org.mockito.ArgumentCaptor.forClass(String.class);
             verify(smsService, org.mockito.Mockito.atLeastOnce()).send(to.capture(), anyString());
             assertThat(to.getAllValues()).contains("+22670000003").doesNotContain("+22670000001", "+22670000002");
@@ -2168,8 +2172,8 @@ class UserRoleHospitalAssignmentServiceImplTest {
             () -> service.verifyAssignmentByCode(VALID_CODE, "000000"));
         assertThat(fifth).isInstanceOf(BusinessException.class);
         assertThat(fifth.getMessage()).isNotEqualTo(firstWrong.getMessage());
-        assertThat(assignment.getConfirmationCode()).isNull();
-        verify(assignmentRepository).save(assignment);
+        // The burn runs in its own transaction (ActivationCodeBurner), so the refusal cannot roll it back.
+        verify(activationCodeBurner).burn(assignment.getId());
         // Burned: even the right code no longer works.
         assertThatThrownBy(() -> service.verifyAssignmentByCode(VALID_CODE, VALID_PIN))
             .isInstanceOf(BusinessException.class)
