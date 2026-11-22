@@ -5325,7 +5325,8 @@
     "PHARMACY_RECONCILIATION": "Pharmacy reconciliation",
     "PHARMACY_TILL_CLOSE": "Pharmacy till close",
     "PHARMACY_BILLING_DEFERRALS": "Deferred billing (pharmacy)",
-    "CLINICAL_RULES": "Clinical rules"
+    "CLINICAL_RULES": "Clinical rules",
+    "PAYER_SHARES": "Insurer shares"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Critical alert",
@@ -15873,6 +15874,83 @@
       "PERINATAL_DEFINITION": "WHO: stillbirths at {{weeks}} or more completed weeks and early neonatal deaths (days 0–6)",
       "STILLBIRTHS_WHO_DEFINITION": "WHO indicator: no signs of life at {{weeks}} or more completed weeks",
       "STILLBIRTHS_ICD_DEFINITION": "ICD level: from {{weeks}} completed weeks"
+    }
+  },
+  "R70_MONEY": {
+    "DEFERRAL": {
+      "FILL_CHARGE": "Amount of the fill",
+      "FILL_DUE": "Still owed on the fill",
+      "INSURER_SHARE": "Insurer share",
+      "PATIENT_SHARE": "Patient share (paid at the checkout)",
+      "COVER_SHARE_HINT": "The insurer share is computed from the patient's plan; the patient pays the rest before the hand-over.",
+      "LIMIT_AT_LEAST": "At least {{amount}}: what the fill owes.",
+      "LIMIT_BELOW_DUE": "The ceiling is below what the fill owes ({{amount}}): set at least that amount, or reject the request."
+    },
+    "CHECKOUT": {
+      "INSURER_SHARE": "Charge {{charge}}, of which the insurer pays {{insurer}}: the patient pays the rest."
+    },
+    "CHECKIN": {
+      "COVERAGE_TITLE": "Coverage to verify",
+      "PAYER": "Payer",
+      "PLAN": "Plan",
+      "NO_PLAN": "No plan linked",
+      "PERCENT": "{{percent}} %",
+      "POLICY": "Policy no.",
+      "VALIDITY": "Valid",
+      "EXPIRED": "Expired",
+      "FROM_TO": "from {{from}} to {{to}}",
+      "UNTIL": "until {{to}}",
+      "NO_END": "no end date",
+      "NO_COVERAGE": "No insurance at this hospital: the patient pays the whole bill.",
+      "SUGGESTED_SHARED": "Suggested patient share: {{copay}} (consultation {{fee}}, insurer {{payer}}).",
+      "SUGGESTED_FULL": "Consultation fee: {{copay}} (no insurer share).",
+      "USE_SUGGESTED": "Use this amount"
+    },
+    "BILLING": {
+      "REVERSAL_PENDING": "Reversal requested",
+      "TO_PRICE": "to price"
+    },
+    "CASH": {
+      "CLOSE_CONFIRM_TITLE": "Close this till?",
+      "CLOSE_CONFIRM_MESSAGE": "Counted {{counted}} for {{expected}} expected (difference {{difference}}). Once closed, only a manager can reopen it."
+    },
+    "SHARES": {
+      "TITLE": "Insurer shares",
+      "SUBTITLE": "What the payers owe on the hospital's invoices: claim them, record their payment or their refusal.",
+      "REFRESH": "Refresh",
+      "VIEWS": "Shares to show",
+      "VIEW_OPEN": "To claim or claimed",
+      "VIEW_CLOSED": "Paid or refused",
+      "LOAD_FAILED": "The insurer shares could not be loaded.",
+      "EMPTY": "No insurer share here.",
+      "TOTAL": "{{count}} share(s), {{amount}} in all",
+      "PLAN": "Plan",
+      "INVOICE": "Invoice",
+      "AMOUNT": "Amount",
+      "CLAIM": "Mark claimed",
+      "PAID": "Mark paid",
+      "REJECT": "Refused by the payer",
+      "REASON": "Payer's reason",
+      "REASON_REQUIRED": "Type the payer's reason for refusing.",
+      "DECIDE_FAILED": "The share could not be updated.",
+      "DONE": {
+        "CLAIM": "Share marked claimed.",
+        "PAID": "Share marked paid.",
+        "REJECT": "Refusal recorded: the patient owes this share again."
+      },
+      "STATUS": {
+        "OPEN": "To claim",
+        "CLAIMED": "Claimed",
+        "PAID": "Paid",
+        "REJECTED": "Refused",
+        "CANCELLED": "Cancelled"
+      }
+    },
+    "PRICE_LIST": {
+      "LINK_BY_CODE": "Link by code",
+      "LINKED_ALL": "{{linked}} lab line(s) linked to their test.",
+      "LINKED_WITH_LEFT": "{{linked}} lab line(s) linked; {{left}} left unlinked (no single live test with that code, or already linked): {{codes}}.",
+      "LINK_FAILED": "The lab lines could not be linked."
     }
   }
 }

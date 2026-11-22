@@ -658,6 +658,14 @@
                         <td>{{ it.quantity }}</td>
                         <td class="amount" [class.unpriced]="!(it.unitPrice > 0)">
                           {{ formatCurrency(it.unitPrice) }}
+                          @if (!(it.unitPrice > 0) && inv.status === 'DRAFT') {
+                            <!-- QA D3255 (r70): a 0 F line is marked before issuing refuses it. -->
+                            <span
+                              class="to-price-badge"
+                              [attr.data-testid]="'line-to-price-' + it.id"
+                              >{{ 'R70_MONEY.BILLING.TO_PRICE' | translate }}</span
+                            >
+                          }
                           @if (it.overrideReason && isTariffLine(it)) {
                             <div
                               class="cell-secondary"
@@ -1060,11 +1068,17 @@
                           >
                             {{ 'BILLING.RECEIPT' | translate }}
                           </button>
-                          @if (canReversePayment) {
+                          @if (pendingReversals().has(p.id)) {
+                            <!-- QA D3252 (r70): already asked for; the server would answer 409. -->
+                            <span class="cell-secondary" data-testid="payment-reversal-pending">{{
+                              'R70_MONEY.BILLING.REVERSAL_PENDING' | translate
+                            }}</span>
+                          } @else if (canReversePayment) {
                             <button
                               type="button"
                               class="btn-secondary btn-sm"
                               [disabled]="paymentActionBusy()"
+                              [attr.data-testid]="'payment-reverse-' + p.id"
                               (click)="openReversal(p, 'reverse')"
                             >
                               {{ 'BILLING.REVERSE_PAYMENT' | translate }}
@@ -1081,7 +1095,11 @@
           <!-- Billing-money plan PR 7: the payer's share and the patient's share, with the payer's decisions -->
           <app-invoice-payer-shares [invoice]="inv" (changed)="refundChanged(inv.id)" />
           <!-- Billing-money plan PR 8 (QA D1900): money handed back, approved by another person -->
-          <app-invoice-refunds [invoice]="inv" (changed)="refundChanged(inv.id)" />
+          <app-invoice-refunds
+            [invoice]="inv"
+            (changed)="refundChanged(inv.id)"
+            (refundsLoaded)="refundsLoaded($event)"
+          />
         </div>
       </div>
     </div>

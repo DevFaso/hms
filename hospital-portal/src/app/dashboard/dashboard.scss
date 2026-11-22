@@ -1926,8 +1926,10 @@ $shadow-md:
 // ─────────────────────────────────────────────────────────────────────────────
 .fallback-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  // QA D3257 (r70): a 360 px track overflowed a 334 px phone column (accountant, claims reviewer at 390).
+  grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr));
   gap: 20px;
+  min-width: 0;
 }
 
 .empty-card {
@@ -2032,6 +2034,13 @@ $shadow-md:
 }
 
 @media (max-width: 480px) {
+  // QA D3257 (r70): the dashboard fits a 390 px phone (it was 376 px in 366 px).
+  .dashboard {
+    padding: 12px;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
   .nurse-workflow-tiles {
     grid-template-columns: repeat(2, 1fr);
   }

@@ -5325,7 +5325,8 @@
     "PHARMACY_RECONCILIATION": "Rapprochement pharmacie",
     "PHARMACY_TILL_CLOSE": "Clôture de caisse pharmacie",
     "PHARMACY_BILLING_DEFERRALS": "Reports « à facturer »",
-    "CLINICAL_RULES": "Règles cliniques"
+    "CLINICAL_RULES": "Règles cliniques",
+    "PAYER_SHARES": "Parts assureurs"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerte critique",
@@ -15873,6 +15874,83 @@
       "PERINATAL_DEFINITION": "OMS : mortinaissances à {{weeks}} semaines révolues ou plus et décès néonatals précoces (jours 0 à 6)",
       "STILLBIRTHS_WHO_DEFINITION": "Indicateur OMS : sans signe de vie à {{weeks}} semaines d’aménorrhée révolues ou plus",
       "STILLBIRTHS_ICD_DEFINITION": "Niveau CIM : à partir de {{weeks}} semaines d’aménorrhée révolues"
+    }
+  },
+  "R70_MONEY": {
+    "DEFERRAL": {
+      "FILL_CHARGE": "Montant de la délivrance",
+      "FILL_DUE": "Reste dû sur la délivrance",
+      "INSURER_SHARE": "Part assureur",
+      "PATIENT_SHARE": "Part patient (payée à la caisse)",
+      "COVER_SHARE_HINT": "La part assureur se calcule selon la formule du patient ; le patient paie le reste avant la remise.",
+      "LIMIT_AT_LEAST": "Au moins {{amount}} : le montant dû pour la délivrance.",
+      "LIMIT_BELOW_DUE": "Le plafond est inférieur au montant dû pour la délivrance ({{amount}}) : fixez au moins ce montant, ou refusez la demande."
+    },
+    "CHECKOUT": {
+      "INSURER_SHARE": "Montant {{charge}}, dont {{insurer}} pris en charge par l’assureur : le patient paie le reste."
+    },
+    "CHECKIN": {
+      "COVERAGE_TITLE": "Couverture à vérifier",
+      "PAYER": "Organisme payeur",
+      "PLAN": "Formule",
+      "NO_PLAN": "Aucune formule liée",
+      "PERCENT": "{{percent}} %",
+      "POLICY": "N° de police",
+      "VALIDITY": "Validité",
+      "EXPIRED": "Expirée",
+      "FROM_TO": "du {{from}} au {{to}}",
+      "UNTIL": "jusqu’au {{to}}",
+      "NO_END": "sans date de fin",
+      "NO_COVERAGE": "Aucune assurance dans cet établissement : le patient paie toute la facture.",
+      "SUGGESTED_SHARED": "Part patient suggérée : {{copay}} (consultation {{fee}}, assureur {{payer}}).",
+      "SUGGESTED_FULL": "Tarif de la consultation : {{copay}} (aucune part assureur).",
+      "USE_SUGGESTED": "Reprendre ce montant"
+    },
+    "BILLING": {
+      "REVERSAL_PENDING": "Contre-passation demandée",
+      "TO_PRICE": "à tarifer"
+    },
+    "CASH": {
+      "CLOSE_CONFIRM_TITLE": "Clôturer cette caisse ?",
+      "CLOSE_CONFIRM_MESSAGE": "Compté {{counted}} pour {{expected}} attendus (écart {{difference}}). Une fois clôturée, seul un responsable peut la rouvrir."
+    },
+    "SHARES": {
+      "TITLE": "Parts assureurs",
+      "SUBTITLE": "Ce que les organismes payeurs doivent sur les factures de l’établissement : réclamez-les, enregistrez leur paiement ou leur refus.",
+      "REFRESH": "Actualiser",
+      "VIEWS": "Parts à afficher",
+      "VIEW_OPEN": "À réclamer ou réclamées",
+      "VIEW_CLOSED": "Payées ou refusées",
+      "LOAD_FAILED": "Impossible de charger les parts assureurs.",
+      "EMPTY": "Aucune part assureur ici.",
+      "TOTAL": "{{count}} part(s), {{amount}} au total",
+      "PLAN": "Formule",
+      "INVOICE": "Facture",
+      "AMOUNT": "Montant",
+      "CLAIM": "Marquer réclamée",
+      "PAID": "Marquer payée",
+      "REJECT": "Refusée par l’assureur",
+      "REASON": "Motif de l’assureur",
+      "REASON_REQUIRED": "Saisissez le motif du refus de l’assureur.",
+      "DECIDE_FAILED": "Impossible de mettre à jour la part.",
+      "DONE": {
+        "CLAIM": "Part marquée réclamée.",
+        "PAID": "Part marquée payée.",
+        "REJECT": "Refus enregistré : le patient doit de nouveau cette part."
+      },
+      "STATUS": {
+        "OPEN": "À réclamer",
+        "CLAIMED": "Réclamée",
+        "PAID": "Payée",
+        "REJECTED": "Refusée",
+        "CANCELLED": "Annulée"
+      }
+    },
+    "PRICE_LIST": {
+      "LINK_BY_CODE": "Lier par code",
+      "LINKED_ALL": "{{linked}} ligne(s) de laboratoire liée(s) à leur test.",
+      "LINKED_WITH_LEFT": "{{linked}} ligne(s) de laboratoire liée(s) ; {{left}} restée(s) sans lien (aucun test actif unique avec ce code, ou déjà lié) : {{codes}}.",
+      "LINK_FAILED": "Impossible de lier les lignes de laboratoire."
     }
   }
 }

@@ -12,6 +12,7 @@ import {
   inject,
   signal,
   ChangeDetectionStrategy,
+  OnInit,
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -21,7 +22,10 @@ import {
   ReceptionQueueItem,
   CheckInRequest,
   CheckInResponse,
+  InsuranceSummary,
 } from '../reception.service';
+import { CfaPipe } from '../../shared/pipes/cfa.pipe';
+import { DayMonthPipe } from '../../shared/pipes/day-month.pipe';
 import { ToastService } from '../../core/toast.service';
 import { BillingService } from '../../services/billing.service';
 import { refusalReason } from '../../shared/refusal-reason';
@@ -72,12 +76,14 @@ export function copayAmountMessageKey(amount: number | string | null | undefined
     DialogFocusDirective,
     FormsModule,
     TranslateModule,
+    CfaPipe,
+    DayMonthPipe,
   ],
   templateUrl: './checkin-dialog.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './checkin-dialog.component.scss',
 })
-export class CheckinDialogComponent {
+export class CheckinDialogComponent implements OnInit {
   @Input() queueItem: ReceptionQueueItem | null = null;
   @Output() dismissed = new EventEmitter<void>();
   @Output() checkedIn = new EventEmitter<CheckInResponse>();
@@ -87,6 +93,41 @@ export class CheckinDialogComponent {
   private readonly translate = inject(TranslateService);
   private readonly billing = inject(BillingService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  /**
+   * QA D3258 (r70): the coverage the desk verifies (payer, plan, policy, validity) and the patient's share of the
+   * consultation, read from the patient's front-desk snapshot by the invoice's coverage rule. Null while loading,
+   * or when the snapshot cannot be read (the check-in still works).
+   */
+  readonly coverage = signal<InsuranceSummary | null>(null);
+  readonly coverageLoaded = signal(false);
+  readonly hasCoverage = computed(() => {
+    const c = this.coverage();
+    return !!c && (!!c.insuranceId || !!c.primaryPayer || !!c.payerName);
+  });
+
+  ngOnInit(): void {
+    const patientId = this.queueItem?.patientId;
+    if (!patientId) {
+      this.coverageLoaded.set(true);
+      return;
+    }
+    this.receptionService.getPatientSnapshot(patientId).subscribe({
+      next: (snapshot) => {
+        this.coverage.set(snapshot?.insurance ?? null);
+        this.coverageLoaded.set(true);
+      },
+      error: () => this.coverageLoaded.set(true),
+    });
+  }
+
+  /** QA D3258: takes the suggested patient share as the copay; the desk may still change it. */
+  useSuggestedCopay(): void {
+    const suggested = this.coverage()?.suggestedCopay;
+    if (suggested !== null && suggested !== undefined) {
+      this.copayAmount.set(suggested);
+    }
+  }
 
   /* ── Form fields ────────────────────────── */
   chiefComplaint = signal('');

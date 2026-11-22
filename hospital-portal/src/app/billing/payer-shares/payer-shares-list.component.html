@@ -1,0 +1,157 @@
+<div class="page-container payer-shares-page" data-testid="payer-shares-page">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'R70_MONEY.SHARES.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'R70_MONEY.SHARES.SUBTITLE' | translate }}</p>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="btn-secondary" [disabled]="loading()" (click)="load()">
+        <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+        {{ 'R70_MONEY.SHARES.REFRESH' | translate }}
+      </button>
+    </div>
+  </div>
+
+  <div class="share-views" role="group" [attr.aria-label]="'R70_MONEY.SHARES.VIEWS' | translate">
+    <button
+      type="button"
+      class="share-view"
+      [class.share-view-on]="view() === 'open'"
+      [attr.aria-pressed]="view() === 'open'"
+      data-testid="payer-shares-view-open"
+      (click)="setView('open')"
+    >
+      {{ 'R70_MONEY.SHARES.VIEW_OPEN' | translate }}
+    </button>
+    <button
+      type="button"
+      class="share-view"
+      [class.share-view-on]="view() === 'closed'"
+      [attr.aria-pressed]="view() === 'closed'"
+      data-testid="payer-shares-view-closed"
+      (click)="setView('closed')"
+    >
+      {{ 'R70_MONEY.SHARES.VIEW_CLOSED' | translate }}
+    </button>
+  </div>
+
+  @if (loading()) {
+    <p class="muted" role="status">{{ 'COMMON.LOADING' | translate }}</p>
+  } @else if (failed()) {
+    <p class="muted" role="alert" data-testid="payer-shares-failed">
+      {{ 'R70_MONEY.SHARES.LOAD_FAILED' | translate }}
+    </p>
+  } @else if (rows().length === 0) {
+    <p class="muted" data-testid="payer-shares-empty">
+      {{ 'R70_MONEY.SHARES.EMPTY' | translate }}
+    </p>
+  } @else {
+    <p class="share-total" data-testid="payer-shares-total">
+      {{
+        'R70_MONEY.SHARES.TOTAL'
+          | translate: { count: rows().length, amount: (total() | cfa: 'XOF') }
+      }}
+    </p>
+    <ul class="share-list" data-testid="payer-shares-list">
+      @for (row of rows(); track row.id) {
+        <li class="share-card" [attr.data-testid]="'payer-share-' + row.id">
+          <div class="share-main">
+            <strong>{{ row.payerName || '—' }}</strong>
+            <span class="share-status" [attr.data-status]="row.status">{{
+              row.status | keyLabel: 'R70_MONEY.SHARES.STATUS.'
+            }}</span>
+          </div>
+          <dl class="share-meta">
+            <div>
+              <dt>{{ 'R70_MONEY.SHARES.PLAN' | translate }}</dt>
+              <dd>{{ row.planName || '—' }}</dd>
+            </div>
+            <div>
+              <dt>{{ 'PATIENTS.PATIENT' | translate }}</dt>
+              <dd>
+                {{ row.patientName || '—' }}
+                @if (row.patientMrn) {
+                  <span class="muted">({{ row.patientMrn }})</span>
+                }
+              </dd>
+            </div>
+            <div>
+              <dt>{{ 'R70_MONEY.SHARES.INVOICE' | translate }}</dt>
+              <dd>
+                {{ row.invoiceNumber || '—' }}
+                @if (row.invoiceDate) {
+                  · {{ row.invoiceDate | dayMonth: undefined : true }}
+                }
+              </dd>
+            </div>
+            <div>
+              <dt>{{ 'R70_MONEY.SHARES.AMOUNT' | translate }}</dt>
+              <dd class="share-amount">{{ row.amount | cfa: 'XOF' }}</dd>
+            </div>
+          </dl>
+          @if (canSettle(row)) {
+            <div class="share-actions">
+              @if (canClaim(row)) {
+                <button
+                  type="button"
+                  class="btn-secondary btn-sm"
+                  [disabled]="busy() === row.id"
+                  [attr.data-testid]="'payer-share-claim-' + row.id"
+                  (click)="decide(row, 'claim')"
+                >
+                  {{ 'R70_MONEY.SHARES.CLAIM' | translate }}
+                </button>
+              }
+              <button
+                type="button"
+                class="btn-primary btn-sm"
+                [disabled]="busy() === row.id"
+                [attr.data-testid]="'payer-share-paid-' + row.id"
+                (click)="decide(row, 'paid')"
+              >
+                {{ 'R70_MONEY.SHARES.PAID' | translate }}
+              </button>
+              <button
+                type="button"
+                class="btn-secondary btn-sm"
+                [disabled]="busy() === row.id"
+                [attr.data-testid]="'payer-share-reject-' + row.id"
+                (click)="startReject(row)"
+              >
+                {{ 'R70_MONEY.SHARES.REJECT' | translate }}
+              </button>
+            </div>
+          }
+          @if (rejecting() === row.id) {
+            <form class="share-reject" (ngSubmit)="submitReject(row)">
+              <label [for]="reasonId(row)">{{ 'R70_MONEY.SHARES.REASON' | translate }} *</label>
+              <input
+                type="text"
+                maxlength="500"
+                required
+                [id]="reasonId(row)"
+                name="reason"
+                [attr.data-testid]="'payer-share-reason-' + row.id"
+                [ngModel]="rejectReason()"
+                (ngModelChange)="rejectReason.set($event)"
+              />
+              <div class="share-actions">
+                <button
+                  type="submit"
+                  class="btn-primary btn-sm"
+                  data-testid="payer-share-reject-confirm"
+                  [disabled]="busy() === row.id"
+                >
+                  {{ 'COMMON.CONFIRM' | translate }}
+                </button>
+                <button type="button" class="btn-secondary btn-sm" (click)="stopReject()">
+                  {{ 'COMMON.CANCEL' | translate }}
+                </button>
+              </div>
+            </form>
+          }
+        </li>
+      }
+    </ul>
+  }
+</div>

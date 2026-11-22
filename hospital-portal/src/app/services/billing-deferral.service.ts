@@ -40,6 +40,12 @@ export interface BillingDeferral {
   amountDue?: number | null;
   /** An executed deferral only: what its fills still owe now (paid, covered or cancelled since: nothing). */
   stillDue?: number | null;
+  /** QA D3406 (r70): an open deferral: the prepared fill's charge and what it still owes. */
+  fillCharge?: number | null;
+  fillDue?: number | null;
+  /** QA D3408 (r70): a third-party cover: the insurer share by the patient's coverage, and the patient share. */
+  insurerShare?: number | null;
+  patientShare?: number | null;
   reviewedByName?: string | null;
   reviewedAt?: string | null;
   reviewNote?: string | null;

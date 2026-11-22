@@ -30,6 +30,19 @@
           {{ 'BILLING.PRICE_LIST.IMPORT_BUTTON' | translate }}
         </button>
       }
+      @if (canUpdate) {
+        <!-- QA r70 (lab set-up): the lab lines imported unlinked take the live test of their code. -->
+        <button
+          type="button"
+          class="btn-secondary"
+          data-testid="price-list-link-by-code"
+          [disabled]="linking()"
+          (click)="linkLabTestsByCode()"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">link</span>
+          {{ 'R70_MONEY.PRICE_LIST.LINK_BY_CODE' | translate }}
+        </button>
+      }
       @if (canCreate) {
         <button
           type="button"

@@ -66,6 +66,16 @@ export interface InsuranceSummary {
   verifiedBy: string | null;
   /** QA D3150: the verifier's name, never their login; null when it names nobody. */
   verifiedByName?: string | null;
+  /** QA D3258 (r70): the payer's name (never its code), the plan and when the coverage starts. */
+  payerName?: string | null;
+  planName?: string | null;
+  effectiveFrom?: string | null;
+  coveragePercent?: number | null;
+  /** QA D3258: the default consultation tariff, and the payer's and the patient's share of it. */
+  consultationFee?: number | null;
+  consultationLabel?: string | null;
+  suggestedPayerShare?: number | null;
+  suggestedCopay?: number | null;
 }
 
 export interface BillingSummary {
