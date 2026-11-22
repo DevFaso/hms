@@ -40,6 +40,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * idempotency key is enforced by the database, the claim is exclusive, the manual retry is scoped
  * to the hospital, and one sweep round trip through the real queries. SMS and mail transports are
  * mocks: nothing is ever sent.
+ *
+ * <p>The real {@code PatientNotificationDispatchScheduler} sweeps every 30 s in this same Spring context,
+ * with the real clock. A row due now could be claimed by it between the save and the test's own claim,
+ * and the test then saw its first claim lose (2026-11-21 CI flake; the sweep's claim and the test's were
+ * still exclusive, exactly one won). So every row here falls due an hour from now ({@link #dueAt}), which
+ * the scheduler never lists while the test runs, and the test claims, requeues and sweeps "at" that time.
  */
 @DisplayName("Patient notification ledger (database)")
 class PatientNotificationLedgerIT extends BaseIT {
@@ -51,7 +57,10 @@ class PatientNotificationLedgerIT extends BaseIT {
     @Autowired private HospitalRepository hospitalRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private PatientChannelConsent consent;
-    @Autowired private PatientNotificationDispatchService dispatchService;
+    @Autowired private PatientNotificationRenderer renderer;
+    @Autowired private SmsService smsService;
+    @Autowired private EmailService emailService;
+    @Autowired private PatientNotificationProperties properties;
     @Autowired private PlatformTransactionManager transactionManager;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private Clock clock;
@@ -60,9 +69,12 @@ class PatientNotificationLedgerIT extends BaseIT {
     private Hospital otherHospital;
     private Patient patient;
     private User account;
+    /** When this test's rows fall due: an hour ahead, out of reach of the scheduled sweep. */
+    private LocalDateTime dueAt;
 
     @BeforeEach
     void seed() {
+        dueAt = LocalDateTime.now(clock).plusHours(1).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
         hospital = hospital();
         otherHospital = hospital();
         int n = SEQ.incrementAndGet();
@@ -158,7 +170,7 @@ class PatientNotificationLedgerIT extends BaseIT {
     @DisplayName("of two claims on one due row exactly one wins")
     void theClaimIsExclusive() {
         PatientNotificationDelivery saved = repository.saveAndFlush(row(UUID.randomUUID(), hospital.getId()));
-        LocalDateTime now = LocalDateTime.now(clock).plusSeconds(1);
+        LocalDateTime now = dueAt.plusSeconds(1);
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         List<NotificationDeliveryStatus> open = PatientNotificationDispatchService.OPEN;
 
@@ -175,7 +187,7 @@ class PatientNotificationLedgerIT extends BaseIT {
         PatientNotificationDelivery saved = repository.saveAndFlush(row(UUID.randomUUID(), hospital.getId()));
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
         List<NotificationDeliveryStatus> open = PatientNotificationDispatchService.OPEN;
-        LocalDateTime firstClaim = LocalDateTime.now(clock).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        LocalDateTime firstClaim = dueAt;
         LocalDateTime secondClaim = firstClaim.plusMinutes(6);
         tx.execute(s -> repository.claim(saved.getId(), open, 5, firstClaim, firstClaim.plusMinutes(5)));
         // The first send outlived its lease: a second sweep claimed the row again.
@@ -202,7 +214,8 @@ class PatientNotificationLedgerIT extends BaseIT {
         row.setErrorCode("PROVIDER_UNREACHABLE");
         PatientNotificationDelivery saved = repository.saveAndFlush(row);
         TransactionTemplate tx = new TransactionTemplate(transactionManager);
-        LocalDateTime now = LocalDateTime.now(clock);
+        // Requeued "at" dueAt: back in the queue, but not yet due for the scheduled sweep.
+        LocalDateTime now = dueAt;
         UUID admin = UUID.randomUUID();
 
         Integer foreign = tx.execute(s -> repository.requeueFailed(saved.getId(), otherHospital.getId(),
@@ -230,8 +243,12 @@ class PatientNotificationLedgerIT extends BaseIT {
     @DisplayName("one sweep round trip: a result that no longer exists is SKIPPED and nothing is sent")
     void sweepRoundTrip() {
         PatientNotificationDelivery saved = repository.saveAndFlush(row(UUID.randomUUID(), hospital.getId()));
+        // The production service and queries, on a clock that has reached dueAt.
+        PatientNotificationDispatchService sweepAtDueTime = new PatientNotificationDispatchService(repository,
+            renderer, smsService, emailService, properties,
+            Clock.offset(clock, java.time.Duration.ofHours(1).plusSeconds(1)), transactionManager);
 
-        dispatchService.dispatchPending();
+        sweepAtDueTime.dispatchPending();
 
         PatientNotificationDelivery reloaded = repository.findById(saved.getId()).orElseThrow();
         assertThat(reloaded.getStatus()).isEqualTo(NotificationDeliveryStatus.SKIPPED);
@@ -248,7 +265,7 @@ class PatientNotificationLedgerIT extends BaseIT {
             .channel(NotificationChannel.SMS)
             .idempotencyKey(PatientNotificationDelivery.keyOf(PatientNotificationEvent.LAB_RESULT_AVAILABLE, subject,
                 NotificationChannel.SMS))
-            .nextAttemptAt(LocalDateTime.now(clock).minusSeconds(5))
+            .nextAttemptAt(dueAt)
             .build();
     }
 }
