@@ -139,27 +139,22 @@
 
           @if (current.canManage) {
             <div class="rule-actions">
-              @if (rule.status === 'SIGNED') {
-                <button
-                  type="button"
-                  class="btn-secondary"
-                  data-testid="rule-revoke"
-                  [disabled]="busy()"
-                  (click)="revoking.set(rule)"
-                >
-                  {{ 'CLINICAL_RULES.REVOKE.ACTION' | translate }}
-                </button>
-              } @else {
-                <button
-                  type="button"
-                  class="btn-primary"
-                  data-testid="rule-sign"
-                  [disabled]="busy()"
-                  (click)="openSign(rule)"
-                >
-                  {{ 'CLINICAL_RULES.SIGN.ACTION' | translate }}
-                </button>
-              }
+              <!-- One button whose action follows the status (QA D2100: never two swapped buttons). -->
+              <button
+                type="button"
+                [class.btn-primary]="rule.status !== 'SIGNED'"
+                [class.btn-secondary]="rule.status === 'SIGNED'"
+                [attr.data-testid]="rule.status === 'SIGNED' ? 'rule-revoke' : 'rule-sign'"
+                [disabled]="busy()"
+                (click)="rule.status === 'SIGNED' ? revoking.set(rule) : openSign(rule)"
+              >
+                {{
+                  (rule.status === 'SIGNED'
+                    ? 'CLINICAL_RULES.REVOKE.ACTION'
+                    : 'CLINICAL_RULES.SIGN.ACTION'
+                  ) | translate
+                }}
+              </button>
             </div>
           }
         </li>

@@ -15839,7 +15839,6 @@
       "CONFIRM": "Record",
       "DONE": "Sign-off recorded.",
       "FAILED": "The sign-off could not be recorded.",
-      "REQUIRED": "Enter the signer’s name, title and the date signed.",
       "FUTURE_DATE": "The date signed cannot be in the future."
     },
     "REVOKE": {

@@ -15839,7 +15839,6 @@
       "CONFIRM": "Enregistrer",
       "DONE": "Validation enregistrée.",
       "FAILED": "La validation n’a pas pu être enregistrée.",
-      "REQUIRED": "Saisissez le nom et la fonction du signataire, et la date de signature.",
       "FUTURE_DATE": "La date de signature ne peut pas être dans le futur."
     },
     "REVOKE": {

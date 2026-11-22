@@ -27,9 +27,11 @@ import { saveBlob } from '../shared/download-file';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { PageHeaderComponent } from '../shared/page-header/page-header.component';
+import { personName } from '../shared/pipes/person-name.pipe';
 import { DayMonthPipe } from '../shared/pipes/day-month.pipe';
 import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 import { refusalReason, refusedFieldReasons } from '../shared/refusal-reason';
+import { joinReasons, missingRequiredMessage } from '../shared/required-fields';
 
 /** The dialog's fields, by the request field a 400 names. */
 const SIGN_FIELDS = {
@@ -139,20 +141,24 @@ export class ClinicalRulesComponent {
     this.draft.selfSigned = selfSigned;
     if (selfSigned && !this.draft.signerName.trim()) {
       const profile = this.auth.getUserProfile();
-      this.draft.signerName = [profile?.firstName, profile?.lastName].filter(Boolean).join(' ');
+      this.draft.signerName = personName(profile);
     }
   }
 
   /** Why the sign-off cannot be sent yet, or null when it can. */
   protected signBlocked(): string | null {
     const d = this.draft;
-    if (!d.signerName.trim() || !d.signerTitle.trim() || !d.signedOn) {
-      return this.translate.instant('CLINICAL_RULES.SIGN.REQUIRED');
-    }
-    if (d.signedOn > this.today) {
-      return this.translate.instant('CLINICAL_RULES.SIGN.FUTURE_DATE');
-    }
-    return null;
+    // QA D1256: every reason at once — the blank fields by name, and a date in the future.
+    return joinReasons([
+      missingRequiredMessage(this.translate, [
+        { labelKey: 'CLINICAL_RULES.SIGN.SIGNER_NAME', value: d.signerName.trim() },
+        { labelKey: 'CLINICAL_RULES.SIGN.SIGNER_TITLE', value: d.signerTitle.trim() },
+        { labelKey: 'CLINICAL_RULES.SIGN.SIGNED_ON', value: d.signedOn },
+      ]),
+      d.signedOn && d.signedOn > this.today
+        ? this.translate.instant('CLINICAL_RULES.SIGN.FUTURE_DATE')
+        : null,
+    ]);
   }
 
   protected submitSign(): void {

@@ -15839,7 +15839,6 @@
       "CONFIRM": "Registrar",
       "DONE": "Validación registrada.",
       "FAILED": "No se pudo registrar la validación.",
-      "REQUIRED": "Introduzca el nombre y el cargo del firmante y la fecha de firma.",
       "FUTURE_DATE": "La fecha de firma no puede estar en el futuro."
     },
     "REVOKE": {

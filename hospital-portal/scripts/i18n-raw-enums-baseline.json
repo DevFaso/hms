@@ -273,7 +273,11 @@
     "src/app/billing/cash-session/cash-session.component.html::s.reopenReason",
     "src/app/billing/cash-session/cash-supervisor.component.html::line.reason",
     "src/app/patients/family-release/family-release.component.html::release.reason",
-    "src/app/pharmacy/billing-deferrals.html::r.reason"
+    "src/app/pharmacy/billing-deferrals.html::r.reason",
+    "src/app/clinical-rules/clinical-rules.component.html::rule.source",
+    "src/app/clinical-rules/clinical-rules.component.html::rule.approverRole",
+    "src/app/clinical-rules/clinical-rules.component.html::signoff.revokeReason",
+    "src/app/shared/rule-status/rule-status.component.ts::rule.source"
   ],
   "reasons": {
     "src/app/billing/billing.html::it.overrideReason": "InvoiceItemRequestDTO.overrideReason is a size-bounded String (500 characters), typed in the billing.html input with data-testid line-override-reason-<id> via editLineOverrideReason and submitted by BillingComponent.saveLine. InvoiceItemServiceImpl.applyPrice trims and stores that explanation; InvoiceItemMapper returns it as InvoiceItemResponseDTO.overrideReason. It is the cashier's free text, not an enum token, and must remain as typed.",
@@ -302,6 +306,10 @@
     "src/app/billing/cash-session/cash-session.component.html::s.reopenReason": "CashSessionNoteRequestDTO.note is a size-bounded String (500 characters) a hospital admin or accountant types in cash-supervisor.component.html textarea#cash-supervisor-note; CashSessionService.reopen stores it as CashSession.reopenReason. It is a person's free text (why the till was reopened), not an enum token, and must remain as typed.",
     "src/app/billing/cash-session/cash-supervisor.component.html::line.reason": "The delete reason is a size-bounded String (500 characters) a cashier types in billing.html input#line-remove-reason; InvoiceItemServiceImpl.deleteInvoiceItem stores it as InvoiceLineRemoval.reason and InvoiceLineRemovalDTO.reason carries it. It is a person's free text (why the line was taken off the invoice), not an enum token, and must remain as typed.",
     "src/app/patients/family-release/family-release.component.html::release.reason": "Policy 2026-11-20: ProxySensitiveReleaseDTO.reason is the free text a doctor or a midwife typed when releasing a minor's result to a parent (textarea#family-release-reason, 10 to 1000 characters); shown as typed to the clinicians, not a wire token.",
-    "src/app/pharmacy/billing-deferrals.html::r.reason": "Policy rule 6 (V345): DispenseBillingDeferralDTO.reason is the free text a person typed, a size-bounded String (500 characters): why the fill should leave before it is paid, or the reason of an urgency override. Not an enum token; it must remain as typed."
+    "src/app/pharmacy/billing-deferrals.html::r.reason": "Policy rule 6 (V345): DispenseBillingDeferralDTO.reason is the free text a person typed, a size-bounded String (500 characters): why the fill should leave before it is paid, or the reason of an urgency override. Not an enum token; it must remain as typed.",
+    "src/app/clinical-rules/clinical-rules.component.html::rule.source": "V356: a published source citation as written in ClinicalRuleRegistry (a law, a guideline), never an enum",
+    "src/app/clinical-rules/clinical-rules.component.html::rule.approverRole": "V356: a {en,fr,es} text object rendered through ruleText() in the reader's language, never an enum",
+    "src/app/clinical-rules/clinical-rules.component.html::signoff.revokeReason": "V356: the reason the hospital admin typed when revoking a sign-off (free text)",
+    "src/app/shared/rule-status/rule-status.component.ts::rule.source": "V356: a published source citation as written in ClinicalRuleRegistry, never an enum"
   }
 }
