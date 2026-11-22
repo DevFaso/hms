@@ -599,7 +599,7 @@ $shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
     border-radius: 12px;
     &.active {
       background: $success-light;
-      color: $success;
+      color: var(--success-text);
     }
     &.inactive {
       background: $danger-light;

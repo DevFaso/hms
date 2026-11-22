@@ -62,6 +62,8 @@ function rule(key: string, status: RuleSignoffStatus = 'PENDING'): ClinicalRuleS
             revokeReason: status === 'REVOKED' ? 'Erreur de saisie' : null,
           },
     lastSignedVersion: null,
+    area: 'RECORDS',
+    sourceUrl: key === 'MINOR_HIV_RESULT_RELEASE' ? 'https://example.org/source' : null,
   };
 }
 
@@ -153,6 +155,21 @@ describe('ClinicalRulesComponent (V356)', () => {
     expect(cards[1].querySelector('[data-testid="rule-revoke"]')).not.toBeNull();
     // The page says a sign-off changes no rule's behaviour.
     expect(host.textContent).toContain('ne change que la mention « provisoire »');
+  });
+
+  it('shows a translated area, never a class name, and links a source that has a public page', () => {
+    load(overview(true, [rule('MINOR_HIV_RESULT_RELEASE'), rule('PRESCRIPTION_RENEWAL')]));
+
+    const cards = host.querySelectorAll('.rule-card');
+    expect(cards[0].querySelector('[data-testid="rule-area"]')!.textContent).toContain(
+      'Dossier patient et confidentialité',
+    );
+    expect(host.textContent).not.toContain('ProxySensitivityPolicy');
+    expect(host.querySelector('.rule-code')).toBeNull();
+    const link = cards[0].querySelector<HTMLAnchorElement>('[data-testid="rule-source-link"]')!;
+    expect(link.getAttribute('href')).toBe('https://example.org/source');
+    expect(link.getAttribute('rel')).toContain('noopener');
+    expect(cards[1].querySelector('[data-testid="rule-source-link"]')).toBeNull();
   });
 
   it('is read-only for staff who do not manage it: no action, and it says who records', () => {

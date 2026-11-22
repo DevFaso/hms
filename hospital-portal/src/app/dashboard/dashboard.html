@@ -59,7 +59,13 @@
               {{ specialization() | enumLabel: 'specialization' }}
             </span>
           }
-          @if (departmentName() && departmentName() !== specialization()) {
+          <!-- QA D3510: compare what the reader sees, not the stored code (« Médecine générale » twice). -->
+          @let specialtyLabel = (specialization() | enumLabel: 'specialization') ?? '';
+          @if (
+            departmentName() &&
+            departmentName()!.trim().toLowerCase() !== specialtyLabel.trim().toLowerCase() &&
+            departmentName() !== specialization()
+          ) {
             {{ ' '
             }}<span class="doctor-chip dept-chip">
               <span class="material-symbols-outlined">domain</span>

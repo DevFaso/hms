@@ -436,7 +436,8 @@
       "SCOPE_UNKNOWN": "Scope not recorded",
       "IMPERSONATOR": "Impersonated by {{actor}}",
       "SHOW_TEN": "Show up to 10 events",
-      "HOSPITAL_FILTER": "Hospital filter (ID)"
+      "HOSPITAL_FILTER": "Hospital",
+      "ALL_HOSPITALS": "All hospitals"
     },
     "STAT": {
       "ORGANIZATIONS": "Organizations",
@@ -906,6 +907,7 @@
     "RETRY": "Retry",
     "EMPTY": "No integrations are registered.",
     "ENABLED": "Enabled",
+    "NOT_CONFIGURED": "Not configured",
     "DISABLED": "Disabled",
     "NO_ORG_HISTORY": "No call history recorded for this integration yet.",
     "PLATFORM_WIDE": "Platform-wide",
@@ -15816,6 +15818,17 @@
     "APPROVER": "Approver",
     "VERSION": "Version",
     "ENFORCED_IN": "Applied in",
+    "SOURCE_OPEN": "Open the source",
+    "AREA": {
+      "PRESCRIBING": "Prescribing",
+      "MATERNITY": "Maternity",
+      "VITALS": "Vital signs",
+      "DEATH": "Deaths and stillbirths",
+      "RECORDS": "Patient record and privacy",
+      "IMAGING": "Imaging",
+      "BILLING": "Billing",
+      "LAB": "Laboratory and blood bank"
+    },
     "NOTE": "Note",
     "REVOKE_REASON": "Reason for revoking",
     "SIGNED_BY": "Signed off on {{date}} by {{title}} ({{name}})",
