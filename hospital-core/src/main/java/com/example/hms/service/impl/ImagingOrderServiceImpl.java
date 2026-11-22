@@ -114,7 +114,10 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         imagingOrder.setOrderingProviderUserId(orderingUser != null ? orderingUser.getId() : null);
         imagingOrder.setOrderingProviderName(orderingUser != null ? displayName(orderingUser) : null);
 
-        List<ImagingOrder> duplicateMatches = loadDuplicateMatches(patient.getId(), hospital.getId(), request.getModality(), request.getBodyRegion(), request.getDuplicateLookbackDays());
+        // QA D3450 / D3254: the duplicate rule compares the order as it is stored: with a catalogue exam, the
+        // exam's own modality and body region, not what the form displayed.
+        List<ImagingOrder> duplicateMatches = loadDuplicateMatches(patient.getId(), hospital.getId(),
+            imagingOrder.getModality(), imagingOrder.getBodyRegion(), request.getDuplicateLookbackDays());
         if (!duplicateMatches.isEmpty()) {
             imagingOrder.setDuplicateOfRecentOrder(true);
             imagingOrder.setDuplicateReferenceOrderId(duplicateMatches.get(0).getId());
