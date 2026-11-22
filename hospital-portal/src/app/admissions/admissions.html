@@ -1090,7 +1090,11 @@
           }
           <!-- QA D3303: a take-home order still to sign is shown, never « aucun traitement de sortie ». -->
           @if (!takeHomeLoading() && takeHomeUnsigned().length) {
-            <div class="take-home-unsigned" role="status" data-testid="discharge-take-home-unsigned">
+            <div
+              class="take-home-unsigned"
+              role="status"
+              data-testid="discharge-take-home-unsigned"
+            >
               <p class="take-home-unsigned__title">
                 {{ 'ADMISSIONS.TAKE_HOME_UNSIGNED_TITLE' | translate }}
               </p>

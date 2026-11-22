@@ -1205,6 +1205,8 @@ export function goesHome(rx: Pick<PrescriptionResponse, 'takeHome' | 'status'>):
 /** QA D3303: marked for home, written, not signed yet: listed apart, it reaches the summary once signed. */
 const AWAITING_SIGNATURE = new Set(['DRAFT', 'PENDING_SIGNATURE']);
 
-export function awaitsSignatureForHome(rx: Pick<PrescriptionResponse, 'takeHome' | 'status'>): boolean {
+export function awaitsSignatureForHome(
+  rx: Pick<PrescriptionResponse, 'takeHome' | 'status'>,
+): boolean {
   return !!rx.takeHome && AWAITING_SIGNATURE.has(String(rx.status ?? '').toUpperCase());
 }

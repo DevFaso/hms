@@ -242,6 +242,16 @@ public class LabResult extends BaseEntity {
     @Column(name = "critical_readback_by_display", length = 255)
     private String criticalReadBackByDisplay;
 
+    /**
+     * V363, rule CRITICAL_RESULT_ESCALATION: the clinical role the acknowledging clinician acted under and the
+     * channel the result reached them by. With the name and the time above: who ended the escalation.
+     */
+    @Column(name = "critical_ack_role", length = 40)
+    private String criticalAckRole;
+
+    @Column(name = "critical_ack_channel", length = 20)
+    private String criticalAckChannel;
+
     @Builder.Default
     @Column(name = "released", nullable = false)
     private boolean released = false;

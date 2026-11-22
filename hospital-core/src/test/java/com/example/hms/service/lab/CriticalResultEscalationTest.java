@@ -1,0 +1,381 @@
+package com.example.hms.service.lab;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.example.hms.enums.AbnormalFlag;
+import com.example.hms.enums.EncounterType;
+import com.example.hms.mapper.LabResultMapper;
+import com.example.hms.model.CriticalResultIncident;
+import com.example.hms.model.Encounter;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.LabOrder;
+import com.example.hms.model.LabResult;
+import com.example.hms.model.LabTestDefinition;
+import com.example.hms.model.Notification;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Staff;
+import com.example.hms.model.User;
+import com.example.hms.repository.CriticalResultIncidentRepository;
+import com.example.hms.repository.LabResultRepository;
+import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.UserRepository;
+import com.example.hms.service.CriticalValueNotificationService;
+import com.example.hms.service.SmsService;
+import com.example.hms.service.lab.CriticalResultEscalationLadder.Minutes;
+import com.example.hms.service.lab.CriticalResultEscalationLadder.Step;
+import net.javacrumbs.shedlock.core.LockAssert;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.transaction.PlatformTransactionManager;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+
+/**
+ * QA r70 scorecard C5, provisional rule CRITICAL_RESULT_ESCALATION: T0 the prescriber and the nurse in charge
+ * (an absent prescriber is skipped), +15 the cover, +30 the médecin-chef and the biologist, +60 the unresolved
+ * alert and its incident, then reminders with no cap; no administrator ever receives the value; only a
+ * clinician's acknowledgement (name, role, time, channel) ends it.
+ */
+class CriticalResultEscalationTest {
+
+    private static final String ESCALATION = "CRITICAL_LAB_RESULT_ESCALATION";
+
+    private final com.example.hms.service.RenderingNotificationService notifications =
+        mock(com.example.hms.service.RenderingNotificationService.class, org.mockito.Answers.CALLS_REAL_METHODS);
+    private final SmsService sms = mock(SmsService.class);
+    private final LabResultRepository results = mock(LabResultRepository.class);
+    private final LabResultMapper mapper = mock(LabResultMapper.class);
+    private final StaffRepository staff = mock(StaffRepository.class);
+    private final CriticalResultRecipients recipients = mock(CriticalResultRecipients.class);
+    private final CriticalResultIncidentRepository incidents = mock(CriticalResultIncidentRepository.class);
+    private final UserRepository users = mock(UserRepository.class);
+    private CriticalValueNotificationService service;
+
+    private LabResult result;
+    private Hospital hospital;
+    private Staff prescriber;
+
+    @BeforeEach
+    void setUp() {
+        LockAssert.TestHelper.makeAllAssertsPass(true);
+        service = new CriticalValueNotificationService(notifications, sms, results, mapper, staff,
+            mock(PlatformTransactionManager.class), com.example.hms.i18n.TestMessageSources.bundles());
+        service.setEscalationCollaborators(recipients, incidents, users);
+
+        hospital = Hospital.builder().name("Clinique").code("CLI").build();
+        hospital.setId(UUID.randomUUID());
+        User doctor = new User();
+        doctor.setId(UUID.randomUUID());
+        doctor.setUsername("dr.diallo");
+        prescriber = Staff.builder().build();
+        prescriber.setId(UUID.randomUUID());
+        prescriber.setUser(doctor);
+        Patient patient = new Patient();
+        patient.setFirstName("Bea");
+        patient.setLastName("Ward");
+        LabTestDefinition definition = new LabTestDefinition();
+        definition.setName("Potassium");
+        Encounter stay = new Encounter();
+        stay.setEncounterType(EncounterType.INPATIENT);
+        LabOrder order = new LabOrder();
+        order.setOrderingStaff(prescriber);
+        order.setPatient(patient);
+        order.setLabTestDefinition(definition);
+        order.setHospital(hospital);
+        order.setEncounter(stay);
+        result = new LabResult();
+        result.setId(UUID.randomUUID());
+        result.setLabOrder(order);
+        result.setResultValue("7.1");
+        result.setResultUnit("mmol/L");
+        result.setReleased(true);
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+
+        lenient().when(notifications.created(anyString(), anyString(), anyString())).thenReturn(new Notification());
+        when(sms.deliversRealSms()).thenReturn(false);
+        when(results.findCriticalUnacknowledged()).thenReturn(List.of(result));
+        when(recipients.nursesInCharge(eq(hospital.getId()), anyBoolean())).thenReturn(Set.of("inf.garde"));
+        when(recipients.cover(hospital.getId(), "dr.diallo")).thenReturn(Set.of("dr.garde"));
+        when(recipients.medicalLead(hospital)).thenReturn(Set.of("dr.chef"));
+        when(recipients.biologists(hospital.getId())).thenReturn(Set.of("bio.kabore"));
+        when(recipients.administrators(hospital.getId())).thenReturn(Set.of("admin.sawadogo"));
+        when(incidents.findByLabResultId(any())).thenReturn(Optional.empty());
+    }
+
+    private void told(String username, String type) {
+        verify(notifications).created(anyString(), eq(username), eq(type));
+    }
+
+    private void notTold(String username) {
+        verify(notifications, never()).created(anyString(), eq(username), anyString());
+    }
+
+    private void minutesAgo(int minutes, int level) {
+        result.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(minutes));
+        result.setCriticalEscalationLevel((short) level);
+    }
+
+    // ── The ladder itself ───────────────────────────────────────────────
+
+    @Test
+    @DisplayName("the default steps are 15, 30 and 60 minutes, and nothing is due before them")
+    void theStepsOfTheLadder() {
+        LocalDateTime t0 = LocalDateTime.of(2026, 11, 22, 10, 0);
+        Minutes m = Minutes.DEFAULT;
+        assertThat(m).isEqualTo(new Minutes(15, 30, 60));
+        assertThat(CriticalResultEscalationLadder.due(0, t0, null, m, t0.plusMinutes(14))).isEmpty();
+        assertThat(CriticalResultEscalationLadder.due(0, t0, null, m, t0.plusMinutes(15))).contains(Step.COVER);
+        assertThat(CriticalResultEscalationLadder.due(1, t0, t0.plusMinutes(15), m, t0.plusMinutes(29))).isEmpty();
+        assertThat(CriticalResultEscalationLadder.due(1, t0, t0.plusMinutes(15), m, t0.plusMinutes(30))).contains(Step.MEDICAL_LEAD);
+        assertThat(CriticalResultEscalationLadder.due(2, t0, t0.plusMinutes(30), m, t0.plusMinutes(59))).isEmpty();
+        assertThat(CriticalResultEscalationLadder.due(2, t0, t0.plusMinutes(30), m, t0.plusMinutes(60))).contains(Step.UNRESOLVED);
+    }
+
+    @Test
+    @DisplayName("there is no round cap: after the final alert a reminder is due at the last interval, at any level")
+    void noRoundCapEver() {
+        LocalDateTime t0 = LocalDateTime.of(2026, 11, 22, 10, 0);
+        Minutes m = Minutes.DEFAULT;
+        LocalDateTime last = t0.plusMinutes(60);
+        assertThat(CriticalResultEscalationLadder.due(3, t0, last, m, last.plusMinutes(29))).isEmpty();
+        for (int level : new int[] {3, 4, 12, 13, 200, Short.MAX_VALUE}) {
+            assertThat(CriticalResultEscalationLadder.due(level, t0, last, m, last.plusMinutes(30)))
+                .as("level " + level).contains(Step.REMINDER);
+        }
+    }
+
+    @Test
+    @DisplayName("a hospital's own minutes are used when they are a valid, increasing set; otherwise the defaults")
+    void perHospitalMinutes() {
+        assertThat(Minutes.of(null, null, null)).isEqualTo(Minutes.DEFAULT);
+        assertThat(Minutes.of(10, 20, 45)).isEqualTo(new Minutes(10, 20, 45));
+        assertThat(Minutes.of(10, null, null)).isEqualTo(new Minutes(10, 30, 60));
+        // Not increasing, under five minutes, over a day: the whole set falls back, never a ladder with no step.
+        assertThat(Minutes.of(30, 20, 60)).isEqualTo(Minutes.DEFAULT);
+        assertThat(Minutes.of(1, 30, 60)).isEqualTo(Minutes.DEFAULT);
+        assertThat(Minutes.of(15, 30, 100_000)).isEqualTo(Minutes.DEFAULT);
+        assertThat(new Minutes(15, 30, 60).reminderEvery()).isEqualTo(30);
+    }
+
+    // ── T0 ──────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("T0: the prescriber and the nurse in charge, nobody else")
+    void t0_thePrescriberAndTheNurseInCharge() {
+        service.notifyIfCritical(result);
+
+        told("dr.diallo", "CRITICAL_LAB_RESULT");
+        told("inf.garde", "CRITICAL_LAB_RESULT");
+        notTold("dr.garde");
+        notTold("admin.sawadogo");
+        assertThat(result.getCriticalNotifiedAt()).isNotNull();
+        assertThat(result.getCriticalEscalationLevel()).isZero();
+    }
+
+    @Test
+    @DisplayName("T0: a prescriber marked absent is skipped: the cover is told at once")
+    void t0_anAbsentPrescriberIsSkipped() {
+        when(recipients.prescriberAbsent(prescriber)).thenReturn(true);
+
+        service.notifyIfCritical(result);
+
+        told("dr.garde", ESCALATION);
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 1);
+        notTold("dr.chef");
+        notTold("admin.sawadogo");
+    }
+
+    // ── The steps ───────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("+15 min: the covering doctor, the prescriber staying copied; not yet the médecin-chef")
+    void plus15_theCover() {
+        minutesAgo(16, 0);
+
+        assertThat(service.escalateOverdue()).isEqualTo(1);
+
+        told("dr.diallo", ESCALATION);
+        told("dr.garde", ESCALATION);
+        notTold("dr.chef");
+        notTold("bio.kabore");
+        notTold("admin.sawadogo");
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 1);
+        verify(incidents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("before +15 min nothing is sent again")
+    void before15_nothing() {
+        minutesAgo(14, 0);
+
+        assertThat(service.escalateOverdue()).isZero();
+
+        verify(notifications, never()).created(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("+30 min: the médecin-chef and the responsible biologist are added")
+    void plus30_theMedicalLeadAndTheBiologist() {
+        minutesAgo(31, 1);
+        result.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(16));
+
+        service.escalateOverdue();
+
+        told("dr.chef", ESCALATION);
+        told("bio.kabore", ESCALATION);
+        told("dr.garde", ESCALATION);
+        notTold("admin.sawadogo");
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 2);
+    }
+
+    @Test
+    @DisplayName("+60 min: « résultat critique non résolu », an incident record, and a value-free flag for the administrators")
+    void plus60_unresolvedAlertAndIncident() {
+        minutesAgo(61, 2);
+        result.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(31));
+
+        service.escalateOverdue();
+
+        ArgumentCaptor<String> texts = ArgumentCaptor.forClass(String.class);
+        verify(notifications).created(texts.capture(), eq("dr.chef"), eq(ESCALATION));
+        assertThat(texts.getValue()).contains("NON RÉSOLU").contains("7,1").contains("Bea Ward");
+        ArgumentCaptor<CriticalResultIncident> incident = ArgumentCaptor.forClass(CriticalResultIncident.class);
+        verify(incidents).save(incident.capture());
+        assertThat(incident.getValue().getLabResultId()).isEqualTo(result.getId());
+        assertThat(incident.getValue().getHospitalId()).isEqualTo(hospital.getId());
+        assertThat(incident.getValue().getCareSetting()).isEqualTo("INPATIENT");
+        assertThat(incident.getValue().getMinutesUnacknowledged()).isBetween(60, 62);
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 3);
+
+        // The administrator: no value, no test, no patient.
+        ArgumentCaptor<String> flag = ArgumentCaptor.forClass(String.class);
+        verify(notifications).created(flag.capture(), eq("admin.sawadogo"), eq(ESCALATION));
+        assertThat(flag.getValue()).doesNotContain("7,1").doesNotContain("7.1").doesNotContain("Potassium")
+            .doesNotContain("Bea").doesNotContain("Ward").contains("incident");
+    }
+
+    @Test
+    @DisplayName("after the final alert the chain is reminded for as long as nobody acknowledges: level 12 and beyond")
+    void theChainNeverGoesSilent() {
+        minutesAgo(9 * 60, 12);
+        result.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(31));
+        when(incidents.findByLabResultId(result.getId())).thenReturn(Optional.of(new CriticalResultIncident()));
+
+        assertThat(service.escalateOverdue()).isEqualTo(1);
+
+        told("dr.garde", ESCALATION);
+        told("dr.chef", ESCALATION);
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 13);
+        // A reminder: no second incident, no second flag to the administrators.
+        verify(incidents, never()).save(any());
+        notTold("admin.sawadogo");
+    }
+
+    @Test
+    @DisplayName("a sweep that was down goes straight to the furthest step due, once")
+    void aLateSweepTakesTheFurthestStepOnce() {
+        minutesAgo(75, 0);
+
+        service.escalateOverdue();
+
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 3);
+        verify(notifications, times(1)).created(anyString(), eq("dr.garde"), eq(ESCALATION));
+        verify(incidents).save(any());
+    }
+
+    @Test
+    @DisplayName("a hospital's own minutes move the steps")
+    void aHospitalsOwnMinutes() {
+        hospital.setCriticalCoverAfterMinutes(5);
+        hospital.setCriticalLeadAfterMinutes(10);
+        hospital.setCriticalUnresolvedAfterMinutes(20);
+        minutesAgo(11, 0);
+
+        service.escalateOverdue();
+
+        told("dr.chef", ESCALATION);
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 2);
+    }
+
+    @Test
+    @DisplayName("no administrator is ever on a value-bearing step, whatever the level")
+    void noAdministratorOnAValueBearingStep() {
+        for (int[] at : new int[][] {{16, 0}, {31, 1}, {200, 5}}) {
+            clearInvocations(notifications);
+            minutesAgo(at[0], at[1]);
+            result.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(31));
+            service.escalateOverdue();
+            notTold("admin.sawadogo");
+        }
+        verify(staff, never()).findActiveUsernamesByHospitalAndRole(any(), eq("ROLE_HOSPITAL_ADMIN"));
+    }
+
+    // ── The acknowledgement ─────────────────────────────────────────────
+
+    @Test
+    @DisplayName("only a matching read-back ends it, and records the name, the role, the time and the channel; it closes the incident")
+    void theAcknowledgementRecordsWhoAsWhatWhenAndHow() {
+        minutesAgo(90, 3);
+        when(results.confirmReadBackIfUnconfirmed(eq(result.getId()), anyString(), any(), any(), any())).thenReturn(1);
+        CriticalResultIncident open = CriticalResultIncident.builder().labResultId(result.getId()).build();
+        when(incidents.findByLabResultId(result.getId())).thenReturn(Optional.of(open));
+        UUID clinician = UUID.randomUUID();
+
+        service.recordReadBack(result, "7.1", clinician, "Dr Awa Garde", "ROLE_DOCTOR", "PHONE");
+
+        assertThat(result.isAcknowledged()).isTrue();
+        assertThat(result.getAcknowledgedByDisplay()).isEqualTo("Dr Awa Garde");
+        assertThat(result.getAcknowledgedAt()).isNotNull();
+        assertThat(result.getCriticalAckRole()).isEqualTo("ROLE_DOCTOR");
+        assertThat(result.getCriticalAckChannel()).isEqualTo("PHONE");
+        assertThat(open.getResolvedAt()).isNotNull();
+        assertThat(open.getResolvedByUserId()).isEqualTo(clinician);
+        verify(incidents).save(open);
+    }
+
+    @Test
+    @DisplayName("the channel is the application when the clinician does not say")
+    void theChannelDefaultsToTheApplication() {
+        minutesAgo(5, 0);
+        when(results.confirmReadBackIfUnconfirmed(eq(result.getId()), anyString(), any(), any(), any())).thenReturn(1);
+
+        service.recordReadBack(result, "7.1", UUID.randomUUID(), "Inf. Garde", "ROLE_NURSE", null);
+
+        assertThat(result.getCriticalAckChannel()).isEqualTo("IN_APP");
+        assertThat(result.getCriticalAckRole()).isEqualTo("ROLE_NURSE");
+    }
+
+    @Test
+    @DisplayName("an outpatient result follows the same ladder, and its incident says so")
+    void anOutpatientResult() {
+        result.getLabOrder().getEncounter().setEncounterType(EncounterType.CONSULTATION);
+        when(recipients.nursesInCharge(hospital.getId(), false)).thenReturn(Set.of());
+        minutesAgo(61, 2);
+        result.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(31));
+
+        service.escalateOverdue();
+
+        ArgumentCaptor<CriticalResultIncident> incident = ArgumentCaptor.forClass(CriticalResultIncident.class);
+        verify(incidents).save(incident.capture());
+        assertThat(incident.getValue().getCareSetting()).isEqualTo("OUTPATIENT");
+        // Nothing here ever texts a patient: the service's only SMS targets are staff accounts.
+        verify(sms, never()).send(anyString(), anyString());
+    }
+}

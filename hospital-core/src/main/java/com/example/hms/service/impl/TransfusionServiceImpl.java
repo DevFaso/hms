@@ -180,7 +180,7 @@ public class TransfusionServiceImpl implements TransfusionService {
     public com.example.hms.payload.dto.transfusion.AntibodyStatusResponseDTO getAntibodyStatus(UUID patientId) {
         UUID hospitalId = requireHospital();
         Patient patient = patientChartAccess.require(patientId, hospitalId);
-        return antibodyScreen.status(patient.getId(), hospitalId);
+        return antibodyScreen.status(patient.getId(), hospitalId, patient.getFullName());
     }
 
     /** The group as it is shown, with the permanent allo-immunisation flag of this hospital's record. */
@@ -303,8 +303,10 @@ public class TransfusionServiceImpl implements TransfusionService {
     public PatientBloodGroupResponseDTO getCurrentBloodGroup(UUID patientId) {
         UUID hospitalId = requireHospital();
         patientChartAccess.require(patientId, hospitalId);
+        // QA D3351: the request dialog reads the flag here, before a request exists.
         return bloodGroupRepository.findByPatient_IdAndHospital_IdAndSupersededFalse(patientId, hospitalId)
             .map(mapper::toDto)
+            .map(dto -> withAntibodyFlag(dto, patientId, hospitalId))
             .orElseThrow(() -> new ResourceNotFoundException(MSG_GROUP_NOT_FOUND, patientId));
     }
 

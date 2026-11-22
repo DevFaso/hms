@@ -4899,7 +4899,11 @@
     "QC_OVERRIDE": "Released despite rejected QC",
     "RELEASE_CRITICAL_FROM_WORKLIST": "A critical result is released from the release worklist, where you record who was told.",
     "RELEASE_FROM_WORKLIST": "Release it from the release worklist.",
-    "READ_BACK_CONFIRMED_DETAIL": "Read-back confirmed: {{test}} « {{value}} » — {{patient}}"
+    "READ_BACK_CONFIRMED_DETAIL": "Read-back confirmed: {{test}} « {{value}} » — {{patient}}",
+    "READ_BACK_CHANNEL": "How the result reached you",
+    "READ_BACK_CHANNEL_IN_APP": "In the application",
+    "READ_BACK_CHANNEL_PHONE": "By telephone",
+    "READ_BACK_CHANNEL_IN_PERSON": "In person"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Abnormal",
@@ -15237,7 +15241,18 @@
     "EMPTY": "No critical result is waiting for a read-back.",
     "ORDERED_BY": "Ordered by",
     "PAGING_SINCE": "Alert sent",
-    "ROUNDS": "Escalation rounds"
+    "ROUNDS": "Escalation rounds",
+    "ESCALATION_TITLE": "Escalation steps (provisional rule)",
+    "ESCALATION_HINT": "A critical result nobody acknowledges goes to the covering doctor, then to the médecin-chef and the biologist, then becomes an « unresolved critical result » with an incident record. Only a clinician’s read-back ends it. The minutes count from the first notice. Provisional rule, to be signed off by the médecin-chef and the biologist.",
+    "ESCALATION_COVER": "Covering doctor after (min)",
+    "ESCALATION_LEAD": "Médecin-chef and biologist after (min)",
+    "ESCALATION_UNRESOLVED": "Unresolved, incident after (min)",
+    "ESCALATION_CHIEF": "Médecin-chef",
+    "ESCALATION_CHIEF_NONE": "Not named: heads of department, else every doctor",
+    "ESCALATION_INVALID": "The three steps must increase, from 5 minutes to 1440 (for example 15, 30 and 60).",
+    "ESCALATION_SAVED": "Escalation steps saved.",
+    "ESCALATION_SAVE_ERROR": "The escalation steps could not be saved.",
+    "ESCALATION_LOAD_ERROR": "The escalation steps could not be loaded."
   },
   "PHARMACY_MONEY": {
     "HANDOVER": {

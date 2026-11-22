@@ -16,6 +16,7 @@ import {
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { roleContextStub } from '../testing/role-context.stub';
+import { expectEmptySubmitRefusal } from '../testing/form-refusal-behaviour';
 
 /**
  * QA D3351 (r70), provisional rule TRANSFUSION_POSITIVE_ANTIBODY_SCREEN: the flag is shown wherever red cells
@@ -83,7 +84,10 @@ describe('TransfusionComponent: positive antibody screen (QA D3351)', () => {
         provideHttpClientTesting(),
         provideRouter([]),
         { provide: TransfusionService, useValue: txSpy },
-        { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['success', 'error']) },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
+        },
         {
           provide: RoleContextService,
           useValue: roleContextStub({ superAdmin: false, hospitalId: 'h1', roles }),
@@ -242,6 +246,18 @@ describe('TransfusionComponent: positive antibody screen (QA D3351)', () => {
         transfusionRequestId: 'req-1',
       }),
     );
+  });
+
+  it('an empty antibody record is refused in the dialog and names its field', async () => {
+    await setUp(['ROLE_LAB_DIRECTOR']);
+    open(flagged());
+    component.openAntibodyWorkup();
+    fixture.detectChanges();
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="submit-antibody-workup"]',
+    });
+    expect(marked).toEqual(['ab-specificities']);
+    expect(txSpy.recordAntibodyWorkup).not.toHaveBeenCalled();
   });
 
   it('a laboratory technician and a manager are not offered the antibody record', async () => {

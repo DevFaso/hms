@@ -4899,7 +4899,11 @@
     "QC_OVERRIDE": "Released despite rejected QC",
     "RELEASE_CRITICAL_FROM_WORKLIST": "A critical result is released from the release worklist, where you record who was told.",
     "RELEASE_FROM_WORKLIST": "Release it from the release worklist.",
-    "READ_BACK_CONFIRMED_DETAIL": "Relectura confirmada: {{test}} « {{value}} » — {{patient}}"
+    "READ_BACK_CONFIRMED_DETAIL": "Relectura confirmada: {{test}} « {{value}} » — {{patient}}",
+    "READ_BACK_CHANNEL": "Cómo le llegó el resultado",
+    "READ_BACK_CHANNEL_IN_APP": "En la aplicación",
+    "READ_BACK_CHANNEL_PHONE": "Por teléfono",
+    "READ_BACK_CHANNEL_IN_PERSON": "En persona"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Anormal",
@@ -15237,7 +15241,18 @@
     "EMPTY": "Ningún resultado crítico espera repetición.",
     "ORDERED_BY": "Solicitado por",
     "PAGING_SINCE": "Alerta enviada",
-    "ROUNDS": "Escaladas"
+    "ROUNDS": "Escaladas",
+    "ESCALATION_TITLE": "Etapas de la escalada (regla provisional)",
+    "ESCALATION_HINT": "Un resultado crítico que nadie confirma pasa al médico de cobertura, luego al médico jefe y al biólogo, y después se convierte en un « resultado crítico no resuelto » con un registro de incidente. Solo la relectura por un clínico le pone fin. Los minutos cuentan desde el primer aviso. Regla provisional, pendiente de la validación del médico jefe y del biólogo.",
+    "ESCALATION_COVER": "Médico de cobertura tras (min)",
+    "ESCALATION_LEAD": "Médico jefe y biólogo tras (min)",
+    "ESCALATION_UNRESOLVED": "No resuelto, incidente tras (min)",
+    "ESCALATION_CHIEF": "Médico jefe",
+    "ESCALATION_CHIEF_NONE": "Sin designar: jefes de servicio, si no todos los médicos",
+    "ESCALATION_INVALID": "Las tres etapas deben ser crecientes, de 5 minutos a 1440 (por ejemplo 15, 30 y 60).",
+    "ESCALATION_SAVED": "Etapas de la escalada guardadas.",
+    "ESCALATION_SAVE_ERROR": "No se pudieron guardar las etapas de la escalada.",
+    "ESCALATION_LOAD_ERROR": "No se pudieron cargar las etapas de la escalada."
   },
   "PHARMACY_MONEY": {
     "HANDOVER": {

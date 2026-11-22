@@ -438,7 +438,9 @@ describe('BedBoardComponent', () => {
     cmp.transferForm.toBedId = 'c-02';
     fixture.detectChanges();
     expect(
-      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="transfer-labor-warning"]'),
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="transfer-labor-warning"]',
+      ),
     ).toBeNull();
     cmp.submitTransfer();
     expect(

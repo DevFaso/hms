@@ -132,7 +132,7 @@ class LabResultServiceImplNullScopeTest {
         when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(),
                 org.mockito.ArgumentMatchers.anyBoolean(), any()))
             .thenReturn(List.of(result));
-        when(criticalValueNotificationService.recordReadBack(any(), any(), any(), any())).thenReturn(result);
+        when(criticalValueNotificationService.recordReadBack(any(), any(), any(), any(), any(), any())).thenReturn(result);
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
     }
 
@@ -197,7 +197,7 @@ class LabResultServiceImplNullScopeTest {
         @Test
         void readBackIsRefusedExactlyLikeAMissingResult() {
             assertRefusedLikeMissing(id -> service.recordCriticalReadBack(id, readBack(), Locale.ENGLISH));
-            verify(criticalValueNotificationService, never()).recordReadBack(any(), any(), any(), any());
+            verify(criticalValueNotificationService, never()).recordReadBack(any(), any(), any(), any(), any(), any());
         }
 
         @Test

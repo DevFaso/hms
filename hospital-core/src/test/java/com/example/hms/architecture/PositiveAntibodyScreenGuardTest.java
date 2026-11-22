@@ -78,6 +78,10 @@ class PositiveAntibodyScreenGuardTest {
             .contains("antibodyScreen.requireEmergencyDeclaration(request, patient.getId(), hospitalId, urgency)");
         assertThat(method(code, "public PatientBloodGroupResponseDTO recordBloodGroup("))
             .contains("antibodyScreen.askBiologistToIdentify(saved)");
+        // The flag reaches the screens that ask for blood: the group read before a request, and the request itself.
+        assertThat(method(code, "public PatientBloodGroupResponseDTO getCurrentBloodGroup("))
+            .contains("withAntibodyFlag(dto, patientId, hospitalId)");
+        assertThat(code).contains("detail.setAlloImmunised(true);");
         // Required injection: the rule is never silently absent in production.
         assertThat(code).containsPattern(
             "@org\\.springframework\\.beans\\.factory\\.annotation\\.Autowired\\s+public void setAntibodyScreen\\(");

@@ -193,6 +193,8 @@ class DeceasedPatientCareGuardTest {
         Transfusion#completeAdministration,stopAdministration | ends a transfusion already running
         Transfusion#cancelRequest | closes a request
         Transfusion#recordCrossmatch,recordBloodGroup | a laboratory result on a sample collected before the death
+        Transfusion#recordAntibodyWorkup | the biologist's finding on a sample collected before the death (QA D3351); it gives no care
+        HospitalCriticalResultEscalation#set | a hospital's escalation settings, no patient
         Transfusion#receiveUnit,discardUnit | blood bank stock, no patient
         TreatmentConsent#revoke | closes a consent
         TreatmentPlan#update,addFollowUp,updateFollowUp,addReview | an existing plan, late documentation

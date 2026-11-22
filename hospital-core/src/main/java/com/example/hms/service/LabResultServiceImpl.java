@@ -1288,8 +1288,26 @@ public class LabResultServiceImpl implements LabResultService {
 
         UUID actorId = authService.getCurrentUserId();
         LabResult updated = criticalValueNotificationService.recordReadBack(
-            labResult, request.getRepeatedValue(), actorId, resolveActorDisplay(actorId));
+            labResult, request.getRepeatedValue(), actorId, resolveActorDisplay(actorId),
+            acknowledgingRole(), request.getChannel());
         return labResultMapper.toResponseDTO(updated);
+    }
+
+    /** The clinical role the caller acts under (the endpoint admits only these), for the acknowledgement record. */
+    private static String acknowledgingRole() {
+        org.springframework.security.core.Authentication auth =
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) {
+            return null;
+        }
+        java.util.Set<String> held = new java.util.HashSet<>();
+        auth.getAuthorities().forEach(authority -> held.add(authority.getAuthority()));
+        for (String role : new String[] {"ROLE_SURGEON", "ROLE_PHYSICIAN", "ROLE_DOCTOR", "ROLE_MIDWIFE", "ROLE_NURSE"}) {
+            if (held.contains(role)) {
+                return role;
+            }
+        }
+        return null;
     }
 
     /**

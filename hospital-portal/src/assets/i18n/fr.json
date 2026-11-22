@@ -4899,7 +4899,11 @@
     "QC_OVERRIDE": "Validé malgré un CQ rejeté",
     "RELEASE_CRITICAL_FROM_WORKLIST": "Un résultat critique se valide depuis la file de validation, où vous notez qui a été prévenu.",
     "RELEASE_FROM_WORKLIST": "Validez-le depuis la file de validation.",
-    "READ_BACK_CONFIRMED_DETAIL": "Relecture confirmée : {{test}} « {{value}} » — {{patient}}"
+    "READ_BACK_CONFIRMED_DETAIL": "Relecture confirmée : {{test}} « {{value}} » — {{patient}}",
+    "READ_BACK_CHANNEL": "Comment le résultat vous est parvenu",
+    "READ_BACK_CHANNEL_IN_APP": "Dans l’application",
+    "READ_BACK_CHANNEL_PHONE": "Par téléphone",
+    "READ_BACK_CHANNEL_IN_PERSON": "En personne"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Anormal",
@@ -15237,7 +15241,18 @@
     "EMPTY": "Aucun résultat critique n’attend de relecture.",
     "ORDERED_BY": "Prescripteur",
     "PAGING_SINCE": "Alerte envoyée",
-    "ROUNDS": "Relances"
+    "ROUNDS": "Relances",
+    "ESCALATION_TITLE": "Étapes de l’escalade (règle provisoire)",
+    "ESCALATION_HINT": "Un résultat critique que personne n’acquitte passe au médecin de couverture, puis au médecin-chef et au biologiste, puis devient un « résultat critique non résolu » avec un enregistrement d’incident. Seule la relecture par un clinicien y met fin. Les minutes comptent depuis la première notification. Règle provisoire, à valider par le médecin-chef et le biologiste.",
+    "ESCALATION_COVER": "Médecin de couverture après (min)",
+    "ESCALATION_LEAD": "Médecin-chef et biologiste après (min)",
+    "ESCALATION_UNRESOLVED": "Non résolu, incident après (min)",
+    "ESCALATION_CHIEF": "Médecin-chef",
+    "ESCALATION_CHIEF_NONE": "Non désigné : chefs de service, sinon tous les médecins",
+    "ESCALATION_INVALID": "Les trois étapes doivent être croissantes, de 5 minutes à 1440 (par exemple 15, 30 et 60).",
+    "ESCALATION_SAVED": "Étapes de l’escalade enregistrées.",
+    "ESCALATION_SAVE_ERROR": "Les étapes de l’escalade n’ont pas pu être enregistrées.",
+    "ESCALATION_LOAD_ERROR": "Les étapes de l’escalade n’ont pas pu être chargées."
   },
   "PHARMACY_MONEY": {
     "HANDOVER": {

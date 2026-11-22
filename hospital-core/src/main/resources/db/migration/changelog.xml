@@ -3951,4 +3951,17 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V363 (QA r70 scorecard C5): the critical-result escalation ladder:
+         per-hospital minutes and the médecin-chef on hospital.hospitals, the
+         role and channel of an acknowledgement on lab.lab_results, and
+         lab.critical_result_incidents. Additive, IF NOT EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V363-r70-critical-result-escalation" author="hms-team" runOnChange="false">
+        <sqlFile path="V363__r70_critical_result_escalation.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

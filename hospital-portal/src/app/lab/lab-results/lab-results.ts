@@ -18,6 +18,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   LabService,
+  CriticalAckChannel,
   LabResultResponse,
   LabResultTrendPoint,
   LabResultReferenceRange,
@@ -1044,6 +1045,9 @@ export class LabResultsComponent implements OnInit {
 
   readBackTarget = signal<LabResultResponse | null>(null);
   readBackValue = signal('');
+  /** QA r70 (C5): how the result reached the clinician; recorded with the acknowledgement. */
+  readBackChannel = signal<CriticalAckChannel>('IN_APP');
+  readonly readBackChannels: CriticalAckChannel[] = ['IN_APP', 'PHONE', 'IN_PERSON'];
   readBackSubmitting = signal(false);
   /** QA D2266: the last confirmed read-back, kept on screen until dismissed. */
   readonly readBackConfirmation = signal<string | null>(null);
@@ -1071,6 +1075,7 @@ export class LabResultsComponent implements OnInit {
     // Deliberately blank, never prefilled with the result: the check only
     // catches a transcription error if the clinician types what they heard.
     this.readBackValue.set('');
+    this.readBackChannel.set('IN_APP');
   }
 
   closeReadBack(): void {
@@ -1086,7 +1091,12 @@ export class LabResultsComponent implements OnInit {
       return;
     }
     this.readBackSubmitting.set(true);
-    this.labService.readBackCriticalValue(target.id, value).subscribe({
+    const channel = this.readBackChannel();
+    const sent =
+      channel === 'IN_APP'
+        ? this.labService.readBackCriticalValue(target.id, value)
+        : this.labService.readBackCriticalValue(target.id, value, channel);
+    sent.subscribe({
       next: (updated) => {
         this.toast.success(this.translate.instant('LAB_RESULTS.READ_BACK_CONFIRMED'));
         this.readBackConfirmation.set(

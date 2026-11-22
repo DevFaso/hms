@@ -138,7 +138,11 @@ public final class ClinicalRuleRegistry {
             "service.billing.PriceListService", "service.billing.PriceVersionRules"),
         // QA D3351 (r70), research report « Transfusion and critical result cover », section 1.
         rule(ClinicalRuleSetKey.TRANSFUSION_POSITIVE_ANTIBODY_SCREEN, DATE_2026_11_22,
-            "service.support.PositiveAntibodyScreenPolicy", "service.transfusion.PositiveAntibodyScreenService"));
+            "service.support.PositiveAntibodyScreenPolicy", "service.transfusion.PositiveAntibodyScreenService"),
+        // QA r70 scorecard C5, research report « Transfusion and critical result cover », section 2.
+        rule(ClinicalRuleSetKey.CRITICAL_RESULT_ESCALATION, DATE_2026_11_22,
+            "service.lab.CriticalResultEscalationLadder", "service.lab.CriticalResultRecipients",
+            "service.lab.CriticalResultEscalationSettingsService"));
 
     private static final Map<ClinicalRuleSetKey, ClinicalRuleSet> BY_KEY = index();
 
@@ -157,7 +161,10 @@ public final class ClinicalRuleRegistry {
         ClinicalRuleSetKey.SEVERE_HYPERTENSION_OBSTETRIC, "https://www.nice.org.uk/guidance/ng133",
         // QA D3351: HAS 2014, the first source the research report cites for the rule (a public PDF).
         ClinicalRuleSetKey.TRANSFUSION_POSITIVE_ANTIBODY_SCREEN,
-        "https://www.has-sante.fr/upload/docs/application/pdf/2015-02/transfusion_de_globules_rouges_homologues_-_produits_et_examens_immuno-hematologiques_-_argumentaire.pdf");
+        "https://www.has-sante.fr/upload/docs/application/pdf/2015-02/transfusion_de_globules_rouges_homologues_-_produits_et_examens_immuno-hematologiques_-_argumentaire.pdf",
+        // Scorecard C5: RCPath G158, the public guidance the research report cites for the escalation duty.
+        ClinicalRuleSetKey.CRITICAL_RESULT_ESCALATION,
+        "https://www.rcpath.org/asset/BB86B370-1545-4C5A-B5826A2C431934F5/");
 
     private ClinicalRuleRegistry() {
     }

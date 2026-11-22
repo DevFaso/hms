@@ -18,6 +18,7 @@ import java.util.UUID;
 public class AntibodyStatusResponseDTO {
 
     private UUID patientId;
+    private String patientName;
     /** A positive antibody screen, or a biologist's record, is on file here. Never cleared by a later screen. */
     private boolean alloImmunised;
     /** When the newest positive screen on record here was performed; null when the flag rests on a work-up only. */

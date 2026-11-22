@@ -279,7 +279,8 @@
                     'TRANSFUSION.VITAL_URGENCY_DECLARED'
                       | translate
                         : {
-                            level: ('TRANSFUSION.VITAL_URGENCY_' + req.vitalUrgencyLevel | translate),
+                            level:
+                              ('TRANSFUSION.VITAL_URGENCY_' + req.vitalUrgencyLevel | translate),
                             reason: req.vitalUrgencyReason ?? '',
                           }
                   }}</span>
@@ -783,7 +784,9 @@
                 {{ 'TRANSFUSION.VITAL_URGENCY_WARNING' | translate }}
               </p>
               <div class="field">
-                <label for="tx-vital-level">{{ 'TRANSFUSION.VITAL_URGENCY_LEVEL' | translate }} *</label>
+                <label for="tx-vital-level"
+                  >{{ 'TRANSFUSION.VITAL_URGENCY_LEVEL' | translate }} *</label
+                >
                 <select
                   required
                   id="tx-vital-level"
@@ -1201,10 +1204,14 @@
         <div class="modal-body">
           <p class="modal-hint">{{ 'TRANSFUSION.ANTIBODY_RECORD_HINT' | translate }}</p>
           <div class="field">
-            <label for="ab-status">{{ 'TRANSFUSION.ANTIBODY_STATUS' | translate }} *</label>
-            <select required id="ab-status" [(ngModel)]="antibodyForm.status">
-              <option value="IDENTIFIED">{{ 'TRANSFUSION.ANTIBODY_STATUS_IDENTIFIED' | translate }}</option>
-              <option value="REFERRED">{{ 'TRANSFUSION.ANTIBODY_STATUS_REFERRED' | translate }}</option>
+            <label for="ab-status">{{ 'TRANSFUSION.ANTIBODY_STATUS' | translate }}</label>
+            <select id="ab-status" [(ngModel)]="antibodyForm.status">
+              <option value="IDENTIFIED">
+                {{ 'TRANSFUSION.ANTIBODY_STATUS_IDENTIFIED' | translate }}
+              </option>
+              <option value="REFERRED">
+                {{ 'TRANSFUSION.ANTIBODY_STATUS_REFERRED' | translate }}
+              </option>
             </select>
           </div>
           @if (antibodyForm.status === 'IDENTIFIED') {
@@ -1224,7 +1231,9 @@
           } @else {
             <p class="modal-hint warn">{{ 'TRANSFUSION.ANTIBODY_REFERRAL_HINT' | translate }}</p>
             <div class="field">
-              <label for="ab-centre">{{ 'TRANSFUSION.ANTIBODY_REFERRAL_CENTRE' | translate }} *</label>
+              <label for="ab-centre"
+                >{{ 'TRANSFUSION.ANTIBODY_REFERRAL_CENTRE' | translate }} *</label
+              >
               <input
                 required
                 id="ab-centre"
@@ -1235,7 +1244,9 @@
               />
             </div>
             <div class="field">
-              <label for="ab-reason">{{ 'TRANSFUSION.ANTIBODY_DECISION_REASON' | translate }} *</label>
+              <label for="ab-reason"
+                >{{ 'TRANSFUSION.ANTIBODY_DECISION_REASON' | translate }} *</label
+              >
               <textarea
                 required
                 id="ab-reason"
@@ -1248,7 +1259,12 @@
           }
           <div class="field">
             <label for="ab-notes">{{ 'COMMON.NOTES' | translate }}</label>
-            <textarea id="ab-notes" rows="2" maxlength="1000" [(ngModel)]="antibodyForm.notes"></textarea>
+            <textarea
+              id="ab-notes"
+              rows="2"
+              maxlength="1000"
+              [(ngModel)]="antibodyForm.notes"
+            ></textarea>
           </div>
         </div>
         <div class="modal-actions">
@@ -1257,11 +1273,14 @@
           </button>
           <button
             class="btn-primary"
+            data-testid="submit-antibody-workup"
             (click)="submitAntibodyWorkup()"
             [disabled]="antibodySubmitting()"
             [appSubmitGuard]="!antibodyFormComplete"
             [submitGuardFields]="
-              antibodyForm.status === 'IDENTIFIED' ? ['ab-specificities'] : ['ab-centre', 'ab-reason']
+              antibodyForm.status === 'IDENTIFIED'
+                ? ['ab-specificities']
+                : ['ab-centre', 'ab-reason']
             "
           >
             {{ 'COMMON.SAVE' | translate }}

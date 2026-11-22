@@ -79,7 +79,6 @@ class CriticalPanelReadBackTest {
     @BeforeEach
     void setUp() {
         LockAssert.TestHelper.makeAllAssertsPass(true);
-        ReflectionTestUtils.setField(service, "escalateAfterMinutes", 30L);
         User orderer = new User();
         orderer.setId(UUID.randomUUID());
         orderer.setUsername("dr.diallo");
@@ -190,26 +189,4 @@ class CriticalPanelReadBackTest {
 
     // ── D2183 ────────────────────────────────────────────────────────────
 
-    @Test
-    void tierTwoAdminsAreAskedToGetAClinicianToReadBackNotToAcknowledge() {
-        UUID hospitalId = UUID.randomUUID();
-        Hospital hospital = Hospital.builder().name("CHU").code("CHU").build();
-        hospital.setId(hospitalId);
-        panel.getLabOrder().setHospital(hospital);
-        panel.setCriticalNotifiedAt(LocalDateTime.now().minusHours(2));
-        panel.setCriticalEscalationLevel((short) 1);
-        when(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, "ROLE_HOSPITAL_ADMIN"))
-            .thenReturn(List.of("admin.kabore"));
-        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class),
-            org.mockito.ArgumentMatchers.anyShort())).thenReturn(List.of(panel));
-
-        service.escalateOverdue();
-
-        // The orderer is still asked to review and acknowledge,
-        verify(notificationService).created(argThat(m -> m.contains("acknowledge") || m.contains("acquittez")),
-            eq("dr.diallo"), eq("CRITICAL_LAB_RESULT_ESCALATION"));
-        // the admin to get a clinician to read the value back.
-        verify(notificationService).created(argThat(m -> m.contains("clinician") || m.contains("clinicien")),
-            eq("admin.kabore"), eq("CRITICAL_LAB_RESULT_ESCALATION"));
-    }
 }

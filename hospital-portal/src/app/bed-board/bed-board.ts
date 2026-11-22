@@ -332,24 +332,24 @@ export class BedBoardComponent implements OnInit {
   readonly destinationOptions = computed<
     { bedId: string; label: string; isolation: boolean; maternity: boolean }[]
   >(() => {
-      const current = this.board();
-      if (!current) {
-        return [];
-      }
-      const spokenFor = new Set(this.pendingTransfers().map((t) => t.toBedId));
-      const eligible = this.eligibleBedIds();
-      return current.wards.flatMap((w) =>
-        w.rooms
-          .flatMap((r) => r.beds)
-          .filter((b) => b.status === 'AVAILABLE' && !spokenFor.has(b.bedId))
-          .filter((b) => eligible === null || eligible.has(b.bedId))
-          .map((b) => ({
-            bedId: b.bedId,
-            label: `${w.wardName} — ${b.bedNumber}`,
-            isolation: w.isolationCapable,
-            maternity: w.wardType === 'MATERNITY',
-          })),
-      );
+    const current = this.board();
+    if (!current) {
+      return [];
+    }
+    const spokenFor = new Set(this.pendingTransfers().map((t) => t.toBedId));
+    const eligible = this.eligibleBedIds();
+    return current.wards.flatMap((w) =>
+      w.rooms
+        .flatMap((r) => r.beds)
+        .filter((b) => b.status === 'AVAILABLE' && !spokenFor.has(b.bedId))
+        .filter((b) => eligible === null || eligible.has(b.bedId))
+        .map((b) => ({
+          bedId: b.bedId,
+          label: `${w.wardName} — ${b.bedNumber}`,
+          isolation: w.isolationCapable,
+          maternity: w.wardType === 'MATERNITY',
+        })),
+    );
   });
 
   /**

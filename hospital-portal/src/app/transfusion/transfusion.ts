@@ -197,7 +197,9 @@ export class TransfusionComponent implements OnInit {
       .recordAntibodyWorkup({
         patientId: request.patientId,
         status: this.antibodyForm.status,
-        antibodySpecificities: referred ? undefined : this.antibodyForm.antibodySpecificities.trim(),
+        antibodySpecificities: referred
+          ? undefined
+          : this.antibodyForm.antibodySpecificities.trim(),
         referralCentre: referred ? this.antibodyForm.referralCentre.trim() : undefined,
         decisionReason: referred ? this.antibodyForm.decisionReason.trim() : undefined,
         transfusionRequestId: referred ? request.id : undefined,

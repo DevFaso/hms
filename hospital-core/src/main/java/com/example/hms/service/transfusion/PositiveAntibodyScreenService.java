@@ -106,6 +106,12 @@ public class PositiveAntibodyScreenService {
     /** The flag and the biologist's records, for the screens that must show them. */
     @Transactional(readOnly = true)
     public AntibodyStatusResponseDTO status(UUID patientId, UUID hospitalId) {
+        return status(patientId, hospitalId, null);
+    }
+
+    /** {@link #status(UUID, UUID)} with the patient's name, for a screen that names them. */
+    @Transactional(readOnly = true)
+    public AntibodyStatusResponseDTO status(UUID patientId, UUID hospitalId, String patientName) {
         List<PatientAntibodyWorkup> workups = patientId == null || hospitalId == null ? List.of()
             : workupRepository.findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId);
         Optional<PatientBloodGroup> positive = patientId == null || hospitalId == null ? Optional.empty()
@@ -114,6 +120,7 @@ public class PositiveAntibodyScreenService {
             .filter(w -> w.getStatus() == AntibodyWorkupStatus.IDENTIFIED).findFirst();
         return AntibodyStatusResponseDTO.builder()
             .patientId(patientId)
+            .patientName(patientName)
             .alloImmunised(positive.isPresent() || !workups.isEmpty())
             .positiveScreenAt(positive.map(PatientBloodGroup::getPerformedAt).orElse(null))
             .identified(identified.isPresent())
@@ -176,7 +183,7 @@ public class PositiveAntibodyScreenService {
                 .transfusionRequestId(servedRequest(request.getTransfusionRequestId(), patient, hospitalId).getId());
         }
         workupRepository.save(workup.build());
-        return status(patient.getId(), hospitalId);
+        return status(patient.getId(), hospitalId, patient.getFullName());
     }
 
     /** The open red-cell request of this patient at this hospital that a referral decision serves. */
@@ -318,8 +325,11 @@ public class PositiveAntibodyScreenService {
             return;
         }
         Object[] args = {patient.getFullName()};
-        fileForBiologists(screen.getHospital().getId(), patient, null, screen.getId(), SCREEN_REFERENCE_TYPE,
-            IDENTIFY_TITLE_KEY, IDENTIFY_BODY_KEY, args, args);
+        CreateInBasketItemRequest item = new CreateInBasketItemRequest();
+        item.setTitleKey(IDENTIFY_TITLE_KEY);
+        item.setBodyKey(IDENTIFY_BODY_KEY);
+        fileForBiologists(item, screen.getHospital().getId(), patient, null, screen.getId(), SCREEN_REFERENCE_TYPE,
+            args, args);
     }
 
     /** A unit went out on the emergency path to an allo-immunised patient: the crossmatch is done afterwards. */
@@ -328,24 +338,26 @@ public class PositiveAntibodyScreenService {
         Object[] titleArgs = {unit.getUnitNumber()};
         Object[] bodyArgs = {unit.getUnitNumber(), patient == null ? null : patient.getFullName(),
             request.getVitalUrgencyLevel() == null ? "" : request.getVitalUrgencyLevel().name()};
-        fileForBiologists(request.getHospital().getId(), patient,
+        CreateInBasketItemRequest item = new CreateInBasketItemRequest();
+        item.setTitleKey(RETROSPECTIVE_TITLE_KEY);
+        item.setBodyKey(RETROSPECTIVE_BODY_KEY);
+        fileForBiologists(item, request.getHospital().getId(), patient,
             request.getEncounter() == null ? null : request.getEncounter().getId(), unit.getId(),
-            RETROSPECTIVE_REFERENCE_TYPE, RETROSPECTIVE_TITLE_KEY, RETROSPECTIVE_BODY_KEY, titleArgs, bodyArgs);
+            RETROSPECTIVE_REFERENCE_TYPE, titleArgs, bodyArgs);
     }
 
-    /** One URGENT task per biologist, after the commit; a failure never undoes what raised it. */
-    private void fileForBiologists(UUID hospitalId, Patient patient, UUID encounterId, UUID referenceId,
-                                   String referenceType, String titleKey, String bodyKey,
+    /**
+     * One URGENT task per biologist, filed after the commit: a filing that fails never undoes what raised it.
+     * {@code template} carries the title and body keys; each reader's copy is rendered from them.
+     */
+    private void fileForBiologists(CreateInBasketItemRequest template, UUID hospitalId, Patient patient,
+                                   UUID encounterId, UUID referenceId, String referenceType,
                                    Object[] titleArgs, Object[] bodyArgs) {
-        List<UUID> biologists;
-        try {
-            biologists = assignmentRepository
-                .findLiveUsersAtHospitalWithRoleCodes(hospitalId, PositiveAntibodyScreenPolicy.BIOLOGIST_ROLE_CODES)
-                .stream().map(User::getId).distinct().toList();
-        } catch (RuntimeException ex) {
-            log.error("Antibody task {} {} not composed: {}", referenceType, referenceId, ex.getClass().getSimpleName());
-            return;
-        }
+        String titleKey = template.getTitleKey();
+        String bodyKey = template.getBodyKey();
+        List<UUID> biologists = assignmentRepository
+            .findLiveUsersAtHospitalWithRoleCodes(hospitalId, PositiveAntibodyScreenPolicy.BIOLOGIST_ROLE_CODES)
+            .stream().map(User::getId).distinct().toList();
         if (biologists.isEmpty()) {
             // The block does not depend on the task: with no biologist, routine red cells simply stay held.
             log.warn("Antibody task {} {} has no biologist to go to at hospital {}", referenceType, referenceId, hospitalId);
