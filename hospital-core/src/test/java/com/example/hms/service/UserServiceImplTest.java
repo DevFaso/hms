@@ -47,6 +47,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+import static com.example.hms.testsupport.RandomIds.withoutRandomIds;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -3050,7 +3051,7 @@ class UserServiceImplTest {
                 .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, refusal -> {
                     assertThat(refusal.getField()).isEqualTo("licenseNumber");
                     // The number the caller typed, and nothing of the account behind it.
-                    assertThat(String.valueOf(refusal.getMessage()))
+                    assertThat(withoutRandomIds(refusal.getMessage()))
                         .doesNotContain("awa", "Sanou", "other-hospital", "70000091");
                 });
             assertThat(held.isForcePasswordChange()).isFalse();

@@ -41,6 +41,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.example.hms.testsupport.RandomIds.withoutRandomIds;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -160,7 +161,7 @@ class PriceListServiceTest {
         assertThat(written.getHospitalId()).isEqualTo(HOSPITAL);
         assertThat(written.getUserId()).isEqualTo(ACTOR);
         assertThat(written.getResourceId()).isEqualTo(item.getValue().getId().toString());
-        assertThat(written.getEventDescription())
+        assertThat(withoutRandomIds(written.getEventDescription()))
             .doesNotContain("Consultation", "2000", "2 000", "Grille 2026", "CS-GEN");
         assertThat(written.getPatientId()).isNull();
     }

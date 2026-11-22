@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.example.hms.testsupport.RandomIds.withoutRandomIds;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -122,7 +123,7 @@ class PatientNotificationDispatchServiceTest {
         service.dispatchPending();
 
         assertThat(row.getStatus()).isEqualTo(NotificationDeliveryStatus.RETRYING);
-        assertThat(row.getErrorCode()).isEqualTo("PROVIDER_UNREACHABLE").doesNotContain("7070");
+        assertThat(withoutRandomIds(row.getErrorCode())).isEqualTo("PROVIDER_UNREACHABLE").doesNotContain("7070");
         assertThat(row.getNextAttemptAt()).isEqualTo(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC).plusSeconds(60));
     }
 
