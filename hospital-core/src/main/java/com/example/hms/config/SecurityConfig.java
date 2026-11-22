@@ -71,6 +71,7 @@ import static com.example.hms.config.SecurityConstants.ROLE_RADIOLOGIST;
 import static com.example.hms.config.SecurityConstants.ROLE_STAFF;
 import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
 import static com.example.hms.config.SecurityConstants.ROLE_SURGEON;
+import static com.example.hms.config.SecurityConstants.ROLE_IMAGING_TECHNICIAN;
 import static com.example.hms.config.SecurityConstants.ROLE_BILLING_SPECIALIST;
 import static com.example.hms.config.SecurityConstants.ROLE_ACCOUNTANT;
 import static com.example.hms.config.SecurityConstants.ROLE_CLAIMS_REVIEWER;
@@ -160,6 +161,14 @@ public class SecurityConfig {
      * they are acting in.
      */
     static final String API_HOSPITAL_ADOLESCENT_AGE = "/hospitals/*/adolescent-confidentiality-age";
+
+    /**
+     * V356 (owner direction 2026-11-21): a hospital's clinical rules and their sign-off. Read by the admins and
+     * the staff who see a « provisoire » label (HospitalClinicalRulesController.READ_ROLES), written by the admins;
+     * the /hospitals/** matchers below would refuse both at the edge. The controller pins the request to the
+     * hospital it acts at.
+     */
+    static final String API_HOSPITAL_CLINICAL_RULES = "/hospitals/*/clinical-rules";
 
     /**
      * The HAPI FHIR servlet ({@code FhirConfig}, mounted at {@code /fhir/*}).
@@ -827,6 +836,13 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, API_HOSPITAL_PACS_SETTINGS)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.POST, API_HOSPITAL_PACS_SETTINGS + "/test")
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                // V356 clinical rules and their sign-off: ahead of the /hospitals matchers, as the posture.
+                .requestMatchers(HttpMethod.GET, API_HOSPITAL_CLINICAL_RULES, API_HOSPITAL_CLINICAL_RULES + "/**")
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN, ROLE_DOCTOR, ROLE_SURGEON, ROLE_NURSE,
+                    ROLE_MIDWIFE, ROLE_PHARMACIST, ROLE_RADIOLOGIST, ROLE_IMAGING_TECHNICIAN, ROLE_LAB_DIRECTOR,
+                    ROLE_QUALITY_MANAGER, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT)
+                .requestMatchers(HttpMethod.POST, API_HOSPITAL_CLINICAL_RULES + "/**")
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
                 // V346 imaging reporting settings: ahead of the /hospitals matchers, as the PACS connection.
                 .requestMatchers(HttpMethod.GET, API_HOSPITAL_IMAGING_REPORTING_SETTINGS)

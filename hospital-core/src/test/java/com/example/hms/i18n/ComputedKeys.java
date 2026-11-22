@@ -100,6 +100,21 @@ final class ComputedKeys {
     private static Map<String, Domain> registry() {
         Map<String, Domain> d = domains();
         Map<String, Domain> r = new LinkedHashMap<>();
+        // V356: a provisional rule set's texts, one per ClinicalRuleSetKey.
+        site(r, d, "com/example/hms/service/clinicalrules/ClinicalRuleSet.java|return \"clinicalRules.rule.\" + key.name() + \".title\"",
+            "ClinicalRuleSet.java|clinicalRules.rule.title");
+        r.put("com/example/hms/service/clinicalrules/HospitalRuleSignoffService.java|rule.titleKey()",
+            ruleSetTexts("title"));
+        // V356: a provisional rule set's texts, one per ClinicalRuleSetKey.
+        site(r, d, "com/example/hms/service/clinicalrules/ClinicalRuleSet.java|return \"clinicalRules.rule.\" + key.name() + \".description\"",
+            "ClinicalRuleSet.java|clinicalRules.rule.description");
+        r.put("com/example/hms/service/clinicalrules/HospitalRuleSignoffService.java|rule.descriptionKey()",
+            ruleSetTexts("description"));
+        // V356: a provisional rule set's texts, one per ClinicalRuleSetKey.
+        site(r, d, "com/example/hms/service/clinicalrules/ClinicalRuleSet.java|return \"clinicalRules.rule.\" + key.name() + \".approver\"",
+            "ClinicalRuleSet.java|clinicalRules.rule.approver");
+        r.put("com/example/hms/service/clinicalrules/HospitalRuleSignoffService.java|rule.approverKey()",
+            ruleSetTexts("approver"));
         site(r, d, "com/example/hms/cdshooks/CdsCardText.java|\"cds.severity.\" + value.name()",
             "CdsCardText.java|cds.severity.");
         site(r, d, "com/example/hms/cdshooks/CdsCardText.java|\"cds.enum.\" + value.name()",
@@ -472,6 +487,9 @@ final class ComputedKeys {
         Map<String, Domain> r = new LinkedHashMap<>();
 
         // ---- per enum value ----------------------------------------------------------------
+        for (String part : List.of("title", "description", "approver")) {
+            r.put("ClinicalRuleSet.java|clinicalRules.rule." + part, ruleSetTexts(part));
+        }
         r.put("AppointmentStatus.java|appointment.statusLabel.", enumValues("appointment.statusLabel.", AppointmentStatus.class));
         r.put("EncounterStatus.java|encounter.statusLabel.", enumValues("encounter.statusLabel.", EncounterStatus.class));
         r.put("InvoiceStatus.java|pdf.invoice.statusValue.", enumValues("pdf.invoice.statusValue.", InvoiceStatus.class));
@@ -663,6 +681,18 @@ final class ComputedKeys {
                 for (Enum<?> constant : e.getEnumConstants()) {
                     keys.add(prefix + constant.name());
                 }
+            }
+            return keys;
+        };
+    }
+
+    /** V356: clinicalRules.rule.<KEY>.<part> for every provisional rule set (ClinicalRuleSetKey). */
+    private static Domain ruleSetTexts(String part) {
+        return () -> {
+            Set<String> keys = new TreeSet<>();
+            for (com.example.hms.service.clinicalrules.ClinicalRuleSetKey key
+                    : com.example.hms.service.clinicalrules.ClinicalRuleSetKey.values()) {
+                keys.add("clinicalRules.rule." + key.name() + "." + part);
             }
             return keys;
         };

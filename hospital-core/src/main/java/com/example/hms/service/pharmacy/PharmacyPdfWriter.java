@@ -17,11 +17,13 @@ import java.util.List;
  * controlled-drug register): PDFBox standard fonts, like the invoice and the
  * labels, with text wrapped to the page and tables split across pages. A
  * character outside WinAnsi prints as '?' rather than failing the document.
+ *
+ * <p>Public since V356: the clinical-rule sign-off pack prints through it too.
  */
-final class PharmacyPdfWriter implements AutoCloseable {
+public final class PharmacyPdfWriter implements AutoCloseable {
 
-    static final PDFont REGULAR = PDType1Font.HELVETICA;
-    static final PDFont BOLD = PDType1Font.HELVETICA_BOLD;
+    public static final PDFont REGULAR = PDType1Font.HELVETICA;
+    public static final PDFont BOLD = PDType1Font.HELVETICA_BOLD;
     private static final float MARGIN = 40f;
     private static final float LEADING = 1.35f;
 
@@ -33,12 +35,12 @@ final class PharmacyPdfWriter implements AutoCloseable {
     private float[] tableWidths;
     private String[] tableHeader;
 
-    PharmacyPdfWriter(boolean landscape) throws IOException {
+    public PharmacyPdfWriter(boolean landscape) throws IOException {
         this.size = landscape ? new PDRectangle(PDRectangle.A4.getHeight(), PDRectangle.A4.getWidth()) : PDRectangle.A4;
         newPage();
     }
 
-    float contentWidth() {
+    public float contentWidth() {
         return size.getWidth() - 2 * MARGIN;
     }
 
@@ -71,7 +73,7 @@ final class PharmacyPdfWriter implements AutoCloseable {
     }
 
     /** One wrapped block of text, the full content width. */
-    void paragraph(PDFont font, float fontSize, String text) throws IOException {
+    public void paragraph(PDFont font, float fontSize, String text) throws IOException {
         for (String line : wrap(font, fontSize, sanitize(font, text), contentWidth())) {
             ensureRoom(fontSize * LEADING);
             y -= fontSize * LEADING;
@@ -80,7 +82,7 @@ final class PharmacyPdfWriter implements AutoCloseable {
     }
 
     /** "Label : value", the label in bold, the value wrapped after it. */
-    void field(String label, String value, float fontSize) throws IOException {
+    public void field(String label, String value, float fontSize) throws IOException {
         String head = sanitize(BOLD, label) + " ";
         float headWidth = width(BOLD, fontSize, head);
         List<String> lines = wrap(REGULAR, fontSize, sanitize(REGULAR, value == null || value.isBlank() ? "-" : value),
@@ -95,11 +97,11 @@ final class PharmacyPdfWriter implements AutoCloseable {
         }
     }
 
-    void space(float points) {
+    public void space(float points) {
         y -= points;
     }
 
-    void rule() throws IOException {
+    public void rule() throws IOException {
         ensureRoom(6f);
         y -= 4f;
         cs.moveTo(MARGIN, y);
@@ -109,7 +111,7 @@ final class PharmacyPdfWriter implements AutoCloseable {
     }
 
     /** Starts a table: the header is written now and repeated on each new page. */
-    void tableHeader(float[] widths, String[] cells) throws IOException {
+    public void tableHeader(float[] widths, String[] cells) throws IOException {
         this.tableWidths = widths.clone();
         this.tableHeader = cells.clone();
         // Review of #975: the header wraps in narrow columns ("Date et heure",
@@ -122,7 +124,7 @@ final class PharmacyPdfWriter implements AutoCloseable {
         writeRow(widths, cells, BOLD, 8f);
     }
 
-    void tableRow(String[] cells) throws IOException {
+    public void tableRow(String[] cells) throws IOException {
         int lines = 1;
         List<List<String>> wrapped = new ArrayList<>();
         for (int i = 0; i < cells.length; i++) {
@@ -173,7 +175,7 @@ final class PharmacyPdfWriter implements AutoCloseable {
         cs.stroke();
     }
 
-    byte[] finish() throws IOException {
+    public byte[] finish() throws IOException {
         cs.close();
         cs = null;
         ByteArrayOutputStream out = new ByteArrayOutputStream();

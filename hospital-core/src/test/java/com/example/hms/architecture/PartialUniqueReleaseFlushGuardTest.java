@@ -108,7 +108,10 @@ class PartialUniqueReleaseFlushGuardTest {
         Map.entry("pharmacy_payments", "PharmacyPayment"),
         Map.entry("pharmacy_sales", "PharmacySale"),
         // QA D2676 (V311): one live refund per return movement; a refund is never replaced, a new one is asked.
-        Map.entry("pharmacy_refunds", "PharmacyRefund"));
+        Map.entry("pharmacy_refunds", "PharmacyRefund"),
+        // V356: one live sign-off per hospital, rule set and version; a revocation releases it, and a new
+        // sign-off is a separate request (never built in the revoking method).
+        Map.entry("hospital_rule_signoffs", "HospitalRuleSignoff"));
 
     /** Indexes whose rows no setter can release: the slot is the row's own key, not its state. */
     private static final Set<String> KEY_ONLY_ENTITIES =

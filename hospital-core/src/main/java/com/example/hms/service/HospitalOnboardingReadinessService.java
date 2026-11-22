@@ -13,6 +13,8 @@ import com.example.hms.repository.PriceListItemRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.scheduling.SessionTemplateRepository;
+import com.example.hms.service.clinicalrules.ClinicalRuleRegistry;
+import com.example.hms.service.clinicalrules.HospitalRuleSignoffService;
 import com.example.hms.service.scheduling.AppointmentSlotPolicy;
 import com.example.hms.utility.HospitalCalendar;
 import lombok.RequiredArgsConstructor;
@@ -53,6 +55,8 @@ public class HospitalOnboardingReadinessService {
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     /** Owns what "a slot can still be taken" means, for the patient form and for this checklist. */
     private final AppointmentSlotPolicy slotPolicy;
+    /** V356: the rule sets this hospital's approver signed off, of the registry's. */
+    private final HospitalRuleSignoffService ruleSignoffService;
 
     @Transactional(readOnly = true)
     public HospitalOnboardingReadinessDTO readiness(UUID hospitalId) {
@@ -73,6 +77,8 @@ public class HospitalOnboardingReadinessService {
         long beds = bedRepository.countByWard_Hospital_IdAndActiveTrue(hospitalId);
         long prices = priceListItemRepository.countByHospitalIdAndActiveTrue(hospitalId);
         long payers = payerRepository.countByHospitalIdAndActiveTrue(hospitalId);
+        long rulesSigned = ruleSignoffService.signedCount(hospitalId);
+        long rulesTotal = ClinicalRuleRegistry.all().size();
 
         List<Item> items = List.of(
             // First: a department cannot be created until the hospital has its administrator.
@@ -84,7 +90,8 @@ public class HospitalOnboardingReadinessService {
             item(Step.OPEN_SLOTS, bookableDepartments.size(), true),
             item(Step.BEDS, beds, false),
             item(Step.PRICE_LIST, prices, false),
-            item(Step.PAYERS, payers, false));
+            item(Step.PAYERS, payers, false),
+            new Item(Step.CLINICAL_RULES, rulesSigned >= rulesTotal, rulesSigned, false, rulesTotal));
         return new HospitalOnboardingReadinessDTO(hospitalId, !bookableDepartments.isEmpty(), items);
     }
 
