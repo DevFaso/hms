@@ -52,6 +52,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -528,6 +529,54 @@ class DispenseBillingDeferralServiceTest {
             assertThatThrownBy(admitting(prescription, hospitalId, due,
                     new DispenseBillingDeferralService.Choice(null, null), user(pharmacist)))
                     .isInstanceOf(FieldBusinessException.class);
+            assertThat(service.chargedToOpenStay(prescription, hospitalId)).isFalse();
+        }
+
+        /** QA D3404: the patient's stay at this hospital, as the repository answers for (patient, hospital, open). */
+        private Admission admittedAt(AdmissionStatus status, LocalDateTime admittedAt) {
+            Admission stay = new Admission();
+            stay.setId(UUID.randomUUID());
+            stay.setHospital(hospital);
+            stay.setStatus(status);
+            stay.setAdmissionDateTime(admittedAt);
+            when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(eq(patientId), eq(hospitalId), any()))
+                    .thenReturn(List.of(stay));
+            return stay;
+        }
+
+        @Test
+        @DisplayName("QA D3404: an inpatient order written without the stay's visit goes on the patient's open stay")
+        void anInpatientOrderWithoutTheVisitFindsTheStay() {
+            Admission stay = admittedAt(AdmissionStatus.ACTIVE, LocalDateTime.now(CLOCK).minusDays(1));
+            prescription.setCreatedAt(LocalDateTime.now(CLOCK).minusHours(2));
+
+            DispenseBillingDeferral row = service.admit(prescription, hospitalId, due,
+                    new DispenseBillingDeferralService.Choice(null, null), user(pharmacist));
+
+            assertThat(row.getKind()).isEqualTo(DispenseBillingDeferralKind.ADMISSION_ACCOUNT);
+            assertThat(row.getAdmissionId()).isEqualTo(stay.getId());
+            assertThat(service.chargedToOpenStay(prescription, hospitalId)).isTrue();
+            // Tenancy: only this hospital's open stays are asked for.
+            verify(admissionRepository, atLeastOnce()).findByPatient_IdAndHospital_IdAndStatusIn(patientId, hospitalId,
+                    DispenseBillingDeferralService.OPEN_STAY);
+        }
+
+        @Test
+        @DisplayName("QA D3404: never a closed stay, never a stay admitted after the order, never another stay than the visit's")
+        void neverAClosedOrLaterStay() {
+            admittedAt(AdmissionStatus.DISCHARGED, LocalDateTime.now(CLOCK).minusDays(3));
+            assertThat(service.chargedToOpenStay(prescription, hospitalId)).isFalse();
+
+            prescription.setCreatedAt(LocalDateTime.now(CLOCK).minusDays(2));
+            admittedAt(AdmissionStatus.ACTIVE, LocalDateTime.now(CLOCK).minusDays(1));
+            assertThat(service.chargedToOpenStay(prescription, hospitalId)).isFalse();
+            assertThatThrownBy(admitting(prescription, hospitalId, due,
+                    new DispenseBillingDeferralService.Choice(null, null), user(pharmacist)))
+                    .isInstanceOf(FieldBusinessException.class);
+
+            // The visit names a stay that has ended: the patient's other open stay is not charged instead.
+            prescription.setCreatedAt(LocalDateTime.now(CLOCK));
+            openStay(AdmissionStatus.DISCHARGED);
             assertThat(service.chargedToOpenStay(prescription, hospitalId)).isFalse();
         }
 
