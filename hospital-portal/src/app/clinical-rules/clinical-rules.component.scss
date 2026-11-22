@@ -129,9 +129,12 @@
   }
 }
 
-.rule-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.8125rem;
+.rule-source-link {
+  display: block;
+  margin-top: 2px;
+  color: var(--brand-primary, #0e7c6b);
+  text-decoration: underline;
+  overflow-wrap: anywhere;
 }
 
 .rule-signoff {

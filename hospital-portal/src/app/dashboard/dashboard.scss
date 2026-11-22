@@ -202,7 +202,8 @@ $shadow-md:
     }
 
     .ring-pct {
-      font-size: 14px;
+      font-size: 12px;
+      white-space: nowrap;
       small {
         font-size: 9px;
       }
@@ -210,7 +211,13 @@ $shadow-md:
 
     .ring-sub,
     .ring-caption {
-      font-size: 9px;
+      font-size: 8px;
+    }
+
+    // QA D3510: « 100 % » must stay inside the ring.
+    .ring-label {
+      padding: 0 6px;
+      overflow: hidden;
     }
   }
 }
@@ -2628,13 +2635,13 @@ $shadow-md:
   font-size: 12px;
   font-weight: 600;
   color: #fff;
-  background: #059669;
+  background: var(--primary);
   border-radius: 8px;
   text-decoration: none;
   transition: background 0.15s;
 
   &:hover {
-    background: #047857;
+    background: var(--primary-dark);
   }
 }
 

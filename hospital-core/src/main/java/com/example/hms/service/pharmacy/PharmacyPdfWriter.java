@@ -34,6 +34,9 @@ public final class PharmacyPdfWriter implements AutoCloseable {
     /** Repeated at the top of every page a table continues on. */
     private float[] tableWidths;
     private String[] tableHeader;
+    /** Optional, set by {@link #pageFurniture}: a header line and a « Page n / N » footer drawn at {@link #finish()}. */
+    private String furnitureHeader;
+    private String furniturePageWord;
 
     public PharmacyPdfWriter(boolean landscape) throws IOException {
         this.size = landscape ? new PDRectangle(PDRectangle.A4.getHeight(), PDRectangle.A4.getWidth()) : PDRectangle.A4;
@@ -175,9 +178,43 @@ public final class PharmacyPdfWriter implements AutoCloseable {
         cs.stroke();
     }
 
+    /**
+     * D3502: every page of the document carries {@code header} (the hospital and the print date) at the top and
+     * « {@code pageWord} n / N » at the foot, so loose signed pages can be put back together and checked. Drawn in
+     * the margins, when the page count is known.
+     */
+    public void pageFurniture(String header, String pageWord) {
+        this.furnitureHeader = header;
+        this.furniturePageWord = pageWord;
+    }
+
+    private void drawFurniture() throws IOException {
+        int pages = doc.getNumberOfPages();
+        for (int i = 0; i < pages; i++) {
+            try (PDPageContentStream out = new PDPageContentStream(doc, doc.getPage(i),
+                    PDPageContentStream.AppendMode.APPEND, true)) {
+                String head = sanitize(REGULAR, furnitureHeader);
+                String foot = sanitize(REGULAR, furniturePageWord + " " + (i + 1) + " / " + pages);
+                out.beginText();
+                out.setFont(REGULAR, 8f);
+                out.newLineAtOffset(MARGIN, size.getHeight() - 24f);
+                out.showText(head);
+                out.endText();
+                out.beginText();
+                out.setFont(REGULAR, 8f);
+                out.newLineAtOffset(size.getWidth() - MARGIN - width(REGULAR, 8f, foot), 22f);
+                out.showText(foot);
+                out.endText();
+            }
+        }
+    }
+
     public byte[] finish() throws IOException {
         cs.close();
         cs = null;
+        if (furnitureHeader != null) {
+            drawFurniture();
+        }
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         doc.save(out);
         return out.toByteArray();

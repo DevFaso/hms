@@ -230,7 +230,13 @@ fieldset.field {
   background: #fafbfc;
 }
 
+.role-hint {
+  flex-basis: 100%;
+  margin-left: 22px;
+}
+
 .role-checkbox {
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   gap: 6px;
