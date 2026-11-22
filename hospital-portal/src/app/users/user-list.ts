@@ -17,6 +17,7 @@ import { Subject, takeUntil } from 'rxjs';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { UserService, UserSummary, AdminRegisterRequest } from '../services/user.service';
 import { grantableRoles } from '../core/grantable-roles';
+import { roleDescriptionKey } from '../roles/role-description';
 import { RoleService, RoleResponse } from '../services/role.service';
 import {
   HospitalService,
@@ -280,6 +281,17 @@ export class UserListComponent implements OnInit, OnDestroy {
    * offered staff roles only.
    */
   // QA D189/D626: the shared grant rule (no patient role, no admin role below super-admin).
+  /**
+   * The explanation printed under a role whose name alone does not say what it grants (« Personnel »): the
+   * seeded description in the reader's language, or null for the self-explaining clinical roles.
+   */
+  protected roleHintKey(role: {
+    code?: string | null;
+    description?: string | null;
+  }): string | null {
+    return role.code === 'ROLE_STAFF' ? roleDescriptionKey(role) : null;
+  }
+
   readonly grantableRoles = computed(() =>
     grantableRoles(this.availableRoles(), this.roleContext.isSuperAdmin()),
   );

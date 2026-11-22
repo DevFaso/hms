@@ -119,6 +119,19 @@ describe('IntegrationHealthComponent', () => {
     expect(cmp.countFor('FAILING')).toBe(1);
   });
 
+  it('a stub integration reads « not configured », never « enabled » (D2779)', () => {
+    const summary = fakeSummary();
+    summary.integrations[1].stub = true;
+    service.getInventory.and.returnValue(of(summary));
+
+    const fixture = setupFixture();
+    const host = fixture.nativeElement as HTMLElement;
+
+    const flagged = host.querySelectorAll('[data-testid="integration-not-configured"]');
+    expect(flagged.length).toBe(1);
+    expect(host.textContent).not.toContain('FHIR Reference Sandbox');
+  });
+
   it('shows the error panel when the inventory call fails', () => {
     service.getInventory.and.returnValue(throwError(() => new Error('boom')));
 

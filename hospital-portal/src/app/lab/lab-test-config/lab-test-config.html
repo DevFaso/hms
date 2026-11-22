@@ -48,9 +48,8 @@
   </header>
   <div class="diagnostics-context">
     <p>
-      <strong>{{ loading() || error() ? '—' : definitions().length }}</strong><span>{{
-        'DIAGNOSTICS_WORKSPACE.LOADED_DEFINITIONS' | translate
-      }}</span>
+      <strong>{{ loading() || error() ? '—' : definitions().length }}</strong>{{ ' '
+      }}<span>{{ 'DIAGNOSTICS_WORKSPACE.LOADED_DEFINITIONS' | translate }}</span>
     </p>
     <p>{{ 'DIAGNOSTICS_WORKSPACE.CONFIG_NOTE' | translate }}</p>
   </div>
@@ -868,7 +867,7 @@
                   <th scope="col">{{ 'LAB_TEST_CONFIG.REFLEX_CONDITION' | translate }}</th>
                   <th scope="col">{{ 'LAB_TEST_CONFIG.REFLEX_TEST' | translate }}</th>
                   <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-                  <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+                  <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
                 </tr>
               </thead>
               <tbody>

@@ -1161,4 +1161,22 @@ textarea {
     mask-image: none !important;
     animation: none !important;
   }
+
+  /* QA D3507 (r70): a printed list has no ACTIONS column (its buttons are
+     already off paper, so the column printed empty) and no pager line
+     (« Affichage de 1 à 23 sur 23 »), and a header never hyphenates
+     (« FRÉ-QUENCE »): the column heads carry .col-actions, and the cells of
+     that last column go with it. */
+  table th.col-actions,
+  table:has(> thead th.col-actions:last-child) > tbody > tr > :is(td, th):last-child,
+  .range-pager,
+  [class*='pager']:not(.print-only) {
+    display: none !important;
+  }
+  table th,
+  .stat-label,
+  .kpi-label,
+  .card-label {
+    hyphens: manual !important;
+  }
 }
