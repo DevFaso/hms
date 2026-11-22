@@ -1255,6 +1255,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           route: '/pharmacy/controlled-register',
           roles: [
             'ROLE_PHARMACIST',
+            'ROLE_PHARMACY_VERIFIER',
             'ROLE_STORE_MANAGER',
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_SUPER_ADMIN',
