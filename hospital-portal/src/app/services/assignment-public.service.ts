@@ -20,6 +20,8 @@ export interface AssignmentPublicView {
   tempUsername: string | null;
   /** Temporary login password — only present on first-time assignment for new users. */
   tempPassword: string | null;
+  /** QA r70 D3201: the password above was issued at this activation and replaces the e-mailed one. */
+  credentialsReissued?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })

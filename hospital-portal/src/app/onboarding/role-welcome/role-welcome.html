@@ -305,6 +305,12 @@
               </div>
             </div>
           </div>
+          <!-- QA r70 D3201: the e-mail never arrived, so this one replaces it. -->
+          @if (assignment.credentialsReissued) {
+            <p class="rw-credentials-hint" data-testid="credentials-reissued">
+              {{ 'ONBOARDING.CREDENTIALS_REISSUED' | translate }}
+            </p>
+          }
           <p class="rw-credentials-warn">
             {{ 'ONBOARDING.CREDENTIALS_WARN' | translate }}
           </p>

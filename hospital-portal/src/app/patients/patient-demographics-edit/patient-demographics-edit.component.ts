@@ -142,6 +142,7 @@ export class PatientDemographicsEditComponent implements OnInit {
     emergencyContactName: '',
     emergencyContactPhone: '',
     emergencyContactRelationship: '',
+    medicalHistorySummary: '',
   };
 
   readonly genders = ['MALE', 'FEMALE', 'OTHER'];

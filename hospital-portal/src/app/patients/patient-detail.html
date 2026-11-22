@@ -67,8 +67,11 @@
             >
           }
           @if (p.bloodType) {
+            <!-- QA r70 D3222: the group is named, not only a drop icon. -->
             <span class="meta-tag" data-testid="header-blood-type"
-              ><span class="material-symbols-outlined">bloodtype</span> {{ p.bloodType }}</span
+              ><span class="material-symbols-outlined" aria-hidden="true">bloodtype</span>
+              {{ 'PATIENT_SAFETY.BLOOD_GROUP' | translate }}{{ 'COMMON.COLON' | translate }}
+              <strong>{{ p.bloodType }}</strong></span
             >
           }
           {{ ' ' }}
@@ -642,6 +645,10 @@
               </button>
             }
           </div>
+          <!-- QA r70 D3206: the desk hands over the portal activation code when the SMS did not go out. -->
+          @if (canHandOverPortalCode()) {
+            <app-patient-portal-activation [patientId]="p.id" />
+          }
         </aside>
       </div>
     }
@@ -690,6 +697,22 @@
             <p class="medical-text">
               {{ p.medicalHistorySummary || ('PATIENTS.NOT_DOCUMENTED' | translate) }}
             </p>
+            <!-- QA r70 D3223: the personal history had no entry; a clinician records it here. -->
+            @if (writesClinicalFields()) {
+              <button
+                type="button"
+                class="btn-outline"
+                data-testid="edit-medical-history"
+                (click)="editingDemographics.set(true)"
+              >
+                {{
+                  (p.medicalHistorySummary
+                    ? 'PATIENT_SAFETY.HISTORY_EDIT'
+                    : 'PATIENT_SAFETY.HISTORY_ADD'
+                  ) | translate
+                }}
+              </button>
+            }
           </div>
         }
       </div>
