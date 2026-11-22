@@ -326,6 +326,19 @@ public class StockTransactionServiceImpl implements StockTransactionService {
 
     // ── Private helpers ──────────────────────────────────────────────────
 
+    /** Movements written only by their own workflow, never typed on the movement form. */
+    private static void refuseWorkflowMovements(StockTransactionType type) {
+        // QA D3415 (r70): the quarantine is fed by returns and cancelled fills, and emptied by its destruction.
+        if (type == StockTransactionType.QUARANTINE || type == StockTransactionType.DESTRUCTION) {
+            throw new com.example.hms.exception.FieldBusinessException("transactionType",
+                    MessageUtil.resolve("stockTransaction.quarantine.viaWorkflow"));
+        }
+        // QA D2670 (r65): a SALE leaves stock through the counter sale, which writes it with the sale's id.
+        if (type == StockTransactionType.DISPENSE || type == StockTransactionType.SALE) {
+            throw new com.example.hms.exception.FieldBusinessException("transactionType", MessageUtil.resolve("stockTransaction.dispense.viaWorkflow"));
+        }
+    }
+
     /**
      * D82: a manual stock movement must be accountable and keep the lots and
      * the item total in step. Morphine was "dispensed" here with no
@@ -343,19 +356,6 @@ public class StockTransactionServiceImpl implements StockTransactionService {
      *   <li>Nothing is received into an expired lot (D108).</li>
      * </ul>
      */
-    /** Movements written only by their own workflow, never typed on the movement form. */
-    private static void refuseWorkflowMovements(StockTransactionType type) {
-        // QA D3415 (r70): the quarantine is fed by returns and cancelled fills, and emptied by its destruction.
-        if (type == StockTransactionType.QUARANTINE || type == StockTransactionType.DESTRUCTION) {
-            throw new com.example.hms.exception.FieldBusinessException("transactionType",
-                    MessageUtil.resolve("stockTransaction.quarantine.viaWorkflow"));
-        }
-        // QA D2670 (r65): a SALE leaves stock through the counter sale, which writes it with the sale's id.
-        if (type == StockTransactionType.DISPENSE || type == StockTransactionType.SALE) {
-            throw new com.example.hms.exception.FieldBusinessException("transactionType", MessageUtil.resolve("stockTransaction.dispense.viaWorkflow"));
-        }
-    }
-
     private void requireMovementIsAccountable(StockTransactionRequestDTO dto, InventoryItem item, StockLot lot) {
         StockTransactionType type = dto.getTransactionType();
         refuseWorkflowMovements(type);
