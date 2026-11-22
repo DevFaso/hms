@@ -58,6 +58,20 @@ class PriceListItemPregnancyDecisionTest {
     }
 
     @Test
+    @DisplayName("review of #1290: a FLAGGED exam stays flagged when it is renamed, moved or relinked (un-flagging would show what was hidden)")
+    void aFlaggedExamStaysFlagged() {
+        exam.setMayRevealPregnancy(true);
+
+        exam.setLabel("Radiographie du thorax (face)");
+        exam.setCategory(PriceListCategory.OTHER_SERVICE);
+        exam.setLinkKey("XRAY:radiographie du thorax face");
+
+        assertThat(exam.getMayRevealPregnancy()).isTrue();
+        assertThat(exam.getMayRevealPregnancySetBy()).isNotNull();
+        assertThat(exam.getMayRevealPregnancySetAt()).isNotNull();
+    }
+
+    @Test
     @DisplayName("saved again with the same name, category and link (a price change, the form re-sent): the decision stays")
     void unchanged() {
         exam.setLabel(" Radiographie du thorax ");

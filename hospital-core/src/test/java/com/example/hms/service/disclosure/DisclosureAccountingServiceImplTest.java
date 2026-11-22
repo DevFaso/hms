@@ -99,7 +99,11 @@ class DisclosureAccountingServiceImplTest {
         assertThat(types.getValue())
             .as("break-the-glass must be fetched or the page cannot show emergency access")
             .contains(AuditEventType.BREAK_GLASS_ACCESS)
-            .containsExactlyInAnyOrderElementsOf(DisclosureCategory.accountableEventTypes());
+            // Review of #1290 (QA D3451): a staff read with no hospital to place the reader at asks for every
+            // accountable event but a result released to the family (the patient's own list asks for all).
+            .doesNotContain(AuditEventType.SENSITIVE_RESULT_RELEASED_TO_PROXY)
+            .hasSize(DisclosureCategory.accountableEventTypes().size() - 1)
+            .isSubsetOf(DisclosureCategory.accountableEventTypes());
     }
 
     @Test

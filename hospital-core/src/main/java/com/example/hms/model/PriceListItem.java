@@ -109,10 +109,11 @@ public class PriceListItem extends BaseEntity implements TenantScoped {
 
     /**
      * QA D3450 (r70): the pregnancy flag is a decision about a NAMED exam. Renamed, moved to another category or
-     * relinked (another modality), the item is another exam: the decision goes back to « not decided », where the
-     * exam is read by its words and held by the fail-closed rule, until the hospital admin or a radiologist decides
-     * again. Held here, in the setters, so that no writer of an item (the form, an import, a link by code) can
-     * rename a cleared « Radiographie du thorax » into an obstetric ultrasound and keep it cleared.
+     * relinked (another modality), a CLEARED item is another exam: its decision goes back to « not decided », where
+     * the exam is read by its words and held by the fail-closed rule, until the hospital admin or a radiologist
+     * decides again. A FLAGGED item stays flagged (un-flagging by a rename would show what was hidden). Held here,
+     * in the setters, so that no writer of an item (the form, an import, a link by code) can rename a cleared
+     * « Radiographie du thorax » into an obstetric ultrasound and keep it cleared.
      */
     public void setLabel(String label) {
         if (this.label != null && (label == null || !this.label.trim().equals(label.trim()))) {
@@ -135,7 +136,11 @@ public class PriceListItem extends BaseEntity implements TenantScoped {
         this.linkKey = linkKey;
     }
 
+    /** Only a cleared exam goes back to « not decided »: a flagged one stays flagged, whatever it is called now. */
     private void clearPregnancyDecision() {
+        if (!Boolean.FALSE.equals(this.mayRevealPregnancy)) {
+            return;
+        }
         this.mayRevealPregnancy = null;
         this.mayRevealPregnancySetBy = null;
         this.mayRevealPregnancySetAt = null;

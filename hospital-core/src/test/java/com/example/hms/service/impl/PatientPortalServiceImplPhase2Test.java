@@ -1098,6 +1098,7 @@ class PatientPortalServiceImplPhase2Test {
             prescription.setHospital(hospital);
 
             when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+            renewalRouting(doctorUser, hospitalId, true);
             // QA D3301: the department's doctors and nurses are never asked for, so nobody else can be told.
             assertThat(nurse.getDepartment()).isSameAs(doctor.getDepartment());
             when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> {
@@ -1150,6 +1151,7 @@ class PatientPortalServiceImplPhase2Test {
             prescription.setStaff(leftTheHospital);
             prescription.setHospital(hospital);
             when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+            renewalRouting(gone, hospital.getId(), true);
             when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> {
                 RefillRequest saved = inv.getArgument(0);
                 saved.setId(UUID.randomUUID());
@@ -1161,6 +1163,46 @@ class PatientPortalServiceImplPhase2Test {
             verify(notificationService, never()).created(any(), any(), any());
             verify(emailService, never()).sendHtml(any(), any(), any(), any(), any());
             verify(staffRepository, never()).findActiveProvidersByHospitalAndDepartment(any(), any());
+        }
+
+        @Test
+        @DisplayName("review of #1290: a prescriber whose assignment was deactivated (still an active staff row and account) is not rung")
+        void requestRefill_prescriberWhoMayNoLongerRenewIsNotRung() {
+            stubPatientResolution();
+            UUID rxId = UUID.randomUUID();
+            Hospital hospital = new Hospital();
+            hospital.setId(UUID.randomUUID());
+            User unassigned = new User();
+            unassigned.setUsername("doctor.unassigned");
+            unassigned.setEmail("doctor.unassigned@hms.test");
+            Staff stillActiveRow = new Staff();
+            stillActiveRow.setUser(unassigned);
+            stillActiveRow.setHospital(hospital);
+            Prescription prescription = buildPrescription(rxId, patient);
+            prescription.setStaff(stillActiveRow);
+            prescription.setHospital(hospital);
+            when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+            renewalRouting(unassigned, hospital.getId(), false);
+            when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> {
+                RefillRequest saved = inv.getArgument(0);
+                saved.setId(UUID.randomUUID());
+                return saved;
+            });
+
+            service.requestMedicationRefill(auth, MedicationRefillRequestDTO.builder().prescriptionId(rxId).build());
+
+            verify(notificationService, never()).created(any(), any(), any());
+            verify(emailService, never()).sendHtml(any(), any(), any(), any(), any());
+        }
+
+        /** The rule as Spring wires it: whether this prescriber may still approve a renewal at this hospital. */
+        private void renewalRouting(User prescriberUser, UUID atHospital, boolean mayRenew) {
+            prescriberUser.setId(UUID.randomUUID());
+            com.example.hms.utility.RoleValidator renewalRoles =
+                org.mockito.Mockito.mock(com.example.hms.utility.RoleValidator.class);
+            org.mockito.Mockito.lenient()
+                .when(renewalRoles.canApproveRenewal(prescriberUser.getId(), atHospital, false)).thenReturn(mayRenew);
+            service.setRenewalAlertRouting(new com.example.hms.service.pharmacy.RenewalAlertRouting(renewalRoles));
         }
 
         @Test
@@ -1192,6 +1234,7 @@ class PatientPortalServiceImplPhase2Test {
             prescription.setHospital(hospital);
 
             when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+            renewalRouting(doctorUser, hospital.getId(), true);
             doThrow(new RuntimeException("notification down"))
                     .when(notificationService).created(any(), any(), eq("MEDICATION_REFILL"));
             doThrow(new RuntimeException("smtp down"))

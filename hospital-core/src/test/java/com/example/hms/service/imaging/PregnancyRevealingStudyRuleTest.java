@@ -2,6 +2,8 @@ package com.example.hms.service.imaging;
 
 import com.example.hms.enums.ImagingModality;
 import com.example.hms.model.ImagingOrder;
+import com.example.hms.model.Patient;
+import com.example.hms.service.imaging.PregnancyRevealingStudyRule.ExamDecision;
 import com.example.hms.service.imaging.PregnancyRevealingStudyRule.Verdict;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -152,6 +154,88 @@ class PregnancyRevealingStudyRuleTest {
     }
 
     @Test
+    @DisplayName("review of #1290: on a cleared exam, the body region the orderer typed is still read; the exam's own region is not")
+    void whatTheOrdererTypedIsReadOnAClearedExam() {
+        for (String typed : new String[] {"Bassin – pelvimétrie", "Utérus", "Pelvis"}) {
+            ImagingOrder order = order(ImagingModality.XRAY, "Radiographie standard", typed, null);
+            assertThat(PregnancyRevealingStudyRule.judge(order, Boolean.FALSE, true, 70)).as(typed)
+                .isEqualTo(Verdict.REVEALING);
+        }
+        // A pelvic X-ray the hospital cleared, with the region the catalogue itself gives it: the clearance stands.
+        ImagingOrder hip = order(ImagingModality.XRAY, "Radiographie du bassin (traumatologie)", "Bassin", null);
+        Patient woman = new Patient();
+        woman.setGender("F");
+        woman.setDateOfBirth(java.time.LocalDate.now().minusYears(30));
+        assertThat(PregnancyRevealingStudyRule.judge(hip, new ExamDecision(false, " bassin "), woman))
+            .isEqualTo(Verdict.SHOWN);
+        // ... but not when the orderer typed another pelvic region than the exam's own.
+        hip.setBodyRegion("Bassin, utérus");
+        assertThat(PregnancyRevealingStudyRule.judge(hip, new ExamDecision(false, "Bassin"), woman))
+            .isEqualTo(Verdict.REVEALING);
+    }
+
+    @Test
+    @DisplayName("review of #1290: an age that cannot be believed is an unknown age, inside the band")
+    void anImplausibleAgeIsUnknown() {
+        ImagingOrder abdominal = order(ImagingModality.ULTRASOUND, "Échographie abdominale", "Abdomen", null);
+        Patient patient = new Patient();
+        patient.setGender("F");
+
+        patient.setDateOfBirth(java.time.LocalDate.of(1900, 1, 1));
+        assertThat(PregnancyRevealingStudyRule.ageOf(patient)).as("the 1900-01-01 placeholder").isNull();
+        assertThat(PregnancyRevealingStudyRule.judge(abdominal, null, patient)).isEqualTo(Verdict.UNCLEARED);
+
+        patient.setDateOfBirth(java.time.LocalDate.now().plusYears(2));
+        assertThat(PregnancyRevealingStudyRule.ageOf(patient)).as("a birth date in the future").isNull();
+        assertThat(PregnancyRevealingStudyRule.judge(abdominal, null, patient)).isEqualTo(Verdict.UNCLEARED);
+
+        patient.setDateOfBirth(java.time.LocalDate.now().minusYears(70));
+        assertThat(PregnancyRevealingStudyRule.judge(abdominal, null, patient)).as("a woman of 70")
+            .isEqualTo(Verdict.SHOWN);
+        patient.setDateOfBirth(java.time.LocalDate.now().minusYears(110));
+        assertThat(PregnancyRevealingStudyRule.ageOf(patient)).as("110 is still an age").isEqualTo(110);
+    }
+
+    @Test
+    @DisplayName("review of #1290: a study that does not say which part of the body it is of is held back for a patient who may be pregnant")
+    void aStudyThatDoesNotSayWhereIsHeldBack() {
+        Object[][] unknown = {
+            {ImagingModality.OTHER, "Bilan"}, {ImagingModality.MRI, "IRM"}, {ImagingModality.CT, "Scanner"},
+            {ImagingModality.CT, "TDM avec injection"}, {ImagingModality.XRAY, "Radiographie"},
+            {ImagingModality.FLUOROSCOPY, "Transit"}, {null, "Examen"},
+        };
+        for (Object[] study : unknown) {
+            ImagingOrder order = order((ImagingModality) study[0], (String) study[1], " ", null);
+            assertThat(PregnancyRevealingStudyRule.judge(order, null, false, 30)).as((String) study[1])
+                .isEqualTo(Verdict.UNCLEARED);
+            assertThat(PregnancyRevealingStudyRule.judge(order, null, true, 30)).as("a recorded male: " + study[1])
+                .isEqualTo(Verdict.SHOWN);
+            assertThat(PregnancyRevealingStudyRule.judge(order, Boolean.FALSE, false, 30)).as("cleared: " + study[1])
+                .isEqualTo(Verdict.SHOWN);
+        }
+        Object[][] elsewhere = {
+            {ImagingModality.MRI, "IRM du genou", null}, {ImagingModality.XRAY, "Radiographie du thorax (face)", null},
+            {ImagingModality.CT, "Scanner cérébral", null}, {ImagingModality.MRI, "IRM", "Genou droit"},
+            {ImagingModality.MAMMOGRAPHY, "Mammographie", null}, {ImagingModality.DEXA, "Ostéodensitométrie", null},
+            {ImagingModality.XRAY, "Radio main gauche", null},
+        };
+        for (Object[] study : elsewhere) {
+            ImagingOrder order = order((ImagingModality) study[0], (String) study[1], (String) study[2], null);
+            assertThat(PregnancyRevealingStudyRule.judge(order, null, false, 30)).as((String) study[1])
+                .isEqualTo(Verdict.SHOWN);
+        }
+        assertThat(PregnancyRevealingStudyRule.judgeExam(null, ImagingModality.CT, "Scanner", null, null))
+            .as("the same for a catalogue exam on an invoice line").isEqualTo(Verdict.UNCLEARED);
+    }
+
+    @Test
+    @DisplayName("a text too long to judge in one bounded pass is taken as naming a pregnancy study, never as naming none")
+    void anOverlongTextIsNotTakenAsClean() {
+        assertThat(PregnancyRevealingStudyRule.namesPregnancyStudy("a".repeat(100_000))).isFalse();
+        assertThat(PregnancyRevealingStudyRule.namesPregnancyStudy("a".repeat(100_001))).isTrue();
+    }
+
+    @Test
     @DisplayName("a catalogue exam read on its own (an invoice line) follows the same three steps")
     void aCatalogueExamOnItsOwn() {
         assertThat(PregnancyRevealingStudyRule.judgeExam(Boolean.TRUE, ImagingModality.XRAY, "Radiographie du thorax",
@@ -183,6 +267,9 @@ class PregnancyRevealingStudyRuleTest {
     void theListsAreBounded() {
         assertThat(PregnancyRevealingStudyRule.TERMS).hasSizeLessThanOrEqualTo(80).doesNotHaveDuplicates();
         assertThat(PregnancyRevealingStudyRule.WORDS).hasSizeLessThanOrEqualTo(20);
+        assertThat(PregnancyRevealingStudyRule.ELSEWHERE_WORDS).hasSizeLessThanOrEqualTo(100)
+            .doesNotContain("abdomen", "bassin", "pelvis", "ventre", "hanche");
+        assertThat(PregnancyRevealingStudyRule.MAX_PLAUSIBLE_AGE).isEqualTo(110);
         assertThat(PregnancyRevealingStudyRule.FAIL_CLOSED_MIN_AGE).isEqualTo(10);
         assertThat(PregnancyRevealingStudyRule.FAIL_CLOSED_MAX_AGE).isEqualTo(55);
     }

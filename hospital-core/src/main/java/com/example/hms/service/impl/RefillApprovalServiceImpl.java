@@ -97,9 +97,10 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
 
     private Page<RefillRequest> listForPrescriber(Authentication auth, RefillStatus status, Pageable pageable) {
         UUID staffId = resolveStaffId(auth);
-        if (mayCoverHere(auth)) {
-            // QA D3301: the designated cover of a prescriber who left answers their requests too.
-            return refillRequestRepository.findAnsweredBy(staffId, roleValidator.getCurrentHospitalId(),
+        java.util.Set<UUID> answered = answeredPrescribers(auth, staffId);
+        if (answered.size() > 1) {
+            // QA D3301: the designated cover of a prescriber who no longer answers lists their requests too.
+            return refillRequestRepository.findAnsweredBy(answered,
                 status == null ? java.util.EnumSet.allOf(RefillStatus.class) : java.util.EnumSet.of(status), pageable);
         }
         return (status == null)
@@ -113,13 +114,32 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
     }
 
     /**
-     * Whether the caller could be a prescriber's cover at the hospital they act at: they may approve a renewal
-     * there. Anybody else lists their own prescriptions' requests only.
+     * The caller's staff record AT the hospital they act at, when they may approve a renewal there: the only
+     * record a cover's reach is read from (review of #1290: never the first staff row of the account, which may
+     * be a row at another hospital). Empty for anybody else.
      */
-    private boolean mayCoverHere(Authentication auth) {
+    private java.util.Optional<Staff> coverRecordHere(Authentication auth) {
         UUID hospitalId = roleValidator.getCurrentHospitalId();
         UUID userId = authUtils.resolveUserId(auth).orElse(null);
-        return hospitalId != null && roleValidator.canApproveRenewal(userId, hospitalId, false);
+        if (hospitalId == null || userId == null || !roleValidator.canApproveRenewal(userId, hospitalId, false)) {
+            return java.util.Optional.empty();
+        }
+        return staffRepository.findByUserIdAndHospitalId(userId, hospitalId);
+    }
+
+    /**
+     * The prescribers whose requests the caller answers: their own staff record, and the prescribers of the
+     * departments they head at the acting hospital who no longer answer there ({@code RenewalAlertRouting}).
+     */
+    private java.util.Set<UUID> answeredPrescribers(Authentication auth, UUID ownStaffId) {
+        java.util.Set<UUID> answered = new java.util.LinkedHashSet<>();
+        answered.add(ownStaffId);
+        coverRecordHere(auth).ifPresent(cover -> {
+            UUID hospitalId = roleValidator.getCurrentHospitalId();
+            answered.addAll(routing().noLongerAnswering(cover,
+                staffRepository.findInDepartmentsHeadedBy(cover.getId(), hospitalId), hospitalId));
+        });
+        return answered;
     }
 
     @Override
@@ -133,9 +153,9 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
                             hospitalId, RefillStatus.REQUESTED);
         }
         UUID staffId = resolveStaffId(auth);
-        if (mayCoverHere(auth)) {
-            return refillRequestRepository.countAnsweredBy(staffId, roleValidator.getCurrentHospitalId(),
-                java.util.EnumSet.of(RefillStatus.REQUESTED));
+        java.util.Set<UUID> answered = answeredPrescribers(auth, staffId);
+        if (answered.size() > 1) {
+            return refillRequestRepository.countAnsweredBy(answered, java.util.EnumSet.of(RefillStatus.REQUESTED));
         }
         return refillRequestRepository.countByPrescription_Staff_IdAndStatus(staffId, RefillStatus.REQUESTED);
     }
@@ -185,9 +205,10 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
 
         Prescription prescription = refill.getPrescription();
         Staff prescriber = prescription != null ? prescription.getStaff() : null;
-        // QA D3301: the prescriber, or the designated cover of a prescriber who is no longer active.
-        boolean answers = prescriber != null
-            && (staffId.equals(prescriber.getId()) || routing().isCoverOf(staffId, prescription));
+        // QA D3301: the prescriber, or the designated cover of a prescriber who no longer answers. The cover is
+        // the caller's staff record at the hospital they act at, never another hospital's.
+        boolean answers = prescriber != null && (staffId.equals(prescriber.getId())
+            || coverRecordHere(auth).map(cover -> routing().isCoverOf(cover.getId(), prescription)).orElse(false));
         if (!answers) {
             throw new AccessDeniedException("patient.refill.decision.notOwnPrescription");
         }

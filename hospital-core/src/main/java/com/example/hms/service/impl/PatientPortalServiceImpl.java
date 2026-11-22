@@ -1705,7 +1705,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     private record Recipients(Set<String> usernames, Set<String> emails) {}
 
-    /** QA D3301: who answers a renewal request; null in a hand-built unit test (then the active prescriber). */
+    /** QA D3301: who answers a renewal request; null in a hand-built unit test (then nobody is told). */
     private com.example.hms.service.pharmacy.RenewalAlertRouting renewalAlertRouting;
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -1727,7 +1727,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // QA D3301: never the department's doctors and nurses. A renewal is the prescriber's to answer.
         java.util.Optional<Staff> answerer = renewalAlertRouting != null
             ? renewalAlertRouting.answererOf(prescription)
-            : com.example.hms.service.pharmacy.RenewalAlertRouting.activePrescriberOf(prescription);
+            : java.util.Optional.empty();
         answerer.ifPresent(staff -> addStaffContact(usernames, emails, staff));
         return new Recipients(usernames, emails);
     }

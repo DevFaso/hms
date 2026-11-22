@@ -173,13 +173,18 @@ public class ImagingCatalogueService {
     }
 
     /**
-     * The pregnancy flag of each order's catalogue exam, for a family proxy's read: by order id, absent for a
-     * free-text order, for an exam nobody decided and for an item that cannot be read. Read at each order's OWN
-     * hospital, outside the caller's tenant scope: a proxy holds no assignment where the patient was imaged
-     * (the QA D1212 trap, as {@code ProxyRecordFilter} reads an invoice's items).
+     * What the catalogue says of each order's exam, for a family proxy's read: by order id, absent for a free-text
+     * order, for an exam nobody decided and for an item that cannot be read. Read at each order's OWN hospital,
+     * outside the caller's tenant scope: a proxy holds no assignment where the patient was imaged (the QA D1212
+     * trap, as {@code ProxyRecordFilter} reads an invoice's items).
+     *
+     * <p>The flag is the item's as it is TODAY, and an order keeps the name it was placed with. A flagged exam
+     * counts for every order that names it (it only hides). A cleared exam counts only for an order still named
+     * as the exam is now: an « Échographie obstétricale » ordered before the line was renamed and cleared as
+     * something else is not cleared by that decision; it is read as undecided, by its own words.
      */
     @Transactional(readOnly = true)
-    public Map<UUID, Boolean> pregnancyFlagsOf(List<ImagingOrder> orders) {
+    public Map<UUID, PregnancyRevealingStudyRule.ExamDecision> pregnancyFlagsOf(List<ImagingOrder> orders) {
         Map<UUID, Set<UUID>> itemsByHospital = new HashMap<>();
         for (ImagingOrder order : orders) {
             UUID hospitalId = hospitalIdOf(order);
@@ -187,20 +192,31 @@ public class ImagingCatalogueService {
                 itemsByHospital.computeIfAbsent(hospitalId, id -> new HashSet<>()).add(order.getCatalogueItemId());
             }
         }
-        Map<String, Boolean> decided = new HashMap<>();
+        Map<String, PriceListItem> decided = new HashMap<>();
         itemsByHospital.forEach((hospitalId, ids) ->
             itemRepository.findUnscopedByHospitalIdAndIdIn(hospitalId, ids).stream()
                 .filter(item -> item.getMayRevealPregnancy() != null && item.getCategory() == PriceListCategory.IMAGING)
-                .forEach(item -> decided.put(hospitalId + "|" + item.getId(), item.getMayRevealPregnancy())));
-        Map<UUID, Boolean> byOrder = new HashMap<>();
+                .forEach(item -> decided.put(hospitalId + "|" + item.getId(), item)));
+        Map<UUID, PregnancyRevealingStudyRule.ExamDecision> byOrder = new HashMap<>();
         for (ImagingOrder order : orders) {
-            Boolean flag = order.getCatalogueItemId() == null ? null
+            PriceListItem item = order.getCatalogueItemId() == null ? null
                 : decided.get(hospitalIdOf(order) + "|" + order.getCatalogueItemId());
-            if (flag != null) {
-                byOrder.put(order.getId(), flag);
+            if (item != null && (Boolean.TRUE.equals(item.getMayRevealPregnancy()) || namedAs(order, item))) {
+                byOrder.put(order.getId(), new PregnancyRevealingStudyRule.ExamDecision(
+                    item.getMayRevealPregnancy(), item.getImagingBodyRegion()));
             }
         }
         return byOrder;
+    }
+
+    /** Whether the order still carries the exam's current name (as {@link #applyTo} writes it), case and accents aside. */
+    private static boolean namedAs(ImagingOrder order, PriceListItem item) {
+        if (order.getStudyType() == null || item.getLabel() == null) {
+            return false;
+        }
+        String label = item.getLabel().trim();
+        String asWritten = label.length() > TEXT_MAX ? label.substring(0, TEXT_MAX) : label;
+        return PriceListLinks.fold(order.getStudyType()).equals(PriceListLinks.fold(asWritten));
     }
 
     /**

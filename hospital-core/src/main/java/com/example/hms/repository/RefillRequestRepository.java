@@ -26,43 +26,31 @@ public interface RefillRequestRepository extends JpaRepository<RefillRequest, UU
     Page<RefillRequest> findByPrescriptionId(UUID prescriptionId, Pageable pageable);
 
     /**
-     * QA D3301 (r70): the requests {@code staffId} answers: those of their own prescriptions, and, as the
-     * designated cover, those of a prescriber of the department they head who is no longer active (the staff
-     * record or the account switched off), at {@code hospitalId}: the hospital the caller acts at, where their
-     * right to approve a renewal was checked. {@code RenewalAlertRouting} is the rule; the decision checks it again.
+     * QA D3301 (r70): the requests of these prescribers: the caller's own staff record, and the prescribers the
+     * caller covers. WHO is covered is decided once, in {@code RenewalAlertRouting} (a prescriber who no longer
+     * answers at the hospital, in a department the caller heads there): this query does not repeat that rule,
+     * it takes its answer.
      */
     @org.springframework.data.jpa.repository.Query(value = """
-        SELECT r FROM RefillRequest r JOIN r.prescription p JOIN p.staff s JOIN s.user u
-            LEFT JOIN s.department d LEFT JOIN d.headOfDepartment h
-        WHERE r.status IN :statuses
-          AND (s.id = :staffId
-               OR ((s.active = false OR u.isActive = false OR u.isDeleted = true)
-                   AND h.id = :staffId AND p.hospital.id = :hospitalId))
+        SELECT r FROM RefillRequest r
+        WHERE r.status IN :statuses AND r.prescription.staff.id IN :prescriberStaffIds
         """, countQuery = """
-        SELECT COUNT(r) FROM RefillRequest r JOIN r.prescription p JOIN p.staff s JOIN s.user u
-            LEFT JOIN s.department d LEFT JOIN d.headOfDepartment h
-        WHERE r.status IN :statuses
-          AND (s.id = :staffId
-               OR ((s.active = false OR u.isActive = false OR u.isDeleted = true)
-                   AND h.id = :staffId AND p.hospital.id = :hospitalId))
+        SELECT COUNT(r) FROM RefillRequest r
+        WHERE r.status IN :statuses AND r.prescription.staff.id IN :prescriberStaffIds
         """)
-    Page<RefillRequest> findAnsweredBy(@org.springframework.data.repository.query.Param("staffId") UUID staffId,
-                                       @org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
-                                       @org.springframework.data.repository.query.Param("statuses") Collection<RefillStatus> statuses,
-                                       Pageable pageable);
+    Page<RefillRequest> findAnsweredBy(
+        @org.springframework.data.repository.query.Param("prescriberStaffIds") Collection<UUID> prescriberStaffIds,
+        @org.springframework.data.repository.query.Param("statuses") Collection<RefillStatus> statuses,
+        Pageable pageable);
 
-    /** QA D3301: how many requests {@code staffId} answers ({@link #findAnsweredBy}, counted). */
+    /** QA D3301: how many requests of these prescribers ({@link #findAnsweredBy}, counted). */
     @org.springframework.data.jpa.repository.Query("""
-        SELECT COUNT(r) FROM RefillRequest r JOIN r.prescription p JOIN p.staff s JOIN s.user u
-            LEFT JOIN s.department d LEFT JOIN d.headOfDepartment h
-        WHERE r.status IN :statuses
-          AND (s.id = :staffId
-               OR ((s.active = false OR u.isActive = false OR u.isDeleted = true)
-                   AND h.id = :staffId AND p.hospital.id = :hospitalId))
+        SELECT COUNT(r) FROM RefillRequest r
+        WHERE r.status IN :statuses AND r.prescription.staff.id IN :prescriberStaffIds
         """)
-    long countAnsweredBy(@org.springframework.data.repository.query.Param("staffId") UUID staffId,
-                         @org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
-                         @org.springframework.data.repository.query.Param("statuses") Collection<RefillStatus> statuses);
+    long countAnsweredBy(
+        @org.springframework.data.repository.query.Param("prescriberStaffIds") Collection<UUID> prescriberStaffIds,
+        @org.springframework.data.repository.query.Param("statuses") Collection<RefillStatus> statuses);
 
     // Count pending refill requests for prescriptions written by a specific doctor (staff)
     long countByPrescription_Staff_IdAndStatus(UUID staffId, RefillStatus status);

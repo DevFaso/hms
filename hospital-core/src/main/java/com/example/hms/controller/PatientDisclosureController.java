@@ -72,8 +72,10 @@ public class PatientDisclosureController {
 
         requirePatientInCallerTenant(patientId);
 
-        DisclosureAccountingDTO accounting =
-            disclosureAccountingService.getAccounting(patientId, from, to, pageable);
+        // Review of #1290 (QA D3451): a result released to the family is listed only to the hospital that
+        // released it; the platform's global view (no hospital) lists none.
+        DisclosureAccountingDTO accounting = disclosureAccountingService.getAccounting(patientId, from, to, pageable,
+            roleValidator.requireActiveHospitalId());
         return ResponseEntity.ok(ApiResponseWrapper.success(accounting));
     }
 

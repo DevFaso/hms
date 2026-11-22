@@ -493,8 +493,8 @@ public class ProxyRecordFilter {
         if (orders == null || orders.isEmpty()) {
             return true;
         }
-        Map<UUID, Boolean> flags = imagingCatalogueService == null ? Map.of()
-            : imagingCatalogueService.pregnancyFlagsOf(orders);
+        Map<UUID, com.example.hms.service.imaging.PregnancyRevealingStudyRule.ExamDecision> flags =
+            imagingCatalogueService == null ? Map.of() : imagingCatalogueService.pregnancyFlagsOf(orders);
         Patient subject = invoice.getPatient();
         return orders.stream().allMatch(order -> admitsImagingStudy(
             com.example.hms.service.imaging.PregnancyRevealingStudyRule.judge(order, flags.get(order.getId()), subject),

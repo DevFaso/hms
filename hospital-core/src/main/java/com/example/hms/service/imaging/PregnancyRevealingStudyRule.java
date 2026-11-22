@@ -5,13 +5,14 @@ import com.example.hms.model.ImagingOrder;
 import com.example.hms.model.Patient;
 import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
 import com.example.hms.service.clinicalrules.ProvisionalRule;
+import com.example.hms.service.recordaccess.ProxySensitivityPolicy;
 import com.example.hms.utility.ObstetricEligibility;
 
 import java.text.Normalizer;
 import java.time.LocalDate;
-import java.time.Period;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -36,21 +37,31 @@ import java.util.Set;
  *       hospital's imaging catalogue ({@code PriceListItem}, V361), and the
  *       hospital admin or a radiologist says of each exam whether it may reveal
  *       a pregnancy. A flagged exam never reaches a proxy. A cleared exam does,
- *       unless the clinical question typed on that one order names a pregnancy.</li>
+ *       unless what the orderer typed on that one order names a pregnancy: its
+ *       clinical question, or a body region that is not the exam's own. A
+ *       cleared exam counts only for an order still named as the exam is: an
+ *       order placed before the exam was renamed is read as undecided.</li>
  *   <li><b>The words</b> ({@link #TERMS}, {@link #WORDS}), for an exam nobody
  *       decided and for a free-text order: obstetric, pelvic and gynaecological
  *       stems, FR/EN/ES, read without case or accents, whoever the patient is.</li>
  *   <li><b>Fail closed.</b> For a patient whose record does not say male, aged
  *       {@value #FAIL_CLOSED_MIN_AGE} to {@value #FAIL_CLOSED_MAX_AGE} (or of
  *       unknown age), every ultrasound and every abdominal or pelvic study is
- *       kept from the proxy until its catalogue exam is explicitly cleared. It
+ *       kept from the proxy until its catalogue exam is explicitly cleared; so
+ *       is a study that does not say which part of the body it is of (no body
+ *       region, and a name with none of {@link #ELSEWHERE_WORDS}). An age that
+ *       cannot be believed (a birth date in the future, or more than
+ *       {@value #MAX_PLAUSIBLE_AGE} years ago) is an unknown age. It
  *       is then a pregnancy row of that patient: the one reader the
  *       sensitive-category policy lets read such a row (a verified parent or
  *       guardian of a child under the hospital's adolescent age) still reads
  *       it; a flagged or a named study is read by no proxy at all.</li>
  * </ol>
- * A wrong match only hides a study from the caregiver, never shows one. The
- * report text is not read.
+ * A wrong match only hides a study from the caregiver, never shows one. What
+ * the proxy would read with the study is read too, by the same words
+ * ({@code PatientImagingPortalService}): a released report (its title, region,
+ * technique, findings, impression, recommendations, comparison) and the
+ * captions of its images; a match keeps the study from every proxy.
  *
  * <p><b>PROVISIONAL</b> (« provisoire ») until the clinic's radiologist or
  * medical lead signs it off (docs/qa/regles-cliniques-provisoires.md). The age
@@ -112,8 +123,46 @@ public final class PregnancyRevealingStudyRule {
     private static final Set<String> ABDOMEN_PELVIS_WORDS =
         Set.of("asp", "hip", "hips", "rein", "reins", "tap", "uiv");
 
-    /** A field longer than any column that feeds this rule is cut: the read stays one bounded pass. */
-    private static final int MAX_READ = 4000;
+    /**
+     * Body parts outside the abdomen and the pelvis, as whole words (FR/EN/ES, no accents). With no body region
+     * given, a study whose name has none of them does not say where it is: for a patient who may be pregnant it is
+     * held back. Bounded, as the other lists: a word missing here only hides a study.
+     */
+    static final Set<String> ELSEWHERE_WORDS = Set.of(
+        "thorax", "thoracique", "thoracic", "chest", "torax", "poumon", "poumons", "pulmonaire", "lung", "lungs",
+        "pulmon", "pulmones", "crane", "cranien", "cerebral", "cerebrale", "cerveau", "encephale", "brain", "head",
+        "tete", "cabeza", "craneo", "sinus", "dentaire", "dental", "panoramique", "epaule", "epaules", "shoulder",
+        "hombro", "bras", "humerus", "arm", "brazo", "coude", "elbow", "codo", "poignet", "wrist", "muneca",
+        "main", "mains", "hand", "mano", "doigt", "doigts", "finger", "dedo", "genou", "genoux", "knee", "rodilla",
+        "jambe", "tibia", "leg", "pierna", "cheville", "ankle", "tobillo", "pied", "pieds", "foot", "pie",
+        "orteil", "clavicule", "sternum", "orbite", "orbites", "mandibule", "coeur", "cardiaque", "cardiac",
+        "heart", "corazon", "sein", "seins", "mammaire", "breast", "mama", "cou", "neck", "cuello");
+
+    /** The modalities that say the body part by themselves (the breast, the bone density sites). */
+    private static final Set<ImagingModality> SELF_LOCATING =
+        EnumSet.of(ImagingModality.MAMMOGRAPHY, ImagingModality.DEXA);
+
+    /** An age above this is a placeholder date of birth (1900-01-01), not an age: it is read as unknown. */
+    public static final int MAX_PLAUSIBLE_AGE = 110;
+
+    /**
+     * The longest text the rule reads (a report's findings are long). A longer one cannot be judged in a bounded
+     * pass: it is taken as naming a pregnancy study, never as naming none.
+     */
+    private static final int MAX_READ = 100_000;
+
+    /**
+     * What the catalogue says of an order's exam: its flag (TRUE flagged, FALSE cleared, null when nobody decided),
+     * and the exam's own body region, which a cleared exam's orders carry without it being something the orderer
+     * typed about one patient.
+     */
+    public record ExamDecision(Boolean flag, String examRegion) {
+
+        /** A decision with no region of the exam's own. */
+        public static ExamDecision of(Boolean flag) {
+            return new ExamDecision(flag, null);
+        }
+    }
 
     private PregnancyRevealingStudyRule() {
     }
@@ -135,29 +184,43 @@ public final class PregnancyRevealingStudyRule {
     /**
      * How this order stands for a family proxy.
      *
-     * @param catalogueFlag the pregnancy flag of the order's catalogue exam: TRUE flagged, FALSE cleared, null when
-     *                      nobody decided or the order names no catalogue exam
-     * @param patient       whose study it is; null is read as a patient who may be pregnant
+     * @param decision what the catalogue says of the order's exam; null when the order names no catalogue exam,
+     *                 when nobody decided, or when the exam was cleared under another name than the order's
+     * @param patient  whose study it is; null is read as a patient who may be pregnant
      */
-    public static Verdict judge(ImagingOrder order, Boolean catalogueFlag, Patient patient) {
+    public static Verdict judge(ImagingOrder order, ExamDecision decision, Patient patient) {
         boolean recordedMale = patient != null && ObstetricEligibility.isRecordedMale(patient);
-        return judge(order, catalogueFlag, recordedMale, ageOf(patient));
+        return verdict(order, decision, recordedMale, ageOf(patient));
     }
 
-    /** {@link #judge(ImagingOrder, Boolean, Patient)} with the patient's sex and age already read. */
+    /** The verdict with the exam's flag alone, and the patient's sex and age already read. */
     public static Verdict judge(ImagingOrder order, Boolean catalogueFlag, boolean recordedMale, Integer ageYears) {
-        if (order == null || Boolean.TRUE.equals(catalogueFlag)) {
+        return verdict(order, ExamDecision.of(catalogueFlag), recordedMale, ageYears);
+    }
+
+    private static Verdict verdict(ImagingOrder order, ExamDecision decision, boolean recordedMale,
+                                   Integer ageYears) {
+        Boolean flag = decision == null ? null : decision.flag();
+        if (order == null || Boolean.TRUE.equals(flag)) {
             return Verdict.REVEALING;
         }
-        if (Boolean.FALSE.equals(catalogueFlag)) {
-            // The exam is cleared; what the orderer typed about this one patient is still read.
-            return namesPregnancyStudy(order.getClinicalQuestion()) ? Verdict.REVEALING : Verdict.SHOWN;
+        boolean cleared = Boolean.FALSE.equals(flag);
+        // What the orderer typed about this one patient is read whatever the exam says: the question, and a
+        // body region that is not the cleared exam's own.
+        boolean regionIsTheExams = cleared && sameText(order.getBodyRegion(), decision.examRegion());
+        if (namesPregnancyStudy(order.getClinicalQuestion())
+                || (!regionIsTheExams && namesPregnancyStudy(order.getBodyRegion()))) {
+            return Verdict.REVEALING;
         }
-        if (namesPregnancyStudy(order.getStudyType(), order.getBodyRegion(), order.getClinicalQuestion())) {
+        if (cleared) {
+            return Verdict.SHOWN;
+        }
+        if (namesPregnancyStudy(order.getStudyType())) {
             return Verdict.REVEALING;
         }
         boolean uncleared = mayBePregnant(recordedMale, ageYears)
-            && ultrasoundOrAbdominoPelvic(order.getModality(), order.getStudyType(), order.getBodyRegion());
+            && (ultrasoundOrAbdominoPelvic(order.getModality(), order.getStudyType(), order.getBodyRegion())
+                || bodyPartUnknown(order.getModality(), order.getStudyType(), order.getBodyRegion()));
         return uncleared ? Verdict.UNCLEARED : Verdict.SHOWN;
     }
 
@@ -175,13 +238,41 @@ public final class PregnancyRevealingStudyRule {
         }
         boolean recordedMale = patient != null && ObstetricEligibility.isRecordedMale(patient);
         boolean uncleared = mayBePregnant(recordedMale, ageOf(patient))
-            && ultrasoundOrAbdominoPelvic(modality, label, bodyRegion);
+            && (ultrasoundOrAbdominoPelvic(modality, label, bodyRegion)
+                || bodyPartUnknown(modality, label, bodyRegion));
         return uncleared ? Verdict.UNCLEARED : Verdict.SHOWN;
     }
 
-    private static Integer ageOf(Patient patient) {
-        return patient == null || patient.getDateOfBirth() == null ? null
-            : Period.between(patient.getDateOfBirth(), LocalDate.now(ZoneId.systemDefault())).getYears();
+    /**
+     * The patient's age in whole years, or null when it is not known: no birth date, one in the future, or one
+     * more than {@link #MAX_PLAUSIBLE_AGE} years ago (the 1900-01-01 placeholder). Unknown is inside the band.
+     */
+    static Integer ageOf(Patient patient) {
+        Integer age = patient == null ? null
+            : ProxySensitivityPolicy.ageOn(patient.getDateOfBirth(), LocalDate.now(ZoneId.systemDefault()));
+        return age != null && age > MAX_PLAUSIBLE_AGE ? null : age;
+    }
+
+    /**
+     * Whether the study does not say which part of the body it is of: no body region, a modality that does not
+     * say it either, and a name with none of {@link #ELSEWHERE_WORDS} (« IRM », « Scanner », « Bilan »).
+     */
+    static boolean bodyPartUnknown(ImagingModality modality, String studyType, String bodyRegion) {
+        if (!fold(bodyRegion).isBlank() || SELF_LOCATING.contains(modality)) {
+            return false;
+        }
+        for (String word : wordsOf(fold(studyType))) {
+            if (ELSEWHERE_WORDS.contains(word)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** The same text, case, accents and outer spaces aside; never true for a blank one. */
+    private static boolean sameText(String one, String other) {
+        String left = fold(one).trim();
+        return !left.isEmpty() && left.equals(fold(other).trim());
     }
 
     /**
@@ -193,6 +284,10 @@ public final class PregnancyRevealingStudyRule {
             return false;
         }
         for (String raw : texts) {
+            if (raw != null && raw.length() > MAX_READ) {
+                // Too long to judge in a bounded pass: never taken as naming nothing.
+                return true;
+            }
             String text = fold(raw);
             if (text.isEmpty()) {
                 continue;

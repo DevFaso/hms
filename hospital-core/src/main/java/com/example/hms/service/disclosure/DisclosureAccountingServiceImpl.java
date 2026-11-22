@@ -41,10 +41,18 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
     @Transactional(readOnly = true)
     public DisclosureAccountingDTO getAccounting(UUID patientId, LocalDateTime from,
                                                  LocalDateTime to, Pageable pageable) {
-        Set<AuditEventType> accountable = DisclosureCategory.accountableEventTypes();
-        Page<AccessLogEntryDTO> entries = queryEntries(patientId, accountable, from, to, pageable);
+        return getAccounting(patientId, from, to, pageable, null);
+    }
 
-        Map<DisclosureCategory, Long> counts = countByCategory(patientId, accountable, from, to);
+    @Override
+    @Transactional(readOnly = true)
+    public DisclosureAccountingDTO getAccounting(UUID patientId, LocalDateTime from, LocalDateTime to,
+                                                 Pageable pageable, UUID callerHospitalId) {
+        Page<AccessLogEntryDTO> entries = staffEntries(patientId, from, to, pageable, callerHospitalId);
+        Map<DisclosureCategory, Long> counts = folded(callerHospitalId == null
+            ? auditRepository.countDisclosureCategoriesForPatient(patientId, STAFF_ANYWHERE, from, to)
+            : auditRepository.countDisclosureCategoriesForPatientAtHospital(patientId,
+                DisclosureCategory.accountableEventTypes(), FAMILY_RELEASE, callerHospitalId, from, to));
 
         long total = counts.values().stream().mapToLong(Long::longValue).sum();
         long external = counts.entrySet().stream()
@@ -68,9 +76,35 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
     @Transactional(readOnly = true)
     public Page<AccessLogEntryDTO> getEntries(UUID patientId, LocalDateTime from,
                                               LocalDateTime to, Pageable pageable) {
-        return queryEntries(patientId, DisclosureCategory.accountableEventTypes(), from, to, pageable);
+        return staffEntries(patientId, from, to, pageable, null);
     }
 
+    /** QA D3451: the audit row of a result released to the family. */
+    private static final AuditEventType FAMILY_RELEASE = AuditEventType.SENSITIVE_RESULT_RELEASED_TO_PROXY;
+
+    /** What a staff accounting lists with no hospital to place the reader at: everything but family releases. */
+    private static final Set<AuditEventType> STAFF_ANYWHERE = staffAnywhere();
+
+    private static Set<AuditEventType> staffAnywhere() {
+        Set<AuditEventType> types = java.util.EnumSet.copyOf(DisclosureCategory.accountableEventTypes());
+        types.remove(FAMILY_RELEASE);
+        return java.util.Collections.unmodifiableSet(types);
+    }
+
+    /**
+     * Review of #1290: the staff's rows. A family release is listed only to the hospital that made it, and a staff
+     * row never carries who received it or which category it was ({@link #toStaffEntry}).
+     */
+    private Page<AccessLogEntryDTO> staffEntries(UUID patientId, LocalDateTime from, LocalDateTime to,
+                                                 Pageable pageable, UUID callerHospitalId) {
+        Page<AuditEventLog> rows = callerHospitalId == null
+            ? auditRepository.findDisclosuresForPatient(patientId, STAFF_ANYWHERE, from, to, pageable)
+            : auditRepository.findDisclosuresForPatientAtHospital(patientId,
+                DisclosureCategory.accountableEventTypes(), FAMILY_RELEASE, callerHospitalId, from, to, pageable);
+        return rows.map(this::toStaffEntry);
+    }
+
+    /** The patient's rows: every accountable event of their record, each release with whom and which category. */
     private Page<AccessLogEntryDTO> queryEntries(UUID patientId, Set<AuditEventType> accountable,
                                                  LocalDateTime from, LocalDateTime to,
                                                  Pageable pageable) {
@@ -259,9 +293,11 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
     private Map<DisclosureCategory, Long> countByCategory(UUID patientId,
                                                           Set<AuditEventType> accountable,
                                                           LocalDateTime from, LocalDateTime to) {
-        List<Object[]> rows = auditRepository
-            .countDisclosureCategoriesForPatient(patientId, accountable, from, to);
+        return folded(auditRepository.countDisclosureCategoriesForPatient(patientId, accountable, from, to));
+    }
 
+    /** Grouped (event type, entity type, count) rows folded to categories. */
+    private Map<DisclosureCategory, Long> folded(List<Object[]> rows) {
         Map<DisclosureCategory, Long> counts = new EnumMap<>(DisclosureCategory.class);
         for (Object[] row : rows) {
             AuditEventType eventType = (AuditEventType) row[0];
@@ -284,11 +320,23 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
         return counts;
     }
 
+    /** A row as the PATIENT reads it: a release to the family says to whom, and which category of result. */
     private AccessLogEntryDTO toEntry(AuditEventLog event) {
+        AccessLogEntryDTO entry = toStaffEntry(event);
+        // QA D3451: a release to the family says to whom, and which category of result.
+        if (entry.getCategory() == DisclosureCategory.RELEASED_TO_FAMILY && familyReleaseDisclosure != null) {
+            familyReleaseDisclosure.describe(event, entry);
+        }
+        return entry;
+    }
+
+    /** A row as staff read it: never the recipient or the category of a released result. */
+    private AccessLogEntryDTO toStaffEntry(AuditEventLog event) {
         DisclosureCategory category =
             DisclosureCategory.classify(event.getEventType(), event.getEntityType());
+        boolean familyRelease = category == DisclosureCategory.RELEASED_TO_FAMILY;
 
-        AccessLogEntryDTO entry = AccessLogEntryDTO.builder()
+        return AccessLogEntryDTO.builder()
             .id(event.getId())
             .actor(event.getUserName())
             // One choke point for both audit surfaces: legacy rows stored
@@ -298,16 +346,12 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
             .eventType(event.getEventType() != null ? event.getEventType().name() : null)
             .entityType(event.getEntityType())
             .resourceId(event.getResourceId())
-            .description(event.getEventDescription())
+            // The release's audit sentence names the category (« Sensitive result (HIV) … »): not repeated on a row.
+            .description(familyRelease ? null : event.getEventDescription())
             .status(event.getStatus() != null ? event.getStatus().name() : null)
             .timestamp(event.getEventTimestamp())
             .category(category)
             .externalDisclosure(category != null && category.isExternalDisclosure())
             .build();
-        // QA D3451: a release to the family says to whom, and which category of result.
-        if (category == DisclosureCategory.RELEASED_TO_FAMILY && familyReleaseDisclosure != null) {
-            familyReleaseDisclosure.describe(event, entry);
-        }
-        return entry;
     }
 }

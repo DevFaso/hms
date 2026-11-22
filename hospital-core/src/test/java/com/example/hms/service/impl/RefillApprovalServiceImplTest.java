@@ -271,6 +271,13 @@ class RefillApprovalServiceImplTest {
         prescriber.setDepartment(department);
         when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(userId));
         when(staffRepository.findByUserId(userId)).thenReturn(List.of(cover));
+        // The caller acts at the prescribing hospital, where this staff record is theirs.
+        lenient().when(roleValidator.getCurrentHospitalId()).thenReturn(prescribingHospitalId);
+        lenient().when(staffRepository.findByUserIdAndHospitalId(userId, prescribingHospitalId))
+                .thenReturn(Optional.of(cover));
+        // The prescriber still answers unless a test says otherwise.
+        lenient().when(roleValidator.canApproveRenewal(prescriberUser.getId(), prescribingHospitalId, false))
+                .thenReturn(true);
         return cover;
     }
 
@@ -319,22 +326,81 @@ class RefillApprovalServiceImplTest {
     }
 
     @Test
-    @DisplayName("D3301: whoever may approve a renewal at the acting hospital lists what they answer: their own requests and those they cover")
+    @DisplayName("D3301: a cover lists what they answer: their own requests and those of the prescribers they cover, by the routing rule")
     void theCoverListsWhatTheyAnswer() {
-        stubStaffResolution();
-        when(roleValidator.getCurrentHospitalId()).thenReturn(prescribingHospitalId);
+        Staff cover = theCallerHeadsThePrescribersDepartment();
+        prescriber.setActive(false);
+        when(staffRepository.findInDepartmentsHeadedBy(cover.getId(), prescribingHospitalId))
+                .thenReturn(List.of(prescriber));
         Pageable pageable = PageRequest.of(0, 10);
-        when(refillRequestRepository.findAnsweredBy(eq(staffId), eq(prescribingHospitalId), any(), eq(pageable)))
+        when(refillRequestRepository.findAnsweredBy(any(), any(), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(pendingRefill())));
 
         assertThat(service.listForProvider(auth, RefillStatus.REQUESTED, pageable).getContent()).hasSize(1);
 
+        org.mockito.ArgumentCaptor<java.util.Collection<UUID>> prescribers =
+                org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
         org.mockito.ArgumentCaptor<java.util.Collection<RefillStatus>> statuses =
                 org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
-        verify(refillRequestRepository).findAnsweredBy(eq(staffId), eq(prescribingHospitalId), statuses.capture(),
-                eq(pageable));
+        verify(refillRequestRepository).findAnsweredBy(prescribers.capture(), statuses.capture(), eq(pageable));
+        assertThat(prescribers.getValue()).containsExactlyInAnyOrder(cover.getId(), prescriber.getId());
         assertThat(statuses.getValue()).containsExactly(RefillStatus.REQUESTED);
         verify(refillRequestRepository, never()).findByPrescription_Staff_IdAndStatus(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("D3301: while every prescriber of the department answers, the head lists their own requests only")
+    void aHeadWithNobodyToCoverListsTheirOwn() {
+        Staff cover = theCallerHeadsThePrescribersDepartment();
+        when(staffRepository.findInDepartmentsHeadedBy(cover.getId(), prescribingHospitalId))
+                .thenReturn(List.of(prescriber));
+        Pageable pageable = PageRequest.of(0, 10);
+        when(refillRequestRepository.findByPrescription_Staff_IdAndStatus(cover.getId(), RefillStatus.REQUESTED, pageable))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        service.listForProvider(auth, RefillStatus.REQUESTED, pageable);
+
+        verify(refillRequestRepository, never()).findAnsweredBy(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("review of #1290: a prescriber whose assignment was deactivated may no longer renew there: the head decides in their place")
+    void aPrescriberWhoMayNoLongerRenewIsCovered() {
+        theCallerHeadsThePrescribersDepartment();
+        when(roleValidator.canApproveRenewal(prescriber.getUser().getId(), prescribingHospitalId, false))
+                .thenReturn(false);
+        RefillRequest pending = pendingRefill();
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pending));
+        when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        MedicationRefillResponseDTO result = service.reject(auth, refillId,
+                RefillDecisionRequestDTO.builder().providerNotes("Revoir en consultation").build());
+
+        assertThat(result.getStatus()).isEqualTo("DENIED");
+    }
+
+    @Test
+    @DisplayName("review of #1290: the cover's staff record is the one at the hospital they act at, not the account's first")
+    void theCoversRecordIsTheOneAtTheActingHospital() {
+        Staff cover = theCallerHeadsThePrescribersDepartment();
+        prescriber.setActive(false);
+        // The account's first staff row is at another hospital; the head's row is the second.
+        Staff elsewhere = new Staff();
+        elsewhere.setId(UUID.randomUUID());
+        when(staffRepository.findByUserId(userId)).thenReturn(List.of(elsewhere, cover));
+        RefillRequest pending = pendingRefill();
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pending));
+        when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(service.reject(auth, refillId,
+                RefillDecisionRequestDTO.builder().providerNotes("Revoir").build()).getStatus()).isEqualTo("DENIED");
+
+        // Acting at another hospital, the same person holds no cover record there: refused.
+        when(roleValidator.getCurrentHospitalId()).thenReturn(UUID.randomUUID());
+        pending.setStatus(RefillStatus.REQUESTED);
+        RefillDecisionRequestDTO refusal = RefillDecisionRequestDTO.builder().providerNotes("non").build();
+        assertThatThrownBy(() -> service.reject(auth, refillId, refusal))
+                .isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
@@ -828,8 +894,12 @@ class RefillApprovalServiceImplTest {
 
         private void thePrescriberReadsTheBell() {
             User doctor = new User();
+            doctor.setId(UUID.randomUUID());
             doctor.setUsername("dr.bob");
             prescriber.setUser(doctor);
+            // Review of #1290: the prescriber answers while they may still approve a renewal at that hospital.
+            lenient().when(roleValidator.canApproveRenewal(doctor.getId(), prescribingHospitalId, false))
+                    .thenReturn(true);
         }
 
         @Test

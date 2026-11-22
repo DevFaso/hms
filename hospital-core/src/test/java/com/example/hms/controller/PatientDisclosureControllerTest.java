@@ -64,7 +64,9 @@ class PatientDisclosureControllerTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId))
             .thenReturn(true);
-        when(disclosureAccountingService.getAccounting(eq(patientId), any(), any(), eq(pageable)))
+        // Review of #1290 (QA D3451): asked for the hospital the caller acts at, so that a result another
+        // hospital released to the family is not listed here.
+        when(disclosureAccountingService.getAccounting(eq(patientId), any(), any(), eq(pageable), eq(hospitalId)))
             .thenReturn(expected);
 
         var response = controller.getDisclosures(patientId, null, null, pageable);
@@ -88,7 +90,7 @@ class PatientDisclosureControllerTest {
             .isInstanceOf(ResourceNotFoundException.class);
 
         // And nothing was read on the way to refusing.
-        verify(disclosureAccountingService, never()).getAccounting(any(), any(), any(), any());
+        verify(disclosureAccountingService, never()).getAccounting(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -100,8 +102,9 @@ class PatientDisclosureControllerTest {
         // documented contract of that method.
         DisclosureAccountingDTO expected = DisclosureAccountingDTO.builder().build();
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
-        when(disclosureAccountingService.getAccounting(eq(patientId), any(), any(), eq(pageable)))
-            .thenReturn(expected);
+        // The global view places the reader at no hospital: no family release is listed (null).
+        when(disclosureAccountingService.getAccounting(eq(patientId), any(), any(), eq(pageable),
+            org.mockito.ArgumentMatchers.isNull())).thenReturn(expected);
 
         var response = controller.getDisclosures(patientId, null, null, pageable);
 

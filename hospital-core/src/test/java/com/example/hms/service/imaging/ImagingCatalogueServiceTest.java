@@ -311,6 +311,26 @@ class ImagingCatalogueServiceTest {
     // ── what a proxy's read asks ─────────────────────────────────────────
 
     @Test
+    @DisplayName("review of #1290: a cleared exam counts only for an order still named as the exam is now; a flagged exam counts whatever the order is called")
+    void aClearanceCountsOnlyUnderTheExamsCurrentName() {
+        // The line was « Échographie obstétricale » when the order was placed; it was renamed and cleared since.
+        chest.setMayRevealPregnancy(false);
+        ImagingOrder placedUnderTheOldName = order("Échographie obstétricale", ImagingModality.ULTRASOUND);
+        placedUnderTheOldName.setCatalogueItemId(chest.getId());
+        ImagingOrder placedUnderTheCurrentName = order(" radiographie du THORAX (face) ", ImagingModality.XRAY);
+        placedUnderTheCurrentName.setCatalogueItemId(chest.getId());
+        when(items.findUnscopedByHospitalIdAndIdIn(any(), anyCollection())).thenReturn(List.of(chest));
+
+        assertThat(service.pregnancyFlagsOf(List.of(placedUnderTheOldName, placedUnderTheCurrentName)))
+            .containsOnlyKeys(placedUnderTheCurrentName.getId());
+
+        chest.setMayRevealPregnancy(true);
+        assertThat(service.pregnancyFlagsOf(List.of(placedUnderTheOldName, placedUnderTheCurrentName)))
+            .as("a flag only hides: it counts for both").containsOnlyKeys(placedUnderTheOldName.getId(),
+                placedUnderTheCurrentName.getId());
+    }
+
+    @Test
     @DisplayName("the flags of a proxy's read are taken at each order's own hospital, outside the caller's scope, and only decided ones")
     void flagsAreReadAtTheOrdersHospital() {
         chest.setMayRevealPregnancy(false);
@@ -321,9 +341,12 @@ class ImagingCatalogueServiceTest {
         ImagingOrder freeText = order("Scanner", ImagingModality.CT);
         when(items.findUnscopedByHospitalIdAndIdIn(any(), anyCollection())).thenReturn(List.of(chest, obstetric));
 
-        Map<UUID, Boolean> flags = service.pregnancyFlagsOf(List.of(cleared, undecided, freeText));
+        chest.setImagingBodyRegion("Thorax");
+        Map<UUID, PregnancyRevealingStudyRule.ExamDecision> flags =
+            service.pregnancyFlagsOf(List.of(cleared, undecided, freeText));
 
-        assertThat(flags).containsOnly(Map.entry(cleared.getId(), false));
+        assertThat(flags).containsOnly(Map.entry(cleared.getId(),
+            new PregnancyRevealingStudyRule.ExamDecision(false, "Thorax")));
         verify(items).findUnscopedByHospitalIdAndIdIn(org.mockito.ArgumentMatchers.eq(hospitalId), anyCollection());
         verify(items, never()).findAllById(any());
     }

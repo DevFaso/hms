@@ -456,6 +456,119 @@ class PatientImagingPortalServiceTest {
         assertThat(service.studiesOf(patientId, Reader.PROXY)).as("the verified parent of a 15-year-old").isEmpty();
     }
 
+    // ── Review of #1290: what the proxy would read with the study; a clearance under another name ──
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"findings", "impression", "recommendations", "title"})
+    @DisplayName("review of #1290: a released report that names a pregnancy keeps the study, and its images, from the proxy; the patient reads it")
+    void aReportThatNamesAPregnancyStaysWithThePatient(String field) {
+        // A man's chest X-ray by its order: only the report says what it is.
+        order.setEncounterId(null);
+        ImagingReport read = report(1, ImagingReportStatus.FINAL, true);
+        String text = "Découverte fortuite : grossesse évolutive de 9 SA.";
+        switch (field) {
+            case "findings" -> read.setFindings(text);
+            case "impression" -> read.setImpression(text);
+            case "recommendations" -> read.setRecommendations(text);
+            default -> read.setReportTitle("Échographie obstétricale");
+        }
+        ImagingStudyImage onStudy = image(null);
+        when(imageRepository.findById(onStudy.getId())).thenReturn(Optional.of(onStudy));
+
+        assertThat(service.studiesOf(patientId, Reader.PATIENT)).hasSize(1);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).isEmpty();
+        UUID imageId = onStudy.getId();
+        assertThatThrownBy(() -> service.openImage(patientId, imageId, Reader.PROXY))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("review of #1290: an image caption that names a pregnancy keeps the study from the proxy; an unreleased report's text does not count")
+    void aCaptionThatNamesAPregnancyStaysWithThePatient() {
+        order.setEncounterId(null);
+        report(1, ImagingReportStatus.FINAL, true);
+        ImagingReport draft = report(2, ImagingReportStatus.DRAFT, false);
+        draft.setFindings("grossesse ?");
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("the draft is nobody's to read yet").hasSize(1);
+
+        ImagingStudyImage captioned = image(null);
+        captioned.setCaption("Sac gestationnel intra-utérin");
+        when(imageRepository.findById(captioned.getId())).thenReturn(Optional.of(captioned));
+
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).isEmpty();
+        assertThat(service.studiesOf(patientId, Reader.PATIENT)).hasSize(1);
+        UUID imageId = captioned.getId();
+        assertThatThrownBy(() -> service.openImage(patientId, imageId, Reader.PROXY))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("review of #1290: a region the report's author typed is read; the order's own region carried by the report is not read twice")
+    void aRegionTheReportsAuthorTypedIsRead() {
+        order.setEncounterId(null);
+        ImagingReport read = report(1, ImagingReportStatus.FINAL, true);
+        // A cleared pelvis X-ray: the exam's own region is the order's, and the report inherits it.
+        order.setStudyType("Radiographie du bassin");
+        order.setBodyRegion("Bassin");
+        catalogueExam(false).setImagingBodyRegion("Bassin");
+        read.setBodyRegion("bassin ");
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("the exam's own region, cleared").hasSize(1);
+
+        read.setBodyRegion("Utérus");
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("typed by the report's author").isEmpty();
+        assertThat(service.studiesOf(patientId, Reader.PATIENT)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("review of #1290: on a cleared exam, a pelvic region the orderer typed still keeps the study from the proxy")
+    void aTypedRegionOnAClearedExamStaysWithThePatient() {
+        order.setEncounterId(null);
+        report(1, ImagingReportStatus.FINAL, true);
+        catalogueExam(false);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("cleared, nothing typed").hasSize(1);
+
+        order.setBodyRegion("Utérus");
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("review of #1290: an order placed before its catalogue line was renamed is not cleared by the line's new decision")
+    void aClearanceUnderAnotherNameDoesNotCount() {
+        aGirlOf(15);
+        order.setEncounterId(null);
+        order.setModality(ImagingModality.ULTRASOUND);
+        order.setStudyType("Échographie abdominale");
+        report(1, ImagingReportStatus.FINAL, true);
+        com.example.hms.model.PriceListItem line = catalogueExam(false);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("cleared under this name").hasSize(1);
+
+        // The line is renamed and cleared again as something else: the order keeps its own name.
+        line.setLabel("Radiographie du thorax");
+        line.setMayRevealPregnancy(false);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("read as undecided: held back").isEmpty();
+    }
+
+    @Test
+    @DisplayName("review of #1290: a study that does not say where it is, and a birth date nobody can believe, are held back")
+    void anUnknownBodyPartAndAnImplausibleAgeAreHeldBack() {
+        order.setEncounterId(null);
+        order.setModality(ImagingModality.MRI);
+        order.setStudyType("IRM");
+        report(1, ImagingReportStatus.FINAL, true);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("a man of 40").hasSize(1);
+
+        aGirlOf(30);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("a woman of 30, « IRM » and no region").isEmpty();
+        order.setBodyRegion("Genou");
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("the knee").hasSize(1);
+
+        order.setBodyRegion("Abdomen");
+        patient.setDateOfBirth(java.time.LocalDate.of(1900, 1, 1));
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("born 1900-01-01: age unknown").isEmpty();
+        patient.setDateOfBirth(java.time.LocalDate.now().plusDays(1));
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("born tomorrow: age unknown").isEmpty();
+    }
+
     @Test
     @DisplayName("a draft or preliminary read never reaches the patient; nor does a study with only those")
     void unsignedReadsStayWithTheCareTeam() {
