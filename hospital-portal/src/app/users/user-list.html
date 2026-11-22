@@ -510,6 +510,12 @@
                         (change)="onRoleToggle(role.code, $any($event.target).checked)"
                       />
                       <span class="role-label">{{ role.name || role.code | roleLabel }}</span>
+                      <!-- QA D3509: a bare « Personnel » says nothing about what it grants. -->
+                      @if (roleHintKey(role); as hintKey) {
+                        <span class="hint-text role-hint" [attr.data-testid]="'role-hint-' + role.code">{{
+                          hintKey | translate
+                        }}</span>
+                      }
                     </label>
                   }
                   @if (availableRoles().length === 0) {
