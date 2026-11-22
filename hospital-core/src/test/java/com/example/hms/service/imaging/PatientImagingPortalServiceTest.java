@@ -185,9 +185,46 @@ class PatientImagingPortalServiceTest {
     }
 
     @Test
-    @DisplayName("review of #1276: a study whose order names no visit fails closed for a proxy; the patient reads it")
-    void aStudyWithNoVisitStaysWithThePatient() {
+    @DisplayName("D3154: a released study whose order names no visit reaches the proxy, with its image")
+    void aStudyWithNoVisitReachesTheProxy() {
         order.setEncounterId(null);
+        report(1, ImagingReportStatus.FINAL, true);
+        ImagingStudyImage onStudy = image(null);
+        when(imageRepository.findById(onStudy.getId())).thenReturn(Optional.of(onStudy));
+        when(fileUploadService.openStoredFile(eq(onStudy.getStorageKey()), anyString())).thenReturn(mock(StoredObject.class));
+
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).hasSize(1);
+        assertThat(service.openImage(patientId, onStudy.getId(), Reader.PROXY).imageId()).isEqualTo(onStudy.getId());
+    }
+
+    @Test
+    @DisplayName("D3154: a visit-less study's unsigned report still stays with the care team for a proxy")
+    void aStudyWithNoVisitIsShownOnlyOnceReleased() {
+        order.setEncounterId(null);
+        report(1, ImagingReportStatus.DRAFT, false);
+
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).isEmpty();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', nullValues = "-", value = {
+        "ULTRASOUND | Échographie obstétricale T2 | Abdomen | -",
+        "ULTRASOUND | Échographie pelvienne | - | -",
+        "ULTRASOUND | Échographie endovaginale | - | -",
+        "ULTRASOUND | Transvaginal ultrasound | - | -",
+        "FLUOROSCOPY | Hystérosalpingographie | - | -",
+        "ULTRASOUND | Échographie abdominale | Abdomen | Grossesse ? aménorrhée 8 SA",
+        "MRI | IRM | Pelvis | -",
+        "ULTRASOUND | Ecografía | Útero y ovarios | -",
+    })
+    @DisplayName("D3154 (provisoire): a visit-less obstetric, pelvic or gynaecological study stays with the patient")
+    void aVisitlessStudyThatMayRevealAPregnancyStaysWithThePatient(ImagingModality modality, String studyType,
+                                                                   String bodyRegion, String question) {
+        order.setEncounterId(null);
+        order.setModality(modality);
+        order.setStudyType(studyType);
+        order.setBodyRegion(bodyRegion);
+        order.setClinicalQuestion(question);
         report(1, ImagingReportStatus.FINAL, true);
         ImagingStudyImage onStudy = image(null);
         when(imageRepository.findById(onStudy.getId())).thenReturn(Optional.of(onStudy));
@@ -197,6 +234,26 @@ class PatientImagingPortalServiceTest {
         UUID imageId = onStudy.getId();
         assertThatThrownBy(() -> service.openImage(patientId, imageId, Reader.PROXY))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', nullValues = "-", value = {
+        "MAMMOGRAPHY | Mammographie bilatérale | Seins | Dépistage",
+        "XRAY | Radiographie thorax face et profil | Thorax | Toux",
+        "ULTRASOUND | Échographie abdominale | Abdomen | Douleur hypochondre droit",
+        "CT | Scanner cérébral | Crâne | -",
+    })
+    @DisplayName("D3154: any other visit-less study reaches the proxy, mammography included")
+    void anyOtherVisitlessStudyReachesTheProxy(ImagingModality modality, String studyType,
+                                               String bodyRegion, String question) {
+        order.setEncounterId(null);
+        order.setModality(modality);
+        order.setStudyType(studyType);
+        order.setBodyRegion(bodyRegion);
+        order.setClinicalQuestion(question);
+        report(1, ImagingReportStatus.FINAL, true);
+
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).hasSize(1);
     }
 
     @Test
