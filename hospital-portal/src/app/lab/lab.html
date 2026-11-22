@@ -291,6 +291,8 @@
           </button>
         </div>
         <div class="panel-body">
+          <!-- QA r70 D3220: the patient-safety header (blood group, allergies, weight). -->
+          <app-patient-safety-header [patientId]="o.patientId" />
           <div class="detail-grid">
             <div class="detail-field">
               <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span><span

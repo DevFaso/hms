@@ -250,3 +250,10 @@
   gap: 0.5rem;
   margin-top: 0.75rem;
 }
+
+// QA r70 D3221: the chart's group, declared and unverified, shown as a reference line.
+.declared-line {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}

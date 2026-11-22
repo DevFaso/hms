@@ -21,6 +21,9 @@ export interface StoryboardPatientHeader {
   ageYears?: number | null;
   gender?: string | null;
   bloodType?: string | null;
+  /** QA r70 D3220: the latest recorded weight (kg) and when it was taken. */
+  latestWeightKg?: number | null;
+  latestWeightRecordedAt?: string | null;
 }
 
 export type AllergySeverity = 'MILD' | 'MODERATE' | 'SEVERE' | 'LIFE_THREATENING' | 'UNKNOWN';

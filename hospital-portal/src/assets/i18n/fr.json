@@ -2152,7 +2152,9 @@
       "ORDONNANCE_PRINTED": "Ordonnance imprimée par son prescripteur (prescriptions {{ids}})",
       "CLINICAL_RULE_SIGNED_OFF": "Ensemble de règles cliniques {{rule}} validé (version {{version}})",
       "CLINICAL_RULE_SIGNOFF_REVOKED": "Validation de l’ensemble de règles cliniques {{rule}} révoquée (version {{version}})",
-      "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Session de support refusée : {{what}} (validation d’une règle clinique)"
+      "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Session de support refusée : {{what}} (validation d’une règle clinique)",
+      "PATIENT_ACTIVATION_CODE_SHOWN": "Code d’activation du portail patient affiché à l’accueil",
+      "PATIENT_ACTIVATION_RESENT": "Activation du portail patient renvoyée par l’accueil"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -5786,13 +5788,16 @@
     "OTHER_ROLES_HINT": "Si votre e-mail de bienvenue mentionne d'autres rôles, confirmez chacun d'eux avec son propre code, à l'aide du bouton placé sous ce code.",
     "DIGIT_OF": "Chiffre {{n}} sur {{total}}",
     "BY_PHONE_TITLE": "Activez votre compte",
-    "BY_PHONE_INTRO": "Saisissez le numéro de téléphone enregistré à l'accueil et le code à 6 chiffres reçu par SMS.",
+    "BY_PHONE_INTRO": "Saisissez le numéro de téléphone donné lors de votre inscription et le code à 6 chiffres reçu (par SMS, par e-mail ou en main propre).",
     "PHONE_LABEL": "Numéro de téléphone",
     "CODE_LABEL": "Code d'activation (6 chiffres)",
     "BY_PHONE_SUBMIT": "Activer mon compte",
     "ERR_PHONE_REQUIRED": "Saisissez votre numéro de téléphone.",
     "ERR_CODE_FORMAT": "Le code comporte 6 chiffres.",
-    "ERR_PHONE_CODE_INCORRECT": "Ce numéro et ce code ne correspondent pas. Vérifiez le SMS et réessayez."
+    "ERR_PHONE_CODE_INCORRECT": "Ce numéro et ce code ne correspondent pas. Vérifiez le SMS et réessayez.",
+    "CREDENTIALS_REISSUED": "Ce mot de passe provisoire remplace celui de l’e-mail de bienvenue.",
+    "ENTER_CODE_TITLE": "Activez votre compte",
+    "ENTER_CODE_INTRO": "Saisissez le code à 6 chiffres reçu par SMS, par e-mail ou en main propre."
   },
   "ORGANIZATIONS": {
     "CONTACT": "Contact",
@@ -10075,7 +10080,9 @@
     "USERNAME": "Nom d'utilisateur",
     "USER_AND_HOSPITAL_REQUIRED": "L'utilisateur et l'hôpital sont obligatoires",
     "VIEW_DEPARTMENT_DETAILS": "Voir les détails du département",
-    "WEEKLY_SHIFTS": "Quarts hebdomadaires"
+    "WEEKLY_SHIFTS": "Quarts hebdomadaires",
+    "NO_DEPARTMENT_OPTION": "— Aucun département —",
+    "DEPARTMENTS_LOAD_FAILED": "Les départements n’ont pas pu être chargés."
   },
   "TREATMENT": {
     "ACTIVE": "Actif",
@@ -10217,7 +10224,8 @@
       "RESTORE_FAILED": "Échec de la restauration de l'utilisateur",
       "IMPERSONATE_REASON_TOO_SHORT": "Le motif doit comporter au moins 5 caractères.",
       "IMPERSONATE_STARTED": "Vous agissez maintenant en tant que {{name}}.",
-      "IMPERSONATE_FAILED": "Échec du démarrage de l'emprunt d'identité"
+      "IMPERSONATE_FAILED": "Échec du démarrage de l'emprunt d'identité",
+      "USERNAME_ISSUED": "Nom d’utilisateur provisoire : {{username}}. La personne choisit le sien à sa première connexion."
     },
     "TOTAL": "Total",
     "USER": "Utilisateur",
@@ -10240,7 +10248,9 @@
       "FAILED": "La validation en deux étapes n'a pas pu être réinitialisée."
     },
     "HOSPITAL_SCOPE": "Hôpital : {{name}}",
-    "HOSPITAL_SCOPE_CLEAR": "Afficher tous les hôpitaux"
+    "HOSPITAL_SCOPE_CLEAR": "Afficher tous les hôpitaux",
+    "DEPARTMENT": "Département",
+    "DEPARTMENT_HINT": "Le département où le soignant reçoit les rendez-vous. Modifiable ensuite dans « Personnel »."
   },
   "TRIAGE": {
     "ACUITY": "Niveau de gravité",
@@ -13361,7 +13371,7 @@
     "DAY_5": "Vendredi",
     "DAY_6": "Samedi",
     "DAY_7": "Dimanche",
-    "DEPARTMENT": "Service",
+    "DEPARTMENT": "Département",
     "FROM": "Du",
     "GENERATE": "Générer",
     "GENERATED": "{{created}} créneaux générés à partir de {{templates}} modèles ({{skipped}} déjà existants)",
@@ -13378,7 +13388,7 @@
     "RETIRE": "Retirer",
     "RETIRED": "Retiré",
     "SEARCH": "Rechercher",
-    "SELECT_DEPARTMENT": "Sélectionner un service",
+    "SELECT_DEPARTMENT": "Sélectionner un département",
     "SELECT_STAFF": "Sélectionner un membre du personnel",
     "SHOW_INACTIVE": "Afficher les retirés",
     "SLOTS_EMPTY": "Aucun créneau ne correspond à ces filtres.",
@@ -13438,7 +13448,8 @@
     "VT_RESTORED": "Type de visite restauré",
     "VT_RETIRED": "Type de visite retiré",
     "VT_SAVED": "Type de visite enregistré",
-    "VT_SAVE_ERROR": "Impossible d'enregistrer le type de visite."
+    "VT_SAVE_ERROR": "Impossible d'enregistrer le type de visite.",
+    "GENERATED_ONE_TEMPLATE": "{{created}} créneaux générés à partir d’un modèle ({{skipped}} déjà existants)"
   },
   "TRANSFUSION": {
     "LATE_INCOMPATIBLE_RESULT": "Enregistrer un résultat incompatible",
@@ -13607,7 +13618,12 @@
     "REACTION_ERROR": "La réaction n'a pas pu être enregistrée",
     "PLATELET_O_TO_B": "Confirmation attendue",
     "PLATELET_O_TO_B_DETAIL": "Plaquettes de groupe O pour un receveur de groupe B. Autorisé par le protocole de cet établissement — cette transfusion n'est ni bloquée ni remise en cause. Le protocole exclut les plaquettes O pour les receveurs A et AB mais pas pour les receveurs B ; le caractère intentionnel de cette différence n'a pas encore été confirmé avec l'hématologie. À soulever lors de la prochaine revue.",
-    "CANCEL_REQUEST_CONFIRM": "Annuler la demande"
+    "CANCEL_REQUEST_CONFIRM": "Annuler la demande",
+    "DECLARED_LABEL": "Groupe au dossier",
+    "DECLARED_VALUE": "{{group}} (déclaré, non vérifié)",
+    "DECLARED_GROUP": "Dossier : {{group}} (non vérifié)",
+    "DECLARED_MISMATCH": "Le dossier indique {{declared}} mais le laboratoire a groupé {{typed}}. Vérifiez l’identité du patient et le dossier ; le groupe du laboratoire fait foi pour la compatibilité.",
+    "DECLARED_MISMATCH_SHORT": "Diffère du dossier"
   },
   "MORTALITY": {
     "DISPUTE": "Contester ce décès",
@@ -15639,7 +15655,7 @@
         },
         "STAFF": {
           "TITLE": "Personnel",
-          "DONE": "Membres du personnel actifs : {{count}}",
+          "DONE": "Membres du personnel actifs (hors administrateurs) : {{count}}",
           "TODO": "Inscrivez le personnel. Chaque personne doit ensuite activer son compte avec le code reçu."
         },
         "PROVIDERS_IN_DEPARTMENT": {
@@ -15676,6 +15692,11 @@
           "TITLE": "Règles cliniques validées",
           "DONE": "Règles cliniques validées : {{count}} / {{total}}",
           "TODO": "Règles cliniques validées : {{count}} / {{total}}. Imprimez le dossier de signature pour le médecin-chef, puis enregistrez chaque signature."
+        },
+        "LAB_TESTS": {
+          "TITLE": "Examens de laboratoire",
+          "DONE": "Examens prescriptibles : {{count}}",
+          "TODO": "Paramétrez les examens (valeurs de référence, validation) avant la grille tarifaire : un tarif de laboratoire se lie à un examen par son code."
         }
       }
     },
@@ -15892,5 +15913,36 @@
       "STILLBIRTHS_WHO_DEFINITION": "Indicateur OMS : sans signe de vie à {{weeks}} semaines d’aménorrhée révolues ou plus",
       "STILLBIRTHS_ICD_DEFINITION": "Niveau CIM : à partir de {{weeks}} semaines d’aménorrhée révolues"
     }
+  },
+  "PATIENT_SAFETY": {
+    "ARIA_LABEL": "Bandeau de sécurité du patient",
+    "LOADING": "Chargement du bandeau de sécurité…",
+    "UNAVAILABLE": "Bandeau de sécurité indisponible : vérifiez le dossier avant d’agir.",
+    "NAME": "Patient",
+    "AGE": "Âge",
+    "AGE_YEARS": "{{n}} ans",
+    "AGE_MONTHS": "{{n}} mois",
+    "SEX": "Sexe",
+    "WEIGHT": "Poids",
+    "WEIGHT_KG": "{{kg}} kg",
+    "WEIGHED_ON": "(pesé le {{date}})",
+    "NOT_WEIGHED": "Aucun poids enregistré",
+    "BLOOD_GROUP": "Groupe sanguin",
+    "NOT_DOCUMENTED": "Non renseigné",
+    "ALLERGIES": "Allergies",
+    "NO_KNOWN_ALLERGIES": "Aucune allergie connue",
+    "HISTORY_HINT": "Antécédents médicaux personnels (médecin, infirmier ou sage-femme). Ils apparaissent dans la synthèse.",
+    "HISTORY_ADD": "Renseigner les antécédents",
+    "HISTORY_EDIT": "Modifier les antécédents"
+  },
+  "PORTAL_ACTIVATION": {
+    "TITLE": "Accès au portail patient",
+    "HELP": "Si le SMS d’activation n’est pas arrivé, affichez le code et remettez-le au patient en main propre, ou renvoyez l’activation.",
+    "SHOW": "Afficher le code d’activation",
+    "RESEND": "Renvoyer l’activation",
+    "HOW_TO": "Le patient ouvre la page de connexion, choisit « J’ai un code d’activation », puis saisit son numéro de téléphone et ce code. L’affichage du code est inscrit au journal d’audit.",
+    "RESENT": "Activation renvoyée.",
+    "RESENT_NOWHERE": "L’activation n’a pas pu être envoyée : affichez le code et remettez-le en main propre.",
+    "RESEND_FAILED": "L’activation n’a pas pu être renvoyée."
   }
 }

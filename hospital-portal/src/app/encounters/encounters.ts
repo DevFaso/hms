@@ -75,10 +75,12 @@ import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { SensitivitySelectComponent } from '../shared/sensitivity/sensitivity-select';
 import { SensitivityCategory, SensitivityTag } from '../shared/sensitivity/sensitivity-category';
+import { PatientSafetyHeaderComponent } from '../shared/patient-safety-header/patient-safety-header.component';
 @Component({
   selector: 'app-encounters',
   standalone: true,
   imports: [
+    PatientSafetyHeaderComponent,
     SensitivitySelectComponent,
     NoteAddendaComponent,
     DateTimePipe,
