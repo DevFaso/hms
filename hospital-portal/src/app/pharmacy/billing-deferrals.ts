@@ -28,6 +28,7 @@ import {
   BillingDeferralService,
   HospitalBillingPolicy,
 } from '../services/billing-deferral.service';
+import { RuleStatusComponent } from '../shared/rule-status/rule-status.component';
 
 type Step = 'approve' | 'reject' | 'cancel' | 'review';
 
@@ -41,6 +42,7 @@ type Step = 'approve' | 'reject' | 'cancel' | 'review';
   selector: 'app-billing-deferrals',
   standalone: true,
   imports: [
+    RuleStatusComponent,
     CommonModule,
     FormsModule,
     TranslateModule,

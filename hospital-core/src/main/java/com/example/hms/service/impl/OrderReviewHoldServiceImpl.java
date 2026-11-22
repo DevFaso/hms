@@ -1,5 +1,7 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.InBasketItemType;
@@ -59,6 +61,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Transactional
+@ProvisionalRule(ClinicalRuleSetKey.ORDER_REVIEW_HOLD)
 public class OrderReviewHoldServiceImpl implements OrderReviewHoldService, org.springframework.beans.factory.InitializingBean {
 
     static final String REFERENCE_TYPE = "ORDER_REVIEW_RUNNING";

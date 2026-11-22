@@ -1,5 +1,7 @@
 package com.example.hms.cdshooks.bpa;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.cdshooks.CdsCardText;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
 import com.example.hms.cdshooks.dto.CdsHookDtos.Source;
@@ -23,6 +25,7 @@ import java.util.List;
  * <p>PROVISIONAL (user decision of 2026-11-15, pending the clinical lead's approval).
  */
 @org.springframework.stereotype.Service
+@ProvisionalRule(ClinicalRuleSetKey.SEVERE_HYPERTENSION_ADULT)
 public class AdultSevereHypertensionRule implements BpaRule {
 
     public static final String PROTOCOL_CODE = "ADULT_SEVERE_HYPERTENSION";

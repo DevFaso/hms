@@ -30,5 +30,8 @@ public class ImpersonationLimitsWebConfig implements WebMvcConfigurer {
         registry.addInterceptor(ImpersonationLimits.forMoney(auditProvider::getIfAvailable))
             .addPathPatterns(ImpersonationLimits.MONEY_PATHS.toArray(String[]::new))
             .excludePathPatterns(ImpersonationLimits.MONEY_PATH_READS.toArray(String[]::new));
+        // V356: a support session never signs off or revokes a hospital's provisional rules in the admin's name.
+        registry.addInterceptor(ImpersonationLimits.forRuleSignoff(auditProvider::getIfAvailable))
+            .addPathPatterns(ImpersonationLimits.RULE_SIGNOFF_PATHS.toArray(String[]::new));
     }
 }

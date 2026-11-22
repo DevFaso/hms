@@ -1,5 +1,7 @@
 package com.example.hms.service.imaging;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -30,6 +32,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@ProvisionalRule(ClinicalRuleSetKey.NON_PHYSICIAN_ULTRASOUND)
 public class ImagingReportingSettingsService {
 
     private static final String MSG_HOSPITAL_NOT_FOUND = "hospital.notfound";

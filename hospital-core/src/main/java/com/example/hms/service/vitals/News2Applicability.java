@@ -1,5 +1,7 @@
 package com.example.hms.service.vitals;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.model.Patient;
 import com.example.hms.utility.NewsScoreCalculator;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +33,7 @@ import java.util.UUID;
  */
 @Component
 @RequiredArgsConstructor
+@ProvisionalRule(ClinicalRuleSetKey.MATERNAL_EARLY_WARNING)
 public class News2Applicability {
 
     /** Why a score is or is not shown. */

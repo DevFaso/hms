@@ -1,5 +1,7 @@
 package com.example.hms.service.pharmacy;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.DispenseBillingDeferralKind;
@@ -66,6 +68,7 @@ import java.util.function.BiPredicate;
  */
 @Service
 @RequiredArgsConstructor
+@ProvisionalRule(ClinicalRuleSetKey.DEFERRED_BILLING)
 public class DispenseBillingDeferralService {
 
     static final String NOT_FOUND = "pharmacy.deferral.notFound";

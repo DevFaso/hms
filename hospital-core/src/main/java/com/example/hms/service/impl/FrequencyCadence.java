@@ -1,5 +1,7 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.service.impl.MarDoseSchedule.Reading;
 
 import java.text.Normalizer;
@@ -39,6 +41,7 @@ import java.util.regex.Pattern;
  * sides to the same reading of every form, and to no reading of any form with an
  * unrelated clause beside it.
  */
+@ProvisionalRule(ClinicalRuleSetKey.CLOCK_TIME_FREQUENCIES)
 final class FrequencyCadence {
 
     private static final int MINUTES_PER_HOUR = 60;

@@ -52,6 +52,7 @@ import { FieldRefusal, refuseFields } from '../shared/forms/invalid-fields';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { MaternityStayComponent } from './maternity-stay.component';
 import { personName } from '../shared/pipes/person-name.pipe';
+import { RuleStatusComponent } from '../shared/rule-status/rule-status.component';
 /**
  * QA D808: the bounds PartographEntryRequestDTO puts on each number. The
  * server refused a dilation of 15 with a bare "≤ 10"; the form now refuses it
@@ -197,6 +198,7 @@ const DELIVERY_IDS = [
   selector: 'app-labor-tab',
   standalone: true,
   imports: [
+    RuleStatusComponent,
     DateTimePipe,
     SubmitGuardDirective,
     ModalDialogDirective,

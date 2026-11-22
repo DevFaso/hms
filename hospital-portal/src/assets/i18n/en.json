@@ -2147,7 +2147,10 @@
       "ADOLESCENT_AGE_SET_ZERO": "Adolescent confidentiality age set to 0",
       "ADOLESCENT_AGE_SET_ONE": "Adolescent confidentiality age set to 1",
       "ACTIVATION_CODE_SHOWN": "Activation code shown to the person who created the assignment",
-      "ORDONNANCE_PRINTED": "Ordonnance printed by its prescriber (prescriptions {{ids}})"
+      "ORDONNANCE_PRINTED": "Ordonnance printed by its prescriber (prescriptions {{ids}})",
+      "CLINICAL_RULE_SIGNED_OFF": "Clinical rule set {{rule}} signed off (version {{version}})",
+      "CLINICAL_RULE_SIGNOFF_REVOKED": "Clinical rule set {{rule}} sign-off revoked (version {{version}})",
+      "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Support session refused: {{what}} (clinical-rule sign-off)"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -5319,7 +5322,8 @@
     "LAB_CRITICAL_PENDING": "Critical results awaiting read-back",
     "PHARMACY_RECONCILIATION": "Pharmacy reconciliation",
     "PHARMACY_TILL_CLOSE": "Pharmacy till close",
-    "PHARMACY_BILLING_DEFERRALS": "Deferred billing (pharmacy)"
+    "PHARMACY_BILLING_DEFERRALS": "Deferred billing (pharmacy)",
+    "CLINICAL_RULES": "Clinical rules"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Critical alert",
@@ -7737,7 +7741,9 @@
         "DISPENSE_BILLING_DEFERRAL_CANCELLED": "Deferred billing of a fill withdrawn",
         "DISPENSE_BILLING_URGENCY_OVERRIDE": "Fill handed over unpaid on an urgency override",
         "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Urgency override of a fill’s billing reviewed",
-        "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay"
+        "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay",
+        "CLINICAL_RULE_SIGNED_OFF": "Clinical rule set signed off",
+        "CLINICAL_RULE_SIGNOFF_REVOKED": "Clinical rule sign-off revoked"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -8292,7 +8298,8 @@
         "PATIENT_PROXY": "Family access",
         "HOSPITAL_ADOLESCENT_CONFIDENTIALITY_AGE": "Adolescent confidentiality age",
         "HOSPITAL_IMAGING_REPORTING_SETTINGS": "Ultrasound setting",
-        "DISPENSE_BILLING_DEFERRAL": "Deferred pharmacy billing"
+        "DISPENSE_BILLING_DEFERRAL": "Deferred pharmacy billing",
+        "HOSPITAL_RULE_SIGNOFF": "Clinical rule sign-off"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",
@@ -15653,6 +15660,11 @@
           "TITLE": "Payers",
           "DONE": "Active payers: {{count}}",
           "TODO": "Add the mutual and insurance payers if the hospital sees insured patients."
+        },
+        "CLINICAL_RULES": {
+          "TITLE": "Clinical rules signed off",
+          "DONE": "Clinical rules signed off: {{count}} / {{total}}",
+          "TODO": "Clinical rules signed off: {{count}} / {{total}}. Print the sign-off pack for the chief medical officer, then record each signature."
         }
       }
     },
@@ -15785,5 +15797,78 @@
     "SEX": "Sex",
     "EXAM_DATE": "Exam date",
     "PRINTED_ON": "Printed on {{date}}"
+  },
+  "CLINICAL_RULES": {
+    "TITLE": "Clinical rules and sign-off",
+    "SUBTITLE": "Every rule the platform applies, its source, who approves it, and whether this hospital has signed it off.",
+    "BEHAVIOUR_NOTE": "A rule applies the same way whether it is signed off or not: the sign-off records the approver’s decision and changes the « provisional » label only.",
+    "NO_HOSPITAL": "Choose a hospital to see its clinical rules.",
+    "LOAD_FAILED": "The clinical rules could not be loaded.",
+    "PROGRESS": "Rule sets signed off: {{signed}} / {{total}}",
+    "READ_ONLY": "Read only: the hospital administrator records each sign-off.",
+    "PACK": "Print the sign-off pack (PDF)",
+    "PACK_FAILED": "The sign-off pack could not be printed.",
+    "SOURCE": "Source",
+    "APPROVER": "Approver",
+    "VERSION": "Version",
+    "ENFORCED_IN": "Applied in",
+    "NOTE": "Note",
+    "REVOKE_REASON": "Reason for revoking",
+    "SIGNED_BY": "Signed off on {{date}} by {{title}} ({{name}})",
+    "REVOKED_BY": "Sign-off revoked on {{date}} by {{name}}",
+    "RECORDED_BY": "Recorded by {{name}} on {{date}}",
+    "NEW_VERSION": "Version {{version}} had been signed off; the rule has changed since and needs a new sign-off.",
+    "STATUS": {
+      "PENDING": "Provisional",
+      "SIGNED": "Signed off",
+      "REVOKED": "Sign-off revoked"
+    },
+    "LABEL": {
+      "PENDING": "Provisional — source: {{source}}. To be signed off by: {{approver}}.",
+      "SIGNED": "Signed off on {{date}} by {{title}}"
+    },
+    "SIGN": {
+      "ACTION": "Record the sign-off",
+      "TITLE": "Record the sign-off",
+      "HINT": "Enter the approver’s signature as written on the sign-off pack. The approver need not have an account.",
+      "SIGNER_NAME": "Signer’s name",
+      "SIGNER_TITLE": "Signer’s title",
+      "DEFAULT_TITLE": "Chief medical officer",
+      "SIGNED_ON": "Date signed",
+      "NOTE": "Note (optional)",
+      "SELF": "I am the signer (my account is recorded with the sign-off)",
+      "CONFIRM": "Record",
+      "DONE": "Sign-off recorded.",
+      "FAILED": "The sign-off could not be recorded.",
+      "FUTURE_DATE": "The date signed cannot be in the future."
+    },
+    "REVOKE": {
+      "ACTION": "Revoke",
+      "TITLE": "Revoke the sign-off",
+      "MESSAGE": "The rule set reads « provisional » again at this hospital. The rule itself keeps applying as before.",
+      "CONFIRM": "Revoke",
+      "DONE": "Sign-off revoked.",
+      "FAILED": "The sign-off could not be revoked."
+    },
+    "SURFACE": {
+      "MIDWIFE_NEWBORN": "A midwife admits the newborn of a delivery she attended and is its responsible clinician.",
+      "MIDWIFE_BED": "A midwife assigns the beds of maternity wards.",
+      "MIDWIFE_COT": "A midwife assigns the cots of maternity wards. A neonatal cot is assigned too, and a doctor is then asked to review the newborn.",
+      "IMAGING_TECHNICIAN": "As an imaging technician you check the patient in, perform and document the exam and attach its images. Ordering the exam and writing or signing the report stay with the physician.",
+      "ULTRASOUND_PHYSICIANS_ONLY": "Ultrasound: at this hospital the exam is performed by a physician. You can check the patient in and attach images.",
+      "MINOR_RELEASE_AGE": "From age {{age}}, the other sensitive categories are hidden from the parents too (age set by the hospital).",
+      "VITALS_NEWBORN": "Newborn (under 28 days): the reading is saved and was judged against the newborn ranges.",
+      "VITALS_NEWBORN_URGENT": "Newborn (under 28 days): the reading is saved, judged against the newborn ranges, and the care team has been notified.",
+      "VITALS_POSTPARTUM_URGENT": "Pregnancy or after birth: the reading is saved and the care team has been notified.",
+      "VITALS_ADULT_HTN": "Severe blood pressure: the reading is saved.",
+      "VITALS_ADULT_HTN_URGENT": "Severe blood pressure with a sign of organ damage: the reading is saved and the care team has been notified.",
+      "VITALS_MATERNAL_EWS": "Pregnancy or postpartum: the reading is saved.",
+      "VITALS_MATERNAL_EWS_PAGED": "Pregnancy or postpartum: the reading is saved and the care team has been alerted.",
+      "LABOUR_TRANSFER_HINT": "Her labour episode here closes and the hospital you choose gets a new episode linked to it, with her partograph from here shown read only. Its maternity team is alerted.",
+      "LABOUR_ARRIVAL_HINT": "Her labour episode at {{hospital}} closes and a new labour episode opens here, linked to it; {{hospital}} is alerted.",
+      "PERINATAL_DEFINITION": "WHO: stillbirths at {{weeks}} or more completed weeks and early neonatal deaths (days 0–6)",
+      "STILLBIRTHS_WHO_DEFINITION": "WHO indicator: no signs of life at {{weeks}} or more completed weeks",
+      "STILLBIRTHS_ICD_DEFINITION": "ICD level: from {{weeks}} completed weeks"
+    }
   }
 }

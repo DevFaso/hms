@@ -1,5 +1,7 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.DeathDisputeStatus;
@@ -53,6 +55,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Transactional
+@ProvisionalRule(ClinicalRuleSetKey.DEATH_RECORD_DISPUTE)
 public class DeathDisputeServiceImpl implements DeathDisputeService {
 
     static final String REFERENCE_TYPE = "DEATH_DISPUTE";

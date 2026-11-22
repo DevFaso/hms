@@ -32,7 +32,11 @@
       <div class="reco-body">
         <p class="reco-provisional" role="note" data-testid="reco-provisional">
           <span class="material-symbols-outlined" aria-hidden="true">pending_actions</span>
-          <span>{{ 'SENSITIVE_POLICY.RECO.PROVISIONAL' | translate }}</span>
+          <span
+            ><app-rule-status ruleKey="RECOMMENDED_SENSITIVE_LAB_TESTS">{{
+              'SENSITIVE_POLICY.RECO.PROVISIONAL' | translate
+            }}</app-rule-status></span
+          >
         </p>
         <p class="reco-hint">{{ 'SENSITIVE_POLICY.RECO.HINT' | translate }}</p>
 

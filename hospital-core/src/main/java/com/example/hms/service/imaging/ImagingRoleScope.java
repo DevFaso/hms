@@ -1,5 +1,7 @@
 package com.example.hms.service.imaging;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.ImagingModality;
 import com.example.hms.exception.ClientSafeAccessDeniedException;
 import com.example.hms.model.Hospital;
@@ -34,6 +36,7 @@ import java.util.UUID;
  *
  * <p>Stateless: each imaging service builds one over its own {@link RoleValidator}.
  */
+@ProvisionalRule(ClinicalRuleSetKey.IMAGING_TECHNICIAN_SCOPE)
 public final class ImagingRoleScope {
 
     static final String TECHNICIAN_ROLE = "IMAGING_TECHNICIAN";

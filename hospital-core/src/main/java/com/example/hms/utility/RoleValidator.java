@@ -457,6 +457,17 @@ public class RoleValidator {
         return !controlled && hasAnyCode(userId, hospitalId, NURSE_ROLE, MIDWIFE_ROLE);
     }
 
+    /**
+     * V356: who reads a hospital's provisional rules and their sign-off status (the « Règles cliniques et
+     * validation » list, the « provisoire » labels, the sign-off pack): a role held AT {@code hospitalId} that
+     * sees a provisional rule. A role held at another hospital, or a patient's registration here, opens nothing.
+     */
+    public boolean canReadClinicalRules(UUID userId, UUID hospitalId) {
+        return userId != null && hospitalId != null && hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE,
+            DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, NURSE_ROLE, MIDWIFE_ROLE, PHARMACIST_ROLE, RADIOLOGIST_ROLE,
+            "IMAGING_TECHNICIAN", "LAB_DIRECTOR", "QUALITY_MANAGER", BILLING_SPECIALIST_ROLE, ACCOUNTANT_ROLE);
+    }
+
     /** Policy rule 1: who reviews, flags or refuses a renewal request at the pharmacy: a pharmacist there. */
     public boolean canReviewRenewalAtPharmacy(UUID userId, UUID hospitalId) {
         return userId != null && hospitalId != null && hasAnyCode(userId, hospitalId, PHARMACIST_ROLE);

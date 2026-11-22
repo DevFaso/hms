@@ -39,7 +39,12 @@ public record HospitalOnboardingReadinessDTO(UUID hospitalId, boolean patientBoo
         /** At least one active price-list item (billing). */
         PRICE_LIST,
         /** At least one active payer (insured patients). */
-        PAYERS
+        PAYERS,
+        /**
+         * V356: every provisional rule set signed off by the hospital's approver at its current version
+         * ({@code count} signed of {@code total}). Never needed for booking: a pending rule still enforces.
+         */
+        CLINICAL_RULES
     }
 
     /**
@@ -47,7 +52,13 @@ public record HospitalOnboardingReadinessDTO(UUID hospitalId, boolean patientBoo
      * @param done               whether the hospital has it
      * @param count              how many it has (departments, staff, slots…)
      * @param requiredForBooking true for the steps online booking cannot work without
+     * @param total              the count the step is done at ({@code count} of {@code total}), or null for the
+     *                           steps that are done at one
      */
-    public record Item(Step step, boolean done, long count, boolean requiredForBooking) {
+    public record Item(Step step, boolean done, long count, boolean requiredForBooking, Long total) {
+
+        public Item(Step step, boolean done, long count, boolean requiredForBooking) {
+            this(step, done, count, requiredForBooking, null);
+        }
     }
 }

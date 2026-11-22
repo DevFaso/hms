@@ -34,6 +34,8 @@ export const ONBOARDING_STEP_ROUTES: Readonly<Record<OnboardingStep, string>> = 
   BEDS: '/bed-management',
   PRICE_LIST: '/billing/tarifs',
   PAYERS: '/billing/organismes',
+  // V356: « Règles cliniques et validation », where the admin records each sign-off.
+  CLINICAL_RULES: '/clinical-rules',
 };
 
 interface ChecklistRow {
@@ -41,6 +43,8 @@ interface ChecklistRow {
   done: boolean;
   count: number;
   requiredForBooking: boolean;
+  /** V356: the count the step is done at (CLINICAL_RULES), else null. */
+  total: number | null;
   route: string;
 }
 
@@ -111,10 +115,13 @@ interface ChecklistRow {
                   @if (row.done) {
                     {{
                       'PLATFORM_SETUP.CHECKLIST.STEP.' + row.step + '.DONE'
-                        | translate: { count: row.count }
+                        | translate: { count: row.count, total: row.total }
                     }}
                   } @else {
-                    {{ 'PLATFORM_SETUP.CHECKLIST.STEP.' + row.step + '.TODO' | translate }}
+                    {{
+                      'PLATFORM_SETUP.CHECKLIST.STEP.' + row.step + '.TODO'
+                        | translate: { count: row.count, total: row.total }
+                    }}
                   }
                 </span>
               </div>
@@ -291,7 +298,11 @@ export class OnboardingChecklistComponent {
     (Array.isArray(this.readiness()?.items) ? this.readiness()!.items : [])
       // A step this build has no page for is not shown rather than linked nowhere.
       .filter((item) => !!ONBOARDING_STEP_ROUTES[item.step])
-      .map((item) => ({ ...item, route: ONBOARDING_STEP_ROUTES[item.step] })),
+      .map((item) => ({
+        ...item,
+        total: item.total ?? null,
+        route: ONBOARDING_STEP_ROUTES[item.step],
+      })),
   );
   protected readonly doneCount = computed(() => this.rows().filter((row) => row.done).length);
   protected readonly visible = computed(() => {

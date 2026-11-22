@@ -1,5 +1,7 @@
 package com.example.hms.service.maternity;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.config.SecurityConstants;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
@@ -60,6 +62,7 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 @Slf4j
+@ProvisionalRule(ClinicalRuleSetKey.STILLBIRTH_CORRECTION)
 public class StillbirthCertificateConflicts {
 
     static final String REFERENCE_TYPE = "STILLBIRTH_CERTIFICATE_CONFLICT";

@@ -371,6 +371,10 @@ public enum AuditEventType {
     DISPENSE_BILLING_OVERRIDE_REVIEWED,
     /** Policy rule 6: an inpatient fill charged to the account of the open stay. */
     DISPENSE_POSTED_TO_ADMISSION_ACCOUNT,
+    /** V356: a hospital admin recorded the approver's sign-off of a provisional rule set (ids, key and version only). */
+    CLINICAL_RULE_SIGNED_OFF,
+    /** V356: a rule set's sign-off revoked at a hospital; it reads « provisoire » again (ids, key and version only). */
+    CLINICAL_RULE_SIGNOFF_REVOKED,
 
     OTHER
 }

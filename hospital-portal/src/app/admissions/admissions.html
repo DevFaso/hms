@@ -455,12 +455,21 @@
         <!-- Policy rule 2 (2026-11-20, provisional): a midwife is offered the maternity wards' beds. -->
         @if (midwifeBedsOnly()) {
           <p class="no-beds-hint" data-testid="adm-midwife-bed-rule">
-            {{
-              (adm.admissionType === 'NEWBORN'
-                ? 'MATERNITY_STAY.MIDWIFE_COT_RULE'
-                : 'MATERNITY_STAY.MIDWIFE_BED_RULE'
-              ) | translate
-            }}
+            <app-rule-status
+              ruleKey="MIDWIFE_NEWBORN_CARE"
+              [detail]="
+                (adm.admissionType === 'NEWBORN'
+                  ? 'CLINICAL_RULES.SURFACE.MIDWIFE_COT'
+                  : 'CLINICAL_RULES.SURFACE.MIDWIFE_BED'
+                ) | translate
+              "
+              >{{
+                (adm.admissionType === 'NEWBORN'
+                  ? 'MATERNITY_STAY.MIDWIFE_COT_RULE'
+                  : 'MATERNITY_STAY.MIDWIFE_BED_RULE'
+                ) | translate
+              }}</app-rule-status
+            >
           </p>
         }
         @if (bedsLoading()) {

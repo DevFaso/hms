@@ -1,5 +1,7 @@
 package com.example.hms.service.safeguarding;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.model.Patient;
 import com.example.hms.model.safeguarding.SafeguardingReview;
 import com.example.hms.utility.TransactionCallbacks;
@@ -34,6 +36,7 @@ import java.util.UUID;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@ProvisionalRule(ClinicalRuleSetKey.MINOR_LABOUR_SAFEGUARDING)
 public class MinorLabourSafeguarding {
 
     /** Provisional default, pending local approval: under 13 at admission. */

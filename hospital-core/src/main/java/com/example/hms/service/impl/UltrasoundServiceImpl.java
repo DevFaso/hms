@@ -1,5 +1,7 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.UltrasoundFindingCategory;
 import com.example.hms.enums.UltrasoundOrderStatus;
 import com.example.hms.enums.UltrasoundScanType;
@@ -46,6 +48,7 @@ import com.example.hms.utility.RoleValidator;
 @Service
 @RequiredArgsConstructor
 @Transactional
+@ProvisionalRule(ClinicalRuleSetKey.LEGACY_ULTRASOUND_REPORTS)
 public class UltrasoundServiceImpl implements UltrasoundService {
 
     /**

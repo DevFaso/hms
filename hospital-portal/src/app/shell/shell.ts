@@ -1140,6 +1140,26 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
       });
     }
+    // V356: « Règles cliniques et validation ». Mirrors the /clinical-rules RoleGuard: the admins
+    // record the approver's sign-off, the clinicians who see a « provisoire » rule read the list.
+    if (
+      this.hasAnyRole([
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_SUPER_ADMIN',
+        'ROLE_DOCTOR',
+        'ROLE_SURGEON',
+        'ROLE_NURSE',
+        'ROLE_MIDWIFE',
+        'ROLE_PHARMACIST',
+      ])
+    ) {
+      items.push({
+        icon: 'rule',
+        label: 'Clinical rules',
+        translationKey: 'NAV.CLINICAL_RULES',
+        route: '/clinical-rules',
+      });
+    }
     // Governance console — SUPER_ADMIN-only backends (matrix, /super-admin/**)
     if (this.hasAnyRole(['ROLE_SUPER_ADMIN'])) {
       items.push({

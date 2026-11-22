@@ -1,5 +1,7 @@
 package com.example.hms.service.lab;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.LabOrderStatus;
@@ -47,6 +49,7 @@ import java.util.UUID;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@ProvisionalRule(ClinicalRuleSetKey.LAB_DUPLICATE_WINDOW)
 public class LabOrderDuplicateCheck {
 
     /**

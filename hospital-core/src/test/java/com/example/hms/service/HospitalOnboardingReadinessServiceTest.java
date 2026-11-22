@@ -58,6 +58,7 @@ class HospitalOnboardingReadinessServiceTest {
     @Mock private PayerRepository payerRepository;
     @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private AppointmentSlotPolicy slotPolicy;
+    @Mock private com.example.hms.service.clinicalrules.HospitalRuleSignoffService ruleSignoffService;
 
     @InjectMocks private HospitalOnboardingReadinessService service;
 
@@ -180,6 +181,20 @@ class HospitalOnboardingReadinessServiceTest {
         PreAuthorize gate = HospitalOnboardingController.class.getMethod("get", UUID.class)
             .getAnnotation(PreAuthorize.class);
         assertThat(gate.value()).isEqualTo("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')");
+    }
+
+    @Test
+    @DisplayName("V356: the checklist says how many rule sets the approver signed of the registry's, done only at all")
+    void clinicalRulesStepCountsTheSignedRuleSets() {
+        long total = com.example.hms.service.clinicalrules.ClinicalRuleRegistry.all().size();
+        when(ruleSignoffService.signedCount(hospitalId)).thenReturn(3L);
+
+        Item rules = item(service.readiness(hospitalId), Step.CLINICAL_RULES);
+
+        assertThat(rules).isEqualTo(new Item(Step.CLINICAL_RULES, false, 3, false, total));
+
+        when(ruleSignoffService.signedCount(hospitalId)).thenReturn(total);
+        assertThat(item(service.readiness(hospitalId), Step.CLINICAL_RULES).done()).isTrue();
     }
 
     @Test

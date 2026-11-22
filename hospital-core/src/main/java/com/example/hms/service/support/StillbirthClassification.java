@@ -1,5 +1,8 @@
 package com.example.hms.service.support;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
+
 /**
  * QA D1714 (user decision 2026-11-13): THE one place the stillbirth thresholds live.
  *
@@ -19,6 +22,7 @@ package com.example.hms.service.support;
  * <p><b>PROVISIONAL</b>: these thresholds await the approval of the obstetric lead and the coding authority
  * (tasklist.md). Change them here and nowhere else.
  */
+@ProvisionalRule(ClinicalRuleSetKey.STILLBIRTH_COUNTING)
 public final class StillbirthClassification {
 
     /** PROVISIONAL. The WHO stillbirth indicator: no signs of life at this many completed weeks or more. */

@@ -1,5 +1,7 @@
 package com.example.hms.service.maternity;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.config.SecurityConstants;
 import com.example.hms.enums.AdmissionType;
 import com.example.hms.enums.InBasketItemType;
@@ -59,6 +61,7 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 @Slf4j
+@ProvisionalRule(ClinicalRuleSetKey.MIDWIFE_NEWBORN_CARE)
 public class MidwifeNewbornCare {
 
     /** The in-basket reference type of the physician's task; its reference id is the admission's id. */

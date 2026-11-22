@@ -1,5 +1,7 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.MedicationAdministrationStatus;
 import com.example.hms.model.MedicationAdministrationRecord;
 import com.example.hms.model.Prescription;
@@ -78,6 +80,7 @@ import java.util.Optional;
  *
  * <p>Pure: the caller passes the clock reading and the order's rows.
  */
+@ProvisionalRule(ClinicalRuleSetKey.CLOCK_TIME_FREQUENCIES)
 public final class MarNextDose {
 
     /**

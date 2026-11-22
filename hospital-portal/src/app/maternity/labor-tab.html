@@ -709,7 +709,13 @@
         </button>
       </div>
       <div class="modal-body">
-        <p class="muted">{{ 'LABOR.TRANSFER.HINT' | translate }}</p>
+        <p class="muted">
+          <app-rule-status
+            ruleKey="LABOUR_TRANSFER"
+            [detail]="'CLINICAL_RULES.SURFACE.LABOUR_TRANSFER_HINT' | translate"
+            >{{ 'LABOR.TRANSFER.HINT' | translate }}</app-rule-status
+          >
+        </p>
         <div class="field">
           <label for="lt-destination">{{ 'LABOR.TRANSFER.DESTINATION' | translate }} *</label>
           <select
@@ -786,7 +792,16 @@
       </div>
       <div class="modal-body">
         <p class="muted">
-          {{ 'LABOR.ARRIVAL.HINT' | translate: { hospital: activeEpisode()?.hospitalName || '—' } }}
+          <app-rule-status
+            ruleKey="LABOUR_TRANSFER"
+            [detail]="
+              'CLINICAL_RULES.SURFACE.LABOUR_ARRIVAL_HINT'
+                | translate: { hospital: activeEpisode()?.hospitalName || '—' }
+            "
+            >{{
+              'LABOR.ARRIVAL.HINT' | translate: { hospital: activeEpisode()?.hospitalName || '—' }
+            }}</app-rule-status
+          >
         </p>
         <div class="field">
           <label for="la-reason">{{ 'LABOR.TRANSFER.REASON' | translate }} *</label>

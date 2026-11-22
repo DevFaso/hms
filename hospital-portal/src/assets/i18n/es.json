@@ -2147,7 +2147,10 @@
       "ADOLESCENT_AGE_SET_ZERO": "Edad de confidencialidad de los adolescentes fijada en 0 años",
       "ADOLESCENT_AGE_SET_ONE": "Edad de confidencialidad de los adolescentes fijada en 1 año",
       "ACTIVATION_CODE_SHOWN": "Código de activación mostrado a la persona que creó la asignación",
-      "ORDONNANCE_PRINTED": "Receta impresa por su prescriptor (recetas {{ids}})"
+      "ORDONNANCE_PRINTED": "Receta impresa por su prescriptor (recetas {{ids}})",
+      "CLINICAL_RULE_SIGNED_OFF": "Conjunto de reglas clínicas {{rule}} validado (versión {{version}})",
+      "CLINICAL_RULE_SIGNOFF_REVOKED": "Validación del conjunto de reglas clínicas {{rule}} revocada (versión {{version}})",
+      "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Sesión de soporte rechazada: {{what}} (validación de una regla clínica)"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -5319,7 +5322,8 @@
     "LAB_CRITICAL_PENDING": "Resultados críticos por repetir",
     "PHARMACY_RECONCILIATION": "Conciliación de farmacia",
     "PHARMACY_TILL_CLOSE": "Pharmacy till close",
-    "PHARMACY_BILLING_DEFERRALS": "Deferred billing (pharmacy)"
+    "PHARMACY_BILLING_DEFERRALS": "Deferred billing (pharmacy)",
+    "CLINICAL_RULES": "Reglas clínicas"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerta crítica",
@@ -7737,7 +7741,9 @@
         "DISPENSE_BILLING_DEFERRAL_CANCELLED": "Deferred billing of a fill withdrawn",
         "DISPENSE_BILLING_URGENCY_OVERRIDE": "Fill handed over unpaid on an urgency override",
         "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Urgency override of a fill’s billing reviewed",
-        "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay"
+        "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay",
+        "CLINICAL_RULE_SIGNED_OFF": "Conjunto de reglas clínicas validado",
+        "CLINICAL_RULE_SIGNOFF_REVOKED": "Validación de regla clínica revocada"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -8292,7 +8298,8 @@
         "PATIENT_PROXY": "Acceso familiar",
         "HOSPITAL_ADOLESCENT_CONFIDENTIALITY_AGE": "Edad de confidencialidad de los adolescentes",
         "HOSPITAL_IMAGING_REPORTING_SETTINGS": "Ajuste de ecografía",
-        "DISPENSE_BILLING_DEFERRAL": "Deferred pharmacy billing"
+        "DISPENSE_BILLING_DEFERRAL": "Deferred pharmacy billing",
+        "HOSPITAL_RULE_SIGNOFF": "Validación de regla clínica"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Alergia",
@@ -15653,6 +15660,11 @@
           "TITLE": "Entidades pagadoras",
           "DONE": "Entidades pagadoras activas: {{count}}",
           "TODO": "Añada las mutuas y los seguros si el establecimiento atiende a pacientes asegurados."
+        },
+        "CLINICAL_RULES": {
+          "TITLE": "Reglas clínicas validadas",
+          "DONE": "Reglas clínicas validadas: {{count}} / {{total}}",
+          "TODO": "Reglas clínicas validadas: {{count}} / {{total}}. Imprima el dossier de firma para el médico jefe y registre cada firma."
         }
       }
     },
@@ -15785,5 +15797,78 @@
     "SEX": "Sex",
     "EXAM_DATE": "Exam date",
     "PRINTED_ON": "Printed on {{date}}"
+  },
+  "CLINICAL_RULES": {
+    "TITLE": "Reglas clínicas y validación",
+    "SUBTITLE": "Cada regla que aplica la plataforma, su fuente, quién la aprueba y si este establecimiento la ha validado.",
+    "BEHAVIOUR_NOTE": "Una regla se aplica igual, validada o no: la validación registra la decisión del aprobador y solo cambia la mención « provisional ».",
+    "NO_HOSPITAL": "Elija un establecimiento para ver sus reglas clínicas.",
+    "LOAD_FAILED": "No se pudieron cargar las reglas clínicas.",
+    "PROGRESS": "Reglas validadas: {{signed}} / {{total}}",
+    "READ_ONLY": "Solo lectura: el administrador del establecimiento registra cada validación.",
+    "PACK": "Imprimir el dossier de firma (PDF)",
+    "PACK_FAILED": "No se pudo imprimir el dossier de firma.",
+    "SOURCE": "Fuente",
+    "APPROVER": "Aprobador",
+    "VERSION": "Versión",
+    "ENFORCED_IN": "Aplicada en",
+    "NOTE": "Nota",
+    "REVOKE_REASON": "Motivo de la revocación",
+    "SIGNED_BY": "Validada el {{date}} por {{title}} ({{name}})",
+    "REVOKED_BY": "Validación revocada el {{date}} por {{name}}",
+    "RECORDED_BY": "Registrada por {{name}} el {{date}}",
+    "NEW_VERSION": "Se había validado la versión {{version}}; la regla ha cambiado y debe validarse de nuevo.",
+    "STATUS": {
+      "PENDING": "Provisional",
+      "SIGNED": "Validada",
+      "REVOKED": "Validación revocada"
+    },
+    "LABEL": {
+      "PENDING": "Provisional — fuente: {{source}}. A validar por: {{approver}}.",
+      "SIGNED": "Validada el {{date}} por {{title}}"
+    },
+    "SIGN": {
+      "ACTION": "Registrar la validación",
+      "TITLE": "Registrar la validación",
+      "HINT": "Introduzca la firma del aprobador tal como figura en el dossier de firma. El aprobador no necesita una cuenta.",
+      "SIGNER_NAME": "Nombre del firmante",
+      "SIGNER_TITLE": "Cargo del firmante",
+      "DEFAULT_TITLE": "Médico jefe",
+      "SIGNED_ON": "Fecha de firma",
+      "NOTE": "Nota (opcional)",
+      "SELF": "Soy el firmante (mi cuenta se registra con la validación)",
+      "CONFIRM": "Registrar",
+      "DONE": "Validación registrada.",
+      "FAILED": "No se pudo registrar la validación.",
+      "FUTURE_DATE": "La fecha de firma no puede estar en el futuro."
+    },
+    "REVOKE": {
+      "ACTION": "Revocar",
+      "TITLE": "Revocar la validación",
+      "MESSAGE": "El conjunto de reglas vuelve a ser « provisional » en este establecimiento. La regla sigue aplicándose como antes.",
+      "CONFIRM": "Revocar",
+      "DONE": "Validación revocada.",
+      "FAILED": "No se pudo revocar la validación."
+    },
+    "SURFACE": {
+      "MIDWIFE_NEWBORN": "Una matrona ingresa al recién nacido de un parto que atendió y es su clínica responsable.",
+      "MIDWIFE_BED": "Una matrona asigna las camas de maternidad.",
+      "MIDWIFE_COT": "Una matrona asigna las cunas de maternidad. Una cuna de neonatología también se asigna, y entonces se pide a un médico que valore al recién nacido.",
+      "IMAGING_TECHNICIAN": "Como técnico de imagen, usted recibe al paciente, realiza y documenta el examen y adjunta sus imágenes. La solicitud del examen y la redacción o firma del informe corresponden al médico.",
+      "ULTRASOUND_PHYSICIANS_ONLY": "Ecografía: en este hospital el examen lo realiza un médico. Usted puede registrar la llegada del paciente y adjuntar imágenes.",
+      "MINOR_RELEASE_AGE": "A partir de los {{age}} años, las demás categorías sensibles también se ocultan a los padres (edad ajustable por el establecimiento).",
+      "VITALS_NEWBORN": "Recién nacido (menos de 28 días): la medición se ha guardado y se ha evaluado con los valores del recién nacido.",
+      "VITALS_NEWBORN_URGENT": "Recién nacido (menos de 28 días): la medición se ha guardado, se ha evaluado con los valores del recién nacido y se ha avisado al equipo asistencial.",
+      "VITALS_POSTPARTUM_URGENT": "Embarazo o posparto: la medición se ha guardado y se ha avisado al equipo asistencial.",
+      "VITALS_ADULT_HTN": "Presión arterial muy elevada: la medición se ha guardado.",
+      "VITALS_ADULT_HTN_URGENT": "Presión arterial muy elevada con un signo de daño de órganos: la medición se ha guardado y se ha avisado al equipo asistencial.",
+      "VITALS_MATERNAL_EWS": "Embarazo o posparto: la medición queda registrada.",
+      "VITALS_MATERNAL_EWS_PAGED": "Embarazo o posparto: la medición queda registrada y se ha avisado al equipo asistencial.",
+      "LABOUR_TRANSFER_HINT": "Su episodio de trabajo de parto aquí se cierra y el hospital elegido recibe un nuevo episodio vinculado, con su partograma de aquí en solo lectura. Se alerta a su equipo de maternidad.",
+      "LABOUR_ARRIVAL_HINT": "Su episodio de trabajo de parto en {{hospital}} se cierra y aquí se abre uno nuevo, vinculado; se alerta a {{hospital}}.",
+      "PERINATAL_DEFINITION": "OMS: mortinatos a las {{weeks}} semanas completas o más y muertes neonatales precoces (días 0 a 6)",
+      "STILLBIRTHS_WHO_DEFINITION": "Indicador OMS: sin signos de vida a las {{weeks}} semanas completas o más",
+      "STILLBIRTHS_ICD_DEFINITION": "Nivel CIE: desde las {{weeks}} semanas completas"
+    }
   }
 }

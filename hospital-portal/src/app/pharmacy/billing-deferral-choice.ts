@@ -22,6 +22,7 @@ import {
   BillingDeferralChoice,
   BillingDeferralService,
 } from '../services/billing-deferral.service';
+import { RuleStatusComponent } from '../shared/rule-status/rule-status.component';
 
 type Mode = 'approved' | 'urgency';
 
@@ -36,7 +37,15 @@ type Mode = 'approved' | 'urgency';
 @Component({
   selector: 'app-billing-deferral-choice',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, CfaPipe, DashPipe, KeyLabelPipe],
+  imports: [
+    RuleStatusComponent,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    CfaPipe,
+    DashPipe,
+    KeyLabelPipe,
+  ],
   templateUrl: './billing-deferral-choice.html',
   styleUrl: './billing-deferral-choice.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

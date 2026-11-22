@@ -48,6 +48,8 @@ describe('SafeguardingBannerComponent', () => {
           provide: RoleContextService,
           useValue: {
             hasAnyActiveRole: (roles: string[]) => roles.some((role) => held.includes(role)),
+            // V356: the « provisoire » label reads the acting hospital; none here, the screen's wording stays.
+            effectiveHospitalIdForRequest: () => null,
           },
         },
         {

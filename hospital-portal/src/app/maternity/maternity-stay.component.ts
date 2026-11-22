@@ -30,6 +30,7 @@ import {
   bedsAMidwifeAssigns,
   isNeonatalCot,
 } from '../shared/midwife-beds';
+import { RuleStatusComponent } from '../shared/rule-status/rule-status.component';
 
 /** The admission a maternity record opens: the mother's labour, or her newborn. */
 export type MaternityStayKind = 'LABOR_DELIVERY' | 'NEWBORN';
@@ -54,7 +55,14 @@ export type MaternityStayKind = 'LABOR_DELIVERY' | 'NEWBORN';
 @Component({
   selector: 'app-maternity-stay',
   standalone: true,
-  imports: [FormsModule, TranslateModule, RouterLink, EnumLabelPipe, SubmitGuardDirective],
+  imports: [
+    RuleStatusComponent,
+    FormsModule,
+    TranslateModule,
+    RouterLink,
+    EnumLabelPipe,
+    SubmitGuardDirective,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (!hidden()) {
@@ -115,7 +123,11 @@ export type MaternityStayKind = 'LABOR_DELIVERY' | 'NEWBORN';
           }
           @if (midwifeOnly() && kind() === 'NEWBORN') {
             <p class="muted maternity-stay__rule" data-testid="maternity-stay-midwife-newborn-rule">
-              {{ 'MATERNITY_STAY.MIDWIFE_NEWBORN_RULE' | translate }}
+              <app-rule-status
+                ruleKey="MIDWIFE_NEWBORN_CARE"
+                [detail]="'CLINICAL_RULES.SURFACE.MIDWIFE_NEWBORN' | translate"
+                >{{ 'MATERNITY_STAY.MIDWIFE_NEWBORN_RULE' | translate }}</app-rule-status
+              >
             </p>
           }
         } @else if (stay(); as s) {
@@ -161,12 +173,21 @@ export type MaternityStayKind = 'LABOR_DELIVERY' | 'NEWBORN';
               }
               @if (midwifeOnly()) {
                 <p class="muted maternity-stay__rule" data-testid="maternity-stay-midwife-bed-rule">
-                  {{
-                    (kind() === 'NEWBORN'
-                      ? 'MATERNITY_STAY.MIDWIFE_COT_RULE'
-                      : 'MATERNITY_STAY.MIDWIFE_BED_RULE'
-                    ) | translate
-                  }}
+                  <app-rule-status
+                    ruleKey="MIDWIFE_NEWBORN_CARE"
+                    [detail]="
+                      (kind() === 'NEWBORN'
+                        ? 'CLINICAL_RULES.SURFACE.MIDWIFE_COT'
+                        : 'CLINICAL_RULES.SURFACE.MIDWIFE_BED'
+                      ) | translate
+                    "
+                    >{{
+                      (kind() === 'NEWBORN'
+                        ? 'MATERNITY_STAY.MIDWIFE_COT_RULE'
+                        : 'MATERNITY_STAY.MIDWIFE_BED_RULE'
+                      ) | translate
+                    }}</app-rule-status
+                  >
                 </p>
               }
             } @else {

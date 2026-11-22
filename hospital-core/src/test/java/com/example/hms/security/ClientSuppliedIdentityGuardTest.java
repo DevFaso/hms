@@ -77,6 +77,9 @@ class ClientSuppliedIdentityGuardTest {
         Map.entry("AppointmentController#searchAppointments{staffId}", "read: a search filter sent as a POST body"),
         Map.entry("AppointmentController#updateAppointment{staffId}", SUBJECT),
         Map.entry("DigitalSignatureController#signReport{signedByStaffId}", "checked: QA D71, must equal the caller's staff record"),
+        Map.entry("HospitalClinicalRulesController#sign{signerUserId}",
+            "checked: V356, the approver (not the actor) when they have an account, refused unless assigned at the hospital;"
+                + " the actor is the session (recordedByUserId)"),
         Map.entry("DischargeApprovalController#approve{doctorStaffId}", CHECKED),
         Map.entry("DischargeApprovalController#cancel?staffId", CHECKED),
         Map.entry("DischargeApprovalController#reject{doctorStaffId}", CHECKED),

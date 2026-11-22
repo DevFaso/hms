@@ -46,6 +46,27 @@ interface Translator {
 }
 
 /**
+ * V356: the hospital's status of a provisional rule set as one sentence (ClinicalRulesService.statusSentence),
+ * or null while unknown. When it is known, a warning's heading says what happened and then that status
+ * (« … Validée le … par Médecin-chef ») instead of its fixed « Règle provisoire, en attente … ».
+ */
+export type RuleStatusLookup = (ruleKey: string) => string | null;
+
+/** The heading: the fixed one while the rule's status is unknown, else what happened + the hospital's status. */
+function heading(
+  translate: Translator,
+  fixedKey: string,
+  surfaceKey: string,
+  ruleKey: string,
+  ruleStatus: RuleStatusLookup | undefined,
+): string {
+  const status = ruleStatus?.(ruleKey);
+  return status
+    ? `${String(translate.instant(surfaceKey))} ${status}`
+    : String(translate.instant(fixedKey));
+}
+
+/**
  * QA D2585 (r65): these warnings stay on screen for 20 s, long after the dialog closed and while
  * the nurse records the next patient; a warning that does not name its patient reads as the next
  * one's. Every announcement starts with the patient's name, when the caller knows it.
@@ -66,13 +87,23 @@ export function announceNewbornWarning(
   toast: WarningToast,
   translate: Translator,
   patientName: string | null | undefined,
+  ruleStatus?: RuleStatusLookup,
 ): boolean {
   const warning = newbornVitalWarning(alerts);
   if (!warning) return false;
-  const heading = String(translate.instant(warning.headingKey));
+  const urgent = warning.headingKey.endsWith('_URGENT');
+  const title = heading(
+    translate,
+    warning.headingKey,
+    urgent
+      ? 'CLINICAL_RULES.SURFACE.VITALS_NEWBORN_URGENT'
+      : 'CLINICAL_RULES.SURFACE.VITALS_NEWBORN',
+    'NEWBORN_VITALS',
+    ruleStatus,
+  );
   toast.push(
     'warning',
-    withPatient([heading, ...warning.lines].join(' '), patientName, translate),
+    withPatient([title, ...warning.lines].join(' '), patientName, translate),
     NEWBORN_WARNING_MS,
   );
   return true;
@@ -90,13 +121,20 @@ export function announcePostpartumWarning(
   toast: { push(type: 'error', message: string, durationMs?: number): void },
   translate: Translator,
   patientName: string | null | undefined,
+  ruleStatus?: RuleStatusLookup,
 ): boolean {
   const lines = (alerts ?? []).map((a) => a.message).filter((m) => !!m);
   if (!lines.length) return false;
-  const heading = String(translate.instant('VITAL_LIMITS.POSTPARTUM_WARNING_URGENT'));
+  const title = heading(
+    translate,
+    'VITAL_LIMITS.POSTPARTUM_WARNING_URGENT',
+    'CLINICAL_RULES.SURFACE.VITALS_POSTPARTUM_URGENT',
+    'SEVERE_HYPERTENSION_OBSTETRIC',
+    ruleStatus,
+  );
   toast.push(
     'error',
-    withPatient([heading, ...lines].join(' '), patientName, translate),
+    withPatient([title, ...lines].join(' '), patientName, translate),
     NEWBORN_WARNING_MS,
   );
   return true;
@@ -114,16 +152,23 @@ export function announceHypertensionWarning(
   toast: { push(type: 'warning' | 'error', message: string, durationMs?: number): void },
   translate: Translator,
   patientName: string | null | undefined,
+  ruleStatus?: RuleStatusLookup,
 ): boolean {
   const lines = (alerts ?? []).map((a) => a.message).filter((m) => !!m);
   if (!lines.length) return false;
   const urgent = (alerts ?? []).some((a) => a.severity === 'URGENT');
-  const heading = String(
-    translate.instant(urgent ? 'VITAL_LIMITS.ADULT_HTN_URGENT' : 'VITAL_LIMITS.ADULT_HTN_WARNING'),
+  const title = heading(
+    translate,
+    urgent ? 'VITAL_LIMITS.ADULT_HTN_URGENT' : 'VITAL_LIMITS.ADULT_HTN_WARNING',
+    urgent
+      ? 'CLINICAL_RULES.SURFACE.VITALS_ADULT_HTN_URGENT'
+      : 'CLINICAL_RULES.SURFACE.VITALS_ADULT_HTN',
+    'SEVERE_HYPERTENSION_ADULT',
+    ruleStatus,
   );
   toast.push(
     urgent ? 'error' : 'warning',
-    withPatient([heading, ...lines].join(' '), patientName, translate),
+    withPatient([title, ...lines].join(' '), patientName, translate),
     NEWBORN_WARNING_MS,
   );
   return true;
@@ -147,19 +192,24 @@ export function announceMaternalWarning(
   toast: { push(type: 'warning' | 'error', message: string, durationMs?: number): void },
   translate: Translator,
   patientName: string | null | undefined,
+  ruleStatus?: RuleStatusLookup,
 ): boolean {
   const lines = (alerts ?? []).map((a) => a.message).filter((m) => !!m);
   if (!lines.length) return false;
   const urgent = (alerts ?? []).some((a) => a.severity === 'URGENT');
   const paged = (alerts ?? []).some((a) => MEWS_PAGED_CODE.test(a.code ?? ''));
-  const heading = String(
-    translate.instant(
-      paged ? 'VITAL_LIMITS.MATERNAL_EWS_PAGED' : 'VITAL_LIMITS.MATERNAL_EWS_WARNING',
-    ),
+  const title = heading(
+    translate,
+    paged ? 'VITAL_LIMITS.MATERNAL_EWS_PAGED' : 'VITAL_LIMITS.MATERNAL_EWS_WARNING',
+    paged
+      ? 'CLINICAL_RULES.SURFACE.VITALS_MATERNAL_EWS_PAGED'
+      : 'CLINICAL_RULES.SURFACE.VITALS_MATERNAL_EWS',
+    'MATERNAL_EARLY_WARNING',
+    ruleStatus,
   );
   toast.push(
     urgent ? 'error' : 'warning',
-    withPatient([heading, ...lines].join(' '), patientName, translate),
+    withPatient([title, ...lines].join(' '), patientName, translate),
     NEWBORN_WARNING_MS,
   );
   return true;

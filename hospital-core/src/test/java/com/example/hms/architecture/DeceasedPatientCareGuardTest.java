@@ -233,6 +233,8 @@ class DeceasedPatientCareGuardTest {
         Map.entry("EmpiProbabilistic", NOT_CARE), Map.entry("FeatureFlag", NOT_CARE), Map.entry("FrontendAudit", NOT_CARE),
         Map.entry("Hospital", NOT_CARE), Map.entry("HospitalRecordAccessPosture", NOT_CARE),
         Map.entry("HospitalPacsSettings", NOT_CARE), Map.entry("HospitalImagingReportingSettings", NOT_CARE),
+        // V356: a hospital's sign-off of its provisional rule sets is governance, about no patient.
+        Map.entry("HospitalClinicalRules", NOT_CARE),
         Map.entry("InBasket", NOT_CARE),
         Map.entry("Inventory", NOT_CARE), Map.entry("LabInstrument", NOT_CARE), Map.entry("LabInventory", NOT_CARE),
         Map.entry("LabQcEvent", NOT_CARE), Map.entry("LabQcTarget", NOT_CARE), Map.entry("LabReflexRule", NOT_CARE), Map.entry("LabTestDefinition", NOT_CARE),

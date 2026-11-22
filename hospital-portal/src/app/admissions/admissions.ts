@@ -63,6 +63,7 @@ import {
   WARD_WIDE_BED_ROLES,
   bedsAMidwifeAssigns,
 } from '../shared/midwife-beds';
+import { RuleStatusComponent } from '../shared/rule-status/rule-status.component';
 
 /** The bed-release reason's field (QA D1100), marked when it is refused. */
 const UNASSIGN_REASON_ID = 'admission-unassign-bed-reason';
@@ -91,6 +92,7 @@ const OPEN_STATUSES: ReadonlySet<string> = new Set([
   selector: 'app-admissions',
   standalone: true,
   imports: [
+    RuleStatusComponent,
     ListEscapeDirective,
     SubmitGuardDirective,
     ModalDialogDirective,

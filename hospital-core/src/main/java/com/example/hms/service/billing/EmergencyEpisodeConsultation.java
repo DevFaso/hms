@@ -1,5 +1,7 @@
 package com.example.hms.service.billing;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.AdmissionType;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.EncounterType;
@@ -34,6 +36,7 @@ import java.util.UUID;
  */
 @Component
 @RequiredArgsConstructor
+@ProvisionalRule(ClinicalRuleSetKey.EMERGENCY_EPISODE_CONSULTATION)
 public class EmergencyEpisodeConsultation {
 
     /** The admissions a doctor first sees in the emergency department; the planned ones never get the line. */

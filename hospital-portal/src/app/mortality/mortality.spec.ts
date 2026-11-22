@@ -89,6 +89,8 @@ describe('MortalityComponent, QA D1488 / D1490', () => {
             isSuperAdmin: () => false,
             hasHospitalScope: () => true,
             activeHospitalId: 'h1',
+            // V356: the « provisoire » labels read the acting hospital; none here, the wording stays.
+            effectiveHospitalIdForRequest: () => null,
           },
         },
       ],
@@ -201,6 +203,8 @@ describe('MortalityComponent', () => {
       isSuperAdmin: () => false,
       hasHospitalScope: () => scopeReady,
       activeHospitalId: 'h1',
+      // V356: the « provisoire » labels read the acting hospital; none here, the wording stays.
+      effectiveHospitalIdForRequest: () => null,
     } as unknown as RoleContextService;
 
     await TestBed.configureTestingModule({

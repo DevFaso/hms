@@ -3925,4 +3925,17 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V356 (owner direction 2026-11-21): hospital.hospital_rule_signoffs,
+         each hospital's sign-off of the provisional rule sets of
+         ClinicalRuleRegistry (signed or revoked, per rule version).
+         Additive, IF NOT EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V356-hospital-rule-signoffs" author="hms-team" runOnChange="false">
+        <sqlFile path="V356__hospital_rule_signoffs.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

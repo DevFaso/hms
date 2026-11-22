@@ -2147,7 +2147,10 @@
       "ADOLESCENT_AGE_SET_ZERO": "Âge de confidentialité des adolescents fixé à 0 an",
       "ADOLESCENT_AGE_SET_ONE": "Âge de confidentialité des adolescents fixé à 1 an",
       "ACTIVATION_CODE_SHOWN": "Code d’activation affiché à la personne qui a créé l’affectation",
-      "ORDONNANCE_PRINTED": "Ordonnance imprimée par son prescripteur (prescriptions {{ids}})"
+      "ORDONNANCE_PRINTED": "Ordonnance imprimée par son prescripteur (prescriptions {{ids}})",
+      "CLINICAL_RULE_SIGNED_OFF": "Ensemble de règles cliniques {{rule}} validé (version {{version}})",
+      "CLINICAL_RULE_SIGNOFF_REVOKED": "Validation de l’ensemble de règles cliniques {{rule}} révoquée (version {{version}})",
+      "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Session de support refusée : {{what}} (validation d’une règle clinique)"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -5319,7 +5322,8 @@
     "LAB_CRITICAL_PENDING": "Résultats critiques à relire",
     "PHARMACY_RECONCILIATION": "Rapprochement pharmacie",
     "PHARMACY_TILL_CLOSE": "Clôture de caisse pharmacie",
-    "PHARMACY_BILLING_DEFERRALS": "Reports « à facturer »"
+    "PHARMACY_BILLING_DEFERRALS": "Reports « à facturer »",
+    "CLINICAL_RULES": "Règles cliniques"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerte critique",
@@ -7703,7 +7707,9 @@
         "DISPENSE_BILLING_DEFERRAL_CANCELLED": "Report « à facturer » retiré",
         "DISPENSE_BILLING_URGENCY_OVERRIDE": "Délivrance remise sans paiement par dérogation d’urgence",
         "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Dérogation d’urgence revue",
-        "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Délivrance portée au compte du séjour"
+        "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Délivrance portée au compte du séjour",
+        "CLINICAL_RULE_SIGNED_OFF": "Ensemble de règles cliniques validé",
+        "CLINICAL_RULE_SIGNOFF_REVOKED": "Validation de règle clinique révoquée"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -8258,7 +8264,8 @@
         "PATIENT_PROXY": "Accès famille",
         "HOSPITAL_ADOLESCENT_CONFIDENTIALITY_AGE": "Âge de confidentialité des adolescents",
         "HOSPITAL_IMAGING_REPORTING_SETTINGS": "Réglage de l'échographie",
-        "DISPENSE_BILLING_DEFERRAL": "Report « à facturer »"
+        "DISPENSE_BILLING_DEFERRAL": "Report « à facturer »",
+        "HOSPITAL_RULE_SIGNOFF": "Validation de règle clinique"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",
@@ -15653,6 +15660,11 @@
           "TITLE": "Organismes payeurs",
           "DONE": "Organismes payeurs actifs : {{count}}",
           "TODO": "Ajoutez les mutuelles et les assurances si l’établissement reçoit des patients assurés."
+        },
+        "CLINICAL_RULES": {
+          "TITLE": "Règles cliniques validées",
+          "DONE": "Règles cliniques validées : {{count}} / {{total}}",
+          "TODO": "Règles cliniques validées : {{count}} / {{total}}. Imprimez le dossier de signature pour le médecin-chef, puis enregistrez chaque signature."
         }
       }
     },
@@ -15785,5 +15797,78 @@
     "SEX": "Sexe",
     "EXAM_DATE": "Date de l'examen",
     "PRINTED_ON": "Imprimé le {{date}}"
+  },
+  "CLINICAL_RULES": {
+    "TITLE": "Règles cliniques et validation",
+    "SUBTITLE": "Chaque règle appliquée par la plateforme, sa source, qui l’approuve, et si cet établissement l’a validée.",
+    "BEHAVIOUR_NOTE": "Une règle s’applique de la même façon, validée ou non : la validation enregistre la décision de l’approbateur et ne change que la mention « provisoire ».",
+    "NO_HOSPITAL": "Choisissez un établissement pour voir ses règles cliniques.",
+    "LOAD_FAILED": "Les règles cliniques n’ont pas pu être chargées.",
+    "PROGRESS": "Règles validées : {{signed}} / {{total}}",
+    "READ_ONLY": "Lecture seule : l’administrateur de l’établissement enregistre chaque validation.",
+    "PACK": "Imprimer le dossier de signature (PDF)",
+    "PACK_FAILED": "Le dossier de signature n’a pas pu être imprimé.",
+    "SOURCE": "Source",
+    "APPROVER": "Approbateur",
+    "VERSION": "Version",
+    "ENFORCED_IN": "Appliquée dans",
+    "NOTE": "Note",
+    "REVOKE_REASON": "Motif de la révocation",
+    "SIGNED_BY": "Validée le {{date}} par {{title}} ({{name}})",
+    "REVOKED_BY": "Validation révoquée le {{date}} par {{name}}",
+    "RECORDED_BY": "Enregistrée par {{name}} le {{date}}",
+    "NEW_VERSION": "La version {{version}} avait été validée ; la règle a changé depuis et doit être validée à nouveau.",
+    "STATUS": {
+      "PENDING": "Provisoire",
+      "SIGNED": "Validée",
+      "REVOKED": "Validation révoquée"
+    },
+    "LABEL": {
+      "PENDING": "Provisoire — source : {{source}}. À valider par : {{approver}}.",
+      "SIGNED": "Validée le {{date}} par {{title}}"
+    },
+    "SIGN": {
+      "ACTION": "Enregistrer la validation",
+      "TITLE": "Enregistrer la validation",
+      "HINT": "Saisissez la signature de l’approbateur telle qu’elle figure sur le dossier de signature. L’approbateur n’a pas besoin d’un compte.",
+      "SIGNER_NAME": "Nom du signataire",
+      "SIGNER_TITLE": "Fonction du signataire",
+      "DEFAULT_TITLE": "Médecin-chef",
+      "SIGNED_ON": "Date de signature",
+      "NOTE": "Note (facultative)",
+      "SELF": "Je suis le signataire (mon compte est enregistré avec la validation)",
+      "CONFIRM": "Enregistrer",
+      "DONE": "Validation enregistrée.",
+      "FAILED": "La validation n’a pas pu être enregistrée.",
+      "FUTURE_DATE": "La date de signature ne peut pas être dans le futur."
+    },
+    "REVOKE": {
+      "ACTION": "Révoquer",
+      "TITLE": "Révoquer la validation",
+      "MESSAGE": "L’ensemble de règles redevient « provisoire » dans cet établissement. La règle elle-même continue de s’appliquer comme avant.",
+      "CONFIRM": "Révoquer",
+      "DONE": "Validation révoquée.",
+      "FAILED": "La validation n’a pas pu être révoquée."
+    },
+    "SURFACE": {
+      "MIDWIFE_NEWBORN": "Une sage-femme admet le nouveau-né d'un accouchement auquel elle a participé et en est la clinicienne responsable.",
+      "MIDWIFE_BED": "Une sage-femme attribue les lits des unités de maternité.",
+      "MIDWIFE_COT": "Une sage-femme attribue les berceaux des unités de maternité. Un berceau de néonatologie est attribué aussi, et un médecin est alors invité à examiner le nouveau-né.",
+      "IMAGING_TECHNICIAN": "En tant que technicien d'imagerie, vous accueillez le patient, réalisez et documentez l'examen et joignez ses images. La prescription de l'examen, la rédaction et la signature du compte rendu restent au médecin.",
+      "ULTRASOUND_PHYSICIANS_ONLY": "Échographie : dans cet établissement, l'examen est réalisé par un médecin. Vous pouvez enregistrer l'arrivée du patient et joindre des images.",
+      "MINOR_RELEASE_AGE": "À partir de {{age}} ans, les autres catégories sensibles sont aussi masquées aux parents (âge réglable par l’établissement).",
+      "VITALS_NEWBORN": "Nouveau-né (moins de 28 jours) : la mesure est enregistrée et a été évaluée selon les valeurs du nouveau-né.",
+      "VITALS_NEWBORN_URGENT": "Nouveau-né (moins de 28 jours) : la mesure est enregistrée, évaluée selon les valeurs du nouveau-né, et l’équipe soignante a été prévenue.",
+      "VITALS_POSTPARTUM_URGENT": "Grossesse ou post-partum : la mesure est enregistrée et l'équipe soignante a été prévenue.",
+      "VITALS_ADULT_HTN": "Tension artérielle très élevée : la mesure est enregistrée.",
+      "VITALS_ADULT_HTN_URGENT": "Tension artérielle très élevée avec un signe d'atteinte d'organe : la mesure est enregistrée et l'équipe soignante a été prévenue.",
+      "VITALS_MATERNAL_EWS": "Grossesse ou post-partum : la mesure est enregistrée.",
+      "VITALS_MATERNAL_EWS_PAGED": "Grossesse ou post-partum : la mesure est enregistrée et l’équipe soignante a été prévenue.",
+      "LABOUR_TRANSFER_HINT": "Son épisode de travail ici est clos et l’hôpital choisi reçoit un nouvel épisode qui lui est lié, avec son partogramme d’ici en lecture seule. Son équipe de maternité est alertée.",
+      "LABOUR_ARRIVAL_HINT": "Son épisode de travail à {{hospital}} est clos et un nouvel épisode de travail s’ouvre ici, lié au précédent ; {{hospital}} est alerté.",
+      "PERINATAL_DEFINITION": "OMS : mortinaissances à {{weeks}} semaines révolues ou plus et décès néonatals précoces (jours 0 à 6)",
+      "STILLBIRTHS_WHO_DEFINITION": "Indicateur OMS : sans signe de vie à {{weeks}} semaines d’aménorrhée révolues ou plus",
+      "STILLBIRTHS_ICD_DEFINITION": "Niveau CIM : à partir de {{weeks}} semaines d’aménorrhée révolues"
+    }
   }
 }

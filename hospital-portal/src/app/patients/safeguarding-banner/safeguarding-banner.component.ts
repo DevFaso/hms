@@ -21,6 +21,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { refusalReason, refusedFieldReasons } from '../../shared/refusal-reason';
 import { SAFEGUARDING_RECORD_ROLES, SAFEGUARDING_VIEW_ROLES } from '../patient-chart/chart-access';
+import { RuleStatusComponent } from '../../shared/rule-status/rule-status.component';
 
 /**
  * r53, provisional rule (user decision 2026-11-14, pending the obstetric lead's and the child-protection lead's
@@ -31,7 +32,14 @@ import { SAFEGUARDING_RECORD_ROLES, SAFEGUARDING_VIEW_ROLES } from '../patient-c
 @Component({
   selector: 'app-safeguarding-banner',
   standalone: true,
-  imports: [FormsModule, TranslateModule, DateTimePipe, ServerTimePipe, SubmitGuardDirective],
+  imports: [
+    RuleStatusComponent,
+    FormsModule,
+    TranslateModule,
+    DateTimePipe,
+    ServerTimePipe,
+    SubmitGuardDirective,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [
     `
@@ -88,7 +96,11 @@ import { SAFEGUARDING_RECORD_ROLES, SAFEGUARDING_VIEW_ROLES } from '../patient-c
           {{ 'SAFEGUARDING.RAISED' | translate: { date: review.raisedAt | serverTime | dateTime } }}
         </p>
         @if (review.provisionalRule) {
-          <p class="provisional">{{ 'SAFEGUARDING.PROVISIONAL' | translate }}</p>
+          <p class="provisional">
+            <app-rule-status ruleKey="MINOR_LABOUR_SAFEGUARDING">{{
+              'SAFEGUARDING.PROVISIONAL' | translate
+            }}</app-rule-status>
+          </p>
         }
         @if (canRecord()) {
           <div class="field">

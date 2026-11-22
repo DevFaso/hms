@@ -1,5 +1,7 @@
 package com.example.hms.service.vitals;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.model.Admission;
 import com.example.hms.model.OnCallSchedule;
@@ -61,6 +63,7 @@ import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@ProvisionalRule({ClinicalRuleSetKey.MATERNAL_EWS_ESCALATION, ClinicalRuleSetKey.MEWS_PAGE_COOL_DOWN})
 public class MaternalEarlyWarningService {
 
     public static final String NOTIFICATION_TYPE = "MEWS_ESCALATION";

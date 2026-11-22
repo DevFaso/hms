@@ -1,5 +1,7 @@
 package com.example.hms.service.support;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.ImagingOrderStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ClientSafeAccessDeniedException;
@@ -24,6 +26,7 @@ import java.util.UUID;
  * started (the ordering clinician or a radiologist does). Administrative, not clinical: who
  * takes which step. Nothing here grades an exam.
  */
+@ProvisionalRule({ClinicalRuleSetKey.IMAGING_TECHNICIAN_SCOPE, ClinicalRuleSetKey.NON_PHYSICIAN_ULTRASOUND})
 public final class ImagingExamRecord {
 
     static final String TECHNICIAN_STEPS_KEY = "imaging.technician.examStepsOnly";

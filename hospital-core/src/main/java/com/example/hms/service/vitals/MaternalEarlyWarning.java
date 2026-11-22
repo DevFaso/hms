@@ -1,5 +1,7 @@
 package com.example.hms.service.vitals;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.ConsciousnessLevel;
 import com.example.hms.enums.MaternalConcern;
 import com.example.hms.model.PatientVitalSign;
@@ -36,6 +38,7 @@ import java.util.Set;
  * </ul>
  * Nothing here ever refuses a reading.
  */
+@ProvisionalRule(ClinicalRuleSetKey.MATERNAL_EARLY_WARNING)
 public final class MaternalEarlyWarning {
 
     private MaternalEarlyWarning() {
