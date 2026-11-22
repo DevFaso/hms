@@ -61,7 +61,7 @@ public class RuleSignoffPackPdfService {
                 pdf.paragraph(PharmacyPdfWriter.BOLD, 11f, number + ". " + rule.title().fr()
                     + "  (" + label("clinicalRules.pack.version", rule.version()) + ")");
                 pdf.field(label("clinicalRules.pack.description"), rule.description().fr(), 9f);
-                pdf.field(label("clinicalRules.pack.source"), rule.source(), 9f);
+                pdf.field(label("clinicalRules.pack.source"), rule.source().fr(), 9f);
                 pdf.field(label("clinicalRules.pack.approver"), rule.approverRole().fr(), 9f);
                 pdf.field(label("clinicalRules.pack.status"), statusText(rule), 9f);
                 pdf.space(2f);

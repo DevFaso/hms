@@ -110,6 +110,11 @@ final class ComputedKeys {
             "ClinicalRuleSet.java|clinicalRules.rule.description");
         r.put("com/example/hms/service/clinicalrules/HospitalRuleSignoffService.java|rule.descriptionKey()",
             ruleSetTexts("description"));
+        // V356: a provisional rule set's source.
+        site(r, d, "com/example/hms/service/clinicalrules/ClinicalRuleSet.java|return TEXT_PREFIX + key.name() + \".source\"",
+            "ClinicalRuleSet.java|clinicalRules.rule.source");
+        r.put("com/example/hms/service/clinicalrules/HospitalRuleSignoffService.java|rule.sourceKey()",
+            ruleSetTexts("source"));
         // V356: a provisional rule set's texts, one per ClinicalRuleSetKey.
         site(r, d, "com/example/hms/service/clinicalrules/ClinicalRuleSet.java|return TEXT_PREFIX + key.name() + \".approver\"",
             "ClinicalRuleSet.java|clinicalRules.rule.approver");
@@ -487,7 +492,7 @@ final class ComputedKeys {
         Map<String, Domain> r = new LinkedHashMap<>();
 
         // ---- per enum value ----------------------------------------------------------------
-        for (String part : List.of("title", "description", "approver")) {
+        for (String part : List.of("title", "description", "source", "approver")) {
             r.put("ClinicalRuleSet.java|clinicalRules.rule." + part, ruleSetTexts(part));
         }
         r.put("AppointmentStatus.java|appointment.statusLabel.", enumValues("appointment.statusLabel.", AppointmentStatus.class));

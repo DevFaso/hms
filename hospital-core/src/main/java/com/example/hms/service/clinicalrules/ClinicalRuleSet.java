@@ -3,18 +3,18 @@ package com.example.hms.service.clinicalrules;
 import java.util.List;
 
 /**
- * One provisional rule set, as a hospital's approver signs it off. Its texts (title, description, approver role)
- * are in the {@code messages-admin} bundles, EN/FR/ES, under {@link #titleKey()}, {@link #descriptionKey()} and
- * {@link #approverKey()}.
+ * One provisional rule set, as a hospital's approver signs it off. Its texts (title, description, source, approver
+ * role) are in the {@code messages-admin} bundles, EN/FR/ES, under {@link #titleKey()}, {@link #descriptionKey()},
+ * {@link #sourceKey()} and {@link #approverKey()}: a published citation as written, a decision in the reader's
+ * words.
  *
  * @param key        the stable key (stored with every sign-off)
  * @param version    the version a sign-off is recorded against; a new version reopens every hospital's sign-off
- * @param source     the published source or decision it rests on, cited as given (not re-verified)
  * @param enforcedIn the classes that enforce it, named from {@code com.example.hms} ("service.vitals.SevereHypertension":
  *                   a name, not a class literal, so a package-private rule class can be named too); each carries
  *                   {@link ProvisionalRule} with {@code key} ({@code ClinicalRuleRegistryGuardTest})
  */
-public record ClinicalRuleSet(ClinicalRuleSetKey key, String version, String source, List<String> enforcedIn) {
+public record ClinicalRuleSet(ClinicalRuleSetKey key, String version, List<String> enforcedIn) {
 
     /** The package every name of {@link #enforcedIn} is relative to. */
     public static final String BASE_PACKAGE = "com.example.hms.";
@@ -31,6 +31,11 @@ public record ClinicalRuleSet(ClinicalRuleSetKey key, String version, String sou
 
     public String descriptionKey() {
         return TEXT_PREFIX + key.name() + ".description";
+    }
+
+    /** The published source or decision the rule rests on (not re-verified here). */
+    public String sourceKey() {
+        return TEXT_PREFIX + key.name() + ".source";
     }
 
     public String approverKey() {

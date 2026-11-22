@@ -30,6 +30,10 @@ import java.util.function.Supplier;
  *   else's account. Payments, reversals, refunds, invoice and line prices, the price list: every write there is
  *   refused. A copay taken at check-in is refused in the service ({@link #refuseMoneyWrite}), since the check-in
  *   itself is not money.</li>
+ *   <li><b>Sign off or revoke a hospital's provisional rules</b> ({@link #RULE_SIGNOFF_PATHS}, V356). The sign-off is
+ *   recorded as the admin's act, and « Je suis le signataire » as the admin's own signature: a support session would
+ *   put a clinical approval in someone else's name. Refused on the path and again in the service
+ *   ({@link #refuseRuleSignoffWrite}).</li>
  * </ul>
  *
  * <p>Ruled on the path, not handler by handler, so an endpoint added later under these paths is covered without
@@ -44,6 +48,12 @@ public class ImpersonationLimits implements HandlerInterceptor {
 
     /** Bundle key of the money refusal (billing-money plan PR 8 review). */
     public static final String MONEY_WRITE_REFUSED = "billing.impersonation.moneyWrite";
+
+    /** Bundle key of the rule sign-off refusal (V356). */
+    public static final String RULE_SIGNOFF_REFUSED = "clinicalRules.impersonation.signoff";
+
+    /** V356: a hospital's sign-off of its provisional rules (recorded and revoked in the admin's name). */
+    public static final List<String> RULE_SIGNOFF_PATHS = List.of("/hospitals/*/clinical-rules/**");
 
     /**
      * The caller's own sign-in and recovery details, and the password check
@@ -78,6 +88,8 @@ public class ImpersonationLimits implements HandlerInterceptor {
 
     /** What the money rule names in its audit row ("(money)"; the portal reads it). */
     private static final String MONEY = "money";
+    /** What the sign-off rule names in its audit row ("(clinical-rule sign-off)"; the portal reads it). */
+    private static final String RULE_SIGNOFF = "clinical-rule sign-off";
 
     /** The audit service, when the context has one (a {@code @WebMvcTest} slice may not). */
     private final Supplier<AuditEventLogService> audit;
@@ -98,6 +110,11 @@ public class ImpersonationLimits implements HandlerInterceptor {
     /** The money rule, for {@link #MONEY_PATHS}. */
     public static ImpersonationLimits forMoney(Supplier<AuditEventLogService> audit) {
         return new ImpersonationLimits(audit, MONEY_WRITE_REFUSED, MONEY);
+    }
+
+    /** The sign-off rule, for {@link #RULE_SIGNOFF_PATHS}. */
+    public static ImpersonationLimits forRuleSignoff(Supplier<AuditEventLogService> audit) {
+        return new ImpersonationLimits(audit, RULE_SIGNOFF_REFUSED, RULE_SIGNOFF);
     }
 
     @Override
@@ -126,6 +143,28 @@ public class ImpersonationLimits implements HandlerInterceptor {
     }
 
     /**
+     * The sign-off rule in the service, behind the path: a sign-off or a revocation is refused, with an audit row,
+     * while a support session impersonates the user.
+     */
+    public static void refuseRuleSignoffWrite(Supplier<AuditEventLogService> audit, String step) {
+        if (ImpersonationContextHolder.isImpersonating()) {
+            audit(audit, step, RULE_SIGNOFF);
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolve(RULE_SIGNOFF_REFUSED));
+        }
+    }
+
+    /** The audit sentence; one fixed shape per rule, each with its portal pattern. */
+    private static String describe(String attempt, String what) {
+        if (MONEY.equals(what)) {
+            return "Support session refused: " + attempt + " (money)";
+        }
+        if (RULE_SIGNOFF.equals(what)) {
+            return "Support session refused: " + attempt + " (clinical-rule sign-off)";
+        }
+        return "Support session refused: " + attempt + " (sign-in or recovery details)";
+    }
+
+    /**
      * One row naming the target, the attempt and the endpoint's pattern or step (never the raw path, which can carry
      * ids); the audit service adds the impersonator from the request's impersonation context.
      */
@@ -142,9 +181,7 @@ public class ImpersonationLimits implements HandlerInterceptor {
                 .userId(acting != null && acting.getPrincipal() instanceof com.example.hms.security.HospitalUserDetails target
                     ? target.getUserId() : null)
                 .userName(acting == null ? null : acting.getName())
-                .eventDescription(MONEY.equals(what)
-                    ? "Support session refused: " + attempt + " (money)"
-                    : "Support session refused: " + attempt + " (sign-in or recovery details)")
+                .eventDescription(describe(attempt, what))
                 .build());
         } catch (RuntimeException ex) {
             log.error("[IMPERSONATION] Failed to audit a refused {} write", what, ex);

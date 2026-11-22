@@ -14,7 +14,7 @@ import com.example.hms.payload.dto.clinicalrules.ClinicalRulesOverviewDTO;
 import com.example.hms.payload.dto.clinicalrules.RuleSignoffRequestDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.HospitalRuleSignoffRepository;
-import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.support.ClinicalActorNames;
 import com.example.hms.utility.RoleValidator;
@@ -55,7 +55,7 @@ class HospitalRuleSignoffServiceTest {
 
     @Mock private HospitalRuleSignoffRepository signoffRepository;
     @Mock private HospitalRepository hospitalRepository;
-    @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Mock private StaffRepository staffRepository;
     @Mock private RoleValidator roleValidator;
     @Mock private ClinicalActorNames actorNames;
     @Mock private AuditEventLogService auditEventLogService;
@@ -71,7 +71,7 @@ class HospitalRuleSignoffServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new HospitalRuleSignoffService(signoffRepository, hospitalRepository, assignmentRepository,
+        service = new HospitalRuleSignoffService(signoffRepository, hospitalRepository, staffRepository,
             roleValidator, actorNames, auditEventLogService, com.example.hms.i18n.TestMessageSources.bundles());
         Hospital hospital = new Hospital();
         hospital.setId(hospitalId);
@@ -95,7 +95,29 @@ class HospitalRuleSignoffServiceTest {
             }
             return row;
         });
+        // The conditional revocation: only a SIGNED row of this hospital changes, once.
+        lenient().when(signoffRepository.revokeIfSigned(any(), any(), any(), any(), any())).thenAnswer(inv -> {
+            HospitalRuleSignoff row = stored.stream().filter(r -> r.getId().equals(inv.getArgument(0))).findFirst()
+                .orElse(null);
+            if (row == null || !hospitalId.equals(inv.getArgument(1)) || row.getStatus() != RuleSignoffStatus.SIGNED) {
+                return 0;
+            }
+            row.setStatus(RuleSignoffStatus.REVOKED);
+            row.setRevokedAt(inv.getArgument(2));
+            row.setRevokedByUserId(inv.getArgument(3));
+            row.setRevokeReason(inv.getArgument(4));
+            return 1;
+        });
+        lenient().when(signoffRepository.findByIdAndHospitalId(any(), eq(hospitalId))).thenAnswer(inv -> stored.stream()
+            .filter(r -> r.getId().equals(inv.getArgument(0))).findFirst());
         lenient().when(roleValidator.isHospitalAdmin(adminId, hospitalId)).thenReturn(true);
+        lenient().when(roleValidator.canReadClinicalRules(adminId, hospitalId)).thenReturn(true);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearContexts() {
+        com.example.hms.security.context.HospitalContextHolder.clear();
+        com.example.hms.security.context.ImpersonationContextHolder.clear();
     }
 
     private RuleSignoffRequestDTO request(String version) {
@@ -117,7 +139,7 @@ class HospitalRuleSignoffServiceTest {
         assertThat(overview.canManage()).isTrue();
         assertThat(overview.rules()).allSatisfy(rule -> {
             assertThat(rule.status()).isEqualTo(RuleSignoffStatus.PENDING);
-            assertThat(rule.source()).isNotBlank();
+            assertThat(rule.source().fr()).isNotBlank().doesNotStartWith("clinicalRules.").doesNotContain("QA ");
             assertThat(rule.approverRole().fr()).isNotBlank().doesNotStartWith("clinicalRules.");
             assertThat(rule.title().es()).isNotBlank().doesNotStartWith("clinicalRules.");
             assertThat(rule.signoff()).isNull();
@@ -233,7 +255,7 @@ class HospitalRuleSignoffServiceTest {
         assertThatThrownBy(() -> service.overview(elsewhere, adminId)).isInstanceOf(ResourceNotFoundException.class);
 
         UUID outsider = UUID.randomUUID();
-        when(assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(outsider, hospitalId)).thenReturn(false);
+        when(staffRepository.findByUserIdAndHospitalId(outsider, hospitalId)).thenReturn(Optional.empty());
         RuleSignoffRequestDTO byOutsider = new RuleSignoffRequestDTO(paracetamol.version(), "Dr X", "Médecin-chef",
             outsider, LocalDate.of(2026, 11, 20), null);
         assertThatThrownBy(() -> service.sign(hospitalId, PARACETAMOL, byOutsider, adminId))
@@ -249,5 +271,80 @@ class HospitalRuleSignoffServiceTest {
 
         verify(signoffRepository, never()).findAll();
         verify(signoffRepository, org.mockito.Mockito.atLeastOnce()).findByHospitalIdOrderByRecordedAtDesc(hospitalId);
+    }
+
+    @Test
+    @DisplayName("a support session impersonating the hospital admin neither signs nor revokes, and it is audited")
+    void aSupportSessionNeverSigns() {
+        RuleSignoffRequestDTO current = request(paracetamol.version());
+        service.sign(hospitalId, PARACETAMOL, current, adminId);
+        org.mockito.Mockito.clearInvocations(auditEventLogService);
+        com.example.hms.security.context.ImpersonationContextHolder.set(
+            com.example.hms.security.context.ImpersonationContext.of(UUID.randomUUID(), "support"));
+
+        assertThatThrownBy(() -> service.revoke(hospitalId, PARACETAMOL, "Erreur de saisie", adminId))
+            .isInstanceOf(ClientSafeAccessDeniedException.class);
+        assertThatThrownBy(() -> service.sign(hospitalId, ClinicalRuleSetKey.CONSULTATION_FEE.name(), current, adminId))
+            .isInstanceOf(ClientSafeAccessDeniedException.class);
+
+        assertThat(stored).singleElement().extracting(HospitalRuleSignoff::getStatus).isEqualTo(RuleSignoffStatus.SIGNED);
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService, org.mockito.Mockito.times(2)).logEvent(audit.capture());
+        assertThat(audit.getAllValues()).allSatisfy(event -> {
+            assertThat(event.getEventType()).isEqualTo(AuditEventType.SECURITY_ALERT_TRIGGERED);
+            assertThat(event.getEventDescription()).endsWith("(clinical-rule sign-off)");
+        });
+    }
+
+    @Test
+    @DisplayName("two concurrent revocations: one revokes, the other is refused; one audit row, the first reason kept")
+    void concurrentRevocationsRevokeOnce() {
+        RuleSignoffRequestDTO current = request(paracetamol.version());
+        service.sign(hospitalId, PARACETAMOL, current, adminId);
+        HospitalRuleSignoff live = stored.get(0);
+        // Both requests read the live row before either writes: the second finds it SIGNED too.
+        when(signoffRepository.findFirstByHospitalIdAndRuleKeyAndRuleVersionAndStatusOrderByRecordedAtDesc(
+                hospitalId, PARACETAMOL, paracetamol.version(), RuleSignoffStatus.SIGNED))
+            .thenReturn(Optional.of(live));
+        org.mockito.Mockito.clearInvocations(auditEventLogService);
+
+        service.revoke(hospitalId, PARACETAMOL, "Première", adminId);
+        assertThatThrownBy(() -> service.revoke(hospitalId, PARACETAMOL, "Seconde", adminId))
+            .isInstanceOf(BusinessException.class);
+
+        assertThat(live.getRevokeReason()).isEqualTo("Première");
+        verify(auditEventLogService, org.mockito.Mockito.times(1)).logEvent(any());
+    }
+
+    @Test
+    @DisplayName("the list is read only with a role held AT this hospital (a role elsewhere, a patient, opens nothing)")
+    void readingNeedsARoleAtThisHospital() {
+        UUID patientElsewhereDoctor = UUID.randomUUID();
+        when(roleValidator.canReadClinicalRules(patientElsewhereDoctor, hospitalId)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.overview(hospitalId, patientElsewhereDoctor))
+            .isInstanceOf(ClientSafeAccessDeniedException.class);
+        assertThat(service.overview(hospitalId, adminId).rules()).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("a signer account must be an active staff member of this hospital: a patient account is refused")
+    void signerMustBeStaffHere() {
+        UUID nurse = UUID.randomUUID();
+        com.example.hms.model.Staff staff = new com.example.hms.model.Staff();
+        staff.setActive(true);
+        when(staffRepository.findByUserIdAndHospitalId(nurse, hospitalId)).thenReturn(Optional.of(staff));
+        RuleSignoffRequestDTO byStaff = new RuleSignoffRequestDTO(paracetamol.version(), "Inf. A", "Médecin-chef",
+            nurse, LocalDate.of(2026, 11, 20), null);
+        assertThat(service.sign(hospitalId, PARACETAMOL, byStaff, adminId).signoff().getSignerUserId()).isEqualTo(nurse);
+
+        UUID patient = UUID.randomUUID();
+        when(staffRepository.findByUserIdAndHospitalId(patient, hospitalId)).thenReturn(Optional.empty());
+        ClinicalRuleSet consultationFee = ClinicalRuleRegistry.find(ClinicalRuleSetKey.CONSULTATION_FEE).orElseThrow();
+        RuleSignoffRequestDTO byPatient = new RuleSignoffRequestDTO(consultationFee.version(), "P", "Médecin-chef",
+            patient, LocalDate.of(2026, 11, 20), null);
+        String consultation = consultationFee.key().name();
+        assertThatThrownBy(() -> service.sign(hospitalId, consultation, byPatient, adminId))
+            .isInstanceOf(FieldBusinessException.class);
     }
 }

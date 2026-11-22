@@ -8,6 +8,7 @@ import com.example.hms.exception.ClientSafeAccessDeniedException;
 import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.HospitalRuleSignoff;
+import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.clinicalrules.ClinicalRuleStatusDTO;
 import com.example.hms.payload.dto.clinicalrules.ClinicalRulesOverviewDTO;
@@ -16,8 +17,9 @@ import com.example.hms.payload.dto.clinicalrules.LocalizedRuleText;
 import com.example.hms.payload.dto.clinicalrules.RuleSignoffRequestDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.HospitalRuleSignoffRepository;
-import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.repository.StaffRepository;
 import com.example.hms.security.CallerIdentity;
+import com.example.hms.security.context.ImpersonationLimits;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.support.ClinicalActorNames;
 import com.example.hms.utility.MessageUtil;
@@ -67,16 +69,24 @@ public class HospitalRuleSignoffService {
 
     private final HospitalRuleSignoffRepository signoffRepository;
     private final HospitalRepository hospitalRepository;
-    private final UserRoleHospitalAssignmentRepository assignmentRepository;
+    private final StaffRepository staffRepository;
     private final RoleValidator roleValidator;
     private final ClinicalActorNames actorNames;
     private final AuditEventLogService auditEventLogService;
     private final MessageSource messageSource;
 
-    /** Every rule set and its status at {@code hospitalId}, for the screen, the labels and the checklist. */
+    /**
+     * Every rule set and its status at {@code hospitalId}, for the screen, the labels and the sign-off pack. Read by
+     * the hospital's own staff in a role that sees a « provisoire » rule, held AT this hospital (a role held
+     * elsewhere, or a patient's registration here, opens nothing), or by the super-admin acting for it.
+     */
     @Transactional(readOnly = true)
     public ClinicalRulesOverviewDTO overview(UUID hospitalId, UUID readerUserId) {
         requireHospital(hospitalId);
+        if (!CallerIdentity.isSuperAdminFor(hospitalId)
+            && (readerUserId == null || !roleValidator.canReadClinicalRules(readerUserId, hospitalId))) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolve("clinicalRules.read.staffOnly"));
+        }
         List<HospitalRuleSignoff> rows = signoffRepository.findByHospitalIdOrderByRecordedAtDesc(hospitalId);
         BiFunction<UUID, String, String> names = actorNames.batch(rows.stream()
             .flatMap(row -> Stream.of(row.getRecordedByUserId(), row.getRevokedByUserId()))
@@ -108,6 +118,8 @@ public class HospitalRuleSignoffService {
     public ClinicalRuleStatusDTO sign(UUID hospitalId, String ruleKey, RuleSignoffRequestDTO request,
                                       UUID actorUserId) {
         requireHospital(hospitalId);
+        // A support session never records an approval in the admin's name (the path refuses it too).
+        ImpersonationLimits.refuseRuleSignoffWrite(() -> auditEventLogService, "sign-off");
         if (!canManage(actorUserId, hospitalId)) {
             throw new ClientSafeAccessDeniedException(MessageUtil.resolve("clinicalRules.sign.adminsOnly"));
         }
@@ -115,8 +127,11 @@ public class HospitalRuleSignoffService {
         if (!rule.version().equals(request.ruleVersion())) {
             throw new FieldBusinessException("ruleVersion", "clinicalRules.versionChanged", rule.version());
         }
+        // The approver's own account: an active staff member of THIS hospital (never a patient's or another
+        // hospital's account).
         if (request.signerUserId() != null
-            && !assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(request.signerUserId(), hospitalId)) {
+            && staffRepository.findByUserIdAndHospitalId(request.signerUserId(), hospitalId)
+                .filter(Staff::isActive).isEmpty()) {
             throw new FieldBusinessException("signerUserId", "clinicalRules.signerNotAtHospital");
         }
         if (liveSignoff(hospitalId, rule) != null) {
@@ -146,20 +161,20 @@ public class HospitalRuleSignoffService {
     @Transactional
     public ClinicalRuleStatusDTO revoke(UUID hospitalId, String ruleKey, String reason, UUID actorUserId) {
         requireHospital(hospitalId);
+        ImpersonationLimits.refuseRuleSignoffWrite(() -> auditEventLogService, "revocation");
         if (!canManage(actorUserId, hospitalId)) {
             throw new ClientSafeAccessDeniedException(MessageUtil.resolve("clinicalRules.revoke.adminsOnly"));
         }
         ClinicalRuleSet rule = requireRule(ruleKey);
         HospitalRuleSignoff live = liveSignoff(hospitalId, rule);
-        // Only a live sign-off is revoked: a revoked one is never revoked again (its reason is never overwritten).
-        if (live == null || live.getStatus() != RuleSignoffStatus.SIGNED) {
+        // Only a live sign-off is revoked, and only once: the update applies WHERE status = SIGNED, so of two
+        // concurrent revocations one changes the row and the other is refused (one audit row; the first reason kept).
+        int revoked = live == null ? 0 : signoffRepository.revokeIfSigned(live.getId(), hospitalId,
+            LocalDateTime.now(ZoneId.systemDefault()), actorUserId, reason == null ? null : reason.strip());
+        if (revoked == 0) {
             throw new BusinessException("clinicalRules.nothingToRevoke");
         }
-        live.setStatus(RuleSignoffStatus.REVOKED);
-        live.setRevokedAt(LocalDateTime.now(ZoneId.systemDefault()));
-        live.setRevokedByUserId(actorUserId);
-        live.setRevokeReason(reason == null ? null : reason.strip());
-        HospitalRuleSignoff saved = signoffRepository.save(live);
+        HospitalRuleSignoff saved = signoffRepository.findByIdAndHospitalId(live.getId(), hospitalId).orElse(live);
         audit(AuditEventType.CLINICAL_RULE_SIGNOFF_REVOKED, saved, actorUserId,
             "Clinical rule set " + rule.key().name() + " sign-off revoked (version " + rule.version() + ")");
         log.info("[clinical-rules] hospital {} revoked {} v{} (sign-off {})", hospitalId, rule.key(), rule.version(),
@@ -203,7 +218,8 @@ public class HospitalRuleSignoffService {
             .findFirst()
             .orElse(null);
         return new ClinicalRuleStatusDTO(rule.key().name(), rule.version(), text(rule.titleKey()),
-            text(rule.descriptionKey()), rule.source(), text(rule.approverKey()), rule.enforcedInNames(), status,
+            text(rule.descriptionKey()), text(rule.sourceKey()), text(rule.approverKey()), rule.enforcedInNames(),
+            status,
             current == null ? null : toDto(current, names), lastSignedVersion);
     }
 

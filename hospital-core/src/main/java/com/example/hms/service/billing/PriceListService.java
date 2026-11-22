@@ -1,5 +1,7 @@
 package com.example.hms.service.billing;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.BloodProductType;
@@ -81,6 +83,7 @@ import java.util.regex.Pattern;
  */
 @Slf4j
 @Service
+@ProvisionalRule(ClinicalRuleSetKey.SAME_DAY_PRICE_CORRECTION)
 public class PriceListService {
 
     static final String NOT_FOUND_KEY = "billing.priceList.notFound";

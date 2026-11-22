@@ -46,7 +46,7 @@ class RuleSignoffPackPdfServiceTest {
         for (ClinicalRuleSet rule : ClinicalRuleRegistry.all()) {
             boolean signed = rule.key() == ClinicalRuleSetKey.PARACETAMOL_LIMITS;
             rules.add(new ClinicalRuleStatusDTO(rule.key().name(), rule.version(), french(messages, rule.titleKey()),
-                french(messages, rule.descriptionKey()), rule.source(), french(messages, rule.approverKey()),
+                french(messages, rule.descriptionKey()), french(messages, rule.sourceKey()), french(messages, rule.approverKey()),
                 rule.enforcedInNames(), signed ? RuleSignoffStatus.SIGNED : RuleSignoffStatus.PENDING,
                 signed ? HospitalRuleSignoffDTO.builder().id(UUID.randomUUID()).ruleVersion(rule.version())
                     .status(RuleSignoffStatus.SIGNED).signerName("Dr Awa Sawadogo").signerTitle("Médecin-chef")

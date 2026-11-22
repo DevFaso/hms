@@ -110,7 +110,7 @@ class HospitalClinicalRulesControllerTest {
     @DisplayName("a sign-off carries the version, signer and date to the service; missing fields are a 400")
     void sign() throws Exception {
         when(signoffService.sign(eq(hospitalId), eq("PARACETAMOL_LIMITS"), any(), eq(userId)))
-            .thenReturn(new ClinicalRuleStatusDTO("PARACETAMOL_LIMITS", "v", null, null, "s", null, List.of(),
+            .thenReturn(new ClinicalRuleStatusDTO("PARACETAMOL_LIMITS", "v", null, null, null, null, List.of(),
                 RuleSignoffStatus.SIGNED, null, null));
 
         mockMvc.perform(post("/hospitals/{id}/clinical-rules/{key}/signoffs", hospitalId, "PARACETAMOL_LIMITS")

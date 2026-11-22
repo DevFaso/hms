@@ -11,7 +11,7 @@ import java.util.List;
  * @param version           its current version (what a sign-off is recorded against)
  * @param title             its name, EN/FR/ES (the portal shows the reader's language)
  * @param description       what it does today, EN/FR/ES
- * @param source            the published source or decision it rests on, as cited
+ * @param source            the published source (as written) or decision it rests on, EN/FR/ES
  * @param approverRole      who signs it off at a hospital, EN/FR/ES
  * @param enforcedIn        the classes that enforce it
  * @param status            PENDING, SIGNED or REVOKED at this hospital for the current version
@@ -23,7 +23,7 @@ public record ClinicalRuleStatusDTO(
     String version,
     LocalizedRuleText title,
     LocalizedRuleText description,
-    String source,
+    LocalizedRuleText source,
     LocalizedRuleText approverRole,
     List<String> enforcedIn,
     RuleSignoffStatus status,
