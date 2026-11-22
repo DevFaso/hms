@@ -24,7 +24,9 @@ class PharmacyCoverUsageTest {
 
     private final PharmacyClaimRepository claims = mock(PharmacyClaimRepository.class);
     private final DispenseBillingDeferralRepository deferrals = mock(DispenseBillingDeferralRepository.class);
-    private final PharmacyCoverUsage usage = new PharmacyCoverUsage(claims, deferrals);
+    private final com.example.hms.repository.pharmacy.DispenseRepository dispenses =
+        mock(com.example.hms.repository.pharmacy.DispenseRepository.class);
+    private final PharmacyCoverUsage usage = new PharmacyCoverUsage(claims, deferrals, dispenses);
     private final UUID patientId = UUID.randomUUID();
     private final UUID hospitalId = UUID.randomUUID();
 
@@ -51,5 +53,19 @@ class PharmacyCoverUsageTest {
 
         assertThat(usage.usedInYear(patientId, hospitalId, 2026, asked)).isEqualByComparingTo("1920");
         assertThat(usage.usedInYear(null, hospitalId, 2026, asked)).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("a cover whose fill was cancelled after it left uses nothing of the ceiling")
+    void aCancelledFillUsesNothing() {
+        UUID cancelledFill = UUID.randomUUID();
+        com.example.hms.model.pharmacy.Dispense fill = new com.example.hms.model.pharmacy.Dispense();
+        fill.setStatus(com.example.hms.enums.DispenseStatus.CANCELLED);
+        when(dispenses.findById(cancelledFill)).thenReturn(java.util.Optional.of(fill));
+        when(claims.sumLiveForPatientBetween(any(), any(), any(), any(), any())).thenReturn(BigDecimal.ZERO);
+        when(deferrals.findByHospitalIdAndPatientIdAndKindAndStatusInAndRequestedAtBetween(any(), any(), any(), any(),
+            any(), any())).thenReturn(List.of(cover("1170", UUID.randomUUID(), cancelledFill)));
+
+        assertThat(usage.usedInYear(patientId, hospitalId, 2026, null)).isEqualByComparingTo("0");
     }
 }

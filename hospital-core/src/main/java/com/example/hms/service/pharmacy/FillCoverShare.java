@@ -75,12 +75,28 @@ public class FillCoverShare {
      * uses (no pharmacy category: the plan's default rate, its ceilings); empty when no coverage with a plan applies.
      */
     public Optional<BigDecimal> planShare(UUID patientId, UUID hospitalId, BigDecimal charge, UUID prescriptionId) {
-        if (patientId == null || hospitalId == null || charge == null) {
+        return planShareOn(patientId, hospitalId, charge, prescriptionId, LocalDate.now(clock));
+    }
+
+    /**
+     * Review of #1284: {@link #planShare} on {@code day}. A fill already handed over is priced on its hand-over day
+     * ({@link #serviceDay}): a policy that ended, or a rate lowered, between the hand-over and the claim never changes
+     * what the insurer owes for it.
+     */
+    public Optional<BigDecimal> planShareOn(UUID patientId, UUID hospitalId, BigDecimal charge, UUID prescriptionId,
+                                            LocalDate day) {
+        if (patientId == null || hospitalId == null || charge == null || day == null) {
             return Optional.empty();
         }
-        return invoiceCoverage.quoteForPrescription(patientId, hospitalId, LocalDate.now(clock), charge,
-                        prescriptionId)
+        return invoiceCoverage.quoteForPrescription(patientId, hospitalId, day, charge, prescriptionId)
                 .map(InvoiceCoverageService.CoverageQuote::payerShare);
+    }
+
+    /** The day a fill's insurer share is read on: its hand-over day once it left, else today. */
+    public LocalDate serviceDay(Dispense fill) {
+        boolean handedOver = fill != null && (fill.getStatus() == DispenseStatus.COMPLETED
+                || fill.getStatus() == DispenseStatus.PARTIAL) && fill.getDispensedAt() != null;
+        return handedOver ? fill.getDispensedAt().toLocalDate() : LocalDate.now(clock);
     }
 
     /**
@@ -90,13 +106,20 @@ public class FillCoverShare {
      */
     public BigDecimal capOf(BigDecimal recorded, UUID patientId, UUID hospitalId, BigDecimal charge,
                             UUID prescriptionId) {
+        return capOn(recorded, patientId, hospitalId, charge, prescriptionId, LocalDate.now(clock));
+    }
+
+    /** {@link #capOf} with the plan share read on {@code day} (a fill's hand-over day once it left). */
+    @SuppressWarnings("java:S107") // the share's own inputs; a parameter object would only rename them
+    public BigDecimal capOn(BigDecimal recorded, UUID patientId, UUID hospitalId, BigDecimal charge,
+                            UUID prescriptionId, LocalDate day) {
         if (recorded == null) {
             return BigDecimal.ZERO;
         }
         if (charge == null) {
             return recorded;
         }
-        return recorded.min(planShare(patientId, hospitalId, charge, prescriptionId).orElse(BigDecimal.ZERO));
+        return recorded.min(planShareOn(patientId, hospitalId, charge, prescriptionId, day).orElse(BigDecimal.ZERO));
     }
 
     /**
@@ -110,8 +133,9 @@ public class FillCoverShare {
         UUID patientId = fill.getPatient() != null ? fill.getPatient().getId() : null;
         UUID prescriptionId = fill.getPrescription() != null ? fill.getPrescription().getId() : null;
         BigDecimal charge = DispenseCharge.of(fill, inventoryItemRepository).orElse(null);
+        LocalDate day = serviceDay(fill);
         return recordedCoverShare(fill, hospitalId)
-                .map(recorded -> capOf(recorded, patientId, hospitalId, charge, prescriptionId));
+                .map(recorded -> capOn(recorded, patientId, hospitalId, charge, prescriptionId, day));
     }
 
     /** The share the cover recorded at approval, before it is measured against this fill. */

@@ -336,7 +336,12 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
      */
     private BigDecimal insurerShareClaimed(Dispense dispense, BigDecimal typed, UUID hospitalId) {
         java.util.Optional<BigDecimal> share = insurerShareOf(dispense, hospitalId);
-        if (share.isEmpty() || share.get().signum() <= 0) {
+        if (share.isPresent() && share.get().signum() <= 0) {
+            // Review of #1284: a plan applies and pays nothing of this fill (0 %, ceiling used, lapsed that day):
+            // there is nothing to claim, never a typed figure instead.
+            throw new com.example.hms.exception.FieldBusinessException("amount", "pharmacy.claim.planPaysNothing");
+        }
+        if (share.isEmpty()) {
             if (typed == null) {
                 throw new com.example.hms.exception.FieldBusinessException("amount", "pharmacy.claim.amountPositive");
             }
@@ -368,7 +373,8 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
         UUID patientId = dispense.getPatient() != null ? dispense.getPatient().getId() : null;
         UUID prescriptionId = dispense.getPrescription() != null ? dispense.getPrescription().getId() : null;
         return charge == null ? java.util.Optional.empty()
-                : fillCoverShare.planShare(patientId, hospitalId, charge, prescriptionId);
+                : fillCoverShare.planShareOn(patientId, hospitalId, charge, prescriptionId,
+                        fillCoverShare.serviceDay(dispense));
     }
 
     /** QA D3408: the insurer share of a fill. A required setter; a unit test built by hand may omit it. */

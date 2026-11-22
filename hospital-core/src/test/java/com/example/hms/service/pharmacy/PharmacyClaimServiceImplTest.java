@@ -185,7 +185,7 @@ class PharmacyClaimServiceImplTest {
         FillCoverShare cover = mock(FillCoverShare.class);
         service.setFillCoverShare(cover);
         when(cover.coverShare(dispense, hospitalId)).thenReturn(Optional.empty());
-        when(cover.planShare(eq(patientId), eq(hospitalId), eq(new BigDecimal("6000")), any()))
+        when(cover.planShareOn(eq(patientId), eq(hospitalId), eq(new BigDecimal("6000")), any(), any()))
                 .thenReturn(Optional.of(new BigDecimal("4500")));
         claimable();
         PharmacyClaimRequestDTO typed = request();
@@ -197,12 +197,27 @@ class PharmacyClaimServiceImplTest {
     }
 
     @Test
+    @DisplayName("review of #1284: a plan that pays nothing of the fill refuses the claim, never a typed amount")
+    void aPlanThatPaysNothingRefusesTheClaim() {
+        FillCoverShare cover = mock(FillCoverShare.class);
+        service.setFillCoverShare(cover);
+        when(cover.coverShare(any(), any())).thenReturn(Optional.empty());
+        when(cover.planShareOn(any(), any(), any(), any(), any())).thenReturn(Optional.of(BigDecimal.ZERO));
+        claimable();
+        PharmacyClaimRequestDTO typed = request();
+
+        assertThatThrownBy(() -> service.createClaim(typed))
+                .extracting("messageKey").isEqualTo("pharmacy.claim.planPaysNothing");
+        verify(claimRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("QA D3408 (r70): a coverage with no plan keeps the typed amount; none typed is refused")
     void d3408_aCoverageWithNoPlanKeepsTheTypedAmount() {
         FillCoverShare cover = mock(FillCoverShare.class);
         service.setFillCoverShare(cover);
         when(cover.coverShare(any(), any())).thenReturn(Optional.empty());
-        when(cover.planShare(any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(cover.planShareOn(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
         claimable();
         PharmacyClaimRequestDTO untyped = request();
         untyped.setAmount(null);

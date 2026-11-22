@@ -28,6 +28,7 @@ public class PharmacyCoverUsage {
 
     private final PharmacyClaimRepository claimRepository;
     private final DispenseBillingDeferralRepository deferralRepository;
+    private final com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
 
     /** The pharmacy insurer shares of {@code patientId} at {@code hospitalId} in {@code year}; never null. */
     public BigDecimal usedInYear(UUID patientId, UUID hospitalId, int year, UUID excludedPrescriptionId) {
@@ -45,12 +46,19 @@ public class PharmacyCoverUsage {
                         EnumSet.of(DispenseBillingDeferralStatus.APPROVED, DispenseBillingDeferralStatus.EXECUTED),
                         from, to)) {
             if (cover.getCreditLimit() == null || excluded.equals(cover.getPrescriptionId())
-                    || claimed(cover.getDispenseId())) {
+                    || claimed(cover.getDispenseId()) || cancelled(cover.getDispenseId())) {
                 continue;
             }
             used = used.add(cover.getCreditLimit());
         }
         return used;
+    }
+
+    /** A fill cancelled after it left (returned, voided) owes the payer nothing. */
+    private boolean cancelled(UUID dispenseId) {
+        return dispenseId != null && dispenseRepository.findById(dispenseId)
+                .map(fill -> fill.getStatus() == com.example.hms.enums.DispenseStatus.CANCELLED)
+                .orElse(false);
     }
 
     private boolean claimed(UUID dispenseId) {

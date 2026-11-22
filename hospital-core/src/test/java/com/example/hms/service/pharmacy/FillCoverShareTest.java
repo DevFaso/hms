@@ -168,6 +168,52 @@ class FillCoverShareTest {
         assertThat(share.coverShare(null, hospitalId)).isEmpty();
     }
 
+    private FillCoverShare at(String instant) {
+        return new FillCoverShare(dispenses, deferrals, inventory, payments, claims, coverage,
+            Clock.fixed(Instant.parse(instant), ZoneOffset.UTC));
+    }
+
+    private void planOn(LocalDate day, String payerShare) {
+        when(coverage.quoteForPrescription(any(), eq(hospitalId), eq(day), any(), any())).thenReturn(Optional.of(
+            new InvoiceCoverageService.CoverageQuote(UUID.randomUUID(), "Mutuelle Test A", "F", "P-1", null, null, 75,
+                new BigDecimal("1560"), new BigDecimal(payerShare), BigDecimal.ZERO)));
+    }
+
+    private void handedOverOn(int year, int month, int day) {
+        fill.setStatus(DispenseStatus.COMPLETED);
+        fill.setDispensedAt(java.time.LocalDateTime.of(year, month, day, 10, 0));
+        when(deferrals.findByHospitalIdAndPrescriptionIdAndStatusInOrderByRequestedAtAsc(eq(hospitalId),
+            eq(prescriptionId), any())).thenReturn(List.of(cover(DispenseBillingDeferralStatus.APPROVED, "1170")));
+    }
+
+    @Test
+    @DisplayName("review of #1284: a policy that ended 31 Dec does not change the claim made on 5 Jan")
+    void aPolicyThatEndedAfterTheHandOver() {
+        handedOverOn(2026, 12, 20);
+        planOn(LocalDate.of(2026, 12, 20), "1170");
+        // From 1 Jan the policy is over: a quote on 5 Jan would find no plan (the mock answers empty for any other day).
+        FillCoverShare onJanuaryFifth = at("2027-01-05T09:00:00Z");
+
+        assertThat(onJanuaryFifth.serviceDay(fill)).isEqualTo(LocalDate.of(2026, 12, 20));
+        assertThat(onJanuaryFifth.coverShare(fill, hospitalId)).contains(new BigDecimal("1170"));
+    }
+
+    @Test
+    @DisplayName("review of #1284: a rate lowered on 1 Dec does not change a fill handed over in November")
+    void aRateLoweredAfterTheHandOver() {
+        handedOverOn(2026, 11, 25);
+        planOn(LocalDate.of(2026, 11, 25), "1170");
+        planOn(LocalDate.of(2026, 12, 3), "780");
+        FillCoverShare onDecemberThird = at("2026-12-03T09:00:00Z");
+
+        assertThat(onDecemberThird.coverShare(fill, hospitalId)).contains(new BigDecimal("1170"));
+        assertThat(onDecemberThird.planShareOn(fill.getPatient().getId(), hospitalId, new BigDecimal("1560"),
+            prescriptionId, onDecemberThird.serviceDay(fill))).contains(new BigDecimal("1170"));
+        // A fill not handed over yet is read today.
+        fill.setStatus(DispenseStatus.PENDING);
+        assertThat(onDecemberThird.serviceDay(fill)).isEqualTo(LocalDate.of(2026, 12, 3));
+    }
+
     @Test
     @DisplayName("the insurer share is the larger of a live claim and the cover's share; zero with neither")
     void theInsurerShare() {

@@ -590,8 +590,8 @@ public class DispenseBillingDeferralService {
         for (DispenseBillingDeferral listed : deferralRepository
                 .findByHospitalIdAndPrescriptionIdAndStatusInOrderByRequestedAtAsc(hospitalId, prescription.getId(),
                         OPEN_STATUSES)) {
-            DispenseBillingDeferral deferral = listed.getKind() != DispenseBillingDeferralKind.THIRD_PARTY_COVER ? null
-                    : deferralRepository.findLockedByIdAndHospitalId(listed.getId(), hospitalId).orElse(null);
+            DispenseBillingDeferral deferral = listed.getKind() == DispenseBillingDeferralKind.THIRD_PARTY_COVER
+                    ? deferralRepository.findLockedByIdAndHospitalId(listed.getId(), hospitalId).orElse(null) : null;
             if (deferral == null || !OPEN_STATUSES.contains(deferral.getStatus())) {
                 continue;
             }
