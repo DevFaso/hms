@@ -473,7 +473,7 @@
   max-width: 640px;
 }
 
-[data-testid='specimens-dialog'] {
+.modal.modal-lg[data-testid='specimens-dialog'] {
   max-width: 1100px;
   .data-table {
     max-width: 100%;
