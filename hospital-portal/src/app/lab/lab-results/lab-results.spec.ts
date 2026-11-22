@@ -589,6 +589,10 @@ describe('LabResultsComponent', () => {
       expect(component.form.labOrderId).toBe('order-1');
       expect(component.form.supersedesResultId).toBe('result-1');
       expect(component.form.resultValue).toBe('');
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('.modal-actions').textContent).toContain(
+        'LAB_RESULTS.SAVE_CORRECTION',
+      );
     });
 
     it('marks a superseded result and offers no second correction of it', () => {

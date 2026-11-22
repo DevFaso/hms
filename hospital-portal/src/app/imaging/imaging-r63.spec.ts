@@ -219,6 +219,24 @@ describe('ImagingComponent — r63 imaging completion', () => {
   });
 
   describe('D2307: the addendum to a signed report', () => {
+    it('D2653: names the addendum, shows its signed source and offers only the addendum status', () => {
+      setUp(['ROLE_RADIOLOGIST']);
+      component.openAddendum(
+        report({ signed: true, findings: 'Original findings', impression: 'Original conclusion' }),
+      );
+      fixture.detectChanges();
+      expect(q('#imaging-dialog-2-title')?.textContent).toContain('Ajouter un addendum');
+      expect(q('[data-testid="addendum-original-report"]')?.textContent).toContain(
+        'Original findings',
+      );
+      expect(q('[data-testid="addendum-original-report"]')?.textContent).toContain(
+        'Original conclusion',
+      );
+      expect(component.authorableStatuses).toEqual(['ADDENDUM']);
+      component.closeReportModal();
+      component.openAuthorReport(order());
+      expect(component.authorableStatuses).toEqual(['DRAFT', 'PRELIMINARY']);
+    });
     it('« Rédiger » on a signed study opens an addendum, never an edit of the signed read', () => {
       setUp(['ROLE_RADIOLOGIST'], { reports: [report()] });
       component.authorForOrder(order());

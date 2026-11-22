@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { expectKeyboardModal } from '../../testing/modal-dialog-keyboard';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject, of, throwError } from 'rxjs';
+import { resetStoredLangForTests, currentLocale } from '../../shared/i18n/app-locale';
 
 import { LabOutboxComponent } from './lab-outbox';
 import {
@@ -212,8 +213,35 @@ describe('LabOutboxComponent', () => {
       return fixture.nativeElement as HTMLElement;
     }
 
+    it('D2616: displays French decimals while leaving the HL7 payload intact', () => {
+      const previous = localStorage.getItem('lang');
+      try {
+        localStorage.setItem('lang', 'fr');
+        resetStoredLangForTests();
+        const root = openWith(ORU);
+        expect(text(root, 'outbox-summary-value')).toBe('7,8 mmol/L');
+        expect(component.detail()?.message.payload).toBe(ORU);
+      } finally {
+        if (previous === null) localStorage.removeItem('lang');
+        else localStorage.setItem('lang', previous);
+        resetStoredLangForTests();
+      }
+    });
+
     const text = (root: HTMLElement, id: string) =>
       root.querySelector<HTMLElement>(`[data-testid="${id}"]`)?.textContent?.trim() ?? null;
+
+    it('keeps a corrected HL7 result visibly marked beside its localized value', () => {
+      const corrected = ORU.replace('|P|||', '|C|||');
+      expect(corrected).not.toBe(ORU);
+      const root = openWith(corrected);
+      expect(
+        root.querySelector(
+          '[data-testid="outbox-summary-value"] app-lab-correction-badge .lab-correction-badge',
+        ),
+      ).not.toBeNull();
+      expect(component.detail()?.message.payload).toBe(corrected);
+    });
 
     it('puts every segment on its own line whatever the terminator, and never rewrites the payload', () => {
       const payload =
@@ -246,7 +274,9 @@ describe('LabOutboxComponent', () => {
       expect(text(root, 'outbox-summary-type')).toContain('LAB_OUTBOX.TYPE_ORU');
       expect(text(root, 'outbox-summary-patient')).toBe('Awa Marie OUEDRAOGO');
       expect(text(root, 'outbox-summary-test')).toBe('Glycémie');
-      expect(text(root, 'outbox-summary-value')).toBe('7.8 mmol/L');
+      expect(text(root, 'outbox-summary-value')).toBe(
+        new Intl.NumberFormat(currentLocale()).format(7.8) + ' mmol/L',
+      );
       expect(text(root, 'outbox-summary-flag')).toContain('LAB_OUTBOX.FLAG_H');
       expect(text(root, 'outbox-summary-result-status')).toBe('LAB_OUTBOX.RESULT_STATUS_P');
       expect(text(root, 'outbox-summary-queued')).toBeTruthy();

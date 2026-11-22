@@ -18,6 +18,16 @@
   }
 }
 
+.organization-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 1rem;
+  dd {
+    margin: 0.25rem 0 0;
+    overflow-wrap: anywhere;
+  }
+}
+
 .code-badge {
   display: inline-block;
   padding: 0.2rem 0.5rem;

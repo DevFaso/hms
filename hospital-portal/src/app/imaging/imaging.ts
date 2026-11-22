@@ -361,6 +361,8 @@ export class ImagingComponent implements OnInit {
   signing = signal(false);
   /** Set when revising an existing draft; null when authoring a new report. */
   reportEditId = signal<string | null>(null);
+  readonly addendumSource = signal<ImagingReportResponse | null>(null);
+  readonly writingAddendum = signal(false);
   reportOrderId = signal<string | null>(null);
   reportForm: ReportForm = this.emptyReportForm();
   /** QA D1923 (r53): whose report the authoring form writes. */
@@ -411,13 +413,18 @@ export class ImagingComponent implements OnInit {
    * outcomes that require a reason — both enforced backend-side too, so this
    * list is a convenience, not the gate.
    */
-  readonly authorableStatuses = [
+  private readonly allAuthorableStatuses = [
     'DRAFT',
     'PRELIMINARY',
     'ADDENDUM',
     'CORRECTED',
     'AMENDED',
   ] as const;
+
+  get authorableStatuses(): readonly ImagingReportStatus[] {
+    if (this.writingAddendum()) return ['ADDENDUM'];
+    return this.reportEditId() ? this.allAuthorableStatuses : ['DRAFT', 'PRELIMINARY'];
+  }
 
   /** What the void modal may write. */
   readonly voidStatuses: VoidReportStatus[] = ['CANCELLED', 'ERROR'];
@@ -1548,6 +1555,8 @@ export class ImagingComponent implements OnInit {
   }
 
   openAddendum(report: ImagingReportResponse): void {
+    this.addendumSource.set(report);
+    this.writingAddendum.set(true);
     this.reportForm = {
       ...this.emptyReportForm(),
       reportTitle: report.reportTitle ?? '',
@@ -1630,6 +1639,8 @@ export class ImagingComponent implements OnInit {
    * and the backend enforces the same rule.
    */
   openAuthorReport(order: ImagingOrderResponse, existingSigned = false): void {
+    this.addendumSource.set(null);
+    this.writingAddendum.set(existingSigned);
     this.reportForm = {
       reportTitle: order.studyType ?? '',
       modality: order.modality,
@@ -1663,6 +1674,8 @@ export class ImagingComponent implements OnInit {
       this.toast.error(this.translate.instant('IMAGING.REPORT_LOCKED'));
       return;
     }
+    this.writingAddendum.set(false);
+    this.addendumSource.set(null);
     this.reportForm = {
       reportTitle: report.reportTitle ?? '',
       modality: report.modality,
@@ -1690,6 +1703,8 @@ export class ImagingComponent implements OnInit {
   }
 
   closeReportModal(): void {
+    this.addendumSource.set(null);
+    this.writingAddendum.set(false);
     this.showReportModal.set(false);
     this.reportEditId.set(null);
     this.reportOrderId.set(null);

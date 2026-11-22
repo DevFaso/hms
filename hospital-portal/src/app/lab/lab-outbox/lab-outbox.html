@@ -234,7 +234,8 @@
               @if (s.value) {
                 <dt>{{ 'LAB_OUTBOX.SUMMARY_VALUE' | translate }}</dt>
                 <dd data-testid="outbox-summary-value">
-                  {{ s.unit ? s.value + ' ' + s.unit : s.value }}
+                  {{ s.value | labValue: s.unit }}
+                  <app-lab-correction-badge [corrected]="s.resultStatus === 'C'" />
                 </dd>
               }
               @if (s.flag) {
