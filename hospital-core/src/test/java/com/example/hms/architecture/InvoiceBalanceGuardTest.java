@@ -118,9 +118,10 @@ class InvoiceBalanceGuardTest {
                     String args = src.substring(open + 1, com.example.hms.testsupport.SourceScan.closingParen(src, open));
                     // Billing-money plan PR 7: and the payers' share of that moment (eight arguments).
                     // QA D2523 (r65): and who received the money (nine: the full form names the cashier).
-                    if (topLevelCommas(args) != 8) {
-                        offenders.add(rel + ": a receipt rendered without the total, payer share and cashier of its"
-                            + " own moment: " + args.trim());
+                    // Review of #1276: and the lines that stood then (ten: what the money was for, of its moment).
+                    if (topLevelCommas(args) != 9) {
+                        offenders.add(rel + ": a receipt rendered without the total, payer share, cashier and lines"
+                            + " of its own moment: " + args.trim());
                     }
                     String method = AppointmentSlotRulesGuardTest.enclosingMethod(src, m.start());
                     if (method.contains("invoice.getTotalAmount()") || method.contains("invoice.getAmountPaid()")) {
@@ -131,6 +132,29 @@ class InvoiceBalanceGuardTest {
         }
         assertThat(calls).as("receipt renderings found").isPositive();
         assertThat(offenders).as("a receipt mixing two moments (QA D1244)").isEmpty();
+    }
+
+    /**
+     * Review of #1276 (QA D2523): the lines a receipt names are those of its moment too. The receipt's
+     * purpose block prints the lines it is handed, never the invoice's lines of today, and the shorter
+     * receipt form hands it the lines that stood when the money was received.
+     */
+    @Test
+    void aReceiptNamesTheLinesOfItsOwnMoment_D2523() throws IOException {
+        String pdf = com.example.hms.testsupport.SourceScan.stripComments(
+            Files.readString(MAIN.resolve("service/PdfInvoiceService.java")));
+        int purpose = pdf.indexOf("private static void receiptPurpose(");
+        assertThat(purpose).as("the receipt's purpose block").isPositive();
+        assertThat(AppointmentSlotRulesGuardTest.enclosingMethod(pdf, purpose + 30))
+            .as("the purpose block reads the lines it is handed")
+            .doesNotContain("getInvoiceItems()");
+        assertThat(pdf).contains("linesWhenReceived(invoice.getInvoiceItems(), payment)");
+        String billing = com.example.hms.testsupport.SourceScan.stripComments(
+            Files.readString(MAIN.resolve("service/BillingInvoiceServiceImpl.java")));
+        int call = billing.indexOf(".generateReceiptPdf(");
+        assertThat(AppointmentSlotRulesGuardTest.enclosingMethod(billing, call))
+            .as("the receipt of a payment hands over the lines of its moment, a folded copay its own")
+            .contains("PdfInvoiceService.linesWhenReceived(").contains("foldedCopayLines(");
     }
 
     private static int topLevelCommas(String args) {

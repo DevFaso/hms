@@ -390,6 +390,33 @@ class PdfInvoiceServiceTest {
             .doesNotContain("pdf.receipt.date");
     }
 
+    /** Review of #1276: a line added to the invoice after the money was received is not on that receipt. */
+    @Test
+    void aReceiptLeavesOutALineAddedAfterItsMoney_D2523() throws Exception {
+        InvoiceItem before = InvoiceItem.builder().itemDescription("Consultation de medecine generale")
+            .itemCategory(ItemCategory.SERVICE).quantity(1)
+            .unitPrice(new BigDecimal("1500.00")).totalPrice(new BigDecimal("1500.00")).build();
+        before.setId(UUID.randomUUID());
+        before.setCreatedAt(java.time.LocalDateTime.of(2026, 11, 20, 9, 0));
+        InvoiceItem after = InvoiceItem.builder().itemDescription("Hemogramme complet")
+            .itemCategory(ItemCategory.SERVICE).quantity(1)
+            .unitPrice(new BigDecimal("4000.00")).totalPrice(new BigDecimal("4000.00")).build();
+        after.setId(UUID.randomUUID());
+        after.setCreatedAt(java.time.LocalDateTime.of(2026, 11, 20, 11, 0));
+        invoice.addItem(before);
+        invoice.addItem(after);
+        PaymentTransaction payment = PaymentTransaction.builder()
+            .amount(new BigDecimal("1500.00")).paymentDate(LocalDate.of(2026, 11, 20))
+            .paymentMethod(PaymentMethod.CASH).status(PaymentStatus.CONFIRMED)
+            .confirmedAt(java.time.LocalDateTime.of(2026, 11, 20, 9, 42)).build();
+        payment.setId(UUID.randomUUID());
+
+        String text = textOf(service.generateReceiptPdf(invoice, payment, "INV-2042-R1", new BigDecimal("1500.00"),
+            null, BigDecimal.ZERO, false, "Awa Caissiere", Locale.FRENCH));
+
+        assertThat(text).contains("Consultation de medecine generale").doesNotContain("Hemogramme complet");
+    }
+
     @Test
     void aReceiptWithNoLinesNoCashierAndNoContactPrintsNoneOfThem_D2523() throws Exception {
         PaymentTransaction payment = PaymentTransaction.builder()

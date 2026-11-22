@@ -1591,8 +1591,11 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             : BigDecimal.ZERO;
         // QA D2523: who took the money (the cashier who confirmed it, else who recorded it).
         UUID receivedBy = row.getConfirmedBy() != null ? row.getConfirmedBy() : row.getRecordedBy();
+        // Review of #1276 (QA D2523): the lines that stood when this money was received; a folded copay's own line.
+        List<com.example.hms.model.InvoiceItem> paidFor = folded ? foldedCopayLines(invoice, row)
+            : PdfInvoiceService.linesWhenReceived(invoice.getInvoiceItems(), row);
         byte[] pdf = pdfInvoiceService.generateReceiptPdf(invoice, row, receiptNumber, paidThen, totalThen,
-            payerShareThen, folded, receivedBy != null ? cashierName(receivedBy) : null, effectiveLocale);
+            payerShareThen, folded, receivedBy != null ? cashierName(receivedBy) : null, paidFor, effectiveLocale);
         return new InvoicePdfResponseDTO(pdf, receiptNumber, invoice.getId());
     }
 
@@ -1712,6 +1715,27 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         return typed == null || typedBirthDate(typed) != null
                 || !com.example.hms.utility.PatientMatchKeys.looksLikePhone(typed.trim())
             ? null : com.example.hms.utility.PatientMatchKeys.phoneContainsPattern(typed.trim());
+    }
+
+    /**
+     * Review of #1276 (QA D2523): what a folded check-in copay paid for: the line of the copay invoice it was
+     * taken on (the latest copay folded onto this invoice written at or before the money was received), as it
+     * stood then. Empty when none is found: the receipt then names no line rather than the visit's later ones.
+     */
+    private List<com.example.hms.model.InvoiceItem> foldedCopayLines(BillingInvoice invoice, PaymentTransaction row) {
+        java.time.LocalDateTime received = receivedAt(row);
+        if (invoice.getId() == null || received == null) {
+            return List.of();
+        }
+        List<BillingInvoice> copays = invoiceRepository.findByCreditedToInvoice_IdAndCheckInCopayTrue(invoice.getId());
+        if (copays == null) {
+            return List.of();
+        }
+        return copays.stream()
+            .filter(c -> c.getCreatedAt() != null && !c.getCreatedAt().isAfter(received))
+            .max(java.util.Comparator.comparing(BillingInvoice::getCreatedAt))
+            .map(c -> PdfInvoiceService.linesWhenReceived(c.getInvoiceItems(), row))
+            .orElse(List.of());
     }
 
     private static java.time.LocalDateTime receivedAt(PaymentTransaction row) {

@@ -2343,14 +2343,14 @@ class BillingInvoiceServiceImplTest {
         when(paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId()))
             .thenReturn(List.of(second, first));
         when(pdfInvoiceService.generateReceiptPdf(any(), any(), any(String.class), any(BigDecimal.class), any(), any(),
-            org.mockito.ArgumentMatchers.anyBoolean(), any(), any()))
+            org.mockito.ArgumentMatchers.anyBoolean(), any(), any(), any()))
             .thenReturn(new byte[] {1});
 
         InvoicePdfResponseDTO pdf = billingInvoiceService.getPaymentReceiptPdf(invoice.getId(), first.getId(), Locale.FRENCH);
 
         assertEquals("GH-2026-000019-R1", pdf.suggestedFilename());
         verify(pdfInvoiceService).generateReceiptPdf(eq(invoice), eq(first), eq("GH-2026-000019-R1"),
-            eq(new BigDecimal("30")), any(), any(), eq(false), any(), any());
+            eq(new BigDecimal("30")), any(), any(), eq(false), any(), any(), any());
     }
 
     @Test
@@ -2373,13 +2373,13 @@ class BillingInvoiceServiceImplTest {
         when(paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId()))
             .thenReturn(List.of(reversed, later));
         when(pdfInvoiceService.generateReceiptPdf(any(), any(), any(String.class), any(BigDecimal.class), any(), any(),
-            org.mockito.ArgumentMatchers.anyBoolean(), any(), any()))
+            org.mockito.ArgumentMatchers.anyBoolean(), any(), any(), any()))
             .thenReturn(new byte[] {1});
 
         billingInvoiceService.getPaymentReceiptPdf(invoice.getId(), later.getId(), Locale.FRENCH);
 
         verify(pdfInvoiceService).generateReceiptPdf(eq(invoice), eq(later), eq("GH-2026-000020-R2"),
-            eq(new BigDecimal("70")), any(), any(), eq(false), any(), any());
+            eq(new BigDecimal("70")), any(), any(), eq(false), any(), any(), any());
     }
 
     @Test
@@ -2402,13 +2402,13 @@ class BillingInvoiceServiceImplTest {
         when(paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId()))
             .thenReturn(List.of(reversed, later));
         when(pdfInvoiceService.generateReceiptPdf(any(), any(), any(String.class), any(BigDecimal.class), any(), any(),
-            org.mockito.ArgumentMatchers.anyBoolean(), any(), any()))
+            org.mockito.ArgumentMatchers.anyBoolean(), any(), any(), any()))
             .thenReturn(new byte[] {1});
 
         billingInvoiceService.getPaymentReceiptPdf(invoice.getId(), later.getId(), Locale.FRENCH);
 
         verify(pdfInvoiceService).generateReceiptPdf(eq(invoice), eq(later), eq("GH-2026-000021-R2"),
-            eq(new BigDecimal("100")), any(), any(), eq(false), any(), any());
+            eq(new BigDecimal("100")), any(), any(), eq(false), any(), any(), any());
     }
 
     @Test
@@ -3568,15 +3568,73 @@ class BillingInvoiceServiceImplTest {
         when(paymentTransactionRepository.findByIdAndInvoice_Id(rest.getId(), invoice.getId())).thenReturn(Optional.of(rest));
         when(paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId())).thenReturn(List.of(copay, rest));
         when(pdfInvoiceService.generateReceiptPdf(any(), any(), any(String.class), any(BigDecimal.class), any(), any(),
-            org.mockito.ArgumentMatchers.anyBoolean(), any(), any())).thenReturn(new byte[] {1});
+            org.mockito.ArgumentMatchers.anyBoolean(), any(), any(), any())).thenReturn(new byte[] {1});
 
         billingInvoiceService.getPaymentReceiptPdf(invoice.getId(), copay.getId(), Locale.FRENCH);
         billingInvoiceService.getPaymentReceiptPdf(invoice.getId(), rest.getId(), Locale.FRENCH);
 
         verify(pdfInvoiceService).generateReceiptPdf(eq(invoice), eq(copay), eq("CHWF6646-2026-000066-R1"),
-            eq(new BigDecimal("2000")), eq(new BigDecimal("6500")), any(), eq(true), any(), any());
+            eq(new BigDecimal("2000")), eq(new BigDecimal("6500")), any(), eq(true), any(), any(), any());
         verify(pdfInvoiceService).generateReceiptPdf(eq(invoice), eq(rest), eq("CHWF6646-2026-000066-R2"),
-            eq(new BigDecimal("5500")), eq(new BigDecimal("5500")), any(), eq(false), any(), any());
+            eq(new BigDecimal("5500")), eq(new BigDecimal("5500")), any(), eq(false), any(), any(), any());
+    }
+
+    private static com.example.hms.model.InvoiceItem lineWrittenAt(String description, java.time.LocalDateTime at) {
+        com.example.hms.model.InvoiceItem line = com.example.hms.model.InvoiceItem.builder().itemDescription(description)
+            .quantity(1).unitPrice(new BigDecimal("1000")).totalPrice(new BigDecimal("1000")).build();
+        line.setId(UUID.randomUUID());
+        line.setCreatedAt(at);
+        return line;
+    }
+
+    /**
+     * Review of #1276 (QA D2523): a receipt names the lines that stood when its money was received, never one
+     * added since; a check-in copay folded onto the visit invoice names the copay's own line, not the visit's.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aReceiptNamesTheLinesOfItsOwnMoment_D2523() {
+        BillingInvoice invoice = payableInvoice(UUID.randomUUID());
+        invoice.setInvoiceNumber("CHWF6646-2026-000070");
+        invoice.setCreatedAt(java.time.LocalDateTime.of(2026, 11, 2, 9, 0));
+        com.example.hms.model.InvoiceItem consult = lineWrittenAt("Consultation", java.time.LocalDateTime.of(2026, 11, 2, 9, 0));
+        com.example.hms.model.InvoiceItem labLater = lineWrittenAt("NFS", java.time.LocalDateTime.of(2026, 11, 2, 11, 0));
+        invoice.getInvoiceItems().add(consult);
+        invoice.getInvoiceItems().add(labLater);
+        BillingInvoice copayInvoice = payableInvoice(UUID.randomUUID());
+        copayInvoice.setCheckInCopay(true);
+        copayInvoice.setCreatedAt(java.time.LocalDateTime.of(2026, 11, 2, 8, 25));
+        com.example.hms.model.InvoiceItem copayLine = lineWrittenAt("Participation du patient : consultation",
+            java.time.LocalDateTime.of(2026, 11, 2, 8, 25));
+        copayInvoice.getInvoiceItems().add(copayLine);
+        PaymentTransaction copay = PaymentTransaction.builder().invoice(invoice).amount(new BigDecimal("1000"))
+            .status(com.example.hms.enums.PaymentStatus.CONFIRMED)
+            .confirmedAt(java.time.LocalDateTime.of(2026, 11, 2, 8, 30)).build();
+        copay.setId(UUID.randomUUID());
+        PaymentTransaction desk = PaymentTransaction.builder().invoice(invoice).amount(new BigDecimal("1000"))
+            .status(com.example.hms.enums.PaymentStatus.CONFIRMED)
+            .confirmedAt(java.time.LocalDateTime.of(2026, 11, 2, 10, 0)).build();
+        desk.setId(UUID.randomUUID());
+        when(invoiceRepository.findByIdWithRefs(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.findByCreditedToInvoice_IdAndCheckInCopayTrue(invoice.getId()))
+            .thenReturn(List.of(copayInvoice));
+        when(paymentTransactionRepository.findByIdAndInvoice_Id(copay.getId(), invoice.getId())).thenReturn(Optional.of(copay));
+        when(paymentTransactionRepository.findByIdAndInvoice_Id(desk.getId(), invoice.getId())).thenReturn(Optional.of(desk));
+        when(paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId())).thenReturn(List.of(copay, desk));
+        when(pdfInvoiceService.generateReceiptPdf(any(), any(), any(String.class), any(BigDecimal.class), any(), any(),
+            org.mockito.ArgumentMatchers.anyBoolean(), any(), any(), any())).thenReturn(new byte[] {1});
+
+        billingInvoiceService.getPaymentReceiptPdf(invoice.getId(), copay.getId(), Locale.FRENCH);
+        billingInvoiceService.getPaymentReceiptPdf(invoice.getId(), desk.getId(), Locale.FRENCH);
+
+        org.mockito.ArgumentCaptor<List<com.example.hms.model.InvoiceItem>> lines =
+            org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(pdfInvoiceService).generateReceiptPdf(eq(invoice), eq(copay), any(String.class), any(BigDecimal.class),
+            any(), any(), eq(true), any(), lines.capture(), any());
+        assertEquals(List.of(copayLine), lines.getValue());
+        verify(pdfInvoiceService).generateReceiptPdf(eq(invoice), eq(desk), any(String.class), any(BigDecimal.class),
+            any(), any(), eq(false), any(), lines.capture(), any());
+        assertEquals(List.of(consult), lines.getValue());
     }
 
     /** QA D1244: an adjustment in force then and reversed since is taken back off the total then. */

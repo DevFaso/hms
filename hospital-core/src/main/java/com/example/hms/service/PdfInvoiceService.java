@@ -304,11 +304,27 @@ public class PdfInvoiceService {
      * QA D2523 (r65): the receipt also says what was paid for (the invoice's lines), at what time, who took the
      * money ({@code receivedByName}, null when unknown) and how to reach the hospital. It used to give the date,
      * the method and the amount only, so neither the patient nor the accountant could tell what the money was for.
+     * The lines are those standing when the money was received ({@link #linesWhenReceived}).
      */
     @SuppressWarnings("java:S107")
     public byte[] generateReceiptPdf(BillingInvoice invoice, PaymentTransaction payment, String receiptNumber,
                                      BigDecimal paidAsOfPayment, BigDecimal totalOverride, BigDecimal payerShareThen,
                                      boolean carriedOver, String receivedByName, Locale locale) {
+        return generateReceiptPdf(invoice, payment, receiptNumber, paidAsOfPayment, totalOverride, payerShareThen,
+            carriedOver, receivedByName, linesWhenReceived(invoice.getInvoiceItems(), payment), locale);
+    }
+
+    /**
+     * Review of #1276 (QA D2523): {@code paidFor} is what the money was for, as it stood when it was received
+     * (QA D228: a receipt is one moment): a line added to the invoice later is not on an earlier receipt. A
+     * check-in copay folded onto a visit invoice (QA D210) was received before that invoice's lines existed:
+     * its caller passes the copay's own line.
+     */
+    @SuppressWarnings("java:S107")
+    public byte[] generateReceiptPdf(BillingInvoice invoice, PaymentTransaction payment, String receiptNumber,
+                                     BigDecimal paidAsOfPayment, BigDecimal totalOverride, BigDecimal payerShareThen,
+                                     boolean carriedOver, String receivedByName, List<InvoiceItem> paidFor,
+                                     Locale locale) {
         PdfLabels t = PdfLabels.of(messageSource, locale);
         try (var doc = new PDDocument()) {
             var w = new Writer(doc);
@@ -341,7 +357,7 @@ public class PdfInvoiceService {
                 w.down(15);
                 w.text(BODY, 11, MARGIN, t.get("pdf.receipt.carriedOver"));
             }
-            receiptPurpose(w, t, invoice);
+            receiptPurpose(w, t, paidFor);
             w.down(28);
             w.text(BOLD, 14, MARGIN, t.get("pdf.receipt.amount", money(payment.getAmount())));
             // QA D228: the total when this money was received, not today's.
@@ -470,11 +486,39 @@ public class PdfInvoiceService {
     private static final int RECEIPT_PURPOSE_LINES = 8;
 
     /**
-     * QA D2523: what the money was for: each line of the invoice, as on the invoice. Nothing when the invoice has
-     * no line.
+     * Review of #1276 (QA D2523): the invoice lines that stood when {@code payment}'s money was received: those
+     * written at or before that moment (the cashier's confirmation, else the row's own time, else the end of
+     * its payment day). A line with no time of its own (never saved) is kept; with no moment at all, every line.
      */
-    private static void receiptPurpose(Writer w, PdfLabels t, BillingInvoice invoice) throws IOException {
-        List<InvoiceItem> lines = invoice.getInvoiceItems() == null ? List.of() : invoice.getInvoiceItems().stream()
+    public static List<InvoiceItem> linesWhenReceived(java.util.Collection<InvoiceItem> items,
+                                                      PaymentTransaction payment) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        java.time.LocalDateTime moment = receiptMomentOf(payment);
+        return items.stream()
+            .filter(item -> moment == null || item.getCreatedAt() == null || !item.getCreatedAt().isAfter(moment))
+            .toList();
+    }
+
+    private static java.time.LocalDateTime receiptMomentOf(PaymentTransaction payment) {
+        if (payment == null) {
+            return null;
+        }
+        if (payment.getConfirmedAt() != null) {
+            return payment.getConfirmedAt();
+        }
+        if (payment.getCreatedAt() != null) {
+            return payment.getCreatedAt();
+        }
+        return payment.getPaymentDate() != null ? payment.getPaymentDate().atTime(java.time.LocalTime.MAX) : null;
+    }
+
+    /**
+     * QA D2523: what the money was for: each line it paid, as on the invoice. Nothing when there is no line.
+     */
+    private static void receiptPurpose(Writer w, PdfLabels t, List<InvoiceItem> paidFor) throws IOException {
+        List<InvoiceItem> lines = paidFor == null ? List.of() : paidFor.stream()
             .sorted(java.util.Comparator.comparing(InvoiceItem::getCreatedAt,
                     java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder()))
                 .thenComparing(it -> String.valueOf(it.getId())))
