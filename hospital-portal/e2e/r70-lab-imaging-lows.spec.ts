@@ -68,6 +68,11 @@ test('D3353/D3356: draft panel guidance and component ranges at four widths', as
   await expect(ranges).toContainText('12,5');
   for (const width of LAYOUT_WIDTHS) {
     await page.setViewportSize({ width, height: heightFor(width) });
+    await page.evaluate(() => {
+      const backdrop = document.querySelector<HTMLElement>('.sidebar-backdrop');
+      if (backdrop && getComputedStyle(backdrop).display !== 'none') backdrop.click();
+    });
+    await expect(page.locator('.sidebar-backdrop')).toBeHidden();
     await expect(page.getByTestId('def-approval-next-step')).toHaveAttribute(
       'href',
       '/lab-approval-queue',
@@ -95,6 +100,11 @@ test('D3357: the order attestation explains its meaning at four widths', async (
   const meaning = page.locator('.checkbox-label').filter({ hasText: 'J’atteste électroniquement' });
   for (const width of LAYOUT_WIDTHS) {
     await page.setViewportSize({ width, height: heightFor(width) });
+    await page.evaluate(() => {
+      const backdrop = document.querySelector<HTMLElement>('.sidebar-backdrop');
+      if (backdrop && getComputedStyle(backdrop).display !== 'none') backdrop.click();
+    });
+    await expect(page.locator('.sidebar-backdrop')).toBeHidden();
     await expect(meaning).toBeVisible();
     expect(await meaning.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
     await page.screenshot({

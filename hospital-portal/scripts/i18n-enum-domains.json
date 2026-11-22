@@ -320,5 +320,8 @@
   },
   "signatureType": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/SignatureType.java"
+  },
+  "referenceSource": {
+    "reason": "LabTestReferenceRangeDTO.source is a free-text String (maximum 500 characters), stored as LabTestReferenceRange.source. It contains the entered guideline citation, not an enum. The asTyped pipe preserves that citation exactly; no translation vocabulary is invented."
   }
 }
