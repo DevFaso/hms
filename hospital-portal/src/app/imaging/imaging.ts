@@ -34,6 +34,12 @@ import { printOnly } from '../shared/print/print-only';
 import { PrintIdentityComponent } from '../shared/print/print-identity.component';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
 import { PatientService, PatientResponse } from '../services/patient.service';
+import {
+  EncounterService,
+  EncounterResponse,
+  isClosedEncounterStatus,
+} from '../services/encounter.service';
+import { encounterOptionLabel } from '../shared/encounter-option-label';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
@@ -227,6 +233,15 @@ export class ImagingComponent implements OnInit {
   private readonly authorship = inject(AuthorshipService);
   private readonly hospitalService = inject(HospitalService);
   private readonly patientService = inject(PatientService);
+  private readonly encounterService = inject(EncounterService);
+  /**
+   * QA D3154 (r70a): the selected patient's open visits here, newest first. A
+   * new order is placed in one of them (the latest by default), as a lab order
+   * is, so the study belongs to the visit it was asked in.
+   */
+  readonly orderVisits = signal<EncounterResponse[]>([]);
+  /** Bumped on every patient or hospital change: a late answer for another patient is dropped. */
+  private orderVisitsRequest = 0;
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly auth = inject(AuthService);
@@ -743,6 +758,45 @@ export class ImagingComponent implements OnInit {
   onPatientPicked(p: PatientResponse | null): void {
     this.selectedPatient.set(p);
     this.form.patientId = p?.id ?? '';
+    this.loadOrderVisits();
+  }
+
+  /** A super-admin changing the hospital: the visits offered are the patient's there. */
+  onOrderHospitalChange(hospitalId: string): void {
+    this.form.hospitalId = hospitalId;
+    this.loadOrderVisits();
+  }
+
+  /**
+   * QA D3154 (r70a): the patient's open visits at the order's hospital, the
+   * latest chosen. A closed visit takes no new order, so it is not offered;
+   * with none open the order stands alone, as the server would place it.
+   */
+  private loadOrderVisits(): void {
+    const request = ++this.orderVisitsRequest;
+    this.orderVisits.set([]);
+    this.form.encounterId = undefined;
+    const patientId = this.form.patientId;
+    const hospitalId = this.form.hospitalId;
+    if (this.editing() || !patientId || !hospitalId) return;
+    this.encounterService.list({ patientId, hospitalId }).subscribe({
+      next: (list) => {
+        if (request !== this.orderVisitsRequest) return;
+        const open = [...(list ?? [])]
+          .filter((e) => !isClosedEncounterStatus(e.status))
+          .sort((a, b) => (b.encounterDate ?? '').localeCompare(a.encounterDate ?? ''));
+        this.orderVisits.set(open);
+        this.form.encounterId = open[0]?.id;
+      },
+      error: () => {
+        if (request === this.orderVisitsRequest) this.orderVisits.set([]);
+      },
+    });
+  }
+
+  /** QA D3154: a visit's day, time and department, as every encounter picker shows it. */
+  orderVisitLabel(e: EncounterResponse): string {
+    return encounterOptionLabel(e);
   }
 
   openCreate(): void {
@@ -753,6 +807,8 @@ export class ImagingComponent implements OnInit {
     this.editing.set(false);
     this.editId = '';
     this.selectedPatient.set(null);
+    this.orderVisitsRequest++;
+    this.orderVisits.set([]);
     // Re-apply locked hospital after emptyForm() reset
     if (this.hospitalLocked) {
       const h = this.hospitals();
@@ -793,6 +849,9 @@ export class ImagingComponent implements OnInit {
     this.editId = o.id;
     this.formError.set(null);
     this.editing.set(true);
+    // QA D3154: an edit keeps the order's visit (the server keeps it when none is sent).
+    this.orderVisitsRequest++;
+    this.orderVisits.set([]);
     this.showModal.set(true);
   }
 

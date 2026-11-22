@@ -554,7 +554,8 @@
         data-testid="imaging-report-panel"
       >
         <div class="detail-header">
-          <h2 id="imaging-panel-1-title">
+          <!-- QA D3153: on paper the print header carries the title; it is printed once. -->
+          <h2 id="imaging-panel-1-title" class="no-print">
             {{ rep.reportTitle || rep.reportNumber || ('IMAGING.REPORT' | translate) }}
           </h2>
           <div class="header-actions no-print">
@@ -696,20 +697,21 @@
             </p>
           }
           <div class="detail-grid">
-            <div class="detail-field" data-testid="imaging-report-drawer-patient">
+            <div class="detail-field no-print" data-testid="imaging-report-drawer-patient">
               <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span><span
                 class="field-value"
                 >{{ rep.patientDisplayName || ('COMMON.UNKNOWN' | translate) }}</span
               >
             </div>
-            <div class="detail-field" data-testid="imaging-report-drawer-mrn">
+            <div class="detail-field no-print" data-testid="imaging-report-drawer-mrn">
               <span class="field-label">{{ 'IMAGING.MRN' | translate }}</span><span
                 class="field-value"
                 >{{ rep.patientMrn || '—' }}</span
               >
             </div>
-            <!-- QA D2642 (r65): who the patient is and what was asked, on screen and on paper. -->
-            <div class="detail-field" data-testid="imaging-report-drawer-dob">
+            <!-- QA D2642 (r65): who the patient is and what was asked, on screen. QA D3153: on
+                 paper the print header carries the identity, so these fields print once, there. -->
+            <div class="detail-field no-print" data-testid="imaging-report-drawer-dob">
               <span class="field-label">{{ 'PATIENTS.DATE_OF_BIRTH' | translate }}</span><span
                 class="field-value"
                 >{{
@@ -722,13 +724,13 @@
                 }
               </span>
             </div>
-            <div class="detail-field" data-testid="imaging-report-drawer-prescriber">
+            <div class="detail-field no-print" data-testid="imaging-report-drawer-prescriber">
               <span class="field-label">{{ 'IMAGING.ORDERING_PROVIDER' | translate }}</span><span
                 class="field-value"
                 >{{ rep.orderingProviderName || '—' }}</span
               >
             </div>
-            <div class="detail-field" data-testid="imaging-report-drawer-exam-date">
+            <div class="detail-field no-print" data-testid="imaging-report-drawer-exam-date">
               <span class="field-label">{{ 'PRINT_IDENTITY.EXAM_DATE' | translate }}</span><span
                 class="field-value"
                 >{{
@@ -1602,7 +1604,8 @@
               <select
                 required
                 id="img-hospitalId"
-                [(ngModel)]="form.hospitalId"
+                [ngModel]="form.hospitalId"
+                (ngModelChange)="onOrderHospitalChange($event)"
                 [title]="'ENCOUNTERS.HOSPITAL' | translate"
               >
                 <option value="">{{ 'IMAGING.SELECT_HOSPITAL' | translate }}</option>
@@ -1613,6 +1616,38 @@
             }
           </div>
         </div>
+        <!-- QA D3154 (r70a): the visit the study is asked in, as a lab order names its visit. -->
+        @if (!editing() && form.patientId) {
+          <div class="form-row">
+            <div class="field full-width" data-testid="img-visit-field">
+              @if (orderVisits().length) {
+                <label for="img-encounterId">{{ 'IMAGING.ORDER_VISIT' | translate }}</label>
+                <select
+                  id="img-encounterId"
+                  [(ngModel)]="form.encounterId"
+                  name="encounterId"
+                  [title]="'IMAGING.ORDER_VISIT' | translate"
+                >
+                  @for (e of orderVisits(); track e.id) {
+                    <option [value]="e.id">
+                      {{ orderVisitLabel(e)
+                      }}{{
+                        e.encounterType
+                          ? ' · ' + (e.encounterType | enumLabel: 'encounterType')
+                          : ''
+                      }}
+                    </option>
+                  }
+                </select>
+              } @else {
+                <span class="field-label">{{ 'IMAGING.ORDER_VISIT' | translate }}</span>
+                <p class="field-hint" data-testid="img-no-open-visit">
+                  {{ 'IMAGING.ORDER_NO_OPEN_VISIT' | translate }}
+                </p>
+              }
+            </div>
+          </div>
+        }
         <div class="form-row">
           <div class="field">
             <label for="img-modality">{{ 'IMAGING.MODALITY' | translate }}</label>
