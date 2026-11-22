@@ -308,6 +308,39 @@ describe('CoverageTabComponent (P3 #21 additions)', () => {
     expect(cells[1].textContent).toContain('COVERAGE.NO_PLAN');
   });
 
+  it('QA D3150: a verified coverage says « Assurance vérifiée » with who verified it and when', () => {
+    insuranceSpy.forPatient.and.returnValue(
+      of([
+        {
+          id: 'i1',
+          patientId: 'p1',
+          providerName: 'Mutuelle Test A',
+          policyNumber: 'MTA-TEST-0002',
+          verifiedAt: '2026-11-22T02:52:30',
+          verifiedByName: 'Awa Ouedraogo',
+        },
+        { id: 'i2', patientId: 'p1', providerName: 'Ancienne assurance', policyNumber: 'X-1' },
+      ]),
+    );
+    fixture.detectChanges();
+    const lines = fixture.nativeElement.querySelectorAll('[data-testid="coverage-verified"]');
+    expect(lines.length).toBe(1);
+    expect(lines[0].textContent).toContain('COVERAGE.VERIFIED');
+    expect(lines[0].textContent).toContain('Awa Ouedraogo');
+    expect(lines[0].textContent).toContain('2026');
+    // It wraps inside its cell at every width, a long name included.
+    const host = fixture.nativeElement as HTMLElement;
+    host.style.display = 'block';
+    for (const width of [1366, 768, 390]) {
+      host.style.width = `${width - 32}px`;
+      fixture.detectChanges();
+      const cell = (lines[0] as HTMLElement).closest('td')!;
+      expect((lines[0] as HTMLElement).getBoundingClientRect().width)
+        .withContext(`verified line at ${width}px`)
+        .toBeLessThanOrEqual(cell.getBoundingClientRect().width + 1);
+    }
+  });
+
   it('links a coverage to a plan of the hospital and shows the answer', () => {
     insuranceSpy.forPatient.and.returnValue(
       of([{ id: 'i1', patientId: 'p1', providerName: 'Mutuelle Test A', policyNumber: 'P-1' }]),

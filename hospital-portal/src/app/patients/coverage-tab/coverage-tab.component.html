@@ -83,6 +83,20 @@
                     {{ 'COMMON.ACTIVE' | translate }}
                   </span>
                 }
+                <!-- QA D3150: the desk's verification, by the verifier's name. -->
+                @if (i.verifiedAt) {
+                  {{ ' '
+                  }}<span class="muted verified-line" data-testid="coverage-verified">
+                    <span class="material-symbols-outlined verified-icon" aria-hidden="true"
+                      >verified</span
+                    >
+                    {{ 'COVERAGE.VERIFIED' | translate }}
+                    @if (i.verifiedByName) {
+                      · {{ i.verifiedByName }}
+                    }
+                    · {{ i.verifiedAt | serverTime | date: 'mediumDate' }}
+                  </span>
+                }
               </td>
               <td class="actions-cell">
                 @if (canEdit) {

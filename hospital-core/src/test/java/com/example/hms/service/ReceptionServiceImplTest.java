@@ -806,6 +806,33 @@ class ReceptionServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D3150: the verification names the verifier, never their login")
+        void theVerificationNamesTheVerifier() {
+            patient.setHospitalRegistrations(Collections.emptySet());
+            PatientInsurance verified = mock(PatientInsurance.class);
+            when(verified.isPrimary()).thenReturn(true);
+            when(verified.getId()).thenReturn(UUID.randomUUID());
+            when(verified.getVerifiedAt()).thenReturn(java.time.LocalDateTime.of(2026, 11, 22, 2, 52));
+            when(verified.getVerifiedBy()).thenReturn("Test.Receptionist.T2.r67");
+            com.example.hms.model.User verifier = new com.example.hms.model.User();
+            verifier.setUsername("test.receptionist.t2.r67");
+            verifier.setFirstName("Awa");
+            verifier.setLastName("Ouedraogo");
+            when(userRepo.findByUsernameInIgnoreCase(List.of("test.receptionist.t2.r67")))
+                    .thenReturn(List.of(verifier));
+            when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepo.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+            when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId))
+                    .thenReturn(List.of(verified));
+            when(invoiceRepo.findByPatient_IdAndHospital_Id(eq(patientId), eq(hospitalId), any()))
+                    .thenReturn(new PageImpl<>(Collections.emptyList()));
+
+            FrontDeskPatientSnapshotDTO result = service.getPatientSnapshot(patientId, hospitalId);
+
+            assertThat(result.getInsurance().getVerifiedByName()).isEqualTo("Awa Ouedraogo");
+        }
+
+        @Test
         @DisplayName("detects expired insurance")
         void detectsExpiredInsurance() {
             patient.setHospitalRegistrations(Collections.emptySet());

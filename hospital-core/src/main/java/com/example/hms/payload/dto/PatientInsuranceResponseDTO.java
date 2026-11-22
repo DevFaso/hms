@@ -82,6 +82,12 @@ public class PatientInsuranceResponseDTO {
     @Schema(description = "The catalogue payer's name, as the hospital typed it")
     private String planPayerName;
 
+    @Schema(description = "QA D3150: when the coverage was last verified at the desk")
+    private LocalDateTime verifiedAt;
+
+    @Schema(description = "QA D3150: the name of the person who verified it, never their login")
+    private String verifiedByName;
+
     @Schema(description = "Date and time this record was created")
     private LocalDateTime createdAt;
 

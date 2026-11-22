@@ -17,10 +17,13 @@ public class PatientInsuranceMapper {
 
     /** Billing-money plan PR 6: names the payer plan a coverage row is billed under (one read, only when it has one). */
     private final PayerCatalogueService payerCatalogueService;
+    /** QA D3150: the verifier's name, not the login the stamp keeps. */
+    private final com.example.hms.service.support.UserDisplayNames userDisplayNames;
 
     public PatientInsuranceResponseDTO toPatientInsuranceResponseDTO(PatientInsurance insurance) {
         if (insurance == null) return null;
-        return toResponse(insurance, payerCatalogueService.labelOf(insurance.getPayerPlanId()));
+        return toResponse(insurance, payerCatalogueService.labelOf(insurance.getPayerPlanId()),
+            userDisplayNames.ofUsername(insurance.getVerifiedBy()));
     }
 
     /** Review of #1202: a list maps with its plans' names read once for the whole list, not once per row. */
@@ -28,13 +31,17 @@ public class PatientInsuranceMapper {
             java.util.List<PatientInsurance> insurances) {
         java.util.Map<UUID, PayerCatalogueService.PlanLabel> labels = payerCatalogueService.labelsOf(
             insurances.stream().map(PatientInsurance::getPayerPlanId).filter(java.util.Objects::nonNull).toList());
+        java.util.Map<String, String> verifiers = userDisplayNames.ofUsernames(
+            insurances.stream().map(PatientInsurance::getVerifiedBy).filter(java.util.Objects::nonNull).toList());
         return insurances.stream()
             .map(insurance -> toResponse(insurance,
-                insurance.getPayerPlanId() == null ? null : labels.get(insurance.getPayerPlanId())))
+                insurance.getPayerPlanId() == null ? null : labels.get(insurance.getPayerPlanId()),
+                verifiers.get(com.example.hms.service.support.UserDisplayNames.key(insurance.getVerifiedBy()))))
             .toList();
     }
 
-    private PatientInsuranceResponseDTO toResponse(PatientInsurance insurance, PayerCatalogueService.PlanLabel plan) {
+    private PatientInsuranceResponseDTO toResponse(PatientInsurance insurance, PayerCatalogueService.PlanLabel plan,
+                                                   String verifiedByName) {
 
         UUID hospitalId = null;
         UUID assignmentId = null;
@@ -67,6 +74,8 @@ public class PatientInsuranceMapper {
             .payerPlanName(plan == null ? null : plan.planName())
             .planPayerCode(plan == null ? null : plan.payerCode())
             .planPayerName(plan == null ? null : plan.payerName())
+            .verifiedAt(insurance.getVerifiedAt())
+            .verifiedByName(insurance.getVerifiedAt() != null ? verifiedByName : null)
             .createdAt(insurance.getCreatedAt())
             .updatedAt(insurance.getUpdatedAt())
             .build();
