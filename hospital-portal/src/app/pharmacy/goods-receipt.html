@@ -43,6 +43,7 @@
             <select
               id="grItem"
               [(ngModel)]="selectedInventoryItemId"
+              (ngModelChange)="onItemChange()"
               name="inventoryItemId"
               required
             >
@@ -80,7 +81,13 @@
             />
           </div>
           <div class="field">
-            <label for="grQty">{{ 'PHARMACY.QUANTITY_RECEIVED' | translate }} *</label>
+            <label for="grQty"
+              >{{ 'PHARMACY.QUANTITY_RECEIVED' | translate }}
+              @if (quantityUnit()) {
+                <span class="qty-unit" data-testid="gr-qty-unit">({{ quantityUnit() }})</span>
+              }
+              *</label
+            >
             <input
               id="grQty"
               data-server-field="initialQuantity remainingQuantity"
@@ -92,6 +99,42 @@
             />
           </div>
         </div>
+        <!-- QA D3401 (r70): an item with a pack size is received in packs or in units, said every time. -->
+        @if (hasPackSize() && selectedItem(); as item) {
+          <div class="form-row">
+            <fieldset class="field received-in" data-server-field="inPacks">
+              <legend>{{ 'PHARMACY.RECEIVED_IN' | translate }} *</legend>
+              <label class="radio-option">
+                <input
+                  id="grQtyIn"
+                  type="radio"
+                  name="grReceivedIn"
+                  value="PACKS"
+                  [(ngModel)]="receivedIn"
+                />
+                {{
+                  'PHARMACY.RECEIVED_IN_PACKS'
+                    | translate
+                      : {
+                          packUnit: item.packUnit ?? '',
+                          n: item.unitsPerPack,
+                          unit: item.unit ?? '',
+                        }
+                }}
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="grReceivedIn" value="UNITS" [(ngModel)]="receivedIn" />
+                {{ 'PHARMACY.RECEIVED_IN_UNITS' | translate: { unit: item.unit ?? '' } }}
+              </label>
+              @if (receivedIn) {
+                <small class="field-hint" data-testid="gr-received-units">{{
+                  'PHARMACY.RECEIVED_IN_TOTAL'
+                    | translate: { qty: receivedUnits(), unit: item.unit ?? '' }
+                }}</small>
+              }
+            </fieldset>
+          </div>
+        }
         <!-- QA D655: a controlled substance moves only in front of a witness -->
         @if (needsWitness()) {
           <div class="form-row">
@@ -129,7 +172,15 @@
             />
           </div>
           <div class="field">
-            <label for="grCost">{{ 'PHARMACY.UNIT_COST' | translate }} (F CFA)</label>
+            <label for="grCost"
+              >{{
+                (hasPackSize() && receivedIn === 'PACKS'
+                  ? 'PHARMACY.UNIT_COST_PER_PACK'
+                  : 'PHARMACY.UNIT_COST'
+                ) | translate: { packUnit: selectedItem()?.packUnit ?? '' }
+              }}
+              (F CFA)</label
+            >
             <input
               id="grCost"
               type="number"
@@ -242,11 +293,11 @@
               </td>
               <td>{{ lot.receivedDate | serverTime | date: 'mediumDate' }}</td>
               <td>{{ lot.expiryDate | serverTime | date: 'mediumDate' }}</td>
-              <td>{{ lot.initialQuantity }}</td>
+              <td>{{ lot.initialQuantity }} {{ lotUnit(lot) }}</td>
               <td>
-                <span [class.low-qty]="lot.remainingQuantity < 10">{{
-                  lot.remainingQuantity
-                }}</span>
+                <span [class.low-qty]="lot.remainingQuantity < 10"
+                  >{{ lot.remainingQuantity }} {{ lotUnit(lot) }}</span
+                >
               </td>
               <td>{{ lot.supplier | dash }}</td>
               <td>

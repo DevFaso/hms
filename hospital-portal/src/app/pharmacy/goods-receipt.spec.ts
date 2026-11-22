@@ -24,6 +24,14 @@ describe('GoodsReceiptComponent', () => {
       controlled: true,
     },
     { id: 'inv-par', medicationCatalogItemId: 'cat-par', medicationName: 'Paracetamol' },
+    {
+      id: 'inv-pack',
+      medicationCatalogItemId: 'cat-pack',
+      medicationName: 'Paracétamol 500 mg',
+      unit: 'comprimé',
+      unitsPerPack: 10,
+      packUnit: 'plaquette',
+    },
   ];
 
   it('keeps lot medication search local to loaded rows', () => {
@@ -159,6 +167,39 @@ describe('GoodsReceiptComponent', () => {
     component.form.witnessedBy = 'user-2';
     component.submitForm();
     expect(svc.receiveStock.calls.mostRecent().args[0].witnessedBy).toBeUndefined();
+  });
+
+  it('QA D3401: an item with a pack size is received in packs or units, said, and inPacks is sent', () => {
+    fillForm('inv-pack');
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('#grQtyIn')).not.toBeNull();
+    expect(el.querySelector('[data-testid="gr-qty-unit"]')?.textContent).toContain('comprimé');
+
+    component.submitForm();
+    expect(svc.receiveStock).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('PHARMACY.RECEIVED_IN_REQUIRED');
+
+    component.receivedIn = 'PACKS';
+    component.form.initialQuantity = 50;
+    fixture.detectChanges();
+    expect(component.receivedUnits()).toBe(500);
+    expect(el.querySelector('[data-testid="gr-qty-unit"]')?.textContent).toContain('plaquette');
+    component.submitForm();
+    expect(svc.receiveStock.calls.mostRecent().args[0]).toEqual(
+      jasmine.objectContaining({ initialQuantity: 50, inPacks: true }),
+    );
+
+    fillForm('inv-pack');
+    component.receivedIn = 'UNITS';
+    component.submitForm();
+    expect(svc.receiveStock.calls.mostRecent().args[0].inPacks).toBeFalse();
+  });
+
+  it('QA D3401: an item without a pack size asks nothing and sends units', () => {
+    fillForm('inv-par');
+    expect(fixture.nativeElement.querySelector('#grQtyIn')).toBeNull();
+    component.submitForm();
+    expect(svc.receiveStock.calls.mostRecent().args[0].inPacks).toBeFalse();
   });
 
   it('QA D778: a negative unit cost is not sent', () => {

@@ -11318,7 +11318,13 @@
     "SAVE_PRICE": "Save the price",
     "WRITE_OFF_REMOVES_ONLY": "Damage and expiry only take stock off: enter a negative quantity.",
     "WRITE_OFF_SIGN_HINT": "This reason takes stock off: enter a negative quantity (for example −2).",
-    "ALLERGY_ALERTS_TITLE": "Allergy alerts"
+    "ALLERGY_ALERTS_TITLE": "Allergy alerts",
+    "RECEIVED_IN": "Quantity received counted in",
+    "RECEIVED_IN_PACKS": "{{packUnit}} (1 {{packUnit}} = {{n}} {{unit}})",
+    "RECEIVED_IN_UNITS": "{{unit}} (single units)",
+    "RECEIVED_IN_TOTAL": "Adds {{qty}} {{unit}} to stock.",
+    "RECEIVED_IN_REQUIRED": "Say whether the quantity received counts packs or single units.",
+    "UNIT_COST_PER_PACK": "Cost per {{packUnit}}"
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",

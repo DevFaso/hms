@@ -11318,7 +11318,13 @@
     "SAVE_PRICE": "Guardar el precio",
     "WRITE_OFF_REMOVES_ONLY": "El deterioro y la caducidad solo retiran existencias: introduzca una cantidad negativa.",
     "WRITE_OFF_SIGN_HINT": "Este motivo retira existencias: introduzca una cantidad negativa (por ejemplo −2).",
-    "ALLERGY_ALERTS_TITLE": "Alertas de alergia"
+    "ALLERGY_ALERTS_TITLE": "Alertas de alergia",
+    "RECEIVED_IN": "Cantidad recibida contada en",
+    "RECEIVED_IN_PACKS": "{{packUnit}} (1 {{packUnit}} = {{n}} {{unit}})",
+    "RECEIVED_IN_UNITS": "{{unit}} (por unidad)",
+    "RECEIVED_IN_TOTAL": "Añade {{qty}} {{unit}} al stock.",
+    "RECEIVED_IN_REQUIRED": "Indique si la cantidad recibida cuenta envases o unidades.",
+    "UNIT_COST_PER_PACK": "Costo por {{packUnit}}"
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",

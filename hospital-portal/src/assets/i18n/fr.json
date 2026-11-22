@@ -11318,7 +11318,13 @@
     "SAVE_PRICE": "Enregistrer le prix",
     "WRITE_OFF_REMOVES_ONLY": "La détérioration et la péremption ne font que retirer du stock : saisissez une quantité négative.",
     "WRITE_OFF_SIGN_HINT": "Ce motif retire du stock : saisissez une quantité négative (par exemple −2).",
-    "ALLERGY_ALERTS_TITLE": "Alertes allergie"
+    "ALLERGY_ALERTS_TITLE": "Alertes allergie",
+    "RECEIVED_IN": "Quantité reçue comptée en",
+    "RECEIVED_IN_PACKS": "{{packUnit}} (1 {{packUnit}} = {{n}} {{unit}})",
+    "RECEIVED_IN_UNITS": "{{unit}} (à l’unité)",
+    "RECEIVED_IN_TOTAL": "Ajoute {{qty}} {{unit}} au stock.",
+    "RECEIVED_IN_REQUIRED": "Indiquez si la quantité reçue est comptée en conditionnements ou à l’unité.",
+    "UNIT_COST_PER_PACK": "Coût par {{packUnit}}"
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",

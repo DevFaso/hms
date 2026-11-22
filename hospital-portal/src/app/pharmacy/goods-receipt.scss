@@ -71,3 +71,36 @@
 }
 
 @include pharmacy.workspace;
+
+// QA D3401 (r70): the unit of the quantity, and packs or units said every time.
+.qty-unit {
+  font-weight: 400;
+  color: #475569;
+}
+
+.received-in {
+  flex: 1 1 100%;
+  min-width: 0;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  margin: 0;
+
+  legend {
+    font-weight: 600;
+    padding: 0 0.25rem;
+  }
+
+  .radio-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    overflow-wrap: anywhere;
+  }
+
+  input[type='radio'] {
+    width: auto;
+    flex: none;
+    margin-top: 0.2rem;
+  }
+}

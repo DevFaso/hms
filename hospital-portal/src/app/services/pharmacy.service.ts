@@ -194,6 +194,11 @@ export interface StockLotRequest {
   notes?: string;
   /** QA D655: the colleague who witnessed the receipt of a controlled substance. */
   witnessedBy?: string;
+  /**
+   * QA D3401 (r70): true when the quantity (and the unit cost) count whole packs of an item kept
+   * in units; the server converts with the item's pack size. Stock is stored in units.
+   */
+  inPacks?: boolean;
 }
 
 export interface StockLotResponse {
