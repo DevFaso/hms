@@ -312,6 +312,8 @@ export class TransfusionComponent implements OnInit {
   groupForm = this.emptyGroupForm();
   groupNeedsPatient = signal(false);
   groupPickerPatient = signal<PatientResponse | null>(null);
+  /** QA r70 D3221: the chart's (declared) group of the patient being typed; a cross-check, never a default. */
+  groupDeclared = signal<string | null>(null);
 
   /* ── Unit modal ── */
   showUnitModal = signal(false);
@@ -548,7 +550,7 @@ export class TransfusionComponent implements OnInit {
   /* ── Type and screen ── */
 
   openGroupModal(): void {
-    this.resetGroupFor(this.selectedPatient()?.id ?? '');
+    this.resetGroupFor(this.selectedPatient()?.id ?? '', this.selectedPatient()?.bloodType);
     this.showGroupModal.set(true);
   }
 
@@ -558,7 +560,7 @@ export class TransfusionComponent implements OnInit {
    * screens that request's patient, whichever patient the request form last held.
    */
   openGroupModalForRequest(request: TransfusionRequestResponse): void {
-    this.resetGroupFor(request.patientId);
+    this.resetGroupFor(request.patientId, request.patientDeclaredBloodType);
     this.showGroupModal.set(true);
   }
 
@@ -569,15 +571,38 @@ export class TransfusionComponent implements OnInit {
     this.showGroupModal.set(true);
   }
 
-  private resetGroupFor(patientId: string): void {
+  private resetGroupFor(patientId: string, declared?: string | null): void {
     this.groupForm = this.emptyGroupForm();
     this.groupForm.patientId = patientId;
     this.groupNeedsPatient.set(!patientId);
+    this.groupDeclared.set(declared || null);
   }
 
   onGroupPatientPicked(patient: PatientResponse | null): void {
     this.groupPickerPatient.set(patient);
     this.groupForm.patientId = patient?.id ?? '';
+    this.groupDeclared.set(patient?.bloodType || null);
+  }
+
+  /** « O+ », « AB- »: the lab's ABO and Rh written the way the chart writes a group. */
+  labGroupCode(abo?: AboGroup | null, rh?: RhFactor | null): string {
+    if (!abo || !rh) return '';
+    return `${abo}${rh === 'POSITIVE' ? '+' : '-'}`;
+  }
+
+  /**
+   * QA r70 D3221: the chart's declared group and a lab-typed one disagree. Nothing is reconciled automatically
+   * (the lab's group stands for the crossmatch); the screen says so, so somebody checks the identity and the chart.
+   */
+  groupsDisagree(
+    declared: string | null | undefined,
+    abo?: AboGroup | null,
+    rh?: RhFactor | null,
+  ): boolean {
+    const typed = this.labGroupCode(abo, rh);
+    if (!declared || !typed) return false;
+    const chart = declared.trim().toUpperCase().replace('−', '-');
+    return chart !== typed;
   }
 
   closeGroupModal(): void {

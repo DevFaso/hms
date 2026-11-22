@@ -49,6 +49,11 @@ public class TransfusionRequestResponseDTO {
     private UUID bloodGroupId;
     private AboGroup patientAboGroup;
     private RhFactor patientRhFactor;
+    /**
+     * QA r70 D3221: the blood group a clinician recorded on the chart (A+ … O-). Declared, not typed: it is
+     * shown as such and compared with the lab-typed group, and never stands in for it.
+     */
+    private String patientDeclaredBloodType;
     /** False when the screen has lapsed — the crossmatch path refuses on this. */
     private Boolean screenCurrent;
 

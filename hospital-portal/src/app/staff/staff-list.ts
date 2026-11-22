@@ -17,6 +17,7 @@ import {
 } from '../services/hospital.service';
 import { UserService, UserSummary } from '../services/user.service';
 import { ToastService } from '../core/toast.service';
+import { DepartmentLookupService } from '../services/department-lookup.service';
 import { RoleContextService } from '../core/role-context.service';
 import { PermissionService } from '../core/permission.service';
 import { AuthService } from '../auth/auth.service';
@@ -67,6 +68,7 @@ function canonicalJobTitle(title: string | null | undefined): string {
 })
 export class StaffListComponent implements OnInit {
   private readonly staffService = inject(StaffService);
+  private readonly departmentLookup = inject(DepartmentLookupService);
   private readonly hospitalService = inject(HospitalService);
   private readonly userService = inject(UserService);
   private readonly toast = inject(ToastService);
@@ -342,6 +344,33 @@ export class StaffListComponent implements OnInit {
     ].sort((a, b) => a.localeCompare(b)),
   );
 
+  // ---------- Departments (QA r70 D3202) ----------
+  /** The chosen hospital's active departments, by name (the staff write resolves a department by its name). */
+  private readonly departmentNames = signal<string[]>([]);
+  readonly departmentsFailed = signal(false);
+  /** The member's current department stays offered, even if it is no longer active. */
+  readonly departmentOptions = computed(() => {
+    const names = this.departmentNames();
+    const current = this.editing()?.departmentName;
+    return current && !names.includes(current) ? [current, ...names] : names;
+  });
+
+  loadDepartmentsFor(hospitalName: string | null | undefined): void {
+    this.departmentNames.set([]);
+    this.departmentsFailed.set(false);
+    const hospital = this.hospitals().find((h) => h.name === hospitalName);
+    if (!hospital) return;
+    this.departmentLookup.getActiveDepartments(hospital.id).subscribe({
+      next: (list) =>
+        this.departmentNames.set(
+          list
+            .map((d) => d.name)
+            .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })),
+        ),
+      error: () => this.departmentsFailed.set(true),
+    });
+  }
+
   // ---------- Create ----------
   openCreate(): void {
     this.form = this.emptyForm();
@@ -351,6 +380,7 @@ export class StaffListComponent implements OnInit {
       const h = this.hospitals();
       if (h.length === 1) this.form.hospitalName = h[0].name;
     }
+    this.loadDepartmentsFor(this.form.hospitalName);
     this.showModal.set(true);
   }
 
@@ -371,6 +401,7 @@ export class StaffListComponent implements OnInit {
       startDate: member.startDate ?? '',
       roleName: member.roleCode ?? '',
     };
+    this.loadDepartmentsFor(this.form.hospitalName);
     this.showModal.set(true);
   }
 

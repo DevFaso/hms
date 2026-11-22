@@ -183,4 +183,16 @@ public interface LabTestDefinitionRepository extends JpaRepository<LabTestDefini
 
     /** Count active definitions within a specific hospital. */
     long countByActiveTrueAndHospital_Id(UUID hospitalId);
+
+    /**
+     * QA r70 D3213 (onboarding checklist): the tests a doctor can order at this hospital today, its own and the
+     * platform catalogue's, in their ACTIVE version.
+     */
+    @Query("""
+        SELECT COUNT(l) FROM LabTestDefinition l LEFT JOIN l.hospital h
+        WHERE l.approvalStatus = com.example.hms.enums.LabTestDefinitionApprovalStatus.ACTIVE
+          AND l.active = true
+          AND (h IS NULL OR h.id = :hospitalId)
+    """)
+    long countOrderableAt(@Param("hospitalId") UUID hospitalId);
 }

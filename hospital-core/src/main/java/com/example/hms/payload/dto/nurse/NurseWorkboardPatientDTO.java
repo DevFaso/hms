@@ -18,6 +18,8 @@ public class NurseWorkboardPatientDTO {
     private UUID patientId;
     private String patientName;
     private String mrn;
+    /** QA r70 D3220: the blood group recorded on the chart (A+ … O-); null when none is. */
+    private String bloodType;
     private String roomBed;
 
     /** AcuityLevel enum name (e.g. "LEVEL_3_MAJOR"). */

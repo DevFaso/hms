@@ -344,6 +344,30 @@ class ArchivedHospitalAssignmentTest {
     }
 
     @Test
+    @DisplayName("QA r70 D3206: the desk's re-send of a patient's activation at an archived hospital is a 409 and nothing is sent")
+    void deskPatientResendIsRefused() {
+        UserRoleHospitalAssignment pending = invitation(archived);
+        pending.setRole(role("ROLE_PATIENT"));
+        com.example.hms.model.Patient patient = new com.example.hms.model.Patient();
+        patient.setId(UUID.randomUUID());
+        patient.setUser(assignee);
+        when(patientRepository.findByIdUnscoped(patient.getId())).thenReturn(Optional.of(patient));
+        when(assignmentRepository.findByUserId(assignee.getId())).thenReturn(List.of(pending));
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+            "desk", "n/a", AuthorityUtils.createAuthorityList("ROLE_RECEPTIONIST")));
+        try {
+            UUID patientId = patient.getId();
+            UUID hospitalId = archived.getId();
+            assertThatThrownBy(() -> service.resendPatientActivation(patientId, hospitalId))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage(FacilityAssignmentGuard.MSG_HOSPITAL_CLOSED);
+            verifyNoInteractions(emailService, smsService);
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
     @DisplayName("resend-notification at an open hospital still sends the e-mail and the SMS")
     void resendNotificationStillSendsAtAnOpenHospital() {
         UserRoleHospitalAssignment pending = invitation(open);
@@ -464,7 +488,7 @@ class ArchivedHospitalAssignmentTest {
     }
 
     @Test
-    @DisplayName("the public view of an invitation to an archived hospital carries no link to complete it")
+    @DisplayName("QA r70 review: the public view carries no link, for an archived hospital's invitation or any other")
     void publicViewHasNoLink() {
         UserRoleHospitalAssignment closedInvite = invitation(archived);
         UserRoleHospitalAssignment openInvite = invitation(open);
@@ -476,7 +500,7 @@ class ArchivedHospitalAssignmentTest {
         assertThat(service.getAssignmentPublicView(closedInvite.getAssignmentCode()).getProfileCompletionUrl())
             .isNull();
         assertThat(service.getAssignmentPublicView(openInvite.getAssignmentCode()).getProfileCompletionUrl())
-            .isNotNull();
+            .isNull();
     }
 
     // ---------------------------------------------------------------- helpers

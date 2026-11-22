@@ -2154,7 +2154,9 @@
       "ORDONNANCE_PRINTED": "Ordonnance printed by its prescriber (prescriptions {{ids}})",
       "CLINICAL_RULE_SIGNED_OFF": "Clinical rule set {{rule}} signed off (version {{version}})",
       "CLINICAL_RULE_SIGNOFF_REVOKED": "Clinical rule set {{rule}} sign-off revoked (version {{version}})",
-      "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Support session refused: {{what}} (clinical-rule sign-off)"
+      "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Support session refused: {{what}} (clinical-rule sign-off)",
+      "PATIENT_ACTIVATION_CODE_SHOWN": "Patient portal activation code shown to the desk",
+      "PATIENT_ACTIVATION_RESENT": "Patient portal activation re-sent by the desk"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -4446,6 +4448,7 @@
     "ACTIVE_ORDERS": "Active Orders",
     "ALL_ORDERS": "All Orders",
     "ATTESTATION": "Attestation",
+    "ATTESTATION_MEANING": "I electronically attest that the information above is accurate.",
     "AUTO_FILLED": "Auto-filled",
     "CANCELLED": "Cancelled",
     "CANCELLING": "Cancelling...",
@@ -4642,6 +4645,8 @@
     "STAFF_COUNT": "{{count}} staff"
   },
   "LAB_TEST_CONFIG": {
+    "APPROVAL_NEXT_STEP": "Continue in the lab approval queue",
+    "COMPONENT_RANGES": "{{components}} components · {{ranges}} ranges",
     "ACTIONS": "Actions",
     "ADD_RANGE": "Add Range",
     "AGE_MAX": "Age Max",
@@ -5789,13 +5794,16 @@
     "OTHER_ROLES_HINT": "If your welcome email lists other roles, confirm each one with its own code, using the button under that code.",
     "DIGIT_OF": "Digit {{n}} of {{total}}",
     "BY_PHONE_TITLE": "Activate your account",
-    "BY_PHONE_INTRO": "Enter the phone number the reception registered and the 6-digit code you received by SMS.",
+    "BY_PHONE_INTRO": "Enter the phone number given when you were registered and the 6-digit code you received (by SMS, by e-mail or in person).",
     "PHONE_LABEL": "Phone number",
     "CODE_LABEL": "Activation code (6 digits)",
     "BY_PHONE_SUBMIT": "Activate my account",
     "ERR_PHONE_REQUIRED": "Enter your phone number.",
     "ERR_CODE_FORMAT": "The code has 6 digits.",
-    "ERR_PHONE_CODE_INCORRECT": "This number and code do not match. Check the SMS and try again."
+    "ERR_PHONE_CODE_INCORRECT": "This number and code do not match. Check the SMS and try again.",
+    "CREDENTIALS_REISSUED": "This temporary password replaces the one in the welcome e-mail.",
+    "ENTER_CODE_TITLE": "Activate your account",
+    "ENTER_CODE_INTRO": "Enter the 6-digit code you received by SMS, by e-mail or in person."
   },
   "ORGANIZATIONS": {
     "CONTACT": "Contact",
@@ -10078,7 +10086,9 @@
     "USERNAME": "Username",
     "USER_AND_HOSPITAL_REQUIRED": "User and hospital are required",
     "VIEW_DEPARTMENT_DETAILS": "View Department Details",
-    "WEEKLY_SHIFTS": "Weekly Shifts"
+    "WEEKLY_SHIFTS": "Weekly Shifts",
+    "NO_DEPARTMENT_OPTION": "— No department —",
+    "DEPARTMENTS_LOAD_FAILED": "The departments could not be loaded."
   },
   "TREATMENT": {
     "ACTIVE": "Active",
@@ -10220,7 +10230,8 @@
       "RESTORE_FAILED": "Failed to restore user",
       "IMPERSONATE_REASON_TOO_SHORT": "Reason must be at least 5 characters.",
       "IMPERSONATE_STARTED": "Now acting as {{name}}.",
-      "IMPERSONATE_FAILED": "Failed to start impersonation"
+      "IMPERSONATE_FAILED": "Failed to start impersonation",
+      "USERNAME_ISSUED": "Temporary username: {{username}}. The person chooses their own at first sign-in."
     },
     "TOTAL": "Total",
     "USER": "User",
@@ -10243,7 +10254,9 @@
       "FAILED": "Two-step verification could not be reset."
     },
     "HOSPITAL_SCOPE": "Hospital: {{name}}",
-    "HOSPITAL_SCOPE_CLEAR": "Show every hospital"
+    "HOSPITAL_SCOPE_CLEAR": "Show every hospital",
+    "DEPARTMENT": "Department",
+    "DEPARTMENT_HINT": "The department a clinician is booked in. It can be changed later on « Staff »."
   },
   "TRIAGE": {
     "ACUITY": "Acuity Level",
@@ -10333,6 +10346,8 @@
     "ASSESSMENT_REQUIRED": "Record the assessment before submitting: allergies, medications, pain, fall risk or nursing notes."
   },
   "PRE_CHECKIN": {
+    "CURRENT_CONTACT": "Current contact details",
+    "CURRENT_CONTACT_ERROR": "Current contact details could not be loaded. Leaving an update field empty keeps its existing value.",
     "ADDRESS": "Address",
     "ADDRESS_LABEL": "Address",
     "ADDRESS_LINE1": "Address Line 1",
@@ -10367,7 +10382,7 @@
     "PHONE_LABEL": "Phone",
     "PHONE_PLACEHOLDER": "e.g. +226 70 12 34 56",
     "QUESTIONNAIRES_COMPLETED": "Questionnaires Completed",
-    "STATE": "State",
+    "STATE": "Region / State (if applicable)",
     "STEPS_NAV_LABEL": "Pre-check-in steps",
     "STEP_DEMOGRAPHICS": "Demographics",
     "STEP_DESCRIPTION": "Please update any information that has changed since your last visit. Leave fields blank to keep current values.",
@@ -10379,7 +10394,7 @@
     "TITLE": "Pre-Check-In",
     "UPDATED_DEMOGRAPHICS": "Updated Demographics",
     "YES": "Yes",
-    "ZIP": "Zip Code",
+    "ZIP": "Postal code (if applicable)",
     "DATE_AT_TIME": "{{date}} at {{time}}",
     "EMAIL_INVALID": "Enter a valid e-mail address, or leave the field empty."
   },
@@ -13439,7 +13454,8 @@
     "VT_RESTORED": "Visit type restored",
     "VT_RETIRED": "Visit type retired",
     "VT_SAVED": "Visit type saved",
-    "VT_SAVE_ERROR": "Could not save the visit type."
+    "VT_SAVE_ERROR": "Could not save the visit type.",
+    "GENERATED_ONE_TEMPLATE": "{{created}} slots generated from 1 template ({{skipped}} already existed)"
   },
   "TRANSFUSION": {
     "LATE_INCOMPATIBLE_RESULT": "Record an incompatible result",
@@ -13609,6 +13625,11 @@
     "PLATELET_O_TO_B": "Pending confirmation",
     "PLATELET_O_TO_B_DETAIL": "Group O platelets to a group B recipient. Permitted by this facility's protocol — this transfusion is not blocked or in question. The protocol excludes O platelets for A and AB recipients but not for B, and whether that difference is intended has not yet been confirmed with haematology. Raise it at the next review.",
     "CANCEL_REQUEST_CONFIRM": "Cancel the request",
+    "DECLARED_LABEL": "Group on the chart",
+    "DECLARED_VALUE": "{{group}} (declared, not verified)",
+    "DECLARED_GROUP": "Chart: {{group}} (not verified)",
+    "DECLARED_MISMATCH": "The chart says {{declared}} but the lab typed {{typed}}. Check the patient’s identity and the chart; the lab group stands for the crossmatch.",
+    "DECLARED_MISMATCH_SHORT": "Differs from the chart",
     "ALLO_IMMUNISED": "Allo-immunised patient (positive antibody screen on record)",
     "ALLO_IMMUNISED_RULE": "Provisional rule: red cells are released only for an identified antibody (or the biologist’s referral decision), on an antigen-negative, RH-KEL1 matched unit, with a compatible antiglobulin crossmatch on a sample of 72 hours or less. A later negative screen does not lift this.",
     "ALLO_IMMUNISED_REQUEST": "Allo-immunised: red cells need the compatible unit, or a declared vital emergency (provisional rule)",
@@ -15689,7 +15710,7 @@
         },
         "STAFF": {
           "TITLE": "Staff",
-          "DONE": "Active staff members: {{count}}",
+          "DONE": "Active staff besides the administrators: {{count}}",
           "TODO": "Register the staff. Each person then activates their account with the code they receive."
         },
         "PROVIDERS_IN_DEPARTMENT": {
@@ -15726,6 +15747,11 @@
           "TITLE": "Clinical rules signed off",
           "DONE": "Clinical rules signed off: {{count}} / {{total}}",
           "TODO": "Clinical rules signed off: {{count}} / {{total}}. Print the sign-off pack for the chief medical officer, then record each signature."
+        },
+        "LAB_TESTS": {
+          "TITLE": "Laboratory tests",
+          "DONE": "Tests a doctor can order: {{count}}",
+          "TODO": "Set up the lab tests (reference ranges, validation) before the price list: a lab price line links to a test by its code."
         }
       }
     },
@@ -15942,5 +15968,36 @@
       "STILLBIRTHS_WHO_DEFINITION": "WHO indicator: no signs of life at {{weeks}} or more completed weeks",
       "STILLBIRTHS_ICD_DEFINITION": "ICD level: from {{weeks}} completed weeks"
     }
+  },
+  "PATIENT_SAFETY": {
+    "ARIA_LABEL": "Patient safety header",
+    "LOADING": "Loading the patient safety details…",
+    "UNAVAILABLE": "Patient safety details unavailable: check the chart before acting.",
+    "NAME": "Patient",
+    "AGE": "Age",
+    "AGE_YEARS": "{{n}} y",
+    "AGE_MONTHS": "{{n}} mo",
+    "SEX": "Sex",
+    "WEIGHT": "Weight",
+    "WEIGHT_KG": "{{kg}} kg",
+    "WEIGHED_ON": "(weighed {{date}})",
+    "NOT_WEIGHED": "No weight recorded",
+    "BLOOD_GROUP": "Blood group",
+    "NOT_DOCUMENTED": "Not recorded",
+    "ALLERGIES": "Allergies",
+    "NO_KNOWN_ALLERGIES": "No known allergies",
+    "HISTORY_HINT": "Personal past medical history (doctor, nurse or midwife). It appears in the summary.",
+    "HISTORY_ADD": "Record the medical history",
+    "HISTORY_EDIT": "Edit the medical history"
+  },
+  "PORTAL_ACTIVATION": {
+    "TITLE": "Patient portal access",
+    "HELP": "If the activation SMS did not arrive, show the code and give it to the patient in person, or send the activation again.",
+    "SHOW": "Show the activation code",
+    "RESEND": "Send the activation again",
+    "HOW_TO": "The patient opens the sign-in page, chooses « I have an activation code », then enters their phone number and this code. Showing the code is recorded in the audit log.",
+    "RESENT": "Activation sent again.",
+    "RESENT_NOWHERE": "The activation was not delivered: show the code and give it in person.",
+    "RESEND_FAILED": "The activation could not be sent again."
   }
 }

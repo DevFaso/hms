@@ -78,6 +78,8 @@ public class CheckOutMapper {
         // Polish 2026-11-13: the identity band (date of birth, the MRN at the visit's hospital).
         if (encounter.getPatient() != null) {
             builder.patientDateOfBirth(encounter.getPatient().getDateOfBirth())
+                   // QA r70 D3220: the blood group on the printed summary (clinical: the desk loses it).
+                   .patientBloodType(encounter.getPatient().getBloodType())
                    .patientMrn(encounter.getHospital() != null
                        ? encounter.getPatient().getMrnForHospital(encounter.getHospital().getId()) : null);
         }
