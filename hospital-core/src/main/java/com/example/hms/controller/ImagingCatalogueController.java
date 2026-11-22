@@ -48,7 +48,7 @@ public class ImagingCatalogueController {
     @WriteAudited(skip = true, reason = "service emits CONFIGURATION_CHANGED with the item id and the new flag")
     @Operation(summary = "Set whether an exam may reveal a pregnancy, and its body region")
     public ImagingCatalogueExamDTO update(@PathVariable UUID itemId,
-                                          @Valid @RequestBody(required = false) ImagingCatalogueExamUpdateRequestDTO request) {
+                                          @Valid @RequestBody ImagingCatalogueExamUpdateRequestDTO request) {
         return catalogueService.update(itemId, request);
     }
 }

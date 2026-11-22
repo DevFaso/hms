@@ -129,7 +129,7 @@ describe('ImagingCatalogueComponent (D3450: « peut révéler une grossesse »)'
     fixture.detectChanges();
 
     expect(api.update).toHaveBeenCalledOnceWith('e1', {
-      mayRevealPregnancy: false,
+      pregnancyFlag: 'NO',
       bodyRegion: 'Thorax',
     });
     expect(toast.success).toHaveBeenCalled();
@@ -144,20 +144,20 @@ describe('ImagingCatalogueComponent (D3450: « peut révéler une grossesse »)'
       exam(),
       exam({ id: 'e2', code: 'ECHO-ABDO', mayRevealPregnancy: false }),
     ]);
-    api.update.and.callFake((id, body) => of(exam({ id, ...body })));
+    api.update.and.callFake((id) => of(exam({ id })));
 
     choose(fixture, 'catalogue-flag-RX-THORAX', 'YES');
     el<HTMLButtonElement>(fixture, 'catalogue-save-RX-THORAX').click();
     expect(api.update.calls.mostRecent().args).toEqual([
       'e1',
-      { mayRevealPregnancy: true, bodyRegion: null },
+      { pregnancyFlag: 'YES', bodyRegion: null },
     ]);
 
     choose(fixture, 'catalogue-flag-ECHO-ABDO', 'UNDECIDED');
     el<HTMLButtonElement>(fixture, 'catalogue-save-ECHO-ABDO').click();
     expect(api.update.calls.mostRecent().args).toEqual([
       'e2',
-      { mayRevealPregnancy: null, bodyRegion: null },
+      { pregnancyFlag: 'UNDECIDED', bodyRegion: null },
     ]);
   });
 

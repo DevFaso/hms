@@ -14,15 +14,13 @@ import { ToastService } from '../../core/toast.service';
 import {
   ImagingCatalogueExam,
   ImagingCatalogueService,
+  PregnancyFlagChoice,
 } from '../../services/imaging-catalogue.service';
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { refusalReason } from '../../shared/refusal-reason';
 import { RuleStatusComponent } from '../../shared/rule-status/rule-status.component';
-
-/** The three answers to « peut révéler une grossesse » : nobody decided, yes, no. */
-export type PregnancyFlagChoice = 'UNDECIDED' | 'YES' | 'NO';
 
 interface ExamDraft {
   flag: PregnancyFlagChoice;
@@ -328,15 +326,10 @@ export class ImagingCatalogueComponent implements OnInit {
     // writes nothing for it.
     if (this.savingId()) return;
     const draft = this.draftOf(exam);
-    const flags: Record<PregnancyFlagChoice, boolean | null> = {
-      UNDECIDED: null,
-      YES: true,
-      NO: false,
-    };
     this.savingId.set(exam.id);
     this.api
       .update(exam.id, {
-        mayRevealPregnancy: flags[draft.flag],
+        pregnancyFlag: draft.flag,
         bodyRegion: draft.bodyRegion.trim() || null,
       })
       .pipe(takeUntilDestroyed(this.destroyRef))

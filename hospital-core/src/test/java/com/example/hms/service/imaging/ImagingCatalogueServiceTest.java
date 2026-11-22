@@ -13,6 +13,7 @@ import com.example.hms.model.PriceListItem;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.imaging.ImagingCatalogueExamDTO;
 import com.example.hms.payload.dto.imaging.ImagingCatalogueExamUpdateRequestDTO;
+import com.example.hms.payload.dto.imaging.ImagingCatalogueExamUpdateRequestDTO.PregnancyFlag;
 import com.example.hms.repository.PriceListItemRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.security.tenant.ActingScopeResolver;
@@ -210,7 +211,7 @@ class ImagingCatalogueServiceTest {
         when(roles.hasRole(userId, hospitalId, "RADIOLOGIST")).thenReturn(true);
 
         ImagingCatalogueExamDTO dto = service.update(chest.getId(),
-            ImagingCatalogueExamUpdateRequestDTO.builder().mayRevealPregnancy(false).bodyRegion(" Thorax ").build());
+            ImagingCatalogueExamUpdateRequestDTO.builder().pregnancyFlag(PregnancyFlag.NO).bodyRegion(" Thorax ").build());
 
         assertThat(chest.getMayRevealPregnancy()).isFalse();
         assertThat(chest.getMayRevealPregnancySetBy()).isEqualTo(userId);
@@ -236,10 +237,10 @@ class ImagingCatalogueServiceTest {
     void anAdminFlagsAndUndecides() {
         when(roles.isHospitalAdmin(userId, hospitalId)).thenReturn(true);
 
-        service.update(chest.getId(), ImagingCatalogueExamUpdateRequestDTO.builder().mayRevealPregnancy(true).build());
+        service.update(chest.getId(), ImagingCatalogueExamUpdateRequestDTO.builder().pregnancyFlag(PregnancyFlag.YES).build());
         assertThat(chest.getMayRevealPregnancy()).isTrue();
 
-        service.update(chest.getId(), ImagingCatalogueExamUpdateRequestDTO.builder().mayRevealPregnancy(null).build());
+        service.update(chest.getId(), ImagingCatalogueExamUpdateRequestDTO.builder().pregnancyFlag(PregnancyFlag.UNDECIDED).build());
         assertThat(chest.getMayRevealPregnancy()).isNull();
         assertThat(chest.getMayRevealPregnancySetBy()).isNull();
         assertThat(chest.getMayRevealPregnancySetAt()).isNull();
@@ -250,7 +251,7 @@ class ImagingCatalogueServiceTest {
     void othersCannotSetTheFlag() {
         // No role stubbed at this hospital: whatever the token says, nothing is held HERE.
         ImagingCatalogueExamUpdateRequestDTO clear =
-            ImagingCatalogueExamUpdateRequestDTO.builder().mayRevealPregnancy(false).build();
+            ImagingCatalogueExamUpdateRequestDTO.builder().pregnancyFlag(PregnancyFlag.NO).build();
 
         assertThatThrownBy(() -> service.update(obstetric.getId(), clear))
             .isInstanceOf(ClientSafeAccessDeniedException.class);
@@ -267,9 +268,25 @@ class ImagingCatalogueServiceTest {
         UUID foreign = UUID.randomUUID();
         when(items.lockByIdAtHospital(foreign, hospitalId)).thenReturn(Optional.empty());
         ImagingCatalogueExamUpdateRequestDTO clear =
-            ImagingCatalogueExamUpdateRequestDTO.builder().mayRevealPregnancy(false).build();
+            ImagingCatalogueExamUpdateRequestDTO.builder().pregnancyFlag(PregnancyFlag.NO).build();
 
         assertThatThrownBy(() -> service.update(foreign, clear)).isInstanceOf(ResourceNotFoundException.class);
+        verify(items, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("an empty request changes nothing: the answer is required, and a flagged exam stays flagged")
+    void anEmptyRequestChangesNothing() {
+        when(roles.isHospitalAdmin(userId, hospitalId)).thenReturn(true);
+        chest.setMayRevealPregnancy(true);
+
+        for (ImagingCatalogueExamUpdateRequestDTO empty : java.util.Arrays.asList(null,
+                new ImagingCatalogueExamUpdateRequestDTO())) {
+            assertThatThrownBy(() -> service.update(chest.getId(), empty))
+                .isInstanceOf(FieldBusinessException.class)
+                .satisfies(ex -> assertThat(((FieldBusinessException) ex).getField()).isEqualTo("pregnancyFlag"));
+        }
+        assertThat(chest.getMayRevealPregnancy()).isTrue();
         verify(items, never()).save(any());
     }
 
@@ -279,7 +296,7 @@ class ImagingCatalogueServiceTest {
         when(roles.isHospitalAdmin(userId, hospitalId)).thenReturn(true);
         chest.setActive(false);
         ImagingCatalogueExamUpdateRequestDTO clear =
-            ImagingCatalogueExamUpdateRequestDTO.builder().mayRevealPregnancy(false).build();
+            ImagingCatalogueExamUpdateRequestDTO.builder().pregnancyFlag(PregnancyFlag.NO).build();
 
         assertThatThrownBy(() -> service.update(chest.getId(), clear)).isInstanceOf(ResourceNotFoundException.class);
         assertThat(chest.getMayRevealPregnancy()).isNull();

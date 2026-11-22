@@ -67,6 +67,7 @@ public class ImagingCatalogueService {
     static final String EDITORS_ONLY_KEY = "imaging.catalogue.editorsOnly";
     static final String NOT_FOUND_KEY = "imaging.catalogue.examNotFound";
     static final String REGION_SIZE_KEY = "imaging.catalogue.bodyRegion.size";
+    static final String FLAG_REQUIRED_KEY = "imaging.catalogue.pregnancyFlag.required";
     static final String AUDIT_ENTITY = "IMAGING_CATALOGUE_EXAM";
     static final int TEXT_MAX = 150;
 
@@ -99,22 +100,26 @@ public class ImagingCatalogueService {
             .filter(found -> found.getCategory() == PriceListCategory.IMAGING)
             .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND_KEY, itemId));
         requireNotWithdrawn(item);
-        ImagingCatalogueExamUpdateRequestDTO body =
-            request != null ? request : new ImagingCatalogueExamUpdateRequestDTO();
-        String region = blankToNull(body.getBodyRegion());
+        // The answer is required (« not decided » is one of its values): an empty request changes nothing.
+        ImagingCatalogueExamUpdateRequestDTO.PregnancyFlag answer = request == null ? null : request.getPregnancyFlag();
+        if (answer == null) {
+            throw new FieldBusinessException("pregnancyFlag", FLAG_REQUIRED_KEY);
+        }
+        boolean decided = answer != ImagingCatalogueExamUpdateRequestDTO.PregnancyFlag.UNDECIDED;
+        Boolean flag = decided ? answer == ImagingCatalogueExamUpdateRequestDTO.PregnancyFlag.YES : null;
+        String region = blankToNull(request.getBodyRegion());
         if (region != null && region.length() > TEXT_MAX) {
             throw new FieldBusinessException("bodyRegion", REGION_SIZE_KEY);
         }
         Boolean flagBefore = item.getMayRevealPregnancy();
-        boolean flagChanged = !Objects.equals(flagBefore, body.getMayRevealPregnancy());
+        boolean flagChanged = !Objects.equals(flagBefore, flag);
         boolean regionChanged = !Objects.equals(item.getImagingBodyRegion(), region);
         if (!flagChanged && !regionChanged) {
             return toDto(item, namesOf(List.of(item)), true);
         }
         item.setImagingBodyRegion(region);
         if (flagChanged) {
-            boolean decided = body.getMayRevealPregnancy() != null;
-            item.setMayRevealPregnancy(body.getMayRevealPregnancy());
+            item.setMayRevealPregnancy(flag);
             // Who decided; nobody when the exam is put back to « not decided ».
             item.setMayRevealPregnancySetBy(decided ? userId : null);
             item.setMayRevealPregnancySetAt(decided ? LocalDateTime.now() : null);

@@ -26,8 +26,12 @@ export interface ImagingCatalogueExam {
   canEdit: boolean;
 }
 
+/** The three answers to « peut révéler une grossesse » : nobody decided, yes, no. */
+export type PregnancyFlagChoice = 'UNDECIDED' | 'YES' | 'NO';
+
 export interface ImagingCatalogueExamUpdate {
-  mayRevealPregnancy: boolean | null;
+  /** Required: an empty request changes nothing. */
+  pregnancyFlag: PregnancyFlagChoice;
   bodyRegion: string | null;
 }
 
