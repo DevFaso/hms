@@ -39,6 +39,7 @@ import { refusalReason } from '../shared/refusal-reason';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { isRecordedMale } from '../shared/patient-measures';
+import { RuleStatusComponent } from '../shared/rule-status/rule-status.component';
 /**
  * The mortality register (Tier 2 item 29) — the first and only caller of every
  * `/mortality` endpoint.
@@ -53,6 +54,7 @@ import { isRecordedMale } from '../shared/patient-measures';
   selector: 'app-mortality',
   standalone: true,
   imports: [
+    RuleStatusComponent,
     DateTimePipe,
     SubmitGuardDirective,
     ModalDialogDirective,

@@ -46,7 +46,7 @@
       @for (rule of rules(); track rule.key) {
         <li class="rule-card" [attr.data-rule]="rule.key" [attr.data-status]="rule.status">
           <div class="rule-head">
-            <h2 class="rule-title">{{ text(rule.title) }}</h2>
+            <h2 class="rule-title">{{ rule.titleText }}</h2>
             <span class="rule-chip" [attr.data-status]="rule.status">
               @switch (rule.status) {
                 @case ('SIGNED') {
@@ -61,15 +61,15 @@
               }
             </span>
           </div>
-          <p class="rule-desc">{{ text(rule.description) }}</p>
+          <p class="rule-desc">{{ rule.descriptionText }}</p>
           <dl class="rule-facts">
             <div>
               <dt>{{ 'CLINICAL_RULES.SOURCE' | translate }}</dt>
-              <dd>{{ rule.source }}</dd>
+              <dd>{{ rule.sourceText }}</dd>
             </div>
             <div>
               <dt>{{ 'CLINICAL_RULES.APPROVER' | translate }}</dt>
-              <dd>{{ text(rule.approverRole) }}</dd>
+              <dd>{{ rule.approverText }}</dd>
             </div>
             <div>
               <dt>{{ 'CLINICAL_RULES.VERSION' | translate }}</dt>

@@ -35,7 +35,11 @@ function rule(key: string, status: RuleSignoffStatus = 'PENDING'): ClinicalRuleS
     version: '2026-11-20.1',
     title: { en: `Rule ${key}`, fr: `Règle ${key}`, es: `Regla ${key}` },
     description: { en: 'What it does', fr: 'Ce qu’elle fait', es: 'Lo que hace' },
-    source: 'Loi 030-2008 art. 17-18; Code pénal art. 525-2',
+    source: {
+      en: 'Loi 030-2008 art. 17-18; Code pénal art. 525-2',
+      fr: 'Loi 030-2008, art. 17 et 18 ; Code pénal, art. 525-2',
+      es: 'Loi 030-2008 art. 17-18; Code pénal art. 525-2',
+    },
     approverRole: { en: 'Jurist', fr: 'Juriste burkinabè', es: 'Jurista' },
     enforcedIn: ['ProxySensitivityPolicy', 'MinorResultReleaseServiceImpl'],
     status,

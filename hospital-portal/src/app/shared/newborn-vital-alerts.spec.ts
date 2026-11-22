@@ -264,3 +264,37 @@ describe('maternal early warning alerts', () => {
     );
   });
 });
+
+/** V356: a warning's « provisoire » sentence follows this hospital's sign-off of its rule. */
+describe('vital warnings and the hospital rule status', () => {
+  const translate = { instant: (key: string) => `[${key}]` };
+  const urgent: NewbornVitalAlert[] = [
+    { code: 'x', severity: 'URGENT', type: 'BP', message: 'Recheck now.' },
+  ];
+
+  it('keeps the fixed heading while the status is unknown, and uses the status once known', () => {
+    const pushes: string[] = [];
+    const toast = { push: (_type: 'warning' | 'error', message: string) => pushes.push(message) };
+    const unknown = () => null;
+    const signed = (key: string) =>
+      key === 'SEVERE_HYPERTENSION_ADULT' ? 'Validée le 20 nov. 2026 par Médecin-chef' : null;
+
+    announceHypertensionWarning(urgent, toast, translate, null, unknown);
+    announceHypertensionWarning(urgent, toast, translate, null, signed);
+    announcePostpartumWarning(urgent, toast, translate, null, signed);
+    announceMaternalWarning(urgent, toast, translate, null, (key) =>
+      key === 'MATERNAL_EARLY_WARNING' ? 'Provisoire — source : NHS' : null,
+    );
+    announceNewbornWarning(urgent, toast, translate, null, (key) =>
+      key === 'NEWBORN_VITALS' ? 'Validée le 1 déc. 2026 par Pédiatre' : null,
+    );
+
+    expect(pushes).toEqual([
+      '[VITAL_LIMITS.ADULT_HTN_URGENT] Recheck now.',
+      '[CLINICAL_RULES.SURFACE.VITALS_ADULT_HTN_URGENT] Validée le 20 nov. 2026 par Médecin-chef Recheck now.',
+      '[VITAL_LIMITS.POSTPARTUM_WARNING_URGENT] Recheck now.',
+      '[CLINICAL_RULES.SURFACE.VITALS_MATERNAL_EWS] Provisoire — source : NHS Recheck now.',
+      '[CLINICAL_RULES.SURFACE.VITALS_NEWBORN_URGENT] Validée le 1 déc. 2026 par Pédiatre Recheck now.',
+    ]);
+  });
+});

@@ -2149,7 +2149,8 @@
       "ACTIVATION_CODE_SHOWN": "Code d’activation affiché à la personne qui a créé l’affectation",
       "ORDONNANCE_PRINTED": "Ordonnance imprimée par son prescripteur (prescriptions {{ids}})",
       "CLINICAL_RULE_SIGNED_OFF": "Ensemble de règles cliniques {{rule}} validé (version {{version}})",
-      "CLINICAL_RULE_SIGNOFF_REVOKED": "Validation de l’ensemble de règles cliniques {{rule}} révoquée (version {{version}})"
+      "CLINICAL_RULE_SIGNOFF_REVOKED": "Validation de l’ensemble de règles cliniques {{rule}} révoquée (version {{version}})",
+      "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Session de support refusée : {{what}} (validation d’une règle clinique)"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -15855,7 +15856,19 @@
       "MIDWIFE_COT": "Une sage-femme attribue les berceaux des unités de maternité. Un berceau de néonatologie est attribué aussi, et un médecin est alors invité à examiner le nouveau-né.",
       "IMAGING_TECHNICIAN": "En tant que technicien d'imagerie, vous accueillez le patient, réalisez et documentez l'examen et joignez ses images. La prescription de l'examen, la rédaction et la signature du compte rendu restent au médecin.",
       "ULTRASOUND_PHYSICIANS_ONLY": "Échographie : dans cet établissement, l'examen est réalisé par un médecin. Vous pouvez enregistrer l'arrivée du patient et joindre des images.",
-      "MINOR_RELEASE_AGE": "À partir de {{age}} ans, les autres catégories sensibles sont aussi masquées aux parents (âge réglable par l’établissement)."
+      "MINOR_RELEASE_AGE": "À partir de {{age}} ans, les autres catégories sensibles sont aussi masquées aux parents (âge réglable par l’établissement).",
+      "VITALS_NEWBORN": "Nouveau-né (moins de 28 jours) : la mesure est enregistrée et a été évaluée selon les valeurs du nouveau-né.",
+      "VITALS_NEWBORN_URGENT": "Nouveau-né (moins de 28 jours) : la mesure est enregistrée, évaluée selon les valeurs du nouveau-né, et l’équipe soignante a été prévenue.",
+      "VITALS_POSTPARTUM_URGENT": "Grossesse ou post-partum : la mesure est enregistrée et l'équipe soignante a été prévenue.",
+      "VITALS_ADULT_HTN": "Tension artérielle très élevée : la mesure est enregistrée.",
+      "VITALS_ADULT_HTN_URGENT": "Tension artérielle très élevée avec un signe d'atteinte d'organe : la mesure est enregistrée et l'équipe soignante a été prévenue.",
+      "VITALS_MATERNAL_EWS": "Grossesse ou post-partum : la mesure est enregistrée.",
+      "VITALS_MATERNAL_EWS_PAGED": "Grossesse ou post-partum : la mesure est enregistrée et l’équipe soignante a été prévenue.",
+      "LABOUR_TRANSFER_HINT": "Son épisode de travail ici est clos et l’hôpital choisi reçoit un nouvel épisode qui lui est lié, avec son partogramme d’ici en lecture seule. Son équipe de maternité est alertée.",
+      "LABOUR_ARRIVAL_HINT": "Son épisode de travail à {{hospital}} est clos et un nouvel épisode de travail s’ouvre ici, lié au précédent ; {{hospital}} est alerté.",
+      "PERINATAL_DEFINITION": "OMS : mortinaissances à {{weeks}} semaines révolues ou plus et décès néonatals précoces (jours 0 à 6)",
+      "STILLBIRTHS_WHO_DEFINITION": "Indicateur OMS : sans signe de vie à {{weeks}} semaines d’aménorrhée révolues ou plus",
+      "STILLBIRTHS_ICD_DEFINITION": "Niveau CIM : à partir de {{weeks}} semaines d’aménorrhée révolues"
     }
   }
 }

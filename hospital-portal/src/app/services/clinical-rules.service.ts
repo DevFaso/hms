@@ -3,6 +3,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 
 import { storedLang } from '../shared/i18n/app-locale';
+import { DayMonthPipe } from '../shared/pipes/day-month.pipe';
 
 /**
  * V356 (owner direction 2026-11-21): the provisional rule sets of the
@@ -42,7 +43,8 @@ export interface ClinicalRuleStatus {
   version: string;
   title: RuleText;
   description: RuleText;
-  source: string;
+  /** The published source (a citation as written) or the decision it rests on. */
+  source: RuleText;
   approverRole: RuleText;
   enforcedIn: string[];
   status: RuleSignoffStatus;
@@ -156,6 +158,34 @@ export class ClinicalRulesService {
     const overview = this.cached();
     if (!overview || !hospitalId || overview.hospitalId !== hospitalId) return null;
     return overview.rules.find((rule) => rule.key === ruleKey) ?? null;
+  }
+
+  /**
+   * The label of one rule set at {@code hospitalId} as one sentence, for text that is not a template (a toast):
+   * « Provisoire — source : … » or « Validée le … par … », in the reader's language. Null while the hospital's
+   * status is not known, so the caller keeps its own wording.
+   */
+  statusSentence(
+    hospitalId: string | null,
+    ruleKey: string,
+    translate: { instant(key: string, params?: Record<string, unknown>): unknown },
+  ): string | null {
+    const rule = this.statusAt(hospitalId, ruleKey);
+    if (!rule) return null;
+    if (rule.status === 'SIGNED' && rule.signoff) {
+      return String(
+        translate.instant('CLINICAL_RULES.LABEL.SIGNED', {
+          date: new DayMonthPipe().transform(rule.signoff.signedOn, undefined, true),
+          title: rule.signoff.signerTitle,
+        }),
+      );
+    }
+    return String(
+      translate.instant('CLINICAL_RULES.LABEL.PENDING', {
+        source: ruleText(rule.source),
+        approver: ruleText(rule.approverRole),
+      }),
+    );
   }
 
   private replace(hospitalId: string, status: ClinicalRuleStatus): void {

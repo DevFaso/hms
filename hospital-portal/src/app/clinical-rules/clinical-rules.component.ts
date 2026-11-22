@@ -101,7 +101,16 @@ export class ClinicalRulesComponent {
 
   protected readonly today = localDateString();
   protected readonly text = ruleText;
-  protected readonly rules = computed(() => this.overview()?.rules ?? []);
+  /** Each rule set with its texts in the reader's language (a citation as written, a decision translated). */
+  protected readonly rules = computed(() =>
+    (this.overview()?.rules ?? []).map((rule) => ({
+      ...rule,
+      titleText: ruleText(rule.title),
+      descriptionText: ruleText(rule.description),
+      sourceText: ruleText(rule.source),
+      approverText: ruleText(rule.approverRole),
+    })),
+  );
 
   constructor() {
     effect(() => {

@@ -1,3 +1,4 @@
+import { ClinicalRulesService } from '../services/clinical-rules.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RoleContextService } from '../core/role-context.service';
 import {
@@ -184,6 +185,17 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   private readonly router = inject(Router);
   private readonly encounterService = inject(EncounterService);
   private readonly translate = inject(TranslateService);
+  private readonly clinicalRules = inject(ClinicalRulesService);
+  /**
+   * V356: a warning's « provisoire » sentence follows this hospital's sign-off of its rule (« validée le … »).
+   * The hospital's statuses are read once, as the page opens; until then the fixed wording stays.
+   */
+  private readonly ruleStatus = (ruleKey: string): string | null =>
+    this.clinicalRules.statusSentence(
+      this.roleContext.effectiveHospitalIdForRequest(),
+      ruleKey,
+      this.translate,
+    );
   private readonly trackerWs = inject(PatientTrackerWsService);
   private readonly auth = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
@@ -424,6 +436,8 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   /* ── Lifecycle ──────────────────────────────────────────── */
 
   ngOnInit(): void {
+    // V356: the hospital's rule statuses, for the warnings' « provisoire » sentences.
+    this.clinicalRules.ensureLoaded(this.roleContext.effectiveHospitalIdForRequest());
     this.loadFast$().subscribe();
     this.loadSlow$().subscribe();
     // Polling stays as the heartbeat: vitals-due and MAR lists are
@@ -1095,6 +1109,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
           this.toast,
           this.translate,
           target.patientName,
+          this.ruleStatus,
         );
         // QA D1890: a mother's severe pressure after birth; saved, and warned (URGENT).
         announcePostpartumWarning(
@@ -1102,6 +1117,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
           this.toast,
           this.translate,
           target.patientName,
+          this.ruleStatus,
         );
         // r54: an adult's severe pressure; saved, and warned (a recheck; URGENT with a sign of organ damage).
         announceHypertensionWarning(
@@ -1109,6 +1125,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
           this.toast,
           this.translate,
           target.patientName,
+          this.ruleStatus,
         );
         // Policy 2026-11-20 (provisional): a pregnant or postpartum woman's maternal early warning; saved, and warned.
         announceMaternalWarning(
@@ -1116,6 +1133,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
           this.toast,
           this.translate,
           target.patientName,
+          this.ruleStatus,
         );
         this.vitalsCapturing.set(false);
         this.closeVitalsDialog();

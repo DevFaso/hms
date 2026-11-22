@@ -2149,7 +2149,8 @@
       "ACTIVATION_CODE_SHOWN": "Activation code shown to the person who created the assignment",
       "ORDONNANCE_PRINTED": "Ordonnance printed by its prescriber (prescriptions {{ids}})",
       "CLINICAL_RULE_SIGNED_OFF": "Clinical rule set {{rule}} signed off (version {{version}})",
-      "CLINICAL_RULE_SIGNOFF_REVOKED": "Clinical rule set {{rule}} sign-off revoked (version {{version}})"
+      "CLINICAL_RULE_SIGNOFF_REVOKED": "Clinical rule set {{rule}} sign-off revoked (version {{version}})",
+      "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Support session refused: {{what}} (clinical-rule sign-off)"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -15855,7 +15856,19 @@
       "MIDWIFE_COT": "A midwife assigns the cots of maternity wards. A neonatal cot is assigned too, and a doctor is then asked to review the newborn.",
       "IMAGING_TECHNICIAN": "As an imaging technician you check the patient in, perform and document the exam and attach its images. Ordering the exam and writing or signing the report stay with the physician.",
       "ULTRASOUND_PHYSICIANS_ONLY": "Ultrasound: at this hospital the exam is performed by a physician. You can check the patient in and attach images.",
-      "MINOR_RELEASE_AGE": "From age {{age}}, the other sensitive categories are hidden from the parents too (age set by the hospital)."
+      "MINOR_RELEASE_AGE": "From age {{age}}, the other sensitive categories are hidden from the parents too (age set by the hospital).",
+      "VITALS_NEWBORN": "Newborn (under 28 days): the reading is saved and was judged against the newborn ranges.",
+      "VITALS_NEWBORN_URGENT": "Newborn (under 28 days): the reading is saved, judged against the newborn ranges, and the care team has been notified.",
+      "VITALS_POSTPARTUM_URGENT": "Pregnancy or after birth: the reading is saved and the care team has been notified.",
+      "VITALS_ADULT_HTN": "Severe blood pressure: the reading is saved.",
+      "VITALS_ADULT_HTN_URGENT": "Severe blood pressure with a sign of organ damage: the reading is saved and the care team has been notified.",
+      "VITALS_MATERNAL_EWS": "Pregnancy or postpartum: the reading is saved.",
+      "VITALS_MATERNAL_EWS_PAGED": "Pregnancy or postpartum: the reading is saved and the care team has been alerted.",
+      "LABOUR_TRANSFER_HINT": "Her labour episode here closes and the hospital you choose gets a new episode linked to it, with her partograph from here shown read only. Its maternity team is alerted.",
+      "LABOUR_ARRIVAL_HINT": "Her labour episode at {{hospital}} closes and a new labour episode opens here, linked to it; {{hospital}} is alerted.",
+      "PERINATAL_DEFINITION": "WHO: stillbirths at {{weeks}} or more completed weeks and early neonatal deaths (days 0–6)",
+      "STILLBIRTHS_WHO_DEFINITION": "WHO indicator: no signs of life at {{weeks}} or more completed weeks",
+      "STILLBIRTHS_ICD_DEFINITION": "ICD level: from {{weeks}} completed weeks"
     }
   }
 }

@@ -2149,7 +2149,8 @@
       "ACTIVATION_CODE_SHOWN": "Código de activación mostrado a la persona que creó la asignación",
       "ORDONNANCE_PRINTED": "Receta impresa por su prescriptor (recetas {{ids}})",
       "CLINICAL_RULE_SIGNED_OFF": "Conjunto de reglas clínicas {{rule}} validado (versión {{version}})",
-      "CLINICAL_RULE_SIGNOFF_REVOKED": "Validación del conjunto de reglas clínicas {{rule}} revocada (versión {{version}})"
+      "CLINICAL_RULE_SIGNOFF_REVOKED": "Validación del conjunto de reglas clínicas {{rule}} revocada (versión {{version}})",
+      "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Sesión de soporte rechazada: {{what}} (validación de una regla clínica)"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -15855,7 +15856,19 @@
       "MIDWIFE_COT": "Una matrona asigna las cunas de maternidad. Una cuna de neonatología también se asigna, y entonces se pide a un médico que valore al recién nacido.",
       "IMAGING_TECHNICIAN": "Como técnico de imagen, usted recibe al paciente, realiza y documenta el examen y adjunta sus imágenes. La solicitud del examen y la redacción o firma del informe corresponden al médico.",
       "ULTRASOUND_PHYSICIANS_ONLY": "Ecografía: en este hospital el examen lo realiza un médico. Usted puede registrar la llegada del paciente y adjuntar imágenes.",
-      "MINOR_RELEASE_AGE": "A partir de los {{age}} años, las demás categorías sensibles también se ocultan a los padres (edad ajustable por el establecimiento)."
+      "MINOR_RELEASE_AGE": "A partir de los {{age}} años, las demás categorías sensibles también se ocultan a los padres (edad ajustable por el establecimiento).",
+      "VITALS_NEWBORN": "Recién nacido (menos de 28 días): la medición se ha guardado y se ha evaluado con los valores del recién nacido.",
+      "VITALS_NEWBORN_URGENT": "Recién nacido (menos de 28 días): la medición se ha guardado, se ha evaluado con los valores del recién nacido y se ha avisado al equipo asistencial.",
+      "VITALS_POSTPARTUM_URGENT": "Embarazo o posparto: la medición se ha guardado y se ha avisado al equipo asistencial.",
+      "VITALS_ADULT_HTN": "Presión arterial muy elevada: la medición se ha guardado.",
+      "VITALS_ADULT_HTN_URGENT": "Presión arterial muy elevada con un signo de daño de órganos: la medición se ha guardado y se ha avisado al equipo asistencial.",
+      "VITALS_MATERNAL_EWS": "Embarazo o posparto: la medición queda registrada.",
+      "VITALS_MATERNAL_EWS_PAGED": "Embarazo o posparto: la medición queda registrada y se ha avisado al equipo asistencial.",
+      "LABOUR_TRANSFER_HINT": "Su episodio de trabajo de parto aquí se cierra y el hospital elegido recibe un nuevo episodio vinculado, con su partograma de aquí en solo lectura. Se alerta a su equipo de maternidad.",
+      "LABOUR_ARRIVAL_HINT": "Su episodio de trabajo de parto en {{hospital}} se cierra y aquí se abre uno nuevo, vinculado; se alerta a {{hospital}}.",
+      "PERINATAL_DEFINITION": "OMS: mortinatos a las {{weeks}} semanas completas o más y muertes neonatales precoces (días 0 a 6)",
+      "STILLBIRTHS_WHO_DEFINITION": "Indicador OMS: sin signos de vida a las {{weeks}} semanas completas o más",
+      "STILLBIRTHS_ICD_DEFINITION": "Nivel CIE: desde las {{weeks}} semanas completas"
     }
   }
 }

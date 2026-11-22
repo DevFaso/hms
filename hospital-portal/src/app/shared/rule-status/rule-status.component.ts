@@ -50,7 +50,7 @@ import { DayMonthPipe } from '../pipes/day-month.pipe';
                       title: rule.signoff.signerTitle,
                     })
               : ('CLINICAL_RULES.LABEL.PENDING'
-                | translate: { source: rule.source, approver: approver() })
+                | translate: { source: sourceText(), approver: approver() })
           "
           >{{
             (rule.status === 'SIGNED'
@@ -87,7 +87,7 @@ import { DayMonthPipe } from '../pipes/day-month.pipe';
           >
             {{
               'CLINICAL_RULES.LABEL.PENDING'
-                | translate: { source: rule.source, approver: approver() }
+                | translate: { source: sourceText(), approver: approver() }
             }}
           </span>
         }
@@ -136,6 +136,7 @@ export class RuleStatusComponent {
     return this.rules.statusAt(this.hospitalId(), this.ruleKey());
   });
   protected readonly approver = computed(() => ruleText(this.status()?.approverRole));
+  protected readonly sourceText = computed(() => ruleText(this.status()?.source));
 
   constructor() {
     effect(() => {

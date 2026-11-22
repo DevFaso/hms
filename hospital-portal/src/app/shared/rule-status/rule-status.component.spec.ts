@@ -35,7 +35,7 @@ function overview(signed: boolean): ClinicalRulesOverview {
     version: '2026-11-20.1',
     title: { en: 'Prescription renewal', fr: 'Renouvellement d’ordonnance', es: 'Renovación' },
     description: { en: 'd', fr: 'd', es: 'd' },
-    source: 'CSP art. 276',
+    source: { en: 'CSP art. 276', fr: 'CSP art. 276', es: 'CSP art. 276' },
     approverRole: { en: 'Pharmacists', fr: 'Ordre des pharmaciens', es: 'Farmacéuticos' },
     enforcedIn: ['RefillApprovalServiceImpl'],
     status: signed ? 'SIGNED' : 'PENDING',

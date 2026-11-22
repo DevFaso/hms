@@ -575,6 +575,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['what'],
   },
   {
+    // V356: a support session never signs off or revokes a hospital's provisional rules in the admin's name.
+    key: 'AUDIT.DESC.SUPPORT_SESSION_RULE_SIGNOFF_REFUSED',
+    re: /^Support session refused: (.+) \(clinical-rule sign-off\)$/,
+    params: ['what'],
+  },
+  {
     // Billing-money plan PR 8 review: a cancelled dispense's payment voided (ids only; older rows below).
     key: 'AUDIT.DESC.PHARMACY_PAYMENT_VOIDED_IDS',
     re: /^Pharmacy payment (\S+) voided for cancelled dispense (\S+)$/,
