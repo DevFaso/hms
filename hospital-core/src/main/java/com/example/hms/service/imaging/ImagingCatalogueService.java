@@ -27,8 +27,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -77,6 +77,8 @@ public class ImagingCatalogueService {
     private final RoleValidator roleValidator;
     private final ActingScopeResolver actingScopeResolver;
     private final AuditEventLogService auditEventLogService;
+    /** When a decision was taken: the application's clock, as the price list stamps its own changes. */
+    private final Clock clock;
 
     /** The acting hospital's exams, by name. */
     @Transactional(readOnly = true)
@@ -123,7 +125,7 @@ public class ImagingCatalogueService {
             item.setMayRevealPregnancy(flag);
             // Who decided; nobody when the exam is put back to « not decided ».
             item.setMayRevealPregnancySetBy(decided ? userId : null);
-            item.setMayRevealPregnancySetAt(decided ? LocalDateTime.now(ZoneId.systemDefault()) : null);
+            item.setMayRevealPregnancySetAt(decided ? LocalDateTime.now(clock) : null);
         }
         item.setUpdatedBy(userId);
         PriceListItem saved = itemRepository.save(item);

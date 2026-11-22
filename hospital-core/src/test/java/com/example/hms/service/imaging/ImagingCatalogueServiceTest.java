@@ -50,7 +50,9 @@ class ImagingCatalogueServiceTest {
     private final RoleValidator roles = mock(RoleValidator.class);
     private final ActingScopeResolver scope = mock(ActingScopeResolver.class);
     private final AuditEventLogService audit = mock(AuditEventLogService.class);
-    private final ImagingCatalogueService service = new ImagingCatalogueService(items, users, roles, scope, audit);
+    private final java.time.Clock clock = java.time.Clock.fixed(java.time.Instant.parse("2026-11-22T10:00:00Z"), java.time.ZoneOffset.UTC);
+    private final ImagingCatalogueService service =
+        new ImagingCatalogueService(items, users, roles, scope, audit, clock);
 
     private final UUID hospitalId = UUID.randomUUID();
     private final UUID userId = UUID.randomUUID();
@@ -215,7 +217,7 @@ class ImagingCatalogueServiceTest {
 
         assertThat(chest.getMayRevealPregnancy()).isFalse();
         assertThat(chest.getMayRevealPregnancySetBy()).isEqualTo(userId);
-        assertThat(chest.getMayRevealPregnancySetAt()).isNotNull();
+        assertThat(chest.getMayRevealPregnancySetAt()).isEqualTo(java.time.LocalDateTime.of(2026, 11, 22, 10, 0));
         assertThat(chest.getImagingBodyRegion()).isEqualTo("Thorax");
         assertThat(dto.mayRevealPregnancy()).isFalse();
         assertThat(dto.canEdit()).isTrue();

@@ -71,7 +71,8 @@ class ProxyInvoiceImagingTest {
             scope, null, null, null, priceListItems);
         filter.setImagingOrderRepository(imagingOrders);
         filter.setImagingCatalogueService(new ImagingCatalogueService(priceListItems, mock(UserRepository.class),
-            mock(RoleValidator.class), mock(ActingScopeResolver.class), mock(AuditEventLogService.class)));
+            mock(RoleValidator.class), mock(ActingScopeResolver.class), mock(AuditEventLogService.class),
+            java.time.Clock.systemUTC()));
     }
 
     private BillingInvoice invoiceOf(Encounter encounter, UUID... pricedFrom) {

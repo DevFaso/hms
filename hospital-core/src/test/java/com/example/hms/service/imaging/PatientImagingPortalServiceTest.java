@@ -86,7 +86,8 @@ class PatientImagingPortalServiceTest {
         when(proxyReadScope.current()).thenReturn(Optional.empty());
         ImagingCatalogueService catalogue = new ImagingCatalogueService(priceListItemRepository,
             mock(com.example.hms.repository.UserRepository.class), roleValidator,
-            mock(com.example.hms.security.tenant.ActingScopeResolver.class), auditEventLogService);
+            mock(com.example.hms.security.tenant.ActingScopeResolver.class), auditEventLogService,
+            java.time.Clock.systemUTC());
         service = new PatientImagingPortalService(orderRepository, reportRepository, imageRepository,
             new ImagingReportMapper(), fileUploadService, roleValidator, auditEventLogService,
             encounterRepository, new ProxyRecordFilter(new SensitivityClassifierImpl(),
