@@ -2145,6 +2145,7 @@
       "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Dérogation d’urgence revue",
       "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Délivrance portée au compte du séjour",
       "DISPENSE_BILLING_DEFERRAL_CLOSED_SETTLED": "Report « à facturer » clos : l’ordonnance est sortie de la pharmacie sans rien devoir",
+      "DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED": "Report « à facturer » retiré : la délivrance préparée sur laquelle il avait été approuvé a été annulée",
       "PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED": "Acceptation de la demande de prise en charge pharmacie confirmée par la facturation ou la comptabilité",
       "ADOLESCENT_AGE_SET_ZERO": "Âge de confidentialité des adolescents fixé à 0 an",
       "ADOLESCENT_AGE_SET_ONE": "Âge de confidentialité des adolescents fixé à 1 an",

@@ -2145,6 +2145,7 @@
       "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Urgency override of a fill’s billing reviewed",
       "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay",
       "DISPENSE_BILLING_DEFERRAL_CLOSED_SETTLED": "Deferred billing closed: the prescription left the pharmacy with nothing due",
+      "DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED": "Deferred billing withdrawn: the prepared fill it was approved on was cancelled",
       "PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED": "Pharmacy claim acceptance confirmed by billing or accounting",
       "ADOLESCENT_AGE_SET_ZERO": "Adolescent confidentiality age set to 0",
       "ADOLESCENT_AGE_SET_ONE": "Adolescent confidentiality age set to 1",

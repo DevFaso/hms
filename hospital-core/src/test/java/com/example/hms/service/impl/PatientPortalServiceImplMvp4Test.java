@@ -356,8 +356,8 @@ class PatientPortalServiceImplMvp4Test {
             when(patientInsuranceRepository
                     .findFirstByPatient_IdAndAssignmentIsNullAndProviderNameIgnoreCaseAndPolicyNumberIgnoreCase(
                     patientId, "Mutuelle Faso Santé", "MFS-R44-0001")).thenReturn(Optional.empty());
-            when(patientInsuranceRepository.existsByPatient_IdAndPrimaryTrueAndAssignment_Hospital_Id(
-                    patientId, hospital.getId())).thenReturn(false);
+            when(patientInsuranceRepository.findByPatient_IdAndAssignment_Hospital_Id(
+                    patientId, hospital.getId())).thenReturn(List.of());
 
             PreCheckInRequestDTO dto = buildDto(apptId);
             dto.setInsuranceProvider("  Mutuelle Faso Santé ");
@@ -406,9 +406,11 @@ class PatientPortalServiceImplMvp4Test {
             when(patientInsuranceRepository
                     .findFirstByPatient_IdAndAssignment_Hospital_IdAndProviderNameIgnoreCaseAndPolicyNumberIgnoreCase(
                     patientId, hospital.getId(), "mutuelle faso santé", "mfs-r44-0001")).thenReturn(Optional.of(existing));
-            when(patientInsuranceRepository.existsByPatient_IdAndPrimaryTrueAndAssignment_Hospital_Id(
+            com.example.hms.model.PatientInsurance primaryElsewhere = new com.example.hms.model.PatientInsurance();
+            primaryElsewhere.setPrimary(true);
+            when(patientInsuranceRepository.findByPatient_IdAndAssignment_Hospital_Id(
                     patientId, hospital.getId()))
-                    .thenReturn(true);
+                    .thenReturn(List.of(primaryElsewhere));
 
             PreCheckInRequestDTO dto = buildDto(apptId);
             dto.setInsuranceProvider("mutuelle faso santé");
@@ -447,9 +449,10 @@ class PatientPortalServiceImplMvp4Test {
             when(patientInsuranceRepository
                     .findFirstByPatient_IdAndAssignmentIsNullAndProviderNameIgnoreCaseAndPolicyNumberIgnoreCase(
                     any(), any(), any())).thenReturn(Optional.empty());
-            when(patientInsuranceRepository.existsByPatient_IdAndPrimaryTrueAndAssignment_Hospital_Id(any(), any()))
+            when(patientInsuranceRepository.findByPatient_IdAndAssignment_Hospital_Id(any(), any()))
                     .thenAnswer(inv -> rows.stream()
-                    .anyMatch(r -> r.isPrimary() && r.getAssignment().getHospital().getId().equals(inv.getArgument(1))));
+                    .filter(r -> r.getAssignment() != null && r.getAssignment().getHospital() != null
+                            && r.getAssignment().getHospital().getId().equals(inv.getArgument(1))).toList());
 
             UUID apptA = UUID.randomUUID();
             when(appointmentRepository.findById(apptA))

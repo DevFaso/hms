@@ -38,9 +38,6 @@ public interface PatientInsuranceRepository extends JpaRepository<PatientInsuran
     Optional<PatientInsurance> lockById(@org.springframework.data.repository.query.Param("id") UUID id);
     boolean existsByPatient_IdAndPolicyNumberIgnoreCaseAndAssignment_Hospital_Id(UUID patientId, String policyNumber,
                                                                                  UUID hospitalId);
-    /** Review of #1284: whether a primary coverage exists (never throws on two, as an Optional finder would). */
-    boolean existsByPatient_IdAndPrimaryTrueAndAssignment_Hospital_Id(UUID patientId, UUID hospitalId);
-
     Optional<PatientInsurance> findByPatient_IdAndPrimaryTrueAndAssignment_Hospital_Id(UUID patientId,
                                                                                        UUID hospitalId);
     @Modifying(clearAutomatically = true, flushAutomatically = true)
