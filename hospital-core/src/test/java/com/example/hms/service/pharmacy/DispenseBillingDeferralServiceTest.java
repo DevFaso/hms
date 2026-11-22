@@ -574,6 +574,16 @@ class DispenseBillingDeferralServiceTest {
                     new DispenseBillingDeferralService.Choice(null, null), user(pharmacist)))
                     .isInstanceOf(FieldBusinessException.class);
 
+            // An outpatient visit's order is the visit's, never the stay's (InpatientOrderEnd.orderOfStay).
+            admittedAt(AdmissionStatus.ACTIVE, LocalDateTime.now(CLOCK).minusDays(1));
+            prescription.setCreatedAt(LocalDateTime.now(CLOCK));
+            Encounter consultation = new Encounter();
+            consultation.setEncounterType(com.example.hms.enums.EncounterType.OUTPATIENT);
+            prescription.setEncounter(consultation);
+            assertThat(service.chargedToOpenStay(prescription, hospitalId)).isFalse();
+            consultation.setEncounterType(com.example.hms.enums.EncounterType.INPATIENT);
+            assertThat(service.chargedToOpenStay(prescription, hospitalId)).isTrue();
+
             // The visit names a stay that has ended: the patient's other open stay is not charged instead.
             prescription.setCreatedAt(LocalDateTime.now(CLOCK));
             openStay(AdmissionStatus.DISCHARGED);

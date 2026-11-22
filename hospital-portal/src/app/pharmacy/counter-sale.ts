@@ -148,6 +148,12 @@ export class CounterSaleComponent implements OnInit {
   saving = signal(false);
   /** The server's reason for the last refusal, shown by the submit button. */
   serverError = signal<string | null>(null);
+  /**
+   * Review of #1285 (Rex P1): a sale whose answer never came may have been recorded. Until it is
+   * settled the basket is frozen and « Encaisser » resends exactly this request with its key, so
+   * a changed basket can never be answered by the first sale. « Nouvelle vente » abandons it.
+   */
+  readonly unsettledRequest = signal<CounterSaleRequest | null>(null);
   receipt = signal<CounterSaleResponse | null>(null);
   /** QA D2430: one key per open sale form, resent on every press until « Nouvelle vente ». */
   clientRequestId: string | undefined = newPaymentRequestKey();
@@ -277,7 +283,7 @@ export class CounterSaleComponent implements OnInit {
   }
 
   addItem(item: InventoryItemResponse): void {
-    if (!this.hasPrice(item)) return;
+    if (!this.hasPrice(item) || this.unsettledRequest()) return;
     const line: BasketLine = {
       key: this.nextLineKey++,
       item,
@@ -293,6 +299,7 @@ export class CounterSaleComponent implements OnInit {
   }
 
   removeLine(line: BasketLine): void {
+    if (this.unsettledRequest()) return;
     this.lines.update((list) => list.filter((l) => l.key !== line.key));
   }
 
@@ -421,6 +428,11 @@ export class CounterSaleComponent implements OnInit {
   submit(): void {
     if (this.saving()) return;
     this.serverError.set(null);
+    const unsettled = this.unsettledRequest();
+    if (unsettled) {
+      this.send(unsettled);
+      return;
+    }
     const refusals = this.clientRefusals();
     const root = this.host.nativeElement;
     if (refusals.length > 0) {
@@ -452,14 +464,19 @@ export class CounterSaleComponent implements OnInit {
       ...(this.clientRequestId ? { clientRequestId: this.clientRequestId } : {}),
       lines: this.lines().map((line) => this.lineRequest(line)),
     };
+    this.send(req);
+  }
 
+  /** Sends one sale request; an unknown outcome freezes it for an exact retry. */
+  private send(req: CounterSaleRequest): void {
     this.saving.set(true);
     this.saleSvc
       .createSale(req)
-      .pipe(retryPaymentWithSameKey(this.clientRequestId))
+      .pipe(retryPaymentWithSameKey(req.clientRequestId))
       .subscribe({
         next: (sale) => {
           this.saving.set(false);
+          this.unsettledRequest.set(null);
           this.receipt.set(sale);
           this.toast.success(this.translate.instant('PHARMACY_SALE.SAVED'));
           this.lotsByItem.set({});
@@ -472,9 +489,12 @@ export class CounterSaleComponent implements OnInit {
           if (paymentOutcomeUnknown(err)) {
             // QA D2430: no answer is not a failure; the same key records nothing twice.
             const message = this.translate.instant(PAYMENT_OUTCOME_UNKNOWN_KEY);
+            this.unsettledRequest.set(req);
             this.serverError.set(message);
             this.toast.warning(message);
           } else {
+            // A refusal is an answer: nothing was recorded, the basket may be changed again.
+            this.unsettledRequest.set(null);
             const message = refusalReason(err) ?? this.translate.instant('PHARMACY_SALE.FAILED');
             this.serverError.set(message);
             this.toast.error(message);
@@ -593,6 +613,7 @@ export class CounterSaleComponent implements OnInit {
     this.notes = '';
     this.searchTerm.set('');
     this.serverError.set(null);
+    this.unsettledRequest.set(null);
     this.clientRequestId = newPaymentRequestKey();
   }
 

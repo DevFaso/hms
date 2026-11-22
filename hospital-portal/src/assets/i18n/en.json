@@ -16000,6 +16000,7 @@
     "COL_TIME": "Time",
     "COL_ITEMS": "Items",
     "COL_TOTAL": "Total",
-    "TODAY_MORE": "Only the {{shown}} most recent sales of today are shown: the till close counts them all."
+    "TODAY_MORE": "Only the {{shown}} most recent sales of today are shown: the till close counts them all.",
+    "UNSETTLED": "No answer came back: the sale may have been recorded. « Take payment » resends exactly the same sale, never twice; the basket is frozen until then."
   }
 }

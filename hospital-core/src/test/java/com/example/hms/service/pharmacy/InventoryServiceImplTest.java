@@ -1404,6 +1404,23 @@ class InventoryServiceImplTest {
     }
 
     @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("QA D3415 review: no conversion to units while units of the item wait in quarantine")
+    void noConversionWhileQuarantineHoldsUnits() {
+        inventoryItem.setUnit("plaquette");
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+        when(inventoryItemRepository.lockById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+        when(stockTransactionRepository.sumQuantityForItem(inventoryItemId,
+                java.util.EnumSet.of(com.example.hms.enums.StockTransactionType.QUARANTINE))).thenReturn(BigDecimal.ONE);
+
+        assertThatThrownBy(() -> service.setPackSize(inventoryItemId, com.example.hms.payload.dto.pharmacy
+                .PackSizeRequestDTO.builder().unitsPerPack(10).unit("comprimé").reason("Plaquettes").build()))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .hasFieldOrPropertyWithValue("messageKey", "pharmacy.pack.quarantineHeld");
+        verify(stockLotRepository, never()).scaleQuantitiesOfItem(any(), any(), any());
+    }
+
+    @org.junit.jupiter.api.Test
     @org.junit.jupiter.api.DisplayName("QA D3400: the stock is in units when said so, or when the new unit is the item's own")
     void alreadyInUnitsIsReadFromTheUnits() {
         InventoryItem item = new InventoryItem();

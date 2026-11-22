@@ -390,6 +390,10 @@ public class InventoryServiceImpl implements InventoryService {
                 alreadyInUnits(item, unit, dto.getAlreadyInUnits()));
     }
 
+    private static BigDecimal nzQuantity(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
+    }
+
     private static String trimmedOrEmpty(String value) {
         return value == null ? "" : value.trim();
     }
@@ -411,6 +415,15 @@ public class InventoryServiceImpl implements InventoryService {
         java.time.LocalDateTime now = java.time.LocalDateTime.now(clock);
         if (size.alreadyInUnits()) {
             return declarePackSize(item, size);
+        }
+        // QA D3415 review: quarantined units are counted in the unit they were set aside in; a conversion would leave
+        // the quarantine in packs while the item counts units. Destroy them first.
+        BigDecimal quarantined = nzQuantity(stockTransactionRepository.sumQuantityForItem(item.getId(),
+                java.util.EnumSet.of(com.example.hms.enums.StockTransactionType.QUARANTINE)))
+                .subtract(nzQuantity(stockTransactionRepository.sumQuantityForItem(item.getId(),
+                        java.util.EnumSet.of(com.example.hms.enums.StockTransactionType.DESTRUCTION))));
+        if (quarantined.signum() > 0) {
+            throw new com.example.hms.exception.FieldBusinessException("unitsPerPack", "pharmacy.pack.quarantineHeld");
         }
         java.util.List<StockLot> lots = stockLotRepository.findAllByInventoryItemIdOrderByExpiryDateAsc(item.getId());
         BigDecimal onHandBefore = item.getQuantityOnHand() != null ? item.getQuantityOnHand() : BigDecimal.ZERO;

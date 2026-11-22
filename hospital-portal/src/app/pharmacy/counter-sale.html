@@ -103,7 +103,11 @@
   } @else if (selectedPharmacyId) {
     <!-- ===== The sale form ===== -->
     <form class="sale-layout" novalidate data-submit-scope (ngSubmit)="submit()">
-      <section class="section-card item-picker" [attr.aria-busy]="itemsLoading()">
+      <section
+        class="section-card item-picker"
+        [attr.aria-busy]="itemsLoading()"
+        [attr.inert]="unsettledRequest() ? '' : null"
+      >
         <h2 class="section-title">
           <span class="material-symbols-outlined" aria-hidden="true">search</span>
           {{ 'PHARMACY_SALE.PICKER_TITLE' | translate }}
@@ -216,7 +220,7 @@
           </p>
         }
 
-        <ul class="basket-lines">
+        <ul class="basket-lines" [attr.inert]="unsettledRequest() ? '' : null">
           @for (line of lines(); track line.key; let i = $index) {
             <li class="basket-line" [attr.data-testid]="'line-' + line.item.id">
               <div class="line-head">
@@ -401,7 +405,7 @@
         </p>
         <p class="field-hint">{{ 'PHARMACY_SALE.PRICED_BY_SERVER' | translate }}</p>
 
-        <fieldset class="payment">
+        <fieldset class="payment" [attr.inert]="unsettledRequest() ? '' : null">
           <legend>{{ 'PHARMACY_SALE.PAYMENT' | translate }}</legend>
           <div
             id="saleMethod"
@@ -477,6 +481,14 @@
 
         @if (serverError(); as error) {
           <p class="sale-error" role="alert" data-testid="sale-error">{{ error }}</p>
+        }
+        @if (unsettledRequest()) {
+          <p class="field-hint" data-testid="sale-unsettled">
+            {{ 'PHARMACY_SALE.UNSETTLED' | translate }}
+            <button type="button" class="btn-link" (click)="newSale()">
+              {{ 'PHARMACY_SALE.NEW_SALE' | translate }}
+            </button>
+          </p>
         }
 
         <div class="form-actions">

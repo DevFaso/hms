@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
@@ -262,6 +262,29 @@ describe('CounterSaleComponent', () => {
     expect(component.clientRequestId).toBeTruthy();
     expect(component.clientRequestId).not.toBe(firstKey);
   });
+
+  it('review of #1285: a sale whose answer was lost is retried exactly, whatever the basket says since', fakeAsync(() => {
+    const line = addParacetamol();
+    line.quantity = 2;
+    sales.createSale.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 0, statusText: 'Unknown Error' })),
+    );
+    component.submit();
+    tick(5000);
+    const first = sentRequest();
+    expect(component.unsettledRequest()).toEqual(first);
+
+    // The basket is frozen: nothing is added or removed, and an edit is not sent.
+    component.removeLine(line);
+    expect(component.lines().length).toBe(1);
+    line.quantity = 9;
+    sales.createSale.and.returnValue(of(saleResponse as any));
+    component.submit();
+    tick(5000);
+    expect(sentRequest()).toBe(first);
+    expect(sentRequest().lines[0].quantity).toBe(2);
+    expect(component.unsettledRequest()).toBeNull();
+  }));
 
   it("shows the server's refusal and marks the field it names", () => {
     const line = addParacetamol();
