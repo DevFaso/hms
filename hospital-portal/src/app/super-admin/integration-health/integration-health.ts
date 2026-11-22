@@ -28,7 +28,10 @@ import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
 interface StatusChip {
   status: IntegrationHealthStatus;
   labelKey: string;
+  /** The border and fill colour (an icon-grade hue). */
   color: string;
+  /** The label as text: 4.5:1 or more on white (QA D3504). */
+  textColor: string;
 }
 
 interface RowAction {
@@ -93,10 +96,30 @@ export class IntegrationHealthComponent implements OnInit {
     const s = this.summary();
     if (!s) return [];
     return [
-      { status: 'HEALTHY', labelKey: 'INTEGRATION_HEALTH.CHIP.HEALTHY', color: '#10b981' },
-      { status: 'DEGRADED', labelKey: 'INTEGRATION_HEALTH.CHIP.DEGRADED', color: '#f59e0b' },
-      { status: 'FAILING', labelKey: 'INTEGRATION_HEALTH.CHIP.FAILING', color: '#ef4444' },
-      { status: 'NO_HISTORY', labelKey: 'INTEGRATION_HEALTH.CHIP.NO_HISTORY', color: '#94a3b8' },
+      {
+        status: 'HEALTHY',
+        labelKey: 'INTEGRATION_HEALTH.CHIP.HEALTHY',
+        color: '#10b981',
+        textColor: 'var(--success-text)',
+      },
+      {
+        status: 'DEGRADED',
+        labelKey: 'INTEGRATION_HEALTH.CHIP.DEGRADED',
+        color: '#f59e0b',
+        textColor: 'var(--warning-text)',
+      },
+      {
+        status: 'FAILING',
+        labelKey: 'INTEGRATION_HEALTH.CHIP.FAILING',
+        color: '#ef4444',
+        textColor: 'var(--danger-text)',
+      },
+      {
+        status: 'NO_HISTORY',
+        labelKey: 'INTEGRATION_HEALTH.CHIP.NO_HISTORY',
+        color: '#94a3b8',
+        textColor: 'var(--text-muted)',
+      },
     ];
   });
 

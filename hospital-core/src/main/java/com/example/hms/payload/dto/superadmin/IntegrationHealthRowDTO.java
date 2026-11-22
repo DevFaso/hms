@@ -30,6 +30,9 @@ public class IntegrationHealthRowDTO {
 
     private boolean enabled;
 
+    /** D2779: backed by a reference stub or sandbox, so the console shows « not configured », never « enabled ». */
+    private boolean stub;
+
     /**
      * QA D851: a connectivity probe is registered, so "Test connection" can
      * run. The console hides the button otherwise.

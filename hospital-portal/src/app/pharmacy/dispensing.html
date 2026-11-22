@@ -30,9 +30,8 @@
 
   <div class="workspace-strip">
     <p>
-      <strong>{{ queueLoading() ? '—' : workQueue().length }}</strong><span>{{
-        'PHARMACY_WORKSPACE.LOADED_QUEUE' | translate
-      }}</span>
+      <strong>{{ queueLoading() ? '—' : workQueue().length }}</strong>{{ ' '
+      }}<span>{{ 'PHARMACY_WORKSPACE.LOADED_QUEUE' | translate }}</span>
     </p>
     <p>{{ 'PHARMACY_WORKSPACE.DISPENSE_HINT' | translate }}</p>
   </div>
@@ -789,7 +788,7 @@
               <th>{{ 'PHARMACY.STATUS' | translate }}</th>
               <th>{{ 'PHARMACY.REFILL' | translate }}</th>
               <th>{{ 'PHARMACY.PRESCRIBER' | translate }}</th>
-              <th>{{ 'COMMON.ACTIONS' | translate }}</th>
+              <th class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
             </tr>
           </thead>
           <tbody>
@@ -1150,7 +1149,7 @@
               <th>{{ 'PHARMACY.VERIFICATION' | translate }}</th>
               <th>{{ 'PHARMACY.DISPENSED_BY' | translate }}</th>
               <th>{{ 'PHARMACY.DISPENSED_AT' | translate }}</th>
-              <th>{{ 'COMMON.ACTIONS' | translate }}</th>
+              <th class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
             </tr>
           </thead>
           <tbody>

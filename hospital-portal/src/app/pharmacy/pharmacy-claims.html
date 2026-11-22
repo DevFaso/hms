@@ -22,9 +22,8 @@
   </header>
   <div class="workspace-strip">
     <p>
-      <strong>{{ loading() ? '—' : claims().length }}</strong><span>{{
-        'PHARMACY_WORKSPACE.LOADED_CLAIMS' | translate
-      }}</span>
+      <strong>{{ loading() ? '—' : claims().length }}</strong>{{ ' '
+      }}<span>{{ 'PHARMACY_WORKSPACE.LOADED_CLAIMS' | translate }}</span>
     </p>
     <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
   </div>
@@ -87,7 +86,7 @@
             <th>{{ 'PHARMACY_CLAIMS.COL_COVERAGE_REF' | translate }}</th>
             <th>{{ 'PHARMACY_CLAIMS.COL_AMOUNT' | translate }}</th>
             <th>{{ 'PHARMACY_CLAIMS.COL_STATUS' | translate }}</th>
-            <th>{{ 'COMMON.ACTIONS' | translate }}</th>
+            <th class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
           </tr>
         </thead>
         <tbody>

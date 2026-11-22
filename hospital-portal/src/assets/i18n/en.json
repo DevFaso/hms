@@ -436,7 +436,8 @@
       "SCOPE_UNKNOWN": "Scope not recorded",
       "IMPERSONATOR": "Impersonated by {{actor}}",
       "SHOW_TEN": "Show up to 10 events",
-      "HOSPITAL_FILTER": "Hospital filter (ID)"
+      "HOSPITAL_FILTER": "Hospital",
+      "ALL_HOSPITALS": "All hospitals"
     },
     "STAT": {
       "ORGANIZATIONS": "Organizations",
@@ -906,6 +907,7 @@
     "RETRY": "Retry",
     "EMPTY": "No integrations are registered.",
     "ENABLED": "Enabled",
+    "NOT_CONFIGURED": "Not configured",
     "DISABLED": "Disabled",
     "NO_ORG_HISTORY": "No call history recorded for this integration yet.",
     "PLATFORM_WIDE": "Platform-wide",
@@ -4442,6 +4444,7 @@
     "ACTIVE_ORDERS": "Active Orders",
     "ALL_ORDERS": "All Orders",
     "ATTESTATION": "Attestation",
+    "ATTESTATION_MEANING": "I electronically attest that the information above is accurate.",
     "AUTO_FILLED": "Auto-filled",
     "CANCELLED": "Cancelled",
     "CANCELLING": "Cancelling...",
@@ -4638,6 +4641,8 @@
     "STAFF_COUNT": "{{count}} staff"
   },
   "LAB_TEST_CONFIG": {
+    "APPROVAL_NEXT_STEP": "Continue in the lab approval queue",
+    "COMPONENT_RANGES": "{{components}} components · {{ranges}} ranges",
     "ACTIONS": "Actions",
     "ADD_RANGE": "Add Range",
     "AGE_MAX": "Age Max",
@@ -10327,6 +10332,8 @@
     "ASSESSMENT_REQUIRED": "Record the assessment before submitting: allergies, medications, pain, fall risk or nursing notes."
   },
   "PRE_CHECKIN": {
+    "CURRENT_CONTACT": "Current contact details",
+    "CURRENT_CONTACT_ERROR": "Current contact details could not be loaded. Leaving an update field empty keeps its existing value.",
     "ADDRESS": "Address",
     "ADDRESS_LABEL": "Address",
     "ADDRESS_LINE1": "Address Line 1",
@@ -10361,7 +10368,7 @@
     "PHONE_LABEL": "Phone",
     "PHONE_PLACEHOLDER": "e.g. +226 70 12 34 56",
     "QUESTIONNAIRES_COMPLETED": "Questionnaires Completed",
-    "STATE": "State",
+    "STATE": "Region / State (if applicable)",
     "STEPS_NAV_LABEL": "Pre-check-in steps",
     "STEP_DEMOGRAPHICS": "Demographics",
     "STEP_DESCRIPTION": "Please update any information that has changed since your last visit. Leave fields blank to keep current values.",
@@ -10373,7 +10380,7 @@
     "TITLE": "Pre-Check-In",
     "UPDATED_DEMOGRAPHICS": "Updated Demographics",
     "YES": "Yes",
-    "ZIP": "Zip Code",
+    "ZIP": "Postal code (if applicable)",
     "DATE_AT_TIME": "{{date}} at {{time}}",
     "EMAIL_INVALID": "Enter a valid e-mail address, or leave the field empty."
   },
@@ -15868,6 +15875,17 @@
     "APPROVER": "Approver",
     "VERSION": "Version",
     "ENFORCED_IN": "Applied in",
+    "SOURCE_OPEN": "Open the source",
+    "AREA": {
+      "PRESCRIBING": "Prescribing",
+      "MATERNITY": "Maternity",
+      "VITALS": "Vital signs",
+      "DEATH": "Deaths and stillbirths",
+      "RECORDS": "Patient record and privacy",
+      "IMAGING": "Imaging",
+      "BILLING": "Billing",
+      "LAB": "Laboratory and blood bank"
+    },
     "NOTE": "Note",
     "REVOKE_REASON": "Reason for revoking",
     "SIGNED_BY": "Signed off on {{date}} by {{title}} ({{name}})",
