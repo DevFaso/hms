@@ -10325,6 +10325,8 @@
     "ASSESSMENT_REQUIRED": "Registre la evaluación antes de enviar: alergias, medicamentos, dolor, riesgo de caída o notas de enfermería."
   },
   "PRE_CHECKIN": {
+    "CURRENT_CONTACT": "Datos de contacto actuales",
+    "CURRENT_CONTACT_ERROR": "No se pudieron cargar los datos de contacto actuales. Dejar vacío un campo de actualización conserva su valor actual.",
     "ADDRESS": "Dirección",
     "ADDRESS_LABEL": "Dirección",
     "ADDRESS_LINE1": "Dirección línea 1",
@@ -10359,7 +10361,7 @@
     "PHONE_LABEL": "Teléfono",
     "PHONE_PLACEHOLDER": "ej. +226 70 12 34 56",
     "QUESTIONNAIRES_COMPLETED": "Cuestionarios completados",
-    "STATE": "Estado/Provincia",
+    "STATE": "Región / Provincia (si corresponde)",
     "STEPS_NAV_LABEL": "Pasos del pre-registro",
     "STEP_DEMOGRAPHICS": "Datos demográficos",
     "STEP_DESCRIPTION": "Actualice cualquier información que haya cambiado desde su última visita. Deje los campos en blanco para mantener los valores actuales.",
@@ -10371,7 +10373,7 @@
     "TITLE": "Pre-registro",
     "UPDATED_DEMOGRAPHICS": "Datos actualizados",
     "YES": "Sí",
-    "ZIP": "Código postal",
+    "ZIP": "Código postal (si corresponde)",
     "DATE_AT_TIME": "{{date}} a las {{time}}",
     "EMAIL_INVALID": "Introduzca una dirección de correo electrónico válida o deje el campo vacío."
   },

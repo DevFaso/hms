@@ -6,6 +6,7 @@ import {
   PortalAppointment,
   PreCheckInResponse,
   QuestionnaireDTO,
+  PatientProfileDTO,
 } from '../../../services/patient-portal.service';
 import { TranslateModule } from '@ngx-translate/core';
 import { FormsModule } from '@angular/forms';
@@ -49,8 +50,16 @@ describe('PreCheckinFormComponent', () => {
     portalSpy = jasmine.createSpyObj('PatientPortalService', [
       'getQuestionnairesForAppointment',
       'submitPreCheckIn',
+      'getMyProfile',
     ]);
     portalSpy.getQuestionnairesForAppointment.and.returnValue(of(mockQuestionnaires));
+    portalSpy.getMyProfile.and.returnValue(
+      of({
+        phoneNumberPrimary: '+22670000000',
+        email: 'patient@example.test',
+        address: 'Ouagadougou',
+      } as PatientProfileDTO),
+    );
 
     await TestBed.configureTestingModule({
       imports: [PreCheckinFormComponent, TranslateModule.forRoot(), FormsModule],
@@ -65,6 +74,16 @@ describe('PreCheckinFormComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('D3455: displays saved contact details while keeping update fields empty', () => {
+    const saved = fixture.nativeElement.querySelector('[data-testid="precheckin-current-contact"]');
+    expect(saved.textContent).toContain('+22670000000');
+    expect(saved.textContent).toContain('patient@example.test');
+    expect(saved.textContent).toContain('Ouagadougou');
+    expect(component.phoneNumber).toBe('');
+    expect(component.email).toBe('');
+    expect(component.addressLine1).toBe('');
   });
 
   it('should load questionnaires on init', () => {
