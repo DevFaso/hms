@@ -21,6 +21,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
+import static com.example.hms.testsupport.RandomIds.withoutRandomIds;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -68,7 +69,7 @@ class PharmacyPaymentVoiderTest {
         assertThat(voided).isEqualTo(1);
         assertThat(payment.getStatus()).isEqualTo(PharmacyPaymentStatus.VOIDED);
         assertThat(payment.getVoidedBy()).isEqualTo(pharmacist);
-        verify(support).logAudit(eq(AuditEventType.PAYMENT_REVERSED), argThat(d -> d.contains(payment.getId().toString()) && !d.contains("200")),
+        verify(support).logAudit(eq(AuditEventType.PAYMENT_REVERSED), argThat(d -> d.contains(payment.getId().toString()) && !withoutRandomIds(d).contains("200")),
                 eq(payment.getId().toString()), eq("PHARMACY_PAYMENT"));
     }
 

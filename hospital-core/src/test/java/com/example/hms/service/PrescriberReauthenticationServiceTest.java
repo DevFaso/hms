@@ -16,6 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.example.hms.testsupport.RandomIds.withoutRandomIds;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -80,7 +81,7 @@ class PrescriberReauthenticationServiceTest {
         assertThat(row.getEventType()).isEqualTo(AuditEventType.PRESCRIPTION_SIGN_REAUTHENTICATION);
         assertThat(row.getStatus()).isEqualTo(AuditStatus.SUCCESS);
         assertThat(row.getResourceId()).isEqualTo(rxId.toString());
-        assertThat(row.getEventDescription()).doesNotContain("123456");
+        assertThat(withoutRandomIds(row.getEventDescription())).doesNotContain("123456");
     }
 
     @Test

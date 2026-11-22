@@ -50,6 +50,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.example.hms.testsupport.RandomIds.withoutRandomIds;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -228,7 +229,7 @@ class ProviderOnboardingServiceImplTest {
             assertThat(row.getEventType()).isEqualTo(AuditEventType.PROVIDER_CREATED);
             assertThat(row.getUserId()).isEqualTo(actorId);
             assertThat(row.getResourceName()).isNull();
-            assertThat(row.getEventDescription())
+            assertThat(withoutRandomIds(row.getEventDescription()))
                 .doesNotContain("1234", "00012345X", "LIC-77", "ONP-123", "Pharmacie", "Ouédraogo", "Sawadogo", "70 00");
         }
 

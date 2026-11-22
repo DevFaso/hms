@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import static com.example.hms.testsupport.RandomIds.withoutRandomIds;
 import static org.mockito.Mockito.mock;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -7872,7 +7873,7 @@ class PrescriptionServiceImplTest {
                 && String.valueOf(e.getDetails()).contains("\"changed\":\"dosage\"")
                 && String.valueOf(e.getDetails()).contains("\"urgent\":true")
                 && !String.valueOf(e.getDetails()).contains("Sepsis")
-                && !String.valueOf(e.getDetails()).contains("900")));
+                && !withoutRandomIds(e.getDetails()).contains("900")));
     }
 
     /** A draft has no signature's reason: an edit still drops a stale override, as it did. */

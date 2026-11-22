@@ -34,6 +34,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.example.hms.testsupport.RandomIds.withoutRandomIds;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -127,7 +128,7 @@ class TariffOverrideTest {
         assertThat(event.getValue().getEventType()).isEqualTo(AuditEventType.INVOICE_LINE_PRICE_OVERRIDDEN);
         assertThat(event.getValue().getHospitalId()).isEqualTo(HOSPITAL_ID);
         assertThat(event.getValue().getResourceId()).isEqualTo(line.getId().toString());
-        assertThat(event.getValue().getEventDescription())
+        assertThat(withoutRandomIds(event.getValue().getEventDescription()))
             .doesNotContain("indigent").doesNotContain("1500").doesNotContain("2000");
     }
 
@@ -182,7 +183,7 @@ class TariffOverrideTest {
         ArgumentCaptor<AuditEventRequestDTO> event = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
         verify(audit).logEvent(event.capture());
         assertThat(event.getValue().getEventType()).isEqualTo(AuditEventType.INVOICE_LINE_PRICED_MANUALLY);
-        assertThat(event.getValue().getEventDescription()).doesNotContain("25000").doesNotContain("ACC-NORMAL");
+        assertThat(withoutRandomIds(event.getValue().getEventDescription())).doesNotContain("25000").doesNotContain("ACC-NORMAL");
     }
 
     @Test
@@ -248,7 +249,7 @@ class TariffOverrideTest {
         verify(audit, org.mockito.Mockito.times(2)).logEvent(events.capture());
         assertThat(events.getAllValues()).extracting(AuditEventRequestDTO::getEventType).containsExactly(
             AuditEventType.INVOICE_LINE_PRICE_OVERRIDDEN, AuditEventType.INVOICE_LINE_PRICE_RESTORED);
-        assertThat(events.getAllValues().get(1).getEventDescription()).doesNotContain("Remise").doesNotContain("2000");
+        assertThat(withoutRandomIds(events.getAllValues().get(1).getEventDescription())).doesNotContain("Remise").doesNotContain("2000");
     }
 
     @Test
@@ -382,7 +383,7 @@ class TariffOverrideTest {
         ArgumentCaptor<AuditEventRequestDTO> event = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
         verify(audit).logEvent(event.capture());
         assertThat(event.getValue().getEventType()).isEqualTo(AuditEventType.INVOICE_LINE_PRICED_MANUALLY);
-        assertThat(event.getValue().getEventDescription()).doesNotContain("Radio").doesNotContain("500");
+        assertThat(withoutRandomIds(event.getValue().getEventDescription())).doesNotContain("Radio").doesNotContain("500");
         assertThat(event.getValue().getDetails())
             .isEqualTo(java.util.Map.of("reason", "Radio refaite, tarif convenu"));
     }
