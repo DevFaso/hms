@@ -158,6 +158,22 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         }
     }
 
+    /**
+     * QA D3450 / D3254: an edit that names no catalogue exam and leaves the study's name as it was keeps the exam
+     * the order was picked from, as it was placed (an exam deactivated since then does not block the edit); a
+     * newly named exam is checked, and a retyped name makes it a free-text order.
+     */
+    private void keepOrApplyCatalogueExamOnEdit(ImagingOrder order, UUID requestedItemId, UUID itemBefore,
+                                                String studyBefore) {
+        boolean examUnchanged = requestedItemId == null
+            && keptCatalogueItem(itemBefore, studyBefore, order.getStudyType()) != null;
+        if (examUnchanged) {
+            return;
+        }
+        UUID hospitalId = order.getHospital() != null ? order.getHospital().getId() : null;
+        applyCatalogueExam(order, requestedItemId, hospitalId);
+    }
+
     /** The exam an edited order keeps: the one it had, while its study is still named the same. */
     private static UUID keptCatalogueItem(UUID itemBefore, String studyBefore, String studyNow) {
         boolean sameName = studyBefore != null && studyNow != null
@@ -260,15 +276,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         UUID catalogueItemBefore = order.getCatalogueItemId();
         String studyBefore = order.getStudyType();
         imagingOrderMapper.updateEntityFromRequest(order, request);
-        // QA D3450 / D3254: an edit that names no catalogue exam and leaves the study's name as it was keeps the
-        // exam the order was picked from, as it was placed (an exam deactivated since then does not block the
-        // edit); a newly named exam is checked, and a retyped name makes it a free-text order.
-        boolean examUnchanged = request.getCatalogueItemId() == null
-            && keptCatalogueItem(catalogueItemBefore, studyBefore, order.getStudyType()) != null;
-        if (!examUnchanged) {
-            applyCatalogueExam(order, request.getCatalogueItemId(),
-                order.getHospital() != null ? order.getHospital().getId() : null);
-        }
+        keepOrApplyCatalogueExamOnEdit(order, request.getCatalogueItemId(), catalogueItemBefore, studyBefore);
         // QA D972: an edit keeps the order's visit (the form has no visit
         // field), and a visit it names must be this patient's at this hospital.
         if (request.getEncounterId() == null) {

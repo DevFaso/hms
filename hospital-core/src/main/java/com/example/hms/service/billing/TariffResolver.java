@@ -107,11 +107,12 @@ public class TariffResolver {
         if (hospitalId == null || itemId == null || day == null) {
             return Optional.empty();
         }
-        Optional<PriceListItem> found = itemRepository.findActiveByIdForCharge(itemId, hospitalId);
-        if (found == null || found.isEmpty() || !hospitalId.equals(found.get().getHospitalId())) {
+        PriceListItem item = itemRepository.findActiveByIdForCharge(itemId, hospitalId)
+            .filter(found -> hospitalId.equals(found.getHospitalId()))
+            .orElse(null);
+        if (item == null) {
             return Optional.empty();
         }
-        PriceListItem item = found.get();
         List<PriceListPrice> versions = priceRepository.findInForce(item.getId(), hospitalId, day);
         if (versions == null) {
             return Optional.empty();

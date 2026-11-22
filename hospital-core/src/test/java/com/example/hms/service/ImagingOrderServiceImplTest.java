@@ -204,7 +204,7 @@ class ImagingOrderServiceImplTest {
         order.setModality(ImagingModality.XRAY);
         order.setStudyType("affiché");
         com.example.hms.service.imaging.ImagingCatalogueService catalogue =
-            org.mockito.Mockito.mock(com.example.hms.service.imaging.ImagingCatalogueService.class);
+            mock(com.example.hms.service.imaging.ImagingCatalogueService.class);
         org.mockito.Mockito.doAnswer(call -> {
             ImagingOrder placed = call.getArgument(0);
             placed.setModality(ImagingModality.ULTRASOUND);
@@ -229,7 +229,7 @@ class ImagingOrderServiceImplTest {
 
         assertThat(order.getDuplicateOfRecentOrder()).isTrue();
         assertThat(order.getDuplicateReferenceOrderId()).isEqualTo(duplicate.getId());
-        org.mockito.Mockito.verify(imagingOrderRepository, org.mockito.Mockito.never())
+        verify(imagingOrderRepository, never())
             .findPotentialDuplicates(any(), any(), eq(ImagingModality.XRAY), any(), any());
     }
 

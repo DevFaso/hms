@@ -253,7 +253,8 @@ class ImagingCatalogueServiceTest {
         ImagingCatalogueExamUpdateRequestDTO clear =
             ImagingCatalogueExamUpdateRequestDTO.builder().pregnancyFlag(PregnancyFlag.NO).build();
 
-        assertThatThrownBy(() -> service.update(obstetric.getId(), clear))
+        UUID examId = obstetric.getId();
+        assertThatThrownBy(() -> service.update(examId, clear))
             .isInstanceOf(ClientSafeAccessDeniedException.class);
 
         assertThat(obstetric.getMayRevealPregnancy()).isNull();
@@ -280,9 +281,10 @@ class ImagingCatalogueServiceTest {
         when(roles.isHospitalAdmin(userId, hospitalId)).thenReturn(true);
         chest.setMayRevealPregnancy(true);
 
+        UUID examId = chest.getId();
         for (ImagingCatalogueExamUpdateRequestDTO empty : java.util.Arrays.asList(null,
                 new ImagingCatalogueExamUpdateRequestDTO())) {
-            assertThatThrownBy(() -> service.update(chest.getId(), empty))
+            assertThatThrownBy(() -> service.update(examId, empty))
                 .isInstanceOf(FieldBusinessException.class)
                 .satisfies(ex -> assertThat(((FieldBusinessException) ex).getField()).isEqualTo("pregnancyFlag"));
         }
@@ -298,7 +300,8 @@ class ImagingCatalogueServiceTest {
         ImagingCatalogueExamUpdateRequestDTO clear =
             ImagingCatalogueExamUpdateRequestDTO.builder().pregnancyFlag(PregnancyFlag.NO).build();
 
-        assertThatThrownBy(() -> service.update(chest.getId(), clear)).isInstanceOf(ResourceNotFoundException.class);
+        UUID examId = chest.getId();
+        assertThatThrownBy(() -> service.update(examId, clear)).isInstanceOf(ResourceNotFoundException.class);
         assertThat(chest.getMayRevealPregnancy()).isNull();
         verify(items, never()).save(any());
     }

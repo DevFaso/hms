@@ -42,6 +42,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import org.mockito.Spy;
@@ -945,7 +946,7 @@ class RefillApprovalServiceImplTest {
             verify(notificationService).created(bell.capture(), eq("dr.head"), eq("MEDICATION_REFILL"));
             assertThat(bell.getValue()).contains("Demande précoce").doesNotContain("Metformin");
             // The prescriber who left is not rung again: one bell, from before.
-            verify(notificationService, org.mockito.Mockito.times(1)).created(anyString(), eq("dr.bob"), anyString());
+            verify(notificationService, times(1)).created(anyString(), eq("dr.bob"), anyString());
         }
 
         @Test

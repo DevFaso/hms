@@ -28,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -122,7 +123,7 @@ public class ImagingCatalogueService {
             item.setMayRevealPregnancy(flag);
             // Who decided; nobody when the exam is put back to « not decided ».
             item.setMayRevealPregnancySetBy(decided ? userId : null);
-            item.setMayRevealPregnancySetAt(decided ? LocalDateTime.now() : null);
+            item.setMayRevealPregnancySetAt(decided ? LocalDateTime.now(ZoneId.systemDefault()) : null);
         }
         item.setUpdatedBy(userId);
         PriceListItem saved = itemRepository.save(item);
