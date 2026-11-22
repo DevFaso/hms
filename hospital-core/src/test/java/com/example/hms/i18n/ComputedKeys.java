@@ -334,6 +334,13 @@ final class ComputedKeys {
             values("mews.escalation.", List.of("lowMedium", "medium", "high", "red")));
         r.put("com/example/hms/service/vitals/MaternalEarlyWarningService.java|ALERT_LABEL_PREFIX + a.name()",
             enumValues("mews.alert.", com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert.class));
+        // QA D3304: the in-basket item of a medium, high or red page.
+        r.put("com/example/hms/service/vitals/MaternalEarlyWarningService.java|ALERT_LABEL_PREFIX + a.name() #2",
+            enumValues("mews.alert.", com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert.class));
+        r.put("com/example/hms/service/vitals/MaternalEarlyWarningService.java|ITEM_TYPE_PREFIX + alertType",
+            values("maternalWarning.alert.type.", List.of("MEWS_MEDIUM", "MEWS_HIGH", "MEWS_RED")));
+        r.put("com/example/hms/service/vitals/MaternalEarlyWarningService.java|String messageKey = ITEM_MESSAGE_PREFIX + alertType",
+            values("maternalWarning.alert.msg.", List.of("MEWS_MEDIUM", "MEWS_HIGH", "MEWS_RED")));
         r.put("com/example/hms/cdshooks/bpa/NewsScoreProtocolRule.java|MaternalEarlyWarningService.ALERT_LABEL_PREFIX + a.name()",
             enumValues("mews.alert.", com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert.class));
         r.put("com/example/hms/cdshooks/bpa/NewsScoreProtocolRule.java|\"cds.bpa.mews.tier.\" + tier.name()",

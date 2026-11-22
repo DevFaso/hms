@@ -611,4 +611,116 @@ class MaternalEarlyWarningServiceTest {
         assertThat(nobody.status()).isEqualTo(MaternalEarlyWarningService.PageStatus.NOBODY);
         assertThat(unreachable.getMewsPagedTier()).isNull();
     }
+
+    // ---- QA D3304 (r70): a medium, high or red page is also an urgent alert to acknowledge ----
+
+    private com.example.hms.service.maternity.ObstetricAlertEscalationService withTheInBasket() {
+        com.example.hms.service.maternity.ObstetricAlertEscalationService alerts =
+            mock(com.example.hms.service.maternity.ObstetricAlertEscalationService.class);
+        service.setObstetricAlerts(alerts);
+        service.setLocalizer(new com.example.hms.service.i18n.NotificationLocalizer(
+            com.example.hms.i18n.TestMessageSources.bundles()));
+        return alerts;
+    }
+
+    private PatientVitalSign saved(PatientVitalSign vital, String recorderUsername, UUID recorderUserId) {
+        vital.setId(UUID.randomUUID());
+        User recorder = new User();
+        recorder.setId(recorderUserId);
+        recorder.setUsername(recorderUsername);
+        Staff nurse = new Staff();
+        nurse.setUser(recorder);
+        vital.setRecordedByStaff(nurse);
+        return vital;
+    }
+
+    private com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert filed(
+            com.example.hms.service.maternity.ObstetricAlertEscalationService alerts) {
+        ArgumentCaptor<com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert> alert =
+            ArgumentCaptor.forClass(com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert.class);
+        verify(alerts).raiseAfterCommit(alert.capture());
+        return alert.getValue();
+    }
+
+    @Test
+    @DisplayName("D3304: a medium page (MEWS 5) from the ward vitals files an urgent alert to acknowledge, in the reader's words")
+    void d3304_aMediumPageIsFiledForAcknowledgement() {
+        com.example.hms.service.maternity.ObstetricAlertEscalationService alerts = withTheInBasket();
+        under(News2Applicability.Status.OBSTETRIC, null);
+        UUID recorderId = UUID.randomUUID();
+        PatientVitalSign vital = saved(setAt(MaternalEarlyWarning.Tier.MEDIUM), "sf.recorder", recorderId);
+        Score score = service.assess(mother, HERE, vital);
+
+        service.page(vital, score, mother.getId(), HERE, "sf.recorder", null, Set.of());
+
+        com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert alert = filed(alerts);
+        assertThat(alert.sourceType()).isEqualTo("VITAL_SIGN");
+        assertThat(alert.sourceId()).isEqualTo(vital.getId());
+        assertThat(alert.hospitalId()).isEqualTo(HERE);
+        assertThat(alert.patientId()).isEqualTo(mother.getId());
+        assertThat(alert.alertType()).isEqualTo(MaternalEarlyWarningService.ALERT_TYPE_MEDIUM);
+        // The recorder cannot acknowledge her own alert: she is the documenter.
+        assertThat(alert.documentedByUserId()).isEqualTo(recorderId);
+        assertThat(alert.alertMessageKey()).isEqualTo("maternalWarning.alert.msg.MEWS_MEDIUM");
+        assertThat(alert.alertMessageArgs().get(0)).isEqualTo(score.total());
+        // Staff-locale (French) title and sentence, with the provisional marker.
+        assertThat(alert.notificationText()).startsWith("Alerte maternelle (MEWS, préoccupation moyenne) pour Awa Sawadogo")
+            .contains("MEWS " + score.total()).contains("15 min").contains("provisoire");
+    }
+
+    @Test
+    @DisplayName("D3304: the high level and a RED alert are filed too; the low-medium notice is not an urgent alert")
+    void d3304_highAndRedAreFiledAndLowMediumIsNot() {
+        com.example.hms.service.maternity.ObstetricAlertEscalationService alerts = withTheInBasket();
+        under(News2Applicability.Status.OBSTETRIC, null);
+
+        PatientVitalSign lowMedium = saved(setAt(MaternalEarlyWarning.Tier.LOW_MEDIUM), "sf.recorder", UUID.randomUUID());
+        assertThat(service.page(lowMedium, service.assess(mother, HERE, lowMedium), mother.getId(), HERE, "sf.recorder",
+            null, Set.of()).status()).isEqualTo(MaternalEarlyWarningService.PageStatus.SENT);
+        verifyNoInteractions(alerts);
+
+        PatientVitalSign high = saved(setAt(MaternalEarlyWarning.Tier.HIGH), "sf.recorder", UUID.randomUUID());
+        service.page(high, service.assess(mother, HERE, high), mother.getId(), HERE, "sf.recorder", null, Set.of());
+        assertThat(filed(alerts).alertType()).isEqualTo(MaternalEarlyWarningService.ALERT_TYPE_HIGH);
+
+        clearInvocations(alerts);
+        PatientVitalSign shock = saved(severeShock(), "sf.recorder", UUID.randomUUID());
+        service.page(shock, service.assess(mother, HERE, shock), mother.getId(), HERE, "sf.recorder", null, Set.of());
+        com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert red = filed(alerts);
+        assertThat(red.alertType()).isEqualTo(MaternalEarlyWarningService.ALERT_TYPE_RED);
+        assertThat(red.notificationText()).contains("alerte rouge").contains("indice de choc en zone rouge");
+    }
+
+    @Test
+    @DisplayName("D3304: the cool-down holds the item with the page, and a RED alert is never held")
+    void d3304_theItemFollowsThePage() {
+        com.example.hms.service.maternity.ObstetricAlertEscalationService alerts = withTheInBasket();
+        com.example.hms.repository.PatientVitalSignRepository vitals = withTheCoolDown();
+        pagedBefore(vitals, "MEDIUM", 2);
+        under(News2Applicability.Status.OBSTETRIC, null);
+
+        // MEWS 6 two minutes after the MEWS 5 page: withheld, and nothing more to acknowledge.
+        PatientVitalSign again = saved(setAt(MaternalEarlyWarning.Tier.MEDIUM), "sf.recorder", UUID.randomUUID());
+        assertThat(service.page(again, service.assess(mother, HERE, again), mother.getId(), HERE, "sf.recorder", null,
+            Set.of()).status()).isEqualTo(MaternalEarlyWarningService.PageStatus.WITHHELD);
+        verifyNoInteractions(alerts);
+
+        // A severe shock in the same half hour: paged at once, and filed at once.
+        PatientVitalSign shock = saved(severeShock(), "sf.recorder", UUID.randomUUID());
+        assertThat(service.page(shock, service.assess(mother, HERE, shock), mother.getId(), HERE, "sf.recorder", null,
+            Set.of()).status()).isEqualTo(MaternalEarlyWarningService.PageStatus.SENT);
+        assertThat(filed(alerts).alertType()).isEqualTo(MaternalEarlyWarningService.ALERT_TYPE_RED);
+    }
+
+    @Test
+    @DisplayName("D3304: a filing that fails never fails the vital set, and the page still goes out")
+    void d3304_aFailedFilingNeverFailsThePage() {
+        com.example.hms.service.maternity.ObstetricAlertEscalationService alerts = withTheInBasket();
+        org.mockito.Mockito.doThrow(new IllegalStateException("down")).when(alerts).raiseAfterCommit(any());
+        under(News2Applicability.Status.OBSTETRIC, null);
+        PatientVitalSign vital = saved(setAt(MaternalEarlyWarning.Tier.MEDIUM), "sf.recorder", UUID.randomUUID());
+
+        assertThat(service.page(vital, service.assess(mother, HERE, vital), mother.getId(), HERE, "sf.recorder", null,
+            Set.of()).status()).isEqualTo(MaternalEarlyWarningService.PageStatus.SENT);
+    }
 }

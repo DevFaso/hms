@@ -3938,4 +3938,17 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V362 (QA r70: D3304, D3351): the obstetric alert escalation accepts
+         the source 'VITAL_SIGN' (a maternal early-warning page from a ward
+         vital set); the positive antibody screen rule's columns and tables.
+         Additive, IF NOT EXISTS / DROP-then-ADD of one CHECK, no DO block.
+         ================================================================= -->
+    <changeSet id="V362-r70-maternal-alert-source-and-antibody-rule" author="hms-team" runOnChange="false">
+        <sqlFile path="V362__r70_maternal_alert_source_and_antibody_rule.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

@@ -61,6 +61,8 @@ class StoredAlertReaderLanguageGuardTest {
         Map.entry("service/maternity/NewbornRegistrationService.java", STORED_RECORD
             + ": the baby's provisional name and contact relationship (QA D1592), which the desk edits"),
         Map.entry("service/impl/PostpartumCareServiceImpl.java", ALERT + "; the escalation reason is never returned"),
+        // QA D3304: the stored copy of a maternal early-warning alert; each reader's item is rendered from its keys.
+        Map.entry("service/vitals/MaternalEarlyWarningService.java", ALERT),
         Map.entry("service/impl/PatientPortalServiceImpl.java", "the refill e-mail to staff; the bell is keyed (D665)"),
         Map.entry("service/impl/TransfusionServiceImpl.java", NOTICE),
         Map.entry("service/impl/DeathDisputeServiceImpl.java", NOTICE),
