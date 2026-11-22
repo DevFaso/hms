@@ -414,6 +414,11 @@ export class AdmissionsComponent implements OnInit {
   staySummary = signal<DischargeSummary | null>(null);
   /** QA D2553: the stay's signed take-home orders: what the summary will list as going home. */
   takeHomeOrders = signal<PrescriptionResponse[]>([]);
+  /**
+   * QA D3303 (r70): the take-home orders written but not signed yet. The dialog said « Aucun traitement de
+   * sortie » while a draft sat on the stay; it is listed, with the word that it goes home only once signed.
+   */
+  takeHomeUnsigned = signal<PrescriptionResponse[]>([]);
   takeHomeLoading = signal(false);
   /** The earliest follow-up date the dialog offers. */
   readonly today = localDateString();
@@ -915,6 +920,7 @@ export class AdmissionsComponent implements OnInit {
     this.dischargingAdm.set(null);
     this.staySummary.set(null);
     this.takeHomeOrders.set([]);
+    this.takeHomeUnsigned.set([]);
   }
 
   /** QA D2553: the stay's take-home orders that are signed and not withdrawn, as the summary lists them. */
@@ -924,10 +930,12 @@ export class AdmissionsComponent implements OnInit {
       next: (rows) => {
         if (this.dischargingAdm()?.id !== admissionId) return;
         this.takeHomeOrders.set(rows.filter(goesHome));
+        this.takeHomeUnsigned.set(rows.filter(awaitsSignatureForHome));
         this.takeHomeLoading.set(false);
       },
       error: () => {
         this.takeHomeOrders.set([]);
+        this.takeHomeUnsigned.set([]);
         this.takeHomeLoading.set(false);
       },
     });
@@ -1192,4 +1200,11 @@ const NOT_GOING_HOME = new Set(['DRAFT', 'PENDING_SIGNATURE', 'CANCELLED', 'DISC
 
 export function goesHome(rx: Pick<PrescriptionResponse, 'takeHome' | 'status'>): boolean {
   return !!rx.takeHome && !NOT_GOING_HOME.has(String(rx.status ?? '').toUpperCase());
+}
+
+/** QA D3303: marked for home, written, not signed yet: listed apart, it reaches the summary once signed. */
+const AWAITING_SIGNATURE = new Set(['DRAFT', 'PENDING_SIGNATURE']);
+
+export function awaitsSignatureForHome(rx: Pick<PrescriptionResponse, 'takeHome' | 'status'>): boolean {
+  return !!rx.takeHome && AWAITING_SIGNATURE.has(String(rx.status ?? '').toUpperCase());
 }

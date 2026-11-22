@@ -1533,7 +1533,9 @@
     "TAKE_HOME_HINT": "Les prescriptions signées marquées « Traitement de sortie » figurent dans le résumé de sortie, y compris celles rédigées dans les 24 h suivant la sortie.",
     "FOLLOW_UP_DATE": "Rendez-vous de suivi",
     "FOLLOW_UP_PURPOSE": "Motif du suivi",
-    "FOLLOW_UP_PURPOSE_PLACEHOLDER": "ex. contrôle, pansement, bilan biologique"
+    "FOLLOW_UP_PURPOSE_PLACEHOLDER": "ex. contrôle, pansement, bilan biologique",
+    "TAKE_HOME_UNSIGNED_TITLE": "Rédigées, pas encore signées",
+    "TAKE_HOME_UNSIGNED_HINT": "Ces prescriptions de sortie ne sont remises au patient, et ne figurent dans le résumé de sortie, qu’une fois signées. Signez-les depuis la page des prescriptions, avant la sortie ou dans les 24 h qui suivent."
   },
   "ANALYTICS": {
     "LOAD_FAILED": "Impossible de charger les indicateurs. Réessayez.",

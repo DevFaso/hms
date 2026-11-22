@@ -1533,7 +1533,9 @@
     "TAKE_HOME_HINT": "Signed prescriptions marked « Take-home medication » are listed in the discharge summary, including those written up to 24 h after the discharge.",
     "FOLLOW_UP_DATE": "Follow-up appointment",
     "FOLLOW_UP_PURPOSE": "Follow-up purpose",
-    "FOLLOW_UP_PURPOSE_PLACEHOLDER": "e.g. check-up, wound review, lab recheck"
+    "FOLLOW_UP_PURPOSE_PLACEHOLDER": "e.g. check-up, wound review, lab recheck",
+    "TAKE_HOME_UNSIGNED_TITLE": "Written but not signed yet",
+    "TAKE_HOME_UNSIGNED_HINT": "These take-home prescriptions go home, and reach the discharge summary, only once signed. Sign them from the prescriptions page, before or within 24 h of the discharge."
   },
   "ANALYTICS": {
     "LOAD_FAILED": "The analytics could not be loaded. Try again.",
