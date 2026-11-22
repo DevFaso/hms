@@ -6833,7 +6833,7 @@
     },
     "SHARING": {
       "TITLE": "Quién consultó mi historial",
-      "ACCESS_LOG_SCOPE_NOTE": "Esta página indica quién abrió su expediente y a dónde se envió: las consultas del equipo que le atiende, el acceso de emergencia, el uso compartido con otro hospital, las copias entregadas y la información enviada a su aseguradora. Quien vuelve a su expediente varias veces durante una misma visita aparece una sola vez.",
+      "ACCESS_LOG_SCOPE_NOTE": "Esta página indica quién abrió su expediente y a dónde se envió: las consultas del equipo que le atiende, el acceso de emergencia, el uso compartido con otro hospital, las copias entregadas, la información enviada a su aseguradora y los resultados comunicados a un padre, una madre o un tutor. Quien vuelve a su expediente varias veces durante una misma visita aparece una sola vez.",
       "LOADING_LOG": "Cargando registro de accesos…",
       "NO_ACCESS_TITLE": "Sin divulgaciones registradas",
       "NO_ACCESS_DESC": "No se ha registrado ninguna divulgación de su expediente en este período.",
@@ -6847,6 +6847,7 @@
         "INSURANCE": "Enviado a su aseguradora",
         "COPY_RELEASED": "Se entregó una copia",
         "IDENTITY_CHANGE": "Historiales fusionados",
+        "RELEASED_TO_FAMILY": "Resultado comunicado a un padre, una madre o un tutor",
         "UNKNOWN": "Acceso registrado"
       },
       "SUMMARY_EMERGENCY": "accesos de emergencia a su historial",
@@ -15589,6 +15590,40 @@
     "ULTRASOUND_PHYSICIANS_ONLY": "Ecografía: en este hospital el examen lo realiza un médico. Usted puede registrar la llegada del paciente y adjuntar imágenes. Regla provisional, pendiente de aprobación del radiólogo o del director médico.",
     "RECORDED_AT_EXAM": "Registrado durante el examen",
     "AWAITS_PREAUTH_NUMBER": "El número de preautorización de este examen aún no está registrado: un médico o un radiólogo lo registra antes de que el examen pueda comenzar."
+  },
+  "IMAGING_CATALOGUE": {
+    "TAB": "Catálogo de exámenes",
+    "TITLE": "Catálogo de imagen",
+    "INTRO": "Los exámenes que una solicitud de imagen puede elegir: las líneas «Imagen» de la lista de precios. El nombre, el código y el precio se modifican en la lista de precios; aquí, la región anatómica y la respuesta a «puede revelar un embarazo».",
+    "PROVISIONAL": "Regla provisional: un examen que puede revelar un embarazo nunca se muestra a un familiar.",
+    "LOAD_FAILED": "No se pudo cargar el catálogo de imagen.",
+    "RETRY": "Reintentar",
+    "EMPTY": "El catálogo está vacío. Añada los exámenes a la lista de precios, categoría «Imagen»: aparecerán aquí y en el formulario de solicitud.",
+    "BODY_REGION": "Región anatómica",
+    "FLAG": "Puede revelar un embarazo",
+    "FLAG_UNDECIDED": "Sin decidir",
+    "FLAG_YES": "Sí: nunca se muestra a familiares",
+    "FLAG_NO": "No: se muestra a familiares",
+    "STATUS_YES": "Nunca se muestra a un familiar, ni el examen ni su factura.",
+    "STATUS_NO": "Se muestra a familiares, salvo si la pregunta clínica de la solicitud menciona un embarazo.",
+    "STATUS_UNDECIDED_NAMED": "Sin decidir: su nombre es el de un examen obstétrico, pélvico o ginecológico, por lo que se oculta a los familiares.",
+    "STATUS_UNDECIDED": "Sin decidir: por prudencia, se oculta a los familiares cuando es una ecografía o un examen abdominal o pélvico de una persona de 10 a 55 años que no está registrada como de sexo masculino.",
+    "DECIDED_BY": "Decidido por {{name}}, el {{date}}.",
+    "SOMEONE": "un responsable del hospital",
+    "SAVED": "Examen actualizado",
+    "SAVE_FAILED": "No se pudo actualizar el examen.",
+    "EXAM": "Examen del catálogo",
+    "FREE_TEXT_OPTION": "Fuera del catálogo (texto libre)",
+    "PICK_HINT": "Examen del catálogo del hospital: se tarifica según la lista de precios.",
+    "FREE_TEXT_HINT": "Elija el examen en el catálogo cuando figure en él. Fuera del catálogo, la línea puede quedar por tarificar en caja, y el examen puede ocultarse a los familiares por prudencia.",
+    "EMPTY_HINT": "El catálogo de imagen del hospital está vacío: escriba el examen en texto libre.",
+    "ORDER_LOAD_FAILED": "No se pudo cargar el catálogo: escriba el examen en texto libre."
+  },
+  "R70_PRIVACY": {
+    "OPEN_REFILLS": "Abrir las solicitudes de renovación",
+    "RELEASED_TO": "Comunicado a {{recipient}}",
+    "RELEASED_TO_UNNAMED": "Comunicado a un padre, una madre o un tutor",
+    "RESULT_CATEGORY": "Categoría del resultado: {{category}}"
   },
   "IMAGING_REPORTING_SETTINGS": {
     "TITLE": "Ecografía",

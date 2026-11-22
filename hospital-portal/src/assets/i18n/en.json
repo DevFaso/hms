@@ -6833,7 +6833,7 @@
     },
     "SHARING": {
       "TITLE": "Who accessed my record",
-      "ACCESS_LOG_SCOPE_NOTE": "This page lists who opened your record and where it was sent: views by the team treating you, emergency access, sharing with another hospital, copies released, and information sent to your insurer. Someone who returns to your record several times during one visit appears once.",
+      "ACCESS_LOG_SCOPE_NOTE": "This page lists who opened your record and where it was sent: views by the team treating you, emergency access, sharing with another hospital, copies released, information sent to your insurer, and results released to a parent or guardian. Someone who returns to your record several times during one visit appears once.",
       "LOADING_LOG": "Loading access log…",
       "NO_ACCESS_TITLE": "No Disclosures Recorded",
       "NO_ACCESS_DESC": "No disclosures of your record have been recorded for this period.",
@@ -6847,6 +6847,7 @@
         "INSURANCE": "Sent to your insurer",
         "COPY_RELEASED": "A copy was released",
         "IDENTITY_CHANGE": "Records merged",
+        "RELEASED_TO_FAMILY": "Result released to a parent or guardian",
         "UNKNOWN": "Access recorded"
       },
       "SUMMARY_EMERGENCY": "emergency accesses to your record",
@@ -15589,6 +15590,40 @@
     "ULTRASOUND_PHYSICIANS_ONLY": "Ultrasound: at this hospital the exam is performed by a physician. You can check the patient in and attach images. Provisional rule, pending approval by the radiologist or the medical director.",
     "RECORDED_AT_EXAM": "Recorded at the exam",
     "AWAITS_PREAUTH_NUMBER": "The pre-authorisation number of this exam is not recorded yet: a doctor or a radiologist records it before the exam can start."
+  },
+  "IMAGING_CATALOGUE": {
+    "TAB": "Catalogue",
+    "TITLE": "Imaging catalogue",
+    "INTRO": "The exams an imaging order can pick: the “Imaging” lines of the price list. Names, codes and prices are edited on the price list; here, the body region and the answer to “may reveal a pregnancy”.",
+    "PROVISIONAL": "Provisional rule: an exam that may reveal a pregnancy is never shown to a family member.",
+    "LOAD_FAILED": "The imaging catalogue could not be loaded.",
+    "RETRY": "Try again",
+    "EMPTY": "The catalogue is empty. Add the exams to the price list, category “Imaging”: they will appear here and on the order form.",
+    "BODY_REGION": "Body region",
+    "FLAG": "May reveal a pregnancy",
+    "FLAG_UNDECIDED": "Not decided",
+    "FLAG_YES": "Yes: never shown to family",
+    "FLAG_NO": "No: shown to family",
+    "STATUS_YES": "Never shown to a family member, neither the exam nor its invoice.",
+    "STATUS_NO": "Shown to family, unless the clinical question of the order mentions a pregnancy.",
+    "STATUS_UNDECIDED_NAMED": "Not decided: its name is that of an obstetric, pelvic or gynaecological exam, so it is hidden from family.",
+    "STATUS_UNDECIDED": "Not decided: to be safe, hidden from family when it is an ultrasound or an abdominal or pelvic exam of a person aged 10 to 55 who is not recorded as male.",
+    "DECIDED_BY": "Decided by {{name}}, on {{date}}.",
+    "SOMEONE": "a hospital lead",
+    "SAVED": "Exam updated",
+    "SAVE_FAILED": "The exam could not be updated.",
+    "EXAM": "Catalogue exam",
+    "FREE_TEXT_OPTION": "Not in the catalogue (free text)",
+    "PICK_HINT": "An exam of the hospital’s catalogue: it is priced from the price list.",
+    "FREE_TEXT_HINT": "Pick the exam from the catalogue when it is there. Outside the catalogue, the line may be left for the cashier to price, and the exam may be hidden from family to be safe.",
+    "EMPTY_HINT": "The hospital’s imaging catalogue is empty: type the exam as free text.",
+    "ORDER_LOAD_FAILED": "The catalogue could not be loaded: type the exam as free text."
+  },
+  "R70_PRIVACY": {
+    "OPEN_REFILLS": "Open the refill requests",
+    "RELEASED_TO": "Released to {{recipient}}",
+    "RELEASED_TO_UNNAMED": "Released to a parent or guardian",
+    "RESULT_CATEGORY": "Category of the result: {{category}}"
   },
   "IMAGING_REPORTING_SETTINGS": {
     "TITLE": "Ultrasound",

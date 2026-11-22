@@ -6833,7 +6833,7 @@
     },
     "SHARING": {
       "TITLE": "Qui a consulté mon dossier",
-      "ACCESS_LOG_SCOPE_NOTE": "Cette page indique qui a ouvert votre dossier et où il a été transmis : les consultations par l'équipe qui vous soigne, les accès d'urgence, le partage avec un autre hôpital, les copies délivrées et les informations transmises à votre assureur. Une personne qui revient plusieurs fois à votre dossier au cours d'une même visite n'apparaît qu'une fois.",
+      "ACCESS_LOG_SCOPE_NOTE": "Cette page indique qui a ouvert votre dossier et où il a été transmis : les consultations par l'équipe qui vous soigne, les accès d'urgence, le partage avec un autre hôpital, les copies délivrées, les informations transmises à votre assureur et les résultats communiqués à un parent ou tuteur. Une personne qui revient plusieurs fois à votre dossier au cours d'une même visite n'apparaît qu'une fois.",
       "LOADING_LOG": "Chargement du journal d'accès…",
       "NO_ACCESS_TITLE": "Aucune divulgation enregistrée",
       "NO_ACCESS_DESC": "Aucune divulgation de votre dossier n'a été enregistrée pour cette période.",
@@ -6847,6 +6847,7 @@
         "INSURANCE": "Transmis à votre assurance",
         "COPY_RELEASED": "Une copie a été délivrée",
         "IDENTITY_CHANGE": "Dossiers fusionnés",
+        "RELEASED_TO_FAMILY": "Résultat communiqué à un parent ou tuteur",
         "UNKNOWN": "Accès enregistré"
       },
       "SUMMARY_EMERGENCY": "accès d'urgence à votre dossier",
@@ -15589,6 +15590,40 @@
     "ULTRASOUND_PHYSICIANS_ONLY": "Échographie : dans cet établissement, l'examen est réalisé par un médecin. Vous pouvez enregistrer l'arrivée du patient et joindre des images. Règle provisoire, en attente d'approbation du radiologue ou du directeur médical.",
     "RECORDED_AT_EXAM": "Enregistré lors de l'examen",
     "AWAITS_PREAUTH_NUMBER": "Le numéro de préautorisation de cet examen n'est pas encore enregistré : un médecin ou un radiologue l'enregistre avant que l'examen puisse démarrer."
+  },
+  "IMAGING_CATALOGUE": {
+    "TAB": "Catalogue des examens",
+    "TITLE": "Catalogue d'imagerie",
+    "INTRO": "Les examens qu'une demande d'imagerie peut choisir : les lignes « Imagerie » de la grille tarifaire. Le nom, le code et le prix se modifient dans la grille tarifaire ; ici, la région anatomique et la réponse à « peut révéler une grossesse ».",
+    "PROVISIONAL": "Règle provisoire : un examen qui peut révéler une grossesse n'est jamais montré à un proche.",
+    "LOAD_FAILED": "Le catalogue d'imagerie n'a pas pu être chargé.",
+    "RETRY": "Réessayer",
+    "EMPTY": "Le catalogue est vide. Ajoutez les examens dans la grille tarifaire, catégorie « Imagerie » : ils apparaîtront ici et dans le formulaire de demande.",
+    "BODY_REGION": "Région anatomique",
+    "FLAG": "Peut révéler une grossesse",
+    "FLAG_UNDECIDED": "Non décidé",
+    "FLAG_YES": "Oui : jamais montré aux proches",
+    "FLAG_NO": "Non : montré aux proches",
+    "STATUS_YES": "Jamais montré à un proche, ni l'examen ni sa facture.",
+    "STATUS_NO": "Montré aux proches, sauf si la question clinique de la demande évoque une grossesse.",
+    "STATUS_UNDECIDED_NAMED": "Non décidé : son nom désigne un examen obstétrical, pelvien ou gynécologique, il est masqué aux proches.",
+    "STATUS_UNDECIDED": "Non décidé : par prudence, masqué aux proches quand c'est une échographie ou un examen abdominal ou pelvien d'une personne de 10 à 55 ans qui n'est pas enregistrée de sexe masculin.",
+    "DECIDED_BY": "Décidé par {{name}}, le {{date}}.",
+    "SOMEONE": "un responsable de l'établissement",
+    "SAVED": "Examen mis à jour",
+    "SAVE_FAILED": "L'examen n'a pas pu être mis à jour.",
+    "EXAM": "Examen du catalogue",
+    "FREE_TEXT_OPTION": "Hors catalogue (texte libre)",
+    "PICK_HINT": "Examen du catalogue de l'établissement : il est tarifé d'après la grille tarifaire.",
+    "FREE_TEXT_HINT": "Choisissez l'examen dans le catalogue quand il y figure. Hors catalogue, la ligne peut rester à tarifer à la caisse, et l'examen peut être masqué aux proches par prudence.",
+    "EMPTY_HINT": "Le catalogue d'imagerie de l'établissement est vide : saisissez l'examen en texte libre.",
+    "ORDER_LOAD_FAILED": "Le catalogue n'a pas pu être chargé : saisissez l'examen en texte libre."
+  },
+  "R70_PRIVACY": {
+    "OPEN_REFILLS": "Ouvrir les demandes de renouvellement",
+    "RELEASED_TO": "Communiqué à {{recipient}}",
+    "RELEASED_TO_UNNAMED": "Communiqué à un parent ou tuteur",
+    "RESULT_CATEGORY": "Catégorie du résultat : {{category}}"
   },
   "IMAGING_REPORTING_SETTINGS": {
     "TITLE": "Échographie",

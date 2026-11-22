@@ -16,7 +16,7 @@
       }
     </div>
   </div>
-  @if (canSeeResults) {
+  @if (canSeeResults || canEditCatalogue) {
     <div class="filter-bar">
       <div class="tabs">
         <button
@@ -35,8 +35,23 @@
         >
           {{ 'IMAGING.RESULTS_TAB' | translate }}
         </button>
+        @if (canEditCatalogue) {
+          <!-- QA D3450 (r70): the hospital admin and the radiologist keep the imaging catalogue. -->
+          <button
+            class="tab-btn"
+            data-testid="imaging-catalogue-tab"
+            [class.active]="view() === 'catalogue'"
+            (click)="setView('catalogue')"
+            [attr.aria-pressed]="view() === 'catalogue'"
+          >
+            {{ 'IMAGING_CATALOGUE.TAB' | translate }}
+          </button>
+        }
       </div>
     </div>
+  }
+  @if (view() === 'catalogue') {
+    <app-imaging-catalogue />
   }
   @if (canPickHospital) {
     <!-- User decision 2026-11-14: the super-admin reads every hospital, or one. -->
@@ -1648,12 +1663,35 @@
             </div>
           </div>
         }
+        <!-- QA D3450 / D3254 (r70): the exam is picked from the hospital's imaging catalogue. -->
+        <div class="form-row">
+          <div class="field full-width">
+            <label for="img-catalogueExam">{{ 'IMAGING_CATALOGUE.EXAM' | translate }}</label>
+            <select
+              id="img-catalogueExam"
+              data-testid="img-catalogue-exam"
+              data-server-field="catalogueItemId"
+              [ngModel]="form.catalogueItemId ?? ''"
+              (ngModelChange)="pickCatalogueExam($event)"
+              [title]="'IMAGING_CATALOGUE.EXAM' | translate"
+            >
+              <option value="">{{ 'IMAGING_CATALOGUE.FREE_TEXT_OPTION' | translate }}</option>
+              @for (exam of catalogue(); track exam.id) {
+                <option [value]="exam.id">{{ exam.label }} ({{ exam.code }})</option>
+              }
+            </select>
+            <p class="field-hint" data-testid="img-catalogue-hint">
+              {{ catalogueHintKey() | translate }}
+            </p>
+          </div>
+        </div>
         <div class="form-row">
           <div class="field">
             <label for="img-modality">{{ 'IMAGING.MODALITY' | translate }}</label>
             <select
               id="img-modality"
               [(ngModel)]="form.modality"
+              [disabled]="!!pickedExam()?.modality"
               [title]="'IMAGING.MODALITY' | translate"
             >
               @for (m of modalities; track m) {
@@ -1682,6 +1720,7 @@
               id="img-studyType"
               type="text"
               [(ngModel)]="form.studyType"
+              [readOnly]="!!form.catalogueItemId"
               [placeholder]="'IMAGING.STUDY_TYPE_PLACEHOLDER' | translate"
             />
           </div>

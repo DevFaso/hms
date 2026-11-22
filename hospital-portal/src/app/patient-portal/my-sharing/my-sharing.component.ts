@@ -141,6 +141,14 @@ export class MySharingComponent implements OnInit {
       : 'PORTAL.SHARING.CATEGORY.UNKNOWN';
   }
 
+  /**
+   * QA D3451 (r70): the label of a released result's category (« VIH »), from the same keys the
+   * clinician's screens use. Never the result's value: the server sends none.
+   */
+  resultCategoryLabelKey(entry: AccessLogEntry): string | null {
+    return entry.resultCategory ? `SENSITIVITY_TAG.CATEGORY_${entry.resultCategory}` : null;
+  }
+
   /** Emergency overrides across the whole history, or 0 if unknown. */
   emergencyCount(): number {
     return this.disclosureSummary()?.countsByCategory?.EMERGENCY_ACCESS ?? 0;

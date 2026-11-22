@@ -72,6 +72,15 @@
           <div class="notif-expanded-panel">
             <p class="notif-expanded-message">{{ notif.message }}</p>
             <span class="notif-expanded-time">{{ notif.createdAt | serverTime | dateTime }}</span>
+            @if (notif.type === 'MEDICATION_REFILL') {
+              <!-- QA D3301 (r70): the bell names the patient only; the request itself is one click away. -->
+              <a
+                class="btn-secondary btn-sm"
+                routerLink="/refills"
+                data-testid="notif-open-refills"
+                >{{ 'R70_PRIVACY.OPEN_REFILLS' | translate }}</a
+              >
+            }
           </div>
         }
       }

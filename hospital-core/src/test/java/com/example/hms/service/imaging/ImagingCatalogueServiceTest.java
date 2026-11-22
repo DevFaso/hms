@@ -273,6 +273,19 @@ class ImagingCatalogueServiceTest {
         verify(items, never()).save(any());
     }
 
+    @Test
+    @DisplayName("a deactivated exam is withdrawn from the catalogue: it answers as a missing one and is not edited")
+    void aWithdrawnExamIsNotEdited() {
+        when(roles.isHospitalAdmin(userId, hospitalId)).thenReturn(true);
+        chest.setActive(false);
+        ImagingCatalogueExamUpdateRequestDTO clear =
+            ImagingCatalogueExamUpdateRequestDTO.builder().mayRevealPregnancy(false).build();
+
+        assertThatThrownBy(() -> service.update(chest.getId(), clear)).isInstanceOf(ResourceNotFoundException.class);
+        assertThat(chest.getMayRevealPregnancy()).isNull();
+        verify(items, never()).save(any());
+    }
+
     // ── what a proxy's read asks ─────────────────────────────────────────
 
     @Test
