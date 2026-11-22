@@ -32,15 +32,20 @@ import java.util.UUID;
  * discharge, left {@code medicationReconciliation} empty and the flag without effect.
  *
  * <p>This is the one place that carries them, every time one of them can change: when the stay is
- * discharged, when a summary is created for a stay, and when a take-home order is signed. Each order is
- * listed once (by its id; an entry typed by hand with the same drug name counts as listed). A finalized
- * (signed) summary is never changed.
+ * discharged, when a summary is created for a stay, when a take-home order is signed, and when one is
+ * withdrawn. Each order is listed once (by its id; an entry typed by hand with the same drug name counts
+ * as listed). A finalized (signed) summary is never changed.
+ *
+ * <p>Review of #1276: the list follows the orders both ways. A take-home order stopped or cancelled
+ * after it was listed leaves the (unfinalized) summary, so a stopped drug and its replacement are not
+ * both read as going home. An entry that records the stop itself ({@code DISCONTINUED}) and an entry
+ * typed by hand (no order id) are the clinician's, and stay.
  *
  * <p>An order written after the stay closed has no stay to sit on: it gets an outpatient anchor. A
  * take-home order of the same patient, at the same hospital, written within
- * {@link #AFTER_DISCHARGE_HOURS} hours of the discharge and before any later admission, belongs to
- * that stay's summary. The window is an operational choice (the discharge round and the pharmacy's
- * hand-over), not a clinical rule.
+ * {@link #AFTER_DISCHARGE_HOURS} hours of the discharge and before any later admission (open or already
+ * closed), and not filed on another stay's encounter, belongs to that stay's summary. The window is an
+ * operational choice (the discharge round and the pharmacy's hand-over), not a clinical rule.
  */
 @Slf4j
 @Component
@@ -56,9 +61,10 @@ public class DischargeTakeHomeMedicines {
     private final AdmissionRepository admissionRepository;
 
     /**
-     * Adds to {@code summary} every take-home order of its stay not listed yet. The caller saves.
+     * Adds to {@code summary} every take-home order of its stay not listed yet, and removes the entry of
+     * every take-home order of the stay that no longer goes home. The caller saves.
      *
-     * @return whether an entry was added
+     * @return whether the list changed
      */
     public boolean carryInto(DischargeSummary summary) {
         if (summary == null || Boolean.TRUE.equals(summary.getIsFinalized()) || summary.getEncounter() == null
@@ -70,14 +76,31 @@ public class DischargeTakeHomeMedicines {
             .findByEncounter_Id(stay.getId(), PrescriptionRepository.EVERY_ORDER_OF_THE_VISIT);
         List<Prescription> candidates = new ArrayList<>(onStay == null ? List.of() : onStay.getContent());
         stayOf(stay).ifPresent(admission -> candidates.addAll(writtenJustAfter(admission)));
-        boolean added = false;
+        boolean changed = false;
         for (Prescription rx : candidates) {
-            if (goesHome(rx) && !listed(summary, rx)) {
-                summary.addMedicationReconciliation(entryFor(rx));
-                added = true;
+            if (goesHome(rx)) {
+                if (!listed(summary, rx)) {
+                    summary.addMedicationReconciliation(entryFor(rx));
+                    changed = true;
+                }
+            } else if (rx != null && rx.isTakeHome()) {
+                changed |= unlist(summary, rx);
             }
         }
-        return added;
+        return changed;
+    }
+
+    /**
+     * Review of #1276: the entry listing a take-home order that no longer goes home (stopped, cancelled)
+     * is taken off the summary. An entry recording the stop ({@code DISCONTINUED}) is the clinician's
+     * statement of it and stays; so does an entry with no order id.
+     */
+    private static boolean unlist(DischargeSummary summary, Prescription rx) {
+        if (summary.getMedicationReconciliation() == null || rx.getId() == null) {
+            return false;
+        }
+        return summary.getMedicationReconciliation().removeIf(e -> rx.getId().equals(e.getPrescriptionId())
+            && e.getReconciliationAction() != MedicationReconciliationAction.DISCONTINUED);
     }
 
     /**
@@ -85,6 +108,18 @@ public class DischargeTakeHomeMedicines {
      * Never fails the signature: the summary is the record of it, not its condition.
      */
     public void onSigned(Prescription rx) {
+        refresh(rx, "signed");
+    }
+
+    /**
+     * Review of #1276: a take-home order was stopped or cancelled: it leaves its stay's summary, if one is
+     * written and still open. Never fails the withdrawal.
+     */
+    public void onWithdrawn(Prescription rx) {
+        refresh(rx, "withdrawn");
+    }
+
+    private void refresh(Prescription rx, String event) {
         if (rx == null || !rx.isTakeHome() || dischargeSummaryRepository == null) {
             return;
         }
@@ -96,7 +131,8 @@ public class DischargeTakeHomeMedicines {
                     }
                 });
         } catch (RuntimeException ex) {
-            log.warn("Take-home order {} not carried into its discharge summary: {}", rx.getId(), ex.getMessage());
+            log.warn("Take-home order {} ({}) not carried into its discharge summary: {}", rx.getId(), event,
+                ex.getMessage());
         }
     }
 
@@ -115,7 +151,12 @@ public class DischargeTakeHomeMedicines {
             .flatMap(enc -> dischargeSummaryRepository.findByEncounter_Id(enc.getId()));
     }
 
-    /** The patient's stay at the order's hospital discharged at most {@link #AFTER_DISCHARGE_HOURS} before it was written. */
+    /**
+     * The patient's stay at the order's hospital discharged at most {@link #AFTER_DISCHARGE_HOURS} before
+     * it was written. None when the patient was admitted again between that discharge and the order (the
+     * later stay open or already closed: the order belongs to the later stay, not to the earlier one), or
+     * when the order is filed on the encounter of another stay.
+     */
     private Optional<Admission> stayEndedJustBefore(Prescription rx) {
         UUID patientId = rx.getPatient() != null ? rx.getPatient().getId() : null;
         UUID hospitalId = rx.getHospital() != null ? rx.getHospital().getId() : null;
@@ -129,9 +170,20 @@ public class DischargeTakeHomeMedicines {
         if (admittedSince) {
             return Optional.empty();
         }
+        UUID filedOnStay = rx.getEncounter() != null ? rx.getEncounter().getAdmissionId() : null;
         return stays.stream()
             .filter(a -> a.getActualDischargeDateTime() != null && within(a.getActualDischargeDateTime(), written))
-            .max(Comparator.comparing(Admission::getActualDischargeDateTime));
+            .max(Comparator.comparing(Admission::getActualDischargeDateTime))
+            .filter(ended -> !admittedAgainBetween(stays, ended, written))
+            .filter(ended -> filedOnStay == null || filedOnStay.equals(ended.getId()));
+    }
+
+    /** Another admission began after {@code ended}'s discharge and no later than {@code written}. */
+    private static boolean admittedAgainBetween(List<Admission> stays, Admission ended, LocalDateTime written) {
+        LocalDateTime discharged = ended.getActualDischargeDateTime();
+        return stays.stream().anyMatch(a -> !Objects.equals(a.getId(), ended.getId())
+            && a.getAdmissionDateTime() != null && a.getAdmissionDateTime().isAfter(discharged)
+            && !a.getAdmissionDateTime().isAfter(written));
     }
 
     /** The take-home orders of the patient at the stay's hospital written in the hours after its discharge. */

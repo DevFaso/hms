@@ -191,4 +191,115 @@ class DischargeTakeHomeMedicinesTest {
         assertThat(carrier.carryInto(summary)).isFalse();
         assertThat(summary.getMedicationReconciliation()).hasSize(1);
     }
+    /** Review of #1276: the QA scenario, an order stopped and replaced after the summary listed it. */
+    @Test
+    void aStoppedTakeHomeOrderLeavesTheSummaryAndItsReplacementIsListedOnce() {
+        Prescription first = rx("Amoxicilline", true, PrescriptionStatus.SIGNED, stayEncounter, discharged.minusHours(5));
+        when(prescriptionRepository.findByEncounter_Id(eq(stayEncounter.getId()), any()))
+            .thenReturn(new PageImpl<>(List.of(first)));
+        carrier.onSigned(first);
+        assertThat(listed()).containsExactly("Amoxicilline");
+
+        first.setStatus(PrescriptionStatus.DISCONTINUED);
+        carrier.onWithdrawn(first);
+        assertThat(listed()).isEmpty();
+
+        Prescription replacement = rx("Amoxicilline", true, PrescriptionStatus.SIGNED, stayEncounter, discharged.minusHours(4));
+        replacement.setDosage("1 g");
+        when(prescriptionRepository.findByEncounter_Id(eq(stayEncounter.getId()), any()))
+            .thenReturn(new PageImpl<>(List.of(first, replacement)));
+        carrier.onSigned(replacement);
+
+        assertThat(summary.getMedicationReconciliation()).singleElement().satisfies(e -> {
+            assertThat(e.getPrescriptionId()).isEqualTo(replacement.getId());
+            assertThat(e.getDosage()).isEqualTo("1 g");
+        });
+    }
+
+    /** Review of #1276: stopped and replaced before anything told the carrier: the next pass lists the replacement only. */
+    @Test
+    void aStopAndAReplacementSeenInOnePassListTheReplacementOnly() {
+        Prescription first = rx("Amoxicilline", true, PrescriptionStatus.SIGNED, stayEncounter, discharged.minusHours(5));
+        when(prescriptionRepository.findByEncounter_Id(eq(stayEncounter.getId()), any()))
+            .thenReturn(new PageImpl<>(List.of(first)));
+        carrier.carryInto(summary);
+        first.setStatus(PrescriptionStatus.CANCELLED);
+        Prescription replacement = rx("Amoxicilline", true, PrescriptionStatus.SIGNED, stayEncounter, discharged.minusHours(4));
+        when(prescriptionRepository.findByEncounter_Id(eq(stayEncounter.getId()), any()))
+            .thenReturn(new PageImpl<>(List.of(replacement, first)));
+
+        assertThat(carrier.carryInto(summary)).isTrue();
+
+        assertThat(summary.getMedicationReconciliation()).singleElement()
+            .satisfies(e -> assertThat(e.getPrescriptionId()).isEqualTo(replacement.getId()));
+    }
+
+    @Test
+    void aStopTheClinicianRecordedAndAnEntryTypedByHandStayWhenTheOrderIsWithdrawn() {
+        Prescription stopped = rx("Amoxicilline", true, PrescriptionStatus.CANCELLED, stayEncounter, discharged.minusHours(5));
+        summary.addMedicationReconciliation(MedicationReconciliationEntry.builder().medicationName("Amoxicilline")
+            .prescriptionId(stopped.getId())
+            .reconciliationAction(com.example.hms.enums.MedicationReconciliationAction.DISCONTINUED).build());
+        summary.addMedicationReconciliation(MedicationReconciliationEntry.builder().medicationName("Zinc").build());
+        when(prescriptionRepository.findByEncounter_Id(eq(stayEncounter.getId()), any()))
+            .thenReturn(new PageImpl<>(List.of(stopped)));
+
+        carrier.onWithdrawn(stopped);
+
+        assertThat(listed()).containsExactly("Amoxicilline", "Zinc");
+    }
+
+    @Test
+    void aWithdrawalNeverChangesAFinalizedSummary() {
+        Prescription first = rx("Amoxicilline", true, PrescriptionStatus.SIGNED, stayEncounter, discharged.minusHours(5));
+        when(prescriptionRepository.findByEncounter_Id(eq(stayEncounter.getId()), any()))
+            .thenReturn(new PageImpl<>(List.of(first)));
+        carrier.carryInto(summary);
+        summary.setIsFinalized(true);
+
+        first.setStatus(PrescriptionStatus.DISCONTINUED);
+        carrier.onWithdrawn(first);
+
+        assertThat(listed()).containsExactly("Amoxicilline");
+        verify(dischargeSummaryRepository, never()).save(any());
+    }
+
+    /**
+     * Review of #1276: an order written during a readmission that has since closed is that stay's, not
+     * the first one's (the old rule saw only a readmission still open).
+     */
+    @Test
+    void anOrderDuringAReadmissionClosedSinceIsNotTheFirstStays() {
+        Admission readmitted = new Admission();
+        readmitted.setId(UUID.randomUUID());
+        readmitted.setAdmissionDateTime(discharged.plusHours(1));
+        readmitted.setActualDischargeDateTime(discharged.plusHours(30));
+        when(admissionRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospital.getId()))
+            .thenReturn(List.of(stay, readmitted));
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(readmitted.getId()))
+            .thenReturn(Optional.empty());
+        Prescription afterSecond = rx("Ibuprofène", true, PrescriptionStatus.SIGNED, anchor(), discharged.plusHours(3));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospital.getId()))
+            .thenReturn(List.of(afterSecond));
+
+        carrier.onSigned(afterSecond);
+        assertThat(carrier.carryInto(summary)).isFalse();
+
+        assertThat(listed()).isEmpty();
+        verify(dischargeSummaryRepository, never()).save(any());
+    }
+
+    @Test
+    void anOrderFiledOnAnotherStaysEncounterIsNotTheStays() {
+        Encounter otherStay = anchor();
+        otherStay.setAdmissionId(UUID.randomUUID());
+        Prescription onOther = rx("Ibuprofène", true, PrescriptionStatus.SIGNED, otherStay, discharged.plusHours(3));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospital.getId()))
+            .thenReturn(List.of(onOther));
+
+        carrier.onSigned(onOther);
+        assertThat(carrier.carryInto(summary)).isFalse();
+
+        assertThat(listed()).isEmpty();
+    }
 }

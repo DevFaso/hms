@@ -2460,6 +2460,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         voidPreparedFillOnEdit(existing, statusBefore);
         releaseQueueClaimOnEdit(existing, currentUserId);
         Prescription saved = prescriptionRepository.save(existing);
+        takeHomeLeavesTheSummary(saved);
         auditSignedWithdrawalAfterCommit(saved, currentUserId, statusBefore, byPrescriber, reason);
     }
 
@@ -2487,8 +2488,19 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         voidPreparedFillOnEdit(existing, statusBefore);
         releaseQueueClaimOnEdit(existing, currentUserId);
         Prescription saved = prescriptionRepository.save(existing);
+        takeHomeLeavesTheSummary(saved);
         auditSignedWithdrawalAfterCommit(saved, currentUserId, statusBefore, byPrescriber, reason);
         return prescriptionMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * Review of #1276 (QA D2553): a withdrawn take-home order leaves its stay's discharge summary, so the
+     * stopped drug and its replacement are not both listed as going home.
+     */
+    private void takeHomeLeavesTheSummary(Prescription withdrawn) {
+        if (takeHomeMedicines != null) {
+            takeHomeMedicines.onWithdrawn(withdrawn);
+        }
     }
 
     /**

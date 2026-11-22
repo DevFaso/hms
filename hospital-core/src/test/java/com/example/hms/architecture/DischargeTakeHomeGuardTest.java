@@ -48,4 +48,23 @@ class DischargeTakeHomeGuardTest {
             .as("a take-home order signed after its stay's summary was written")
             .contains("takeHomeMedicines.onSigned(");
     }
+    /**
+     * Review of #1276: the list follows the orders both ways. Every path that withdraws a signed order
+     * (the ones that write the withdrawal audit) also tells the carrier, so a stopped take-home order
+     * leaves its stay's summary.
+     */
+    @Test
+    void everySignedWithdrawalReachesTheCarrier() throws IOException {
+        String src = code(MAIN.resolve("service/PrescriptionServiceImpl.java"));
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("auditSignedWithdrawalAfterCommit\\(saved").matcher(src);
+        int withdrawals = 0;
+        while (m.find()) {
+            withdrawals++;
+            assertThat(AppointmentSlotRulesGuardTest.enclosingMethod(src, m.start()))
+                .as("a signed order's withdrawal that leaves its take-home entry on the summary")
+                .contains("takeHomeLeavesTheSummary(");
+        }
+        assertThat(withdrawals).as("signed withdrawals found").isGreaterThanOrEqualTo(2);
+        assertThat(src).contains("takeHomeMedicines.onWithdrawn(");
+    }
 }
