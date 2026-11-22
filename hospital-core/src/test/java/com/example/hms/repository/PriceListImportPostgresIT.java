@@ -59,6 +59,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+import static com.example.hms.testsupport.RandomIds.withoutRandomIds;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -298,7 +299,7 @@ class PriceListImportPostgresIT {
         verify(audit, times(1)).logEvent(logged.capture());
         assertThat(logged.getValue().getEventType()).isEqualTo(AuditEventType.PRICE_LIST_IMPORTED);
         assertThat(logged.getValue().getResourceId()).isEqualTo(applied.getImportId().toString());
-        assertThat(logged.getValue().getEventDescription()).doesNotContain("Consultation", "2000");
+        assertThat(withoutRandomIds(logged.getValue().getEventDescription())).doesNotContain("Consultation", "2000");
     }
 
     @Test

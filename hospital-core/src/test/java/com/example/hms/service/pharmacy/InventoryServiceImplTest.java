@@ -46,6 +46,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.example.hms.testsupport.RandomIds.withoutRandomIds;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -1451,7 +1452,7 @@ class InventoryServiceImplTest {
         org.mockito.ArgumentCaptor<AuditEventRequestDTO> audit = org.mockito.ArgumentCaptor.forClass(AuditEventRequestDTO.class);
         verify(auditEventLogService).logEvent(audit.capture());
         assertThat(audit.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.PHARMACY_PRICE_CHANGED);
-        assertThat(audit.getValue().getEventDescription()).doesNotContain("300").doesNotContain("250");
+        assertThat(withoutRandomIds(audit.getValue().getEventDescription())).doesNotContain("300").doesNotContain("250");
     }
 
     @org.junit.jupiter.api.Test

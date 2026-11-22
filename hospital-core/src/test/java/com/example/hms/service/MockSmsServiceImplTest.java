@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
+import static com.example.hms.testsupport.RandomIds.withoutRandomIds;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** D2000 class: the no-provider SMS bean says "not sent" and never logs the number or the text. */
@@ -36,7 +37,7 @@ class MockSmsServiceImplTest {
         assertThat(mock.deliversRealSms()).isFalse();
         assertThat(appender.list).hasSize(1);
         String line = appender.list.get(0).getFormattedMessage();
-        assertThat(line).contains("NOT sent").contains("56")
+        assertThat(withoutRandomIds(line)).contains("NOT sent").contains("56")
             .doesNotContain("482913").doesNotContain("70123456").doesNotContain("votre code");
     }
 }
