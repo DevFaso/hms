@@ -77,7 +77,7 @@ describe('Inventory pack size (QA D2674)', () => {
         { provide: PharmacyService, useValue: svc },
         { provide: PharmacyMoneyService, useValue: m },
         { provide: ToastService, useValue: toast() },
-        { provide: RoleContextService, useValue: {} },
+        { provide: RoleContextService, useValue: { hasAnyActiveRoleExactly: () => true } },
       ],
     });
     const fixture = TestBed.createComponent(InventoryDashboardComponent);

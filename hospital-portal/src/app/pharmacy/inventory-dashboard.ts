@@ -100,6 +100,15 @@ export class InventoryDashboardComponent implements OnInit {
     return this.roleContext.hasAnyActiveRoleExactly(actionRoles('inventoryReorderTrigger'));
   }
 
+  /**
+   * QA D3407 (r70): the selling price is the store manager's or the hospital admin's
+   * (RoleValidator.canSetPharmacyPrice); the pharmacist was offered the price field and the
+   * pencil, and the first item creation failed on the server's refusal.
+   */
+  canSetPrice(): boolean {
+    return this.roleContext.hasAnyActiveRoleExactly(['ROLE_STORE_MANAGER', 'ROLE_HOSPITAL_ADMIN']);
+  }
+
   // Pharmacy selection
   pharmacies = signal<PharmacyResponse[]>([]);
   /** True once the pharmacy list answered, so an empty list shows a hint, not a blank select (D59). */
@@ -308,7 +317,11 @@ export class InventoryDashboardComponent implements OnInit {
     }
     refuseFields(root, [], CI_FIELD_IDS, '');
     this.saving.set(true);
-    this.svc.createInventoryItem(this.createForm).subscribe({
+    // QA D3407: a price is sent only by those who may set it; the pharmacist's item has none yet.
+    const request = this.canSetPrice()
+      ? this.createForm
+      : { ...this.createForm, unitPrice: undefined };
+    this.svc.createInventoryItem(request).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('PHARMACY.ITEM_CREATED'));
         this.closeCreateModal();

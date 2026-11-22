@@ -395,16 +395,18 @@
                     <span class="price-text" [attr.data-testid]="'price-' + item.id">{{
                       (item.unitPrice ?? null) !== null ? (item.unitPrice | cfa: 'XOF') : '—'
                     }}</span>
-                    <button
-                      type="button"
-                      class="btn-icon price-edit"
-                      [attr.aria-label]="'PHARMACY.EDIT_PRICE' | translate"
-                      [title]="'PHARMACY.EDIT_PRICE' | translate"
-                      [attr.data-testid]="'price-edit-' + item.id"
-                      (click)="editingPriceId.set(item.id)"
-                    >
-                      <span class="material-symbols-outlined" aria-hidden="true">edit</span>
-                    </button>
+                    @if (canSetPrice()) {
+                      <button
+                        type="button"
+                        class="btn-icon price-edit"
+                        [attr.aria-label]="'PHARMACY.EDIT_PRICE' | translate"
+                        [title]="'PHARMACY.EDIT_PRICE' | translate"
+                        [attr.data-testid]="'price-edit-' + item.id"
+                        (click)="editingPriceId.set(item.id)"
+                      >
+                        <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                      </button>
+                    }
                   }
                 </td>
                 <td>
@@ -679,17 +681,20 @@
                   min="0"
                 />
               </div>
-              <div class="field">
-                <label for="ciUnitPrice">{{ 'PHARMACY.UNIT_PRICE' | translate }}</label>
-                <input
-                  id="ciUnitPrice"
-                  type="number"
-                  [(ngModel)]="createForm.unitPrice"
-                  name="unitPrice"
-                  min="0"
-                  step="1"
-                />
-              </div>
+              <!-- QA D3407 (r70): only the store manager or the hospital admin sets a price. -->
+              @if (canSetPrice()) {
+                <div class="field">
+                  <label for="ciUnitPrice">{{ 'PHARMACY.UNIT_PRICE' | translate }}</label>
+                  <input
+                    id="ciUnitPrice"
+                    type="number"
+                    [(ngModel)]="createForm.unitPrice"
+                    name="unitPrice"
+                    min="0"
+                    step="1"
+                  />
+                </div>
+              }
             </div>
           </div>
           <div class="modal-actions">
