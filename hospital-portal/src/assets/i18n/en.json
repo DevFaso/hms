@@ -10869,7 +10869,7 @@
     "CANCEL_DISPENSE_CONFIRM": "Cancel this dispense and reverse stock changes?",
     "CANCEL_FAILED": "Cancel failed",
     "CATALOG_LOAD_FAILED": "Failed to load medication catalog",
-    "CATALOG_SUBTITLE": "Manage the national medication catalog",
+    "CATALOG_SUBTITLE": "Manage this hospital's medication catalog",
     "CATALOG_TITLE": "Medication Catalog",
     "CATEGORY": "Category",
     "CHECK": "Check",
@@ -11362,7 +11362,8 @@
       "DESTROY_FAILED": "The destruction could not be recorded."
     },
     "REGISTER_QUARANTINE": "In quarantine",
-    "REGISTER_QUARANTINE_MOVE": "quarantine {{qty}} → {{after}}"
+    "REGISTER_QUARANTINE_MOVE": "quarantine {{qty}} → {{after}}",
+    "FIRST_PHARMACY_ASK_ADMIN": "No pharmacy is registered yet. The hospital administrator registers it: ask them."
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",

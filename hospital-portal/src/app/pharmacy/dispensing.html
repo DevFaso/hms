@@ -519,7 +519,7 @@
             <dl class="handover-payment-grid">
               <div>
                 <dt>{{ 'PHARMACY_MONEY.HANDOVER.QUANTITY' | translate }}</dt>
-                <dd>{{ pay.quantity }} {{ pay.unit ?? '' }}</dd>
+                <dd>{{ pay.quantity | countUnit: pay.unit }}</dd>
               </div>
               <div>
                 <dt>{{ 'PHARMACY_MONEY.HANDOVER.CHARGE' | translate }}</dt>
@@ -812,7 +812,7 @@
                 </td>
                 <td>{{ rx.dosage }}</td>
                 <td>
-                  {{ rx.quantity }} {{ rx.quantityUnit }}
+                  {{ rx.quantity | countUnit: rx.quantityUnit }}
                   <!-- QA D1001: a partly filled order says what is still owed -->
                   @if (isPartlyDispensed(rx)) {
                     <span class="cell-sub" [attr.data-testid]="'rx-remaining-' + rx.id">{{
@@ -1158,7 +1158,7 @@
               <tr>
                 <td data-testid="recent-dispense-patient">{{ d.patientName || '—' }}</td>
                 <td>{{ d.medicationName }}</td>
-                <td>{{ d.quantityDispensed }} {{ d.unit }}</td>
+                <td>{{ d.quantityDispensed | countUnit: d.unit }}</td>
                 <td>
                   <span class="badge" [ngClass]="getStatusClass(d.status)">{{
                     d.status | enumLabel: 'dispenseStatus'

@@ -40,6 +40,7 @@ import {
 import { AuthService } from '../auth/auth.service';
 import { PrintLabelService } from '../services/print-label.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { CountUnitPipe } from '../shared/pipes/count-unit.pipe';
 import { OfflineDispenseQueueService } from './offline-dispense-queue.service';
 import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
@@ -185,6 +186,7 @@ export function sameDispenseUnit(
   selector: 'app-dispensing',
   standalone: true,
   imports: [
+    CountUnitPipe,
     SubmitGuardDirective,
     ServerTimePipe,
     PersonNamePipe,

@@ -10869,7 +10869,7 @@
     "CANCEL_DISPENSE_CONFIRM": "Annuler cette dispensation et rétablir le stock ?",
     "CANCEL_FAILED": "Échec de l'annulation",
     "CATALOG_LOAD_FAILED": "Échec du chargement du catalogue de médicaments",
-    "CATALOG_SUBTITLE": "Gérer le catalogue national des médicaments",
+    "CATALOG_SUBTITLE": "Gérer le catalogue des médicaments de cet établissement",
     "CATALOG_TITLE": "Catalogue de médicaments",
     "CATEGORY": "Catégorie",
     "CHECK": "Vérifier",
@@ -11362,7 +11362,8 @@
       "DESTROY_FAILED": "La destruction n’a pas pu être enregistrée."
     },
     "REGISTER_QUARANTINE": "En quarantaine",
-    "REGISTER_QUARANTINE_MOVE": "quarantaine {{qty}} → {{after}}"
+    "REGISTER_QUARANTINE_MOVE": "quarantaine {{qty}} → {{after}}",
+    "FIRST_PHARMACY_ASK_ADMIN": "Aucune pharmacie n’est encore enregistrée. C’est l’administrateur de l’établissement qui l’enregistre : demandez-le-lui."
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",

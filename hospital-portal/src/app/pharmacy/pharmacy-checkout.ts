@@ -1,3 +1,4 @@
+import { CountUnitPipe } from '../shared/pipes/count-unit.pipe';
 import { map } from 'rxjs';
 import { allRows } from '../shared/all-pages';
 import { refusalReason } from '../shared/refusal-reason';
@@ -71,7 +72,15 @@ export const PHARMACY_CHECKOUT_METHODS: readonly {
 @Component({
   selector: 'app-pharmacy-checkout',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, DatePipe, CfaPipe],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    DatePipe,
+    CfaPipe,
+    CountUnitPipe,
+  ],
   templateUrl: './pharmacy-checkout.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pharmacy-checkout.scss',
