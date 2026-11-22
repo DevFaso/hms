@@ -122,7 +122,10 @@
               <dd data-testid="checkin-coverage-plan">
                 {{ c.planName || ('R70_MONEY.CHECKIN.NO_PLAN' | translate) }}
                 @if (c.coveragePercent !== null && c.coveragePercent !== undefined) {
-                  ({{ 'R70_MONEY.CHECKIN.PERCENT' | translate: { percent: c.coveragePercent } }})
+                  ({{
+                    'R70_MONEY.CHECKIN.PERCENT'
+                      | translate: { percent: (c.coveragePercent | number) }
+                  }})
                 }
               </dd>
             </div>

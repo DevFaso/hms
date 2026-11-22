@@ -815,7 +815,7 @@ public class DispenseServiceImpl implements DispenseService {
     /** QA D3408: the insurer share of a fill, read by the checkout. A required setter; a unit test may omit it. */
     private FillCoverShare fillCoverShare;
 
-    @Autowired
+    @Autowired(required = false)
     public void setFillCoverShare(FillCoverShare fillCoverShare) {
         this.fillCoverShare = fillCoverShare;
     }

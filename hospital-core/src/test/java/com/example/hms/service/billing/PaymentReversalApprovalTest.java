@@ -106,6 +106,7 @@ class PaymentReversalApprovalTest {
             return user.equals(BILLING_A) || user.equals(BILLING_2_A) || user.equals(RECEPTION_A);
         });
         when(sessions.stamp(any(), any(), any())).thenReturn(SESSION);
+        when(sessions.stampPayout(any(), any(), any(), any(), any())).thenReturn(SESSION);
 
         Hospital hospital = new Hospital();
         hospital.setId(HOSPITAL_A);
@@ -251,7 +252,7 @@ class PaymentReversalApprovalTest {
             .hasMessageContaining("deux fois le même trop-perçu");
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CONFIRMED);
         assertThat(invoice.getAmountPaid()).isEqualByComparingTo("4000");
-        verify(sessions, never()).stamp(any(), any(), any());
+        verify(sessions, never()).stampPayout(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -313,7 +314,7 @@ class PaymentReversalApprovalTest {
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CONFIRMED);
         assertThat(invoice.getAmountPaid()).isEqualByComparingTo("2000");
         verify(payments, never()).transitionStatus(any(), any(), any(), any());
-        verify(sessions, never()).stamp(any(), any(), any());
+        verify(sessions, never()).stampPayout(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -373,7 +374,7 @@ class PaymentReversalApprovalTest {
         assertThat(invoice.getAmountPaid()).isEqualByComparingTo("1000");
         // A reversal is not an overpayment refund: what was refunded on the invoice is unchanged.
         assertThat(invoice.getAmountRefunded()).isEqualByComparingTo("0");
-        verify(sessions).stamp(CashTill.BILLING, HOSPITAL_A, BILLING_A);
+        verify(sessions).stampPayout(eq(CashTill.BILLING), eq(HOSPITAL_A), eq(BILLING_A), any(), any());
         ArgumentCaptor<InvoiceRefundRepository.Payout> payout = ArgumentCaptor.forClass(InvoiceRefundRepository.Payout.class);
         verify(refunds).markPaid(eq(reversal.getId()), eq(HOSPITAL_A), payout.capture());
         assertThat(payout.getValue().cashSessionId()).isEqualTo(SESSION);
@@ -469,6 +470,6 @@ class PaymentReversalApprovalTest {
         service.approve(invoice.getId(), reversal.getId());
         actAs(RECEPTION_A);
         service.pay(invoice.getId(), reversal.getId(), null);
-        verify(sessions).stamp(CashTill.RECEPTION, HOSPITAL_A, RECEPTION_A);
+        verify(sessions).stampPayout(eq(CashTill.RECEPTION), eq(HOSPITAL_A), eq(RECEPTION_A), any(), any());
     }
 }

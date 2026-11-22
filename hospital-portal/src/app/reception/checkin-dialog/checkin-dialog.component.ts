@@ -15,6 +15,7 @@ import {
   OnInit,
 } from '@angular/core';
 
+import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
@@ -78,6 +79,7 @@ export function copayAmountMessageKey(amount: number | string | null | undefined
     TranslateModule,
     CfaPipe,
     DayMonthPipe,
+    DecimalPipe,
   ],
   templateUrl: './checkin-dialog.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,

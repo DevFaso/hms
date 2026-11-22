@@ -108,7 +108,7 @@ public class LabPriceAutoLink {
             .itemId(item.getId()).code(item.getCode()).label(item.getLabel())
             .testCode(test.getTestCode()).testName(test.getName()).build());
         audit(actorUserId, hospitalId, item.getId(),
-            "Price list item " + item.getId() + " linked by code to lab test " + key);
+            "Price list item " + item.getId() + " updated");
     }
 
     /** The live tests whose code matches {@code code}, by lineage (one test revised twice is one match). */
