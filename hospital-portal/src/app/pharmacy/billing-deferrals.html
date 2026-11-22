@@ -116,7 +116,33 @@
                 <dd>{{ r.decidedByName }}</dd>
               </div>
             }
-            @if (r.creditLimit) {
+            <!-- QA D3406 (r70): the amount of the fill, before anybody sets a ceiling. -->
+            @if (r.fillCharge !== null && r.fillCharge !== undefined) {
+              <div data-testid="deferral-fill-charge">
+                <dt>{{ 'R70_MONEY.DEFERRAL.FILL_CHARGE' | translate }}</dt>
+                <dd>{{ r.fillCharge | cfa: 'XOF' }}</dd>
+              </div>
+            }
+            @if (r.fillDue !== null && r.fillDue !== undefined && r.fillDue !== r.fillCharge) {
+              <div data-testid="deferral-fill-due">
+                <dt>{{ 'R70_MONEY.DEFERRAL.FILL_DUE' | translate }}</dt>
+                <dd>{{ r.fillDue | cfa: 'XOF' }}</dd>
+              </div>
+            }
+            <!-- QA D3408 (r70): a cover leaves the insurer share only; the patient pays the rest. -->
+            @if (r.insurerShare !== null && r.insurerShare !== undefined) {
+              <div data-testid="deferral-insurer-share">
+                <dt>{{ 'R70_MONEY.DEFERRAL.INSURER_SHARE' | translate }}</dt>
+                <dd>{{ r.insurerShare | cfa: 'XOF' }}</dd>
+              </div>
+            }
+            @if (r.patientShare !== null && r.patientShare !== undefined) {
+              <div data-testid="deferral-patient-share">
+                <dt>{{ 'R70_MONEY.DEFERRAL.PATIENT_SHARE' | translate }}</dt>
+                <dd>{{ r.patientShare | cfa: 'XOF' }}</dd>
+              </div>
+            }
+            @if (r.creditLimit && r.kind !== 'THIRD_PARTY_COVER') {
               <div>
                 <dt>{{ 'PHARMACY_MONEY.DEFERRAL.LIMIT_LABEL' | translate }}</dt>
                 <dd>{{ r.creditLimit | cfa: 'XOF' }}</dd>
@@ -230,6 +256,9 @@
                     <small class="hint">{{
                       'PHARMACY_MONEY.DEFERRAL.COVER_HINT' | translate
                     }}</small>
+                    <small class="hint" data-testid="deferral-step-cover-share">{{
+                      'R70_MONEY.DEFERRAL.COVER_SHARE_HINT' | translate
+                    }}</small>
                   </div>
                 }
                 @if (a.step === 'approve' && r.kind === 'OUTPATIENT_CREDIT') {
@@ -250,6 +279,12 @@
                     <small class="hint">{{
                       'PHARMACY_MONEY.DEFERRAL.LIMIT_HINT' | translate
                     }}</small>
+                    @if (r.fillDue !== null && r.fillDue !== undefined) {
+                      <small class="hint" data-testid="deferral-step-limit-due">{{
+                        'R70_MONEY.DEFERRAL.LIMIT_AT_LEAST'
+                          | translate: { amount: (r.fillDue | cfa: 'XOF') }
+                      }}</small>
+                    }
                   </div>
                 }
                 <div class="field">

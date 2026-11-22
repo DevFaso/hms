@@ -43,4 +43,10 @@ public interface DispenseBillingDeferralRepository extends JpaRepository<Dispens
 
     /** These deferrals, at the acting hospital (the reconciliation of a day). */
     List<DispenseBillingDeferral> findByHospitalIdAndIdIn(UUID hospitalId, Collection<UUID> ids);
+
+    /** Review of #1284: a patient's deferrals of one kind at a hospital, asked for in [from, to). */
+    List<DispenseBillingDeferral> findByHospitalIdAndPatientIdAndKindAndStatusInAndRequestedAtBetween(
+            UUID hospitalId, UUID patientId, com.example.hms.enums.DispenseBillingDeferralKind kind,
+            Collection<com.example.hms.enums.DispenseBillingDeferralStatus> statuses, java.time.LocalDateTime from,
+            java.time.LocalDateTime to);
 }

@@ -415,6 +415,45 @@ export class PriceListComponent implements OnInit {
 
   readonly importOpen = signal(false);
   readonly exporting = signal(false);
+  /** QA r70 (lab set-up): « Lier par code » is running. */
+  readonly linking = signal(false);
+
+  linkLabTestsByCode(): void {
+    if (this.linking()) return;
+    this.linking.set(true);
+    this.api
+      .linkLabTestsByCode()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (report) => {
+          this.linking.set(false);
+          const left = [
+            ...(report?.unmatched ?? []),
+            ...(report?.ambiguous ?? []),
+            ...(report?.alreadyTaken ?? []),
+          ];
+          const linked = report?.linked?.length ?? 0;
+          const message = this.translate.instant(
+            left.length > 0
+              ? 'R70_MONEY.PRICE_LIST.LINKED_WITH_LEFT'
+              : 'R70_MONEY.PRICE_LIST.LINKED_ALL',
+            { linked, left: left.length, codes: left.join(', ') },
+          );
+          if (linked > 0) {
+            this.toast.success(message);
+          } else {
+            this.toast.info(message);
+          }
+          this.load();
+        },
+        error: (err) => {
+          this.linking.set(false);
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('R70_MONEY.PRICE_LIST.LINK_FAILED'),
+          );
+        },
+      });
+  }
 
   openImport(): void {
     this.importOpen.set(true);

@@ -116,6 +116,15 @@ class DeferredBillingGuardTest {
         assertThat(oneStep).as("the one-step fill asks the gate before it is saved").contains("requireFreeOrDeferred(");
         assertThat(service).as("both reach the one gate").contains("billingDeferrals.admit(");
         assertThat(count(service, "billingDeferrals.admit(")).isEqualTo(1);
+        // Review of #1284: the gate is told the fill's money (charge, paid by the patient), so a third-party cover
+        // checks the patient share on what the patient paid, never on what a claim took off. Both paths pass it.
+        assertThat(service).as("the one gate call passes the fill's money")
+            .contains("billingDeferrals.admit(prescription, hospitalId, due, choice, actor, claimGap, money)");
+        assertThat(count(service, "new DispenseBillingDeferralService.FillMoney("))
+            .as("the hand-over and the one-step fill each tell the gate the fill's money").isEqualTo(2);
+        assertThat(between(service, "DispenseBillingDeferral requirePaidCoveredOrDeferred(",
+                "private void closeDeferralsOfSettledOrder("))
+            .contains("new DispenseBillingDeferralService.FillMoney(settlement.charge(), settlement.paid())");
     }
 
     @Test

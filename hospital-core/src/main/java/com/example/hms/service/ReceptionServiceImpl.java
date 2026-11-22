@@ -25,6 +25,9 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.PatientInsurance;
+import com.example.hms.service.billing.CoverageOrder;
+import com.example.hms.service.billing.InvoiceCoverageService;
+import com.example.hms.service.billing.TariffResolver;
 import com.example.hms.model.Staff;
 import com.example.hms.model.scheduling.AppointmentSlot;
 import com.example.hms.payload.dto.DuplicateCandidateDTO;
@@ -64,6 +67,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -251,9 +255,16 @@ public class ReceptionServiceImpl implements ReceptionService {
         List<PatientInsurance> insurances = insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId);
         LocalDate today = LocalDate.now();
         boolean hasActive = insurances.stream()
-                .anyMatch(i -> i.getExpirationDate() == null || !i.getExpirationDate().isBefore(today));
-        boolean hasPrimary = insurances.stream().anyMatch(PatientInsurance::isPrimary);
-        PatientInsurance primary = snapshotCoverage(insurances);
+                .anyMatch(i -> CoverageOrder.inForceOn(i, today));
+        // QA D3250: the desk shows and attests the coverage an invoice bills, by the CoverageOrder rule.
+        // A single coverage in force is the one that applies, flagged primary or not.
+        boolean hasPrimary = !insurances.isEmpty() && !CoverageOrder.ambiguous(insurances, today)
+                && (CoverageOrder.first(insurances, today).isPresent() || CoverageOrder.hasPrimary(insurances));
+        PatientInsurance primary = deskCoverage(patientId, hospitalId, insurances, today);
+        if (primary == null) {
+            primary = snapshotCoverage(insurances);
+        }
+        CheckInCoverage checkIn = checkInCoverage(patientId, hospitalId, today);
 
         FrontDeskPatientSnapshotDTO.InsuranceSummary insuranceSummary = FrontDeskPatientSnapshotDTO.InsuranceSummary.builder()
                 .insuranceId(primary != null ? primary.getId() : null)
@@ -268,6 +279,15 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .verifiedByName(primary != null
                         ? new com.example.hms.service.support.UserDisplayNames(userRepo).ofUsername(primary.getVerifiedBy())
                         : null)
+                // QA D3258: what the check-in dialog shows: payer, plan, validity and the suggested copay.
+                .payerName(checkIn.quote() != null ? checkIn.quote().payerName() : null)
+                .planName(checkIn.quote() != null ? checkIn.quote().planName() : null)
+                .effectiveFrom(primary != null ? primary.getEffectiveDate() : null)
+                .coveragePercent(checkIn.quote() != null ? checkIn.quote().defaultPercent() : null)
+                .consultationFee(checkIn.fee())
+                .consultationLabel(checkIn.label())
+                .suggestedPayerShare(checkIn.quote() != null ? checkIn.quote().payerShare() : null)
+                .suggestedCopay(checkIn.suggestedCopay())
                 .build();
 
         // Billing
@@ -340,19 +360,17 @@ public class ReceptionServiceImpl implements ReceptionService {
             return "MISSING_INSURANCE";
         }
         boolean hasActive = insurances.stream()
-                .anyMatch(i -> i.getExpirationDate() == null || !i.getExpirationDate().isBefore(today));
+                .anyMatch(i -> CoverageOrder.inForceOn(i, today));
         if (!hasActive) return "EXPIRED_INSURANCE";
-        boolean hasPrimary = insurances.stream().anyMatch(PatientInsurance::isPrimary);
-        if (!hasPrimary) return "NO_PRIMARY";
+        // QA D3250: only several coverages in force with none primary leave the desk unable to tell which applies.
+        if (CoverageOrder.ambiguous(insurances, today)) return "NO_PRIMARY";
         return null;
     }
 
     private InsuranceIssueDTO buildInsuranceIssueItem(ReceptionQueueItemDTO item, String issueType,
                                                        List<PatientInsurance> insurances) {
-        PatientInsurance relevantInsurance = insurances.isEmpty() ? null : insurances.stream()
-                .filter(PatientInsurance::isPrimary)
-                .findFirst()
-                .orElse(insurances.get(0));
+        PatientInsurance relevantInsurance = CoverageOrder.first(insurances, LocalDate.now(ZoneId.systemDefault()))
+                .orElse(snapshotCoverage(insurances));
         return InsuranceIssueDTO.builder()
                 .appointmentId(item.getAppointmentId())
                 .encounterId(item.getEncounterId())
@@ -636,8 +654,9 @@ public class ReceptionServiceImpl implements ReceptionService {
         if (insurances.isEmpty()) return true;
         LocalDate today = LocalDate.now();
         boolean hasActive = insurances.stream()
-                .anyMatch(i -> i.getExpirationDate() == null || !i.getExpirationDate().isBefore(today));
-        return !hasActive || insurances.stream().noneMatch(PatientInsurance::isPrimary);
+                .anyMatch(i -> CoverageOrder.inForceOn(i, today));
+        // QA D3250: the same rule as the invoice and the snapshot (CoverageOrder).
+        return !hasActive || CoverageOrder.ambiguous(insurances, today);
     }
 
     private boolean detectOutstandingBalance(UUID patientId, UUID hospitalId) {
@@ -1329,20 +1348,21 @@ public class ReceptionServiceImpl implements ReceptionService {
     }
 
     /**
-     * QA D2522: stamps the patient's primary coverage at this hospital as verified by
-     * {@code actorUsername} at {@code at}, when it is current on that day. Review of #1276: only the
-     * primary one: the desk's tick attests the coverage it bills, and with no primary coverage there is
-     * no telling which policy was checked, so nothing is stamped (never an arbitrary first one). An
-     * expired policy is never marked verified.
+     * QA D2522: stamps the patient's coverage at this hospital as verified by {@code actorUsername} at
+     * {@code at}, when it is current on that day. Review of #1276: the desk's tick attests the coverage it
+     * bills. QA D3250 (r70): that is the coverage an invoice issued today would bill ({@link CoverageOrder}:
+     * primary first, else the only one in force), so a patient's only policy, never ticked « principale »,
+     * is stamped too. When several coverages are in force, none primary and none billed, there is no telling
+     * which policy was checked, so nothing is stamped (never an arbitrary first one). An expired policy is
+     * never marked verified.
      *
      * @return whether a coverage was stamped
      */
     private boolean stampInsuranceVerified(UUID patientId, UUID hospitalId, String actorUsername, LocalDateTime at) {
-        PatientInsurance coverage = insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId)
-                .stream().filter(PatientInsurance::isPrimary).findFirst().orElse(null);
         LocalDate day = at.toLocalDate();
-        if (coverage == null || (coverage.getExpirationDate() != null && coverage.getExpirationDate().isBefore(day))
-                || (coverage.getEffectiveDate() != null && coverage.getEffectiveDate().isAfter(day))) {
+        PatientInsurance coverage = deskCoverage(patientId, hospitalId,
+                insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId), day);
+        if (coverage == null || !CoverageOrder.inForceOn(coverage, day)) {
             return false;
         }
         coverage.setVerifiedAt(at);
@@ -1351,12 +1371,74 @@ public class ReceptionServiceImpl implements ReceptionService {
         return true;
     }
 
-    /** The coverage the front-desk snapshot reads: the primary one, else the first. */
+    /**
+     * QA D3250 (r70): the coverage the desk shows and attests on {@code day}: the one an invoice issued that day
+     * would bill, else the first in force by the same order ({@link CoverageOrder}); null when none is in force or
+     * several are with none primary.
+     */
+    private PatientInsurance deskCoverage(UUID patientId, UUID hospitalId, List<PatientInsurance> insurances,
+                                          LocalDate day) {
+        if (invoiceCoverage != null) {
+            java.util.Optional<PatientInsurance> billed = invoiceCoverage.billedCoverage(patientId, hospitalId, day);
+            if (billed.isPresent()) {
+                return billed.get();
+            }
+        }
+        if (CoverageOrder.ambiguous(insurances, day)) {
+            return null;
+        }
+        return CoverageOrder.first(insurances, day).orElse(null);
+    }
+
+    /** QA D3258: the consultation tariff and the coverage's split of it, for the check-in dialog. */
+    private record CheckInCoverage(InvoiceCoverageService.CoverageQuote quote, BigDecimal fee, String label) {
+        BigDecimal suggestedCopay() {
+            if (fee == null) {
+                return null;
+            }
+            return quote != null ? quote.patientShare() : fee;
+        }
+    }
+
+    /**
+     * QA D3258 (r70): the check-in dialog showed no coverage and no expected patient share, so the desk typed the
+     * copay with nothing to go by. The suggestion is the patient's share of the hospital's default consultation
+     * tariff under the coverage an invoice would bill ({@link InvoiceCoverageService#quote}); the whole tariff when
+     * no coverage applies; nothing when the hospital has no consultation tariff. A suggestion only: the desk types
+     * what it takes.
+     */
+    private CheckInCoverage checkInCoverage(UUID patientId, UUID hospitalId, LocalDate day) {
+        if (tariffResolver == null || invoiceCoverage == null) {
+            return new CheckInCoverage(null, null, null);
+        }
+        java.util.Optional<TariffResolver.Tariff> tariff = tariffResolver.peek(hospitalId,
+                com.example.hms.enums.PriceListLinkType.SYSTEM,
+                com.example.hms.enums.PriceListSystemKey.CONSULTATION_DEFAULT.name(), day);
+        BigDecimal fee = tariff.map(TariffResolver.Tariff::unitPrice).orElse(null);
+        java.util.Optional<InvoiceCoverageService.CoverageQuote> quote = invoiceCoverage.quote(patientId, hospitalId,
+                day, fee != null ? fee : BigDecimal.ZERO, com.example.hms.enums.PriceListCategory.CONSULTATION,
+                tariff.map(TariffResolver.Tariff::itemId).orElse(null));
+        return new CheckInCoverage(quote.orElse(null), fee,
+                tariff.map(TariffResolver.Tariff::label).orElse(null));
+    }
+
+    private InvoiceCoverageService invoiceCoverage;
+    private TariffResolver tariffResolver;
+
+    /** QA D3250 / D3258: the invoice's coverage rule and the tariff. Required setters; a unit test may omit them. */
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setInvoiceCoverage(InvoiceCoverageService invoiceCoverage) {
+        this.invoiceCoverage = invoiceCoverage;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setTariffResolver(TariffResolver tariffResolver) {
+        this.tariffResolver = tariffResolver;
+    }
+
+    /** The coverage the front-desk snapshot reads when none is in force: the primary one, else the oldest. */
     private static PatientInsurance snapshotCoverage(List<PatientInsurance> insurances) {
-        return insurances.stream()
-                .filter(PatientInsurance::isPrimary)
-                .findFirst()
-                .orElse(insurances.isEmpty() ? null : insurances.get(0));
+        return CoverageOrder.preferred(insurances).orElse(null);
     }
 
     private CheckInResponseDTO checkInResponse(Appointment appointment, Encounter encounter,

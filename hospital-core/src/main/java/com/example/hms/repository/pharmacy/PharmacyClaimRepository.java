@@ -36,6 +36,22 @@ public interface PharmacyClaimRepository extends JpaRepository<PharmacyClaim, UU
      */
     boolean existsByDispenseIdAndClaimStatusNot(UUID dispenseId, PharmacyClaimStatus status);
 
+    /**
+     * Review of #1284: what the live (non-REJECTED) pharmacy claims of a patient at a hospital asked of the payers
+     * in [from, to), except those of one prescription (pass a random id to exclude none). They use the plan's
+     * annual ceiling as the invoice shares do.
+     */
+    @org.springframework.data.jpa.repository.Query("SELECT COALESCE(SUM(c.amount), 0) FROM PharmacyClaim c "
+         + "WHERE c.patient.id = :patientId AND c.hospital.id = :hospitalId "
+         + "AND c.claimStatus <> com.example.hms.enums.PharmacyClaimStatus.REJECTED "
+         + "AND c.createdAt >= :from AND c.createdAt < :to AND c.dispense.prescription.id <> :excludedPrescriptionId")
+    java.math.BigDecimal sumLiveForPatientBetween(
+            @org.springframework.data.repository.query.Param("patientId") UUID patientId,
+            @org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
+            @org.springframework.data.repository.query.Param("from") java.time.LocalDateTime from,
+            @org.springframework.data.repository.query.Param("to") java.time.LocalDateTime to,
+            @org.springframework.data.repository.query.Param("excludedPrescriptionId") UUID excludedPrescriptionId);
+
     /** QA D1613: what the live (non-REJECTED) claims of one dispense ask of the payer. */
     @org.springframework.data.jpa.repository.Query("SELECT COALESCE(SUM(c.amount), 0) FROM PharmacyClaim c "
          + "WHERE c.dispense.id = :dispenseId AND c.claimStatus <> com.example.hms.enums.PharmacyClaimStatus.REJECTED")

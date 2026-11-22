@@ -34,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -143,6 +144,91 @@ class PharmacyClaimServiceImplTest {
         assertThat(result).isNotNull();
         verify(claimRepository).save(any());
         verify(support).logAudit(any(), any(), any(), any());
+    }
+
+    private void claimable() {
+        org.mockito.Mockito.lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        org.mockito.Mockito.lenient().when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+        org.mockito.Mockito.lenient().when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        org.mockito.Mockito.lenient().when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        org.mockito.Mockito.lenient().when(claimMapper.toEntity(any(), any(), any(), any())).thenAnswer(inv -> PharmacyClaim.builder()
+                .amount(inv.<PharmacyClaimRequestDTO>getArgument(0).getAmount()).currency("XOF")
+                .claimStatus(PharmacyClaimStatus.DRAFT).hospital(hospital).build());
+        org.mockito.Mockito.lenient().when(claimRepository.save(any())).thenAnswer(inv -> {
+            PharmacyClaim c = inv.getArgument(0);
+            c.setId(UUID.randomUUID());
+            return c;
+        });
+        org.mockito.Mockito.lenient().when(claimMapper.toResponseDTO(any())).thenReturn(PharmacyClaimResponseDTO.builder().build());
+    }
+
+    @Test
+    @DisplayName("QA D3408 (r70): the claim is the insurer share the cover recorded; left out, it is filled in")
+    void d3408_theClaimIsTheCoverInsurerShare() {
+        FillCoverShare cover = mock(FillCoverShare.class);
+        service.setFillCoverShare(cover);
+        when(cover.coverShare(dispense, hospitalId)).thenReturn(Optional.of(new BigDecimal("4500")));
+        claimable();
+        PharmacyClaimRequestDTO untyped = request();
+        untyped.setAmount(null);
+
+        service.createClaim(untyped);
+
+        org.mockito.ArgumentCaptor<PharmacyClaim> saved = org.mockito.ArgumentCaptor.forClass(PharmacyClaim.class);
+        verify(claimRepository).save(saved.capture());
+        assertThat(saved.getValue().getAmount()).isEqualByComparingTo("4500");
+    }
+
+    @Test
+    @DisplayName("QA D3408 (r70): a typed amount that is not the insurer share by the plan is refused, naming it")
+    void d3408_aTypedAmountOtherThanThePlanShareIsRefused() {
+        FillCoverShare cover = mock(FillCoverShare.class);
+        service.setFillCoverShare(cover);
+        when(cover.coverShare(dispense, hospitalId)).thenReturn(Optional.empty());
+        when(cover.planShareOn(eq(patientId), eq(hospitalId), eq(new BigDecimal("6000")), any(), any()))
+                .thenReturn(Optional.of(new BigDecimal("4500")));
+        claimable();
+        PharmacyClaimRequestDTO typed = request();
+
+        assertThatThrownBy(() -> service.createClaim(typed))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.claim.amountIsInsurerShare");
+        verify(claimRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("review of #1284: a plan that pays nothing of the fill refuses the claim, never a typed amount")
+    void aPlanThatPaysNothingRefusesTheClaim() {
+        FillCoverShare cover = mock(FillCoverShare.class);
+        service.setFillCoverShare(cover);
+        when(cover.coverShare(any(), any())).thenReturn(Optional.empty());
+        when(cover.planShareOn(any(), any(), any(), any(), any())).thenReturn(Optional.of(BigDecimal.ZERO));
+        claimable();
+        PharmacyClaimRequestDTO typed = request();
+
+        assertThatThrownBy(() -> service.createClaim(typed))
+                .extracting("messageKey").isEqualTo("pharmacy.claim.planPaysNothing");
+        verify(claimRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D3408 (r70): a coverage with no plan keeps the typed amount; none typed is refused")
+    void d3408_aCoverageWithNoPlanKeepsTheTypedAmount() {
+        FillCoverShare cover = mock(FillCoverShare.class);
+        service.setFillCoverShare(cover);
+        when(cover.coverShare(any(), any())).thenReturn(Optional.empty());
+        when(cover.planShareOn(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        claimable();
+        PharmacyClaimRequestDTO untyped = request();
+        untyped.setAmount(null);
+
+        assertThatThrownBy(() -> service.createClaim(untyped))
+                .extracting("messageKey").isEqualTo("pharmacy.claim.amountPositive");
+
+        service.createClaim(request());
+        org.mockito.ArgumentCaptor<PharmacyClaim> saved = org.mockito.ArgumentCaptor.forClass(PharmacyClaim.class);
+        verify(claimRepository).save(saved.capture());
+        assertThat(saved.getValue().getAmount()).isEqualByComparingTo("5000");
     }
 
     @Test
