@@ -37,9 +37,8 @@
 
   <div class="workspace-strip">
     <p>
-      <strong>{{ loading() ? '—' : filtered().length }}</strong><span>{{
-        'PHARMACY_WORKSPACE.VISIBLE_INTERACTIONS' | translate
-      }}</span>
+      <strong>{{ loading() ? '—' : filtered().length }}</strong>{{ ' '
+      }}<span>{{ 'PHARMACY_WORKSPACE.VISIBLE_INTERACTIONS' | translate }}</span>
     </p>
     <span class="material-symbols-outlined" aria-hidden="true">policy</span>
   </div>

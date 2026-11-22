@@ -22,9 +22,8 @@
   </header>
   <div class="workspace-strip">
     <p>
-      <strong>{{ loading() ? '—' : claims().length }}</strong><span>{{
-        'PHARMACY_WORKSPACE.LOADED_CLAIMS' | translate
-      }}</span>
+      <strong>{{ loading() ? '—' : claims().length }}</strong>{{ ' '
+      }}<span>{{ 'PHARMACY_WORKSPACE.LOADED_CLAIMS' | translate }}</span>
     </p>
     <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
   </div>

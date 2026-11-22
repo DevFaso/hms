@@ -13220,7 +13220,7 @@
   },
   "DRUG_INTERACTIONS": {
     "ACTIONS": "Actions",
-    "ACTIVE": "Active",
+    "ACTIVE": "En vigueur",
     "ADD": "Ajouter une interaction",
     "ADD_TITLE": "Nouvelle interaction",
     "ALL_SEVERITIES": "Toutes les gravités",
