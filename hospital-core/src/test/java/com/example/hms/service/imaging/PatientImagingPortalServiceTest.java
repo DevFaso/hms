@@ -185,6 +185,34 @@ class PatientImagingPortalServiceTest {
     }
 
     @Test
+    @DisplayName("D3154 (provisoire): an obstetric study of an untagged visit stays with the patient; a chest X-ray of that visit reaches the proxy")
+    void anObstetricStudyOfAnUntaggedVisitStaysWithThePatient() {
+        com.example.hms.model.Encounter visit = new com.example.hms.model.Encounter();
+        visit.setId(UUID.randomUUID());
+        when(encounterRepository.findWithDepartmentByIdIn(anyCollection())).thenReturn(List.of(visit));
+        ImagingOrder chest = order;
+        chest.setEncounterId(visit.getId());
+        report(1, ImagingReportStatus.FINAL, true);
+        ImagingOrder obstetric = order(patient);
+        obstetric.setEncounterId(visit.getId());
+        obstetric.setModality(ImagingModality.ULTRASOUND);
+        obstetric.setStudyType("Échographie obstétricale T1");
+        order = obstetric;
+        report(1, ImagingReportStatus.FINAL, true);
+        ImagingStudyImage obstetricImage = image(null);
+        when(imageRepository.findById(obstetricImage.getId())).thenReturn(Optional.of(obstetricImage));
+        when(orderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId)).thenReturn(List.of(chest, obstetric));
+
+        assertThat(service.studiesOf(patientId, Reader.PATIENT)).extracting(PatientImagingStudyDTO::imagingOrderId)
+            .containsExactlyInAnyOrder(chest.getId(), obstetric.getId());
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).extracting(PatientImagingStudyDTO::imagingOrderId)
+            .containsExactly(chest.getId());
+        UUID imageId = obstetricImage.getId();
+        assertThatThrownBy(() -> service.openImage(patientId, imageId, Reader.PROXY))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
     @DisplayName("D3154: a released study whose order names no visit reaches the proxy, with its image")
     void aStudyWithNoVisitReachesTheProxy() {
         order.setEncounterId(null);

@@ -8,16 +8,17 @@ import java.util.Locale;
 import java.util.stream.Stream;
 
 /**
- * QA D3154 (r70a): which studies ordered outside any visit a proxy may read.
+ * QA D3154 (r70a): the imaging studies a proxy never reads because they may
+ * reveal a pregnancy.
  *
- * <p>A study's sensitivity comes from the visit it was ordered in
- * ({@code ProxyRecordFilter}). An order that names no visit (ordered when the
- * patient had no open visit, or before the order joined one) has nothing to
- * judge it by, so #1276 hid every one of them from a caregiver: none was ever
- * shown. Decision (2026-11-21, after #1242's rule that pregnancy is
- * sensitive): such a study reaches a proxy, unless what was ordered may reveal
- * a pregnancy: an obstetric, pelvic or gynaecological study. Mammography is
- * not one of them.
+ * <p>Pregnancy is a sensitive category (#1242). A study's sensitivity otherwise
+ * comes from the visit it was ordered in ({@code ProxyRecordFilter}), but an
+ * obstetric ultrasound ordered in an untagged general visit, or in no visit at
+ * all, says what the visit does not. Decision (2026-11-21): every study a proxy
+ * reads, with or without a visit, is kept from the proxy when what was ordered
+ * is an obstetric, pelvic or gynaecological study; this is in addition to the
+ * visit's sensitivity, never instead of it. Mammography is not one of them.
+ * The patient reads every study.
  *
  * <p><b>PROVISIONAL</b> (« provisoire ») until the clinic's radiologist or
  * medical lead signs it off (docs/qa/regles-cliniques-provisoires.md). The
@@ -25,9 +26,10 @@ import java.util.stream.Stream;
  * order says it is: its study type, body region and clinical question, read
  * without case or accents, against the bounded list {@link #TERMS} (FR/EN/ES).
  * A match keeps the study with the patient (fails closed); a false match only
- * hides a study from the caregiver, never shows one.
+ * hides a study from the caregiver, never shows one. The report text is not
+ * read.
  */
-public final class VisitlessStudyProxyRule {
+public final class PregnancyRevealingStudyRule {
 
     /**
      * Word stems of an obstetric, pelvic or gynaecological study, compared
@@ -44,7 +46,7 @@ public final class VisitlessStudyProxyRule {
         "gyn", "ginec", "transvag", "endovag", "vagin", "uterus", "uterin", "utero", "ovar", "endometr",
         "salping", "annex", "adnex", "trompe");
 
-    private VisitlessStudyProxyRule() {
+    private PregnancyRevealingStudyRule() {
     }
 
     /** True when the order's own description names an obstetric, pelvic or gynaecological study. */
@@ -53,7 +55,7 @@ public final class VisitlessStudyProxyRule {
             return true;
         }
         return Stream.of(order.getStudyType(), order.getBodyRegion(), order.getClinicalQuestion())
-            .map(VisitlessStudyProxyRule::fold)
+            .map(PregnancyRevealingStudyRule::fold)
             .anyMatch(text -> TERMS.stream().anyMatch(text::contains));
     }
 
