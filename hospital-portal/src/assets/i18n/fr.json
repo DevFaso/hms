@@ -8093,7 +8093,7 @@
         "RETURN": "Retour",
         "SALE": "Vente au comptoir",
         "QUARANTINE": "Quarantaine",
-        "DESTRUCTION": "Destruction"
+        "DESTRUCTION": "Destruction (quarantaine)"
       },
       "INVOICE_ITEM_CATEGORY": {
         "SERVICE": "Prestation",
@@ -11349,7 +11349,7 @@
       "EXPLAIN": "Médicaments retournés endommagés, périmés ou contaminés, et stupéfiants retournés : ils ne sont plus vendables et attendent leur destruction.",
       "LOAD_FAILED": "La quarantaine n’a pas pu être chargée.",
       "EMPTY": "Rien en quarantaine.",
-      "LOT": "Lot {{lot}}",
+      "LOT": "N° de lot {{lot}}",
       "NO_LOT": "Sans lot",
       "DESTROY": "Détruire",
       "DESTROY_TITLE": "Détruire {{name}} ({{held}} en quarantaine)",
@@ -11363,7 +11363,8 @@
     },
     "REGISTER_QUARANTINE": "En quarantaine",
     "REGISTER_QUARANTINE_MOVE": "quarantaine {{qty}} → {{after}}",
-    "FIRST_PHARMACY_ASK_ADMIN": "Aucune pharmacie n’est encore enregistrée. C’est l’administrateur de l’établissement qui l’enregistre : demandez-le-lui."
+    "FIRST_PHARMACY_ASK_ADMIN": "Aucune pharmacie n’est encore enregistrée. C’est l’administrateur de l’établissement qui l’enregistre : demandez-le-lui.",
+    "STOCK_CONDITION_CHOOSE_UNIT": "Choisissez : conditionnements ou unités"
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",
@@ -15950,7 +15951,7 @@
     "BASKET_REQUIRED": "Ajoutez au moins un article au panier.",
     "REMOVE": "Retirer",
     "REMOVE_LABEL": "Retirer {{name}} du panier",
-    "LOT": "Lot",
+    "LOT": "N° de lot",
     "LOT_CHOOSE": "Choisir le lot",
     "LOT_OPTION": "{{lot}} · péremption {{date}} · {{qty}} {{unit}}",
     "LOTS_LOADING": "Chargement des lots…",
@@ -15985,7 +15986,7 @@
     "FAILED": "La vente n’a pas pu être enregistrée.",
     "RECEIPT_TITLE": "Vente enregistrée",
     "RECEIPT_NUMBER": "N° de vente",
-    "RECEIPT_DATE": "Date",
+    "RECEIPT_DATE": "Date de la vente",
     "COL_ITEM": "Article",
     "COL_QUANTITY": "Quantité",
     "COL_UNIT_PRICE": "Prix unitaire",
@@ -15998,7 +15999,7 @@
     "TODAY_EMPTY": "Aucune vente au comptoir enregistrée aujourd’hui dans cette pharmacie.",
     "COL_TIME": "Heure",
     "COL_ITEMS": "Articles",
-    "COL_TOTAL": "Total",
+    "COL_TOTAL": "Montant",
     "TODAY_MORE": "Seules les {{shown}} ventes les plus récentes de la journée sont affichées : la clôture de caisse les compte toutes."
   }
 }

@@ -117,8 +117,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 && StockQuarantine.quarantines(item, conditionOf(dto), true)) {
             stockQuarantine.quarantine(item, lot, dto.getQuantity(), dto.getReferenceId(), conditionOf(dto),
                     performer, witness);
-            logAudit(AuditEventType.STOCK_RETURN, "RETURN: " + dto.getQuantity() + " units quarantined ("
-                    + conditionOf(dto).name() + ")", saved.getId().toString());
+            logAudit(AuditEventType.STOCK_RETURN, "RETURN: " + dto.getQuantity() + " units — quarantined "
+                    + conditionOf(dto).name(), saved.getId().toString());
             return stockTransactionMapper.toResponseDTO(saved);
         }
 
@@ -682,7 +682,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
             case DISPENSE, TRANSFER, SALE -> takeOff(item, lot, quantity, now);
             case RECEIPT, RETURN -> putOn(item, lot, quantity, now);
             // Never through this path (requireMovementIsAccountable refuses them).
-            case QUARANTINE, DESTRUCTION -> throw new IllegalStateException("not a manual movement: " + type);
+            case QUARANTINE, DESTRUCTION -> throw new com.example.hms.exception.FieldBusinessException(
+                    "transactionType", "stockTransaction.quarantine.viaWorkflow");
             // QA D143: a negative adjustment (a write-off) goes through the
             // guarded decrement, so it can never drive a lot or the item
             // below zero; a positive one adds.

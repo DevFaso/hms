@@ -123,8 +123,8 @@ public class PreparedFillVoider {
                     .transactionType(StockTransactionType.RETURN)
                     .referenceId(dispense.getId())
                     .quantity(dispense.getQuantityDispensed())
-                    .reason(NOT_FOR_SALE_PREFIX + " (" + condition.name() + ") for prescription "
-                            + (dispense.getPrescription() != null ? dispense.getPrescription().getId() : "unknown"))
+                    // The fill (and through it the prescription) is the row's reference.
+                    .reason(NOT_FOR_SALE_PREFIX + ": " + condition.name())
                     .performedByUser(performer)
                     .build());
             stockQuarantine.quarantine(item, lot, dispense.getQuantityDispensed(), dispense.getId(), condition,

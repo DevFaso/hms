@@ -11363,7 +11363,8 @@
     },
     "REGISTER_QUARANTINE": "In quarantine",
     "REGISTER_QUARANTINE_MOVE": "quarantine {{qty}} → {{after}}",
-    "FIRST_PHARMACY_ASK_ADMIN": "No pharmacy is registered yet. The hospital administrator registers it: ask them."
+    "FIRST_PHARMACY_ASK_ADMIN": "No pharmacy is registered yet. The hospital administrator registers it: ask them.",
+    "STOCK_CONDITION_CHOOSE_UNIT": "Choose: packs or single units"
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",

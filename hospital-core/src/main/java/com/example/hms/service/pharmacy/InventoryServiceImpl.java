@@ -447,8 +447,7 @@ public class InventoryServiceImpl implements InventoryService {
         item.setPackUnit(size.packUnit());
         item.setUnit(size.unit());
         InventoryItem saved = inventoryItemRepository.save(item);
-        logAudit(AuditEventType.STOCK_ADJUSTMENT, "Pack size declared on an inventory item already counted in units: 1 "
-                + size.packUnit() + " = " + size.perPack() + " " + size.unit(), saved.getId().toString());
+        logAudit(AuditEventType.STOCK_ADJUSTMENT, "Pack size set on an inventory item", saved.getId().toString());
         return inventoryItemMapper.toResponseDTO(saved);
     }
 

@@ -452,7 +452,8 @@
             <span class="quarantine-what">
               <strong>{{ line.medicationName ?? ('PHARMACY.UNKNOWN_ITEM' | translate) }}</strong>
               @if (line.controlled) {
-                <span class="badge-controlled">{{ 'PHARMACY.CONTROLLED' | translate }}</span>
+                {{ ' '
+                }}<span class="badge-controlled">{{ 'PHARMACY.CONTROLLED' | translate }}</span>
               }
               <small>{{
                 line.lotNumber
@@ -487,6 +488,7 @@
             <input
               id="destroyQty"
               name="destroyQty"
+              appFocusOnRender
               type="number"
               min="1"
               [max]="line.heldQuantity"

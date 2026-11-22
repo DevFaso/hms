@@ -126,8 +126,8 @@ public class QuarantineDestructionService {
         WholeUnitQuantity.require(item, dto.getQuantity(), WholeUnitQuantity.DEFAULT_KEY);
         BigDecimal held = held(item, lot);
         if (dto.getQuantity().compareTo(held) > 0) {
-            throw new FieldBusinessException(FIELD_QUANTITY, "pharmacy.quarantine.aboveHeld", held.stripTrailingZeros()
-                    .toPlainString());
+            throw new FieldBusinessException(FIELD_QUANTITY, "pharmacy.quarantine.aboveHeld",
+                    com.example.hms.utility.DisplayNumbers.quantity(held));
         }
         User performer = support.resolveCurrentUser();
         User witness = controlledStockWitness.resolve(dto.getWitnessedBy(), item, performer);
@@ -140,8 +140,8 @@ public class QuarantineDestructionService {
                 .performedByUser(performer)
                 .witnessedByUser(witness)
                 .build());
-        support.logAudit(AuditEventType.STOCK_ADJUSTMENT, "Quarantined stock destroyed: " + dto.getQuantity()
-                + " units", String.valueOf(saved.getId()), "STOCK_TRANSACTION");
+        support.logAudit(AuditEventType.STOCK_ADJUSTMENT, "DESTRUCTION: " + dto.getQuantity() + " units",
+                String.valueOf(saved.getId()), "STOCK_TRANSACTION");
         return stockTransactionMapper.toResponseDTO(saved);
     }
 

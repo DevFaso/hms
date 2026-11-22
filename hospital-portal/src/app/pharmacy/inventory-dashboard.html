@@ -225,7 +225,8 @@
                 }}
               </label>
               @if (packCountedIn) {
-                <small class="field-hint" data-testid="pack-size-preview">{{
+                {{ ' '
+                }}<small class="field-hint" data-testid="pack-size-preview">{{
                   'PHARMACY_MONEY.PACK.PREVIEW'
                     | translate
                       : {

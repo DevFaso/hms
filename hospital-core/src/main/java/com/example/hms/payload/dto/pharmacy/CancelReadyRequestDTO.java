@@ -27,5 +27,6 @@ public class CancelReadyRequestDTO {
      * QA D3403 (r70): the state of the prepared medicine, said every time (no default). Only INTACT (not given,
      * intact) goes back on sale; damaged, expired or contaminated stock is quarantined.
      */
+    @NotNull(message = "{dispense.ready.stockConditionRequired}")
     private com.example.hms.enums.ReturnedStockCondition stockCondition;
 }

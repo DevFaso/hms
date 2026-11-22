@@ -1,4 +1,5 @@
 import { allRows } from '../shared/all-pages';
+import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { blankFields, refuseFields } from '../shared/forms/invalid-fields';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
@@ -119,6 +120,7 @@ const TYPED_REFUSAL_FIELD: Readonly<Record<string, string>> = {
   selector: 'app-stock-adjustment',
   standalone: true,
   imports: [
+    FocusOnRenderDirective,
     DateTimePipe,
     DashPipe,
     SubmitGuardDirective,

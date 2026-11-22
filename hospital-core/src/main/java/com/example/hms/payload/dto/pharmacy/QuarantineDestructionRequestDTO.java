@@ -21,14 +21,19 @@ import java.util.UUID;
 @Builder
 public class QuarantineDestructionRequestDTO {
 
+    @jakarta.validation.constraints.NotNull(message = "{pharmacy.quarantine.itemRequired}")
     private UUID inventoryItemId;
 
     /** The lot the quarantined units came from; empty for units quarantined without a lot. */
     private UUID stockLotId;
 
+    @jakarta.validation.constraints.NotNull(message = "{pharmacy.quarantine.quantityPositive}")
+    @jakarta.validation.constraints.DecimalMin(value = "0", inclusive = false,
+            message = "{pharmacy.quarantine.quantityPositive}")
     private BigDecimal quantity;
 
     /** How they were destroyed (incinerated, returned to the supplier, ...). */
+    @jakarta.validation.constraints.NotBlank(message = "{pharmacy.quarantine.reasonRequired}")
     @Size(max = 300)
     @com.example.hms.validation.NoCardNumber
     private String reason;

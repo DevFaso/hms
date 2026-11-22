@@ -102,37 +102,40 @@
         <!-- QA D3401 (r70): an item with a pack size is received in packs or in units, said every time. -->
         @if (hasPackSize() && selectedItem(); as item) {
           <div class="form-row">
-            <fieldset class="field received-in" data-server-field="inPacks">
-              <legend>{{ 'PHARMACY.RECEIVED_IN' | translate }} *</legend>
-              <label class="radio-option">
-                <input
-                  id="grQtyIn"
-                  type="radio"
-                  name="grReceivedIn"
-                  value="PACKS"
-                  [(ngModel)]="receivedIn"
-                />
-                {{
-                  'PHARMACY.RECEIVED_IN_PACKS'
-                    | translate
-                      : {
-                          packUnit: item.packUnit ?? '',
-                          n: item.unitsPerPack,
-                          unit: item.unit ?? '',
-                        }
-                }}
-              </label>
-              <label class="radio-option">
-                <input type="radio" name="grReceivedIn" value="UNITS" [(ngModel)]="receivedIn" />
-                {{ 'PHARMACY.RECEIVED_IN_UNITS' | translate: { unit: item.unit ?? '' } }}
-              </label>
+            <div class="field received-in">
+              <label for="grQtyIn">{{ 'PHARMACY.RECEIVED_IN' | translate }} *</label>
+              <select
+                id="grQtyIn"
+                name="grReceivedIn"
+                data-server-field="inPacks"
+                required
+                [(ngModel)]="receivedIn"
+              >
+                <option [ngValue]="null">
+                  {{ 'PHARMACY.STOCK_CONDITION_CHOOSE_UNIT' | translate }}
+                </option>
+                <option [ngValue]="'PACKS'">
+                  {{
+                    'PHARMACY.RECEIVED_IN_PACKS'
+                      | translate
+                        : {
+                            packUnit: item.packUnit ?? '',
+                            n: item.unitsPerPack,
+                            unit: item.unit ?? '',
+                          }
+                  }}
+                </option>
+                <option [ngValue]="'UNITS'">
+                  {{ 'PHARMACY.RECEIVED_IN_UNITS' | translate: { unit: item.unit ?? '' } }}
+                </option>
+              </select>
               @if (receivedIn) {
                 <small class="field-hint" data-testid="gr-received-units">{{
                   'PHARMACY.RECEIVED_IN_TOTAL'
                     | translate: { qty: receivedUnits(), unit: item.unit ?? '' }
                 }}</small>
               }
-            </fieldset>
+            </div>
           </div>
         }
         <!-- QA D655: a controlled substance moves only in front of a witness -->

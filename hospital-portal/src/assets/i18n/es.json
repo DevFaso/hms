@@ -11363,7 +11363,8 @@
     },
     "REGISTER_QUARANTINE": "En cuarentena",
     "REGISTER_QUARANTINE_MOVE": "cuarentena {{qty}} → {{after}}",
-    "FIRST_PHARMACY_ASK_ADMIN": "Todavía no hay ninguna farmacia registrada. La registra el administrador del establecimiento: pídaselo."
+    "FIRST_PHARMACY_ASK_ADMIN": "Todavía no hay ninguna farmacia registrada. La registra el administrador del establecimiento: pídaselo.",
+    "STOCK_CONDITION_CHOOSE_UNIT": "Elija: envases o unidades"
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",

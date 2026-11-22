@@ -1255,7 +1255,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           route: '/pharmacy/controlled-register',
           roles: [
             'ROLE_PHARMACIST',
-            'ROLE_PHARMACY_VERIFIER',
             'ROLE_STORE_MANAGER',
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_SUPER_ADMIN',
@@ -1312,6 +1311,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           label: 'Stock Routing',
           translationKey: 'NAV.STOCK_ROUTING',
           route: '/pharmacy/stock-routing',
+        },
+        {
+          // QA D3411 (r70): the verifier witnesses controlled movements and reads their register.
+          icon: 'local_police',
+          label: 'Controlled-Drug Register',
+          translationKey: 'NAV.CONTROLLED_REGISTER',
+          route: '/pharmacy/controlled-register',
         },
       );
     }
