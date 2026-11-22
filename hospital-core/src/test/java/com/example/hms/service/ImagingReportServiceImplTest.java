@@ -767,6 +767,19 @@ class ImagingReportServiceImplTest {
         "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_LAB_SCIENTIST", "ROLE_STAFF", "ROLE_PATIENT"};
 
     @Test
+    void missingReportForAnOrderNamesTheStudyRatherThanAReportIdentifier() {
+        signIn("ROLE_DOCTOR");
+        assertThatThrownBy(() -> imagingReportService.getLatestReportForOrder(orderId))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .satisfies(error -> {
+                ResourceNotFoundException missing = (ResourceNotFoundException) error;
+                assertThat(missing.getMessageKey()).isEqualTo("imaging.report.forOrder.notFound");
+                assertThat(missing.getArgs()).containsExactly(orderId);
+                assertThat(missing.getMessage()).contains("study", orderId.toString());
+            });
+    }
+
+    @Test
     void adminDecision_everyAdminReadOfAnOrdersReportsLeavesOutWorkInProgress() {
         ImagingReport draft = version(4, ImagingReportStatus.DRAFT, false);
         ImagingReport addendum = version(3, ImagingReportStatus.ADDENDUM, true);

@@ -140,6 +140,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final String MSG_ASSIGNMENT_ACTOR_MISMATCH = "assignment.confirmation.actor-mismatch";
     private static final String MSG_ASSIGNMENT_CODE_REGISTRAR_ONLY = "assignment.activationCode.registrarOnly";
     private static final String MSG_ASSIGNMENT_CODE_EXPIRED = "assignment.activationCode.expired";
+    private static final String MSG_PATIENT_INVITATION_NOT_FOUND = "assignment.patientInvitation.notFound";
     /** The audit detail that names the assignment: its human-facing code, never the confirmation code. */
     private static final String DETAIL_ASSIGNMENT_CODE = "assignmentCode";
     private static final String MSG_ASSIGNMENT_NOT_FOUND_BY_CODE = "assignment.notfound.bycode";
@@ -212,6 +213,11 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private final com.example.hms.utility.RoleValidator roleValidator;
     private final ApplicationEventPublisher eventPublisher;
     private final UserAccountAccess accountAccess;
+    /** QA r70 review of #1281: burns an invitation code in its own transaction. */
+    private final com.example.hms.service.support.ActivationCodeBurner activationCodeBurner;
+    /** QA r70 D3201: lazily, so this service never waits on the security configuration that defines it. */
+    private final org.springframework.beans.factory.ObjectProvider<org.springframework.security.crypto.password.PasswordEncoder>
+        passwordEncoderProvider;
     /** Role/facility compatibility and one kind of facility per user (provider plan §3.2, §3.2a). */
     private final FacilityAssignmentGuard facilityAssignmentGuard;
     /** Every other kind of record that still points at an assignment (QA round 14). */
@@ -1083,6 +1089,126 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         return new com.example.hms.payload.dto.AssignmentActivationCodeDTO(assignment.getId(), code, expiresAt);
     }
 
+    /** QA r70 D3206: the desk of the patient's hospital, not only the registrar (see the interface). */
+    @Override
+    @Transactional
+    public com.example.hms.payload.dto.AssignmentActivationCodeDTO revealPatientActivationCode(UUID patientId,
+                                                                                            UUID hospitalId) {
+        UserRoleHospitalAssignment assignment = pendingPatientInvitation(patientId, hospitalId);
+        String code = assignment.getConfirmationCode();
+        LocalDateTime expiresAt = confirmationExpiry(assignment);
+        if (code == null || code.isBlank() || codeExpired(expiresAt)) {
+            // A dead code handed over fails at the patient's first try; « Renvoyer » issues a new one.
+            throw new BusinessException(MSG_ASSIGNMENT_CODE_EXPIRED);
+        }
+        User actor = requireCallerAccount();
+        recordPatientActivationAudit(assignment, actor, "Patient portal activation code shown to the desk");
+        return new com.example.hms.payload.dto.AssignmentActivationCodeDTO(assignment.getId(), code, expiresAt);
+    }
+
+    @Override
+    @Transactional
+    public void resendPatientActivation(UUID patientId, UUID hospitalId) {
+        UserRoleHospitalAssignment assignment = pendingPatientInvitation(patientId, hospitalId);
+        FacilityAssignmentGuard.requireOpenForAssignment(assignment.getHospital());
+        // QA r22 class: never re-send an activation that is already done (checked here, at the send).
+        if (assignment.getConfirmationVerifiedAt() != null) {
+            throw new com.example.hms.exception.ConflictException("assignment.resend.alreadyVerified");
+        }
+        // QA r70 review: a code burned by wrong tries has none to rotate; it is issued afresh first.
+        if (assignment.getConfirmationCode() == null || assignment.getConfirmationCode().isBlank()) {
+            assignment.setConfirmationCode(generateConfirmationCode());
+            assignment.setConfirmationSentAt(null);
+            assignment = assignmentRepository.saveAndFlush(assignment);
+        }
+        // QA r70 review: the public re-send's claim (QA D418): a fresh code, at most once per
+        // DESK_RESEND_COOLDOWN per invitation, in the database so it holds across instances and clicks.
+        LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
+        int claimed = assignmentRepository.claimActivationResend(assignment.getId(), generateConfirmationCode(), now,
+            now.minus(DESK_RESEND_COOLDOWN), FacilityAssignmentGuard.CLOSED_STATES);
+        if (claimed == 0) {
+            throw new BusinessException("assignment.patientInvitation.resendTooSoon", DESK_RESEND_COOLDOWN.toMinutes());
+        }
+        // The claim cleared the persistence context: the row (and its new code) is read again, by the same
+        // hospital-scoped lookup that found it.
+        UserRoleHospitalAssignment fresh = pendingPatientInvitation(patientId, hospitalId);
+        User actor = requireCallerAccount();
+        recordPatientActivationAudit(fresh, actor, "Patient portal activation re-sent by the desk");
+        // The patient only: no registrar or hospital FYI on a re-send (they were told at registration).
+        sendAssignmentEmailNotification(fresh);
+        sendAssignmentSmsNotifications(fresh, false);
+    }
+
+    /** QA r70 review: the desk's re-send waits as long as the public one (AuthController.RESEND_COOLDOWN). */
+    static final java.time.Duration DESK_RESEND_COOLDOWN = java.time.Duration.ofMinutes(5);
+
+    /**
+     * The patient's PATIENT assignment at the acting hospital, still waiting for its code. The caller holds the
+     * receptionist or hospital-administrator role AT that hospital (the request's own roles, not one held
+     * elsewhere). A patient of another hospital, one with no portal invitation here, and a caller without the
+     * role here all answer as a missing invitation, so the endpoint names no patient it does not serve.
+     */
+    private UserRoleHospitalAssignment pendingPatientInvitation(UUID patientId, UUID hospitalId) {
+        if (patientId == null || hospitalId == null) {
+            throw new ResourceNotFoundException(MSG_PATIENT_INVITATION_NOT_FOUND);
+        }
+        if (!com.example.hms.security.ClinicalActor.holdsOwnRoleQuietly(
+                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication(),
+                "RECEPTIONIST", "HOSPITAL_ADMIN")) {
+            throw new ResourceNotFoundException(MSG_PATIENT_INVITATION_NOT_FOUND);
+        }
+        com.example.hms.model.Patient patient = patientRepository.findByIdUnscoped(patientId)
+            .filter(p -> p.getUser() != null && p.getUser().getId() != null)
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_INVITATION_NOT_FOUND));
+        // QA r70 review: no portal account is opened, and no code sent, for a patient recorded as deceased.
+        com.example.hms.service.support.DeceasedPatientGuard.refuseNewCare(patient);
+        UUID userId = patient.getUser().getId();
+        UserRoleHospitalAssignment assignment = assignmentRepository.findByUserId(userId).stream()
+            .filter(this::isPatientRole)
+            .filter(a -> a.getHospital() != null && hospitalId.equals(a.getHospital().getId()))
+            .findFirst()
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_INVITATION_NOT_FOUND));
+        if (assignment.getConfirmationVerifiedAt() != null) {
+            throw new BusinessException(MSG_ASSIGNMENT_ALREADY_CONFIRMED);
+        }
+        return assignment;
+    }
+
+    /** When the row's code stops working, on the clock it was stamped on (restartInvitation: the server's zone). */
+    private static LocalDateTime confirmationExpiry(UserRoleHospitalAssignment assignment) {
+        LocalDateTime sentAt = assignment.getConfirmationSentAt();
+        return sentAt != null ? sentAt.plusHours(CONFIRMATION_CODE_EXPIRY_HOURS) : null;
+    }
+
+    private static boolean codeExpired(LocalDateTime expiresAt) {
+        return expiresAt != null && expiresAt.isBefore(LocalDateTime.now(ZoneId.systemDefault()));
+    }
+
+    /** QA r70 D3206: who showed or re-sent a patient's code is on the trail; the code never is. */
+    private void recordPatientActivationAudit(UserRoleHospitalAssignment assignment, User actor, String what) {
+        try {
+            Map<String, Object> details = new HashMap<>();
+            details.put(DETAIL_ASSIGNMENT_CODE, assignment.getAssignmentCode());
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .userId(actor.getId())
+                .assignmentId(assignment.getId())
+                .userName(resolveDisplayName(actor, null))
+                .hospitalName(resolveHospitalName(assignment.getHospital()))
+                .hospitalId(assignment.getHospital() != null ? assignment.getHospital().getId() : null)
+                .resourceName(resolveDisplayName(assignment.getUser(), UNKNOWN_USER))
+                .resourceId(assignment.getId() != null ? assignment.getId().toString() : null)
+                .entityType(AUDIT_ENTITY_ASSIGNMENT)
+                .eventType(AuditEventType.DATA_ACCESS)
+                .eventDescription(what)
+                .status(AuditStatus.SUCCESS)
+                .details(details)
+                .build());
+        } catch (RuntimeException ex) {
+            log.warn("⚠️ Failed to record the patient activation audit for assignment '{}': {}",
+                assignment.getId(), ex.getMessage());
+        }
+    }
+
     /** The reveal is on the trail; the code is not (QA r65 D2772: a credential value has no place there). */
     private void recordActivationCodeShownAudit(UserRoleHospitalAssignment assignment, User actor) {
         try {
@@ -1114,28 +1240,13 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (sanitized == null || sanitized.isBlank()) {
             throw new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND_BY_CODE, assignmentCode);
         }
-
-        UserRoleHospitalAssignment assignment = assignmentRepository.findByAssignmentCode(sanitized)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND_BY_CODE, sanitized));
-
-        Role role = assignment.getRole();
-        Hospital hospital = assignment.getHospital();
-        User assignee = assignment.getUser();
-
+        // QA r70 review: this read is public, and it answered 404 for an unknown code and the assignee's name,
+        // role and hospital for a real one, so invitation codes could be enumerated and a person named. It now
+        // answers the same neutral page for every code, and nothing is read: who, what and where come back
+        // from the code check (verifyAssignmentByCode), once the 6-digit code is proven.
         return UserRoleAssignmentPublicViewDTO.builder()
-            .assignmentId(assignment.getId())
-            .assignmentCode(assignment.getAssignmentCode())
-            .roleName(role != null ? role.getName() : null)
-            .roleCode(role != null ? getRoleCode(role) : null)
-            .roleDescription(localizedRoleDescription(role))
-            .hospitalName(hospital != null ? hospital.getName() : null)
-            .hospitalCode(hospital != null ? hospital.getCode() : null)
-            .hospitalAddress(hospital != null ? hospital.getAddress() : null)
-            .assigneeName(resolveDisplayName(assignee, null))
-            .confirmationVerified(assignment.getConfirmationVerifiedAt() != null)
-            .confirmationVerifiedAt(assignment.getConfirmationVerifiedAt())
-            .profileCompletionUrl(profileCompletionUrl(assignment))
-            .profileChecklist(localizedProfileChecklist(role))
+            .assignmentCode(sanitized)
+            .confirmationVerified(false)
             .build();
     }
 
@@ -1143,9 +1254,20 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     public UserRoleAssignmentPublicViewDTO verifyAssignmentByCode(String assignmentCode, String confirmationCode) {
         String sanitizedCode = sanitizeRequiredInput(assignmentCode, MSG_ASSIGNMENT_NOT_FOUND_BY_CODE);
         String sanitizedConfirmation = sanitizeConfirmationInput(confirmationCode);
+        // QA r70 review: a 6-digit code now also hands out a first password (D3201), so each invitation takes
+        // CODE_ACTIVATION_MAX_FAILURES wrong codes per window, as each number does on the phone path. Keyed by the
+        // code typed, so an unknown code is limited exactly like a real one.
+        requireUnderCodeActivationLimit(sanitizedCode);
 
-        UserRoleHospitalAssignment assignment = assignmentRepository.findByAssignmentCode(sanitizedCode)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND_BY_CODE, sanitizedCode));
+        // An unknown invitation answers exactly as a wrong code (it used to answer 404: an existence oracle).
+        java.util.Optional<UserRoleHospitalAssignment> found = assignmentRepository.findByAssignmentCode(sanitizedCode);
+        if (found.isEmpty()) {
+            if (recordCodeActivationFailure(sanitizedCode) >= CODE_ACTIVATION_MAX_FAILURES) {
+                throw new BusinessException(MSG_CODE_ACTIVATION_TOO_MANY, CODE_ACTIVATION_WINDOW_MS / 60_000);
+            }
+            throw invalidConfirmationCode();
+        }
+        UserRoleHospitalAssignment assignment = found.get();
 
         // Idempotent: already verified AND active → existing state (no save).
         // A verified-but-INACTIVE row is the wedged state a pre-fix registrar
@@ -1158,17 +1280,71 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             return buildPublicViewDTO(assignment, null, null);
         }
 
+        String expected = assignment.getConfirmationCode();
+        if (expected == null || !expected.equalsIgnoreCase(sanitizedConfirmation)) {
+            if (recordCodeActivationFailure(sanitizedCode) >= CODE_ACTIVATION_MAX_FAILURES) {
+                // Burned: this invitation's code works no more; the registrar or the desk issues a new one.
+                // In a transaction of its own (ActivationCodeBurner), so the refusal below cannot roll it back.
+                activationCodeBurner.burn(assignment.getId());
+                log.warn("🔒 Activation code of assignment '{}' burned after {} wrong codes",
+                    assignment.getId(), CODE_ACTIVATION_MAX_FAILURES);
+                throw new BusinessException(MSG_CODE_ACTIVATION_TOO_MANY, CODE_ACTIVATION_WINDOW_MS / 60_000);
+            }
+            throw invalidConfirmationCode();
+        }
         verifyCodeNotExpiredAndMatches(assignment, sanitizedConfirmation);
+        codeActivationFailures.remove(sanitizedCode);
 
         // Capture one-time temp credentials BEFORE clearing them
         String tempUsername = assignment.getUser() != null ? assignment.getUser().getUsername() : null;
         String tempPassword = assignment.getTempPlainPassword();
+        // QA r70 D3201: read before the activation switches the account on.
+        boolean firstPasswordOwed = tempPassword == null && owesFirstPassword(assignment.getUser());
 
         activateVerifiedAssignment(assignment, "assignee code entry");
 
+        boolean reissued = false;
+        if (firstPasswordOwed) {
+            tempPassword = issueFirstPasswordAtActivation(assignment.getUser());
+            reissued = true;
+        }
+
         // Include credentials if this was a new-user assignment (temp creds were set)
         String exposedUsername = tempPassword != null ? tempUsername : null;
-        return buildPublicViewDTO(assignment, exposedUsername, tempPassword);
+        UserRoleAssignmentPublicViewDTO view = buildPublicViewDTO(assignment, exposedUsername, tempPassword);
+        view.setCredentialsReissued(reissued);
+        return view;
+    }
+
+    /**
+     * QA r70 D3201: a staff member registered with an e-mail address had their temporary password in that e-mail
+     * only. When it never arrived (a typo, a spam filter, every {@code .test} mailbox on dev), activating with the
+     * code ended on « Identifiants existants » and nobody could see or re-issue the password. An account that has
+     * never been used (switched on by THIS code, never signed in, still on the password it was created with, not
+     * switched off by an administrator) is owed one: the holder has just proved the code, as strong a proof as
+     * the e-mail. An account in use keeps its password.
+     */
+    private static boolean owesFirstPassword(User holder) {
+        return holder != null
+            && !Boolean.TRUE.equals(holder.isActive())
+            && holder.getLastLoginAt() == null
+            && holder.isForcePasswordChange()
+            && holder.getDeactivatedByAdminAt() == null;
+    }
+
+    /**
+     * A fresh one-time password, shown once on the activation page (the same path as a patient's) and replaced at
+     * first sign-in. It supersedes the e-mailed one, which the page says. Never logged, never kept in clear.
+     */
+    private String issueFirstPasswordAtActivation(User holder) {
+        String password = com.example.hms.utility.TemporaryPasswords.generate();
+        LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
+        holder.setPasswordHash(passwordEncoderProvider.getObject().encode(password));
+        holder.setPasswordChangedAt(now);
+        holder.setForcePasswordChange(true);
+        userRepository.save(holder);
+        log.info("🔑 First password issued at code activation for user '{}'", holder.getId());
+        return password;
     }
 
     /**
@@ -1291,6 +1467,42 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         phoneActivationFailures
             .computeIfAbsent(key, k -> new java.util.concurrent.ConcurrentLinkedDeque<>())
             .addLast(System.currentTimeMillis());
+    }
+
+    private static final int CODE_ACTIVATION_MAX_FAILURES = 5;
+    private static final long CODE_ACTIVATION_WINDOW_MS = 15L * 60 * 1000;
+    private static final String MSG_CODE_ACTIVATION_TOO_MANY = "assignment.codeActivation.tooManyAttempts";
+
+    /** Wrong-code times per invitation code, as {@link #phoneActivationFailures} per number (per instance). */
+    private final Map<String, java.util.Deque<Long>> codeActivationFailures =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+    private void requireUnderCodeActivationLimit(String key) {
+        java.util.Deque<Long> failures = codeActivationFailures.get(key);
+        if (failures == null) {
+            return;
+        }
+        long cutoff = System.currentTimeMillis() - CODE_ACTIVATION_WINDOW_MS;
+        Long oldest = failures.peekFirst();
+        while (oldest != null && oldest < cutoff) {
+            failures.pollFirst();
+            oldest = failures.peekFirst();
+        }
+        if (failures.size() >= CODE_ACTIVATION_MAX_FAILURES) {
+            throw new BusinessException(MSG_CODE_ACTIVATION_TOO_MANY, CODE_ACTIVATION_WINDOW_MS / 60_000);
+        }
+    }
+
+    /** Records one wrong code and answers how many this invitation code has in the window. */
+    private int recordCodeActivationFailure(String key) {
+        if (codeActivationFailures.size() > PHONE_ACTIVATION_TRACKED_MAX) {
+            long cutoff = System.currentTimeMillis() - CODE_ACTIVATION_WINDOW_MS;
+            codeActivationFailures.values().removeIf(d -> isStale(d, cutoff));
+        }
+        java.util.Deque<Long> failures = codeActivationFailures
+            .computeIfAbsent(key, k -> new java.util.concurrent.ConcurrentLinkedDeque<>());
+        failures.addLast(System.currentTimeMillis());
+        return failures.size();
     }
 
     private BusinessException invalidConfirmationCode() {
@@ -2492,6 +2704,11 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     }
 
     private void sendAssignmentSmsNotifications(UserRoleHospitalAssignment assignment) {
+        sendAssignmentSmsNotifications(assignment, true);
+    }
+
+    /** {@code withFyi}: also tell the registrar and the hospital (at registration, not on the desk's re-send). */
+    private void sendAssignmentSmsNotifications(UserRoleHospitalAssignment assignment, boolean withFyi) {
         try {
             Role role = assignment.getRole();
             Hospital hospital = assignment.getHospital();
@@ -2511,6 +2728,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             // abort the whole method before the one SMS that matters was even
             // attempted — and before any SMS outcome could be recorded.
             notifyAssigneeBySms(assignment, user, locale, roleLabel, hospitalDisplay, confirmationCode);
+            if (!withFyi) {
+                return;
+            }
             sendFyiSmsQuietly(assignment.getId(), "Registrar", () ->
                 notifyRegistrarBySms(assignment.getRegisteredBy(), locale, roleLabel, assigneeDisplay, hospitalDisplay, confirmationCode));
             sendFyiSmsQuietly(assignment.getId(), "Hospital", () ->

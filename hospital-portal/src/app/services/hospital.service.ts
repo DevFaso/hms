@@ -42,6 +42,8 @@ export type OnboardingStep =
   | 'SESSION_TEMPLATES'
   | 'OPEN_SLOTS'
   | 'BEDS'
+  // QA r70 D3213: lab tests a doctor can order here, before the price list.
+  | 'LAB_TESTS'
   | 'PRICE_LIST'
   | 'PAYERS'
   // V356: every provisional rule set signed off by the hospital's approver (count of total).

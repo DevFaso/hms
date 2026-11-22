@@ -42,6 +42,8 @@ class DeceasedPatientCareGuardTest {
         Admission#admitPatient | AdmissionServiceImpl#admitPatient
         AdvanceDirective#create | AdvanceDirectiveServiceImpl#create
         Appointment#createAppointment | AppointmentServiceImpl#createAppointment
+        PatientPortalActivation#revealCode | UserRoleHospitalAssignmentServiceImpl#pendingPatientInvitation
+        PatientPortalActivation#resend | UserRoleHospitalAssignmentServiceImpl#pendingPatientInvitation
         Appointment#updateAppointment | AppointmentServiceImpl#updateAppointment
         Appointment#updateAppointmentStatus | AppointmentServiceImpl#confirmOrCancelAppointment
         BirthPlan#createBirthPlan | BirthPlanServiceImpl#createBirthPlan

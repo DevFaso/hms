@@ -209,6 +209,20 @@
               }
             </select>
           </div>
+          <!-- QA r70 D3223: the personal history the Synthèse reads; it had no entry anywhere. -->
+          <div class="field-group field-group-wide">
+            <label for="demoMedicalHistory">{{ 'PATIENTS.MEDICAL_HISTORY' | translate }}</label>
+            <textarea
+              id="demoMedicalHistory"
+              name="medicalHistorySummary"
+              class="form-control"
+              rows="3"
+              maxlength="500"
+              [placeholder]="'PATIENTS.MEDICAL_HISTORY_PLACEHOLDER' | translate"
+              [(ngModel)]="form.medicalHistorySummary"
+            ></textarea>
+            <small class="field-hint">{{ 'PATIENT_SAFETY.HISTORY_HINT' | translate }}</small>
+          </div>
         }
         <div class="field-group">
           <label for="demoCountry">{{ 'PATIENTS.COUNTRY' | translate }}</label>

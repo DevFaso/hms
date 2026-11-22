@@ -185,14 +185,9 @@ public class TransfusionMapper {
         // two), so it is resolved against THIS request's hospital rather than
         // read off the patient as if it were a single global identifier.
         UUID hospitalId = request.getHospital() != null ? request.getHospital().getId() : null;
-        return TransfusionRequestResponseDTO.builder()
+        TransfusionRequestResponseDTO.TransfusionRequestResponseDTOBuilder builder = TransfusionRequestResponseDTO.builder()
             .id(request.getId())
-            .authorUserId(request.getRequestedBy() != null && request.getRequestedBy().getUser() != null
-                ? request.getRequestedBy().getUser().getId() : null)
-            .patientId(patient != null ? patient.getId() : null)
-            .patientName(patientName(patient))
-            .patientMrn(patient != null && hospitalId != null
-                ? patient.getMrnForHospital(hospitalId) : null)
+            .authorUserId(authorUserId(request))
             .hospitalId(hospitalId)
             .encounterId(request.getEncounter() != null ? request.getEncounter().getId() : null)
             .productType(request.getProductType())
@@ -205,16 +200,45 @@ public class TransfusionMapper {
             .requiredBy(request.getRequiredBy())
             .cancelReason(request.getCancelReason())
             .notes(request.getNotes())
-            .bloodGroupId(group != null ? group.getId() : null)
-            .patientAboGroup(group != null ? group.getAboGroup() : null)
-            .patientRhFactor(group != null ? group.getRhFactor() : null)
-            .screenCurrent(group != null && group.screenIsCurrent(LocalDateTime.now(clock)))
             .units(units == null ? List.of() : units.stream().map(this::toDto).toList())
             .crossmatches(crossmatches == null ? List.of()
                 : crossmatches.stream().map(this::toDto).toList())
             .emergencyReleases(releases == null ? List.of() : releases.stream().map(this::toDto).toList())
-            .createdAt(request.getCreatedAt())
-            .build();
+            .createdAt(request.getCreatedAt());
+        withPatient(builder, patient, hospitalId);
+        withBloodGroup(builder, group);
+        return builder.build();
+    }
+
+    private static UUID authorUserId(TransfusionRequest request) {
+        return request.getRequestedBy() != null && request.getRequestedBy().getUser() != null
+            ? request.getRequestedBy().getUser().getId() : null;
+    }
+
+    /** The patient's identity at this request's hospital, and the group recorded on the chart. */
+    private void withPatient(TransfusionRequestResponseDTO.TransfusionRequestResponseDTOBuilder builder,
+                             Patient patient, UUID hospitalId) {
+        if (patient == null) {
+            return;
+        }
+        builder.patientId(patient.getId())
+            .patientName(patientName(patient))
+            .patientMrn(hospitalId != null ? patient.getMrnForHospital(hospitalId) : null)
+            // QA r70 D3221: the chart's group, shown beside the lab-typed one, never in its place.
+            .patientDeclaredBloodType(patient.getBloodType());
+    }
+
+    /** The type and screen the request stands on; an untyped request has none (and no current screen). */
+    private void withBloodGroup(TransfusionRequestResponseDTO.TransfusionRequestResponseDTOBuilder builder,
+                                PatientBloodGroup group) {
+        if (group == null) {
+            builder.screenCurrent(false);
+            return;
+        }
+        builder.bloodGroupId(group.getId())
+            .patientAboGroup(group.getAboGroup())
+            .patientRhFactor(group.getRhFactor())
+            .screenCurrent(group.screenIsCurrent(LocalDateTime.now(clock)));
     }
 
     public TransfusionAdministrationResponseDTO toDto(TransfusionAdministration administration,

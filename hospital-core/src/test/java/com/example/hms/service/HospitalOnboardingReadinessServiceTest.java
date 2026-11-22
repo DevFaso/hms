@@ -59,6 +59,7 @@ class HospitalOnboardingReadinessServiceTest {
     @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private AppointmentSlotPolicy slotPolicy;
     @Mock private com.example.hms.service.clinicalrules.HospitalRuleSignoffService ruleSignoffService;
+    @Mock private com.example.hms.repository.LabTestDefinitionRepository labTestDefinitionRepository;
 
     @InjectMocks private HospitalOnboardingReadinessService service;
 
@@ -86,7 +87,7 @@ class HospitalOnboardingReadinessServiceTest {
     @DisplayName("the r65 set-up (departments and staff, nobody attached, no rota): nothing to book, and it says which steps are missing")
     void freshHospitalIsNotBookable() {
         when(departmentRepository.countByHospitalId(hospitalId)).thenReturn(9L);
-        when(staffRepository.countActiveByHospitalId(hospitalId)).thenReturn(46L);
+        when(staffRepository.countActiveNonAdministratorsByHospitalId(hospitalId)).thenReturn(46L);
         when(staffRepository.findDepartmentIdsWithActiveProviders(hospitalId)).thenReturn(Set.of());
         when(slotPolicy.departmentsWithOpenSlots(eq(hospitalId), any())).thenReturn(Set.of());
 
@@ -153,13 +154,31 @@ class HospitalOnboardingReadinessServiceTest {
         service.readiness(hospitalId);
 
         verify(departmentRepository).countByHospitalId(hospitalId);
-        verify(staffRepository).countActiveByHospitalId(hospitalId);
+        verify(staffRepository).countActiveNonAdministratorsByHospitalId(hospitalId);
         verify(staffRepository).findDepartmentIdsWithActiveProviders(hospitalId);
         verify(sessionTemplateRepository).countByHospital_IdAndActiveTrue(hospitalId);
         verify(slotPolicy).departmentsWithOpenSlots(eq(hospitalId), any());
         verify(bedRepository).countByWard_Hospital_IdAndActiveTrue(hospitalId);
         verify(priceListItemRepository).countByHospitalIdAndActiveTrue(hospitalId);
         verify(payerRepository).countByHospitalIdAndActiveTrue(hospitalId);
+        verify(labTestDefinitionRepository).countOrderableAt(hospitalId);
+    }
+
+    @Test
+    @DisplayName("QA r70 D3213: the lab is a step, before the price list (a lab price links to a test), never for booking")
+    void theLabIsAStepBeforeThePriceList() {
+        when(staffRepository.findDepartmentIdsWithActiveProviders(hospitalId)).thenReturn(Set.of());
+        when(slotPolicy.departmentsWithOpenSlots(eq(hospitalId), any())).thenReturn(Set.of());
+        when(labTestDefinitionRepository.countOrderableAt(hospitalId)).thenReturn(0L);
+
+        HospitalOnboardingReadinessDTO readiness = service.readiness(hospitalId);
+
+        assertThat(item(readiness, Step.LAB_TESTS)).isEqualTo(new Item(Step.LAB_TESTS, false, 0, false));
+        java.util.List<Step> order = readiness.items().stream().map(Item::step).toList();
+        assertThat(order.indexOf(Step.LAB_TESTS)).isLessThan(order.indexOf(Step.PRICE_LIST));
+
+        when(labTestDefinitionRepository.countOrderableAt(hospitalId)).thenReturn(12L);
+        assertThat(item(service.readiness(hospitalId), Step.LAB_TESTS).done()).isTrue();
     }
 
     @Test

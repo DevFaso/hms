@@ -39,4 +39,10 @@ public class UserRoleAssignmentPublicViewDTO {
      */
     private String tempUsername;
     private String tempPassword;
+
+    /**
+     * QA r70 D3201: the temporary password above was issued at this activation and replaces the one the welcome
+     * e-mail carried (which never arrived, or the holder would have used it).
+     */
+    private boolean credentialsReissued;
 }

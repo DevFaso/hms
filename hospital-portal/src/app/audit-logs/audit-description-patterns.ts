@@ -2055,4 +2055,15 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Clinical rule set (\S+) sign-off revoked \(version (\S+)\)$/,
     params: ['rule', 'version'],
   },
+  // QA r70 D3206: the desk showed or re-sent a patient's portal activation (never the code).
+  {
+    key: 'AUDIT.DESC.PATIENT_ACTIVATION_CODE_SHOWN',
+    re: /^Patient portal activation code shown to the desk$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PATIENT_ACTIVATION_RESENT',
+    re: /^Patient portal activation re-sent by the desk$/,
+    params: [],
+  },
 ];
