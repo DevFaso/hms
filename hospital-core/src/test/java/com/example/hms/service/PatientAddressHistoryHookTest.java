@@ -105,6 +105,58 @@ class PatientAddressHistoryHookTest {
     }
 
     @Test
+    @DisplayName("QA r70 D3223: a nurse records the personal medical history; a hospital admin's value is ignored")
+    void theMedicalHistoryIsWrittenByAClinicianOnly() {
+        try {
+            signInAs("ROLE_NURSE");
+            PatientProfileUpdateRequestDTO request = new PatientProfileUpdateRequestDTO();
+            request.setMedicalHistorySummary("  HTA depuis 2019, drépanocytose AS  ");
+            patientService.patchPatient(patientId, request, null, Locale.FRENCH);
+            assertThat(patient.getMedicalHistorySummary()).isEqualTo("HTA depuis 2019, drépanocytose AS");
+
+            signInAs("ROLE_HOSPITAL_ADMIN");
+            PatientProfileUpdateRequestDTO byAdmin = new PatientProfileUpdateRequestDTO();
+            byAdmin.setMedicalHistorySummary("écrasé");
+            patientService.patchPatient(patientId, byAdmin, null, Locale.FRENCH);
+            assertThat(patient.getMedicalHistorySummary()).isEqualTo("HTA depuis 2019, drépanocytose AS");
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    @DisplayName("QA r70 review: a clinician's change to the history or the blood group is audited by field name, never by value")
+    void clinicalFieldChangesAreAuditedByNameOnly() {
+        AuditEventLogService audit = mock(AuditEventLogService.class);
+        ReflectionTestUtils.setField(patientService, "auditEventLogService", audit);
+        ReflectionTestUtils.setField(patientService, "roleValidator", mock(RoleValidator.class));
+        try {
+            signInAs("ROLE_DOCTOR");
+            PatientProfileUpdateRequestDTO request = new PatientProfileUpdateRequestDTO();
+            request.setMedicalHistorySummary("HTA depuis 2019");
+            request.setBloodType("B-");
+            // No transaction here: the after-commit audit runs at once.
+            patientService.patchPatient(patientId, request, null, Locale.FRENCH);
+
+            ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> row =
+                ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+            verify(audit).logEvent(row.capture());
+            assertThat(row.getValue().getEventDescription())
+                .contains("bloodType").contains("medicalHistorySummary")
+                .doesNotContain("HTA").doesNotContain("B-");
+            assertThat(String.valueOf(row.getValue().getDetails())).doesNotContain("HTA");
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    private static void signInAs(String role) {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("u", "p",
+                List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority(role))));
+    }
+
+    @Test
     @DisplayName("patchPatient with a NEW address records the OLD one as history")
     void patchRecordsTheSupersededAddress() {
         PatientProfileUpdateRequestDTO request = new PatientProfileUpdateRequestDTO();

@@ -2261,6 +2261,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .patientId(patient.getId())
             .patientName(patient.getFullName())
             .mrn(patient.getMrnForHospital(hospitalId))
+            // QA r70 D3220: the group where the nurse works, not only on the chart.
+            .bloodType(patient.getBloodType())
             .roomBed(a.getRoomBed())
             .acuityLevel(a.getAcuityLevel() != null ? a.getAcuityLevel().name() : null)
             .admissionId(a.getId())

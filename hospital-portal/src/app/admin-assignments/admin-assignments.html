@@ -493,7 +493,7 @@
       (keydown.escape)="closeModal()"
     >
       <div
-        class="modal modal-lg"
+        class="modal modal-lg modal-detail"
         role="dialog"
         aria-modal="true"
         tabindex="-1"
@@ -503,120 +503,124 @@
         aria-labelledby="admin-assignments-dialog-3-title"
       >
         <h2 id="admin-assignments-dialog-3-title">{{ 'ASSIGN_ADMIN.DETAIL_TITLE' | translate }}</h2>
-        <div class="detail-grid">
-          <div>
-            <span class="label">{{ 'ASSIGN_ADMIN.USER' | translate }}</span>
-            <span>{{ row.userName || '—' }} ({{ row.userEmail || '—' }})</span>
+        <!-- QA r70 D3215: the body scrolls on its own; the « Fermer » row never covers it. -->
+        <div class="detail-scroll">
+          <div class="detail-grid">
+            <div>
+              <span class="label">{{ 'ASSIGN_ADMIN.USER' | translate }}</span>
+              <span>{{ row.userName || '—' }} ({{ row.userEmail || '—' }})</span>
+            </div>
+            <div>
+              <span class="label">{{ 'ASSIGN_ADMIN.ROLE' | translate }}</span>
+              <span>{{ (row.roleName || row.roleCode | roleLabel) || '—' }}</span>
+            </div>
+            <div>
+              <span class="label">{{ 'ASSIGN_ADMIN.HOSPITAL' | translate }}</span>
+              <span
+                >{{ row.hospitalName || '—' }}
+                {{ row.hospitalCode ? '(' + row.hospitalCode + ')' : '' }}</span
+              >
+            </div>
+            <div>
+              <span class="label">{{ 'ASSIGN_ADMIN.CODE' | translate }}</span>
+              <span
+                ><code>{{ row.assignmentCode || '—' }}</code></span
+              >
+            </div>
+            <div>
+              <span class="label">{{ 'ASSIGN_ADMIN.START_DATE' | translate }}</span>
+              <span>{{
+                row.startDate ? (row.startDate | serverTime | date: 'mediumDate') : '—'
+              }}</span>
+            </div>
+            <div>
+              <span class="label">{{ 'ASSIGN_ADMIN.ASSIGNED_AT' | translate }}</span>
+              <span>{{ row.assignedAt ? (row.assignedAt | serverTime | dateTime) : '—' }}</span>
+            </div>
+            <div>
+              <span class="label">{{ 'ASSIGN_ADMIN.CONFIRMATION_SENT' | translate }}</span>
+              <span>{{
+                row.confirmationSentAt ? (row.confirmationSentAt | serverTime | dateTime) : '—'
+              }}</span>
+            </div>
+            <div>
+              <span class="label">{{ 'ASSIGN_ADMIN.CONFIRMATION_VERIFIED' | translate }}</span>
+              <span>{{
+                row.confirmationVerifiedAt
+                  ? (row.confirmationVerifiedAt | serverTime | dateTime)
+                  : ('ASSIGN_ADMIN.NOT_VERIFIED' | translate)
+              }}</span>
+            </div>
+            <div>
+              <span class="label">{{ 'ASSIGN_ADMIN.REGISTERED_BY' | translate }}</span>
+              <span>{{ row.registeredByUserName || '—' }}</span>
+            </div>
           </div>
-          <div>
-            <span class="label">{{ 'ASSIGN_ADMIN.ROLE' | translate }}</span>
-            <span>{{ (row.roleName || row.roleCode | roleLabel) || '—' }}</span>
-          </div>
-          <div>
-            <span class="label">{{ 'ASSIGN_ADMIN.HOSPITAL' | translate }}</span>
-            <span
-              >{{ row.hospitalName || '—' }}
-              {{ row.hospitalCode ? '(' + row.hospitalCode + ')' : '' }}</span
-            >
-          </div>
-          <div>
-            <span class="label">{{ 'ASSIGN_ADMIN.CODE' | translate }}</span>
-            <span
-              ><code>{{ row.assignmentCode || '—' }}</code></span
-            >
-          </div>
-          <div>
-            <span class="label">{{ 'ASSIGN_ADMIN.START_DATE' | translate }}</span>
-            <span>{{
-              row.startDate ? (row.startDate | serverTime | date: 'mediumDate') : '—'
-            }}</span>
-          </div>
-          <div>
-            <span class="label">{{ 'ASSIGN_ADMIN.ASSIGNED_AT' | translate }}</span>
-            <span>{{ row.assignedAt ? (row.assignedAt | serverTime | dateTime) : '—' }}</span>
-          </div>
-          <div>
-            <span class="label">{{ 'ASSIGN_ADMIN.CONFIRMATION_SENT' | translate }}</span>
-            <span>{{
-              row.confirmationSentAt ? (row.confirmationSentAt | serverTime | dateTime) : '—'
-            }}</span>
-          </div>
-          <div>
-            <span class="label">{{ 'ASSIGN_ADMIN.CONFIRMATION_VERIFIED' | translate }}</span>
-            <span>{{
-              row.confirmationVerifiedAt
-                ? (row.confirmationVerifiedAt | serverTime | dateTime)
-                : ('ASSIGN_ADMIN.NOT_VERIFIED' | translate)
-            }}</span>
-          </div>
-          <div>
-            <span class="label">{{ 'ASSIGN_ADMIN.REGISTERED_BY' | translate }}</span>
-            <span>{{ row.registeredByUserName || '—' }}</span>
-          </div>
-        </div>
-        @if (row.profileCompletionUrl) {
-          <p class="form-static">
-            <strong
-              >{{ 'ASSIGN_ADMIN.PROFILE_URL' | translate }}{{ 'COMMON.COLON' | translate }}</strong
-            >
-            <code class="wrap-code">{{ row.profileCompletionUrl }}</code>
-          </p>
-        }
-        <!-- QA r65 D2764: « Remettez le code en main propre » needs the code to be somewhere. -->
-        @if (!row.confirmationVerified) {
-          <section class="activation-code" data-testid="activation-code">
-            <h3>{{ 'PLATFORM_SETUP.ACTIVATION.TITLE' | translate }}</h3>
-            @if (isRegistrar(row)) {
-              @if (activationCode(); as shown) {
-                <p class="activation-code-value" data-testid="activation-code-value">
-                  <code>{{ shown.confirmationCode }}</code>
-                </p>
-                <p class="form-static">{{ 'PLATFORM_SETUP.ACTIVATION.HOW_TO' | translate }}</p>
-                @if (shown.expiresAt) {
-                  <p class="form-static" data-testid="activation-code-expiry">
-                    {{
-                      'PLATFORM_SETUP.ACTIVATION.EXPIRES'
-                        | translate: { date: (shown.expiresAt | serverTime | dateTime) }
-                    }}
+          @if (row.profileCompletionUrl) {
+            <p class="form-static">
+              <strong
+                >{{ 'ASSIGN_ADMIN.PROFILE_URL' | translate
+                }}{{ 'COMMON.COLON' | translate }}</strong
+              >
+              <code class="wrap-code">{{ row.profileCompletionUrl }}</code>
+            </p>
+          }
+          <!-- QA r65 D2764: « Remettez le code en main propre » needs the code to be somewhere. -->
+          @if (!row.confirmationVerified) {
+            <section class="activation-code" data-testid="activation-code">
+              <h3>{{ 'PLATFORM_SETUP.ACTIVATION.TITLE' | translate }}</h3>
+              @if (isRegistrar(row)) {
+                @if (activationCode(); as shown) {
+                  <p class="activation-code-value" data-testid="activation-code-value">
+                    <code>{{ shown.confirmationCode }}</code>
+                  </p>
+                  <p class="form-static">{{ 'PLATFORM_SETUP.ACTIVATION.HOW_TO' | translate }}</p>
+                  @if (shown.expiresAt) {
+                    <p class="form-static" data-testid="activation-code-expiry">
+                      {{
+                        'PLATFORM_SETUP.ACTIVATION.EXPIRES'
+                          | translate: { date: (shown.expiresAt | serverTime | dateTime) }
+                      }}
+                    </p>
+                  }
+                } @else {
+                  <p class="form-static">{{ 'PLATFORM_SETUP.ACTIVATION.HELP' | translate }}</p>
+                  <button
+                    type="button"
+                    class="btn-secondary"
+                    data-testid="activation-code-show"
+                    [disabled]="activationBusy()"
+                    (click)="showActivationCode(row)"
+                  >
+                    {{ 'PLATFORM_SETUP.ACTIVATION.SHOW' | translate }}
+                  </button>
+                }
+                @if (activationError(); as reason) {
+                  <p class="field-error" role="alert" data-testid="activation-code-error">
+                    {{ reason }}
                   </p>
                 }
               } @else {
-                <p class="form-static">{{ 'PLATFORM_SETUP.ACTIVATION.HELP' | translate }}</p>
-                <button
-                  type="button"
-                  class="btn-secondary"
-                  data-testid="activation-code-show"
-                  [disabled]="activationBusy()"
-                  (click)="showActivationCode(row)"
-                >
-                  {{ 'PLATFORM_SETUP.ACTIVATION.SHOW' | translate }}
-                </button>
-              }
-              @if (activationError(); as reason) {
-                <p class="field-error" role="alert" data-testid="activation-code-error">
-                  {{ reason }}
+                <p class="form-static" data-testid="activation-code-registrar-only">
+                  {{
+                    'PLATFORM_SETUP.ACTIVATION.REGISTRAR_ONLY'
+                      | translate: { name: row.registeredByUserName || '—' }
+                  }}
                 </p>
               }
-            } @else {
-              <p class="form-static" data-testid="activation-code-registrar-only">
-                {{
-                  'PLATFORM_SETUP.ACTIVATION.REGISTRAR_ONLY'
-                    | translate: { name: row.registeredByUserName || '—' }
-                }}
-              </p>
-            }
-          </section>
-        }
-        @if (row.profileChecklist && row.profileChecklist.length > 0) {
-          <div class="checklist">
-            <strong>{{ 'ASSIGN_ADMIN.CHECKLIST' | translate }}</strong>
-            <ul>
-              @for (item of row.profileChecklist; track $index) {
-                <li>{{ item }}</li>
-              }
-            </ul>
-          </div>
-        }
+            </section>
+          }
+          @if (row.profileChecklist && row.profileChecklist.length > 0) {
+            <div class="checklist">
+              <strong>{{ 'ASSIGN_ADMIN.CHECKLIST' | translate }}</strong>
+              <ul>
+                @for (item of row.profileChecklist; track $index) {
+                  <li>{{ item }}</li>
+                }
+              </ul>
+            </div>
+          }
+        </div>
         <div class="modal-actions">
           <button type="button" class="btn-primary" (click)="closeModal()">
             {{ 'COMMON.CLOSE' | translate }}

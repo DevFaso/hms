@@ -30,3 +30,8 @@
 .dialog-footer {
   padding: 0.875rem 0 0;
 }
+
+// QA r70 D3223: the history text spans the grid's row.
+.field-group-wide {
+  grid-column: 1 / -1;
+}

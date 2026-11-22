@@ -48,6 +48,7 @@ import { AuthorshipService } from '../shared/authorship.service';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { PatientSafetyHeaderComponent } from '../shared/patient-safety-header/patient-safety-header.component';
 /** Mirrors the @PreAuthorize on GET /consultations/mine. Update both together. */
 const CONSULTANT_TAB_ROLES = ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'];
 
@@ -55,6 +56,7 @@ const CONSULTANT_TAB_ROLES = ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'];
   selector: 'app-consultations',
   standalone: true,
   imports: [
+    PatientSafetyHeaderComponent,
     DateTimePipe,
     ListEscapeDirective,
     SubmitGuardDirective,

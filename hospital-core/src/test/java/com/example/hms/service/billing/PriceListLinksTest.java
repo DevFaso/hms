@@ -146,6 +146,32 @@ class PriceListLinksTest {
     }
 
     @Test
+    @DisplayName("QA r70 D3213: a test still in validation can be priced; the finance import does not wait for QA")
+    void aTestInValidationIsLinkable() {
+        LabTestDefinition draft = labTest("TWP-GE", HOSPITAL);
+        draft.setActive(false);
+        draft.setApprovalStatus(com.example.hms.enums.LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+        when(labTests.findLiveByCodeAtHospital("TWP-GE", HOSPITAL)).thenReturn(List.of(draft));
+        when(labTests.findBySupersedesDefinitionId(draft.getId())).thenReturn(List.of());
+
+        assertThat(links.normalise(HOSPITAL, PriceListLinkType.LAB_TEST_DEFINITION, "TWP-GE"))
+            .isEqualTo(draft.getId().toString());
+    }
+
+    @Test
+    @DisplayName("QA r70 D3213: a retired test stays refused")
+    void aRetiredTestIsStillRefused() {
+        LabTestDefinition retired = labTest("TWP-OLD2", HOSPITAL);
+        retired.setActive(false);
+        retired.setApprovalStatus(com.example.hms.enums.LabTestDefinitionApprovalStatus.RETIRED);
+        when(labTests.findById(retired.getId())).thenReturn(Optional.of(retired));
+        String key = retired.getId().toString();
+
+        assertThatThrownBy(() -> links.normalise(HOSPITAL, PriceListLinkType.LAB_TEST_DEFINITION, key))
+            .isInstanceOf(FieldBusinessException.class);
+    }
+
+    @Test
     void aPlatformLabTestIsLinkableAndSoIsOneGivenByItsId() {
         LabTestDefinition platform = labTest("GLOBAL-GLY", null);
         when(labTests.findLiveGlobalByCode("GLOBAL-GLY")).thenReturn(List.of(platform));

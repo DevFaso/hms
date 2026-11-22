@@ -561,6 +561,8 @@ public class PatientServiceImpl implements PatientService {
         // review: by a clinician of the acting hospital only.
         if (writesClinicalFields()) {
             applyNullable(request.getBloodType(), patient::setBloodType);
+            // QA r70 D3223: the personal history the Synthèse reads, written where the blood group is.
+            applyNullable(request.getMedicalHistorySummary(), patient::setMedicalHistorySummary);
         }
     }
 
@@ -676,6 +678,10 @@ public class PatientServiceImpl implements PatientService {
         m.put("preferredPharmacy", p.getPreferredPharmacy());
         m.put("careTeamNotes", p.getCareTeamNotes());
         m.put("chronicConditions", p.getChronicConditions());
+        // QA r70 review: the clinician-only fields are on the trail too (D3223, D3224). The audit names the
+        // field, never its value: the row says « bloodType » or « medicalHistorySummary » changed, nothing more.
+        m.put("bloodType", p.getBloodType());
+        m.put("medicalHistorySummary", p.getMedicalHistorySummary());
         return m;
     }
 

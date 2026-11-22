@@ -280,6 +280,8 @@ export interface TransfusionRequestResponse {
   bloodGroupId: string | null;
   patientAboGroup: AboGroup | null;
   patientRhFactor: RhFactor | null;
+  /** QA r70 D3221: the group a clinician recorded on the chart: declared, never typed. */
+  patientDeclaredBloodType?: string | null;
   screenCurrent: boolean;
   units: BloodUnitResponse[];
   crossmatches: CrossmatchResponse[];

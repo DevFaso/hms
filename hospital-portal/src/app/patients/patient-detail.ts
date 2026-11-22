@@ -75,6 +75,7 @@ import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { ElapsedPipe } from '../shared/pipes/elapsed.pipe';
 import { NationalUniqueIdViewComponent } from './national-unique-id-view.component';
 import { RuleStatusComponent } from '../shared/rule-status/rule-status.component';
+import { PatientPortalActivationComponent } from './portal-activation/patient-portal-activation.component';
 
 /** The chart-restriction reason box: the server names it `reason` in a 400. */
 const RESTRICTION_REASON_FIELD = 'restriction-reason';
@@ -103,6 +104,7 @@ type TabKey =
   selector: 'app-patient-detail',
   standalone: true,
   imports: [
+    PatientPortalActivationComponent,
     RuleStatusComponent,
     DateTimePipe,
     ElapsedPipe,
@@ -634,6 +636,19 @@ export class PatientDetailComponent implements OnInit {
 
   /** QA D926: the demographics edit dialog is open. */
   editingDemographics = signal(false);
+
+  /** QA r70 D3206: mirrors PatientPortalActivationController's roles (the service scopes them to this hospital). */
+  canHandOverPortalCode(): boolean {
+    return this.roleContext.hasAnyActiveRole(['ROLE_RECEPTIONIST', 'ROLE_HOSPITAL_ADMIN']);
+  }
+
+  /**
+   * QA r70 D3223: the roles the server lets write the clinical fields (PatientServiceImpl#writesClinicalFields):
+   * the personal history is recorded from the chart by a doctor, nurse or midwife.
+   */
+  writesClinicalFields(): boolean {
+    return this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']);
+  }
 
   /** QA D926: mirrors PATCH /patients/{id}'s @PreAuthorize list. */
   canEditDemographics(): boolean {

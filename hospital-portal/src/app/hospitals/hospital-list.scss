@@ -64,6 +64,13 @@
 }
 
 .action-link {
+  // QA r70 D3212: the « open » link (an <a>) had no frame beside the framed edit and delete buttons;
+  // the three now share one.
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  text-decoration: none;
+
   &.danger:hover {
     color: var(--danger);
     background: #fef2f2;

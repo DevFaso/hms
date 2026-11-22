@@ -117,6 +117,8 @@ public class UserServiceImpl implements UserService {
     private final com.example.hms.security.provider.FacilityAssignmentGuard facilityAssignmentGuard;
     /** Tells whether generated credentials can reach an e-mail-less patient by SMS. */
     private final SmsService smsService;
+    /** QA r70 D3202: the department chosen at registration, checked to be the hospital's own. */
+    private final com.example.hms.repository.DepartmentRepository departmentRepository;
 
     @Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -796,6 +798,14 @@ public class UserServiceImpl implements UserService {
         staff.setEmploymentType(
             request.getEmploymentType() != null ? request.getEmploymentType() : EmploymentType.FULL_TIME);
         staff.setJobTitle(coerceJobTitle(request.getJobTitle(), roles));
+        // QA r70 D3202 / D3209: the department and the specialization the registration form sends were
+        // dropped, so every clinician needed a second visit to /staff and a doctor's specialization was lost.
+        if (request.getDepartmentId() != null) {
+            staff.setDepartment(requireDepartmentOf(hospital, request.getDepartmentId()));
+        }
+        if (request.getSpecialization() != null) {
+            staff.setSpecialization(request.getSpecialization().name());
+        }
         if (staff.getStartDate() == null) {
             staff.setStartDate(LocalDate.now());
         }
@@ -808,6 +818,15 @@ public class UserServiceImpl implements UserService {
         }
 
         staffRepository.save(staff);
+    }
+
+    /** A department of THIS hospital; another hospital's (or an unknown id) is refused on the field. */
+    private com.example.hms.model.Department requireDepartmentOf(Hospital hospital, UUID departmentId) {
+        return departmentRepository.findByIdWithHospital(departmentId)
+            .filter(department -> department.getHospital() != null
+                && hospital.getId().equals(department.getHospital().getId()))
+            .orElseThrow(() -> new com.example.hms.exception.FieldBusinessException(
+                "departmentId", "department.notFound", departmentId));
     }
 
     /** The trimmed licence number, or null when none was given. Never required. */
@@ -2434,33 +2453,7 @@ public class UserServiceImpl implements UserService {
      * Guarantees at least one character from each category.
      */
     private String generateTempPassword() {
-        String upper   = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        String lower   = "abcdefghijklmnopqrstuvwxyz";
-        String digits  = "0123456789";
-        String special = "!@#$%&*";
-        String all     = upper + lower + digits + special;
-
-        // Guarantee one from each category
-        StringBuilder sb = new StringBuilder(14);
-        sb.append(upper.charAt(SECURE_RANDOM.nextInt(upper.length())));
-        sb.append(lower.charAt(SECURE_RANDOM.nextInt(lower.length())));
-        sb.append(digits.charAt(SECURE_RANDOM.nextInt(digits.length())));
-        sb.append(special.charAt(SECURE_RANDOM.nextInt(special.length())));
-
-        // Fill remaining 10 chars
-        for (int i = 4; i < 14; i++) {
-            sb.append(all.charAt(SECURE_RANDOM.nextInt(all.length())));
-        }
-
-        // Shuffle to avoid predictable positions
-        char[] chars = sb.toString().toCharArray();
-        for (int i = chars.length - 1; i > 0; i--) {
-            int j = SECURE_RANDOM.nextInt(i + 1);
-            char tmp = chars[i];
-            chars[i] = chars[j];
-            chars[j] = tmp;
-        }
-        return new String(chars);
+        return com.example.hms.utility.TemporaryPasswords.generate();
     }
 
 

@@ -57,6 +57,15 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
                               @Param("closedStates")
                               java.util.Collection<com.example.hms.enums.HospitalLifecycleState> closedStates);
 
+    /**
+     * QA r70 review of #1281: burns a pending invitation's code after too many wrong tries (the code and any
+     * temporary password are cleared; a new code must be issued). A verified row is left alone.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE UserRoleHospitalAssignment a SET a.confirmationCode = NULL, a.tempPlainPassword = NULL "
+        + "WHERE a.id = :id AND a.confirmationVerifiedAt IS NULL")
+    int burnPendingConfirmationCode(@Param("id") UUID id);
+
     /* ------------ Basic lookups ------------ */
     List<UserRoleHospitalAssignment> findByUserId(UUID userId);
 

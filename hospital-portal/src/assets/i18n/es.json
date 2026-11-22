@@ -2152,7 +2152,9 @@
       "ORDONNANCE_PRINTED": "Receta impresa por su prescriptor (recetas {{ids}})",
       "CLINICAL_RULE_SIGNED_OFF": "Conjunto de reglas clínicas {{rule}} validado (versión {{version}})",
       "CLINICAL_RULE_SIGNOFF_REVOKED": "Validación del conjunto de reglas clínicas {{rule}} revocada (versión {{version}})",
-      "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Sesión de soporte rechazada: {{what}} (validación de una regla clínica)"
+      "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Sesión de soporte rechazada: {{what}} (validación de una regla clínica)",
+      "PATIENT_ACTIVATION_CODE_SHOWN": "Código de activación del portal del paciente mostrado en recepción",
+      "PATIENT_ACTIVATION_RESENT": "Activación del portal del paciente reenviada por recepción"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -5786,13 +5788,16 @@
     "OTHER_ROLES_HINT": "Si su correo de bienvenida menciona otros roles, confirme cada uno con su propio código, usando el botón que aparece debajo de ese código.",
     "DIGIT_OF": "Dígito {{n}} de {{total}}",
     "BY_PHONE_TITLE": "Active su cuenta",
-    "BY_PHONE_INTRO": "Introduzca el número de teléfono registrado en recepción y el código de 6 dígitos recibido por SMS.",
+    "BY_PHONE_INTRO": "Introduzca el número de teléfono que dio al inscribirse y el código de 6 dígitos recibido (por SMS, por correo o en persona).",
     "PHONE_LABEL": "Número de teléfono",
     "CODE_LABEL": "Código de activación (6 dígitos)",
     "BY_PHONE_SUBMIT": "Activar mi cuenta",
     "ERR_PHONE_REQUIRED": "Introduzca su número de teléfono.",
     "ERR_CODE_FORMAT": "El código tiene 6 dígitos.",
-    "ERR_PHONE_CODE_INCORRECT": "Este número y este código no coinciden. Revise el SMS e inténtelo de nuevo."
+    "ERR_PHONE_CODE_INCORRECT": "Este número y este código no coinciden. Revise el SMS e inténtelo de nuevo.",
+    "CREDENTIALS_REISSUED": "Esta contraseña provisional sustituye a la del correo de bienvenida.",
+    "ENTER_CODE_TITLE": "Active su cuenta",
+    "ENTER_CODE_INTRO": "Introduzca el código de 6 dígitos recibido por SMS, por correo o en persona."
   },
   "ORGANIZATIONS": {
     "CONTACT": "Contacto",
@@ -10077,7 +10082,9 @@
     "USERNAME": "Nombre de usuario",
     "USER_AND_HOSPITAL_REQUIRED": "El usuario y el hospital son obligatorios",
     "VIEW_DEPARTMENT_DETAILS": "Ver detalles del departamento",
-    "WEEKLY_SHIFTS": "Turnos semanales"
+    "WEEKLY_SHIFTS": "Turnos semanales",
+    "NO_DEPARTMENT_OPTION": "— Ningún departamento —",
+    "DEPARTMENTS_LOAD_FAILED": "No se pudieron cargar los departamentos."
   },
   "TREATMENT": {
     "ACTIVE": "Activo",
@@ -10219,7 +10226,8 @@
       "RESTORE_FAILED": "Error al restaurar el usuario",
       "IMPERSONATE_REASON_TOO_SHORT": "El motivo debe tener al menos 5 caracteres.",
       "IMPERSONATE_STARTED": "Ahora actuando como {{name}}.",
-      "IMPERSONATE_FAILED": "Error al iniciar la suplantación"
+      "IMPERSONATE_FAILED": "Error al iniciar la suplantación",
+      "USERNAME_ISSUED": "Nombre de usuario provisional: {{username}}. La persona elige el suyo en su primer inicio de sesión."
     },
     "TOTAL": "Total",
     "USER": "Usuario",
@@ -10242,7 +10250,9 @@
       "FAILED": "No se pudo restablecer la verificación en dos pasos."
     },
     "HOSPITAL_SCOPE": "Hospital: {{name}}",
-    "HOSPITAL_SCOPE_CLEAR": "Mostrar todos los hospitales"
+    "HOSPITAL_SCOPE_CLEAR": "Mostrar todos los hospitales",
+    "DEPARTMENT": "Departamento",
+    "DEPARTMENT_HINT": "El departamento donde el profesional recibe citas. Se puede cambiar luego en « Personal »."
   },
   "TRIAGE": {
     "ACUITY": "Nivel de gravedad",
@@ -13411,7 +13421,7 @@
     "DAY_5": "Viernes",
     "DAY_6": "Sábado",
     "DAY_7": "Domingo",
-    "DEPARTMENT": "Servicio",
+    "DEPARTMENT": "Departamento",
     "FROM": "Desde",
     "GENERATE": "Generar",
     "GENERATED": "{{created}} espacios generados a partir de {{templates}} plantillas ({{skipped}} ya existentes)",
@@ -13428,7 +13438,7 @@
     "RETIRE": "Retirar",
     "RETIRED": "Retirado",
     "SEARCH": "Buscar",
-    "SELECT_DEPARTMENT": "Seleccionar servicio",
+    "SELECT_DEPARTMENT": "Seleccionar departamento",
     "SELECT_STAFF": "Seleccionar personal",
     "SHOW_INACTIVE": "Mostrar retirados",
     "SLOTS_EMPTY": "Ningún espacio coincide con estos filtros.",
@@ -13488,7 +13498,8 @@
     "VT_RESTORED": "Tipo de visita restaurado",
     "VT_RETIRED": "Tipo de visita retirado",
     "VT_SAVED": "Tipo de visita guardado",
-    "VT_SAVE_ERROR": "No se pudo guardar el tipo de visita."
+    "VT_SAVE_ERROR": "No se pudo guardar el tipo de visita.",
+    "GENERATED_ONE_TEMPLATE": "{{created}} espacios generados a partir de una plantilla ({{skipped}} ya existentes)"
   },
   "TRANSFUSION": {
     "LATE_INCOMPATIBLE_RESULT": "Registrar un resultado incompatible",
@@ -13657,7 +13668,12 @@
     "REACTION_ERROR": "No se pudo registrar la reacción",
     "PLATELET_O_TO_B": "Pendiente de confirmación",
     "PLATELET_O_TO_B_DETAIL": "Plaquetas de grupo O para un receptor de grupo B. Permitido por el protocolo de este centro: esta transfusión no está bloqueada ni cuestionada. El protocolo excluye las plaquetas O para receptores A y AB pero no para receptores B, y aún no se ha confirmado con hematología si esa diferencia es intencionada. Plantéelo en la próxima revisión.",
-    "CANCEL_REQUEST_CONFIRM": "Cancelar la solicitud"
+    "CANCEL_REQUEST_CONFIRM": "Cancelar la solicitud",
+    "DECLARED_LABEL": "Grupo en la historia",
+    "DECLARED_VALUE": "{{group}} (declarado, no verificado)",
+    "DECLARED_GROUP": "Historia: {{group}} (no verificado)",
+    "DECLARED_MISMATCH": "La historia indica {{declared}} pero el laboratorio tipificó {{typed}}. Compruebe la identidad del paciente y la historia; el grupo del laboratorio rige para la compatibilidad.",
+    "DECLARED_MISMATCH_SHORT": "Difiere de la historia"
   },
   "MORTALITY": {
     "DISPUTE": "Impugnar este fallecimiento",
@@ -15695,7 +15711,7 @@
         },
         "STAFF": {
           "TITLE": "Personal",
-          "DONE": "Miembros del personal activos: {{count}}",
+          "DONE": "Personal activo (sin administradores): {{count}}",
           "TODO": "Inscriba al personal. Cada persona debe después activar su cuenta con el código recibido."
         },
         "PROVIDERS_IN_DEPARTMENT": {
@@ -15732,6 +15748,11 @@
           "TITLE": "Reglas clínicas validadas",
           "DONE": "Reglas clínicas validadas: {{count}} / {{total}}",
           "TODO": "Reglas clínicas validadas: {{count}} / {{total}}. Imprima el dossier de firma para el médico jefe y registre cada firma."
+        },
+        "LAB_TESTS": {
+          "TITLE": "Pruebas de laboratorio",
+          "DONE": "Pruebas que se pueden pedir: {{count}}",
+          "TODO": "Configure las pruebas (valores de referencia, validación) antes de la tarifa: un precio de laboratorio se vincula a una prueba por su código."
         }
       }
     },
@@ -15948,6 +15969,37 @@
       "STILLBIRTHS_WHO_DEFINITION": "Indicador OMS: sin signos de vida a las {{weeks}} semanas completas o más",
       "STILLBIRTHS_ICD_DEFINITION": "Nivel CIE: desde las {{weeks}} semanas completas"
     }
+  },
+  "PATIENT_SAFETY": {
+    "ARIA_LABEL": "Cabecera de seguridad del paciente",
+    "LOADING": "Cargando la cabecera de seguridad…",
+    "UNAVAILABLE": "Cabecera de seguridad no disponible: compruebe la historia antes de actuar.",
+    "NAME": "Paciente",
+    "AGE": "Edad",
+    "AGE_YEARS": "{{n}} años",
+    "AGE_MONTHS": "{{n}} meses",
+    "SEX": "Sexo",
+    "WEIGHT": "Peso",
+    "WEIGHT_KG": "{{kg}} kg",
+    "WEIGHED_ON": "(pesado el {{date}})",
+    "NOT_WEIGHED": "Sin peso registrado",
+    "BLOOD_GROUP": "Grupo sanguíneo",
+    "NOT_DOCUMENTED": "No registrado",
+    "ALLERGIES": "Alergias",
+    "NO_KNOWN_ALLERGIES": "Sin alergias conocidas",
+    "HISTORY_HINT": "Antecedentes médicos personales (médico, enfermero o matrona). Aparecen en el resumen.",
+    "HISTORY_ADD": "Registrar los antecedentes",
+    "HISTORY_EDIT": "Modificar los antecedentes"
+  },
+  "PORTAL_ACTIVATION": {
+    "TITLE": "Acceso al portal del paciente",
+    "HELP": "Si el SMS de activación no llegó, muestre el código y entrégueselo al paciente en persona, o vuelva a enviar la activación.",
+    "SHOW": "Mostrar el código de activación",
+    "RESEND": "Volver a enviar la activación",
+    "HOW_TO": "El paciente abre la página de inicio de sesión, elige « Tengo un código de activación » e introduce su número de teléfono y este código. La consulta del código queda registrada en la auditoría.",
+    "RESENT": "Activación enviada de nuevo.",
+    "RESENT_NOWHERE": "La activación no se pudo enviar: muestre el código y entréguelo en persona.",
+    "RESEND_FAILED": "No se pudo volver a enviar la activación."
   },
   "PHARMACY_SALE": {
     "NAV": "Venta en mostrador",
