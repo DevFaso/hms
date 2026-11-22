@@ -179,7 +179,8 @@
                     <ul>
                       @for (component of def.components; track component.code) {
                         <li>
-                          {{ component.code }} · {{ component.name }}:
+                          {{ component.code }} · {{ component.name
+                          }}{{ 'COMMON.COLON' | translate }}
                           {{ component.referenceRanges?.length ?? 0 }}
                           <ul>
                             @for (range of component.referenceRanges; track $index) {
