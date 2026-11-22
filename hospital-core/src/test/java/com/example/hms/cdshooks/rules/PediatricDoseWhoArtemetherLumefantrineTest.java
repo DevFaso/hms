@@ -61,14 +61,15 @@ class PediatricDoseWhoArtemetherLumefantrineTest {
 
         // 4 tablets per dose against 1, and 8 a day against 2: both above the 5-15 kg band.
         assertThat(critical(cards)).isEqualTo(2);
-        assertThat(cards).anySatisfy(c -> assertThat(c.summary()).contains("12 kg").contains("4"));
         // Pending local approval: the review is asked for too, never a plain advisory.
-        assertThat(cards).anySatisfy(c -> {
-            assertThat(c.requiresReview()).isTrue();
-            assertThat(c.summary()).contains("WHO weight bands").contains("provisional");
-        });
-        assertThat(cards).noneSatisfy(c -> assertThat(c.summary()).contains("verify weight-based dosing"));
-        assertThat(cards).allSatisfy(c -> assertThat(c.detail()).contains("WHO Guidelines for the treatment of malaria"));
+        assertThat(cards)
+            .anySatisfy(c -> assertThat(c.summary()).contains("12 kg").contains("4"))
+            .anySatisfy(c -> {
+                assertThat(c.requiresReview()).isTrue();
+                assertThat(c.summary()).contains("WHO weight bands").contains("provisional");
+            })
+            .noneSatisfy(c -> assertThat(c.summary()).contains("verify weight-based dosing"))
+            .allSatisfy(c -> assertThat(c.detail()).contains("WHO Guidelines for the treatment of malaria"));
     }
 
     @Test
@@ -77,11 +78,12 @@ class PediatricDoseWhoArtemetherLumefantrineTest {
         List<CdsCard> cards = rule.evaluate(ctx(al.getNameFr(), al, "1 cp", "BID", 12.0));
 
         assertThat(critical(cards)).isZero();
-        assertThat(cards).anySatisfy(c -> {
-            assertThat(c.indicator()).isEqualTo(CdsCard.Indicator.INFO);
-            assertThat(c.summary()).contains("WHO weight band for 12 kg").contains("1 tablet(s) of 20/120 mg");
-        });
-        assertThat(cards).anySatisfy(c -> assertThat(c.requiresReview()).isTrue());
+        assertThat(cards)
+            .anySatisfy(c -> {
+                assertThat(c.indicator()).isEqualTo(CdsCard.Indicator.INFO);
+                assertThat(c.summary()).contains("WHO weight band for 12 kg").contains("1 tablet(s) of 20/120 mg");
+            })
+            .anySatisfy(c -> assertThat(c.requiresReview()).isTrue());
     }
 
     @Test
