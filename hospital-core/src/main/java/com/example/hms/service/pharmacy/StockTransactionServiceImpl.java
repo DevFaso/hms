@@ -75,6 +75,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     private final EntityManager entityManager;
     /** QA D964: a transfer out follows first expired, first out. */
     private final FefoLotPolicy fefoLotPolicy;
+    /** QA D3415 (r70): a return that may not go back on sale is set aside. */
+    private final StockQuarantine stockQuarantine;
 
     @Override
     @Transactional
@@ -108,6 +110,17 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         StockTransaction tx = stockTransactionMapper.toEntity(dto, item, lot, performer);
         tx.setWitnessedByUser(witness);
         StockTransaction saved = stockTransactionRepository.save(tx);
+
+        // QA D3415 (r70): a returned morphine ampoule went straight back into the saleable lot. A return that may
+        // not be sold again (not intact, or a controlled drug back from outside) stays off the lot, set aside.
+        if (dto.getTransactionType() == StockTransactionType.RETURN
+                && StockQuarantine.quarantines(item, conditionOf(dto), true)) {
+            stockQuarantine.quarantine(item, lot, dto.getQuantity(), dto.getReferenceId(), conditionOf(dto),
+                    performer, witness);
+            logAudit(AuditEventType.STOCK_RETURN, "RETURN: " + dto.getQuantity() + " units quarantined ("
+                    + conditionOf(dto).name() + ")", saved.getId().toString());
+            return stockTransactionMapper.toResponseDTO(saved);
+        }
 
         // Update inventory and lot quantities based on transaction type
         applyQuantityChange(item, lot, dto.getTransactionType(), dto.getQuantity());
@@ -238,7 +251,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                     d.getQuantityDispensed(),
                     returnable,
                     d.getUnit(),
-                    d.getStockLot() != null ? d.getStockLot().getLotNumber() : null));
+                    d.getStockLot() != null ? d.getStockLot().getLotNumber() : null,
+                    d.getStockLot() != null ? d.getStockLot().getId() : null));
         }
         return out;
     }
@@ -254,13 +268,30 @@ public class StockTransactionServiceImpl implements StockTransactionService {
             return dispenseRepository.findReturnableFillsOfLot(stockLotId,
                     RETURNABLE_FILL_STATES);
         }
+        // QA D3409 (r70): no lot named lists every fill of the item, from its lots and from none (the list stayed
+        // empty until the lot was chosen, although the item is what the pharmacist knows first).
+        List<com.example.hms.model.pharmacy.Dispense> fromLots = nzList(
+                dispenseRepository.findReturnableFillsOfItemLots(item.getId(), RETURNABLE_FILL_STATES));
         if (item.getMedicationCatalogItem() == null || item.getPharmacy() == null) {
-            return List.of();
+            return fromLots;
         }
-        return dispenseRepository
+        List<com.example.hms.model.pharmacy.Dispense> outOfLots = nzList(dispenseRepository
                 .findReturnableFillsOutOfLots(
                         item.getPharmacy().getId(), item.getMedicationCatalogItem().getId(),
-                        RETURNABLE_FILL_STATES);
+                        RETURNABLE_FILL_STATES));
+        if (fromLots.isEmpty()) {
+            return outOfLots;
+        }
+        List<com.example.hms.model.pharmacy.Dispense> all = new java.util.ArrayList<>(fromLots);
+        all.addAll(outOfLots);
+        all.sort(Comparator.comparing(com.example.hms.model.pharmacy.Dispense::getCreatedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())));
+        return all;
+    }
+
+    private static List<com.example.hms.model.pharmacy.Dispense> nzList(
+            List<com.example.hms.model.pharmacy.Dispense> list) {
+        return list != null ? list : List.of();
     }
 
     /** What has already been returned against each fill, in one query. */
@@ -314,6 +345,11 @@ public class StockTransactionServiceImpl implements StockTransactionService {
      */
     private void requireMovementIsAccountable(StockTransactionRequestDTO dto, InventoryItem item, StockLot lot) {
         StockTransactionType type = dto.getTransactionType();
+        // QA D3415 (r70): the quarantine is fed by returns and cancelled fills, and emptied by its destruction.
+        if (type == StockTransactionType.QUARANTINE || type == StockTransactionType.DESTRUCTION) {
+            throw new com.example.hms.exception.FieldBusinessException("transactionType",
+                    MessageUtil.resolve("stockTransaction.quarantine.viaWorkflow"));
+        }
         // QA D2670 (r65): a SALE leaves stock through the counter sale, which writes it with the sale's id.
         if (type == StockTransactionType.DISPENSE || type == StockTransactionType.SALE) {
             throw new com.example.hms.exception.FieldBusinessException("transactionType", MessageUtil.resolve("stockTransaction.dispense.viaWorkflow"));
@@ -565,6 +601,12 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 && WholeUnitQuantity.isWhole(current.add(dto.getQuantity()));
     }
 
+    /** The state a return's units are in; INTACT when the request does not say. */
+    private static com.example.hms.enums.ReturnedStockCondition conditionOf(StockTransactionRequestDTO dto) {
+        return dto.getStockCondition() != null ? dto.getStockCondition()
+                : com.example.hms.enums.ReturnedStockCondition.INTACT;
+    }
+
     private static BigDecimal nz(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
     }
@@ -639,6 +681,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         switch (type) {
             case DISPENSE, TRANSFER, SALE -> takeOff(item, lot, quantity, now);
             case RECEIPT, RETURN -> putOn(item, lot, quantity, now);
+            // Never through this path (requireMovementIsAccountable refuses them).
+            case QUARANTINE, DESTRUCTION -> throw new IllegalStateException("not a manual movement: " + type);
             // QA D143: a negative adjustment (a write-off) goes through the
             // guarded decrement, so it can never drive a lot or the item
             // below zero; a positive one adds.
@@ -695,7 +739,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
             case ADJUSTMENT -> AuditEventType.STOCK_ADJUSTMENT;
             case TRANSFER -> AuditEventType.STOCK_TRANSFER;
             case RETURN -> AuditEventType.STOCK_RETURN;
-            case DISPENSE, SALE -> AuditEventType.STOCK_ADJUSTMENT;
+            case DISPENSE, SALE, QUARANTINE, DESTRUCTION -> AuditEventType.STOCK_ADJUSTMENT;
         };
     }
 

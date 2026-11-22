@@ -26,6 +26,9 @@ import {
   StockTransactionResponse,
   StockWitnessCandidate,
   ReturnableDispense,
+  RETURNED_STOCK_CONDITIONS,
+  ReturnedStockCondition,
+  QuarantineLine,
 } from '../services/pharmacy.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { currentLocale } from '../shared/i18n/app-locale';
@@ -50,7 +53,8 @@ const RETURN_FILL_REF = /^(?:lot\s+)?(?:(\S+)\s+)?(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d
  * support for first-class supplier / PO / expiry / cost fields is a follow-up
  * (would require new StockTransactionRequest fields + a Liquibase migration).
  */
-type TxType = 'RECEIPT' | 'DISPENSE' | 'ADJUSTMENT' | 'TRANSFER' | 'RETURN';
+type TxType =
+  'RECEIPT' | 'DISPENSE' | 'ADJUSTMENT' | 'TRANSFER' | 'RETURN' | 'QUARANTINE' | 'DESTRUCTION';
 
 const ADJUSTMENT_REASON_CODES = [
   'DAMAGE',
@@ -77,6 +81,7 @@ const LEGACY_REASON_CODES: Readonly<Record<string, string>> = {
 
 /** Every field the movement form may refuse (QA D1306). */
 const TX_FIELD_IDS = [
+  'retCondition',
   'txType',
   'txItem',
   'txQty',
@@ -94,6 +99,7 @@ const TX_FIELD_IDS = [
 
 /** The field each type-specific refusal of {@link validateTyped} is about (QA D1306). */
 const TYPED_REFUSAL_FIELD: Readonly<Record<string, string>> = {
+  'PHARMACY.RETURN_CONDITION_REQUIRED': 'retCondition',
   'PHARMACY.ADJUSTMENT_REASON_REQUIRED': 'adjReason',
   'PHARMACY.ADJUSTMENT_NOTES_REQUIRED': 'adjNotes',
   [WRITE_OFF_KEY]: 'txQty',
@@ -145,7 +151,15 @@ export class StockAdjustmentComponent implements OnInit {
   // Filter
   filterType = '';
   /** Every type, for the history filter (dispenses are listed, not entered here). */
-  readonly transactionTypes: TxType[] = ['RECEIPT', 'DISPENSE', 'ADJUSTMENT', 'TRANSFER', 'RETURN'];
+  readonly transactionTypes: TxType[] = [
+    'RECEIPT',
+    'DISPENSE',
+    'ADJUSTMENT',
+    'TRANSFER',
+    'RETURN',
+    'QUARANTINE',
+    'DESTRUCTION',
+  ];
   /**
    * D82: the types this form may record. A dispense leaves stock through the
    * prescription dispense workflow only, and the server refuses it here.
@@ -182,6 +196,12 @@ export class StockAdjustmentComponent implements OnInit {
    * dispensed stock ("doit indiquer sa délivrance"), morphine included.
    */
   returnDispenseId = '';
+  /**
+   * QA D3415 (r70): the state of the returned units, said every time. Only « intact » goes back on
+   * sale; a controlled drug that comes back is quarantined whatever its state.
+   */
+  returnCondition: ReturnedStockCondition | null = null;
+  readonly returnedStockConditions = RETURNED_STOCK_CONDITIONS;
   readonly returnableDispenses = signal<ReturnableDispense[]>([]);
   readonly returnableLoading = signal(false);
   private returnableSeq = 0;
@@ -215,6 +235,88 @@ export class StockAdjustmentComponent implements OnInit {
     if (!this.selectedPharmacyId) return;
     this.loadInventoryItems();
     this.loadTransactions();
+    this.loadQuarantine();
+  }
+
+  // ── QA D3415 (r70): the quarantine and its witnessed destruction ──
+  readonly quarantine = signal<QuarantineLine[]>([]);
+  readonly quarantineFailed = signal(false);
+  /** The quarantined line being destroyed, and the destruction form. */
+  readonly destroying = signal<QuarantineLine | null>(null);
+  readonly destroySaving = signal(false);
+  destroyQuantity: number | null = null;
+  destroyReason = '';
+  destroyWitness: string | undefined = undefined;
+
+  loadQuarantine(): void {
+    const pharmacyId = this.selectedPharmacyId;
+    if (!pharmacyId) return;
+    this.quarantineFailed.set(false);
+    this.svc.listQuarantine(pharmacyId).subscribe({
+      next: (res) => {
+        if (pharmacyId !== this.selectedPharmacyId) return;
+        this.quarantine.set(res?.data ?? []);
+      },
+      error: () => {
+        if (pharmacyId !== this.selectedPharmacyId) return;
+        this.quarantine.set([]);
+        this.quarantineFailed.set(true);
+      },
+    });
+  }
+
+  openDestroy(line: QuarantineLine): void {
+    this.destroying.set(line);
+    this.destroyQuantity = null;
+    this.destroyReason = '';
+    this.destroyWitness = undefined;
+    if (line.controlled) this.loadWitnessCandidates();
+  }
+
+  confirmDestroy(): void {
+    const line = this.destroying();
+    if (!line) return;
+    const root = this.host.nativeElement;
+    const ids = ['destroyQty', 'destroyReason', 'destroyWitness'];
+    const qty = Number(this.destroyQuantity);
+    const missing = [
+      ...(Number.isFinite(qty) && qty > 0 && qty <= line.heldQuantity ? [] : ['destroyQty']),
+      ...(this.destroyReason.trim() ? [] : ['destroyReason']),
+      ...(line.controlled && !this.destroyWitness ? ['destroyWitness'] : []),
+    ];
+    if (missing.length > 0) {
+      const message = this.translate.instant('PHARMACY.QUARANTINE.DESTROY_INVALID', {
+        max: line.heldQuantity,
+      });
+      refuseFields(root, missing, ids, message);
+      this.toast.error(message);
+      return;
+    }
+    refuseFields(root, [], ids, '');
+    this.destroySaving.set(true);
+    this.svc
+      .destroyQuarantined({
+        inventoryItemId: line.inventoryItemId,
+        stockLotId: line.stockLotId,
+        quantity: qty,
+        reason: this.destroyReason.trim(),
+        witnessedBy: line.controlled ? this.destroyWitness : undefined,
+      })
+      .subscribe({
+        next: () => {
+          this.destroySaving.set(false);
+          this.destroying.set(null);
+          this.toast.success(this.translate.instant('PHARMACY.QUARANTINE.DESTROYED'));
+          this.loadQuarantine();
+          this.loadTransactions();
+        },
+        error: (err) => {
+          this.destroySaving.set(false);
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('PHARMACY.QUARANTINE.DESTROY_FAILED'),
+          );
+        },
+      });
   }
 
   private loadInventoryItems(): void {
@@ -308,6 +410,7 @@ export class StockAdjustmentComponent implements OnInit {
     this.returnReference = '';
     this.fefoReason = '';
     this.returnDispenseId = '';
+    this.returnCondition = null;
     this.returnableDispenses.set([]);
   }
 
@@ -332,6 +435,22 @@ export class StockAdjustmentComponent implements OnInit {
     });
   }
 
+  /** QA D3409: choosing a fill first takes its lot, so the stock goes back where it came from. */
+  onReturnDispenseChange(): void {
+    const fill = this.selectedReturnDispense();
+    if (fill?.stockLotId && this.form.stockLotId !== fill.stockLotId) {
+      this.form.stockLotId = fill.stockLotId;
+    }
+  }
+
+  /** QA D3415: units that come back go to quarantine (not intact, or a controlled drug). */
+  returnGoesToQuarantine(): boolean {
+    return (
+      !!this.selectedItem()?.controlled ||
+      (!!this.returnCondition && this.returnCondition !== 'INTACT')
+    );
+  }
+
   /** QA D932: a new lot names other fills; the return's dispense is chosen again. */
   onLotChange(): void {
     this.returnDispenseId = '';
@@ -348,7 +467,8 @@ export class StockAdjustmentComponent implements OnInit {
     this.returnableDispenses.set([]);
     const itemId = this.form.inventoryItemId;
     const lotId = this.form.stockLotId;
-    if (!this.isReturn() || !itemId || (this.itemLots().length > 0 && !lotId)) {
+    // QA D3409 (r70): the item's fills are listed before a lot is chosen; choosing one takes its lot.
+    if (!this.isReturn() || !itemId) {
       this.returnableLoading.set(false);
       return;
     }
@@ -513,6 +633,7 @@ export class StockAdjustmentComponent implements OnInit {
         this.saving.set(false);
         this.loadTransactions();
         this.loadInventoryItems();
+        this.loadQuarantine();
       },
       error: (err) => {
         this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.TX_RECORD_FAILED'));
@@ -588,6 +709,9 @@ export class StockAdjustmentComponent implements OnInit {
         ? 'PHARMACY.RETURN_DISPENSE_REQUIRED'
         : 'PHARMACY.RETURN_REFERENCE_REQUIRED';
     }
+    if (this.isReturn() && !this.returnCondition) {
+      return 'PHARMACY.RETURN_CONDITION_REQUIRED';
+    }
     const returnDispense = this.isReturn() ? this.selectedReturnDispense() : undefined;
     if (returnDispense && Number(this.form.quantity) > returnDispense.returnableQuantity) {
       return 'PHARMACY.RETURN_EXCEEDS_DISPENSE';
@@ -652,6 +776,9 @@ export class StockAdjustmentComponent implements OnInit {
       this.form.referenceId = this.returnDispenseId || undefined;
       const ref = this.returnReference.trim() || this.returnFillReference();
       this.form.reason = `RETURN ref ${ref}`;
+      this.form.stockCondition = this.returnCondition ?? undefined;
+    } else {
+      this.form.stockCondition = undefined;
     }
   }
 
@@ -691,6 +818,19 @@ export class StockAdjustmentComponent implements OnInit {
     // QA D1000: the two reversal shapes the server writes (DispenseServiceImpl,
     // PreparedFillVoider), pinned by PharmacyUserFacingTextGuardTest.
     if (/^Dispense cancelled\b/i.test(reason)) return t('LEDGER_REASON_DISPENSE_CANCELLED');
+    // QA D3403 / D3415 (r70): a cancelled fill not put back on sale, the quarantine, the destruction.
+    if (/^Prepared fill cancelled, not for sale\b/i.test(reason)) {
+      return t('LEDGER_REASON_PREPARED_NOT_FOR_SALE');
+    }
+    m = /^Quarantined: ([A-Z_]+)$/.exec(reason);
+    if (m) {
+      const condition = (RETURNED_STOCK_CONDITIONS as readonly string[]).includes(m[1])
+        ? t(`STOCK_CONDITION.${m[1]}`)
+        : m[1];
+      return t('LEDGER_REASON_QUARANTINED', { condition });
+    }
+    m = /^Destroyed: ([\s\S]+)$/.exec(reason);
+    if (m) return t('LEDGER_REASON_DESTROYED', { reason: m[1] });
     if (/^Prepared fill cancelled\b/i.test(reason)) return t('LEDGER_REASON_PREPARED_CANCELLED');
     m = /^RETURN ref (.+)$/i.exec(reason);
     if (m) return this.returnReasonLabel(m[1]);
@@ -746,6 +886,7 @@ export class StockAdjustmentComponent implements OnInit {
 
   getTypeClass(type: string): string {
     if (['RECEIPT', 'RETURN'].includes(type)) return 'tx-in';
+    if (['QUARANTINE', 'DESTRUCTION'].includes(type)) return 'tx-quarantine';
     if (['ADJUSTMENT'].includes(type)) return 'tx-neutral';
     return 'tx-out';
   }

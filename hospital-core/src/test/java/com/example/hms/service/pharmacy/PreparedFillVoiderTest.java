@@ -81,7 +81,8 @@ class PreparedFillVoiderTest {
         MessageUtil.setMessageSource(TestMessageSources.bundles());
         LocaleContextHolder.setLocale(Locale.ENGLISH);
         voider = new PreparedFillVoider(dispenseRepository, stockLotRepository, inventoryItemRepository,
-                stockTransactionRepository, support, entityManager, CLOCK, paymentVoider);
+                stockTransactionRepository, support, entityManager, CLOCK, paymentVoider,
+                new StockQuarantine(stockTransactionRepository));
 
         prescription = new Prescription();
         prescription.setId(UUID.randomUUID());
@@ -139,7 +140,7 @@ class PreparedFillVoiderTest {
     void cancelReturnsTheStock(ReadyCancelReason reason) {
         theUpdateCancels(reason);
 
-        Dispense result = voider.cancel(prepared, reason);
+        Dispense result = voider.cancel(prepared, reason, com.example.hms.enums.ReturnedStockCondition.INTACT);
 
         assertThat(result.getStatus()).isEqualTo(DispenseStatus.CANCELLED);
         verify(entityManager).refresh(prepared);
@@ -157,6 +158,37 @@ class PreparedFillVoiderTest {
         verify(paymentVoider).voidForCancelledDispense(eq(prepared), argThat(r -> r.contains(reason.name())));
     }
 
+    @ParameterizedTest
+    @EnumSource(value = com.example.hms.enums.ReturnedStockCondition.class, names = "INTACT",
+            mode = EnumSource.Mode.EXCLUDE)
+    @DisplayName("QA D3403: damaged, expired or contaminated stock is quarantined, never back on sale")
+    void stockNotIntactIsQuarantined(com.example.hms.enums.ReturnedStockCondition condition) {
+        theUpdateCancels(ReadyCancelReason.STOCK_UNAVAILABLE);
+
+        voider.cancel(prepared, ReadyCancelReason.STOCK_UNAVAILABLE, condition);
+
+        // The saleable lot and the item do not move.
+        assertThat(lot.getRemainingQuantity()).isEqualByComparingTo("40");
+        assertThat(item.getQuantityOnHand()).isEqualByComparingTo("90");
+        verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
+        verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+        // The RETURN that brought it back, then the QUARANTINE: the ledger still adds up to the lot.
+        ArgumentCaptor<StockTransaction> tx = ArgumentCaptor.forClass(StockTransaction.class);
+        verify(stockTransactionRepository, org.mockito.Mockito.times(2)).save(tx.capture());
+        assertThat(tx.getAllValues()).extracting(StockTransaction::getTransactionType)
+                .containsExactly(StockTransactionType.RETURN, StockTransactionType.QUARANTINE);
+        assertThat(tx.getAllValues()).allSatisfy(row -> {
+            assertThat(row.getQuantity()).isEqualByComparingTo("10");
+            assertThat(row.getStockLot()).isSameAs(lot);
+            assertThat(row.getReferenceId()).isEqualTo(prepared.getId());
+        });
+        assertThat(tx.getAllValues().get(0).getReason()).startsWith(PreparedFillVoider.NOT_FOR_SALE_PREFIX);
+        assertThat(tx.getAllValues().get(1).getReason()).isEqualTo(StockQuarantine.REASON_PREFIX + condition.name());
+        assertThat(ControlledDrugRegisterService.signed(StockTransactionType.RETURN, BigDecimal.TEN)
+                .add(ControlledDrugRegisterService.signed(StockTransactionType.QUARANTINE, BigDecimal.TEN)))
+                .isEqualByComparingTo("0");
+    }
+
     @Test
     @DisplayName("AC-7: a row that is no longer PENDING is a 409, and nothing is returned or sent")
     void notPendingIsAConflict() {
@@ -164,7 +196,7 @@ class PreparedFillVoiderTest {
         when(entityManager.contains(prepared)).thenReturn(false);
         when(dispenseRepository.findById(prepared.getId())).thenReturn(Optional.of(prepared));
 
-        assertThatThrownBy(() -> voider.cancel(prepared, ReadyCancelReason.OTHER))
+        assertThatThrownBy(() -> voider.cancel(prepared, ReadyCancelReason.OTHER, com.example.hms.enums.ReturnedStockCondition.INTACT))
                 .isInstanceOf(ConflictException.class)
                 .hasMessage("This fill is no longer waiting for collection.");
         verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
@@ -181,7 +213,7 @@ class PreparedFillVoiderTest {
         when(dispenseRepository.cancelPreparedFill(any(), any(), any())).thenReturn(1);
         when(entityManager.contains(prepared)).thenReturn(true);
 
-        voider.cancel(prepared, ReadyCancelReason.NOT_COLLECTED);
+        voider.cancel(prepared, ReadyCancelReason.NOT_COLLECTED, com.example.hms.enums.ReturnedStockCondition.INTACT);
 
         verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
         verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());

@@ -8125,7 +8125,9 @@
         "ADJUSTMENT": "Adjustment",
         "TRANSFER": "Transfer",
         "RETURN": "Return",
-        "SALE": "Counter sale"
+        "SALE": "Counter sale",
+        "QUARANTINE": "Quarantine",
+        "DESTRUCTION": "Destruction"
       },
       "INVOICE_ITEM_CATEGORY": {
         "SERVICE": "Service",
@@ -11200,7 +11202,7 @@
     "HAND_OVER": "Hand over",
     "HAND_OVER_CONFIRM": "Hand this prepared fill over to the patient?",
     "CANCEL_READY": "Cancel preparation",
-    "CANCEL_READY_CONFIRM": "Cancel this preparation? The stock is returned and the patient is told it is no longer ready.",
+    "CANCEL_READY_CONFIRM": "Cancel this preparation? The patient is told it is no longer ready. The medicine goes back on sale only if it is intact.",
     "CANCEL_READY_REASON_LABEL": "Reason",
     "CANCEL_READY_REASON": {
       "STOCK_UNAVAILABLE": "Stock missing or damaged",
@@ -11324,7 +11326,43 @@
     "RECEIVED_IN_UNITS": "{{unit}} (single units)",
     "RECEIVED_IN_TOTAL": "Adds {{qty}} {{unit}} to stock.",
     "RECEIVED_IN_REQUIRED": "Say whether the quantity received counts packs or single units.",
-    "UNIT_COST_PER_PACK": "Cost per {{packUnit}}"
+    "UNIT_COST_PER_PACK": "Cost per {{packUnit}}",
+    "CANCEL_READY_CHOOSE": "Choose the reason and the state of the prepared medicine.",
+    "CANCEL_READY_CHOOSE_REASON": "Choose the reason",
+    "STOCK_CONDITION_LABEL": "State of the medicine",
+    "STOCK_CONDITION_CHOOSE": "Choose the state",
+    "STOCK_CONDITION": {
+      "INTACT": "Not given, intact",
+      "DAMAGED": "Damaged",
+      "EXPIRED": "Expired",
+      "CONTAMINATED": "Contaminated"
+    },
+    "STOCK_CONDITION_BACK_ON_SALE": "Put back into saleable stock.",
+    "STOCK_CONDITION_QUARANTINED": "Quarantined: it will not be sold again and waits to be destroyed.",
+    "STOCK_CONDITION_CONTROLLED_QUARANTINED": "Returned controlled drug: always quarantined, never back on sale; it is destroyed in front of a witness.",
+    "RETURN_CONDITION_REQUIRED": "Say what state the returned medicine is in.",
+    "LEDGER_REASON_PREPARED_NOT_FOR_SALE": "Preparation cancelled, not put back on sale",
+    "LEDGER_REASON_QUARANTINED": "Quarantined ({{condition}})",
+    "LEDGER_REASON_DESTROYED": "Destroyed: {{reason}}",
+    "QUARANTINE": {
+      "TITLE": "Quarantine",
+      "EXPLAIN": "Returned medicines that are damaged, expired or contaminated, and returned controlled drugs: they can no longer be sold and wait to be destroyed.",
+      "LOAD_FAILED": "The quarantine could not be loaded.",
+      "EMPTY": "Nothing in quarantine.",
+      "LOT": "Lot {{lot}}",
+      "NO_LOT": "No lot",
+      "DESTROY": "Destroy",
+      "DESTROY_TITLE": "Destroy {{name}} ({{held}} in quarantine)",
+      "QUANTITY": "Quantity destroyed",
+      "REASON": "How it was destroyed",
+      "REASON_PLACEHOLDER": "Incineration, returned to the supplier…",
+      "DESTROY_CONFIRM": "Record the destruction",
+      "DESTROY_INVALID": "Enter a quantity from 1 to {{max}}, how it was destroyed and, for a controlled drug, the witness.",
+      "DESTROYED": "Destruction recorded.",
+      "DESTROY_FAILED": "The destruction could not be recorded."
+    },
+    "REGISTER_QUARANTINE": "In quarantine",
+    "REGISTER_QUARANTINE_MOVE": "quarantine {{qty}} → {{after}}"
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",
@@ -15928,7 +15966,7 @@
     "PACK_SIZE": "1 {{packUnit}} = {{n}} {{unit}}",
     "LINE_UNITS": "{{units}} {{unit}} in all",
     "FEFO_REASON": "Reason for taking this lot",
-    "FEFO_WARNING": "Lot {{lot}} expires sooner ({{date}}) and still has stock: say why this lot is taken first.",
+    "FEFO_WARNING": "Lot {{lot}} expires sooner ({{date}}) and still holds {{left}}: say why this lot is taken first.",
     "FEFO_REASON_REQUIRED": "Give the reason for taking a lot that expires later.",
     "LOT_SHORT": "Lot {{lot}} holds only {{qty}} {{unit}}: add the item again for the rest from the next lot.",
     "LINE_TOTAL": "Line total",

@@ -1147,15 +1147,39 @@ describe('DispensingComponent', () => {
     expect(component.readyAction()).not.toBeNull();
   });
 
-  it('cancels a preparation with the chosen reason', () => {
+  it('cancels a preparation with the chosen reason and the stock state', () => {
     pharmacySvc.cancelReady.and.returnValue(of({ data: {} } as any));
     component.openCancelReady(preparedRow as any);
     component.cancelReason = 'STOCK_UNAVAILABLE';
+    component.cancelCondition = 'DAMAGED';
 
     component.confirmCancelReady();
 
-    expect(pharmacySvc.cancelReady).toHaveBeenCalledWith('d-ready', 'STOCK_UNAVAILABLE');
+    expect(pharmacySvc.cancelReady).toHaveBeenCalledWith('d-ready', 'STOCK_UNAVAILABLE', 'DAMAGED');
     expect(toastSvc.success).toHaveBeenCalledWith('PHARMACY.CANCEL_READY_SUCCESS');
+  });
+
+  it('QA D3403: no default reason or stock state; nothing is sent until both are chosen', () => {
+    component.openCancelReady(preparedRow as any);
+    expect(component.cancelReason).toBeNull();
+    expect(component.cancelCondition).toBeNull();
+
+    component.confirmCancelReady();
+    expect(pharmacySvc.cancelReady).not.toHaveBeenCalled();
+    expect(toastSvc.error).toHaveBeenCalledWith('PHARMACY.CANCEL_READY_CHOOSE');
+
+    component.cancelReason = 'NOT_COLLECTED';
+    component.confirmCancelReady();
+    expect(pharmacySvc.cancelReady).not.toHaveBeenCalled();
+  });
+
+  it('QA D3403: offers the four stock states, intact first', () => {
+    expect([...component.returnedStockConditions]).toEqual([
+      'INTACT',
+      'DAMAGED',
+      'EXPIRED',
+      'CONTAMINATED',
+    ]);
   });
 
   it('offers only the pharmacist reasons, never the system ones', () => {

@@ -8091,7 +8091,9 @@
         "ADJUSTMENT": "Ajustement",
         "TRANSFER": "Transfert",
         "RETURN": "Retour",
-        "SALE": "Vente au comptoir"
+        "SALE": "Vente au comptoir",
+        "QUARANTINE": "Quarantaine",
+        "DESTRUCTION": "Destruction"
       },
       "INVOICE_ITEM_CATEGORY": {
         "SERVICE": "Prestation",
@@ -11200,7 +11202,7 @@
     "HAND_OVER": "Remettre au patient",
     "HAND_OVER_CONFIRM": "Remettre cette délivrance préparée au patient ?",
     "CANCEL_READY": "Annuler la préparation",
-    "CANCEL_READY_CONFIRM": "Annuler cette préparation ? Le stock est réintégré et le patient est informé qu'elle n'est plus prête.",
+    "CANCEL_READY_CONFIRM": "Annuler cette préparation ? Le patient est informé qu'elle n'est plus prête. Le médicament n'est remis en vente que s'il est intact.",
     "CANCEL_READY_REASON_LABEL": "Motif",
     "CANCEL_READY_REASON": {
       "STOCK_UNAVAILABLE": "Stock manquant ou endommagé",
@@ -11324,7 +11326,43 @@
     "RECEIVED_IN_UNITS": "{{unit}} (à l’unité)",
     "RECEIVED_IN_TOTAL": "Ajoute {{qty}} {{unit}} au stock.",
     "RECEIVED_IN_REQUIRED": "Indiquez si la quantité reçue est comptée en conditionnements ou à l’unité.",
-    "UNIT_COST_PER_PACK": "Coût par {{packUnit}}"
+    "UNIT_COST_PER_PACK": "Coût par {{packUnit}}",
+    "CANCEL_READY_CHOOSE": "Choisissez le motif et l’état du médicament préparé.",
+    "CANCEL_READY_CHOOSE_REASON": "Choisissez le motif",
+    "STOCK_CONDITION_LABEL": "État du médicament",
+    "STOCK_CONDITION_CHOOSE": "Choisissez l’état",
+    "STOCK_CONDITION": {
+      "INTACT": "Non remis, intact",
+      "DAMAGED": "Endommagé",
+      "EXPIRED": "Périmé",
+      "CONTAMINATED": "Contaminé"
+    },
+    "STOCK_CONDITION_BACK_ON_SALE": "Remis en stock vendable.",
+    "STOCK_CONDITION_QUARANTINED": "Mis en quarantaine : il ne sera pas revendu et attend sa destruction.",
+    "STOCK_CONDITION_CONTROLLED_QUARANTINED": "Stupéfiant retourné : toujours mis en quarantaine, jamais remis en vente ; sa destruction se fait devant un témoin.",
+    "RETURN_CONDITION_REQUIRED": "Indiquez l’état du médicament retourné.",
+    "LEDGER_REASON_PREPARED_NOT_FOR_SALE": "Préparation annulée, pas remise en vente",
+    "LEDGER_REASON_QUARANTINED": "Mis en quarantaine ({{condition}})",
+    "LEDGER_REASON_DESTROYED": "Détruit : {{reason}}",
+    "QUARANTINE": {
+      "TITLE": "Quarantaine",
+      "EXPLAIN": "Médicaments retournés endommagés, périmés ou contaminés, et stupéfiants retournés : ils ne sont plus vendables et attendent leur destruction.",
+      "LOAD_FAILED": "La quarantaine n’a pas pu être chargée.",
+      "EMPTY": "Rien en quarantaine.",
+      "LOT": "Lot {{lot}}",
+      "NO_LOT": "Sans lot",
+      "DESTROY": "Détruire",
+      "DESTROY_TITLE": "Détruire {{name}} ({{held}} en quarantaine)",
+      "QUANTITY": "Quantité détruite",
+      "REASON": "Mode de destruction",
+      "REASON_PLACEHOLDER": "Incinération, retour au fournisseur…",
+      "DESTROY_CONFIRM": "Enregistrer la destruction",
+      "DESTROY_INVALID": "Indiquez une quantité de 1 à {{max}}, le mode de destruction et, pour un stupéfiant, le témoin.",
+      "DESTROYED": "Destruction enregistrée.",
+      "DESTROY_FAILED": "La destruction n’a pas pu être enregistrée."
+    },
+    "REGISTER_QUARANTINE": "En quarantaine",
+    "REGISTER_QUARANTINE_MOVE": "quarantaine {{qty}} → {{after}}"
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",
@@ -15928,7 +15966,7 @@
     "PACK_SIZE": "1 {{packUnit}} = {{n}} {{unit}}",
     "LINE_UNITS": "{{units}} {{unit}} au total",
     "FEFO_REASON": "Motif du choix de ce lot",
-    "FEFO_WARNING": "Le lot {{lot}} se périme plus tôt ({{date}}) et contient encore du stock : indiquez pourquoi ce lot-ci sort en premier.",
+    "FEFO_WARNING": "Le lot {{lot}} se périme plus tôt ({{date}}) et en contient encore {{left}} : indiquez pourquoi ce lot-ci sort en premier.",
     "FEFO_REASON_REQUIRED": "Indiquez le motif de la sortie d’un lot qui se périme plus tard.",
     "LOT_SHORT": "Le lot {{lot}} ne contient que {{qty}} {{unit}} : ajoutez de nouveau l’article pour prendre le reste dans le lot suivant.",
     "LINE_TOTAL": "Montant de la ligne",

@@ -22,4 +22,10 @@ public class CancelReadyRequestDTO {
 
     @NotNull(message = "{dispense.ready.cancelReason.required}")
     private ReadyCancelReason reason;
+
+    /**
+     * QA D3403 (r70): the state of the prepared medicine, said every time (no default). Only INTACT (not given,
+     * intact) goes back on sale; damaged, expired or contaminated stock is quarantined.
+     */
+    private com.example.hms.enums.ReturnedStockCondition stockCondition;
 }

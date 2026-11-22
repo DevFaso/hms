@@ -132,6 +132,9 @@ class StockTransactionServiceImplTest {
         // QA D655: the witness rule is one shared component, run for real on the mocks.
         org.springframework.test.util.ReflectionTestUtils.setField(service, "controlledStockWitness",
                 new ControlledStockWitness(assignmentRepository, userRepository));
+        // QA D3415: the quarantine rule, run for real on the mocks.
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "stockQuarantine",
+                new StockQuarantine(stockTransactionRepository));
     }
 
     /**
@@ -750,6 +753,74 @@ class StockTransactionServiceImplTest {
             verify(inventoryItemRepository, never()).save(any(InventoryItem.class));
         }
 
+        /** QA D3415: the rows the return saved, in order. */
+        private java.util.List<StockTransaction> savedRows() {
+            org.mockito.ArgumentCaptor<StockTransaction> rows = org.mockito.ArgumentCaptor.forClass(StockTransaction.class);
+            verify(stockTransactionRepository, org.mockito.Mockito.atLeastOnce()).save(rows.capture());
+            return rows.getAllValues();
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.ReturnedStockCondition.class,
+                names = "INTACT", mode = org.junit.jupiter.params.provider.EnumSource.Mode.EXCLUDE)
+        @DisplayName("QA D3415: a return that is not intact is quarantined: the lot and the item do not move")
+        void aReturnNotIntactIsQuarantined(com.example.hms.enums.ReturnedStockCondition condition) {
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.RETURN, new BigDecimal("8.00"));
+            dto.setStockCondition(condition);
+            stubCommonMocks(dto, true);
+            stubLotMovements(new BigDecimal("10.00"), new BigDecimal("2.00"));
+
+            service.recordTransaction(dto);
+
+            assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo("100.00");
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo("50.00");
+            assertThat(savedRows()).extracting(StockTransaction::getTransactionType)
+                    .containsExactly(StockTransactionType.RETURN, StockTransactionType.QUARANTINE);
+        }
+
+        @Test
+        @DisplayName("QA D3415: a controlled drug that comes back is quarantined even intact, with its witness")
+        void aControlledReturnIsQuarantinedWhateverItsState() {
+            inventoryItem.getMedicationCatalogItem().setControlled(true);
+            UUID witnessId = UUID.randomUUID();
+            User witness = new User();
+            witness.setId(witnessId);
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.RETURN, new BigDecimal("1.00"));
+            dto.setStockCondition(com.example.hms.enums.ReturnedStockCondition.INTACT);
+            dto.setWitnessedBy(witnessId);
+            stubCommonMocks(dto, true);
+            stubLotMovements(new BigDecimal("10.00"), new BigDecimal("2.00"));
+            when(assignmentRepository.existsActiveWitness(
+                    witnessId, hospitalId, StockTransactionServiceImpl.WITNESS_ROLE_CODES)).thenReturn(true);
+            when(userRepository.findById(witnessId)).thenReturn(Optional.of(witness));
+
+            service.recordTransaction(dto);
+
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo("50.00");
+            assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo("100.00");
+            java.util.List<StockTransaction> rows = savedRows();
+            assertThat(rows).extracting(StockTransaction::getTransactionType)
+                    .containsExactly(StockTransactionType.RETURN, StockTransactionType.QUARANTINE);
+            assertThat(rows.get(1).getWitnessedByUser()).isSameAs(witness);
+            assertThat(rows.get(1).getStockLot()).isSameAs(stockLot);
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.EnumSource(value = StockTransactionType.class,
+                names = {"QUARANTINE", "DESTRUCTION"})
+        @DisplayName("QA D3415: quarantine and destruction are never typed as a manual movement")
+        void quarantineIsNotAManualMovement(StockTransactionType type) {
+            StockTransactionRequestDTO dto = buildRequest(type, new BigDecimal("1.00"));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+
+            assertThatThrownBy(() -> service.recordTransaction(dto))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .hasFieldOrPropertyWithValue("field", "transactionType");
+            verify(stockTransactionRepository, never()).save(any());
+        }
+
         private void stubLotMovements(BigDecimal issued, BigDecimal returned) {
             org.mockito.Mockito.lenient().when(stockTransactionRepository.sumQuantityForLot(stockLotId, java.util.EnumSet.of(
                     StockTransactionType.DISPENSE, StockTransactionType.TRANSFER, StockTransactionType.SALE))).thenReturn(issued);
@@ -1040,6 +1111,30 @@ class StockTransactionServiceImplTest {
             assertThat(rows.get(0).patientName()).isEqualTo("Awa Ouedraogo");
             assertThat(rows.get(0).lotNumber()).isEqualTo("LOT-001");
             assertThat(rows.get(1).returnableQuantity()).isEqualByComparingTo("3");
+        }
+
+        @Test
+        @DisplayName("QA D3409: with no lot named, every fill of the item is listed (its lots' and lot-less), with its lot")
+        void withNoLotEveryFillOfTheItemIsListed() {
+            var fromLot = dispenseOf(new BigDecimal("5"), com.example.hms.enums.DispenseStatus.COMPLETED, stockLot);
+            fromLot.setCreatedAt(java.time.LocalDateTime.now().minusDays(1));
+            var noLot = dispenseOf(new BigDecimal("3"), com.example.hms.enums.DispenseStatus.COMPLETED, null);
+            noLot.setCreatedAt(java.time.LocalDateTime.now());
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(dispenseRepository.findReturnableFillsOfItemLots(eq(inventoryItemId), any()))
+                    .thenReturn(List.of(fromLot));
+            when(dispenseRepository.findReturnableFillsOutOfLots(eq(pharmacyId),
+                    eq(inventoryItem.getMedicationCatalogItem().getId()), any())).thenReturn(List.of(noLot));
+            when(stockTransactionRepository.sumQuantityByReferences(any(), any())).thenReturn(List.of());
+
+            var rows = service.listReturnableDispenses(inventoryItemId, null);
+
+            assertThat(rows).extracting(com.example.hms.payload.dto.pharmacy.ReturnableDispenseDTO::dispenseId)
+                    .containsExactly(noLot.getId(), fromLot.getId());
+            assertThat(rows.get(1).stockLotId()).isEqualTo(stockLotId);
+            assertThat(rows.get(0).stockLotId()).isNull();
+            verify(stockLotRepository, never()).findById(any());
         }
 
         /**

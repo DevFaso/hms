@@ -72,6 +72,10 @@ public class ControlledDrugRegisterService {
     /** The longest period one read covers. */
     static final long MAX_DAYS = 366;
 
+    /** Movements whose reference may be a fill: a return, and the quarantine that follows it (QA D3415). */
+    private static final Set<StockTransactionType> BOOKED_AGAINST_A_FILL =
+            java.util.EnumSet.of(StockTransactionType.RETURN, StockTransactionType.QUARANTINE);
+
     private static final Pattern PRESCRIPTION_IN_REASON = Pattern.compile(
             "for prescription ([0-9a-fA-F-]{36})");
 
@@ -135,6 +139,7 @@ public class ControlledDrugRegisterService {
         LocalDateTime end = to.plusDays(1).atStartOfDay();
 
         Map<UUID, BigDecimal> opening = openingBalances(itemIds, start);
+        Map<UUID, BigDecimal> quarantine = openingQuarantine(itemIds, start);
         List<StockTransaction> rows = stockTransactionRepository.findRegisterRows(itemIds, start, end,
                 PageRequest.of(0, MAX_ROWS + 1));
         boolean truncated = rows.size() > MAX_ROWS;
@@ -145,7 +150,8 @@ public class ControlledDrugRegisterService {
 
         Map<UUID, BigDecimal> balance = new HashMap<>(opening);
         java.time.ZoneId hospitalZone = com.example.hms.utility.HospitalTime.zoneOf(pharmacy.getHospital());
-        Map<UUID, List<ControlledRegisterEntryDTO>> entries = entriesByItem(rows, people, balance, hospitalZone);
+        Map<UUID, List<ControlledRegisterEntryDTO>> entries = entriesByItem(rows, people, balance, quarantine,
+                hospitalZone);
         // Review of #975: the shelf count is today's; it is only comparable
         // with a closing balance carried to today, and a truncated register
         // has no closing balance at all (its last row is not the period's).
@@ -156,7 +162,8 @@ public class ControlledDrugRegisterService {
             out.add(new ControlledRegisterDrugDTO(item.getId(), drugName(item), item.getUnit(), open,
                     truncated ? null : balance.getOrDefault(item.getId(), open),
                     coversToday && !truncated ? item.getQuantityOnHand() : null,
-                    entries.getOrDefault(item.getId(), List.of())));
+                    entries.getOrDefault(item.getId(), List.of()),
+                    truncated ? null : quarantine.getOrDefault(item.getId(), BigDecimal.ZERO)));
         }
         return new ControlledRegisterDTO(pharmacy.getId(), pharmacy.getName(), from, to, truncated, out);
     }
@@ -177,15 +184,42 @@ public class ControlledDrugRegisterService {
         return opening;
     }
 
-    /** The period's rows per drug, oldest first, each with the balance after it ({@code balance} is carried). */
+    /**
+     * QA D3415 (r70): each drug's quarantine before the period (quarantined less destroyed), carried like the
+     * balance.
+     */
+    private Map<UUID, BigDecimal> openingQuarantine(List<UUID> itemIds, LocalDateTime start) {
+        Map<UUID, BigDecimal> opening = new HashMap<>();
+        List<Object[]> sums = stockTransactionRepository.sumByItemAndTypeBefore(itemIds, start);
+        if (sums == null) {
+            return opening;
+        }
+        for (Object[] row : sums) {
+            if (row != null && row.length == 3 && row[0] instanceof UUID id
+                    && row[1] instanceof StockTransactionType type && row[2] instanceof BigDecimal total) {
+                opening.merge(id, QuarantineDestructionService.quarantineSigned(type, total), BigDecimal::add);
+            }
+        }
+        return opening;
+    }
+
+    /**
+     * The period's rows per drug, oldest first, each with the balance after it ({@code balance} and
+     * {@code quarantine} are carried).
+     */
     private static Map<UUID, List<ControlledRegisterEntryDTO>> entriesByItem(List<StockTransaction> rows,
-            People people, Map<UUID, BigDecimal> balance, java.time.ZoneId hospitalZone) {
+            People people, Map<UUID, BigDecimal> balance, Map<UUID, BigDecimal> quarantine,
+            java.time.ZoneId hospitalZone) {
         Map<UUID, List<ControlledRegisterEntryDTO>> entries = new LinkedHashMap<>();
         for (StockTransaction tx : rows) {
             UUID itemId = tx.getInventoryItem().getId();
             BigDecimal moved = signed(tx.getTransactionType(), tx.getQuantity());
             BigDecimal after = balance.getOrDefault(itemId, BigDecimal.ZERO).add(moved);
             balance.put(itemId, after);
+            BigDecimal quarantined = QuarantineDestructionService.quarantineSigned(tx.getTransactionType(),
+                    tx.getQuantity());
+            BigDecimal quarantineAfter = quarantine.getOrDefault(itemId, BigDecimal.ZERO).add(quarantined);
+            quarantine.put(itemId, quarantineAfter);
             Prescription prescription = people.prescriptionOf(tx);
             FillRef fill = fillRef(tx.getReason());
             entries.computeIfAbsent(itemId, k -> new ArrayList<>()).add(new ControlledRegisterEntryDTO(
@@ -201,7 +235,9 @@ public class ControlledDrugRegisterService {
                     userName(tx.getWitnessedByUser()),
                     reasonText(LocaleContextHolder.getLocale(), tx.getReason(), hospitalZone),
                     fill != null ? fill.lot() : null,
-                    fill != null ? fill.at() : null));
+                    fill != null ? fill.at() : null,
+                    quarantined.signum() != 0 ? quarantined : null,
+                    quarantined.signum() != 0 ? quarantineAfter : null));
         }
         return entries;
     }
@@ -261,6 +297,10 @@ public class ControlledDrugRegisterService {
                         + (drug.unit() != null ? " (" + drug.unit() + ")" : ""));
                 pdf.paragraph(PharmacyPdfWriter.REGULAR, 9f, label(locale, "pharmacy.register.balances",
                         plain(drug.openingBalance()), plain(drug.closingBalance()), plain(drug.quantityOnHand())));
+                if (drug.inQuarantine() != null && drug.inQuarantine().signum() != 0) {
+                    pdf.paragraph(PharmacyPdfWriter.REGULAR, 9f, label(locale, "pharmacy.register.inQuarantine",
+                            plain(drug.inQuarantine())));
+                }
                 List<String> head = headers(locale).subList(1, 11);
                 pdf.tableHeader(widths, head.toArray(new String[0]));
                 for (ControlledRegisterEntryDTO e : drug.entries()) {
@@ -301,7 +341,9 @@ public class ControlledDrugRegisterService {
         }
         return switch (type) {
             case RECEIPT, RETURN, ADJUSTMENT -> q;
-            case DISPENSE, TRANSFER, SALE -> q.negate();
+            // QA D3415 (r70): quarantined units leave the saleable stock; their destruction moves only the quarantine.
+            case DISPENSE, TRANSFER, SALE, QUARANTINE -> q.negate();
+            case DESTRUCTION -> BigDecimal.ZERO;
         };
     }
 
@@ -313,7 +355,7 @@ public class ControlledDrugRegisterService {
             UUID fromReason = systemPrescriptionIdOf(tx);
             if (fromReason != null) {
                 prescriptionIds.add(fromReason);
-            } else if (tx.getTransactionType() == StockTransactionType.RETURN && tx.getReferenceId() != null) {
+            } else if (BOOKED_AGAINST_A_FILL.contains(tx.getTransactionType()) && tx.getReferenceId() != null) {
                 dispenseIds.add(tx.getReferenceId());
             }
         }
@@ -440,6 +482,18 @@ public class ControlledDrugRegisterService {
         if (r.startsWith("Dispense for prescription")) {
             return label(locale, "pharmacy.register.reason.dispense");
         }
+        // QA D3403 / D3415 (r70): set aside, destroyed, or a cancelled fill not put back on sale.
+        if (r.startsWith(StockQuarantine.REASON_PREFIX)) {
+            return label(locale, "pharmacy.register.reason.quarantined",
+                    conditionLabel(locale, r.substring(StockQuarantine.REASON_PREFIX.length()).trim()));
+        }
+        if (r.startsWith(QuarantineDestructionService.REASON_PREFIX)) {
+            return label(locale, "pharmacy.register.reason.destroyed",
+                    r.substring(QuarantineDestructionService.REASON_PREFIX.length()).trim());
+        }
+        if (r.startsWith(PreparedFillVoider.NOT_FOR_SALE_PREFIX)) {
+            return label(locale, "pharmacy.register.reason.cancelledNotForSale");
+        }
         if (r.startsWith("Dispense cancelled") || r.startsWith("Prepared fill cancelled")) {
             return label(locale, "pharmacy.register.reason.cancelled");
         }
@@ -509,6 +563,16 @@ public class ControlledDrugRegisterService {
     private static final Pattern RETURN_FILL_REF = Pattern.compile(
         "^(?i:lot\\s+)?(?:(\\S+)\\s+)?(\\d{4}-\\d{2}-\\d{2})[T ](\\d{2}:\\d{2})$");
 
+    /** A returned stock condition in the reader's language; an unknown word is kept as stored. */
+    private static String conditionLabel(Locale locale, String condition) {
+        for (com.example.hms.enums.ReturnedStockCondition c : com.example.hms.enums.ReturnedStockCondition.values()) {
+            if (c.name().equals(condition)) {
+                return label(locale, "pharmacy.stockCondition." + c.name());
+            }
+        }
+        return condition;
+    }
+
     private static String movementLabel(Locale locale, String type) {
         return type == null ? "" : label(locale, "pharmacy.register.movement." + type);
     }
@@ -561,8 +625,19 @@ public class ControlledDrugRegisterService {
             String unit = med.getStrengthUnit() == null ? "" : " " + med.getStrengthUnit();
             strength = " " + med.getStrength() + unit;
         }
-        return (Objects.toString(name, "") + strength).trim();
+        // QA D2682 (r70): « Morphine 10 mg/mL 10 mg/mL »: a name already carrying its strength is not given it twice.
+        String bare = Objects.toString(name, "").trim();
+        if (!strength.isBlank() && squeezed(bare).contains(squeezed(strength))) {
+            return bare;
+        }
+        return (bare + strength).trim();
     }
+
+    private static String squeezed(String text) {
+        return WHITESPACE.matcher(text).replaceAll("").toLowerCase(Locale.ROOT);
+    }
+
+    private static final Pattern WHITESPACE = Pattern.compile("\\s+");
 
     private static String patientName(Patient patient) {
         if (patient == null) {

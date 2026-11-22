@@ -610,16 +610,53 @@
         <p>{{ 'PHARMACY.CANCEL_READY_CONFIRM' | translate }}</p>
         <div class="form-row">
           <div class="field full-width">
-            <label for="cancelReadyReason">{{
-              'PHARMACY.CANCEL_READY_REASON_LABEL' | translate
-            }}</label>
-            <select id="cancelReadyReason" name="cancelReadyReason" [(ngModel)]="cancelReason">
+            <label for="cancelReadyReason"
+              >{{ 'PHARMACY.CANCEL_READY_REASON_LABEL' | translate }} *</label
+            >
+            <select
+              id="cancelReadyReason"
+              name="cancelReadyReason"
+              data-server-field="reason"
+              required
+              [(ngModel)]="cancelReason"
+            >
+              <option [ngValue]="null">
+                {{ 'PHARMACY.CANCEL_READY_CHOOSE_REASON' | translate }}
+              </option>
               @for (reason of readyCancelReasons; track reason) {
-                <option [value]="reason">
+                <option [ngValue]="reason">
                   {{ 'PHARMACY.CANCEL_READY_REASON.' + reason | translate }}
                 </option>
               }
             </select>
+          </div>
+          <!-- QA D3403 (r70): only « intact » goes back on sale; the rest is quarantined. -->
+          <div class="field full-width">
+            <label for="cancelReadyCondition"
+              >{{ 'PHARMACY.STOCK_CONDITION_LABEL' | translate }} *</label
+            >
+            <select
+              id="cancelReadyCondition"
+              name="cancelReadyCondition"
+              data-server-field="stockCondition"
+              required
+              [(ngModel)]="cancelCondition"
+            >
+              <option [ngValue]="null">{{ 'PHARMACY.STOCK_CONDITION_CHOOSE' | translate }}</option>
+              @for (condition of returnedStockConditions; track condition) {
+                <option [ngValue]="condition">
+                  {{ 'PHARMACY.STOCK_CONDITION.' + condition | translate }}
+                </option>
+              }
+            </select>
+            @if (cancelCondition) {
+              <small class="field-hint" data-testid="cancel-ready-stock-fate">{{
+                (cancelCondition === 'INTACT'
+                  ? 'PHARMACY.STOCK_CONDITION_BACK_ON_SALE'
+                  : 'PHARMACY.STOCK_CONDITION_QUARANTINED'
+                ) | translate
+              }}</small>
+            }
           </div>
         </div>
         <div class="form-actions">

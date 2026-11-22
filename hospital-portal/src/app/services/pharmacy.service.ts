@@ -239,6 +239,11 @@ export interface StockTransactionRequest {
   performedBy?: string;
   /** QA D157: the colleague who witnessed a controlled-substance movement. */
   witnessedBy?: string;
+  /**
+   * QA D3415 (r70): the state of a RETURN's units. Only INTACT goes back on sale; the others, and
+   * a controlled drug, are quarantined.
+   */
+  stockCondition?: ReturnedStockCondition;
   // FU-2: first-class RECEIPT fields (all optional)
   lotNumber?: string;
   supplier?: string;
@@ -272,6 +277,9 @@ export interface ControlledRegisterEntry {
   /** QA D1084: a return booked against a fill: its lot, and the minute it was given (server time). */
   reasonFillLot?: string | null;
   reasonFillAt?: string | null;
+  /** QA D3415 (r70): what the row did to the quarantine (signed), and the quarantine after it. */
+  quarantineQuantity?: number | null;
+  quarantineAfter?: number | null;
 }
 
 /** QA D967: one controlled drug's page of the register. */
@@ -283,6 +291,8 @@ export interface ControlledRegisterDrug {
   closingBalance: number;
   quantityOnHand?: number;
   entries: ControlledRegisterEntry[];
+  /** QA D3415 (r70): units set aside at the end of the period, waiting to be destroyed. */
+  inQuarantine?: number | null;
 }
 
 /** QA D967: the controlled-drug (stupéfiants) register of a pharmacy over a period. */
@@ -309,6 +319,8 @@ export interface ReturnableDispense {
   returnableQuantity: number;
   unit?: string;
   lotNumber?: string;
+  /** QA D3409 (r70): the fill's lot, taken by the form when the fill is chosen first. */
+  stockLotId?: string | null;
 }
 
 export interface StockTransactionResponse {
@@ -498,6 +510,33 @@ export const READY_CANCEL_REASONS = [
   'OTHER',
 ] as const;
 export type ReadyCancelReason = (typeof READY_CANCEL_REASONS)[number];
+
+/**
+ * QA D3403 / D3415 (r70): the state of medicine coming back to the pharmacy. Only INTACT goes back
+ * on sale; the others (and a controlled drug a patient brings back) are quarantined.
+ */
+export const RETURNED_STOCK_CONDITIONS = ['INTACT', 'DAMAGED', 'EXPIRED', 'CONTAMINATED'] as const;
+export type ReturnedStockCondition = (typeof RETURNED_STOCK_CONDITIONS)[number];
+
+/** QA D3415: units set aside, not for sale, waiting to be destroyed. */
+export interface QuarantineLine {
+  inventoryItemId: string;
+  medicationName: string | null;
+  unit: string | null;
+  controlled: boolean;
+  stockLotId: string | null;
+  lotNumber: string | null;
+  heldQuantity: number;
+}
+
+/** QA D3415: the witnessed destruction of quarantined units. */
+export interface QuarantineDestructionRequest {
+  inventoryItemId: string;
+  stockLotId?: string | null;
+  quantity: number;
+  reason: string;
+  witnessedBy?: string;
+}
 
 /** G15: GET /pharmacy/dispense/settings (G13 adds the work-queue claim switch and TTL). */
 export interface DispenseSettings {
@@ -1281,10 +1320,28 @@ export class PharmacyService {
   cancelReady(
     dispenseId: string,
     reason: ReadyCancelReason,
+    stockCondition: ReturnedStockCondition,
   ): Observable<ApiResponse<DispenseResponse>> {
     return this.http.post<ApiResponse<DispenseResponse>>(
       `/pharmacy/dispense/${dispenseId}/cancel-ready`,
-      { reason },
+      { reason, stockCondition },
+    );
+  }
+
+  /** QA D3415: what the pharmacy holds in quarantine, per item and lot. */
+  listQuarantine(pharmacyId: string): Observable<ApiResponse<QuarantineLine[]>> {
+    return this.http.get<ApiResponse<QuarantineLine[]>>('/pharmacy/stock-transactions/quarantine', {
+      params: { pharmacyId },
+    });
+  }
+
+  /** QA D3415: destroys quarantined units (witnessed for a controlled drug). */
+  destroyQuarantined(
+    req: QuarantineDestructionRequest,
+  ): Observable<ApiResponse<StockTransactionResponse>> {
+    return this.http.post<ApiResponse<StockTransactionResponse>>(
+      '/pharmacy/stock-transactions/quarantine/destructions',
+      req,
     );
   }
 

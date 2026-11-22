@@ -1453,8 +1453,8 @@ class DispenseReadyForCollectionTest {
         @EnumSource(value = ReadyCancelReason.class, names = {"PRESCRIPTION_WITHDRAWN", "PRESCRIPTION_CHANGED"})
         @DisplayName("a system reason, or none, is a 400 before anything is read")
         void systemReasonIsRefused(ReadyCancelReason reason) {
-            CancelReadyRequestDTO systemReason = new CancelReadyRequestDTO(reason);
-            CancelReadyRequestDTO noReason = new CancelReadyRequestDTO(null);
+            CancelReadyRequestDTO systemReason = new CancelReadyRequestDTO(reason, com.example.hms.enums.ReturnedStockCondition.INTACT);
+            CancelReadyRequestDTO noReason = new CancelReadyRequestDTO(null, com.example.hms.enums.ReturnedStockCondition.INTACT);
             assertThatThrownBy(() -> service.cancelReady(dispenseId, systemReason))
                     .isInstanceOf(BusinessException.class);
             assertThatThrownBy(() -> service.cancelReady(dispenseId, noReason))
@@ -1463,22 +1463,32 @@ class DispenseReadyForCollectionTest {
         }
 
         @Test
+        @DisplayName("QA D3403: the stock's state is said, never assumed: none is a 400 naming stockCondition")
+        void noStockConditionIsRefused() {
+            CancelReadyRequestDTO noCondition = new CancelReadyRequestDTO(ReadyCancelReason.STOCK_UNAVAILABLE, null);
+            assertThatThrownBy(() -> service.cancelReady(dispenseId, noCondition))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .extracting("field").isEqualTo("stockCondition");
+            verifyNoInteractions(dispenseRepository, preparedFillVoider);
+        }
+
+        @Test
         @DisplayName("scope, the lock, then the voider with the pharmacist's reason")
         void delegatesToTheVoider() {
             Dispense d = preparedFill();
             stubLocked(d);
-            when(preparedFillVoider.cancel(d, ReadyCancelReason.STOCK_UNAVAILABLE)).thenAnswer(inv -> {
+            when(preparedFillVoider.cancel(d, ReadyCancelReason.STOCK_UNAVAILABLE, com.example.hms.enums.ReturnedStockCondition.INTACT)).thenAnswer(inv -> {
                 d.setStatus(DispenseStatus.CANCELLED);
                 return d;
             });
 
             DispenseResponseDTO result = service.cancelReady(dispenseId,
-                    new CancelReadyRequestDTO(ReadyCancelReason.STOCK_UNAVAILABLE));
+                    new CancelReadyRequestDTO(ReadyCancelReason.STOCK_UNAVAILABLE, com.example.hms.enums.ReturnedStockCondition.INTACT));
 
             assertThat(result.getStatus()).isEqualTo("CANCELLED");
             org.mockito.InOrder order = org.mockito.Mockito.inOrder(prescriptionRepository, preparedFillVoider);
             order.verify(prescriptionRepository).findByIdAndHospitalIdForUpdate(eq(prescriptionId), any());
-            order.verify(preparedFillVoider).cancel(d, ReadyCancelReason.STOCK_UNAVAILABLE);
+            order.verify(preparedFillVoider).cancel(d, ReadyCancelReason.STOCK_UNAVAILABLE, com.example.hms.enums.ReturnedStockCondition.INTACT);
         }
 
         @Test
@@ -1515,13 +1525,13 @@ class DispenseReadyForCollectionTest {
             Dispense d = preparedFill();
             stubLocked(d);
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
-            when(preparedFillVoider.cancel(d, ReadyCancelReason.NOT_COLLECTED)).thenAnswer(inv -> {
+            when(preparedFillVoider.cancel(d, ReadyCancelReason.NOT_COLLECTED, com.example.hms.enums.ReturnedStockCondition.INTACT)).thenAnswer(inv -> {
                 d.setStatus(DispenseStatus.CANCELLED);
                 return d;
             });
 
             DispenseResponseDTO result = service.cancelReady(dispenseId,
-                    new CancelReadyRequestDTO(ReadyCancelReason.NOT_COLLECTED));
+                    new CancelReadyRequestDTO(ReadyCancelReason.NOT_COLLECTED, com.example.hms.enums.ReturnedStockCondition.INTACT));
 
             assertThat(result.getStatus()).isEqualTo("CANCELLED");
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISCONTINUED);
@@ -1567,12 +1577,12 @@ class DispenseReadyForCollectionTest {
 
             Dispense d = preparedFill();
             stubLocked(d);
-            when(preparedFillVoider.cancel(d, ReadyCancelReason.NOT_COLLECTED)).thenAnswer(inv -> {
+            when(preparedFillVoider.cancel(d, ReadyCancelReason.NOT_COLLECTED, com.example.hms.enums.ReturnedStockCondition.INTACT)).thenAnswer(inv -> {
                 d.setStatus(DispenseStatus.CANCELLED);
                 return d;
             });
 
-            service.cancelReady(dispenseId, new CancelReadyRequestDTO(ReadyCancelReason.NOT_COLLECTED));
+            service.cancelReady(dispenseId, new CancelReadyRequestDTO(ReadyCancelReason.NOT_COLLECTED, com.example.hms.enums.ReturnedStockCondition.INTACT));
 
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
             verify(prescriptionRepository, never()).save(any());
@@ -1586,7 +1596,7 @@ class DispenseReadyForCollectionTest {
             d.setStatus(DispenseStatus.COMPLETED);
             stubLocked(d);
 
-            CancelReadyRequestDTO other = new CancelReadyRequestDTO(ReadyCancelReason.OTHER);
+            CancelReadyRequestDTO other = new CancelReadyRequestDTO(ReadyCancelReason.OTHER, com.example.hms.enums.ReturnedStockCondition.INTACT);
             assertThatThrownBy(() -> service.cancelReady(dispenseId, other))
                     .isInstanceOf(ConflictException.class);
             verifyNoInteractions(preparedFillVoider);
@@ -1670,7 +1680,7 @@ class DispenseReadyForCollectionTest {
         @DisplayName("cancel-ready: the same three answer the same 404 body")
         void cancelReadyAnswersTheSame() {
             var bodies = threeRefusals(() -> service.cancelReady(dispenseId,
-                    new CancelReadyRequestDTO(ReadyCancelReason.OTHER)));
+                    new CancelReadyRequestDTO(ReadyCancelReason.OTHER, com.example.hms.enums.ReturnedStockCondition.INTACT)));
 
             assertThat(bodies.get(0)).containsEntry("status", 404)
                     .containsEntry("message", "Dispense record not found");

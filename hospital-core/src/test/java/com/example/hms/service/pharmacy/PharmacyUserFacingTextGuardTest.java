@@ -65,7 +65,11 @@ class PharmacyUserFacingTextGuardTest {
             "Stock receipt: lot ",
             "Dispense for prescription ",
             "Dispense cancelled — stock returned for prescription ",
-            "Prepared fill cancelled — stock returned for prescription ");
+            "Prepared fill cancelled — stock returned for prescription ",
+            // QA D3403 / D3415 (r70): a cancelled fill not put back on sale, the quarantine and its destruction.
+            "Prepared fill cancelled, not for sale",
+            "Quarantined: ",
+            "Destroyed: ");
 
     @Test
     void everyTextThePharmacyServicesSendToTheUiIsAKnownMessageKey() throws IOException {

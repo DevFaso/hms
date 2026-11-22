@@ -358,6 +358,7 @@
                         : {
                             lot: earlier.lotNumber,
                             date: (earlier.expiryDate | serverTime | date: 'mediumDate'),
+                            left: earlier.remainingQuantity,
                           }
                   }}</small>
                   <input

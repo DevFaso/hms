@@ -31,6 +31,8 @@ import {
   StockLotResponse,
   READY_CANCEL_REASONS,
   ReadyCancelReason,
+  RETURNED_STOCK_CONDITIONS,
+  ReturnedStockCondition,
   QueueClaimFilter,
   WorkQueueClaim,
   StockWitnessCandidate,
@@ -307,7 +309,10 @@ export class DispensingComponent implements OnInit, OnDestroy {
    */
   private readonly handOverDeferral = viewChild<BillingDeferralChoiceComponent>('handOverDeferral');
   private readonly oneStepDeferral = viewChild<BillingDeferralChoiceComponent>('oneStepDeferral');
-  cancelReason: ReadyCancelReason = 'NOT_COLLECTED';
+  /** QA D3403 (r70): no silent default; the reason and the stock's state are both said. */
+  cancelReason: ReadyCancelReason | null = null;
+  cancelCondition: ReturnedStockCondition | null = null;
+  readonly returnedStockConditions = RETURNED_STOCK_CONDITIONS;
 
   // G13 — work-queue claim ("being prepared by"). Advisory: it coordinates
   // pharmacists and never blocks a dispense. Off until the server says so.
@@ -1278,7 +1283,8 @@ export class DispensingComponent implements OnInit, OnDestroy {
 
   openCancelReady(rx: WorkQueuePrescription): void {
     this.closeForm();
-    this.cancelReason = 'NOT_COLLECTED';
+    this.cancelReason = null;
+    this.cancelCondition = null;
     this.readyAction.set({ kind: 'cancel', rx });
   }
 
@@ -1323,8 +1329,24 @@ export class DispensingComponent implements OnInit, OnDestroy {
   confirmCancelReady(): void {
     const dispenseId = this.readyAction()?.rx.readyForCollection?.dispenseId;
     if (!dispenseId) return;
+    const missing = [
+      ...(this.cancelReason ? [] : ['cancelReadyReason']),
+      ...(this.cancelCondition ? [] : ['cancelReadyCondition']),
+    ];
+    if (missing.length > 0 || !this.cancelReason || !this.cancelCondition) {
+      const message = this.translate.instant('PHARMACY.CANCEL_READY_CHOOSE');
+      refuseFields(
+        this.host.nativeElement,
+        missing,
+        ['cancelReadyReason', 'cancelReadyCondition'],
+        message,
+      );
+      this.toast.error(message);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], ['cancelReadyReason', 'cancelReadyCondition'], '');
     this.readyActionSaving.set(true);
-    this.svc.cancelReady(dispenseId, this.cancelReason).subscribe({
+    this.svc.cancelReady(dispenseId, this.cancelReason, this.cancelCondition).subscribe({
       next: () => this.afterReadyAction('PHARMACY.CANCEL_READY_SUCCESS'),
       error: (err) => this.readyActionFailed(err, 'PHARMACY.CANCEL_READY_FAILED'),
     });

@@ -663,11 +663,17 @@ public class DispenseServiceImpl implements DispenseService {
         if (reason == null || !reason.isPharmacistChoice()) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_REASON, "dispense.ready.cancelReason.invalid");
         }
+        // QA D3403 (r70): what happens to the stock is said, never assumed (damaged stock went back on sale).
+        com.example.hms.enums.ReturnedStockCondition condition = request.getStockCondition();
+        if (condition == null) {
+            throw new com.example.hms.exception.FieldBusinessException("stockCondition",
+                    "dispense.ready.stockConditionRequired");
+        }
         LockedPreparedFill locked = lockPreparedFill(dispenseId);
         if (locked.dispense().getStatus() != DispenseStatus.PENDING) {
             throw new ConflictException(MessageUtil.resolve(READY_NOT_PENDING));
         }
-        Dispense cancelled = preparedFillVoider.cancel(locked.dispense(), reason);
+        Dispense cancelled = preparedFillVoider.cancel(locked.dispense(), reason, condition);
         // QA D792 (#953 review, round 2): the prepared fill was what held a
         // ward order of an ended stay live (migration V233 leaves such orders
         // to the counter). With the fill gone nothing else would ever end it:

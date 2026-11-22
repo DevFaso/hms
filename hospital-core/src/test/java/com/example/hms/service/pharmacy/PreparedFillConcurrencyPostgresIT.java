@@ -115,7 +115,7 @@ import static org.mockito.Mockito.when;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
-@Import({DispenseServiceImpl.class, PreparedFillVoider.class, PharmacyPaymentVoider.class, PrescriptionQueueClaimService.class,
+@Import({DispenseServiceImpl.class, PreparedFillVoider.class, StockQuarantine.class, PharmacyPaymentVoider.class, PrescriptionQueueClaimService.class,
         DispenseVerificationService.class,
         ControlledSubstanceGuard.class, PrescriptionControlledResolver.class, ControlledStockWitness.class, FefoLotPolicy.class, StockOutRoutingServiceImpl.class, DispenseMapper.class,
         StockTransactionServiceImpl.class, com.example.hms.mapper.pharmacy.StockTransactionMapper.class,
@@ -339,7 +339,7 @@ class PreparedFillConcurrencyPostgresIT {
 
         CompletableFuture<Object> second = race(
             () -> dispenseService.handOver(dispenseId, null),
-            () -> dispenseService.cancelReady(dispenseId, new CancelReadyRequestDTO(ReadyCancelReason.OTHER)));
+            () -> dispenseService.cancelReady(dispenseId, new CancelReadyRequestDTO(ReadyCancelReason.OTHER, com.example.hms.enums.ReturnedStockCondition.INTACT)));
 
         assertThat(causeOf(second)).isInstanceOf(ConflictException.class)
             .hasMessage("This fill is no longer waiting for collection.");
@@ -354,7 +354,7 @@ class PreparedFillConcurrencyPostgresIT {
         UUID dispenseId = prepare();
 
         CompletableFuture<Object> second = race(
-            () -> dispenseService.cancelReady(dispenseId, new CancelReadyRequestDTO(ReadyCancelReason.NOT_COLLECTED)),
+            () -> dispenseService.cancelReady(dispenseId, new CancelReadyRequestDTO(ReadyCancelReason.NOT_COLLECTED, com.example.hms.enums.ReturnedStockCondition.INTACT)),
             () -> dispenseService.handOver(dispenseId, null));
 
         assertThat(causeOf(second)).isInstanceOf(ConflictException.class)
