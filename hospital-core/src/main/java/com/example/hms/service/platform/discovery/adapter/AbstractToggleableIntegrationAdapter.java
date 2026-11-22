@@ -61,6 +61,7 @@ public abstract class AbstractToggleableIntegrationAdapter implements PlatformIn
             .featureFlag(featureFlag)
             .capabilities(defaultCapabilities(locale))
             .enabled(enabled)
+            .stub(defaultStub() && isBlank(config.getProvider()))
             .autoProvision(autoProvision && enabled)
             .managedByPlatform(managedByPlatform)
             .defaultOwnership(defaultOwnership(locale))
@@ -83,6 +84,18 @@ public abstract class AbstractToggleableIntegrationAdapter implements PlatformIn
             locale.getLanguage();
         }
         return PlatformOwnershipDTO.builder().build();
+    }
+
+    /**
+     * True for a catalog entry backed by a reference stub: it is shown as not configured, not as active (D2779).
+     * Every catalog adapter today is a reference stub; a real connector overrides this with false.
+     */
+    protected boolean defaultStub() {
+        return true;
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     protected boolean defaultEnabled() {

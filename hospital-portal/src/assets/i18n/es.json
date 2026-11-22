@@ -436,7 +436,8 @@
       "SCOPE_UNKNOWN": "Ámbito no registrado",
       "IMPERSONATOR": "Suplantado por {{actor}}",
       "SHOW_TEN": "Mostrar hasta 10 eventos",
-      "HOSPITAL_FILTER": "Filtro de hospital (ID)"
+      "HOSPITAL_FILTER": "Hospital",
+      "ALL_HOSPITALS": "Todos los hospitales"
     },
     "STAT": {
       "ORGANIZATIONS": "Organizaciones",
@@ -906,6 +907,7 @@
     "RETRY": "Reintentar",
     "EMPTY": "No hay integraciones registradas.",
     "ENABLED": "Activada",
+    "NOT_CONFIGURED": "No configurada",
     "DISABLED": "Desactivada",
     "NO_ORG_HISTORY": "Aún no hay historial de llamadas para esta integración.",
     "PLATFORM_WIDE": "Plataforma completa",
@@ -15851,6 +15853,17 @@
     "APPROVER": "Aprobador",
     "VERSION": "Versión",
     "ENFORCED_IN": "Aplicada en",
+    "SOURCE_OPEN": "Abrir la fuente",
+    "AREA": {
+      "PRESCRIBING": "Prescripción",
+      "MATERNITY": "Maternidad",
+      "VITALS": "Constantes vitales",
+      "DEATH": "Defunciones y mortinatos",
+      "RECORDS": "Historia clínica y privacidad",
+      "IMAGING": "Imagen",
+      "BILLING": "Facturación",
+      "LAB": "Laboratorio y banco de sangre"
+    },
     "NOTE": "Nota",
     "REVOKE_REASON": "Motivo de la revocación",
     "SIGNED_BY": "Validada el {{date}} por {{title}} ({{name}})",

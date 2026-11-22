@@ -436,7 +436,8 @@
       "SCOPE_UNKNOWN": "Périmètre non renseigné",
       "IMPERSONATOR": "Identité empruntée par {{actor}}",
       "SHOW_TEN": "Afficher jusqu’à 10 événements",
-      "HOSPITAL_FILTER": "Filtre hospitalier (identifiant)"
+      "HOSPITAL_FILTER": "Hôpital",
+      "ALL_HOSPITALS": "Tous les hôpitaux"
     },
     "STAT": {
       "ORGANIZATIONS": "Organisations",
@@ -906,6 +907,7 @@
     "RETRY": "Réessayer",
     "EMPTY": "Aucune intégration enregistrée.",
     "ENABLED": "Activée",
+    "NOT_CONFIGURED": "Non configurée",
     "DISABLED": "Désactivée",
     "NO_ORG_HISTORY": "Aucun historique d'appel enregistré pour cette intégration.",
     "PLATFORM_WIDE": "Plateforme entière",
@@ -13221,7 +13223,7 @@
   },
   "DRUG_INTERACTIONS": {
     "ACTIONS": "Actions",
-    "ACTIVE": "Active",
+    "ACTIVE": "En vigueur",
     "ADD": "Ajouter une interaction",
     "ADD_TITLE": "Nouvelle interaction",
     "ALL_SEVERITIES": "Toutes les gravités",
@@ -15851,6 +15853,17 @@
     "APPROVER": "Approbateur",
     "VERSION": "Version",
     "ENFORCED_IN": "Appliquée dans",
+    "SOURCE_OPEN": "Ouvrir la source",
+    "AREA": {
+      "PRESCRIBING": "Prescription",
+      "MATERNITY": "Maternité",
+      "VITALS": "Constantes vitales",
+      "DEATH": "Décès et mortinatalité",
+      "RECORDS": "Dossier patient et confidentialité",
+      "IMAGING": "Imagerie",
+      "BILLING": "Facturation",
+      "LAB": "Laboratoire et banque de sang"
+    },
     "NOTE": "Note",
     "REVOKE_REASON": "Motif de la révocation",
     "SIGNED_BY": "Validée le {{date}} par {{title}} ({{name}})",

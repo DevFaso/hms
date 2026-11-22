@@ -224,7 +224,8 @@ public class HospitalRuleSignoffService {
         return new ClinicalRuleStatusDTO(rule.key().name(), rule.version(), text(rule.titleKey()),
             text(rule.descriptionKey()), text(rule.sourceKey()), text(rule.approverKey()), rule.enforcedInNames(),
             status,
-            current == null ? null : toDto(current, names), lastSignedVersion);
+            current == null ? null : toDto(current, names), lastSignedVersion,
+            rule.key().area().name(), rule.sourceUrl());
     }
 
     private static HospitalRuleSignoffDTO toDto(HospitalRuleSignoff row, BiFunction<UUID, String, String> names) {
