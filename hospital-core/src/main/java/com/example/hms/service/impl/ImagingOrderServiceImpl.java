@@ -101,6 +101,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         // Provisional rule 2: « Commander quand même » names its reason.
         com.example.hms.service.imaging.ImagingDuplicateOverride.requireReason(request);
         ImagingOrder imagingOrder = imagingOrderMapper.toEntity(request, patient, hospital);
+        // QA D3450 / D3254: the exam picked from the hospital's imaging catalogue names the order.
+        applyCatalogueExam(imagingOrder, request.getCatalogueItemId(), hospital.getId());
         imagingOrder.setOrderedAt(LocalDateTime.now());
         // QA D972 (round 18): an order belongs to the visit it was written in,
         // which is how the checkout bills it.
@@ -130,6 +132,34 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             duplicateOverride.audit(saved, duplicateMatches);
         }
         return imagingOrderMapper.toResponseDTO(saved, duplicateMatches);
+    }
+
+    /** QA D3450 / D3254 (r70, V361): the hospital's imaging catalogue; null in a hand-built unit test. */
+    private com.example.hms.service.imaging.ImagingCatalogueService imagingCatalogueService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setImagingCatalogueService(
+            com.example.hms.service.imaging.ImagingCatalogueService imagingCatalogueService) {
+        this.imagingCatalogueService = imagingCatalogueService;
+    }
+
+    /**
+     * Writes the catalogue exam on the order (its item, code, name, modality), or none for a free-text order. An
+     * exam that cannot be checked is never taken on trust: with no catalogue to ask, a named exam is refused.
+     */
+    private void applyCatalogueExam(ImagingOrder order, UUID catalogueItemId, UUID hospitalId) {
+        if (imagingCatalogueService != null) {
+            imagingCatalogueService.applyTo(order, catalogueItemId, hospitalId);
+        } else if (catalogueItemId != null) {
+            throw new com.example.hms.exception.FieldBusinessException("catalogueItemId", "imaging.catalogue.examUnknown");
+        }
+    }
+
+    /** The exam an edited order keeps: the one it had, while its study is still named the same. */
+    private static UUID keptCatalogueItem(UUID itemBefore, String studyBefore, String studyNow) {
+        boolean sameName = studyBefore != null && studyNow != null
+            && studyBefore.trim().equalsIgnoreCase(studyNow.trim());
+        return sameName ? itemBefore : null;
     }
 
     /** Provisional rule 1: the billing follow-up of a pending pre-authorisation; null in a hand-built unit test. */
@@ -224,7 +254,14 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
         requireNotInThePast(request.getScheduledDate(), order.getScheduledDate());
         UUID visitBefore = order.getEncounterId();
+        UUID catalogueItemBefore = order.getCatalogueItemId();
+        String studyBefore = order.getStudyType();
         imagingOrderMapper.updateEntityFromRequest(order, request);
+        // QA D3450 / D3254: an edit that names no catalogue exam and leaves the study's name as it was keeps the
+        // exam the order was picked from; a retyped name makes it a free-text order.
+        UUID catalogueItem = request.getCatalogueItemId() != null ? request.getCatalogueItemId()
+            : keptCatalogueItem(catalogueItemBefore, studyBefore, order.getStudyType());
+        applyCatalogueExam(order, catalogueItem, order.getHospital() != null ? order.getHospital().getId() : null);
         // QA D972: an edit keeps the order's visit (the form has no visit
         // field), and a visit it names must be this patient's at this hospital.
         if (request.getEncounterId() == null) {

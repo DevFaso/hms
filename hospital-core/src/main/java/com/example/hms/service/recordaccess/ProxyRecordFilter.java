@@ -455,7 +455,68 @@ public class ProxyRecordFilter {
             return false;
         }
         ReadCache cache = new ReadCache();
-        return billsNoHiddenOrder(visit, cache) && billsNoHiddenTest(invoice, cache);
+        return billsNoHiddenOrder(visit, cache) && billsNoHiddenTest(invoice, cache)
+            && billsNoPregnancyRevealingStudy(invoice, visit);
+    }
+
+    /** QA D3450 (r70): the imaging orders of a visit, and their catalogue; null in a hand-built unit test. */
+    private com.example.hms.repository.ImagingOrderRepository imagingOrderRepository;
+    private com.example.hms.service.imaging.ImagingCatalogueService imagingCatalogueService;
+
+    @Autowired(required = false)
+    public void setImagingOrderRepository(com.example.hms.repository.ImagingOrderRepository imagingOrderRepository) {
+        this.imagingOrderRepository = imagingOrderRepository;
+    }
+
+    @Autowired(required = false)
+    public void setImagingCatalogueService(
+            com.example.hms.service.imaging.ImagingCatalogueService imagingCatalogueService) {
+        this.imagingCatalogueService = imagingCatalogueService;
+    }
+
+    /** An unsigned draft and a cancelled study are on no invoice. */
+    private static final Set<com.example.hms.enums.ImagingOrderStatus> IMAGING_NOT_BILLED = EnumSet.of(
+        com.example.hms.enums.ImagingOrderStatus.DRAFT, com.example.hms.enums.ImagingOrderStatus.CANCELLED);
+
+    /**
+     * QA D3450 (r70), the invoice side of the imaging rule: a line « Échographie obstétricale » on the invoice
+     * of a general consultation says what the hidden study is. An invoice is withheld, whole, when its visit
+     * holds an imaging order a proxy does not read ({@code PregnancyRevealingStudyRule}); a line priced from
+     * such a catalogue exam, with or without a visit, is judged with the tests ({@link #admitsPricedFrom}).
+     */
+    private boolean billsNoPregnancyRevealingStudy(BillingInvoice invoice, Encounter visit) {
+        if (visit == null || visit.getId() == null || imagingOrderRepository == null) {
+            return true;
+        }
+        List<com.example.hms.model.ImagingOrder> orders =
+            imagingOrderRepository.findByEncounterIdAndStatusNotIn(visit.getId(), IMAGING_NOT_BILLED);
+        if (orders == null || orders.isEmpty()) {
+            return true;
+        }
+        Map<UUID, Boolean> flags = imagingCatalogueService == null ? Map.of()
+            : imagingCatalogueService.pregnancyFlagsOf(orders);
+        Patient subject = invoice.getPatient();
+        return orders.stream().allMatch(order -> admitsImagingStudy(
+            com.example.hms.service.imaging.PregnancyRevealingStudyRule.judge(order, flags.get(order.getId()), subject),
+            subject, invoice.getHospital()));
+    }
+
+    /**
+     * QA D3450 (r70): what the imaging rule's verdict means for the grant of this read. A study that is shown is
+     * read; one that is flagged or named is read by no proxy; one the fail-closed band holds back is a pregnancy
+     * row of that patient, read only by whoever the policy lets read one (a verified parent or guardian of a
+     * child under the hospital's adolescent age).
+     */
+    public boolean admitsImagingStudy(com.example.hms.service.imaging.PregnancyRevealingStudyRule.Verdict verdict,
+                                      Patient subject, Hospital recordedAt) {
+        if (verdict == null) {
+            return false;
+        }
+        return switch (verdict) {
+            case SHOWN -> true;
+            case REVEALING -> false;
+            case UNCLEARED -> admits(SensitivityCategory.PREGNANCY, subject, recordedAt);
+        };
     }
 
     /** The tests ordered in the invoice's visit are what its lines charge. */
@@ -504,6 +565,13 @@ public class ProxyRecordFilter {
 
     /** One price-list item: an ordinary one, or the price of a test this proxy may read. */
     private boolean admitsPricedFrom(PriceListItem item, BillingInvoice invoice, ReadCache cache) {
+        // QA D3450: a line priced from an imaging exam that may reveal a pregnancy names it.
+        if (item.getCategory() == com.example.hms.enums.PriceListCategory.IMAGING) {
+            return admitsImagingStudy(com.example.hms.service.imaging.PregnancyRevealingStudyRule.judgeExam(
+                item.getMayRevealPregnancy(), com.example.hms.service.imaging.ImagingCatalogueService.modalityOf(item),
+                item.getLabel(), item.getImagingBodyRegion(), invoice.getPatient()),
+                invoice.getPatient(), invoice.getHospital());
+        }
         if (item.getLinkType() != PriceListLinkType.LAB_TEST_DEFINITION || item.getLinkKey() == null) {
             return true;
         }
