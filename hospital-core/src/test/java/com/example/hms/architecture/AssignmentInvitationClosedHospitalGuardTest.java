@@ -77,7 +77,9 @@ class AssignmentInvitationClosedHospitalGuardTest {
         Map.entry("reissuePendingInvitationsForRestoredUser", "restoredAccountSkipsTheClosedInvitation"),
         Map.entry("sendNotifications", "afterCommitSendIsSkipped"),
         Map.entry("resendPendingActivationCode", "publicResendNeitherRotatesNorSends"),
-        Map.entry("resendNotifications", "resendNotificationIsRefused"));
+        Map.entry("resendNotifications", "resendNotificationIsRefused"),
+        // QA r70 D3206: the desk re-sends a patient's portal activation.
+        Map.entry("resendPatientActivation", "deskPatientResendIsRefused"));
 
     private static final Pattern METHOD = Pattern.compile(
         "(?m)^    (?:@\\w+(?:\\([^)]*\\))?\\s+)*(public|protected|private)\\b[^\\n;={(]*?\\b(\\w+)\\s*\\(");

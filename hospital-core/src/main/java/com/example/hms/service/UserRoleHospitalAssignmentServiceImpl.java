@@ -1114,6 +1114,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             // An expired code is replaced before it goes out again (the link changes with it).
             assignment = reissueCode(assignment, false);
         }
+        // QA r22 class: never re-send an activation that is already done (checked here, at the send).
+        if (assignment.getConfirmationVerifiedAt() != null) {
+            throw new com.example.hms.exception.ConflictException("assignment.resend.alreadyVerified");
+        }
         User actor = requireCallerAccount();
         recordPatientActivationAudit(assignment, actor, "Patient portal activation re-sent by the desk");
         notifyAssignee(assignment);
@@ -1127,22 +1131,22 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
      */
     private UserRoleHospitalAssignment pendingPatientInvitation(UUID patientId, UUID hospitalId) {
         if (patientId == null || hospitalId == null) {
-            throw new ResourceNotFoundException(MSG_PATIENT_INVITATION_NOT_FOUND, patientId);
+            throw new ResourceNotFoundException(MSG_PATIENT_INVITATION_NOT_FOUND);
         }
         if (!com.example.hms.security.ClinicalActor.holdsOwnRoleQuietly(
                 org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication(),
                 "RECEPTIONIST", "HOSPITAL_ADMIN")) {
-            throw new ResourceNotFoundException(MSG_PATIENT_INVITATION_NOT_FOUND, patientId);
+            throw new ResourceNotFoundException(MSG_PATIENT_INVITATION_NOT_FOUND);
         }
         UUID userId = patientRepository.findByIdUnscoped(patientId)
             .map(com.example.hms.model.Patient::getUser)
             .map(User::getId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_INVITATION_NOT_FOUND, patientId));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_INVITATION_NOT_FOUND));
         UserRoleHospitalAssignment assignment = assignmentRepository.findByUserId(userId).stream()
             .filter(this::isPatientRole)
             .filter(a -> a.getHospital() != null && hospitalId.equals(a.getHospital().getId()))
             .findFirst()
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_INVITATION_NOT_FOUND, patientId));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_INVITATION_NOT_FOUND));
         if (assignment.getConfirmationVerifiedAt() != null) {
             throw new BusinessException(MSG_ASSIGNMENT_ALREADY_CONFIRMED);
         }

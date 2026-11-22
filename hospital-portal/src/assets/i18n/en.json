@@ -2150,7 +2150,9 @@
       "ORDONNANCE_PRINTED": "Ordonnance printed by its prescriber (prescriptions {{ids}})",
       "CLINICAL_RULE_SIGNED_OFF": "Clinical rule set {{rule}} signed off (version {{version}})",
       "CLINICAL_RULE_SIGNOFF_REVOKED": "Clinical rule set {{rule}} sign-off revoked (version {{version}})",
-      "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Support session refused: {{what}} (clinical-rule sign-off)"
+      "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Support session refused: {{what}} (clinical-rule sign-off)",
+      "PATIENT_ACTIVATION_CODE_SHOWN": "Patient portal activation code shown to the desk",
+      "PATIENT_ACTIVATION_RESENT": "Patient portal activation re-sent by the desk"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
