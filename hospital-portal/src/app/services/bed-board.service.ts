@@ -36,6 +36,8 @@ export interface BedOccupant {
   requiresIsolationWard: boolean;
   /** Needs an isolation ward and is not in one. The board exists for this. */
   isolationMismatch: boolean;
+  /** QA D3308: she has an active labour episode here; a move out of a maternity unit warns. */
+  inLabor?: boolean;
 }
 
 export interface BedBoardEntry {

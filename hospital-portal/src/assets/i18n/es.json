@@ -13842,7 +13842,16 @@
     "WARD_OVERVIEW": "Vista de unidades",
     "SNAPSHOT_AT": "Actualizado",
     "LEGEND": "Leyenda del estado de camas",
-    "HOSPITAL_NAMES_ERROR": "No se pudieron cargar los nombres de hospitales. Se muestran identificadores; las capacidades están disponibles."
+    "HOSPITAL_NAMES_ERROR": "No se pudieron cargar los nombres de hospitales. Se muestran identificadores; las capacidades están disponibles.",
+    "IN_LABOR": "En trabajo de parto",
+    "LABOR_NOTICE": "{{name}} está en trabajo de parto. Un traslado a otra cama de maternidad no requiere confirmación; un traslado fuera de la unidad de maternidad sí.",
+    "LABOR_WARNING": "{{name}} está en trabajo de parto y esta cama no está en una unidad de maternidad. Compruebe que es la paciente correcta y explique el porqué en el motivo.",
+    "LABOR_CONFIRM": "Confirmo el traslado de una paciente en trabajo de parto fuera de la unidad de maternidad",
+    "LABOR_COMPLETE_TITLE": "¿Trasladar a una paciente en trabajo de parto?",
+    "LABOR_COMPLETE_MESSAGE": "{{name}} está en trabajo de parto y {{bed}} no está en una unidad de maternidad. Realice este traslado solo si está destinado a ella.",
+    "LABOR_COMPLETE_CONFIRM": "Sí, realizar el traslado",
+    "SEARCH_RESULTS": "{{shown}} de {{total}} camas coinciden con la búsqueda.",
+    "SEARCH_CLEAR": "Mostrar todas las camas"
   },
   "EMAR": {
     "ORDER_NO_LONGER_ACTIVE": "Esta receta ya no está activa. No se registró ninguna dosis.",

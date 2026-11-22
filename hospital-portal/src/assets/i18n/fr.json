@@ -13842,7 +13842,16 @@
     "WARD_OVERVIEW": "Vue des unités",
     "SNAPSHOT_AT": "Mis à jour le",
     "LEGEND": "Légende des lits",
-    "HOSPITAL_NAMES_ERROR": "Les noms des hôpitaux n’ont pas pu être chargés. Les identifiants sont affichés ; les capacités sont disponibles."
+    "HOSPITAL_NAMES_ERROR": "Les noms des hôpitaux n’ont pas pu être chargés. Les identifiants sont affichés ; les capacités sont disponibles.",
+    "IN_LABOR": "En travail",
+    "LABOR_NOTICE": "{{name}} est en travail. Un déplacement vers un autre lit de maternité ne demande pas de confirmation ; un déplacement hors de l’unité de maternité en demande une.",
+    "LABOR_WARNING": "{{name}} est en travail et ce lit n’est pas dans une unité de maternité. Vérifiez qu’il s’agit bien de la bonne patiente, et dites pourquoi dans le motif.",
+    "LABOR_CONFIRM": "Je confirme le transfert d’une patiente en travail hors de l’unité de maternité",
+    "LABOR_COMPLETE_TITLE": "Déplacer une patiente en travail ?",
+    "LABOR_COMPLETE_MESSAGE": "{{name}} est en travail et {{bed}} n’est pas dans une unité de maternité. N’effectuez ce transfert que s’il lui est bien destiné.",
+    "LABOR_COMPLETE_CONFIRM": "Oui, effectuer le transfert",
+    "SEARCH_RESULTS": "{{shown}} lit(s) sur {{total}} correspondent à la recherche.",
+    "SEARCH_CLEAR": "Afficher tous les lits"
   },
   "EMAR": {
     "ORDER_NO_LONGER_ACTIVE": "Cette prescription n’est plus active. Aucune dose n’a été enregistrée.",

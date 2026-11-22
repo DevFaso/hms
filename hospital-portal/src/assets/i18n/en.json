@@ -13842,7 +13842,16 @@
     "WARD_OVERVIEW": "Ward overview",
     "SNAPSHOT_AT": "Updated",
     "LEGEND": "Bed status legend",
-    "HOSPITAL_NAMES_ERROR": "Hospital names could not be loaded. Identifiers are shown; bed counts are available."
+    "HOSPITAL_NAMES_ERROR": "Hospital names could not be loaded. Identifiers are shown; bed counts are available.",
+    "IN_LABOR": "In labour",
+    "LABOR_NOTICE": "{{name}} is in active labour. A move to another maternity bed needs no confirmation; a move out of the maternity unit does.",
+    "LABOR_WARNING": "{{name}} is in active labour and this bed is not in a maternity unit. Make sure this is the right patient, and say why in the reason.",
+    "LABOR_CONFIRM": "I confirm the transfer of a woman in labour out of the maternity unit",
+    "LABOR_COMPLETE_TITLE": "Move a woman in labour?",
+    "LABOR_COMPLETE_MESSAGE": "{{name}} is in active labour and {{bed}} is not in a maternity unit. Carry out this transfer only if it is intended for her.",
+    "LABOR_COMPLETE_CONFIRM": "Yes, carry out the transfer",
+    "SEARCH_RESULTS": "{{shown}} of {{total}} beds match the search.",
+    "SEARCH_CLEAR": "Show every bed"
   },
   "EMAR": {
     "ORDER_NO_LONGER_ACTIVE": "This order is no longer active. No dose was recorded.",
