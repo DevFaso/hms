@@ -55,6 +55,11 @@ test('D3455: current contact details remain readable at all four widths', async 
   await expect(contact).toContainText('+22670000000');
   for (const width of LAYOUT_WIDTHS) {
     await page.setViewportSize({ width, height: heightFor(width) });
+    await page.evaluate(() => {
+      const backdrop = document.querySelector<HTMLElement>('.sidebar-backdrop');
+      if (backdrop && getComputedStyle(backdrop).display !== 'none') backdrop.click();
+    });
+    await expect(page.locator('.sidebar-backdrop')).toBeHidden();
     await expect(contact).toBeVisible();
     expect(await contact.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
     const box = await page.locator('.pre-checkin-panel').boundingBox();
