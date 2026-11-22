@@ -169,8 +169,12 @@ public class HospitalRuleSignoffService {
         HospitalRuleSignoff live = liveSignoff(hospitalId, rule);
         // Only a live sign-off is revoked, and only once: the update applies WHERE status = SIGNED, so of two
         // concurrent revocations one changes the row and the other is refused (one audit row; the first reason kept).
-        int revoked = live == null ? 0 : signoffRepository.revokeIfSigned(live.getId(), hospitalId,
-            LocalDateTime.now(ZoneId.systemDefault()), actorUserId, reason == null ? null : reason.strip());
+        if (live == null) {
+            throw new BusinessException("clinicalRules.nothingToRevoke");
+        }
+        String why = reason == null ? null : reason.strip();
+        int revoked = signoffRepository.revokeIfSigned(live.getId(), hospitalId,
+            LocalDateTime.now(ZoneId.systemDefault()), actorUserId, why);
         if (revoked == 0) {
             throw new BusinessException("clinicalRules.nothingToRevoke");
         }

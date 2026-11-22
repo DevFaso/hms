@@ -153,15 +153,18 @@ public class ImpersonationLimits implements HandlerInterceptor {
         }
     }
 
+    /** The opening of every refusal's audit sentence. */
+    private static final String REFUSED = "Support session refused: ";
+
     /** The audit sentence; one fixed shape per rule, each with its portal pattern. */
     private static String describe(String attempt, String what) {
         if (MONEY.equals(what)) {
-            return "Support session refused: " + attempt + " (money)";
+            return REFUSED + attempt + " (money)";
         }
         if (RULE_SIGNOFF.equals(what)) {
-            return "Support session refused: " + attempt + " (clinical-rule sign-off)";
+            return REFUSED + attempt + " (clinical-rule sign-off)";
         }
-        return "Support session refused: " + attempt + " (sign-in or recovery details)";
+        return REFUSED + attempt + " (sign-in or recovery details)";
     }
 
     /**

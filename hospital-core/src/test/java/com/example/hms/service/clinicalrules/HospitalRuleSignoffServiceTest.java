@@ -41,6 +41,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -289,7 +290,7 @@ class HospitalRuleSignoffServiceTest {
 
         assertThat(stored).singleElement().extracting(HospitalRuleSignoff::getStatus).isEqualTo(RuleSignoffStatus.SIGNED);
         ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
-        verify(auditEventLogService, org.mockito.Mockito.times(2)).logEvent(audit.capture());
+        verify(auditEventLogService, times(2)).logEvent(audit.capture());
         assertThat(audit.getAllValues()).allSatisfy(event -> {
             assertThat(event.getEventType()).isEqualTo(AuditEventType.SECURITY_ALERT_TRIGGERED);
             assertThat(event.getEventDescription()).endsWith("(clinical-rule sign-off)");
@@ -313,7 +314,7 @@ class HospitalRuleSignoffServiceTest {
             .isInstanceOf(BusinessException.class);
 
         assertThat(live.getRevokeReason()).isEqualTo("Première");
-        verify(auditEventLogService, org.mockito.Mockito.times(1)).logEvent(any());
+        verify(auditEventLogService, times(1)).logEvent(any());
     }
 
     @Test
