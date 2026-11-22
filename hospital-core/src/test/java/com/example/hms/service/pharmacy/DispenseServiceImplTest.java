@@ -2534,7 +2534,7 @@ class DispenseServiceImplTest {
 
             org.mockito.ArgumentCaptor<com.example.hms.model.pharmacy.StockTransaction> tx =
                     org.mockito.ArgumentCaptor.forClass(com.example.hms.model.pharmacy.StockTransaction.class);
-            verify(stockTransactionRepository, org.mockito.Mockito.times(2)).save(tx.capture());
+            verify(stockTransactionRepository, times(2)).save(tx.capture());
             assertThat(tx.getAllValues().get(0).getWitnessedByUser()).isSameAs(witness);
             assertThat(tx.getAllValues().get(0).getQuantity()).isEqualByComparingTo("3");
             // Review of #1285: a handed-over controlled drug is quarantined, never put straight back on sale.

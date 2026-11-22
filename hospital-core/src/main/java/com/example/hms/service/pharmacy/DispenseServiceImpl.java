@@ -719,6 +719,51 @@ public class DispenseServiceImpl implements DispenseService {
         return new LockedPreparedFill(resync(dispense), prescription);
     }
 
+    /**
+     * The stock of a cancelled fill (Sonar S3776: split out of the cancel). QA D604: only what was not already
+     * returned against the fill comes back; review of #1285: a controlled drug comes back into quarantine.
+     */
+    private void reverseCancelledFillStock(Dispense dispense, UUID witnessedBy) {
+        BigDecimal stillOut = dispense.getStockLot() != null ? notYetReturned(dispense) : BigDecimal.ZERO;
+        if (stillOut.signum() > 0) {
+            StockLot lot = dispense.getStockLot();
+            InventoryItem item = lot.getInventoryItem();
+            User performer = resolveCurrentUser();
+            // QA D654: a controlled substance goes back on the shelf in front
+            // of a witness, as it left.
+            User witness = ControlledStockWitness.isControlled(item)
+                    ? controlledStockWitness.resolve(witnessedBy, item, performer) : null;
+            // Review of #1285: a controlled drug that was handed over left the pharmacy's custody; whatever comes
+            // back is quarantined (the RETURN, then a QUARANTINE, the lot unchanged), never put straight back on sale.
+            // Other stock goes back: the cancel corrects a fill recorded in error.
+            boolean quarantine = StockQuarantine.quarantines(item, ReturnedStockCondition.INTACT, true);
+            if (!quarantine) {
+                LocalDateTime now = LocalDateTime.now(clock);
+                stockLotRepository.incrementRemaining(lot.getId(), stillOut, now);
+                inventoryItemRepository.incrementOnHand(item.getId(), stillOut, now);
+                refreshIfManaged(lot);
+                refreshIfManaged(item);
+            }
+
+            StockTransaction reverseTx = StockTransaction.builder()
+                    .inventoryItem(item)
+                    .stockLot(lot)
+                    .transactionType(StockTransactionType.RETURN)
+                    .referenceId(dispense.getId())
+                    .quantity(stillOut)
+                    .reason("Dispense cancelled — stock returned for prescription "
+                            + dispense.getPrescription().getId())
+                    .performedByUser(performer)
+                    .witnessedByUser(witness)
+                    .build();
+            stockTransactionRepository.save(reverseTx);
+            if (quarantine) {
+                new StockQuarantine(stockTransactionRepository).quarantine(item, lot, stillOut, dispense.getId(),
+                        ReturnedStockCondition.INTACT, performer, witness);
+            }
+        }
+    }
+
     private record LockedPreparedFill(Dispense dispense, Prescription prescription) {}
 
     private ResourceNotFoundException dispenseNotFound() {
@@ -1746,44 +1791,7 @@ public class DispenseServiceImpl implements DispenseService {
         // returns of 2 and 3 then put 4 more back on cancel), counted under
         // the dispense row lock that a referenced return also takes, and the
         // reversal names the dispense so it counts as one of its returns.
-        BigDecimal stillOut = dispense.getStockLot() != null ? notYetReturned(dispense) : BigDecimal.ZERO;
-        if (stillOut.signum() > 0) {
-            StockLot lot = dispense.getStockLot();
-            InventoryItem item = lot.getInventoryItem();
-            User performer = resolveCurrentUser();
-            // QA D654: a controlled substance goes back on the shelf in front
-            // of a witness, as it left.
-            User witness = ControlledStockWitness.isControlled(item)
-                    ? controlledStockWitness.resolve(witnessedBy, item, performer) : null;
-            // Review of #1285: a controlled drug that was handed over left the pharmacy's custody; whatever comes
-            // back is quarantined (the RETURN, then a QUARANTINE, the lot unchanged), never put straight back on sale.
-            // Other stock goes back: the cancel corrects a fill recorded in error.
-            boolean quarantine = StockQuarantine.quarantines(item, ReturnedStockCondition.INTACT, true);
-            if (!quarantine) {
-                LocalDateTime now = LocalDateTime.now(clock);
-                stockLotRepository.incrementRemaining(lot.getId(), stillOut, now);
-                inventoryItemRepository.incrementOnHand(item.getId(), stillOut, now);
-                refreshIfManaged(lot);
-                refreshIfManaged(item);
-            }
-
-            StockTransaction reverseTx = StockTransaction.builder()
-                    .inventoryItem(item)
-                    .stockLot(lot)
-                    .transactionType(StockTransactionType.RETURN)
-                    .referenceId(dispense.getId())
-                    .quantity(stillOut)
-                    .reason("Dispense cancelled — stock returned for prescription "
-                            + dispense.getPrescription().getId())
-                    .performedByUser(performer)
-                    .witnessedByUser(witness)
-                    .build();
-            stockTransactionRepository.save(reverseTx);
-            if (quarantine) {
-                new StockQuarantine(stockTransactionRepository).quarantine(item, lot, stillOut, dispense.getId(),
-                        ReturnedStockCondition.INTACT, performer, witness);
-            }
-        }
+        reverseCancelledFillStock(dispense, witnessedBy);
 
         Dispense saved = dispenseRepository.save(dispense);
         // Policy rule 6 (review of #1244): a cancelled fill owes nothing; its deferral gives the amount back.
