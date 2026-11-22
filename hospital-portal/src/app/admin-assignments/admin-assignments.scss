@@ -718,3 +718,26 @@
     }
   }
 }
+
+// QA r70 D3215: the detail dialog is a column (title, a body that scrolls, the action row): the body ran
+// under the « Fermer » row before, its last lines showing past the bar.
+.modal-detail {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  > h2 {
+    flex: 0 0 auto;
+  }
+
+  > .detail-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  > .modal-actions {
+    flex: 0 0 auto;
+    position: static;
+  }
+}

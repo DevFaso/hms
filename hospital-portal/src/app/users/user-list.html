@@ -564,6 +564,7 @@
                 <select
                   id="hospitalId"
                   [(ngModel)]="createForm.hospitalId"
+                  (ngModelChange)="loadRegistrationDepartments($event)"
                   name="hospitalId"
                   [attr.aria-required]="organisationRegistrar || null"
                   [attr.aria-describedby]="organisationRegistrar ? 'hospitalIdScope' : null"
@@ -580,6 +581,28 @@
                 }
               }
             </div>
+
+            <!-- QA r70 D3202: the department is chosen here, from the hospital's own list. -->
+            @if (!editing() && createForm.hospitalId) {
+              <div class="field">
+                <label for="departmentId">{{ 'USERS.DEPARTMENT' | translate }}</label>
+                <select id="departmentId" [(ngModel)]="createForm.departmentId" name="departmentId">
+                  <option [ngValue]="undefined">
+                    {{ 'STAFF.NO_DEPARTMENT_OPTION' | translate }}
+                  </option>
+                  @for (d of registrationDepartments(); track d.id) {
+                    <option [ngValue]="d.id">{{ d.name }}</option>
+                  }
+                </select>
+                @if (registrationDepartmentsFailed()) {
+                  <span class="hint-text" role="alert">{{
+                    'STAFF.DEPARTMENTS_LOAD_FAILED' | translate
+                  }}</span>
+                } @else {
+                  <span class="hint-text">{{ 'USERS.DEPARTMENT_HINT' | translate }}</span>
+                }
+              </div>
+            }
 
             <!-- Job Title & Employment Type -->
             <div class="field-row">
