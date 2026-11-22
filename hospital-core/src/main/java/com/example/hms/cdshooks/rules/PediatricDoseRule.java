@@ -515,6 +515,12 @@ public class PediatricDoseRule implements CdsRule {
 
         /** "WHO Pocket Book 2013 (default, pending local approval)". */
         String limitBasis() {
+            if (whoStrengthUnbanded) {
+                // QA D3151: the "cannot assess" card of a strength the WHO bands do not count names the
+                // same source as the band cards: it is that rule's card, not a limit with no source.
+                return ArtemetherLumefantrineWhoBands.SOURCE + " ("
+                    + text.get("cds.pediatric.limit.pending", "default, pending local approval") + ")";
+            }
             if (item == null) {
                 return text.get("cds.pediatric.limit.none", "no paediatric limit on file");
             }
