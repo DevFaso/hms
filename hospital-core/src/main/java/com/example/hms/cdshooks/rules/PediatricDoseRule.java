@@ -1,5 +1,7 @@
 package com.example.hms.cdshooks.rules;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
 import com.example.hms.cdshooks.dto.CdsHookDtos.Source;
 import com.example.hms.enums.PediatricDoseLimitStatus;
@@ -59,6 +61,7 @@ import java.util.UUID;
  * band for a limit beyond the manual-review age. Provisional, awaiting the named clinical approver.
  */
 @Component
+@ProvisionalRule({ClinicalRuleSetKey.PARACETAMOL_LIMITS, ClinicalRuleSetKey.PAEDIATRIC_DOSE_LIMITS, ClinicalRuleSetKey.AL_WHO_WEIGHT_BANDS})
 public class PediatricDoseRule implements CdsRule {
 
     private static final String ID = "pediatric-dose";

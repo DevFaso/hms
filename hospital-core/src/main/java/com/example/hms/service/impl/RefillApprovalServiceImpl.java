@@ -1,5 +1,7 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.service.i18n.NotificationText;
 import com.example.hms.service.i18n.NotificationLocalizer;
 import com.example.hms.controller.support.ControllerAuthUtils;
@@ -34,6 +36,7 @@ import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@ProvisionalRule(ClinicalRuleSetKey.PRESCRIPTION_RENEWAL)
 public class RefillApprovalServiceImpl implements RefillApprovalService {
 
     private static final String NOTIFICATION_TYPE = "MEDICATION_REFILL";

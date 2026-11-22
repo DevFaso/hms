@@ -1,5 +1,7 @@
 package com.example.hms.service.scheduled;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.service.DeathDisputeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +16,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 @Slf4j
+@ProvisionalRule(ClinicalRuleSetKey.DEATH_RECORD_DISPUTE)
 public class DeathDisputeEscalationScheduler {
 
     private final DeathDisputeService disputes;

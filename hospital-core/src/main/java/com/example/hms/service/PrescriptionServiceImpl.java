@@ -1,5 +1,7 @@
 package com.example.hms.service;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.cdshooks.CdsCriticalBlockException;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
 import com.example.hms.cdshooks.rules.CdsRuleEngine;
@@ -54,6 +56,7 @@ import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
+@ProvisionalRule(ClinicalRuleSetKey.ALLERGY_OVERRIDE_REASON)
 public class PrescriptionServiceImpl implements PrescriptionService {
 
     private static final Logger logger = LoggerFactory.getLogger(PrescriptionServiceImpl.class);

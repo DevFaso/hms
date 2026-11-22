@@ -1,5 +1,7 @@
 package com.example.hms.cdshooks.rules;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
 import com.example.hms.cdshooks.dto.CdsHookDtos.Source;
 import com.example.hms.model.Prescription;
@@ -68,6 +70,7 @@ import java.util.UUID;
  * paediatric rule, a separate rule of the engine, keeps every limit it has.
  */
 @Component
+@ProvisionalRule(ClinicalRuleSetKey.PARACETAMOL_LIMITS)
 public class AdultParacetamolRule implements CdsRule {
 
     static final double MAX_MG_PER_ADMINISTRATION = 1000d;

@@ -1,5 +1,7 @@
 package com.example.hms.cdshooks.rules;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.PediatricDoseLimitStatus;
 import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.model.medication.PediatricWeightBand;
@@ -33,6 +35,7 @@ import java.util.regex.Pattern;
  * the band is a critical soft stop that needs a reason. A hospital that records its own bands (or any
  * paediatric limit) on its catalogue item replaces these, and its approval clears in-band doses.
  */
+@ProvisionalRule(ClinicalRuleSetKey.AL_WHO_WEIGHT_BANDS)
 final class ArtemetherLumefantrineWhoBands {
 
     /** The tablet the WHO bands count. */

@@ -1,5 +1,7 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.service.i18n.NotificationLocalizer;
 import com.example.hms.utility.ElapsedTime;
 import com.example.hms.enums.DeliveryMode;
@@ -69,6 +71,7 @@ import com.example.hms.utility.ObstetricEligibility;
 @Service
 @RequiredArgsConstructor
 @Transactional
+@ProvisionalRule(ClinicalRuleSetKey.LABOUR_TRANSFER)
 public class LaborServiceImpl implements LaborService {
     /** Request properties a refusal names (QA D1352 class, round 30). */
     private static final String FIELD_HOSPITAL_ID = "hospitalId";

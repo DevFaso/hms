@@ -1,5 +1,7 @@
 package com.example.hms.service;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.MedicationReconciliationAction;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.model.Admission;
@@ -50,6 +52,7 @@ import java.util.UUID;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@ProvisionalRule(ClinicalRuleSetKey.TAKE_HOME_ORDER_WINDOW)
 public class DischargeTakeHomeMedicines {
 
     /** How long after a discharge a take-home order still belongs to that stay's summary. */

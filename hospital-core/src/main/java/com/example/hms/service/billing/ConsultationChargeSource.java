@@ -1,5 +1,7 @@
 package com.example.hms.service.billing;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.PriceListSystemKey;
 import com.example.hms.enums.PriceListLinkType;
 import com.example.hms.enums.ItemCategory;
@@ -21,6 +23,7 @@ import java.util.UUID;
  */
 @Component
 @RequiredArgsConstructor
+@ProvisionalRule(ClinicalRuleSetKey.CONSULTATION_FEE)
 public class ConsultationChargeSource implements VisitChargeSource {
 
     /** Words a hospital's priced-service name uses for a consultation (EN/FR/ES). */

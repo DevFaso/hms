@@ -1,5 +1,7 @@
 package com.example.hms.service;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.InBasketItemStatus;
 import com.example.hms.enums.InBasketItemType;
 import com.example.hms.enums.InBasketPriority;
@@ -54,6 +56,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@ProvisionalRule(ClinicalRuleSetKey.UNSIGNED_NOTE_WORKFLOW)
 public class UnsignedNoteFollowUp {
 
     /** The reference of a "note to sign" item: the note's id. */

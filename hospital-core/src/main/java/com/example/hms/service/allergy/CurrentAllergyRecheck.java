@@ -1,5 +1,7 @@
 package com.example.hms.service.allergy;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.cdshooks.CdsCriticalBlockException;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
 import com.example.hms.cdshooks.dto.CdsHookDtos.Source;
@@ -84,6 +86,7 @@ import java.util.UUID;
  */
 @Slf4j
 @Component
+@ProvisionalRule(ClinicalRuleSetKey.ALLERGY_CONFLICT_REVIEW)
 public class CurrentAllergyRecheck {
 
     /**

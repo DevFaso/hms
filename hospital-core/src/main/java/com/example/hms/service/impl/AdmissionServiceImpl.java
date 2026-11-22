@@ -1,5 +1,7 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.AdmissionType;
 import com.example.hms.exception.BusinessException;
@@ -50,6 +52,7 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
  */
 @Service
 @RequiredArgsConstructor
+@ProvisionalRule(ClinicalRuleSetKey.MIDWIFE_LABOUR_ADMISSION)
 public class AdmissionServiceImpl implements AdmissionService {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AdmissionServiceImpl.class);
     private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";

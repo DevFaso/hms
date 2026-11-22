@@ -1,5 +1,7 @@
 package com.example.hms.service.maternity;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.BabyOutcome;
 import com.example.hms.model.labor.DeliveryNewborn;
 import com.example.hms.model.labor.DeliveryRecord;
@@ -32,6 +34,7 @@ import java.util.UUID;
  */
 @Component
 @RequiredArgsConstructor
+@ProvisionalRule(ClinicalRuleSetKey.STILLBORN_NEONATAL_ALERTS)
 public class StillbornNeonatalAlerts {
 
     /** The delivery's neonatal-care alerts this rule governs. */

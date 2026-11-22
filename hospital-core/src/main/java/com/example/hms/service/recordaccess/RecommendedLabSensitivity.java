@@ -1,5 +1,7 @@
 package com.example.hms.service.recordaccess;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.SensitivityCategory;
 import com.example.hms.model.LabTestComponent;
 import com.example.hms.model.LabTestDefinition;
@@ -30,6 +32,7 @@ import java.util.Set;
  * withheld whole. Rules are tried in order, so a panel with an HIV component
  * and a syphilis component is recommended HIV, the most protected.
  */
+@ProvisionalRule(ClinicalRuleSetKey.RECOMMENDED_SENSITIVE_LAB_TESTS)
 public final class RecommendedLabSensitivity {
 
     /** The mapping is provisional until a clinician signs the test list off. */

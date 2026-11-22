@@ -1,5 +1,7 @@
 package com.example.hms.service.vitals;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -40,6 +42,7 @@ import java.util.List;
 @ConfigurationProperties(prefix = "hms.maternity.ews")
 @Getter
 @Setter
+@ProvisionalRule({ClinicalRuleSetKey.MATERNAL_EARLY_WARNING, ClinicalRuleSetKey.MATERNAL_EWS_ESCALATION, ClinicalRuleSetKey.CRADLE_SHOCK_INDEX, ClinicalRuleSetKey.LABOUR_ALERT_VALUES, ClinicalRuleSetKey.MEWS_PAGE_COOL_DOWN})
 public class MaternalEarlyWarningRules {
 
     /**
