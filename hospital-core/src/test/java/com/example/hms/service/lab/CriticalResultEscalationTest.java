@@ -155,8 +155,16 @@ class CriticalResultEscalationTest {
         Minutes m = Minutes.DEFAULT;
         LocalDateTime last = t0.plusMinutes(60);
         assertThat(CriticalResultEscalationLadder.due(3, t0, last, m, last.plusMinutes(29))).isEmpty();
-        for (int level : new int[] {3, 4, 12, 13, 200, Short.MAX_VALUE}) {
-            assertThat(CriticalResultEscalationLadder.due(level, t0, last, m, last.plusMinutes(30)))
+        assertThat(CriticalResultEscalationLadder.due(3, t0, last, m, last.plusMinutes(30))).contains(Step.REMINDER);
+        // Reminders slow down (30, 60, 120 … minutes) to once a day, and never stop, whatever the level.
+        assertThat(m.reminderEveryAt(3)).isEqualTo(30);
+        assertThat(m.reminderEveryAt(4)).isEqualTo(60);
+        assertThat(m.reminderEveryAt(5)).isEqualTo(120);
+        for (int level : new int[] {9, 12, 13, 200, Short.MAX_VALUE}) {
+            assertThat(m.reminderEveryAt(level)).as("level " + level).isEqualTo(24 * 60);
+            assertThat(CriticalResultEscalationLadder.due(level, t0, last, m, last.plusMinutes(24 * 60 - 1)))
+                .as("level " + level).isEmpty();
+            assertThat(CriticalResultEscalationLadder.due(level, t0, last, m, last.plusMinutes(24 * 60)))
                 .as("level " + level).contains(Step.REMINDER);
         }
     }
@@ -274,8 +282,8 @@ class CriticalResultEscalationTest {
     @Test
     @DisplayName("after the final alert the chain is reminded for as long as nobody acknowledges: level 12 and beyond")
     void theChainNeverGoesSilent() {
-        minutesAgo(9 * 60, 12);
-        result.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(31));
+        minutesAgo(3 * 24 * 60, 12);
+        result.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(24 * 60 + 1));
         when(incidents.findByLabResultId(result.getId())).thenReturn(Optional.of(new CriticalResultIncident()));
 
         assertThat(service.escalateOverdue()).isEqualTo(1);
@@ -289,14 +297,23 @@ class CriticalResultEscalationTest {
     }
 
     @Test
-    @DisplayName("a sweep that was down goes straight to the furthest step due, once")
-    void aLateSweepTakesTheFurthestStepOnce() {
+    @DisplayName("a sweep that was down catches up one step a pass, in order: cover, then lead, then unresolved")
+    void aLateSweepTakesOneStepAPass() {
         minutesAgo(75, 0);
 
         service.escalateOverdue();
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 1);
+        told("dr.garde", ESCALATION);
+        notTold("dr.chef");
+        verify(incidents, never()).save(any());
 
+        service.escalateOverdue();
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 2);
+        told("dr.chef", ESCALATION);
+        verify(incidents, never()).save(any());
+
+        service.escalateOverdue();
         assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 3);
-        verify(notifications, times(1)).created(anyString(), eq("dr.garde"), eq(ESCALATION));
         verify(incidents).save(any());
     }
 
@@ -306,21 +323,25 @@ class CriticalResultEscalationTest {
         hospital.setCriticalCoverAfterMinutes(5);
         hospital.setCriticalLeadAfterMinutes(10);
         hospital.setCriticalUnresolvedAfterMinutes(20);
-        minutesAgo(11, 0);
+        minutesAgo(11, 1);
+        result.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(6));
 
         service.escalateOverdue();
 
         told("dr.chef", ESCALATION);
         assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 2);
+        // And with the default minutes the same result would not have reached the cover yet.
+        assertThat(CriticalResultEscalationLadder.due(0, LocalDateTime.now().minusMinutes(11), null,
+            Minutes.DEFAULT, LocalDateTime.now())).isEmpty();
     }
 
     @Test
     @DisplayName("no administrator is ever on a value-bearing step, whatever the level")
     void noAdministratorOnAValueBearingStep() {
-        for (int[] at : new int[][] {{16, 0}, {31, 1}, {200, 5}}) {
+        for (int[] at : new int[][] {{16, 0}, {31, 1}, {600, 5}}) {
             clearInvocations(notifications);
             minutesAgo(at[0], at[1]);
-            result.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(31));
+            result.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(at[1] >= 3 ? 121 : 31));
             service.escalateOverdue();
             notTold("admin.sawadogo");
         }

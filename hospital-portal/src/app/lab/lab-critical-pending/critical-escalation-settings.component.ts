@@ -42,33 +42,30 @@ import { refusalReason } from '../../shared/refusal-reason';
         } @else if (settings(); as current) {
           <div class="escalation-settings__grid">
             <label for="esc-cover"
-              >{{ 'LAB_CRITICAL_PENDING.ESCALATION_COVER' | translate }} *
+              >{{ 'LAB_CRITICAL_PENDING.ESCALATION_COVER' | translate }}
               <input
                 id="esc-cover"
                 type="number"
-                required
                 min="5"
                 max="1440"
                 data-server-field="coverAfterMinutes"
                 [(ngModel)]="cover"
             /></label>
             <label for="esc-lead"
-              >{{ 'LAB_CRITICAL_PENDING.ESCALATION_LEAD' | translate }} *
+              >{{ 'LAB_CRITICAL_PENDING.ESCALATION_LEAD' | translate }}
               <input
                 id="esc-lead"
                 type="number"
-                required
                 min="5"
                 max="1440"
                 data-server-field="leadAfterMinutes"
                 [(ngModel)]="lead"
             /></label>
             <label for="esc-unresolved"
-              >{{ 'LAB_CRITICAL_PENDING.ESCALATION_UNRESOLVED' | translate }} *
+              >{{ 'LAB_CRITICAL_PENDING.ESCALATION_UNRESOLVED' | translate }}
               <input
                 id="esc-unresolved"
                 type="number"
-                required
                 min="5"
                 max="1440"
                 data-server-field="unresolvedAfterMinutes"
@@ -103,7 +100,7 @@ import { refusalReason } from '../../shared/refusal-reason';
             type="button"
             class="btn-primary"
             data-testid="escalation-settings-save"
-            [disabled]="saving() || !valid"
+            [disabled]="saving()"
             (click)="save()"
           >
             {{ 'COMMON.SAVE' | translate }}

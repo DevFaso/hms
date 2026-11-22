@@ -16,6 +16,7 @@ import {
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { roleContextStub } from '../testing/role-context.stub';
+import { toServerDateTime } from '../shared/date-utils';
 import { expectEmptySubmitRefusal } from '../testing/form-refusal-behaviour';
 
 /**
@@ -191,7 +192,8 @@ describe('TransfusionComponent: positive antibody screen (QA D3351)', () => {
       'req-1',
       jasmine.objectContaining({
         compatible: true,
-        sampleCollectedAt: '2026-11-22T08:00',
+        // Sent as the server reads times, not as the browser's wall clock.
+        sampleCollectedAt: toServerDateTime('2026-11-22T08:00'),
         antiglobulinMethod: true,
         antigenNegative: true,
         rhKellMatched: true,

@@ -177,6 +177,7 @@ class DrugAllergyBrandEntryPointsTest {
 
     /** Readers of an order's catalogue item that decide safety: each goes through the one agreement rule. */
     private static final Set<String> IDENTITY_CHECKS = Set.of(
+        "service/emar/FiveRightsVerificationService.java",
         "service/PrescriptionServiceImpl.java",
         "service/pharmacy/DispenseVerificationService.java",
         "cdshooks/service/MedicationAllergyCdsService.java",
@@ -188,6 +189,9 @@ class DrugAllergyBrandEntryPointsTest {
 
     /** Readers of an order's catalogue item that are not an identity decision, and why. */
     private static final Map<String, String> NOT_IDENTITY_CHECKS = Map.ofEntries(
+        Map.entry("service/emar/MedicationLabelMatch.java", "QA D3302: compares a scanned label with the item its"
+            + " only caller, FiveRightsVerificationService, hands it AFTER asking OrderedDrugIdentity; an item the"
+            + " order's name contradicts never reaches it"),
         Map.entry("service/recordaccess/ProxyRecordFilter.java", "policy 2026-11-20: reads the item's sensitive"
             + " category only to WITHHOLD the prescription from a family proxy; no dose, allergy or interaction is"
             + " decided from it, and a tag can only hide more"),

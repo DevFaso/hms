@@ -28,8 +28,9 @@ import java.util.Optional;
  *   <li><b>+{@value #DEFAULT_LEAD_MINUTES}</b>: the médecin-chef and the responsible biologist are added.</li>
  *   <li><b>+{@value #DEFAULT_UNRESOLVED_MINUTES}</b>: « résultat critique non résolu »: a final alert to the whole
  *       chain and an incident record; the administrators get a flag that carries no value.</li>
- *   <li><b>after that</b>: a reminder to the chain at the last interval, for as long as it is unanswered. Nothing
- *       but a clinician's acknowledgement (name, role, time, channel) ends it: there is no round cap.</li>
+ *   <li><b>after that</b>: a reminder to the chain for as long as it is unanswered, first at the last interval,
+ *       then at twice that, up to once a day (« reminders may slow down but the item stays open »). Nothing but a
+ *       clinician's acknowledgement (name, role, time, channel) ends it: there is no round cap.</li>
  * </ol>
  * The hospital examples the report cites hand over within 10 to 45 minutes (Guarner et al., AJCP 2025; Asante;
  * ChristianaCare), and SFBC 2016 targets 60 minutes for urgent results.
@@ -68,9 +69,19 @@ public final class CriticalResultEscalationLadder {
             return cover >= MIN_MINUTES && cover < lead && lead < unresolved && unresolved <= MAX_MINUTES;
         }
 
-        /** How long after the final alert each reminder comes: the last interval of the ladder. */
+        /** How long after the final alert the first reminder comes: the last interval of the ladder. */
         public int reminderEvery() {
             return Math.max(MIN_MINUTES, unresolved - lead);
+        }
+
+        /**
+         * The wait before the reminder that follows {@code level} steps: the last interval, doubled at each
+         * reminder, up to once a day. Reminders slow down so that a result left open for days does not page the
+         * whole chain every half hour; they never stop.
+         */
+        public long reminderEveryAt(int level) {
+            int doublings = Math.min(Math.max(level - Step.UNRESOLVED.ordinal() - 1, 0), 10);
+            return Math.min(MAX_MINUTES, (long) reminderEvery() << doublings);
         }
     }
 
@@ -97,9 +108,9 @@ public final class CriticalResultEscalationLadder {
         if (level == 2) {
             return elapsed >= minutes.unresolved() ? Optional.of(Step.UNRESOLVED) : Optional.empty();
         }
-        // After the final alert: never a stop, a reminder at the last interval.
+        // After the final alert: never a stop. A reminder, at an interval that grows to once a day.
         LocalDateTime last = lastEscalatedAt == null ? notifiedAt.plusMinutes(minutes.unresolved()) : lastEscalatedAt;
-        return Duration.between(last, now).toMinutes() >= minutes.reminderEvery()
+        return Duration.between(last, now).toMinutes() >= minutes.reminderEveryAt(level)
             ? Optional.of(Step.REMINDER) : Optional.empty();
     }
 }

@@ -2601,7 +2601,7 @@ class TransfusionServiceImplTest {
         when(crossmatchRepository.findByRequest_IdAndBloodUnit_Id(req.getId(), oNeg.getId()))
             .thenReturn(Optional.empty());
         when(rule.requireEmergencyReleaseAllowed(req))
-            .thenThrow(new BusinessException("transfusion.antibody.emergencyNotDeclared"));
+            .thenThrow(new BusinessException("transfusion.antibody.workupRequired"));
         UUID requestId = req.getId();
         UUID unitId = oNeg.getId();
 

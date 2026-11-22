@@ -36,12 +36,16 @@ public class HospitalCriticalResultEscalationController {
 
     private final CriticalResultEscalationSettingsService settingsService;
 
-    /** The three steps are required together: an empty body changes nothing by accident. */
+    /**
+     * The three steps are required together (an empty body changes nothing by accident) and judged together on
+     * the body, so one refusal names every field.
+     */
+    @com.example.hms.validation.IncreasingEscalationSteps
     public record UpdateRequest(
         @NotNull(message = "{lab.criticalEscalation.minutesRequired}") Integer coverAfterMinutes,
         @NotNull(message = "{lab.criticalEscalation.minutesRequired}") Integer leadAfterMinutes,
         @NotNull(message = "{lab.criticalEscalation.minutesRequired}") Integer unresolvedAfterMinutes,
-        UUID medicalLeadUserId) {
+        UUID medicalLeadUserId) implements com.example.hms.validation.IncreasingEscalationSteps.Steps {
     }
 
     @Operation(summary = "Read a hospital's critical-result escalation steps")

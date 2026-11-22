@@ -111,6 +111,23 @@ class MedicationLabelMatchTest {
         assertThat(wrong.getFailureReasons().get(FiveRightsCheck.DRUG)).isNotBlank();
     }
 
+    /** QA D1223: an order linked to an item its own name contradicts is recognised by its text only. */
+    @Test
+    void anOrderWhoseNameContradictsItsItemIsNotRecognisedByThatItem() {
+        MedicationCatalogItemRepository catalogue = mock(MedicationCatalogItemRepository.class);
+        when(catalogue.findById(ITEM_ID)).thenReturn(Optional.of(item()));
+        FiveRightsVerificationService service = new FiveRightsVerificationService(catalogue);
+        MedicationAdministrationRecord mar = mar();
+        mar.getPrescription().setMedicationName("Amoxicilline 500 mg");
+
+        for (String scan : new String[] {"Paracétamol 500 mg", "Paracétamol", "N02BE01", "PARA-500-CP"}) {
+            assertThat(service.verify(mar, patientId().toString(), scan, "1000 mg", "PO", LocalDateTime.now())
+                .failedChecks()).as(scan).contains(FiveRightsCheck.DRUG);
+        }
+        assertThat(service.verify(mar, patientId().toString(), "Amoxicilline 500 mg", "1000 mg", "PO",
+            LocalDateTime.now()).getOutcomes().get(FiveRightsCheck.DRUG)).isTrue();
+    }
+
     private static Basis match(String scan) {
         return MedicationLabelMatch.match(order(), item(), scan);
     }

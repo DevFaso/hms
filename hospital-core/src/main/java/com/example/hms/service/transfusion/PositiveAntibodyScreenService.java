@@ -5,7 +5,6 @@ import com.example.hms.enums.AntibodyWorkupStatus;
 import com.example.hms.enums.InBasketItemType;
 import com.example.hms.enums.InBasketPriority;
 import com.example.hms.enums.TransfusionUrgency;
-import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ClientSafeAccessDeniedException;
 import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -237,11 +236,13 @@ public class PositiveAntibodyScreenService {
     /**
      * A COMPATIBLE crossmatch for a held request is « compatibilisé » or it is not written: the work-up, the
      * antiglobulin technique, the two attestations about the unit and a sample of 72 hours or less. An
-     * incompatible result is always written.
+     * incompatible result is always written. So is a result on an EMERGENCY request: around an emergency
+     * release the result is the laboratory's finding and is recorded as found (the crossmatch afterwards this
+     * rule asks the biologist for would otherwise be impossible to record before the antibody is identified).
      */
     @Transactional(readOnly = true)
     public void requireCompatibilised(TransfusionRequest request, CrossmatchRequestDTO result) {
-        if (!Boolean.TRUE.equals(result.getCompatible()) || !holds(request)) {
+        if (!Boolean.TRUE.equals(result.getCompatible()) || !holds(request) || emergency(request)) {
             return;
         }
         refuse(PositiveAntibodyScreenPolicy.firstMissing(workupServes(request),
@@ -252,11 +253,11 @@ public class PositiveAntibodyScreenService {
     /**
      * A unit leaves the laboratory on its crossmatch (the routine path) for a held request only when that
      * crossmatch is « compatibilisé » NOW: the sample ages, and a crossmatch written before the positive screen
-     * carries no attestation. A declared vital emergency is not held by it.
+     * carries no attestation. An EMERGENCY request is not held by it: it has the emergency path.
      */
     @Transactional(readOnly = true)
     public void requireRoutineIssueAllowed(TransfusionRequest request, TransfusionCrossmatch crossmatch) {
-        if (!holds(request) || emergencyDeclared(request)) {
+        if (!holds(request) || emergency(request)) {
             return;
         }
         refuse(PositiveAntibodyScreenPolicy.firstMissing(workupServes(request), crossmatch == null ? null
@@ -266,31 +267,31 @@ public class PositiveAntibodyScreenService {
 
     /**
      * An emergency release (uncrossmatched, O positive by decision, serologically incompatible) to an
-     * allo-immunised patient needs the prescriber's declaration on the request. « Urgence relative » and a
-     * request with no declaration are refused: they wait for the compatible unit.
+     * allo-immunised patient is open to an EMERGENCY request only. « Urgence relative » (an URGENT request) and a
+     * routine request have no emergency path: they are told what the compatible unit still lacks.
      *
-     * @return true when the rule held the request and the declaration opened the path: the caller then files the
-     *         crossmatch afterwards
+     * <p>The prescriber's declaration (level, reason, sample drawn) is asked when the request is RAISED for a
+     * patient already known allo-immunised ({@link #requireEmergencyDeclaration}). It is never asked here: a
+     * request raised before the screen turned positive could not carry it, and a vital emergency in progress is
+     * not delayed (« ne pas retarder la transfusion même si RAI positives »). The existing emergency release
+     * rules (reason, authoriser) apply to it unchanged.
+     *
+     * @return true when the rule holds the request and the emergency path is taken: the caller then asks the
+     *         biologist for the crossmatch afterwards
      */
     @Transactional(readOnly = true)
     public boolean requireEmergencyReleaseAllowed(TransfusionRequest request) {
         if (!holds(request)) {
             return false;
         }
-        if (!emergencyDeclared(request)) {
-            if (request.getUrgency() != TransfusionUrgency.EMERGENCY) {
-                // A routine or an urgent request (« urgence relative ») has no emergency path: it is told what
-                // the compatible unit still lacks.
-                refuse(PositiveAntibodyScreenPolicy.firstMissing(workupServes(request), null, LocalDateTime.now(clock)));
-            }
-            throw new BusinessException("transfusion.antibody.emergencyNotDeclared");
+        if (!emergency(request)) {
+            refuse(PositiveAntibodyScreenPolicy.firstMissing(workupServes(request), null, LocalDateTime.now(clock)));
         }
         return true;
     }
 
-    private static boolean emergencyDeclared(TransfusionRequest request) {
-        return PositiveAntibodyScreenPolicy.emergencyDeclared(request.getUrgency(), request.getVitalUrgencyLevel(),
-            request.getVitalUrgencyReason(), request.getPreTransfusionSampleDrawn());
+    private static boolean emergency(TransfusionRequest request) {
+        return request.getUrgency() == TransfusionUrgency.EMERGENCY;
     }
 
     /** The antibody is identified, or a referral decision serves this very request. */

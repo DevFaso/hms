@@ -18,7 +18,6 @@ import com.example.hms.enums.InBasketPriority;
 import com.example.hms.enums.TransfusionRequestStatus;
 import com.example.hms.enums.TransfusionUrgency;
 import com.example.hms.enums.VitalUrgencyLevel;
-import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ClientSafeAccessDeniedException;
 import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.model.BloodUnit;
@@ -368,7 +367,7 @@ class PositiveAntibodyScreenServiceTest {
     }
 
     @Test
-    @DisplayName("the emergency path opens on the declaration only; « urgence relative » never opens it")
+    @DisplayName("the emergency path is an EMERGENCY request's; « urgence relative » never opens it")
     void urgenceRelativeNeverOpensTheEmergencyPath() {
         screen(AntibodyScreenResult.POSITIVE, NOW.minusDays(3));
 
@@ -381,10 +380,12 @@ class PositiveAntibodyScreenServiceTest {
         assertThatCode(() -> service.requireRoutineIssueAllowed(declared, new TransfusionCrossmatch()))
             .doesNotThrowAnyException();
 
-        // An emergency with no declaration (a request raised before the screen turned positive).
+        // An emergency raised before the screen turned positive carries no declaration: it is not delayed, and
+        // the crossmatch afterwards is asked for all the same (the caller files the task on true).
         TransfusionRequest undeclared = request(TransfusionUrgency.EMERGENCY, BloodProductType.PACKED_RED_CELLS);
-        assertThatThrownBy(() -> service.requireEmergencyReleaseAllowed(undeclared))
-            .isInstanceOf(BusinessException.class).hasMessageContaining("vital urgency");
+        assertThat(service.requireEmergencyReleaseAllowed(undeclared)).isTrue();
+        assertThatCode(() -> service.requireRoutineIssueAllowed(undeclared, new TransfusionCrossmatch()))
+            .doesNotThrowAnyException();
 
         // UR: an URGENT request carrying the very same declaration is still not an emergency.
         TransfusionRequest relative = request(TransfusionUrgency.URGENT, BloodProductType.PACKED_RED_CELLS);
@@ -397,6 +398,28 @@ class PositiveAntibodyScreenServiceTest {
             "pressé", true)).isFalse();
         assertThat(PositiveAntibodyScreenPolicy.emergencyDeclared(TransfusionUrgency.ROUTINE, VitalUrgencyLevel.UV,
             "x", true)).isFalse();
+    }
+
+    @Test
+    @DisplayName("a result around an emergency release is recorded as found, declared or raised before the screen turned positive")
+    void anEmergencyRaisedBeforeTheScreenTurnedPositiveIsNotDelayed() {
+        screen(AntibodyScreenResult.POSITIVE, NOW.minusDays(3));
+        TransfusionRequest declared = request(TransfusionUrgency.EMERGENCY, BloodProductType.PACKED_RED_CELLS);
+        declared.setVitalUrgencyLevel(VitalUrgencyLevel.UVI);
+        declared.setVitalUrgencyReason("Choc hémorragique");
+        declared.setPreTransfusionSampleDrawn(true);
+
+        // No work-up yet, no attestation: the result on the retained segment is still written.
+        assertThatCode(() -> service.requireCompatibilised(declared,
+            CrossmatchRequestDTO.builder().compatible(true).build())).doesNotThrowAnyException();
+        // An emergency raised before the screen turned positive: recorded as found too.
+        TransfusionRequest undeclared = request(TransfusionUrgency.EMERGENCY, BloodProductType.PACKED_RED_CELLS);
+        assertThatCode(() -> service.requireCompatibilised(undeclared,
+            CrossmatchRequestDTO.builder().compatible(true).build())).doesNotThrowAnyException();
+        // « Urgence relative » is not an emergency: the same result is held.
+        TransfusionRequest relative = request(TransfusionUrgency.URGENT, BloodProductType.PACKED_RED_CELLS);
+        assertThatThrownBy(() -> service.requireCompatibilised(relative,
+            CrossmatchRequestDTO.builder().compatible(true).build())).isInstanceOf(FieldBusinessException.class);
     }
 
     // ── The biologist's tasks ───────────────────────────────────────────

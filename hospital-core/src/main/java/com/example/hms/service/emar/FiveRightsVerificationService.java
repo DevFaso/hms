@@ -132,7 +132,14 @@ public class FiveRightsVerificationService {
         if (catalogItemRepository == null || rx.getMedicationCatalogItemId() == null) {
             return null;
         }
-        return catalogItemRepository.findById(rx.getMedicationCatalogItemId()).orElse(null);
+        MedicationCatalogItem item = catalogItemRepository.findById(rx.getMedicationCatalogItemId()).orElse(null);
+        // QA D1223: an order whose written name contradicts the item it is linked to (« Amoxicilline » on the
+        // paracetamol item) is not recognised by that item's names, codes or ATC: only by its own text.
+        if (item != null && com.example.hms.service.pharmacy.OrderedDrugIdentity.contradicts(
+                rx.getMedicationName(), item)) {
+            return null;
+        }
+        return item;
     }
 
     /** Right dose: the scanned dose token must match the prescription's dosage. */

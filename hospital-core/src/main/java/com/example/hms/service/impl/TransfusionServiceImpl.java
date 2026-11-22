@@ -1077,7 +1077,9 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (release.getReleaseType() == EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE) {
             notifySafely(() -> fileReleaseReviewAfterCommit(request, unit, saved), saved.getId());
         }
-        if (crossmatchAfterwards) {
+        // A serologically incompatible release was crossmatched (that is how it is known incompatible), and
+        // the lab director reviews that release already: no second task for the same bag.
+        if (crossmatchAfterwards && release.getReleaseType() != EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE) {
             notifySafely(() -> antibodyScreen.askRetrospectiveCrossmatch(request, unit), unit.getId());
         }
         return putOut(request, unit);

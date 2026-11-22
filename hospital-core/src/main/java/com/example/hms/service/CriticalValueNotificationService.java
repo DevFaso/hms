@@ -471,37 +471,20 @@ public class CriticalValueNotificationService {
     }
 
     /**
-     * Takes the furthest step of the ladder that is due for one result. A sweep that was down, or a hospital that
-     * shortened its minutes, goes straight to that step: its circle contains the earlier ones, so nobody is told
-     * the same thing three times.
+     * Takes the next step of the ladder that is due for one result: one step a pass, in order. A sweep that was
+     * down, or a hospital that shortened its minutes, catches up one sweep at a time, so each circle is told in
+     * its turn and the level always counts the steps actually taken.
      *
      * @return true when a step was taken
      */
     private boolean escalateOne(LabResult result, LocalDateTime now) {
-        CriticalResultEscalationLadder.Minutes minutes = minutesOf(result);
-        CriticalResultEscalationLadder.Step furthest = null;
-        int level = result.getCriticalEscalationLevel();
-        for (int guard = 0; guard < CriticalResultEscalationLadder.Step.values().length; guard++) {
-            java.util.Optional<CriticalResultEscalationLadder.Step> due = CriticalResultEscalationLadder.due(
-                level, result.getCriticalNotifiedAt(), result.getCriticalEscalatedAt(), minutes, now);
-            if (due.isEmpty()) {
-                break;
-            }
-            if (due.get() == CriticalResultEscalationLadder.Step.REMINDER) {
-                // A reminder is due only for a result already past its final alert: a step taken on this
-                // pass is never followed by one.
-                if (furthest == null) {
-                    furthest = due.get();
-                }
-                break;
-            }
-            furthest = due.get();
-            level = furthest.ordinal() + 1;
-        }
-        if (furthest == null) {
+        java.util.Optional<CriticalResultEscalationLadder.Step> due = CriticalResultEscalationLadder.due(
+            result.getCriticalEscalationLevel(), result.getCriticalNotifiedAt(), result.getCriticalEscalatedAt(),
+            minutesOf(result), now);
+        if (due.isEmpty()) {
             return false;
         }
-        takeStep(result, furthest, now);
+        takeStep(result, due.get(), now);
         labResultRepository.save(result);
         return true;
     }

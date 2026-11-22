@@ -786,7 +786,7 @@ export class TransfusionComponent implements OnInit {
         // QA D3351: sent only for an allo-immunised patient; every other result keeps its payload.
         ...(attested
           ? {
-              sampleCollectedAt: this.crossmatchForm.sampleCollectedAt,
+              sampleCollectedAt: toServerDateTime(this.crossmatchForm.sampleCollectedAt),
               antiglobulinMethod: true,
               antigenNegative: true,
               rhKellMatched: true,

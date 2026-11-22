@@ -52,12 +52,12 @@ import java.util.UUID;
 public class CriticalResultRecipients {
 
     /** A doctor, whichever of the three doctor roles the hospital assigned. */
-    static final List<String> DOCTOR_ROLES = List.of("ROLE_DOCTOR", "ROLE_PHYSICIAN", "ROLE_SURGEON");
-    static final String NURSE_ROLE = "ROLE_NURSE";
+    public static final List<String> DOCTOR_ROLES = List.of("ROLE_DOCTOR", "ROLE_PHYSICIAN", "ROLE_SURGEON");
+    public static final String NURSE_ROLE = "ROLE_NURSE";
     /** The responsible biologist. */
-    static final String BIOLOGIST_ROLE = "ROLE_LAB_DIRECTOR";
+    public static final String BIOLOGIST_ROLE = "ROLE_LAB_DIRECTOR";
     /** Told that an incident is open, never the value. */
-    static final String ADMINISTRATOR_ROLE = "ROLE_HOSPITAL_ADMIN";
+    public static final String ADMINISTRATOR_ROLE = "ROLE_HOSPITAL_ADMIN";
 
     private final StaffRepository staffRepository;
     private final OnCallScheduleRepository onCallScheduleRepository;

@@ -38,7 +38,9 @@ import java.util.Set;
  * la transfusion même si RAI positives » (ARS Centre-Val de Loire 2022). The prescriber declares the level and a
  * reason on the request and that the sample is drawn before the first unit; the existing emergency release of
  * group O ({@link EmergencyReleasePolicy}) then applies, the biologist gets the task of the crossmatch afterwards,
- * the release carries the haemolysis warning, and the bedside check stays mandatory.
+ * the release carries the haemolysis warning, and the bedside check stays mandatory. A request raised before the
+ * screen turned positive could not carry the declaration: it keeps the emergency path, under the existing
+ * release rules, and the crossmatch afterwards is asked for all the same.
  *
  * <p>Sources as cited by the report: HAS 2014 (Transfusion de globules rouges homologues, argumentaire); ARS
  * Centre-Val de Loire 2022; BSH pre-transfusion compatibility guidelines; Australian Red Cross Lifeblood; Canadian
@@ -128,7 +130,7 @@ public final class PositiveAntibodyScreenPolicy {
     }
 
     /**
-     * The emergency path is open: the request is an EMERGENCY, and the prescriber declared a vital urgency level
+     * The declaration a new EMERGENCY request carries for a patient known allo-immunised: a vital urgency level
      * (UVI or UV), a reason, and that the pre-transfusion sample is drawn. An URGENT request (« urgence relative »)
      * never qualifies, whatever it carries.
      */
