@@ -114,7 +114,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         imagingOrder.setOrderingProviderUserId(orderingUser != null ? orderingUser.getId() : null);
         imagingOrder.setOrderingProviderName(orderingUser != null ? displayName(orderingUser) : null);
 
-        List<ImagingOrder> duplicateMatches = loadDuplicateMatches(patient.getId(), hospital.getId(), request.getModality(), request.getBodyRegion(), request.getDuplicateLookbackDays());
+        List<ImagingOrder> duplicateMatches = loadDuplicateMatches(patient.getId(), hospital.getId(),
+            imagingOrder.getModality(), imagingOrder.getBodyRegion(), request.getDuplicateLookbackDays());
         if (!duplicateMatches.isEmpty()) {
             imagingOrder.setDuplicateOfRecentOrder(true);
             imagingOrder.setDuplicateReferenceOrderId(duplicateMatches.get(0).getId());
@@ -258,10 +259,14 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         String studyBefore = order.getStudyType();
         imagingOrderMapper.updateEntityFromRequest(order, request);
         // QA D3450 / D3254: an edit that names no catalogue exam and leaves the study's name as it was keeps the
-        // exam the order was picked from; a retyped name makes it a free-text order.
-        UUID catalogueItem = request.getCatalogueItemId() != null ? request.getCatalogueItemId()
-            : keptCatalogueItem(catalogueItemBefore, studyBefore, order.getStudyType());
-        applyCatalogueExam(order, catalogueItem, order.getHospital() != null ? order.getHospital().getId() : null);
+        // exam the order was picked from, as it was placed (an exam deactivated since then does not block the
+        // edit); a newly named exam is checked, and a retyped name makes it a free-text order.
+        boolean examUnchanged = request.getCatalogueItemId() == null
+            && keptCatalogueItem(catalogueItemBefore, studyBefore, order.getStudyType()) != null;
+        if (!examUnchanged) {
+            applyCatalogueExam(order, request.getCatalogueItemId(),
+                order.getHospital() != null ? order.getHospital().getId() : null);
+        }
         // QA D972: an edit keeps the order's visit (the form has no visit
         // field), and a visit it names must be this patient's at this hospital.
         if (request.getEncounterId() == null) {

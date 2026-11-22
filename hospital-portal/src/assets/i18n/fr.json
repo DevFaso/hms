@@ -2136,6 +2136,7 @@
       "ADOLESCENT_AGE_SET": "Âge de confidentialité des adolescents fixé à {{age}} ans",
       "ADOLESCENT_AGE_RESET": "Âge de confidentialité des adolescents ramené à la valeur par défaut ({{age}} ans)",
       "IMAGING_REPORTING_SETTINGS_CHANGED": "Réglage de l'échographie modifié",
+      "IMAGING_CATALOGUE_EXAM_CHANGED": "Examen du catalogue d'imagerie modifié",
       "IMAGING_EXAM_RECORD_UPDATED": "Réalisation de l'examen d'imagerie mise à jour",
       "DISPENSE_BILLING_DEFERRAL_REQUESTED": "Report « à facturer » demandé",
       "DISPENSE_BILLING_DEFERRAL_APPROVED": "Report « à facturer » approuvé",
@@ -8269,6 +8270,7 @@
         "PATIENT_PROXY": "Accès famille",
         "HOSPITAL_ADOLESCENT_CONFIDENTIALITY_AGE": "Âge de confidentialité des adolescents",
         "HOSPITAL_IMAGING_REPORTING_SETTINGS": "Réglage de l'échographie",
+        "IMAGING_CATALOGUE_EXAM": "Examen du catalogue d'imagerie",
         "DISPENSE_BILLING_DEFERRAL": "Report « à facturer »",
         "HOSPITAL_RULE_SIGNOFF": "Validation de règle clinique"
       },

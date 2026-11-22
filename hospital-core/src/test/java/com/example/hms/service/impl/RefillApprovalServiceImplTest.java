@@ -323,14 +323,15 @@ class RefillApprovalServiceImplTest {
         stubStaffResolution();
         when(roleValidator.getCurrentHospitalId()).thenReturn(prescribingHospitalId);
         Pageable pageable = PageRequest.of(0, 10);
-        when(refillRequestRepository.findAnsweredBy(eq(staffId), any(), eq(pageable)))
+        when(refillRequestRepository.findAnsweredBy(eq(staffId), eq(prescribingHospitalId), any(), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(pendingRefill())));
 
         assertThat(service.listForProvider(auth, RefillStatus.REQUESTED, pageable).getContent()).hasSize(1);
 
         org.mockito.ArgumentCaptor<java.util.Collection<RefillStatus>> statuses =
                 org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
-        verify(refillRequestRepository).findAnsweredBy(eq(staffId), statuses.capture(), eq(pageable));
+        verify(refillRequestRepository).findAnsweredBy(eq(staffId), eq(prescribingHospitalId), statuses.capture(),
+                eq(pageable));
         assertThat(statuses.getValue()).containsExactly(RefillStatus.REQUESTED);
         verify(refillRequestRepository, never()).findByPrescription_Staff_IdAndStatus(any(), any(), any());
     }

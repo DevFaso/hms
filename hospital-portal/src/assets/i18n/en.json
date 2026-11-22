@@ -2136,6 +2136,7 @@
       "ADOLESCENT_AGE_SET": "Adolescent confidentiality age set to {{age}}",
       "ADOLESCENT_AGE_RESET": "Adolescent confidentiality age reset to the default ({{age}})",
       "IMAGING_REPORTING_SETTINGS_CHANGED": "Ultrasound setting changed",
+      "IMAGING_CATALOGUE_EXAM_CHANGED": "Imaging catalogue exam changed",
       "IMAGING_EXAM_RECORD_UPDATED": "Imaging exam record updated",
       "DISPENSE_BILLING_DEFERRAL_REQUESTED": "Deferred billing of a fill requested",
       "DISPENSE_BILLING_DEFERRAL_APPROVED": "Deferred billing of a fill approved",
@@ -8303,6 +8304,7 @@
         "PATIENT_PROXY": "Family access",
         "HOSPITAL_ADOLESCENT_CONFIDENTIALITY_AGE": "Adolescent confidentiality age",
         "HOSPITAL_IMAGING_REPORTING_SETTINGS": "Ultrasound setting",
+        "IMAGING_CATALOGUE_EXAM": "Imaging catalogue exam",
         "DISPENSE_BILLING_DEFERRAL": "Deferred pharmacy billing",
         "HOSPITAL_RULE_SIGNOFF": "Clinical rule sign-off"
       },

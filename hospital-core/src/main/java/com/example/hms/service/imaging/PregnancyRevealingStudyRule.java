@@ -162,14 +162,6 @@ public final class PregnancyRevealingStudyRule {
     }
 
     /**
-     * The strict reading, with no reader to judge an exception by: anything but {@link Verdict#SHOWN} is kept
-     * from the proxy.
-     */
-    public static boolean hiddenFromProxy(ImagingOrder order, Boolean catalogueFlag, Patient patient) {
-        return judge(order, catalogueFlag, patient) != Verdict.SHOWN;
-    }
-
-    /**
      * How a catalogue exam stands, read on its own (an invoice line priced from it, with no order in hand): the
      * same three steps as an order, on the exam's flag, name, region and modality.
      */

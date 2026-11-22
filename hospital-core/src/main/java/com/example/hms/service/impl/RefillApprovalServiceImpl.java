@@ -99,7 +99,7 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         UUID staffId = resolveStaffId(auth);
         if (mayCoverHere(auth)) {
             // QA D3301: the designated cover of a prescriber who left answers their requests too.
-            return refillRequestRepository.findAnsweredBy(staffId,
+            return refillRequestRepository.findAnsweredBy(staffId, roleValidator.getCurrentHospitalId(),
                 status == null ? java.util.EnumSet.allOf(RefillStatus.class) : java.util.EnumSet.of(status), pageable);
         }
         return (status == null)
@@ -134,7 +134,8 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         }
         UUID staffId = resolveStaffId(auth);
         if (mayCoverHere(auth)) {
-            return refillRequestRepository.countAnsweredBy(staffId, java.util.EnumSet.of(RefillStatus.REQUESTED));
+            return refillRequestRepository.countAnsweredBy(staffId, roleValidator.getCurrentHospitalId(),
+                java.util.EnumSet.of(RefillStatus.REQUESTED));
         }
         return refillRequestRepository.countByPrescription_Staff_IdAndStatus(staffId, RefillStatus.REQUESTED);
     }

@@ -2136,6 +2136,7 @@
       "ADOLESCENT_AGE_SET": "Edad de confidencialidad de los adolescentes fijada en {{age}} años",
       "ADOLESCENT_AGE_RESET": "Edad de confidencialidad de los adolescentes devuelta al valor por defecto ({{age}} años)",
       "IMAGING_REPORTING_SETTINGS_CHANGED": "Ajuste de ecografía modificado",
+      "IMAGING_CATALOGUE_EXAM_CHANGED": "Examen del catálogo de imagen modificado",
       "IMAGING_EXAM_RECORD_UPDATED": "Realización del examen de imagen actualizada",
       "DISPENSE_BILLING_DEFERRAL_REQUESTED": "Deferred billing of a fill requested",
       "DISPENSE_BILLING_DEFERRAL_APPROVED": "Deferred billing of a fill approved",
@@ -8303,6 +8304,7 @@
         "PATIENT_PROXY": "Acceso familiar",
         "HOSPITAL_ADOLESCENT_CONFIDENTIALITY_AGE": "Edad de confidencialidad de los adolescentes",
         "HOSPITAL_IMAGING_REPORTING_SETTINGS": "Ajuste de ecografía",
+        "IMAGING_CATALOGUE_EXAM": "Examen del catálogo de imagen",
         "DISPENSE_BILLING_DEFERRAL": "Deferred pharmacy billing",
         "HOSPITAL_RULE_SIGNOFF": "Validación de regla clínica"
       },

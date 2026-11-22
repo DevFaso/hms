@@ -298,7 +298,7 @@ public class ImagingCatalogueService {
             .hospitalId(hospitalId)
             .entityType(AUDIT_ENTITY)
             .resourceId(String.valueOf(item.getId()))
-            .eventDescription("Imaging catalogue exam " + item.getId() + " changed")
+            .eventDescription("Imaging catalogue exam changed")
             .details(details)
             .build();
         UUID itemId = item.getId();
