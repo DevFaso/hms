@@ -184,9 +184,15 @@ class HospitalRuleSignoffServiceTest {
         assertThat(stored).isEmpty();
         verify(auditEventLogService, never()).logEvent(any());
 
-        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
-        assertThat(service.sign(hospitalId, paracetamol.key().name(), request(paracetamol.version()), doctorId)
-            .status()).isEqualTo(RuleSignoffStatus.SIGNED);
+        // The verified super-admin (the Global acting scope) records for the hospital named in the path.
+        com.example.hms.security.context.HospitalContextHolder.setContext(com.example.hms.security.context.HospitalContext
+            .builder().principalUserId(doctorId).superAdmin(true).build());
+        try {
+            assertThat(service.sign(hospitalId, paracetamol.key().name(), request(paracetamol.version()), doctorId)
+                .status()).isEqualTo(RuleSignoffStatus.SIGNED);
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
     }
 
     @Test

@@ -480,7 +480,10 @@
     "inBasket.labNormal": "Normal",
     "inBasket.messages": "Messages",
     "inBasket.resultActions.column": "Actions",
-    "inBasket.urgent": "Urgent"
+    "inBasket.urgent": "Urgent",
+    "CLINICAL_RULES.NOTE": "Note",
+    "CLINICAL_RULES.SOURCE": "Source",
+    "CLINICAL_RULES.VERSION": "Version"
   },
   "es": {
     "CHART.LAB_STATUS_NORMAL": "Normal",

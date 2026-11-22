@@ -17,6 +17,7 @@ import com.example.hms.payload.dto.clinicalrules.RuleSignoffRequestDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.HospitalRuleSignoffRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.CallerIdentity;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.support.ClinicalActorNames;
 import com.example.hms.utility.MessageUtil;
@@ -169,7 +170,8 @@ public class HospitalRuleSignoffService {
         if (userId == null || hospitalId == null) {
             return false;
         }
-        return roleValidator.isSuperAdminFromAuth() || roleValidator.isHospitalAdmin(userId, hospitalId);
+        // The verified super-admin in global view or with THIS hospital selected (never a token claim alone).
+        return CallerIdentity.isSuperAdminFor(hospitalId) || roleValidator.isHospitalAdmin(userId, hospitalId);
     }
 
     // ── internals ───────────────────────────────────────────────────────
