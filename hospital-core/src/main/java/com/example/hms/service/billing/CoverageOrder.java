@@ -50,6 +50,11 @@ public final class CoverageOrder {
             .toList();
     }
 
+    /** How many of the coverages are flagged primary (more than one is a row left behind to unset). */
+    public static long primaryCount(Collection<PatientInsurance> coverages) {
+        return coverages == null ? 0 : coverages.stream().filter(PatientInsurance::isPrimary).count();
+    }
+
     /** Whether one of the coverages is flagged primary. */
     public static boolean hasPrimary(Collection<PatientInsurance> coverages) {
         return coverages != null && coverages.stream().anyMatch(PatientInsurance::isPrimary);

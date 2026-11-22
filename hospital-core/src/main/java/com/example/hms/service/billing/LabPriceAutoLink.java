@@ -41,8 +41,10 @@ import java.util.UUID;
  *       audited per line.</li>
  * </ul>
  *
- * <p>It runs when a lab test is activated (the case the QA hit), after a price-list import is applied, and from the
- * price list's « Lier par code » action. It never changes a line that already has a link, a price, a label or a code.
+ * <p>It runs when a lab test is activated (the case the QA hit) and after a price-list import is applied, on EXACT
+ * codes only, since nobody sees a report then (review of #1284); the price list's « Lier par code » action also
+ * matches the code after its prefix, and shows what it linked. It never changes a line that already has a link, a
+ * price, a label or a code.
  */
 @Slf4j
 @Component
@@ -54,9 +56,19 @@ public class LabPriceAutoLink {
     private final PriceListLinks links;
     private final AuditEventLogService auditEventLogService;
 
-    /** Links what can be linked at {@code hospitalId}; {@code actorUserId} is recorded on each line linked. */
+    /** The exact-code link, run in the background (a test activated, an import applied): no report is shown. */
     @Transactional
     public PriceListAutoLinkReportDTO link(UUID hospitalId, UUID actorUserId) {
+        return link(hospitalId, actorUserId, false);
+    }
+
+    /**
+     * Links what can be linked at {@code hospitalId}; {@code actorUserId} is recorded on each line linked. With
+     * {@code byPrefix}, a code also matches the same code after its prefix (« LAB-GLY », « TWP-GLY »): only from the
+     * « Lier par code » action, whose report the person reads.
+     */
+    @Transactional
+    public PriceListAutoLinkReportDTO link(UUID hospitalId, UUID actorUserId, boolean byPrefix) {
         PriceListAutoLinkReportDTO report = PriceListAutoLinkReportDTO.builder()
             .linked(new ArrayList<>()).unmatched(new ArrayList<>()).ambiguous(new ArrayList<>())
             .alreadyTaken(new ArrayList<>()).build();
@@ -75,14 +87,14 @@ public class LabPriceAutoLink {
         live.addAll(labTestDefinitionRepository.findByHospitalIsNullAndActiveTrue());
         live.sort(Comparator.comparing(LabTestDefinition::getTestCode, Comparator.nullsLast(Comparator.naturalOrder())));
         for (PriceListItem item : unlinked) {
-            linkOne(item, live, hospitalId, actorUserId, report);
+            linkOne(item, live, hospitalId, actorUserId, report, byPrefix);
         }
         return report;
     }
 
     private void linkOne(PriceListItem item, List<LabTestDefinition> live, UUID hospitalId, UUID actorUserId,
-                         PriceListAutoLinkReportDTO report) {
-        Map<String, LabTestDefinition> byLineage = matches(item.getCode(), live, hospitalId);
+                         PriceListAutoLinkReportDTO report, boolean byPrefix) {
+        Map<String, LabTestDefinition> byLineage = matches(item.getCode(), live, hospitalId, byPrefix);
         if (byLineage.isEmpty()) {
             report.getUnmatched().add(item.getCode());
             return;
@@ -112,11 +124,12 @@ public class LabPriceAutoLink {
     }
 
     /** The live tests whose code matches {@code code}, by lineage (one test revised twice is one match). */
-    private Map<String, LabTestDefinition> matches(String code, List<LabTestDefinition> live, UUID hospitalId) {
+    private Map<String, LabTestDefinition> matches(String code, List<LabTestDefinition> live, UUID hospitalId,
+                                                   boolean byPrefix) {
         Map<String, LabTestDefinition> exact = new LinkedHashMap<>();
         Map<String, LabTestDefinition> stem = new LinkedHashMap<>();
         String wanted = norm(code);
-        String wantedStem = stem(wanted);
+        String wantedStem = byPrefix ? stem(wanted) : null;
         for (LabTestDefinition test : live) {
             String testCode = norm(test.getTestCode());
             if (testCode.isEmpty()) {

@@ -77,14 +77,29 @@ class LabPriceAutoLinkTest {
     }
 
     @Test
-    @DisplayName("an unlinked lab line takes the one live test of its code, or of its code after the prefix")
+    @DisplayName("review of #1284: in the background (activation, import) only an EXACT code links")
+    void theBackgroundLinkIsExactOnly() {
+        PriceListItem gly = line("LAB-GLY", PriceListCategory.LAB_TEST);
+        PriceListItem nfs = line("TWP-NFS", PriceListCategory.LAB_TEST);
+        test("TWP-GLY");
+        LabTestDefinition numeration = test("TWP-NFS");
+
+        PriceListAutoLinkReportDTO report = autoLink.link(hospitalId, actor);
+
+        assertThat(gly.getLinkType()).as("a prefix match waits for « Lier par code »").isNull();
+        assertThat(nfs.getLinkKey()).isEqualTo(numeration.getId().toString());
+        assertThat(report.getUnmatched()).containsExactly("LAB-GLY");
+    }
+
+    @Test
+    @DisplayName("« Lier par code »: an unlinked lab line takes the one live test of its code, or of its code after the prefix")
     void linksByCode() {
         PriceListItem gly = line("LAB-GLY", PriceListCategory.LAB_TEST);
         PriceListItem nfs = line("TWP-NFS", PriceListCategory.LAB_TEST);
         LabTestDefinition glycemie = test("TWP-GLY");
         LabTestDefinition numeration = test("TWP-NFS");
 
-        PriceListAutoLinkReportDTO report = autoLink.link(hospitalId, actor);
+        PriceListAutoLinkReportDTO report = autoLink.link(hospitalId, actor, true);
 
         assertThat(gly.getLinkType()).isEqualTo(PriceListLinkType.LAB_TEST_DEFINITION);
         assertThat(gly.getLinkKey()).isEqualTo(glycemie.getId().toString());
@@ -109,7 +124,7 @@ class LabPriceAutoLinkTest {
         when(items.findActiveByLink(hospitalId, PriceListLinkType.LAB_TEST_DEFINITION, ecbu.getId().toString()))
             .thenReturn(List.of(holder));
 
-        PriceListAutoLinkReportDTO report = autoLink.link(hospitalId, actor);
+        PriceListAutoLinkReportDTO report = autoLink.link(hospitalId, actor, true);
 
         assertThat(List.of(none, two, taken)).allSatisfy(item -> assertThat(item.getLinkType()).isNull());
         assertThat(report.getUnmatched()).containsExactly("LAB-CRP");
@@ -129,7 +144,7 @@ class LabPriceAutoLinkTest {
         test("ABC-GLY");
         test("TWP-NFS");
 
-        PriceListAutoLinkReportDTO report = autoLink.link(hospitalId, actor);
+        PriceListAutoLinkReportDTO report = autoLink.link(hospitalId, actor, true);
 
         assertThat(exact.getLinkKey()).isEqualTo(same.getId().toString());
         assertThat(consultation.getLinkType()).isNull();

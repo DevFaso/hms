@@ -366,7 +366,9 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
         }
         BigDecimal charge = DispenseCharge.of(dispense, inventoryItemRepository).orElse(null);
         UUID patientId = dispense.getPatient() != null ? dispense.getPatient().getId() : null;
-        return charge == null ? java.util.Optional.empty() : fillCoverShare.planShare(patientId, hospitalId, charge);
+        UUID prescriptionId = dispense.getPrescription() != null ? dispense.getPrescription().getId() : null;
+        return charge == null ? java.util.Optional.empty()
+                : fillCoverShare.planShare(patientId, hospitalId, charge, prescriptionId);
     }
 
     /** QA D3408: the insurer share of a fill. A required setter; a unit test built by hand may omit it. */

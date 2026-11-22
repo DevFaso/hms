@@ -255,7 +255,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         List<PatientInsurance> insurances = insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId);
         LocalDate today = LocalDate.now();
         boolean hasActive = insurances.stream()
-                .anyMatch(i -> i.getExpirationDate() == null || !i.getExpirationDate().isBefore(today));
+                .anyMatch(i -> CoverageOrder.inForceOn(i, today));
         // QA D3250: the desk shows and attests the coverage an invoice bills, by the CoverageOrder rule.
         // A single coverage in force is the one that applies, flagged primary or not.
         boolean hasPrimary = !insurances.isEmpty() && !CoverageOrder.ambiguous(insurances, today)
@@ -360,7 +360,7 @@ public class ReceptionServiceImpl implements ReceptionService {
             return "MISSING_INSURANCE";
         }
         boolean hasActive = insurances.stream()
-                .anyMatch(i -> i.getExpirationDate() == null || !i.getExpirationDate().isBefore(today));
+                .anyMatch(i -> CoverageOrder.inForceOn(i, today));
         if (!hasActive) return "EXPIRED_INSURANCE";
         // QA D3250: only several coverages in force with none primary leave the desk unable to tell which applies.
         if (CoverageOrder.ambiguous(insurances, today)) return "NO_PRIMARY";
@@ -654,7 +654,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         if (insurances.isEmpty()) return true;
         LocalDate today = LocalDate.now();
         boolean hasActive = insurances.stream()
-                .anyMatch(i -> i.getExpirationDate() == null || !i.getExpirationDate().isBefore(today));
+                .anyMatch(i -> CoverageOrder.inForceOn(i, today));
         // QA D3250: the same rule as the invoice and the snapshot (CoverageOrder).
         return !hasActive || CoverageOrder.ambiguous(insurances, today);
     }

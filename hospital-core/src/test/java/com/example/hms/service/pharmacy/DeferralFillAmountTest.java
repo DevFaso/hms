@@ -169,7 +169,7 @@ class DeferralFillAmountTest {
         DispenseBillingDeferral row = stored(DispenseBillingDeferralKind.THIRD_PARTY_COVER,
                 DispenseBillingDeferralStatus.REQUESTED);
         when(roleValidator.getCurrentUserId()).thenReturn(billing);
-        when(coverShare.planShare(patientId, hospitalId, new BigDecimal("1000")))
+        when(coverShare.planShare(patientId, hospitalId, new BigDecimal("1000"), prescriptionId))
                 .thenReturn(Optional.of(new BigDecimal("750")));
 
         service.approve(row.getId(), new DispenseBillingDeferralDecisionDTO(null, "MTA-BON-0001", null));
@@ -197,13 +197,95 @@ class DeferralFillAmountTest {
         assertThat(executed.getAmountDue()).isEqualByComparingTo("750");
     }
 
+    private DispenseBillingDeferral approvedCover(String insurerShare) {
+        DispenseBillingDeferral row = stored(DispenseBillingDeferralKind.THIRD_PARTY_COVER,
+                DispenseBillingDeferralStatus.APPROVED);
+        row.setDecidedBy(billing);
+        row.setCreditLimit(new BigDecimal(insurerShare));
+        // capOf: the recorded share, or the plan's share of the fill handing over, whichever is less.
+        when(coverShare.capOf(any(), any(), any(), any(), any())).thenAnswer(call -> {
+            BigDecimal recorded = call.getArgument(0);
+            BigDecimal charge = call.getArgument(3);
+            return recorded.min(charge.multiply(new BigDecimal("0.75")));
+        });
+        return row;
+    }
+
+    @Test
+    @DisplayName("review of #1284: a cover AND a claim on one fill never let the patient share leave unpaid")
+    void aClaimNeverStandsInForThePatientShare() {
+        // 1 560 fill at 75 %: insurer 1 170, patient 390. The claim of 1 170 is submitted; the patient paid nothing.
+        DispenseBillingDeferral row = approvedCover("1170");
+        DispenseBillingDeferralService.Choice choice = new DispenseBillingDeferralService.Choice(row.getId(), null);
+        User handingOver = user(pharmacist);
+        BigDecimal dueAfterTheClaim = new BigDecimal("390");
+        DispenseBillingDeferralService.FillMoney nothingPaid =
+                new DispenseBillingDeferralService.FillMoney(new BigDecimal("1560"), BigDecimal.ZERO);
+
+        assertThatThrownBy(() -> service.admit(prescription, hospitalId, dueAfterTheClaim, choice, handingOver,
+                FillClaimCover.Gap.NONE, nothingPaid))
+                .isInstanceOf(FieldBusinessException.class)
+                .satisfies(e -> {
+                    FieldBusinessException fe = (FieldBusinessException) e;
+                    assertThat(fe.getMessageKey()).isEqualTo("pharmacy.handOver.coverPatientShareDue");
+                    assertThat(fe.getMessage()).contains("390").contains("1170");
+                });
+        assertThat(row.getStatus()).isEqualTo(DispenseBillingDeferralStatus.APPROVED);
+
+        // The 390 F patient share paid: the fill leaves on the cover.
+        DispenseBillingDeferral executed = service.admit(prescription, hospitalId, new BigDecimal("1170"), choice,
+                handingOver, FillClaimCover.Gap.NONE,
+                new DispenseBillingDeferralService.FillMoney(new BigDecimal("1560"), new BigDecimal("390")));
+        assertThat(executed.getStatus()).isEqualTo(DispenseBillingDeferralStatus.EXECUTED);
+    }
+
+    @Test
+    @DisplayName("review of #1284: a smaller fill prepared again carries the plan share of ITS charge, not the old one")
+    void aSmallerFillCarriesItsOwnInsurerShare() {
+        // Approved on 1 000 (insurer 750); the fill that leaves costs 400: the insurer pays 300, the patient 100.
+        DispenseBillingDeferral row = approvedCover("750");
+        DispenseBillingDeferralService.Choice choice = new DispenseBillingDeferralService.Choice(row.getId(), null);
+        User handingOver = user(pharmacist);
+        BigDecimal due = new BigDecimal("400");
+        DispenseBillingDeferralService.FillMoney nothingPaid =
+                new DispenseBillingDeferralService.FillMoney(new BigDecimal("400"), BigDecimal.ZERO);
+
+        assertThatThrownBy(() -> service.admit(prescription, hospitalId, due, choice, handingOver,
+                FillClaimCover.Gap.NONE, nothingPaid))
+                .satisfies(e -> assertThat(e.getMessage()).contains("100").contains("300"));
+
+        DispenseBillingDeferral executed = service.admit(prescription, hospitalId, new BigDecimal("300"), choice,
+                handingOver, FillClaimCover.Gap.NONE,
+                new DispenseBillingDeferralService.FillMoney(new BigDecimal("400"), new BigDecimal("100")));
+        assertThat(executed.getStatus()).isEqualTo(DispenseBillingDeferralStatus.EXECUTED);
+    }
+
+    @Test
+    @DisplayName("review of #1284: a cancelled prepared fill withdraws the open covers of its order, never a credit")
+    void aCancelledFillWithdrawsItsCovers() {
+        DispenseBillingDeferral cover = stored(DispenseBillingDeferralKind.THIRD_PARTY_COVER,
+                DispenseBillingDeferralStatus.APPROVED);
+        DispenseBillingDeferral credit = stored(DispenseBillingDeferralKind.OUTPATIENT_CREDIT,
+                DispenseBillingDeferralStatus.APPROVED);
+        when(deferralRepository.findByHospitalIdAndPrescriptionIdAndStatusInOrderByRequestedAtAsc(eq(hospitalId),
+                eq(prescriptionId), any())).thenReturn(List.of(cover, credit));
+        when(roleValidator.getCurrentUserId()).thenReturn(pharmacist);
+
+        service.withdrawCoversOfCancelledFill(prescription, hospitalId);
+
+        assertThat(cover.getStatus()).isEqualTo(DispenseBillingDeferralStatus.CANCELLED);
+        assertThat(cover.getCancelReason()).isNotBlank();
+        assertThat(cover.getCancelledBy()).isEqualTo(pharmacist);
+        assertThat(credit.getStatus()).isEqualTo(DispenseBillingDeferralStatus.APPROVED);
+    }
+
     @Test
     @DisplayName("QA D3408: a cover with no plan coverage, or none prepared, is refused at approval")
     void d3408_aCoverNeedsAPlanAndAPreparedFill() {
         DispenseBillingDeferral row = stored(DispenseBillingDeferralKind.THIRD_PARTY_COVER,
                 DispenseBillingDeferralStatus.REQUESTED);
         when(roleValidator.getCurrentUserId()).thenReturn(billing);
-        when(coverShare.planShare(any(), any(), any())).thenReturn(Optional.empty());
+        when(coverShare.planShare(any(), any(), any(), any())).thenReturn(Optional.empty());
         UUID id = row.getId();
         DispenseBillingDeferralDecisionDTO voucher = new DispenseBillingDeferralDecisionDTO(null, "MTA-BON-0002", null);
 

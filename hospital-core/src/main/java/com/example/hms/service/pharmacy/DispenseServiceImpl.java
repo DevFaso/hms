@@ -755,7 +755,8 @@ public class DispenseServiceImpl implements DispenseService {
                 request != null ? request.getBillingDeferralId() : null,
                 request != null ? request.getBillingUrgencyReason() : null), settlement.due(), actor,
                 // QA D2931 (r66): a claim sent for the fill that does not count for this person is named.
-                FillClaimCover.gapFor(claimRepository, dispense.getId(), actor != null ? actor.getId() : null));
+                FillClaimCover.gapFor(claimRepository, dispense.getId(), actor != null ? actor.getId() : null),
+                new DispenseBillingDeferralService.FillMoney(settlement.charge(), settlement.paid()));
     }
 
     /**
@@ -784,7 +785,8 @@ public class DispenseServiceImpl implements DispenseService {
         if (charge.signum() <= 0) {
             return null;
         }
-        return requireDeferral(newFill, prescription, choice, charge, actor, FillClaimCover.Gap.NONE);
+        return requireDeferral(newFill, prescription, choice, charge, actor, FillClaimCover.Gap.NONE,
+                new DispenseBillingDeferralService.FillMoney(charge, BigDecimal.ZERO));
     }
 
     /**
@@ -793,12 +795,12 @@ public class DispenseServiceImpl implements DispenseService {
      */
     private com.example.hms.model.pharmacy.DispenseBillingDeferral requireDeferral(
             Dispense dispense, Prescription prescription, DispenseBillingDeferralService.Choice choice,
-            BigDecimal due, User actor, FillClaimCover.Gap claimGap) {
+            BigDecimal due, User actor, FillClaimCover.Gap claimGap, DispenseBillingDeferralService.FillMoney money) {
         if (billingDeferrals == null) {
             throw DispenseBillingDeferralService.unpaid(claimGap, due);
         }
         UUID hospitalId = dispense.getPharmacy().getHospital().getId();
-        return billingDeferrals.admit(prescription, hospitalId, due, choice, actor, claimGap);
+        return billingDeferrals.admit(prescription, hospitalId, due, choice, actor, claimGap, money);
     }
 
     /**

@@ -21,11 +21,13 @@ import {
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { CfaPipe } from '../../shared/pipes/cfa.pipe';
+import { formatCfa } from '../../shared/i18n/app-locale';
 import { DayMonthPipe } from '../../shared/pipes/day-month.pipe';
 import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
 import { refusalReason } from '../../shared/refusal-reason';
 import { containsCardNumber } from '../../shared/mobile-money-operator';
 import { refuseFields } from '../../shared/forms/invalid-fields';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 
 /** The field id of a share's rejection reason. */
 export function payerShareReasonId(share: { id: string }): string {
@@ -54,6 +56,7 @@ export class PayerSharesListComponent {
   private readonly translate = inject(TranslateService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly confirm = inject(ConfirmService);
 
   /** The roles that decide a share (the super-admin reads only). */
   readonly canDecide = this.roleContext.hasAnyActiveRole([
@@ -140,6 +143,16 @@ export class PayerSharesListComponent {
       return;
     }
     this.decide(row, 'reject', reason);
+  }
+
+  /** Review of #1284: « Marquer payée » settles the share for good; it is confirmed first, naming the amount. */
+  async markPaid(row: OpenPayerShare): Promise<void> {
+    const sure = await this.confirm.ask({
+      titleKey: 'R70_MONEY.SHARES.PAID_CONFIRM',
+      params: { amount: formatCfa(row.amount, 'XOF'), payer: row.payerName ?? '' },
+      confirmKey: 'R70_MONEY.SHARES.PAID',
+    });
+    if (sure) this.decide(row, 'paid');
   }
 
   decide(row: OpenPayerShare, decision: PayerShareDecision, reason?: string): void {

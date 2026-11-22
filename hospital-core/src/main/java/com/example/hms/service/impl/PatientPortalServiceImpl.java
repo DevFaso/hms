@@ -2682,8 +2682,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
         boolean thisHospitals = insurance.getAssignment() != null && insurance.getAssignment().getHospital() != null
             && hospitalId != null && hospitalId.equals(insurance.getAssignment().getHospital().getId());
-        if (thisHospitals && !insurance.isPrimary() && patientInsuranceRepository
-                .findByPatient_IdAndPrimaryTrueAndAssignment_Hospital_Id(patient.getId(), hospitalId).isEmpty()) {
+        if (thisHospitals && !insurance.isPrimary() && !patientInsuranceRepository
+                .existsByPatient_IdAndPrimaryTrueAndAssignment_Hospital_Id(patient.getId(), hospitalId)) {
             insurance.setPrimary(true);
         }
         patientInsuranceRepository.save(insurance);

@@ -135,6 +135,22 @@ class PatientInsurancePrimaryTest {
     }
 
     @Test
+    @DisplayName("review of #1284: links serialise on the patient row, and a second primary left behind is unset")
+    void aSecondPrimaryIsUnsetAndLinksSerialise() {
+        link("MTA-T1-R70-0001", null);
+        // A second primary written before the rule (or by a race the lock now prevents).
+        PatientInsurance stray = rows.get(0);
+        link("MTA-T1-R70-0002", null);
+        rows.get(1).setPrimary(true);
+        stray.setPrimary(true);
+        link("MTA-T1-R70-0003", false);
+
+        verify(patientRepository, org.mockito.Mockito.atLeast(3)).lockByIdUnscoped(patientId);
+        verify(patientInsuranceRepository, org.mockito.Mockito.atLeastOnce())
+            .unsetOtherPrimariesForPatientInHospital(patientId, stray.getId(), hospitalId);
+    }
+
+    @Test
     @DisplayName("QA D3250: a policy ticked « principale » is the one primary; the others are unset")
     void d3250_aTickedPolicyIsTheOnlyPrimary() {
         link("MTA-T1-R70-0001", null);

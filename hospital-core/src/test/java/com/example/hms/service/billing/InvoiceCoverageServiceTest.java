@@ -284,6 +284,22 @@ class InvoiceCoverageServiceTest {
     }
 
     @Test
+    @DisplayName("review of #1284: the pharmacy insurer shares of the year use the plan's annual ceiling too")
+    void pharmacySharesUseTheAnnualCeiling() {
+        UUID patientId = invoice.getPatient().getId();
+        LocalDate day = LocalDate.of(2026, 11, 22);
+        UUID prescriptionId = UUID.randomUUID();
+        com.example.hms.service.pharmacy.PharmacyCoverUsage usage =
+            mock(com.example.hms.service.pharmacy.PharmacyCoverUsage.class);
+        // 150 000 F a year; the pharmacy covers already used 149 500 of it.
+        when(usage.usedInYear(patientId, HOSPITAL_A, 2026, prescriptionId)).thenReturn(new BigDecimal("149500"));
+        service.setPharmacyCoverUsage(usage);
+
+        assertThat(service.quoteForPrescription(patientId, HOSPITAL_A, day, new BigDecimal("2000"), prescriptionId)
+            .orElseThrow().payerShare()).isEqualByComparingTo("500");
+    }
+
+    @Test
     @DisplayName("QA D3250 (r70): the only coverage, never ticked primary, is billed by the same order the desk reads")
     void theOnlyCoverageIsBilledThoughNotPrimary() {
         coverage.setPrimary(false);

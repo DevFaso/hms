@@ -742,6 +742,9 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         if (hospitalId == null || patientId == null || saved.getId() == null) {
             return saved;
         }
+        // Review of #1284: two links of one patient at once serialise on the patient row, so the second reads the
+        // first's coverage before choosing the primary.
+        patientRepository.lockByIdUnscoped(patientId);
         if (saved.isPrimary()) {
             // The row just made (or kept) primary is the one; any other primary of this hospital is unset.
             patientInsuranceRepository.unsetOtherPrimariesForPatientInHospital(patientId, saved.getId(), hospitalId);
@@ -760,7 +763,15 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             hospitalId);
         List<PatientInsurance> inForce = com.example.hms.service.billing.CoverageOrder.ordered(rows,
             java.time.LocalDate.now(java.time.ZoneId.systemDefault()));
-        if (inForce.isEmpty() || inForce.get(0).isPrimary()) {
+        if (inForce.isEmpty()) {
+            return;
+        }
+        if (inForce.get(0).isPrimary()) {
+            // Review of #1284: a second primary (written before this rule, or by a race) is unset.
+            if (com.example.hms.service.billing.CoverageOrder.primaryCount(rows) > 1) {
+                patientInsuranceRepository.unsetOtherPrimariesForPatientInHospital(patientId, inForce.get(0).getId(),
+                    hospitalId);
+            }
             return;
         }
         PatientInsurance chosen = inForce.stream()

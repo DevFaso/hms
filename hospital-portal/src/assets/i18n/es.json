@@ -15942,6 +15942,7 @@
       "AMOUNT": "Amount",
       "CLAIM": "Mark claimed",
       "PAID": "Mark paid",
+      "PAID_CONFIRM": "Mark this {{amount}} share of {{payer}} as paid? It can no longer be claimed or refused.",
       "REJECT": "Refused by the payer",
       "REASON": "Payer's reason",
       "REASON_REQUIRED": "Type the payer's reason for refusing.",

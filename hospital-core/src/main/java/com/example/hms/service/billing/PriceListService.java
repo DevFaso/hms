@@ -268,7 +268,7 @@ public class PriceListService {
     @Transactional
     public com.example.hms.payload.dto.billing.PriceListAutoLinkReportDTO linkLabTestsByCode() {
         Maintainer actor = requireMaintainer();
-        return java.util.Objects.requireNonNull(labPriceAutoLink).link(actor.hospitalId(), actor.userId());
+        return java.util.Objects.requireNonNull(labPriceAutoLink).link(actor.hospitalId(), actor.userId(), true);
     }
 
     private LabPriceAutoLink labPriceAutoLink;

@@ -266,7 +266,7 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
                 && prior.getPaymentMethod() == dto.getPaymentMethod()
                 && java.util.Objects.equals(priorPatient, dto.getPatientId())
                 && prior.getLines().size() == dto.getLines().size()
-                && sameBasket(prior, dto);
+                && sameBasket(prior, dto, pharmacy);
         if (!same) {
             throw new com.example.hms.exception.ConflictException(
                     com.example.hms.utility.MessageUtil.resolve("billing.payment.clientRequestReused"));
@@ -277,13 +277,14 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
     /**
      * QA D3402 (r70): a retry with the same key and a different basket (3 SRO instead of 1) answered 201 with the
      * first sale. The basket is the same when each requested line matches a recorded line, one for one: the same
-     * medication, the same lot when one was named, and the same quantity (a quantity in packs is converted by the
-     * server, so only its medication and lot are compared).
+     * medication, the same lot when one was named, and the same quantity in units (a quantity in packs is converted
+     * as the sale converts it; review of #1284).
      */
-    private static boolean sameBasket(PharmacySale prior, PharmacySaleRequestDTO dto) {
+    private boolean sameBasket(PharmacySale prior, PharmacySaleRequestDTO dto, Pharmacy pharmacy) {
         java.util.List<SaleLine> left = new java.util.ArrayList<>(prior.getLines());
         for (SaleLineRequestDTO wanted : dto.getLines()) {
-            SaleLine match = left.stream().filter(line -> sameLine(line, wanted)).findFirst().orElse(null);
+            BigDecimal units = unitsOf(wanted, pharmacy);
+            SaleLine match = left.stream().filter(line -> sameLine(line, wanted, units)).findFirst().orElse(null);
             if (match == null) {
                 return false;
             }
@@ -292,7 +293,19 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
         return left.isEmpty();
     }
 
-    private static boolean sameLine(SaleLine recorded, SaleLineRequestDTO wanted) {
+    /** The units a requested line stands for: its quantity, converted from packs as the sale converts it. */
+    private BigDecimal unitsOf(SaleLineRequestDTO wanted, Pharmacy pharmacy) {
+        if (!Boolean.TRUE.equals(wanted.getInPacks()) || wanted.getQuantity() == null
+                || wanted.getMedicationCatalogItemId() == null) {
+            return wanted.getQuantity();
+        }
+        return inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(pharmacy.getId(),
+                        wanted.getMedicationCatalogItemId())
+                .map(item -> PackQuantity.toUnits(item, wanted.getQuantity(), true, "quantity"))
+                .orElse(null);
+    }
+
+    private static boolean sameLine(SaleLine recorded, SaleLineRequestDTO wanted, BigDecimal units) {
         UUID item = recorded.getMedicationCatalogItem() != null ? recorded.getMedicationCatalogItem().getId() : null;
         UUID lot = recorded.getStockLot() != null ? recorded.getStockLot().getId() : null;
         if (!java.util.Objects.equals(item, wanted.getMedicationCatalogItemId())) {
@@ -301,11 +314,7 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
         if (wanted.getStockLotId() != null && !wanted.getStockLotId().equals(lot)) {
             return false;
         }
-        if (Boolean.TRUE.equals(wanted.getInPacks())) {
-            return true;
-        }
-        return recorded.getQuantity() != null && wanted.getQuantity() != null
-                && recorded.getQuantity().compareTo(wanted.getQuantity()) == 0;
+        return recorded.getQuantity() != null && units != null && recorded.getQuantity().compareTo(units) == 0;
     }
 
     /** Saves the sale; a keyed one is flushed so a key another sale took is refused here (V310). */

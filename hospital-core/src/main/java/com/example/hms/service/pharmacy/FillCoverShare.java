@@ -74,12 +74,29 @@ public class FillCoverShare {
      * The insurer share of {@code charge} for the patient at {@code hospitalId} today, by the coverage rule an invoice
      * uses (no pharmacy category: the plan's default rate, its ceilings); empty when no coverage with a plan applies.
      */
-    public Optional<BigDecimal> planShare(UUID patientId, UUID hospitalId, BigDecimal charge) {
+    public Optional<BigDecimal> planShare(UUID patientId, UUID hospitalId, BigDecimal charge, UUID prescriptionId) {
         if (patientId == null || hospitalId == null || charge == null) {
             return Optional.empty();
         }
-        return invoiceCoverage.quote(patientId, hospitalId, LocalDate.now(clock), charge, null, null)
+        return invoiceCoverage.quoteForPrescription(patientId, hospitalId, LocalDate.now(clock), charge,
+                        prescriptionId)
                 .map(InvoiceCoverageService.CoverageQuote::payerShare);
+    }
+
+    /**
+     * Review of #1284: the share a cover recorded is of the fill prepared when it was approved; the fill that leaves
+     * may be another one (cancelled, prepared again, smaller). What the insurer pays of THIS fill is the recorded share
+     * or the plan's share of this fill's charge, whichever is less; nothing when the plan no longer applies.
+     */
+    public BigDecimal capOf(BigDecimal recorded, UUID patientId, UUID hospitalId, BigDecimal charge,
+                            UUID prescriptionId) {
+        if (recorded == null) {
+            return BigDecimal.ZERO;
+        }
+        if (charge == null) {
+            return recorded;
+        }
+        return recorded.min(planShare(patientId, hospitalId, charge, prescriptionId).orElse(BigDecimal.ZERO));
     }
 
     /**
@@ -90,6 +107,15 @@ public class FillCoverShare {
         if (fill == null || hospitalId == null) {
             return Optional.empty();
         }
+        UUID patientId = fill.getPatient() != null ? fill.getPatient().getId() : null;
+        UUID prescriptionId = fill.getPrescription() != null ? fill.getPrescription().getId() : null;
+        BigDecimal charge = DispenseCharge.of(fill, inventoryItemRepository).orElse(null);
+        return recordedCoverShare(fill, hospitalId)
+                .map(recorded -> capOf(recorded, patientId, hospitalId, charge, prescriptionId));
+    }
+
+    /** The share the cover recorded at approval, before it is measured against this fill. */
+    private Optional<BigDecimal> recordedCoverShare(Dispense fill, UUID hospitalId) {
         if (fill.getBillingDeferralId() != null) {
             return deferralRepository.findByHospitalIdAndIdIn(hospitalId, java.util.List.of(fill.getBillingDeferralId()))
                     .stream()

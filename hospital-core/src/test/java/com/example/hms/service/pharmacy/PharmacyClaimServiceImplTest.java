@@ -185,7 +185,7 @@ class PharmacyClaimServiceImplTest {
         FillCoverShare cover = mock(FillCoverShare.class);
         service.setFillCoverShare(cover);
         when(cover.coverShare(dispense, hospitalId)).thenReturn(Optional.empty());
-        when(cover.planShare(patientId, hospitalId, new BigDecimal("6000")))
+        when(cover.planShare(eq(patientId), eq(hospitalId), eq(new BigDecimal("6000")), any()))
                 .thenReturn(Optional.of(new BigDecimal("4500")));
         claimable();
         PharmacyClaimRequestDTO typed = request();
@@ -202,7 +202,7 @@ class PharmacyClaimServiceImplTest {
         FillCoverShare cover = mock(FillCoverShare.class);
         service.setFillCoverShare(cover);
         when(cover.coverShare(any(), any())).thenReturn(Optional.empty());
-        when(cover.planShare(any(), any(), any())).thenReturn(Optional.empty());
+        when(cover.planShare(any(), any(), any(), any())).thenReturn(Optional.empty());
         claimable();
         PharmacyClaimRequestDTO untyped = request();
         untyped.setAmount(null);

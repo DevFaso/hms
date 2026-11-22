@@ -15942,6 +15942,7 @@
       "AMOUNT": "Montant",
       "CLAIM": "Marquer réclamée",
       "PAID": "Marquer payée",
+      "PAID_CONFIRM": "Marquer payée cette part de {{amount}} de {{payer}} ? Elle ne pourra plus être réclamée ni refusée.",
       "REJECT": "Refusée par l’assureur",
       "REASON": "Motif de l’assureur",
       "REASON_REQUIRED": "Saisissez le motif du refus de l’assureur.",

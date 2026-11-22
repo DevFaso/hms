@@ -74,6 +74,9 @@ class FillCoverShareTest {
         fill.setMedicationCatalogItem(item);
         fill.setQuantityDispensed(new BigDecimal("20"));
         fill.setStatus(DispenseStatus.PENDING);
+        com.example.hms.model.Patient patient = new com.example.hms.model.Patient();
+        patient.setId(UUID.randomUUID());
+        fill.setPatient(patient);
         InventoryItem stocked = InventoryItem.builder().unitPrice(new BigDecimal("78")).build();
         when(inventory.findByPharmacyIdAndMedicationCatalogItemId(pharmacy.getId(), item.getId()))
             .thenReturn(Optional.of(stocked));
@@ -107,19 +110,47 @@ class FillCoverShareTest {
     @DisplayName("the plan share is the invoice rule on the charge, today; none without a plan coverage")
     void thePlanShare() {
         UUID patientId = UUID.randomUUID();
-        when(coverage.quote(patientId, hospitalId, LocalDate.of(2026, 11, 22), new BigDecimal("1560"), null, null))
+        when(coverage.quoteForPrescription(patientId, hospitalId, LocalDate.of(2026, 11, 22), new BigDecimal("1560"),
+            prescriptionId))
             .thenReturn(Optional.of(new InvoiceCoverageService.CoverageQuote(UUID.randomUUID(), "Mutuelle Test A",
                 "Formule", "P-1", null, null, 75, new BigDecimal("1560"), new BigDecimal("1170"),
                 new BigDecimal("390"))));
 
-        assertThat(share.planShare(patientId, hospitalId, new BigDecimal("1560"))).contains(new BigDecimal("1170"));
-        assertThat(share.planShare(UUID.randomUUID(), hospitalId, new BigDecimal("1560"))).isEmpty();
-        assertThat(share.planShare(patientId, null, BigDecimal.ONE)).isEmpty();
+        assertThat(share.planShare(patientId, hospitalId, new BigDecimal("1560"), prescriptionId))
+            .contains(new BigDecimal("1170"));
+        assertThat(share.planShare(UUID.randomUUID(), hospitalId, new BigDecimal("1560"), prescriptionId)).isEmpty();
+        assertThat(share.planShare(patientId, null, BigDecimal.ONE, prescriptionId)).isEmpty();
+    }
+
+    /** The plan pays 75 % of whatever this fill costs. */
+    private void planPaysThreeQuarters() {
+        when(coverage.quoteForPrescription(any(), eq(hospitalId), any(), any(), any())).thenAnswer(call -> {
+            BigDecimal charge = call.getArgument(3);
+            BigDecimal payer = charge.multiply(new BigDecimal("0.75"));
+            return Optional.of(new InvoiceCoverageService.CoverageQuote(UUID.randomUUID(), "Mutuelle Test A", "F",
+                "P-1", null, null, 75, charge, payer, charge.subtract(payer)));
+        });
+    }
+
+    @Test
+    @DisplayName("review of #1284: the cover share is never more than the plan's share of THIS fill")
+    void theCoverShareIsMeasuredOnThisFill() {
+        planPaysThreeQuarters();
+        // Approved on a larger fill (1 500); this fill costs 1 560 x 0.25 less: 20 x 78 = 1 560 -> plan 1 170.
+        when(deferrals.findByHospitalIdAndPrescriptionIdAndStatusInOrderByRequestedAtAsc(eq(hospitalId),
+            eq(prescriptionId), any())).thenReturn(List.of(cover(DispenseBillingDeferralStatus.APPROVED, "1500")));
+        assertThat(share.coverShare(fill, hospitalId)).contains(new BigDecimal("1170.00"));
+        // No plan any more: the insurer pays nothing of this fill.
+        when(coverage.quoteForPrescription(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        assertThat(share.coverShare(fill, hospitalId)).contains(BigDecimal.ZERO);
+        assertThat(share.capOf(null, null, hospitalId, BigDecimal.TEN, prescriptionId)).isEqualByComparingTo("0");
+        assertThat(share.capOf(BigDecimal.TEN, null, hospitalId, null, prescriptionId)).isEqualByComparingTo("10");
     }
 
     @Test
     @DisplayName("the cover share: the one the fill left on, else the cover approved for its prescription")
     void theCoverShare() {
+        planPaysThreeQuarters();
         DispenseBillingDeferral approved = cover(DispenseBillingDeferralStatus.APPROVED, "1170");
         when(deferrals.findByHospitalIdAndPrescriptionIdAndStatusInOrderByRequestedAtAsc(eq(hospitalId),
             eq(prescriptionId), any())).thenReturn(List.of(approved));
@@ -140,6 +171,7 @@ class FillCoverShareTest {
     @Test
     @DisplayName("the insurer share is the larger of a live claim and the cover's share; zero with neither")
     void theInsurerShare() {
+        planPaysThreeQuarters();
         when(deferrals.findByHospitalIdAndPrescriptionIdAndStatusInOrderByRequestedAtAsc(eq(hospitalId),
             eq(prescriptionId), any())).thenReturn(List.of());
         assertThat(share.insurerShare(fill, hospitalId)).isEqualByComparingTo("0");
@@ -149,6 +181,7 @@ class FillCoverShareTest {
 
         when(deferrals.findByHospitalIdAndPrescriptionIdAndStatusInOrderByRequestedAtAsc(eq(hospitalId),
             eq(prescriptionId), any())).thenReturn(List.of(cover(DispenseBillingDeferralStatus.APPROVED, "1200")));
-        assertThat(share.insurerShare(fill, hospitalId)).isEqualByComparingTo("1200");
+        // The cover recorded 1 200, but the plan pays 1 170 of this fill: the larger share standing is the claim's.
+        assertThat(share.insurerShare(fill, hospitalId)).isEqualByComparingTo("1170");
     }
 }

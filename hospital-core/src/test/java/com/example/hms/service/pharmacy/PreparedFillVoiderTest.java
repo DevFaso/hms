@@ -158,6 +158,21 @@ class PreparedFillVoiderTest {
     }
 
     @Test
+    @DisplayName("review of #1284: a cancelled prepared fill withdraws the open third-party covers of its order")
+    void aCancelledFillWithdrawsItsCovers() {
+        DispenseBillingDeferralService deferrals = org.mockito.Mockito.mock(DispenseBillingDeferralService.class);
+        voider.setBillingDeferrals(deferrals);
+        com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+        hospital.setId(UUID.randomUUID());
+        pharmacy.setHospital(hospital);
+        theUpdateCancels(ReadyCancelReason.OTHER);
+
+        voider.cancel(prepared, ReadyCancelReason.OTHER);
+
+        verify(deferrals).withdrawCoversOfCancelledFill(prescription, hospital.getId());
+    }
+
+    @Test
     @DisplayName("AC-7: a row that is no longer PENDING is a 409, and nothing is returned or sent")
     void notPendingIsAConflict() {
         when(dispenseRepository.cancelPreparedFill(any(), any(), any())).thenReturn(0);

@@ -107,7 +107,7 @@
                 class="btn-primary btn-sm"
                 [disabled]="busy() === row.id"
                 [attr.data-testid]="'payer-share-paid-' + row.id"
-                (click)="decide(row, 'paid')"
+                (click)="markPaid(row)"
               >
                 {{ 'R70_MONEY.SHARES.PAID' | translate }}
               </button>
