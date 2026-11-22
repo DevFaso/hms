@@ -11,7 +11,6 @@ import com.example.hms.model.User;
 import com.example.hms.service.lab.CriticalResultEscalationLadder;
 import com.example.hms.repository.LabResultRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import net.javacrumbs.shedlock.core.LockAssert;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
