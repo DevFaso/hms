@@ -4430,6 +4430,7 @@
     "ORDER_NO_OPEN_VISIT": "No hay ninguna visita abierta para este paciente aquí: la solicitud no se vinculará a ninguna visita."
   },
   "LAB": {
+    "ATTESTATION_MEANING": "Declaro electrónicamente que la información anterior es correcta.",
     "DUPLICATE": {
       "TITLE": "Posible orden duplicada",
       "BODY": "Este paciente ya tiene una orden activa de la misma prueba aquí, realizada en las últimas 24 horas. Compruebe que una nueva orden sea realmente necesaria.",
@@ -4638,6 +4639,8 @@
     "STAFF_COUNT": "{{count}} miembros del personal"
   },
   "LAB_TEST_CONFIG": {
+    "APPROVAL_NEXT_STEP": "Continuar en la cola de aprobación del laboratorio",
+    "COMPONENT_RANGES": "{{components}} componentes · {{ranges}} rangos",
     "ACTIONS": "Acciones",
     "ADD_RANGE": "Agregar rango",
     "AGE_MAX": "Edad máx",

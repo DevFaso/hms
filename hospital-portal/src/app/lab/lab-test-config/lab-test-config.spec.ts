@@ -87,6 +87,35 @@ describe('LabTestConfigComponent', () => {
     flushAssignments();
   }
 
+  it('D3353/D3356: a draft panel links to approval and counts ranges on its components', () => {
+    fixture.detectChanges();
+    flushInit([
+      mockDefinition({
+        approvalStatus: 'DRAFT',
+        components: [
+          { code: 'HB', name: 'Haemoglobin', referenceRanges: [{ minValue: 12, maxValue: 16 }] },
+          {
+            code: 'PLT',
+            name: 'Platelets',
+            referenceRanges: [
+              { minValue: 150, maxValue: 400 },
+              { minValue: 100, maxValue: 450 },
+            ],
+          },
+        ],
+      }),
+    ]);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="def-approval-next-step"]')?.getAttribute('href')).toBe(
+      '/lab-approval-queue',
+    );
+    const panel = host.querySelector('[data-testid="def-component-ranges"]');
+    expect(panel?.textContent).toContain('Haemoglobin');
+    expect(panel?.textContent).toContain('Platelets');
+    expect(component.componentRangeCount(component.definitions()[0])).toBe(3);
+  });
+
   it('QA D617: renders no tune or delete on an ACTIVE row, and both on a DRAFT row', () => {
     fixture.detectChanges();
     flushInit(

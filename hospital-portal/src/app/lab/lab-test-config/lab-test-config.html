@@ -153,9 +153,61 @@
                 <span class="status-badge" [ngClass]="statusClass(def.approvalStatus)">
                   {{ 'LAB_TEST_CONFIG.STATUS_' + def.approvalStatus | translate }}
                 </span>
+                @if (isEditableDraft(def)) {
+                  <a
+                    class="cell-secondary"
+                    routerLink="/lab-approval-queue"
+                    data-testid="def-approval-next-step"
+                  >
+                    {{ 'LAB_TEST_CONFIG.APPROVAL_NEXT_STEP' | translate }}
+                  </a>
+                }
               </td>
               <td class="range-count">
-                @if (!def.referenceRanges?.length && def.expectedResult) {
+                @if (def.components?.length) {
+                  <details data-testid="def-component-ranges">
+                    <summary>
+                      {{
+                        'LAB_TEST_CONFIG.COMPONENT_RANGES'
+                          | translate
+                            : {
+                                components: def.components?.length,
+                                ranges: componentRangeCount(def),
+                              }
+                      }}
+                    </summary>
+                    <ul>
+                      @for (component of def.components; track component.code) {
+                        <li>
+                          {{ component.code }} · {{ component.name }}:
+                          {{ component.referenceRanges?.length ?? 0 }}
+                          <ul>
+                            @for (range of component.referenceRanges; track $index) {
+                              <li>
+                                {{ range.minValue | localeNumber }} –
+                                {{ range.maxValue | localeNumber }}
+                                {{ range.unit || component.unit }} ·
+                                {{
+                                  'LAB_TEST_CONFIG.COMPONENTS.GENDER_' + (range.gender || 'ALL')
+                                    | translate
+                                }}
+                                · {{ range.ageMin | localeNumber }} –
+                                {{ range.ageMax | localeNumber }}
+                                {{
+                                  'LAB_TEST_CONFIG.AGE_UNIT_' + (range.ageUnit || 'YEARS')
+                                    | translate
+                                }}
+                                @if (range.source) {
+                                  · {{ range.source | enumLabel: 'referenceSource' : 'asTyped' }}
+                                }
+                              </li>
+                            }
+                          </ul>
+                        </li>
+                      }
+                    </ul>
+                  </details>
+                } @else if (!def.referenceRanges?.length && def.expectedResult) {
                   <span class="expected-result" data-testid="def-expected-result">{{
                     'LAB_TEST_CONFIG.EXPECTED_RESULT_SHORT'
                       | translate: { value: def.expectedResult }

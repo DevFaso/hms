@@ -4430,6 +4430,7 @@
     "ORDER_NO_OPEN_VISIT": "Aucune visite ouverte pour ce patient ici : la demande ne sera rattachée à aucune visite."
   },
   "LAB": {
+    "ATTESTATION_MEANING": "J’atteste électroniquement que les informations ci-dessus sont exactes.",
     "DUPLICATE": {
       "TITLE": "Demande possiblement en double",
       "BODY": "Ce patient a déjà une demande en cours pour le même examen ici, passée dans les dernières 24 heures. Vérifiez qu'une nouvelle demande est vraiment nécessaire.",
@@ -4638,6 +4639,8 @@
     "STAFF_COUNT": "{{count}} membres du personnel"
   },
   "LAB_TEST_CONFIG": {
+    "APPROVAL_NEXT_STEP": "Continuer dans la file d’approbation labo",
+    "COMPONENT_RANGES": "{{components}} composants · {{ranges}} plages",
     "ACTIONS": "Actions",
     "ADD_RANGE": "Ajouter une plage",
     "AGE_MAX": "Âge max",
