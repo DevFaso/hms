@@ -21,6 +21,23 @@ public interface StockTransactionRepository extends JpaRepository<StockTransacti
 
     Page<StockTransaction> findByStockLotId(UUID stockLotId, Pageable pageable);
 
+    /**
+     * QA D3415 (r70): what each item and lot of a pharmacy moved by the given types, as
+     * {@code [itemId, lotId (null for no lot), type, total]} rows: the quarantine read.
+     */
+    @Query("SELECT t.inventoryItem.id, l.id, t.transactionType, COALESCE(SUM(t.quantity), 0) FROM StockTransaction t "
+         + "LEFT JOIN t.stockLot l "
+         + "WHERE t.inventoryItem.pharmacy.id = :pharmacyId AND t.transactionType IN :types "
+         + "GROUP BY t.inventoryItem.id, l.id, t.transactionType")
+    java.util.List<Object[]> sumByItemLotAndTypeForPharmacy(@Param("pharmacyId") UUID pharmacyId,
+                                                            @Param("types") Collection<StockTransactionType> types);
+
+    /** QA D3415: what one item moved by the given types with no lot. */
+    @Query("SELECT COALESCE(SUM(t.quantity), 0) FROM StockTransaction t "
+         + "WHERE t.inventoryItem.id = :itemId AND t.stockLot IS NULL AND t.transactionType IN :types")
+    BigDecimal sumQuantityForItemWithoutLot(@Param("itemId") UUID itemId,
+                                            @Param("types") Collection<StockTransactionType> types);
+
     /** QA D270: the total moved through one lot by the given movement types. */
     @Query("SELECT COALESCE(SUM(t.quantity), 0) FROM StockTransaction t "
          + "WHERE t.stockLot.id = :lotId AND t.transactionType IN :types")

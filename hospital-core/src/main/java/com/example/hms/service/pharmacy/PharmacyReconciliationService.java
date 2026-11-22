@@ -425,6 +425,11 @@ public class PharmacyReconciliationService {
             case RETURN -> b.returned = b.returned.add(q);
             case ADJUSTMENT -> b.adjusted = b.adjusted.add(q);
             case TRANSFER -> b.transferred = b.transferred.add(q);
+            // QA D3415 (r70): set aside off the saleable stock (counted as an adjustment out), then destroyed.
+            case QUARANTINE -> b.adjusted = b.adjusted.subtract(q);
+            case DESTRUCTION -> {
+                // Out of the quarantine only: the saleable stock already lost these units.
+            }
         }
     }
 

@@ -53,8 +53,10 @@
             <!-- QA D1058: the patient first, so four Paracétamol rows are told apart -->
             <option [value]="d.id">
               {{ d.patientName || ('PHARMACY_CHECKOUT.RECEIPT_NO_PATIENT' | translate) }} ·
-              {{ d.medicationName }} · {{ d.quantityDispensed }} {{ d.unit }} ·
-              {{ d.dispensedAt | serverTime | date: 'short' }}
+              {{ d.medicationName }} · {{ d.quantityDispensed | countUnit: d.unit }}
+              @if (d.dispensedAt) {
+                · {{ d.dispensedAt | serverTime | date: 'short' }}
+              }
             </option>
           }
         </select>
@@ -68,7 +70,7 @@
             <dt>{{ 'PHARMACY_CHECKOUT.MEDICATION' | translate }}</dt>
             <dd>{{ d.medicationName }}</dd>
             <dt>{{ 'PHARMACY_CHECKOUT.QTY_DISPENSED' | translate }}</dt>
-            <dd>{{ d.quantityDispensed }} {{ d.unit }}</dd>
+            <dd>{{ d.quantityDispensed | countUnit: d.unit }}</dd>
             <dt>{{ 'PHARMACY_CHECKOUT.PATIENT' | translate }}</dt>
             <dd>{{ d.patientName || ('PHARMACY_CHECKOUT.RECEIPT_NO_PATIENT' | translate) }}</dd>
             <dt>{{ 'PHARMACY_CHECKOUT.PHARMACY' | translate }}</dt>

@@ -33,7 +33,8 @@ import java.util.UUID;
 @Tag(name = "Pharmacy Controlled-Drug Register", description = "Register of controlled-substance movements")
 public class ControlledRegisterController {
 
-    private static final String ROLES = "hasAnyRole('PHARMACIST', 'STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')";
+    // QA D3411 (r70): every role that may witness a controlled movement reads the register it signs.
+    static final String ROLES = "hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')";
 
     private final ControlledDrugRegisterService registerService;
 

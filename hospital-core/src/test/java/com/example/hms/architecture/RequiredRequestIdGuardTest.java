@@ -575,8 +575,16 @@ class RequiredRequestIdGuardTest {
             "KNOWN GAP D1300: filled from the caller's scope when absent, after binding; validateRequest names it (D1299)"),
         Map.entry("LabSpecimenRequestDTO.labOrderId", "the controller sets it from the path after binding: never absent"));
 
-    /** The field carries @NotNull / @NotBlank / @NotEmpty (any group), or a class-level @OneOf lists it. */
+    /**
+     * The field carries @NotNull / @NotBlank / @NotEmpty (any group), or a class-level @OneOf lists it, or (review
+     * of #1285) a RETURN's stock state, required only for a RETURN, is named at the edge by the class-level
+     * {@code @ReturnStockStateRequired}.
+     */
     private static boolean constrainedPresent(Class<?> body, String field) {
+        if ("stockCondition".equals(field)
+                && body.isAnnotationPresent(com.example.hms.validation.ReturnStockStateRequired.class)) {
+            return true;
+        }
         for (Class<?> c = body; c != null && c != Object.class; c = c.getSuperclass()) {
             for (com.example.hms.payload.dto.OneOf oneOf : c.getAnnotationsByType(com.example.hms.payload.dto.OneOf.class)) {
                 if (List.of(oneOf.fields()).contains(field)) {
