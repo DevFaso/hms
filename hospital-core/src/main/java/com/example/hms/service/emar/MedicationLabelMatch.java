@@ -209,8 +209,9 @@ final class MedicationLabelMatch {
             };
         }
 
+        /** One spelling per amount, for comparison only (never shown): "500", "500.0" and "0.5 g" agree. */
         private static String plain(BigDecimal value) {
-            return value.signum() == 0 ? "0" : value.stripTrailingZeros().toPlainString();
+            return value.signum() == 0 ? "0" : value.stripTrailingZeros().toString();
         }
     }
 }

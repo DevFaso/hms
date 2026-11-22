@@ -42,14 +42,17 @@ public final class ClinicalRuleRegistry {
     private static final String DATE_2026_11_15 = "2026-11-15.1";
     private static final String DATE_2026_11_20 = "2026-11-20.1";
     private static final String DATE_2026_11_21 = "2026-11-21.1";
+    private static final String DATE_2026_11_22 = "2026-11-22.1";
 
     private static final List<ClinicalRuleSet> ALL = List.of(
         rule(ClinicalRuleSetKey.BLOOD_EMERGENCY_RELEASE, DATE_2026_11_07,
             "service.support.EmergencyReleasePolicy"),
         rule(ClinicalRuleSetKey.NEWBORN_VITALS, DATE_2026_11_07,
             "service.maternity.NewbornAlertRules"),
-        rule(ClinicalRuleSetKey.PARACETAMOL_LIMITS, DATE_2026_11_07,
-            "cdshooks.rules.AdultParacetamolRule", PAEDIATRIC_DOSE_RULE),
+        // 2026-11-22 (QA D3306): the child's limits apply by default where the catalogue records none.
+        rule(ClinicalRuleSetKey.PARACETAMOL_LIMITS, DATE_2026_11_22,
+            "cdshooks.rules.AdultParacetamolRule", PAEDIATRIC_DOSE_RULE,
+            "cdshooks.rules.ParacetamolPaediatricDefault"),
         rule(ClinicalRuleSetKey.PAEDIATRIC_DOSE_LIMITS, DATE_2026_11_07,
             PAEDIATRIC_DOSE_RULE),
         rule(ClinicalRuleSetKey.AL_WHO_WEIGHT_BANDS, DATE_2026_11_21,
