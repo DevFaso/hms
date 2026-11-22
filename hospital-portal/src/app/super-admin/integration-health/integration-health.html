@@ -31,7 +31,7 @@
   } @else {
     <div class="chips" data-test="status-chips">
       @for (chip of chips(); track chip.status) {
-        <div class="chip" [style.borderColor]="chip.color" [style.color]="chip.color">
+        <div class="chip" [style.borderColor]="chip.color" [style.color]="chip.textColor">
           <span class="chip-value">{{ countFor(chip.status) }}</span>
           {{ ' ' }}<span class="chip-label">{{ chip.labelKey | translate }}</span>
         </div>

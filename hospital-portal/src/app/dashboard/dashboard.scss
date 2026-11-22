@@ -2627,13 +2627,13 @@ $shadow-md:
   font-size: 12px;
   font-weight: 600;
   color: #fff;
-  background: #059669;
+  background: var(--primary);
   border-radius: 8px;
   text-decoration: none;
   transition: background 0.15s;
 
   &:hover {
-    background: #047857;
+    background: var(--primary-dark);
   }
 }
 
