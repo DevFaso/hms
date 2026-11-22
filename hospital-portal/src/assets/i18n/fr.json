@@ -4422,7 +4422,9 @@
       "RECORDED": "Numéro de préautorisation enregistré.",
       "RECORD_ERROR": "Le numéro de préautorisation n'a pas pu être enregistré.",
       "NUMBER_REQUIRED": "Saisissez le numéro de préautorisation."
-    }
+    },
+    "ORDER_VISIT": "Visite",
+    "ORDER_NO_OPEN_VISIT": "Aucune visite ouverte pour ce patient ici : la demande ne sera rattachée à aucune visite."
   },
   "LAB": {
     "DUPLICATE": {
@@ -10682,7 +10684,8 @@
     "COUNT_SCOPE_HELP": "Les compteurs portent sur les demandes et résumés chargés selon leurs filtres respectifs. L’approbation d’une demande et la finalisation d’un résumé sont deux étapes distinctes.",
     "REQUESTS_LOADED": "Demandes chargées",
     "NO_FILTERED_APPROVALS": "Aucune demande au statut : {{status}}",
-    "SHOW_ALL_REQUESTS": "Voir toutes les demandes"
+    "SHOW_ALL_REQUESTS": "Voir toutes les demandes",
+    "FOLLOW_UP_KIND": "Suivi"
   },
   "CHART": {
     "ALLERGIES_WITHHELD": "Les allergies enregistrées dans d'autres hôpitaux ne sont pas affichées : ce patient a refusé le partage de son dossier. Cette liste peut être incomplète.",
@@ -11814,7 +11817,8 @@
     "PICK_PLAN": "Choisir la formule",
     "PLAN_HINT": "La formule de l’organisme payeur au titre de laquelle cette couverture est facturée. Sans formule, le patient paie toute la facture.",
     "PLAN_SAVED": "Formule enregistrée.",
-    "PLAN_SAVE_ERROR": "La formule n’a pas pu être enregistrée."
+    "PLAN_SAVE_ERROR": "La formule n’a pas pu être enregistrée.",
+    "VERIFIED": "Assurance vérifiée"
   },
   "PATIENT_DOCUMENTS": {
     "TAB": "Documents",

@@ -4422,7 +4422,9 @@
       "RECORDED": "Número de autorización previa registrado.",
       "RECORD_ERROR": "No se pudo registrar el número de autorización previa.",
       "NUMBER_REQUIRED": "Introduzca el número de autorización previa."
-    }
+    },
+    "ORDER_VISIT": "Visita",
+    "ORDER_NO_OPEN_VISIT": "No hay ninguna visita abierta para este paciente aquí: la solicitud no se vinculará a ninguna visita."
   },
   "LAB": {
     "DUPLICATE": {
@@ -10682,7 +10684,8 @@
     "COUNT_SCOPE_HELP": "Los recuentos corresponden a solicitudes y resúmenes cargados según sus filtros respectivos. La aprobación de solicitudes y la finalización de resúmenes son pasos distintos.",
     "REQUESTS_LOADED": "Solicitudes cargadas",
     "NO_FILTERED_APPROVALS": "No hay solicitudes con estado: {{status}}",
-    "SHOW_ALL_REQUESTS": "Ver todas las solicitudes"
+    "SHOW_ALL_REQUESTS": "Ver todas las solicitudes",
+    "FOLLOW_UP_KIND": "Seguimiento"
   },
   "CHART": {
     "ALLERGIES_WITHHELD": "Las alergias registradas en otros hospitales no se muestran: este paciente rechazó compartir su historial. Esta lista puede estar incompleta.",
@@ -11814,7 +11817,8 @@
     "PICK_PLAN": "Choose the plan",
     "PLAN_HINT": "The payer plan this coverage is billed under. Without a plan, the patient pays the whole invoice.",
     "PLAN_SAVED": "Plan saved.",
-    "PLAN_SAVE_ERROR": "The plan could not be saved."
+    "PLAN_SAVE_ERROR": "The plan could not be saved.",
+    "VERIFIED": "Seguro verificado"
   },
   "PATIENT_DOCUMENTS": {
     "TAB": "Documentos",
