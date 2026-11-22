@@ -147,6 +147,7 @@ class ClinicalRuleRegistryGuardTest {
         Map.entry("service/EncounterAutoCompletionService.java", "service.UnsignedNoteFollowUp"),
         Map.entry("service/EncounterServiceImpl.java", "service.UnsignedNoteFollowUp"),
         Map.entry("service/ImagingOrderService.java", "service.support.ImagingPreAuthorisationPolicy"),
+        Map.entry("service/imaging/PatientImagingPortalService.java", "service.imaging.PregnancyRevealingStudyRule"),
         Map.entry("service/LabTestDefinitionService.java", "service.recordaccess.RecommendedLabSensitivity"),
         Map.entry("service/LabTestDefinitionServiceImpl.java", "service.recordaccess.RecommendedLabSensitivity"),
         Map.entry("service/LaborService.java", "service.impl.LaborServiceImpl"),

@@ -1,6 +1,8 @@
 package com.example.hms.service.imaging;
 
 import com.example.hms.model.ImagingOrder;
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 
 import java.text.Normalizer;
 import java.util.List;
@@ -29,6 +31,7 @@ import java.util.stream.Stream;
  * hides a study from the caregiver, never shows one. The report text is not
  * read.
  */
+@ProvisionalRule(ClinicalRuleSetKey.PREGNANCY_REVEALING_IMAGING)
 public final class PregnancyRevealingStudyRule {
 
     /**
