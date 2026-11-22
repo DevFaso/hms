@@ -2033,6 +2033,47 @@ class ReceptionServiceImplTest {
         }
 
         @Test
+        @DisplayName("review of #1276: with no primary coverage nothing is stamped, and the audit does not say verified")
+        void noPrimaryCoverageStampsNothingAndTheAuditSaysSo_D2522() {
+            Appointment appointment = scheduledAppointment();
+            when(appointmentRepo.lockById(appointment.getId())).thenReturn(Optional.of(appointment));
+            com.example.hms.model.PatientInsurance first = coverage(false, null);
+            com.example.hms.model.PatientInsurance second = coverage(false, today.plusYears(1));
+            when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patient.getId(), hospitalId))
+                    .thenReturn(List.of(first, second));
+
+            service.checkInPatient(CheckInRequestDTO.builder().appointmentId(appointment.getId())
+                    .identityConfirmed(true).insuranceVerified(true).build(), hospitalId, "receptionist1");
+
+            assertThat(first.getVerifiedAt()).isNull();
+            assertThat(second.getVerifiedAt()).isNull();
+            verify(insuranceRepo, never()).save(any());
+            org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+                    org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+            verify(auditEventLogService, org.mockito.Mockito.atLeastOnce()).logEvent(audit.capture());
+            assertThat(audit.getAllValues()).noneSatisfy(a -> assertThat(a.getEventDescription()).contains("Insurance verified"));
+        }
+
+        @Test
+        @DisplayName("review of #1276: a stamped primary coverage is what the audit's « Insurance verified » says")
+        void aStampedCoverageIsAudited_D2522() {
+            Appointment appointment = scheduledAppointment();
+            when(appointmentRepo.lockById(appointment.getId())).thenReturn(Optional.of(appointment));
+            com.example.hms.model.PatientInsurance primary = coverage(true, null);
+            when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patient.getId(), hospitalId))
+                    .thenReturn(List.of(primary));
+
+            service.checkInPatient(CheckInRequestDTO.builder().appointmentId(appointment.getId())
+                    .identityConfirmed(true).insuranceVerified(true).build(), hospitalId, "receptionist1");
+
+            assertThat(primary.getVerifiedAt()).isNotNull();
+            org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+                    org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+            verify(auditEventLogService, org.mockito.Mockito.atLeastOnce()).logEvent(audit.capture());
+            assertThat(audit.getAllValues()).anySatisfy(a -> assertThat(a.getEventDescription()).contains("Insurance verified"));
+        }
+
+        @Test
         @DisplayName("QA D149: the copay entered at check-in is recorded on the encounter, not dropped")
         void copayIsRecordedOnTheEncounter_D149() {
             Appointment appointment = scheduledAppointment();
