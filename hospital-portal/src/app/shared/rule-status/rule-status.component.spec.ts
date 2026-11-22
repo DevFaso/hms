@@ -57,6 +57,8 @@ function overview(signed: boolean): ClinicalRulesOverview {
         }
       : null,
     lastSignedVersion: null,
+    area: 'PRESCRIBING',
+    sourceUrl: null,
   };
   return {
     hospitalId: 'h-1',

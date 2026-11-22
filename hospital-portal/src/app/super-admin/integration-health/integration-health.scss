@@ -182,6 +182,10 @@
     color: var(--text-secondary);
     text-decoration: line-through;
   }
+
+  &[data-testid='integration-not-configured'] {
+    text-decoration: none;
+  }
 }
 
 .integration-status {

@@ -38,6 +38,9 @@ public class IntegrationDescriptor {
 
     private final boolean enabled;
 
+    /** D2779: a reference stub or sandbox that connects to nothing real; never shown as an active connector. */
+    private final boolean stub;
+
     private final boolean autoProvision;
 
     private final boolean managedByPlatform;

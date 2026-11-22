@@ -17,6 +17,8 @@ import java.util.List;
  * @param status            PENDING, SIGNED or REVOKED at this hospital for the current version
  * @param signoff           the sign-off of the current version (signed, or revoked); null when pending
  * @param lastSignedVersion when pending: an earlier version this hospital had signed, else null
+ * @param area              the area of the product it belongs to (the screen shows its translated name, not a class)
+ * @param sourceUrl         the public page of the main published source, or null
  */
 public record ClinicalRuleStatusDTO(
     String key,
@@ -28,5 +30,7 @@ public record ClinicalRuleStatusDTO(
     List<String> enforcedIn,
     RuleSignoffStatus status,
     HospitalRuleSignoffDTO signoff,
-    String lastSignedVersion) {
+    String lastSignedVersion,
+    String area,
+    String sourceUrl) {
 }

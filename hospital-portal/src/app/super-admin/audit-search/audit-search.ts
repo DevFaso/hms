@@ -17,6 +17,7 @@ import { catchError, of } from 'rxjs';
 import { AuditTabsComponent } from '../audit-tabs.component';
 
 import { AuditSearchService } from '../../services/audit-search.service';
+import { HospitalDirectoryEntry, HospitalService } from '../../services/hospital.service';
 import {
   AggregatedAuditEvent,
   AggregatedAuditPage,
@@ -75,6 +76,9 @@ export class SuperAdminAuditSearchComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   readonly excludeRoutineSuccesses = signal(false);
   readonly hospitalId = signal('');
+  /** QA D3508: the hospital filter is a picker over the directory, never a UUID typed by hand. */
+  readonly hospitals = signal<HospitalDirectoryEntry[]>([]);
+  private readonly hospitalService = inject(HospitalService);
   private readonly enumLabels = inject(EnumLabelService);
   /** QA D619: an audit entity token as its keyed label (core/enum-label.service). */
   entityLabel(raw: string | null | undefined): string | null {
@@ -154,6 +158,11 @@ export class SuperAdminAuditSearchComponent implements OnInit {
   );
 
   ngOnInit(): void {
+    this.hospitalService
+      .directory()
+      .pipe(catchError(() => of([] as HospitalDirectoryEntry[])))
+      .subscribe((list) => this.hospitals.set(list));
+
     this.residencyService
       .listAvailableRegions()
       .pipe(catchError(() => of([] as OrganizationRegion[])))

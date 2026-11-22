@@ -75,4 +75,15 @@ class CatalogAdapterLocalizationTest {
         assertThat(inventory.isEnabled()).isFalse();
         assertThat(inventory.isAutoProvision()).isFalse();
     }
+
+    @Test
+    @DisplayName("D2779: the stub adapters are flagged as stubs until an operator configures a real provider")
+    void stubAdaptersAreFlagged() {
+        for (AbstractToggleableIntegrationAdapter adapter : adapters()) {
+            assertThat(adapter.describe(Locale.FRENCH).isStub()).as("%s", adapter.getServiceType()).isTrue();
+        }
+        properties.getBilling().setProvider("CNAMU");
+
+        assertThat(new BillingIntegrationAdapter(properties, messages).describe(Locale.FRENCH).isStub()).isFalse();
+    }
 }

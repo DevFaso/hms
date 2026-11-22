@@ -38,6 +38,11 @@ public record ClinicalRuleSet(ClinicalRuleSetKey key, String version, List<Strin
         return TEXT_PREFIX + key.name() + ".source";
     }
 
+    /** The public page of the main published source, or null (a platform decision has none). */
+    public String sourceUrl() {
+        return ClinicalRuleRegistry.sourceUrl(key).orElse(null);
+    }
+
     public String approverKey() {
         return TEXT_PREFIX + key.name() + ".approver";
     }

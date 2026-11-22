@@ -14,9 +14,8 @@
 
   <div class="diagnostics-context">
     <p>
-      <strong>{{ loading() ? '—' : definitions().length }}</strong><span>{{
-        'DIAGNOSTICS_WORKSPACE.LOADED_DEFINITIONS' | translate
-      }}</span>
+      <strong>{{ loading() ? '—' : definitions().length }}</strong>{{ ' '
+      }}<span>{{ 'DIAGNOSTICS_WORKSPACE.LOADED_DEFINITIONS' | translate }}</span>
     </p>
     <p>{{ 'DIAGNOSTICS_WORKSPACE.APPROVAL_NOTE' | translate }}</p>
   </div>

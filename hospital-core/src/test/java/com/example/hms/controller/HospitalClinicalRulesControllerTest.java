@@ -111,7 +111,7 @@ class HospitalClinicalRulesControllerTest {
     void sign() throws Exception {
         when(signoffService.sign(eq(hospitalId), eq("PARACETAMOL_LIMITS"), any(), eq(userId)))
             .thenReturn(new ClinicalRuleStatusDTO("PARACETAMOL_LIMITS", "v", null, null, null, null, List.of(),
-                RuleSignoffStatus.SIGNED, null, null));
+                RuleSignoffStatus.SIGNED, null, null, "PRESCRIBING", null));
 
         mockMvc.perform(post("/hospitals/{id}/clinical-rules/{key}/signoffs", hospitalId, "PARACETAMOL_LIMITS")
                 .contentType(MediaType.APPLICATION_JSON)
