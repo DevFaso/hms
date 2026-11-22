@@ -145,7 +145,7 @@ function choiceOf(flag: boolean | null): PregnancyFlagChoice {
                     type="button"
                     class="btn-primary btn-sm"
                     [attr.data-testid]="'catalogue-save-' + exam.code"
-                    [disabled]="!dirty(exam) || savingId() === exam.id"
+                    [disabled]="saving(exam)"
                     (click)="save(exam)"
                   >
                     {{ 'COMMON.SAVE' | translate }}
@@ -309,12 +309,9 @@ export class ImagingCatalogueComponent implements OnInit {
     this.drafts.update((all) => ({ ...all, [exam.id]: { ...this.draftOf(exam), bodyRegion } }));
   }
 
-  dirty(exam: ImagingCatalogueExam): boolean {
-    const draft = this.draftOf(exam);
-    return (
-      draft.flag !== choiceOf(exam.mayRevealPregnancy) ||
-      draft.bodyRegion.trim() !== (exam.bodyRegion ?? '')
-    );
+  /** The save of this exam is in flight. */
+  saving(exam: ImagingCatalogueExam): boolean {
+    return this.savingId() === exam.id;
   }
 
   /** What the exam's answer means for a family proxy, in words. */
@@ -327,7 +324,9 @@ export class ImagingCatalogueComponent implements OnInit {
   }
 
   save(exam: ImagingCatalogueExam): void {
-    if (this.savingId() || !this.dirty(exam)) return;
+    // Never a silently disabled save (QA D1124): an unchanged exam is sent as it is, and the server
+    // writes nothing for it.
+    if (this.savingId()) return;
     const draft = this.draftOf(exam);
     const flags: Record<PregnancyFlagChoice, boolean | null> = {
       UNDECIDED: null,

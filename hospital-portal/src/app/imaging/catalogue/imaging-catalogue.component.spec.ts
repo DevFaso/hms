@@ -102,10 +102,11 @@ describe('ImagingCatalogueComponent (D3450: « peut révéler une grossesse »)'
     expect(el<HTMLSelectElement>(fixture, 'catalogue-flag-RX-THORAX').value).toBe('UNDECIDED');
   });
 
-  it('clears an exam: sends false with the body region, shows who decided, and the save is offered only for a change', async () => {
+  it('clears an exam: sends false with the body region and shows who decided; the save is never silently disabled', async () => {
     const fixture = render([exam()]);
     const save = el<HTMLButtonElement>(fixture, 'catalogue-save-RX-THORAX');
-    expect(save.disabled).withContext('nothing changed yet').toBeTrue();
+    // QA D1124: never a silently disabled button; an unchanged exam may be saved (the server writes nothing).
+    expect(save.disabled).withContext('nothing changed yet').toBeFalse();
 
     api.update.and.returnValue(
       of(
@@ -122,7 +123,6 @@ describe('ImagingCatalogueComponent (D3450: « peut révéler une grossesse »)'
     region.value = ' Thorax ';
     region.dispatchEvent(new Event('input'));
     fixture.detectChanges();
-    expect(save.disabled).toBeFalse();
     save.click();
     fixture.detectChanges();
     await fixture.whenStable();
@@ -136,7 +136,7 @@ describe('ImagingCatalogueComponent (D3450: « peut révéler une grossesse »)'
     const status = el(fixture, 'catalogue-status-RX-THORAX').textContent ?? '';
     expect(status).toContain('Montré aux proches');
     expect(status).toContain('Dr Radiologue');
-    expect(el<HTMLButtonElement>(fixture, 'catalogue-save-RX-THORAX').disabled).toBeTrue();
+    expect(el<HTMLButtonElement>(fixture, 'catalogue-save-RX-THORAX').disabled).toBeFalse();
   });
 
   it('flags an exam (true) and puts one back to « not decided » (null)', () => {
