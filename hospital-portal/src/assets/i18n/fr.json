@@ -8822,7 +8822,7 @@
       "DUE": "Revue de dose par un pharmacien ou un médecin requise",
       "ACTION": "Enregistrer la revue de dose",
       "TITLE": "Enregistrer la revue de dose pédiatrique",
-      "HINT": "Une revue de dose p?diatrique est requise pour cette ordonnance. En tant que pharmacien ou m?decin autre que le prescripteur, indiquez pourquoi vous acceptez la dose ; l?ordonnance pourra ?tre sign?e une fois la revue enregistr?e.",
+      "HINT": "Une revue de dose pédiatrique est requise pour cette ordonnance. En tant que pharmacien ou médecin autre que le prescripteur, indiquez pourquoi vous acceptez la dose ; l’ordonnance pourra être signée une fois la revue enregistrée.",
       "REASON": "Motif d’acceptation de la dose",
       "REASON_REQUIRED": "Indiquez le motif pour lequel vous acceptez cette dose.",
       "CONFIRM": "Enregistrer la revue",

@@ -12,6 +12,10 @@ test('paediatric review explanations do not claim that every dose was unevaluabl
       readFileSync(new URL(`../src/assets/i18n/${locale}.json`, import.meta.url)),
     );
     assert.doesNotMatch(portal.PRESCRIPTIONS.DOSE_REVIEW.HINT, misleading, locale);
+    assert.ok(
+      !portal.PRESCRIPTIONS.DOSE_REVIEW.HINT.includes('?'),
+      `corrupted portal text: ${locale}`,
+    );
   }
   for (const suffix of ['', '_en', '_fr', '_es']) {
     const bundle = readFileSync(

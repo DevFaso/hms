@@ -8822,7 +8822,7 @@
       "DUE": "Se requiere revisión de dosis por un farmacéutico o un médico",
       "ACTION": "Registrar la revisión de dosis",
       "TITLE": "Registrar la revisión de dosis pediátrica",
-      "HINT": "Esta receta requiere una revisi?n de dosis pedi?trica. Como farmac?utico o m?dico distinto del prescriptor, indique por qu? acepta la dosis; la receta podr? firmarse una vez registrada la revisi?n.",
+      "HINT": "Esta receta requiere una revisión de dosis pediátrica. Como farmacéutico o médico distinto del prescriptor, indique por qué acepta la dosis; la receta podrá firmarse una vez registrada la revisión.",
       "REASON": "Motivo para aceptar la dosis",
       "REASON_REQUIRED": "Indique el motivo por el que acepta esta dosis.",
       "CONFIRM": "Registrar la revisión",
