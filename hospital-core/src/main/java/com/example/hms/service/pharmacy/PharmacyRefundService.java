@@ -232,7 +232,8 @@ public class PharmacyRefundService {
         recordHandover(refund, body, actor);
         // QA D2950 (r66): the money leaves the payer's PHARMACY till today, as a counter sale enters it; a closed
         // till refuses the payout and nothing is written.
-        refund.setCashSessionId(stampPharmacyTill(actor.hospitalId(), actor.userId()));
+        // QA D3410 (r70): from a PHARMACY till the payer holds open today, and never below its cash.
+        refund.setCashSessionId(stampPharmacyTill(actor.hospitalId(), actor.userId(), refund));
         refund.setStatus(PharmacyRefundStatus.PAID);
         refund.setPaidBy(actor.userId());
         refund.setPaidAt(now());
@@ -254,9 +255,10 @@ public class PharmacyRefundService {
         this.cashSessions = service;
     }
 
-    private UUID stampPharmacyTill(UUID hospitalId, UUID payerId) {
+    private UUID stampPharmacyTill(UUID hospitalId, UUID payerId, PharmacyRefund refund) {
         return cashSessions == null ? null
-                : cashSessions.stamp(com.example.hms.enums.CashTill.PHARMACY, hospitalId, payerId);
+                : cashSessions.stampPayout(com.example.hms.enums.CashTill.PHARMACY, hospitalId, payerId,
+                        refund.getMethod() != null ? refund.getMethod().name() : null, refund.getAmount());
     }
 
     /**

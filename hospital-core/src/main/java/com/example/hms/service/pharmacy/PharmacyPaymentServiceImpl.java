@@ -168,8 +168,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         if (replay.isPresent()) {
             return toResponse(replay.get());
         }
-        requireWithinPatientShare(dispense, dto.getAmount());
-        requireAmountMatchesCharge(dispense, dto.getAmount());
+        requireAmountIsPatientShare(dispense, dto.getAmount(), hospitalId);
 
         Patient patient = patientRepository.findById(dto.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", dto.getPatientId()));
@@ -362,19 +361,41 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
      * holds the dispense lock the claim service takes too, and a replayed receipt
      * has already answered before this check.
      */
-    private void requireWithinPatientShare(Dispense dispense, BigDecimal amount) {
-        BigDecimal claimed = java.util.Objects.requireNonNullElse(
-                claimRepository.sumLiveForDispense(dispense.getId()), BigDecimal.ZERO);
-        if (claimed.signum() <= 0) {
+    /**
+     * QA D3408 (r70): with an insurer share on the fill (a live claim, or a third-party cover approved by the
+     * patient's coverage, {@link FillCoverShare#insurerShare}), the patient pays exactly the rest: the checkout
+     * used to take only the whole charge, so the patient share could not be paid and the fill left on the voucher
+     * whole. With no insurer share, the patient pays the whole charge.
+     */
+    private void requireAmountIsPatientShare(Dispense dispense, BigDecimal amount, UUID hospitalId) {
+        BigDecimal insurer = insurerShareOf(dispense, hospitalId);
+        if (insurer.signum() <= 0) {
+            requireAmountMatchesCharge(dispense, amount);
             return;
         }
         BigDecimal charge = DispenseCharge.of(dispense, inventoryItemRepository)
                 .orElseThrow(() -> new BusinessException("pharmacy.payment.noPrice"));
-        BigDecimal patientShare = charge.subtract(claimed).max(BigDecimal.ZERO);
-        if (amount.compareTo(patientShare) > 0) {
+        BigDecimal patientShare = charge.subtract(insurer).max(BigDecimal.ZERO);
+        if (amount.compareTo(patientShare) != 0) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_AMOUNT,
-                    "pharmacy.payment.claimCoversCharge", claimed, patientShare);
+                    "pharmacy.payment.patientShareOnly", insurer, patientShare);
         }
+    }
+
+    private BigDecimal insurerShareOf(Dispense dispense, UUID hospitalId) {
+        if (fillCoverShare != null) {
+            return fillCoverShare.insurerShare(dispense, hospitalId);
+        }
+        return java.util.Objects.requireNonNullElse(claimRepository.sumLiveForDispense(dispense.getId()),
+                BigDecimal.ZERO);
+    }
+
+    /** QA D3408: the insurer share of a fill. A required setter; a unit test built by hand may omit it. */
+    private FillCoverShare fillCoverShare;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setFillCoverShare(FillCoverShare fillCoverShare) {
+        this.fillCoverShare = fillCoverShare;
     }
 
     private void requireAmountMatchesCharge(Dispense dispense, BigDecimal amount) {

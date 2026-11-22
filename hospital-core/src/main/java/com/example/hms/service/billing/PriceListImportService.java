@@ -178,7 +178,19 @@ public class PriceListImportService {
             Math.min(PriceListService.REASON_MAX, REASON_PREFIX.length() + fileName.length()));
         write(planned, actor, reason, trace.getId());
         auditAfterCommit(actor, trace.getId(), counts);
+        // QA r70 (lab set-up): the lab lines just imported unlinked are linked to the live tests of the same code.
+        if (labPriceAutoLink != null) {
+            labPriceAutoLink.link(actor.hospitalId(), actor.userId());
+        }
         return report.importId(trace.getId()).result(PriceListImportResult.APPLIED).build();
+    }
+
+    /** QA r70: links imported lab lines by code. A required setter; a unit test built by hand may omit it. */
+    private LabPriceAutoLink labPriceAutoLink;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setLabPriceAutoLink(LabPriceAutoLink labPriceAutoLink) {
+        this.labPriceAutoLink = labPriceAutoLink;
     }
 
     /**

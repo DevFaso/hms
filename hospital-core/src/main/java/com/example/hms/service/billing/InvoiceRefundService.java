@@ -415,8 +415,10 @@ public class InvoiceRefundService {
         // Billing plan PR 10: the money leaves the payer's till today; a closed till refuses it (nothing written).
         CashTill till = roleValidator.paysAtBillingDesk(actor.userId(), actor.hospitalId())
             ? CashTill.BILLING : CashTill.RECEPTION;
+        // QA D3410 (r70): from a till the payer holds open today, and never below its cash.
         UUID cashSessionId = cashSessions == null ? null
-            : cashSessions.stamp(till, actor.hospitalId(), actor.userId());
+            : cashSessions.stampPayout(till, actor.hospitalId(), actor.userId(),
+                refund.getMethod() != null ? refund.getMethod().name() : null, refund.getAmount());
         // PR 8 review: the receipt number is assigned once, here, under the invoice lock, in payout order.
         int receiptSeq = refundRepository.maxReceiptSeq(invoice.getId()) + 1;
         String receiptNumber = invoice.getInvoiceNumber() + "-RB" + receiptSeq;
@@ -554,8 +556,41 @@ public class InvoiceRefundService {
         String number = refund.getReceiptNumber();
         Locale effective = locale != null ? locale : LocaleContextHolder.getLocale();
         byte[] pdf = pdfInvoiceService.generateRefundReceiptPdf(invoice, refund, number,
-            displayName(refund.getPaidBy()), effective);
+            displayName(refund.getPaidBy()), reversalDetails(invoice, refund), effective);
         return new InvoicePdfResponseDTO(pdf, number, invoice.getId());
+    }
+
+    /**
+     * QA D3253 (r70): a payment reversal's receipt names the receipt of the payment it reverses (numbered as the
+     * payment receipt numbers it: the invoice number and its rank among the money received, by confirmation time),
+     * its reason and its approver. Null for a refund of an overpayment.
+     */
+    private PdfInvoiceService.ReversalDetails reversalDetails(BillingInvoice invoice, InvoiceRefund refund) {
+        if (!isReversal(refund)) {
+            return null;
+        }
+        String reversedReceipt = null;
+        if (paymentRepository != null) {
+            List<PaymentTransaction> received = paymentRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId())
+                .stream()
+                .filter(p -> p.getStatus() == com.example.hms.enums.PaymentStatus.CONFIRMED
+                    || p.getStatus() == com.example.hms.enums.PaymentStatus.REVERSED)
+                .sorted(java.util.Comparator.comparing(InvoiceRefundService::receivedAt,
+                        java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder()))
+                    .thenComparing(p -> String.valueOf(p.getId())))
+                .toList();
+            for (int i = 0; i < received.size(); i++) {
+                if (received.get(i).getId().equals(refund.getReversedPaymentId())) {
+                    reversedReceipt = invoice.getInvoiceNumber() + "-R" + (i + 1);
+                }
+            }
+        }
+        return new PdfInvoiceService.ReversalDetails(reversedReceipt, refund.getReason(),
+            displayName(refund.getDecidedBy()));
+    }
+
+    private static LocalDateTime receivedAt(PaymentTransaction payment) {
+        return payment.getConfirmedAt() != null ? payment.getConfirmedAt() : payment.getCreatedAt();
     }
 
     // ───────────────────────────── access ─────────────────────────────

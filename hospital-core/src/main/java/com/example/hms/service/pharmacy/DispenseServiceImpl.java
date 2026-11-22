@@ -812,6 +812,14 @@ public class DispenseServiceImpl implements DispenseService {
         this.billingDeferrals = billingDeferrals;
     }
 
+    /** QA D3408: the insurer share of a fill, read by the checkout. A required setter; a unit test may omit it. */
+    private FillCoverShare fillCoverShare;
+
+    @Autowired
+    public void setFillCoverShare(FillCoverShare fillCoverShare) {
+        this.fillCoverShare = fillCoverShare;
+    }
+
     @Override
     @Transactional(readOnly = true)
     public com.example.hms.payload.dto.pharmacy.DispensePaymentStatusDTO getPaymentStatus(UUID dispenseId) {
@@ -1576,6 +1584,15 @@ public class DispenseServiceImpl implements DispenseService {
         DispenseResponseDTO dto = dispenseMapper.toResponseDTO(dispense);
         // QA D264: the checkout takes the amount from here, not from a typed figure.
         dto.setChargeAmount(DispenseCharge.of(dispense, inventoryItemRepository).orElse(null));
+        // QA D3408 (r70): with an insurer share, the checkout takes the patient share, not the whole charge.
+        if (fillCoverShare != null && dto.getChargeAmount() != null && dispense.getPharmacy() != null
+                && dispense.getPharmacy().getHospital() != null) {
+            BigDecimal insurer = fillCoverShare.insurerShare(dispense, dispense.getPharmacy().getHospital().getId());
+            if (insurer.signum() > 0) {
+                dto.setInsurerShareAmount(insurer);
+                dto.setPatientShareAmount(dto.getChargeAmount().subtract(insurer).max(BigDecimal.ZERO));
+            }
+        }
         // QA D843: a paid fill was offered at the checkout with nothing saying so.
         dto.setPaid(paymentRepository.existsByDispense_IdAndStatus(
                 dispense.getId(), com.example.hms.enums.PharmacyPaymentStatus.POSTED));

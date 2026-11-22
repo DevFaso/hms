@@ -1,0 +1,143 @@
+package com.example.hms.service.pharmacy;
+
+import com.example.hms.enums.DispenseBillingDeferralKind;
+import com.example.hms.enums.DispenseBillingDeferralStatus;
+import com.example.hms.enums.DispenseStatus;
+import com.example.hms.model.pharmacy.Dispense;
+import com.example.hms.model.pharmacy.DispenseBillingDeferral;
+import com.example.hms.repository.pharmacy.DispenseBillingDeferralRepository;
+import com.example.hms.repository.pharmacy.DispenseRepository;
+import com.example.hms.repository.pharmacy.InventoryItemRepository;
+import com.example.hms.repository.pharmacy.PharmacyClaimRepository;
+import com.example.hms.repository.pharmacy.PharmacyPaymentRepository;
+import com.example.hms.service.billing.InvoiceCoverageService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.LocalDate;
+import java.util.EnumSet;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+
+/**
+ * QA D3406 / D3408 (r70): what a pharmacy fill costs, and who pays which part of it, read the same way by the
+ * deferral cards, their approval, the checkout and the claim.
+ *
+ * <ul>
+ *   <li>The <b>prepared fill</b> of a prescription (its PENDING dispense, at most one) is what a deferral is asked
+ *       for: its charge, what was paid on it, and what is still due. The approver sees it, and an outpatient credit
+ *       below it is refused at approval (D3406), not at the hand-over.</li>
+ *   <li>The <b>insurer share</b> of a fill comes from the patient's coverage by the invoice's rule
+ *       ({@link InvoiceCoverageService#quote}), never from a typed figure (D3408). A third-party cover records it at
+ *       approval as the most that may leave on it; the patient's share is paid at the checkout (or the fill stays
+ *       at the counter), and the claim is that share.</li>
+ * </ul>
+ */
+@Component
+@RequiredArgsConstructor
+public class FillCoverShare {
+
+    /** A third-party cover that still stands: approved, or a fill left on it. */
+    static final Set<DispenseBillingDeferralStatus> COVER_STANDING = EnumSet.of(DispenseBillingDeferralStatus.APPROVED,
+            DispenseBillingDeferralStatus.EXECUTED);
+
+    private final DispenseRepository dispenseRepository;
+    private final DispenseBillingDeferralRepository deferralRepository;
+    private final InventoryItemRepository inventoryItemRepository;
+    private final PharmacyPaymentRepository paymentRepository;
+    private final PharmacyClaimRepository claimRepository;
+    private final InvoiceCoverageService invoiceCoverage;
+    private final Clock clock;
+
+    /** The prepared fill of a prescription: its charge, what was paid on it, and what is still due. */
+    public record PreparedFill(UUID dispenseId, BigDecimal charge, BigDecimal paid, BigDecimal due) {
+    }
+
+    /** The prepared (PENDING) fill of {@code prescriptionId} at {@code hospitalId}, priced; empty when none. */
+    @Transactional(readOnly = true)
+    public Optional<PreparedFill> preparedFill(UUID prescriptionId, UUID hospitalId) {
+        if (prescriptionId == null || hospitalId == null) {
+            return Optional.empty();
+        }
+        return dispenseRepository.findFirstByPrescription_IdAndStatus(prescriptionId, DispenseStatus.PENDING)
+                .filter(fill -> atHospital(fill, hospitalId))
+                .flatMap(fill -> DispenseCharge.of(fill, inventoryItemRepository).map(charge -> {
+                    BigDecimal paid = paidOn(fill);
+                    return new PreparedFill(fill.getId(), charge, paid, charge.subtract(paid).max(BigDecimal.ZERO));
+                }));
+    }
+
+    /**
+     * The insurer share of {@code charge} for the patient at {@code hospitalId} today, by the coverage rule an invoice
+     * uses (no pharmacy category: the plan's default rate, its ceilings); empty when no coverage with a plan applies.
+     */
+    @Transactional(readOnly = true)
+    public Optional<BigDecimal> planShare(UUID patientId, UUID hospitalId, BigDecimal charge) {
+        if (patientId == null || hospitalId == null || charge == null) {
+            return Optional.empty();
+        }
+        return invoiceCoverage.quote(patientId, hospitalId, LocalDate.now(clock), charge, null, null)
+                .map(InvoiceCoverageService.CoverageQuote::payerShare);
+    }
+
+    /**
+     * The insurer share recorded on the third-party cover this fill left on, or that stands approved for its
+     * prescription; empty when the fill has none.
+     */
+    @Transactional(readOnly = true)
+    public Optional<BigDecimal> coverShare(Dispense fill, UUID hospitalId) {
+        if (fill == null || hospitalId == null) {
+            return Optional.empty();
+        }
+        if (fill.getBillingDeferralId() != null) {
+            return deferralRepository.findByHospitalIdAndIdIn(hospitalId, java.util.List.of(fill.getBillingDeferralId()))
+                    .stream()
+                    .filter(FillCoverShare::isCover)
+                    .map(DispenseBillingDeferral::getCreditLimit)
+                    .filter(Objects::nonNull)
+                    .findFirst();
+        }
+        UUID prescriptionId = fill.getPrescription() != null ? fill.getPrescription().getId() : null;
+        if (prescriptionId == null) {
+            return Optional.empty();
+        }
+        return deferralRepository.findByHospitalIdAndPrescriptionIdAndStatusInOrderByRequestedAtAsc(hospitalId,
+                        prescriptionId, EnumSet.of(DispenseBillingDeferralStatus.APPROVED)).stream()
+                .filter(FillCoverShare::isCover)
+                .map(DispenseBillingDeferral::getCreditLimit)
+                .filter(Objects::nonNull)
+                .findFirst();
+    }
+
+    /**
+     * What the insurer pays of this fill: the share a live claim asks for, else the share its third-party cover
+     * recorded; zero when neither. The patient owes the charge less this.
+     */
+    @Transactional(readOnly = true)
+    public BigDecimal insurerShare(Dispense fill, UUID hospitalId) {
+        BigDecimal claimed = fill != null && fill.getId() != null
+                ? Objects.requireNonNullElse(claimRepository.sumLiveForDispense(fill.getId()), BigDecimal.ZERO)
+                : BigDecimal.ZERO;
+        BigDecimal cover = coverShare(fill, hospitalId).orElse(BigDecimal.ZERO);
+        return claimed.max(cover);
+    }
+
+    private static boolean isCover(DispenseBillingDeferral deferral) {
+        return deferral.getKind() == DispenseBillingDeferralKind.THIRD_PARTY_COVER
+                && COVER_STANDING.contains(deferral.getStatus());
+    }
+
+    private BigDecimal paidOn(Dispense fill) {
+        return Objects.requireNonNullElse(paymentRepository.sumPostedForDispense(fill.getId()), BigDecimal.ZERO);
+    }
+
+    private static boolean atHospital(Dispense fill, UUID hospitalId) {
+        return fill.getPharmacy() != null && fill.getPharmacy().getHospital() != null
+                && hospitalId.equals(fill.getPharmacy().getHospital().getId());
+    }
+}

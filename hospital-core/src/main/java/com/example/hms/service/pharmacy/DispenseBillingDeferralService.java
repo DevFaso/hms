@@ -199,11 +199,21 @@ public class DispenseBillingDeferralService {
         if (note != null) {
             requireText(note, FIELD_NOTE);
         }
+        FillCoverShare.PreparedFill fill = coverShare != null
+                ? coverShare.preparedFill(deferral.getPrescriptionId(), actor.hospitalId()).orElse(null) : null;
         if (thirdParty) {
             requireReference(cover);
             deferral.setCoverReference(cover);
+            // QA D3408 (r70): the insurer pays its share by the patient's coverage, never the whole fill on a voucher.
+            deferral.setCreditLimit(requireInsurerShare(deferral, fill, actor.hospitalId()));
         } else {
-            deferral.setCreditLimit(requireLimit(decision.getCreditLimit()));
+            BigDecimal limit = requireLimit(decision.getCreditLimit());
+            // QA D3406 (r70): a ceiling below what the fill owes was approved, then refused at the hand-over.
+            if (limit != null && fill != null && limit.compareTo(fill.due()) < 0) {
+                throw new FieldBusinessException(FIELD_LIMIT, "pharmacy.deferral.creditLimitBelowDue",
+                        DisplayNumbers.quantity(limit), DisplayNumbers.quantity(fill.due()));
+            }
+            deferral.setCreditLimit(limit);
         }
         deferral.setStatus(DispenseBillingDeferralStatus.APPROVED);
         deferral.setDecidedBy(actor.userId());
@@ -506,6 +516,12 @@ public class DispenseBillingDeferralService {
         }
         BigDecimal total = first || deferral.getAmountDue() == null ? due : deferral.getAmountDue().add(due);
         if (deferral.getCreditLimit() != null && total.compareTo(deferral.getCreditLimit()) > 0) {
+            if (deferral.getKind() == DispenseBillingDeferralKind.THIRD_PARTY_COVER) {
+                // QA D3408 (r70): the cover holds the insurer share only; the patient share is paid first.
+                throw new FieldBusinessException(FIELD_DEFERRAL, "pharmacy.handOver.coverPatientShareDue",
+                        DisplayNumbers.quantity(total.subtract(deferral.getCreditLimit())),
+                        DisplayNumbers.quantity(deferral.getCreditLimit()));
+            }
             throw new FieldBusinessException(FIELD_DEFERRAL, "pharmacy.handOver.deferralOverLimit",
                     DisplayNumbers.quantity(total), DisplayNumbers.quantity(deferral.getCreditLimit()));
         }
@@ -721,6 +737,38 @@ public class DispenseBillingDeferralService {
         CardNumbers.requireNone(reference, FIELD_COVER);
     }
 
+    /**
+     * QA D3408 (r70): the insurer share of the prepared fill, by the patient's coverage at this hospital today
+     * ({@link FillCoverShare#planShare}); the most that may leave on the cover. Refused when no fill is prepared
+     * (nothing to price), when no coverage with a plan applies, or when the plan pays nothing of it.
+     */
+    private BigDecimal requireInsurerShare(DispenseBillingDeferral deferral, FillCoverShare.PreparedFill fill,
+                                           UUID hospitalId) {
+        if (coverShare == null) {
+            return null;
+        }
+        if (fill == null) {
+            throw new FieldBusinessException(FIELD_COVER, "pharmacy.deferral.coverNeedsPreparedFill");
+        }
+        BigDecimal share = coverShare.planShare(deferral.getPatientId(), hospitalId, fill.charge())
+                .orElseThrow(() -> new FieldBusinessException(FIELD_COVER, "pharmacy.deferral.coverNoPlan"));
+        if (share.signum() <= 0) {
+            throw new FieldBusinessException(FIELD_COVER, "pharmacy.deferral.coverNothingCovered");
+        }
+        return share;
+    }
+
+    /**
+     * QA D3406 / D3408: the fill a deferral is about, and the coverage split of it. A required setter: the
+     * application always wires it; a service built by hand in a unit test has none and approves as before.
+     */
+    private FillCoverShare coverShare;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setCoverShare(FillCoverShare coverShare) {
+        this.coverShare = coverShare;
+    }
+
     /** An optional ceiling: whole francs, above zero. */
     private static BigDecimal requireLimit(BigDecimal limit) {
         if (limit == null) {
@@ -748,7 +796,22 @@ public class DispenseBillingDeferralService {
                 && roleValidator.canReviewDispenseBillingOverride(actor.userId(), actor.hospitalId());
         boolean canExecute = actor != null && d.getStatus() == DispenseBillingDeferralStatus.APPROVED
                 && !actor.userId().equals(d.getDecidedBy());
+        // QA D3406 (r70): the card shows the fill it is about; QA D3408: and, for a cover, the insurer share.
+        FillCoverShare.PreparedFill fill = coverShare != null && OPEN_STATUSES.contains(d.getStatus())
+                ? coverShare.preparedFill(d.getPrescriptionId(), d.getHospitalId()).orElse(null) : null;
+        BigDecimal insurerShare = null;
+        if (d.getKind() == DispenseBillingDeferralKind.THIRD_PARTY_COVER) {
+            insurerShare = d.getCreditLimit();
+            if (insurerShare == null && fill != null) {
+                insurerShare = coverShare.planShare(d.getPatientId(), d.getHospitalId(), fill.charge()).orElse(null);
+            }
+        }
         return DispenseBillingDeferralDTO.builder()
+                .fillCharge(fill != null ? fill.charge() : null)
+                .fillDue(fill != null ? fill.due() : null)
+                .insurerShare(insurerShare)
+                .patientShare(insurerShare != null && fill != null
+                        ? fill.charge().subtract(insurerShare).max(BigDecimal.ZERO) : null)
                 .id(d.getId())
                 .prescriptionId(d.getPrescriptionId())
                 .patientId(d.getPatientId())

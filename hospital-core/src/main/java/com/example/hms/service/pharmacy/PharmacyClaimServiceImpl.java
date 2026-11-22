@@ -82,6 +82,8 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
             throw new ResourceNotFoundException("dispense.notfound");
         }
 
+        // QA D3408 (r70): the claim is the insurer share by the coverage rule, never a typed figure.
+        dto.setAmount(insurerShareClaimed(dispense, dto.getAmount(), hospitalId));
         requireClaimableDispense(dispense, dto.getAmount());
 
         Patient patient = patientRepository.findById(dto.getPatientId())
@@ -315,7 +317,8 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
         if (dto == null) {
             throw new BusinessException("pharmacy.claim.requestRequired");
         }
-        if (dto.getAmount() == null || dto.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
+        // QA D3408: an amount may be left out (the server takes the insurer share); one given must be positive.
+        if (dto.getAmount() != null && dto.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new com.example.hms.exception.FieldBusinessException("amount", "pharmacy.claim.amountPositive");
         }
         // QA D1613: a new claim is a draft; a status sent with it used to be stored as is,
@@ -323,6 +326,50 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
         if (dto.getClaimStatus() != null && dto.getClaimStatus() != PharmacyClaimStatus.DRAFT) {
             throw new com.example.hms.exception.FieldBusinessException("claimStatus", "pharmacy.claim.startsAsDraft");
         }
+    }
+
+    /**
+     * QA D3408 (r70): what a claim asks the insurer for. The share recorded on the third-party cover the fill left
+     * on, else the share of the patient coverage at this hospital today ({@link FillCoverShare}), at most what the
+     * patient did not pay. A typed amount that differs is refused, naming the share. Only a coverage with no plan
+     * (free-text) leaves the amount to the person, as before.
+     */
+    private BigDecimal insurerShareClaimed(Dispense dispense, BigDecimal typed, UUID hospitalId) {
+        java.util.Optional<BigDecimal> share = java.util.Optional.empty();
+        if (fillCoverShare != null) {
+            share = fillCoverShare.coverShare(dispense, hospitalId);
+            if (share.isEmpty()) {
+                BigDecimal charge = DispenseCharge.of(dispense, inventoryItemRepository).orElse(null);
+                UUID patientId = dispense.getPatient() != null ? dispense.getPatient().getId() : null;
+                share = charge == null ? java.util.Optional.empty()
+                        : fillCoverShare.planShare(patientId, hospitalId, charge);
+            }
+        }
+        if (share.isEmpty() || share.get().signum() <= 0) {
+            if (typed == null) {
+                throw new com.example.hms.exception.FieldBusinessException("amount", "pharmacy.claim.amountPositive");
+            }
+            return typed;
+        }
+        BigDecimal paid = java.util.Objects.requireNonNullElse(
+                paymentRepository.sumPostedForDispense(dispense.getId()), BigDecimal.ZERO);
+        BigDecimal billable = DispenseCharge.of(dispense, inventoryItemRepository)
+                .map(charge -> charge.subtract(paid).max(BigDecimal.ZERO))
+                .orElse(share.get());
+        BigDecimal insurer = share.get().min(billable);
+        if (typed != null && typed.compareTo(insurer) != 0) {
+            throw new com.example.hms.exception.FieldBusinessException("amount", "pharmacy.claim.amountIsInsurerShare",
+                    insurer);
+        }
+        return insurer.signum() > 0 ? insurer : typed;
+    }
+
+    /** QA D3408: the insurer share of a fill. A required setter; a unit test built by hand may omit it. */
+    private FillCoverShare fillCoverShare;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setFillCoverShare(FillCoverShare fillCoverShare) {
+        this.fillCoverShare = fillCoverShare;
     }
 
     /**
