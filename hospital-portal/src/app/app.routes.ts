@@ -593,6 +593,26 @@ export const routes: Routes = [
           import('./billing/payers/payers.component').then((m) => m.PayersComponent),
       },
 
+      // QA D2706 (r70): the hospital's insurer shares in one list, the claims reviewer's own screen; mirrors
+      // GET /billing-invoices/payer-shares (InvoicePayerShareController).
+      {
+        path: 'billing/parts-assureurs',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_SUPER_ADMIN',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ACCOUNTANT',
+            'ROLE_BILLING_SPECIALIST',
+            'ROLE_CLAIMS_REVIEWER',
+          ],
+        },
+        loadComponent: () =>
+          import('./billing/payer-shares/payer-shares-list.component').then(
+            (m) => m.PayerSharesListComponent,
+          ),
+      },
+
       // Billing-money plan PR 10 (QA r65 D2326): every till of the hospital on a day, the day report and
       // the journal. Hospital admin and accountant (the super-admin reads); mirrors CashSessionController.
       {

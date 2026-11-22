@@ -59,6 +59,18 @@ public class DispenseBillingDeferralDTO {
     private String cancelledByName;
     private LocalDateTime cancelledAt;
     private String cancelReason;
+    /**
+     * QA D3406 (r70): an open deferral only: the charge of the prescription prepared fill and what it still owes,
+     * so the approver sees the amount before setting a ceiling. Null when no fill is prepared.
+     */
+    private BigDecimal fillCharge;
+    private BigDecimal fillDue;
+    /**
+     * QA D3408 (r70): a third-party cover only: the insurer share by the patient coverage (recorded at approval,
+     * estimated before) and the patient share, which is paid at the checkout before the hand-over.
+     */
+    private BigDecimal insurerShare;
+    private BigDecimal patientShare;
     private boolean canDecide;
     private boolean canReview;
     private boolean canExecute;

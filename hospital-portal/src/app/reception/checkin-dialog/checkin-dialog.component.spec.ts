@@ -5,7 +5,12 @@ import { markServerFieldErrors, scopeOf } from '../../shared/forms/server-field-
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
-import { ReceptionService, ReceptionQueueItem, CheckInResponse } from '../reception.service';
+import {
+  ReceptionService,
+  ReceptionQueueItem,
+  CheckInResponse,
+  FrontDeskPatientSnapshot,
+} from '../reception.service';
 import { ToastService } from '../../core/toast.service';
 import { defer, of, throwError } from 'rxjs';
 import { HttpErrorResponse, HttpHeaders, HttpResponse } from '@angular/common/http';
@@ -47,8 +52,44 @@ describe('CheckinDialogComponent', () => {
     message: 'Patient Jane Doe successfully checked in',
   };
 
+  /** QA D3258 (r70): the patient's only policy, Mutuelle Test A at 75 %, and a 2 000 F consultation. */
+  const snapshot = {
+    patientId: 'pat-1',
+    fullName: 'Jane Doe',
+    mrn: 'MRN-001',
+    dob: null,
+    phone: null,
+    email: null,
+    address: null,
+    insurance: {
+      insuranceId: 'ins-1',
+      hasActiveCoverage: true,
+      primaryPayer: 'MUT-TEST-A',
+      policyNumber: 'MTA-T1-R70-0001',
+      expiresOn: '2027-12-31',
+      expired: false,
+      hasPrimary: true,
+      verifiedAt: null,
+      verifiedBy: null,
+      payerName: 'Mutuelle Test A',
+      planName: 'Formule Test Essentielle',
+      effectiveFrom: '2026-01-01',
+      coveragePercent: 75,
+      consultationFee: 2000,
+      consultationLabel: 'Consultation générale',
+      suggestedPayerShare: 1500,
+      suggestedCopay: 500,
+    },
+    billing: { openInvoiceCount: 0, totalBalanceDue: 0 },
+    alerts: {},
+  } as unknown as FrontDeskPatientSnapshot;
+
   beforeEach(async () => {
-    mockReceptionService = jasmine.createSpyObj('ReceptionService', ['checkInPatient']);
+    mockReceptionService = jasmine.createSpyObj('ReceptionService', [
+      'checkInPatient',
+      'getPatientSnapshot',
+    ]);
+    mockReceptionService.getPatientSnapshot.and.returnValue(of(snapshot));
     mockToastService = jasmine.createSpyObj('ToastService', ['success', 'error', 'warning']);
 
     await TestBed.configureTestingModule({
@@ -69,6 +110,31 @@ describe('CheckinDialogComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('QA D3258 (r70): shows the payer, plan, policy and validity the desk verifies', () => {
+    const host = fixture.nativeElement as HTMLElement;
+    expect(mockReceptionService.getPatientSnapshot).toHaveBeenCalledWith('pat-1');
+    expect(host.querySelector('[data-testid="checkin-coverage-payer"]')?.textContent).toContain(
+      'Mutuelle Test A',
+    );
+    expect(host.querySelector('[data-testid="checkin-coverage-plan"]')?.textContent).toContain(
+      'Formule Test Essentielle',
+    );
+    expect(host.querySelector('[data-testid="checkin-coverage-policy"]')?.textContent).toContain(
+      'MTA-T1-R70-0001',
+    );
+    expect(
+      host.querySelector('[data-testid="checkin-coverage-validity"]')?.textContent?.trim(),
+    ).not.toBe('');
+  });
+
+  it('QA D3258 (r70): suggests the patient share of the consultation; the desk takes it in one press', () => {
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="checkin-suggested-copay"]')).not.toBeNull();
+    expect(component.copayAmount()).toBeNull();
+    host.querySelector<HTMLButtonElement>('[data-testid="checkin-use-suggested-copay"]')!.click();
+    expect(component.copayAmount()).toBe(500);
   });
 
   it('should not allow submit when identity is not confirmed', () => {

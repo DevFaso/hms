@@ -68,7 +68,25 @@ public class TariffResolver {
         if (key.isEmpty()) {
             return Optional.empty();
         }
-        List<PriceListItem> items = itemRepository.findActiveByLinkForCharge(hospitalId, type, key.get());
+        return inForce(itemRepository.findActiveByLinkForCharge(hospitalId, type, key.get()), hospitalId, day);
+    }
+
+    /**
+     * QA D3258 (r70): {@link #resolve} for a read that charges nothing (the check-in dialog's suggested copay): the
+     * same item and version, without the share lock a charge takes, so a read-only transaction may ask.
+     */
+    public Optional<Tariff> peek(UUID hospitalId, PriceListLinkType type, String rawKey, LocalDate day) {
+        if (hospitalId == null || day == null) {
+            return Optional.empty();
+        }
+        Optional<String> key = PriceListLinks.lookupKey(type, rawKey);
+        if (key.isEmpty()) {
+            return Optional.empty();
+        }
+        return inForce(itemRepository.findActiveByLink(hospitalId, type, key.get()), hospitalId, day);
+    }
+
+    private Optional<Tariff> inForce(List<PriceListItem> items, UUID hospitalId, LocalDate day) {
         // One active item per link (uq_price_list_item_active_link); anything else is never guessed between.
         if (items == null || items.size() != 1) {
             return Optional.empty();

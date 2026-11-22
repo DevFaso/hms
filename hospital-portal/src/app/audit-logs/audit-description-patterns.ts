@@ -2025,6 +2025,13 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Deferred billing of a fill closed: the order left the counter with nothing due$/,
     params: [],
   },
+  // Review of #1284 (QA D3408): a third-party cover withdrawn because the prepared fill it was approved on was
+  // cancelled (constant description, ids on the row).
+  {
+    key: 'AUDIT.DESC.DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED',
+    re: /^Deferred billing of a fill closed: the prepared fill was cancelled$/,
+    params: [],
+  },
   {
     key: 'AUDIT.DESC.PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED',
     re: /^Pharmacy claim acceptance confirmed by a money desk$/,

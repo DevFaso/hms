@@ -116,6 +116,13 @@ public class PriceListController {
             .body(report);
     }
 
+    @PostMapping("/link-lab-tests")
+    @PreAuthorize(MAINTAINERS)
+    @Operation(summary = "Link every unlinked lab price line to the live lab test of the same code (Lier par code)")
+    public com.example.hms.payload.dto.billing.PriceListAutoLinkReportDTO linkLabTestsByCode() {
+        return priceListService.linkLabTestsByCode();
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize(READERS)
     @Operation(summary = "One price list item with its price history")

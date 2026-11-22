@@ -222,7 +222,26 @@ export class PriceListService {
   }
 
   /** PR 4: the acting hospital's grid in the import's format; the whole response keeps the server's file name. */
+  /** QA r70 (lab set-up): « Lier par code »: every unlinked lab line takes the live lab test of its code. */
+  linkLabTestsByCode(): Observable<PriceListAutoLinkReport> {
+    return this.http.post<PriceListAutoLinkReport>(`${this.base}/link-lab-tests`, {});
+  }
+
   exportCsv(): Observable<HttpResponse<Blob>> {
     return this.http.get(`${this.base}/export.csv`, { responseType: 'blob', observe: 'response' });
   }
+}
+
+/** QA r70 (lab set-up): what « Lier par code » linked, and the codes it left (PriceListAutoLinkReportDTO). */
+export interface PriceListAutoLinkReport {
+  linked: {
+    itemId: string;
+    code: string;
+    label?: string | null;
+    testCode?: string | null;
+    testName?: string | null;
+  }[];
+  unmatched: string[];
+  ambiguous: string[];
+  alreadyTaken: string[];
 }

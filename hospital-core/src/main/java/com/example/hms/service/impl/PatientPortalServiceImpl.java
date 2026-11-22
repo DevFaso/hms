@@ -2660,8 +2660,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
         boolean thisHospitals = insurance.getAssignment() != null && insurance.getAssignment().getHospital() != null
             && hospitalId != null && hospitalId.equals(insurance.getAssignment().getHospital().getId());
-        if (thisHospitals && !insurance.isPrimary() && patientInsuranceRepository
-                .findByPatient_IdAndPrimaryTrueAndAssignment_Hospital_Id(patient.getId(), hospitalId).isEmpty()) {
+        // Review of #1284: read as a list, so a second primary left behind never throws as an Optional finder would.
+        if (thisHospitals && !insurance.isPrimary() && !com.example.hms.service.billing.CoverageOrder.hasPrimary(
+                patientInsuranceRepository.findByPatient_IdAndAssignment_Hospital_Id(patient.getId(), hospitalId))) {
             insurance.setPrimary(true);
         }
         patientInsuranceRepository.save(insurance);

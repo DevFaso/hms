@@ -47,6 +47,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -155,6 +156,21 @@ class PreparedFillVoiderTest {
         verify(support).notifyReadyCancelled(any(), eq(patient), eq(pharmacy), eq("Amoxicillin"));
         // QA D404: a preparation paid at the till is voided with it, every reason.
         verify(paymentVoider).voidForCancelledDispense(eq(prepared), argThat(r -> r.contains(reason.name())));
+    }
+
+    @Test
+    @DisplayName("review of #1284: a cancelled prepared fill withdraws the open third-party covers of its order")
+    void aCancelledFillWithdrawsItsCovers() {
+        DispenseBillingDeferralService deferrals = mock(DispenseBillingDeferralService.class);
+        voider.setBillingDeferrals(deferrals);
+        com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+        hospital.setId(UUID.randomUUID());
+        pharmacy.setHospital(hospital);
+        theUpdateCancels(ReadyCancelReason.OTHER);
+
+        voider.cancel(prepared, ReadyCancelReason.OTHER);
+
+        verify(deferrals).withdrawCoversOfCancelledFill(prescription, hospital.getId());
     }
 
     @Test

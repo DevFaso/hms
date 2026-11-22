@@ -956,6 +956,10 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
         LabTestDefinition saved = repository.save(definition);
         auditApprovalStep(currentUser, saved, action, singleDirectorException);
+        // QA r70 (lab set-up): a test going live picks up the price line of its code, imported before it existed.
+        if ("ACTIVATE".equals(action) && labPriceAutoLink != null && saved.getHospital() != null) {
+            labPriceAutoLink.link(saved.getHospital().getId(), currentUser.getId());
+        }
         return mapper.toDto(saved);
     }
 
@@ -1002,6 +1006,14 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         if (!definition.hasGradingBasis()) {
             throw new BusinessException("lab.definition.rangesRequiredForReview");
         }
+    }
+
+    /** QA r70: links the lab price line of an activated test. A required setter; a unit test may omit it. */
+    private com.example.hms.service.billing.LabPriceAutoLink labPriceAutoLink;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setLabPriceAutoLink(com.example.hms.service.billing.LabPriceAutoLink labPriceAutoLink) {
+        this.labPriceAutoLink = labPriceAutoLink;
     }
 
     /**
