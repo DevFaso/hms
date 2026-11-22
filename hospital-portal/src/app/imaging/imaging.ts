@@ -176,6 +176,7 @@ const ORDER_FIELD_IDS: Readonly<Record<string, string>> = {
   modality: 'img-modality',
   priority: 'img-priority',
   studyType: 'img-studyType',
+  catalogueItemId: 'img-catalogueExam',
   bodyRegion: 'img-bodyRegion',
   laterality: 'img-laterality',
   clinicalQuestion: 'img-clinicalQ',
@@ -194,6 +195,7 @@ const ORDER_FIELD_LABELS: Readonly<Record<string, string>> = {
   modality: 'IMAGING.MODALITY',
   priority: 'IMAGING.PRIORITY',
   studyType: 'IMAGING.STUDY_TYPE',
+  catalogueItemId: 'IMAGING_CATALOGUE.EXAM',
   bodyRegion: 'IMAGING.BODY_REGION',
   laterality: 'IMAGING.LATERALITY',
   clinicalQuestion: 'IMAGING.CLINICAL_QUESTION',
@@ -1068,6 +1070,9 @@ export class ImagingComponent implements OnInit {
     };
     const payload: ImagingOrderRequest = {
       ...this.form,
+      // QA D3450 / D3254: only an exam the catalogue still offers is named. An order whose exam was
+      // withdrawn since is sent without it, and the server keeps the exam it was placed with.
+      catalogueItemId: this.pickedExam()?.id,
       laterality: this.form.laterality || undefined,
       scheduledDate: (this.form.scheduledDate ?? '').trim() || undefined,
     };

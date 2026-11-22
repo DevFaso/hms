@@ -254,6 +254,33 @@ describe('ImagingComponent — r70 (D3450 / D3254: the exam is picked from the c
     expect(imaging.updateOrder.calls.mostRecent().args[1].catalogueItemId).toBe('e-chest');
   });
 
+  it('an order whose exam was withdrawn from the catalogue stays editable, and is sent without an exam', async () => {
+    setUp(of([exam()]));
+    component.openEdit({
+      id: 'o1',
+      patientId: 'p1',
+      hospitalId: 'h1',
+      modality: 'ULTRASOUND',
+      studyType: 'Échographie rénale',
+      catalogueItemId: 'e-withdrawn',
+      status: 'ORDERED',
+    } as ImagingOrderResponse);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const study = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+      '#img-studyType',
+    )!;
+    expect(study.readOnly).toBeFalse();
+    component.submitForm();
+    const sent = imaging.updateOrder.calls.mostRecent().args[1];
+    expect(sent.catalogueItemId)
+      .withContext('the server keeps the exam it was placed with')
+      .toBeUndefined();
+    expect(sent.studyType).toBe('Échographie rénale');
+  });
+
   it('the catalogue tab is offered to the hospital admin and the radiologist only', () => {
     setUp(of([exam()]));
     expect(q('imaging-catalogue-tab')).withContext('a doctor').toBeNull();
