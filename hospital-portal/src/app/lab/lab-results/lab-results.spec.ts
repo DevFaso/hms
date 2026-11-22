@@ -181,7 +181,10 @@ describe('LabResultsComponent', () => {
     ).toContain('50%');
   });
 
-  function flushInit(results: Record<string, unknown>[] = [mockResult()]): void {
+  function flushInit(
+    results: Record<string, unknown>[] = [mockResult()],
+    orders: LabOrderResponse[] = [],
+  ): void {
     // listResults
     const resultsReq = httpMock.expectOne((r) => r.url === '/lab-results' && r.method === 'GET');
     resultsReq.flush({
@@ -192,7 +195,7 @@ describe('LabResultsComponent', () => {
     // listOrders
     const ordersReq = httpMock.expectOne((r) => r.url === '/lab-orders' && r.method === 'GET');
     ordersReq.flush({
-      data: { content: [], totalElements: 0, totalPages: 0, number: 0 },
+      data: { content: orders, totalElements: orders.length, totalPages: 1, number: 0 },
       success: true,
     });
 
@@ -691,6 +694,35 @@ describe('LabResultsComponent', () => {
 
     // saving should not be set and no HTTP request should be made
     expect(component.saving()).toBeFalse();
+  });
+
+  it('D2311: a saved result leaves the new-result picker but remains available for correction', () => {
+    fixture.detectChanges();
+    const orders = ['order-1', 'order-2'].map(
+      (id) =>
+        ({
+          id,
+          patientId: 'patient-1',
+          labTestName: 'cdx-Test',
+          status: 'COLLECTED',
+        }) as LabOrderResponse,
+    );
+    flushInit([], orders);
+    expect(component.orders().map((o) => o.id)).toEqual(['order-1', 'order-2']);
+    component.openCreate();
+    component.form.labOrderId = 'order-1';
+    component.form.resultValue = '7.0';
+    component.submitForm();
+    httpMock
+      .expectOne((r) => r.url === '/lab-results' && r.method === 'POST')
+      .flush({ id: 'new-result', labOrderId: 'order-1' });
+    httpMock
+      .expectOne((r) => r.url === '/lab-results' && r.method === 'GET')
+      .flush({ data: { content: [], totalElements: 0, totalPages: 0, number: 0 }, success: true });
+    component.openCreate();
+    expect(component.orders().map((o) => o.id)).toEqual(['order-2']);
+    component.openCorrection(mockResult({ released: true, labOrderId: 'order-1' }) as never);
+    expect(component.orders().map((o) => o.id)).toEqual(['order-1', 'order-2']);
   });
 
   it('should submit create form', () => {
