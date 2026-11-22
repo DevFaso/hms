@@ -57,7 +57,12 @@ describe('PreCheckinFormComponent', () => {
       of({
         phoneNumberPrimary: '+22670000000',
         email: 'patient@example.test',
-        address: 'Ouagadougou',
+        addressLine1: 'cdx-Street',
+        addressLine2: 'cdx-Door 2',
+        city: 'Ouagadougou',
+        state: 'Centre',
+        zipCode: 'CDX',
+        country: 'Burkina Faso',
       } as PatientProfileDTO),
     );
 
@@ -80,7 +85,9 @@ describe('PreCheckinFormComponent', () => {
     const saved = fixture.nativeElement.querySelector('[data-testid="precheckin-current-contact"]');
     expect(saved.textContent).toContain('+22670000000');
     expect(saved.textContent).toContain('patient@example.test');
-    expect(saved.textContent).toContain('Ouagadougou');
+    expect(saved.textContent).toContain(
+      'cdx-Street, cdx-Door 2, Ouagadougou, Centre, CDX, Burkina Faso',
+    );
     expect(component.phoneNumber).toBe('');
     expect(component.email).toBe('');
     expect(component.addressLine1).toBe('');

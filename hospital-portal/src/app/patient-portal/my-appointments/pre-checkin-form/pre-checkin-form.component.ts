@@ -74,6 +74,26 @@ export class PreCheckinFormComponent implements OnInit, OnChanges {
   readonly contactLoadFailed = signal(false);
   readonly contactFailureReason = signal<string | null>(null);
 
+  currentAddress(): string {
+    const contact = this.currentContact();
+    if (!contact) return '—';
+    return (
+      [
+        contact.addressLine1,
+        contact.addressLine2,
+        contact.city,
+        contact.state,
+        contact.zipCode,
+        contact.country,
+      ]
+        .map((part) => part?.trim())
+        .filter(Boolean)
+        .join(', ') ||
+      contact.address?.trim() ||
+      '—'
+    );
+  }
+
   // ── State ──────────────────────────────────────────────────────────
   step = signal<'demographics' | 'questionnaires' | 'review'>('demographics');
   saving = signal(false);

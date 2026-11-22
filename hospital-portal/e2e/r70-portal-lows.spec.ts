@@ -40,7 +40,9 @@ test('D3455: current contact details remain readable at all four widths', async 
           lastName: 'Patient',
           phoneNumberPrimary: '+22670000000',
           email: 'local-patient-long-contact@example.invalid',
-          address: 'Ouagadougou',
+          addressLine1: 'cdx-Street',
+          city: 'Ouagadougou',
+          country: 'Burkina Faso',
         },
       },
     }),
@@ -53,6 +55,7 @@ test('D3455: current contact details remain readable at all four widths', async 
   await page.getByTestId('precheckin-open').click();
   const contact = page.getByTestId('precheckin-current-contact');
   await expect(contact).toContainText('+22670000000');
+  await expect(contact).toContainText('cdx-Street, Ouagadougou, Burkina Faso');
   for (const width of LAYOUT_WIDTHS) {
     await page.setViewportSize({ width, height: heightFor(width) });
     await page.evaluate(() => {

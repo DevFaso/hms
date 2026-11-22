@@ -90,7 +90,7 @@
             </p>
             <p>
               {{ 'PRE_CHECKIN.ADDRESS' | translate }}{{ 'COMMON.COLON' | translate }}
-              {{ contact.address || '—' }}
+              {{ currentAddress() || '—' }}
             </p>
           </section>
         } @else if (contactLoadFailed()) {
