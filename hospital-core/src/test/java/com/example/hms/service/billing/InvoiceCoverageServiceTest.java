@@ -63,6 +63,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -227,6 +228,86 @@ class InvoiceCoverageServiceTest {
     private InvoicePayerShare onlyShare() {
         assertThat(ledger.values().stream().filter(s -> s.getStatus().isLive()).toList()).hasSize(1);
         return ledger.values().stream().filter(s -> s.getStatus().isLive()).findFirst().orElseThrow();
+    }
+
+    @Test
+    @DisplayName("QA D3258 / D3408 (r70): a quote is the invoice rule on one charge: payer, plan, policy and the split")
+    void quoteIsTheInvoiceRuleOnOneCharge() {
+        UUID patientId = invoice.getPatient().getId();
+        LocalDate day = LocalDate.of(2026, 11, 22);
+
+        InvoiceCoverageService.CoverageQuote quote = service.quote(patientId, HOSPITAL_A, day,
+            new BigDecimal("2000"), PriceListCategory.CONSULTATION, null).orElseThrow();
+        assertThat(quote.payerName()).isEqualTo("RAMU");
+        assertThat(quote.planName()).isEqualTo("Formule Base");
+        assertThat(quote.policyNumber()).isEqualTo("BC2-001");
+        assertThat(quote.payerShare()).isEqualByComparingTo("1600");
+        assertThat(quote.patientShare()).isEqualByComparingTo("400");
+        // An excluded category: the payer pays nothing of it.
+        assertThat(service.quote(patientId, HOSPITAL_A, day, new BigDecimal("1500"), PriceListCategory.LAB_TEST, null)
+            .orElseThrow().payerShare()).isEqualByComparingTo("0");
+        assertThat(service.billedCoverage(patientId, HOSPITAL_A, day)).contains(coverage);
+    }
+
+    @Test
+    @DisplayName("QA D2706 (r70): « Parts assureurs » lists the hospital's open shares with invoice, patient and payer")
+    void d2706_theHospitalWideListOfInsurerShares() {
+        InvoicePayerShare open = InvoicePayerShare.builder().invoiceId(invoice.getId()).hospitalId(HOSPITAL_A)
+            .payerPlanId(plan.getId()).amount(new BigDecimal("8500")).status(PayerShareStatus.OPEN).build();
+        open.setId(UUID.randomUUID());
+        BillingInvoice elsewhere = invoice(HOSPITAL_B);
+        InvoicePayerShare stray = InvoicePayerShare.builder().invoiceId(elsewhere.getId()).hospitalId(HOSPITAL_A)
+            .payerPlanId(plan.getId()).amount(BigDecimal.TEN).status(PayerShareStatus.OPEN).build();
+        stray.setId(UUID.randomUUID());
+        when(shares.findByHospitalIdAndStatusInOrderByCreatedAtAsc(eq(HOSPITAL_A), any()))
+            .thenReturn(List.of(open, stray));
+
+        List<com.example.hms.payload.dto.billing.OpenPayerShareDTO> rows = service.listAtHospital(null);
+
+        assertThat(rows).singleElement().satisfies(row -> {
+            assertThat(row.getInvoiceNumber()).isEqualTo("CHWF-2026-000042");
+            assertThat(row.getPayerName()).isEqualTo("RAMU");
+            assertThat(row.getPlanName()).isEqualTo("Formule Base");
+            assertThat(row.getAmount()).isEqualByComparingTo("8500");
+            assertThat(row.getStatus()).isEqualTo("OPEN");
+        });
+    }
+
+    @Test
+    @DisplayName("QA D2706 (r70): a role that decides no share reads no list")
+    void d2706_onlyTheDecidersReadTheList() {
+        when(roles.canDecidePayerShare(BILLING_A, HOSPITAL_A)).thenReturn(false);
+        List<PayerShareStatus> paid = List.of(PayerShareStatus.PAID);
+
+        assertThatThrownBy(() -> service.listAtHospital(paid))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("review of #1284: the pharmacy insurer shares of the year use the plan's annual ceiling too")
+    void pharmacySharesUseTheAnnualCeiling() {
+        UUID patientId = invoice.getPatient().getId();
+        LocalDate day = LocalDate.of(2026, 11, 22);
+        UUID prescriptionId = UUID.randomUUID();
+        com.example.hms.service.pharmacy.PharmacyCoverUsage usage =
+            mock(com.example.hms.service.pharmacy.PharmacyCoverUsage.class);
+        // 150 000 F a year; the pharmacy covers already used 149 500 of it.
+        when(usage.usedInYear(patientId, HOSPITAL_A, 2026, prescriptionId)).thenReturn(new BigDecimal("149500"));
+        service.setPharmacyCoverUsage(usage);
+
+        assertThat(service.quoteForPrescription(patientId, HOSPITAL_A, day, new BigDecimal("2000"), prescriptionId)
+            .orElseThrow().payerShare()).isEqualByComparingTo("500");
+    }
+
+    @Test
+    @DisplayName("QA D3250 (r70): the only coverage, never ticked primary, is billed by the same order the desk reads")
+    void theOnlyCoverageIsBilledThoughNotPrimary() {
+        coverage.setPrimary(false);
+        UUID patientId = invoice.getPatient().getId();
+
+        assertThat(service.billedCoverage(patientId, HOSPITAL_A, LocalDate.of(2026, 11, 22))).contains(coverage);
+        assertThat(service.quote(patientId, HOSPITAL_B, LocalDate.of(2026, 11, 22), BigDecimal.TEN, null, null))
+            .as("another hospital never quotes this coverage").isEmpty();
     }
 
     @Test

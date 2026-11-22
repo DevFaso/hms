@@ -931,6 +931,21 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         ],
       },
       {
+        icon: 'request_quote',
+        label: 'Insurer shares',
+        translationKey: 'NAV.PAYER_SHARES',
+        route: '/billing/parts-assureurs',
+        permission: 'View Billing',
+        // QA D2706 (r70): mirrors the /billing/parts-assureurs RoleGuard.
+        roles: [
+          'ROLE_SUPER_ADMIN',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_ACCOUNTANT',
+          'ROLE_BILLING_SPECIALIST',
+          'ROLE_CLAIMS_REVIEWER',
+        ],
+      },
+      {
         icon: 'science',
         label: 'Laboratory',
         translationKey: 'NAV.LABORATORY',

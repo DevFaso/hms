@@ -213,7 +213,8 @@ export class PharmacyCheckoutComponent implements OnInit {
         }
         this.dispense.set(loaded);
         // QA D264: the amount is the dispense's charge, never a typed figure.
-        this.amount = loaded?.chargeAmount ?? null;
+        // QA D3408 (r70): with an insurer share, the patient pays the rest only.
+        this.amount = loaded?.patientShareAmount ?? loaded?.chargeAmount ?? null;
         this.loading.set(false);
       },
       error: (err) => {

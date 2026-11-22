@@ -813,7 +813,8 @@ public class DispenseServiceImpl implements DispenseService {
                 request != null ? request.getBillingDeferralId() : null,
                 request != null ? request.getBillingUrgencyReason() : null), settlement.due(), actor,
                 // QA D2931 (r66): a claim sent for the fill that does not count for this person is named.
-                FillClaimCover.gapFor(claimRepository, dispense.getId(), actor != null ? actor.getId() : null));
+                FillClaimCover.gapFor(claimRepository, dispense.getId(), actor != null ? actor.getId() : null),
+                new DispenseBillingDeferralService.FillMoney(settlement.charge(), settlement.paid()));
     }
 
     /**
@@ -842,7 +843,8 @@ public class DispenseServiceImpl implements DispenseService {
         if (charge.signum() <= 0) {
             return null;
         }
-        return requireDeferral(newFill, prescription, choice, charge, actor, FillClaimCover.Gap.NONE);
+        return requireDeferral(newFill, prescription, choice, charge, actor, FillClaimCover.Gap.NONE,
+                new DispenseBillingDeferralService.FillMoney(charge, BigDecimal.ZERO));
     }
 
     /**
@@ -851,12 +853,12 @@ public class DispenseServiceImpl implements DispenseService {
      */
     private com.example.hms.model.pharmacy.DispenseBillingDeferral requireDeferral(
             Dispense dispense, Prescription prescription, DispenseBillingDeferralService.Choice choice,
-            BigDecimal due, User actor, FillClaimCover.Gap claimGap) {
+            BigDecimal due, User actor, FillClaimCover.Gap claimGap, DispenseBillingDeferralService.FillMoney money) {
         if (billingDeferrals == null) {
             throw DispenseBillingDeferralService.unpaid(claimGap, due);
         }
         UUID hospitalId = dispense.getPharmacy().getHospital().getId();
-        return billingDeferrals.admit(prescription, hospitalId, due, choice, actor, claimGap);
+        return billingDeferrals.admit(prescription, hospitalId, due, choice, actor, claimGap, money);
     }
 
     /**
@@ -868,6 +870,14 @@ public class DispenseServiceImpl implements DispenseService {
     @Autowired
     public void setBillingDeferrals(DispenseBillingDeferralService billingDeferrals) {
         this.billingDeferrals = billingDeferrals;
+    }
+
+    /** QA D3408: the insurer share of a fill, read by the checkout. A required setter; a unit test may omit it. */
+    private FillCoverShare fillCoverShare;
+
+    @Autowired(required = false)
+    public void setFillCoverShare(FillCoverShare fillCoverShare) {
+        this.fillCoverShare = fillCoverShare;
     }
 
     @Override
@@ -1634,6 +1644,15 @@ public class DispenseServiceImpl implements DispenseService {
         DispenseResponseDTO dto = dispenseMapper.toResponseDTO(dispense);
         // QA D264: the checkout takes the amount from here, not from a typed figure.
         dto.setChargeAmount(DispenseCharge.of(dispense, inventoryItemRepository).orElse(null));
+        // QA D3408 (r70): with an insurer share, the checkout takes the patient share, not the whole charge.
+        if (fillCoverShare != null && dto.getChargeAmount() != null && dispense.getPharmacy() != null
+                && dispense.getPharmacy().getHospital() != null) {
+            BigDecimal insurer = fillCoverShare.insurerShare(dispense, dispense.getPharmacy().getHospital().getId());
+            if (insurer.signum() > 0) {
+                dto.setInsurerShareAmount(insurer);
+                dto.setPatientShareAmount(dto.getChargeAmount().subtract(insurer).max(BigDecimal.ZERO));
+            }
+        }
         // QA D843: a paid fill was offered at the checkout with nothing saying so.
         dto.setPaid(paymentRepository.existsByDispense_IdAndStatus(
                 dispense.getId(), com.example.hms.enums.PharmacyPaymentStatus.POSTED));

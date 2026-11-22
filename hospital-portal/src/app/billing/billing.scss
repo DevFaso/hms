@@ -728,3 +728,15 @@
   color: #b45309;
   font-weight: 600;
 }
+/* QA D3255 (r70): a 0 F draft line, marked before issuing refuses it. */
+.to-price-badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}

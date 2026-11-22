@@ -137,3 +137,72 @@
     }
   }
 }
+
+/* QA D3258 (r70): the coverage the desk verifies, and the suggested patient share. */
+.checkin-coverage {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 6px;
+  background: var(--surface-muted, #f7f8fa);
+  min-width: 0;
+
+  &__title {
+    margin: 0 0 6px;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 6px 12px;
+    margin: 0;
+
+    div {
+      min-width: 0;
+    }
+
+    dt {
+      font-size: 0.75rem;
+      color: var(--text-secondary, #5b6472);
+    }
+
+    dd {
+      margin: 0;
+      font-size: 0.85rem;
+      overflow-wrap: anywhere;
+    }
+  }
+
+  &__expired {
+    color: var(--danger-color, #b42318);
+    font-weight: 600;
+  }
+
+  &__copay {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 8px;
+    margin: 8px 0 0;
+    font-size: 0.85rem;
+    overflow-wrap: anywhere;
+  }
+
+  .hint {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--text-secondary, #5b6472);
+  }
+
+  .btn-link {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--primary);
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+}

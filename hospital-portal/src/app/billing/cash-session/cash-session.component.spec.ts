@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 import { CashSessionComponent } from './cash-session.component';
 import { CashSupervisorComponent } from './cash-supervisor.component';
 import {
@@ -58,7 +59,7 @@ function session(overrides: Partial<CashSession> = {}): CashSession {
 }
 
 describe('CashSessionComponent (billing plan PR 10)', () => {
-  function render(rows: CashSession[]) {
+  function render(rows: CashSession[], confirmed = true) {
     const api = jasmine.createSpyObj<CashSessionService>('CashSessionService', [
       'mine',
       'close',
@@ -89,16 +90,19 @@ describe('CashSessionComponent (billing plan PR 10)', () => {
       'info',
       'warning',
     ]);
+    const confirm = jasmine.createSpyObj<ConfirmService>('ConfirmService', ['ask']);
+    confirm.ask.and.resolveTo(confirmed);
     TestBed.configureTestingModule({
       imports: [CashSessionComponent, TranslateModule.forRoot()],
       providers: [
         { provide: CashSessionService, useValue: api },
         { provide: ToastService, useValue: toast },
+        { provide: ConfirmService, useValue: confirm },
       ],
     });
     const fixture = TestBed.createComponent(CashSessionComponent);
     fixture.detectChanges();
-    return { fixture, api, toast, el: fixture.nativeElement as HTMLElement };
+    return { fixture, api, toast, confirm, el: fixture.nativeElement as HTMLElement };
   }
 
   it('shows the cash to count on its own, never mixed with card or mobile money (QA D2714)', () => {
@@ -106,41 +110,61 @@ describe('CashSessionComponent (billing plan PR 10)', () => {
     expect(el.querySelector('[data-testid="cash-to-count"]')?.textContent).toContain('500');
   });
 
-  it('closes with every method counted; no explanation when nothing differs', () => {
+  it('closes with every method counted; no explanation when nothing differs', async () => {
     const { fixture, api } = render([session()]);
     const c = fixture.componentInstance;
     const s = c.sessions()[0];
     c.setCounted(s, s.methods[0], 500);
     c.setCounted(s, s.methods[1], 850);
-    c.close(s);
+    await c.close(s);
     expect(api.close).toHaveBeenCalledWith('s1', [
       { method: 'CASH', operator: null, counted: 500, explanation: undefined },
       { method: 'MOBILE_MONEY', operator: 'ORANGE_MONEY', counted: 850, explanation: undefined },
     ]);
   });
 
-  it('asks for an explanation only when the count differs (QA D2325)', () => {
+  it('asks for an explanation only when the count differs (QA D2325)', async () => {
     const { fixture, api } = render([session()]);
     const c = fixture.componentInstance;
     const s = c.sessions()[0];
     c.setCounted(s, s.methods[0], 400);
     c.setCounted(s, s.methods[1], 850);
     expect(c.differenceOf(s, s.methods[0])).toBe(-100);
-    c.close(s);
+    await c.close(s);
     expect(api.close).not.toHaveBeenCalled();
     expect(fixture.componentInstance.refusals()['s1']).toBeTruthy();
     c.setExplanation(s, s.methods[0], 'Billet de 100 manquant');
-    c.close(s);
+    await c.close(s);
     expect(api.close).toHaveBeenCalled();
   });
 
-  it('refuses a method left uncounted', () => {
+  it('refuses a method left uncounted', async () => {
     const { fixture, api } = render([session()]);
     const c = fixture.componentInstance;
     const s = c.sessions()[0];
     c.setCounted(s, s.methods[0], 500);
-    c.close(s);
+    await c.close(s);
     expect(api.close).not.toHaveBeenCalled();
+  });
+
+  it('QA D3256 (r70): the close is confirmed on the counted figures; cancelling closes nothing', async () => {
+    const { fixture, api, confirm } = render([session()], false);
+    const c = fixture.componentInstance;
+    const s = c.sessions()[0];
+    c.setCounted(s, s.methods[0], 500);
+    c.setCounted(s, s.methods[1], 850);
+    await c.close(s);
+    expect(confirm.ask).toHaveBeenCalledWith(
+      jasmine.objectContaining({ titleKey: 'R70_MONEY.CASH.CLOSE_CONFIRM_TITLE' }),
+    );
+    expect(api.close).not.toHaveBeenCalled();
+  });
+
+  it('QA D3256 (r70): a negative amount carries the minus sign, never a hyphen', () => {
+    const { fixture } = render([session()]);
+    const text = fixture.componentInstance.signedCfa(-100);
+    expect(text.startsWith('\u2212')).toBeTrue();
+    expect(text).not.toContain('-');
   });
 
   it('a closed till shows its counts and no close button', () => {

@@ -265,12 +265,56 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
         boolean same = prior.getPharmacy() != null && pharmacy.getId().equals(prior.getPharmacy().getId())
                 && prior.getPaymentMethod() == dto.getPaymentMethod()
                 && java.util.Objects.equals(priorPatient, dto.getPatientId())
-                && prior.getLines().size() == dto.getLines().size();
+                && prior.getLines().size() == dto.getLines().size()
+                && sameBasket(prior, dto, pharmacy);
         if (!same) {
             throw new com.example.hms.exception.ConflictException(
                     com.example.hms.utility.MessageUtil.resolve("billing.payment.clientRequestReused"));
         }
         return prior;
+    }
+
+    /**
+     * QA D3402 (r70): a retry with the same key and a different basket (3 SRO instead of 1) answered 201 with the
+     * first sale. The basket is the same when each requested line matches a recorded line, one for one: the same
+     * medication, the same lot when one was named, and the same quantity in units (a quantity in packs is converted
+     * as the sale converts it; review of #1284).
+     */
+    private boolean sameBasket(PharmacySale prior, PharmacySaleRequestDTO dto, Pharmacy pharmacy) {
+        java.util.List<SaleLine> left = new java.util.ArrayList<>(prior.getLines());
+        for (SaleLineRequestDTO wanted : dto.getLines()) {
+            BigDecimal units = unitsOf(wanted, pharmacy);
+            SaleLine match = left.stream().filter(line -> sameLine(line, wanted, units)).findFirst().orElse(null);
+            if (match == null) {
+                return false;
+            }
+            left.remove(match);
+        }
+        return left.isEmpty();
+    }
+
+    /** The units a requested line stands for: its quantity, converted from packs as the sale converts it. */
+    private BigDecimal unitsOf(SaleLineRequestDTO wanted, Pharmacy pharmacy) {
+        if (!Boolean.TRUE.equals(wanted.getInPacks()) || wanted.getQuantity() == null
+                || wanted.getMedicationCatalogItemId() == null) {
+            return wanted.getQuantity();
+        }
+        return inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(pharmacy.getId(),
+                        wanted.getMedicationCatalogItemId())
+                .map(item -> PackQuantity.toUnits(item, wanted.getQuantity(), true, "quantity"))
+                .orElse(null);
+    }
+
+    private static boolean sameLine(SaleLine recorded, SaleLineRequestDTO wanted, BigDecimal units) {
+        UUID item = recorded.getMedicationCatalogItem() != null ? recorded.getMedicationCatalogItem().getId() : null;
+        UUID lot = recorded.getStockLot() != null ? recorded.getStockLot().getId() : null;
+        if (!java.util.Objects.equals(item, wanted.getMedicationCatalogItemId())) {
+            return false;
+        }
+        if (wanted.getStockLotId() != null && !wanted.getStockLotId().equals(lot)) {
+            return false;
+        }
+        return recorded.getQuantity() != null && units != null && recorded.getQuantity().compareTo(units) == 0;
     }
 
     /** Saves the sale; a keyed one is flushed so a key another sale took is refused here (V310). */

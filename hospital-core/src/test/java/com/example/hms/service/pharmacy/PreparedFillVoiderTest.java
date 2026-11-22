@@ -47,6 +47,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -252,6 +253,21 @@ class PreparedFillVoiderTest {
         verify(stockTransactionRepository, times(2)).save(tx.capture());
         assertThat(tx.getAllValues().get(1).getTransactionType()).isEqualTo(StockTransactionType.QUARANTINE);
         assertThat(tx.getAllValues().get(1).getWitnessedByUser()).isSameAs(witness);
+    }
+
+    @Test
+    @DisplayName("review of #1284: a cancelled prepared fill withdraws the open third-party covers of its order")
+    void aCancelledFillWithdrawsItsCovers() {
+        DispenseBillingDeferralService deferrals = mock(DispenseBillingDeferralService.class);
+        voider.setBillingDeferrals(deferrals);
+        com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+        hospital.setId(UUID.randomUUID());
+        pharmacy.setHospital(hospital);
+        theUpdateCancels(ReadyCancelReason.OTHER);
+
+        voider.cancel(prepared, ReadyCancelReason.OTHER, com.example.hms.enums.ReturnedStockCondition.INTACT, null);
+
+        verify(deferrals).withdrawCoversOfCancelledFill(prescription, hospital.getId());
     }
 
     @Test

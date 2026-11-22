@@ -182,7 +182,8 @@ class PharmacyPaymentServiceImplTest {
                     com.example.hms.exception.FieldBusinessException fe =
                             (com.example.hms.exception.FieldBusinessException) e;
                     assertThat(fe.getField()).isEqualTo("amount");
-                    assertThat(fe.getMessageKey()).isEqualTo("pharmacy.payment.claimCoversCharge");
+                    // QA D3408 (r70): the patient pays exactly the rest, named with both amounts.
+                    assertThat(fe.getMessageKey()).isEqualTo("pharmacy.payment.patientShareOnly");
                 });
         verify(paymentRepository, never()).save(any());
     }
@@ -203,6 +204,38 @@ class PharmacyPaymentServiceImplTest {
 
         assertThat(service.createPayment(dto)).isNotNull();
         verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D3408 (r70): with a third-party cover approved by the coverage, the patient pays exactly the rest")
+    void d3408_thePatientPaysThePatientShareOfACoveredFill() {
+        FillCoverShare cover = mock(FillCoverShare.class);
+        service.setFillCoverShare(cover);
+        when(cover.insurerShare(dispense, hospitalId)).thenReturn(new BigDecimal("1875"));
+        PharmacyPaymentRequestDTO share = request(PharmacyPaymentMethod.CASH);
+        share.setAmount(new BigDecimal("625"));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(paymentMapper.toEntity(any(), any(), any(), any(), any())).thenReturn(new PharmacyPayment());
+        when(paymentRepository.save(any())).thenAnswer(inv -> {
+            PharmacyPayment p = inv.getArgument(0);
+            p.setId(UUID.randomUUID());
+            return p;
+        });
+        when(paymentMapper.toResponseDTO(any())).thenReturn(PharmacyPaymentResponseDTO.builder().build());
+
+        assertThat(service.createPayment(share)).isNotNull();
+        verify(paymentRepository).save(any());
+
+        // The whole charge, on the same covered fill, is refused naming both shares.
+        PharmacyPaymentRequestDTO whole = request(PharmacyPaymentMethod.CASH);
+        when(paymentRepository.findFirstByDispense_IdOrderByCreatedAtAsc(dispenseId)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.createPayment(whole))
+                .extracting("messageKey").isEqualTo("pharmacy.payment.patientShareOnly");
     }
 
     @Test

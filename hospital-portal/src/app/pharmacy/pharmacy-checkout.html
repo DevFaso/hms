@@ -107,6 +107,18 @@
         @if (hasCharge()) {
           <p class="field-hint" data-testid="checkout-charge">{{ amount | cfa: 'XOF' }}</p>
         }
+        @if (dispense()?.insurerShareAmount; as insurer) {
+          <p class="field-hint" data-testid="checkout-insurer-share">
+            {{
+              'R70_MONEY.CHECKOUT.INSURER_SHARE'
+                | translate
+                  : {
+                      charge: (dispense()?.chargeAmount | cfa: 'XOF'),
+                      insurer: (insurer | cfa: 'XOF'),
+                    }
+            }}
+          </p>
+        }
         @if (!hasCharge()) {
           <p class="field-hint" role="alert">{{ 'PHARMACY_CHECKOUT.NO_PRICE' | translate }}</p>
         }

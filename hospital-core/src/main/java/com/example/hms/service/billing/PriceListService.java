@@ -261,6 +261,24 @@ public class PriceListService {
         return detail(saved);
     }
 
+    /**
+     * QA r70 (lab set-up): « Lier par code ». Every active, unlinked lab price line of the acting hospital is linked
+     * to the one live lab test of the same code ({@link LabPriceAutoLink}); the rest is reported, never guessed.
+     */
+    @Transactional
+    public com.example.hms.payload.dto.billing.PriceListAutoLinkReportDTO linkLabTestsByCode() {
+        Maintainer actor = requireMaintainer();
+        return java.util.Objects.requireNonNull(labPriceAutoLink).link(actor.hospitalId(), actor.userId(), true);
+    }
+
+    private LabPriceAutoLink labPriceAutoLink;
+
+    /** QA r70: the lab auto-link. A required setter; a unit test built by hand may omit it. */
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setLabPriceAutoLink(LabPriceAutoLink labPriceAutoLink) {
+        this.labPriceAutoLink = labPriceAutoLink;
+    }
+
     /** The label, the category and the link; the code and the prices never change here. */
     @Transactional
     public PriceListItemDTO update(UUID itemId, PriceListItemUpdateRequestDTO request) {

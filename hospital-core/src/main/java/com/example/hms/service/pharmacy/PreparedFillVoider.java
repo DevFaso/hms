@@ -65,6 +65,17 @@ public class PreparedFillVoider {
     private final ControlledStockWitness controlledStockWitness;
 
     /**
+     * Review of #1284: the « à facturer » gate, whose open covers a cancelled fill withdraws. Optional: a sliced test
+     * context may build this class without it.
+     */
+    private DispenseBillingDeferralService billingDeferrals;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setBillingDeferrals(DispenseBillingDeferralService billingDeferrals) {
+        this.billingDeferrals = billingDeferrals;
+    }
+
+    /**
      * The prescriber withdrew or changed the order: void its open
      * preparation, if it has one. The caller holds the prescription lock.
      *
@@ -97,6 +108,11 @@ public class PreparedFillVoider {
         returnStock(current, condition, witness);
         // QA D404: a preparation paid at the till is voided with it.
         paymentVoider.voidForCancelledDispense(current, "Prepared fill cancelled: " + reason.name());
+        // Review of #1284: a third-party cover was approved on this fill's charge: it goes with it.
+        if (billingDeferrals != null && current.getPharmacy() != null && current.getPharmacy().getHospital() != null) {
+            billingDeferrals.withdrawCoversOfCancelledFill(current.getPrescription(),
+                    current.getPharmacy().getHospital().getId());
+        }
 
         String prescriptionId = current.getPrescription() != null
                 ? String.valueOf(current.getPrescription().getId()) : "unknown";

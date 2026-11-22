@@ -467,6 +467,12 @@ export interface DispenseResponse {
   /** QA D264: what the dispense costs; null when the pharmacy has not priced the medication. */
   chargeAmount?: number | null;
   /**
+   * QA D3408 (r70): the insurer share of this fill (a live claim, or a third-party cover approved by the
+   * patient's coverage) and the patient share the checkout takes; absent when the insurer pays nothing.
+   */
+  insurerShareAmount?: number | null;
+  patientShareAmount?: number | null;
+  /**
    * QA D843: a payment is already POSTED against this dispense. Sent by
    * GET /pharmacy/dispense/{id} and the pharmacy list the checkout reads;
    * absent elsewhere.
@@ -809,7 +815,8 @@ export interface PharmacyClaimRequest {
   hospitalId: string;
   coverageReference?: string;
   claimStatus?: PharmacyClaimStatus;
-  amount: number;
+  /** QA D3408 (r70): optional; the server takes the insurer share by the coverage rule. */
+  amount?: number;
   currency?: string;
   notes?: string;
   rejectionReason?: string;

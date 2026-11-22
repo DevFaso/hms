@@ -171,6 +171,39 @@ public class CashSessionService {
         return session.getId();
     }
 
+    /**
+     * QA D3410 (r70): the till money is paid OUT of. A hospital admin paid a pharmacy refund from a PHARMACY till
+     * opened on the spot with nothing in it, leaving -200 F to count, while the till holding the cash was untouched.
+     * A payout is taken from a till the payer already holds OPEN today for {@code till} (never one opened by the
+     * payout itself), and a cash payout never takes the till's cash below zero. {@code CashSessionStampGuardTest}
+     * keeps every money-out writer on this method.
+     *
+     * @param method the payout method (CASH, MOBILE_MONEY, ...); only cash is bounded by what the till holds
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public UUID stampPayout(CashTill till, UUID hospitalId, UUID cashierId, String method, BigDecimal amount) {
+        if (till == null || hospitalId == null || cashierId == null) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolve("billing.cashSession.cashierUnknown"));
+        }
+        if (!roleValidator.canHoldTill(cashierId, hospitalId)) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolve("billing.cashSession.tillHoldersOnly"));
+        }
+        CashSession session = sessionRepository.findLockedForDay(hospitalId, cashierId, till, businessDays.today())
+            .orElseThrow(() -> new ConflictException(MessageUtil.resolve("billing.cashSession.payoutNeedsOpenTill")));
+        if (session.getStatus() != CashSessionStatus.OPEN) {
+            throw new ConflictException(MessageUtil.resolve("billing.cashSession.closedForMovement"));
+        }
+        if (amount != null && method != null && "CASH".equalsIgnoreCase(method.trim())) {
+            BigDecimal cash = figures(session).cashToCount();
+            if (cash.compareTo(amount) < 0) {
+                throw new ConflictException(MessageUtil.resolve("billing.cashSession.payoutAboveCash",
+                    com.example.hms.utility.DisplayNumbers.quantity(amount),
+                    com.example.hms.utility.DisplayNumbers.quantity(cash.max(BigDecimal.ZERO))));
+            }
+        }
+        return session.getId();
+    }
+
     // ───────────────────────────── reads ─────────────────────────────
 
     /** The signed-in user's sessions on {@code date} (today when null) at the acting hospital, every till. */

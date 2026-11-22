@@ -515,18 +515,20 @@ class PharmacyRefundServiceTest {
                 mock(com.example.hms.service.billing.cash.CashSessionService.class);
         service.setCashSessionService(tills);
         UUID sessionId = UUID.randomUUID();
-        when(tills.stamp(com.example.hms.enums.CashTill.PHARMACY, hospitalId, pharmacist)).thenReturn(sessionId);
+        when(tills.stampPayout(eq(com.example.hms.enums.CashTill.PHARMACY), eq(hospitalId), eq(pharmacist), any(), any())).thenReturn(sessionId);
         actAs(pharmacist);
         PharmacyRefund refund = stored(PharmacyRefundStatus.APPROVED, UUID.randomUUID());
 
         assertThat(service.pay(refund.getId(), null).getStatus()).isEqualTo("PAID");
 
         assertThat(refund.getCashSessionId()).isEqualTo(sessionId);
-        verify(tills, times(1)).stamp(com.example.hms.enums.CashTill.PHARMACY, hospitalId, pharmacist);
+        verify(tills, times(1)).stampPayout(eq(com.example.hms.enums.CashTill.PHARMACY), eq(hospitalId), eq(pharmacist),
+                any(), any());
+        verify(tills, never()).stamp(any(), any(), any());
 
         // Paid once: asking again answers the paid refund and takes nothing more out of the till.
         assertThat(service.pay(refund.getId(), null).getStatus()).isEqualTo("PAID");
-        verify(tills, times(1)).stamp(any(), any(), any());
+        verify(tills, times(1)).stampPayout(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -535,7 +537,7 @@ class PharmacyRefundServiceTest {
         com.example.hms.service.billing.cash.CashSessionService tills =
                 mock(com.example.hms.service.billing.cash.CashSessionService.class);
         service.setCashSessionService(tills);
-        when(tills.stamp(com.example.hms.enums.CashTill.PHARMACY, hospitalId, pharmacist))
+        when(tills.stampPayout(eq(com.example.hms.enums.CashTill.PHARMACY), eq(hospitalId), eq(pharmacist), any(), any()))
                 .thenThrow(new ConflictException("closed"));
         actAs(pharmacist);
         PharmacyRefund refund = stored(PharmacyRefundStatus.APPROVED, UUID.randomUUID());
