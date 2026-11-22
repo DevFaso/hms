@@ -114,8 +114,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         imagingOrder.setOrderingProviderUserId(orderingUser != null ? orderingUser.getId() : null);
         imagingOrder.setOrderingProviderName(orderingUser != null ? displayName(orderingUser) : null);
 
-        List<ImagingOrder> duplicateMatches = loadDuplicateMatches(patient.getId(), hospital.getId(),
-            imagingOrder.getModality(), imagingOrder.getBodyRegion(), request.getDuplicateLookbackDays());
+        List<ImagingOrder> duplicateMatches = loadDuplicateMatches(patient.getId(), hospital.getId(), request.getModality(), request.getBodyRegion(), request.getDuplicateLookbackDays());
         if (!duplicateMatches.isEmpty()) {
             imagingOrder.setDuplicateOfRecentOrder(true);
             imagingOrder.setDuplicateReferenceOrderId(duplicateMatches.get(0).getId());
