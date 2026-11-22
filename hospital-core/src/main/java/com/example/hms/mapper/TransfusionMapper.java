@@ -208,6 +208,8 @@ public class TransfusionMapper {
             .bloodGroupId(group != null ? group.getId() : null)
             .patientAboGroup(group != null ? group.getAboGroup() : null)
             .patientRhFactor(group != null ? group.getRhFactor() : null)
+            // QA r70 D3221: the chart's group, shown beside the lab-typed one, never in its place.
+            .patientDeclaredBloodType(patient != null ? patient.getBloodType() : null)
             .screenCurrent(group != null && group.screenIsCurrent(LocalDateTime.now(clock)))
             .units(units == null ? List.of() : units.stream().map(this::toDto).toList())
             .crossmatches(crossmatches == null ? List.of()

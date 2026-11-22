@@ -81,6 +81,9 @@ public class PatientStoryboardDTO {
         private Integer ageYears;
         private String gender;
         private String bloodType;
+        /** QA r70 D3220: the latest recorded weight (kg) and when it was taken; null when none is on file. */
+        private Double latestWeightKg;
+        private LocalDateTime latestWeightRecordedAt;
     }
 
     @Getter
