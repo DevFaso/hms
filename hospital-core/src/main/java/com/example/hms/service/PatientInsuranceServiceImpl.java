@@ -759,7 +759,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         List<PatientInsurance> rows = patientInsuranceRepository.findByPatient_IdAndAssignment_Hospital_Id(patientId,
             hospitalId);
         List<PatientInsurance> inForce = com.example.hms.service.billing.CoverageOrder.ordered(rows,
-            java.time.LocalDate.now());
+            java.time.LocalDate.now(java.time.ZoneId.systemDefault()));
         if (inForce.isEmpty() || inForce.get(0).isPrimary()) {
             return;
         }

@@ -347,22 +347,12 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
     }
 
     /**
-     * QA D264 (D204 did not hold): the D204 fix stopped a second payment and
-     * fractional or non-positive amounts, but nothing in the system said what
-     * a dispense costs, so any first amount was taken. The charge now comes
-     * from the inventory item's unit price; a dispense is paid once, for
-     * exactly that charge, and an unpriced one cannot be paid at all.
-     */
-    /**
-     * QA D1613 (Rex on #1130): the claim side bounds a claim by the charge less the
-     * patient's payments; this is the other side. With a live (non-REJECTED) claim on
-     * the dispense, the patient owes at most the charge less the claimed amount, so
-     * the full charge collected on top of an insurer claim is refused. The caller
-     * holds the dispense lock the claim service takes too, and a replayed receipt
-     * has already answered before this check.
-     */
-    /**
-     * QA D3408 (r70): with an insurer share on the fill (a live claim, or a third-party cover approved by the
+     * QA D264 (D204 did not hold): the charge comes from the inventory item's unit price; a dispense is paid once,
+     * for exactly what the patient owes, and an unpriced one cannot be paid at all. QA D1613: with a live claim on
+     * the dispense, the full charge collected on top of it is refused; the caller holds the dispense lock the claim
+     * service takes too, and a replayed receipt has already answered before this check.
+     *
+     * <p>QA D3408 (r70): with an insurer share on the fill (a live claim, or a third-party cover approved by the
      * patient's coverage, {@link FillCoverShare#insurerShare}), the patient pays exactly the rest: the checkout
      * used to take only the whole charge, so the patient share could not be paid and the fill left on the voucher
      * whole. With no insurer share, the patient pays the whole charge.

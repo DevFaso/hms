@@ -416,9 +416,9 @@ public class InvoiceRefundService {
         CashTill till = roleValidator.paysAtBillingDesk(actor.userId(), actor.hospitalId())
             ? CashTill.BILLING : CashTill.RECEPTION;
         // QA D3410 (r70): from a till the payer holds open today, and never below its cash.
+        String payoutMethod = refund.getMethod() != null ? refund.getMethod().name() : null;
         UUID cashSessionId = cashSessions == null ? null
-            : cashSessions.stampPayout(till, actor.hospitalId(), actor.userId(),
-                refund.getMethod() != null ? refund.getMethod().name() : null, refund.getAmount());
+            : cashSessions.stampPayout(till, actor.hospitalId(), actor.userId(), payoutMethod, refund.getAmount());
         // PR 8 review: the receipt number is assigned once, here, under the invoice lock, in payout order.
         int receiptSeq = refundRepository.maxReceiptSeq(invoice.getId()) + 1;
         String receiptNumber = invoice.getInvoiceNumber() + "-RB" + receiptSeq;

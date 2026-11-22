@@ -2124,7 +2124,7 @@ class ReceptionServiceImplTest {
             when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patient.getId(), hospitalId))
                     .thenReturn(List.of(first, billed));
             com.example.hms.service.billing.InvoiceCoverageService coverage =
-                    org.mockito.Mockito.mock(com.example.hms.service.billing.InvoiceCoverageService.class);
+                    mock(com.example.hms.service.billing.InvoiceCoverageService.class);
             when(coverage.billedCoverage(eq(patient.getId()), eq(hospitalId), any()))
                     .thenReturn(Optional.of(billed));
             service.setInvoiceCoverage(coverage);

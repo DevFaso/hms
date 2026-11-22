@@ -1008,10 +1008,6 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         }
     }
 
-    /**
-     * QA D213: the four steps were four identical generic audit rows. This
-     * one names the step and the status it led to. Ids only, no PHI.
-     */
     /** QA r70: links the lab price line of an activated test. A required setter; a unit test may omit it. */
     private com.example.hms.service.billing.LabPriceAutoLink labPriceAutoLink;
 
@@ -1020,6 +1016,10 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         this.labPriceAutoLink = labPriceAutoLink;
     }
 
+    /**
+     * QA D213: the four steps were four identical generic audit rows. This
+     * one names the step and the status it led to. Ids only, no PHI.
+     */
     private void auditApprovalStep(User actor, LabTestDefinition definition, String action,
                                    boolean singleDirectorException) {
         if (auditEventLogService == null) {

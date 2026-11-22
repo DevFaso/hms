@@ -63,6 +63,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -246,6 +247,40 @@ class InvoiceCoverageServiceTest {
         assertThat(service.quote(patientId, HOSPITAL_A, day, new BigDecimal("1500"), PriceListCategory.LAB_TEST, null)
             .orElseThrow().payerShare()).isEqualByComparingTo("0");
         assertThat(service.billedCoverage(patientId, HOSPITAL_A, day)).contains(coverage);
+    }
+
+    @Test
+    @DisplayName("QA D2706 (r70): « Parts assureurs » lists the hospital's open shares with invoice, patient and payer")
+    void d2706_theHospitalWideListOfInsurerShares() {
+        InvoicePayerShare open = InvoicePayerShare.builder().invoiceId(invoice.getId()).hospitalId(HOSPITAL_A)
+            .payerPlanId(plan.getId()).amount(new BigDecimal("8500")).status(PayerShareStatus.OPEN).build();
+        open.setId(UUID.randomUUID());
+        BillingInvoice elsewhere = invoice(HOSPITAL_B);
+        InvoicePayerShare stray = InvoicePayerShare.builder().invoiceId(elsewhere.getId()).hospitalId(HOSPITAL_A)
+            .payerPlanId(plan.getId()).amount(BigDecimal.TEN).status(PayerShareStatus.OPEN).build();
+        stray.setId(UUID.randomUUID());
+        when(shares.findByHospitalIdAndStatusInOrderByCreatedAtAsc(eq(HOSPITAL_A), any()))
+            .thenReturn(List.of(open, stray));
+
+        List<com.example.hms.payload.dto.billing.OpenPayerShareDTO> rows = service.listAtHospital(null);
+
+        assertThat(rows).singleElement().satisfies(row -> {
+            assertThat(row.getInvoiceNumber()).isEqualTo("CHWF-2026-000042");
+            assertThat(row.getPayerName()).isEqualTo("RAMU");
+            assertThat(row.getPlanName()).isEqualTo("Formule Base");
+            assertThat(row.getAmount()).isEqualByComparingTo("8500");
+            assertThat(row.getStatus()).isEqualTo("OPEN");
+        });
+    }
+
+    @Test
+    @DisplayName("QA D2706 (r70): a role that decides no share reads no list")
+    void d2706_onlyTheDecidersReadTheList() {
+        when(roles.canDecidePayerShare(BILLING_A, HOSPITAL_A)).thenReturn(false);
+        List<PayerShareStatus> paid = List.of(PayerShareStatus.PAID);
+
+        assertThatThrownBy(() -> service.listAtHospital(paid))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
     }
 
     @Test

@@ -335,16 +335,7 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
      * (free-text) leaves the amount to the person, as before.
      */
     private BigDecimal insurerShareClaimed(Dispense dispense, BigDecimal typed, UUID hospitalId) {
-        java.util.Optional<BigDecimal> share = java.util.Optional.empty();
-        if (fillCoverShare != null) {
-            share = fillCoverShare.coverShare(dispense, hospitalId);
-            if (share.isEmpty()) {
-                BigDecimal charge = DispenseCharge.of(dispense, inventoryItemRepository).orElse(null);
-                UUID patientId = dispense.getPatient() != null ? dispense.getPatient().getId() : null;
-                share = charge == null ? java.util.Optional.empty()
-                        : fillCoverShare.planShare(patientId, hospitalId, charge);
-            }
-        }
+        java.util.Optional<BigDecimal> share = insurerShareOf(dispense, hospitalId);
         if (share.isEmpty() || share.get().signum() <= 0) {
             if (typed == null) {
                 throw new com.example.hms.exception.FieldBusinessException("amount", "pharmacy.claim.amountPositive");
@@ -362,6 +353,20 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
                     insurer);
         }
         return insurer.signum() > 0 ? insurer : typed;
+    }
+
+    /** The insurer share by the cover the fill left on, else by the patient coverage; empty when neither. */
+    private java.util.Optional<BigDecimal> insurerShareOf(Dispense dispense, UUID hospitalId) {
+        if (fillCoverShare == null) {
+            return java.util.Optional.empty();
+        }
+        java.util.Optional<BigDecimal> cover = fillCoverShare.coverShare(dispense, hospitalId);
+        if (cover.isPresent()) {
+            return cover;
+        }
+        BigDecimal charge = DispenseCharge.of(dispense, inventoryItemRepository).orElse(null);
+        UUID patientId = dispense.getPatient() != null ? dispense.getPatient().getId() : null;
+        return charge == null ? java.util.Optional.empty() : fillCoverShare.planShare(patientId, hospitalId, charge);
     }
 
     /** QA D3408: the insurer share of a fill. A required setter; a unit test built by hand may omit it. */

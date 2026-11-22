@@ -181,7 +181,8 @@ class DeferralFillAmountTest {
         DispenseBillingDeferralService.Choice choice = new DispenseBillingDeferralService.Choice(row.getId(), null);
         User handingOver = user(pharmacist);
         row.setDecidedBy(billing);
-        assertThatThrownBy(() -> service.admit(prescription, hospitalId, new BigDecimal("1000"), choice, handingOver))
+        BigDecimal wholeFill = new BigDecimal("1000");
+        assertThatThrownBy(() -> service.admit(prescription, hospitalId, wholeFill, choice, handingOver))
                 .isInstanceOf(FieldBusinessException.class)
                 .satisfies(e -> {
                     FieldBusinessException fe = (FieldBusinessException) e;

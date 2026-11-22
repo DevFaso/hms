@@ -167,7 +167,7 @@ class CashSessionServiceTest {
             new BigDecimal("200")))
             .isInstanceOf(com.example.hms.exception.ConflictException.class)
             .hasMessageContaining("caisse");
-        org.mockito.Mockito.verify(writes, org.mockito.Mockito.never()).insertIfAbsent(any(), any(), any(), any());
+        verify(writes, never()).insertIfAbsent(any(), any(), any(), any());
     }
 
     @Test

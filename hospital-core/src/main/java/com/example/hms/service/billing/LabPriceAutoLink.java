@@ -147,7 +147,15 @@ public class LabPriceAutoLink {
             return "";
         }
         String folded = code.trim().toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]+", "-");
-        return folded.replaceAll("(^-+)|(-+$)", "");
+        int start = 0;
+        int end = folded.length();
+        while (start < end && folded.charAt(start) == '-') {
+            start++;
+        }
+        while (end > start && folded.charAt(end - 1) == '-') {
+            end--;
+        }
+        return folded.substring(start, end);
     }
 
     /** The code after its first segment (« LAB-GLY » → « GLY »), or null when it has a single segment. */

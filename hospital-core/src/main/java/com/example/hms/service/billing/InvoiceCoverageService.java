@@ -420,37 +420,59 @@ public class InvoiceCoverageService {
         }
         java.util.Collection<PayerShareStatus> wanted = statuses == null || statuses.isEmpty()
             ? EnumSet.of(PayerShareStatus.OPEN, PayerShareStatus.CLAIMED) : statuses;
-        Map<UUID, PayerPlan> plans = new HashMap<>();
-        Map<UUID, String> payerNames = new HashMap<>();
-        Map<UUID, Optional<BillingInvoice>> invoices = new HashMap<>();
+        ShareNames names = new ShareNames(hospitalId);
         List<com.example.hms.payload.dto.billing.OpenPayerShareDTO> out = new ArrayList<>();
         for (InvoicePayerShare share : shareRepository.findByHospitalIdAndStatusInOrderByCreatedAtAsc(hospitalId,
                 wanted)) {
-            BillingInvoice invoice = invoices.computeIfAbsent(share.getInvoiceId(), id -> invoiceRepository.findById(id)
-                .filter(found -> found.getHospital() != null && hospitalId.equals(found.getHospital().getId())))
-                .orElse(null);
-            if (invoice == null) {
-                continue;
-            }
-            PayerPlan plan = plans.computeIfAbsent(share.getPayerPlanId(),
-                id -> planRepository.findByIdAndHospitalId(id, hospitalId).orElse(null));
-            String payerName = plan == null ? null : payerNames.computeIfAbsent(plan.getPayerId(),
-                id -> payerRepository.findByIdAndHospitalId(id, hospitalId).map(Payer::getName).orElse(null));
-            out.add(com.example.hms.payload.dto.billing.OpenPayerShareDTO.builder()
-                .id(share.getId())
-                .invoiceId(invoice.getId())
-                .invoiceNumber(invoice.getInvoiceNumber())
-                .invoiceDate(invoice.getInvoiceDate())
-                .patientName(invoice.getPatient() != null ? invoice.getPatient().getFullName() : null)
-                .patientMrn(invoice.getPatient() != null ? invoice.getPatient().getMrnForHospital(hospitalId) : null)
-                .payerName(payerName)
-                .planName(plan != null ? plan.getName() : null)
-                .amount(share.getAmount())
-                .status(share.getStatus().name())
-                .createdAt(share.getCreatedAt())
-                .build());
+            names.invoice(share.getInvoiceId()).ifPresent(invoice -> out.add(openShare(share, invoice, names)));
         }
         return List.copyOf(out);
+    }
+
+    /** The invoices, plans and payer names one « Parts assureurs » list reads, each read once, at one hospital. */
+    private final class ShareNames {
+        private final UUID hospitalId;
+        private final Map<UUID, Optional<BillingInvoice>> invoices = new HashMap<>();
+        private final Map<UUID, Optional<PayerPlan>> plans = new HashMap<>();
+        private final Map<UUID, Optional<String>> payers = new HashMap<>();
+
+        ShareNames(UUID hospitalId) {
+            this.hospitalId = hospitalId;
+        }
+
+        Optional<BillingInvoice> invoice(UUID id) {
+            return invoices.computeIfAbsent(id, key -> invoiceRepository.findById(key)
+                .filter(found -> found.getHospital() != null && hospitalId.equals(found.getHospital().getId())));
+        }
+
+        Optional<PayerPlan> plan(UUID id) {
+            return plans.computeIfAbsent(id, key -> planRepository.findByIdAndHospitalId(key, hospitalId));
+        }
+
+        Optional<String> payer(PayerPlan plan) {
+            return payers.computeIfAbsent(plan.getPayerId(),
+                key -> payerRepository.findByIdAndHospitalId(key, hospitalId).map(Payer::getName));
+        }
+    }
+
+    private static com.example.hms.payload.dto.billing.OpenPayerShareDTO openShare(InvoicePayerShare share,
+                                                                                  BillingInvoice invoice,
+                                                                                  ShareNames names) {
+        Optional<PayerPlan> plan = names.plan(share.getPayerPlanId());
+        com.example.hms.model.Patient patient = invoice.getPatient();
+        return com.example.hms.payload.dto.billing.OpenPayerShareDTO.builder()
+            .id(share.getId())
+            .invoiceId(invoice.getId())
+            .invoiceNumber(invoice.getInvoiceNumber())
+            .invoiceDate(invoice.getInvoiceDate())
+            .patientName(patient != null ? patient.getFullName() : null)
+            .patientMrn(patient != null ? patient.getMrnForHospital(names.hospitalId) : null)
+            .payerName(plan.flatMap(names::payer).orElse(null))
+            .planName(plan.map(PayerPlan::getName).orElse(null))
+            .amount(share.getAmount())
+            .status(share.getStatus().name())
+            .createdAt(share.getCreatedAt())
+            .build();
     }
 
     /** The shares of an invoice of the acting hospital (404 for another hospital's invoice). */

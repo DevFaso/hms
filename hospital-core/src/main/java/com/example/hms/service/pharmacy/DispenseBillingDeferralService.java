@@ -796,22 +796,12 @@ public class DispenseBillingDeferralService {
                 && roleValidator.canReviewDispenseBillingOverride(actor.userId(), actor.hospitalId());
         boolean canExecute = actor != null && d.getStatus() == DispenseBillingDeferralStatus.APPROVED
                 && !actor.userId().equals(d.getDecidedBy());
-        // QA D3406 (r70): the card shows the fill it is about; QA D3408: and, for a cover, the insurer share.
-        FillCoverShare.PreparedFill fill = coverShare != null && OPEN_STATUSES.contains(d.getStatus())
-                ? coverShare.preparedFill(d.getPrescriptionId(), d.getHospitalId()).orElse(null) : null;
-        BigDecimal insurerShare = null;
-        if (d.getKind() == DispenseBillingDeferralKind.THIRD_PARTY_COVER) {
-            insurerShare = d.getCreditLimit();
-            if (insurerShare == null && fill != null) {
-                insurerShare = coverShare.planShare(d.getPatientId(), d.getHospitalId(), fill.charge()).orElse(null);
-            }
-        }
+        FillFigures figures = fillFigures(d);
         return DispenseBillingDeferralDTO.builder()
-                .fillCharge(fill != null ? fill.charge() : null)
-                .fillDue(fill != null ? fill.due() : null)
-                .insurerShare(insurerShare)
-                .patientShare(insurerShare != null && fill != null
-                        ? fill.charge().subtract(insurerShare).max(BigDecimal.ZERO) : null)
+                .fillCharge(figures.charge())
+                .fillDue(figures.due())
+                .insurerShare(figures.insurerShare())
+                .patientShare(figures.patientShare())
                 .id(d.getId())
                 .prescriptionId(d.getPrescriptionId())
                 .patientId(d.getPatientId())
@@ -851,6 +841,35 @@ public class DispenseBillingDeferralService {
                 .canReview(canReview)
                 .canExecute(canExecute)
                 .build();
+    }
+
+    /** QA D3406 / D3408: what a deferral card shows of its fill; every figure null when it is unknown. */
+    private record FillFigures(BigDecimal charge, BigDecimal due, BigDecimal insurerShare, BigDecimal patientShare) {
+    }
+
+    /**
+     * QA D3406 (r70): the card shows the fill it is about while it is open; QA D3408: for a cover, the insurer share
+     * (recorded at approval, estimated before) and the patient share.
+     */
+    private FillFigures fillFigures(DispenseBillingDeferral d) {
+        if (coverShare == null) {
+            return new FillFigures(null, null, null, null);
+        }
+        FillCoverShare.PreparedFill fill = OPEN_STATUSES.contains(d.getStatus())
+                ? coverShare.preparedFill(d.getPrescriptionId(), d.getHospitalId()).orElse(null) : null;
+        BigDecimal insurerShare = null;
+        if (d.getKind() == DispenseBillingDeferralKind.THIRD_PARTY_COVER) {
+            insurerShare = d.getCreditLimit();
+            if (insurerShare == null && fill != null) {
+                insurerShare = coverShare.planShare(d.getPatientId(), d.getHospitalId(), fill.charge()).orElse(null);
+            }
+        }
+        if (fill == null) {
+            return new FillFigures(null, null, insurerShare, null);
+        }
+        BigDecimal patientShare = insurerShare != null ? fill.charge().subtract(insurerShare).max(BigDecimal.ZERO)
+                : null;
+        return new FillFigures(fill.charge(), fill.due(), insurerShare, patientShare);
     }
 
     /** A staff member's name as shown on the list; read once per call. */

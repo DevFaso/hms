@@ -256,9 +256,12 @@ public class PharmacyRefundService {
     }
 
     private UUID stampPharmacyTill(UUID hospitalId, UUID payerId, PharmacyRefund refund) {
-        return cashSessions == null ? null
-                : cashSessions.stampPayout(com.example.hms.enums.CashTill.PHARMACY, hospitalId, payerId,
-                        refund.getMethod() != null ? refund.getMethod().name() : null, refund.getAmount());
+        if (cashSessions == null) {
+            return null;
+        }
+        String method = refund.getMethod() != null ? refund.getMethod().name() : null;
+        return cashSessions.stampPayout(com.example.hms.enums.CashTill.PHARMACY, hospitalId, payerId, method,
+                refund.getAmount());
     }
 
     /**

@@ -381,6 +381,48 @@ class PaymentReversalApprovalTest {
     }
 
     @Test
+    @DisplayName("QA D3253 (r70): the reversal receipt names the receipt it reverses, the reason and the approver")
+    void d3253_theReversalReceiptSaysWhatItReverses() {
+        PdfInvoiceService pdf = mock(PdfInvoiceService.class);
+        UserRepository users = mock(UserRepository.class);
+        com.example.hms.model.User approver = new com.example.hms.model.User();
+        approver.setId(ACCOUNTANT_A);
+        approver.setFirstName("Awa");
+        approver.setLastName("Comptable");
+        when(users.findById(ACCOUNTANT_A)).thenReturn(Optional.of(approver));
+        InvoiceRefundService withPdf = new InvoiceRefundService(invoices, refunds,
+            mock(PaymentReferenceRegistry.class), users, roles, scope, pdf, audit, clock);
+        withPdf.setPaymentRepository(payments);
+        withPdf.setCashSessionService(sessions);
+        InvoiceRefundDTO reversal = asked();
+        UUID invoiceId = invoice.getId();
+        actAs(ACCOUNTANT_A);
+        withPdf.approve(invoiceId, reversal.getId());
+        actAs(BILLING_A);
+        withPdf.pay(invoiceId, reversal.getId(), null);
+        // The cash payment ranks second among the money received on the invoice: its receipt is -R2.
+        PaymentTransaction earlier = PaymentTransaction.builder().invoice(invoice).amount(new BigDecimal("1000"))
+            .paymentMethod(PaymentMethod.CASH).status(PaymentStatus.CONFIRMED)
+            .confirmedAt(java.time.LocalDateTime.of(2026, 11, 20, 8, 0)).build();
+        earlier.setId(UUID.randomUUID());
+        payment.setConfirmedAt(java.time.LocalDateTime.of(2026, 11, 20, 9, 0));
+        when(payments.findByInvoice_IdOrderByCreatedAtAsc(invoiceId)).thenReturn(List.of(earlier, payment));
+        when(invoices.findById(invoiceId)).thenReturn(Optional.of(invoice));
+        when(roles.requireActiveHospitalId()).thenReturn(HOSPITAL_A);
+        when(roles.canRequestRefund(BILLING_A, HOSPITAL_A)).thenReturn(true);
+        when(pdf.generateRefundReceiptPdf(any(), any(), any(), any(), any(), any())).thenReturn(new byte[] {1});
+
+        withPdf.receipt(invoiceId, reversal.getId(), Locale.FRENCH);
+
+        ArgumentCaptor<PdfInvoiceService.ReversalDetails> details =
+            ArgumentCaptor.forClass(PdfInvoiceService.ReversalDetails.class);
+        verify(pdf).generateRefundReceiptPdf(any(), any(), any(), any(), details.capture(), any());
+        assertThat(details.getValue().reversedReceiptNumber()).isEqualTo("TWP-2026-000026-R2");
+        assertThat(details.getValue().reason()).isNotBlank();
+        assertThat(details.getValue().approvedByName()).isEqualTo("Awa Comptable");
+    }
+
+    @Test
     @DisplayName("a payment already reversed meanwhile is never reversed twice")
     void reversedOnce() {
         InvoiceRefundDTO reversal = asked();

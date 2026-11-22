@@ -13,7 +13,6 @@ import com.example.hms.repository.pharmacy.PharmacyPaymentRepository;
 import com.example.hms.service.billing.InvoiceCoverageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -59,7 +58,6 @@ public class FillCoverShare {
     }
 
     /** The prepared (PENDING) fill of {@code prescriptionId} at {@code hospitalId}, priced; empty when none. */
-    @Transactional(readOnly = true)
     public Optional<PreparedFill> preparedFill(UUID prescriptionId, UUID hospitalId) {
         if (prescriptionId == null || hospitalId == null) {
             return Optional.empty();
@@ -76,7 +74,6 @@ public class FillCoverShare {
      * The insurer share of {@code charge} for the patient at {@code hospitalId} today, by the coverage rule an invoice
      * uses (no pharmacy category: the plan's default rate, its ceilings); empty when no coverage with a plan applies.
      */
-    @Transactional(readOnly = true)
     public Optional<BigDecimal> planShare(UUID patientId, UUID hospitalId, BigDecimal charge) {
         if (patientId == null || hospitalId == null || charge == null) {
             return Optional.empty();
@@ -89,7 +86,6 @@ public class FillCoverShare {
      * The insurer share recorded on the third-party cover this fill left on, or that stands approved for its
      * prescription; empty when the fill has none.
      */
-    @Transactional(readOnly = true)
     public Optional<BigDecimal> coverShare(Dispense fill, UUID hospitalId) {
         if (fill == null || hospitalId == null) {
             return Optional.empty();
@@ -116,9 +112,9 @@ public class FillCoverShare {
 
     /**
      * What the insurer pays of this fill: the share a live claim asks for, else the share its third-party cover
-     * recorded; zero when neither. The patient owes the charge less this.
+     * recorded; zero when neither. The patient owes the charge less this. Every read here runs in the caller's
+     * transaction (the counter's, the checkout's, the claim's, the card's).
      */
-    @Transactional(readOnly = true)
     public BigDecimal insurerShare(Dispense fill, UUID hospitalId) {
         BigDecimal claimed = fill != null && fill.getId() != null
                 ? Objects.requireNonNullElse(claimRepository.sumLiveForDispense(fill.getId()), BigDecimal.ZERO)

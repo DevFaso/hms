@@ -209,7 +209,7 @@ class PharmacyPaymentServiceImplTest {
     @Test
     @DisplayName("QA D3408 (r70): with a third-party cover approved by the coverage, the patient pays exactly the rest")
     void d3408_thePatientPaysThePatientShareOfACoveredFill() {
-        FillCoverShare cover = org.mockito.Mockito.mock(FillCoverShare.class);
+        FillCoverShare cover = mock(FillCoverShare.class);
         service.setFillCoverShare(cover);
         when(cover.insurerShare(dispense, hospitalId)).thenReturn(new BigDecimal("1875"));
         PharmacyPaymentRequestDTO share = request(PharmacyPaymentMethod.CASH);

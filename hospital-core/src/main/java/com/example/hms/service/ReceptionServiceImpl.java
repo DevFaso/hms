@@ -67,6 +67,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -255,8 +256,8 @@ public class ReceptionServiceImpl implements ReceptionService {
         LocalDate today = LocalDate.now();
         boolean hasActive = insurances.stream()
                 .anyMatch(i -> i.getExpirationDate() == null || !i.getExpirationDate().isBefore(today));
-        // QA D3250: the coverage the desk shows and attests is the one an invoice bills (CoverageOrder);
-        // one coverage in force applies, flagged primary or not.
+        // QA D3250: the desk shows and attests the coverage an invoice bills, by the CoverageOrder rule.
+        // A single coverage in force is the one that applies, flagged primary or not.
         boolean hasPrimary = !insurances.isEmpty() && !CoverageOrder.ambiguous(insurances, today)
                 && (CoverageOrder.first(insurances, today).isPresent() || CoverageOrder.hasPrimary(insurances));
         PatientInsurance primary = deskCoverage(patientId, hospitalId, insurances, today);
@@ -368,7 +369,7 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     private InsuranceIssueDTO buildInsuranceIssueItem(ReceptionQueueItemDTO item, String issueType,
                                                        List<PatientInsurance> insurances) {
-        PatientInsurance relevantInsurance = CoverageOrder.first(insurances, LocalDate.now())
+        PatientInsurance relevantInsurance = CoverageOrder.first(insurances, LocalDate.now(ZoneId.systemDefault()))
                 .orElse(snapshotCoverage(insurances));
         return InsuranceIssueDTO.builder()
                 .appointmentId(item.getAppointmentId())
@@ -1379,7 +1380,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                                           LocalDate day) {
         if (invoiceCoverage != null) {
             java.util.Optional<PatientInsurance> billed = invoiceCoverage.billedCoverage(patientId, hospitalId, day);
-            if (billed != null && billed.isPresent()) {
+            if (billed.isPresent()) {
                 return billed.get();
             }
         }
@@ -1413,14 +1414,11 @@ public class ReceptionServiceImpl implements ReceptionService {
         java.util.Optional<TariffResolver.Tariff> tariff = tariffResolver.peek(hospitalId,
                 com.example.hms.enums.PriceListLinkType.SYSTEM,
                 com.example.hms.enums.PriceListSystemKey.CONSULTATION_DEFAULT.name(), day);
-        if (tariff == null) {
-            tariff = java.util.Optional.empty();
-        }
         BigDecimal fee = tariff.map(TariffResolver.Tariff::unitPrice).orElse(null);
         java.util.Optional<InvoiceCoverageService.CoverageQuote> quote = invoiceCoverage.quote(patientId, hospitalId,
                 day, fee != null ? fee : BigDecimal.ZERO, com.example.hms.enums.PriceListCategory.CONSULTATION,
                 tariff.map(TariffResolver.Tariff::itemId).orElse(null));
-        return new CheckInCoverage(quote != null ? quote.orElse(null) : null, fee,
+        return new CheckInCoverage(quote.orElse(null), fee,
                 tariff.map(TariffResolver.Tariff::label).orElse(null));
     }
 
