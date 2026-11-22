@@ -6,6 +6,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.Test;
 
+import static com.example.hms.testsupport.RandomIds.withoutRandomIds;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -58,7 +59,7 @@ class CardNumbersTest {
             .isInstanceOfSatisfying(FieldBusinessException.class, refusal -> {
                 assertThat(refusal.getField()).isEqualTo("notes");
                 assertThat(refusal.getMessageKey()).isEqualTo(com.example.hms.validation.NoCardNumber.MESSAGE_KEY);
-                assertThat(String.valueOf(refusal.getMessage())).doesNotContain("4111").doesNotContain("1111");
+                assertThat(withoutRandomIds(refusal.getMessage())).doesNotContain("4111").doesNotContain("1111");
             });
     }
 }

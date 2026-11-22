@@ -16,6 +16,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.math.BigDecimal;
 import java.util.Set;
 
+import static com.example.hms.testsupport.RandomIds.withoutRandomIds;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Billing plan D-15: a payment free-text field never stores a card number. */
@@ -74,7 +75,7 @@ class NoCardNumberValidatorTest {
             .containsExactlyInAnyOrder("reference", "notes");
         assertThat(violations).allSatisfy(v -> {
             assertThat(v.getMessageTemplate()).isEqualTo("{" + NoCardNumber.MESSAGE_KEY + "}");
-            assertThat(v.getMessage()).doesNotContain("4111").doesNotContain("5555");
+            assertThat(withoutRandomIds(v.getMessage())).doesNotContain("4111").doesNotContain("5555");
         });
     }
 

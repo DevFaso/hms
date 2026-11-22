@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 
+import static com.example.hms.testsupport.RandomIds.withoutRandomIds;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class PatientRecordPdfImagingHistoryTest {
@@ -39,7 +40,7 @@ class PatientRecordPdfImagingHistoryTest {
             previous = current;
         }
         assertThat(text).doesNotContain("null", "pdf.record.");
-        assertThat(text.substring(text.indexOf("v4"))).doesNotContain("2026");
+        assertThat(withoutRandomIds(text.substring(text.indexOf("v4")))).doesNotContain("2026");
     }
 
     @ParameterizedTest
@@ -50,7 +51,8 @@ class PatientRecordPdfImagingHistoryTest {
         String fallback = PatientRecordPdfService.imagingConclusions(entry, labels);
         entry.setReports(List.of(report(null, null, null, null, "Legacy user's words")));
         assertThat(PatientRecordPdfService.imagingConclusions(entry, labels)).isEqualTo(fallback)
-            .contains("Legacy user's words").doesNotContain("null", "2026", "()");
+            .contains("Legacy user's words");
+        assertThat(withoutRandomIds(fallback)).doesNotContain("null", "2026", "()");
     }
 
     private static ChartReviewDTO.ImagingReportEntryDTO report(String status, Integer version,

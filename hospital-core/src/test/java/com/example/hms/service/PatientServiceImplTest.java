@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import static com.example.hms.testsupport.RandomIds.withoutRandomIds;
 import static org.mockito.ArgumentMatchers.isNull;
 import com.example.hms.enums.AllergySeverity;
 import com.example.hms.enums.EncounterType;
@@ -2141,7 +2142,7 @@ class PatientServiceImplTest {
         assertThat(match.getFullName()).isEqualTo("Jane Doe");
         assertThat(match.getBirthYear()).isEqualTo(1990);
         assertThat(match.getMaskedPhone()).startsWith("+").endsWith("70").contains("•");
-        assertThat(match.getMaskedPhone()).doesNotContain("2267070");
+        assertThat(withoutRandomIds(match.getMaskedPhone())).doesNotContain("2267070");
         assertThat(match.getMaskedEmail()).isEqualTo("j•••@example.com");
         assertThat(match.getHospitalCount()).isEqualTo(1);
         assertThat(match.isAlreadyRegisteredHere()).isFalse();

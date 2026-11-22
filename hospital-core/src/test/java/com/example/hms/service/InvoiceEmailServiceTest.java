@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.example.hms.testsupport.RandomIds.withoutRandomIds;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -204,7 +205,8 @@ class InvoiceEmailServiceTest {
         assertThat(mail[0]).isEqualTo("Facture INV-1 - Centre Hospitalier Wend-Panga");
         assertThat(mail[1]).contains("lang=\"fr\"", "<h2>Facture INV-1</h2>", "Date : 18 nov. 2026",
                 "Échéance : 7 déc. 2026", "Total : 4 300 F CFA", "Reste à payer : <strong>4 300 F CFA</strong>",
-                "Merci,")
+                "Merci,");
+        assertThat(withoutRandomIds(mail[1]))
             .doesNotContain("Invoice", "2026-11-18", "4300", "Thank you", "Your Hospital");
     }
 
