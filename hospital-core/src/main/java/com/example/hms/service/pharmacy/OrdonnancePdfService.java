@@ -240,23 +240,31 @@ public class OrdonnancePdfService {
                         age.getYears(), age.getMonths(), age.getDays()), 11f);
             }
         }
-        if (patient.getId() != null && rx.getHospital() != null && rx.getHospital().getId() != null) {
-            var latest = vitalSigns.findFirstByPatient_IdAndHospital_IdAndWeightKgIsNotNullOrderByRecordedAtDesc(
-                    patient.getId(), rx.getHospital().getId());
-            if (latest.isPresent()) {
-                var vital = latest.get();
-                String measuredAt = vital.getRecordedAt() == null ? null
-                        : com.example.hms.utility.DisplayDates.dateTime(
-                                com.example.hms.utility.HospitalTime.at(vital.getRecordedAt(), rx.getHospital()), locale);
-                pdf.field(label(locale, "pdf.ordonnance.latestWeight"), joinNonBlank(" - ",
-                        com.example.hms.utility.DisplayNumbers.quantity(
-                                java.math.BigDecimal.valueOf(vital.getWeightKg()), locale) + " kg", measuredAt), 11f);
-            }
-        }
+        writeLatestWeight(pdf, patient, rx.getHospital(), locale);
         String mrn = rx.getHospital() != null ? patient.getMrnForHospital(rx.getHospital().getId()) : null;
         if (mrn != null && !mrn.isBlank()) {
             pdf.field(label(locale, "pdf.ordonnance.mrn"), mrn, 11f);
         }
+    }
+
+    /** The most recent measured weight in this hospital, explicitly dated rather than a dose snapshot. */
+    private void writeLatestWeight(PharmacyPdfWriter pdf, Patient patient, Hospital hospital,
+                                   Locale locale) throws IOException {
+        if (patient.getId() == null || hospital == null || hospital.getId() == null) {
+            return;
+        }
+        var latest = vitalSigns.findFirstByPatient_IdAndHospital_IdAndWeightKgIsNotNullOrderByRecordedAtDesc(
+                patient.getId(), hospital.getId());
+        if (latest.isEmpty()) {
+            return;
+        }
+        var vital = latest.get();
+        String measuredAt = vital.getRecordedAt() == null ? null
+                : com.example.hms.utility.DisplayDates.dateTime(
+                        com.example.hms.utility.HospitalTime.at(vital.getRecordedAt(), hospital), locale);
+        pdf.field(label(locale, "pdf.ordonnance.latestWeight"), joinNonBlank(" - ",
+                com.example.hms.utility.DisplayNumbers.quantity(
+                        java.math.BigDecimal.valueOf(vital.getWeightKg()), locale) + " kg", measuredAt), 11f);
     }
 
     /** One medicine: its name, then dose · route · frequency · duration · quantity, then the instructions. */
