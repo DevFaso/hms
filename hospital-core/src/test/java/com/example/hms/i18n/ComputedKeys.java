@@ -100,6 +100,9 @@ final class ComputedKeys {
     private static Map<String, Domain> registry() {
         Map<String, Domain> d = domains();
         Map<String, Domain> r = new LinkedHashMap<>();
+        // Known specialty codes have localized PDF labels; other entered text falls back unchanged.
+        r.put("com/example/hms/service/pharmacy/OrdonnancePdfService.java|\"pdf.ordonnance.specialty.\" + specialization.trim()",
+            enumValues("pdf.ordonnance.specialty.", com.example.hms.enums.Specialization.class));
         // V356: a provisional rule set's texts, one per ClinicalRuleSetKey.
         site(r, d, "com/example/hms/service/clinicalrules/ClinicalRuleSet.java|return TEXT_PREFIX + key.name() + \".title\"",
             "ClinicalRuleSet.java|clinicalRules.rule.title");
