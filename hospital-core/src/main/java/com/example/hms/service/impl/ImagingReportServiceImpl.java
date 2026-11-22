@@ -61,6 +61,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
      * attached, the same defect PR #490 fixed across the chart reads.
      */
     private static final String MSG_REPORT_NOT_FOUND = "imaging.report.notFound";
+    private static final String MSG_REPORT_FOR_ORDER_NOT_FOUND = "imaging.report.forOrder.notFound";
     private static final String MSG_ORDER_NOT_FOUND = "imaging.order.notFound";
 
     private static final String SIGNATURE_ALGORITHM = "SHA-256";
@@ -448,7 +449,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         Reader reader = asPatient ? null : roles().reader(order);
         // Policy rule 3: an imaging technician too, and only for an exam they performed.
         if (reader == Reader.TECHNICIAN && !performedByCaller(order)) {
-            throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, imagingOrderId);
+            throw new ResourceNotFoundException(MSG_REPORT_FOR_ORDER_NOT_FOUND, imagingOrderId);
         }
         if (reader != null && reader != Reader.CLINICAL) {
             // An administrator reads the newest RELEASED version; work in progress is not theirs.
@@ -456,15 +457,15 @@ public class ImagingReportServiceImpl implements ImagingReportService {
                 .filter(ImagingReport::isReleasedToPatient)
                 .findFirst()
                 .map(imagingReportMapper::toResponseDTO)
-                .orElseThrow(() -> new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, imagingOrderId));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_REPORT_FOR_ORDER_NOT_FOUND, imagingOrderId));
         }
         ImagingReport report = imagingReportRepository.findFirstByImagingOrder_IdAndLatestVersionIsTrue(imagingOrderId)
             .orElseGet(() -> imagingReportRepository.findTopByImagingOrder_IdOrderByReportVersionDesc(imagingOrderId)
-                .orElseThrow(() -> new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, imagingOrderId)));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_REPORT_FOR_ORDER_NOT_FOUND, imagingOrderId)));
         // Their own order, but the latest read is not signed yet: the patient
         // is answered as though the study had no report.
         if (asPatient && !report.isReleasedToPatient()) {
-            throw new ResourceNotFoundException(MSG_REPORT_NOT_FOUND, imagingOrderId);
+            throw new ResourceNotFoundException(MSG_REPORT_FOR_ORDER_NOT_FOUND, imagingOrderId);
         }
         // QA D1960: a patient reads the patient's copy.
         return asPatient ? PatientSafeView.imagingReport(imagingReportMapper.toResponseDTO(report))

@@ -10,6 +10,12 @@ export const PRINT_ISOLATED_CLASS = 'print-isolated';
  * global print rules in styles.scss; the marks are removed after the print.
  */
 export function printOnly(root: HTMLElement, win: Window = window): void {
+  isolatePrint(root, win);
+  win.print();
+}
+
+/** Prepare the same isolation for the browser's native beforeprint event. */
+export function isolatePrint(root: HTMLElement, win: Window = window): () => void {
   const body = root.ownerDocument.body;
   const clear = (): void => {
     root.classList.remove(PRINT_ROOT_CLASS);
@@ -19,5 +25,5 @@ export function printOnly(root: HTMLElement, win: Window = window): void {
   root.classList.add(PRINT_ROOT_CLASS);
   body.classList.add(PRINT_ISOLATED_CLASS);
   win.addEventListener('afterprint', clear);
-  win.print();
+  return clear;
 }

@@ -5,6 +5,7 @@ import { currentLocale } from './i18n/app-locale';
 export interface EncounterOptionSource {
   readonly encounterDate?: string | null;
   readonly departmentName?: string | null;
+  readonly staffName?: string | null;
 }
 
 /**
@@ -34,5 +35,5 @@ export function encounterOptionLabel(
   const time = valid
     ? when.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })
     : '';
-  return [day, time, e.departmentName].filter((part) => !!part).join(' · ');
+  return [day, time, e.departmentName, e.staffName].filter((part) => !!part).join(' · ');
 }

@@ -217,6 +217,15 @@ describe('LabComponent — performing laboratory', () => {
     expect(renderPickerSublines(fixture, component)).toEqual(EXPECTED_PICKER_SUBLINES);
   });
 
+  it('D3357: the required attestation states what the clinician confirms', async () => {
+    await setup(['ROLE_DOCTOR'], []);
+    component.openCreate();
+    fixture.detectChanges();
+    const label = fixture.nativeElement.querySelector('.checkbox-label') as HTMLElement;
+    expect(label.textContent).toContain('LAB.ATTESTATION_MEANING');
+    expect(label.querySelector('input[required]')).not.toBeNull();
+  });
+
   it('QA D1257 (round 26): an empty "Créer" names the patient with the other blank fields', async () => {
     await setup(['ROLE_DOCTOR'], []);
     const cmp = component;

@@ -4444,6 +4444,7 @@
     "ACTIVE_ORDERS": "Active Orders",
     "ALL_ORDERS": "All Orders",
     "ATTESTATION": "Attestation",
+    "ATTESTATION_MEANING": "I electronically attest that the information above is accurate.",
     "AUTO_FILLED": "Auto-filled",
     "CANCELLED": "Cancelled",
     "CANCELLING": "Cancelling...",
@@ -4640,6 +4641,8 @@
     "STAFF_COUNT": "{{count}} staff"
   },
   "LAB_TEST_CONFIG": {
+    "APPROVAL_NEXT_STEP": "Continue in the lab approval queue",
+    "COMPONENT_RANGES": "{{components}} components · {{ranges}} ranges",
     "ACTIONS": "Actions",
     "ADD_RANGE": "Add Range",
     "AGE_MAX": "Age Max",

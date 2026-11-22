@@ -4,6 +4,10 @@ import { provideHttpClientTesting, HttpTestingController } from '@angular/common
 import { provideRouter } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { LabTestConfigComponent } from './lab-test-config';
+import { RoleContextService } from '../../core/role-context.service';
+import { LAB_APPROVAL_QUEUE_ROLES } from '../../core/lab-navigation-access';
+import { routes } from '../../app.routes';
+import { Route } from '@angular/router';
 import { expectEmptySubmitRefusal, expectFieldsMarked } from '../../testing/form-refusal-behaviour';
 
 function mockDefinition(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -30,6 +34,17 @@ function mockDefinition(overrides: Record<string, unknown> = {}): Record<string,
 }
 
 describe('LabTestConfigComponent', () => {
+  it('keeps approval-link navigation aligned with the actual destination route', () => {
+    const find = (items: Route[]): Route | undefined => {
+      for (const route of items) {
+        if (route.path === 'lab-approval-queue') return route;
+        const child = find(route.children ?? []);
+        if (child) return child;
+      }
+      return undefined;
+    };
+    expect([...LAB_APPROVAL_QUEUE_ROLES]).toEqual(find(routes)?.data?.['roles']);
+  });
   it('does not report a definition count when the page failed to load', () => {
     fixture.detectChanges();
     const count = () =>
@@ -86,6 +101,62 @@ describe('LabTestConfigComponent', () => {
     flushSearch(content, totalElements);
     flushAssignments();
   }
+
+  it('offers the approval link only to the active roles allowed into its destination', () => {
+    let activeRole = 'ROLE_HOSPITAL_ADMIN';
+    spyOn(TestBed.inject(RoleContextService), 'hasAnyActiveRole').and.callFake((roles) =>
+      roles.includes(activeRole),
+    );
+    fixture.detectChanges();
+    flushInit([mockDefinition({ approvalStatus: 'DRAFT' })]);
+    const link = () =>
+      fixture.nativeElement.querySelector('[data-testid="def-approval-next-step"]');
+    for (const role of [
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_LAB_TECHNICIAN',
+      'ROLE_LAB_DIRECTOR',
+      'ROLE_QUALITY_MANAGER',
+      'ROLE_LAB_MANAGER',
+      'ROLE_LAB_SCIENTIST',
+      'ROLE_SUPER_ADMIN',
+    ]) {
+      activeRole = role;
+      fixture.detectChanges();
+      expect(!!link())
+        .withContext(role)
+        .toBe(!['ROLE_HOSPITAL_ADMIN', 'ROLE_LAB_TECHNICIAN'].includes(role));
+    }
+  });
+
+  it('D3353/D3356: a draft panel links to approval and counts ranges on its components', () => {
+    spyOn(TestBed.inject(RoleContextService), 'hasAnyActiveRole').and.returnValue(true);
+    fixture.detectChanges();
+    flushInit([
+      mockDefinition({
+        approvalStatus: 'DRAFT',
+        components: [
+          { code: 'HB', name: 'Haemoglobin', referenceRanges: [{ minValue: 12, maxValue: 16 }] },
+          {
+            code: 'PLT',
+            name: 'Platelets',
+            referenceRanges: [
+              { minValue: 150, maxValue: 400 },
+              { minValue: 100, maxValue: 450 },
+            ],
+          },
+        ],
+      }),
+    ]);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="def-approval-next-step"]')?.getAttribute('href')).toBe(
+      '/lab-approval-queue',
+    );
+    const panel = host.querySelector('[data-testid="def-component-ranges"]');
+    expect(panel?.textContent).toContain('Haemoglobin');
+    expect(panel?.textContent).toContain('Platelets');
+    expect(component.componentRangeCount(component.definitions()[0])).toBe(3);
+  });
 
   it('QA D617: renders no tune or delete on an ACTIVE row, and both on a DRAFT row', () => {
     fixture.detectChanges();

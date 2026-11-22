@@ -4444,6 +4444,7 @@
     "ACTIVE_ORDERS": "Demandes actives",
     "ALL_ORDERS": "Toutes les demandes",
     "ATTESTATION": "Attestation",
+    "ATTESTATION_MEANING": "J’atteste électroniquement que les informations ci-dessus sont exactes.",
     "AUTO_FILLED": "Rempli automatiquement",
     "CANCELLED": "Annulée",
     "CANCELLING": "Annulation…",
@@ -4640,6 +4641,8 @@
     "STAFF_COUNT": "{{count}} membres du personnel"
   },
   "LAB_TEST_CONFIG": {
+    "APPROVAL_NEXT_STEP": "Continuer dans la file d’approbation labo",
+    "COMPONENT_RANGES": "{{components}} composants · {{ranges}} plages",
     "ACTIONS": "Actions",
     "ADD_RANGE": "Ajouter une plage",
     "AGE_MAX": "Âge max",

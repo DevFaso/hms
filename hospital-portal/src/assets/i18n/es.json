@@ -4444,6 +4444,7 @@
     "ACTIVE_ORDERS": "Órdenes activas",
     "ALL_ORDERS": "Todas las órdenes",
     "ATTESTATION": "Certificación",
+    "ATTESTATION_MEANING": "Declaro electrónicamente que la información anterior es correcta.",
     "AUTO_FILLED": "Autocompletado",
     "CANCELLED": "Cancelada",
     "CANCELLING": "Cancelando...",
@@ -4640,6 +4641,8 @@
     "STAFF_COUNT": "{{count}} miembros del personal"
   },
   "LAB_TEST_CONFIG": {
+    "APPROVAL_NEXT_STEP": "Continuar en la cola de aprobación del laboratorio",
+    "COMPONENT_RANGES": "{{components}} componentes · {{ranges}} rangos",
     "ACTIONS": "Acciones",
     "ADD_RANGE": "Agregar rango",
     "AGE_MAX": "Edad máx",
