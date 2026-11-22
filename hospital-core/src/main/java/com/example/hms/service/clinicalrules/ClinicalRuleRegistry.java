@@ -113,7 +113,8 @@ public final class ClinicalRuleRegistry {
             "service.billing.EmergencyEpisodeConsultation"),
         rule(ClinicalRuleSetKey.MATERNAL_EARLY_WARNING, DATE_2026_11_20,
             MEWS_RULES, "service.vitals.MaternalEarlyWarning", "service.vitals.News2Applicability"),
-        rule(ClinicalRuleSetKey.MATERNAL_EWS_ESCALATION, DATE_2026_11_20,
+        // 2026-11-22 (QA D3304): a medium, high or red page is also an urgent alert to acknowledge.
+        rule(ClinicalRuleSetKey.MATERNAL_EWS_ESCALATION, DATE_2026_11_22,
             MEWS_SERVICE, MEWS_RULES),
         rule(ClinicalRuleSetKey.CRADLE_SHOCK_INDEX, DATE_2026_11_20,
             MEWS_RULES),
@@ -134,7 +135,10 @@ public final class ClinicalRuleRegistry {
         rule(ClinicalRuleSetKey.LEGACY_ULTRASOUND_REPORTS, DATE_2026_11_21,
             "service.impl.UltrasoundServiceImpl"),
         rule(ClinicalRuleSetKey.SAME_DAY_PRICE_CORRECTION, DATE_2026_11_21,
-            "service.billing.PriceListService", "service.billing.PriceVersionRules"));
+            "service.billing.PriceListService", "service.billing.PriceVersionRules"),
+        // QA D3351 (r70), research report « Transfusion and critical result cover », section 1.
+        rule(ClinicalRuleSetKey.TRANSFUSION_POSITIVE_ANTIBODY_SCREEN, DATE_2026_11_22,
+            "service.support.PositiveAntibodyScreenPolicy", "service.transfusion.PositiveAntibodyScreenService"));
 
     private static final Map<ClinicalRuleSetKey, ClinicalRuleSet> BY_KEY = index();
 

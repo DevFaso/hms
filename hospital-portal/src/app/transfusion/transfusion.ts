@@ -17,6 +17,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   AboGroup,
   AntibodyScreenResult,
+  AntibodyStatusResponse,
+  AntibodyWorkupStatus,
   BloodProductType,
   BloodUnitResponse,
   BloodUnitStatus,
@@ -31,6 +33,7 @@ import {
   TransfusionService,
   TransfusionUrgency,
   VerifierCandidate,
+  VitalUrgencyLevel,
 } from '../services/transfusion.service';
 import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
@@ -104,6 +107,118 @@ export class TransfusionComponent implements OnInit {
   readonly unitsLoaded = signal(false);
   unitStatusFilter = signal<BloodUnitStatus | ''>('');
   assignableUnits = signal<BloodUnitResponse[]>([]);
+
+  /* ── Positive antibody screen (QA D3351, provisional rule) ── */
+
+  /** Only the hospital's biologist records the antibody (TransfusionController#recordAntibodyWorkup). */
+  readonly canRecordAntibody = this.roleContext.hasAnyActiveRoleExactly(['ROLE_LAB_DIRECTOR']);
+  readonly vitalUrgencyLevels: VitalUrgencyLevel[] = ['UVI', 'UV'];
+  antibodyStatus = signal<AntibodyStatusResponse | null>(null);
+  showAntibodyModal = signal(false);
+  antibodySubmitting = signal(false);
+  antibodyForm = this.emptyAntibodyForm();
+
+  /** The request being written is a red-cell emergency for an allo-immunised patient: it is declared. */
+  get needsVitalUrgency(): boolean {
+    return (
+      !!this.patientGroup()?.alloImmunised &&
+      this.requestForm.urgency === 'EMERGENCY' &&
+      this.isRedCells(this.requestForm.productType)
+    );
+  }
+
+  /** The declaration is complete, or not asked for. */
+  get vitalUrgencyDeclared(): boolean {
+    return (
+      !this.needsVitalUrgency ||
+      (!!this.requestForm.vitalUrgencyLevel &&
+        !!this.requestForm.vitalUrgencyReason.trim() &&
+        this.requestForm.preTransfusionSampleDrawn)
+    );
+  }
+
+  /** A compatible result on red cells for an allo-immunised patient carries the four attestations. */
+  get crossmatchNeedsCompatibilisation(): boolean {
+    const request = this.selectedRequest();
+    return !!request?.alloImmunised && this.crossmatchForm.compatible && !this.lateResultUnit();
+  }
+
+  get crossmatchCompatibilised(): boolean {
+    return (
+      !this.crossmatchNeedsCompatibilisation ||
+      (!!this.crossmatchForm.sampleCollectedAt &&
+        this.crossmatchForm.antiglobulinMethod &&
+        this.crossmatchForm.antigenNegative &&
+        this.crossmatchForm.rhKellMatched)
+    );
+  }
+
+  private isRedCells(product: BloodProductType): boolean {
+    return product === 'PACKED_RED_CELLS' || product === 'WHOLE_BLOOD';
+  }
+
+  private emptyAntibodyForm() {
+    return {
+      status: 'IDENTIFIED' as AntibodyWorkupStatus,
+      antibodySpecificities: '',
+      referralCentre: '',
+      decisionReason: '',
+      notes: '',
+    };
+  }
+
+  /** The flag and the biologist's records of the open request's patient. */
+  private loadAntibodyStatus(patientId: string): void {
+    this.transfusion.getAntibodyStatus(patientId).subscribe({
+      next: (status) => {
+        if (this.selectedRequest()?.patientId === patientId) this.antibodyStatus.set(status);
+      },
+      error: () => this.antibodyStatus.set(null),
+    });
+  }
+
+  openAntibodyWorkup(): void {
+    this.antibodyForm = this.emptyAntibodyForm();
+    this.showAntibodyModal.set(true);
+  }
+
+  get antibodyFormComplete(): boolean {
+    return this.antibodyForm.status === 'IDENTIFIED'
+      ? !!this.antibodyForm.antibodySpecificities.trim()
+      : !!this.antibodyForm.referralCentre.trim() && !!this.antibodyForm.decisionReason.trim();
+  }
+
+  submitAntibodyWorkup(): void {
+    const request = this.selectedRequest();
+    if (!request || !this.antibodyFormComplete || this.antibodySubmitting()) return;
+    const referred = this.antibodyForm.status === 'REFERRED';
+    this.antibodySubmitting.set(true);
+    this.transfusion
+      .recordAntibodyWorkup({
+        patientId: request.patientId,
+        status: this.antibodyForm.status,
+        antibodySpecificities: referred ? undefined : this.antibodyForm.antibodySpecificities.trim(),
+        referralCentre: referred ? this.antibodyForm.referralCentre.trim() : undefined,
+        decisionReason: referred ? this.antibodyForm.decisionReason.trim() : undefined,
+        transfusionRequestId: referred ? request.id : undefined,
+        notes: this.antibodyForm.notes.trim() || undefined,
+      })
+      .subscribe({
+        next: (status) => {
+          this.toast.success(this.translate.instant('TRANSFUSION.ANTIBODY_RECORDED'));
+          this.antibodySubmitting.set(false);
+          this.showAntibodyModal.set(false);
+          this.antibodyStatus.set(status);
+          this.refreshSelected();
+        },
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('TRANSFUSION.ANTIBODY_ERROR'),
+          );
+          this.antibodySubmitting.set(false);
+        },
+      });
+  }
 
   /* ── Role gates: mirror TransfusionController exactly ── */
   readonly canRequest = this.roleContext.hasAnyActiveRole([
@@ -206,7 +321,7 @@ export class TransfusionComponent implements OnInit {
   crossmatchSubmitting = signal(false);
   /** Set when the form records a late result on a bag whose transfusion ended. */
   lateResultUnit = signal<string | null>(null);
-  crossmatchForm = { bloodUnitId: '', compatible: true, method: '', incompatibilityReason: '' };
+  crossmatchForm = this.emptyCrossmatchForm();
 
   /* ── Bedside modals ── */
   showHangModal = signal(false);
@@ -298,6 +413,9 @@ export class TransfusionComponent implements OnInit {
       this.administrations.set([]);
     }
     this.selectedRequest.set(request);
+    // QA D3351: the biologist's records are read only for a patient the rule holds.
+    this.antibodyStatus.set(null);
+    if (request.alloImmunised) this.loadAntibodyStatus(request.patientId);
     this.loadAdministrations(thenFocus);
   }
 
@@ -356,7 +474,8 @@ export class TransfusionComponent implements OnInit {
   }
 
   submitRequest(): void {
-    if (!this.requestForm.patientId) return;
+    if (!this.requestForm.patientId || !this.vitalUrgencyDeclared) return;
+    const declared = this.needsVitalUrgency;
     this.requestSubmitting.set(true);
     this.transfusion
       .createRequest({
@@ -366,6 +485,14 @@ export class TransfusionComponent implements OnInit {
         indication: this.requestForm.indication.trim(),
         urgency: this.requestForm.urgency,
         notes: this.requestForm.notes.trim() || undefined,
+        // QA D3351: the declaration of a vital emergency, sent only when it was asked for.
+        ...(declared && this.requestForm.vitalUrgencyLevel
+          ? {
+              vitalUrgencyLevel: this.requestForm.vitalUrgencyLevel,
+              vitalUrgencyReason: this.requestForm.vitalUrgencyReason.trim(),
+              preTransfusionSampleDrawn: true,
+            }
+          : {}),
       })
       .subscribe({
         next: (created) => {
@@ -593,12 +720,7 @@ export class TransfusionComponent implements OnInit {
 
   openCrossmatch(): void {
     this.lateResultUnit.set(null);
-    this.crossmatchForm = {
-      bloodUnitId: '',
-      compatible: true,
-      method: '',
-      incompatibilityReason: '',
-    };
+    this.crossmatchForm = this.emptyCrossmatchForm();
     // QA CX-011: a bag this request already holds can be crossmatched again, and a
     // refused issue tells the lab to. The stock list does not hold it. That includes
     // a bag already running: an emergency bag goes up before its crossmatch, and the
@@ -636,10 +758,9 @@ export class TransfusionComponent implements OnInit {
 
   openLateResult(administration: TransfusionAdministrationResponse): void {
     this.crossmatchForm = {
+      ...this.emptyCrossmatchForm(),
       bloodUnitId: administration.bloodUnitId,
       compatible: false,
-      method: '',
-      incompatibilityReason: '',
     };
     this.lateResultUnit.set(administration.unitNumber);
     this.showCrossmatchModal.set(true);
@@ -651,6 +772,8 @@ export class TransfusionComponent implements OnInit {
     // QA D1507: an incompatible crossmatch records why.
     if (!this.crossmatchForm.compatible && !this.crossmatchForm.incompatibilityReason.trim())
       return;
+    if (!this.crossmatchCompatibilised) return;
+    const attested = this.crossmatchNeedsCompatibilisation;
     this.crossmatchSubmitting.set(true);
     this.transfusion
       .recordCrossmatch(request.id, {
@@ -658,6 +781,15 @@ export class TransfusionComponent implements OnInit {
         compatible: this.crossmatchForm.compatible,
         method: this.crossmatchForm.method.trim() || undefined,
         incompatibilityReason: this.crossmatchForm.incompatibilityReason.trim() || undefined,
+        // QA D3351: sent only for an allo-immunised patient; every other result keeps its payload.
+        ...(attested
+          ? {
+              sampleCollectedAt: this.crossmatchForm.sampleCollectedAt,
+              antiglobulinMethod: true,
+              antigenNegative: true,
+              rhKellMatched: true,
+            }
+          : {}),
       })
       .subscribe({
         next: () => {
@@ -1120,6 +1252,22 @@ export class TransfusionComponent implements OnInit {
       indication: '',
       urgency: 'ROUTINE' as TransfusionUrgency,
       notes: '',
+      vitalUrgencyLevel: '' as VitalUrgencyLevel | '',
+      vitalUrgencyReason: '',
+      preTransfusionSampleDrawn: false,
+    };
+  }
+
+  private emptyCrossmatchForm() {
+    return {
+      bloodUnitId: '',
+      compatible: true,
+      method: '',
+      incompatibilityReason: '',
+      sampleCollectedAt: '',
+      antiglobulinMethod: false,
+      antigenNegative: false,
+      rhKellMatched: false,
     };
   }
 

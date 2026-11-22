@@ -156,6 +156,41 @@ public class TransfusionServiceImpl implements TransfusionService {
      */
     private final Clock clock;
 
+    /**
+     * QA D3351: the positive antibody screen rule (rule set TRANSFUSION_POSITIVE_ANTIBODY_SCREEN). Setter
+     * injection, required: every request, crossmatch and release below goes through it.
+     */
+    private com.example.hms.service.transfusion.PositiveAntibodyScreenService antibodyScreen;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setAntibodyScreen(com.example.hms.service.transfusion.PositiveAntibodyScreenService antibodyScreen) {
+        this.antibodyScreen = antibodyScreen;
+    }
+
+    @Override
+    public com.example.hms.payload.dto.transfusion.AntibodyStatusResponseDTO recordAntibodyWorkup(
+            com.example.hms.payload.dto.transfusion.AntibodyWorkupRequestDTO request) {
+        UUID hospitalId = requireHospital();
+        Patient patient = patientChartAccess.require(request.getPatientId(), hospitalId);
+        return antibodyScreen.recordWorkup(request, patient, hospitalRef(hospitalId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.transfusion.AntibodyStatusResponseDTO getAntibodyStatus(UUID patientId) {
+        UUID hospitalId = requireHospital();
+        Patient patient = patientChartAccess.require(patientId, hospitalId);
+        return antibodyScreen.status(patient.getId(), hospitalId);
+    }
+
+    /** The group as it is shown, with the permanent allo-immunisation flag of this hospital's record. */
+    private PatientBloodGroupResponseDTO withAntibodyFlag(PatientBloodGroupResponseDTO dto, UUID patientId, UUID hospitalId) {
+        if (dto != null && antibodyScreen != null) {
+            dto.setAlloImmunised(antibodyScreen.alloImmunised(patientId, hospitalId));
+        }
+        return dto;
+    }
+
     // ── Type and screen ─────────────────────────────────────────────────
 
     @Override
@@ -216,7 +251,11 @@ public class TransfusionServiceImpl implements TransfusionService {
 
         PatientBloodGroup saved = bloodGroupRepository.save(group);
         moveOpenRequestsOnto(saved);
-        return mapper.toDto(saved);
+        if (antibodyScreen != null) {
+            // QA D3351: a positive screen asks the biologist to identify the antibody or refer the sample.
+            notifySafely(() -> antibodyScreen.askBiologistToIdentify(saved), saved.getId());
+        }
+        return withAntibodyFlag(mapper.toDto(saved), patient.getId(), hospitalId);
     }
 
     /**
@@ -400,10 +439,20 @@ public class TransfusionServiceImpl implements TransfusionService {
             throw new FieldBusinessException("requiredBy", "transfusion.request.requiredByInPast");
         }
 
+        // QA D3351: an emergency for an allo-immunised patient is declared (level, reason, sample drawn first).
+        if (antibodyScreen != null) {
+            antibodyScreen.requireEmergencyDeclaration(request, patient.getId(), hospitalId, urgency);
+        }
+        boolean emergency = urgency == TransfusionUrgency.EMERGENCY;
+
         TransfusionRequest entity = TransfusionRequest.builder()
             .patient(patient)
             .hospital(hospitalRef(hospitalId))
             .encounter(encounter)
+            .vitalUrgencyLevel(emergency ? request.getVitalUrgencyLevel() : null)
+            .vitalUrgencyReason(emergency && hasText(request.getVitalUrgencyReason())
+                ? request.getVitalUrgencyReason().trim() : null)
+            .preTransfusionSampleDrawn(emergency ? request.getPreTransfusionSampleDrawn() : null)
             .bloodGroup(group)
             .productType(request.getProductType())
             .unitsRequested(request.getUnitsRequested())
@@ -634,6 +683,11 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (Boolean.FALSE.equals(request.getCompatible()) && !hasText(request.getIncompatibilityReason())) {
             throw new FieldBusinessException("incompatibilityReason", "transfusion.crossmatch.reasonRequired");
         }
+        // QA D3351: a compatible result on red cells for an allo-immunised patient is « compatibilisé » or it
+        // is not written. A closed request takes only a late incompatible result, which is never refused.
+        if (antibodyScreen != null && !transfusionRequest.isTerminal()) {
+            antibodyScreen.requireCompatibilised(transfusionRequest, request);
+        }
 
         LocalDateTime now = LocalDateTime.now(clock);
         TransfusionCrossmatch crossmatch = onFile != null ? onFile : TransfusionCrossmatch.builder()
@@ -651,6 +705,10 @@ public class TransfusionServiceImpl implements TransfusionService {
             crossmatch.setUnitIssued(true);
         }
         crossmatch.setCompatible(request.getCompatible());
+        crossmatch.setSampleCollectedAt(request.getSampleCollectedAt());
+        crossmatch.setAntiglobulinMethod(request.getAntiglobulinMethod());
+        crossmatch.setAntigenNegative(request.getAntigenNegative());
+        crossmatch.setRhKellMatched(request.getRhKellMatched());
         crossmatch.setMethod(request.getMethod());
         crossmatch.setIncompatibilityReason(request.getIncompatibilityReason());
         crossmatch.setPerformedBy(currentStaff(transfusionRequest.getHospital().getId()));
@@ -937,6 +995,16 @@ public class TransfusionServiceImpl implements TransfusionService {
         TransfusionCrossmatch crossmatch = crossmatchRepository
             .findByRequest_IdAndBloodUnit_Id(requestId, unitId).orElse(null);
         BusinessException refusal = standingCrossmatchRefusal(request, unit, crossmatch);
+        // QA D3351: red cells for an allo-immunised patient leave on a « compatibilisé » crossmatch, or on the
+        // emergency path of a declared vital emergency; nothing else, and nobody overrides it here.
+        boolean crossmatchAfterwards = false;
+        if (antibodyScreen != null) {
+            if (refusal == null) {
+                antibodyScreen.requireRoutineIssueAllowed(request, crossmatch);
+            } else {
+                crossmatchAfterwards = antibodyScreen.requireEmergencyReleaseAllowed(request);
+            }
+        }
         if (refusal != null) {
             // Emergency release: group O red cells may go out uncrossmatched, because in a
             // haemorrhage the crossmatch takes longer than the patient has. Anything else must
@@ -945,6 +1013,9 @@ public class TransfusionServiceImpl implements TransfusionService {
             log.warn("EMERGENCY uncrossmatched release of unit {} against request {}",
                 unit.getUnitNumber(), requestId);
             recordRelease(request, unit, EmergencyReleaseType.UNCROSSMATCHED, null, null, List.of());
+            if (crossmatchAfterwards) {
+                notifySafely(() -> antibodyScreen.askRetrospectiveCrossmatch(request, unit), unit.getId());
+            }
         }
         return putOut(request, unit);
     }
@@ -980,6 +1051,8 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (!AboGroup.isEmergencyRedCells(request.getProductType())) {
             throw new BusinessException("transfusion.emergency.redCellsOnly");
         }
+        // QA D3351: for an allo-immunised patient the emergency path opens on the prescriber's declaration only.
+        boolean crossmatchAfterwards = antibodyScreen != null && antibodyScreen.requireEmergencyReleaseAllowed(request);
         TransfusionCrossmatch crossmatch = crossmatchRepository
             .findByRequest_IdAndBloodUnit_Id(requestId, unit.getId()).orElse(null);
         if (unit.getStatus() == BloodUnitStatus.ISSUED && documentedRelease(request, unit) != null) {
@@ -1001,6 +1074,9 @@ public class TransfusionServiceImpl implements TransfusionService {
         EmergencyBloodRelease saved = recordRelease(request, unit, release.getReleaseType(), reason, release.getAuthoriserUserId(), negativeShown);
         if (release.getReleaseType() == EmergencyReleaseType.SEROLOGICALLY_INCOMPATIBLE) {
             notifySafely(() -> fileReleaseReviewAfterCommit(request, unit, saved), saved.getId());
+        }
+        if (crossmatchAfterwards) {
+            notifySafely(() -> antibodyScreen.askRetrospectiveCrossmatch(request, unit), unit.getId());
         }
         return putOut(request, unit);
     }
@@ -1834,6 +1910,13 @@ public class TransfusionServiceImpl implements TransfusionService {
             releaseRepository.findByRequest_IdOrderByIssuedAtDesc(request.getId()));
         detail.setHeldForReview(com.example.hms.service.support.OrderReviewHoldGuard.isHeld(
             com.example.hms.enums.OrderReviewType.TRANSFUSION_REQUEST, request.getId()));
+        detail.setVitalUrgencyLevel(request.getVitalUrgencyLevel());
+        detail.setVitalUrgencyReason(request.getVitalUrgencyReason());
+        detail.setPreTransfusionSampleDrawn(request.getPreTransfusionSampleDrawn());
+        if (antibodyScreen != null && antibodyScreen.holds(request)) {
+            detail.setAlloImmunised(true);
+            detail.setAntibodyWorkupServes(antibodyScreen.workupServes(request));
+        }
         return detail;
     }
 

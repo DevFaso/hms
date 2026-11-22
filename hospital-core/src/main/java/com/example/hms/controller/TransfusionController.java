@@ -106,6 +106,25 @@ public class TransfusionController {
         return ResponseEntity.ok(transfusionService.getCurrentBloodGroup(patientId));
     }
 
+    @PostMapping("/antibody-workups")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'LAB_DIRECTOR')")
+    @Operation(summary = "Record the antibody identified, or the referral decision for one request",
+        description = "The hospital's biologist only (rule set TRANSFUSION_POSITIVE_ANTIBODY_SCREEN); "
+            + "a super-admin alone is refused.")
+    public ResponseEntity<com.example.hms.payload.dto.transfusion.AntibodyStatusResponseDTO> recordAntibodyWorkup(
+        @Valid @RequestBody com.example.hms.payload.dto.transfusion.AntibodyWorkupRequestDTO request) {
+        return new ResponseEntity<>(transfusionService.recordAntibodyWorkup(request), HttpStatus.CREATED);
+    }
+
+    @GetMapping("/antibody-status/patient/{patientId}")
+    @PreAuthorize(READER)
+    @Operation(summary = "The patient's allo-immunisation at the active hospital",
+        description = "The permanent flag of a positive antibody screen and what the biologist recorded.")
+    public ResponseEntity<com.example.hms.payload.dto.transfusion.AntibodyStatusResponseDTO> getAntibodyStatus(
+        @PathVariable UUID patientId) {
+        return ResponseEntity.ok(transfusionService.getAntibodyStatus(patientId));
+    }
+
     @GetMapping("/blood-groups/patient/{patientId}/history")
     @PreAuthorize(READER)
     @Operation(summary = "All type and screen results for a patient, newest first")

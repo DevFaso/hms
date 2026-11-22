@@ -65,6 +65,8 @@ class StoredAlertReaderLanguageGuardTest {
         Map.entry("service/vitals/MaternalEarlyWarningService.java", ALERT),
         Map.entry("service/impl/PatientPortalServiceImpl.java", "the refill e-mail to staff; the bell is keyed (D665)"),
         Map.entry("service/impl/TransfusionServiceImpl.java", NOTICE),
+        // QA D3351: the biologist's tasks of the positive antibody screen rule; the reader's copy is keyed.
+        Map.entry("service/transfusion/PositiveAntibodyScreenService.java", NOTICE),
         Map.entry("service/impl/DeathDisputeServiceImpl.java", NOTICE),
         // QA D1802: the reconciliation task of a contradicted stillbirth certificate; the reader's copy is keyed.
         Map.entry("service/maternity/StillbirthCertificateConflicts.java", NOTICE),

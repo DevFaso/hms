@@ -2582,4 +2582,67 @@ class TransfusionServiceImplTest {
         assertThat(open.getBloodGroup()).isNotSameAs(old);
         assertThat(closed.getBloodGroup()).isSameAs(old);
     }
+
+    // ---- QA D3351 (r70): the positive antibody screen rule is asked wherever a unit leaves the laboratory ----
+
+    private com.example.hms.service.transfusion.PositiveAntibodyScreenService antibodyRule() {
+        com.example.hms.service.transfusion.PositiveAntibodyScreenService rule =
+            org.mockito.Mockito.mock(com.example.hms.service.transfusion.PositiveAntibodyScreenService.class);
+        service.setAntibodyScreen(rule);
+        return rule;
+    }
+
+    @Test
+    void d3351_anEmergencyReleaseTheRuleRefusesLeavesTheUnitInTheLaboratory() {
+        com.example.hms.service.transfusion.PositiveAntibodyScreenService rule = antibodyRule();
+        TransfusionRequest req = request(null, TransfusionUrgency.EMERGENCY);
+        BloodUnit oNeg = unit(AboGroup.O, RhFactor.NEGATIVE, BloodProductType.PACKED_RED_CELLS,
+            BloodUnitStatus.AVAILABLE);
+        when(crossmatchRepository.findByRequest_IdAndBloodUnit_Id(req.getId(), oNeg.getId()))
+            .thenReturn(Optional.empty());
+        when(rule.requireEmergencyReleaseAllowed(req))
+            .thenThrow(new BusinessException("transfusion.antibody.emergencyNotDeclared"));
+        UUID requestId = req.getId();
+        UUID unitId = oNeg.getId();
+
+        assertThatThrownBy(() -> service.issueUnit(requestId, unitId)).isInstanceOf(BusinessException.class);
+
+        assertThat(oNeg.getStatus()).isEqualTo(BloodUnitStatus.AVAILABLE);
+        assertThat(req.getStatus()).isNotEqualTo(TransfusionRequestStatus.ISSUED);
+        org.mockito.Mockito.verify(rule, org.mockito.Mockito.never()).askRetrospectiveCrossmatch(any(), any());
+    }
+
+    @Test
+    void d3351_aDeclaredVitalEmergencyGoesOutAndTheBiologistIsAskedForTheCrossmatchAfterwards() {
+        com.example.hms.service.transfusion.PositiveAntibodyScreenService rule = antibodyRule();
+        TransfusionRequest req = request(null, TransfusionUrgency.EMERGENCY);
+        BloodUnit oNeg = unit(AboGroup.O, RhFactor.NEGATIVE, BloodProductType.PACKED_RED_CELLS,
+            BloodUnitStatus.AVAILABLE);
+        when(crossmatchRepository.findByRequest_IdAndBloodUnit_Id(req.getId(), oNeg.getId()))
+            .thenReturn(Optional.empty());
+        when(rule.requireEmergencyReleaseAllowed(req)).thenReturn(true);
+
+        service.issueUnit(req.getId(), oNeg.getId());
+
+        assertThat(oNeg.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
+        org.mockito.Mockito.verify(rule).askRetrospectiveCrossmatch(req, oNeg);
+        // The emergency path was taken: the routine check is not the one that let it out.
+        org.mockito.Mockito.verify(rule, org.mockito.Mockito.never()).requireRoutineIssueAllowed(any(), any());
+    }
+
+    @Test
+    void d3351_aPatientTheRuleDoesNotHoldIsReleasedAsBefore() {
+        com.example.hms.service.transfusion.PositiveAntibodyScreenService rule = antibodyRule();
+        TransfusionRequest req = request(null, TransfusionUrgency.EMERGENCY);
+        BloodUnit oNeg = unit(AboGroup.O, RhFactor.NEGATIVE, BloodProductType.PACKED_RED_CELLS,
+            BloodUnitStatus.AVAILABLE);
+        when(crossmatchRepository.findByRequest_IdAndBloodUnit_Id(req.getId(), oNeg.getId()))
+            .thenReturn(Optional.empty());
+        when(rule.requireEmergencyReleaseAllowed(req)).thenReturn(false);
+
+        service.issueUnit(req.getId(), oNeg.getId());
+
+        assertThat(oNeg.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
+        org.mockito.Mockito.verify(rule, org.mockito.Mockito.never()).askRetrospectiveCrossmatch(any(), any());
+    }
 }

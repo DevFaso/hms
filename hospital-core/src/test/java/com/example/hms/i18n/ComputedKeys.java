@@ -334,6 +334,10 @@ final class ComputedKeys {
             values("mews.escalation.", List.of("lowMedium", "medium", "high", "red")));
         r.put("com/example/hms/service/vitals/MaternalEarlyWarningService.java|ALERT_LABEL_PREFIX + a.name()",
             enumValues("mews.alert.", com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert.class));
+        // QA D3351: what a routine issue to an allo-immunised patient still lacks (PositiveAntibodyScreenPolicy.Missing).
+        r.put("com/example/hms/service/transfusion/PositiveAntibodyScreenService.java|lack.messageKey()",
+            values("transfusion.antibody.", List.of("workupRequired", "antiglobulinRequired", "antigenNegativeRequired",
+                "rhKellRequired", "sampleTimeRequired", "sampleInFuture", "sampleTooOld")));
         // QA D3304: the in-basket item of a medium, high or red page.
         r.put("com/example/hms/service/vitals/MaternalEarlyWarningService.java|ALERT_LABEL_PREFIX + a.name() #2",
             enumValues("mews.alert.", com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert.class));
