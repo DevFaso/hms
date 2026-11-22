@@ -332,6 +332,15 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
 
     @Override
     @Transactional(readOnly = true)
+    public java.util.Optional<DischargeSummaryResponseDTO> findDischargeSummaryByEncounter(UUID encounterId,
+                                                                                           Locale locale) {
+        return dischargeSummaryRepository.findByEncounter_Id(encounterId)
+            .filter(this::inActiveHospitalScope)
+            .map(this::toDto);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public DischargeSummaryResponseDTO getDischargeSummaryByEncounter(UUID encounterId, Locale locale) {
         DischargeSummary dischargeSummary = dischargeSummaryRepository.findByEncounter_Id(encounterId)
             .orElseThrow(() -> new ResourceNotFoundException("dischargeSummary.notFoundForEncounter", encounterId));
@@ -547,11 +556,16 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     }
 
     private void enforceHospitalScope(DischargeSummary summary, UUID summaryId) {
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        if (activeHospitalId != null && summary.getHospital() != null
-                && !activeHospitalId.equals(summary.getHospital().getId())) {
+        if (!inActiveHospitalScope(summary)) {
             throw new ResourceNotFoundException(DISCHARGE_SUMMARY_NOT_FOUND_KEY, summaryId);
         }
+    }
+
+    /** Whether the caller's active hospital may read this summary (no active hospital: not narrowed here). */
+    private boolean inActiveHospitalScope(DischargeSummary summary) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        return activeHospitalId == null || summary.getHospital() == null
+            || activeHospitalId.equals(summary.getHospital().getId());
     }
 
     // ── Portal-specific: patient-centric, no hospital context required ──

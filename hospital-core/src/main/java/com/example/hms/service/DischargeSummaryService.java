@@ -46,6 +46,13 @@ public interface DischargeSummaryService {
     DischargeSummaryResponseDTO getDischargeSummaryByEncounter(UUID encounterId, Locale locale);
 
     /**
+     * QA D3155 (r70a): the summary of an encounter, or empty when it has none yet, or none the caller's
+     * hospital may read (answered alike, so a foreign summary is not told apart from no summary).
+     */
+    @Transactional(readOnly = true)
+    java.util.Optional<DischargeSummaryResponseDTO> findDischargeSummaryByEncounter(UUID encounterId, Locale locale);
+
+    /**
      * Get all discharge summaries for a patient
      */
     @Transactional(readOnly = true)

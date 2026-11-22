@@ -381,6 +381,13 @@ class DischargeSummaryServiceImplTest {
         assertThat(service.getDischargeSummaryByEncounter(encounterId, Locale.ENGLISH).getId()).isEqualTo(summaryId);
     }
 
+    @Test void findDischargeSummaryByEncounter_success() {
+        when(dischargeSummaryRepository.findByEncounter_Id(encounterId)).thenReturn(Optional.of(summary));
+        when(dischargeSummaryMapper.toResponseDTO(summary)).thenReturn(responseDTO);
+        assertThat(service.findDischargeSummaryByEncounter(encounterId, Locale.ENGLISH))
+            .map(DischargeSummaryResponseDTO::getId).contains(summaryId);
+    }
+
     @Test void getDischargeSummariesByPatient() {
         when(dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId)).thenReturn(List.of(summary));
         when(dischargeSummaryMapper.toResponseDTO(summary)).thenReturn(responseDTO);
@@ -620,6 +627,16 @@ class DischargeSummaryServiceImplTest {
         when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
         assertThatThrownBy(() -> service.finalizeDischargeSummary(summaryId, "Dr. Sig", staffId, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    /** QA D3155: no summary yet, and a summary of another hospital, both answer empty (alike, no leak). */
+    @Test void findDischargeSummaryByEncounter_noneOrForeign_isEmpty() {
+        when(dischargeSummaryRepository.findByEncounter_Id(encounterId)).thenReturn(Optional.empty());
+        assertThat(service.findDischargeSummaryByEncounter(encounterId, Locale.ENGLISH)).isEmpty();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        when(dischargeSummaryRepository.findByEncounter_Id(encounterId)).thenReturn(Optional.of(summary));
+        assertThat(service.findDischargeSummaryByEncounter(encounterId, Locale.ENGLISH)).isEmpty();
     }
 
     @Test void getDischargeSummaryByEncounter_crossHospital_throws() {
