@@ -10327,6 +10327,8 @@
     "ASSESSMENT_REQUIRED": "Saisissez l'évaluation avant de soumettre : allergies, médicaments, douleur, risque de chute ou notes infirmières."
   },
   "PRE_CHECKIN": {
+    "CURRENT_CONTACT": "Coordonnées actuelles",
+    "CURRENT_CONTACT_ERROR": "Impossible de charger les coordonnées actuelles. Laisser un champ de mise à jour vide conserve sa valeur actuelle.",
     "ADDRESS": "Adresse",
     "ADDRESS_LABEL": "Adresse",
     "ADDRESS_LINE1": "Adresse ligne 1",
@@ -10361,7 +10363,7 @@
     "PHONE_LABEL": "Téléphone",
     "PHONE_PLACEHOLDER": "ex. +226 70 12 34 56",
     "QUESTIONNAIRES_COMPLETED": "Questionnaires complétés",
-    "STATE": "État/Province",
+    "STATE": "Région / Province (le cas échéant)",
     "STEPS_NAV_LABEL": "Étapes du pré-enregistrement",
     "STEP_DEMOGRAPHICS": "Données démographiques",
     "STEP_DESCRIPTION": "Veuillez mettre à jour les informations qui ont changé depuis votre dernière visite. Laissez les champs vides pour conserver les valeurs actuelles.",
@@ -10373,7 +10375,7 @@
     "TITLE": "Pré-enregistrement",
     "UPDATED_DEMOGRAPHICS": "Données mises à jour",
     "YES": "Oui",
-    "ZIP": "Code postal",
+    "ZIP": "Code postal (le cas échéant)",
     "DATE_AT_TIME": "{{date}} à {{time}}",
     "EMAIL_INVALID": "Saisissez une adresse e-mail valide, ou laissez le champ vide."
   },
