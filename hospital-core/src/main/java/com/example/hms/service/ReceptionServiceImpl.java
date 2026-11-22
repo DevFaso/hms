@@ -253,10 +253,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         boolean hasActive = insurances.stream()
                 .anyMatch(i -> i.getExpirationDate() == null || !i.getExpirationDate().isBefore(today));
         boolean hasPrimary = insurances.stream().anyMatch(PatientInsurance::isPrimary);
-        PatientInsurance primary = insurances.stream()
-                .filter(PatientInsurance::isPrimary)
-                .findFirst()
-                .orElse(insurances.isEmpty() ? null : insurances.get(0));
+        PatientInsurance primary = snapshotCoverage(insurances);
 
         FrontDeskPatientSnapshotDTO.InsuranceSummary insuranceSummary = FrontDeskPatientSnapshotDTO.InsuranceSummary.builder()
                 .insuranceId(primary != null ? primary.getId() : null)
@@ -663,6 +660,14 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     // ── MVP 11: Duplicate Candidate Detection ─────────────────────────────────
 
+    /** Duplicate-check weights: offered from 40 (QA D924); the same name and birth date is 80. */
+    private static final int SCORE_SAME_NAME = 50;
+    /** QA D2520: a near spelling of the name. With the same birth date 65, a day off 50; alone never offered. */
+    private static final int SCORE_SIMILAR_NAME = 35;
+    private static final int SCORE_SAME_DOB = 30;
+    /** QA D2520: a birth date one day off; with the same name 65, with a near spelling 50. */
+    private static final int SCORE_NEAR_DOB = 15;
+
     /**
      * QA D924: the phone number used to be ANDed with the name and the date of
      * birth, and the phone is mandatory on the form, so only a patient with the
@@ -703,6 +708,15 @@ public class ReceptionServiceImpl implements ReceptionService {
             patientRepo.searchPatientsExtended(
                     null, namePattern, null, null, null, hospitalId, true,
                     PageRequest.of(0, 20)).getContent()
+                .forEach(p -> candidates.putIfAbsent(p.getId(), p));
+        }
+        // QA D2520 (r65): a near spelling (« Awa Test Diallo », « Awa TestDyallo ») born
+        // within a day of the typed date. The LIKE above finds exact spellings only.
+        java.time.LocalDate bornOn = PatientMatchKeys.birthDate(dob);
+        if (namePattern != null && bornOn != null) {
+            patientRepo.findActiveBornBetweenAtHospital(bornOn.minusDays(1), bornOn.plusDays(1), hospitalId,
+                    PageRequest.of(0, PatientRepository.BORN_NEAR_CAP)).stream()
+                .filter(p -> PatientMatchKeys.similarName(name, p.getFirstName(), p.getMiddleName(), p.getLastName()))
                 .forEach(p -> candidates.putIfAbsent(p.getId(), p));
         }
         String phoneKey = PatientMatchKeys.phoneKey(phone);
@@ -754,10 +768,18 @@ public class ReceptionServiceImpl implements ReceptionService {
                     || PatientMatchKeys.nameContains(p.getLastName() + " " + p.getFirstName(), name)
                     // QA D1103: the name as displayed, middle name included, is the same name.
                     || PatientMatchKeys.nameContains(p.getFullName(), name))) {
-            score += 50;
+            score += SCORE_SAME_NAME;
+        } else if (PatientMatchKeys.similarName(name, p.getFirstName(), p.getMiddleName(), p.getLastName())) {
+            // QA D2520: a near spelling is asked about, never as sure as the same name.
+            score += SCORE_SIMILAR_NAME;
         }
         if (dob != null && p.getDateOfBirth() != null && p.getDateOfBirth().toString().equals(dob)) {
-            score += 30;
+            score += SCORE_SAME_DOB;
+        } else if (dob != null && p.getDateOfBirth() != null && PatientMatchKeys.birthDate(dob) != null
+                && Math.abs(java.time.temporal.ChronoUnit.DAYS.between(p.getDateOfBirth(),
+                    PatientMatchKeys.birthDate(dob))) == 1) {
+            // QA D2520: a birth date one day off (a slip of the pen, a midnight birth).
+            score += SCORE_NEAR_DOB;
         }
         if (PatientMatchKeys.samePhone(p.getPhoneNumberPrimary(), phone, callingCode)
                 || PatientMatchKeys.samePhone(p.getPhoneNumberSecondary(), phone, callingCode)) {
@@ -1276,6 +1298,13 @@ public class ReceptionServiceImpl implements ReceptionService {
                 actorUserId, request.getCopayClientRequestId());
         }
 
+        // 3d. QA D2522 (r65): « Assurance vérifiée » is recorded on the coverage itself (who, when),
+        // as the desk's eligibility attestation is; it used to survive only in the audit text below,
+        // so the snapshot and the front-desk alerts kept the coverage unverified.
+        // Review of #1276: the audit says « Insurance verified » only when a coverage was stamped.
+        boolean insuranceStamped = request.isInsuranceVerified()
+                && stampInsuranceVerified(patient.getId(), hospital.getId(), actorUsername, now);
+
         // 4. Audit trail
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .userName(actorUsername)
@@ -1283,7 +1312,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .eventDescription("Patient checked in for appointment " + appointment.getId()
                         + ". Encounter " + encounter.getCode() + " created with status ARRIVED."
                         + (request.isIdentityConfirmed() ? " Identity confirmed." : "")
-                        + (request.isInsuranceVerified() ? " Insurance verified." : ""))
+                        + (insuranceStamped ? " Insurance verified." : ""))
                 .resourceId(encounter.getId().toString())
                 .entityType(ENTITY_TYPE_ENCOUNTER)
                 .status(AuditStatus.SUCCESS)
@@ -1294,6 +1323,37 @@ public class ReceptionServiceImpl implements ReceptionService {
 
         // 5. Build response
         return checkInResponse(appointment, encounter, copayPayment);
+    }
+
+    /**
+     * QA D2522: stamps the patient's primary coverage at this hospital as verified by
+     * {@code actorUsername} at {@code at}, when it is current on that day. Review of #1276: only the
+     * primary one: the desk's tick attests the coverage it bills, and with no primary coverage there is
+     * no telling which policy was checked, so nothing is stamped (never an arbitrary first one). An
+     * expired policy is never marked verified.
+     *
+     * @return whether a coverage was stamped
+     */
+    private boolean stampInsuranceVerified(UUID patientId, UUID hospitalId, String actorUsername, LocalDateTime at) {
+        PatientInsurance coverage = insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId)
+                .stream().filter(PatientInsurance::isPrimary).findFirst().orElse(null);
+        LocalDate day = at.toLocalDate();
+        if (coverage == null || (coverage.getExpirationDate() != null && coverage.getExpirationDate().isBefore(day))
+                || (coverage.getEffectiveDate() != null && coverage.getEffectiveDate().isAfter(day))) {
+            return false;
+        }
+        coverage.setVerifiedAt(at);
+        coverage.setVerifiedBy(actorUsername);
+        insuranceRepo.save(coverage);
+        return true;
+    }
+
+    /** The coverage the front-desk snapshot reads: the primary one, else the first. */
+    private static PatientInsurance snapshotCoverage(List<PatientInsurance> insurances) {
+        return insurances.stream()
+                .filter(PatientInsurance::isPrimary)
+                .findFirst()
+                .orElse(insurances.isEmpty() ? null : insurances.get(0));
     }
 
     private CheckInResponseDTO checkInResponse(Appointment appointment, Encounter encounter,

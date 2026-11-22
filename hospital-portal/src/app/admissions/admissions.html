@@ -1052,6 +1052,62 @@
             ></textarea>
           }
         </div>
+
+        <!-- QA D2553: what goes home, read from the take-home orders; they reach the summary. -->
+        <div class="field" data-testid="discharge-take-home">
+          <span class="field-label">{{ 'ADMISSIONS.TAKE_HOME_TITLE' | translate }}</span>
+          @if (takeHomeLoading()) {
+            <p class="field-hint">{{ 'COMMON.LOADING' | translate }}</p>
+          } @else if (takeHomeOrders().length) {
+            <ul class="take-home-list">
+              @for (rx of takeHomeOrders(); track rx.id) {
+                <li>
+                  <strong>{{ rx.medicationDisplayName || rx.medicationName }}</strong>
+                  @if (rx.dosage) {
+                    · {{ rx.dosage }}
+                  }
+                  @if (rx.frequency) {
+                    · {{ rx.frequency }}
+                  }
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="field-hint" data-testid="discharge-take-home-none">
+              {{ 'ADMISSIONS.TAKE_HOME_NONE' | translate }}
+            </p>
+          }
+          <p class="field-hint">{{ 'ADMISSIONS.TAKE_HOME_HINT' | translate }}</p>
+        </div>
+
+        <!-- QA D2553: the follow-up reaches the summary as an appointment, not only as text. -->
+        @if (!staySummary()?.isFinalized) {
+          <div class="form-row">
+            <div class="field">
+              <label for="discharge-follow-up-date">{{
+                'ADMISSIONS.FOLLOW_UP_DATE' | translate
+              }}</label>
+              <input
+                id="discharge-follow-up-date"
+                type="date"
+                [min]="today"
+                [(ngModel)]="dischargeForm.followUpDate"
+              />
+            </div>
+            <div class="field">
+              <label for="discharge-follow-up-purpose">{{
+                'ADMISSIONS.FOLLOW_UP_PURPOSE' | translate
+              }}</label>
+              <input
+                id="discharge-follow-up-purpose"
+                type="text"
+                maxlength="500"
+                [(ngModel)]="dischargeForm.followUpPurpose"
+                [placeholder]="'ADMISSIONS.FOLLOW_UP_PURPOSE_PLACEHOLDER' | translate"
+              />
+            </div>
+          </div>
+        }
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="cancelDischarge()">

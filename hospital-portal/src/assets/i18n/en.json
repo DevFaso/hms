@@ -1527,7 +1527,13 @@
     "OVERVIEW_TITLE": "Loaded admissions",
     "MATCHING_COUNT": "Matching admissions: {{count}}",
     "MISSING_BED_SUBSET": "Active with bed details missing",
-    "MISSING_BED_HINT": "Missing bed details are a subset of active admissions and are already included in that count."
+    "MISSING_BED_HINT": "Missing bed details are a subset of active admissions and are already included in that count.",
+    "TAKE_HOME_TITLE": "Take-home medicines",
+    "TAKE_HOME_NONE": "No take-home medicine is prescribed for this stay.",
+    "TAKE_HOME_HINT": "Signed prescriptions marked « Take-home medication » are listed in the discharge summary, including those written up to 24 h after the discharge.",
+    "FOLLOW_UP_DATE": "Follow-up appointment",
+    "FOLLOW_UP_PURPOSE": "Follow-up purpose",
+    "FOLLOW_UP_PURPOSE_PLACEHOLDER": "e.g. check-up, wound review, lab recheck"
   },
   "ANALYTICS": {
     "LOAD_FAILED": "The analytics could not be loaded. Try again.",
@@ -6942,7 +6948,8 @@
         "STATUS": "Status",
         "TEST": "Test",
         "TITLE": "{{name}}'s Health Data",
-        "TITLE_FALLBACK": "Shared Health Data"
+        "TITLE_FALLBACK": "Shared Health Data",
+        "IMAGING_TAB": "Imaging"
       },
       "USER_NOT_FOUND": "No account has this username. Check the spelling with the person you want to give access to.",
       "REVOKE_CONFIRM_TITLE": "Revoke this access?",
@@ -15132,7 +15139,8 @@
       "NO_CREATININE": "No released creatinine result at this hospital",
       "PRIOR_STUDIES": "Prior imaging studies",
       "NO_PRIOR": "No prior imaging study at this hospital",
-      "OPEN_REPORT": "Open its report"
+      "OPEN_REPORT": "Open its report",
+      "REFERENCE_RANGE": "Reference range: {{range}}"
     },
     "PORTAL": {
       "TITLE": "Imaging",
@@ -15142,7 +15150,8 @@
       "EMPTY_DESC": "A report appears here once the radiologist has signed it.",
       "REPORT": "Report",
       "IMAGES": "Images",
-      "IMAGE_N": "Image {{n}}"
+      "IMAGE_N": "Image {{n}}",
+      "PRESCRIBED_BY": "Requested by {{name}}"
     },
     "MAX_SIZE_LABEL": "10 MB",
     "IMAGES": {
@@ -15770,5 +15779,11 @@
     "DESCENDING": "Descending",
     "ASCENDING_FLIP": "Ascending, switch to descending",
     "DESCENDING_FLIP": "Descending, switch to ascending"
+  },
+  "PRINT_IDENTITY": {
+    "PATIENT": "Patient",
+    "SEX": "Sex",
+    "EXAM_DATE": "Exam date",
+    "PRINTED_ON": "Printed on {{date}}"
   }
 }

@@ -2799,7 +2799,7 @@ public class EncounterServiceImpl implements EncounterService {
         // clinician retyped them; the summary just written carries the visit's orders.
         dischargeSummaryRepository.findByEncounter_Id(encounter.getId()).ifPresent(summary -> {
             if (isBlankText(avs.getPrescriptionSummary())) {
-                avs.setPrescriptionSummary(medicationsAtDischarge(summary));
+                avs.setPrescriptionSummary(medicationsAtDischarge(summary, Set.of(), withdrawnOrdersOf(summary)));
             }
         });
         fillSummarySections(encounter, avs);
@@ -3360,11 +3360,23 @@ public class EncounterServiceImpl implements EncounterService {
     }
 
     /**
-     * QA D322: the medicines the patient goes home with, one line each, from
-     * the discharge summary's reconciliation (stopped ones left out).
+     * Review of #1276 (QA D2553): the orders named on the summary's lines that were withdrawn since
+     * (stopped, cancelled). A finalized summary keeps its text, but the after-visit summary never tells
+     * the patient to take a medicine the prescriber stopped. Read by the ids the summary itself holds.
      */
-    private static String medicationsAtDischarge(DischargeSummary summary) {
-        return medicationsAtDischarge(summary, Set.of());
+    private Set<UUID> withdrawnOrdersOf(DischargeSummary summary) {
+        Set<UUID> named = summary.getMedicationReconciliation() == null ? Set.of()
+            : summary.getMedicationReconciliation().stream()
+                .map(MedicationReconciliationEntry::getPrescriptionId)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (named.isEmpty()) {
+            return Set.of();
+        }
+        return prescriptionRepository.findAllById(named).stream()
+            .filter(rx -> rx.getStatus() != null && rx.getStatus().isWithdrawn())
+            .map(com.example.hms.model.Prescription::getId)
+            .collect(Collectors.toSet());
     }
 
     /**
@@ -3407,9 +3419,16 @@ public class EncounterServiceImpl implements EncounterService {
         return name == null ? "" : name.trim().toLowerCase(java.util.Locale.ROOT);
     }
 
-    private static String medicationsAtDischarge(DischargeSummary summary, Set<String> wardOrders) {
+    /**
+     * QA D322: the medicines the patient goes home with, one line each, from
+     * the discharge summary's reconciliation (stopped ones left out, and a line
+     * whose order was withdrawn since).
+     */
+    private static String medicationsAtDischarge(DischargeSummary summary, Set<String> wardOrders,
+                                                 Set<UUID> withdrawnOrders) {
         String text = summary.getMedicationReconciliation().stream()
             .filter(m -> !isLegacyWardOrderLine(m, wardOrders))
+            .filter(m -> m.getPrescriptionId() == null || !withdrawnOrders.contains(m.getPrescriptionId()))
             .filter(m -> !Boolean.FALSE.equals(m.getContinueAtDischarge()))
             .filter(m -> m.getReconciliationAction() != MedicationReconciliationAction.DISCONTINUED)
             .filter(m -> !isBlankText(m.getMedicationName()))
@@ -3468,7 +3487,8 @@ public class EncounterServiceImpl implements EncounterService {
             // follow-ups as lists, not as the checkout's free text, so the
             // stay's AVS showed neither.
             if (isBlankText(avs.getPrescriptionSummary())) {
-                avs.setPrescriptionSummary(medicationsAtDischarge(summary, wardOrderNames(encounter)));
+                avs.setPrescriptionSummary(medicationsAtDischarge(summary, wardOrderNames(encounter),
+                    withdrawnOrdersOf(summary)));
             }
             if (isBlankText(avs.getFollowUpInstructions())) {
                 avs.setFollowUpInstructions(summary.getFollowUpInstructions());

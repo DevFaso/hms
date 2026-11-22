@@ -3,6 +3,7 @@ import {
   Component,
   DestroyRef,
   ElementRef,
+  Input,
   OnInit,
   computed,
   inject,
@@ -22,6 +23,7 @@ import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { printOnly } from '../../shared/print/print-only';
 import { DialogA11yDirective } from '../../shared/a11y/dialog-a11y.directive';
 import { refusalReason } from '../../shared/refusal-reason';
+import { PrintIdentityComponent } from '../../shared/print/print-identity.component';
 
 /**
  * QA D2342 (r63, High): « Imagerie », the patient's released imaging reports.
@@ -35,7 +37,14 @@ import { refusalReason } from '../../shared/refusal-reason';
 @Component({
   selector: 'app-my-imaging',
   standalone: true,
-  imports: [TranslateModule, EnumLabelPipe, ServerTimePipe, DateTimePipe, DialogA11yDirective],
+  imports: [
+    TranslateModule,
+    EnumLabelPipe,
+    ServerTimePipe,
+    DateTimePipe,
+    DialogA11yDirective,
+    PrintIdentityComponent,
+  ],
   templateUrl: './my-imaging.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-imaging.component.scss', '../patient-portal-pages.scss'],
@@ -44,6 +53,16 @@ export class MyImagingComponent implements OnInit {
   private readonly imaging = inject(PatientImagingService);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  /**
+   * QA D2641 (r65): a caregiver reads the grantor's released imaging inside
+   * « Accès famille ». The reads go through the proxy endpoints, which check
+   * the grant (records permission) and leave out a study ordered in a
+   * sensitive visit (ProxyRecordFilter). Null: the patient's own imaging.
+   */
+  @Input() grantorPatientId: string | null = null;
+  /** Inside another page (the family-access viewer): no page title of its own. */
+  @Input() embedded = false;
 
   readonly studies = signal<PatientImagingStudy[]>([]);
   readonly loading = signal(true);
@@ -73,7 +92,7 @@ export class MyImagingComponent implements OnInit {
     this.loading.set(true);
     this.failed.set(false);
     this.failureReason.set(null);
-    this.imaging.studies().subscribe({
+    this.imaging.studies(this.grantorPatientId).subscribe({
       next: (list) => {
         this.studies.set(list ?? []);
         this.loading.set(false);
@@ -100,13 +119,23 @@ export class MyImagingComponent implements OnInit {
     return index > 0 || report.reportStatus === 'ADDENDUM';
   }
 
+  /** QA D2643 (r65): the study's latest released report carries whom it is about. */
+  identityOf(study: PatientImagingStudy): PatientImagingReport | null {
+    return study.reports.length ? study.reports[study.reports.length - 1] : null;
+  }
+
+  /** The prescriber of the study, as its reports name it. */
+  prescriberOf(study: PatientImagingStudy): string | null {
+    return this.identityOf(study)?.orderingProviderName ?? null;
+  }
+
   studyTitle(study: PatientImagingStudy): string | null {
     return study.studyType || study.reports[0]?.reportTitle || null;
   }
 
   private readThumb(image: PatientImagingImage): void {
     if (this.objectUrls.has(image.id)) return;
-    this.imaging.image(image.id).subscribe({
+    this.imaging.image(image.id, this.grantorPatientId).subscribe({
       next: (blob) => {
         const url = URL.createObjectURL(blob);
         this.objectUrls.set(image.id, url);
@@ -130,7 +159,7 @@ export class MyImagingComponent implements OnInit {
       return;
     }
     // A PDF opens in the browser's own viewer, from the authenticated bytes.
-    this.imaging.image(image.id).subscribe({
+    this.imaging.image(image.id, this.grantorPatientId).subscribe({
       next: (blob) => {
         const url = URL.createObjectURL(blob);
         this.objectUrls.set(image.id, url);

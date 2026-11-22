@@ -41,7 +41,6 @@ class DoseNumberReaderGuardTest {
             "matches the whole text as ONE amount: a range is null, and the fill waits for a recorded quantity"),
         Map.entry("fhir/mapper/MedicationRequestFhirMapper.java",
             "matches the whole text as ONE number: a range stays in the dosage's text"),
-        Map.entry("service/AdmissionStayEncounterService.java", "copies the text; its parsing is about something else"),
         Map.entry("service/AfterVisitSummarySections.java",
             "copies the text; its pattern strips a strength from a drug NAME to group one drug's lines"),
         Map.entry("service/DischargeSummaryServiceImpl.java", "copies the text; its parsing is about something else"),

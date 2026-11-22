@@ -70,7 +70,8 @@ class NeverSignedOrderReadersGuardTest {
             "the after-visit summary's current medicines: issued and running courses only")),
         Map.entry("service/EncounterServiceImpl.java", new Reader("isWithdrawn()",
             "the after-visit reconciliation lists continued orders: no draft, no withdrawn order")),
-        Map.entry("service/AdmissionStayEncounterService.java", new Reader("isWithdrawn()",
+        // QA D2553: the stay's take-home orders, read for its summary in one place.
+        Map.entry("service/DischargeTakeHomeMedicines.java", new Reader("isWithdrawn()",
             "take-home orders: no draft, no withdrawn order")),
         // Staff history that names each row's status.
         Map.entry("service/PatientServiceImpl.java", new Reader("PrescriptionIssuance.withoutDiscardedProposals(",

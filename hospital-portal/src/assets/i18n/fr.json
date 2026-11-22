@@ -1527,7 +1527,13 @@
     "OVERVIEW_TITLE": "Admissions chargées",
     "MATCHING_COUNT": "Admissions correspondantes : {{count}}",
     "MISSING_BED_SUBSET": "Actifs : lit non renseigné",
-    "MISSING_BED_HINT": "Les lits non renseignés concernent un sous-ensemble des admissions actives, déjà compris dans leur total."
+    "MISSING_BED_HINT": "Les lits non renseignés concernent un sous-ensemble des admissions actives, déjà compris dans leur total.",
+    "TAKE_HOME_TITLE": "Traitement de sortie",
+    "TAKE_HOME_NONE": "Aucun traitement de sortie n'est prescrit pour ce séjour.",
+    "TAKE_HOME_HINT": "Les prescriptions signées marquées « Traitement de sortie » figurent dans le résumé de sortie, y compris celles rédigées dans les 24 h suivant la sortie.",
+    "FOLLOW_UP_DATE": "Rendez-vous de suivi",
+    "FOLLOW_UP_PURPOSE": "Motif du suivi",
+    "FOLLOW_UP_PURPOSE_PLACEHOLDER": "ex. contrôle, pansement, bilan biologique"
   },
   "ANALYTICS": {
     "LOAD_FAILED": "Impossible de charger les indicateurs. Réessayez.",
@@ -6942,7 +6948,8 @@
         "STATUS": "Statut",
         "TEST": "Analyse",
         "TITLE": "Données de santé de {{name}}",
-        "TITLE_FALLBACK": "Données de santé partagées"
+        "TITLE_FALLBACK": "Données de santé partagées",
+        "IMAGING_TAB": "Imagerie"
       },
       "USER_NOT_FOUND": "Aucun compte ne porte cet identifiant. Vérifiez l’orthographe auprès de la personne à qui vous voulez donner accès.",
       "REVOKE_CONFIRM_TITLE": "Révoquer cet accès ?",
@@ -15132,7 +15139,8 @@
       "NO_CREATININE": "Aucun résultat de créatinine validé dans cet établissement",
       "PRIOR_STUDIES": "Examens d'imagerie antérieurs",
       "NO_PRIOR": "Aucun examen d'imagerie antérieur dans cet établissement",
-      "OPEN_REPORT": "Ouvrir son compte rendu"
+      "OPEN_REPORT": "Ouvrir son compte rendu",
+      "REFERENCE_RANGE": "Valeurs de référence : {{range}}"
     },
     "PORTAL": {
       "TITLE": "Imagerie",
@@ -15142,7 +15150,8 @@
       "EMPTY_DESC": "Un compte rendu apparaît ici dès que le radiologue l'a signé.",
       "REPORT": "Compte rendu",
       "IMAGES": "Clichés",
-      "IMAGE_N": "Cliché {{n}}"
+      "IMAGE_N": "Cliché {{n}}",
+      "PRESCRIBED_BY": "Demandé par {{name}}"
     },
     "MAX_SIZE_LABEL": "10 Mo",
     "IMAGES": {
@@ -15770,5 +15779,11 @@
     "DESCENDING": "Décroissant",
     "ASCENDING_FLIP": "Croissant, passer en décroissant",
     "DESCENDING_FLIP": "Décroissant, passer en croissant"
+  },
+  "PRINT_IDENTITY": {
+    "PATIENT": "Nom du patient",
+    "SEX": "Sexe",
+    "EXAM_DATE": "Date de l'examen",
+    "PRINTED_ON": "Imprimé le {{date}}"
   }
 }

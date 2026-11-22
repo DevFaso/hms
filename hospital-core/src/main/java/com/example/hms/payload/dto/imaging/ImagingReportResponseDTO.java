@@ -122,6 +122,26 @@ public class ImagingReportResponseDTO {
 
     private BigDecimal examRadiationDoseMgy;
 
+    /**
+     * QA D2642 / D2643 (r65): what a printed report must say to identify the patient and the
+     * request (this field and the six below), read from the order and the patient every time.
+     * The patient's copy keeps the hospital, the patient's own date of birth and the prescriber
+     * ({@code PatientSafeView}); the clinical question and the sex are staff only.
+     */
+    private String hospitalName;
+
+    private String hospitalAddress;
+
+    private java.time.LocalDate patientDateOfBirth;
+
+    private String patientGender;
+
+    private String orderingProviderName;
+
+    private String clinicalQuestion;
+
+    private LocalDateTime orderedAt;
+
     private Integer attachmentsCount;
 
     private Integer measurementsCount;

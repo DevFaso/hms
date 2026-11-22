@@ -802,6 +802,43 @@ class PatientServiceImplTest {
             eq(hospitalId), isNull(), any(Pageable.class));
     }
 
+    /**
+     * QA D2521 (r65): the 12 digits of an ID card typed into the one search box find the patient by
+     * IU (first), within the search's hospital; they used to be read as a phone number only.
+     */
+    @Test
+    void twelveDigitsTypedIntoTheSearchFindThePatientByIu_D2521() {
+        Patient other = new Patient();
+        other.setId(UUID.randomUUID());
+        other.setActive(true);
+        com.example.hms.model.PatientHospitalRegistration here = new com.example.hms.model.PatientHospitalRegistration();
+        com.example.hms.model.Hospital h = new com.example.hms.model.Hospital();
+        h.setId(hospitalId);
+        here.setHospital(h);
+        here.setActive(true);
+        patient.setActive(true);
+        patient.setHospitalRegistrations(new java.util.HashSet<>(java.util.Set.of(here)));
+        other.setHospitalRegistrations(new java.util.HashSet<>());
+        when(patientRepository.searchPatientsExtended(any(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))
+            .thenReturn(Page.empty());
+        PatientNationalUniqueIdService identities = mock(PatientNationalUniqueIdService.class);
+        when(identities.matchesForSearch("2065 3283 4071")).thenReturn(List.of(patient, other));
+        @SuppressWarnings("unchecked")
+        org.springframework.beans.factory.ObjectProvider<PatientNationalUniqueIdService> provider =
+            mock(org.springframework.beans.factory.ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(identities);
+        org.springframework.test.util.ReflectionTestUtils.setField(patientService, "nationalUniqueIds", provider);
+        PatientResponseDTO dto = PatientResponseDTO.builder().id(patientId).build();
+        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(dto);
+        lenient().when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+
+        List<PatientResponseDTO> found = patientService.searchPatients(PatientSearchCriteria.builder()
+            .name("2065 3283 4071").hospitalId(hospitalId).includeInactive(true).build(), 0, 10, Locale.FRENCH);
+
+        // The patient registered elsewhere is not listed at this hospital.
+        assertThat(found).containsExactly(dto);
+    }
+
     @Test
     void anExplicitBirthDateIsAcceptedInTheDayFirstFormats() {
         when(patientRepository.searchPatientsExtended(any(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))

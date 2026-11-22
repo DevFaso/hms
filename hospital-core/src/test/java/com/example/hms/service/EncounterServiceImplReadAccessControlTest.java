@@ -378,6 +378,38 @@ class EncounterServiceImplReadAccessControlTest {
         }
 
         @Test
+        @DisplayName("review of #1276 (D2553): a stay's AVS leaves out a take-home order stopped after its summary was signed")
+        void stayAvsLeavesOutAStoppedTakeHomeOrder() {
+            authenticateAs("ROLE_PATIENT");
+            Encounter mine = encounterAt(hospital, callerPatient, true);
+            com.example.hms.model.Prescription stopped = new com.example.hms.model.Prescription();
+            stopped.setId(UUID.randomUUID());
+            stopped.setMedicationName("Amoxicilline");
+            stopped.setTakeHome(true);
+            stopped.setStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+            com.example.hms.model.Prescription replacement = new com.example.hms.model.Prescription();
+            replacement.setId(UUID.randomUUID());
+            replacement.setMedicationName("Amoxicilline");
+            replacement.setTakeHome(true);
+            replacement.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+            lenient().when(prescriptionRepository.findAllById(any()))
+                .thenReturn(java.util.List.of(stopped, replacement));
+            com.example.hms.model.discharge.DischargeSummary summary = new com.example.hms.model.discharge.DischargeSummary();
+            summary.setIsFinalized(true);
+            summary.getMedicationReconciliation().add(com.example.hms.model.discharge.MedicationReconciliationEntry.builder()
+                .medicationName("Amoxicilline").dosage("1 g").continueAtDischarge(true).prescriptionId(stopped.getId())
+                .reconciliationAction(com.example.hms.enums.MedicationReconciliationAction.CONTINUED).build());
+            summary.getMedicationReconciliation().add(com.example.hms.model.discharge.MedicationReconciliationEntry.builder()
+                .medicationName("Amoxicilline").dosage("500 mg").continueAtDischarge(true).prescriptionId(replacement.getId())
+                .reconciliationAction(com.example.hms.enums.MedicationReconciliationAction.CONTINUED).build());
+            lenient().when(dischargeSummaryRepository.findByEncounter_Id(mine.getId())).thenReturn(Optional.of(summary));
+
+            AfterVisitSummaryDTO avs = service.getAfterVisitSummary(mine.getId());
+
+            assertThat(avs.getPrescriptionSummary()).isEqualTo("Amoxicilline 500 mg");
+        }
+
+        @Test
         @DisplayName("QA D795: after a transfer, a stay's AVS names the discharging department, not the admitting one")
         void transferredStayAvsNamesTheDischargingDepartment() {
             // The QA call: DOCTOR_A, GET /encounters/{stay}/avs after an admission

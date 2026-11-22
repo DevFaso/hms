@@ -399,6 +399,36 @@ const DRAWERS: DrawerCase[] = [
   },
 ];
 
+/*
+ * QA D2644 (r65): « Latéralité » shared its row with the full-width « Question
+ * clinique » and was squeezed to an empty 60 px select (0 px at 390, its label
+ * one letter per line). The select keeps a readable width at every width.
+ */
+test.describe('layout: the new imaging order form (D2644)', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test('« Latéralité » stays readable at 1366, 1024, 768 and 390', async ({ page }, testInfo) => {
+    await page.route('**/api/imaging/orders**', (r) => r.fulfill({ json: [IMAGING_ORDER] }));
+    await page.route('**/api/imaging/results/**', (r) => r.fulfill({ json: [] }));
+    await open(page, testInfo.project.use.baseURL as string, 'ROLE_DOCTOR', '/imaging');
+    await page
+      .locator('button.btn-primary')
+      .filter({ hasText: /Nouvelle demande|New (imaging )?order/i })
+      .first()
+      .click();
+    const select = page.locator('#img-laterality');
+    await expect(select).toBeVisible();
+    for (const width of LAYOUT_WIDTHS) {
+      await page.setViewportSize({ width, height: heightFor(width) });
+      const field = await select.boundingBox();
+      const label = await page.locator('label[for="img-laterality"]').boundingBox();
+      expect(field?.width ?? 0, `select width @${width}`).toBeGreaterThanOrEqual(150);
+      expect(label?.height ?? 99, `label on one line @${width}`).toBeLessThan(32);
+    }
+    await shoot(page, 'imaging-new-order', LAYOUT_WIDTHS);
+  });
+});
+
 test.describe('layout overflow: clinical drawers', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 

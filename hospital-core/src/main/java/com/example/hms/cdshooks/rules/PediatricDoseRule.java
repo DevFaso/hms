@@ -120,6 +120,10 @@ public class PediatricDoseRule implements CdsRule {
                 "{0}: cannot assess, review required: no paracetamol limit on file applies to this order",
                 check.medication()), check.limitBasis(), "paedNoLimit:" + context.proposedRoute().code()));
         }
+        Optional<String> unbanded = check.unbandedStrength();
+        if (unbanded.isPresent()) {
+            return List.of(cannotAssess(unbanded.get(), check.limitBasis(), "paedAlStrength:" + context.proposedRoute().code()));
+        }
         Optional<String> noVerdict = check.noVerdictOnThisRoute();
         if (noVerdict.isPresent()) {
             return List.of(cannotAssess(noVerdict.get(), check.limitBasis(), check.routeKey()));
@@ -182,13 +186,23 @@ public class PediatricDoseRule implements CdsRule {
          * ticked interval is known: it is the most the order allows.
          */
         private final boolean totalUnknown;
+        /** QA D2552: the WHO artemether-lumefantrine bands stand in for a catalogue with no limit of its own. */
+        private final boolean whoDefault;
+        /** QA D2552: artemether-lumefantrine of a strength the WHO bands do not count (not 20/120 mg). */
+        private final boolean whoStrengthUnbanded;
 
         Check(CdsRuleContext context, Period age, long ageMonths) {
             this.context = context;
             // QA D1462: a free-text brand of paracetamol is judged against the hospital's limits for
             // the drug, like a brand its catalogue item names. Its strength is not read from them.
-            this.item = context.proposedCatalogItem() != null
+            MedicationCatalogItem own = context.proposedCatalogItem() != null
                 ? context.proposedCatalogItem() : context.paracetamolFacts().limits();
+            boolean alWithNoLimit = !hasLimitsOf(own)
+                && ArtemetherLumefantrineWhoBands.names(context.proposedMedicationName(), own);
+            boolean banded = ArtemetherLumefantrineWhoBands.bandsCountThisProduct(context.proposedMedicationName(), own);
+            this.whoDefault = alWithNoLimit && banded;
+            this.whoStrengthUnbanded = alWithNoLimit && !banded;
+            this.item = whoDefault ? ArtemetherLumefantrineWhoBands.asDefaultLimit(own) : own;
             this.age = age;
             this.ageMonths = ageMonths;
             // Review of round 18: the doses given on a dosing day - at least the
@@ -209,13 +223,27 @@ public class PediatricDoseRule implements CdsRule {
         }
 
         boolean hasBands() {
-            return item != null && item.getPediatricWeightBands() != null && !item.getPediatricWeightBands().isEmpty();
+            return bandsOf(item);
         }
 
         boolean hasMgLimit() {
-            return item != null && (item.getPediatricMaxDoseMgPerKg() != null
-                || item.getPediatricMaxDailyMgPerKg() != null || item.getPediatricMaxSingleDoseMg() != null
-                || item.getPediatricMaxDailyMg() != null);
+            return mgLimitOf(item);
+        }
+
+        /**
+         * QA D2552: the WHO bands count tablets of 20/120 mg; another strength, or none stated on a
+         * product that is not clearly 20/120 mg (review of #1276), cannot be judged by them.
+         */
+        Optional<String> unbandedStrength() {
+            if (!whoStrengthUnbanded) {
+                return Optional.empty();
+            }
+            String stated = ArtemetherLumefantrineWhoBands.statedStrength(context.proposedMedicationName(),
+                context.proposedCatalogItem());
+            return Optional.of(text.get("cds.pediatric.who.al.strength.summary",
+                "{0}: cannot assess, review required: the WHO weight bands for artemether-lumefantrine count tablets of 20/120 mg, and the strength of this product ({1}) could not be matched to them (provisional rule)",
+                medication(), stated != null ? stated
+                    : text.get("cds.pediatric.who.al.strength.notStated", "not stated")));
         }
 
         /** CR-01: what a cannot-assess card answers, for the urgent exception: the two routes and the status. */
@@ -276,6 +304,12 @@ public class PediatricDoseRule implements CdsRule {
             if (limitRoute() == null) {
                 return Optional.of(text.get("cds.pediatric.limit.noRoute.summary",
                     "{0}: cannot assess, review required: the limit on file does not record its route, so a dose under it is not cleared",
+                    medication()));
+            }
+            if (whoDefault) {
+                // QA D2552: a published default, provisional: it does not clear a dose by itself.
+                return Optional.of(text.get("cds.pediatric.who.al.pending.summary",
+                    "{0}: dosed by the WHO weight bands (provisional rule, pending local approval) - review required: a dose under them is not cleared",
                     medication()));
             }
             return item.getPediatricDoseStatus() == PediatricDoseLimitStatus.APPROVED ? Optional.empty()
@@ -365,6 +399,7 @@ public class PediatricDoseRule implements CdsRule {
                     medication(), number(bandDose), unitOf(band), number(weight)), limitBasis()));
             }
             List<CdsCard> cards = new ArrayList<>();
+            boolean withinBand = units <= bandDose;
             if (units > bandDose) {
                 cards.add(softStop(text.get("cds.pediatric.band.perDose.summary",
                     "{0}: {1} {2} per dose is above the {3} {2} of the weight band for {4} kg",
@@ -379,7 +414,14 @@ public class PediatricDoseRule implements CdsRule {
                         "{0}: {1} {2} per day is above the {3} {2} per day of the weight band for {4} kg",
                         medication(), number(daily), unitOf(band), number(bandDaily), number(weight)),
                         "bandDaily:" + daily + ":" + bandDaily));
+                    withinBand = false;
                 }
+            }
+            if (whoDefault && withinBand) {
+                // QA D2552: the prescriber sees the band the order was judged against, not only the hold.
+                cards.add(info(text.get("cds.pediatric.who.al.band.summary",
+                    "{0}: WHO weight band for {1} kg: {2} tablet(s) of 20/120 mg per dose, twice a day for 3 days; this order: {3} per dose (provisional rule)",
+                    medication(), number(weight), number(bandDose), number(units)), limitBasis()));
             }
             return cards;
         }
@@ -489,6 +531,25 @@ public class PediatricDoseRule implements CdsRule {
             String detail = text.get("cds.pediatric.warning.detail", "Limit: {0}.", limitBasis);
             return card(summary, detail, CdsCard.Indicator.WARNING, null);
         }
+
+        private CdsCard info(String summary, String limitBasis) {
+            String detail = text.get("cds.pediatric.warning.detail", "Limit: {0}.", limitBasis);
+            return card(summary, detail, CdsCard.Indicator.INFO, null);
+        }
+    }
+
+    private static boolean hasLimitsOf(MedicationCatalogItem item) {
+        return bandsOf(item) || mgLimitOf(item);
+    }
+
+    private static boolean bandsOf(MedicationCatalogItem item) {
+        return item != null && item.getPediatricWeightBands() != null && !item.getPediatricWeightBands().isEmpty();
+    }
+
+    private static boolean mgLimitOf(MedicationCatalogItem item) {
+        return item != null && (item.getPediatricMaxDoseMgPerKg() != null
+            || item.getPediatricMaxDailyMgPerKg() != null || item.getPediatricMaxSingleDoseMg() != null
+            || item.getPediatricMaxDailyMg() != null);
     }
 
     /**

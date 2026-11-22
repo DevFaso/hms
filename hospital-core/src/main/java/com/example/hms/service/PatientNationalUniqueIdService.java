@@ -31,6 +31,10 @@ import java.util.UUID;
 public class PatientNationalUniqueIdService {
     private static final Set<String> EDITORS = Set.of("ROLE_RECEPTIONIST", "ROLE_NURSE", "ROLE_MIDWIFE",
         "ROLE_DOCTOR", "ROLE_HOSPITAL_ADMIN", "ROLE_SUPER_ADMIN");
+    /** The roles of {@code PatientNationalUniqueIdController.SEARCHERS}: who may find a patient by IU. */
+    static final Set<String> SEARCHERS = Set.of("ROLE_RECEPTIONIST", "ROLE_HOSPITAL_ADMIN", "ROLE_DOCTOR",
+        "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_LAB_SCIENTIST", "ROLE_PHARMACIST", "ROLE_RADIOLOGIST",
+        "ROLE_PHYSIOTHERAPIST", "ROLE_SUPER_ADMIN", "ROLE_BILLING_SPECIALIST", "ROLE_ACCOUNTANT");
     private final PatientRepository patients;
     private final RoleValidator roles;
     private final EntityManager entityManager;
@@ -62,6 +66,41 @@ public class PatientNationalUniqueIdService {
         if (hash == null) return List.of();
         return patients.findByNationalUniqueIdHashInScope(hash).stream()
             .map(patient -> identityMatch(patient, hospitalId)).toList();
+    }
+
+    /**
+     * QA D2521 (r65): the patients in the caller's scope whose IU is exactly {@code term}, for the free
+     * patient search (a desk types the 12 digits of an ID card into the one search box). Empty, never an
+     * error, when the term is not an IU, when the caller is not one of the roles of
+     * {@code POST /patients/national-unique-id/search}, or when no lookup key is configured: the search
+     * then answers as it did. The IU itself never leaves this method; the caller lists the patients.
+     */
+    @Transactional(readOnly = true)
+    public List<Patient> matchesForSearch(String term) {
+        if (!isNationalUniqueId(term) || !callerHolds(SEARCHERS)) return List.of();
+        String hash;
+        try {
+            hash = PatientNationalUniqueId.fingerprint(term);
+        } catch (FieldBusinessException unavailable) {
+            return List.of();
+        }
+        return hash == null ? List.of() : patients.findByNationalUniqueIdHashInScope(hash);
+    }
+
+    /** Twelve digits, spaces or dashes between them allowed: what an IU is typed as. */
+    static boolean isNationalUniqueId(String term) {
+        if (term == null || term.isBlank()) return false;
+        try {
+            return PatientNationalUniqueId.normalize(term) != null;
+        } catch (FieldBusinessException notAnIu) {
+            return false;
+        }
+    }
+
+    private static boolean callerHolds(Set<String> roles) {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null && authentication.isAuthenticated() && authentication.getAuthorities().stream()
+            .anyMatch(authority -> roles.contains(authority.getAuthority()));
     }
 
     /** A picker needs identity only; it must not become another clinical-record read surface. */

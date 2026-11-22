@@ -79,6 +79,9 @@ class DialogTextLimitGuardTest {
         // Stored on the stay's encounter, truncated there to 2000 (AdmissionStayEncounterService).
         new Limit(ADMISSIONS, "discharge-diagnosis", AdmissionDischargeRequestDTO.class, "dischargeDiagnosis",
             null, null, "clinical"),
+        // QA D2553: the follow-up's purpose, kept on the stay summary's follow-up entry.
+        new Limit(ADMISSIONS, "discharge-follow-up-purpose", AdmissionDischargeRequestDTO.class, "followUpPurpose",
+            com.example.hms.model.discharge.FollowUpAppointmentEntry.class, "purpose", "clinical"),
         new Limit(ADMISSIONS, "adm-complaint", AdmissionRequestDTO.class, "chiefComplaint",
             Admission.class, "chiefComplaint", "clinical"),
         new Limit(ADMISSIONS, "adm-notes", AdmissionRequestDTO.class, "admissionNotes",

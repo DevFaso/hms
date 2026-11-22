@@ -17,7 +17,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -30,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -47,7 +47,8 @@ class AdmissionStayEncounterServiceTest {
     @Mock private com.example.hms.repository.PrescriptionRepository prescriptionRepository;
     @Mock private StayOrderDiscontinuation stayOrders;
 
-    @InjectMocks private AdmissionStayEncounterService service;
+    @Mock private com.example.hms.repository.AdmissionRepository admissionRepository;
+    private AdmissionStayEncounterService service;
 
     private Hospital hospital;
     private Staff doctor;
@@ -55,6 +56,11 @@ class AdmissionStayEncounterServiceTest {
 
     @BeforeEach
     void setUp() {
+        // QA D2553: the real take-home carrier, on the same repository mocks.
+        service = new AdmissionStayEncounterService(encounterRepository, staffRepository, assignmentRepository,
+            nurseHandoffRepository, nursingTaskRepository, messageSource, dischargeSummaryRepository, stayOrders,
+            new DischargeTakeHomeMedicines(prescriptionRepository, dischargeSummaryRepository, encounterRepository,
+                admissionRepository));
         hospital = Hospital.builder().build();
         hospital.setId(UUID.randomUUID());
         User user = new User();
@@ -368,6 +374,38 @@ class AdmissionStayEncounterServiceTest {
         service.recordDischarge(admission, "Pneumopathie");
 
         verify(dischargeSummaryRepository, never()).save(any());
+    }
+
+    @Test
+    void d2553_aSummaryWrittenBeforeTheDischargeGetsTheTakeHomeMedicinesAndTheFollowUp() {
+        Encounter stay = new Encounter();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionId(admission.getId());
+        admission.setFollowUpAppointments(List.of(java.util.Map.of(
+            "appointmentType", "DISCHARGE_FOLLOW_UP", "appointmentDate", "2026-11-26", "purpose", "Contrôle glycémie")));
+        com.example.hms.model.Prescription home = new com.example.hms.model.Prescription();
+        home.setId(UUID.randomUUID());
+        home.setMedicationName("Metformine");
+        home.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        home.setTakeHome(true);
+        com.example.hms.model.discharge.DischargeSummary written = new com.example.hms.model.discharge.DischargeSummary();
+        written.setEncounter(stay);
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
+            .thenReturn(Optional.of(stay));
+        when(dischargeSummaryRepository.findByEncounter_Id(stay.getId())).thenReturn(Optional.of(written));
+        when(prescriptionRepository.findByEncounter_Id(eq(stay.getId()), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(home)));
+
+        service.recordDischarge(admission, "Diabète de type 2");
+        service.recordDischarge(admission, "Diabète de type 2");
+
+        assertThat(written.getMedicationReconciliation())
+            .extracting(com.example.hms.model.discharge.MedicationReconciliationEntry::getMedicationName)
+            .containsExactly("Metformine");
+        assertThat(written.getFollowUpAppointments())
+            .extracting(com.example.hms.model.discharge.FollowUpAppointmentEntry::getPurpose)
+            .containsExactly("Contrôle glycémie");
+        verify(dischargeSummaryRepository, times(1)).save(written);
     }
 
     /* ── QA D1596: the written summary is the one source ─────────────────── */
