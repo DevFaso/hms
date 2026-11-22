@@ -50,8 +50,8 @@ class ClinicalRuleRegistryGuardTest {
     private static final Pattern KEY = Pattern.compile("ClinicalRuleSetKey\\.(\\w+)");
     /** The codebase's marker for a rule awaiting its approver ("PROVISIONAL (user decision …)", "PROVISIONAL_DEFAULT…"). */
     private static final Pattern PROVISIONAL_MARKER = Pattern.compile("\\bPROVISIONAL(?:_\\w+)?\\b");
-    /** A string literal that prints « provisoire » to a user. */
-    private static final Pattern PROVISOIRE_LITERAL = Pattern.compile("\"[^\"\\n]*provisoire[^\"\\n]*\"");
+    /** A one-line string literal; one that holds « provisoire » prints it to a user. */
+    private static final Pattern STRING_LITERAL = Pattern.compile("\"[^\"\\n]*+\"");
 
     /**
      * Files that say PROVISIONAL only to name a rule enforced elsewhere: the file, and the class (named from
@@ -152,7 +152,8 @@ class ClinicalRuleRegistryGuardTest {
             String relative = MAIN.relativize(file).toString().replace('\\', '/');
             String raw = Files.readString(file, StandardCharsets.UTF_8);
             boolean marked = PROVISIONAL_MARKER.matcher(raw).find()
-                || PROVISOIRE_LITERAL.matcher(SourceScan.stripComments(raw)).find();
+                || STRING_LITERAL.matcher(SourceScan.stripComments(raw)).results()
+                    .anyMatch(literal -> literal.group().contains("provisoire"));
             if (!marked || annotatedFiles.contains(relative) || NOT_A_RULE.containsKey(relative)) {
                 continue;
             }

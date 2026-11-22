@@ -101,17 +101,17 @@ final class ComputedKeys {
         Map<String, Domain> d = domains();
         Map<String, Domain> r = new LinkedHashMap<>();
         // V356: a provisional rule set's texts, one per ClinicalRuleSetKey.
-        site(r, d, "com/example/hms/service/clinicalrules/ClinicalRuleSet.java|return \"clinicalRules.rule.\" + key.name() + \".title\"",
+        site(r, d, "com/example/hms/service/clinicalrules/ClinicalRuleSet.java|return TEXT_PREFIX + key.name() + \".title\"",
             "ClinicalRuleSet.java|clinicalRules.rule.title");
         r.put("com/example/hms/service/clinicalrules/HospitalRuleSignoffService.java|rule.titleKey()",
             ruleSetTexts("title"));
         // V356: a provisional rule set's texts, one per ClinicalRuleSetKey.
-        site(r, d, "com/example/hms/service/clinicalrules/ClinicalRuleSet.java|return \"clinicalRules.rule.\" + key.name() + \".description\"",
+        site(r, d, "com/example/hms/service/clinicalrules/ClinicalRuleSet.java|return TEXT_PREFIX + key.name() + \".description\"",
             "ClinicalRuleSet.java|clinicalRules.rule.description");
         r.put("com/example/hms/service/clinicalrules/HospitalRuleSignoffService.java|rule.descriptionKey()",
             ruleSetTexts("description"));
         // V356: a provisional rule set's texts, one per ClinicalRuleSetKey.
-        site(r, d, "com/example/hms/service/clinicalrules/ClinicalRuleSet.java|return \"clinicalRules.rule.\" + key.name() + \".approver\"",
+        site(r, d, "com/example/hms/service/clinicalrules/ClinicalRuleSet.java|return TEXT_PREFIX + key.name() + \".approver\"",
             "ClinicalRuleSet.java|clinicalRules.rule.approver");
         r.put("com/example/hms/service/clinicalrules/HospitalRuleSignoffService.java|rule.approverKey()",
             ruleSetTexts("approver"));

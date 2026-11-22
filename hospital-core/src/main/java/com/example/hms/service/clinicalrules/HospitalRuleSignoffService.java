@@ -30,6 +30,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -60,6 +61,7 @@ public class HospitalRuleSignoffService {
 
     static final String ENTITY_TYPE = "HOSPITAL_RULE_SIGNOFF";
     private static final Locale SPANISH = Locale.forLanguageTag("es");
+    // recordedAt / revokedAt on the server's clock, as BaseEntity's createdAt (the screen orders by them).
     private static final String MSG_HOSPITAL_NOT_FOUND = "hospital.notFound";
     private static final String MSG_RULE_NOT_FOUND = "clinicalRules.notFound";
 
@@ -131,7 +133,7 @@ public class HospitalRuleSignoffService {
             .signedOn(request.signedOn())
             .note(blankToNull(request.note()))
             .recordedByUserId(actorUserId)
-            .recordedAt(LocalDateTime.now())
+            .recordedAt(LocalDateTime.now(ZoneId.systemDefault()))
             .build());
         audit(AuditEventType.CLINICAL_RULE_SIGNED_OFF, saved, actorUserId,
             "Clinical rule set " + rule.key().name() + " signed off (version " + rule.version() + ")");
@@ -154,7 +156,7 @@ public class HospitalRuleSignoffService {
             throw new BusinessException("clinicalRules.nothingToRevoke");
         }
         live.setStatus(RuleSignoffStatus.REVOKED);
-        live.setRevokedAt(LocalDateTime.now());
+        live.setRevokedAt(LocalDateTime.now(ZoneId.systemDefault()));
         live.setRevokedByUserId(actorUserId);
         live.setRevokeReason(reason == null ? null : reason.strip());
         HospitalRuleSignoff saved = signoffRepository.save(live);

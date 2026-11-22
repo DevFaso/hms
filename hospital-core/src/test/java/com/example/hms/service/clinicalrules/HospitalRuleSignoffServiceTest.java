@@ -67,6 +67,7 @@ class HospitalRuleSignoffServiceTest {
     private final List<HospitalRuleSignoff> stored = new ArrayList<>();
     private final ClinicalRuleSet paracetamol =
         ClinicalRuleRegistry.find(ClinicalRuleSetKey.PARACETAMOL_LIMITS).orElseThrow();
+    private static final String PARACETAMOL = ClinicalRuleSetKey.PARACETAMOL_LIMITS.name();
 
     @BeforeEach
     void setUp() {
@@ -168,7 +169,8 @@ class HospitalRuleSignoffServiceTest {
     @Test
     @DisplayName("a sign-off against a version the rule no longer has is refused, so nobody signs what they did not read")
     void staleVersionIsRefused() {
-        assertThatThrownBy(() -> service.sign(hospitalId, paracetamol.key().name(), request("2020-01-01.0"), adminId))
+        RuleSignoffRequestDTO stale = request("2020-01-01.0");
+        assertThatThrownBy(() -> service.sign(hospitalId, PARACETAMOL, stale, adminId))
             .isInstanceOf(FieldBusinessException.class);
         assertThat(stored).isEmpty();
     }
@@ -177,9 +179,10 @@ class HospitalRuleSignoffServiceTest {
     @DisplayName("only the hospital's admin or the super-admin records or revokes; a doctor there is refused")
     void onlyAdminsWrite() {
         UUID doctorId = UUID.randomUUID();
-        assertThatThrownBy(() -> service.sign(hospitalId, paracetamol.key().name(),
-            request(paracetamol.version()), doctorId)).isInstanceOf(ClientSafeAccessDeniedException.class);
-        assertThatThrownBy(() -> service.revoke(hospitalId, paracetamol.key().name(), "Erreur de saisie", doctorId))
+        RuleSignoffRequestDTO current = request(paracetamol.version());
+        assertThatThrownBy(() -> service.sign(hospitalId, PARACETAMOL, current, doctorId))
+            .isInstanceOf(ClientSafeAccessDeniedException.class);
+        assertThatThrownBy(() -> service.revoke(hospitalId, PARACETAMOL, "Erreur de saisie", doctorId))
             .isInstanceOf(ClientSafeAccessDeniedException.class);
         assertThat(stored).isEmpty();
         verify(auditEventLogService, never()).logEvent(any());
@@ -198,16 +201,17 @@ class HospitalRuleSignoffServiceTest {
     @Test
     @DisplayName("a second sign-off of the same version is refused; a revoked one reads REVOKED and is never revoked twice")
     void revokeThenSignAgain() {
-        service.sign(hospitalId, paracetamol.key().name(), request(paracetamol.version()), adminId);
-        assertThatThrownBy(() -> service.sign(hospitalId, paracetamol.key().name(),
-            request(paracetamol.version()), adminId)).isInstanceOf(BusinessException.class);
+        RuleSignoffRequestDTO current = request(paracetamol.version());
+        service.sign(hospitalId, PARACETAMOL, current, adminId);
+        assertThatThrownBy(() -> service.sign(hospitalId, PARACETAMOL, current, adminId))
+            .isInstanceOf(BusinessException.class);
 
         ClinicalRuleStatusDTO revoked = service.revoke(hospitalId, paracetamol.key().name(), "Erreur de saisie",
             adminId);
         assertThat(revoked.status()).isEqualTo(RuleSignoffStatus.REVOKED);
         assertThat(revoked.signoff().getRevokeReason()).isEqualTo("Erreur de saisie");
         assertThat(service.signedCount(hospitalId)).isZero();
-        assertThatThrownBy(() -> service.revoke(hospitalId, paracetamol.key().name(), "Encore", adminId))
+        assertThatThrownBy(() -> service.revoke(hospitalId, PARACETAMOL, "Encore", adminId))
             .isInstanceOf(BusinessException.class);
         assertThat(stored.get(0).getRevokeReason()).isEqualTo("Erreur de saisie");
 
@@ -220,9 +224,10 @@ class HospitalRuleSignoffServiceTest {
     @Test
     @DisplayName("nothing to revoke, an unknown rule set, an unknown hospital, or a signer account from elsewhere: refused")
     void refusals() {
-        assertThatThrownBy(() -> service.revoke(hospitalId, paracetamol.key().name(), "Erreur", adminId))
+        assertThatThrownBy(() -> service.revoke(hospitalId, PARACETAMOL, "Erreur", adminId))
             .isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> service.sign(hospitalId, "NO_SUCH_RULE", request("1"), adminId))
+        RuleSignoffRequestDTO unknown = request("1");
+        assertThatThrownBy(() -> service.sign(hospitalId, "NO_SUCH_RULE", unknown, adminId))
             .isInstanceOf(ResourceNotFoundException.class);
         UUID elsewhere = UUID.randomUUID();
         assertThatThrownBy(() -> service.overview(elsewhere, adminId)).isInstanceOf(ResourceNotFoundException.class);
@@ -231,7 +236,7 @@ class HospitalRuleSignoffServiceTest {
         when(assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(outsider, hospitalId)).thenReturn(false);
         RuleSignoffRequestDTO byOutsider = new RuleSignoffRequestDTO(paracetamol.version(), "Dr X", "Médecin-chef",
             outsider, LocalDate.of(2026, 11, 20), null);
-        assertThatThrownBy(() -> service.sign(hospitalId, paracetamol.key().name(), byOutsider, adminId))
+        assertThatThrownBy(() -> service.sign(hospitalId, PARACETAMOL, byOutsider, adminId))
             .isInstanceOf(FieldBusinessException.class);
         assertThat(stored).isEmpty();
     }

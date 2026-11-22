@@ -18,21 +18,23 @@ public record ClinicalRuleSet(ClinicalRuleSetKey key, String version, String sou
 
     /** The package every name of {@link #enforcedIn} is relative to. */
     public static final String BASE_PACKAGE = "com.example.hms.";
+    /** The bundle prefix of every rule set's texts. */
+    private static final String TEXT_PREFIX = "clinicalRules.rule.";
 
     public ClinicalRuleSet {
         enforcedIn = List.copyOf(enforcedIn);
     }
 
     public String titleKey() {
-        return "clinicalRules.rule." + key.name() + ".title";
+        return TEXT_PREFIX + key.name() + ".title";
     }
 
     public String descriptionKey() {
-        return "clinicalRules.rule." + key.name() + ".description";
+        return TEXT_PREFIX + key.name() + ".description";
     }
 
     public String approverKey() {
-        return "clinicalRules.rule." + key.name() + ".approver";
+        return TEXT_PREFIX + key.name() + ".approver";
     }
 
     /** The simple names of the enforcing classes, for the screen and the sign-off pack. */
