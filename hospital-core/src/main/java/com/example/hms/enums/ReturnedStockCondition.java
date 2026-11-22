@@ -10,10 +10,20 @@ public enum ReturnedStockCondition {
     INTACT,
     DAMAGED,
     EXPIRED,
-    CONTAMINATED;
+    CONTAMINATED,
+    /**
+     * Review of #1285: a prepared fill whose stock is gone (« manquant »). Nothing comes back: the units are a
+     * recorded loss. Only for a cancelled preparation, never for a return (a return brings units back).
+     */
+    MISSING;
 
     /** True only for stock that may be sold again. */
     public boolean isFitForSale() {
         return this == INTACT;
+    }
+
+    /** True when nothing came back to the pharmacy (the units are a loss, not a quarantine). */
+    public boolean isLoss() {
+        return this == MISSING;
     }
 }

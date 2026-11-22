@@ -99,6 +99,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                             ? "stockTransaction.return.wholeUnitsOnly" : WholeUnitQuantity.DEFAULT_KEY);
         }
         if (dto.getTransactionType() == StockTransactionType.RETURN) {
+            requireReturnCondition(dto);
             // QA D604: the dispense row first (the lock its cancel takes), then the item.
             requireReturnWithinDispense(dto, item, lot);
             requireReturnWithinIssued(item, lot, dto.getQuantity());
@@ -606,10 +607,24 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 && WholeUnitQuantity.isWhole(current.add(dto.getQuantity()));
     }
 
-    /** The state a return's units are in; INTACT when the request does not say. */
+    /**
+     * Review of #1285: a RETURN says the state of its units (a missing one was counted intact and put back on sale);
+     * « missing » is not a return, since nothing comes back.
+     */
+    private static void requireReturnCondition(StockTransactionRequestDTO dto) {
+        if (dto.getStockCondition() == null) {
+            throw new com.example.hms.exception.FieldBusinessException("stockCondition",
+                    "stockTransaction.return.stockConditionRequired");
+        }
+        if (dto.getStockCondition().isLoss()) {
+            throw new com.example.hms.exception.FieldBusinessException("stockCondition",
+                    "stockTransaction.return.missingIsNotAReturn");
+        }
+    }
+
+    /** The state a return's units are in (required on a RETURN, checked by requireReturnCondition). */
     private static com.example.hms.enums.ReturnedStockCondition conditionOf(StockTransactionRequestDTO dto) {
-        return dto.getStockCondition() != null ? dto.getStockCondition()
-                : com.example.hms.enums.ReturnedStockCondition.INTACT;
+        return dto.getStockCondition();
     }
 
     private static BigDecimal nz(BigDecimal value) {

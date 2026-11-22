@@ -831,6 +831,7 @@ export class StockAdjustmentComponent implements OnInit {
         : m[1];
       return t('LEDGER_REASON_QUARANTINED', { condition });
     }
+    if (/^Missing from a cancelled fill\b/.test(reason)) return t('LEDGER_REASON_MISSING');
     m = /^Destroyed: ([\s\S]+)$/.exec(reason);
     if (m) return t('LEDGER_REASON_DESTROYED', { reason: m[1] });
     if (/^Prepared fill cancelled\b/i.test(reason)) return t('LEDGER_REASON_PREPARED_CANCELLED');

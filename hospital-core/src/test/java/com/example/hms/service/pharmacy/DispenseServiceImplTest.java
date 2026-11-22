@@ -2534,9 +2534,16 @@ class DispenseServiceImplTest {
 
             org.mockito.ArgumentCaptor<com.example.hms.model.pharmacy.StockTransaction> tx =
                     org.mockito.ArgumentCaptor.forClass(com.example.hms.model.pharmacy.StockTransaction.class);
-            verify(stockTransactionRepository).save(tx.capture());
-            assertThat(tx.getValue().getWitnessedByUser()).isSameAs(witness);
-            assertThat(tx.getValue().getQuantity()).isEqualByComparingTo("3");
+            verify(stockTransactionRepository, org.mockito.Mockito.times(2)).save(tx.capture());
+            assertThat(tx.getAllValues().get(0).getWitnessedByUser()).isSameAs(witness);
+            assertThat(tx.getAllValues().get(0).getQuantity()).isEqualByComparingTo("3");
+            // Review of #1285: a handed-over controlled drug is quarantined, never put straight back on sale.
+            assertThat(tx.getAllValues()).extracting(com.example.hms.model.pharmacy.StockTransaction::getTransactionType)
+                    .containsExactly(com.example.hms.enums.StockTransactionType.RETURN,
+                            com.example.hms.enums.StockTransactionType.QUARANTINE);
+            assertThat(tx.getAllValues().get(1).getWitnessedByUser()).isSameAs(witness);
+            verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
         }
 
         /**

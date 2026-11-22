@@ -29,4 +29,7 @@ public class CancelReadyRequestDTO {
      */
     @NotNull(message = "{dispense.ready.stockConditionRequired}")
     private com.example.hms.enums.ReturnedStockCondition stockCondition;
+
+    /** Review of #1285: the witness of a controlled fill set aside or lost (required then, never the actor). */
+    private java.util.UUID witnessedBy;
 }

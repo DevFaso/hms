@@ -652,11 +652,33 @@
               <small class="field-hint" data-testid="cancel-ready-stock-fate">{{
                 (cancelCondition === 'INTACT'
                   ? 'PHARMACY.STOCK_CONDITION_BACK_ON_SALE'
-                  : 'PHARMACY.STOCK_CONDITION_QUARANTINED'
+                  : cancelCondition === 'MISSING'
+                    ? 'PHARMACY.STOCK_CONDITION_MISSING_LOSS'
+                    : 'PHARMACY.STOCK_CONDITION_QUARANTINED'
                 ) | translate
               }}</small>
             }
           </div>
+          <!-- Review of #1285: a controlled fill set aside or lost is witnessed (not the actor). -->
+          @if (cancelReadyNeedsWitness()) {
+            <div class="field full-width">
+              <label for="cancelReadyWitness">{{ 'PHARMACY.WITNESS' | translate }} *</label>
+              <select
+                id="cancelReadyWitness"
+                name="cancelReadyWitness"
+                data-server-field="witnessedBy"
+                required
+                [(ngModel)]="cancelReadyWitness"
+              >
+                <option [ngValue]="undefined">
+                  {{ 'PHARMACY.SELECT_WITNESS_OPTION' | translate }}
+                </option>
+                @for (w of witnessCandidates(); track w.userId) {
+                  <option [ngValue]="w.userId">{{ w.displayName }}</option>
+                }
+              </select>
+            </div>
+          }
         </div>
         <div class="form-actions">
           <button type="button" class="btn-secondary" (click)="closeReadyAction()">

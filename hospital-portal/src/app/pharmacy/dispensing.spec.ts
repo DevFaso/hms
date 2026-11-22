@@ -1155,7 +1155,12 @@ describe('DispensingComponent', () => {
 
     component.confirmCancelReady();
 
-    expect(pharmacySvc.cancelReady).toHaveBeenCalledWith('d-ready', 'STOCK_UNAVAILABLE', 'DAMAGED');
+    expect(pharmacySvc.cancelReady).toHaveBeenCalledWith(
+      'd-ready',
+      'STOCK_UNAVAILABLE',
+      'DAMAGED',
+      undefined,
+    );
     expect(toastSvc.success).toHaveBeenCalledWith('PHARMACY.CANCEL_READY_SUCCESS');
   });
 
@@ -1173,13 +1178,43 @@ describe('DispensingComponent', () => {
     expect(pharmacySvc.cancelReady).not.toHaveBeenCalled();
   });
 
-  it('QA D3403: offers the four stock states, intact first', () => {
+  it('QA D3403: offers the stock states, intact first, missing last', () => {
     expect([...component.returnedStockConditions]).toEqual([
       'INTACT',
       'DAMAGED',
       'EXPIRED',
       'CONTAMINATED',
+      'MISSING',
     ]);
+  });
+
+  it('review of #1285: « stock manquant » is never intact, and a controlled fill set aside is witnessed', () => {
+    pharmacySvc.cancelReady.and.returnValue(of({ data: {} } as any));
+    const controlledRow = {
+      ...preparedRow,
+      readyForCollection: { ...preparedRow.readyForCollection, controlled: true },
+    } as any;
+    component.openCancelReady(controlledRow);
+    component.cancelReason = 'STOCK_UNAVAILABLE';
+    component.cancelCondition = 'INTACT';
+    component.confirmCancelReady();
+    expect(pharmacySvc.cancelReady).not.toHaveBeenCalled();
+    expect(toastSvc.error).toHaveBeenCalledWith('PHARMACY.CANCEL_READY_NOT_INTACT');
+
+    component.cancelCondition = 'MISSING';
+    expect(component.cancelReadyNeedsWitness()).toBeTrue();
+    component.confirmCancelReady();
+    expect(pharmacySvc.cancelReady).not.toHaveBeenCalled();
+    expect(toastSvc.error).toHaveBeenCalledWith('PHARMACY.WITNESS_REQUIRED');
+
+    component.cancelReadyWitness = 'u-2';
+    component.confirmCancelReady();
+    expect(pharmacySvc.cancelReady).toHaveBeenCalledWith(
+      'd-ready',
+      'STOCK_UNAVAILABLE',
+      'MISSING',
+      'u-2',
+    );
   });
 
   it('offers only the pharmacist reasons, never the system ones', () => {

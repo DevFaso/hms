@@ -11342,7 +11342,8 @@
       "INTACT": "Non remis, intact",
       "DAMAGED": "Endommagé",
       "EXPIRED": "Périmé",
-      "CONTAMINATED": "Contaminé"
+      "CONTAMINATED": "Contaminé",
+      "MISSING": "Manquant (perte)"
     },
     "STOCK_CONDITION_BACK_ON_SALE": "Remis en stock vendable.",
     "STOCK_CONDITION_QUARANTINED": "Mis en quarantaine : il ne sera pas revendu et attend sa destruction.",
@@ -11371,7 +11372,10 @@
     "REGISTER_QUARANTINE": "En quarantaine",
     "REGISTER_QUARANTINE_MOVE": "quarantaine {{qty}} → {{after}}",
     "FIRST_PHARMACY_ASK_ADMIN": "Aucune pharmacie n’est encore enregistrée. C’est l’administrateur de l’établissement qui l’enregistre : demandez-le-lui.",
-    "STOCK_CONDITION_CHOOSE_UNIT": "Choisissez : conditionnements ou unités"
+    "STOCK_CONDITION_CHOOSE_UNIT": "Choisissez : conditionnements ou unités",
+    "STOCK_CONDITION_MISSING_LOSS": "Rien ne revient en stock : les unités sont enregistrées comme perte.",
+    "CANCEL_READY_NOT_INTACT": "« Stock manquant ou endommagé » ne peut pas revenir en vente comme intact : choisissez endommagé, périmé, contaminé ou manquant.",
+    "LEDGER_REASON_MISSING": "Manquant sur une préparation annulée (perte)"
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",

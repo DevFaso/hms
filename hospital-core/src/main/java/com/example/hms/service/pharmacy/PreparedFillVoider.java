@@ -24,6 +24,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
  * The one implementation of "a prepared fill is no longer waiting" (G15
@@ -60,6 +61,8 @@ public class PreparedFillVoider {
     private final Clock clock;
     private final PharmacyPaymentVoider paymentVoider;
     private final StockQuarantine stockQuarantine;
+    /** Review of #1285: a controlled fill that does not go back on sale is witnessed, as every controlled movement. */
+    private final ControlledStockWitness controlledStockWitness;
 
     /**
      * The prescriber withdrew or changed the order: void its open
@@ -71,16 +74,18 @@ public class PreparedFillVoider {
     public void voidPreparedFill(Prescription prescription, ReadyCancelReason reason) {
         // The bag never left the pharmacy and nobody reported it damaged: it goes back on sale.
         dispenseRepository.findFirstByPrescription_IdAndStatus(prescription.getId(), DispenseStatus.PENDING)
-                .ifPresent(open -> cancel(open, reason, ReturnedStockCondition.INTACT));
+                .ifPresent(open -> cancel(open, reason, ReturnedStockCondition.INTACT, null));
     }
 
     /**
      * Cancel one PENDING row. Returns the row as it now is in the database.
      *
      * @param condition QA D3403 (r70): the state of the prepared medicine; only INTACT goes back on sale
+     * @param witnessId review of #1285: the colleague who saw a controlled fill set aside or lost (not the actor)
      * @throws ConflictException when the row is no longer PENDING
      */
-    Dispense cancel(Dispense dispense, ReadyCancelReason reason, ReturnedStockCondition condition) {
+    Dispense cancel(Dispense dispense, ReadyCancelReason reason, ReturnedStockCondition condition, UUID witnessId) {
+        User witness = witnessOf(dispense, condition, witnessId);
         int changed = dispenseRepository.cancelPreparedFill(dispense.getId(), reason, LocalDateTime.now(clock));
         // The bulk UPDATE bypassed the managed copy; nothing touches it before
         // this resync, or a flush would write its stale PENDING back.
@@ -89,7 +94,7 @@ public class PreparedFillVoider {
             throw new ConflictException(MessageUtil.resolve("dispense.ready.notPending"));
         }
 
-        returnStock(current, condition);
+        returnStock(current, condition, witness);
         // QA D404: a preparation paid at the till is voided with it.
         paymentVoider.voidForCancelledDispense(current, "Prepared fill cancelled: " + reason.name());
 
@@ -109,12 +114,27 @@ public class PreparedFillVoider {
      * the saleable lot, damaged stock included. Stock that is damaged, expired or contaminated is now written as its
      * RETURN followed by a QUARANTINE, the lot unchanged ({@link StockQuarantine}), and waits for its destruction.
      */
-    private void returnStock(Dispense dispense, ReturnedStockCondition condition) {
+    private void returnStock(Dispense dispense, ReturnedStockCondition condition, User witness) {
         StockLot lot = dispense.getStockLot();
         if (lot == null) {
             return;
         }
         InventoryItem item = lot.getInventoryItem();
+        if (condition.isLoss()) {
+            User performer = support.resolveCurrentUser();
+            stockTransactionRepository.save(StockTransaction.builder()
+                    .inventoryItem(item)
+                    .stockLot(lot)
+                    .transactionType(StockTransactionType.RETURN)
+                    .referenceId(dispense.getId())
+                    .quantity(dispense.getQuantityDispensed())
+                    .reason(NOT_FOR_SALE_PREFIX + ": " + condition.name())
+                    .performedByUser(performer)
+                    .build());
+            stockQuarantine.recordLoss(item, lot, dispense.getQuantityDispensed(), dispense.getId(), performer,
+                    witness);
+            return;
+        }
         if (StockQuarantine.quarantines(item, condition, false)) {
             User performer = support.resolveCurrentUser();
             stockTransactionRepository.save(StockTransaction.builder()
@@ -128,7 +148,7 @@ public class PreparedFillVoider {
                     .performedByUser(performer)
                     .build());
             stockQuarantine.quarantine(item, lot, dispense.getQuantityDispensed(), dispense.getId(), condition,
-                    performer, null);
+                    performer, witness);
             return;
         }
         // Atomic in the database (#825 security finding 1, round 5): every
@@ -155,6 +175,18 @@ public class PreparedFillVoider {
                         + (dispense.getPrescription() != null ? dispense.getPrescription().getId() : "unknown"))
                 .performedByUser(performer)
                 .build());
+    }
+
+    /**
+     * Review of #1285: the witness of a controlled fill that does not go back on sale (quarantined or lost), checked
+     * before anything moves: required, not the actor, a stock-witness role at the hospital. Null otherwise.
+     */
+    private User witnessOf(Dispense dispense, ReturnedStockCondition condition, UUID witnessId) {
+        StockLot lot = dispense.getStockLot();
+        if (condition.isFitForSale() || lot == null || lot.getInventoryItem() == null) {
+            return null;
+        }
+        return controlledStockWitness.resolve(witnessId, lot.getInventoryItem(), support.resolveCurrentUser());
     }
 
     /**

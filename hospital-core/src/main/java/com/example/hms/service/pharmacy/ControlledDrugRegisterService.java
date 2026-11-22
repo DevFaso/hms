@@ -588,6 +588,9 @@ public class ControlledDrugRegisterService {
         if (reason.startsWith(PreparedFillVoider.NOT_FOR_SALE_PREFIX)) {
             return label(locale, "pharmacy.register.reason.cancelledNotForSale");
         }
+        if (reason.startsWith(StockQuarantine.LOSS_REASON)) {
+            return label(locale, "pharmacy.register.reason.missing");
+        }
         return null;
     }
 

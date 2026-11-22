@@ -339,7 +339,7 @@ class PreparedFillConcurrencyPostgresIT {
 
         CompletableFuture<Object> second = race(
             () -> dispenseService.handOver(dispenseId, null),
-            () -> dispenseService.cancelReady(dispenseId, new CancelReadyRequestDTO(ReadyCancelReason.OTHER, com.example.hms.enums.ReturnedStockCondition.INTACT)));
+            () -> dispenseService.cancelReady(dispenseId, new CancelReadyRequestDTO(ReadyCancelReason.OTHER, com.example.hms.enums.ReturnedStockCondition.INTACT, null)));
 
         assertThat(causeOf(second)).isInstanceOf(ConflictException.class)
             .hasMessage("This fill is no longer waiting for collection.");
@@ -354,7 +354,7 @@ class PreparedFillConcurrencyPostgresIT {
         UUID dispenseId = prepare();
 
         CompletableFuture<Object> second = race(
-            () -> dispenseService.cancelReady(dispenseId, new CancelReadyRequestDTO(ReadyCancelReason.NOT_COLLECTED, com.example.hms.enums.ReturnedStockCondition.INTACT)),
+            () -> dispenseService.cancelReady(dispenseId, new CancelReadyRequestDTO(ReadyCancelReason.NOT_COLLECTED, com.example.hms.enums.ReturnedStockCondition.INTACT, null)),
             () -> dispenseService.handOver(dispenseId, null));
 
         assertThat(causeOf(second)).isInstanceOf(ConflictException.class)

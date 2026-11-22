@@ -26,11 +26,11 @@ class ReturnedStockQuarantineGuardTest {
 
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms");
 
-    /** Writers of RETURN rows that are not a physical return of medicine, with why. */
-    private static final Map<String, String> NOT_A_PHYSICAL_RETURN = Map.of(
-            "DispenseServiceImpl.java",
-            "cancelling a fill recorded in error (completed or partial) reverses the record; a medicine the patient "
-                    + "brings back is booked through the return movement, which quarantines");
+    /**
+     * Writers of RETURN rows that are not a physical return of medicine, with why. None: since the review of #1285
+     * the cancel of a handed-over fill (DispenseServiceImpl) quarantines a controlled drug too.
+     */
+    private static final Map<String, String> NOT_A_PHYSICAL_RETURN = Map.of();
 
     @Test
     void everyReturnWriterUsesTheQuarantineRule() throws IOException {

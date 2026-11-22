@@ -188,6 +188,9 @@ class StockTransactionServiceImplTest {
                 .quantity(quantity)
                 .reason("Test reason")
                 .performedBy(userId)
+                // Review of #1285: a RETURN always says the state of its units.
+                .stockCondition(type == StockTransactionType.RETURN
+                        ? com.example.hms.enums.ReturnedStockCondition.INTACT : null)
                 .build();
     }
 
@@ -762,7 +765,7 @@ class StockTransactionServiceImplTest {
 
         @org.junit.jupiter.params.ParameterizedTest
         @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.ReturnedStockCondition.class,
-                names = "INTACT", mode = org.junit.jupiter.params.provider.EnumSource.Mode.EXCLUDE)
+                names = {"INTACT", "MISSING"}, mode = org.junit.jupiter.params.provider.EnumSource.Mode.EXCLUDE)
         @DisplayName("QA D3415: a return that is not intact is quarantined: the lot and the item do not move")
         void aReturnNotIntactIsQuarantined(com.example.hms.enums.ReturnedStockCondition condition) {
             StockTransactionRequestDTO dto = buildRequest(StockTransactionType.RETURN, new BigDecimal("8.00"));
@@ -803,6 +806,26 @@ class StockTransactionServiceImplTest {
                     .containsExactly(StockTransactionType.RETURN, StockTransactionType.QUARANTINE);
             assertThat(rows.get(1).getWitnessedByUser()).isSameAs(witness);
             assertThat(rows.get(1).getStockLot()).isSameAs(stockLot);
+        }
+
+        @Test
+        @DisplayName("review of #1285: a RETURN with no state is refused, and « missing » is not a return")
+        void aReturnSaysItsState() {
+            StockTransactionRequestDTO noState = buildRequest(StockTransactionType.RETURN, new BigDecimal("1.00"));
+            noState.setStockCondition(null);
+            StockTransactionRequestDTO missing = buildRequest(StockTransactionType.RETURN, new BigDecimal("1.00"));
+            missing.setStockCondition(com.example.hms.enums.ReturnedStockCondition.MISSING);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+
+            assertThatThrownBy(() -> service.recordTransaction(noState))
+                    .hasFieldOrPropertyWithValue("field", "stockCondition")
+                    .hasFieldOrPropertyWithValue("messageKey", "stockTransaction.return.stockConditionRequired");
+            assertThatThrownBy(() -> service.recordTransaction(missing))
+                    .hasFieldOrPropertyWithValue("messageKey", "stockTransaction.return.missingIsNotAReturn");
+            verify(stockTransactionRepository, never()).save(any());
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo("50.00");
         }
 
         @org.junit.jupiter.params.ParameterizedTest

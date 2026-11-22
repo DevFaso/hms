@@ -9,6 +9,7 @@ import com.example.hms.enums.QueueClaimFilter;
 import com.example.hms.enums.QueueClaimReleaseReason;
 import com.example.hms.enums.DispenseVerificationStatus;
 import com.example.hms.enums.ReadyCancelReason;
+import com.example.hms.enums.ReturnedStockCondition;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RefillStatus;
 import com.example.hms.enums.RoutingDecisionStatus;
@@ -669,11 +670,17 @@ public class DispenseServiceImpl implements DispenseService {
             throw new com.example.hms.exception.FieldBusinessException("stockCondition",
                     "dispense.ready.stockConditionRequired");
         }
+        // Review of #1285: « stock manquant ou endommagé » is never an intact bag going back on sale.
+        if (reason == ReadyCancelReason.STOCK_UNAVAILABLE && condition.isFitForSale()) {
+            throw new com.example.hms.exception.FieldBusinessException("stockCondition",
+                    "dispense.ready.stockUnavailableNotIntact");
+        }
         LockedPreparedFill locked = lockPreparedFill(dispenseId);
         if (locked.dispense().getStatus() != DispenseStatus.PENDING) {
             throw new ConflictException(MessageUtil.resolve(READY_NOT_PENDING));
         }
-        Dispense cancelled = preparedFillVoider.cancel(locked.dispense(), reason, condition);
+        Dispense cancelled = preparedFillVoider.cancel(locked.dispense(), reason, condition,
+                request.getWitnessedBy());
         // QA D792 (#953 review, round 2): the prepared fill was what held a
         // ward order of an ended stay live (migration V233 leaves such orders
         // to the counter). With the fill gone nothing else would ever end it:
@@ -1748,11 +1755,17 @@ public class DispenseServiceImpl implements DispenseService {
             // of a witness, as it left.
             User witness = ControlledStockWitness.isControlled(item)
                     ? controlledStockWitness.resolve(witnessedBy, item, performer) : null;
-            LocalDateTime now = LocalDateTime.now(clock);
-            stockLotRepository.incrementRemaining(lot.getId(), stillOut, now);
-            inventoryItemRepository.incrementOnHand(item.getId(), stillOut, now);
-            refreshIfManaged(lot);
-            refreshIfManaged(item);
+            // Review of #1285: a controlled drug that was handed over left the pharmacy's custody; whatever comes
+            // back is quarantined (the RETURN, then a QUARANTINE, the lot unchanged), never put straight back on sale.
+            // Other stock goes back: the cancel corrects a fill recorded in error.
+            boolean quarantine = StockQuarantine.quarantines(item, ReturnedStockCondition.INTACT, true);
+            if (!quarantine) {
+                LocalDateTime now = LocalDateTime.now(clock);
+                stockLotRepository.incrementRemaining(lot.getId(), stillOut, now);
+                inventoryItemRepository.incrementOnHand(item.getId(), stillOut, now);
+                refreshIfManaged(lot);
+                refreshIfManaged(item);
+            }
 
             StockTransaction reverseTx = StockTransaction.builder()
                     .inventoryItem(item)
@@ -1766,6 +1779,10 @@ public class DispenseServiceImpl implements DispenseService {
                     .witnessedByUser(witness)
                     .build();
             stockTransactionRepository.save(reverseTx);
+            if (quarantine) {
+                new StockQuarantine(stockTransactionRepository).quarantine(item, lot, stillOut, dispense.getId(),
+                        ReturnedStockCondition.INTACT, performer, witness);
+            }
         }
 
         Dispense saved = dispenseRepository.save(dispense);
@@ -1993,6 +2010,9 @@ public class DispenseServiceImpl implements DispenseService {
                 .quantity(prepared.getQuantityDispensed())
                 .unit(prepared.getUnit())
                 .reminderSentAt(prepared.getReadyReminderSentAt())
+                // Review of #1285: a controlled fill set aside or lost on cancel is witnessed.
+                .controlled(prepared.getStockLot() != null && prepared.getStockLot().getInventoryItem() != null
+                        && ControlledStockWitness.isControlled(prepared.getStockLot().getInventoryItem()))
                 .build();
     }
 

@@ -11342,7 +11342,8 @@
       "INTACT": "Not given, intact",
       "DAMAGED": "Damaged",
       "EXPIRED": "Expired",
-      "CONTAMINATED": "Contaminated"
+      "CONTAMINATED": "Contaminated",
+      "MISSING": "Missing (loss)"
     },
     "STOCK_CONDITION_BACK_ON_SALE": "Put back into saleable stock.",
     "STOCK_CONDITION_QUARANTINED": "Quarantined: it will not be sold again and waits to be destroyed.",
@@ -11371,7 +11372,10 @@
     "REGISTER_QUARANTINE": "In quarantine",
     "REGISTER_QUARANTINE_MOVE": "quarantine {{qty}} → {{after}}",
     "FIRST_PHARMACY_ASK_ADMIN": "No pharmacy is registered yet. The hospital administrator registers it: ask them.",
-    "STOCK_CONDITION_CHOOSE_UNIT": "Choose: packs or single units"
+    "STOCK_CONDITION_CHOOSE_UNIT": "Choose: packs or single units",
+    "STOCK_CONDITION_MISSING_LOSS": "Nothing comes back to stock: the units are recorded as a loss.",
+    "CANCEL_READY_NOT_INTACT": "« Stock missing or damaged » cannot go back on sale as intact: choose damaged, expired, contaminated or missing.",
+    "LEDGER_REASON_MISSING": "Missing from a cancelled fill (loss)"
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",

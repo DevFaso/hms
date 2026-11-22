@@ -516,7 +516,12 @@ export type ReadyCancelReason = (typeof READY_CANCEL_REASONS)[number];
  * on sale; the others (and a controlled drug a patient brings back) are quarantined.
  */
 export const RETURNED_STOCK_CONDITIONS = ['INTACT', 'DAMAGED', 'EXPIRED', 'CONTAMINATED'] as const;
-export type ReturnedStockCondition = (typeof RETURNED_STOCK_CONDITIONS)[number];
+/**
+ * Review of #1285: a cancelled preparation may also be « manquant » (nothing comes back: a
+ * recorded loss); a return never is.
+ */
+export const CANCEL_STOCK_CONDITIONS = [...RETURNED_STOCK_CONDITIONS, 'MISSING'] as const;
+export type ReturnedStockCondition = (typeof CANCEL_STOCK_CONDITIONS)[number];
 
 /** QA D3415: units set aside, not for sale, waiting to be destroyed. */
 export interface QuarantineLine {
@@ -576,6 +581,8 @@ export interface WorkQueueReadyForCollection {
   unit?: string;
   /** When the one reminder SMS went out; absent before. */
   reminderSentAt?: string;
+  /** Review of #1285: a controlled drug; set aside or lost on cancel, it needs a witness. */
+  controlled?: boolean;
 }
 
 /** Work-queue prescription — minimal projection returned by GET /pharmacy/dispense/work-queue. */
@@ -1321,10 +1328,11 @@ export class PharmacyService {
     dispenseId: string,
     reason: ReadyCancelReason,
     stockCondition: ReturnedStockCondition,
+    witnessedBy?: string,
   ): Observable<ApiResponse<DispenseResponse>> {
     return this.http.post<ApiResponse<DispenseResponse>>(
       `/pharmacy/dispense/${dispenseId}/cancel-ready`,
-      { reason, stockCondition },
+      { reason, stockCondition, ...(witnessedBy ? { witnessedBy } : {}) },
     );
   }
 

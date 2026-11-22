@@ -69,7 +69,8 @@ class PharmacyUserFacingTextGuardTest {
             // QA D3403 / D3415 (r70): a cancelled fill not put back on sale, the quarantine and its destruction.
             "Prepared fill cancelled, not for sale",
             "Quarantined: ",
-            "Destroyed: ");
+            "Destroyed: ",
+            "Missing from a cancelled fill");
 
     @Test
     void everyTextThePharmacyServicesSendToTheUiIsAKnownMessageKey() throws IOException {

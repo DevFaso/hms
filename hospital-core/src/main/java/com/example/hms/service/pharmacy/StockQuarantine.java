@@ -34,6 +34,8 @@ public class StockQuarantine {
 
     /** The QUARANTINE row's reason, followed by the condition's name. */
     public static final String REASON_PREFIX = "Quarantined: ";
+    /** Review of #1285: the ADJUSTMENT reason of units recorded as lost (a cancelled fill whose stock is missing). */
+    public static final String LOSS_REASON = "Missing from a cancelled fill";
 
     private final StockTransactionRepository stockTransactionRepository;
 
@@ -44,10 +46,31 @@ public class StockQuarantine {
      *                        pharmacy's custody); false for a prepared fill that never left the counter
      */
     public static boolean quarantines(InventoryItem item, ReturnedStockCondition condition, boolean leftThePharmacy) {
+        if (condition != null && condition.isLoss()) {
+            return false;
+        }
         if (leftThePharmacy && ControlledStockWitness.isControlled(item)) {
             return true;
         }
         return condition != null && !condition.isFitForSale();
+    }
+
+    /**
+     * Review of #1285: units that never came back are a recorded loss: the RETURN that closed the fill is followed by
+     * an ADJUSTMENT of the same quantity out, the lot unchanged, so the ledger still adds up to the lot.
+     */
+    public StockTransaction recordLoss(InventoryItem item, StockLot lot, BigDecimal quantity, UUID referenceId,
+                                       User performer, User witness) {
+        return stockTransactionRepository.save(StockTransaction.builder()
+                .inventoryItem(item)
+                .stockLot(lot)
+                .transactionType(StockTransactionType.ADJUSTMENT)
+                .referenceId(referenceId)
+                .quantity(quantity.negate())
+                .reason(LOSS_REASON)
+                .performedByUser(performer)
+                .witnessedByUser(witness)
+                .build());
     }
 
     /**
