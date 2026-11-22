@@ -120,6 +120,8 @@ public final class ClinicalRuleRegistry {
             MEWS_SERVICE, MEWS_RULES),
         rule(ClinicalRuleSetKey.TAKE_HOME_ORDER_WINDOW, DATE_2026_11_21,
             "service.DischargeTakeHomeMedicines"),
+        rule(ClinicalRuleSetKey.PREGNANCY_REVEALING_IMAGING, DATE_2026_11_21,
+            "service.imaging.PregnancyRevealingStudyRule"),
         rule(ClinicalRuleSetKey.LAB_DUPLICATE_WINDOW, DATE_2026_11_21,
             "service.lab.LabOrderDuplicateCheck"),
         rule(ClinicalRuleSetKey.OBSTETRIC_ELIGIBILITY, DATE_2026_11_21,
