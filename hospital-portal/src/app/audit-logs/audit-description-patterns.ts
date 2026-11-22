@@ -2031,4 +2031,15 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Ordonnance printed by its prescriber: prescriptions (\S+)$/,
     params: ['ids'],
   },
+  // V356: a hospital's sign-off of a provisional rule set recorded or revoked (key and version only).
+  {
+    key: 'AUDIT.DESC.CLINICAL_RULE_SIGNED_OFF',
+    re: /^Clinical rule set (\S+) signed off \(version (\S+)\)$/,
+    params: ['rule', 'version'],
+  },
+  {
+    key: 'AUDIT.DESC.CLINICAL_RULE_SIGNOFF_REVOKED',
+    re: /^Clinical rule set (\S+) sign-off revoked \(version (\S+)\)$/,
+    params: ['rule', 'version'],
+  },
 ];

@@ -1335,6 +1335,26 @@ export const routes: Routes = [
           ),
       },
 
+      // V356: « Règles cliniques et validation » — the provisional rule sets and this hospital's
+      // sign-off of each. Same roles as its sidebar entry; the backend's READ_ROLES include them all.
+      {
+        path: 'clinical-rules',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+            'ROLE_DOCTOR',
+            'ROLE_SURGEON',
+            'ROLE_NURSE',
+            'ROLE_MIDWIFE',
+            'ROLE_PHARMACIST',
+          ],
+        },
+        loadComponent: () =>
+          import('./clinical-rules/clinical-rules.component').then((m) => m.ClinicalRulesComponent),
+      },
+
       // Consultations
       {
         path: 'consultations',

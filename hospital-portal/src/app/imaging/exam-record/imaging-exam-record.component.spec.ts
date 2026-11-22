@@ -35,6 +35,8 @@ describe('ImagingExamRecordComponent (policy rule 3)', () => {
           provide: RoleContextService,
           useValue: {
             hasAnyActiveRole: (wanted: string[]) => wanted.some((r) => roles.includes(r)),
+            // V356: the « provisoire » label reads the acting hospital; none here, the screen's wording stays.
+            effectiveHospitalIdForRequest: () => null,
           },
         },
       ],

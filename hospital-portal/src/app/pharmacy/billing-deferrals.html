@@ -8,7 +8,9 @@
       <h1 class="page-title">{{ 'PHARMACY_MONEY.DEFERRAL.PAGE_TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'PHARMACY_MONEY.DEFERRAL.PAGE_SUBTITLE' | translate }}</p>
       <p class="deferral-provisional" data-testid="deferrals-provisional">
-        {{ 'PHARMACY_MONEY.DEFERRAL.PROVISIONAL' | translate }}
+        <app-rule-status ruleKey="DEFERRED_BILLING">{{
+          'PHARMACY_MONEY.DEFERRAL.PROVISIONAL' | translate
+        }}</app-rule-status>
       </p>
     </div>
     <div class="header-actions">
@@ -294,7 +296,14 @@
   @if (policy(); as p) {
     <section class="policy-card" data-testid="billing-policy">
       <h2 class="policy-title">{{ 'PHARMACY_MONEY.POLICY.TITLE' | translate }}</h2>
-      <p class="deferral-provisional">{{ 'PHARMACY_MONEY.POLICY.PROVISIONAL' | translate }}</p>
+      <p class="deferral-provisional">
+        <app-rule-status ruleKey="CONSULTATION_FEE">{{
+          'PHARMACY_MONEY.POLICY.PROVISIONAL' | translate
+        }}</app-rule-status>
+      </p>
+      <p class="deferral-provisional">
+        <app-rule-status ruleKey="PRESCRIPTION_RENEWAL" />
+      </p>
       <label class="policy-row">
         <input
           type="checkbox"

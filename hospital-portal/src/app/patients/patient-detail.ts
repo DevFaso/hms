@@ -74,6 +74,7 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { ElapsedPipe } from '../shared/pipes/elapsed.pipe';
 import { NationalUniqueIdViewComponent } from './national-unique-id-view.component';
+import { RuleStatusComponent } from '../shared/rule-status/rule-status.component';
 
 /** The chart-restriction reason box: the server names it `reason` in a 400. */
 const RESTRICTION_REASON_FIELD = 'restriction-reason';
@@ -102,6 +103,7 @@ type TabKey =
   selector: 'app-patient-detail',
   standalone: true,
   imports: [
+    RuleStatusComponent,
     DateTimePipe,
     ElapsedPipe,
     DashPipe,

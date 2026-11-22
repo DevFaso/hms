@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter, Route } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import fr from '../../../assets/i18n/fr.json';
 import { Subject, of, throwError } from 'rxjs';
 
 import {
@@ -101,6 +102,33 @@ describe('OnboardingChecklistComponent (QA r65 D2731)', () => {
     expect(el(fixture, 'onboarding-booking-state')!.textContent).toContain(
       'PLATFORM_SETUP.CHECKLIST.NOT_BOOKABLE',
     );
+  });
+
+  it('V356: « Règles cliniques validées : n / N », linked to the rules page', () => {
+    hospitals.onboardingReadiness.and.returnValue(
+      of({
+        ...fresh(),
+        items: [
+          ...fresh().items,
+          { step: 'CLINICAL_RULES', done: false, count: 3, requiredForBooking: false, total: 39 },
+        ],
+      }),
+    );
+    TestBed.configureTestingModule({
+      imports: [OnboardingChecklistComponent, TranslateModule.forRoot()],
+      providers: [provideRouter(appRoutes), { provide: HospitalService, useValue: hospitals }],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.use('fr');
+    const fixture = TestBed.createComponent(OnboardingChecklistComponent);
+    fixture.componentRef.setInput('hospitalId', 'h-1');
+    fixture.detectChanges();
+
+    const rules = row(fixture, 'CLINICAL_RULES');
+    expect(rules.textContent).toContain('Règles cliniques validées : 3 / 39');
+    expect(rules.textContent).not.toContain('nécessaire aux rendez-vous');
+    expect(rules.querySelector('a')!.getAttribute('href')).toBe('/clinical-rules');
   });
 
   it('says patients can book once the server says so', () => {

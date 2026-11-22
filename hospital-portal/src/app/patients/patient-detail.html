@@ -787,7 +787,9 @@
                     class="mews-provisional"
                     data-testid="mews-provisional"
                     [attr.title]="'PATIENTS.MEWS_PROVISIONAL_HINT' | translate"
-                    >{{ 'PATIENTS.MEWS_PROVISIONAL' | translate }}</span
+                    ><app-rule-status ruleKey="MATERNAL_EARLY_WARNING" [compact]="true">{{
+                      'PATIENTS.MEWS_PROVISIONAL' | translate
+                    }}</app-rule-status></span
                   >
                 </div>
               }

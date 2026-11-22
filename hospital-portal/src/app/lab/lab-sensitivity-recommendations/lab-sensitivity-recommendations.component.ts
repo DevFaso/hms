@@ -16,6 +16,7 @@ import {
 import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import { refusalReason } from '../../shared/refusal-reason';
 import { sensitivityLabelKey } from '../../shared/sensitivity/sensitivity-category';
+import { RuleStatusComponent } from '../../shared/rule-status/rule-status.component';
 
 /**
  * Policy 2026-11-20 (provisional): « Appliquer les catégories recommandées ».
@@ -30,7 +31,7 @@ import { sensitivityLabelKey } from '../../shared/sensitivity/sensitivity-catego
 @Component({
   selector: 'app-lab-sensitivity-recommendations',
   standalone: true,
-  imports: [TranslateModule, DialogFocusDirective],
+  imports: [RuleStatusComponent, TranslateModule, DialogFocusDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './lab-sensitivity-recommendations.component.html',
   styleUrl: './lab-sensitivity-recommendations.component.scss',

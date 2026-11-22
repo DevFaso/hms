@@ -150,7 +150,9 @@
                 </p>
               }
               <p class="refill-card__rule refill-card__provisional">
-                {{ 'REFILLS.PROVISIONAL' | translate }}
+                <app-rule-status ruleKey="PRESCRIPTION_RENEWAL">{{
+                  'REFILLS.PROVISIONAL' | translate
+                }}</app-rule-status>
               </p>
             </div>
           }
