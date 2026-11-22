@@ -85,7 +85,7 @@ dependencies {
     // the old deploy before starting the new one). The URLConnection HTTP client,
     // not the default Apache 4 / Netty ones: no commons-logging (excluded below)
     // and no second async stack for a synchronous client.
-    implementation platform('software.amazon.awssdk:bom:2.57.7')
+    implementation platform('software.amazon.awssdk:bom:2.59.4')
     implementation('software.amazon.awssdk:s3') {
         exclude group: 'software.amazon.awssdk', module: 'apache-client'
         exclude group: 'software.amazon.awssdk', module: 'netty-nio-client'
