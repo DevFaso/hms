@@ -1127,7 +1127,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (claimed == 0) {
             throw new BusinessException("assignment.patientInvitation.resendTooSoon", DESK_RESEND_COOLDOWN.toMinutes());
         }
-        UserRoleHospitalAssignment fresh = assignmentRepository.findById(assignment.getId()).orElse(assignment);
+        // The claim cleared the persistence context: the row (and its new code) is read again, by the same
+        // hospital-scoped lookup that found it.
+        UserRoleHospitalAssignment fresh = pendingPatientInvitation(patientId, hospitalId);
         User actor = requireCallerAccount();
         recordPatientActivationAudit(fresh, actor, "Patient portal activation re-sent by the desk");
         // The patient only: no registrar or hospital FYI on a re-send (they were told at registration).
@@ -1287,7 +1289,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 assignmentRepository.save(assignment);
                 log.warn("🔒 Activation code of assignment '{}' burned after {} wrong codes",
                     assignment.getId(), CODE_ACTIVATION_MAX_FAILURES);
-                throw new ActivationCodeBurnedException(CODE_ACTIVATION_WINDOW_MS / 60_000);
+                throw new ActivationCodeBurnedException();
             }
             throw invalidConfirmationCode();
         }
@@ -1476,8 +1478,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     static final class ActivationCodeBurnedException extends BusinessException {
         private static final long serialVersionUID = 1L;
 
-        ActivationCodeBurnedException(long minutes) {
-            super(MSG_CODE_ACTIVATION_TOO_MANY, minutes);
+        ActivationCodeBurnedException() {
+            super(MSG_CODE_ACTIVATION_TOO_MANY, CODE_ACTIVATION_WINDOW_MS / 60_000);
         }
     }
 

@@ -2124,8 +2124,6 @@ class UserRoleHospitalAssignmentServiceImplTest {
             org.mockito.ArgumentCaptor<LocalDateTime> cutoff = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
             when(assignmentRepository.claimActivationResend(eq(assignment.getId()), anyString(), now.capture(),
                 cutoff.capture(), any())).thenReturn(1);
-            when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
-
             service.resendPatientActivation(patientId, hospital.getId());
 
             assertThat(java.time.Duration.between(cutoff.getValue(), now.getValue())).isEqualTo(java.time.Duration.ofMinutes(5));
