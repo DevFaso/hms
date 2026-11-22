@@ -44,9 +44,14 @@ final class ArtemetherLumefantrineWhoBands {
         "WHO Guidelines for the treatment of malaria, 3rd ed. 2015, section 4 (artemether + lumefantrine,"
             + " 20/120 mg tablets twice daily for 3 days) - provisoire";
 
-    /** Bounded and possessive (CodeQL java/polynomial-redos): a prescriber's text is read in linear time. */
-    private static final Pattern STRENGTH = Pattern.compile(
-        "(\\d{1,6}+(?:[.,]\\d{1,3}+)?+)\\s{0,3}+(?:mg)?+\\s{0,3}+/\\s{0,3}+(\\d{1,6}+(?:[.,]\\d{1,3}+)?+)");
+    /**
+     * One amount written in a strength. Bounded and possessive (CodeQL java/polynomial-redos): a
+     * prescriber's text is read in linear time. Whatever stands between two amounts ("/", "+", "-",
+     * "mg", "Luméfantrine") is not read: the first two amounts of a text are its strength.
+     */
+    private static final Pattern AMOUNT = Pattern.compile("\\d{1,6}+(?:[.,]\\d{1,3}+)?+");
+    /** Words that name a stronger tablet than 20/120 mg without its amounts ("Coartem forte", "DS"). */
+    private static final Pattern STRONGER_TABLET_WORD = Pattern.compile("\\b(?:forte|ds|double)\\b");
     /** No drug name or strength is longer; a longer text is read up to here. */
     private static final int MAX_READ = 300;
 
@@ -65,33 +70,86 @@ final class ArtemetherLumefantrineWhoBands {
     }
 
     /**
-     * The strength stated on the item or in the written name ("20/120", "80 mg/480"), as "a/b" in the
-     * digits it was written with; {@code null} when none is written.
+     * The strength stated on the item or in the written name that the WHO bands cannot count (anything
+     * but 20/120 mg: "80/480", "80 mg + 480 mg", "Artéméther 80 mg / Luméfantrine 480 mg", "80-480",
+     * "forte"), as read; {@code null} when every stated strength is 20/120 mg, or none is stated.
      */
     static String statedStrength(String medicationName, MedicationCatalogItem item) {
-        Matcher m = strengthMatch(medicationName, item);
-        return m == null ? null : m.group(1) + "/" + m.group(2);
-    }
-
-    /** Whether the WHO bands count this product's tablets: 20/120 mg, or no strength written. */
-    static boolean bandsCountThisProduct(String medicationName, MedicationCatalogItem item) {
-        Matcher m = strengthMatch(medicationName, item);
-        return m == null || (amount(m.group(1)).compareTo(ARTEMETHER_MG) == 0
-            && amount(m.group(2)).compareTo(LUMEFANTRINE_MG) == 0);
-    }
-
-    private static Matcher strengthMatch(String medicationName, MedicationCatalogItem item) {
-        String fromItem = item == null ? null : item.getStrength();
-        for (String candidate : new String[] {fromItem, medicationName, item == null ? null : item.getNameFr()}) {
-            if (candidate == null) {
-                continue;
-            }
-            Matcher m = STRENGTH.matcher(candidate.length() > MAX_READ ? candidate.substring(0, MAX_READ) : candidate);
-            if (m.find()) {
-                return m;
+        for (String candidate : sources(medicationName, item)) {
+            String stated = strengthIn(candidate);
+            if (stated != null && !isBandedStrength(stated)) {
+                return stated;
             }
         }
         return null;
+    }
+
+    /**
+     * Review of #1276 (QA D2552): whether the WHO bands count this product's tablets. Only a product
+     * clearly of 20/120 mg: a strength of 20/120 mg stated on the item or in the name, and no other
+     * strength stated anywhere; or, with no strength written at all, the Coartem brand, whose tablets
+     * are all 20/120 mg. A generic name with no strength could be the 80/480 mg tablet: it is not
+     * counted, and the order is held as "cannot assess" rather than judged in tablets four times too weak.
+     */
+    static boolean bandsCountThisProduct(String medicationName, MedicationCatalogItem item) {
+        boolean banded = false;
+        for (String candidate : sources(medicationName, item)) {
+            String stated = strengthIn(candidate);
+            if (stated != null) {
+                if (!isBandedStrength(stated)) {
+                    return false;
+                }
+                banded = true;
+            }
+        }
+        return banded || namesCoartem(medicationName, item);
+    }
+
+    /** The texts a strength is read from: the item's strength, the written name, the item's names. */
+    private static String[] sources(String medicationName, MedicationCatalogItem item) {
+        return new String[] {item == null ? null : item.getStrength(), medicationName,
+            item == null ? null : item.getNameFr(), item == null ? null : item.getBrandName()};
+    }
+
+    /**
+     * The strength one text states: its first two amounts as "a/b", a lone amount as written, or a word
+     * naming a stronger tablet; {@code null} when it states none.
+     */
+    private static String strengthIn(String text) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        String read = folded(text.length() > MAX_READ ? text.substring(0, MAX_READ) : text);
+        Matcher m = AMOUNT.matcher(read);
+        if (m.find()) {
+            String first = m.group();
+            return m.find() ? first + "/" + m.group() : first;
+        }
+        Matcher word = STRONGER_TABLET_WORD.matcher(read);
+        return word.find() ? word.group() : null;
+    }
+
+    /** 20/120 mg, in either order (an item may name lumefantrine first). */
+    private static boolean isBandedStrength(String stated) {
+        int slash = stated.indexOf('/');
+        if (slash < 0) {
+            return false;
+        }
+        BigDecimal a = amount(stated.substring(0, slash));
+        BigDecimal b = amount(stated.substring(slash + 1));
+        return (a.compareTo(ARTEMETHER_MG) == 0 && b.compareTo(LUMEFANTRINE_MG) == 0)
+            || (a.compareTo(LUMEFANTRINE_MG) == 0 && b.compareTo(ARTEMETHER_MG) == 0);
+    }
+
+    /** The order names the Coartem brand, whose tablets are 20/120 mg (a stronger one is caught as a strength). */
+    private static boolean namesCoartem(String medicationName, MedicationCatalogItem item) {
+        StringBuilder all = new StringBuilder(medicationName == null ? "" : medicationName);
+        if (item != null) {
+            all.append(' ').append(item.getNameFr()).append(' ').append(item.getGenericName())
+                .append(' ').append(item.getBrandName());
+        }
+        String text = folded(all.toString());
+        return text.contains("coartem");
     }
 
     /**

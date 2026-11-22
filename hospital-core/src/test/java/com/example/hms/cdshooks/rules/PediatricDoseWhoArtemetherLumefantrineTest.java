@@ -124,6 +124,67 @@ class PediatricDoseWhoArtemetherLumefantrineTest {
         assertThat(cards).singleElement().satisfies(c -> assertThat(c.summary()).contains("verify weight-based dosing"));
     }
 
+    /**
+     * Review of #1276: every way of writing the 80/480 mg tablet (or a strength not stated on a generic
+     * name) is held as "cannot assess", never judged in tablets of 20/120 mg, where one tablet of
+     * 80/480 mg read as in-band for 12 kg is four times the band's dose.
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+        "Artéméther 80 mg + Luméfantrine 480 mg|80/480",
+        "80 mg + 480 mg artemether-lumefantrine|80/480",
+        "Artéméther 80 mg / Luméfantrine 480 mg|80/480",
+        "Artemether-lumefantrine 80-480|80/480",
+        "Coartem 80/480|80/480",
+        "Coartem forte|forte",
+        "Artéméther-luméfantrine DS|ds",
+        "Artéméther-luméfantrine 80 mg|80",
+        "Artéméther-luméfantrine|not stated",
+    })
+    void aStrengthNotClearlyTwentyOneTwentyIsHeldNotBanded(String written, String shown) {
+        List<CdsCard> cards = rule.evaluate(ctx(written, null, "1 cp", "BID", 12.0));
+
+        assertThat(cards).singleElement().satisfies(c -> {
+            assertThat(c.requiresReview()).isTrue();
+            assertThat(c.indicator()).isNotEqualTo(CdsCard.Indicator.INFO);
+            assertThat(c.summary()).contains("could not be matched").contains("(" + shown + ")");
+        });
+    }
+
+    @Test
+    void aWrittenStrengthOtherThanTheCataloguesIsHeldToo() {
+        MedicationCatalogItem al = adultAlWithNoLimit("20/120");
+        List<CdsCard> cards = rule.evaluate(ctx("Artéméther 80 mg + Luméfantrine 480 mg", al, "1 cp", "BID", 12.0));
+
+        assertThat(cards).singleElement().satisfies(c -> assertThat(c.summary()).contains("(80/480)"));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        "Artéméther 20 mg + Luméfantrine 120 mg", "Artemether-lumefantrine 20-120", "Luméfantrine 120 mg / Artéméther 20 mg",
+        "Coartem", "Coartem dispersible"})
+    void aProductClearlyOfTwentyOneTwentyIsJudgedByTheBands(String written) {
+        List<CdsCard> cards = rule.evaluate(ctx(written, null, "4 cp", "BID", 12.0));
+
+        assertThat(critical(cards)).isEqualTo(2);
+    }
+
+    @Test
+    void aGenericCatalogueItemOfTwentyOneTwentyWithANameWithNoStrengthIsBanded() {
+        MedicationCatalogItem al = adultAlWithNoLimit("20/120");
+        al.setNameFr("Artéméther-luméfantrine");
+
+        assertThat(critical(rule.evaluate(ctx("Artéméther-luméfantrine", al, "4 cp", "BID", 12.0)))).isEqualTo(2);
+    }
+
+    @Test
+    void aLongTextIsReadInBoundedTime() {
+        String longText = "Artemether-lumefantrine " + "1".repeat(5000) + " mg " + "a/".repeat(5000);
+        long start = System.nanoTime();
+        rule.evaluate(ctx(longText, null, "1 cp", "BID", 12.0));
+        assertThat(java.time.Duration.ofNanos(System.nanoTime() - start)).isLessThan(java.time.Duration.ofSeconds(2));
+    }
+
     /** The WHO table, pinned: 5-<15 kg 1, 15-<25 kg 2, 25-<35 kg 3, >=35 kg 4 tablets of 20/120 mg, twice a day. */
     @Test
     void theWhoBandsAreTheGuidelinesTable() {

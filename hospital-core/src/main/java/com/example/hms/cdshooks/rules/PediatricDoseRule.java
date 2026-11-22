@@ -230,14 +230,20 @@ public class PediatricDoseRule implements CdsRule {
             return mgLimitOf(item);
         }
 
-        /** QA D2552: the WHO bands count tablets of 20/120 mg; another strength cannot be judged by them. */
+        /**
+         * QA D2552: the WHO bands count tablets of 20/120 mg; another strength, or none stated on a
+         * product that is not clearly 20/120 mg (review of #1276), cannot be judged by them.
+         */
         Optional<String> unbandedStrength() {
-            return whoStrengthUnbanded
-                ? Optional.of(text.get("cds.pediatric.who.al.strength.summary",
-                    "{0}: cannot assess, review required: the WHO weight bands for artemether-lumefantrine count tablets of 20/120 mg, and this product is {1} mg (provisional rule)",
-                    medication(), String.valueOf(ArtemetherLumefantrineWhoBands.statedStrength(
-                        context.proposedMedicationName(), context.proposedCatalogItem()))))
-                : Optional.empty();
+            if (!whoStrengthUnbanded) {
+                return Optional.empty();
+            }
+            String stated = ArtemetherLumefantrineWhoBands.statedStrength(context.proposedMedicationName(),
+                context.proposedCatalogItem());
+            return Optional.of(text.get("cds.pediatric.who.al.strength.summary",
+                "{0}: cannot assess, review required: the WHO weight bands for artemether-lumefantrine count tablets of 20/120 mg, and the strength of this product ({1}) could not be matched to them (provisional rule)",
+                medication(), stated != null ? stated
+                    : text.get("cds.pediatric.who.al.strength.notStated", "not stated")));
         }
 
         /** CR-01: what a cannot-assess card answers, for the urgent exception: the two routes and the status. */
