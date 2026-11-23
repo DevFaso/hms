@@ -813,6 +813,17 @@ div.data-table {
     width: auto;
   }
 
+  /* Nor a list row's own button on a tablet, where the row is still one line:
+     a full-width button beside the row's text left that text 0 px, one letter
+     per line (QA D3550, r71: the counter sale's « Ajouter » at 768 px). Under
+     641 px a row usually stacks, and a stacked row's button stays full width. */
+  @media (min-width: 641px) {
+    li > .btn-primary,
+    li > .btn-secondary {
+      width: auto;
+    }
+  }
+
   .empty-state {
     padding: 2rem 1rem;
   }

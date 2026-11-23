@@ -43,6 +43,7 @@ import {
 } from '../shared/payment-request-key';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { CountUnitPipe } from '../shared/pipes/count-unit.pipe';
 import { refusalReason } from '../shared/refusal-reason';
 import { earlierLotWithStock, fefoFirstLot } from './fefo-lots';
 
@@ -106,7 +107,7 @@ type LotsState = 'loading' | 'failed' | 'ready';
 @Component({
   selector: 'app-counter-sale',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, CfaPipe, ServerTimePipe],
+  imports: [CommonModule, FormsModule, TranslateModule, CfaPipe, ServerTimePipe, CountUnitPipe],
   templateUrl: './counter-sale.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './counter-sale.scss',

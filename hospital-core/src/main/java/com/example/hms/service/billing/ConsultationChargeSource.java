@@ -1,5 +1,6 @@
 package com.example.hms.service.billing;
 
+import com.example.hms.enums.PriceListCategory;
 import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
 import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.PriceListSystemKey;
@@ -85,15 +86,18 @@ public class ConsultationChargeSource implements VisitChargeSource {
             Optional<TariffResolver.Tariff> tariff =
                 visit.tariff(PriceListLinkType.SYSTEM, PriceListSystemKey.CONSULTATION_DEFAULT.name());
             if (tariff.isPresent()) {
-                lines.add(VisitCharge.tariffed(tariff.get(), ItemCategory.SERVICE, 1));
+                lines.add(VisitCharge.tariffed(tariff.get(), ItemCategory.SERVICE, 1)
+                    .coveredAs(PriceListCategory.CONSULTATION));
                 return lines;
             }
             Optional<Treatment> consultation = visit.prices().naming(CONSULTATION_WORDS);
             // QA D1901: the hospital's own service name as written; else the
             // server's word for it, shown in each reader's language.
-            lines.add(consultation.isPresent()
+            // QA D3603 (r71): the default consultation is a consultation to a plan's category rule, however priced.
+            lines.add((consultation.isPresent()
                 ? VisitCharge.of(consultation.get().getName(), ItemCategory.SERVICE, 1, consultation)
-                : VisitCharge.worded(BillingText.of(CONSULTATION_CODE), ItemCategory.SERVICE, 1, consultation));
+                : VisitCharge.worded(BillingText.of(CONSULTATION_CODE), ItemCategory.SERVICE, 1, consultation))
+                .coveredAs(PriceListCategory.CONSULTATION));
         }
         return lines;
     }

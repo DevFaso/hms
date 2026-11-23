@@ -26,6 +26,7 @@ import { localDateString } from '../shared/date-utils';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { blankFields, refuseFields } from '../shared/forms/invalid-fields';
 import { DashPipe } from '../shared/pipes/dash.pipe';
+import { CountUnitPipe } from '../shared/pipes/count-unit.pipe';
 import { missingRequiredMessage } from '../shared/required-fields';
 
 /** QA D1233: how many recent lots the receipt page lists. */
@@ -47,6 +48,7 @@ const GR_FIELD_IDS = ['grItem', 'grLot', 'grExpiry', 'grQty', 'grQtyIn', 'grWitn
     FormsModule,
     TranslateModule,
     CfaPipe,
+    CountUnitPipe,
   ],
   templateUrl: './goods-receipt.html',
   changeDetection: ChangeDetectionStrategy.Eager,

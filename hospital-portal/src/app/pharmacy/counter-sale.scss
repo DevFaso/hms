@@ -92,17 +92,22 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
+  flex-wrap: wrap;
   padding: 0.625rem 0.75rem;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: #fff;
 }
 
+// QA D3550 (r71): the article's text takes the row's room and never less than
+// a readable width. At 768 px the shared full-width button rule left it 0 px
+// wide, one letter per line; the row wraps the button below it instead.
 .item-info {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-width: 0;
+  flex: 1 1 auto;
+  min-width: min(10rem, 100%);
 }
 
 .item-name {
@@ -128,6 +133,7 @@
 
 .btn-add {
   flex-shrink: 0;
+  width: auto;
 }
 
 .basket-line {

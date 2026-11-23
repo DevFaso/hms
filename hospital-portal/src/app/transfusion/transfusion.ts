@@ -484,17 +484,27 @@ export class TransfusionComponent implements OnInit {
     if (!patient) return;
     // The allo-immunisation flag follows the patient: asked for on its own, so it shows for a patient with
     // no type and screen at this hospital yet (the emergency request that needs the declaration).
+    // Review of #1300: every answer is checked against the patient still picked. A late answer (or a late
+    // failure) for the previous patient never fills, or clears, the form of the one picked since.
+    const stillPicked = () => this.requestForm.patientId === patient.id;
     this.transfusion.getAntibodyStatus(patient.id).subscribe({
       next: (status) => {
-        if (this.requestForm.patientId === patient.id) this.requestAntibody.set(status);
+        if (stillPicked()) this.requestAntibody.set(status);
       },
-      error: () => this.requestAntibody.set(null),
+      error: () => {
+        if (stillPicked()) this.requestAntibody.set(null);
+      },
     });
     // Surface the standing type and screen before the clinician commits, so a
     // missing or lapsed one is visible here rather than as a 400 on submit.
+    // QA D3352: no type and screen yet is a 204, read as null.
     this.transfusion.getCurrentBloodGroup(patient.id).subscribe({
-      next: (group) => this.patientGroup.set(group),
-      error: () => this.patientGroup.set(null),
+      next: (group) => {
+        if (stillPicked()) this.patientGroup.set(group ?? null);
+      },
+      error: () => {
+        if (stillPicked()) this.patientGroup.set(null);
+      },
     });
   }
 
