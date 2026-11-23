@@ -51,6 +51,7 @@ for (const [lang, strings] of Object.entries({ en, fr, es })) {
       await expect(banner).toBeVisible();
       await expect(banner).toContainText(strings.API_TIMEOUT.TITLE);
       await expect(banner).toContainText(strings.API_TIMEOUT.KEEP_INPUT);
+      await expect(page.getByTestId('api-timeout-write')).toHaveCount(0);
       expect(
         (await new AxeBuilder({ page }).include('[data-testid="api-timeout-banner"]').analyze())
           .violations,
@@ -201,6 +202,58 @@ test('a generated PDF export completes beyond the ordinary deadline', async ({ p
     release();
     expect((await download).suggestedFilename()).toBe('lab-test-definitions.pdf');
     expect(exportCalls).toBe(1);
+  } finally {
+    release();
+  }
+});
+
+test('a stalled refresh retains the open patient view, its input and the existing session', async ({
+  page,
+  baseURL,
+}) => {
+  await signInAs(page, 'ROLE_SUPER_ADMIN', baseURL!);
+  let unauthorized = false;
+  let refreshCalls = 0;
+  let logoutCalls = 0;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route('**/api/patients**', async (route) => {
+    if (!unauthorized) {
+      unauthorized = true;
+      await route.fulfill({ status: 401, json: { message: 'Expired access token' } });
+    } else {
+      await route.fulfill({
+        json: { content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 },
+      });
+    }
+  });
+  await page.route('**/api/auth/token/refresh', async (route) => {
+    refreshCalls++;
+    await held;
+    await route
+      .fulfill({ status: 503, json: { message: 'Temporarily unavailable' } })
+      .catch(() => undefined);
+  });
+  await page.route('**/api/auth/logout', async (route) => {
+    logoutCalls++;
+    await route.fulfill({ status: 204 });
+  });
+  try {
+    await page.clock.install();
+    await page.goto('/patients');
+    const search = page.locator('.filter-toolbar .search-bar input');
+    await expect(search).toBeVisible();
+    await expect.poll(() => refreshCalls).toBe(1);
+    const token = await page.evaluate(() => localStorage.getItem('auth_token'));
+    await search.fill('Keep this input');
+    await page.clock.fastForward(30000);
+    await expect(page).toHaveURL(/\/patients(?:[?#]|$)/);
+    await expect(search).toHaveValue('Keep this input');
+    await expect(page.getByTestId('api-timeout-banner')).toBeVisible();
+    await expect(page.getByTestId('api-timeout-write')).toHaveCount(0);
+    expect(await page.evaluate(() => localStorage.getItem('auth_token'))).toBe(token);
+    expect(logoutCalls).toBe(0);
+    expect(refreshCalls).toBe(1);
   } finally {
     release();
   }

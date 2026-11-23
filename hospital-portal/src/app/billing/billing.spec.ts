@@ -212,6 +212,72 @@ describe('BillingComponent', () => {
     expect(component.invoices()[0].id).toBe('inv-2');
   });
 
+  for (const lateResponse of ['success', 'error']) {
+    it(`an older summary ${lateResponse} cannot replace the current range or hide its pending state`, () => {
+      fixture.detectChanges();
+      const earlier = new Subject<ReturnType<BillingComponent['stats']>>();
+      const current = new Subject<ReturnType<BillingComponent['stats']>>();
+      billingSpy.getSummary.and.returnValues(earlier, current);
+      component.filterFromDate.set('2026-01-01');
+      component.loadInvoices();
+      component.filterFromDate.set('2026-02-01');
+      component.loadInvoices();
+      expect(billingSpy.getSummary.calls.mostRecent().args[0]?.fromDate).toBe('2026-02-01');
+      earlier.next({
+        total: 99,
+        paid: 0,
+        outstanding: 99,
+        overdue: 0,
+        totalRevenue: 0,
+        balance: 99,
+      });
+      expect(component.statsUnknown()).toBeTrue();
+      current.next({ total: 2, paid: 0, outstanding: 2, overdue: 0, totalRevenue: 0, balance: 20 });
+      expect(component.stats().total).toBe(2);
+      expect(component.statsUnknown()).toBeFalse();
+      if (lateResponse === 'error') earlier.error(new HttpErrorResponse({ status: 504 }));
+      else
+        earlier.next({
+          total: 999,
+          paid: 0,
+          outstanding: 999,
+          overdue: 0,
+          totalRevenue: 0,
+          balance: 999,
+        });
+      expect(component.stats().total).toBe(2);
+      expect(component.statsUnknown()).toBeFalse();
+    });
+
+    it(`an older invoice-list ${lateResponse} cannot clear the current load or replace its rows`, () => {
+      fixture.detectChanges();
+      const earlier = new Subject<InvoicePage>();
+      const current = new Subject<InvoicePage>();
+      billingSpy.searchInvoices.and.returnValues(earlier, current);
+      component.loadInvoices();
+      component.loadInvoices();
+      if (lateResponse === 'error') earlier.error(new HttpErrorResponse({ status: 504 }));
+      else earlier.next(mockPage([mockInvoice({ id: 'stale' })]));
+      expect(component.loading()).toBeTrue();
+      expect(component.loadFailed()).toBeFalse();
+      current.next(mockPage([mockInvoice({ id: 'current' })]));
+      expect(component.loading()).toBeFalse();
+      expect(component.invoices().map((invoice) => invoice.id)).toEqual(['current']);
+    });
+  }
+
+  it('a late overdue worklist cannot replace a newer ordinary search', () => {
+    fixture.detectChanges();
+    const overdue = new Subject<BillingInvoiceResponse[]>();
+    billingSpy.getOverdue.and.returnValue(overdue);
+    component.setTab('overdue');
+    billingSpy.searchInvoices.and.returnValue(of(mockPage([mockInvoice({ id: 'current' })])));
+    component.setTab('all');
+    overdue.next([mockInvoice({ id: 'stale-overdue' })]);
+    expect(component.invoices().map((invoice) => invoice.id)).toEqual(['current']);
+    expect(component.loading()).toBeFalse();
+  });
+
   it('QA D203: the search term goes to the server, not a filter over the loaded page', fakeAsync(() => {
     fixture.detectChanges();
     billingSpy.searchInvoices.calls.reset();
