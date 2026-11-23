@@ -11,7 +11,7 @@ import {
 } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
-import { defer, of, throwError } from 'rxjs';
+import { defer, of, throwError, Subject } from 'rxjs';
 
 import {
   errorInterceptor,
@@ -41,16 +41,20 @@ describe('errorInterceptor', () => {
 
   beforeEach(() => {
     clearReportedSilent403s();
-    auth = jasmine.createSpyObj('AuthService', [
-      'getRefreshToken',
-      'getUserProfile',
-      'logout',
-      'refreshTokenRequest',
-      'setToken',
-      'setRefreshToken',
-      'getToken',
-      'isExpired',
-    ]);
+    auth = jasmine.createSpyObj(
+      'AuthService',
+      [
+        'getRefreshToken',
+        'getUserProfile',
+        'logout',
+        'refreshTokenRequest',
+        'setToken',
+        'setRefreshToken',
+        'getToken',
+        'isExpired',
+      ],
+      { sessionEnded$: new Subject<void>() },
+    );
     auth.getToken.and.returnValue(null);
     auth.isExpired.and.returnValue(true);
     auth.getRefreshToken.and.returnValue(null);
@@ -85,6 +89,83 @@ describe('errorInterceptor', () => {
   });
 
   afterEach(() => httpMock.verify());
+
+  it('navigation away does not cancel the shared refresh or fail queued requests', () => {
+    auth.getRefreshToken.and.returnValue('r1');
+    const refresh = new Subject<{ accessToken: string; refreshToken: string }>();
+    auth.refreshTokenRequest.and.returnValue(refresh);
+    const owner = http
+      .get('/first-page')
+      .subscribe({ error: () => fail('cancelled owner errored') });
+    httpMock.expectOne('/first-page').flush(null, { status: 401, statusText: 'Unauthorized' });
+    let body: unknown;
+    const error = jasmine.createSpy('queued error');
+    http.get('/other-page').subscribe({ next: (value) => (body = value), error });
+    httpMock.expectOne('/other-page').flush(null, { status: 401, statusText: 'Unauthorized' });
+    owner.unsubscribe();
+    expect(refresh.observed).toBeTrue();
+    expect(error).not.toHaveBeenCalled();
+    refresh.next({ accessToken: 'new-token', refreshToken: 'r2' });
+    refresh.complete();
+    const queuedRetry = httpMock.expectOne('/other-page');
+    expect(queuedRetry.request.headers.get('Authorization')).toBe('Bearer new-token');
+    queuedRetry.flush({ ok: true });
+    httpMock.expectNone('/first-page');
+    expect(body).toEqual({ ok: true });
+    expect(error).not.toHaveBeenCalled();
+    expect(auth.refreshTokenRequest).toHaveBeenCalledTimes(1);
+    expect(auth.logout).not.toHaveBeenCalled();
+  });
+
+  it('a genuine refresh rejection still fails waiters once and ends the session', () => {
+    auth.getRefreshToken.and.returnValue('r1');
+    auth.logout.and.callFake(() => (auth.sessionEnded$ as Subject<void>).next());
+    const refresh = new Subject<{ accessToken: string; refreshToken: string }>();
+    auth.refreshTokenRequest.and.returnValue(refresh);
+    const ownerError = jasmine.createSpy('owner error');
+    const waiterError = jasmine.createSpy('waiter error');
+    http.get('/owner').subscribe({ error: ownerError });
+    httpMock.expectOne('/owner').flush(null, { status: 401, statusText: 'Unauthorized' });
+    http.get('/waiter').subscribe({ error: waiterError });
+    httpMock.expectOne('/waiter').flush(null, { status: 401, statusText: 'Unauthorized' });
+    refresh.error(new HttpErrorResponse({ status: 401 }));
+    expect(ownerError).toHaveBeenCalledTimes(1);
+    expect(waiterError).toHaveBeenCalledTimes(1);
+    expect(auth.logout).toHaveBeenCalledTimes(1);
+    expect(auth.setToken).not.toHaveBeenCalled();
+  });
+
+  it('an explicit logout cancels the refresh and never restores credentials', () => {
+    auth.getRefreshToken.and.returnValue('r1');
+    const refresh = new Subject<{ accessToken: string; refreshToken: string }>();
+    auth.refreshTokenRequest.and.returnValue(refresh);
+    const error = jasmine.createSpy('request error');
+    http.get('/data').subscribe({ error });
+    httpMock.expectOne('/data').flush(null, { status: 401, statusText: 'Unauthorized' });
+    (auth.sessionEnded$ as Subject<void>).next();
+    expect(refresh.observed).toBeFalse();
+    refresh.next({ accessToken: 'late-token', refreshToken: 'late-refresh' });
+    expect(auth.setToken).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+    // The logout also releases refresh ownership for a later session.
+    auth.refreshTokenRequest.and.returnValue(of({ accessToken: 'new-token', refreshToken: 'r2' }));
+    http.get('/later-session').subscribe();
+    httpMock.expectOne('/later-session').flush(null, { status: 401, statusText: 'Unauthorized' });
+    httpMock.expectOne('/later-session').flush({});
+    expect(auth.refreshTokenRequest).toHaveBeenCalledTimes(2);
+  });
+
+  it('a shared refresh remains bounded when all page subscribers leave', fakeAsync(() => {
+    auth.getRefreshToken.and.returnValue('r1');
+    const refresh = new Subject<{ accessToken: string; refreshToken: string }>();
+    auth.refreshTokenRequest.and.returnValue(refresh);
+    const owner = http.get('/data').subscribe();
+    httpMock.expectOne('/data').flush(null, { status: 401, statusText: 'Unauthorized' });
+    owner.unsubscribe();
+    tick(20_000);
+    expect(refresh.observed).toBeFalse();
+    expect(auth.logout).toHaveBeenCalledTimes(1);
+  }));
 
   it('passes successful responses through untouched', () => {
     let body: unknown;
