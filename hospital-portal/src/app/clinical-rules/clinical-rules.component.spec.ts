@@ -17,6 +17,7 @@ import { answerReasonDialog } from '../shared/reason-dialog/reason-dialog.testin
 import { expectEmptySubmitRefusal, expectFieldsMarked } from '../testing/form-refusal-behaviour';
 import { ClinicalRulesComponent } from './clinical-rules.component';
 import fr from '../../assets/i18n/fr.json';
+import { useTestLanguage } from '../testing/test-language';
 
 @Component({
   standalone: true,
@@ -87,8 +88,10 @@ describe('ClinicalRulesComponent (V356)', () => {
   let httpMock: HttpTestingController;
   let toast: jasmine.SpyObj<ToastService>;
   let roleContext: RoleContextService;
+  let restoreLanguage: () => void;
 
   beforeEach(async () => {
+    restoreLanguage = useTestLanguage('fr');
     toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);
     await TestBed.configureTestingModule({
       imports: [HostComponent, TranslateModule.forRoot()],
@@ -117,7 +120,13 @@ describe('ClinicalRulesComponent (V356)', () => {
     host = fixture.nativeElement as HTMLElement;
   });
 
-  afterEach(() => httpMock.verify());
+  afterEach(() => {
+    try {
+      httpMock.verify();
+    } finally {
+      restoreLanguage();
+    }
+  });
 
   const q = <T extends HTMLElement>(testId: string) =>
     host.querySelector<T>(`[data-testid="${testId}"]`);
