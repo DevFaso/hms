@@ -40,4 +40,24 @@ class PatientRecipientVerificationGuardTest {
             assertThat(scopes).containsExactly("PatientMessageGate.java");
         }
     }
+    @Test void securityChallengeHasOnlyTheTwoAuthorizedControllerEntryPoints() throws Exception {
+        try (var files = Files.walk(MAIN)) {
+            var callers = files.filter(path -> path.toString().endsWith(".java"))
+                .filter(path -> !path.getFileName().toString().equals("PatientRecipientChallengeService.java"))
+                .filter(path -> {
+                    try { return Files.readString(path).contains("PatientRecipientChallengeService"); }
+                    catch (java.io.IOException e) { throw new java.io.UncheckedIOException(e); }
+                }).map(path -> path.getFileName().toString()).sorted().toList();
+            assertThat(callers).containsExactly("PatientRecipientVerificationController.java",
+                "PatientSelfRecipientVerificationController.java");
+        }
+        String staff = Files.readString(MAIN.resolve("controller/PatientRecipientVerificationController.java"));
+        assertThat(staff).contains("registrations.existsByPatientIdAndHospitalId(patientId, scope)",
+            "authUtils.resolveHospitalScope(auth, hospitalId, null, true)",
+            "authorize(patientId, hospitalId, auth)");
+        String self = Files.readString(MAIN.resolve("controller/PatientSelfRecipientVerificationController.java"));
+        assertThat(self.split(java.util.regex.Pattern.quote("portal.resolvePatientId(auth)"), -1)).hasSize(4);
+        assertThat(self).doesNotContain("@PathVariable UUID patientId", "@RequestParam UUID patientId");
+    }
+
 }

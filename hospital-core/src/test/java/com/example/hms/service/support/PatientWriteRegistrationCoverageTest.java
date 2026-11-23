@@ -91,6 +91,10 @@ class PatientWriteRegistrationCoverageTest {
 
     /** {@code Class#method} -> why that one write needs no check of its own. Frozen: it only shrinks. */
     private static final Map<String, String> RECORDED_METHODS = Map.ofEntries(
+        entry("PatientRecipientChallengeService#request", "C-K2b: patient-level security challenge, not a chart write;"
+            + " only the two recipient-verification controllers call it. Staff require registration at their resolved"
+            + " hospital, self-service derives the linked patient. RecipientVerificationControllersTest and"
+            + " PatientRecipientVerificationGuardTest freeze those authorized entry points"),
         entry("BillingInvoiceServiceImpl#recordPayment", BOUND_TO_PARENT + " (the invoice, locked and matched to the patient)"),
         entry("BillingInvoiceServiceImpl#recordPatientPayment", BOUND_TO_PARENT
             + " (the invoice, locked and matched to the patient)"),
