@@ -54,6 +54,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.atLeast;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -518,9 +522,9 @@ class TransfusionPositiveAntibodyScreenPostgresIT {
         // that account is also what the patient reads in « Qui a consulté mon dossier ».
         @SuppressWarnings("unchecked")
         ArgumentCaptor<java.util.Map<String, Long>> perSource = ArgumentCaptor.forClass(java.util.Map.class);
-        verify(reachRecorder, org.mockito.Mockito.atLeast(5)).recordReach(org.mockito.ArgumentMatchers.eq(patient),
-            org.mockito.ArgumentMatchers.eq(hospital), any(), org.mockito.ArgumentMatchers.isNull(),
-            perSource.capture(), org.mockito.ArgumentMatchers.eq(PositiveAntibodyScreenService.REACH_DESCRIPTION));
+        verify(reachRecorder, atLeast(5)).recordReach(eq(patient),
+            eq(hospital), any(), isNull(),
+            perSource.capture(), eq(PositiveAntibodyScreenService.REACH_DESCRIPTION));
         assertThat(perSource.getAllValues()).allSatisfy(reach ->
             assertThat(reach).containsOnlyKeys(hospitalA.toString()));
         // Nothing was written at A, and B wrote no antibody record of its own.
@@ -540,7 +544,7 @@ class TransfusionPositiveAntibodyScreenPostgresIT {
         assertThat(known.getPositiveScreenHospitalName()).startsWith("Hopital R70A");
         @SuppressWarnings("unchecked")
         ArgumentCaptor<java.util.Map<String, Long>> perSource = ArgumentCaptor.forClass(java.util.Map.class);
-        verify(reachRecorder, org.mockito.Mockito.atLeastOnce()).recordReach(any(), any(), any(), any(),
+        verify(reachRecorder, atLeastOnce()).recordReach(any(), any(), any(), any(),
             perSource.capture(), any());
         assertThat(perSource.getAllValues()).allSatisfy(reach -> assertThat(reach).isEmpty());
     }

@@ -1,5 +1,9 @@
 package com.example.hms.service.transfusion;
 
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -688,7 +692,7 @@ class PositiveAntibodyScreenServiceTest {
             .isInstanceOfSatisfying(FieldBusinessException.class, refusal -> assertThat(refusal.getMessageKey())
                 .isEqualTo(PositiveAntibodyScreenPolicy.Missing.WORKUP.messageKey()));
         // Enforcing the rule shows nothing to anybody: nothing is accounted for it.
-        org.mockito.Mockito.verifyNoInteractions(reach);
+        verifyNoInteractions(reach);
 
         AntibodyStatusResponseDTO shown = service.status(patient.getId(), hospital.getId(), "Awa Sawadogo");
 
@@ -699,10 +703,10 @@ class PositiveAntibodyScreenServiceTest {
         assertThat(shown.getOtherHospitalNames()).containsExactly("CHU A");
         assertThat(shown.getWorkups()).isEmpty();
         ArgumentCaptor<java.util.Map<String, Long>> perSource = ArgumentCaptor.captor();
-        verify(reach).recordReach(org.mockito.ArgumentMatchers.eq(patient.getId()),
-            org.mockito.ArgumentMatchers.eq(hospital.getId()), org.mockito.ArgumentMatchers.eq(biologist),
-            org.mockito.ArgumentMatchers.isNull(), perSource.capture(),
-            org.mockito.ArgumentMatchers.eq(PositiveAntibodyScreenService.REACH_DESCRIPTION));
+        verify(reach).recordReach(eq(patient.getId()),
+            eq(hospital.getId()), eq(biologist),
+            isNull(), perSource.capture(),
+            eq(PositiveAntibodyScreenService.REACH_DESCRIPTION));
         assertThat(perSource.getValue()).containsOnlyKeys(hospitalA.getId().toString());
 
         // The flag shown on the group and on the request is accounted the same way.
@@ -785,7 +789,7 @@ class PositiveAntibodyScreenServiceTest {
         verify(reach).recordReach(any(), any(), any(), any(), perSource.capture(), any());
         assertThat(perSource.getValue()).as("nothing surfaced from another hospital").isEmpty();
 
-        org.mockito.Mockito.doThrow(new IllegalStateException("audit down")).when(reach)
+        doThrow(new IllegalStateException("audit down")).when(reach)
             .recordReach(any(), any(), any(), any(), any(), any());
         assertThat(service.alloImmunisedShownAt(patient.getId(), hospital.getId())).isTrue();
         assertThat(service.status(patient.getId(), hospital.getId()).isAlloImmunised()).isTrue();

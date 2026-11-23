@@ -57,6 +57,10 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.mockito.AdditionalAnswers.delegatesTo;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
@@ -618,9 +622,9 @@ class LabOrderEndToEndIT extends BaseIT {
         com.example.hms.repository.CriticalResultIncidentRepository incidents =
             applicationContext.getBean(com.example.hms.repository.CriticalResultIncidentRepository.class);
         java.util.concurrent.atomic.AtomicReference<UUID> acknowledgedMeanwhile = new java.util.concurrent.atomic.AtomicReference<>();
-        com.example.hms.service.lab.CriticalResultRecipients rosterDuringTheSweep = org.mockito.Mockito.mock(
-            com.example.hms.service.lab.CriticalResultRecipients.class, org.mockito.AdditionalAnswers.delegatesTo(roster));
-        org.mockito.Mockito.doAnswer(call -> {
+        com.example.hms.service.lab.CriticalResultRecipients rosterDuringTheSweep = mock(
+            com.example.hms.service.lab.CriticalResultRecipients.class, delegatesTo(roster));
+        doAnswer(call -> {
             String prescriberBeingTold = call.getArgument(1);
             UUID other = resultOf.entrySet().stream().filter(entry -> !entry.getKey().equals(prescriberBeingTold))
                 .map(java.util.Map.Entry::getValue).findFirst().orElseThrow();
@@ -630,7 +634,7 @@ class LabOrderEndToEndIT extends BaseIT {
                     .get(30, java.util.concurrent.TimeUnit.SECONDS);
             }
             return roster.cover(call.getArgument(0), prescriberBeingTold);
-        }).when(rosterDuringTheSweep).cover(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        }).when(rosterDuringTheSweep).cover(any(), any());
 
         Integer escalated;
         sweep.setEscalationCollaborators(rosterDuringTheSweep, incidents, userRepository);
