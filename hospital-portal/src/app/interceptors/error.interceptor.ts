@@ -15,6 +15,7 @@ import {
   catchError,
   defer,
   filter,
+  finalize,
   retry,
   switchMap,
   take,
@@ -336,8 +337,10 @@ function tryRefreshAndRetry(
     isRefreshing = true;
     refreshDone$.next(null); // reset before the call
 
+    let refreshPending = true;
     return refreshWithSupersededRetry(auth).pipe(
       switchMap((tokens) => {
+        refreshPending = false;
         isRefreshing = false;
         auth.setToken(tokens.accessToken);
         if (tokens.refreshToken) {
@@ -359,6 +362,7 @@ function tryRefreshAndRetry(
         if (refreshError instanceof CredentialRetryError) {
           return throwError(() => refreshError.error);
         }
+        refreshPending = false;
         isRefreshing = false;
         refreshDone$.next('__REFRESH_FAILED__');
         // Reset to null so refreshDone$ is ready for the next login session.
@@ -367,6 +371,12 @@ function tryRefreshAndRetry(
         auth.logout();
         void router.navigate(['/login']);
         return isSilentBackground ? EMPTY : throwError(() => refreshError);
+      }),
+      finalize(() => {
+        if (!refreshPending) return;
+        isRefreshing = false;
+        refreshDone$.next('__REFRESH_FAILED__');
+        refreshDone$.next(null);
       }),
     );
   }

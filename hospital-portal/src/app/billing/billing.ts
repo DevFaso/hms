@@ -233,7 +233,10 @@ export class BillingComponent implements OnInit {
   loadFailed = signal(false);
   /** QA D1145: the totals could not be read; the tiles say "—", never 0. */
   private readonly summaryFailed = signal(false);
-  readonly statsUnknown = computed(() => this.loadFailed() || this.summaryFailed());
+  private readonly summaryLoading = signal(true);
+  readonly statsUnknown = computed(
+    () => this.loading() || this.summaryLoading() || this.loadFailed() || this.summaryFailed(),
+  );
   activeTab = signal<BillingTab>('all');
   selectedInvoice = signal<BillingInvoiceResponse | null>(null);
 
@@ -814,9 +817,11 @@ export class BillingComponent implements OnInit {
    * page of 20 rows undercounted revenue and money owed.
    */
   private refreshStats(): void {
+    this.summaryLoading.set(true);
     // QA D1059: the tiles follow the list's date filter (the invoice date, as the search reads it).
     this.billingService.getSummary(this.appliedRange).subscribe({
       next: (summary) => {
+        this.summaryLoading.set(false);
         this.summaryFailed.set(false);
         this.stats.set({
           total: Number(summary?.total ?? 0),
@@ -827,7 +832,10 @@ export class BillingComponent implements OnInit {
           balance: Number(summary?.balance ?? 0),
         });
       },
-      error: () => this.summaryFailed.set(true),
+      error: () => {
+        this.summaryLoading.set(false);
+        this.summaryFailed.set(true);
+      },
     });
   }
 

@@ -11,7 +11,7 @@ import {
 } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
-import { defer, of, throwError } from 'rxjs';
+import { defer, of, throwError, Subject } from 'rxjs';
 
 import {
   errorInterceptor,
@@ -85,6 +85,23 @@ describe('errorInterceptor', () => {
   });
 
   afterEach(() => httpMock.verify());
+
+  it('D3602: cancelling a stalled refresh releases the mutex for the next request', () => {
+    auth.getRefreshToken.and.returnValue('r1');
+    const refresh = new Subject<{ accessToken: string; refreshToken: string }>();
+    auth.refreshTokenRequest.and.returnValue(refresh);
+    const subscription = http.get('/data').subscribe({ error: () => undefined });
+    httpMock.expectOne('/data').flush(null, { status: 401, statusText: 'Unauthorized' });
+    expect(auth.refreshTokenRequest).toHaveBeenCalledTimes(1);
+    subscription.unsubscribe();
+    expect(auth.logout).not.toHaveBeenCalled();
+    auth.refreshTokenRequest.and.returnValue(of({ accessToken: 'new-token', refreshToken: 'r2' }));
+    http.get('/data').subscribe();
+    httpMock.expectOne('/data').flush(null, { status: 401, statusText: 'Unauthorized' });
+    expect(auth.refreshTokenRequest).toHaveBeenCalledTimes(2);
+    httpMock.expectOne('/data').flush({ ok: true });
+    expect(auth.logout).not.toHaveBeenCalled();
+  });
 
   it('passes successful responses through untouched', () => {
     let body: unknown;
