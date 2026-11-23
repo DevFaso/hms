@@ -4,6 +4,7 @@ import { Observable, of, NEVER } from 'rxjs';
 import { StockAdjustmentComponent } from './stock-adjustment';
 import { PharmacyService } from '../services/pharmacy.service';
 import { ToastService } from '../core/toast.service';
+import { expectEmptySubmitRefusal } from '../testing/form-refusal-behaviour';
 
 type LotsPage =
   ReturnType<PharmacyService['listLotsByInventoryItem']> extends Observable<infer T> ? T : never;
@@ -25,8 +26,11 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
       'receiveStock',
       'listWitnessCandidates',
       'listReturnableDispenses',
+      'listQuarantine',
+      'destroyQuarantined',
     ]);
     svc.listReturnableDispenses.and.returnValue(of({ data: [] }) as never);
+    svc.listQuarantine.and.returnValue(of({ data: [] }) as never);
     svc.listWitnessCandidates.and.returnValue(
       of({ data: [{ userId: 'u-2', displayName: 'Awa Traore' }] } as unknown as ReturnType<
         PharmacyService['listWitnessCandidates']
@@ -301,6 +305,7 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
       c.form.stockLotId = 'lot-1';
       c.onLotChange();
       c.form.quantity = 2;
+      c.returnCondition = 'INTACT';
     }
 
     it('forgets the chosen dispense when the item changes', () => {
@@ -335,6 +340,39 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
       // date are put in the reader's language where it is shown (was
       // 'RETURN ref lot R16-MOR-01 2026-10-27 09:00': English "lot", raw date).
       expect(body.reason).toBe('RETURN ref R16-MOR-01 2026-10-27T09:00');
+      // QA D3415: the state of the returned units is sent.
+      expect(body.stockCondition).toBe('INTACT');
+    });
+
+    it('QA D3415: no state, no return; a damaged return is said to go to quarantine', () => {
+      const c = create();
+      openReturn(c);
+      c.returnDispenseId = fill.dispenseId;
+      c.returnCondition = null;
+      c.submitForm();
+      expect(toast.error).toHaveBeenCalledWith('PHARMACY.RETURN_CONDITION_REQUIRED');
+      expect(svc.recordTransaction).not.toHaveBeenCalled();
+
+      c.returnCondition = 'DAMAGED';
+      expect(c.returnGoesToQuarantine()).toBeTrue();
+      c.returnCondition = 'INTACT';
+      expect(c.returnGoesToQuarantine()).toBeFalse();
+    });
+
+    it('QA D3409: the fills are listed before a lot is chosen, and choosing one takes its lot', () => {
+      const c = create();
+      svc.listReturnableDispenses.and.returnValue(
+        of({ data: [{ ...fill, stockLotId: 'lot-1' }] }) as never,
+      );
+      c.openForm();
+      c.onTypeChange('RETURN');
+      c.onItemChange('item-1');
+      expect(svc.listReturnableDispenses).toHaveBeenCalledWith('item-1', undefined);
+      expect(c.returnableDispenses().length).toBe(1);
+
+      c.returnDispenseId = fill.dispenseId;
+      c.onReturnDispenseChange();
+      expect(c.form.stockLotId).toBe('lot-1');
     });
 
     it('asks for the dispense when one exists and none is chosen, and caps the quantity', () => {
@@ -349,6 +387,81 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
       expect(toast.error).toHaveBeenCalledWith('PHARMACY.RETURN_EXCEEDS_DISPENSE');
       expect(svc.recordTransaction).not.toHaveBeenCalled();
     });
+  });
+
+  describe('QA D3415: the quarantine and its witnessed destruction', () => {
+    const morphine = {
+      inventoryItemId: 'item-mor',
+      medicationName: 'Morphine 10 mg/mL',
+      unit: 'ampoule',
+      controlled: true,
+      stockLotId: 'lot-mor',
+      lotNumber: 'LOT-MOR-1',
+      heldQuantity: 2,
+    };
+
+    it('lists what is held and destroys a controlled drug only with a witness and a reason', () => {
+      const c = create();
+      svc.listQuarantine.and.returnValue(of({ data: [morphine] }) as never);
+      svc.destroyQuarantined.and.returnValue(of({ data: {} }) as never);
+      svc.listTransactionsByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
+      c.selectedPharmacyId = 'ph-1';
+      c.loadQuarantine();
+      expect(c.quarantine()).toEqual([morphine]);
+
+      c.openDestroy(morphine);
+      c.destroyQuantity = 3;
+      c.confirmDestroy();
+      expect(svc.destroyQuarantined).not.toHaveBeenCalled();
+
+      c.destroyQuantity = 2;
+      c.destroyReason = 'Incinéré';
+      c.confirmDestroy();
+      expect(svc.destroyQuarantined).not.toHaveBeenCalled();
+
+      c.destroyWitness = 'user-2';
+      c.confirmDestroy();
+      expect(svc.destroyQuarantined).toHaveBeenCalledWith({
+        inventoryItemId: 'item-mor',
+        stockLotId: 'lot-mor',
+        quantity: 2,
+        reason: 'Incinéré',
+        witnessedBy: 'user-2',
+      });
+      expect(toast.success).toHaveBeenCalledWith('PHARMACY.QUARANTINE.DESTROYED');
+    });
+  });
+
+  it('QA D3415: an empty destruction form marks its required fields and sends nothing', () => {
+    create();
+    svc.listQuarantine.and.returnValue(
+      of({
+        data: [
+          {
+            inventoryItemId: 'item-mor',
+            medicationName: 'Morphine 10 mg/mL',
+            unit: 'ampoule',
+            controlled: true,
+            stockLotId: 'lot-mor',
+            lotNumber: 'LOT-MOR-1',
+            heldQuantity: 2,
+          },
+        ],
+      }) as never,
+    );
+    const fixture = TestBed.createComponent(StockAdjustmentComponent);
+    document.body.appendChild(fixture.nativeElement);
+    const c = fixture.componentInstance;
+    c.selectedPharmacyId = 'ph-1';
+    c.loadQuarantine();
+    fixture.detectChanges();
+    c.openDestroy(c.quarantine()[0]);
+    fixture.detectChanges();
+    expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="destroy-confirm"]',
+      sent: svc.destroyQuarantined,
+    });
+    fixture.nativeElement.remove();
   });
 
   describe('QA D964: a transfer sends first expired, first out', () => {

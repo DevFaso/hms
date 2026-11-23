@@ -357,6 +357,84 @@ class ControlledDrugRegisterServiceTest {
         assertThat(ControlledDrugRegisterService.fillRef("RETURN ref QA-RET-001")).isNull();
     }
 
+    /**
+     * QA D3415 (r70): a controlled return goes to quarantine (RETURN then QUARANTINE, the stock balance unchanged)
+     * and its destruction moves only the quarantine; both read in French, with the quarantine balance.
+     */
+    @Test
+    void aQuarantinedReturnAndItsDestructionAreInTheRegister() throws Exception {
+        when(ledger.sumByItemAndTypeBefore(eq(List.of(morphine.getId())), any())).thenReturn(List.<Object[]>of(
+                new Object[] {morphine.getId(), StockTransactionType.RECEIPT, new BigDecimal("20")},
+                new Object[] {morphine.getId(), StockTransactionType.QUARANTINE, new BigDecimal("2")},
+                new Object[] {morphine.getId(), StockTransactionType.DESTRUCTION, new BigDecimal("1")}));
+        StockLot lot = StockLot.builder().inventoryItem(morphine).lotNumber("R70-MOR-01").build();
+        UUID dispenseId = UUID.randomUUID();
+        StockTransaction back = tx(StockTransactionType.RETURN, "1", "RETURN ref D-abcdef12", lot, 1);
+        back.setReferenceId(dispenseId);
+        StockTransaction aside = tx(StockTransactionType.QUARANTINE, "1", StockQuarantine.REASON_PREFIX + "INTACT",
+                lot, 2);
+        aside.setReferenceId(dispenseId);
+        aside.setWitnessedByUser(witness);
+        StockTransaction destroyed = tx(StockTransactionType.DESTRUCTION, "2",
+                QuarantineDestructionService.REASON_PREFIX + "incinéré", lot, 3);
+        destroyed.setWitnessedByUser(witness);
+        when(ledger.findRegisterRows(eq(List.of(morphine.getId())), any(), any(), any()))
+                .thenReturn(List.of(back, aside, destroyed));
+        Dispense dispense = new Dispense();
+        dispense.setId(dispenseId);
+        dispense.setPrescription(rx);
+        when(dispenses.findAllById(any())).thenReturn(List.of(dispense));
+
+        ControlledRegisterDrugDTO drug = service.register(pharmacy.getId(), null, from, to).drugs().get(0);
+
+        assertThat(drug.openingBalance()).isEqualByComparingTo("18");
+        assertThat(drug.entries()).extracting(e -> e.balanceAfter().stripTrailingZeros().toPlainString())
+                .containsExactly("19", "18", "18");
+        var quarantined = drug.entries().get(1);
+        assertThat(quarantined.patientName()).isEqualTo("Awa Sanou");
+        assertThat(quarantined.quarantineQuantity()).isEqualByComparingTo("1");
+        assertThat(quarantined.quarantineAfter()).isEqualByComparingTo("2");
+        assertThat(quarantined.reason()).isEqualTo("Mis en quarantaine, pas remis en vente (intact)");
+        var destruction = drug.entries().get(2);
+        assertThat(destruction.quantity()).isEqualByComparingTo("0");
+        assertThat(destruction.quarantineQuantity()).isEqualByComparingTo("-2");
+        assertThat(destruction.reason()).isEqualTo("Détruit : incinéré");
+        assertThat(drug.entries().get(0).quarantineQuantity()).isNull();
+        assertThat(drug.inQuarantine()).isEqualByComparingTo("0");
+
+        byte[] pdf = service.exportPdf(pharmacy.getId(), null, from, to);
+        try (PDDocument doc = PDDocument.load(pdf)) {
+            assertThat(new PDFTextStripper().getText(doc)).contains("Destruction").contains("Quarantaine");
+        }
+        // Review of #1285 (Rex): the export keeps the destroyed amount, from the quarantine.
+        String csv = new String(service.exportCsv(pharmacy.getId(), null, from, to),
+                java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(csv).contains("0 (quarantaine -2, puis 0)").contains("-1 (quarantaine +1, puis 2)");
+    }
+
+    @Test
+    void theQuarantineBalanceIsPrintedWhenUnitsWaitForDestruction() throws Exception {
+        when(ledger.sumByItemAndTypeBefore(eq(List.of(morphine.getId())), any())).thenReturn(List.<Object[]>of(
+                new Object[] {morphine.getId(), StockTransactionType.QUARANTINE, new BigDecimal("3")}));
+        when(ledger.findRegisterRows(eq(List.of(morphine.getId())), any(), any(), any())).thenReturn(List.of());
+
+        byte[] pdf = service.exportPdf(pharmacy.getId(), null, from, to);
+
+        try (PDDocument doc = PDDocument.load(pdf)) {
+            assertThat(new PDFTextStripper().getText(doc)).contains("En quarantaine en fin de période : 3");
+        }
+    }
+
+    @Test
+    void aCancelledFillNotPutBackOnSaleReadsInFrench() {
+        assertThat(ControlledDrugRegisterService.reasonText(Locale.FRENCH,
+                PreparedFillVoider.NOT_FOR_SALE_PREFIX + ": DAMAGED"))
+                .isEqualTo("Délivrance annulée, pas remise en vente");
+        assertThat(ControlledDrugRegisterService.reasonText(Locale.FRENCH, StockQuarantine.REASON_PREFIX + "ODD"))
+                .isEqualTo("Mis en quarantaine, pas remis en vente (ODD)");
+        assertThat(ControlledDrugRegisterService.quarantineReasonText(Locale.FRENCH, "RETURN ref X")).isNull();
+    }
+
     private void stubLedger() {
         when(ledger.sumByItemAndTypeBefore(eq(List.of(morphine.getId())), any())).thenReturn(List.of(
                 new Object[] {morphine.getId(), StockTransactionType.RECEIPT, new BigDecimal("100")},

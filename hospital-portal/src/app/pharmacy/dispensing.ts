@@ -31,6 +31,8 @@ import {
   StockLotResponse,
   READY_CANCEL_REASONS,
   ReadyCancelReason,
+  CANCEL_STOCK_CONDITIONS,
+  ReturnedStockCondition,
   QueueClaimFilter,
   WorkQueueClaim,
   StockWitnessCandidate,
@@ -38,6 +40,7 @@ import {
 import { AuthService } from '../auth/auth.service';
 import { PrintLabelService } from '../services/print-label.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { CountUnitPipe } from '../shared/pipes/count-unit.pipe';
 import { OfflineDispenseQueueService } from './offline-dispense-queue.service';
 import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
@@ -184,6 +187,7 @@ export function sameDispenseUnit(
   selector: 'app-dispensing',
   standalone: true,
   imports: [
+    CountUnitPipe,
     PatientSafetyHeaderComponent,
     SubmitGuardDirective,
     ServerTimePipe,
@@ -309,7 +313,12 @@ export class DispensingComponent implements OnInit, OnDestroy {
    */
   private readonly handOverDeferral = viewChild<BillingDeferralChoiceComponent>('handOverDeferral');
   private readonly oneStepDeferral = viewChild<BillingDeferralChoiceComponent>('oneStepDeferral');
-  cancelReason: ReadyCancelReason = 'NOT_COLLECTED';
+  /** QA D3403 (r70): no silent default; the reason and the stock's state are both said. */
+  cancelReason: ReadyCancelReason | null = null;
+  cancelCondition: ReturnedStockCondition | null = null;
+  readonly returnedStockConditions = CANCEL_STOCK_CONDITIONS;
+  /** Review of #1285: the witness of a controlled fill set aside or lost (never the actor). */
+  cancelReadyWitness: string | undefined = undefined;
 
   // G13 — work-queue claim ("being prepared by"). Advisory: it coordinates
   // pharmacists and never blocks a dispense. Off until the server says so.
@@ -1280,7 +1289,9 @@ export class DispensingComponent implements OnInit, OnDestroy {
 
   openCancelReady(rx: WorkQueuePrescription): void {
     this.closeForm();
-    this.cancelReason = 'NOT_COLLECTED';
+    this.cancelReason = null;
+    this.cancelCondition = null;
+    this.cancelReadyWitness = undefined;
     this.readyAction.set({ kind: 'cancel', rx });
   }
 
@@ -1321,12 +1332,44 @@ export class DispensingComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Review of #1285: a controlled fill that does not go back on sale is witnessed. */
+  cancelReadyNeedsWitness(): boolean {
+    const ready = this.readyAction()?.rx.readyForCollection;
+    return !!ready?.controlled && !!this.cancelCondition && this.cancelCondition !== 'INTACT';
+  }
+
   /** G15 AC-7: the stock goes back and the patient is told it is no longer ready. */
   confirmCancelReady(): void {
     const dispenseId = this.readyAction()?.rx.readyForCollection?.dispenseId;
     if (!dispenseId) return;
+    const ids = ['cancelReadyReason', 'cancelReadyCondition', 'cancelReadyWitness'];
+    const missing = [
+      ...(this.cancelReason ? [] : ['cancelReadyReason']),
+      ...(this.cancelCondition ? [] : ['cancelReadyCondition']),
+    ];
+    if (missing.length > 0 || !this.cancelReason || !this.cancelCondition) {
+      const message = this.translate.instant('PHARMACY.CANCEL_READY_CHOOSE');
+      refuseFields(this.host.nativeElement, missing, ids, message);
+      this.toast.error(message);
+      return;
+    }
+    // Review of #1285: « stock manquant ou endommagé » is never an intact bag back on sale.
+    if (this.cancelReason === 'STOCK_UNAVAILABLE' && this.cancelCondition === 'INTACT') {
+      const message = this.translate.instant('PHARMACY.CANCEL_READY_NOT_INTACT');
+      refuseFields(this.host.nativeElement, ['cancelReadyCondition'], ids, message);
+      this.toast.error(message);
+      return;
+    }
+    if (this.cancelReadyNeedsWitness() && !this.cancelReadyWitness) {
+      const message = this.translate.instant('PHARMACY.WITNESS_REQUIRED');
+      refuseFields(this.host.nativeElement, ['cancelReadyWitness'], ids, message);
+      this.toast.error(message);
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], ids, '');
     this.readyActionSaving.set(true);
-    this.svc.cancelReady(dispenseId, this.cancelReason).subscribe({
+    const witness = this.cancelReadyNeedsWitness() ? this.cancelReadyWitness : undefined;
+    this.svc.cancelReady(dispenseId, this.cancelReason, this.cancelCondition, witness).subscribe({
       next: () => this.afterReadyAction('PHARMACY.CANCEL_READY_SUCCESS'),
       error: (err) => this.readyActionFailed(err, 'PHARMACY.CANCEL_READY_FAILED'),
     });

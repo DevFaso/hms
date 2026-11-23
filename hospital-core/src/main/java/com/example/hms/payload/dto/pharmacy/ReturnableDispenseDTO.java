@@ -19,5 +19,7 @@ public record ReturnableDispenseDTO(
         BigDecimal quantityDispensed,
         BigDecimal returnableQuantity,
         String unit,
-        String lotNumber) {
+        String lotNumber,
+        /** QA D3409 (r70): the fill's lot, so the form takes it when the fill is chosen first. */
+        UUID stockLotId) {
 }

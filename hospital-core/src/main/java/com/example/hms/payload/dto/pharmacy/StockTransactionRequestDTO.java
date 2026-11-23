@@ -21,6 +21,8 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
+// Review of #1285 (QA D1300): a RETURN names its stock state at the edge, with the other missing fields.
+@com.example.hms.validation.ReturnStockStateRequired
 public class StockTransactionRequestDTO {
 
     @NotNull(message = "{stockTransaction.inventoryItemId.required}")
@@ -51,6 +53,13 @@ public class StockTransactionRequestDTO {
 
     /** QA D157: the colleague who witnessed a controlled-substance movement. */
     private UUID witnessedBy;
+
+    /**
+     * QA D3415 (r70): the state of a RETURN's units. Only INTACT goes back on sale; damaged, expired or contaminated
+     * units are quarantined, and a controlled drug that comes back is quarantined whatever its state. Left out on a
+     * RETURN: INTACT (the portal always says it).
+     */
+    private com.example.hms.enums.ReturnedStockCondition stockCondition;
 
     // ── FU-2 (P-06 backend): first-class RECEIPT fields, optional for other types ──
 

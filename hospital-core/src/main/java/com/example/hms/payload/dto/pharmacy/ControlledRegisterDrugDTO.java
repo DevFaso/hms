@@ -22,5 +22,7 @@ public record ControlledRegisterDrugDTO(
         BigDecimal openingBalance,
         BigDecimal closingBalance,
         BigDecimal quantityOnHand,
-        List<ControlledRegisterEntryDTO> entries) {
+        List<ControlledRegisterEntryDTO> entries,
+        /** QA D3415 (r70): units set aside at the end of the period, waiting to be destroyed (null when truncated). */
+        BigDecimal inQuarantine) {
 }

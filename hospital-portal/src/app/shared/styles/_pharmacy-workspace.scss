@@ -64,6 +64,10 @@
         color: #087568;
         border-radius: 12px;
         padding: 12px;
+        // QA D2682 (r70): the flex row shrank the icon tile, so the glyph was clipped at the left.
+        flex: none;
+        line-height: 1;
+        overflow: visible;
       }
       strong {
         display: block;
@@ -126,6 +130,13 @@
         outline: 2px solid #087568;
         outline-offset: 2px;
       }
+    }
+    // QA D2682 (r70): page-common places the search icon absolutely over an input padded for it;
+    // this flex box takes the padding away, so the icon sat on the placeholder. It sits in the row.
+    .search-bar > .search-icon {
+      position: static;
+      transform: none;
+      flex-shrink: 0;
     }
     .workspace-search {
       flex: 1 1 330px;

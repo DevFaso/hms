@@ -180,6 +180,8 @@ public class WorkQueuePrescriptionDTO implements com.example.hms.payload.dto.pre
         private String unit;
         /** When the one reminder SMS was sent; null before. */
         private LocalDateTime reminderSentAt;
+        /** Review of #1285: a controlled drug; cancelling it into quarantine or as a loss needs a witness. */
+        private boolean controlled;
     }
 
     @Getter
