@@ -71,6 +71,14 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'ImagingOrderController#recordExam',
     roles: ['ROLE_IMAGING_TECHNICIAN', 'ROLE_RADIOLOGIST', 'ROLE_DOCTOR'],
   },
+  /**
+   * QA D3450 (r70): an exam's pregnancy flag and body region in the imaging catalogue. Master data,
+   * set by the hospital's administrator or a radiologist in a role of their own, never a super-admin alone.
+   */
+  imagingCatalogueUpdate: {
+    endpoint: 'ImagingCatalogueController#update',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_RADIOLOGIST'],
+  },
   /** V316 + policy rule 3: key images on a study; the technician attaches to the study only. */
   imagingImageUpload: {
     endpoint: 'ImagingStudyImageController#upload',

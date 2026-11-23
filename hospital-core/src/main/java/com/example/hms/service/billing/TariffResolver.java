@@ -115,6 +115,32 @@ public class TariffResolver {
         }
     }
 
+    /**
+     * QA D3254 (r70, V361): the tariff of ONE named price-list item on {@code day}: the item an imaging order was
+     * picked from in the hospital's catalogue, so its line is priced whatever the order's wording. The same rules
+     * as a link lookup: the item is this hospital's and active, read under the charge's share lock, and only a
+     * version in force that day prices it; anything else is empty and the line is posted for the cashier.
+     */
+    public Optional<Tariff> resolveItem(UUID hospitalId, UUID itemId, LocalDate day) {
+        if (hospitalId == null || itemId == null || day == null) {
+            return Optional.empty();
+        }
+        PriceListItem item = itemRepository.findActiveByIdForCharge(itemId, hospitalId)
+            .filter(found -> hospitalId.equals(found.getHospitalId()))
+            .orElse(null);
+        if (item == null) {
+            return Optional.empty();
+        }
+        List<PriceListPrice> versions = priceRepository.findInForce(item.getId(), hospitalId, day);
+        if (versions == null) {
+            return Optional.empty();
+        }
+        return versions.stream()
+            .filter(version -> hospitalId.equals(version.getHospitalId()) && version.coversDay(day))
+            .findFirst()
+            .map(version -> new Tariff(item.getId(), version.getId(), item.getLabel(), version.getUnitPrice()));
+    }
+
     /** The business day of a server timestamp (written in the server's zone), or today when there is none. */
     public LocalDate businessDayOf(LocalDateTime serverTime) {
         if (serverTime == null) {
@@ -157,6 +183,18 @@ public class TariffResolver {
                 locked = true;
             }
             return resolver.resolve(hospitalId, type, rawKey, day);
+        }
+
+        /** QA D3254: the tariff of one named item (an imaging order's catalogue exam), under the same locks. */
+        public Optional<Tariff> findItem(UUID itemId) {
+            if (resolver == null || itemId == null) {
+                return Optional.empty();
+            }
+            if (!locked && hospitalId != null) {
+                resolver.lockForCheckout(hospitalId);
+                locked = true;
+            }
+            return resolver.resolveItem(hospitalId, itemId, day);
         }
 
         public LocalDate day() {

@@ -69,6 +69,11 @@ import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { localDateString, serverLocalDate } from '../shared/date-utils';
 import { ActivatedRoute } from '@angular/router';
 import { ImagingStudyViewerComponent } from './study-viewer/imaging-study-viewer.component';
+import { ImagingCatalogueComponent } from './catalogue/imaging-catalogue.component';
+import {
+  ImagingCatalogueExam,
+  ImagingCatalogueService,
+} from '../services/imaging-catalogue.service';
 import { catchError, forkJoin, map, of, Subscription } from 'rxjs';
 
 /** The cancellation reason's field (QA D1098), marked when it is refused. */
@@ -172,6 +177,7 @@ const ORDER_FIELD_IDS: Readonly<Record<string, string>> = {
   modality: 'img-modality',
   priority: 'img-priority',
   studyType: 'img-studyType',
+  catalogueItemId: 'img-catalogueExam',
   bodyRegion: 'img-bodyRegion',
   laterality: 'img-laterality',
   clinicalQuestion: 'img-clinicalQ',
@@ -190,6 +196,7 @@ const ORDER_FIELD_LABELS: Readonly<Record<string, string>> = {
   modality: 'IMAGING.MODALITY',
   priority: 'IMAGING.PRIORITY',
   studyType: 'IMAGING.STUDY_TYPE',
+  catalogueItemId: 'IMAGING_CATALOGUE.EXAM',
   bodyRegion: 'IMAGING.BODY_REGION',
   laterality: 'IMAGING.LATERALITY',
   clinicalQuestion: 'IMAGING.CLINICAL_QUESTION',
@@ -220,6 +227,7 @@ const ORDER_FIELD_LABELS: Readonly<Record<string, string>> = {
     ImagingExamRecordComponent,
     ImagingStudyViewerComponent,
     ImagingReadingContextComponent,
+    ImagingCatalogueComponent,
     MeasurePipe,
     PrintIdentityComponent,
   ],
@@ -229,6 +237,8 @@ const ORDER_FIELD_LABELS: Readonly<Record<string, string>> = {
 })
 export class ImagingComponent implements OnInit {
   private readonly imagingService = inject(ImagingService);
+  /** QA D3450 / D3254 (r70): the catalogue the order's exam is picked from. */
+  private readonly catalogueService = inject(ImagingCatalogueService);
   /** r63: the « À signer » list and the order's reading context. */
   private readonly readingService = inject(ImagingReadingService);
   private readonly authorship = inject(AuthorshipService);
@@ -281,6 +291,17 @@ export class ImagingComponent implements OnInit {
   saving = signal(false);
   editId = '';
   form: ImagingForm = this.emptyForm();
+  /**
+   * QA D3450 / D3254 (r70): the acting hospital's imaging catalogue, read each time the order form
+   * opens. An exam picked here names the order (its name, its modality) and prices it; « hors
+   * catalogue » keeps the free-text field, for an exam the catalogue does not hold yet.
+   */
+  readonly catalogue = signal<ImagingCatalogueExam[]>([]);
+  readonly catalogueFailed = signal(false);
+  /** The hospital admin and the radiologist decide, per exam, whether it may reveal a pregnancy. */
+  readonly canEditCatalogue = this.roleContext.hasAnyActiveRole(
+    actionRoles('imagingCatalogueUpdate'),
+  );
   /** QA D1922: the earliest exam day the form offers (the server refuses a past one). */
   readonly today = localDateString();
 
@@ -328,7 +349,7 @@ export class ImagingComponent implements OnInit {
   deleting = signal(false);
 
   /* ── Results state ── */
-  view = signal<'orders' | 'results'>('orders');
+  view = signal<'orders' | 'results' | 'catalogue'>('orders');
   reports = signal<ImagingReportResponse[]>([]);
   reportsLoading = signal(false);
   reportStatusFilter = signal<ImagingReportStatus>('FINAL');
@@ -708,6 +729,49 @@ export class ImagingComponent implements OnInit {
     });
   }
 
+  /** Reads the catalogue for the order form; a failed read leaves the free-text field usable. */
+  private loadCatalogue(): void {
+    this.catalogueFailed.set(false);
+    this.catalogueService.list().subscribe({
+      next: (exams) => this.catalogue.set(exams ?? []),
+      error: () => {
+        this.catalogue.set([]);
+        this.catalogueFailed.set(true);
+      },
+    });
+  }
+
+  /** The exam picked in the form, or undefined for a free-text order. */
+  pickedExam(): ImagingCatalogueExam | undefined {
+    const id = this.form.catalogueItemId;
+    return id ? this.catalogue().find((exam) => exam.id === id) : undefined;
+  }
+
+  /**
+   * QA D3450 / D3254: an exam picked from the catalogue names the order: its name, its modality when
+   * it has one, and its body region when the form's is empty. « Hors catalogue » ('') keeps what
+   * was typed.
+   */
+  pickCatalogueExam(id: string): void {
+    const exam = this.catalogue().find((candidate) => candidate.id === id);
+    this.form.catalogueItemId = exam ? exam.id : undefined;
+    if (!exam) return;
+    this.form.studyType = exam.label.slice(0, 150);
+    if (exam.modality) this.form.modality = exam.modality;
+    if (exam.bodyRegion && !(this.form.bodyRegion ?? '').trim()) {
+      this.form.bodyRegion = exam.bodyRegion;
+    }
+  }
+
+  /** The hint under the exam picker: what the catalogue is, or why it is not offered. */
+  catalogueHintKey(): string {
+    if (this.catalogueFailed()) return 'IMAGING_CATALOGUE.ORDER_LOAD_FAILED';
+    if (!this.catalogue().length) return 'IMAGING_CATALOGUE.EMPTY_HINT';
+    return this.form.catalogueItemId
+      ? 'IMAGING_CATALOGUE.PICK_HINT'
+      : 'IMAGING_CATALOGUE.FREE_TEXT_HINT';
+  }
+
   emptyForm(): ImagingForm {
     return {
       patientId: '',
@@ -818,15 +882,18 @@ export class ImagingComponent implements OnInit {
       const h = this.hospitals();
       if (h.length === 1) this.form.hospitalId = h[0].id;
     }
+    this.loadCatalogue();
     this.showModal.set(true);
   }
 
   openEdit(o: ImagingOrderResponse): void {
+    this.loadCatalogue();
     this.form = {
       patientId: o.patientId,
       hospitalId: o.hospitalId ?? '',
       modality: o.modality ?? 'XRAY',
       studyType: o.studyType ?? '',
+      catalogueItemId: o.catalogueItemId ?? undefined,
       bodyRegion: o.bodyRegion ?? '',
       priority: o.priority ?? 'ROUTINE',
       laterality: (o.laterality as ImagingLaterality) || '',
@@ -1007,6 +1074,9 @@ export class ImagingComponent implements OnInit {
     };
     const payload: ImagingOrderRequest = {
       ...this.form,
+      // QA D3450 / D3254: only an exam the catalogue still offers is named. An order whose exam was
+      // withdrawn since is sent without it, and the server keeps the exam it was placed with.
+      catalogueItemId: this.pickedExam()?.id,
       laterality: this.form.laterality || undefined,
       scheduledDate: (this.form.scheduledDate ?? '').trim() || undefined,
     };
@@ -1341,7 +1411,7 @@ export class ImagingComponent implements OnInit {
 
   /* ── Results ── */
 
-  setView(view: 'orders' | 'results'): void {
+  setView(view: 'orders' | 'results' | 'catalogue'): void {
     this.view.set(view);
     if (view === 'results' && this.reports().length === 0) {
       this.loadReports();

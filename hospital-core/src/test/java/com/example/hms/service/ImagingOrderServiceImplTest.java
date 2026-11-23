@@ -191,6 +191,49 @@ class ImagingOrderServiceImplTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("QA D3450 / D3254: a catalogue exam's modality and body region feed the duplicate check, not what the form displayed")
+    void aCatalogueExamFeedsTheDuplicateCheck() {
+        UUID examId = UUID.randomUUID();
+        // The form displayed an X-ray with no region; the catalogue exam is an ultrasound of the pelvis.
+        ImagingOrderRequestDTO request = ImagingOrderRequestDTO.builder().patientId(patientId).hospitalId(hospitalId)
+            .modality(ImagingModality.XRAY).studyType("affiché").catalogueItemId(examId)
+            .priority(ImagingOrderPriority.ROUTINE).build();
+        ImagingOrder order = new ImagingOrder();
+        order.setPatient(patient);
+        order.setHospital(hospital);
+        order.setModality(ImagingModality.XRAY);
+        order.setStudyType("affiché");
+        com.example.hms.service.imaging.ImagingCatalogueService catalogue =
+            mock(com.example.hms.service.imaging.ImagingCatalogueService.class);
+        org.mockito.Mockito.doAnswer(call -> {
+            ImagingOrder placed = call.getArgument(0);
+            placed.setModality(ImagingModality.ULTRASOUND);
+            placed.setStudyType("Échographie pelvienne");
+            placed.setBodyRegion("Pelvis");
+            return null;
+        }).when(catalogue).applyTo(order, examId, hospitalId);
+        imagingOrderService.setImagingCatalogueService(catalogue);
+        ImagingOrder duplicate = new ImagingOrder();
+        duplicate.setId(UUID.randomUUID());
+        duplicate.setOrderedAt(LocalDateTime.now().minusDays(1));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(imagingOrderMapper.toEntity(request, patient, hospital)).thenReturn(order);
+        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(hospitalId),
+            eq(ImagingModality.ULTRASOUND), eq("Pelvis"), any(LocalDateTime.class))).thenReturn(List.of(duplicate));
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+
+        UUID orderingUserId = UUID.randomUUID();
+        signer(orderingUserId, "Ada", "Order");
+        imagingOrderService.createOrder(request, orderingUserId);
+
+        assertThat(order.getDuplicateOfRecentOrder()).isTrue();
+        assertThat(order.getDuplicateReferenceOrderId()).isEqualTo(duplicate.getId());
+        verify(imagingOrderRepository, never())
+            .findPotentialDuplicates(any(), any(), eq(ImagingModality.XRAY), any(), any());
+    }
+
+    @Test
     void createOrderSetsOrderingUserAndDuplicateMetadata() {
         UUID orderingUserId = UUID.randomUUID();
         ImagingOrderRequestDTO request = ImagingOrderRequestDTO.builder()
@@ -207,6 +250,8 @@ class ImagingOrderServiceImplTest {
         order.setHospital(hospital);
         order.setModality(ImagingModality.CT);
         order.setStudyType("CT Chest with contrast");
+        // The mapper copies the request's body region onto the order; the duplicate rule reads the order.
+        order.setBodyRegion(BODY_REGION_CHEST);
         order.setPriority(ImagingOrderPriority.ROUTINE);
         order.setStatus(ImagingOrderStatus.DRAFT);
 

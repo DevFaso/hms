@@ -76,6 +76,8 @@ public class PatientImagingPortalService {
     private final com.example.hms.repository.EncounterRepository encounterRepository;
     /** QA D2730: what a proxy may read of the grantor's imaging. */
     private final com.example.hms.service.recordaccess.ProxyRecordFilter proxyRecordFilter;
+    /** QA D3450: whether an order's catalogue exam may reveal a pregnancy. */
+    private final ImagingCatalogueService imagingCatalogueService;
 
     /** How the patient was reached, for the audit row. */
     public enum Reader { PATIENT, PROXY }
@@ -98,6 +100,10 @@ public class PatientImagingPortalService {
 
         List<PatientImagingStudyDTO> studies = orders.stream()
             .filter(order -> released.containsKey(order.getId()))
+            // QA D3450 (review): what a proxy would read WITH the study is read too. A report or a caption that
+            // names a pregnancy keeps the whole study from the proxy, whatever the order was called.
+            .filter(order -> reader != Reader.PROXY || !textRevealsPregnancy(order, released.get(order.getId()),
+                images.getOrDefault(order.getId(), List.of())))
             .map(order -> toStudy(order, released.get(order.getId()), images.getOrDefault(order.getId(), List.of())))
             .toList();
         audit(patientId, null, null, readDescription(patientId, reader, studies.size()));
@@ -115,9 +121,14 @@ public class PatientImagingPortalService {
                 || shownTo(reader, List.of(order)).isEmpty()) {
             throw new ResourceNotFoundException(MSG_IMAGE_NOT_FOUND, imageId);
         }
-        boolean studyReleased = reportRepository.findByImagingOrder_IdOrderByReportVersionDesc(order.getId())
-            .stream().anyMatch(ImagingReport::isReleasedToPatient);
-        if (!ImagingStudyImageService.released(image, studyReleased)) {
+        List<ImagingReport> releasedReports = reportRepository.findByImagingOrder_IdOrderByReportVersionDesc(order.getId())
+            .stream().filter(ImagingReport::isReleasedToPatient).toList();
+        if (!ImagingStudyImageService.released(image, !releasedReports.isEmpty())) {
+            throw new ResourceNotFoundException(MSG_IMAGE_NOT_FOUND, imageId);
+        }
+        // QA D3450 (review): an image of a study whose report or captions name a pregnancy is not a proxy's either.
+        if (reader == Reader.PROXY && textRevealsPregnancy(order, releasedReports,
+                imageRepository.findByImagingOrder_IdInOrderByCreatedAtAsc(List.of(order.getId())))) {
             throw new ResourceNotFoundException(MSG_IMAGE_NOT_FOUND, imageId);
         }
         StoredObject object = fileUploadService.openStoredFile(image.getStorageKey(),
@@ -132,9 +143,12 @@ public class PatientImagingPortalService {
      * ({@code ProxyRecordFilter}). An order names its visit by id; a visit
      * that cannot be read is treated as sensitive (fails closed); an order that
      * names no visit carries no category of its own and is judged by the next
-     * rule only. QA D3154: whatever its visit, an obstetric, pelvic or
-     * gynaecological study, which may reveal a pregnancy, never reaches a proxy
-     * ({@link PregnancyRevealingStudyRule}, provisional). The patient reads every study.
+     * rule only. QA D3154, D3450: whatever its visit, a study that may reveal
+     * a pregnancy never reaches a proxy: one whose catalogue exam is flagged,
+     * one whose words name an obstetric, pelvic or gynaecological study, and,
+     * until its exam is cleared, any ultrasound or abdominal / pelvic study of
+     * a patient who may be pregnant ({@link PregnancyRevealingStudyRule},
+     * provisional). The patient reads every study.
      */
     private List<ImagingOrder> shownTo(Reader reader, List<ImagingOrder> orders) {
         if (reader != Reader.PROXY || orders.isEmpty()) {
@@ -147,10 +161,45 @@ public class PatientImagingPortalService {
                 .filter(proxyRecordFilter::admits)
                 .map(com.example.hms.model.Encounter::getId)
                 .collect(Collectors.toSet());
+        // QA D3450: the catalogue exam's flag first, then the order's words, then the fail-closed band.
+        Map<UUID, PregnancyRevealingStudyRule.ExamDecision> pregnancyFlags =
+            imagingCatalogueService.pregnancyFlagsOf(orders);
         return orders.stream()
-            .filter(o -> !PregnancyRevealingStudyRule.mayRevealPregnancy(o))
+            .filter(o -> proxyRecordFilter.admitsImagingStudy(
+                PregnancyRevealingStudyRule.judge(o, pregnancyFlags.get(o.getId()), o.getPatient()),
+                o.getPatient(), o.getHospital()))
             .filter(o -> o.getEncounterId() == null || admittedVisits.contains(o.getEncounterId()))
             .toList();
+    }
+
+    /**
+     * QA D3450 (review of #1290): whether what a proxy would read with a study names a pregnancy: a released
+     * report's own text (title, region, technique, findings, impression, recommendations, comparison) or the
+     * caption of an image shown with it. Read by the rule's words ({@link PregnancyRevealingStudyRule}), whoever
+     * the patient is: an order called « Échographie abdominale » whose report says « grossesse évolutive de 9 SA »
+     * is an obstetric study. A wrong match only hides the study from the caregiver.
+     */
+    private static boolean textRevealsPregnancy(ImagingOrder order, List<ImagingReport> releasedReports,
+                                                List<ImagingStudyImage> images) {
+        boolean inAReport = releasedReports != null && releasedReports.stream().anyMatch(report ->
+            PregnancyRevealingStudyRule.namesPregnancyStudy(report.getReportTitle(),
+                regionTheAuthorTyped(order, report), report.getTechnique(), report.getFindings(),
+                report.getImpression(), report.getRecommendations(), report.getComparisonStudies()));
+        return inAReport || (images != null && images.stream()
+            .filter(image -> !image.isWithdrawn() && ImagingStudyImageService.released(image, true))
+            .anyMatch(image -> PregnancyRevealingStudyRule.namesPregnancyStudy(image.getCaption())));
+    }
+
+    /**
+     * The report's body region when its author typed one of their own. A report that carries its order's region
+     * (inherited, QA D3000) says nothing new: the rule already judged that region with the order, and a cleared
+     * exam's own region is not something typed about one patient.
+     */
+    private static String regionTheAuthorTyped(ImagingOrder order, ImagingReport report) {
+        String region = ImagingReportMapper.studyBodyRegionOf(report);
+        String ordered = order == null ? null : order.getBodyRegion();
+        boolean theOrders = region != null && ordered != null && region.trim().equalsIgnoreCase(ordered.trim());
+        return theOrders ? null : region;
     }
 
     private PatientImagingStudyDTO toStudy(ImagingOrder order, List<ImagingReport> releasedReports,

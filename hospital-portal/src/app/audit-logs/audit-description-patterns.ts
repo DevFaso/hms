@@ -1970,6 +1970,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     key: 'AUDIT.DESC.IMAGING_REPORTING_SETTINGS_CHANGED',
     re: /^Imaging reporting settings changed$/,
   },
+  // QA D3450 (r70, V361): an exam of the imaging catalogue changed (its pregnancy flag or body region; the
+  // item is the row's resource, the new value is in the details).
+  {
+    key: 'AUDIT.DESC.IMAGING_CATALOGUE_EXAM_CHANGED',
+    re: /^Imaging catalogue exam changed$/,
+  },
   // Policy rule 3 (V346): an exam record written (what changed is in the details; never the free text).
   {
     key: 'AUDIT.DESC.IMAGING_EXAM_RECORD_UPDATED',

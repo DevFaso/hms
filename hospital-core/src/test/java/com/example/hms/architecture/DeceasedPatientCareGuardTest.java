@@ -235,6 +235,8 @@ class DeceasedPatientCareGuardTest {
         Map.entry("EmpiProbabilistic", NOT_CARE), Map.entry("FeatureFlag", NOT_CARE), Map.entry("FrontendAudit", NOT_CARE),
         Map.entry("Hospital", NOT_CARE), Map.entry("HospitalRecordAccessPosture", NOT_CARE),
         Map.entry("HospitalPacsSettings", NOT_CARE), Map.entry("HospitalImagingReportingSettings", NOT_CARE),
+        // QA D3450 (r70, V361): an exam of the imaging catalogue and its pregnancy flag are master data, no patient.
+        Map.entry("ImagingCatalogue", NOT_CARE),
         // V356: a hospital's sign-off of its provisional rule sets is governance, about no patient.
         Map.entry("HospitalClinicalRules", NOT_CARE),
         Map.entry("InBasket", NOT_CARE),

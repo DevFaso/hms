@@ -922,7 +922,9 @@ export type DisclosureCategory =
   | 'SHARED_WITH_PROVIDER'
   | 'INSURANCE'
   | 'COPY_RELEASED'
-  | 'IDENTITY_CHANGE';
+  | 'IDENTITY_CHANGE'
+  /** QA D3451 (r70): a clinician released one of the patient's results to a parent or guardian. */
+  | 'RELEASED_TO_FAMILY';
 
 export interface AccessLogEntry {
   id: string;
@@ -937,6 +939,12 @@ export interface AccessLogEntry {
   timestamp: string;
   category: DisclosureCategory | null;
   externalDisclosure: boolean;
+  /** QA D3451 (r70): on a result released to the family, who received it; absent on other rows. */
+  recipientName?: string | null;
+  /** How the recipient is related to the patient (PARENT, LEGAL_GUARDIAN). */
+  recipientRelationship?: string | null;
+  /** The category of the released result (HIV), never its value. */
+  resultCategory?: string | null;
 }
 
 export interface DisclosureAccounting {
