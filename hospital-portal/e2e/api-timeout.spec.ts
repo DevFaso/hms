@@ -416,3 +416,80 @@ test('terminal refresh 410 ends the legacy session and opens login', async ({ pa
   expect(await page.evaluate(() => localStorage.getItem('auth_token'))).toBeNull();
   expect(refreshCalls).toBe(1);
 });
+
+for (const resourceConflict of [false, true]) {
+  test(`only a genuine invoice conflict offers a supplementary invoice (${resourceConflict})`, async ({
+    page,
+    baseURL,
+  }) => {
+    await signInAs(page, 'ROLE_SUPER_ADMIN', baseURL!);
+    await page.addInitScript(() => localStorage.setItem('lang', 'en'));
+    const patientId = '00000000-0000-0000-0000-00000000ab12';
+    await page.route('**/api/patients/search**', (route) =>
+      route.fulfill({
+        json: [
+          {
+            id: patientId,
+            firstName: 'Test',
+            lastName: 'Patient',
+            active: true,
+          },
+        ],
+      }),
+    );
+    let writes = 0;
+    let refreshes = 0;
+    await page.route('**/api/billing-invoices**', async (route) => {
+      if (
+        route.request().method() === 'POST' &&
+        new URL(route.request().url()).pathname.endsWith('/billing-invoices')
+      ) {
+        writes++;
+        expect(route.request().postDataJSON().supplementary).not.toBe(true);
+        await route.fulfill(
+          writes === 1
+            ? { status: 401, json: { message: 'Expired access token' } }
+            : { status: 409, json: { message: 'Existing invoice for this visit' } },
+        );
+      } else if (route.request().url().includes('/summary')) {
+        await route.fulfill({
+          json: { total: 0, paid: 0, outstanding: 0, overdue: 0, totalRevenue: 0, balance: 0 },
+        });
+      } else {
+        await route.fulfill({
+          json: { content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 },
+        });
+      }
+    });
+    const payload = Buffer.from(
+      JSON.stringify({ sub: 'layout-guard', roles: ['ROLE_SUPER_ADMIN'], exp: 9999999999 }),
+    ).toString('base64url');
+    await page.route('**/api/auth/token/refresh', async (route) => {
+      refreshes++;
+      await route.fulfill(
+        resourceConflict
+          ? { json: { accessToken: `eyJhbGciOiJIUzI1NiJ9.${payload}.refreshed-signature` } }
+          : { status: 409, json: { message: 'Refresh superseded by another tab' } },
+      );
+    });
+    await page.goto('/billing');
+    await page.getByRole('button').filter({ hasText: en.BILLING.NEW_INVOICE }).click();
+    const form = page.locator('[aria-labelledby="bill-form-title"]');
+    await form.locator('#bill-patient').fill('Test');
+    await page.getByRole('option').filter({ hasText: 'Test Patient' }).click();
+    await form.locator('.modal-actions .btn-primary').click();
+    const confirmation = page.getByText(en.BILLING.SUPPLEMENTARY_CONFIRM, { exact: true });
+    if (resourceConflict) {
+      await expect(confirmation).toBeVisible();
+      expect(writes).toBe(2);
+      expect(refreshes).toBe(1);
+    } else {
+      await expect.poll(() => refreshes, { timeout: 12000 }).toBe(5);
+      await expect(form.locator('.modal-actions .btn-primary')).toBeEnabled();
+      await expect(confirmation).toHaveCount(0);
+      expect(writes).toBe(1);
+      await expect(page).toHaveURL(/\/billing(?:[?#]|$)/);
+      expect(await page.evaluate(() => localStorage.getItem('auth_token'))).not.toBeNull();
+    }
+  });
+}

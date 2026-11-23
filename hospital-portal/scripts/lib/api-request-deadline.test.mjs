@@ -13,6 +13,7 @@ const {
   API_TIMEOUT_PROFILE,
   API_TIMEOUT_BUDGETS,
   isRefreshRejection,
+  refreshFailureForCaller,
   timeoutNoticeMethod,
 } = await import('../../src/app/core/api-request-timeout.ts');
 
@@ -162,7 +163,9 @@ test('only an explicit refresh rejection ends a session; session protocol POSTs 
   );
   const auth = read('src/app/interceptors/error.interceptor.ts');
   assert.match(auth, /if \(isRefreshRejection\(error\)\)/);
-  assert.match(auth, /refreshDone\$\.next\(\{ error \}\)/);
+  assert.match(auth, /const callerError = refreshFailureForCaller\(error\)/);
+  assert.match(auth, /refreshDone\$\.next\(\{ error: callerError \}\)/);
+  assert.match(auth, /return throwError\(\(\) => callerError\)/);
   assert.equal(
     (
       auth.match(
@@ -171,6 +174,21 @@ test('only an explicit refresh rejection ends a session; session protocol POSTs 
     ).length,
     2,
   );
+});
+
+test('refresh protocol errors cannot be interpreted as invoice or other resource responses', () => {
+  for (const status of [0, 404, 408, 409, 422, 429, 500, 502, 503, 504]) {
+    const error = new HttpErrorResponse({ status, error: { message: 'protocol-only' } });
+    const failure = refreshFailureForCaller(error);
+    assert.equal(failure.status, 503);
+    assert.deepEqual(failure.error, { code: 'SESSION_REFRESH_UNAVAILABLE' });
+  }
+  for (const status of [400, 401, 403, 410]) {
+    const error = new HttpErrorResponse({ status });
+    assert.equal(refreshFailureForCaller(error), error);
+  }
+  const timeout = new Error('timeout');
+  assert.equal(refreshFailureForCaller(timeout), timeout);
 });
 
 test('timeout notices are scoped to the session and billing callbacks to the latest read', () => {

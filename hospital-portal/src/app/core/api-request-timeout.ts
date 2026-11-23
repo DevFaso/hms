@@ -41,6 +41,17 @@ export function isRefreshRejection(error: unknown): boolean {
   return error instanceof HttpErrorResponse && [400, 401, 403, 410].includes(error.status);
 }
 
+/** Refresh protocol failures must never masquerade as resource conflicts or validation errors. */
+export function refreshFailureForCaller(error: unknown): unknown {
+  if (!(error instanceof HttpErrorResponse) || isRefreshRejection(error)) return error;
+  return new HttpErrorResponse({
+    status: 503,
+    statusText: 'Service Unavailable',
+    url: error.url ?? undefined,
+    error: { code: 'SESSION_REFRESH_UNAVAILABLE' },
+  });
+}
+
 export function isSignInRequest(req: HttpRequest<unknown>): boolean {
   return /(?:^|\/)auth\/(?:login|mfa\/verify)\/?(?:[?#]|$)/i.test(req.url);
 }

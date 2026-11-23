@@ -1,4 +1,8 @@
-import { API_REQUEST_TIMEOUT_MS, isRefreshRejection } from '../core/api-request-timeout';
+import {
+  API_REQUEST_TIMEOUT_MS,
+  isRefreshRejection,
+  refreshFailureForCaller,
+} from '../core/api-request-timeout';
 import {
   HttpClient,
   HttpInterceptorFn,
@@ -354,13 +358,14 @@ function tryRefreshAndRetry(
       catchError((error) => {
         refreshPending = false;
         isRefreshing = false;
-        refreshDone$.next({ error });
+        const callerError = refreshFailureForCaller(error);
+        refreshDone$.next({ error: callerError });
         refreshDone$.next(null);
         if (isRefreshRejection(error)) {
           auth.logout();
           void router.navigate(['/login']);
         }
-        return throwError(() => error);
+        return throwError(() => callerError);
       }),
       finalize(() => {
         // Only explicit logout/teardown completes without a refresh result.

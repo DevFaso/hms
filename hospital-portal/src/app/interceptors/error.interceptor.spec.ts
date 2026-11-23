@@ -193,7 +193,7 @@ describe('errorInterceptor', () => {
   }));
 
   for (const status of [0, 500, 502, 503, 504]) {
-    it(`a refresh transport failure (${status}) reaches every waiter unchanged without signing out`, () => {
+    it(`a refresh transport failure (${status}) reaches every waiter as session unavailability without signing out`, () => {
       auth.getRefreshToken.and.returnValue('r1');
       const refresh = new Subject<{ accessToken: string; refreshToken: string }>();
       auth.refreshTokenRequest.and.returnValue(refresh);
@@ -204,12 +204,43 @@ describe('errorInterceptor', () => {
       }
       const failure = new HttpErrorResponse({ status, error: { code: 'REQUEST_TIMEOUT' } });
       refresh.error(failure);
-      expect(errors).toEqual([failure, failure]);
+      expect(errors.length).toBe(2);
+      expect(errors[0]).toBe(errors[1]);
+      expect((errors[0] as HttpErrorResponse).status).toBe(503);
+      expect((errors[0] as HttpErrorResponse).error).toEqual({
+        code: 'SESSION_REFRESH_UNAVAILABLE',
+      });
       expect(auth.logout).not.toHaveBeenCalled();
       expect(router.navigate).not.toHaveBeenCalled();
       expect(auth.setToken).not.toHaveBeenCalled();
     });
   }
+
+  it('an exhausted refresh 409 never asks either invoice caller to bypass the duplicate guard', fakeAsync(() => {
+    auth.getRefreshToken.and.returnValue('r1');
+    auth.refreshTokenRequest.and.returnValue(
+      defer(() => throwError(() => new HttpErrorResponse({ status: 409 }))),
+    );
+    const errors: HttpErrorResponse[] = [];
+    for (const url of ['/billing-invoices', '/billing-invoices/queued']) {
+      http.post(url, { supplementary: false }).subscribe({ error: (error) => errors.push(error) });
+      httpMock.expectOne(url).flush(null, { status: 401, statusText: 'Unauthorized' });
+    }
+    tick(
+      (REFRESH_SUPERSEDED_DELAY_MS *
+        REFRESH_SUPERSEDED_RETRIES *
+        (REFRESH_SUPERSEDED_RETRIES + 1)) /
+        2,
+    );
+    expect(errors.length).toBe(2);
+    for (const error of errors) {
+      expect(error.status).toBe(503);
+      expect(error.error).toEqual({ code: 'SESSION_REFRESH_UNAVAILABLE' });
+    }
+    httpMock.expectNone('/billing-invoices');
+    expect(auth.logout).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+  }));
 
   for (const status of [400, 403, 410]) {
     it(`a real refresh rejection (${status}) still ends the session`, () => {
@@ -443,7 +474,8 @@ describe('errorInterceptor', () => {
       );
 
       expect(calls).toBe(REFRESH_SUPERSEDED_RETRIES + 1);
-      expect(error?.status).toBe(409);
+      expect(error?.status).toBe(503);
+      expect(error?.error).toEqual({ code: 'SESSION_REFRESH_UNAVAILABLE' });
       expect(auth.logout).not.toHaveBeenCalled();
       expect(router.navigate).not.toHaveBeenCalled();
     }));
