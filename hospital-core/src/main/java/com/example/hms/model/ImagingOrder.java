@@ -77,6 +77,19 @@ public class ImagingOrder extends BaseEntity implements TenantScoped {
     @Column(name = "study_type", nullable = false, length = 150)
     private String studyType;
 
+    /**
+     * QA D3450 / D3254 (r70, V361): the exam of the hospital's imaging catalogue (a price-list item of the IMAGING
+     * category) this order was picked from; null for an order typed in free text. The order is priced by this
+     * item, and a family proxy's read is decided by the item's pregnancy flag. Set only by
+     * {@code ImagingCatalogueService}, at the order's own hospital.
+     */
+    @Column(name = "catalogue_item_id")
+    private UUID catalogueItemId;
+
+    /** The catalogue item's code when the order was placed (a copy, for reading). */
+    @Column(name = "catalogue_code", length = 40)
+    private String catalogueCode;
+
     @Column(name = "body_region", length = 150)
     private String bodyRegion;
 

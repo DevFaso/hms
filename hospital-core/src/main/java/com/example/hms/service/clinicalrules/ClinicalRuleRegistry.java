@@ -42,8 +42,19 @@ public final class ClinicalRuleRegistry {
     private static final String DATE_2026_11_15 = "2026-11-15.1";
     private static final String DATE_2026_11_20 = "2026-11-20.1";
     private static final String DATE_2026_11_21 = "2026-11-21.1";
+    /** QA r70, first build of the day: the child paracetamol default (D3306), maternal pages to acknowledge (D3304). */
     private static final String DATE_2026_11_22 = "2026-11-22.1";
-    /** The two rule sets of 2026-11-22 as amended by the review of their first build, the same day. */
+    /**
+     * The rule sets of 2026-11-22 as amended by the review of their first build, the same day (.2).
+     *
+     * <p>QA r70 (D3450, D3301): the imaging rule's catalogue flag and fail-closed band; who a renewal is announced to.
+     * Review of #1290: the report and captions a proxy would read, a clearance only under the exam's current
+     * name, an unknown body part and an implausible age held back; a prescriber who may no longer renew is covered.
+     *
+     * <p>QA r70 (D3351, C5), review of #1291: every positive screen asks the biologist and an emergency on a plain
+     * crossmatch owes the crossmatch afterwards; SMS after the commit, the results already waiting never texted
+     * about, an incident closed when its result is amended or no longer critical.
+     */
     private static final String DATE_2026_11_22_REVIEWED = "2026-11-22.2";
 
     private static final List<ClinicalRuleSet> ALL = List.of(
@@ -105,8 +116,8 @@ public final class ClinicalRuleRegistry {
             "service.imaging.ImagingRoleScope", IMAGING_EXAM_RECORD),
         rule(ClinicalRuleSetKey.NON_PHYSICIAN_ULTRASOUND, DATE_2026_11_20,
             "service.imaging.ImagingReportingSettingsService", IMAGING_EXAM_RECORD),
-        rule(ClinicalRuleSetKey.PRESCRIPTION_RENEWAL, DATE_2026_11_20,
-            "service.impl.RefillApprovalServiceImpl"),
+        rule(ClinicalRuleSetKey.PRESCRIPTION_RENEWAL, DATE_2026_11_22_REVIEWED,
+            "service.impl.RefillApprovalServiceImpl", "service.pharmacy.RenewalAlertRouting"),
         rule(ClinicalRuleSetKey.DEFERRED_BILLING, DATE_2026_11_20,
             "service.pharmacy.DispenseBillingDeferralService"),
         rule(ClinicalRuleSetKey.CONSULTATION_FEE, DATE_2026_11_20,
@@ -126,7 +137,7 @@ public final class ClinicalRuleRegistry {
             MEWS_SERVICE, MEWS_RULES),
         rule(ClinicalRuleSetKey.TAKE_HOME_ORDER_WINDOW, DATE_2026_11_21,
             "service.DischargeTakeHomeMedicines"),
-        rule(ClinicalRuleSetKey.PREGNANCY_REVEALING_IMAGING, DATE_2026_11_21,
+        rule(ClinicalRuleSetKey.PREGNANCY_REVEALING_IMAGING, DATE_2026_11_22_REVIEWED,
             "service.imaging.PregnancyRevealingStudyRule"),
         rule(ClinicalRuleSetKey.LAB_DUPLICATE_WINDOW, DATE_2026_11_21,
             "service.lab.LabOrderDuplicateCheck"),

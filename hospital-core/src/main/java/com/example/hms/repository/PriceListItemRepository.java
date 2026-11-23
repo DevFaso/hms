@@ -116,4 +116,24 @@ public interface PriceListItemRepository extends JpaRepository<PriceListItem, UU
         """)
     List<PriceListItem> lockByHospitalIdAndCodes(@Param("hospitalId") UUID hospitalId,
                                                  @Param("codes") java.util.Collection<String> codes);
+
+    /**
+     * QA D3450 / D3254 (r70, V361): the hospital's imaging catalogue: its active price-list items of the IMAGING
+     * category, by label. One hospital, always named.
+     */
+    @Query("""
+        SELECT i FROM PriceListItem i
+        WHERE i.hospitalId = :hospitalId AND i.active = true
+          AND i.category = com.example.hms.enums.PriceListCategory.IMAGING
+        ORDER BY i.label, i.code
+        """)
+    List<PriceListItem> findActiveImagingCatalogue(@Param("hospitalId") UUID hospitalId);
+
+    /**
+     * QA D3254 (r70): the catalogue item an imaging order was picked from, to price its line: the item itself, at
+     * its own hospital, active, read under the share lock every charge takes ({@link #findActiveByLinkForCharge}).
+     */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("SELECT i FROM PriceListItem i WHERE i.id = :id AND i.hospitalId = :hospitalId AND i.active = true")
+    Optional<PriceListItem> findActiveByIdForCharge(@Param("id") UUID id, @Param("hospitalId") UUID hospitalId);
 }

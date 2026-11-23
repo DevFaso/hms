@@ -47,6 +47,9 @@ export interface ImagingOrderResponse {
   hospitalName: string;
   modality: ImagingModality;
   studyType: string;
+  /** QA D3450 / D3254 (r70): the catalogue exam the order was picked from; null for free text. */
+  catalogueItemId?: string | null;
+  catalogueCode?: string | null;
   bodyRegion: string;
   laterality: ImagingLaterality | '';
   priority: ImagingPriority;
@@ -131,6 +134,12 @@ export interface ImagingOrderRequest {
   encounterId?: string;
   modality: ImagingModality;
   studyType: string;
+  /**
+   * QA D3450 / D3254 (r70): the exam picked from the hospital's imaging catalogue. The server then
+   * writes the exam's own name and modality, prices the order by it and decides a family reader's
+   * access by its flag. Absent: a free-text order.
+   */
+  catalogueItemId?: string;
   bodyRegion?: string;
   priority: ImagingPriority;
   laterality?: ImagingLaterality;

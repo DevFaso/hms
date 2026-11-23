@@ -194,6 +194,9 @@
                 @case ('IDENTITY_CHANGE') {
                   merge
                 }
+                @case ('RELEASED_TO_FAMILY') {
+                  family_restroom
+                }
                 @default {
                   visibility
                 }
@@ -212,6 +215,26 @@
                 · {{ entry.hospitalName }}
               }
             </span>
+            @if (entry.category === 'RELEASED_TO_FAMILY') {
+              <!-- QA D3451 (r70): to whom the result went, and which category; never its value. -->
+              {{ ' '
+              }}<span class="pli-sub pli-release" data-testid="released-to-family">
+                @if (entry.recipientName) {
+                  {{ 'R70_PRIVACY.RELEASED_TO' | translate: { recipient: entry.recipientName } }}
+                  @if (entry.recipientRelationship) {
+                    ({{ entry.recipientRelationship | enumLabel: 'relationship' }})
+                  }
+                } @else {
+                  {{ 'R70_PRIVACY.RELEASED_TO_UNNAMED' | translate }}
+                }
+                @if (resultCategoryLabelKey(entry); as categoryKey) {
+                  ·
+                  {{
+                    'R70_PRIVACY.RESULT_CATEGORY' | translate: { category: categoryKey | translate }
+                  }}
+                }
+              </span>
+            }
             {{ ' ' }}<span class="pli-meta">{{ entry.timestamp | serverTime | dateTime }}</span>
           </div>
         </div>

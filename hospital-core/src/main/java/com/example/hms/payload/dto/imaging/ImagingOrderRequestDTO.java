@@ -42,6 +42,14 @@ public class ImagingOrderRequestDTO {
     @Schema(description = "Specific study or protocol name", example = "CT Chest with contrast")
     private String studyType;
 
+    /**
+     * QA D3450 / D3254 (r70, V361): the exam picked from the hospital's imaging catalogue. When set, the server
+     * writes the exam's own name as the study type (and its modality), prices the order by it and decides a family
+     * reader's access by its flag; {@link #studyType} is then only what the form displayed. Null: a free-text order.
+     */
+    @Schema(description = "Imaging catalogue exam (price-list item) the order is picked from; null for free text")
+    private UUID catalogueItemId;
+
     @Size(max = 150)
     @Schema(description = "Body region or anatomy of focus", example = "Chest")
     private String bodyRegion;

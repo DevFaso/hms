@@ -89,7 +89,9 @@ class DispenseBillingDeferralFollowUpTest {
         assertThat(item.getReferenceType()).isEqualTo(DispenseBillingDeferralFollowUp.REFERENCE_TYPE);
         assertThat(item.getTitleKey()).isEqualTo("pharmacy.deferral.followUp.reviewTitle");
         assertThat(item.getTitle()).startsWith("Dérogation d");
-        assertThat(item.getBody()).contains("Salbutamol", "Awa Traoré");
+        // QA D3301 (r70), the class: billing is told of a hand-over to the patient, never of the medicine.
+        assertThat(item.getBody()).contains("Awa Traoré").doesNotContain("Salbutamol");
+        assertThat(item.getBodyArgs()).doesNotContain("Salbutamol");
     }
 
     @Test
@@ -115,6 +117,11 @@ class DispenseBillingDeferralFollowUpTest {
                 any(), org.mockito.ArgumentMatchers.eq("mariam.comptable"), org.mockito.ArgumentMatchers.eq("PHARMACY_BILLING_DEFERRAL"),
                 org.mockito.ArgumentMatchers.eq(credit.getId()));
         verify(notifications).createNotification(any(), any(), org.mockito.ArgumentMatchers.eq("issa.admin"), any(), any());
+        // QA D3301 (r70): the bell of an accountant or an admin never carries the medicine's name.
+        ArgumentCaptor<Object[]> bellArgs = ArgumentCaptor.forClass(Object[].class);
+        verify(notifications).createNotification(any(), bellArgs.capture(),
+                org.mockito.ArgumentMatchers.eq("mariam.comptable"), any(), any());
+        assertThat(bellArgs.getValue()).doesNotContain("Amoxicilline").contains("Awa");
         verify(notifications, never()).createNotification(any(), any(), org.mockito.ArgumentMatchers.eq("awa.pharmacienne"), any(), any());
 
         followUp.approvalNeeded(deferral(DispenseBillingDeferralKind.THIRD_PARTY_COVER), "Awa", "Amoxicilline");

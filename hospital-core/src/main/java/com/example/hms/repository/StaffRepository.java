@@ -73,6 +73,18 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
 
     Optional<Staff> findByUserIdAndHospitalId(UUID userId, UUID hospitalId);
 
+    /**
+     * QA D3301 (r70): the staff of the departments one person heads at one hospital, with their accounts: the
+     * prescribers a designated cover may answer for ({@code RenewalAlertRouting} decides which).
+     */
+    @EntityGraph(attributePaths = {"user", "user.patientProfile", "user.staffProfile", "department",
+        "department.headOfDepartment"})
+    @Query("""
+        SELECT s FROM Staff s
+        WHERE s.hospital.id = :hospitalId AND s.department.headOfDepartment.id = :headStaffId
+        """)
+    List<Staff> findInDepartmentsHeadedBy(@Param("headStaffId") UUID headStaffId, @Param("hospitalId") UUID hospitalId);
+
     Optional<Staff> findFirstByUserIdOrderByCreatedAtAsc(UUID userId);
 
     boolean existsByAssignment_Id(UUID assignmentId);

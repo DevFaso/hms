@@ -38,6 +38,12 @@ public class ImagingOrderResponseDTO {
 
     private String studyType;
 
+    /** QA D3450 / D3254 (V361): the imaging catalogue exam the order was picked from; null for a free-text order. */
+    private UUID catalogueItemId;
+
+    /** The catalogue exam's code when the order was placed. */
+    private String catalogueCode;
+
     private String bodyRegion;
 
     private ImagingLaterality laterality;

@@ -3939,6 +3939,20 @@
     </changeSet>
 
     <!-- =================================================================
+         V361 (QA r70 D3450, D3254): an imaging order names its exam in the
+         hospital's imaging catalogue (billing.price_list_items, IMAGING),
+         which carries the exam's body region and whether it may reveal a
+         pregnancy; clinical.imaging_orders keeps the item it was picked
+         from. Additive, IF NOT EXISTS, no DO block, no backfill.
+         ================================================================= -->
+    <changeSet id="V361-imaging-catalogue-pregnancy-flag" author="hms-team" runOnChange="false">
+        <sqlFile path="V361__imaging_catalogue_pregnancy_flag.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
          V362 (QA r70: D3304, D3351): the obstetric alert escalation accepts
          the source 'VITAL_SIGN' (a maternal early-warning page from a ward
          vital set); the positive antibody screen rule's columns and tables.

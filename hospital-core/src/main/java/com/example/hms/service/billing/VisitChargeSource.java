@@ -46,6 +46,11 @@ public interface VisitChargeSource {
         public Optional<TariffResolver.Tariff> tariff(PriceListLinkType type, String rawKey) {
             return tariffs.find(type, rawKey);
         }
+
+        /** QA D3254 (r70): the tariff of one named price-list item on the service day (an order's catalogue exam). */
+        public Optional<TariffResolver.Tariff> tariffOfItem(java.util.UUID itemId) {
+            return tariffs.findItem(itemId);
+        }
     }
 
     /**

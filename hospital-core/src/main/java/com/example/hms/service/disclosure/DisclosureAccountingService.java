@@ -49,6 +49,17 @@ public interface DisclosureAccountingService {
                                           LocalDateTime to, Pageable pageable);
 
     /**
+     * Review of #1290 (QA D3451): the STAFF accounting as one hospital reads it. A result released to the family
+     * is listed only when {@code callerHospitalId} is the hospital that released it, and never with who received
+     * it or which category it was (those are the patient's to read): another hospital's staff, who may read this
+     * patient's accounting because the patient is also registered with them, never learn that an HIV result
+     * exists elsewhere. With no hospital (the platform's global view) no release is listed at all.
+     * {@link #getAccounting(UUID, LocalDateTime, LocalDateTime, Pageable)} is this with no hospital.
+     */
+    DisclosureAccountingDTO getAccounting(UUID patientId, LocalDateTime from, LocalDateTime to, Pageable pageable,
+                                          UUID callerHospitalId);
+
+    /**
      * Just the entries, for the portal's simpler "who viewed my records"
      * list. Same data and same classification as {@link #getAccounting},
      * without the grouped count query.

@@ -42,14 +42,29 @@ public class ImagingOrderChargeSource implements VisitChargeSource {
         for (ImagingOrder order : orders) {
             String study = order.getStudyType();
             if (study != null && !study.isBlank()) {
-                // PR 3: the tariff linked to <modality>:<study type> first, else the service of the same name.
-                Optional<TariffResolver.Tariff> tariff = order.getModality() == null ? Optional.empty()
-                    : visit.tariff(PriceListLinkType.IMAGING_STUDY, order.getModality().name() + ":" + study);
-                lines.add(tariff.map(t -> VisitCharge.tariffed(t, ItemCategory.SERVICE, 1))
+                lines.add(tariffOf(order, study, visit).map(t -> VisitCharge.tariffed(t, ItemCategory.SERVICE, 1))
                     .orElseGet(() -> VisitCharge.of(study.trim(), ItemCategory.SERVICE, 1,
                         visit.prices().sameName(study))));
             }
         }
         return lines;
+    }
+
+    /**
+     * QA D3254 (r70): the order's price. An order picked from the imaging catalogue is priced by that item, whatever
+     * its wording (« Radiographie du thorax (face) », the price list's own label, billed 0 F because it was not the
+     * link key word for word). A free-text order keeps PR 3's lookup: the tariff linked to
+     * {@code <modality>:<study type>}. With neither, the caller falls back to the service of the same name, and
+     * then posts the line unpriced for the cashier: an order is never left off the invoice.
+     */
+    private static Optional<TariffResolver.Tariff> tariffOf(ImagingOrder order, String study, Visit visit) {
+        if (order.getCatalogueItemId() != null) {
+            Optional<TariffResolver.Tariff> byItem = visit.tariffOfItem(order.getCatalogueItemId());
+            if (byItem.isPresent()) {
+                return byItem;
+            }
+        }
+        return order.getModality() == null ? Optional.empty()
+            : visit.tariff(PriceListLinkType.IMAGING_STUDY, order.getModality().name() + ":" + study);
     }
 }

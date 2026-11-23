@@ -69,6 +69,8 @@ class PatientImagingPortalServiceTest {
     @Mock private RoleValidator roleValidator;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private com.example.hms.repository.EncounterRepository encounterRepository;
+    @Mock private com.example.hms.repository.PriceListItemRepository priceListItemRepository;
+    @Mock private com.example.hms.service.recordaccess.ProxyReadScope proxyReadScope;
 
     private PatientImagingPortalService service;
 
@@ -81,15 +83,24 @@ class PatientImagingPortalServiceTest {
 
     @BeforeEach
     void setUp() {
+        when(proxyReadScope.current()).thenReturn(Optional.empty());
+        ImagingCatalogueService catalogue = new ImagingCatalogueService(priceListItemRepository,
+            mock(com.example.hms.repository.UserRepository.class), roleValidator,
+            mock(com.example.hms.security.tenant.ActingScopeResolver.class), auditEventLogService,
+            java.time.Clock.systemUTC());
         service = new PatientImagingPortalService(orderRepository, reportRepository, imageRepository,
             new ImagingReportMapper(), fileUploadService, roleValidator, auditEventLogService,
             encounterRepository, new ProxyRecordFilter(new SensitivityClassifierImpl(),
-                mock(com.example.hms.repository.LabTestDefinitionRepository.class)));
+                mock(com.example.hms.repository.LabTestDefinitionRepository.class), proxyReadScope,
+                null, null, null, null), catalogue);
         hospital = new Hospital();
         hospital.setId(UUID.randomUUID());
         hospital.setName("CHU Yalgado");
         patient = new Patient();
         patient.setId(patientId);
+        // A man of 40: the fail-closed band of QA D3450 (a patient who may be pregnant) is tested on its own.
+        patient.setGender("M");
+        patient.setDateOfBirth(java.time.LocalDate.now().minusYears(40));
         order = order(patient);
         when(orderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId)).thenAnswer(inv -> List.of(order));
         when(reportRepository.findByImagingOrder_IdIn(anyCollection())).thenAnswer(inv -> reports);
@@ -269,7 +280,7 @@ class PatientImagingPortalServiceTest {
     @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', nullValues = "-", value = {
         "MAMMOGRAPHY | Mammographie bilatérale | Seins | Dépistage",
         "XRAY | Radiographie thorax face et profil | Thorax | Toux",
-        "ULTRASOUND | Échographie abdominale | Abdomen | Douleur hypochondre droit",
+        "ULTRASOUND | Échographie abdominale (homme de 40 ans) | Abdomen | Douleur hypochondre droit",
         "CT | Scanner cérébral | Crâne | -",
         "CT | Computerised tomography | Head | -",
     })
@@ -284,6 +295,278 @@ class PatientImagingPortalServiceTest {
         report(1, ImagingReportStatus.FINAL, true);
 
         assertThat(service.studiesOf(patientId, Reader.PROXY)).hasSize(1);
+    }
+
+    // ── QA D3450 (r70, High): the catalogue flag, and the fail-closed band ───────────────
+
+    private void aGirlOf(int years) {
+        patient.setGender("F");
+        patient.setDateOfBirth(java.time.LocalDate.now().minusYears(years));
+    }
+
+    private com.example.hms.model.PriceListItem catalogueExam(Boolean mayRevealPregnancy) {
+        com.example.hms.model.PriceListItem item = com.example.hms.model.PriceListItem.builder()
+            .hospitalId(hospital.getId()).code("IMG-01").label(order.getStudyType())
+            .category(com.example.hms.enums.PriceListCategory.IMAGING)
+            .mayRevealPregnancy(mayRevealPregnancy).build();
+        item.setId(UUID.randomUUID());
+        order.setCatalogueItemId(item.getId());
+        when(priceListItemRepository.findUnscopedByHospitalIdAndIdIn(eq(hospital.getId()), anyCollection()))
+            .thenReturn(List.of(item));
+        return item;
+    }
+
+    @Test
+    @DisplayName("D3450, the r70 case: « Échographie du 1er trimestre », region Abdomen, in an untagged visit of a 15-year-old never reaches her mother")
+    void theFirstTrimesterUltrasoundOfR70StaysWithThePatient() {
+        aGirlOf(15);
+        com.example.hms.model.Encounter visit = new com.example.hms.model.Encounter();
+        visit.setId(UUID.randomUUID());
+        when(encounterRepository.findWithDepartmentByIdIn(anyCollection())).thenReturn(List.of(visit));
+        order.setEncounterId(visit.getId());
+        order.setModality(ImagingModality.ULTRASOUND);
+        order.setStudyType("Échographie du 1er trimestre");
+        order.setBodyRegion("Abdomen");
+        report(1, ImagingReportStatus.FINAL, true);
+        ImagingStudyImage onStudy = image(null);
+        when(imageRepository.findById(onStudy.getId())).thenReturn(Optional.of(onStudy));
+
+        assertThat(service.studiesOf(patientId, Reader.PATIENT)).hasSize(1);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).isEmpty();
+        UUID imageId = onStudy.getId();
+        assertThatThrownBy(() -> service.openImage(patientId, imageId, Reader.PROXY))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', nullValues = "-", value = {
+        "ULTRASOUND | Échographie abdominale | Abdomen",
+        "ULTRASOUND | Échographie thyroïdienne | Cou",
+        "ULTRASOUND | Bilan | -",
+        "OTHER | Écho | -",
+        "XRAY | ASP | -",
+        "XRAY | Radiographie du rachis lombaire | -",
+        "CT | Scanner abdominal | -",
+        "CT | TDM TAP | -",
+        "MRI | IRM | Abdomen",
+    })
+    @DisplayName("D3450 (provisoire), fail closed: for a girl of 15 any ultrasound and any abdominal or pelvic study is held back, though no word names a pregnancy")
+    void anUnclearedStudyOfAPatientWhoMayBePregnantStaysWithThePatient(ImagingModality modality, String studyType,
+                                                                      String bodyRegion) {
+        aGirlOf(15);
+        order.setEncounterId(null);
+        order.setModality(modality);
+        order.setStudyType(studyType);
+        order.setBodyRegion(bodyRegion);
+        report(1, ImagingReportStatus.FINAL, true);
+
+        assertThat(service.studiesOf(patientId, Reader.PATIENT)).hasSize(1);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("D3450: the band is 10 to 55, sex not recorded as male; unknown sex or age is inside it")
+    void theFailClosedBandIsTenToFiftyFive() {
+        order.setEncounterId(null);
+        order.setModality(ImagingModality.ULTRASOUND);
+        order.setStudyType("Échographie abdominale");
+        report(1, ImagingReportStatus.FINAL, true);
+
+        aGirlOf(9);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("9 years").hasSize(1);
+        aGirlOf(10);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("10 years").isEmpty();
+        aGirlOf(55);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("55 years").isEmpty();
+        aGirlOf(56);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("56 years").hasSize(1);
+        patient.setGender("M");
+        patient.setDateOfBirth(java.time.LocalDate.now().minusYears(30));
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("a man of 30").hasSize(1);
+        patient.setGender(null);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("sex not recorded").isEmpty();
+        patient.setGender("F");
+        patient.setDateOfBirth(null);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("age not recorded").isEmpty();
+    }
+
+    @Test
+    @DisplayName("D3450: a catalogue exam the hospital cleared reaches the proxy; flagged, it never does, whatever its name")
+    void theCatalogueFlagDecides() {
+        aGirlOf(15);
+        order.setEncounterId(null);
+        order.setModality(ImagingModality.ULTRASOUND);
+        order.setStudyType("Échographie abdominale");
+        report(1, ImagingReportStatus.FINAL, true);
+
+        com.example.hms.model.PriceListItem exam = catalogueExam(null);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("nobody decided: held back").isEmpty();
+
+        exam.setMayRevealPregnancy(false);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("cleared").hasSize(1);
+
+        order.setClinicalQuestion("Douleurs, grossesse de 8 SA ?");
+        assertThat(service.studiesOf(patientId, Reader.PROXY))
+            .as("cleared exam, but this order's question names a pregnancy").isEmpty();
+
+        order.setClinicalQuestion(null);
+        order.setModality(ImagingModality.XRAY);
+        order.setStudyType("Radiographie du thorax");
+        exam.setMayRevealPregnancy(true);
+        patient.setGender("M");
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("flagged, even for a man's chest X-ray").isEmpty();
+        assertThat(service.studiesOf(patientId, Reader.PATIENT)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("D3450: the flag is read at the order's own hospital; an item that cannot be read decides nothing")
+    void anUnreadableCatalogueItemDecidesNothing() {
+        aGirlOf(15);
+        order.setEncounterId(null);
+        order.setModality(ImagingModality.ULTRASOUND);
+        order.setStudyType("Échographie abdominale");
+        order.setCatalogueItemId(UUID.randomUUID());
+        report(1, ImagingReportStatus.FINAL, true);
+        when(priceListItemRepository.findUnscopedByHospitalIdAndIdIn(eq(hospital.getId()), anyCollection()))
+            .thenReturn(List.of());
+
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).isEmpty();
+        verify(priceListItemRepository).findUnscopedByHospitalIdAndIdIn(eq(hospital.getId()), anyCollection());
+    }
+
+    @Test
+    @DisplayName("D3450: the verified parent of a child under the adolescent age still reads an uncleared study, never a named or flagged one")
+    void theVerifiedParentOfAChildReadsAnUnclearedStudy() {
+        aGirlOf(10);
+        order.setEncounterId(null);
+        order.setModality(ImagingModality.ULTRASOUND);
+        order.setStudyType("Échographie abdominale");
+        report(1, ImagingReportStatus.FINAL, true);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("a caregiver with no verified link").isEmpty();
+
+        when(proxyReadScope.current()).thenReturn(Optional.of(new com.example.hms.service.recordaccess.ProxyReadContext(
+            UUID.randomUUID(), patientId, com.example.hms.enums.ProxyRelationship.PARENT, true, java.util.Set.of())));
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("the verified parent of a 10-year-old").hasSize(1);
+
+        order.setStudyType("Échographie obstétricale");
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("a named study: no proxy at all").isEmpty();
+
+        order.setStudyType("Échographie abdominale");
+        aGirlOf(15);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("the verified parent of a 15-year-old").isEmpty();
+    }
+
+    // ── Review of #1290: what the proxy would read with the study; a clearance under another name ──
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"findings", "impression", "recommendations", "title"})
+    @DisplayName("review of #1290: a released report that names a pregnancy keeps the study, and its images, from the proxy; the patient reads it")
+    void aReportThatNamesAPregnancyStaysWithThePatient(String field) {
+        // A man's chest X-ray by its order: only the report says what it is.
+        order.setEncounterId(null);
+        ImagingReport read = report(1, ImagingReportStatus.FINAL, true);
+        String text = "Découverte fortuite : grossesse évolutive de 9 SA.";
+        switch (field) {
+            case "findings" -> read.setFindings(text);
+            case "impression" -> read.setImpression(text);
+            case "recommendations" -> read.setRecommendations(text);
+            default -> read.setReportTitle("Échographie obstétricale");
+        }
+        ImagingStudyImage onStudy = image(null);
+        when(imageRepository.findById(onStudy.getId())).thenReturn(Optional.of(onStudy));
+
+        assertThat(service.studiesOf(patientId, Reader.PATIENT)).hasSize(1);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).isEmpty();
+        UUID imageId = onStudy.getId();
+        assertThatThrownBy(() -> service.openImage(patientId, imageId, Reader.PROXY))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("review of #1290: an image caption that names a pregnancy keeps the study from the proxy; an unreleased report's text does not count")
+    void aCaptionThatNamesAPregnancyStaysWithThePatient() {
+        order.setEncounterId(null);
+        report(1, ImagingReportStatus.FINAL, true);
+        ImagingReport draft = report(2, ImagingReportStatus.DRAFT, false);
+        draft.setFindings("grossesse ?");
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("the draft is nobody's to read yet").hasSize(1);
+
+        ImagingStudyImage captioned = image(null);
+        captioned.setCaption("Sac gestationnel intra-utérin");
+        when(imageRepository.findById(captioned.getId())).thenReturn(Optional.of(captioned));
+
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).isEmpty();
+        assertThat(service.studiesOf(patientId, Reader.PATIENT)).hasSize(1);
+        UUID imageId = captioned.getId();
+        assertThatThrownBy(() -> service.openImage(patientId, imageId, Reader.PROXY))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("review of #1290: a region the report's author typed is read; the order's own region carried by the report is not read twice")
+    void aRegionTheReportsAuthorTypedIsRead() {
+        order.setEncounterId(null);
+        ImagingReport read = report(1, ImagingReportStatus.FINAL, true);
+        // A cleared pelvis X-ray: the exam's own region is the order's, and the report inherits it.
+        order.setStudyType("Radiographie du bassin");
+        order.setBodyRegion("Bassin");
+        catalogueExam(false).setImagingBodyRegion("Bassin");
+        read.setBodyRegion("bassin ");
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("the exam's own region, cleared").hasSize(1);
+
+        read.setBodyRegion("Utérus");
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("typed by the report's author").isEmpty();
+        assertThat(service.studiesOf(patientId, Reader.PATIENT)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("review of #1290: on a cleared exam, a pelvic region the orderer typed still keeps the study from the proxy")
+    void aTypedRegionOnAClearedExamStaysWithThePatient() {
+        order.setEncounterId(null);
+        report(1, ImagingReportStatus.FINAL, true);
+        catalogueExam(false);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("cleared, nothing typed").hasSize(1);
+
+        order.setBodyRegion("Utérus");
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("review of #1290: an order placed before its catalogue line was renamed is not cleared by the line's new decision")
+    void aClearanceUnderAnotherNameDoesNotCount() {
+        aGirlOf(15);
+        order.setEncounterId(null);
+        order.setModality(ImagingModality.ULTRASOUND);
+        order.setStudyType("Échographie abdominale");
+        report(1, ImagingReportStatus.FINAL, true);
+        com.example.hms.model.PriceListItem line = catalogueExam(false);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("cleared under this name").hasSize(1);
+
+        // The line is renamed and cleared again as something else: the order keeps its own name.
+        line.setLabel("Radiographie du thorax");
+        line.setMayRevealPregnancy(false);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("read as undecided: held back").isEmpty();
+    }
+
+    @Test
+    @DisplayName("review of #1290: a study that does not say where it is, and a birth date nobody can believe, are held back")
+    void anUnknownBodyPartAndAnImplausibleAgeAreHeldBack() {
+        order.setEncounterId(null);
+        order.setModality(ImagingModality.MRI);
+        order.setStudyType("IRM");
+        report(1, ImagingReportStatus.FINAL, true);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("a man of 40").hasSize(1);
+
+        aGirlOf(30);
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("a woman of 30, « IRM » and no region").isEmpty();
+        order.setBodyRegion("Genou");
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("the knee").hasSize(1);
+
+        order.setBodyRegion("Abdomen");
+        patient.setDateOfBirth(java.time.LocalDate.of(1900, 1, 1));
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("born 1900-01-01: age unknown").isEmpty();
+        patient.setDateOfBirth(java.time.LocalDate.now().plusDays(1));
+        assertThat(service.studiesOf(patientId, Reader.PROXY)).as("born tomorrow: age unknown").isEmpty();
     }
 
     @Test

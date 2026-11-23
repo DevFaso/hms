@@ -100,6 +100,8 @@ class ServiceWriteTenantLoadCoverageTest {
 
     /** Class.method#call → why the method needs no tenant check of its own. Frozen: it only shrinks. */
     private static final Map<String, String> RECORDED = Map.ofEntries(
+        Map.entry("FamilyReleaseDisclosure.releaseOf#findById",
+            "QA D3451: a read for the PATIENT's own disclosure list, owned by patient id: the release an audit row of that patient names, used only when it is that patient's; writes nothing"),
         Map.entry("PatientImagingPortalService.openImage#findById",
             "QA D2342: a patient read, owned by patient id (the token's or the proxy grant's), never by hospital; another patient's image is 404"),
         // Policy 2026-11-20: the proxy read filter judges rows of the grant's patient, from every hospital
