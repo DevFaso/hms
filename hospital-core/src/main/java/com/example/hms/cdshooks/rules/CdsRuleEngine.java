@@ -155,7 +155,7 @@ public class CdsRuleEngine {
                                        String proposedDosage,
                                        String proposedRoute) {
         return buildContext(patient, hospitalId, new ProposedOrder(proposedMedicationName, proposedMedicationCode,
-            proposedDosage, null, null, null, null, proposedRoute, null));
+            proposedDosage, null, null, null, null, proposedRoute, null, false));
     }
 
     /**
@@ -177,7 +177,7 @@ public class CdsRuleEngine {
                                        UUID excludedPrescriptionId,
                                        String proposedRoute) {
         return buildContext(patient, hospitalId, new ProposedOrder(proposedMedicationName, proposedMedicationCode,
-            proposedDosage, null, proposedCatalogItem, excludedPrescriptionId, null, proposedRoute, null));
+            proposedDosage, null, proposedCatalogItem, excludedPrescriptionId, null, proposedRoute, null, false));
     }
 
     /**
@@ -187,10 +187,12 @@ public class CdsRuleEngine {
      * (null on a create). CR-01: the route is the one this order states, null when
      * it states none, and never the catalogue item's; the formulation is the
      * ordered product's, the catalogue item's form when none is given.
+     * QA D3303: {@code takeHome} is whether the order is marked for home; such an
+     * order is not added to the ward orders the discharge stops (and the reverse).
      */
     public record ProposedOrder(String medicationName, String medicationCode, String dosage, String frequency,
                                 MedicationCatalogItem catalogItem, UUID excludedPrescriptionId,
-                                Double prnDosesPerDay, String route, String formulation) {
+                                Double prnDosesPerDay, String route, String formulation, boolean takeHome) {
     }
 
     /**
@@ -249,7 +251,7 @@ public class CdsRuleEngine {
             weighedAt,
             order.prnDosesPerDay(),
             factsRead != null ? factsRead
-                : readParacetamolFacts(patient, hospitalId, proposedMedicationName, catalogItem, excludedPrescriptionId),
+                : readParacetamolFacts(patient, hospitalId, proposedMedicationName, catalogItem, excludedPrescriptionId, order.takeHome()),
             OrderedRoute.of(order.route(),
                 order.formulation() != null || catalogItem == null ? order.formulation() : catalogItem.getForm())
         );
@@ -257,12 +259,12 @@ public class CdsRuleEngine {
 
     /** QA D1121: as a rule that throws, a failed read costs its cards, never the order. */
     private ParacetamolFacts readParacetamolFacts(Patient patient, UUID hospitalId, String name,
-                                                  MedicationCatalogItem item, UUID editedOrderId) {
+                                                  MedicationCatalogItem item, UUID editedOrderId, boolean takeHome) {
         if (paracetamolFacts == null) {
             return ParacetamolFacts.NONE;
         }
         try {
-            return paracetamolFacts.read(patient, hospitalId, name, item, editedOrderId);
+            return paracetamolFacts.read(patient, hospitalId, name, item, editedOrderId, takeHome);
         } catch (RuntimeException ex) {
             if (failFast) {
                 throw ex;
@@ -353,7 +355,7 @@ public class CdsRuleEngine {
         MedicationCatalogItem item = order.catalogItem() != null
             ? order.catalogItem() : resolveCatalogItem(hospitalId, order.medicationCode());
         ParacetamolFacts facts = readParacetamolFacts(patient, hospitalId, order.medicationName(), item,
-            order.excludedPrescriptionId());
+            order.excludedPrescriptionId(), order.takeHome());
         if (facts == ParacetamolFacts.READ_FAILED) {
             throw new IllegalStateException();
         }

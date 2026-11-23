@@ -39,6 +39,43 @@ public final class InpatientOrderEnd {
     private InpatientOrderEnd() {
     }
 
+    /**
+     * QA D3303 (r70): a take-home order written before the discharge was added to the ward order it replaces
+     * (paracetamol 1 g four times a day on the ward + 1 g three times a day for home = « 7 g par jour »), so the
+     * natural order of work, prescribe for home then discharge, was refused. The two are never taken together:
+     * the discharge stops every ward order of the stay ({@link #endedWithItsStay}) and that is when a take-home
+     * order starts. So, while a stay is open, an order of that stay marked for home and one that is not do not
+     * run together, whichever of the two is being written or given.
+     *
+     * <p>Two take-home orders do run together, and so do two ward orders; an order filed on no stay, or on a stay
+     * that has ended, is read on its own dates as before.
+     *
+     * @param takeHome    whether the order being written, signed or given is marked for home
+     * @param other       another order of the patient
+     * @param openStayIds the patient's admissions that have not ended
+     */
+    public static boolean neverRunsWith(boolean takeHome, Prescription other, java.util.Collection<UUID> openStayIds) {
+        if (other == null || other.getEncounter() == null || openStayIds == null) {
+            return false;
+        }
+        UUID stay = other.getEncounter().getAdmissionId();
+        return stay != null && openStayIds.contains(stay) && other.isTakeHome() != takeHome;
+    }
+
+    /** The ids of the stays that have not ended, for {@link #neverRunsWith}. */
+    public static Set<UUID> openStayIds(List<Admission> stays) {
+        Set<UUID> open = new java.util.HashSet<>();
+        if (stays != null) {
+            for (Admission stay : stays) {
+                if (stay.getId() != null && stay.getActualDischargeDateTime() == null
+                    && !ENDED_STAY_STATUSES.contains(stay.getStatus())) {
+                    open.add(stay.getId());
+                }
+            }
+        }
+        return open;
+    }
+
     public static boolean endedWithAStay(Prescription rx, List<Admission> stays) {
         // QA D757: an order marked for home outlives the stay it was written on.
         if (rx.isTakeHome()) {

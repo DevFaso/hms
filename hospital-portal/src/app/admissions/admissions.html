@@ -1083,10 +1083,36 @@
                 </li>
               }
             </ul>
-          } @else {
+          } @else if (!takeHomeUnsigned().length) {
             <p class="field-hint" data-testid="discharge-take-home-none">
               {{ 'ADMISSIONS.TAKE_HOME_NONE' | translate }}
             </p>
+          }
+          <!-- QA D3303: a take-home order still to sign is shown, never « aucun traitement de sortie ». -->
+          @if (!takeHomeLoading() && takeHomeUnsigned().length) {
+            <div
+              class="take-home-unsigned"
+              role="status"
+              data-testid="discharge-take-home-unsigned"
+            >
+              <p class="take-home-unsigned__title">
+                {{ 'ADMISSIONS.TAKE_HOME_UNSIGNED_TITLE' | translate }}
+              </p>
+              <ul class="take-home-list">
+                @for (rx of takeHomeUnsigned(); track rx.id) {
+                  <li>
+                    <strong>{{ rx.medicationDisplayName || rx.medicationName }}</strong>
+                    @if (rx.dosage) {
+                      · {{ rx.dosage }}
+                    }
+                    @if (rx.frequency) {
+                      · {{ rx.frequency }}
+                    }
+                  </li>
+                }
+              </ul>
+              <p class="field-hint">{{ 'ADMISSIONS.TAKE_HOME_UNSIGNED_HINT' | translate }}</p>
+            </div>
           }
           <p class="field-hint">{{ 'ADMISSIONS.TAKE_HOME_HINT' | translate }}</p>
         </div>

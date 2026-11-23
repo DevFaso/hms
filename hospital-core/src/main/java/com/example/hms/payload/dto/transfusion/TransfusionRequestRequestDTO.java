@@ -44,6 +44,17 @@ public class TransfusionRequestRequestDTO {
 
     private LocalDateTime requiredBy;
 
+    /**
+     * QA D3351: an EMERGENCY request of red cells for an allo-immunised patient declares the level of vital
+     * urgency (UVI or UV), why, and that the pre-transfusion sample is drawn before the first unit.
+     */
+    private com.example.hms.enums.VitalUrgencyLevel vitalUrgencyLevel;
+
+    @jakarta.validation.constraints.Size(max = 500)
+    private String vitalUrgencyReason;
+
+    private Boolean preTransfusionSampleDrawn;
+
     @Size(max = 1000)
     private String notes;
 }

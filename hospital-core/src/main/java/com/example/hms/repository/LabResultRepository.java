@@ -19,32 +19,40 @@ import java.util.UUID;
 public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
 
     /**
-     * Escalation sweep feed (P0 #5): critical results whose provider was
-     * notified and that are still unresolved past the cutoff. Unscoped by
-     * design — the sweep is a system actor covering every hospital.
-     *
-     * <p>The last clause used to be {@code criticalEscalatedAt IS NULL}, which
-     * made escalation one-shot: after a single nudge the row left the feed
-     * forever, so a critical result nobody acknowledged went permanently quiet.
-     * It now compares the LAST escalation against the same cutoff, so the sweep
-     * re-fires on the configured interval until the result is resolved.
-     *
-     * <p>Resolved means acknowledged OR read back. Read-back is the stronger
-     * act, but requiring it outright would strand results acknowledged before
-     * V116 existed.
-     *
-     * <p>QA D305: the chain is capped at {@code maxRounds}; a row that reached
-     * it leaves the sweep (it stays on the critical worklist).
+     * Rule CRITICAL_RESULT_ESCALATION: every critical result that was paged and that no clinician has
+     * acknowledged. No cutoff and no round cap: each hospital's own minutes decide which step is due, and only an
+     * acknowledgement takes a result out of this list.
      */
     @org.springframework.data.jpa.repository.Query(
         "SELECT r FROM LabResult r WHERE r.acknowledged = false "
-        + "AND r.criticalReadBackAt IS NULL "
-        + "AND r.criticalNotifiedAt IS NOT NULL AND r.criticalNotifiedAt < :cutoff "
-        + "AND (r.criticalEscalatedAt IS NULL OR r.criticalEscalatedAt < :cutoff) "
-        + "AND r.criticalEscalationLevel < :maxRounds")
-    java.util.List<LabResult> findCriticalAwaitingEscalation(
-        @org.springframework.data.repository.query.Param("cutoff") java.time.LocalDateTime cutoff,
-        @org.springframework.data.repository.query.Param("maxRounds") short maxRounds);
+        + "AND r.criticalReadBackAt IS NULL AND r.criticalNotifiedAt IS NOT NULL")
+    java.util.List<LabResult> findCriticalUnacknowledged();
+
+    /**
+     * Rule CRITICAL_RESULT_ESCALATION: the stamp of one ladder step, written only while nobody has acknowledged
+     * and the row still stands at the level the sweep read. A conditional UPDATE of these two columns, never a
+     * save of the loaded entity: a save writes every column as the sweep read it, and would put back
+     * {@code acknowledged = false} over a read-back committed while the sweep ran (the result would then page
+     * for ever). 0 means the result was acknowledged, amended or stamped meanwhile: the sweep tells nobody.
+     */
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true)
+    @org.springframework.data.jpa.repository.Query(
+        "UPDATE LabResult r SET r.criticalEscalationLevel = :level, r.criticalEscalatedAt = :at "
+        + "WHERE r.id = :id AND r.acknowledged = false AND r.criticalReadBackAt IS NULL "
+        + "AND r.criticalNotifiedAt IS NOT NULL AND r.criticalEscalationLevel = :expected")
+    int stampEscalationIfUnacknowledged(@Param("id") UUID id, @Param("expected") short expected,
+                                        @Param("level") short level, @Param("at") java.time.LocalDateTime at);
+
+    /**
+     * QA D305: a result that no longer grades as critical leaves the chain; its stamps are cleared by a
+     * conditional UPDATE for the same reason as {@link #stampEscalationIfUnacknowledged}. {@code none} is level 0.
+     */
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true)
+    @org.springframework.data.jpa.repository.Query(
+        "UPDATE LabResult r SET r.criticalNotifiedAt = NULL, r.criticalEscalatedAt = NULL, "
+        + "r.criticalEscalationLevel = :none "
+        + "WHERE r.id = :id AND r.acknowledged = false AND r.criticalReadBackAt IS NULL")
+    int leaveCriticalChainIfUnacknowledged(@Param("id") UUID id, @Param("none") short none);
 
     /**
      * QA D1553 (Rex P2): the matching read-back, written only while the row has

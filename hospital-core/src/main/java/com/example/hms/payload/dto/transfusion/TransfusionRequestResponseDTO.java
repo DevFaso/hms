@@ -57,6 +57,16 @@ public class TransfusionRequestResponseDTO {
     /** False when the screen has lapsed — the crossmatch path refuses on this. */
     private Boolean screenCurrent;
 
+    /**
+     * QA D3351: the patient is allo-immunised here (a positive antibody screen on record, never cleared), the
+     * antibody is identified or this request has a referral decision, and the emergency declaration it carries.
+     */
+    private boolean alloImmunised;
+    private boolean antibodyWorkupServes;
+    private com.example.hms.enums.VitalUrgencyLevel vitalUrgencyLevel;
+    private String vitalUrgencyReason;
+    private Boolean preTransfusionSampleDrawn;
+
     private List<BloodUnitResponseDTO> units;
     private List<CrossmatchResponseDTO> crossmatches;
     /** Every emergency release on this request, newest first, one per bag; empty on a list row. */

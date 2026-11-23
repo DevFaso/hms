@@ -986,3 +986,25 @@ select:focus-visible,
     flex-direction: column;
   }
 }
+
+/* QA D3308: a woman in active labour, on her bed card, on a pending transfer and in the transfer dialog. */
+.chip-labor {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fde8f1;
+  color: #8a1c4f;
+  border: 1px solid #f3b6d0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.labor-block {
+  border-left: 4px solid #c2255c;
+}
+.search-summary {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  color: #40566b;
+  overflow-wrap: anywhere;
+}

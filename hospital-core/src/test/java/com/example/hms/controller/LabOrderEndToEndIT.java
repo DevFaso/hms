@@ -57,6 +57,10 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.mockito.AdditionalAnswers.delegatesTo;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
@@ -496,6 +500,182 @@ class LabOrderEndToEndIT extends BaseIT {
         assertThat(runSweep(sweep)).isEqualTo(1);
         assertThat(labResultRepository.findById(critical).orElseThrow().getCriticalEscalationLevel())
             .isEqualTo((short) 2);
+    }
+
+    /**
+     * QA r70 (C5), rule CRITICAL_RESULT_ESCALATION. The sweep and the read-back are reached through the Spring
+     * beans, as in production, so each runs in its own transaction and every read below is of what it
+     * committed: the step taken, the incident opened, then who closed it, in which role and by which channel.
+     */
+    @Test
+    @DisplayName("QA r70 (C5): the last step of the ladder and its incident are kept, no step is taken twice, and the read-back closes the incident with who, in which role and how")
+    void theLastStepItsIncidentAndTheReadBackAreKept() throws Exception {
+        UUID orderId = placeOrder(LocalDateTime.now().minusMinutes(120));
+        collectSpecimen(orderId);
+        UUID resultId = idOf(postResult(scientist, orderId, CRITICAL_VALUE).andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString());
+        releaseAs(director, resultId);
+
+        // Told 61 minutes ago; the cover and the médecin-chef were told in their turn: the last step is due.
+        LabResult told = labResultRepository.findById(resultId).orElseThrow();
+        told.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(61));
+        told.setCriticalEscalationLevel((short) 2);
+        told.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(31));
+        labResultRepository.save(told);
+
+        SecurityContextHolder.clearContext();
+        HospitalContextHolder.clear();
+        com.example.hms.service.CriticalValueNotificationService sweep =
+            applicationContext.getBean(com.example.hms.service.CriticalValueNotificationService.class);
+        com.example.hms.repository.CriticalResultIncidentRepository incidents =
+            applicationContext.getBean(com.example.hms.repository.CriticalResultIncidentRepository.class);
+        assertThat(runSweep(sweep)).isEqualTo(1);
+
+        LabResult unresolved = labResultRepository.findById(resultId).orElseThrow();
+        assertThat(unresolved.getCriticalEscalationLevel()).isEqualTo((short) 3);
+        assertThat(unresolved.isAcknowledged()).isFalse();
+        com.example.hms.model.CriticalResultIncident opened = incidents.findByLabResultIdOrderByOpenedAtDesc(resultId).get(0);
+        assertThat(opened.getHospitalId()).isEqualTo(hospital.getId());
+        assertThat(opened.getMinutesUnacknowledged()).isBetween(61, 63);
+        assertThat(opened.getOpenedAt()).isNotNull();
+        assertThat(opened.getResolvedAt()).isNull();
+        assertThat(notificationRepository
+            .findByRecipientUsernameAndReadOrderByCreatedAtDesc(doctor.user().getUsername(), false))
+            .anyMatch(n -> "CRITICAL_LAB_RESULT_ESCALATION".equals(n.getType()));
+
+        // The next sweep, a moment later: the reminder is not due, so nothing is told twice and nothing moves.
+        assertThat(runSweep(sweep)).isZero();
+        assertThat(labResultRepository.findById(resultId).orElseThrow().getCriticalEscalationLevel()).isEqualTo((short) 3);
+        assertThat(incidents.findByHospitalIdOrderByOpenedAtDesc(hospital.getId())).hasSize(1);
+
+        // The prescriber is reached by telephone and reads the value back: only that ends the chain.
+        CriticalValueReadBackRequestDTO byPhone = readBack(CRITICAL_VALUE);
+        byPhone.setChannel("PHONE");
+        mockMvc.perform(post(RESULT_READ_BACK, resultId).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsBytes(byPhone))
+                .with(signedInAs(doctor)).with(csrf()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.acknowledged").value(true));
+
+        LabResult acknowledged = labResultRepository.findById(resultId).orElseThrow();
+        assertThat(acknowledged.isAcknowledged()).isTrue();
+        assertThat(acknowledged.getCriticalAckRole()).isEqualTo(ROLE_DOCTOR);
+        assertThat(acknowledged.getCriticalAckChannel()).isEqualTo("PHONE");
+        com.example.hms.model.CriticalResultIncident closed = incidents.findByLabResultIdOrderByOpenedAtDesc(resultId).get(0);
+        assertThat(closed.getResolvedAt()).isNotNull();
+        assertThat(closed.getResolvedByUserId()).isEqualTo(doctor.user().getId());
+        assertThat(closed.getResolvedByDisplay()).isNotBlank();
+        assertThat(closed.getResolution()).isEqualTo(com.example.hms.model.CriticalResultIncident.RESOLVED_READ_BACK);
+
+        SecurityContextHolder.clearContext();
+        HospitalContextHolder.clear();
+        assertThat(runSweep(sweep)).isZero();
+        assertThat(labResultRepository.findById(resultId).orElseThrow().getCriticalEscalationLevel()).isEqualTo((short) 3);
+    }
+
+    /**
+     * QA r70 (C5), review M2. The sweep reads its rows once, then takes them one by one. A clinician who reads a
+     * value back while the sweep is on another result commits an acknowledgement the sweep has not seen. The sweep
+     * used to save each result as it had read it, every column included: it wrote {@code acknowledged = false}
+     * back over the read-back and the result paged for ever. Here the read-back is committed from another thread
+     * in the middle of the sweep (when the sweep looks up the cover of the OTHER result), and must stand.
+     */
+    @Test
+    @DisplayName("review M2: a read-back committed while the sweep runs stands: nobody is told about that result and its acknowledgement is not written over")
+    void aReadBackCommittedDuringTheSweepIsNotWrittenOver() throws Exception {
+        // Two critical results of two prescribers: the cover lookup of a step says whose result is being told.
+        Actor colleague = actor("colleague", ROLE_DOCTOR, hospital);
+        Staff colleagueStaff = staffRepository.save(Staff.builder()
+            .user(colleague.user())
+            .hospital(hospital)
+            .assignment(colleague.assignment())
+            .jobTitle(JobTitle.DOCTOR)
+            .employmentType(EmploymentType.FULL_TIME)
+            .licenseNumber("LIC-" + nextId())
+            .name("Dr. " + colleague.user().getFirstName())
+            .active(true)
+            .build());
+        UUID myOrder = placeOrder(LocalDateTime.now().minusMinutes(120));
+        UUID theirOrder = placeOrder(LocalDateTime.now().minusMinutes(120));
+        java.util.Map<String, UUID> resultOf = new java.util.HashMap<>();
+        for (UUID orderId : List.of(myOrder, theirOrder)) {
+            collectSpecimen(orderId);
+            UUID resultId = idOf(postResult(scientist, orderId, CRITICAL_VALUE).andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString());
+            releaseAs(director, resultId);
+            LabResult paged = labResultRepository.findById(resultId).orElseThrow();
+            paged.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(16));
+            labResultRepository.save(paged);
+            resultOf.put(orderId.equals(myOrder) ? doctor.user().getUsername() : colleague.user().getUsername(), resultId);
+        }
+        com.example.hms.model.LabOrder theirs = labOrderRepository.findById(theirOrder).orElseThrow();
+        theirs.setOrderingStaff(colleagueStaff);
+        labOrderRepository.save(theirs);
+
+        SecurityContextHolder.clearContext();
+        HospitalContextHolder.clear();
+        com.example.hms.service.CriticalValueNotificationService sweep =
+            applicationContext.getBean(com.example.hms.service.CriticalValueNotificationService.class);
+        com.example.hms.service.lab.CriticalResultRecipients roster =
+            applicationContext.getBean(com.example.hms.service.lab.CriticalResultRecipients.class);
+        com.example.hms.repository.CriticalResultIncidentRepository incidents =
+            applicationContext.getBean(com.example.hms.repository.CriticalResultIncidentRepository.class);
+        java.util.concurrent.atomic.AtomicReference<UUID> acknowledgedMeanwhile = new java.util.concurrent.atomic.AtomicReference<>();
+        com.example.hms.service.lab.CriticalResultRecipients rosterDuringTheSweep = mock(
+            com.example.hms.service.lab.CriticalResultRecipients.class, delegatesTo(roster));
+        doAnswer(call -> {
+            String prescriberBeingTold = call.getArgument(1);
+            UUID other = resultOf.entrySet().stream().filter(entry -> !entry.getKey().equals(prescriberBeingTold))
+                .map(java.util.Map.Entry::getValue).findFirst().orElseThrow();
+            if (acknowledgedMeanwhile.compareAndSet(null, other)) {
+                // Another thread, so another transaction: it commits while the sweep's is still open.
+                java.util.concurrent.CompletableFuture.runAsync(() -> readBackAs(doctor, other))
+                    .get(30, java.util.concurrent.TimeUnit.SECONDS);
+            }
+            return roster.cover(call.getArgument(0), prescriberBeingTold);
+        }).when(rosterDuringTheSweep).cover(any(), any());
+
+        Integer escalated;
+        sweep.setEscalationCollaborators(rosterDuringTheSweep, incidents, userRepository);
+        try {
+            escalated = runSweep(sweep);
+        } finally {
+            sweep.setEscalationCollaborators(roster, incidents, userRepository);
+        }
+
+        UUID stood = acknowledgedMeanwhile.get();
+        assertThat(stood).as("the read-back was committed during the sweep").isNotNull();
+        UUID stepped = resultOf.values().stream().filter(id -> !id.equals(stood)).findFirst().orElseThrow();
+        assertThat(escalated).as("one result took its step; the acknowledged one took none").isEqualTo(1);
+
+        LabResult acknowledged = labResultRepository.findById(stood).orElseThrow();
+        assertThat(acknowledged.isAcknowledged()).as("the acknowledgement is not written over").isTrue();
+        assertThat(acknowledged.getCriticalReadBackAt()).isNotNull();
+        assertThat(acknowledged.getAcknowledgedByUserId()).isEqualTo(doctor.user().getId());
+        assertThat(acknowledged.getCriticalAckRole()).isEqualTo(ROLE_DOCTOR);
+        assertThat(acknowledged.getCriticalEscalationLevel()).as("no step was taken for it").isZero();
+        assertThat(acknowledged.getCriticalEscalatedAt()).isNull();
+        LabResult told = labResultRepository.findById(stepped).orElseThrow();
+        assertThat(told.getCriticalEscalationLevel()).isEqualTo((short) 1);
+        assertThat(told.isAcknowledged()).isFalse();
+
+        // And it stays out of the chain: the next sweep (nothing is due yet for the other one) leaves it alone.
+        assertThat(runSweep(sweep)).isZero();
+        assertThat(labResultRepository.findById(stood).orElseThrow().isAcknowledged()).isTrue();
+        assertThat(labResultRepository.findById(stood).orElseThrow().getCriticalEscalationLevel()).isZero();
+    }
+
+    private void readBackAs(Actor actor, UUID resultId) {
+        try {
+            mockMvc.perform(post(RESULT_READ_BACK, resultId).contextPath(API)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsBytes(readBack(CRITICAL_VALUE)))
+                    .with(signedInAs(actor)).with(csrf()))
+                .andExpect(status().isOk());
+        } catch (Exception failure) {
+            throw new IllegalStateException(failure);
+        }
     }
 
     @Test

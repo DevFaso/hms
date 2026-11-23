@@ -75,6 +75,67 @@ describe('D1973: selected internal roles survive real session hydration', () => 
     });
   }
 
+  // QA D3300 (r70): the picker offers « Médecin » to a surgeon and to a
+  // physician (the doctor equivalence); the bootstrap lists only the held role.
+  for (const held of ['ROLE_SURGEON', 'ROLE_PHYSICIAN']) {
+    it(`keeps a ${held} who signed in as « Médecin » signed in (D3300)`, () => {
+      TestBed.configureTestingModule({
+        providers: [provideHttpClient(withXhr()), provideHttpClientTesting(), provideRouter([])],
+      });
+      const auth = TestBed.inject(AuthService);
+      const context = TestBed.inject(RoleContextService);
+      const session = TestBed.inject(SessionScopeService);
+      const http = TestBed.inject(HttpTestingController);
+      const token = `e30.${btoa(JSON.stringify({ roles: ['ROLE_DOCTOR'], exp: Math.floor(Date.now() / 1000) + 3600 }))}.signature`;
+      auth.setToken(token, false);
+      context.setRoles(auth.getRoles());
+      session.hydrate().subscribe();
+      http.expectOne('auth/session/bootstrap').flush({
+        userId: 'synthetic-user',
+        username: 'synthetic.test',
+        authSource: 'internal',
+        email: 'synthetic@example.test',
+        roles: [held],
+        superAdmin: false,
+        hospitalAdmin: false,
+        primaryHospitalId: 'hospital-a',
+        permittedHospitalIds: ['hospital-a'],
+      } satisfies SessionBootstrapResponse);
+      // No logout call: afterEach's verify() fails on an unexpected one.
+      expect(auth.isAuthenticated()).toBeTrue();
+      expect(context.activeRoles).toEqual(['ROLE_DOCTOR']);
+      expect(context.activeRole).toBe('ROLE_DOCTOR');
+      expect(context.effectiveHospitalIdForRequest()).toBe('hospital-a');
+    });
+  }
+
+  it('still ends a « Chirurgien(ne) » session whose only live role is doctor (D3300: one way only)', () => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(withXhr()), provideHttpClientTesting(), provideRouter([])],
+    });
+    const auth = TestBed.inject(AuthService);
+    const context = TestBed.inject(RoleContextService);
+    const session = TestBed.inject(SessionScopeService);
+    const http = TestBed.inject(HttpTestingController);
+    const token = `e30.${btoa(JSON.stringify({ roles: ['ROLE_SURGEON'], exp: Math.floor(Date.now() / 1000) + 3600 }))}.signature`;
+    auth.setToken(token, false);
+    context.setRoles(auth.getRoles());
+    session.hydrate().subscribe();
+    http.expectOne('auth/session/bootstrap').flush({
+      userId: 'synthetic-user',
+      username: 'synthetic.test',
+      authSource: 'internal',
+      email: 'synthetic@example.test',
+      roles: ['ROLE_DOCTOR'],
+      superAdmin: false,
+      hospitalAdmin: false,
+      permittedHospitalIds: ['hospital-a'],
+    } satisfies SessionBootstrapResponse);
+    http.expectOne((req) => req.url.endsWith('/api/auth/logout')).flush({});
+    expect(auth.isAuthenticated()).toBeFalse();
+    expect(context.activeRoles).toEqual([]);
+  });
+
   for (const liveRoles of [[], ['ROLE_DOCTOR']]) {
     it(`ends a revoked selected-role session with live roles ${JSON.stringify(liveRoles)}`, () => {
       TestBed.configureTestingModule({

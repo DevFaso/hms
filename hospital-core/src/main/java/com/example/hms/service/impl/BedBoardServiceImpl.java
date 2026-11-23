@@ -84,6 +84,7 @@ public class BedBoardServiceImpl implements BedBoardService {
 
         List<BedBoardDTO.WardBoardDTO> wards =
             buildWards(beds, admissionByBedId, precautionsByPatient, hospitalId);
+        markWomenInLabour(wards, hospitalId);
 
         return BedBoardDTO.builder()
             .hospitalId(hospitalId)
@@ -91,6 +92,29 @@ public class BedBoardServiceImpl implements BedBoardService {
             .census(buildCensus(beds, admissions, precautionsByPatient))
             .wards(wards)
             .build();
+    }
+
+    /** QA D3308: the women in active labour are marked on the board (one query), so a move out of maternity warns. */
+    private com.example.hms.service.maternity.LabourBedMove labourBedMove;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setLabourBedMove(com.example.hms.service.maternity.LabourBedMove labourBedMove) {
+        this.labourBedMove = labourBedMove;
+    }
+
+    private void markWomenInLabour(List<BedBoardDTO.WardBoardDTO> wards, UUID hospitalId) {
+        if (labourBedMove == null) {
+            return;
+        }
+        List<BedBoardDTO.OccupantDTO> occupants = wards.stream()
+            .flatMap(ward -> ward.getRooms().stream())
+            .flatMap(room -> room.getBeds().stream())
+            .map(BedBoardDTO.BedBoardEntryDTO::getOccupant)
+            .filter(occupant -> occupant != null && occupant.getPatientId() != null)
+            .toList();
+        Set<UUID> inLabour = labourBedMove.inActiveLabour(
+            occupants.stream().map(BedBoardDTO.OccupantDTO::getPatientId).toList(), hospitalId);
+        occupants.forEach(occupant -> occupant.setInLabor(inLabour.contains(occupant.getPatientId())));
     }
 
     // ── Assembly ────────────────────────────────────────────────────────

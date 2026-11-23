@@ -26,6 +26,11 @@
     {{ 'LAB_CRITICAL_PENDING.WHAT_TO_DO' | translate }}
   </p>
 
+  <!-- QA r70 (C5): the hospital's steps of the escalation ladder; closed until opened, it holds no result. -->
+  @if (settingsHospitalId(); as scopedHospital) {
+    <app-critical-escalation-settings [hospitalId]="scopedHospital" />
+  }
+
   @if (noScope()) {
     <p class="state-block" data-testid="critical-pending-no-scope">
       {{ 'LAB_CRITICAL_PENDING.NO_SCOPE' | translate }}
