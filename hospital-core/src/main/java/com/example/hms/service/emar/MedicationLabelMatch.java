@@ -1,5 +1,6 @@
 package com.example.hms.service.emar;
 
+import com.example.hms.enums.DosageForm;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.medication.MedicationCatalogItem;
 
@@ -23,8 +24,10 @@ import java.util.regex.Pattern;
  *   <li><b>the product's identifiers</b>: the catalogue item id of the order, its formulary code, its RxNorm code,
  *       the order's own medication code;</li>
  *   <li><b>its designation</b>: a name of the product (generic name, French name, brand name, the order's name),
- *       then any strength and the dosage form the label carries. Accents, case, spacing ("500mg") and a strength
- *       written twice do not count; a strength or a form that is NOT the product's does ("1 g" for a 500 mg
+ *       then any strength and the dosage form the label carries. Accents, case, spacing ("500mg"), a strength
+ *       written twice and the language of the form word (QA D3552: « gélule », « capsule » and « cápsula » are the
+ *       catalogue's CAPSULE, see {@link DosageForm}) do not count; a strength or a form that is NOT the
+ *       product's does ("1 g" for a 500 mg
  *       product is refused, and so is the name of another substance or of a combination);</li>
  *   <li><b>its ATC code</b>.</li>
  * </ol>
@@ -53,6 +56,8 @@ final class MedicationLabelMatch {
      * texts are read up to here, so every expression below works on a bounded input.
      */
     private static final int MAX_READ = 300;
+    /** The longest wording of a dosage form, in words (« comprimidos recubiertos con película »). */
+    private static final int MAX_FORM_WORDS = 5;
 
     private MedicationLabelMatch() {
     }
@@ -115,14 +120,14 @@ final class MedicationLabelMatch {
         names.add(rx.getMedicationName());
         names.add(rx.getMedicationDisplayName());
         Set<String> strengths = new LinkedHashSet<>();
-        String form = "";
+        Set<String> forms = new LinkedHashSet<>();
         if (item != null) {
             names.add(item.getGenericName());
             names.add(item.getNameFr());
             names.add(item.getBrandName());
             names.add(item.getTallManName());
             strengths.addAll(Label.of(join(item.getStrength(), item.getStrengthUnit())).strengths());
-            form = Label.of(item.getForm()).words();
+            forms.addAll(formWords(Label.of(item.getForm()).words()));
         }
         List<Label> labels = names.stream().filter(name -> !blank(name)).map(Label::of).toList();
         if (strengths.isEmpty()) {
@@ -133,21 +138,72 @@ final class MedicationLabelMatch {
         if (!strengths.isEmpty() && !strengths.containsAll(typed.strengths())) {
             return false;
         }
+        // The catalogue's form may be left off the label. With no form on record, the form the order's own text
+        // ends with is the product's: it may be written in another language or wording, never left off.
+        boolean formOnRecord = !forms.isEmpty();
+        if (!formOnRecord) {
+            labels.stream().map(label -> trailingForm(label.words()))
+                .filter(form -> !form.isEmpty())
+                .forEach(form -> forms.addAll(formWords(form)));
+        }
         for (Label label : labels) {
-            String name = withoutTrailing(label.words(), form);
+            String name = withoutTrailingForm(label.words(), forms);
             if (name.isEmpty()) {
                 continue;
             }
-            if (typed.words().equals(name) || (!form.isEmpty() && typed.words().equals(name + " " + form))) {
+            if (typed.words().equals(label.words()) || (formOnRecord && typed.words().equals(name))) {
                 return true;
+            }
+            for (String form : forms) {
+                if (typed.words().equals(name + " " + form)) {
+                    return true;
+                }
             }
         }
         return false;
     }
 
-    private static String withoutTrailing(String words, String form) {
-        if (!form.isEmpty() && words.endsWith(" " + form)) {
-            return words.substring(0, words.length() - form.length() - 1);
+    /**
+     * QA D3552 (r71): every way the form {@code word} is written. A known dosage form is the same form in its code
+     * and in its English, French and Spanish words, singular or plural (« CAPSULE », « gélules », « cápsula »); any
+     * other form on record is its own words only, and no form is no word at all.
+     */
+    private static Set<String> formWords(String word) {
+        if (word.isEmpty()) {
+            return Set.of();
+        }
+        DosageForm known = DosageForm.of(word);
+        if (known == null) {
+            return Set.of(word);
+        }
+        Set<String> words = new LinkedHashSet<>(known.words());
+        words.add(word);
+        return words;
+    }
+
+    /**
+     * The dosage form a text ends with, in one word or several (« comprimé pelliculé », « poudre pour suspension
+     * buvable »), the longest first; empty when it ends with none. A text that is only a form names no product.
+     */
+    private static String trailingForm(String words) {
+        String[] parts = words.split(" ");
+        for (int count = Math.min(MAX_FORM_WORDS, parts.length - 1); count > 0; count--) {
+            String suffix = String.join(" ", java.util.Arrays.copyOfRange(parts, parts.length - count, parts.length));
+            if (DosageForm.of(suffix) != null) {
+                return suffix;
+            }
+        }
+        return "";
+    }
+
+    /** The name a label gives once the form it ends with is taken off; the longest wording of the form first. */
+    private static String withoutTrailingForm(String words, Set<String> forms) {
+        List<String> longestFirst = forms.stream()
+            .sorted(java.util.Comparator.comparingInt(String::length).reversed()).toList();
+        for (String form : longestFirst) {
+            if (words.endsWith(" " + form)) {
+                return words.substring(0, words.length() - form.length() - 1);
+            }
         }
         return words;
     }

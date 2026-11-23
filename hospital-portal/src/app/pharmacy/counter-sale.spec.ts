@@ -8,6 +8,9 @@ import { PharmacySaleService } from '../services/pharmacy-sale.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { expectEmptySubmitRefusal, expectFieldsMarked } from '../testing/form-refusal-behaviour';
+import { closeScreens, openScreen } from '../testing/screen-frame';
+import { TranslateService } from '@ngx-translate/core';
+import fr from '../../assets/i18n/fr.json';
 
 /**
  * QA D2309: the pharmacy had no counter-sale screen although POST /pharmacy-sales
@@ -342,5 +345,60 @@ describe('CounterSaleComponent', () => {
       'Paracétamol 500 mg',
     );
     expect(el().querySelector('[data-testid="today-more"]')).not.toBeNull();
+  });
+
+  /* ── r71: D3550 (layout at 768 px) and D3551 (unit plurals) ───────── */
+
+  describe('the article list at every width (QA D3550)', () => {
+    /**
+     * A window of that width (a media query follows the window, not a box),
+     * less the shell: the sidebar and the content padding at 1366 and 1024, the
+     * gutter alone at 768 and 390 where the sidebar is an overlay.
+     */
+    async function listOn(screenWidth: number): Promise<HTMLElement> {
+      const screen = await openScreen(screenWidth);
+      const host = screen.createElement('div');
+      host.style.width = `${screenWidth >= 1024 ? screenWidth - 310 : screenWidth - 32}px`;
+      screen.body.appendChild(host);
+      host.appendChild(fixture.nativeElement);
+      return host;
+    }
+
+    afterEach(closeScreens);
+
+    for (const width of [390, 768, 1024, 1366]) {
+      it(`keeps each article's name readable at ${width} px`, async () => {
+        const host = await listOn(width);
+        const info = host.querySelector<HTMLElement>('.item-info')!;
+        const name = host.querySelector<HTMLElement>('.item-name')!;
+        expect(info.getBoundingClientRect().width)
+          .withContext('the text box beside the « Ajouter » button')
+          .toBeGreaterThanOrEqual(150);
+        const lineHeight = parseFloat(getComputedStyle(name).lineHeight) || 24;
+        expect(name.getBoundingClientRect().height)
+          .withContext('« Paracétamol 500 mg » on one or two lines, not one letter per line')
+          .toBeLessThanOrEqual(lineHeight * 2 + 1);
+        const row = host.querySelector<HTMLElement>('.item-result')!;
+        expect(row.scrollWidth).toBeLessThanOrEqual(row.clientWidth + 1);
+      });
+    }
+  });
+
+  it('writes every count with its unit in the plural (QA D3551)', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr, true);
+    translate.use('fr');
+    fixture.detectChanges();
+    const text = (selector: string) =>
+      el().querySelector(selector)!.textContent!.replace(/\s+/g, ' ');
+    const meta = text('[data-testid="item-inv-par"] .item-meta');
+    expect(meta).toContain('En stock : 120 comprimés');
+    expect(meta).toContain('12 plaquettes + 0 comprimé');
+    expect(meta).not.toContain('{{');
+    addParacetamol();
+    const basket = text('[data-testid="line-inv-par"]');
+    expect(basket).toContain('1 plaquette = 10 comprimés');
+    expect(basket).toContain('60 comprimés');
+    expect(basket).not.toContain('{{');
   });
 });
