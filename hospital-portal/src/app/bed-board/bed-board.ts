@@ -36,6 +36,7 @@ import { roleSatisfies } from '../core/role-equivalence';
 import { catchError, finalize, forkJoin, of } from 'rxjs';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { ConfirmDialogComponent } from '../shared/confirm-dialog/confirm-dialog.component';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
@@ -60,6 +61,7 @@ import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.com
   selector: 'app-bed-board',
   standalone: true,
   imports: [
+    ConfirmDialogComponent,
     ReasonDialogComponent,
     SubmitGuardDirective,
     MeasurePipe,
@@ -284,7 +286,42 @@ export class BedBoardComponent implements OnInit {
     reason: string;
     isolationOverride: boolean;
     isolationOverrideReason: string;
-  } = { toBedId: '', reason: '', isolationOverride: false, isolationOverrideReason: '' };
+    laborAcknowledged: boolean;
+  } = {
+    toBedId: '',
+    reason: '',
+    isolationOverride: false,
+    isolationOverrideReason: '',
+    laborAcknowledged: false,
+  };
+
+  /**
+   * QA D3308 (r70): a woman in active labour is bound for a bed outside a maternity unit. The dialog says
+   * so before the order is sent, and the order needs the tick (the server refuses it otherwise). A move
+   * between maternity beds asks nothing. A getter, not a computed: the chosen bed is a plain form field.
+   */
+  get transferNeedsLaborAck(): boolean {
+    const target = this.transferTarget();
+    if (!target?.inLabor || !this.transferForm.toBedId) {
+      return false;
+    }
+    const chosen = this.destinationOptions().find((o) => o.bedId === this.transferForm.toBedId);
+    return !!chosen && !chosen.maternity;
+  }
+
+  /** QA D3308: how many beds the search left on the board, said under the search box. */
+  readonly searchSummary = computed<{ shown: number; total: number } | null>(() => {
+    const current = this.board();
+    if (!current || !this.searchTerm().trim()) {
+      return null;
+    }
+    const count = (wards: WardBoard[]) =>
+      wards.reduce((sum, w) => sum + w.rooms.reduce((n, r) => n + r.beds.length, 0), 0);
+    return { shown: count(this.visibleWards()), total: count(current.wards) };
+  });
+
+  /** QA D3308: the pending transfer of a labouring woman being carried out; the confirm says she is in labour. */
+  completingLaborTransfer = signal<TransferOrderResponse | null>(null);
 
   /**
    * Free beds, as the destination picker. Built from the board itself: you
@@ -292,27 +329,28 @@ export class BedBoardComponent implements OnInit {
    * Beds already spoken for by a pending transfer are excluded — the backend
    * refuses them, and offering them would be an error waiting to happen.
    */
-  readonly destinationOptions = computed<{ bedId: string; label: string; isolation: boolean }[]>(
-    () => {
-      const current = this.board();
-      if (!current) {
-        return [];
-      }
-      const spokenFor = new Set(this.pendingTransfers().map((t) => t.toBedId));
-      const eligible = this.eligibleBedIds();
-      return current.wards.flatMap((w) =>
-        w.rooms
-          .flatMap((r) => r.beds)
-          .filter((b) => b.status === 'AVAILABLE' && !spokenFor.has(b.bedId))
-          .filter((b) => eligible === null || eligible.has(b.bedId))
-          .map((b) => ({
-            bedId: b.bedId,
-            label: `${w.wardName} — ${b.bedNumber}`,
-            isolation: w.isolationCapable,
-          })),
-      );
-    },
-  );
+  readonly destinationOptions = computed<
+    { bedId: string; label: string; isolation: boolean; maternity: boolean }[]
+  >(() => {
+    const current = this.board();
+    if (!current) {
+      return [];
+    }
+    const spokenFor = new Set(this.pendingTransfers().map((t) => t.toBedId));
+    const eligible = this.eligibleBedIds();
+    return current.wards.flatMap((w) =>
+      w.rooms
+        .flatMap((r) => r.beds)
+        .filter((b) => b.status === 'AVAILABLE' && !spokenFor.has(b.bedId))
+        .filter((b) => eligible === null || eligible.has(b.bedId))
+        .map((b) => ({
+          bedId: b.bedId,
+          label: `${w.wardName} — ${b.bedNumber}`,
+          isolation: w.isolationCapable,
+          maternity: w.wardType === 'MATERNITY',
+        })),
+    );
+  });
 
   /**
    * True when the chosen destination cannot contain the patient's airborne
@@ -552,6 +590,7 @@ export class BedBoardComponent implements OnInit {
       reason: '',
       isolationOverride: false,
       isolationOverrideReason: '',
+      laborAcknowledged: false,
     };
     this.eligibleBedIds.set(new Set());
     this.beds
@@ -583,6 +622,9 @@ export class BedBoardComponent implements OnInit {
     if (!this.transferForm.toBedId || !this.transferForm.reason.trim()) {
       return false;
     }
+    if (this.transferNeedsLaborAck && !this.transferForm.laborAcknowledged) {
+      return false;
+    }
     if (this.destinationNeedsOverride()) {
       return (
         this.transferForm.isolationOverride && !!this.transferForm.isolationOverrideReason.trim()
@@ -607,6 +649,7 @@ export class BedBoardComponent implements OnInit {
         isolationOverrideReason: override
           ? this.transferForm.isolationOverrideReason.trim()
           : undefined,
+        laborAcknowledged: this.transferNeedsLaborAck ? true : undefined,
       })
       .subscribe({
         next: () => {
@@ -635,14 +678,31 @@ export class BedBoardComponent implements OnInit {
   }
 
   completeTransfer(order: TransferOrderResponse): void {
-    this.transfers.completeTransfer(order.id, {}).subscribe({
-      next: () => {
-        this.toast.success(this.translate.instant('BED_BOARD.TRANSFER_COMPLETED'));
-        this.refreshAll();
-      },
-      error: (err: HttpErrorResponse) =>
-        this.toast.error(this.serverReason(err, 'BED_BOARD.TRANSFER_COMPLETE_ERROR')),
-    });
+    // QA D3308: a labouring woman bound for a bed outside maternity is moved only after the warning.
+    if (order.laborAcknowledgementRequired) {
+      this.completingLaborTransfer.set(order);
+      return;
+    }
+    this.sendCompletion(order, false);
+  }
+
+  /** QA D3308: the labour warning was read and confirmed. */
+  confirmLaborTransferCompletion(order: TransferOrderResponse): void {
+    this.completingLaborTransfer.set(null);
+    this.sendCompletion(order, true);
+  }
+
+  private sendCompletion(order: TransferOrderResponse, laborAcknowledged: boolean): void {
+    this.transfers
+      .completeTransfer(order.id, laborAcknowledged ? { laborAcknowledged: true } : {})
+      .subscribe({
+        next: () => {
+          this.toast.success(this.translate.instant('BED_BOARD.TRANSFER_COMPLETED'));
+          this.refreshAll();
+        },
+        error: (err: HttpErrorResponse) =>
+          this.toast.error(this.serverReason(err, 'BED_BOARD.TRANSFER_COMPLETE_ERROR')),
+      });
   }
 
   /** QA D1201: the pending transfer being cancelled; the shared reason dialog asks why. */

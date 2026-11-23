@@ -37,6 +37,8 @@ export interface TransferOrderResponse {
   /** Shown on the worklist so a porter sees them without opening the chart. */
   isolationPrecautions: IsolationPrecautionType[];
   destinationIsolationMismatch: boolean;
+  /** QA D3308: a woman in active labour, bound for a bed outside a maternity unit. */
+  laborAcknowledgementRequired?: boolean;
 }
 
 export interface TransferOrderRequest {
@@ -49,11 +51,15 @@ export interface TransferOrderRequest {
   isolationOverride?: boolean;
   /** Required by the backend when isolationOverride is true. */
   isolationOverrideReason?: string;
+  /** QA D3308: the labour warning was seen; required for a labouring woman leaving maternity. */
+  laborAcknowledged?: boolean;
 }
 
 export interface TransferCompletionRequest {
   completedByStaffId?: string;
   notes?: string;
+  /** QA D3308: the labour warning was seen by whoever carries the move out. */
+  laborAcknowledged?: boolean;
 }
 
 /** The destination has been held out of circulation, so a reason is required. */

@@ -4,17 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.mapper.LabResultMapper;
-import com.example.hms.model.Hospital;
 import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabResult;
 import com.example.hms.model.LabResultComponent;
@@ -42,7 +38,6 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.MessageSource;
-import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * r65 D2623: a critical NFS could not be acknowledged. Every read-back but the
@@ -79,7 +74,6 @@ class CriticalPanelReadBackTest {
     @BeforeEach
     void setUp() {
         LockAssert.TestHelper.makeAllAssertsPass(true);
-        ReflectionTestUtils.setField(service, "escalateAfterMinutes", 30L);
         User orderer = new User();
         orderer.setId(UUID.randomUUID());
         orderer.setUsername("dr.diallo");
@@ -190,26 +184,4 @@ class CriticalPanelReadBackTest {
 
     // ── D2183 ────────────────────────────────────────────────────────────
 
-    @Test
-    void tierTwoAdminsAreAskedToGetAClinicianToReadBackNotToAcknowledge() {
-        UUID hospitalId = UUID.randomUUID();
-        Hospital hospital = Hospital.builder().name("CHU").code("CHU").build();
-        hospital.setId(hospitalId);
-        panel.getLabOrder().setHospital(hospital);
-        panel.setCriticalNotifiedAt(LocalDateTime.now().minusHours(2));
-        panel.setCriticalEscalationLevel((short) 1);
-        when(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, "ROLE_HOSPITAL_ADMIN"))
-            .thenReturn(List.of("admin.kabore"));
-        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class),
-            org.mockito.ArgumentMatchers.anyShort())).thenReturn(List.of(panel));
-
-        service.escalateOverdue();
-
-        // The orderer is still asked to review and acknowledge,
-        verify(notificationService).created(argThat(m -> m.contains("acknowledge") || m.contains("acquittez")),
-            eq("dr.diallo"), eq("CRITICAL_LAB_RESULT_ESCALATION"));
-        // the admin to get a clinician to read the value back.
-        verify(notificationService).created(argThat(m -> m.contains("clinician") || m.contains("clinicien")),
-            eq("admin.kabore"), eq("CRITICAL_LAB_RESULT_ESCALATION"));
-    }
 }

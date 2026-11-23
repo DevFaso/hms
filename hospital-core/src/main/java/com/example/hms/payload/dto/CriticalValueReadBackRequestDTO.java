@@ -27,4 +27,10 @@ public class CriticalValueReadBackRequestDTO {
     @Size(max = 255)
     @Schema(description = "The result value as repeated back by the clinician", example = "6.8")
     private String repeatedValue;
+
+    /** How the result reached the clinician: IN_APP (the default), PHONE or IN_PERSON. */
+    @jakarta.validation.constraints.Pattern(regexp = "IN_APP|PHONE|IN_PERSON",
+        message = "{criticalValueReadBack.channel.invalid}")
+    @Schema(description = "The channel the critical result reached the clinician by", example = "PHONE")
+    private String channel;
 }

@@ -132,5 +132,8 @@ public class BedBoardDTO {
          * reason for showing precautions.
          */
         private boolean isolationMismatch;
+
+        /** QA D3308: she has an active labour episode at this hospital; a move out of maternity warns. */
+        private boolean inLabor;
     }
 }

@@ -96,6 +96,23 @@ public class TransfusionCrossmatch extends BaseEntity {
     @Builder.Default
     private boolean unitIssued = false;
 
+    /**
+     * QA D3351 (V362): what makes this crossmatch « compatibilisé » for an allo-immunised patient: the sample it
+     * was done on, the indirect antiglobulin technique, and the laboratory's two attestations about the unit
+     * (negative for the target antigen, RH-KEL1 matched). Null for a patient with no antibody.
+     */
+    @Column(name = "sample_collected_at")
+    private LocalDateTime sampleCollectedAt;
+
+    @Column(name = "antiglobulin_method")
+    private Boolean antiglobulinMethod;
+
+    @Column(name = "antigen_negative")
+    private Boolean antigenNegative;
+
+    @Column(name = "rh_kell_matched")
+    private Boolean rhKellMatched;
+
     /** Compatible, and the reservation has not lapsed. */
     public boolean isUsableAt(LocalDateTime now) {
         return Boolean.TRUE.equals(compatible)

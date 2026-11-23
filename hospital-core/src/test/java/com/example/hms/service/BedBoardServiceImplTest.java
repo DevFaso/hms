@@ -3,6 +3,7 @@ package com.example.hms.service;
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.BedStatus;
 import com.example.hms.enums.IsolationPrecautionType;
+import com.example.hms.enums.LaborStatus;
 import com.example.hms.enums.WardType;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.model.Admission;
@@ -15,11 +16,14 @@ import com.example.hms.payload.dto.bed.BedBoardDTO;
 import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.BedRepository;
 import com.example.hms.repository.IsolationPrecautionRepository;
+import com.example.hms.repository.LaborEpisodeRepository;
 import com.example.hms.service.impl.BedBoardServiceImpl;
+import com.example.hms.service.maternity.LabourBedMove;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -30,12 +34,18 @@ import org.mockito.quality.Strictness;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -347,5 +357,50 @@ class BedBoardServiceImplTest {
         assertThatThrownBy(() -> service.getBoard())
             .isInstanceOf(BusinessException.class)
             .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("bed.r7.boardNeedsHospital"));
+    }
+
+    // ── QA D3308 (r70): the women in active labour ────────────────────────
+
+    @Test
+    void theBoardMarksTheWomenInActiveLabourWithOneQuestion() {
+        Bed first = bed(generalWard, "1", "101", BedStatus.OCCUPIED);
+        Bed second = bed(generalWard, "2", "101", BedStatus.OCCUPIED);
+        Bed empty = bed(generalWard, "3", "102", BedStatus.AVAILABLE);
+        Patient inLabour = patient("Aminata", "Diallo");
+        Patient postpartum = patient("Fatou", "Sow");
+        when(bedRepository.findBoardBeds(hospitalId)).thenReturn(List.of(first, second, empty));
+        when(admissionRepository.findBedHoldingAdmissions(any(), any()))
+            .thenReturn(List.of(admission(inLabour, first), admission(postpartum, second)));
+        LaborEpisodeRepository episodes =
+            mock(LaborEpisodeRepository.class);
+        when(episodes.findPatientIdsWithStatusAmong(any(), any(), any())).thenReturn(List.of(inLabour.getId()));
+        service.setLabourBedMove(new LabourBedMove(episodes));
+
+        BedBoardDTO board = service.getBoard();
+
+        List<BedBoardDTO.BedBoardEntryDTO> beds = board.getWards().get(0).getRooms().stream()
+            .flatMap(room -> room.getBeds().stream()).toList();
+        assertThat(beds).filteredOn(entry -> entry.getOccupant() != null)
+            .extracting(entry -> entry.getOccupant().getPatientName(), entry -> entry.getOccupant().isInLabor())
+            .containsExactlyInAnyOrder(tuple("Aminata Diallo", true),
+                tuple("Fatou Sow", false));
+        // One question for the whole board, about the occupants of this hospital only.
+        ArgumentCaptor<Collection<UUID>> asked = ArgumentCaptor.captor();
+        verify(episodes).findPatientIdsWithStatusAmong(
+            eq(hospitalId),
+            eq(LaborStatus.ACTIVE), asked.capture());
+        assertThat(asked.getValue()).containsExactlyInAnyOrder(inLabour.getId(), postpartum.getId());
+    }
+
+    @Test
+    void aBoardWithNoOccupantAsksNothingAboutLabour() {
+        when(bedRepository.findBoardBeds(hospitalId))
+            .thenReturn(List.of(bed(generalWard, "1", "101", BedStatus.AVAILABLE)));
+        LaborEpisodeRepository episodes =
+            mock(LaborEpisodeRepository.class);
+        service.setLabourBedMove(new LabourBedMove(episodes));
+
+        assertThat(service.getBoard().getWards()).hasSize(1);
+        verifyNoInteractions(episodes);
     }
 }

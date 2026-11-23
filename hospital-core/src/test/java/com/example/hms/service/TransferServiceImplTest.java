@@ -811,4 +811,89 @@ class TransferServiceImplTest {
             .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
         verify(bedAssignmentService, never()).assignBed(any(), any(), any());
     }
+
+    // ---- QA D3308 (r70): a woman in active labour leaves a maternity ward only knowingly ----
+
+    private com.example.hms.repository.LaborEpisodeRepository inLabour(boolean active) {
+        com.example.hms.repository.LaborEpisodeRepository episodes =
+            mock(com.example.hms.repository.LaborEpisodeRepository.class);
+        when(episodes.existsByPatient_IdAndHospital_IdAndStatus(patient.getId(), hospitalId,
+            com.example.hms.enums.LaborStatus.ACTIVE)).thenReturn(active);
+        service.setLabourBedMove(new com.example.hms.service.maternity.LabourBedMove(episodes));
+        return episodes;
+    }
+
+    @Test
+    void d3308_orderingALabouringWomanOutOfMaternityNeedsTheAcknowledgementAndHoldsNothingWithoutIt() {
+        inLabour(true);
+        Ward surgery = ward("Chirurgie", "CHI", WardType.SURGICAL);
+        destinationBed = bed(surgery, "C-01", BedStatus.AVAILABLE);
+        TransferOrderRequestDTO silent = base().toBedId(destinationBed.getId()).build();
+
+        assertThatThrownBy(() -> service.requestTransfer(silent))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("laborAcknowledged"))
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.labor.acknowledgeRequired"));
+        verify(bedAssignmentService, never()).reserveBed(any(), any());
+
+        TransferOrderResponseDTO ordered = service.requestTransfer(
+            base().toBedId(destinationBed.getId()).laborAcknowledged(true).build());
+        assertThat(ordered.getStatus()).isEqualTo(TransferOrderStatus.REQUESTED);
+        // The worklist says it: whoever carries the move out is warned too.
+        assertThat(ordered.isLaborAcknowledgementRequired()).isTrue();
+        verify(bedAssignmentService).reserveBed(destinationBed.getId(), hospitalId);
+    }
+
+    @Test
+    void d3308_aMoveBetweenMaternityBedsAndAWomanNotInLabourAskNothing() {
+        com.example.hms.repository.LaborEpisodeRepository episodes = inLabour(true);
+        // Labour room to delivery room: her ordinary care.
+        assertThat(service.requestTransfer(base().build()).isLaborAcknowledgementRequired()).isFalse();
+        verifyNoInteractions(episodes);
+
+        inLabour(false);
+        Ward surgery = ward("Chirurgie", "CHI", WardType.SURGICAL);
+        destinationBed = bed(surgery, "C-01", BedStatus.AVAILABLE);
+        assertThat(service.requestTransfer(base().toBedId(destinationBed.getId()).build())
+            .isLaborAcknowledgementRequired()).isFalse();
+    }
+
+    @Test
+    void d3308_carryingTheMoveOutNeedsTheAcknowledgementToo() {
+        inLabour(true);
+        Ward surgery = ward("Chirurgie", "CHI", WardType.SURGICAL);
+        destinationBed = bed(surgery, "C-01", BedStatus.AVAILABLE);
+        TransferOrder order = pendingOrder(destinationBed);
+        when(transferOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        UUID orderId = order.getId();
+        TransferCompletionRequestDTO silent = TransferCompletionRequestDTO.builder().build();
+
+        assertThatThrownBy(() -> service.completeTransfer(orderId, silent))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("laborAcknowledged"));
+        verify(bedAssignmentService, never()).assignBed(any(), any(), any());
+
+        assertThat(service.completeTransfer(orderId, TransferCompletionRequestDTO.builder().laborAcknowledged(true).build())
+            .getStatus()).isEqualTo(TransferOrderStatus.COMPLETED);
+    }
+
+    @Test
+    void d3308_aDirectBedChangeOutOfMaternityIsSentToTheTransferOrder() {
+        com.example.hms.repository.LaborEpisodeRepository episodes =
+            mock(com.example.hms.repository.LaborEpisodeRepository.class);
+        when(episodes.existsByPatient_IdAndHospital_IdAndStatus(patient.getId(), hospitalId,
+            com.example.hms.enums.LaborStatus.ACTIVE)).thenReturn(true);
+        com.example.hms.service.maternity.LabourBedMove rule = new com.example.hms.service.maternity.LabourBedMove(episodes);
+        Bed surgical = bed(ward("Chirurgie", "CHI", WardType.SURGICAL), "C-01", BedStatus.AVAILABLE);
+
+        assertThatThrownBy(() -> rule.requireTransferOrderForABedChange(admission, surgical, hospitalId, "bedId"))
+            .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class,
+                ex -> assertThat(ex.getField()).isEqualTo("bedId"))
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.labor.useTransferOrder"));
+        // Her first bed is an admission, not a move; another maternity bed asks nothing.
+        admission.setBed(null);
+        rule.requireTransferOrderForABedChange(admission, surgical, hospitalId, "bedId");
+        admission.setBed(originBed);
+        rule.requireTransferOrderForABedChange(admission, destinationBed, hospitalId, "bedId");
+    }
 }

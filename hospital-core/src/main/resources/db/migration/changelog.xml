@@ -3952,4 +3952,44 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V362 (QA r70: D3304, D3351): the obstetric alert escalation accepts
+         the source 'VITAL_SIGN' (a maternal early-warning page from a ward
+         vital set); the positive antibody screen rule's columns and tables.
+         Additive, IF NOT EXISTS / DROP-then-ADD of one CHECK, no DO block.
+         ================================================================= -->
+    <changeSet id="V362-r70-maternal-alert-source-and-antibody-rule" author="hms-team" runOnChange="false">
+        <sqlFile path="V362__r70_maternal_alert_source_and_antibody_rule.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V363 (QA r70 scorecard C5): the critical-result escalation ladder:
+         per-hospital minutes and the médecin-chef on hospital.hospitals, the
+         role and channel of an acknowledgement on lab.lab_results, and
+         lab.critical_result_incidents. Additive, IF NOT EXISTS, no DO block.
+         ================================================================= -->
+    <changeSet id="V363-r70-critical-result-escalation" author="hms-team" runOnChange="false">
+        <sqlFile path="V363__r70_critical_result_escalation.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V364 (QA r70 scorecard C5, review of #1291): the results already
+         waiting when the ladder is switched on are marked (never texted
+         about), an incident says how it ended (read-back, amended, no longer
+         critical), and a result may have several incidents, one open at a
+         time. Additive, idempotent, no DO block.
+         ================================================================= -->
+    <changeSet id="V364-r70-critical-escalation-backlog-and-incident-end" author="hms-team" runOnChange="false">
+        <sqlFile path="V364__r70_critical_escalation_backlog_and_incident_end.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

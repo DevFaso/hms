@@ -71,7 +71,8 @@ import static org.mockito.Mockito.when;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-@Import({TransfusionServiceImpl.class, TransfusionMapper.class, TransfusionRunningBagPostgresIT.Config.class})
+@Import({TransfusionServiceImpl.class,
+    com.example.hms.service.transfusion.PositiveAntibodyScreenService.class, TransfusionMapper.class, TransfusionRunningBagPostgresIT.Config.class})
 @DisplayName("a crossmatch result on a bag already running, on PostgreSQL")
 class TransfusionRunningBagPostgresIT {
 
