@@ -320,7 +320,7 @@ class WardLoadPostgresIT {
         List<NurseMedicationTaskResponseDTO> listed = nurseTasks.getMedicationTasks(nurseUser, HOSPITAL, null);
         LocalDateTime now = LocalDateTime.now();
 
-        new org.springframework.transaction.support.TransactionTemplate(transactions).executeWithoutResult(tx -> {
+        readOnlyComparisonTransaction().executeWithoutResult(tx -> {
             Map<UUID, Admission> stays = new java.util.HashMap<>();
             for (Admission stay : admissions.findActiveAdmissionsByHospital(HOSPITAL)) {
                 stays.putIfAbsent(stay.getPatient().getId(), stay);
@@ -402,7 +402,7 @@ class WardLoadPostgresIT {
             assertThat(prescriptionRepository.searchAtHospital(HOSPITAL,
                 com.example.hms.utility.PatientMatchKeys.nameContainsPattern("zzzz-nothing"), FIRST).getTotalElements()).isZero();
         };
-        new org.springframework.transaction.support.TransactionTemplate(transactions).executeWithoutResult(tx -> inTx.run());
+        readOnlyComparisonTransaction().executeWithoutResult(tx -> inTx.run());
     }
 
     @Test
@@ -427,6 +427,13 @@ class WardLoadPostgresIT {
         assertThat(row.getHospitalId()).isEqualTo(HOSPITAL);
     }
 
+    /** Read-only oracles must not dirty-check every previously loaded entity before each lookup. */
+    private org.springframework.transaction.support.TransactionTemplate readOnlyComparisonTransaction() {
+        var transaction = new org.springframework.transaction.support.TransactionTemplate(transactions);
+        transaction.setReadOnly(true);
+        return transaction;
+    }
+
     private long found(String term) {
         return prescriptions.search(term, List.of(), FIRST, Locale.FRENCH).getTotalElements();
     }
@@ -434,7 +441,7 @@ class WardLoadPostgresIT {
     @Test
     @DisplayName("the catalogue's flag: item, code, nothing to ask, another hospital's line")
     void controlledAmong() {
-        new org.springframework.transaction.support.TransactionTemplate(transactions).executeWithoutResult(tx -> {
+        readOnlyComparisonTransaction().executeWithoutResult(tx -> {
             List<Prescription> sample = prescriptionRepository.findByHospital_Id(HOSPITAL, PageRequest.of(0, 500, NEWEST_FIRST)).getContent();
             java.util.Set<UUID> batch = controlledResolver.controlledAmong(sample);
             assertThat(batch).isNotEmpty();
@@ -457,7 +464,7 @@ class WardLoadPostgresIT {
     @Test
     @DisplayName("the latest observation sets: not a weight alone, not another hospital's, none is no entry")
     void latestObservationSets() {
-        new org.springframework.transaction.support.TransactionTemplate(transactions).executeWithoutResult(tx -> {
+        readOnlyComparisonTransaction().executeWithoutResult(tx -> {
             List<UUID> patients = registrations.findActiveNamesForHospital(HOSPITAL).stream()
                 .map(r -> r.patientId()).toList();
             Map<UUID, com.example.hms.model.PatientVitalSign> batch = wardReader.latestObservationSets(HOSPITAL, patients);
