@@ -48,15 +48,28 @@ export interface AntibodyWorkup {
   recordedByDisplay: string | null;
   recordedAt: string;
   notes: string | null;
+  /** The hospital that made this record. */
+  hospitalName?: string | null;
+  /** Made at another hospital: only the antibody, the date and the hospital's name are filled. */
+  otherHospital?: boolean;
 }
 
-/** QA D3351: the permanent allo-immunisation flag and what the biologist recorded. */
+/**
+ * QA D3351: the permanent allo-immunisation flag and what the biologists recorded. The flag follows the
+ * patient: it may rest on another hospital's record, of which only the antibody, the date and the hospital's
+ * name are sent.
+ */
 export interface AntibodyStatusResponse {
   patientId: string;
   alloImmunised: boolean;
   positiveScreenAt: string | null;
+  positiveScreenHospitalName?: string | null;
   identified: boolean;
   antibodySpecificities: string | null;
+  identifiedHospitalName?: string | null;
+  identifiedAt?: string | null;
+  /** The other hospitals this safety information comes from; empty when it is all on record here. */
+  otherHospitalNames?: string[];
   workups: AntibodyWorkup[];
 }
 

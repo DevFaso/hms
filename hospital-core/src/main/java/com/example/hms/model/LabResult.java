@@ -260,7 +260,7 @@ public class LabResult extends BaseEntity {
      */
     @Builder.Default
     @Column(name = "critical_backlog", nullable = false)
-    private boolean criticalBacklog = false;
+    private boolean escalationBacklog = false;
 
     @Builder.Default
     @Column(name = "released", nullable = false)

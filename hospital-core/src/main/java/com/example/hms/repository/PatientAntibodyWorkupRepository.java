@@ -8,15 +8,22 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Every read is by patient AND hospital: a work-up is the record of the hospital that made it. */
+/**
+ * A work-up is written at the hospital that made it, and read for the PATIENT, wherever it was made (owner decision
+ * 2026-11-22): an alloantibody is permanent and can become undetectable, so the hospital that transfuses next must
+ * know of it. The reads below are by patient only, deliberately, and are not narrowed by the record-sharing
+ * choice of the patient: {@code PositiveAntibodyScreenService} is their one reader, shows another hospital's row
+ * as the fact, the antibody, the date and that hospital's name only, and accounts each such read. The one read by
+ * hospital is the referral decision, which serves a request of that hospital.
+ */
 public interface PatientAntibodyWorkupRepository extends JpaRepository<PatientAntibodyWorkup, UUID> {
 
-    List<PatientAntibodyWorkup> findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(UUID patientId, UUID hospitalId);
+    List<PatientAntibodyWorkup> findByPatient_IdOrderByRecordedAtDesc(UUID patientId);
 
-    boolean existsByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId);
+    boolean existsByPatient_Id(UUID patientId);
 
-    Optional<PatientAntibodyWorkup> findFirstByPatient_IdAndHospital_IdAndStatusOrderByRecordedAtDesc(
-        UUID patientId, UUID hospitalId, AntibodyWorkupStatus status);
+    Optional<PatientAntibodyWorkup> findFirstByPatient_IdAndStatusOrderByRecordedAtDesc(
+        UUID patientId, AntibodyWorkupStatus status);
 
     boolean existsByPatient_IdAndHospital_IdAndStatusAndTransfusionRequestId(
         UUID patientId, UUID hospitalId, AntibodyWorkupStatus status, UUID transfusionRequestId);

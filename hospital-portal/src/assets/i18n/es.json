@@ -1900,6 +1900,7 @@
       "CROSS_TENANT_READ": "Lectura del superadministrador en todos los hospitales: {{view}} ({{rows}} filas)",
       "CROSS_HOSPITAL_READ_LAB": "Solicitud de laboratorio de otro hospital consultada por el laboratorio que la realiza",
       "CROSS_HOSPITAL_READ_LAB_RESULT": "Resultado de laboratorio de otro hospital consultado por el laboratorio que lo realiza",
+      "CROSS_HOSPITAL_ANTIBODY_FLAG": "Alerta de aloinmunización de otro hospital consultada (seguridad transfusional, mostrada sea cual sea la elección de compartir el expediente)",
       "EMERGENCY_BLOOD_RELEASED": "Entrega de urgencia sin prueba cruzada de la unidad {{unit}} para la solicitud {{request}}",
       "EMERGENCY_BLOOD_RELEASED_O_POSITIVE": "Entrega de urgencia con decisión documentada O positivo de la unidad {{unit}} para la solicitud {{request}}",
       "EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE": "Entrega de urgencia — serológicamente incompatible, de la unidad {{unit}} para la solicitud {{request}}",
@@ -13713,7 +13714,10 @@
     "XM_ANTIGLOBULIN": "Realizada por la técnica de antiglobulina indirecta",
     "XM_ANTIGEN_NEGATIVE": "La unidad es negativa para el antígeno diana",
     "XM_RH_KELL": "La unidad respeta el fenotipo RH-KEL1",
-    "HAEMOLYSIS_WARNING": "Paciente aloinmunizado: una entrega sin prueba cruzada compatible conlleva riesgo de hemólisis. Avise al equipo clínico, mantenga el control a pie de cama; el biólogo realiza la prueba cruzada después (regla provisional)."
+    "HAEMOLYSIS_WARNING": "Paciente aloinmunizado: una entrega sin prueba cruzada compatible conlleva riesgo de hemólisis. Avise al equipo clínico, mantenga el control a pie de cama; el biólogo realiza la prueba cruzada después (regla provisional).",
+    "ANTIBODY_FROM_OTHER_HOSPITAL": "Información de seguridad transfusional registrada por: {{hospitals}}",
+    "ANTIBODY_KNOWN_IDENTIFIED": "Anticuerpo identificado: {{antibody}} ({{hospital}}, {{date}}).",
+    "ANTIBODY_KNOWN_NOT_IDENTIFIED": "Escrutinio de anticuerpos positivo, anticuerpo no identificado ({{hospital}}, {{date}})."
   },
   "MORTALITY": {
     "DISPUTE": "Impugnar este fallecimiento",

@@ -94,8 +94,10 @@ class PositiveAntibodyScreenServiceTest {
         hospital = new Hospital();
         hospital.setId(UUID.randomUUID());
         biologist = UUID.randomUUID();
-        when(groups.findByPatient_IdAndHospital_IdOrderByPerformedAtDesc(patient.getId(), hospital.getId()))
-            .thenReturn(history);
+        // The patient's positive screens, at every hospital, the newest first: as the repository returns them.
+        when(groups.findByPatient_IdAndAntibodyScreenOrderByPerformedAtDesc(patient.getId(), AntibodyScreenResult.POSITIVE))
+            .thenAnswer(call -> history.stream()
+                .filter(group -> group.getAntibodyScreen() == AntibodyScreenResult.POSITIVE).toList());
         when(roles.getCurrentUserId()).thenReturn(biologist);
         when(assignments.existsActiveWitness(biologist, hospital.getId(), PositiveAntibodyScreenPolicy.BIOLOGIST_ROLE_CODES))
             .thenReturn(true);
@@ -119,7 +121,7 @@ class PositiveAntibodyScreenServiceTest {
     }
 
     private void identified() {
-        when(workups.findFirstByPatient_IdAndHospital_IdAndStatusOrderByRecordedAtDesc(patient.getId(), hospital.getId(),
+        when(workups.findFirstByPatient_IdAndStatusOrderByRecordedAtDesc(patient.getId(),
             AntibodyWorkupStatus.IDENTIFIED)).thenReturn(Optional.of(PatientAntibodyWorkup.builder()
                 .status(AntibodyWorkupStatus.IDENTIFIED).antibodySpecificities("anti-K").recordedAt(NOW).build()));
     }
@@ -143,15 +145,15 @@ class PositiveAntibodyScreenServiceTest {
     @Test
     @DisplayName("a positive screen flags the patient, and a later negative screen never clears it")
     void aLaterNegativeScreenNeverClearsTheFlag() {
-        assertThat(service.alloImmunised(patient.getId(), hospital.getId())).isFalse();
+        assertThat(service.alloImmunised(patient.getId())).isFalse();
 
         screen(AntibodyScreenResult.POSITIVE, NOW.minusMonths(8));
-        assertThat(service.alloImmunised(patient.getId(), hospital.getId())).isTrue();
+        assertThat(service.alloImmunised(patient.getId())).isTrue();
 
         // Two negative screens since: the antibody is no longer detected, and still known.
         screen(AntibodyScreenResult.NEGATIVE, NOW.minusMonths(2));
         screen(AntibodyScreenResult.NEGATIVE, NOW.minusDays(1));
-        assertThat(service.alloImmunised(patient.getId(), hospital.getId())).isTrue();
+        assertThat(service.alloImmunised(patient.getId())).isTrue();
         AntibodyStatusResponseDTO status = service.status(patient.getId(), hospital.getId());
         assertThat(status.isAlloImmunised()).isTrue();
         assertThat(status.getPositiveScreenAt()).isEqualTo(NOW.minusMonths(8));
@@ -168,8 +170,8 @@ class PositiveAntibodyScreenServiceTest {
     @Test
     @DisplayName("an antibody the biologist recorded flags the patient with no positive screen here")
     void aBiologistsRecordFlagsThePatientToo() {
-        when(workups.existsByPatient_IdAndHospital_Id(patient.getId(), hospital.getId())).thenReturn(true);
-        assertThat(service.alloImmunised(patient.getId(), hospital.getId())).isTrue();
+        when(workups.existsByPatient_Id(patient.getId())).thenReturn(true);
+        assertThat(service.alloImmunised(patient.getId())).isTrue();
     }
 
     @Test
@@ -351,26 +353,26 @@ class PositiveAntibodyScreenServiceTest {
         TransfusionRequestRequestDTO.TransfusionRequestRequestDTOBuilder dto = TransfusionRequestRequestDTO.builder()
             .patientId(patient.getId()).productType(BloodProductType.PACKED_RED_CELLS);
 
-        assertThatThrownBy(() -> service.requireEmergencyDeclaration(dto.build(), patient.getId(), hospital.getId(),
+        assertThatThrownBy(() -> service.requireEmergencyDeclaration(dto.build(), patient.getId(),
             TransfusionUrgency.EMERGENCY)).satisfies(e -> assertThat(field(e)).isEqualTo("vitalUrgencyLevel"));
         dto.vitalUrgencyLevel(VitalUrgencyLevel.UVI);
-        assertThatThrownBy(() -> service.requireEmergencyDeclaration(dto.build(), patient.getId(), hospital.getId(),
+        assertThatThrownBy(() -> service.requireEmergencyDeclaration(dto.build(), patient.getId(),
             TransfusionUrgency.EMERGENCY)).satisfies(e -> assertThat(field(e)).isEqualTo("vitalUrgencyReason"));
         dto.vitalUrgencyReason("Hémorragie du post-partum, choc");
-        assertThatThrownBy(() -> service.requireEmergencyDeclaration(dto.build(), patient.getId(), hospital.getId(),
+        assertThatThrownBy(() -> service.requireEmergencyDeclaration(dto.build(), patient.getId(),
             TransfusionUrgency.EMERGENCY)).satisfies(e -> assertThat(field(e)).isEqualTo("preTransfusionSampleDrawn"));
         dto.preTransfusionSampleDrawn(true);
-        assertThatCode(() -> service.requireEmergencyDeclaration(dto.build(), patient.getId(), hospital.getId(),
+        assertThatCode(() -> service.requireEmergencyDeclaration(dto.build(), patient.getId(),
             TransfusionUrgency.EMERGENCY)).doesNotThrowAnyException();
 
         // A routine or an urgent request, and plasma, declare nothing: they are held by the routine rule.
         TransfusionRequestRequestDTO bare = TransfusionRequestRequestDTO.builder().patientId(patient.getId())
             .productType(BloodProductType.PACKED_RED_CELLS).build();
-        assertThatCode(() -> service.requireEmergencyDeclaration(bare, patient.getId(), hospital.getId(),
+        assertThatCode(() -> service.requireEmergencyDeclaration(bare, patient.getId(),
             TransfusionUrgency.URGENT)).doesNotThrowAnyException();
         assertThatCode(() -> service.requireEmergencyDeclaration(TransfusionRequestRequestDTO.builder()
             .patientId(patient.getId()).productType(BloodProductType.PLATELETS).build(), patient.getId(),
-            hospital.getId(), TransfusionUrgency.EMERGENCY)).doesNotThrowAnyException();
+            TransfusionUrgency.EMERGENCY)).doesNotThrowAnyException();
     }
 
     @Test
@@ -526,10 +528,11 @@ class PositiveAntibodyScreenServiceTest {
     void anIncompleteCallAsksNothing() {
         screen(AntibodyScreenResult.POSITIVE, NOW);
 
-        assertThat(service.alloImmunised(null, hospital.getId())).isFalse();
-        assertThat(service.alloImmunised(patient.getId(), null)).isFalse();
+        assertThat(service.alloImmunised(null)).isFalse();
+        assertThat(service.alloImmunisedShownAt(null, hospital.getId())).isFalse();
         assertThat(service.status(null, hospital.getId()).isAlloImmunised()).isFalse();
-        assertThat(service.status(patient.getId(), null).getWorkups()).isEmpty();
+        assertThat(service.status(null, hospital.getId()).getWorkups()).isEmpty();
+        assertThat(service.holdsShown(null)).isFalse();
         assertThat(service.holds(null)).isFalse();
         TransfusionRequest nobody = request(TransfusionUrgency.ROUTINE, BloodProductType.PACKED_RED_CELLS);
         nobody.setPatient(null);
@@ -553,11 +556,11 @@ class PositiveAntibodyScreenServiceTest {
     void theStatusShowsTheScreenAndTheRecords() {
         PatientBloodGroup positive = screen(AntibodyScreenResult.POSITIVE, NOW.minusDays(40));
         screen(AntibodyScreenResult.NEGATIVE, NOW.minusDays(1));
-        PatientAntibodyWorkup referred = PatientAntibodyWorkup.builder().status(AntibodyWorkupStatus.REFERRED)
+        PatientAntibodyWorkup referred = PatientAntibodyWorkup.builder().hospital(hospital).status(AntibodyWorkupStatus.REFERRED)
             .referralCentre("CNTS").decisionReason("Hb 5").recordedAt(NOW.minusDays(39)).recordedByDisplay("Dr Kaboré").build();
-        PatientAntibodyWorkup named = PatientAntibodyWorkup.builder().status(AntibodyWorkupStatus.IDENTIFIED)
+        PatientAntibodyWorkup named = PatientAntibodyWorkup.builder().hospital(hospital).status(AntibodyWorkupStatus.IDENTIFIED)
             .antibodySpecificities("anti-K").recordedAt(NOW.minusDays(36)).recordedByDisplay("Dr Kaboré").build();
-        when(workups.findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patient.getId(), hospital.getId()))
+        when(workups.findByPatient_IdOrderByRecordedAtDesc(patient.getId()))
             .thenReturn(List.of(named, referred));
 
         AntibodyStatusResponseDTO status = service.status(patient.getId(), hospital.getId(), "Awa Sawadogo");
@@ -582,7 +585,7 @@ class PositiveAntibodyScreenServiceTest {
         TransfusionRequest routine = request(TransfusionUrgency.ROUTINE, BloodProductType.PACKED_RED_CELLS);
         PatientAntibodyWorkup known = PatientAntibodyWorkup.builder().status(AntibodyWorkupStatus.IDENTIFIED)
             .antibodySpecificities("anti-K").recordedAt(NOW.minusDays(9)).build();
-        when(workups.findFirstByPatient_IdAndHospital_IdAndStatusOrderByRecordedAtDesc(patient.getId(), hospital.getId(),
+        when(workups.findFirstByPatient_IdAndStatusOrderByRecordedAtDesc(patient.getId(),
             AntibodyWorkupStatus.IDENTIFIED)).thenReturn(Optional.of(known));
         CrossmatchRequestDTO complete = compatibilised().build();
 
@@ -612,10 +615,10 @@ class PositiveAntibodyScreenServiceTest {
     @Test
     @DisplayName("review L4: an antibody recorded with no positive screen here (known from elsewhere) serves, until a positive screen comes")
     void anAntibodyKnownFromElsewhereServesUntilAPositiveScreenHere() {
-        when(workups.existsByPatient_IdAndHospital_Id(patient.getId(), hospital.getId())).thenReturn(true);
+        when(workups.existsByPatient_Id(patient.getId())).thenReturn(true);
         PatientAntibodyWorkup known = PatientAntibodyWorkup.builder().status(AntibodyWorkupStatus.IDENTIFIED)
             .antibodySpecificities("anti-E").recordedAt(NOW.minusDays(30)).build();
-        when(workups.findFirstByPatient_IdAndHospital_IdAndStatusOrderByRecordedAtDesc(patient.getId(), hospital.getId(),
+        when(workups.findFirstByPatient_IdAndStatusOrderByRecordedAtDesc(patient.getId(),
             AntibodyWorkupStatus.IDENTIFIED)).thenReturn(Optional.of(known));
         TransfusionRequest routine = request(TransfusionUrgency.ROUTINE, BloodProductType.PACKED_RED_CELLS);
 
@@ -653,5 +656,138 @@ class PositiveAntibodyScreenServiceTest {
         assertThatThrownBy(() -> service.requireRoutineIssueAllowed(routine, plain))
             .isInstanceOf(FieldBusinessException.class);
         assertThat(service.requireRoutineIssueAllowed(routine, complete)).isFalse();
+    }
+
+    // ── Owner decision 2026-11-22: the flag follows the patient across hospitals ───────────────────
+
+    private Hospital anotherHospital(String name) {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        other.setName(name);
+        return other;
+    }
+
+    @Test
+    @DisplayName("positive at hospital A, negative later at hospital B: still flagged at B, red cells held at B, and the read at B is accounted against A")
+    void aFlagRecordedAtAnotherHospitalFollowsThePatient() {
+        com.example.hms.service.recordaccess.CrossHospitalReachRecorder reach =
+            mock(com.example.hms.service.recordaccess.CrossHospitalReachRecorder.class);
+        service.setReachRecorder(reach);
+        hospital.setName("Hôpital B");
+        Hospital hospitalA = anotherHospital("CHU A");
+        // The positive screen was recorded at A; the newest screen, at B (this hospital), is negative.
+        PatientBloodGroup atA = screen(AntibodyScreenResult.POSITIVE, NOW.minusDays(200));
+        atA.setHospital(hospitalA);
+        screen(AntibodyScreenResult.NEGATIVE, NOW.minusHours(2));
+        TransfusionRequest atB = request(TransfusionUrgency.ROUTINE, BloodProductType.PACKED_RED_CELLS);
+
+        assertThat(service.alloImmunised(patient.getId())).isTrue();
+        assertThat(service.holds(atB)).isTrue();
+        assertThat(service.workupServes(atB)).isFalse();
+        assertThatThrownBy(crossmatched(atB, compatibilised().build()))
+            .isInstanceOfSatisfying(FieldBusinessException.class, refusal -> assertThat(refusal.getMessageKey())
+                .isEqualTo(PositiveAntibodyScreenPolicy.Missing.WORKUP.messageKey()));
+        // Enforcing the rule shows nothing to anybody: nothing is accounted for it.
+        org.mockito.Mockito.verifyNoInteractions(reach);
+
+        AntibodyStatusResponseDTO shown = service.status(patient.getId(), hospital.getId(), "Awa Sawadogo");
+
+        assertThat(shown.isAlloImmunised()).isTrue();
+        assertThat(shown.isIdentified()).isFalse();
+        assertThat(shown.getPositiveScreenAt()).isEqualTo(atA.getPerformedAt());
+        assertThat(shown.getPositiveScreenHospitalName()).isEqualTo("CHU A");
+        assertThat(shown.getOtherHospitalNames()).containsExactly("CHU A");
+        assertThat(shown.getWorkups()).isEmpty();
+        ArgumentCaptor<java.util.Map<String, Long>> perSource = ArgumentCaptor.captor();
+        verify(reach).recordReach(org.mockito.ArgumentMatchers.eq(patient.getId()),
+            org.mockito.ArgumentMatchers.eq(hospital.getId()), org.mockito.ArgumentMatchers.eq(biologist),
+            org.mockito.ArgumentMatchers.isNull(), perSource.capture(),
+            org.mockito.ArgumentMatchers.eq(PositiveAntibodyScreenService.REACH_DESCRIPTION));
+        assertThat(perSource.getValue()).containsOnlyKeys(hospitalA.getId().toString());
+
+        // The flag shown on the group and on the request is accounted the same way.
+        assertThat(service.alloImmunisedShownAt(patient.getId(), hospital.getId())).isTrue();
+        assertThat(service.holdsShown(atB)).isTrue();
+        verify(reach, times(3)).recordReach(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("an antibody identified at hospital A serves at hospital B; of A's record B sees the antibody, the date and A's name, and nothing of its text")
+    void anIdentificationMadeElsewhereServesAndShowsTheMinimum() {
+        hospital.setName("Hôpital B");
+        Hospital hospitalA = anotherHospital("CHU A");
+        PatientBloodGroup atA = screen(AntibodyScreenResult.POSITIVE, NOW.minusDays(200));
+        atA.setHospital(hospitalA);
+        PatientAntibodyWorkup identifiedAtA = PatientAntibodyWorkup.builder().hospital(hospitalA).patient(patient)
+            .status(AntibodyWorkupStatus.IDENTIFIED).antibodySpecificities("anti-K").recordedAt(NOW.minusDays(199))
+            .recordedByDisplay("Dr Kaboré (A)").notes("Titre 1/64, panel du 2026-05-04").build();
+        identifiedAtA.setId(UUID.randomUUID());
+        PatientAntibodyWorkup referredAtA = PatientAntibodyWorkup.builder().hospital(hospitalA).patient(patient)
+            .status(AntibodyWorkupStatus.REFERRED).referralCentre("CNTS Ouagadougou").decisionReason("Hb 5 g/dL")
+            .transfusionRequestId(UUID.randomUUID()).recordedAt(NOW.minusDays(200)).recordedByDisplay("Dr Kaboré (A)").build();
+        PatientAntibodyWorkup referredHere = PatientAntibodyWorkup.builder().hospital(hospital).patient(patient)
+            .status(AntibodyWorkupStatus.REFERRED).referralCentre("CRTS Bobo").decisionReason("Hémorragie")
+            .recordedAt(NOW.minusDays(1)).recordedByDisplay("Dr Sanou (B)").notes("note d'ici").build();
+        when(workups.findByPatient_IdOrderByRecordedAtDesc(patient.getId()))
+            .thenReturn(List.of(referredHere, identifiedAtA, referredAtA));
+        when(workups.findFirstByPatient_IdAndStatusOrderByRecordedAtDesc(patient.getId(), AntibodyWorkupStatus.IDENTIFIED))
+            .thenReturn(Optional.of(identifiedAtA));
+        TransfusionRequest atB = request(TransfusionUrgency.ROUTINE, BloodProductType.PACKED_RED_CELLS);
+
+        // B can make a unit compatible: the antibody is known.
+        assertThat(service.workupServes(atB)).isTrue();
+        assertThatCode(crossmatched(atB, compatibilised().build())).doesNotThrowAnyException();
+
+        AntibodyStatusResponseDTO shown = service.status(patient.getId(), hospital.getId());
+
+        assertThat(shown.isIdentified()).isTrue();
+        assertThat(shown.getAntibodySpecificities()).isEqualTo("anti-K");
+        assertThat(shown.getIdentifiedHospitalName()).isEqualTo("CHU A");
+        assertThat(shown.getIdentifiedAt()).isEqualTo(NOW.minusDays(199));
+        assertThat(shown.getOtherHospitalNames()).containsExactly("CHU A");
+        // This hospital's own record in full; A's identification with the minimum; A's referral not listed.
+        assertThat(shown.getWorkups()).hasSize(2);
+        AntibodyStatusResponseDTO.Workup own = shown.getWorkups().get(0);
+        assertThat(own.isOtherHospital()).isFalse();
+        assertThat(own.getReferralCentre()).isEqualTo("CRTS Bobo");
+        assertThat(own.getNotes()).isEqualTo("note d'ici");
+        assertThat(own.getHospitalName()).isEqualTo("Hôpital B");
+        AntibodyStatusResponseDTO.Workup fromA = shown.getWorkups().get(1);
+        assertThat(fromA.isOtherHospital()).isTrue();
+        assertThat(fromA.getStatus()).isEqualTo(AntibodyWorkupStatus.IDENTIFIED);
+        assertThat(fromA.getAntibodySpecificities()).isEqualTo("anti-K");
+        assertThat(fromA.getRecordedAt()).isEqualTo(NOW.minusDays(199));
+        assertThat(fromA.getHospitalName()).isEqualTo("CHU A");
+        assertThat(fromA.getId()).isNull();
+        assertThat(fromA.getNotes()).isNull();
+        assertThat(fromA.getRecordedByDisplay()).isNull();
+        assertThat(fromA.getReferralCentre()).isNull();
+        assertThat(fromA.getDecisionReason()).isNull();
+        assertThat(fromA.getTransfusionRequestId()).isNull();
+        // Nothing of A's text travels in any field of what is sent.
+        assertThat(shown.toString()).doesNotContain("Titre").doesNotContain("Kaboré").doesNotContain("CNTS")
+            .doesNotContain("Hb 5");
+    }
+
+    @Test
+    @DisplayName("information all on record at this hospital names no other hospital and is not accounted as a cross-hospital read; an account that fails never fails the read")
+    void aFlagHeldHereIsNoCrossHospitalRead() {
+        com.example.hms.service.recordaccess.CrossHospitalReachRecorder reach =
+            mock(com.example.hms.service.recordaccess.CrossHospitalReachRecorder.class);
+        service.setReachRecorder(reach);
+        screen(AntibodyScreenResult.POSITIVE, NOW.minusDays(2));
+
+        AntibodyStatusResponseDTO shown = service.status(patient.getId(), hospital.getId());
+
+        assertThat(shown.isAlloImmunised()).isTrue();
+        assertThat(shown.getOtherHospitalNames()).isEmpty();
+        ArgumentCaptor<java.util.Map<String, Long>> perSource = ArgumentCaptor.captor();
+        verify(reach).recordReach(any(), any(), any(), any(), perSource.capture(), any());
+        assertThat(perSource.getValue()).as("nothing surfaced from another hospital").isEmpty();
+
+        org.mockito.Mockito.doThrow(new IllegalStateException("audit down")).when(reach)
+            .recordReach(any(), any(), any(), any(), any(), any());
+        assertThat(service.alloImmunisedShownAt(patient.getId(), hospital.getId())).isTrue();
+        assertThat(service.status(patient.getId(), hospital.getId()).isAlloImmunised()).isTrue();
     }
 }

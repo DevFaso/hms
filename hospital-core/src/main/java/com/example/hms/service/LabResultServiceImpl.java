@@ -978,7 +978,7 @@ public class LabResultServiceImpl implements LabResultService {
             // QA r70 (C5): the unanswered episode was about the old value: its incident closes as amended (a
             // new one opens if the new value goes unanswered too), and a page about the new value is a new
             // page, texted like any other.
-            labResult.setCriticalBacklog(false);
+            labResult.setEscalationBacklog(false);
             criticalValueNotificationService.incidentEndedByAmendment(labResult);
         }
 

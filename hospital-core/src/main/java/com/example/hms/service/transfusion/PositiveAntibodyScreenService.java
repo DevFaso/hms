@@ -53,9 +53,15 @@ import java.util.UUID;
  * « provisoire ») needs from the record, and every place it is enforced. {@code TransfusionServiceImpl} calls it
  * where a request is raised, a crossmatch is written and a unit leaves the laboratory; it holds no way round.
  *
- * <p>Everything is read and written at the caller's hospital: the flag, the work-up and the tasks are those of the
- * hospital that holds the screen. It opens no transaction of its own: every call comes from
- * {@code TransfusionServiceImpl}, inside the transaction of the request, the result or the release it guards.
+ * <p>Everything is WRITTEN at the caller's hospital: a screen, a work-up and the tasks belong to the hospital
+ * that made them. The flag is READ for the patient, at every hospital (owner decision 2026-11-22): an
+ * alloantibody is permanent and can become undetectable, so a positive screen or an identified antibody at one
+ * hospital holds red cells at the next, as an allergy follows the patient, and whatever the patient chose about
+ * record sharing. What another hospital's record shows here is the fact, the antibody, the date and that
+ * hospital's name, never its text, and each time it is shown the read is accounted as a cross-hospital one.
+ *
+ * <p>It opens no transaction of its own: every call comes from {@code TransfusionServiceImpl}, inside the
+ * transaction of the request, the result or the release it guards.
  */
 @Slf4j
 @Service
@@ -81,51 +87,117 @@ public class PositiveAntibodyScreenService {
     private final InBasketService inBasketService;
     private final Clock clock;
 
+    /** What a reader acting at one hospital is told when the flag rests on another hospital's record. */
+    public static final String REACH_DESCRIPTION =
+        "Cross-hospital allo-immunisation flag read (transfusion safety, shown whatever the sharing choice)";
+
+    /**
+     * The account of cross-hospital reads. Optional for the sliced test contexts only; in the application the
+     * bean exists and every read of another hospital's antibody record is accounted.
+     */
+    private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setReachRecorder(com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder) {
+        this.reachRecorder = reachRecorder;
+    }
+
     // ── The flag ────────────────────────────────────────────────────────
 
     /**
-     * The patient is allo-immunised at this hospital: a positive screen is on record here (superseded ones
-     * included: a later negative screen clears nothing), or a biologist recorded an antibody.
+     * The patient is allo-immunised: a positive screen is on record at some hospital (superseded ones included: a
+     * later negative screen clears nothing, here or elsewhere), or a biologist recorded an antibody at some
+     * hospital. The flag follows the patient; the record-sharing choice of the patient does not narrow it.
      */
-    public boolean alloImmunised(UUID patientId, UUID hospitalId) {
-        if (patientId == null || hospitalId == null) {
+    public boolean alloImmunised(UUID patientId) {
+        return patientId != null && (!positiveScreens(patientId).isEmpty() || workupRepository.existsByPatient_Id(patientId));
+    }
+
+    /**
+     * {@link #alloImmunised(UUID)} as it is SHOWN to somebody acting at a hospital: when the flag rests on
+     * another hospital's record, the read is accounted as a cross-hospital one.
+     */
+    public boolean alloImmunisedShownAt(UUID patientId, UUID actingHospitalId) {
+        if (patientId == null) {
             return false;
         }
-        return newestPositiveScreen(patientId, hospitalId).isPresent()
-            || workupRepository.existsByPatient_IdAndHospital_Id(patientId, hospitalId);
+        List<PatientBloodGroup> screens = positiveScreens(patientId);
+        List<PatientAntibodyWorkup> workups = workupRepository.findByPatient_IdOrderByRecordedAtDesc(patientId);
+        accountReach(patientId, actingHospitalId, screens, workups);
+        return !screens.isEmpty() || !workups.isEmpty();
     }
 
-    private Optional<PatientBloodGroup> newestPositiveScreen(UUID patientId, UUID hospitalId) {
-        return bloodGroupRepository.findByPatient_IdAndHospital_IdOrderByPerformedAtDesc(patientId, hospitalId).stream()
-            .filter(group -> group.getAntibodyScreen() == AntibodyScreenResult.POSITIVE)
-            .findFirst();
+    /** Every positive screen of the patient, at every hospital, the newest first. */
+    private List<PatientBloodGroup> positiveScreens(UUID patientId) {
+        return bloodGroupRepository.findByPatient_IdAndAntibodyScreenOrderByPerformedAtDesc(patientId,
+            AntibodyScreenResult.POSITIVE);
     }
 
-    /** The flag and the biologist's records, for the screens that must show them. */
-    public AntibodyStatusResponseDTO status(UUID patientId, UUID hospitalId) {
-        return status(patientId, hospitalId, null);
+    /** The flag and the biologists' records, for the screens that must show them. */
+    public AntibodyStatusResponseDTO status(UUID patientId, UUID actingHospitalId) {
+        return status(patientId, actingHospitalId, null);
     }
 
-    /** {@link #status(UUID, UUID)} with the patient's name, for a screen that names them. */
-    public AntibodyStatusResponseDTO status(UUID patientId, UUID hospitalId, String patientName) {
-        List<PatientAntibodyWorkup> workups = patientId == null || hospitalId == null ? List.of()
-            : workupRepository.findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId);
-        Optional<PatientBloodGroup> positive = patientId == null || hospitalId == null ? Optional.empty()
-            : newestPositiveScreen(patientId, hospitalId);
+    /**
+     * {@link #status(UUID, UUID)} with the patient's name, for a screen that names them.
+     *
+     * <p>What crosses from another hospital is the minimum the next transfusion needs: that a positive screen is on
+     * record, its date and the hospital that holds it; and, when an antibody was identified there, its
+     * specificity, the date and that hospital. Another hospital's referral decision, its centre, its reasons, its
+     * notes and its author are not shown (until an antibody is identified the patient is, here, "positive screen,
+     * not identified"); nor is anything else of its blood group record.
+     */
+    public AntibodyStatusResponseDTO status(UUID patientId, UUID actingHospitalId, String patientName) {
+        List<PatientAntibodyWorkup> workups = patientId == null ? List.of()
+            : workupRepository.findByPatient_IdOrderByRecordedAtDesc(patientId);
+        List<PatientBloodGroup> screens = patientId == null ? List.of() : positiveScreens(patientId);
+        Optional<PatientBloodGroup> positive = screens.stream().findFirst();
         Optional<PatientAntibodyWorkup> identified = workups.stream()
             .filter(w -> w.getStatus() == AntibodyWorkupStatus.IDENTIFIED).findFirst();
+        accountReach(patientId, actingHospitalId, screens, workups);
         return AntibodyStatusResponseDTO.builder()
             .patientId(patientId)
             .patientName(patientName)
             .alloImmunised(positive.isPresent() || !workups.isEmpty())
             .positiveScreenAt(positive.map(PatientBloodGroup::getPerformedAt).orElse(null))
+            .positiveScreenHospitalName(positive.map(PatientBloodGroup::getHospital).map(Hospital::getName).orElse(null))
             .identified(identified.isPresent())
             .antibodySpecificities(identified.map(PatientAntibodyWorkup::getAntibodySpecificities).orElse(null))
-            .workups(workups.stream().map(PositiveAntibodyScreenService::toDto).toList())
+            .identifiedHospitalName(identified.map(PatientAntibodyWorkup::getHospital).map(Hospital::getName).orElse(null))
+            .identifiedAt(identified.map(PatientAntibodyWorkup::getRecordedAt).orElse(null))
+            .otherHospitalNames(otherHospitalNames(actingHospitalId, screens, workups))
+            .workups(workups.stream()
+                .filter(workup -> !elsewhere(workup.getHospital(), actingHospitalId)
+                    || workup.getStatus() == AntibodyWorkupStatus.IDENTIFIED)
+                .map(workup -> toDto(workup, actingHospitalId)).toList())
             .build();
     }
 
-    private static AntibodyStatusResponseDTO.Workup toDto(PatientAntibodyWorkup workup) {
+    private static boolean elsewhere(Hospital hospital, UUID actingHospitalId) {
+        return hospital == null || !Objects.equals(hospital.getId(), actingHospitalId);
+    }
+
+    private static List<String> otherHospitalNames(UUID actingHospitalId, List<PatientBloodGroup> screens,
+                                                   List<PatientAntibodyWorkup> workups) {
+        List<Hospital> sources = new java.util.ArrayList<>();
+        screens.forEach(screen -> sources.add(screen.getHospital()));
+        workups.forEach(workup -> sources.add(workup.getHospital()));
+        return sources.stream().filter(hospital -> hospital != null && elsewhere(hospital, actingHospitalId))
+            .map(Hospital::getName).filter(Objects::nonNull).distinct().sorted().toList();
+    }
+
+    private static AntibodyStatusResponseDTO.Workup toDto(PatientAntibodyWorkup workup, UUID actingHospitalId) {
+        String hospitalName = workup.getHospital() == null ? null : workup.getHospital().getName();
+        if (elsewhere(workup.getHospital(), actingHospitalId)) {
+            // Another hospital's identification: the antibody, the date, the hospital. Nothing of its text.
+            return AntibodyStatusResponseDTO.Workup.builder()
+                .status(workup.getStatus())
+                .antibodySpecificities(workup.getAntibodySpecificities())
+                .recordedAt(workup.getRecordedAt())
+                .hospitalName(hospitalName)
+                .otherHospital(true)
+                .build();
+        }
         return AntibodyStatusResponseDTO.Workup.builder()
             .id(workup.getId())
             .status(workup.getStatus())
@@ -136,7 +208,33 @@ public class PositiveAntibodyScreenService {
             .recordedByDisplay(workup.getRecordedByDisplay())
             .recordedAt(workup.getRecordedAt())
             .notes(workup.getNotes())
+            .hospitalName(hospitalName)
             .build();
+    }
+
+    /**
+     * Accounts what was shown of other hospitals' records, one entry a source hospital, as every cross-hospital
+     * read is. It never fails the read it accounts for: the flag exists to stop an unsafe transfusion, and an
+     * audit that cannot be written must not hide it or hold blood back.
+     */
+    private void accountReach(UUID patientId, UUID actingHospitalId, List<PatientBloodGroup> screens,
+                              List<PatientAntibodyWorkup> workups) {
+        if (reachRecorder == null || patientId == null || actingHospitalId == null) {
+            return;
+        }
+        try {
+            List<UUID> sources = new java.util.ArrayList<>();
+            screens.forEach(screen -> sources.add(
+                com.example.hms.service.recordaccess.CrossHospitalReachRecorder.hospitalIdOf(screen.getHospital())));
+            workups.forEach(workup -> sources.add(
+                com.example.hms.service.recordaccess.CrossHospitalReachRecorder.hospitalIdOf(workup.getHospital())));
+            reachRecorder.recordReach(patientId, actingHospitalId, roleValidator.getCurrentUserId(), null,
+                com.example.hms.service.recordaccess.CrossHospitalReachRecorder.reachOf(sources, actingHospitalId),
+                REACH_DESCRIPTION);
+        } catch (RuntimeException ex) {
+            log.warn("Cross-hospital allo-immunisation read not accounted for patient {} at hospital {}: {}",
+                patientId, actingHospitalId, ex.getClass().getSimpleName());
+        }
     }
 
     // ── The biologist's record ──────────────────────────────────────────
@@ -198,11 +296,18 @@ public class PositiveAntibodyScreenService {
 
     // ── Where the rule is enforced ──────────────────────────────────────
 
-    /** Whether the rule holds this request: red cells for a patient allo-immunised here. */
+    /** Whether the rule holds this request: red cells for an allo-immunised patient, wherever that is on record. */
     public boolean holds(TransfusionRequest request) {
         return request != null && request.getPatient() != null && request.getHospital() != null
             && PositiveAntibodyScreenPolicy.appliesTo(request.getProductType())
-            && alloImmunised(request.getPatient().getId(), request.getHospital().getId());
+            && alloImmunised(request.getPatient().getId());
+    }
+
+    /** {@link #holds} for a request that is being SHOWN: a flag resting on another hospital's record is accounted. */
+    public boolean holdsShown(TransfusionRequest request) {
+        return request != null && request.getPatient() != null && request.getHospital() != null
+            && PositiveAntibodyScreenPolicy.appliesTo(request.getProductType())
+            && alloImmunisedShownAt(request.getPatient().getId(), request.getHospital().getId());
     }
 
     /**
@@ -210,10 +315,10 @@ public class PositiveAntibodyScreenService {
      * or UV), why, and that the pre-transfusion sample is drawn before the first unit. Nothing is asked of a
      * routine or an urgent request (they follow the routine rule), nor of another product or patient.
      */
-    public void requireEmergencyDeclaration(TransfusionRequestRequestDTO request, UUID patientId, UUID hospitalId,
+    public void requireEmergencyDeclaration(TransfusionRequestRequestDTO request, UUID patientId,
                                             TransfusionUrgency urgency) {
         if (urgency != TransfusionUrgency.EMERGENCY || !PositiveAntibodyScreenPolicy.appliesTo(request.getProductType())
-                || !alloImmunised(patientId, hospitalId)) {
+                || !alloImmunised(patientId)) {
             return;
         }
         if (request.getVitalUrgencyLevel() == null) {
@@ -304,22 +409,22 @@ public class PositiveAntibodyScreenService {
     public boolean workupServes(TransfusionRequest request) {
         UUID patientId = request.getPatient().getId();
         UUID hospitalId = request.getHospital().getId();
-        return identifiedSinceTheNewestPositiveScreen(patientId, hospitalId)
+        return identifiedSinceTheNewestPositiveScreen(patientId)
             || (request.getId() != null && workupRepository.existsByPatient_IdAndHospital_IdAndStatusAndTransfusionRequestId(
                 patientId, hospitalId, AntibodyWorkupStatus.REFERRED, request.getId()));
     }
 
-    private boolean identifiedSinceTheNewestPositiveScreen(UUID patientId, UUID hospitalId) {
+    /** Read for the patient, at every hospital: an identification made at one serves at another. */
+    private boolean identifiedSinceTheNewestPositiveScreen(UUID patientId) {
         Optional<PatientAntibodyWorkup> identified = workupRepository
-            .findFirstByPatient_IdAndHospital_IdAndStatusOrderByRecordedAtDesc(patientId, hospitalId,
-                AntibodyWorkupStatus.IDENTIFIED);
+            .findFirstByPatient_IdAndStatusOrderByRecordedAtDesc(patientId, AntibodyWorkupStatus.IDENTIFIED);
         if (identified.isEmpty()) {
             return false;
         }
-        LocalDateTime screenedAt = newestPositiveScreen(patientId, hospitalId)
+        LocalDateTime screenedAt = positiveScreens(patientId).stream().findFirst()
             .map(PatientBloodGroup::getPerformedAt).orElse(null);
         if (screenedAt == null) {
-            // An antibody recorded with no positive screen here (known from elsewhere): nothing newer to cover.
+            // An antibody recorded with no positive screen on the platform (known from outside): nothing newer.
             return true;
         }
         LocalDateTime recordedAt = identified.get().getRecordedAt();

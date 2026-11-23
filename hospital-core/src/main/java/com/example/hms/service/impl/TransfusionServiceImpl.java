@@ -186,7 +186,7 @@ public class TransfusionServiceImpl implements TransfusionService {
     /** The group as it is shown, with the permanent allo-immunisation flag of this hospital's record. */
     private PatientBloodGroupResponseDTO withAntibodyFlag(PatientBloodGroupResponseDTO dto, UUID patientId, UUID hospitalId) {
         if (dto != null && antibodyScreen != null) {
-            dto.setAlloImmunised(antibodyScreen.alloImmunised(patientId, hospitalId));
+            dto.setAlloImmunised(antibodyScreen.alloImmunisedShownAt(patientId, hospitalId));
         }
         return dto;
     }
@@ -443,7 +443,7 @@ public class TransfusionServiceImpl implements TransfusionService {
 
         // QA D3351: an emergency for an allo-immunised patient is declared (level, reason, sample drawn first).
         if (antibodyScreen != null) {
-            antibodyScreen.requireEmergencyDeclaration(request, patient.getId(), hospitalId, urgency);
+            antibodyScreen.requireEmergencyDeclaration(request, patient.getId(), urgency);
         }
         boolean emergency = urgency == TransfusionUrgency.EMERGENCY;
 
@@ -1929,7 +1929,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         detail.setVitalUrgencyLevel(request.getVitalUrgencyLevel());
         detail.setVitalUrgencyReason(request.getVitalUrgencyReason());
         detail.setPreTransfusionSampleDrawn(request.getPreTransfusionSampleDrawn());
-        if (antibodyScreen != null && antibodyScreen.holds(request)) {
+        if (antibodyScreen != null && antibodyScreen.holdsShown(request)) {
             detail.setAlloImmunised(true);
             detail.setAntibodyWorkupServes(antibodyScreen.workupServes(request));
         }

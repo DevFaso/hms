@@ -1900,6 +1900,7 @@
       "CROSS_TENANT_READ": "Lecture du super-administrateur sur tous les hôpitaux : {{view}} ({{rows}} lignes)",
       "CROSS_HOSPITAL_READ_LAB": "Demande d’analyses d’un autre hôpital consultée par le laboratoire exécutant",
       "CROSS_HOSPITAL_READ_LAB_RESULT": "Résultat d’analyses d’un autre hôpital consulté par le laboratoire exécutant",
+      "CROSS_HOSPITAL_ANTIBODY_FLAG": "Alerte d’allo-immunisation d’un autre hôpital consultée (sécurité transfusionnelle, affichée quel que soit le choix de partage du dossier)",
       "EMERGENCY_BLOOD_RELEASED": "Délivrance en urgence sans épreuve de compatibilité de la poche {{unit}} pour la demande {{request}}",
       "EMERGENCY_BLOOD_RELEASED_O_POSITIVE": "Délivrance d'urgence sur décision documentée O positif de la poche {{unit}} pour la demande {{request}}",
       "EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE": "Délivrance d'urgence — sérologiquement incompatible, de la poche {{unit}} pour la demande {{request}}",
@@ -13713,7 +13714,10 @@
     "XM_ANTIGLOBULIN": "Réalisée en test indirect à l’antiglobuline",
     "XM_ANTIGEN_NEGATIVE": "La poche est négative pour l’antigène cible",
     "XM_RH_KELL": "La poche respecte le phénotype RH-KEL1",
-    "HAEMOLYSIS_WARNING": "Patient allo-immunisé : une délivrance sans épreuve de compatibilité expose à un risque d’hémolyse. Prévenez l’équipe clinique, maintenez le contrôle au lit du malade ; le biologiste réalise l’épreuve a posteriori (règle provisoire)."
+    "HAEMOLYSIS_WARNING": "Patient allo-immunisé : une délivrance sans épreuve de compatibilité expose à un risque d’hémolyse. Prévenez l’équipe clinique, maintenez le contrôle au lit du malade ; le biologiste réalise l’épreuve a posteriori (règle provisoire).",
+    "ANTIBODY_FROM_OTHER_HOSPITAL": "Information de sécurité transfusionnelle enregistrée par : {{hospitals}}",
+    "ANTIBODY_KNOWN_IDENTIFIED": "Anticorps identifié : {{antibody}} ({{hospital}}, {{date}}).",
+    "ANTIBODY_KNOWN_NOT_IDENTIFIED": "RAI positive, anticorps non identifié ({{hospital}}, {{date}})."
   },
   "MORTALITY": {
     "DISPUTE": "Contester ce décès",

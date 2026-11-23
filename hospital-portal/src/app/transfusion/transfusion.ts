@@ -118,10 +118,21 @@ export class TransfusionComponent implements OnInit {
   antibodySubmitting = signal(false);
   antibodyForm = this.emptyAntibodyForm();
 
+  /**
+   * What is known of the antibodies of the patient picked on the request form, at this hospital or another:
+   * the flag follows the patient, so it is read on its own, with or without a blood group on record here.
+   */
+  requestAntibody = signal<AntibodyStatusResponse | null>(null);
+
+  /** The patient of the request being written is allo-immunised, by the group read here or by the patient's flag. */
+  get requestPatientAlloImmunised(): boolean {
+    return !!this.patientGroup()?.alloImmunised || !!this.requestAntibody()?.alloImmunised;
+  }
+
   /** The request being written is a red-cell emergency for an allo-immunised patient: it is declared. */
   get needsVitalUrgency(): boolean {
     return (
-      !!this.patientGroup()?.alloImmunised &&
+      this.requestPatientAlloImmunised &&
       this.requestForm.urgency === 'EMERGENCY' &&
       this.isRedCells(this.requestForm.productType)
     );
@@ -457,6 +468,7 @@ export class TransfusionComponent implements OnInit {
     this.requestForm = this.emptyRequestForm();
     this.selectedPatient.set(null);
     this.patientGroup.set(null);
+    this.requestAntibody.set(null);
     this.showRequestModal.set(true);
   }
 
@@ -468,7 +480,16 @@ export class TransfusionComponent implements OnInit {
     this.selectedPatient.set(patient);
     this.requestForm.patientId = patient?.id ?? '';
     this.patientGroup.set(null);
+    this.requestAntibody.set(null);
     if (!patient) return;
+    // The allo-immunisation flag follows the patient: asked for on its own, so it shows for a patient with
+    // no type and screen at this hospital yet (the emergency request that needs the declaration).
+    this.transfusion.getAntibodyStatus(patient.id).subscribe({
+      next: (status) => {
+        if (this.requestForm.patientId === patient.id) this.requestAntibody.set(status);
+      },
+      error: () => this.requestAntibody.set(null),
+    });
     // Surface the standing type and screen before the clinician commits, so a
     // missing or lapsed one is visible here rather than as a 400 on submit.
     this.transfusion.getCurrentBloodGroup(patient.id).subscribe({

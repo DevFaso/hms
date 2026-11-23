@@ -284,6 +284,12 @@
                         | translate: { antibody: status.antibodySpecificities ?? '' }
                     }}</span>
                   }
+                  @if (status.otherHospitalNames?.length) {
+                    <span data-testid="antibody-other-hospital">{{
+                      'TRANSFUSION.ANTIBODY_FROM_OTHER_HOSPITAL'
+                        | translate: { hospitals: status.otherHospitalNames!.join(', ') }
+                    }}</span>
+                  }
                 }
                 @if (!req.antibodyWorkupServes) {
                   <span data-testid="antibody-workup-missing">{{
@@ -809,6 +815,36 @@
                 }
               } @else {
                 <span class="warn-inline">{{ 'TRANSFUSION.NO_GROUP_ON_FILE' | translate }}</span>
+              }
+              @if (requestAntibody(); as known) {
+                @if (known.alloImmunised) {
+                  <span class="warn-inline" role="alert" data-testid="request-antibody-known">
+                    @if (known.identified) {
+                      {{
+                        'TRANSFUSION.ANTIBODY_KNOWN_IDENTIFIED'
+                          | translate
+                            : {
+                                antibody: known.antibodySpecificities ?? '',
+                                hospital: known.identifiedHospitalName ?? '',
+                                date: (known.identifiedAt | serverTime | date: 'mediumDate') ?? '',
+                              }
+                      }}
+                    } @else {
+                      {{
+                        'TRANSFUSION.ANTIBODY_KNOWN_NOT_IDENTIFIED'
+                          | translate
+                            : {
+                                hospital: known.positiveScreenHospitalName ?? '',
+                                date:
+                                  (known.positiveScreenAt | serverTime | date: 'mediumDate') ?? '',
+                              }
+                      }}
+                    }
+                    @if (!patientGroup()?.alloImmunised) {
+                      {{ 'TRANSFUSION.ALLO_IMMUNISED_REQUEST' | translate }}
+                    }
+                  </span>
+                }
               }
               @if (canLab) {
                 <button class="btn-secondary" (click)="openGroupModal()">

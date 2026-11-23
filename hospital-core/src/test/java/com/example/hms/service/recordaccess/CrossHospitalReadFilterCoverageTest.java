@@ -119,11 +119,13 @@ class CrossHospitalReadFilterCoverageTest {
      * 29 at #49-pass-1; 28 after E9 #59a — the chart domain widened beside the
      * single finders that CDS, FHIR and bulk export still
      * call, and only the chart-update page finder had no caller left.
-     * 29 with QA D3351: PatientAntibodyWorkupRepository.existsByPatient_IdAndHospital_Id stays acting-hospital
-     * only by decision: the allo-immunisation flag is the record of the hospital that holds the screen, as the
-     * blood group it rests on; widening it is the cross-hospital transfusion question, not this rule's.
+     * 29 with QA D3351 for one build, then 28 again: the allo-immunisation flag follows the PATIENT (owner
+     * decision 2026-11-22), so PatientAntibodyWorkupRepository reads by patient alone and its single-hospital
+     * finder is gone. Those reads are not routed through the readable set either, deliberately: the flag is
+     * shown whatever the sharing choice, with the minimum of another hospital's record and an account of each
+     * read (PositiveAntibodyScreenService, guarded by PositiveAntibodyScreenGuardTest).
      */
-    private static final int SINGLE_HOSPITAL_FINDER_BUDGET = 29;
+    private static final int SINGLE_HOSPITAL_FINDER_BUDGET = 28;
 
     @Test
     @DisplayName("the single-hospital patient-read surface has not grown unnoticed")

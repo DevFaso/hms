@@ -328,10 +328,10 @@ public class CriticalValueNotificationService {
      * One SMS to each clinician of the chain who has a number, sent once the transaction that decided the step
      * has committed: a gateway that hangs never holds the result's row or the sweep's lock, and a step that is
      * rolled back texts nobody. The numbers are read here, while the session is open. A result that was already
-     * waiting when the ladder was switched on ({@code criticalBacklog}, V364) is never texted about.
+     * waiting when the ladder was switched on ({@code escalationBacklog}, V364) is never texted about.
      */
     private void smsTheChain(LabResult result, java.util.Set<String> chain, String message) {
-        if (users == null || chain.isEmpty() || result.isCriticalBacklog() || !smsService.deliversRealSms()) {
+        if (users == null || chain.isEmpty() || result.isEscalationBacklog() || !smsService.deliversRealSms()) {
             return;
         }
         List<String> lower = chain.stream().map(name -> name.toLowerCase(java.util.Locale.ROOT)).toList();
@@ -392,7 +392,9 @@ public class CriticalValueNotificationService {
             incident.setResolution(resolution);
             incident.setResolvedByUserId(byUserId);
             incident.setResolvedByDisplay(byDisplay);
-            incidents.save(incident);
+            // Flushed now: the open slot of the result (V364's partial unique index) is free before anything
+            // in this transaction could open the next incident (Hibernate runs INSERTs before UPDATEs, CX-011).
+            incidents.saveAndFlush(incident);
         });
     }
 

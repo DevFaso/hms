@@ -83,7 +83,7 @@ class PositiveAntibodyScreenGuardTest {
         assertThat(method(code, "public CrossmatchResponseDTO recordCrossmatch("))
             .contains("antibodyScreen.requireCompatibilised(transfusionRequest, request)");
         assertThat(method(code, "public TransfusionRequestResponseDTO createRequest("))
-            .contains("antibodyScreen.requireEmergencyDeclaration(request, patient.getId(), hospitalId, urgency)");
+            .contains("antibodyScreen.requireEmergencyDeclaration(request, patient.getId(), urgency)");
         assertThat(method(code, "public PatientBloodGroupResponseDTO recordBloodGroup("))
             .contains("antibodyScreen.askBiologistToIdentify(saved)");
         // The flag reaches the screens that ask for blood: the group read before a request, and the request itself.
@@ -142,5 +142,74 @@ class PositiveAntibodyScreenGuardTest {
             }
         }
         assertThat(callers).containsExactly("TransfusionServiceImpl.java");
+    }
+
+    /**
+     * Owner decision 2026-11-22 (research note « antibody history sharing »): the flag follows the patient across
+     * hospitals, whatever the sharing choice, with the minimum of another hospital's record, on the transfusion
+     * path only, and each time it is shown the read is accounted (which also puts it in the patient's own
+     * « Qui a consulté mon dossier »). The class this guards: the patient-wide reads gaining a second reader (a
+     * chart, a summary, an export) that would show another hospital's antibody record with no account of it.
+     */
+    @Test
+    @DisplayName("the flag crosses hospitals on the transfusion path only: one reader of the patient-wide queries, every shown read accounted, another hospital's text never mapped")
+    void theFlagCrossesHospitalsOnTheTransfusionPathOnly() throws IOException {
+        String rule = code(MAIN.resolve("service/transfusion/PositiveAntibodyScreenService.java"));
+        // The patient-wide reads have one reader: this rule's service.
+        for (String query : List.of("findByPatient_IdAndAntibodyScreenOrderByPerformedAtDesc(",
+                "findByPatient_IdOrderByRecordedAtDesc(", "findFirstByPatient_IdAndStatusOrderByRecordedAtDesc(",
+                "existsByPatient_Id(")) {
+            List<String> readers = new ArrayList<>();
+            try (Stream<Path> files = Files.walk(MAIN)) {
+                for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
+                    String source = code(file);
+                    boolean declares = file.getFileName().toString().endsWith("Repository.java");
+                    boolean antibodyQuery = query.startsWith("findByPatient_IdAndAntibodyScreen")
+                        || source.contains("workupRepository." + query) || source.contains("WorkupRepository");
+                    if (!declares && antibodyQuery && source.contains("." + query)) {
+                        readers.add(file.getFileName().toString());
+                    }
+                }
+            }
+            assertThat(readers).as(query).containsExactly("PositiveAntibodyScreenService.java");
+        }
+        // The sharing choice of the patient does not narrow the flag: the rule asks no sharing policy.
+        assertThat(rule).doesNotContain("RecordAccessPolicy").doesNotContain("SharingOptOut")
+            .doesNotContain("readableHospitalIds");
+        // Every read that SHOWS the flag is accounted; the three ways it is shown are the transfusion service's.
+        assertThat(rule.split("accountReach\\(patientId, actingHospitalId, screens, workups\\);", -1)).hasSize(3);
+        assertThat(rule).contains("reachRecorder.recordReach(patientId, actingHospitalId, roleValidator.getCurrentUserId(), null,");
+        String service = code(SERVICE);
+        assertThat(service).contains("antibodyScreen.alloImmunisedShownAt(patientId, hospitalId)")
+            .contains("antibodyScreen.holdsShown(request)")
+            .contains("antibodyScreen.status(patient.getId(), hospitalId, patient.getFullName())");
+        // Another hospital's record is mapped by one branch, which carries four things and no text.
+        int foreign = rule.indexOf("if (elsewhere(workup.getHospital(), actingHospitalId)) {");
+        assertThat(foreign).isNotNegative();
+        String minimum = rule.substring(foreign, rule.indexOf(".build();", foreign));
+        assertThat(minimum).contains(".status(").contains(".antibodySpecificities(").contains(".recordedAt(")
+            .contains(".hospitalName(").contains(".otherHospital(true)")
+            .doesNotContain("getNotes").doesNotContain("getDecisionReason").doesNotContain("getReferralCentre")
+            .doesNotContain("getRecordedByDisplay").doesNotContain("getTransfusionRequestId").doesNotContain(".id(");
+        // And nothing of another hospital's blood group record but the time of its positive screen and its name.
+        assertThat(rule).doesNotContain("getAntibodyDetail").doesNotContain("getAboGroup").doesNotContain("getRhFactor");
+        // Who reads the antibody and its source: the bench and the prescriber, not the bedside, not a chart viewer.
+        String controller = code(CONTROLLER);
+        assertThat(controller).contains("ANTIBODY_READER = LABORATORY + \" or \" + PRESCRIBER;");
+        int read = controller.indexOf("@GetMapping(\"/antibody-status/patient/{patientId}\")");
+        assertThat(read).isNotNegative();
+        assertThat(controller.substring(read, controller.indexOf("public ResponseEntity", read)))
+            .contains("@PreAuthorize(ANTIBODY_READER)");
+        // The flag is a field of the transfusion screens' own answers, and of nothing else that is sent.
+        List<String> carriers = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(MAIN.resolve("payload"))) {
+            for (Path file : files.filter(path -> path.toString().endsWith(".java")).toList()) {
+                if (code(file).contains("alloImmunised")) {
+                    carriers.add(MAIN.resolve("payload").relativize(file).toString().replace('\\', '/'));
+                }
+            }
+        }
+        assertThat(carriers).containsExactlyInAnyOrder("dto/transfusion/AntibodyStatusResponseDTO.java",
+            "dto/transfusion/PatientBloodGroupResponseDTO.java", "dto/transfusion/TransfusionRequestResponseDTO.java");
     }
 }

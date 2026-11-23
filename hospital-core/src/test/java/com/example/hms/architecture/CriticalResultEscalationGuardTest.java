@@ -173,11 +173,11 @@ class CriticalResultEscalationGuardTest {
     @DisplayName("review L3: a result already waiting at activation is never texted about; nothing but the migration and an amendment touch the mark")
     void theBacklogIsNeverTextedAbout() throws IOException {
         String service = code(SERVICE);
-        assertThat(member(service, "private void smsTheChain(")).contains("result.isCriticalBacklog()");
-        assertThat(service).doesNotContain("setCriticalBacklog(");
+        assertThat(member(service, "private void smsTheChain(")).contains("result.isEscalationBacklog()");
+        assertThat(service).doesNotContain("setEscalationBacklog(");
         // Still on the ladder: the sweep's query does not leave the backlog out.
         String repository = code(MAIN.resolve("repository/LabResultRepository.java"));
-        assertThat(repository).doesNotContain("criticalBacklog");
-        assertThat(code(MAIN.resolve("service/LabResultServiceImpl.java")).split("setCriticalBacklog\\(", -1)).hasSize(2);
+        assertThat(repository).doesNotContain("escalationBacklog");
+        assertThat(code(MAIN.resolve("service/LabResultServiceImpl.java")).split("setEscalationBacklog\\(", -1)).hasSize(2);
     }
 }

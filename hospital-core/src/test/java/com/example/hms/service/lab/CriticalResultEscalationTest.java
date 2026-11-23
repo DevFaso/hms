@@ -375,7 +375,7 @@ class CriticalResultEscalationTest {
         assertThat(open.getResolvedByUserId()).isEqualTo(clinician);
         assertThat(open.getResolvedByDisplay()).isEqualTo("Dr Awa Garde");
         assertThat(open.getResolution()).isEqualTo(CriticalResultIncident.RESOLVED_READ_BACK);
-        verify(incidents).save(open);
+        verify(incidents).saveAndFlush(open);
     }
 
     @Test
@@ -622,7 +622,7 @@ class CriticalResultEscalationTest {
         assertThat(open.getResolvedAt()).isNotNull();
         assertThat(open.getResolvedByUserId()).isNull();
         assertThat(open.getResolvedByDisplay()).isNull();
-        verify(incidents).save(open);
+        verify(incidents).saveAndFlush(open);
         verify(results, never()).save(any());
         verify(notifications, never()).created(anyString(), anyString(), anyString());
     }
@@ -638,7 +638,8 @@ class CriticalResultEscalationTest {
         assertThat(aboutTheOldValue.getResolution()).isEqualTo(CriticalResultIncident.RESOLVED_AMENDED);
         assertThat(aboutTheOldValue.getResolvedAt()).isNotNull();
         assertThat(aboutTheOldValue.getResolvedByUserId()).isNull();
-        verify(incidents).save(aboutTheOldValue);
+        // Flushed: the open slot of the result is free before another incident can be opened (V364, CX-011).
+        verify(incidents).saveAndFlush(aboutTheOldValue);
 
         // The new value paged afresh and went unanswered in its turn: no open incident is on record.
         when(incidents.findByLabResultIdAndResolvedAtIsNull(result.getId())).thenReturn(Optional.empty());
@@ -648,8 +649,8 @@ class CriticalResultEscalationTest {
         assertThat(service.escalateOverdue()).isEqualTo(1);
 
         ArgumentCaptor<CriticalResultIncident> saved = ArgumentCaptor.forClass(CriticalResultIncident.class);
-        verify(incidents, times(2)).save(saved.capture());
-        CriticalResultIncident aboutTheNewValue = saved.getAllValues().get(1);
+        verify(incidents).save(saved.capture());
+        CriticalResultIncident aboutTheNewValue = saved.getValue();
         assertThat(aboutTheNewValue).isNotSameAs(aboutTheOldValue);
         assertThat(aboutTheNewValue.getResolvedAt()).isNull();
         assertThat(aboutTheNewValue.getResolution()).isNull();
@@ -661,12 +662,13 @@ class CriticalResultEscalationTest {
         service.incidentEndedByAmendment(result);
 
         verify(incidents, never()).save(any());
+        verify(incidents, never()).saveAndFlush(any());
     }
 
     @Test
     @DisplayName("review L3: a result already waiting when the ladder was switched on keeps its notices and its incident, and is never texted about")
     void aBacklogResultIsNeverTextedAbout() {
-        result.setCriticalBacklog(true);
+        result.setEscalationBacklog(true);
         when(sms.deliversRealSms()).thenReturn(true);
         when(users.findByUsernameInIgnoreCase(any())).thenReturn(List.of(account("dr.garde", "+22670000002")));
         // Paged a month ago, left at the old chain's second round.

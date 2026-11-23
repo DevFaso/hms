@@ -3,7 +3,7 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { TransfusionComponent } from './transfusion';
 import {
@@ -13,6 +13,7 @@ import {
   TransfusionRequestResponse,
   TransfusionService,
 } from '../services/transfusion.service';
+import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { roleContextStub } from '../testing/role-context.stub';
@@ -267,5 +268,117 @@ describe('TransfusionComponent: positive antibody screen (QA D3351)', () => {
     open(flagged());
     expect(component.canRecordAntibody).toBeFalse();
     expect(el().querySelector('[data-testid="antibody-record"]')).toBeNull();
+  });
+
+  it('a flag held at another hospital shows on the request form with no blood group here, and the emergency is declared', async () => {
+    await setUp(['ROLE_DOCTOR']);
+    // Never typed at this hospital; a positive screen and an identified antibody are on record at another one.
+    txSpy.getCurrentBloodGroup.and.returnValue(throwError(() => new Error('404')));
+    txSpy.getAntibodyStatus.and.returnValue(
+      of(
+        status({
+          identified: true,
+          antibodySpecificities: 'anti-K',
+          identifiedHospitalName: 'CHU Yalgado',
+          identifiedAt: '2026-11-02T10:00:00',
+          positiveScreenHospitalName: 'CHU Yalgado',
+          otherHospitalNames: ['CHU Yalgado'],
+        }),
+      ),
+    );
+    component.openNewRequest();
+    component.onPatientPicked({
+      id: 'p1',
+      firstName: 'Awa',
+      lastName: 'Traoré',
+    } as PatientResponse);
+    fixture.detectChanges();
+
+    expect(txSpy.getAntibodyStatus).toHaveBeenCalledWith('p1');
+    expect(component.patientGroup()).toBeNull();
+    expect(component.requestPatientAlloImmunised).toBeTrue();
+    const known = el().querySelector('[data-testid="request-antibody-known"]');
+    expect(known).not.toBeNull();
+    // The fact line and, with no group line to carry it, the requirement.
+    expect(known!.textContent).toContain('TRANSFUSION.ANTIBODY_KNOWN_IDENTIFIED');
+    expect(known!.textContent).toContain('TRANSFUSION.ALLO_IMMUNISED_REQUEST');
+
+    component.requestForm.urgency = 'EMERGENCY';
+    component.requestForm.productType = 'PACKED_RED_CELLS';
+    expect(component.needsVitalUrgency).toBeTrue();
+    expect(component.vitalUrgencyDeclared).toBeFalse();
+
+    // Another patient is picked: what was known of the first one is not carried over.
+    txSpy.getAntibodyStatus.and.returnValue(of(status({ patientId: 'p2', alloImmunised: false })));
+    component.onPatientPicked({ id: 'p2', firstName: 'Fatou', lastName: 'Sow' } as PatientResponse);
+    fixture.detectChanges();
+    expect(component.requestPatientAlloImmunised).toBeFalse();
+    expect(el().querySelector('[data-testid="request-antibody-known"]')).toBeNull();
+    expect(component.needsVitalUrgency).toBeFalse();
+  });
+
+  it('a positive screen not identified says so, and an answer for a patient no longer picked is dropped', async () => {
+    await setUp(['ROLE_DOCTOR']);
+    txSpy.getCurrentBloodGroup.and.returnValue(throwError(() => new Error('404')));
+    const late = new Subject<AntibodyStatusResponse>();
+    txSpy.getAntibodyStatus.and.returnValue(late.asObservable());
+    component.openNewRequest();
+    component.onPatientPicked({
+      id: 'p1',
+      firstName: 'Awa',
+      lastName: 'Traoré',
+    } as PatientResponse);
+    component.onPatientPicked(null);
+    late.next(
+      status({ positiveScreenHospitalName: 'CMA Pissy', otherHospitalNames: ['CMA Pissy'] }),
+    );
+    fixture.detectChanges();
+    expect(component.requestAntibody()).toBeNull();
+
+    txSpy.getAntibodyStatus.and.returnValue(
+      of(status({ positiveScreenHospitalName: 'CMA Pissy', otherHospitalNames: ['CMA Pissy'] })),
+    );
+    component.onPatientPicked({
+      id: 'p1',
+      firstName: 'Awa',
+      lastName: 'Traoré',
+    } as PatientResponse);
+    fixture.detectChanges();
+    expect(el().querySelector('[data-testid="request-antibody-known"]')!.textContent).toContain(
+      'TRANSFUSION.ANTIBODY_KNOWN_NOT_IDENTIFIED',
+    );
+
+    // The read failing leaves the form usable, with nothing claimed.
+    txSpy.getAntibodyStatus.and.returnValue(throwError(() => new Error('500')));
+    component.onPatientPicked({
+      id: 'p1',
+      firstName: 'Awa',
+      lastName: 'Traoré',
+    } as PatientResponse);
+    fixture.detectChanges();
+    expect(component.requestAntibody()).toBeNull();
+    expect(el().querySelector('[data-testid="request-antibody-known"]')).toBeNull();
+  });
+
+  it('the request says which other hospital the safety information comes from', async () => {
+    await setUp(['ROLE_LAB_SCIENTIST']);
+    txSpy.getRequest.and.returnValue(of(flagged()));
+    txSpy.getAntibodyStatus.and.returnValue(
+      of(
+        status({
+          identified: true,
+          antibodySpecificities: 'anti-K',
+          otherHospitalNames: ['CHU Yalgado'],
+        }),
+      ),
+    );
+    component.openRequest(flagged());
+    fixture.detectChanges();
+    expect(el().querySelector('[data-testid="antibody-other-hospital"]')).not.toBeNull();
+
+    txSpy.getAntibodyStatus.and.returnValue(of(status({ otherHospitalNames: [] })));
+    component.openRequest(flagged());
+    fixture.detectChanges();
+    expect(el().querySelector('[data-testid="antibody-other-hospital"]')).toBeNull();
   });
 });

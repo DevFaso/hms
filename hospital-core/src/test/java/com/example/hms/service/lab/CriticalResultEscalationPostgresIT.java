@@ -284,7 +284,7 @@ class CriticalResultEscalationPostgresIT {
         UUID pagedAfterwards = paged(1, 0, false);
         assertThat(row(pagedAfterwards)[6]).isEqualTo(false);
         // The entity reads the mark.
-        assertThat(open()).filteredOn(LabResult::isCriticalBacklog)
+        assertThat(open()).filteredOn(LabResult::isEscalationBacklog)
             .extracting(LabResult::getId).contains(waiting).doesNotContain(pagedAfterwards);
     }
 }

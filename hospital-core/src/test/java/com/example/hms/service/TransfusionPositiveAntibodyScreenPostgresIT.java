@@ -115,6 +115,8 @@ class TransfusionPositiveAntibodyScreenPostgresIT {
     @MockitoBean private PatientChartAccess patientChartAccess;
     @MockitoBean private InBasketService inBasketService;
     @MockitoBean private AuditEventLogService auditEventLogService;
+    /** The account of cross-hospital reads: in the slice as a double, so the reads it is handed can be checked. */
+    @MockitoBean private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     private final UUID hospital = UUID.randomUUID();
     private final UUID patient = UUID.randomUUID();
@@ -145,7 +147,7 @@ class TransfusionPositiveAntibodyScreenPostgresIT {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospital);
         when(patientChartAccess.require(any(), any()))
             .thenAnswer(call -> entityManager.find(Patient.class, call.getArgument(0)));
-        clearInvocations(inBasketService, auditEventLogService);
+        clearInvocations(inBasketService, auditEventLogService, reachRecorder);
     }
 
     private void person(UUID user, String role) {
@@ -410,5 +412,136 @@ class TransfusionPositiveAntibodyScreenPostgresIT {
         assertThat(task.getValue().getTitleKey()).isEqualTo(PositiveAntibodyScreenService.RETROSPECTIVE_TITLE_KEY);
         assertThat(task.getValue().getReferenceId()).isEqualTo(bagId);
         assertThat(task.getValue().getPriority()).isEqualTo(InBasketPriority.URGENT);
+    }
+
+    // ── Owner decision 2026-11-22: the flag follows the patient across hospitals ───────────────────
+
+    private static final String HOSPITAL_A = "CHU A (autre établissement)";
+
+    /** Hospital A, where the patient screened positive seven months ago and anti-K was identified the next day. */
+    private UUID anotherHospitalThatKnowsTheAntibody() {
+        UUID hospitalA = UUID.randomUUID();
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            entityManager.createNativeQuery("SET LOCAL session_replication_role = replica").executeUpdate();
+            entityManager.createNativeQuery("""
+                INSERT INTO hospital.hospitals (id, code, name, active, created_at, updated_at)
+                VALUES (:id, :code, :name, true, now(), now())
+                """).setParameter("id", hospitalA).setParameter("code", "R70X-" + hospitalA.toString().substring(0, 8))
+                .setParameter("name", HOSPITAL_A).executeUpdate();
+            entityManager.createNativeQuery("""
+                INSERT INTO clinical.patient_blood_groups (id, patient_id, hospital_id, abo_group, rh_factor,
+                    antibody_screen, antibody_detail, performed_at, superseded, notes, created_at, updated_at)
+                VALUES (:id, :p, :h, 'A', 'POSITIVE', 'POSITIVE', 'Panel A: réactions 2+ cellules 3 et 7',
+                    now() - interval '210 days', false, 'Note interne de A', now(), now())
+                """).setParameter("id", UUID.randomUUID()).setParameter("p", patient).setParameter("h", hospitalA)
+                .executeUpdate();
+            entityManager.createNativeQuery("""
+                INSERT INTO clinical.patient_antibody_workups (id, patient_id, hospital_id, status,
+                    antibody_specificities, recorded_by_user_id, recorded_by_display, recorded_at, notes,
+                    created_at, updated_at)
+                VALUES (:id, :p, :h, 'IDENTIFIED', 'anti-K', :u, 'Dr Biologiste de A', now() - interval '209 days',
+                    'Titre 1/64, compte rendu interne de A', now(), now())
+                """).setParameter("id", UUID.randomUUID()).setParameter("p", patient).setParameter("h", hospitalA)
+                .setParameter("u", UUID.randomUUID()).executeUpdate();
+        });
+        return hospitalA;
+    }
+
+    /** The patient opted out of sharing their record between hospitals, and has not revoked it. */
+    private void optedOutOfRecordSharing() {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+            entityManager.createNativeQuery("""
+                INSERT INTO clinical.patient_record_sharing_optouts (id, patient_id, opted_out_at, created_at, updated_at)
+                VALUES (:id, :p, now() - interval '30 days', now(), now())
+                """).setParameter("id", UUID.randomUUID()).setParameter("p", patient).executeUpdate());
+    }
+
+    @Test
+    @DisplayName("owner decision: positive at hospital A, negative later at hospital B: still flagged at B, though the patient opted out of record sharing; B sees the antibody, the date and A's name and nothing of A's text, and each read is accounted against A")
+    void theFlagFollowsThePatientAcrossHospitals() {
+        UUID hospitalA = anotherHospitalThatKnowsTheAntibody();
+        optedOutOfRecordSharing();
+        actingAs(techUser);
+
+        // Never screened at B: the flag is already known here (the request form reads it before any group exists).
+        AntibodyStatusResponseDTO known = service.getAntibodyStatus(patient);
+        assertThat(known.isAlloImmunised()).isTrue();
+        assertThat(known.isIdentified()).isTrue();
+        assertThat(known.getAntibodySpecificities()).isEqualTo("anti-K");
+        assertThat(known.getIdentifiedHospitalName()).isEqualTo(HOSPITAL_A);
+        assertThat(known.getIdentifiedAt()).isNotNull();
+        assertThat(known.getPositiveScreenAt()).isNotNull();
+        assertThat(known.getPositiveScreenHospitalName()).isEqualTo(HOSPITAL_A);
+        assertThat(known.getOtherHospitalNames()).containsExactly(HOSPITAL_A);
+        assertThat(known.getWorkups()).singleElement().satisfies(fromA -> {
+            assertThat(fromA.isOtherHospital()).isTrue();
+            assertThat(fromA.getAntibodySpecificities()).isEqualTo("anti-K");
+            assertThat(fromA.getHospitalName()).isEqualTo(HOSPITAL_A);
+            assertThat(fromA.getRecordedAt()).isNotNull();
+            assertThat(fromA.getNotes()).isNull();
+            assertThat(fromA.getRecordedByDisplay()).isNull();
+            assertThat(fromA.getId()).isNull();
+        });
+        assertThat(known.toString()).doesNotContain("Titre").doesNotContain("Biologiste de A")
+            .doesNotContain("Panel A").doesNotContain("Note interne");
+
+        // B screens the patient: negative (the antibody is no longer detectable). Nobody is asked to identify.
+        screened(AntibodyScreenResult.NEGATIVE);
+        verify(inBasketService, never()).createItemInNewTransaction(any());
+        assertThat(service.getCurrentBloodGroup(patient).getAntibodyScreen()).isEqualTo(AntibodyScreenResult.NEGATIVE);
+        assertThat(service.getCurrentBloodGroup(patient).isAlloImmunised()).as("still flagged at B").isTrue();
+
+        // A routine request at B is held by the rule: a plain « compatible » is refused, the compatibilised one
+        // is written, because the antibody A identified is known here.
+        UUID requestId = request(TransfusionUrgency.ROUTINE).getId();
+        assertThat(service.getRequest(requestId).isAlloImmunised()).isTrue();
+        assertThat(service.getRequest(requestId).isAntibodyWorkupServes()).isTrue();
+        UUID bagId = bag().getId();
+        CrossmatchRequestDTO plain = CrossmatchRequestDTO.builder().bloodUnitId(bagId).compatible(Boolean.TRUE).build();
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, plain))
+            .isInstanceOfSatisfying(FieldBusinessException.class, refusal -> assertThat(refusal.getField())
+                .isEqualTo(PositiveAntibodyScreenPolicy.Missing.ANTIGLOBULIN.field()));
+        service.recordCrossmatch(requestId, compatibilised(bagId));
+        assertThat(rows("transfusion_crossmatches")).isEqualTo(1);
+
+        // An emergency for this patient is declared at B too.
+        actingAs(doctorUser);
+        TransfusionRequestRequestDTO undeclared = TransfusionRequestRequestDTO.builder()
+            .patientId(patient).productType(BloodProductType.PACKED_RED_CELLS).unitsRequested(1)
+            .indication("Haemorrhage").urgency(TransfusionUrgency.EMERGENCY).build();
+        assertThatThrownBy(() -> service.createRequest(undeclared))
+            .isInstanceOfSatisfying(FieldBusinessException.class,
+                refusal -> assertThat(refusal.getField()).isEqualTo("vitalUrgencyLevel"));
+        actingAs(techUser);
+
+        // Every time the flag was shown at B, the read of A's record was accounted, against A and nobody else:
+        // that account is also what the patient reads in « Qui a consulté mon dossier ».
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<java.util.Map<String, Long>> perSource = ArgumentCaptor.forClass(java.util.Map.class);
+        verify(reachRecorder, org.mockito.Mockito.atLeast(5)).recordReach(org.mockito.ArgumentMatchers.eq(patient),
+            org.mockito.ArgumentMatchers.eq(hospital), any(), org.mockito.ArgumentMatchers.isNull(),
+            perSource.capture(), org.mockito.ArgumentMatchers.eq(PositiveAntibodyScreenService.REACH_DESCRIPTION));
+        assertThat(perSource.getAllValues()).allSatisfy(reach ->
+            assertThat(reach).containsOnlyKeys(hospitalA.toString()));
+        // Nothing was written at A, and B wrote no antibody record of its own.
+        assertThat(rows("patient_antibody_workups")).isZero();
+    }
+
+    @Test
+    @DisplayName("a patient known at one hospital only: the flag names no other hospital, and no read of another hospital's record is accounted")
+    void aFlagHeldHereNamesNoOtherHospital() {
+        actingAs(techUser);
+        screened(AntibodyScreenResult.POSITIVE);
+
+        AntibodyStatusResponseDTO known = service.getAntibodyStatus(patient);
+
+        assertThat(known.isAlloImmunised()).isTrue();
+        assertThat(known.getOtherHospitalNames()).isEmpty();
+        assertThat(known.getPositiveScreenHospitalName()).startsWith("Hopital R70A");
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<java.util.Map<String, Long>> perSource = ArgumentCaptor.forClass(java.util.Map.class);
+        verify(reachRecorder, org.mockito.Mockito.atLeastOnce()).recordReach(any(), any(), any(), any(),
+            perSource.capture(), any());
+        assertThat(perSource.getAllValues()).allSatisfy(reach -> assertThat(reach).isEmpty());
     }
 }
