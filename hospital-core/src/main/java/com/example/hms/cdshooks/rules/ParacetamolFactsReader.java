@@ -89,12 +89,31 @@ public class ParacetamolFactsReader {
     }
 
     /**
+     * An order that is not marked for home. Kept for the callers that write a ward or an outpatient order.
+     *
      * @param item          the proposed order's catalogue item (may be null)
      * @param editedOrderId the order being edited, not "another order" of itself (null on a create)
      */
     @Transactional(readOnly = true, noRollbackFor = RuntimeException.class)
     public ParacetamolFacts read(Patient patient, UUID hospitalId, String medicationName,
                                  MedicationCatalogItem item, UUID editedOrderId) {
+        return readFor(patient, hospitalId, medicationName, item, new Proposed(editedOrderId, false));
+    }
+
+    /**
+     * @param takeHome whether the proposed order is marked for home (QA D3303): the ward orders of the open stay,
+     *                 which the discharge stops, are then not "other orders" of it, and a take-home order of an
+     *                 open stay is not one of a ward order ({@link InpatientOrderEnd#neverRunsWith})
+     */
+    @Transactional(readOnly = true, noRollbackFor = RuntimeException.class)
+    public ParacetamolFacts read(Patient patient, UUID hospitalId, String medicationName,
+                                 MedicationCatalogItem item, UUID editedOrderId, boolean takeHome) {
+        return readFor(patient, hospitalId, medicationName, item, new Proposed(editedOrderId, takeHome));
+    }
+
+    /** The read itself, in the transaction either entry point opened. */
+    private ParacetamolFacts readFor(Patient patient, UUID hospitalId, String medicationName,
+                                     MedicationCatalogItem item, Proposed proposed) {
         if (patient == null) {
             return ParacetamolFacts.NONE;
         }
@@ -120,17 +139,28 @@ public class ParacetamolFactsReader {
                 ? ParacetamolFacts.NOT_RECOGNISED : ParacetamolFacts.NONE;
         }
         Orders orders = child ? new Orders(List.of(), List.of(), List.of(), List.of())
-            : otherOrders(patient.getId(), scope, editedOrderId, paracetamol, combinations, active);
+            : otherOrders(patient.getId(), scope, proposed, paracetamol, combinations, active);
         List<PatientProblem> live = liveProblems(patient.getId(), scope);
         List<PatientProblem> surfaced = live.stream()
             .filter(p -> CrossHospitalRows.maySurface(scope, acting, p.getSensitivityCategory()))
             .toList();
-        ParacetamolFacts.Documented documented = child || scope == null || dosesGiven == null
-            ? ParacetamolFacts.Documented.NOT_READ
-            : dosesGiven.read(patient.getId(), scope, paracetamol, combinations, active);
+        ParacetamolFacts.Documented documented = child ? ParacetamolFacts.Documented.NOT_READ
+            : dosesDocumented(patient.getId(), scope, paracetamol, combinations, active);
+        boolean freeText = item == null && named;
         return new ParacetamolFacts(true, orders.counted, ParacetamolRisk.of(surfaced), orders.mayStillBeInUse,
             orders.combinations, combination, acting == null, scope == null,
-            item == null && named ? freeTextLimits(paracetamol) : null, orders.notRecognised, false, documented);
+            freeText ? freeTextLimits(paracetamol) : null, orders.notRecognised, false, documented);
+    }
+
+    /** The doses the record says were given; not read with no hospital to read at, or no record of doses. */
+    private ParacetamolFacts.Documented dosesDocumented(UUID patientId, UUID scope,
+                                                        List<MedicationCatalogItem> paracetamol,
+                                                        List<MedicationCatalogItem> combinations,
+                                                        List<MedicationCatalogItem> active) {
+        if (scope == null || dosesGiven == null) {
+            return ParacetamolFacts.Documented.NOT_READ;
+        }
+        return dosesGiven.read(patientId, scope, paracetamol, combinations, active);
     }
 
     /** A catalogue item or a cited brand names it, or it carries a class member's INN stem. */
@@ -199,15 +229,28 @@ public class ParacetamolFactsReader {
         return page == null ? List.of() : page.getContent();
     }
 
-    private Orders otherOrders(UUID patientId, UUID hospitalId, UUID editedOrderId,
+    /** The proposed order, as far as "which other orders run with it" needs it. */
+    private record Proposed(UUID editedOrderId, boolean takeHome) {
+    }
+
+    private Orders otherOrders(UUID patientId, UUID hospitalId, Proposed proposed,
                                List<MedicationCatalogItem> paracetamol, List<MedicationCatalogItem> combinations,
                                List<MedicationCatalogItem> active) {
         if (hospitalId == null) {
             return new Orders(List.of(), List.of(), List.of(), List.of());
         }
-        List<Prescription> live = prescriptions.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
+        List<Prescription> inForce = prescriptions.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
             .filter(CdsRuleEngine::inForce)
-            .filter(rx -> !rx.getId().equals(editedOrderId))
+            .filter(rx -> !rx.getId().equals(proposed.editedOrderId()))
+            .toList();
+        if (inForce.isEmpty()) {
+            return new Orders(List.of(), List.of(), List.of(), List.of());
+        }
+        List<Admission> stays = admissions.findByPatientIdOrderByAdmissionDateTimeDesc(patientId);
+        // QA D3303: a ward order of the open stay and an order for home are never taken together.
+        java.util.Set<UUID> openStays = InpatientOrderEnd.openStayIds(stays);
+        List<Prescription> live = inForce.stream()
+            .filter(rx -> !InpatientOrderEnd.neverRunsWith(proposed.takeHome(), rx, openStays))
             .toList();
         List<Prescription> combined = live.stream().filter(rx -> isCombination(rx, paracetamol, combinations)).toList();
         List<ParacetamolFacts.OtherOrder> alone = live.stream()
@@ -223,7 +266,7 @@ public class ParacetamolFactsReader {
         if (alone.isEmpty() && combined.isEmpty() && unnamed.isEmpty()) {
             return new Orders(List.of(), List.of(), List.of(), List.of());
         }
-        List<Admission> closedStays = admissions.findByPatientIdOrderByAdmissionDateTimeDesc(patientId).stream()
+        List<Admission> closedStays = stays == null ? List.of() : stays.stream()
             .filter(a -> a.getActualDischargeDateTime() != null)
             .toList();
         List<ParacetamolFacts.OtherOrder> counted = new java.util.ArrayList<>();

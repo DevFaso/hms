@@ -834,3 +834,22 @@ select:focus-visible {
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
+
+/* QA D3303: take-home orders written but not signed yet, in the discharge dialog. */
+.take-home-unsigned {
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #f59e0b;
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #78350f;
+  min-width: 0;
+  overflow-wrap: anywhere;
+
+  &__title {
+    margin: 0 0 0.25rem;
+    font-weight: 600;
+    font-size: 0.88rem;
+  }
+}

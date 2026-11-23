@@ -126,8 +126,11 @@ public class ObstetricAlertEscalationWorker {
             alert.patientName() == null || alert.patientName().isBlank()
                 ? NotificationLocalizer.key(PATIENT_FALLBACK) : alert.patientName(),
             alertMessageArg(alert.alertMessageKey(), alert.alertMessageArgs(), alert.alertMessage())};
+        // QA D3304: the maternal early-warning page already rang its circle for this reading; its first notice
+        // here is the item to acknowledge only, never a second bell. Its reminders ring like every other alert's.
+        boolean alreadyRang = ObstetricAlertEscalationService.SOURCE_VITAL_SIGN.equals(alert.sourceType());
         int reached = deliver(row, firstNoticeKey(alert.sourceType()), args, alert.notificationText(),
-            alert.patientName(), recipients, NOTIFICATION_TYPE);
+            alert.patientName(), recipients, alreadyRang ? null : NOTIFICATION_TYPE);
         if (reached == 0) {
             log.warn("Urgent obstetric alert {} at hospital {} has nobody on call and no other doctor or midwife to notify",
                 row.getId(), alert.hospitalId());
@@ -300,6 +303,8 @@ public class ObstetricAlertEscalationWorker {
      * but the documenter. Each delivery is guarded: one bad recipient never
      * stops the others.
      *
+     * @param notificationType the bell notice's type; {@code null} files the in-basket items with no bell notice
+     *                         (the page that raised the alert already rang these people: QA D3304)
      * @return how many people other than the documenter were notified
      */
     private int deliver(ObstetricAlertEscalation row, String messageKey, Object[] args, String message,
@@ -312,9 +317,7 @@ public class ObstetricAlertEscalationWorker {
         if (others.isEmpty()) {
             return 0;
         }
-        for (String username : others) {
-            notifyQuietly(messageKey, args, username, notificationType, row.getId());
-        }
+        ring(others, messageKey, args, notificationType, row.getId());
         List<String> lower = others.stream().map(u -> u.toLowerCase(Locale.ROOT)).toList();
         String text = message == null ? "" : message;
         String title = text.length() > TITLE_MAX ? text.substring(0, TITLE_MAX) : text;
@@ -347,6 +350,16 @@ public class ObstetricAlertEscalationWorker {
             }
         }
         return others.size();
+    }
+
+    /** The bell notice of each recipient; none when {@code notificationType} is null (QA D3304). */
+    private void ring(List<String> usernames, String messageKey, Object[] args, String notificationType, UUID escalationId) {
+        if (notificationType == null) {
+            return;
+        }
+        for (String username : usernames) {
+            notifyQuietly(messageKey, args, username, notificationType, escalationId);
+        }
     }
 
     private void notifyQuietly(String messageKey, Object[] args, String username, String type, UUID escalationId) {
@@ -393,6 +406,9 @@ public class ObstetricAlertEscalationWorker {
         }
         if (ObstetricAlertEscalationService.SOURCE_POSTPARTUM.equals(sourceType)) {
             return "postpartum.alert.";
+        }
+        if (ObstetricAlertEscalationService.SOURCE_VITAL_SIGN.equals(sourceType)) {
+            return "maternalWarning.alert.";
         }
         return "labor.alert.";
     }

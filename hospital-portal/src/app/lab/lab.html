@@ -943,6 +943,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-dialog-title-4"
+      data-testid="specimens-dialog"
       appModalDialog
       (escaped)="closeSpecimens()"
       (keydown.escape)="$event.stopPropagation()"
@@ -969,6 +970,9 @@
         } @else if (specimens().length === 0) {
           <p class="empty-hint">{{ 'LAB.NO_SPECIMENS' | translate }}</p>
         } @else {
+          <p class="field-hint specimen-scroll-hint">
+            {{ 'LAB.SPECIMEN_SCROLL_HINT' | translate }}
+          </p>
           <div class="data-table" tabindex="0" role="region" aria-labelledby="lab-dialog-title-4">
             <table>
               <thead>
@@ -1053,6 +1057,11 @@
           </p>
         }
         @if (specimensOrderAcceptsSpecimens()) {
+          @if (specimens().length > 0) {
+            <p class="field-hint" data-testid="existing-specimens-warning">
+              {{ 'LAB.EXISTING_SPECIMENS' | translate: { count: specimens().length } }}
+            </p>
+          }
           <h3 class="specimen-form-title">{{ 'LAB.COLLECT_SPECIMEN' | translate }}</h3>
           <div class="form-row">
             <div class="field">

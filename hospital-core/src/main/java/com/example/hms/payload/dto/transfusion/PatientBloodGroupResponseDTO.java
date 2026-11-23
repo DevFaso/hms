@@ -32,6 +32,8 @@ public class PatientBloodGroupResponseDTO {
     private Boolean superseded;
     /** Whether the SCREEN is still usable for a crossmatch. ABO/Rh never expires. */
     private Boolean screenCurrent;
+    /** QA D3351: a positive antibody screen is on record here, this one or an earlier one: never cleared. */
+    private boolean alloImmunised;
     private String notes;
     /** Why this result disagrees with the one before it (QA CX-011). */
     private String correctionReason;

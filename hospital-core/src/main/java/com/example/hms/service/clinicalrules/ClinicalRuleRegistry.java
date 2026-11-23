@@ -42,20 +42,30 @@ public final class ClinicalRuleRegistry {
     private static final String DATE_2026_11_15 = "2026-11-15.1";
     private static final String DATE_2026_11_20 = "2026-11-20.1";
     private static final String DATE_2026_11_21 = "2026-11-21.1";
+    /** QA r70, first build of the day: the child paracetamol default (D3306), maternal pages to acknowledge (D3304). */
+    private static final String DATE_2026_11_22 = "2026-11-22.1";
     /**
-     * QA r70 (D3450, D3301): the imaging rule's catalogue flag and fail-closed band; who a renewal is announced to.
-     * Review of #1290 (.2): the report and captions a proxy would read, a clearance only under the exam's current
+     * The rule sets of 2026-11-22 as amended by the review of their first build, the same day (.2).
+     *
+     * <p>QA r70 (D3450, D3301): the imaging rule's catalogue flag and fail-closed band; who a renewal is announced to.
+     * Review of #1290: the report and captions a proxy would read, a clearance only under the exam's current
      * name, an unknown body part and an implausible age held back; a prescriber who may no longer renew is covered.
+     *
+     * <p>QA r70 (D3351, C5), review of #1291: every positive screen asks the biologist and an emergency on a plain
+     * crossmatch owes the crossmatch afterwards; SMS after the commit, the results already waiting never texted
+     * about, an incident closed when its result is amended or no longer critical.
      */
-    private static final String DATE_2026_11_22 = "2026-11-22.2";
+    private static final String DATE_2026_11_22_REVIEWED = "2026-11-22.2";
 
     private static final List<ClinicalRuleSet> ALL = List.of(
         rule(ClinicalRuleSetKey.BLOOD_EMERGENCY_RELEASE, DATE_2026_11_07,
             "service.support.EmergencyReleasePolicy"),
         rule(ClinicalRuleSetKey.NEWBORN_VITALS, DATE_2026_11_07,
             "service.maternity.NewbornAlertRules"),
-        rule(ClinicalRuleSetKey.PARACETAMOL_LIMITS, DATE_2026_11_07,
-            "cdshooks.rules.AdultParacetamolRule", PAEDIATRIC_DOSE_RULE),
+        // 2026-11-22 (QA D3306): the child's limits apply by default where the catalogue records none.
+        rule(ClinicalRuleSetKey.PARACETAMOL_LIMITS, DATE_2026_11_22,
+            "cdshooks.rules.AdultParacetamolRule", PAEDIATRIC_DOSE_RULE,
+            "cdshooks.rules.ParacetamolPaediatricDefault"),
         rule(ClinicalRuleSetKey.PAEDIATRIC_DOSE_LIMITS, DATE_2026_11_07,
             PAEDIATRIC_DOSE_RULE),
         rule(ClinicalRuleSetKey.AL_WHO_WEIGHT_BANDS, DATE_2026_11_21,
@@ -106,7 +116,7 @@ public final class ClinicalRuleRegistry {
             "service.imaging.ImagingRoleScope", IMAGING_EXAM_RECORD),
         rule(ClinicalRuleSetKey.NON_PHYSICIAN_ULTRASOUND, DATE_2026_11_20,
             "service.imaging.ImagingReportingSettingsService", IMAGING_EXAM_RECORD),
-        rule(ClinicalRuleSetKey.PRESCRIPTION_RENEWAL, DATE_2026_11_22,
+        rule(ClinicalRuleSetKey.PRESCRIPTION_RENEWAL, DATE_2026_11_22_REVIEWED,
             "service.impl.RefillApprovalServiceImpl", "service.pharmacy.RenewalAlertRouting"),
         rule(ClinicalRuleSetKey.DEFERRED_BILLING, DATE_2026_11_20,
             "service.pharmacy.DispenseBillingDeferralService"),
@@ -116,7 +126,8 @@ public final class ClinicalRuleRegistry {
             "service.billing.EmergencyEpisodeConsultation"),
         rule(ClinicalRuleSetKey.MATERNAL_EARLY_WARNING, DATE_2026_11_20,
             MEWS_RULES, "service.vitals.MaternalEarlyWarning", "service.vitals.News2Applicability"),
-        rule(ClinicalRuleSetKey.MATERNAL_EWS_ESCALATION, DATE_2026_11_20,
+        // 2026-11-22 (QA D3304): a medium, high or red page is also an urgent alert to acknowledge.
+        rule(ClinicalRuleSetKey.MATERNAL_EWS_ESCALATION, DATE_2026_11_22,
             MEWS_SERVICE, MEWS_RULES),
         rule(ClinicalRuleSetKey.CRADLE_SHOCK_INDEX, DATE_2026_11_20,
             MEWS_RULES),
@@ -126,7 +137,7 @@ public final class ClinicalRuleRegistry {
             MEWS_SERVICE, MEWS_RULES),
         rule(ClinicalRuleSetKey.TAKE_HOME_ORDER_WINDOW, DATE_2026_11_21,
             "service.DischargeTakeHomeMedicines"),
-        rule(ClinicalRuleSetKey.PREGNANCY_REVEALING_IMAGING, DATE_2026_11_22,
+        rule(ClinicalRuleSetKey.PREGNANCY_REVEALING_IMAGING, DATE_2026_11_22_REVIEWED,
             "service.imaging.PregnancyRevealingStudyRule"),
         rule(ClinicalRuleSetKey.LAB_DUPLICATE_WINDOW, DATE_2026_11_21,
             "service.lab.LabOrderDuplicateCheck"),
@@ -137,7 +148,14 @@ public final class ClinicalRuleRegistry {
         rule(ClinicalRuleSetKey.LEGACY_ULTRASOUND_REPORTS, DATE_2026_11_21,
             "service.impl.UltrasoundServiceImpl"),
         rule(ClinicalRuleSetKey.SAME_DAY_PRICE_CORRECTION, DATE_2026_11_21,
-            "service.billing.PriceListService", "service.billing.PriceVersionRules"));
+            "service.billing.PriceListService", "service.billing.PriceVersionRules"),
+        // QA D3351 (r70), research report « Transfusion and critical result cover », section 1.
+        rule(ClinicalRuleSetKey.TRANSFUSION_POSITIVE_ANTIBODY_SCREEN, DATE_2026_11_22_REVIEWED,
+            "service.support.PositiveAntibodyScreenPolicy", "service.transfusion.PositiveAntibodyScreenService"),
+        // QA r70 scorecard C5, research report « Transfusion and critical result cover », section 2.
+        rule(ClinicalRuleSetKey.CRITICAL_RESULT_ESCALATION, DATE_2026_11_22_REVIEWED,
+            "service.lab.CriticalResultEscalationLadder", "service.lab.CriticalResultRecipients",
+            "service.lab.CriticalResultEscalationSettingsService"));
 
     private static final Map<ClinicalRuleSetKey, ClinicalRuleSet> BY_KEY = index();
 
@@ -153,7 +171,13 @@ public final class ClinicalRuleRegistry {
         ClinicalRuleSetKey.ORDER_REVIEW_HOLD, "https://www.who.int/initiatives/medication-without-harm",
         ClinicalRuleSetKey.NEWBORN_VITALS, "https://www.who.int/publications/i/item/9789240045989",
         ClinicalRuleSetKey.LABOUR_ALERT_VALUES, "https://www.who.int/publications/i/item/9789240017566",
-        ClinicalRuleSetKey.SEVERE_HYPERTENSION_OBSTETRIC, "https://www.nice.org.uk/guidance/ng133");
+        ClinicalRuleSetKey.SEVERE_HYPERTENSION_OBSTETRIC, "https://www.nice.org.uk/guidance/ng133",
+        // QA D3351: HAS 2014, the first source the research report cites for the rule (a public PDF).
+        ClinicalRuleSetKey.TRANSFUSION_POSITIVE_ANTIBODY_SCREEN,
+        "https://www.has-sante.fr/upload/docs/application/pdf/2015-02/transfusion_de_globules_rouges_homologues_-_produits_et_examens_immuno-hematologiques_-_argumentaire.pdf",
+        // Scorecard C5: RCPath G158, the public guidance the research report cites for the escalation duty.
+        ClinicalRuleSetKey.CRITICAL_RESULT_ESCALATION,
+        "https://www.rcpath.org/asset/BB86B370-1545-4C5A-B5826A2C431934F5/");
 
     private ClinicalRuleRegistry() {
     }

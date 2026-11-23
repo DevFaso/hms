@@ -24,6 +24,8 @@ import {
 import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { LabValuePipe } from '../../shared/pipes/lab-value.pipe';
+import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.component';
 import {
   flagKey,
   hl7Readable,
@@ -44,7 +46,15 @@ import {
 @Component({
   selector: 'app-lab-outbox',
   standalone: true,
-  imports: [ModalDialogDirective, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [
+    ModalDialogDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    LabValuePipe,
+    LabCorrectionBadgeComponent,
+  ],
   templateUrl: './lab-outbox.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-outbox.scss',

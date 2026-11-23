@@ -1094,7 +1094,9 @@ export class LabComponent implements OnInit {
           (o.status ?? '').toLowerCase().includes(term),
       );
     }
-    this.filtered.set(list);
+    const priorityRank = (order: LabOrderResponse): number =>
+      order.priority === 'STAT' ? 0 : order.priority === 'URGENT' ? 1 : 2;
+    this.filtered.set([...list].sort((a, b) => priorityRank(a) - priorityRank(b)));
   }
 
   /** Invalidates every drawer request, including a previous opening of the same order. */
@@ -1287,7 +1289,11 @@ export class LabComponent implements OnInit {
           this.specimenSaving.set(false);
           if (!this.specimensSession.isCurrent(session)) return;
           this.toast.success(this.translate.instant('LAB.TOAST.SPECIMEN_COLLECTED'));
-          this.specimenForm = { specimenType: '', currentLocation: '', notes: '' };
+          this.specimenForm = {
+            specimenType: this.sampleTypeOf(order),
+            currentLocation: '',
+            notes: '',
+          };
           this.loadSpecimens(order.id);
         },
         error: (err: { error?: { errors?: Record<string, string>; message?: string } }) => {

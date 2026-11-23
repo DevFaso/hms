@@ -2,7 +2,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { LabQcDashboardComponent } from './lab-qc-dashboard';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { resetStoredLangForTests } from '../../shared/i18n/app-locale';
 import {
   LabService,
   LabQcSummary,
@@ -302,6 +303,30 @@ describe('LabQcDashboardComponent', () => {
       expect(component.liveFlag()).toBe('OUTSIDE_3SD');
       component.qcMeasured.set('5.1');
       expect(component.liveFlag()).toBe('WITHIN_2SD');
+    });
+
+    it('D2616: the target readout uses French decimals', () => {
+      const previous = localStorage.getItem('lang');
+      try {
+        localStorage.setItem('lang', 'fr');
+        resetStoredLangForTests();
+        const translate = TestBed.inject(TranslateService);
+        translate.setTranslation(
+          'fr',
+          { LAB_QC: { TARGET: { CURRENT: '{{mean}} / {{sd}}' } } },
+          true,
+        );
+        translate.use('fr');
+        component.openRecordForm('def-1');
+        fixture.detectChanges();
+        expect(
+          fixture.nativeElement.querySelector('[data-testid="qc-target-readout"]').textContent,
+        ).toContain('5 / 0,2');
+      } finally {
+        if (previous === null) localStorage.removeItem('lang');
+        else localStorage.setItem('lang', previous);
+        resetStoredLangForTests();
+      }
     });
 
     it('lets the lab director set and approve a target', () => {

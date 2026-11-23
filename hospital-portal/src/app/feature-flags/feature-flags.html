@@ -69,7 +69,11 @@
             </button>
           </div>
           <div class="col-key">
-            <span class="flag-name">{{ flag.key }}</span>
+            <span class="flag-name">{{ flagTitle(flag) }}</span>
+            @if (flagTitle(flag) !== flag.key) {
+              <p class="muted">{{ flag.key }}</p>
+            }
+            <p>{{ flagDescription(flag) }}</p>
             {{ ' '
             }}<span class="flag-badge" [class.on]="flag.enabled">
               {{ flag.enabled ? ('FLAGS.ON' | translate) : ('FLAGS.OFF' | translate) }}
@@ -141,15 +145,18 @@
         <div class="modal-body">
           <div class="form-group">
             <label for="flag-key">{{ 'FLAGS.KEY_LABEL' | translate }} *</label>
-            <input
+            <select
               id="flag-key"
-              type="text"
               required
               data-server-field="key flagKey"
-              [placeholder]="'FLAGS.KEY_PLACEHOLDER' | translate"
               [ngModel]="newFlagKey()"
               (ngModelChange)="newFlagKey.set($event)"
-            />
+            >
+              <option value="">{{ 'FLAGS.SELECT_DECLARED' | translate }}</option>
+              @for (flag of flags(); track flag.key) {
+                <option [value]="flag.key">{{ flag.key }}</option>
+              }
+            </select>
           </div>
           <div class="form-group">
             <label for="flag-description">{{ 'FLAGS.DESCRIPTION_LABEL' | translate }}</label>

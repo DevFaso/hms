@@ -114,6 +114,9 @@ class ServiceWriteTenantLoadCoverageTest {
         // scheduler thread). The ids come from the action that queued the row, which was tenant-checked
         // itself; the sweep only decides whether to send and never returns the rows to a caller.
         entry("PatientNotificationDispatchService.recordOutcome#findById", "V312 sweep: the ledger row it claimed"),
+        entry("FiveRightsVerificationService.catalogItemOf#findById", "QA D3302: the id is the order's own"
+            + " medicationCatalogItemId, never a request value; the MAR row was tenant-checked by its caller, and the"
+            + " item (the hospital's or the national list's) is read only to recognise the product scanned"),
         entry("PatientNotificationLedger.eligibleChannels#findByIdUnscoped", "V312 queue: the patient of a booking or"
             + " release that was tenant-checked; reads contact presence and consent only"),
         entry("PatientNotificationRenderer.prepare#findById", "V312 sweep: the claimed ledger row and its hospital,"

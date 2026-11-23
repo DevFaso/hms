@@ -29,6 +29,40 @@
       </div>
     </div>
 
+    <section class="panel" data-testid="organization-details">
+      <h2 class="panel-title">{{ 'ORGANIZATION_DETAIL.INFORMATION' | translate }}</h2>
+      @if (org.description) {
+        <p>{{ org.description }}</p>
+      }
+      <dl class="organization-facts">
+        <div>
+          <dt>{{ 'ORGANIZATION_DETAIL.EMAIL' | translate }}</dt>
+          <dd>{{ org.primaryContactEmail || '—' }}</dd>
+        </div>
+        <div>
+          <dt>{{ 'ORGANIZATION_DETAIL.PHONE' | translate }}</dt>
+          <dd>{{ org.primaryContactPhone || '—' }}</dd>
+        </div>
+        <div>
+          <dt>{{ 'ORGANIZATION_DETAIL.TIMEZONE' | translate }}</dt>
+          <dd>{{ org.defaultTimezone || '—' }}</dd>
+        </div>
+      </dl>
+      <h3>{{ 'ORGANIZATION_DETAIL.HOSPITALS' | translate }}</h3>
+      @if (org.hospitals?.length) {
+        <ul>
+          @for (hospital of org.hospitals; track hospital.id) {
+            <li>
+              <a [routerLink]="['/hospitals', hospital.id]">{{ hospital.name }}</a> ·
+              {{ hospital.code }} · {{ hospital.city }}
+            </li>
+          }
+        </ul>
+      } @else {
+        <p>{{ 'ORGANIZATION_DETAIL.NO_HOSPITALS' | translate }}</p>
+      }
+    </section>
+
     @if (lifecycle(); as lc) {
       <!-- Lifecycle panel -->
       <section class="panel" data-test="lifecycle-panel">

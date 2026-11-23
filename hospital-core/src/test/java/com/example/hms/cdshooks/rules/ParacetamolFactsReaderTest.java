@@ -623,4 +623,66 @@ class ParacetamolFactsReaderTest {
         assertThat(limits.getPediatricMaxDailyMg()).isNull();
         assertThat(limits.getPediatricMaxDoseMgPerKg()).isEqualByComparingTo("15");
     }
+
+    // ---- QA D3303 (r70): an order for home and the ward orders the discharge stops ----
+
+    private Prescription onStay(Prescription rx, Admission stay, boolean takeHome) {
+        com.example.hms.model.Encounter encounter = new com.example.hms.model.Encounter();
+        encounter.setAdmissionId(stay.getId());
+        rx.setEncounter(encounter);
+        rx.setTakeHome(takeHome);
+        return rx;
+    }
+
+    private Admission openStay() {
+        Admission stay = new Admission();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionDateTime(LocalDateTime.now().minusDays(3));
+        stay.setStatus(com.example.hms.enums.AdmissionStatus.ACTIVE);
+        when(admissions.findByPatientIdOrderByAdmissionDateTimeDesc(adult.getId())).thenReturn(List.of(stay));
+        return stay;
+    }
+
+    @Test
+    void aWardOrderOfTheOpenStayIsNotAddedToAnOrderForHome() {
+        Admission stay = openStay();
+        onStay(order("Paracétamol", PrescriptionStatus.SIGNED), stay, false);
+
+        // The report's case: 1 g x3 for home, written while 1 g x4 runs on the ward (« 7 g par jour »).
+        assertThat(reader.read(adult, hospitalId, "Paracétamol 500 mg", null, null, true).otherOrders()).isEmpty();
+        // Another ward order of the same stay IS taken with it.
+        assertThat(reader.read(adult, hospitalId, "Paracétamol 500 mg", null, null, false).otherOrders()).hasSize(1);
+    }
+
+    @Test
+    void anOrderForHomeOfTheOpenStayIsNotAddedToAWardOrder() {
+        Admission stay = openStay();
+        onStay(order("Paracétamol", PrescriptionStatus.SIGNED), stay, true);
+
+        assertThat(reader.read(adult, hospitalId, "Paracétamol 500 mg", null, null, false).otherOrders()).isEmpty();
+        // Two orders for home go home together: the second one is checked against the first.
+        assertThat(reader.read(adult, hospitalId, "Paracétamol 500 mg", null, null, true).otherOrders()).hasSize(1);
+    }
+
+    @Test
+    void onceTheStayHasEndedAnOrderForHomeCountsForEveryNewOrder() {
+        Admission stay = openStay();
+        Prescription home = onStay(order("Paracétamol", PrescriptionStatus.SIGNED), stay, true);
+        home.setHospital(hospitalOf());
+        stay.setHospital(home.getHospital());
+        stay.setStatus(com.example.hms.enums.AdmissionStatus.DISCHARGED);
+        stay.setActualDischargeDateTime(LocalDateTime.now().minusHours(2));
+
+        assertThat(reader.read(adult, hospitalId, "Paracétamol 500 mg", null, null, false).otherOrders()).hasSize(1);
+        assertThat(reader.read(adult, hospitalId, "Paracétamol 500 mg", null, null, true).otherOrders()).hasSize(1);
+    }
+
+    @Test
+    void anOrderOnNoStayIsCountedWithAnOrderForHome() {
+        openStay();
+        order("Paracétamol", PrescriptionStatus.SIGNED);
+
+        // An outpatient order in force is not stopped by the discharge: it still adds up.
+        assertThat(reader.read(adult, hospitalId, "Paracétamol 500 mg", null, null, true).otherOrders()).hasSize(1);
+    }
 }

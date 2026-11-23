@@ -60,8 +60,8 @@ class AdultParacetamolGuardTest {
 
     @Test
     void theEngineReadsTheFactsForEveryContext() throws IOException {
-        assertThat(code(ENGINE)).contains("readParacetamolFacts(patient, hospitalId, proposedMedicationName, catalogItem, excludedPrescriptionId)")
-            .contains("return paracetamolFacts.read(patient, hospitalId, name, item, editedOrderId);");
+        assertThat(code(ENGINE)).contains("readParacetamolFacts(patient, hospitalId, proposedMedicationName, catalogItem, excludedPrescriptionId, order.takeHome())")
+            .contains("return paracetamolFacts.read(patient, hospitalId, name, item, editedOrderId, takeHome);");
     }
 
     @Test

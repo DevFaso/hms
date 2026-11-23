@@ -60,7 +60,8 @@ public class ParacetamolExposureCheck {
             new CdsRuleEngine.ProposedOrder(rx.getMedicationName(), rx.getMedicationCode(), rx.getDosage(),
                 rx.getFrequency(), engine.itemOf(rx, scope), rx.getId(),
                 PrnMinInterval.highestDosesPerDay(PrnMinInterval.isAsNeeded(rx), rx.getPrnMinIntervalHours()),
-                rx.getRoute(), null),
+                // QA D3303: a dose given on the ward runs with the ward orders, whatever the order is marked.
+                rx.getRoute(), null, false),
             doseJustRecorded);
     }
 

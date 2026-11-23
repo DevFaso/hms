@@ -1069,7 +1069,13 @@
 
 <!-- The partograph rows of one episode: this one, or (read only) the one it continues. -->
 <ng-template #entryTable let-rows>
-  <div class="data-table">
+  <p class="muted">{{ 'LABOR.PARTOGRAPH_SCROLL_HINT' | translate }}</p>
+  <div
+    class="data-table"
+    role="region"
+    tabindex="0"
+    [attr.aria-label]="'LABOR.PARTOGRAPH' | translate"
+  >
     <table>
       <thead>
         <tr>

@@ -167,22 +167,31 @@ class LabResultControllerTest {
     }
 
     /**
-     * r65 D2183: whoever the escalation pages from round 2 (ROLE_HOSPITAL_ADMIN)
-     * can open the critical lists it is paged about; acknowledging and reading
-     * back stay with the clinical roles.
+     * r65 D2183, r70 C5: whoever the escalation tells (the doctors, the nurse in charge, the biologist, and
+     * the hospital administrator who gets the incident flag) can open the critical lists it is told about;
+     * acknowledging and reading back stay with the clinical roles, never the administrator nor the laboratory.
      */
     @Test
     void criticalLists_admitTheRoleTheEscalationPages_acknowledgeStaysClinical() throws Exception {
-        String paged = ((String) org.springframework.test.util.ReflectionTestUtils.getField(
-            com.example.hms.service.CriticalValueNotificationService.class, "TIER_TWO_ROLE")).replace("ROLE_", "");
-        assertThat(extractRolesFromMethod("getUnacknowledgedCriticalResults", java.util.UUID.class, Locale.class))
-            .contains(paged);
-        assertThat(extractRolesFromMethod("getCriticalResults", java.util.UUID.class,
-            java.time.LocalDateTime.class, Locale.class)).contains(paged);
+        java.util.List<String> told = java.util.List.of(
+            com.example.hms.service.lab.CriticalResultRecipients.DOCTOR_ROLES.get(0),
+            com.example.hms.service.lab.CriticalResultRecipients.NURSE_ROLE,
+            com.example.hms.service.lab.CriticalResultRecipients.BIOLOGIST_ROLE,
+            com.example.hms.service.lab.CriticalResultRecipients.ADMINISTRATOR_ROLE);
+        String administrator =
+            com.example.hms.service.lab.CriticalResultRecipients.ADMINISTRATOR_ROLE.replace("ROLE_", "");
+        assertThat(administrator).isEqualTo("HOSPITAL_ADMIN");
+        for (String role : told) {
+            String paged = role.replace("ROLE_", "");
+            assertThat(extractRolesFromMethod("getUnacknowledgedCriticalResults", java.util.UUID.class, Locale.class))
+                .contains(paged);
+            assertThat(extractRolesFromMethod("getCriticalResults", java.util.UUID.class,
+                java.time.LocalDateTime.class, Locale.class)).contains(paged);
+        }
         String readBack = LabResultController.class.getMethod("readBackCriticalValue",
                 java.util.UUID.class, com.example.hms.payload.dto.CriticalValueReadBackRequestDTO.class, Locale.class)
             .getAnnotation(org.springframework.security.access.prepost.PreAuthorize.class).value();
-        assertThat(readBack).doesNotContain(paged);
+        assertThat(readBack).doesNotContain(administrator).doesNotContain("LAB_DIRECTOR");
     }
 
     // ── getAllLabResults must include SUPER_ADMIN for cross-tenant browsing ──

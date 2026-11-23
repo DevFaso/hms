@@ -188,6 +188,12 @@
                   {{ ' '
                   }}<span class="chip chip-mismatch">{{ 'BED_BOARD.OVERRIDE' | translate }}</span>
                 }
+                @if (t.laborAcknowledgementRequired) {
+                  {{ ' '
+                  }}<span class="chip chip-labor" data-testid="transfer-in-labor">{{
+                    'BED_BOARD.IN_LABOR' | translate
+                  }}</span>
+                }
               </div>
               <div class="transfer-route">
                 <span>{{ t.fromBedLabel || ('BED_BOARD.NO_BED' | translate) }}</span>
@@ -253,10 +259,20 @@
           ><input
             [attr.aria-label]="'BED_BOARD.SEARCH_BEDS' | translate"
             [placeholder]="'BED_BOARD.SEARCH_BEDS' | translate"
+            data-testid="bed-board-search"
             [ngModel]="searchTerm()"
             (ngModelChange)="searchTerm.set($event)"
         /></label>
       </div>
+      <!-- QA D3308: the search says what it left on the board, so a filtered board is never mistaken for the whole one. -->
+      @if (searchSummary(); as found) {
+        <p class="search-summary" role="status" data-testid="bed-board-search-summary">
+          {{ 'BED_BOARD.SEARCH_RESULTS' | translate: { shown: found.shown, total: found.total } }}
+          <button type="button" class="btn-link" (click)="searchTerm.set('')">
+            {{ 'BED_BOARD.SEARCH_CLEAR' | translate }}
+          </button>
+        </p>
+      }
       <section class="filters">
         <label for="ward-filter">{{ 'BED_BOARD.FILTER_WARD' | translate }}</label>
         <select
@@ -402,6 +418,14 @@
                                   'BED_BOARD.WRONG_WARD' | translate
                                 }}</span>
                               }
+                            </div>
+                          }
+
+                          @if (o.inLabor) {
+                            <div class="precautions">
+                              <span class="chip chip-labor" data-testid="occupant-in-labor">{{
+                                'BED_BOARD.IN_LABOR' | translate
+                              }}</span>
                             </div>
                           }
 
@@ -643,6 +667,31 @@
         </div>
       }
 
+      <!-- QA D3308: a woman in labour leaves maternity only knowingly; said BEFORE the order is sent. -->
+      @if (transferTarget()?.inLabor) {
+        <div class="override-block labor-block" role="alert" data-testid="transfer-labor-warning">
+          <p class="hint warn">
+            {{
+              (transferNeedsLaborAck ? 'BED_BOARD.LABOR_WARNING' : 'BED_BOARD.LABOR_NOTICE')
+                | translate: { name: transferTarget()?.patientName ?? '' }
+            }}
+          </p>
+          @if (transferNeedsLaborAck) {
+            <label class="check">
+              <input
+                id="labor-confirm"
+                type="checkbox"
+                required
+                data-server-field="laborAcknowledged"
+                [(ngModel)]="transferForm.laborAcknowledged"
+                name="laborAcknowledged"
+              />
+              {{ 'BED_BOARD.LABOR_CONFIRM' | translate }} *
+            </label>
+          }
+        </div>
+      }
+
       <div class="form-row">
         <label for="transfer-reason">{{ 'BED_BOARD.REASON' | translate }} *</label>
         <input
@@ -672,6 +721,7 @@
           'transfer-reason',
           'override-confirm',
           'override-reason',
+          'labor-confirm',
         ]"
       >
         {{ 'BED_BOARD.ORDER_TRANSFER' | translate }}
@@ -692,6 +742,18 @@
     [busy]="discontinueBusy()"
     (confirmed)="confirmDiscontinue(p, $event)"
     (cancelled)="discontinuing.set(null)"
+  />
+}
+<!-- QA D3308: carrying out the move of a woman in labour to a bed outside maternity asks first. -->
+@if (completingLaborTransfer(); as order) {
+  <app-confirm-dialog
+    titleKey="BED_BOARD.LABOR_COMPLETE_TITLE"
+    messageKey="BED_BOARD.LABOR_COMPLETE_MESSAGE"
+    [params]="{ name: order.patientName ?? '', bed: order.toBedLabel ?? '' }"
+    confirmKey="BED_BOARD.LABOR_COMPLETE_CONFIRM"
+    dismissKey="COMMON.BACK"
+    (confirmed)="confirmLaborTransferCompletion(order)"
+    (cancelled)="completingLaborTransfer.set(null)"
   />
 }
 @if (cancellingTransfer(); as order) {
