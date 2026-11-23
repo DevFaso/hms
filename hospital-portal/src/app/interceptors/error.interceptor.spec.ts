@@ -211,7 +211,7 @@ describe('errorInterceptor', () => {
     });
   }
 
-  for (const status of [400, 403]) {
+  for (const status of [400, 403, 410]) {
     it(`a real refresh rejection (${status}) still ends the session`, () => {
       auth.getRefreshToken.and.returnValue('r1');
       auth.refreshTokenRequest.and.returnValue(throwError(() => new HttpErrorResponse({ status })));

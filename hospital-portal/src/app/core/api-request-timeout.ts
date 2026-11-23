@@ -38,7 +38,7 @@ export function withApiTimeoutProfile(req: HttpRequest<unknown>): HttpRequest<un
 
 /** A transport failure says nothing about whether the refresh cookie is still valid. */
 export function isRefreshRejection(error: unknown): boolean {
-  return error instanceof HttpErrorResponse && [400, 401, 403].includes(error.status);
+  return error instanceof HttpErrorResponse && [400, 401, 403, 410].includes(error.status);
 }
 
 export function isSignInRequest(req: HttpRequest<unknown>): boolean {

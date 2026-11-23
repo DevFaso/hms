@@ -150,7 +150,7 @@ test('only an explicit refresh rejection ends a session; session protocol POSTs 
   for (const status of [0, 409, 500, 502, 503, 504])
     assert.equal(isRefreshRejection(new HttpErrorResponse({ status })), false);
   assert.equal(isRefreshRejection(new Error('timeout')), false);
-  for (const status of [400, 401, 403])
+  for (const status of [400, 401, 403, 410])
     assert.equal(isRefreshRejection(new HttpErrorResponse({ status })), true);
   for (const path of ['login', 'token/refresh', 'mfa/verify', 'verify-password'])
     assert.equal(timeoutNoticeMethod(new HttpRequest('POST', '/api/auth/' + path, {})), 'GET');

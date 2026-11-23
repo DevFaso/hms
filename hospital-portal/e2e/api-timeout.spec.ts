@@ -382,13 +382,11 @@ test('an uncertain upload warning is cleared when the patient signs out', async 
     await page.goto('/my-documents');
     await page.clock.install();
     await page.getByTestId('document-upload-toggle').click();
-    await page
-      .locator('#portal-document-file')
-      .setInputFiles({
-        name: 'slow-report.pdf',
-        mimeType: 'application/pdf',
-        buffer: Buffer.from('report'),
-      });
+    await page.locator('#portal-document-file').setInputFiles({
+      name: 'slow-report.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('report'),
+    });
     await page.locator('.upload-form button.btn-primary').click();
     await expect.poll(() => uploadCalls).toBe(1);
     await page.clock.fastForward(121000);
@@ -401,4 +399,20 @@ test('an uncertain upload warning is cleared when the patient signs out', async 
   } finally {
     release();
   }
+});
+
+test('terminal refresh 410 ends the legacy session and opens login', async ({ page, baseURL }) => {
+  await signInAs(page, 'ROLE_SUPER_ADMIN', baseURL!);
+  let refreshCalls = 0;
+  await page.route('**/api/auth/token/refresh', async (route) => {
+    refreshCalls++;
+    await route.fulfill({ status: 410, json: { message: 'Legacy issuer retired' } });
+  });
+  await page.route('**/api/patients**', (route) =>
+    route.fulfill({ status: 401, json: { message: 'Expired access token' } }),
+  );
+  await page.goto('/patients');
+  await expect(page).toHaveURL(/\/login(?:[?#]|$)/);
+  expect(await page.evaluate(() => localStorage.getItem('auth_token'))).toBeNull();
+  expect(refreshCalls).toBe(1);
 });
