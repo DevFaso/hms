@@ -183,10 +183,11 @@ public class PatientRecordPdfService {
 
         pages.heading(t.get("pdf.record.section.codeStatus"));
         PatientStoryboardDTO.CodeStatusDTO code = storyboard.getCodeStatus();
-        if (code == null || code.getStatus() == null) {
+        boolean hasDirectives = code != null && code.getDirectives() != null && !code.getDirectives().isEmpty();
+        if (code == null || (code.getStatus() == null && !hasDirectives)) {
             pages.text(t.get("pdf.record.codeStatus.none"));
         } else {
-            pages.text(label(t, code.getStatus()));
+            if (code.getStatus() != null) pages.text(label(t, code.getStatus()));
             pages.rows(code.getDirectives(), d -> join(SEPARATOR, label(t, d.getDirectiveType()), label(t, d.getStatus()),
                 d.getEffectiveDate() != null ? t.get("pdf.record.directive.from", t.fmt(d.getEffectiveDate())) : null,
                 d.getDescription()));

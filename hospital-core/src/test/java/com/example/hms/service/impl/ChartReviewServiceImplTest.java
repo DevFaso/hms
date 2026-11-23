@@ -196,6 +196,18 @@ class ChartReviewServiceImplTest {
         var allergies = mock(com.example.hms.repository.PatientAllergyRepository.class);
         var problems = mock(com.example.hms.repository.PatientProblemRepository.class);
         var directives = mock(com.example.hms.repository.AdvanceDirectiveRepository.class);
+        var ownDirective = new com.example.hms.model.AdvanceDirective(); ownDirective.setId(UUID.randomUUID());
+        ownDirective.setHospital(hospital); ownDirective.setStatus(com.example.hms.enums.AdvanceDirectiveStatus.ACTIVE);
+        ownDirective.setDirectiveType(com.example.hms.enums.AdvanceDirectiveType.LIVING_WILL);
+        ownDirective.setDescription("OWN-DIRECTIVE-CONTENT");
+        var foreignDirective = new com.example.hms.model.AdvanceDirective(); foreignDirective.setId(UUID.randomUUID());
+        foreignDirective.setHospital(other); foreignDirective.setStatus(com.example.hms.enums.AdvanceDirectiveStatus.ACTIVE);
+        foreignDirective.setDirectiveType(com.example.hms.enums.AdvanceDirectiveType.LIVING_WILL);
+        foreignDirective.setDescription("FOREIGN-DIRECTIVE-CONTENT");
+        when(directives.findByPatient_IdAndHospital_IdIn(eq(PATIENT_ID), any()))
+            .thenAnswer(inv -> List.of(ownDirective, foreignDirective).stream()
+                .filter(d -> ((Set<?>) inv.getArgument(1)).contains(d.getHospital().getId())).toList());
+        patient.setCodeStatus("DNR");
         var ownAllergy = new com.example.hms.model.PatientAllergy(); ownAllergy.setId(UUID.randomUUID());
         ownAllergy.setHospital(hospital); ownAllergy.setActive(true); ownAllergy.setAllergenDisplay("OWN-ALLERGY");
         var foreignAllergy = new com.example.hms.model.PatientAllergy(); foreignAllergy.setId(UUID.randomUUID());
@@ -238,8 +250,8 @@ class ChartReviewServiceImplTest {
                 .andReturn().getResponse().getContentAsByteArray();
             try (var document = org.apache.pdfbox.pdmodel.PDDocument.load(bytes)) {
                 assertThat(new org.apache.pdfbox.text.PDFTextStripper().getText(document))
-                    .contains("OWN-RELEASABLE-VISIT", "OWN-ALLERGY", "OWN-LAB-RESULT")
-                    .doesNotContain("FOREIGN-UNTAGGED-VISIT", "FOREIGN-HIV-VISIT", "FOREIGN-ALLERGY", "FOREIGN-LAB-RESULT", "UNSCOPED-LEGACY-ALLERGY");
+                    .contains("OWN-RELEASABLE-VISIT", "OWN-ALLERGY", "OWN-LAB-RESULT", "OWN-DIRECTIVE-CONTENT")
+                    .doesNotContain("FOREIGN-UNTAGGED-VISIT", "FOREIGN-HIV-VISIT", "FOREIGN-ALLERGY", "FOREIGN-LAB-RESULT", "FOREIGN-DIRECTIVE-CONTENT", "UNSCOPED-LEGACY-ALLERGY");
             }
             org.mockito.Mockito.verifyNoInteractions(recordAccessPolicy, breakGlassGate, reachRecorder);
         } finally {

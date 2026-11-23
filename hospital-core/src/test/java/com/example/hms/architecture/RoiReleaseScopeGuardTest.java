@@ -25,6 +25,7 @@ class RoiReleaseScopeGuardTest {
             }
         }
         String pdf = source("service/PatientRecordPdfService.java");
+        assertThat(pdf).contains("code.getStatus() == null && !hasDirectives", "if (code.getStatus() != null)");
         assertThat(pdf).contains("requestId == null", "getHospitalReleaseChart(patientId, hospitalId)",
             "getHospitalReleaseStoryboard(patientId, hospitalId)", "requestId == null ? patient.getAllergies() : null");
         for (String name : new String[]{"ChartReviewServiceImpl", "PatientStoryboardServiceImpl"}) {
