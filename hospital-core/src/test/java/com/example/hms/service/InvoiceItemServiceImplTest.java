@@ -260,4 +260,39 @@ class InvoiceItemServiceImplTest {
             org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
         }
     }
+    /**
+     * QA D3603 / review of #1301 (L2): the category a plan rule sees survives pricing the line at the till (its
+     * label and category echoed), and is dropped when the line is rewritten as something else - another label, or
+     * another item category.
+     */
+    @Test
+    void thePostedCoverageCategoryFollowsAPriceEditButNotARewrite_D3603() {
+        InvoiceItem xray = InvoiceItem.builder().itemDescription("Radiographie du poignet gauche").quantity(1)
+            .unitPrice(BigDecimal.ZERO).totalPrice(BigDecimal.ZERO).itemCategory(ItemCategory.SERVICE)
+            .coverageCategory(com.example.hms.enums.PriceListCategory.IMAGING).assignment(callerAssignment).build();
+        xray.setId(UUID.randomUUID());
+        xray.setBillingInvoice(invoice);
+        when(itemRepository.findById(xray.getId())).thenReturn(Optional.of(xray));
+
+        service.updateInvoiceItem(xray.getId(), InvoiceItemRequestDTO.builder().billingInvoiceId(invoice.getId())
+            .itemDescription("Radiographie du poignet gauche").quantity(1).unitPrice(new BigDecimal("7500"))
+            .overrideReason("Tarif du service").itemCategory(ItemCategory.SERVICE).build(), Locale.FRENCH);
+        assertThat(xray.getCoverageCategory()).isEqualTo(com.example.hms.enums.PriceListCategory.IMAGING);
+
+        service.updateInvoiceItem(xray.getId(), InvoiceItemRequestDTO.builder().billingInvoiceId(invoice.getId())
+            .itemDescription("Pansement simple").quantity(1).unitPrice(new BigDecimal("7500"))
+            .itemCategory(ItemCategory.SERVICE).build(), Locale.FRENCH);
+        assertThat(xray.getCoverageCategory()).isNull();
+
+        InvoiceItem lab = InvoiceItem.builder().itemDescription("Glycémie").quantity(1)
+            .unitPrice(new BigDecimal("1500")).totalPrice(new BigDecimal("1500")).itemCategory(ItemCategory.LAB_TEST)
+            .coverageCategory(com.example.hms.enums.PriceListCategory.LAB_TEST).assignment(callerAssignment).build();
+        lab.setId(UUID.randomUUID());
+        lab.setBillingInvoice(invoice);
+        when(itemRepository.findById(lab.getId())).thenReturn(Optional.of(lab));
+        service.updateInvoiceItem(lab.getId(), InvoiceItemRequestDTO.builder().billingInvoiceId(invoice.getId())
+            .itemDescription("Glycémie").quantity(1).unitPrice(new BigDecimal("1500"))
+            .itemCategory(ItemCategory.SERVICE).build(), Locale.FRENCH);
+        assertThat(lab.getCoverageCategory()).isNull();
+    }
 }

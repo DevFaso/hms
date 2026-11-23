@@ -32,6 +32,7 @@ import { serverDateOrInstant } from '../shared/date-utils';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { DashPipe } from '../shared/pipes/dash.pipe';
+import { CountUnitPipe } from '../shared/pipes/count-unit.pipe';
 import { missingRequiredMessage } from '../shared/required-fields';
 import { PharmacyMoneyService } from '../services/pharmacy-money.service';
 
@@ -53,6 +54,7 @@ const CI_FIELD_IDS = ['ciMed'];
     TranslateModule,
     CfaPipe,
     ModalDialogDirective,
+    CountUnitPipe,
   ],
   templateUrl: './inventory-dashboard.html',
   changeDetection: ChangeDetectionStrategy.Eager,

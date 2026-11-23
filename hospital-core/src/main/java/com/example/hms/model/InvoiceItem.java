@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import com.example.hms.enums.PriceListCategory;
 import com.example.hms.enums.InvoiceLinePriceSource;
 import com.example.hms.enums.ItemCategory;
 import jakarta.persistence.Column;
@@ -105,6 +106,16 @@ public class InvoiceItem extends BaseEntity {
 
     @Column(name = "price_list_price_id")
     private UUID priceListPriceId;
+
+    /**
+     * QA D3603 (r71, V365): what the line bills, as a payer plan's category rule sees it - IMAGING for an imaging
+     * order, PROCEDURE, BED_DAY, ... - stamped when the line is posted and never changed by a price edit, so the
+     * category rule applies however the line is priced (price list, service name, by hand, overridden). Null for a
+     * line typed at the till; a line priced from the price list also reads its item's category.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "coverage_category", length = 30)
+    private PriceListCategory coverageCategory;
 
     /** Where {@link #unitPrice} came from. A line typed at the till is MANUAL. */
     @Builder.Default

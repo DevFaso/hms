@@ -386,8 +386,12 @@ export class TransfusionService {
     return this.http.post<PatientBloodGroupResponse>(`${this.baseUrl}/blood-groups`, req);
   }
 
-  getCurrentBloodGroup(patientId: string): Observable<PatientBloodGroupResponse> {
-    return this.http.get<PatientBloodGroupResponse>(
+  /**
+   * The patient's current type and screen at this hospital, or `null` when none is on record yet
+   * (QA D3352: the server answers 204, not a 404 the browser logs as an error).
+   */
+  getCurrentBloodGroup(patientId: string): Observable<PatientBloodGroupResponse | null> {
+    return this.http.get<PatientBloodGroupResponse | null>(
       `${this.baseUrl}/blood-groups/patient/${patientId}`,
     );
   }

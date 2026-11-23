@@ -87,8 +87,10 @@ class PositiveAntibodyScreenGuardTest {
         assertThat(method(code, "public PatientBloodGroupResponseDTO recordBloodGroup("))
             .contains("antibodyScreen.askBiologistToIdentify(saved)");
         // The flag reaches the screens that ask for blood: the group read before a request, and the request itself.
-        assertThat(method(code, "public PatientBloodGroupResponseDTO getCurrentBloodGroup("))
+        assertThat(method(code, "public java.util.Optional<PatientBloodGroupResponseDTO> findCurrentBloodGroup("))
             .contains("withAntibodyFlag(dto, patientId, hospitalId)");
+        assertThat(method(code, "public PatientBloodGroupResponseDTO getCurrentBloodGroup("))
+            .contains("findCurrentBloodGroup(patientId)");
         // The request shows the flag, and the injection is required: the rule is never silently absent.
         assertThat(code).contains("detail.setAlloImmunised(true);").containsPattern(
             "@org\\.springframework\\.beans\\.factory\\.annotation\\.Autowired\\s+public void setAntibodyScreen\\(");

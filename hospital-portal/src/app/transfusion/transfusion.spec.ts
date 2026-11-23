@@ -182,8 +182,44 @@ describe('TransfusionComponent', () => {
     expect(component.patientGroup()).toBe(group);
   });
 
-  it('leaves the group empty when the patient has never been typed', () => {
-    txSpy.getCurrentBloodGroup.and.returnValue(throwError(() => new Error('404')));
+  it('leaves the group empty when the patient has never been typed (QA D3352: 204, no body)', () => {
+    txSpy.getCurrentBloodGroup.and.returnValue(of(null));
+
+    component.onPatientPicked({ id: 'p1' } as PatientResponse);
+
+    expect(component.patientGroup()).toBeNull();
+  });
+
+  it('never fills the form of the patient picked since with a late answer for the previous one (#1300 review)', () => {
+    const lateGroupA = new Subject<PatientBloodGroupResponse | null>();
+    const groupB = {
+      aboGroup: 'O',
+      rhFactor: 'NEGATIVE',
+      screenCurrent: true,
+    } as PatientBloodGroupResponse;
+    txSpy.getCurrentBloodGroup.and.callFake((id: string) =>
+      id === 'pA' ? lateGroupA.asObservable() : of(groupB),
+    );
+
+    component.onPatientPicked({ id: 'pA' } as PatientResponse);
+    component.onPatientPicked({ id: 'pB' } as PatientResponse);
+    expect(component.patientGroup()).toBe(groupB);
+
+    // A's answer arrives after B was picked: dropped, whether a group, no group (204) or a failure.
+    lateGroupA.next({
+      aboGroup: 'AB',
+      rhFactor: 'POSITIVE',
+      screenCurrent: true,
+    } as PatientBloodGroupResponse);
+    expect(component.patientGroup()).toBe(groupB);
+    lateGroupA.next(null);
+    expect(component.patientGroup()).toBe(groupB);
+    lateGroupA.error(new Error('500'));
+    expect(component.patientGroup()).toBe(groupB);
+  });
+
+  it('leaves the group empty when the read fails', () => {
+    txSpy.getCurrentBloodGroup.and.returnValue(throwError(() => new Error('500')));
 
     component.onPatientPicked({ id: 'p1' } as PatientResponse);
 

@@ -301,13 +301,19 @@ public class TransfusionServiceImpl implements TransfusionService {
     @Override
     @Transactional(readOnly = true)
     public PatientBloodGroupResponseDTO getCurrentBloodGroup(UUID patientId) {
+        return findCurrentBloodGroup(patientId)
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_GROUP_NOT_FOUND, patientId));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.Optional<PatientBloodGroupResponseDTO> findCurrentBloodGroup(UUID patientId) {
         UUID hospitalId = requireHospital();
         patientChartAccess.require(patientId, hospitalId);
         // QA D3351: the request dialog reads the flag here, before a request exists.
         return bloodGroupRepository.findByPatient_IdAndHospital_IdAndSupersededFalse(patientId, hospitalId)
             .map(mapper::toDto)
-            .map(dto -> withAntibodyFlag(dto, patientId, hospitalId))
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_GROUP_NOT_FOUND, patientId));
+            .map(dto -> withAntibodyFlag(dto, patientId, hospitalId));
     }
 
     @Override

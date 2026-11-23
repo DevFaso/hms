@@ -272,8 +272,9 @@ describe('TransfusionComponent: positive antibody screen (QA D3351)', () => {
 
   it('a flag held at another hospital shows on the request form with no blood group here, and the emergency is declared', async () => {
     await setUp(['ROLE_DOCTOR']);
-    // Never typed at this hospital; a positive screen and an identified antibody are on record at another one.
-    txSpy.getCurrentBloodGroup.and.returnValue(throwError(() => new Error('404')));
+    // Never typed at this hospital (QA D3352: 204, read as null); a positive screen and an identified antibody
+    // are on record at another one.
+    txSpy.getCurrentBloodGroup.and.returnValue(of(null));
     txSpy.getAntibodyStatus.and.returnValue(
       of(
         status({
@@ -319,7 +320,7 @@ describe('TransfusionComponent: positive antibody screen (QA D3351)', () => {
 
   it('a positive screen not identified says so, and an answer for a patient no longer picked is dropped', async () => {
     await setUp(['ROLE_DOCTOR']);
-    txSpy.getCurrentBloodGroup.and.returnValue(throwError(() => new Error('404')));
+    txSpy.getCurrentBloodGroup.and.returnValue(of(null));
     const late = new Subject<AntibodyStatusResponse>();
     txSpy.getAntibodyStatus.and.returnValue(late.asObservable());
     component.openNewRequest();

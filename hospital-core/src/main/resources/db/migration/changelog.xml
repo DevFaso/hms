@@ -3992,6 +3992,21 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V365 (QA r71, D3603 and D3600): billing.invoice_items.coverage_category,
+         what a line bills as a payer plan's category rule sees it, stamped at
+         posting so a line priced by hand keeps its IMAGING (etc.) rule; DRAFT
+         lines backfilled from their order. Coverage rows named by their payer
+         code are renamed after their hospital's payer of that code.
+         Additive, idempotent, no DO block.
+         ================================================================= -->
+    <changeSet id="V365-r71-line-coverage-category-and-insurer-names" author="hms-team" runOnChange="false">
+        <sqlFile path="V365__r71_line_coverage_category_and_insurer_names.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
     <changeSet id="V391-patient-recipient-verification" author="codex" runOnChange="false">
         <sqlFile path="V391__patient_recipient_verification.sql" relativeToChangelogFile="true"
                  splitStatements="true" stripComments="true"/>
