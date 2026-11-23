@@ -28,6 +28,7 @@ import { currentLocale, formatDecimal } from '../../shared/i18n/app-locale';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { serverInstant } from '../../shared/date-utils';
 import { MeasurePipe } from '../../shared/pipes/measure.pipe';
+import { LocaleNumberPipe } from '../../shared/pipes/lab-value.pipe';
 
 interface QcPoint {
   x: number;
@@ -77,7 +78,14 @@ const TARGET_FIELD_IDS: Readonly<Record<string, string>> = {
 @Component({
   selector: 'app-lab-qc-dashboard',
   standalone: true,
-  imports: [SubmitGuardDirective, MeasurePipe, ServerTimePipe, CommonModule, TranslateModule],
+  imports: [
+    SubmitGuardDirective,
+    MeasurePipe,
+    ServerTimePipe,
+    CommonModule,
+    TranslateModule,
+    LocaleNumberPipe,
+  ],
   templateUrl: './lab-qc-dashboard.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-qc-dashboard.scss',

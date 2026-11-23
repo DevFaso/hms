@@ -114,6 +114,7 @@ describe('ImagingComponent — r63 imaging completion', () => {
       'getReport',
       'getReportsForOrder',
       'getReportsByHospital',
+      'createReport',
     ]);
     imaging.getAllOrders.and.returnValue(of([order()]));
     imaging.getOrder.and.returnValue(of(order()));
@@ -218,7 +219,93 @@ describe('ImagingComponent — r63 imaging completion', () => {
     });
   });
 
+  for (const status of ['ADDENDUM', 'CORRECTED', 'AMENDED'] as const) {
+    it(`preserves the unsigned ${status} kind when reopening its revision form`, () => {
+      setUp(['ROLE_RADIOLOGIST']);
+      component.openEditReport(report({ signed: false, reportStatus: status }));
+      expect(component.reportForm.reportStatus).toBe(status);
+      expect(component.authorableStatuses).toEqual(['ADDENDUM', 'CORRECTED', 'AMENDED']);
+      component.closeReportModal();
+      component.openAuthorReport(order());
+      expect(component.authorableStatuses).toEqual(['DRAFT', 'PRELIMINARY']);
+    });
+  }
+
+  for (const status of ['DRAFT', 'PRELIMINARY'] as const) {
+    it(`editing an unsigned ${status} read keeps revision kinds out of its picker`, () => {
+      setUp(['ROLE_RADIOLOGIST']);
+      component.openEditReport(report({ signed: false, reportStatus: status }));
+      expect(component.reportForm.reportStatus).toBe(status);
+      expect(component.authorableStatuses).toEqual(['DRAFT', 'PRELIMINARY']);
+    });
+  }
+
+  it('shows the latest signed source when an addendum is opened from its study', () => {
+    setUp(['ROLE_RADIOLOGIST'], {
+      reports: [
+        report({ id: 'first', reportVersion: 1, findings: 'First signed text' }),
+        report({ id: 'latest', reportVersion: 2, findings: 'Latest signed text' }),
+      ],
+    });
+    component.authorForOrder(order());
+    fixture.detectChanges();
+    expect(component.addendumSource()?.id).toBe('latest');
+    expect(q('[data-testid="addendum-original-report"]')?.textContent).toContain(
+      'Latest signed text',
+    );
+    expect(component.reportForm.reportStatus).toBe('ADDENDUM');
+    expect(component.reportForm.findings).toBe('');
+    expect(component.authorableStatuses).toEqual(['ADDENDUM', 'CORRECTED', 'AMENDED']);
+  });
+
   describe('D2307: the addendum to a signed report', () => {
+    for (const entryPoint of ['report', 'study'] as const) {
+      for (const status of ['ADDENDUM', 'CORRECTED', 'AMENDED'] as const) {
+        it(`offers and submits ${status} from the signed ${entryPoint} without editing its source`, async () => {
+          setUp(['ROLE_RADIOLOGIST'], { reports: [report()] });
+          imaging.createReport.and.returnValue(
+            of(report({ id: 'revision', signed: false, reportStatus: status })),
+          );
+          if (entryPoint === 'report') component.openAddendum(report());
+          else component.authorForOrder(order());
+          fixture.detectChanges();
+          const picker = q('#rep-status') as HTMLSelectElement;
+          expect(Array.from(picker.options, (option) => option.value)).toEqual([
+            'ADDENDUM',
+            'CORRECTED',
+            'AMENDED',
+          ]);
+          picker.value = status;
+          picker.dispatchEvent(new Event('change'));
+          await fixture.whenStable();
+          component.reportForm.findings = 'Documented revision';
+          component.submitReport();
+          expect(imaging.createReport).toHaveBeenCalledWith(
+            jasmine.objectContaining({ imagingOrderId: 'o1', reportStatus: status }),
+          );
+          expect(component.reportEditId()).toBeNull();
+        });
+      }
+    }
+
+    it('D2653: names the revision, shows its signed source and offers every revision kind', () => {
+      setUp(['ROLE_RADIOLOGIST']);
+      component.openAddendum(
+        report({ signed: true, findings: 'Original findings', impression: 'Original conclusion' }),
+      );
+      fixture.detectChanges();
+      expect(q('#imaging-dialog-2-title')?.textContent).toContain('Ajouter un addendum');
+      expect(q('[data-testid="addendum-original-report"]')?.textContent).toContain(
+        'Original findings',
+      );
+      expect(q('[data-testid="addendum-original-report"]')?.textContent).toContain(
+        'Original conclusion',
+      );
+      expect(component.authorableStatuses).toEqual(['ADDENDUM', 'CORRECTED', 'AMENDED']);
+      component.closeReportModal();
+      component.openAuthorReport(order());
+      expect(component.authorableStatuses).toEqual(['DRAFT', 'PRELIMINARY']);
+    });
     it('« Rédiger » on a signed study opens an addendum, never an edit of the signed read', () => {
       setUp(['ROLE_RADIOLOGIST'], { reports: [report()] });
       component.authorForOrder(order());

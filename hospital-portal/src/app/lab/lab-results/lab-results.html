@@ -993,7 +993,7 @@
               ? ('COMMON.SAVING' | translate)
               : editing()
                 ? ('COMMON.UPDATE' | translate)
-                : ('COMMON.CREATE' | translate)
+                : ((correcting() ? 'LAB_RESULTS.SAVE_CORRECTION' : 'COMMON.CREATE') | translate)
           }}
         </button>
       </div>

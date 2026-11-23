@@ -859,7 +859,6 @@
           <!-- V317: the report's images, streamed through e-Keneya from the PACS. -->
           @if (canViewImages) {
             <div class="detail-notes" data-testid="imaging-report-images">
-              <span class="field-label">{{ 'IMAGING_PACS.IMAGES' | translate }}</span>
               @if (rep.pacsViewerUrl) {
                 <button
                   type="button"
@@ -1052,7 +1051,14 @@
     >
       <div class="modal-header">
         <h2 id="imaging-dialog-2-title">
-          {{ (reportEditId() ? 'IMAGING.EDIT_REPORT' : 'IMAGING.AUTHOR_REPORT') | translate }}
+          {{
+            (writingAddendum()
+              ? 'IMAGING_COMPLETION.ADD_ADDENDUM'
+              : reportEditId()
+                ? 'IMAGING.EDIT_REPORT'
+                : 'IMAGING.AUTHOR_REPORT'
+            ) | translate
+          }}
         </h2>
         <button
           class="modal-close"
@@ -1064,6 +1070,15 @@
       </div>
       <div class="modal-body">
         <!-- QA D1923 (r53): the report is written for this patient. -->
+        @if (addendumSource(); as source) {
+          <section class="detail-notes" data-testid="addendum-original-report">
+            <h3>{{ 'IMAGING.ADDENDUM_ORIGINAL' | translate }}</h3>
+            <strong>{{ 'IMAGING.FINDINGS' | translate }}</strong>
+            <p>{{ source.findings || '—' }}</p>
+            <strong>{{ 'IMAGING.IMPRESSION' | translate }}</strong>
+            <p>{{ source.impression || '—' }}</p>
+          </section>
+        }
         <p class="report-patient" data-testid="imaging-report-form-patient">
           <strong>{{ 'PATIENTS.PATIENT_NAME' | translate }}{{ 'COMMON.COLON' | translate }}</strong>
           {{ reportPatient()?.name || ('COMMON.UNKNOWN' | translate) }}

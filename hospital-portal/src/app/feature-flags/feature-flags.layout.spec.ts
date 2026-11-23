@@ -33,7 +33,14 @@ describe('FeatureFlagsComponent — the rows fit a phone (QA r65 D2768)', () => 
       'hl7.adt.visit-sync.auto-create.enabled': false,
       'pharmacy.partner-routing': true,
     });
-    http.match('/feature-flags/overrides').forEach((r) => r.flush([]));
+    http.match('/feature-flags/overrides').forEach((r) =>
+      r.flush([
+        {
+          flagKey: 'imaging.dicom-proxy.enabled-for-every-hospital',
+          description: 'cdx-description-'.repeat(8),
+        },
+      ]),
+    );
     fixture.detectChanges();
 
     const host = fixture.nativeElement as HTMLElement;

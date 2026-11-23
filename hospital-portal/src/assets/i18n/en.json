@@ -1,4 +1,12 @@
 {
+  "ORGANIZATION_DETAIL": {
+    "INFORMATION": "Organisation details",
+    "EMAIL": "Contact email",
+    "PHONE": "Contact phone",
+    "TIMEZONE": "Time zone",
+    "HOSPITALS": "Hospitals",
+    "NO_HOSPITALS": "No hospitals are linked to this organisation."
+  },
   "A11Y": {
     "SKIP_TO_MAIN": "Skip to main content"
   },
@@ -4083,10 +4091,20 @@
     "TITLE": "Change Password"
   },
   "FLAGS": {
+    "CATALOG": {
+      "BILLING_TITLE": "Billing module",
+      "BILLING_DESCRIPTION": "Platform feature flag for the billing module.",
+      "EHR_TITLE": "Electronic health record",
+      "EHR_DESCRIPTION": "Platform feature flag for the electronic health record module.",
+      "INVENTORY_TITLE": "Inventory module",
+      "INVENTORY_DESCRIPTION": "Platform feature flag for the inventory module."
+    },
+    "NO_DESCRIPTION": "No description supplied.",
+    "SELECT_DECLARED": "Select a declared flag",
     "CREATE": "Create",
     "CREATED": "Flag {{key}} created",
     "CREATE_FAILED": "Failed to create flag",
-    "CREATE_TITLE": "Create Feature Flag",
+    "CREATE_TITLE": "Configure a declared flag",
     "CREATING": "Creating...",
     "DESCRIPTION_LABEL": "Description",
     "DESCRIPTION_PLACEHOLDER": "Describe the feature...",
@@ -4101,7 +4119,7 @@
     "KEY_REQUIRED": "Flag key is required",
     "LOADING": "Loading feature flags...",
     "LOAD_FAILED": "Failed to load feature flags",
-    "NEW_FLAG": "New Flag",
+    "NEW_FLAG": "Configure flag",
     "NO_FLAGS": "No feature flags found",
     "NO_FLAGS_MATCHING": "No feature flag matches “{{query}}”",
     "OFF": "OFF",
@@ -4235,6 +4253,7 @@
     "NEW_REPORT_HINT": "Images added now go on the study. Save the report first to attach them to it."
   },
   "IMAGING": {
+    "ADDENDUM_ORIGINAL": "Signed report being supplemented",
     "RESULTS_PARTIAL_FAILURE": "The reports of these hospitals could not be loaded, so the list is incomplete: {{hospitals}}.",
     "ADMIN_READ_ONLY": "Read-only: imaging requests and released reports. Ordering, reporting and signing are done by the clinical team.",
     "ALL_HOSPITALS": "All hospitals",
@@ -4439,6 +4458,8 @@
     "ORDER_NO_OPEN_VISIT": "No open visit for this patient here: the order will not be linked to a visit."
   },
   "LAB": {
+    "SPECIMEN_SCROLL_HINT": "Scroll horizontally to see the specimen status and all actions.",
+    "EXISTING_SPECIMENS": "This order already has {{count}} specimen(s). Check the list before collecting another.",
     "DUPLICATE": {
       "TITLE": "Possible duplicate order",
       "BODY": "This patient already has an active order for the same test here, placed in the last 24 hours. Check that a new order is really needed.",
@@ -4784,6 +4805,7 @@
     }
   },
   "LAB_RESULTS": {
+    "SAVE_CORRECTION": "Save correction",
     "QUOTED_READ_BACK_VALUE": "“{{value}}”",
     "ALL_AGES": "All ages",
     "CORRECTED": "Corrected",

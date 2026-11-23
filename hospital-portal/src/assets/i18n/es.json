@@ -1,4 +1,12 @@
 {
+  "ORGANIZATION_DETAIL": {
+    "INFORMATION": "Datos de la organización",
+    "EMAIL": "Correo de contacto",
+    "PHONE": "Teléfono de contacto",
+    "TIMEZONE": "Zona horaria",
+    "HOSPITALS": "Hospitales",
+    "NO_HOSPITALS": "No hay hospitales vinculados a esta organización."
+  },
   "A11Y": {
     "SKIP_TO_MAIN": "Saltar al contenido principal"
   },
@@ -4083,10 +4091,20 @@
     "TITLE": "Cambiar contraseña"
   },
   "FLAGS": {
+    "CATALOG": {
+      "BILLING_TITLE": "Módulo de facturación",
+      "BILLING_DESCRIPTION": "Indicador de funcionalidad del módulo de facturación.",
+      "EHR_TITLE": "Historia clínica electrónica",
+      "EHR_DESCRIPTION": "Indicador de funcionalidad del módulo de historia clínica electrónica.",
+      "INVENTORY_TITLE": "Gestión de existencias",
+      "INVENTORY_DESCRIPTION": "Indicador de funcionalidad del módulo de gestión de existencias."
+    },
+    "NO_DESCRIPTION": "No se ha indicado ninguna descripción.",
+    "SELECT_DECLARED": "Seleccionar un indicador declarado",
     "CREATE": "Crear",
     "CREATED": "Indicador {{key}} creado",
     "CREATE_FAILED": "Error al crear el indicador",
-    "CREATE_TITLE": "Crear indicador de función",
+    "CREATE_TITLE": "Configurar un indicador declarado",
     "CREATING": "Creando...",
     "DESCRIPTION_LABEL": "Descripción",
     "DESCRIPTION_PLACEHOLDER": "Describa la función...",
@@ -4101,7 +4119,7 @@
     "KEY_REQUIRED": "La clave del indicador es obligatoria",
     "LOADING": "Cargando indicadores de funciones...",
     "LOAD_FAILED": "Error al cargar los indicadores de funcionalidad",
-    "NEW_FLAG": "Nuevo indicador",
+    "NEW_FLAG": "Configurar indicador",
     "NO_FLAGS": "No se encontraron indicadores de funciones",
     "NO_FLAGS_MATCHING": "Ningún indicador coincide con «{{query}}»",
     "OFF": "NO",
@@ -4235,6 +4253,7 @@
     "NEW_REPORT_HINT": "Las imágenes añadidas ahora van al estudio. Guarde primero el informe para adjuntarlas a él."
   },
   "IMAGING": {
+    "ADDENDUM_ORIGINAL": "Informe firmado que se amplía",
     "RESULTS_PARTIAL_FAILURE": "No se pudieron cargar los informes de estos hospitales, por lo que la lista está incompleta: {{hospitals}}.",
     "ADMIN_READ_ONLY": "Solo lectura: solicitudes de imagen e informes validados. La solicitud, la interpretación y la firma corresponden al equipo clínico.",
     "ALL_HOSPITALS": "Todos los hospitales",
@@ -4439,6 +4458,8 @@
     "ORDER_NO_OPEN_VISIT": "No hay ninguna visita abierta para este paciente aquí: la solicitud no se vinculará a ninguna visita."
   },
   "LAB": {
+    "SPECIMEN_SCROLL_HINT": "Desplácese horizontalmente para ver el estado de la muestra y todas las acciones.",
+    "EXISTING_SPECIMENS": "Esta solicitud ya tiene {{count}} muestra(s). Compruebe la lista antes de recoger otra.",
     "DUPLICATE": {
       "TITLE": "Posible orden duplicada",
       "BODY": "Este paciente ya tiene una orden activa de la misma prueba aquí, realizada en las últimas 24 horas. Compruebe que una nueva orden sea realmente necesaria.",
@@ -4784,6 +4805,7 @@
     }
   },
   "LAB_RESULTS": {
+    "SAVE_CORRECTION": "Guardar corrección",
     "QUOTED_READ_BACK_VALUE": "«{{value}}»",
     "ALL_AGES": "Todas las edades",
     "CORRECTED": "Corregido",

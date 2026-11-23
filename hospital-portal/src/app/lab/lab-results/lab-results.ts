@@ -415,6 +415,8 @@ export class LabResultsComponent implements OnInit {
   orders = signal<LabOrderResponse[]>([]);
   /** Every order a result can be filed against, whatever its status. */
   private resultableOrders: LabOrderResponse[] = [];
+  /** Successful saves invalidate the local new-result picker before its order snapshot refreshes. */
+  private readonly ordersWithSavedResults = new Set<string>();
   private activeAssignmentId = '';
 
   /* ── CRUD signals ── */
@@ -513,7 +515,8 @@ export class LabResultsComponent implements OnInit {
     return this.resultableOrders.filter(
       (o) =>
         o.id === keepOrderId ||
-        (!ORDER_STATUSES_WITHOUT_NEW_RESULT.has(o.status) &&
+        (!this.ordersWithSavedResults.has(o.id) &&
+          !ORDER_STATUSES_WITHOUT_NEW_RESULT.has(o.status) &&
           !ORDER_STATUSES_AWAITING_SPECIMEN.has(o.status)),
     );
   }
@@ -686,6 +689,7 @@ export class LabResultsComponent implements OnInit {
 
     op.subscribe({
       next: (saved) => {
+        this.ordersWithSavedResults.add(payload.labOrderId);
         this.toast.success(
           this.translate.instant(this.editing() ? 'LAB_RESULTS.UPDATED' : 'LAB_RESULTS.CREATED'),
         );
@@ -729,6 +733,10 @@ export class LabResultsComponent implements OnInit {
     this.deleting.set(true);
     this.labService.deleteResult(result.id).subscribe({
       next: () => {
+        if (result.labOrderId && !result.supersedesResultId) {
+          this.ordersWithSavedResults.delete(result.labOrderId);
+        }
+        this.orders.set(this.pickableOrders());
         this.toast.success(this.translate.instant('LAB_RESULTS.DELETED'));
         this.cancelDelete();
         this.deleting.set(false);

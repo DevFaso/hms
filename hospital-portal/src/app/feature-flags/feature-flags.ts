@@ -16,6 +16,21 @@ import { refusalReason } from '../shared/refusal-reason';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
+const FLAG_CATALOG: Readonly<Record<string, { title: string; description: string }>> = {
+  'ff.platform.billing': {
+    title: 'FLAGS.CATALOG.BILLING_TITLE',
+    description: 'FLAGS.CATALOG.BILLING_DESCRIPTION',
+  },
+  'ff.platform.ehr': {
+    title: 'FLAGS.CATALOG.EHR_TITLE',
+    description: 'FLAGS.CATALOG.EHR_DESCRIPTION',
+  },
+  'ff.platform.inventory': {
+    title: 'FLAGS.CATALOG.INVENTORY_TITLE',
+    description: 'FLAGS.CATALOG.INVENTORY_DESCRIPTION',
+  },
+};
+
 interface FeatureFlag {
   key: string;
   enabled: boolean;
@@ -60,9 +75,25 @@ export class FeatureFlagsComponent implements OnInit {
   filteredFlags = computed(() => {
     const q = this.search().toLowerCase();
     return this.flags().filter(
-      (f) => f.key.toLowerCase().includes(q) || f.description.toLowerCase().includes(q),
+      (f) =>
+        f.key.toLowerCase().includes(q) ||
+        this.flagTitle(f).toLowerCase().includes(q) ||
+        this.flagDescription(f).toLowerCase().includes(q),
     );
   });
+
+  flagTitle(flag: FeatureFlag): string {
+    const entry = FLAG_CATALOG[flag.key];
+    return entry ? this.translate.instant(entry.title) : flag.key;
+  }
+
+  flagDescription(flag: FeatureFlag): string {
+    const supplied = this.overrides().find(
+      (override) => override.flagKey === flag.key,
+    )?.description;
+    if (supplied?.trim()) return supplied;
+    return this.translate.instant(FLAG_CATALOG[flag.key]?.description ?? 'FLAGS.NO_DESCRIPTION');
+  }
 
   enabledCount = computed(() => this.flags().filter((f) => f.enabled).length);
   disabledCount = computed(() => this.flags().filter((f) => !f.enabled).length);
