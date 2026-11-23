@@ -148,9 +148,15 @@ test.describe('all routed pages', () => {
       // Explicit destination/render assertions prevent a guard/error redirect or empty shell being counted.
       await expect(page).toHaveURL((url) => url.pathname === pathname);
       // A sidebar heading, directory or scope chooser is not proof that the requested screen loaded.
-      const content = publicPage
+      let content = publicPage
         ? page.locator('app-root')
         : page.locator('#main-content router-outlet + *').first();
+      // Angular's dev server also serves public/privacy-policy.html at this clean URL.
+      // That standalone public document is the destination, not an app shell or a redirect.
+      if (screen.path === '/privacy-policy' && (await page.locator('app-root').count()) === 0) {
+        await expect(page).toHaveTitle(/Privacy Policy/);
+        content = page.locator('body > .container');
+      }
       await expect(content).toBeVisible();
       await expect(content.locator('h1, h2, [role="heading"]').first()).toBeVisible();
       if (MAIN_JOURNEY_ROUTES.some((path) => path === screen.path)) {
