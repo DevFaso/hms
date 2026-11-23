@@ -2156,7 +2156,9 @@
       "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Sesión de soporte rechazada: {{what}} (validación de una regla clínica)",
       "PATIENT_ACTIVATION_CODE_SHOWN": "Código de activación del portal del paciente mostrado en recepción",
       "PATIENT_ACTIVATION_RESENT": "Activación del portal del paciente reenviada por recepción",
-      "DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED": "Deferred billing withdrawn: the prepared fill it was approved on was cancelled"
+      "DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED": "Deferred billing withdrawn: the prepared fill it was approved on was cancelled",
+      "CROSS_HOSPITAL_INSURANCE_READ": "Seguro de otro hospital consultado en admisión para verificarlo (solo identidad)",
+      "CROSS_HOSPITAL_INSURANCE_REUSED": "Seguro de otro hospital retomado como cobertura propia de este hospital (solo identidad)"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -11907,7 +11909,7 @@
     "OTHER_NO_AGREEMENT": "Ningún convenio con esta aseguradora en este hospital. Retomarlo solo registra el seguro: no se factura ninguna parte a la aseguradora hasta que el hospital tenga su propio convenio.",
     "OTHER_DECLARED": "Declarado en {{hospital}} el {{date}} — por verificar",
     "OTHER_DECLARED_NO_DATE": "Declarado en {{hospital}} — por verificar",
-    "OTHER_CARD_HINT": "La tarjeta de seguro que subió el paciente, si la hay, está en la pestaña Documentos.",
+    "OTHER_CARD_HINT": "La tarjeta de seguro que subió el paciente, si la hay, está en la pestaña «Documentos».",
     "OTHER_REUSED_NO_AGREEMENT": "Seguro registrado para este hospital, sin verificar y sin convenio: no se factura ninguna parte a la aseguradora."
   },
   "PATIENT_DOCUMENTS": {

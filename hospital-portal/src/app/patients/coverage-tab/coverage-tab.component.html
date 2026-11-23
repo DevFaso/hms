@@ -147,8 +147,10 @@
         @for (o of otherPolicies(); track o.sourceInsuranceId) {
           <li class="other-card" data-testid="other-hospital-policy">
             <div class="other-head">
-              <strong class="other-insurer">{{ o.insurerName || '—' }}</strong>
-              <span class="flag-badge to-verify-badge">{{ 'COVERAGE.TO_VERIFY' | translate }}</span>
+              <strong class="other-insurer">{{ o.insurerName || '—' }}</strong>{{ ' '
+              }}<span class="flag-badge to-verify-badge">{{
+                'COVERAGE.TO_VERIFY' | translate
+              }}</span>
             </div>
             <!-- A declaration, never a verification: the other hospital's check is not shown. -->
             <p class="muted other-declared" data-testid="other-declared">

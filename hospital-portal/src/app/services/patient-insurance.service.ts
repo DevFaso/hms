@@ -62,6 +62,8 @@ export interface OtherHospitalPolicy {
   holderRelationship?: string | null;
   effectiveDate?: string | null;
   expirationDate?: string | null;
+  /** The day the other hospital recorded it: « Déclarée à … le … », never « vérifiée ». */
+  declaredOn?: string | null;
   /** Whether this hospital has an active agreement (payer) with that insurer. */
   agreementHere: boolean;
 }

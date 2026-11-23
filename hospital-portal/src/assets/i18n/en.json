@@ -2156,7 +2156,9 @@
       "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Support session refused: {{what}} (clinical-rule sign-off)",
       "PATIENT_ACTIVATION_CODE_SHOWN": "Patient portal activation code shown to the desk",
       "PATIENT_ACTIVATION_RESENT": "Patient portal activation re-sent by the desk",
-      "DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED": "Deferred billing withdrawn: the prepared fill it was approved on was cancelled"
+      "DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED": "Deferred billing withdrawn: the prepared fill it was approved on was cancelled",
+      "CROSS_HOSPITAL_INSURANCE_READ": "Insurance policy of another hospital read to verify at the desk (identity only)",
+      "CROSS_HOSPITAL_INSURANCE_REUSED": "Insurance policy of another hospital taken over as this hospital's own coverage (identity only)"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",

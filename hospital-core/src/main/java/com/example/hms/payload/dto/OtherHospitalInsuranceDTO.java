@@ -47,8 +47,8 @@ public class OtherHospitalInsuranceDTO {
     @Schema(description = "Valid to, as recorded")
     private LocalDate expirationDate;
 
-    @Schema(description = "The day the source hospital recorded it (« Déclarée à … le … »): a declaration, never a "
-        + "verification - the source hospital's verification is not shown")
+    @Schema(description = "The day the source hospital recorded it, shown as declared there, never as verified: the "
+        + "source hospital's verification is not shown")
     private LocalDate declaredOn;
 
     @Schema(description = "Whether THIS hospital has an active agreement (payer) with that insurer: without one a "
