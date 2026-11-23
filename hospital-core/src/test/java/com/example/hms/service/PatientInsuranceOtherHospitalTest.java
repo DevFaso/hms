@@ -119,7 +119,7 @@ class PatientInsuranceOtherHospitalTest {
         when(payerCatalogueService.labelsOf(anyCollection())).thenReturn(Map.of(planAtA,
             new PayerCatalogueService.PlanLabel(planAtA, "F-A", "Formule Famille", "CNAMU", "Caisse Nationale AMU")));
         when(payerCatalogueService.activeAgreementsAt(hospitalB))
-            .thenReturn(List.of(new PayerCatalogueService.Agreement("CNAMU", "CNAMU Burkina")));
+            .thenReturn(List.of(new PayerCatalogueService.Agreement("CNAMU-BF", "Caisse nationale  AMU")));
         when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(actor, hospitalB))
             .thenReturn(Optional.of(atB));
         when(patientInsuranceRepository.findById(rowA.getId())).thenReturn(Optional.of(rowA));
@@ -188,7 +188,7 @@ class PatientInsuranceOtherHospitalTest {
     void aPolicyThisHospitalAlreadyHoldsIsNotRepeated() {
         bReadsA();
         PatientInsurance ownAtB = PatientInsurance.builder().patient(patient).assignment(atB)
-            .payerCode("CNAMU").providerName("CNAMU Burkina").policyNumber("amu-778899").build();
+            .payerCode("CNAMU-BF").providerName("Caisse Nationale AMU").policyNumber("amu-778899").build();
         when(patientInsuranceRepository.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalB))
             .thenReturn(List.of(ownAtB));
 
@@ -237,8 +237,8 @@ class PatientInsuranceOtherHospitalTest {
         PatientInsurance own = written.getValue();
         assertThat(own).isNotSameAs(rowA);
         assertThat(own.getAssignment()).isSameAs(atB);
-        assertThat(own.getPayerCode()).isEqualTo("CNAMU");
-        assertThat(own.getProviderName()).isEqualTo("CNAMU Burkina");
+        assertThat(own.getPayerCode()).isEqualTo("CNAMU-BF");
+        assertThat(own.getProviderName()).isEqualTo("Caisse nationale  AMU");
         assertThat(own.getPolicyNumber()).isEqualTo("AMU-778899");
         assertThat(own.getSubscriberRelationship()).isEqualTo("Conjoint");
         assertThat(own.getEffectiveDate()).isEqualTo(LocalDate.of(2026, 1, 1));
@@ -278,7 +278,8 @@ class PatientInsuranceOtherHospitalTest {
         verify(patientInsuranceRepository, times(1)).save(written.capture());
         PatientInsurance own = written.getValue();
         assertThat(own.getAssignment()).isSameAs(atB);
-        assertThat(own.getPayerCode()).isEqualTo("CNAMU");
+        // Review of #1293 (L1): another hospital's free-text code means nothing here; the name as recorded stays.
+        assertThat(own.getPayerCode()).isNull();
         assertThat(own.getProviderName()).isEqualTo("Caisse Nationale AMU");
         assertThat(own.getPayerPlanId()).isNull();
         assertThat(own.getVerifiedAt()).isNull();
@@ -314,18 +315,83 @@ class PatientInsuranceOtherHospitalTest {
         verify(patientInsuranceRepository, never()).save(any());
     }
 
+    /**
+     * Review of #1293 (L2): under the lock, the reuse finds the row this hospital already holds by the list's own
+     * rule (same number, same insurer by name), even under another code: a stale page or a direct call never makes a
+     * second row.
+     */
     @Test
     void reuseTwiceReturnsTheRowThisHospitalAlreadyHolds() {
         bReadsA();
-        PatientInsurance held = PatientInsurance.builder().patient(patient).assignment(atB).payerCode("CNAMU")
-            .providerName("CNAMU Burkina").policyNumber("AMU-778899").build();
-        when(patientInsuranceRepository
-            .findFirstByPatient_IdAndAssignment_Hospital_IdAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(
-                patientId, hospitalB, "CNAMU", "AMU-778899")).thenReturn(Optional.of(held));
+        PatientInsurance held = PatientInsurance.builder().patient(patient).assignment(atB).payerCode("AMU-OLD")
+            .providerName("CAISSE NATIONALE AMU").policyNumber("amu-778899").build();
+        when(patientInsuranceRepository.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalB))
+            .thenReturn(List.of(held));
         PatientInsuranceResponseDTO response = new PatientInsuranceResponseDTO();
         when(patientInsuranceMapper.toPatientInsuranceResponseDTO(held)).thenReturn(response);
 
+        assertThat(service.getOtherHospitalPolicies(patientId)).isEmpty();
         assertThat(service.reuseOtherHospitalPolicy(rowA.getId())).isSameAs(response);
         verify(patientInsuranceRepository, never()).save(any());
+    }
+
+    /** Review of #1293 (L3): a shared (untagged) row this hospital sees already holds the policy. */
+    @Test
+    void aSharedRowThisHospitalSeesAlreadyHoldsThePolicy() {
+        bReadsA();
+        PatientInsurance shared = PatientInsurance.builder().patient(patient).payerCode("CNAMU")
+            .providerName("Caisse Nationale AMU").policyNumber("AMU-778899").build();
+        when(patientInsuranceRepository.findByPatient_IdAndAssignmentIsNull(patientId)).thenReturn(List.of(shared));
+        PatientInsuranceResponseDTO response = new PatientInsuranceResponseDTO();
+        when(patientInsuranceMapper.toPatientInsuranceResponseDTO(shared)).thenReturn(response);
+
+        assertThat(service.getOtherHospitalPolicies(patientId)).isEmpty();
+        assertThat(service.reuseOtherHospitalPolicy(rowA.getId())).isSameAs(response);
+        verify(patientInsuranceRepository, never()).save(any());
+    }
+
+    /**
+     * Review of #1293 (M1): payer codes are unique only within one hospital. A's "MS" (Mutuelle Alpha) is not B's
+     * "MS" (Mutuelle Beta): no agreement here, and the reuse never files Alpha's member number under Beta.
+     */
+    @Test
+    void aCollidingCodeIsAnotherInsurer() {
+        rowA.setPayerCode("MS");
+        rowA.setProviderName("Mutuelle Alpha");
+        bReadsA();
+        when(payerCatalogueService.activeAgreementsAt(hospitalB))
+            .thenReturn(List.of(new PayerCatalogueService.Agreement("MS", "Mutuelle Beta")));
+        when(patientInsuranceRepository.save(any(PatientInsurance.class))).thenAnswer(call -> {
+            PatientInsurance saved = call.getArgument(0);
+            saved.setId(UUID.randomUUID());
+            return saved;
+        });
+
+        assertThat(service.getOtherHospitalPolicies(patientId)).singleElement()
+            .extracting(OtherHospitalInsuranceDTO::isAgreementHere).isEqualTo(false);
+        service.reuseOtherHospitalPolicy(rowA.getId());
+
+        ArgumentCaptor<PatientInsurance> written = ArgumentCaptor.forClass(PatientInsurance.class);
+        verify(patientInsuranceRepository, times(1)).save(written.capture());
+        assertThat(written.getValue().getProviderName()).isEqualTo("Mutuelle Alpha");
+        assertThat(written.getValue().getPayerCode()).isNull();
+    }
+
+    /** Review of #1293 (M1): same name and code first, then same name; a code alone never; ties keep catalogue order. */
+    @Test
+    void theAgreementIsChosenByNameThenCodeInCatalogueOrder() {
+        PayerCatalogueService.Agreement nameOnly = new PayerCatalogueService.Agreement("AMU-2", "Caisse Nationale AMU");
+        PayerCatalogueService.Agreement nameAndCode = new PayerCatalogueService.Agreement("CNAMU", "caisse nationale amu");
+        PayerCatalogueService.Agreement codeOnly = new PayerCatalogueService.Agreement("CNAMU", "Autre caisse");
+        PayerCatalogueService.Agreement secondNameOnly = new PayerCatalogueService.Agreement("AMU-3", "Caisse Nationale AMU");
+
+        assertThat(PayerCatalogueService.Agreement.bestFor(List.of(codeOnly, nameOnly, nameAndCode),
+            "cnamu", "Caisse  Nationale AMU")).contains(nameAndCode);
+        assertThat(PayerCatalogueService.Agreement.bestFor(List.of(codeOnly, nameOnly, secondNameOnly),
+            "CNAMU", "Caisse Nationale AMU")).contains(nameOnly);
+        assertThat(PayerCatalogueService.Agreement.bestFor(List.of(codeOnly), "CNAMU", "Caisse Nationale AMU"))
+            .isEmpty();
+        assertThat(new PayerCatalogueService.Agreement("CNAMU", null).matches("CNAMU", "Caisse Nationale AMU"))
+            .isTrue();
     }
 }

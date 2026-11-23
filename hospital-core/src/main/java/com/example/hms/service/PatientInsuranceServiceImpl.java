@@ -478,8 +478,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         if (others.isEmpty()) {
             return List.of();
         }
-        List<PatientInsurance> here = patientInsuranceRepository.findByPatient_IdAndAssignment_Hospital_Id(patientId,
-            hospitalId);
+        List<PatientInsurance> here = heldAt(patientId, hospitalId);
         List<PatientInsurance> shown = patientInsuranceRepository
             .findByPatient_IdAndAssignment_Hospital_IdIn(patientId, others).stream()
             .filter(row -> others.contains(hospitalOf(row)))
@@ -525,25 +524,23 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         }
         patientChartAccess.require(patientId, hospitalId);
         lockPatient(patientId);
-        // This hospital's agreement with the insurer, else the insurer as recorded (an identity-only record).
-        PayerCatalogueService.Agreement insurer = payerCatalogueService.activeAgreementsAt(hospitalId).stream()
-            .filter(candidate -> candidate.matches(source.getPayerCode(), source.getProviderName()))
-            .findFirst()
-            .orElseGet(() -> new PayerCatalogueService.Agreement(source.getPayerCode(), source.getProviderName()));
         reachRecorder.recordReach(patientId, hospitalId, actorUserId, null,
             CrossHospitalReachRecorder.reachOf(List.of(sourceHospitalId), hospitalId),
             OTHER_HOSPITAL_REUSE_DESCRIPTION);
-        java.util.Optional<PatientInsurance> held = insurer.payerCode() != null
-            ? patientInsuranceRepository
-                .findFirstByPatient_IdAndAssignment_Hospital_IdAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(
-                    patientId, hospitalId, insurer.payerCode(), source.getPolicyNumber())
-            : patientInsuranceRepository
-                .findFirstByPatient_IdAndAssignment_Hospital_IdAndProviderNameIgnoreCaseAndPolicyNumberIgnoreCase(
-                    patientId, hospitalId, insurer.payerName(), source.getPolicyNumber());
+        // Review of #1293: under the patient lock, the same "already held" rule as the list (its own rows and the
+        // shared ones it sees), so a stale page or a direct call never makes a second row of the policy.
+        java.util.Optional<PatientInsurance> held = heldAt(patientId, hospitalId).stream()
+            .filter(own -> samePolicy(own, source))
+            .findFirst();
         if (held.isPresent()) {
             return patientInsuranceMapper.toPatientInsuranceResponseDTO(held.get());
         }
-        PatientInsurance own = rowAtHospital(identityOf(source, insurer), hospitalId, actorUserId,
+        // This hospital's agreement with the insurer (matched by name, review of #1293), else none: identity only.
+        PayerCatalogueService.Agreement agreement = PayerCatalogueService.Agreement
+            .bestFor(payerCatalogueService.activeAgreementsAt(hospitalId), source.getPayerCode(),
+                source.getProviderName())
+            .orElse(null);
+        PatientInsurance own = rowAtHospital(identityOf(source, agreement), hospitalId, actorUserId,
             () -> insuranceNotFound(sourceInsuranceId));
         own.setLinkedByUserId(actorUserId);
         own.setLinkedAs("STAFF");
@@ -551,12 +548,16 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
     }
 
-    /** A new, untagged row: the source policy's identity under the insurer named. Unverified, no plan. */
-    private static PatientInsurance identityOf(PatientInsurance source, PayerCatalogueService.Agreement insurer) {
+    /**
+     * A new, untagged row: the source policy's identity, unverified, no plan. Under this hospital's payer when it has
+     * an agreement; otherwise the insurer's name as recorded and no payer code (another hospital's code is free text
+     * that means nothing here, review of #1293).
+     */
+    private static PatientInsurance identityOf(PatientInsurance source, PayerCatalogueService.Agreement agreement) {
         return PatientInsurance.builder()
             .patient(source.getPatient())
-            .payerCode(insurer.payerCode())
-            .providerName(insurer.payerName())
+            .payerCode(agreement == null ? null : agreement.payerCode())
+            .providerName(agreement == null ? source.getProviderName() : agreement.payerName())
             .policyNumber(source.getPolicyNumber())
             .subscriberRelationship(source.getSubscriberRelationship())
             .effectiveDate(source.getEffectiveDate())
@@ -584,7 +585,18 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             .build();
     }
 
-    /** The same policy: the same number, of the same insurer (by payer code, else by name). */
+    /**
+     * Review of #1293 (L3): the rows this hospital already holds for the patient - its own and the shared (untagged)
+     * ones it sees ({@link PatientInsurance#isVisibleAt}).
+     */
+    private List<PatientInsurance> heldAt(UUID patientId, UUID hospitalId) {
+        List<PatientInsurance> held = new java.util.ArrayList<>(
+            patientInsuranceRepository.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId));
+        held.addAll(patientInsuranceRepository.findByPatient_IdAndAssignmentIsNull(patientId));
+        return held;
+    }
+
+    /** The same policy: the same number, of the same insurer ({@link PayerCatalogueService.Agreement#matches}). */
     private static boolean samePolicy(PatientInsurance own, PatientInsurance other) {
         return own.getPolicyNumber() != null && own.getPolicyNumber().equalsIgnoreCase(other.getPolicyNumber())
             && new PayerCatalogueService.Agreement(own.getPayerCode(), own.getProviderName())

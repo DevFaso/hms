@@ -639,17 +639,59 @@ public class PayerCatalogueService {
             .toList();
     }
 
-    /** An active payer of one hospital: the insurer it has an agreement with. */
+    /**
+     * An active payer of one hospital: the insurer it has an agreement with.
+     *
+     * <p>Review of #1293: a payer code is unique only within one hospital (V305) and a coverage row's code is free
+     * text, so another hospital's "MS" may be a different insurer than this hospital's "MS". The insurer is matched on
+     * its name (trimmed, spaces collapsed, case ignored); a code counts only beside the same name, or when a name is
+     * missing on either side.
+     */
     public record Agreement(String payerCode, String payerName) {
 
-        /** The insurer recorded elsewhere is this payer: the same code, else the same name (case ignored). */
+        /** 3 = same name and code, 2 = same name, 1 = same code where a name is missing, 0 = another insurer. */
+        public int matchRank(String recordedCode, String recordedName) {
+            boolean sameName = sameText(payerName, recordedName);
+            boolean sameCode = sameText(payerCode, recordedCode);
+            if (sameName) {
+                return sameCode ? 3 : 2;
+            }
+            return sameCode && (isBlank(payerName) || isBlank(recordedName)) ? 1 : 0;
+        }
+
+        /** The insurer recorded elsewhere is this payer ({@link #matchRank} above 0). */
         public boolean matches(String recordedCode, String recordedName) {
-            return sameText(payerCode, recordedCode) || sameText(payerName, recordedName);
+            return matchRank(recordedCode, recordedName) > 0;
+        }
+
+        /**
+         * The payer of {@code agreements} that is the insurer recorded: the best {@link #matchRank}, and among equal
+         * ranks the first in the list (the catalogue reads them by code), so the answer is always the same.
+         */
+        public static Optional<Agreement> bestFor(List<Agreement> agreements, String recordedCode,
+                                                  String recordedName) {
+            Agreement best = null;
+            int bestRank = 0;
+            for (Agreement candidate : agreements) {
+                int rank = candidate.matchRank(recordedCode, recordedName);
+                if (rank > bestRank) {
+                    best = candidate;
+                    bestRank = rank;
+                }
+            }
+            return Optional.ofNullable(best);
         }
 
         private static boolean sameText(String ours, String recorded) {
-            return ours != null && recorded != null && !recorded.isBlank()
-                && ours.trim().equalsIgnoreCase(recorded.trim());
+            return !isBlank(ours) && !isBlank(recorded) && normalised(ours).equals(normalised(recorded));
+        }
+
+        private static boolean isBlank(String text) {
+            return text == null || text.isBlank();
+        }
+
+        private static String normalised(String text) {
+            return text.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
         }
     }
 
