@@ -1,6 +1,7 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpContext, HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import { API_TIMEOUT_PROFILE } from '../core/api-request-timeout';
 import { SecurityRuleType } from './org-security.service';
 
 /*
@@ -235,7 +236,9 @@ export class SuperAdminGovernanceService {
   /* ── Users ── */
 
   importUsers(req: UserBulkImportRequest): Observable<UserBulkImportResponse> {
-    return this.http.post<UserBulkImportResponse>('/super-admin/users/import', req);
+    return this.http.post<UserBulkImportResponse>('/super-admin/users/import', req, {
+      context: new HttpContext().set(API_TIMEOUT_PROFILE, 'upload'),
+    });
   }
 
   forcePasswordReset(req: ForcePasswordResetRequest): Observable<ForcePasswordResetResponse> {
@@ -267,7 +270,9 @@ export class SuperAdminGovernanceService {
 
   /** 404 when no baseline exists yet; client decodes base64Content itself. */
   exportLatestBaseline(): Observable<BaselineExport> {
-    return this.http.get<BaselineExport>('/super-admin/security/policies/export/latest');
+    return this.http.get<BaselineExport>('/super-admin/security/policies/export/latest', {
+      context: new HttpContext().set(API_TIMEOUT_PROFILE, 'export'),
+    });
   }
 
   /* ── Rule sets ── */

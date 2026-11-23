@@ -1,6 +1,7 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpContext, HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import { API_TIMEOUT_PROFILE } from '../core/api-request-timeout';
 import { PageResponse } from './maternity.service';
 
 /*
@@ -199,6 +200,8 @@ export class AssignmentAdminService {
   }
 
   bulkImport(req: AssignmentBulkImportRequest): Observable<AssignmentBulkImportResponse> {
-    return this.http.post<AssignmentBulkImportResponse>(`${this.baseUrl}/bulk-import`, req);
+    return this.http.post<AssignmentBulkImportResponse>(`${this.baseUrl}/bulk-import`, req, {
+      context: new HttpContext().set(API_TIMEOUT_PROFILE, 'upload'),
+    });
   }
 }

@@ -78,6 +78,7 @@
             <th scope="col">{{ 'PATIENT_NOTIFICATIONS.COL_CHANNEL' | translate }}</th>
             <th scope="col">{{ 'PATIENT_NOTIFICATIONS.COL_STATUS' | translate }}</th>
             <th scope="col">{{ 'PATIENT_NOTIFICATIONS.COL_ATTEMPTS' | translate }}</th>
+            <th scope="col">{{ 'PATIENT_NOTIFICATIONS.COL_NEXT_ATTEMPT' | translate }}</th>
             <th scope="col">{{ 'PATIENT_NOTIFICATIONS.COL_REASON' | translate }}</th>
             <th scope="col">{{ 'PATIENT_NOTIFICATIONS.COL_LAST_ATTEMPT' | translate }}</th>
             <th scope="col">{{ 'PATIENT_NOTIFICATIONS.COL_ACTIONS' | translate }}</th>
@@ -102,6 +103,13 @@
                 </span>
               </td>
               <td class="numeric">{{ row.attempts }}</td>
+              <td [attr.data-testid]="'pn-next-attempt-' + row.id">
+                @if ((row.status === 'PENDING' || row.status === 'RETRYING') && row.nextAttemptAt) {
+                  {{ row.nextAttemptAt | serverTime | date: 'short' }}
+                } @else {
+                  —
+                }
+              </td>
               <td>
                 @if (errorKey(row.errorCode); as reason) {
                   {{ reason | translate }}
@@ -136,7 +144,7 @@
                 }
               </td>
               <td class="actions-cell">
-                @if (row.retryable) {
+                @if (row.retryable && !maybeDelivered(row)) {
                   <button
                     class="btn-retry"
                     (click)="retry(row)"

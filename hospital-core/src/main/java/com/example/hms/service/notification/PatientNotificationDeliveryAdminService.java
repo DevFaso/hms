@@ -109,15 +109,15 @@ public class PatientNotificationDeliveryAdminService {
      * open or SKIPPED one is refused with a 400.
      */
     @Transactional
-    public PatientNotificationDeliveryDTO retry(UUID id) {
+    public PatientNotificationDeliveryDTO retry(UUID id, int expectedManualRetries) {
         UUID hospitalId = actingScopeResolver.requirePinned();
         PatientNotificationDelivery row = repository.findByIdAndHospitalId(id, hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND_KEY));
-        if (row.getStatus() != NotificationDeliveryStatus.FAILED) {
+        if (!retryable(row) || expectedManualRetries < 0 || row.getManualRetries() != expectedManualRetries) {
             throw new BusinessException(NOT_RETRYABLE_KEY);
         }
         int requeued = repository.requeueFailed(id, hospitalId, NotificationDeliveryStatus.FAILED,
-            NotificationDeliveryStatus.PENDING, LocalDateTime.now(clock), roleValidator.getCurrentUserId());
+            NotificationDeliveryStatus.PENDING, LocalDateTime.now(clock), roleValidator.getCurrentUserId(), expectedManualRetries);
         if (requeued != 1) {
             // Someone else requeued it between the read and the update.
             throw new BusinessException(NOT_RETRYABLE_KEY);
@@ -231,7 +231,7 @@ public class PatientNotificationDeliveryAdminService {
             .status(row.getStatus().name())
             .attempts(row.getAttempts())
             .errorCode(row.getErrorCode())
-            .retryable(row.getStatus() == NotificationDeliveryStatus.FAILED)
+            .retryable(retryable(row))
             .manualRetries(row.getManualRetries())
             .createdAt(row.getCreatedAt())
             .lastAttemptAt(row.getLastAttemptAt())
@@ -241,5 +241,11 @@ public class PatientNotificationDeliveryAdminService {
             .consentRecordedBy(row.getConsentRecordedBy())
             .consentRecordedAt(row.getConsentRecordedAt())
             .build();
+    }
+
+    private static boolean retryable(PatientNotificationDelivery row) {
+        if (row.getStatus() != NotificationDeliveryStatus.FAILED || row.getErrorCode() == null) return false;
+        try { return PatientNotificationErrorCode.valueOf(row.getErrorCode()).retryable(); }
+        catch (IllegalArgumentException unknown) { return false; }
     }
 }

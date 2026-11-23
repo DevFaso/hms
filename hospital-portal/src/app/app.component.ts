@@ -1,3 +1,4 @@
+import { ApiTimeoutBannerComponent } from './shared/api-timeout-banner.component';
 import { ChunkRecoveryService } from './core/chunk-recovery.service';
 import { RouteLoadingComponent } from './shared/route-loading.component';
 import { Component, inject, OnInit, ChangeDetectionStrategy } from '@angular/core';
@@ -16,7 +17,13 @@ import { ConnectivityBannerComponent } from './shared/connectivity/connectivity-
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, TranslateModule, ConnectivityBannerComponent, RouteLoadingComponent],
+  imports: [
+    RouterOutlet,
+    TranslateModule,
+    ConnectivityBannerComponent,
+    RouteLoadingComponent,
+    ApiTimeoutBannerComponent,
+  ],
   template: `
     <app-route-loading />
     @if (chunkRecovery.failedUrl()) {
@@ -39,6 +46,7 @@ import { ConnectivityBannerComponent } from './shared/connectivity/connectivity-
         }
       </section>
     }
+    <app-api-timeout-banner />
     <router-outlet />
     <app-connectivity-banner />
   `,

@@ -1,4 +1,11 @@
 {
+  "API_TIMEOUT": {
+    "TITLE": "El servidor tarda demasiado en responder",
+    "MESSAGE": "Se agotó el tiempo de espera. Vuelva a intentar la acción cuando haya conexión, o recargue la página para cargar sus datos.",
+    "WRITE_UNKNOWN": "Es posible que la acción se haya guardado. Compruebe su estado antes de enviarla de nuevo.",
+    "KEEP_INPUT": "Lo escrito permanece en esta página. Antes de recargar, copie el texto sin guardar; la recarga lo borra. Recargar no vuelve a enviar un formulario.",
+    "RELOAD": "Recargar la página y reintentar"
+  },
   "ORGANIZATION_DETAIL": {
     "INFORMATION": "Datos de la organización",
     "EMAIL": "Correo de contacto",
@@ -15129,6 +15136,7 @@
     "SUBJECT_APPOINTMENT": "Cita del {{date}} a las {{time}}",
     "SUBJECT_INVOICE": "Factura {{number}}",
     "SUBJECT_LAB_ORDER": "Solicitud de análisis {{number}}",
+    "COL_NEXT_ATTEMPT": "Próximo intento",
     "CONSENT_RECORDED_BY": "Preferencia de canal registrada por:"
   },
   "IMAGING_PACS": {

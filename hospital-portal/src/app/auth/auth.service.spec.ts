@@ -285,10 +285,20 @@ describe('AuthService — logout revokes the server session', () => {
     sessionStorage.clear();
   });
 
+  it('ends session-owned background work when the application injector is destroyed', () => {
+    const ended = jasmine.createSpy('session ended');
+    service.sessionEnded$.subscribe(ended);
+    TestBed.resetTestingModule();
+    expect(ended).toHaveBeenCalledTimes(1);
+  });
+
   it('POSTs /auth/logout with the current bearer and the refresh cookie', () => {
+    const ended = jasmine.createSpy('session ended');
+    service.sessionEnded$.subscribe(ended);
     localStorage.setItem('auth_token', 'current.jwt.token');
 
     service.logout();
+    expect(ended).toHaveBeenCalledTimes(1);
 
     const req = httpMock.expectOne((r) => r.url.endsWith('/api/auth/logout'));
     expect(req.request.method).toBe('POST');

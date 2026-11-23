@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { API_TIMEOUT_PROFILE } from '../core/api-request-timeout';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { SuperAdminGovernanceService } from './super-admin-governance.service';
@@ -26,6 +27,7 @@ describe('SuperAdminGovernanceService', () => {
       .importUsers({ csvContent: 'username,email\nj,j@x.org', forcePasswordChange: true })
       .subscribe((res) => expect(res.imported).toBe(1));
     const req = httpMock.expectOne('/super-admin/users/import');
+    expect(req.request.context.get(API_TIMEOUT_PROFILE)).toBe('upload');
     expect(req.request.method).toBe('POST');
     expect(typeof req.request.body.csvContent).toBe('string');
     req.flush({ processed: 1, imported: 1, failed: 0, results: [] });
@@ -69,6 +71,7 @@ describe('SuperAdminGovernanceService', () => {
       expect(exp.base64Content).toBe('e30=');
     });
     const req = httpMock.expectOne('/super-admin/security/policies/export/latest');
+    expect(req.request.context.get(API_TIMEOUT_PROFILE)).toBe('export');
     expect(req.request.method).toBe('GET');
     req.flush({
       baselineVersion: 'v1',
