@@ -339,4 +339,76 @@ class TransfusionPositiveAntibodyScreenPostgresIT {
                 .isEqualTo(PositiveAntibodyScreenPolicy.Missing.WORKUP.messageKey()));
         assertThat(rows("transfusion_crossmatches")).isEqualTo(1);
     }
+
+    @Test
+    @DisplayName("review L4: a positive screen after an identification asks the biologist again and holds routine red cells until the work-up of that screen is recorded")
+    void aPositiveScreenAfterAnIdentificationHoldsAgain() {
+        actingAs(techUser);
+        screened(AntibodyScreenResult.POSITIVE);
+        AntibodyWorkupRequestDTO identified = AntibodyWorkupRequestDTO.builder().patientId(patient)
+            .status(AntibodyWorkupStatus.IDENTIFIED).antibodySpecificities("Anti-K").build();
+        actingAs(directorUser);
+        service.recordAntibodyWorkup(identified);
+        actingAs(techUser);
+        UUID requestId = request(TransfusionUrgency.ROUTINE).getId();
+        UUID bagId = bag().getId();
+        assertThat(service.getRequest(requestId).isAntibodyWorkupServes()).isTrue();
+        clearInvocations(inBasketService);
+
+        // The repeat screen of the next sample is positive again: it may be a second antibody.
+        screened(AntibodyScreenResult.POSITIVE);
+
+        ArgumentCaptor<CreateInBasketItemRequest> task = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
+        verify(inBasketService).createItemInNewTransaction(task.capture());
+        assertThat(task.getValue().getRecipientUserId()).isEqualTo(directorUser);
+        assertThat(task.getValue().getTitleKey()).isEqualTo(PositiveAntibodyScreenService.IDENTIFY_TITLE_KEY);
+        assertThat(service.getRequest(requestId).isAntibodyWorkupServes()).isFalse();
+        // The antibody already known stays on the patient's record all the while.
+        assertThat(service.getAntibodyStatus(patient).getAntibodySpecificities()).isEqualTo("Anti-K");
+        CrossmatchRequestDTO complete = compatibilised(bagId);
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, complete))
+            .isInstanceOfSatisfying(FieldBusinessException.class, refusal -> assertThat(refusal.getMessageKey())
+                .isEqualTo(PositiveAntibodyScreenPolicy.Missing.WORKUP.messageKey()));
+        assertThat(rows("transfusion_crossmatches")).isZero();
+
+        actingAs(directorUser);
+        service.recordAntibodyWorkup(AntibodyWorkupRequestDTO.builder().patientId(patient)
+            .status(AntibodyWorkupStatus.IDENTIFIED).antibodySpecificities("Anti-K, anti-E").build());
+        actingAs(techUser);
+
+        assertThat(service.getRequest(requestId).isAntibodyWorkupServes()).isTrue();
+        service.recordCrossmatch(requestId, complete);
+        assertThat(rows("transfusion_crossmatches")).isEqualTo(1);
+        assertThat(service.getAntibodyStatus(patient).getAntibodySpecificities()).isEqualTo("Anti-K, anti-E");
+    }
+
+    @Test
+    @DisplayName("review M3: an EMERGENCY request issued on a standing plain « compatible » crossmatch leaves at once, and the biologist is asked for the crossmatch afterwards")
+    void anEmergencyOnAPlainCrossmatchOwesTheCrossmatchAfterwards() {
+        actingAs(techUser);
+        screened(AntibodyScreenResult.POSITIVE);
+        actingAs(doctorUser);
+        UUID requestId = service.createRequest(TransfusionRequestRequestDTO.builder()
+            .patientId(patient).productType(BloodProductType.PACKED_RED_CELLS).unitsRequested(1)
+            .indication("Haemorrhage").urgency(TransfusionUrgency.EMERGENCY)
+            .vitalUrgencyLevel(com.example.hms.enums.VitalUrgencyLevel.UV).vitalUrgencyReason("Choc hémorragique")
+            .preTransfusionSampleDrawn(Boolean.TRUE).build()).getId();
+        actingAs(techUser);
+        UUID bagId = bag().getId();
+        // Around an emergency the result is recorded as found: a plain « compatible », no technique, no attestation.
+        service.recordCrossmatch(requestId, CrossmatchRequestDTO.builder().bloodUnitId(bagId).compatible(Boolean.TRUE).build());
+        clearInvocations(inBasketService);
+
+        service.issueUnit(requestId, bagId);
+
+        assertThat(bagStatus(bagId)).isEqualTo("ISSUED");
+        // It left on its crossmatch: no emergency release row. But that crossmatch is not « compatibilisé ».
+        assertThat(service.getRequest(requestId).getEmergencyReleases()).isEmpty();
+        ArgumentCaptor<CreateInBasketItemRequest> task = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
+        verify(inBasketService).createItemInNewTransaction(task.capture());
+        assertThat(task.getValue().getRecipientUserId()).isEqualTo(directorUser);
+        assertThat(task.getValue().getTitleKey()).isEqualTo(PositiveAntibodyScreenService.RETROSPECTIVE_TITLE_KEY);
+        assertThat(task.getValue().getReferenceId()).isEqualTo(bagId);
+        assertThat(task.getValue().getPriority()).isEqualTo(InBasketPriority.URGENT);
+    }
 }

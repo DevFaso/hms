@@ -246,15 +246,26 @@ public class PositiveAntibodyScreenService {
     /**
      * A unit leaves the laboratory on its crossmatch (the routine path) for a held request only when that
      * crossmatch is « compatibilisé » NOW: the sample ages, and a crossmatch written before the positive screen
-     * carries no attestation. An EMERGENCY request is not held by it: it has the emergency path.
+     * carries no attestation. An EMERGENCY request is not held by it (a vital emergency is never delayed), but
+     * what its crossmatch lacks is still owed: a plain « compatible » result is not the antiglobulin crossmatch
+     * on an antigen-negative unit, so the biologist is asked for the crossmatch afterwards.
+     *
+     * @return true when an EMERGENCY request leaves on a crossmatch that is not « compatibilisé »: the caller
+     *         then asks the biologist for the crossmatch afterwards
      */
-    public void requireRoutineIssueAllowed(TransfusionRequest request, TransfusionCrossmatch crossmatch) {
-        if (!holds(request) || emergency(request)) {
-            return;
+    public boolean requireRoutineIssueAllowed(TransfusionRequest request, TransfusionCrossmatch crossmatch) {
+        if (!holds(request)) {
+            return false;
         }
-        refuse(PositiveAntibodyScreenPolicy.firstMissing(workupServes(request), crossmatch == null ? null
-            : new Compatibilisation(crossmatch.getAntiglobulinMethod(), crossmatch.getAntigenNegative(),
-                crossmatch.getRhKellMatched(), crossmatch.getSampleCollectedAt()), LocalDateTime.now(clock)));
+        Optional<PositiveAntibodyScreenPolicy.Missing> missing = PositiveAntibodyScreenPolicy.firstMissing(
+            workupServes(request), crossmatch == null ? null
+                : new Compatibilisation(crossmatch.getAntiglobulinMethod(), crossmatch.getAntigenNegative(),
+                    crossmatch.getRhKellMatched(), crossmatch.getSampleCollectedAt()), LocalDateTime.now(clock));
+        if (emergency(request)) {
+            return missing.isPresent();
+        }
+        refuse(missing);
+        return false;
     }
 
     /**
@@ -285,14 +296,34 @@ public class PositiveAntibodyScreenService {
         return request.getUrgency() == TransfusionUrgency.EMERGENCY;
     }
 
-    /** The antibody is identified, or a referral decision serves this very request. */
+    /**
+     * The antibody is identified since the newest positive screen, or a referral decision serves this very
+     * request. An identification made before a later positive screen does not cover it: that screen may be a
+     * second antibody, and the biologist is asked again ({@link #askBiologistToIdentify}).
+     */
     public boolean workupServes(TransfusionRequest request) {
         UUID patientId = request.getPatient().getId();
         UUID hospitalId = request.getHospital().getId();
-        return workupRepository.findFirstByPatient_IdAndHospital_IdAndStatusOrderByRecordedAtDesc(
-                patientId, hospitalId, AntibodyWorkupStatus.IDENTIFIED).isPresent()
+        return identifiedSinceTheNewestPositiveScreen(patientId, hospitalId)
             || (request.getId() != null && workupRepository.existsByPatient_IdAndHospital_IdAndStatusAndTransfusionRequestId(
                 patientId, hospitalId, AntibodyWorkupStatus.REFERRED, request.getId()));
+    }
+
+    private boolean identifiedSinceTheNewestPositiveScreen(UUID patientId, UUID hospitalId) {
+        Optional<PatientAntibodyWorkup> identified = workupRepository
+            .findFirstByPatient_IdAndHospital_IdAndStatusOrderByRecordedAtDesc(patientId, hospitalId,
+                AntibodyWorkupStatus.IDENTIFIED);
+        if (identified.isEmpty()) {
+            return false;
+        }
+        LocalDateTime screenedAt = newestPositiveScreen(patientId, hospitalId)
+            .map(PatientBloodGroup::getPerformedAt).orElse(null);
+        if (screenedAt == null) {
+            // An antibody recorded with no positive screen here (known from elsewhere): nothing newer to cover.
+            return true;
+        }
+        LocalDateTime recordedAt = identified.get().getRecordedAt();
+        return recordedAt != null && !recordedAt.isBefore(screenedAt);
     }
 
     private static void refuse(Optional<PositiveAntibodyScreenPolicy.Missing> missing) {
@@ -304,17 +335,17 @@ public class PositiveAntibodyScreenService {
 
     // ── The biologist's tasks ───────────────────────────────────────────
 
-    /** A positive screen was just recorded: every biologist of the hospital is asked to identify or refer. */
+    /**
+     * A positive screen was just recorded: every biologist of the hospital is asked to identify or refer. Every
+     * positive screen asks, one recorded after an antibody was identified too: it may be a second antibody, and
+     * the earlier identification does not cover it ({@link #workupServes}).
+     */
     public void askBiologistToIdentify(PatientBloodGroup screen) {
         if (screen == null || screen.getAntibodyScreen() != AntibodyScreenResult.POSITIVE
                 || screen.getPatient() == null || screen.getHospital() == null) {
             return;
         }
         Patient patient = screen.getPatient();
-        if (workupRepository.findFirstByPatient_IdAndHospital_IdAndStatusOrderByRecordedAtDesc(
-                patient.getId(), screen.getHospital().getId(), AntibodyWorkupStatus.IDENTIFIED).isPresent()) {
-            return;
-        }
         Object[] args = {patient.getFullName()};
         CreateInBasketItemRequest item = new CreateInBasketItemRequest();
         item.setTitleKey(IDENTIFY_TITLE_KEY);

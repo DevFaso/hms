@@ -119,8 +119,12 @@ class MedicationLabelMatchTest {
         FiveRightsVerificationService service = new FiveRightsVerificationService(catalogue);
         MedicationAdministrationRecord mar = mar();
         mar.getPrescription().setMedicationName("Amoxicilline 500 mg");
+        // Review L1: the code the order copied from the item, and the item's id, identify the paracetamol item,
+        // not what was ordered: scanning the paracetamol box must not pass an amoxicillin order.
+        mar.getPrescription().setMedicationCode("PARA-500-CP");
 
-        for (String scan : new String[] {"Paracétamol 500 mg", "Paracétamol", "N02BE01", "PARA-500-CP"}) {
+        for (String scan : new String[] {"Paracétamol 500 mg", "Paracétamol", "N02BE01", "PARA-500-CP", "161",
+            ITEM_ID.toString()}) {
             assertThat(service.verify(mar, patientId().toString(), scan, "1000 mg", "PO", LocalDateTime.now())
                 .failedChecks()).as(scan).contains(FiveRightsCheck.DRUG);
         }
@@ -197,5 +201,34 @@ class MedicationLabelMatchTest {
         mar.setPrescription(order());
         mar.setScheduledTime(LocalDateTime.now());
         return mar;
+    }
+
+    /** Review L1: an order in step with its item is still recognised by the item's id and by the code it copied. */
+    @Test
+    void anOrderInStepWithItsItemKeepsItsIdentifiers() {
+        MedicationCatalogItemRepository catalogue = mock(MedicationCatalogItemRepository.class);
+        when(catalogue.findById(ITEM_ID)).thenReturn(Optional.of(item()));
+        FiveRightsVerificationService service = new FiveRightsVerificationService(catalogue);
+        MedicationAdministrationRecord mar = mar();
+        mar.getPrescription().setMedicationCode("ORD-PARA-1");
+
+        for (String scan : new String[] {ITEM_ID.toString(), "ORD-PARA-1", "PARA-500-CP", "161"}) {
+            assertThat(service.verify(mar, patientId().toString(), scan, "1000 mg", "PO", LocalDateTime.now())
+                .getOutcomes().get(FiveRightsCheck.DRUG)).as(scan).isTrue();
+        }
+    }
+
+    /** Review L1: read by its own text only, an order matches its designation and no identifier at all. */
+    @Test
+    void ownTextOnlyKnowsNoIdentifier() {
+        Prescription rx = order();
+        rx.setMedicationCode("PARA-500-CP");
+
+        assertThat(MedicationLabelMatch.matchOwnTextOnly(rx, "Paracétamol 500 mg 500 mg Comprimé")).isEqualTo(Basis.DESIGNATION);
+        assertThat(MedicationLabelMatch.matchOwnTextOnly(rx, ITEM_ID.toString())).isEqualTo(Basis.NONE);
+        assertThat(MedicationLabelMatch.matchOwnTextOnly(rx, "PARA-500-CP")).isEqualTo(Basis.NONE);
+        assertThat(MedicationLabelMatch.matchOwnTextOnly(rx, " ")).isEqualTo(Basis.NONE);
+        assertThat(MedicationLabelMatch.matchOwnTextOnly(null, "Paracétamol")).isEqualTo(Basis.NONE);
+        assertThat(MedicationLabelMatch.matchOwnTextOnly(rx, "Paracétamol 500 mg" + " ".repeat(300))).isEqualTo(Basis.NONE);
     }
 }

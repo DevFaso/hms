@@ -120,7 +120,15 @@ public class FiveRightsVerificationService {
             b.fail(FiveRightsCheck.DRUG, reason("emar.fiveRights.drug.noPrescription"));
             return;
         }
-        if (MedicationLabelMatch.match(rx, catalogItemOf(rx), scan) == MedicationLabelMatch.Basis.NONE) {
+        MedicationCatalogItem item = catalogItemOf(rx);
+        // QA D1223: an order whose written name contradicts the item it is linked to (« Amoxicilline » on the
+        // paracetamol item) is recognised by its own text only: not by that item's names, codes or ATC, and
+        // not by the item's id or the code the order copied from it.
+        boolean contradicted = item != null
+            && com.example.hms.service.pharmacy.OrderedDrugIdentity.contradicts(rx.getMedicationName(), item);
+        MedicationLabelMatch.Basis basis = contradicted
+            ? MedicationLabelMatch.matchOwnTextOnly(rx, scan) : MedicationLabelMatch.match(rx, item, scan);
+        if (basis == MedicationLabelMatch.Basis.NONE) {
             b.fail(FiveRightsCheck.DRUG, reason("emar.fiveRights.drug.mismatch"));
         } else {
             b.pass(FiveRightsCheck.DRUG);
@@ -132,14 +140,7 @@ public class FiveRightsVerificationService {
         if (catalogItemRepository == null || rx.getMedicationCatalogItemId() == null) {
             return null;
         }
-        MedicationCatalogItem item = catalogItemRepository.findById(rx.getMedicationCatalogItemId()).orElse(null);
-        // QA D1223: an order whose written name contradicts the item it is linked to (« Amoxicilline » on the
-        // paracetamol item) is not recognised by that item's names, codes or ATC: only by its own text.
-        if (item != null && com.example.hms.service.pharmacy.OrderedDrugIdentity.contradicts(
-                rx.getMedicationName(), item)) {
-            return null;
-        }
-        return item;
+        return catalogItemRepository.findById(rx.getMedicationCatalogItemId()).orElse(null);
     }
 
     /** Right dose: the scanned dose token must match the prescription's dosage. */

@@ -3,6 +3,7 @@ package com.example.hms.service.lab;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyShort;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -11,6 +12,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -35,11 +37,14 @@ import com.example.hms.service.SmsService;
 import com.example.hms.service.lab.CriticalResultEscalationLadder.Minutes;
 import com.example.hms.service.lab.CriticalResultEscalationLadder.Step;
 import net.javacrumbs.shedlock.core.LockAssert;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -115,7 +120,9 @@ class CriticalResultEscalationTest {
         when(recipients.medicalLead(hospital)).thenReturn(Set.of("dr.chef"));
         when(recipients.biologists(hospital.getId())).thenReturn(Set.of("bio.kabore"));
         when(recipients.administrators(hospital.getId())).thenReturn(Set.of("admin.sawadogo"));
-        when(incidents.findByLabResultId(any())).thenReturn(Optional.empty());
+        when(incidents.findByLabResultIdAndResolvedAtIsNull(any())).thenReturn(Optional.empty());
+        // The sweep writes its stamps by conditional UPDATE: here the result plays the row.
+        com.example.hms.testsupport.CriticalResultRows.of(results).with(result);
     }
 
     private void told(String username, String type) {
@@ -283,7 +290,7 @@ class CriticalResultEscalationTest {
     void theChainNeverGoesSilent() {
         minutesAgo(3 * 24 * 60, 12);
         result.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(24 * 60 + 1));
-        when(incidents.findByLabResultId(result.getId())).thenReturn(Optional.of(new CriticalResultIncident()));
+        when(incidents.findByLabResultIdAndResolvedAtIsNull(result.getId())).thenReturn(Optional.of(new CriticalResultIncident()));
 
         assertThat(service.escalateOverdue()).isEqualTo(1);
 
@@ -354,7 +361,7 @@ class CriticalResultEscalationTest {
         minutesAgo(90, 3);
         when(results.confirmReadBackIfUnconfirmed(eq(result.getId()), anyString(), any(), any(), any())).thenReturn(1);
         CriticalResultIncident open = CriticalResultIncident.builder().labResultId(result.getId()).build();
-        when(incidents.findByLabResultId(result.getId())).thenReturn(Optional.of(open));
+        when(incidents.findByLabResultIdAndResolvedAtIsNull(result.getId())).thenReturn(Optional.of(open));
         UUID clinician = UUID.randomUUID();
 
         service.recordReadBack(result, "7.1", clinician, "Dr Awa Garde", "ROLE_DOCTOR", "PHONE");
@@ -366,6 +373,8 @@ class CriticalResultEscalationTest {
         assertThat(result.getCriticalAckChannel()).isEqualTo("PHONE");
         assertThat(open.getResolvedAt()).isNotNull();
         assertThat(open.getResolvedByUserId()).isEqualTo(clinician);
+        assertThat(open.getResolvedByDisplay()).isEqualTo("Dr Awa Garde");
+        assertThat(open.getResolution()).isEqualTo(CriticalResultIncident.RESOLVED_READ_BACK);
         verify(incidents).save(open);
     }
 
@@ -440,7 +449,7 @@ class CriticalResultEscalationTest {
             account("admin.sawadogo", "+22670000009")));
         minutesAgo(3 * 24 * 60, 12);
         result.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(24 * 60 + 1));
-        when(incidents.findByLabResultId(result.getId())).thenReturn(Optional.of(new CriticalResultIncident()));
+        when(incidents.findByLabResultIdAndResolvedAtIsNull(result.getId())).thenReturn(Optional.of(new CriticalResultIncident()));
 
         assertThat(service.escalateOverdue()).isEqualTo(1);
 
@@ -450,7 +459,7 @@ class CriticalResultEscalationTest {
         clearInvocations(users, sms);
         minutesAgo(61, 2);
         result.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(31));
-        when(incidents.findByLabResultId(result.getId())).thenReturn(Optional.empty());
+        when(incidents.findByLabResultIdAndResolvedAtIsNull(result.getId())).thenReturn(Optional.empty());
 
         assertThat(service.escalateOverdue()).isEqualTo(1);
 
@@ -462,7 +471,7 @@ class CriticalResultEscalationTest {
     @Test
     @DisplayName("the incident is opened once: a step that finds it on record writes no second one")
     void theIncidentIsOpenedOnce() {
-        when(incidents.findByLabResultId(result.getId())).thenReturn(Optional.of(new CriticalResultIncident()));
+        when(incidents.findByLabResultIdAndResolvedAtIsNull(result.getId())).thenReturn(Optional.of(new CriticalResultIncident()));
         minutesAgo(61, 2);
         result.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(31));
 
@@ -486,5 +495,194 @@ class CriticalResultEscalationTest {
         notTold("admin.sawadogo");
         verify(incidents, never()).save(any());
         assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 3);
+    }
+
+    // ── Review of #1291: after the commit, never over an acknowledgement, the incident's end, the backlog ──
+
+    @AfterEach
+    void noSynchronizationLeftBehind() {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    @Test
+    @DisplayName("review M1: at T0 with the prescriber away, the cover's SMS waits for the release to commit; a release that is rolled back texts nobody")
+    void aRolledBackReleaseTextsNobody() {
+        when(sms.deliversRealSms()).thenReturn(true);
+        when(users.findByUsernameInIgnoreCase(any())).thenReturn(List.of(account("dr.garde", "+22670000002")));
+        when(recipients.prescriberAbsent(prescriber)).thenReturn(true);
+        TransactionSynchronizationManager.initSynchronization();
+
+        service.notifyIfCritical(result);
+
+        // The notices are written in the release's transaction; the gateway is not called inside it.
+        told("dr.garde", ESCALATION);
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 1);
+        verify(sms, never()).send(anyString(), anyString());
+
+        // The release fails: a transaction that rolls back completes without its after-commit callbacks.
+        for (TransactionSynchronization pending : TransactionSynchronizationManager.getSynchronizations()) {
+            pending.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK);
+        }
+        TransactionSynchronizationManager.clearSynchronization();
+
+        verify(sms, never()).send(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("review M1: the sweep's SMS are sent once the sweep has committed, not while it holds its rows and its lock")
+    void theSweepTextsAfterItsCommit() {
+        when(sms.deliversRealSms()).thenReturn(true);
+        when(users.findByUsernameInIgnoreCase(any())).thenReturn(List.of(account("dr.diallo", "+22670000001"),
+            account("dr.garde", "+22670000002"), account("dr.double", "+22670000002")));
+        minutesAgo(16, 0);
+        TransactionSynchronizationManager.initSynchronization();
+
+        assertThat(service.escalateOverdue()).isEqualTo(1);
+
+        told("dr.garde", ESCALATION);
+        verify(sms, never()).send(anyString(), anyString());
+
+        for (TransactionSynchronization pending : TransactionSynchronizationManager.getSynchronizations()) {
+            pending.afterCommit();
+        }
+
+        // One SMS a number, each number once.
+        verify(sms).send(eq("+22670000001"), anyString());
+        verify(sms).send(eq("+22670000002"), anyString());
+    }
+
+    @Test
+    @DisplayName("review M2: a result acknowledged while the sweep ran is told to nobody, and the sweep never saves the row it loaded")
+    void anAcknowledgementCommittedDuringTheSweepStands() {
+        minutesAgo(16, 0);
+        when(sms.deliversRealSms()).thenReturn(true);
+        // The clinician's read-back committed after the sweep read the row: the conditional UPDATE finds nothing.
+        when(results.stampEscalationIfUnacknowledged(eq(result.getId()), anyShort(), anyShort(), any())).thenReturn(0);
+
+        assertThat(service.escalateOverdue()).isZero();
+
+        verify(results).stampEscalationIfUnacknowledged(eq(result.getId()), eq((short) 0), eq((short) 1), any());
+        verify(notifications, never()).created(anyString(), anyString(), anyString());
+        verify(users, never()).findByUsernameInIgnoreCase(any());
+        verify(incidents, never()).save(any());
+        verify(results, never()).save(any());
+        assertThat(result.getCriticalEscalationLevel()).isZero();
+    }
+
+    @Test
+    @DisplayName("review M2: every step of the ladder is stamped on the row by the conditional UPDATE, level by level, and nothing is saved")
+    void everyStepIsStampedByTheConditionalUpdate() {
+        minutesAgo(200, 0);
+
+        for (short level = 0; level < 3; level++) {
+            assertThat(service.escalateOverdue()).isEqualTo(1);
+            verify(results).stampEscalationIfUnacknowledged(eq(result.getId()), eq(level), eq((short) (level + 1)), any());
+            result.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(200));
+        }
+
+        verify(results, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("a step that could not be told is given back on the row: the next sweep takes it again")
+    void aStepThatCouldNotBeToldIsGivenBack() {
+        minutesAgo(16, 0);
+        when(recipients.cover(hospital.getId(), "dr.diallo"))
+            .thenThrow(new IllegalStateException("roster down")).thenReturn(Set.of("dr.garde"));
+
+        assertThat(service.escalateOverdue()).isZero();
+
+        assertThat(result.getCriticalEscalationLevel()).isZero();
+        assertThat(result.getCriticalEscalatedAt()).isNull();
+        notTold("dr.garde");
+
+        assertThat(service.escalateOverdue()).isEqualTo(1);
+
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 1);
+        told("dr.garde", ESCALATION);
+    }
+
+    @Test
+    @DisplayName("review L2: an incident closes with nobody's name on it when its result no longer grades as critical")
+    void anIncidentClosesWhenTheResultIsNoLongerCritical() {
+        result.setResultValue("4.2");
+        result.setAbnormalFlag(AbnormalFlag.NORMAL);
+        when(mapper.severityFlagOf(result)).thenReturn("NORMAL");
+        minutesAgo(90, 3);
+        CriticalResultIncident open = CriticalResultIncident.builder().labResultId(result.getId()).build();
+        when(incidents.findByLabResultIdAndResolvedAtIsNull(result.getId())).thenReturn(Optional.of(open));
+
+        assertThat(service.escalateOverdue()).isZero();
+
+        assertThat(result.getCriticalNotifiedAt()).isNull();
+        assertThat(result.getCriticalEscalationLevel()).isZero();
+        assertThat(open.getResolution()).isEqualTo(CriticalResultIncident.RESOLVED_NO_LONGER_CRITICAL);
+        assertThat(open.getResolvedAt()).isNotNull();
+        assertThat(open.getResolvedByUserId()).isNull();
+        assertThat(open.getResolvedByDisplay()).isNull();
+        verify(incidents).save(open);
+        verify(results, never()).save(any());
+        verify(notifications, never()).created(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("review L2: an amended result closes its incident as amended; unanswered again at its new value, it opens another")
+    void anAmendedResultClosesItsIncidentAndMayOpenAnother() {
+        CriticalResultIncident aboutTheOldValue = CriticalResultIncident.builder().labResultId(result.getId()).build();
+        when(incidents.findByLabResultIdAndResolvedAtIsNull(result.getId())).thenReturn(Optional.of(aboutTheOldValue));
+
+        service.incidentEndedByAmendment(result);
+
+        assertThat(aboutTheOldValue.getResolution()).isEqualTo(CriticalResultIncident.RESOLVED_AMENDED);
+        assertThat(aboutTheOldValue.getResolvedAt()).isNotNull();
+        assertThat(aboutTheOldValue.getResolvedByUserId()).isNull();
+        verify(incidents).save(aboutTheOldValue);
+
+        // The new value paged afresh and went unanswered in its turn: no open incident is on record.
+        when(incidents.findByLabResultIdAndResolvedAtIsNull(result.getId())).thenReturn(Optional.empty());
+        minutesAgo(61, 2);
+        result.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(31));
+
+        assertThat(service.escalateOverdue()).isEqualTo(1);
+
+        ArgumentCaptor<CriticalResultIncident> saved = ArgumentCaptor.forClass(CriticalResultIncident.class);
+        verify(incidents, times(2)).save(saved.capture());
+        CriticalResultIncident aboutTheNewValue = saved.getAllValues().get(1);
+        assertThat(aboutTheNewValue).isNotSameAs(aboutTheOldValue);
+        assertThat(aboutTheNewValue.getResolvedAt()).isNull();
+        assertThat(aboutTheNewValue.getResolution()).isNull();
+    }
+
+    @Test
+    @DisplayName("an amendment of a result with no open incident closes nothing")
+    void anAmendmentWithNoOpenIncidentClosesNothing() {
+        service.incidentEndedByAmendment(result);
+
+        verify(incidents, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("review L3: a result already waiting when the ladder was switched on keeps its notices and its incident, and is never texted about")
+    void aBacklogResultIsNeverTextedAbout() {
+        result.setCriticalBacklog(true);
+        when(sms.deliversRealSms()).thenReturn(true);
+        when(users.findByUsernameInIgnoreCase(any())).thenReturn(List.of(account("dr.garde", "+22670000002")));
+        // Paged a month ago, left at the old chain's second round.
+        minutesAgo(30 * 24 * 60, 1);
+        result.setCriticalEscalatedAt(LocalDateTime.now().minusDays(29));
+
+        assertThat(service.escalateOverdue()).isEqualTo(1);
+        result.setCriticalEscalatedAt(LocalDateTime.now().minusDays(29));
+        assertThat(service.escalateOverdue()).isEqualTo(1);
+
+        // Never dropped: the médecin-chef is told, then the incident opens.
+        verify(notifications, times(2)).created(anyString(), eq("dr.chef"), eq(ESCALATION));
+        verify(incidents).save(any());
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 3);
+        // And no telephone rings about it.
+        verify(users, never()).findByUsernameInIgnoreCase(any());
+        verify(sms, never()).send(anyString(), anyString());
     }
 }

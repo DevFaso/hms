@@ -324,6 +324,7 @@ class LabResultServiceImplNullScopeTest {
             result.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(5));
             result.setCriticalEscalationLevel((short) 1);
             result.setCriticalReadBackValue("79");
+            result.setCriticalBacklog(true);
             LabResultRequestDTO amended = request();
             amended.setResultValue("4.2");
 
@@ -332,6 +333,10 @@ class LabResultServiceImplNullScopeTest {
             assertThat(result.getCriticalNotifiedAt()).isNull();
             assertThat(result.getCriticalEscalationLevel()).isZero();
             assertThat(result.getCriticalReadBackValue()).isNull();
+            // QA r70 (C5), review L2: the incident about the old value closes as amended, and a page about the
+            // new value is a new page (texted like any other).
+            verify(criticalValueNotificationService).incidentEndedByAmendment(result);
+            assertThat(result.isCriticalBacklog()).isFalse();
             // Re-evaluated on the new value: re-paged only if still critical.
             verify(criticalValueNotificationService).notifyIfCritical(eq(result), any());
         }
@@ -349,6 +354,7 @@ class LabResultServiceImplNullScopeTest {
 
             assertThat(result.getCriticalNotifiedAt()).isEqualTo(paged);
             verify(criticalValueNotificationService, never()).notifyIfCritical(any(), any());
+            verify(criticalValueNotificationService, never()).incidentEndedByAmendment(any());
         }
 
         @Test

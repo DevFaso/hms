@@ -121,7 +121,7 @@ class PositiveAntibodyScreenServiceTest {
     private void identified() {
         when(workups.findFirstByPatient_IdAndHospital_IdAndStatusOrderByRecordedAtDesc(patient.getId(), hospital.getId(),
             AntibodyWorkupStatus.IDENTIFIED)).thenReturn(Optional.of(PatientAntibodyWorkup.builder()
-                .status(AntibodyWorkupStatus.IDENTIFIED).antibodySpecificities("anti-K").build()));
+                .status(AntibodyWorkupStatus.IDENTIFIED).antibodySpecificities("anti-K").recordedAt(NOW).build()));
     }
 
     private static CrossmatchRequestDTO.CrossmatchRequestDTOBuilder compatibilised() {
@@ -391,8 +391,9 @@ class PositiveAntibodyScreenServiceTest {
         // the crossmatch afterwards is asked for all the same (the caller files the task on true).
         TransfusionRequest undeclared = request(TransfusionUrgency.EMERGENCY, BloodProductType.PACKED_RED_CELLS);
         assertThat(service.requireEmergencyReleaseAllowed(undeclared)).isTrue();
-        assertThatCode(() -> service.requireRoutineIssueAllowed(undeclared, new TransfusionCrossmatch()))
-            .doesNotThrowAnyException();
+        // Review M3: it leaves on a plain crossmatch without delay, and the crossmatch afterwards is then owed.
+        TransfusionCrossmatch plain = new TransfusionCrossmatch();
+        assertThat(service.requireRoutineIssueAllowed(undeclared, plain)).isTrue();
 
         // UR: an URGENT request carrying the very same declaration is still not an emergency.
         TransfusionRequest relative = request(TransfusionUrgency.URGENT, BloodProductType.PACKED_RED_CELLS);
@@ -428,7 +429,7 @@ class PositiveAntibodyScreenServiceTest {
     // ── The biologist's tasks ───────────────────────────────────────────
 
     @Test
-    @DisplayName("a positive screen asks every biologist to identify or refer; an identified antibody asks nobody again")
+    @DisplayName("a positive screen asks every biologist to identify or refer, and so does a positive screen after an identification")
     void aPositiveScreenAsksTheBiologist() {
         User one = new User();
         one.setId(UUID.randomUUID());
@@ -456,9 +457,10 @@ class PositiveAntibodyScreenServiceTest {
         assertThat(item.getTitle()).contains("RAI positive").contains("Awa Sawadogo");
         assertThat(item.getBody()).contains("provisoire");
 
+        // Review L4: an antibody is identified; a new positive screen may be a second one, so it asks again.
         identified();
-        service.askBiologistToIdentify(screen(AntibodyScreenResult.POSITIVE, NOW));
-        verify(inBasket, times(2)).createItemInNewTransaction(any());
+        service.askBiologistToIdentify(screen(AntibodyScreenResult.POSITIVE, NOW.plusDays(3)));
+        verify(inBasket, times(4)).createItemInNewTransaction(any());
     }
 
     @Test
@@ -569,5 +571,87 @@ class PositiveAntibodyScreenServiceTest {
             .containsExactly(AntibodyWorkupStatus.IDENTIFIED, AntibodyWorkupStatus.REFERRED);
         assertThat(status.getWorkups().get(1).getReferralCentre()).isEqualTo("CNTS");
         assertThat(status.getWorkups().get(1).getRecordedByDisplay()).isEqualTo("Dr Kaboré");
+    }
+
+    // ── Review of #1291: L4 and M3 ────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("review L4: an identification covers the positive screens before it, not one recorded after it: routine red cells are held again until the biologist records the work-up again")
+    void aPositiveScreenAfterAnIdentificationIsNotCoveredByIt() {
+        screen(AntibodyScreenResult.POSITIVE, NOW.minusDays(10));
+        TransfusionRequest routine = request(TransfusionUrgency.ROUTINE, BloodProductType.PACKED_RED_CELLS);
+        PatientAntibodyWorkup known = PatientAntibodyWorkup.builder().status(AntibodyWorkupStatus.IDENTIFIED)
+            .antibodySpecificities("anti-K").recordedAt(NOW.minusDays(9)).build();
+        when(workups.findFirstByPatient_IdAndHospital_IdAndStatusOrderByRecordedAtDesc(patient.getId(), hospital.getId(),
+            AntibodyWorkupStatus.IDENTIFIED)).thenReturn(Optional.of(known));
+        CrossmatchRequestDTO complete = compatibilised().build();
+
+        // Identified since the screen: served. A later NEGATIVE screen changes nothing.
+        assertThat(service.workupServes(routine)).isTrue();
+        screen(AntibodyScreenResult.NEGATIVE, NOW.minusDays(5));
+        assertThat(service.workupServes(routine)).isTrue();
+        assertThatCode(crossmatched(routine, complete)).doesNotThrowAnyException();
+
+        // A new positive screen, after the identification: possibly a second antibody. Held again.
+        screen(AntibodyScreenResult.POSITIVE, NOW.minusHours(1));
+        assertThat(service.workupServes(routine)).isFalse();
+        assertThatThrownBy(crossmatched(routine, complete))
+            .isInstanceOfSatisfying(FieldBusinessException.class, refusal -> assertThat(refusal.getMessageKey())
+                .isEqualTo(PositiveAntibodyScreenPolicy.Missing.WORKUP.messageKey()));
+
+        // The biologist records the work-up of that screen: served again (the same instant counts).
+        known.setRecordedAt(NOW.minusHours(1));
+        assertThat(service.workupServes(routine)).isTrue();
+        assertThatCode(crossmatched(routine, complete)).doesNotThrowAnyException();
+
+        // A record with no time on it covers nothing.
+        known.setRecordedAt(null);
+        assertThat(service.workupServes(routine)).isFalse();
+    }
+
+    @Test
+    @DisplayName("review L4: an antibody recorded with no positive screen here (known from elsewhere) serves, until a positive screen comes")
+    void anAntibodyKnownFromElsewhereServesUntilAPositiveScreenHere() {
+        when(workups.existsByPatient_IdAndHospital_Id(patient.getId(), hospital.getId())).thenReturn(true);
+        PatientAntibodyWorkup known = PatientAntibodyWorkup.builder().status(AntibodyWorkupStatus.IDENTIFIED)
+            .antibodySpecificities("anti-E").recordedAt(NOW.minusDays(30)).build();
+        when(workups.findFirstByPatient_IdAndHospital_IdAndStatusOrderByRecordedAtDesc(patient.getId(), hospital.getId(),
+            AntibodyWorkupStatus.IDENTIFIED)).thenReturn(Optional.of(known));
+        TransfusionRequest routine = request(TransfusionUrgency.ROUTINE, BloodProductType.PACKED_RED_CELLS);
+
+        assertThat(service.holds(routine)).isTrue();
+        assertThat(service.workupServes(routine)).isTrue();
+
+        screen(AntibodyScreenResult.POSITIVE, NOW.minusHours(2));
+        assertThat(service.workupServes(routine)).isFalse();
+    }
+
+    @Test
+    @DisplayName("review M3: an EMERGENCY request that leaves on a standing crossmatch owes the crossmatch afterwards unless that crossmatch is « compatibilisé »; nothing is owed for a patient the rule does not hold")
+    void anEmergencyOnAPlainCrossmatchOwesTheCrossmatchAfterwards() {
+        TransfusionRequest emergency = request(TransfusionUrgency.EMERGENCY, BloodProductType.PACKED_RED_CELLS);
+        TransfusionCrossmatch plain = TransfusionCrossmatch.builder().compatible(true).build();
+        TransfusionCrossmatch complete = TransfusionCrossmatch.builder().compatible(true).antiglobulinMethod(true)
+            .antigenNegative(true).rhKellMatched(true).sampleCollectedAt(NOW.minusHours(3)).build();
+
+        // Not allo-immunised: the rule has nothing to ask.
+        assertThat(service.requireRoutineIssueAllowed(emergency, plain)).isFalse();
+
+        screen(AntibodyScreenResult.POSITIVE, NOW.minusDays(2));
+        // Never refused, never delayed; the plain result is not the antiglobulin crossmatch on a matched unit.
+        assertThat(service.requireRoutineIssueAllowed(emergency, plain)).isTrue();
+        assertThat(service.requireRoutineIssueAllowed(emergency, null)).isTrue();
+        // Complete attestations but no identification yet: still owed.
+        assertThat(service.requireRoutineIssueAllowed(emergency, complete)).isTrue();
+
+        identified();
+        assertThat(service.requireRoutineIssueAllowed(emergency, complete)).isFalse();
+        assertThat(service.requireRoutineIssueAllowed(emergency, plain)).isTrue();
+
+        // A routine request is refused instead, as before, and owes nothing afterwards once it is in order.
+        TransfusionRequest routine = request(TransfusionUrgency.ROUTINE, BloodProductType.PACKED_RED_CELLS);
+        assertThatThrownBy(() -> service.requireRoutineIssueAllowed(routine, plain))
+            .isInstanceOf(FieldBusinessException.class);
+        assertThat(service.requireRoutineIssueAllowed(routine, complete)).isFalse();
     }
 }

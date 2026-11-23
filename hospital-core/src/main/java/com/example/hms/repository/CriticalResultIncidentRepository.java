@@ -10,7 +10,11 @@ import java.util.UUID;
 /** The register of unresolved critical results (V363). Read by hospital. */
 public interface CriticalResultIncidentRepository extends JpaRepository<CriticalResultIncident, UUID> {
 
-    Optional<CriticalResultIncident> findByLabResultId(UUID labResultId);
+    /** The open incident of a result: at most one (V364's partial unique index). */
+    Optional<CriticalResultIncident> findByLabResultIdAndResolvedAtIsNull(UUID labResultId);
+
+    /** Every incident of a result, the newest first: a result amended to another critical value may have several. */
+    List<CriticalResultIncident> findByLabResultIdOrderByOpenedAtDesc(UUID labResultId);
 
     List<CriticalResultIncident> findByHospitalIdOrderByOpenedAtDesc(UUID hospitalId);
 }

@@ -975,6 +975,11 @@ public class LabResultServiceImpl implements LabResultService {
             labResult.setCriticalReadBackAt(null);
             labResult.setCriticalReadBackByUserId(null);
             labResult.setCriticalReadBackByDisplay(null);
+            // QA r70 (C5): the unanswered episode was about the old value: its incident closes as amended (a
+            // new one opens if the new value goes unanswered too), and a page about the new value is a new
+            // page, texted like any other.
+            labResult.setCriticalBacklog(false);
+            criticalValueNotificationService.incidentEndedByAmendment(labResult);
         }
 
         LabResult updated = labResultRepository.save(labResult);

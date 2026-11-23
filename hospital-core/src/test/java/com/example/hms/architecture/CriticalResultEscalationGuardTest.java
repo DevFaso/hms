@@ -94,8 +94,90 @@ class CriticalResultEscalationGuardTest {
         String service = code(SERVICE);
         assertThat(service).doesNotContain("getPatient().getPhone").doesNotContain("patient.getPhone")
             .doesNotContain("getPhoneNumberE164");
-        // Two senders: the prescriber's number at T0, the chain's staff accounts afterwards.
-        assertThat(service.split("smsService\\.send\\(", -1)).hasSize(3);
+        // One sender, for the prescriber's number at T0 and for the chain's staff accounts afterwards.
+        assertThat(service.split("smsService\\.send\\(", -1)).hasSize(2);
         assertThat(service).contains("users.findByUsernameInIgnoreCase(lower)");
+    }
+
+    /** The body of a member that starts with {@code signature}, up to its closing brace. */
+    private static String member(String code, String signature) {
+        int from = code.indexOf(signature);
+        assertThat(from).as(signature).isNotNegative();
+        return code.substring(from, code.indexOf("\n    }", from));
+    }
+
+    @Test
+    @DisplayName("review M1: no SMS leaves inside a transaction: the one sender is only ever called after the commit")
+    void everySmsWaitsForTheCommit() throws IOException {
+        String service = code(SERVICE);
+        // The definition, and two callers: the prescriber at T0, the chain of a step.
+        assertThat(service.split("sendCriticalSms\\(", -1)).hasSize(4);
+        assertThat(service.split("TransactionCallbacks\\.afterCommit\\(\\s*\\(\\) -> [^;]*sendCriticalSms\\(", -1))
+            .as("each caller hands the SMS to afterCommit").hasSize(3);
+        assertThat(member(service, "private void smsTheChain(")).doesNotContain("smsService.send(")
+            .contains("TransactionCallbacks.afterCommit(");
+        assertThat(member(service, "private void tell(")).doesNotContain("smsService.");
+    }
+
+    @Test
+    @DisplayName("review M2: the sweep never saves a result it loaded: a step is stamped, and a chain left, by a conditional UPDATE only")
+    void theSweepNeverSavesTheRowItRead() throws IOException {
+        String service = code(SERVICE);
+        for (String signature : List.of("public Integer escalateOverdue()", "private boolean escalateOne(",
+                "private void leaveChain(", "private void tell(")) {
+            assertThat(member(service, signature)).as(signature)
+                .doesNotContain("labResultRepository.save(").doesNotContain("result.set");
+        }
+        assertThat(member(service, "private boolean escalateOne("))
+            .contains("labResultRepository.stampEscalationIfUnacknowledged(result.getId(), from, to, now) == 0");
+        assertThat(member(service, "private void leaveChain("))
+            .contains("labResultRepository.leaveCriticalChainIfUnacknowledged(result.getId(), (short) 0) == 0");
+        String repository = code(MAIN.resolve("repository/LabResultRepository.java"));
+        for (String method : List.of("int stampEscalationIfUnacknowledged(", "int leaveCriticalChainIfUnacknowledged(")) {
+            int at = repository.indexOf(method);
+            String query = repository.substring(repository.lastIndexOf("@org.springframework.data.jpa.repository.Query(", at), at);
+            assertThat(query).as(method).contains("r.acknowledged = false").contains("r.criticalReadBackAt IS NULL")
+                .doesNotContain("r.acknowledged = true").doesNotContain("r.acknowledged = :");
+        }
+    }
+
+    @Test
+    @DisplayName("review L2: an incident ends in one of three ways, and the table's CHECK lists the same three")
+    void theWaysAnIncidentEndsMatchTheTable() throws IOException {
+        String migration = Files.readString(
+            Path.of("src/main/resources/db/migration/V364__r70_critical_escalation_backlog_and_incident_end.sql"),
+            StandardCharsets.UTF_8);
+        int at = migration.indexOf("ADD CONSTRAINT ck_critical_incident_resolution");
+        assertThat(at).isNotNegative();
+        java.util.regex.Matcher listed = java.util.regex.Pattern.compile("resolution IN \\(([^)]*)\\)")
+            .matcher(migration.substring(at));
+        assertThat(listed.find()).isTrue();
+        List<String> allowed = java.util.Arrays.stream(listed.group(1).split(","))
+            .map(value -> value.trim().replace("'", "")).toList();
+        assertThat(allowed).containsExactlyInAnyOrder(
+            com.example.hms.model.CriticalResultIncident.RESOLVED_READ_BACK,
+            com.example.hms.model.CriticalResultIncident.RESOLVED_AMENDED,
+            com.example.hms.model.CriticalResultIncident.RESOLVED_NO_LONGER_CRITICAL);
+        // Each way has its one caller: the read-back, the amendment, the result that is no longer critical.
+        String service = code(SERVICE);
+        assertThat(service.split("endIncident\\(", -1)).hasSize(5);
+        assertThat(member(service, "UUID byUserId, String byDisplay, String role, String channel) {"))
+            .contains("CriticalResultIncident.RESOLVED_READ_BACK");
+        assertThat(member(service, "private void leaveChain(")).contains("CriticalResultIncident.RESOLVED_NO_LONGER_CRITICAL");
+        assertThat(member(service, "public void incidentEndedByAmendment(")).contains("CriticalResultIncident.RESOLVED_AMENDED");
+        assertThat(code(MAIN.resolve("service/LabResultServiceImpl.java")))
+            .contains("criticalValueNotificationService.incidentEndedByAmendment(labResult);");
+    }
+
+    @Test
+    @DisplayName("review L3: a result already waiting at activation is never texted about; nothing but the migration and an amendment touch the mark")
+    void theBacklogIsNeverTextedAbout() throws IOException {
+        String service = code(SERVICE);
+        assertThat(member(service, "private void smsTheChain(")).contains("result.isCriticalBacklog()");
+        assertThat(service).doesNotContain("setCriticalBacklog(");
+        // Still on the ladder: the sweep's query does not leave the backlog out.
+        String repository = code(MAIN.resolve("repository/LabResultRepository.java"));
+        assertThat(repository).doesNotContain("criticalBacklog");
+        assertThat(code(MAIN.resolve("service/LabResultServiceImpl.java")).split("setCriticalBacklog\\(", -1)).hasSize(2);
     }
 }

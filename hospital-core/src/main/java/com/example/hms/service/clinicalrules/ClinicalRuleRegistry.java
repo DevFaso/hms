@@ -43,6 +43,8 @@ public final class ClinicalRuleRegistry {
     private static final String DATE_2026_11_20 = "2026-11-20.1";
     private static final String DATE_2026_11_21 = "2026-11-21.1";
     private static final String DATE_2026_11_22 = "2026-11-22.1";
+    /** The two rule sets of 2026-11-22 as amended by the review of their first build, the same day. */
+    private static final String DATE_2026_11_22_REVIEWED = "2026-11-22.2";
 
     private static final List<ClinicalRuleSet> ALL = List.of(
         rule(ClinicalRuleSetKey.BLOOD_EMERGENCY_RELEASE, DATE_2026_11_07,
@@ -137,10 +139,10 @@ public final class ClinicalRuleRegistry {
         rule(ClinicalRuleSetKey.SAME_DAY_PRICE_CORRECTION, DATE_2026_11_21,
             "service.billing.PriceListService", "service.billing.PriceVersionRules"),
         // QA D3351 (r70), research report « Transfusion and critical result cover », section 1.
-        rule(ClinicalRuleSetKey.TRANSFUSION_POSITIVE_ANTIBODY_SCREEN, DATE_2026_11_22,
+        rule(ClinicalRuleSetKey.TRANSFUSION_POSITIVE_ANTIBODY_SCREEN, DATE_2026_11_22_REVIEWED,
             "service.support.PositiveAntibodyScreenPolicy", "service.transfusion.PositiveAntibodyScreenService"),
         // QA r70 scorecard C5, research report « Transfusion and critical result cover », section 2.
-        rule(ClinicalRuleSetKey.CRITICAL_RESULT_ESCALATION, DATE_2026_11_22,
+        rule(ClinicalRuleSetKey.CRITICAL_RESULT_ESCALATION, DATE_2026_11_22_REVIEWED,
             "service.lab.CriticalResultEscalationLadder", "service.lab.CriticalResultRecipients",
             "service.lab.CriticalResultEscalationSettingsService"));
 

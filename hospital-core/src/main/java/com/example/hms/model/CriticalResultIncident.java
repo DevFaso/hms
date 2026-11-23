@@ -4,7 +4,6 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -17,15 +16,18 @@ import java.util.UUID;
 
 /**
  * V363, rule CRITICAL_RESULT_ESCALATION: a critical result nobody acknowledged within the last step of the
- * ladder. One row per result. It names the result by id only: no value, no test and no patient, so a hospital
+ * ladder. One OPEN row per result (V364: a result amended to another critical value may go unanswered again,
+ * and the row about the old value stays, closed). It names the result by id only: no value, no test and no patient, so a hospital
  * administrator may read the register of incidents without reading a result.
  */
 @Entity
 @Table(
     name = "critical_result_incidents",
     schema = "lab",
-    uniqueConstraints = @UniqueConstraint(name = "uq_critical_result_incident", columnNames = "lab_result_id"),
-    indexes = @Index(name = "idx_critical_incident_hospital", columnList = "hospital_id, opened_at")
+    indexes = {
+        @Index(name = "idx_critical_incident_hospital", columnList = "hospital_id, opened_at"),
+        @Index(name = "idx_critical_incident_result", columnList = "lab_result_id")
+    }
 )
 @Getter
 @Setter
@@ -63,4 +65,18 @@ public class CriticalResultIncident extends BaseEntity {
 
     @Column(name = "resolved_by_display", length = 255)
     private String resolvedByDisplay;
+
+    /**
+     * V364: how the incident ended, one of the {@code RESOLVED_*} values (the CHECK of the table lists them). Only
+     * a read-back names a clinician; the two others close the row with nobody's name on it.
+     */
+    @Column(name = "resolution", length = 30)
+    private String resolution;
+
+    /** A clinician read the value back: the acknowledgement that ends the escalation. */
+    public static final String RESOLVED_READ_BACK = "READ_BACK";
+    /** The result was amended: the unanswered episode was about the old value. */
+    public static final String RESOLVED_AMENDED = "AMENDED";
+    /** The result no longer grades as critical. */
+    public static final String RESOLVED_NO_LONGER_CRITICAL = "NO_LONGER_CRITICAL";
 }

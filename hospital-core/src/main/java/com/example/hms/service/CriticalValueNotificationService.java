@@ -173,7 +173,11 @@ public class CriticalValueNotificationService {
         if (recipients != null && (username == null || recipients.prescriberAbsent(orderingStaffOf(result)))) {
             // Rule CRITICAL_RESULT_ESCALATION: nobody to answer at T0 (no account, or on approved leave): the
             // cover is told now, not in fifteen minutes.
-            takeStep(result, CriticalResultEscalationLadder.Step.COVER, notifiedAt);
+            tell(result, CriticalResultEscalationLadder.Step.COVER, notifiedAt);
+            // The release's own transaction, on the entity it is saving: the stamp is written with the result.
+            result.setCriticalEscalationLevel(
+                levelAfter(result.getCriticalEscalationLevel(), CriticalResultEscalationLadder.Step.COVER));
+            result.setCriticalEscalatedAt(notifiedAt);
         }
         labResultRepository.save(result);
     }
@@ -278,10 +282,10 @@ public class CriticalValueNotificationService {
 
     /**
      * One step of the ladder: its notices (and, for the steps that widen the circle, an SMS to the clinicians
-     * newly told), the incident at the last step, and the stamp. A step with nobody to tell is still stamped,
-     * and logged as an error: the next step widens further.
+     * told, after the commit) and the incident at the last step. It writes nothing on the result: the caller
+     * stamps the step. A step with nobody to tell is logged as an error: the next step widens further.
      */
-    private void takeStep(LabResult result, CriticalResultEscalationLadder.Step step, LocalDateTime now) {
+    private void tell(LabResult result, CriticalResultEscalationLadder.Step step, LocalDateTime now) {
         NotificationText escalation = buildText(result, true);
         String prescriber = resolveOrderingUsername(result);
         long minutes = result.getCriticalNotifiedAt() == null ? 0
@@ -313,34 +317,42 @@ public class CriticalValueNotificationService {
         if (chain.isEmpty()) {
             log.error("Critical lab result {} reached the step {} with no clinician to tell", result.getId(), step);
         }
-        int level = Math.max(result.getCriticalEscalationLevel() + 1, step.ordinal() + 1);
-        result.setCriticalEscalationLevel((short) Math.min(level, Short.MAX_VALUE));
-        result.setCriticalEscalatedAt(now);
     }
 
-    /** One SMS to each clinician of the chain who has a number; best effort, after nothing else depends on it. */
+    /** The level a result stands at once {@code step} is taken from {@code level}: it counts the steps taken. */
+    private static short levelAfter(short level, CriticalResultEscalationLadder.Step step) {
+        return (short) Math.min(Math.max(level + 1, step.ordinal() + 1), Short.MAX_VALUE);
+    }
+
+    /**
+     * One SMS to each clinician of the chain who has a number, sent once the transaction that decided the step
+     * has committed: a gateway that hangs never holds the result's row or the sweep's lock, and a step that is
+     * rolled back texts nobody. The numbers are read here, while the session is open. A result that was already
+     * waiting when the ladder was switched on ({@code criticalBacklog}, V364) is never texted about.
+     */
     private void smsTheChain(LabResult result, java.util.Set<String> chain, String message) {
-        if (users == null || chain.isEmpty() || !smsService.deliversRealSms()) {
+        if (users == null || chain.isEmpty() || result.isCriticalBacklog() || !smsService.deliversRealSms()) {
             return;
         }
         List<String> lower = chain.stream().map(name -> name.toLowerCase(java.util.Locale.ROOT)).toList();
-        for (User user : users.findByUsernameInIgnoreCase(lower)) {
-            String phone = user.getPhoneNumber();
-            if (phone == null || phone.isBlank()) {
-                continue;
-            }
-            try {
-                smsService.send(phone, message);
-            } catch (RuntimeException ex) {
-                log.warn("Critical-value SMS failed for lab result {}: {}", result.getId(), ex.getMessage());
-            }
+        List<String> phones = users.findByUsernameInIgnoreCase(lower).stream()
+            .map(User::getPhoneNumber)
+            .filter(phone -> phone != null && !phone.isBlank())
+            .distinct()
+            .toList();
+        if (phones.isEmpty()) {
+            return;
         }
+        UUID resultId = result.getId();
+        com.example.hms.utility.TransactionCallbacks.afterCommit(
+            () -> phones.forEach(phone -> sendCriticalSms(resultId, phone, message)));
     }
 
-    /** « Résultat critique non résolu »: the incident, once per result. */
+    /** « Résultat critique non résolu »: the incident, one open at a time for a result. */
     private void openIncident(LabResult result, LocalDateTime now, int minutes, int told) {
         UUID hospitalId = resolveHospitalId(result);
-        if (incidents == null || hospitalId == null || incidents.findByLabResultId(result.getId()).isPresent()) {
+        if (incidents == null || hospitalId == null
+                || incidents.findByLabResultIdAndResolvedAtIsNull(result.getId()).isPresent()) {
             return;
         }
         incidents.save(com.example.hms.model.CriticalResultIncident.builder()
@@ -367,18 +379,31 @@ public class CriticalValueNotificationService {
         }
     }
 
-    /** The incident of an acknowledged result is closed by the clinician who acknowledged it. */
-    private void resolveIncident(LabResult result, UUID byUserId, String byDisplay, LocalDateTime at) {
-        if (incidents == null) {
+    /**
+     * Closes the open incident of a result and says how it ended ({@code CriticalResultIncident.RESOLVED_*}): a
+     * read-back names the clinician; an amendment, or a result that no longer grades as critical, names nobody.
+     */
+    private void endIncident(UUID resultId, String resolution, UUID byUserId, String byDisplay, LocalDateTime at) {
+        if (incidents == null || resultId == null) {
             return;
         }
-        incidents.findByLabResultId(result.getId()).filter(incident -> incident.getResolvedAt() == null)
-            .ifPresent(incident -> {
-                incident.setResolvedAt(at);
-                incident.setResolvedByUserId(byUserId);
-                incident.setResolvedByDisplay(byDisplay);
-                incidents.save(incident);
-            });
+        incidents.findByLabResultIdAndResolvedAtIsNull(resultId).ifPresent(incident -> {
+            incident.setResolvedAt(at);
+            incident.setResolution(resolution);
+            incident.setResolvedByUserId(byUserId);
+            incident.setResolvedByDisplay(byDisplay);
+            incidents.save(incident);
+        });
+    }
+
+    /**
+     * The value of a result was amended: its chain restarts from the new value (re-paged if still critical), so
+     * the incident about the old value is closed, by nobody: nobody acknowledged it. Called in the amendment's
+     * own transaction.
+     */
+    public void incidentEndedByAmendment(LabResult result) {
+        endIncident(result.getId(), com.example.hms.model.CriticalResultIncident.RESOLVED_AMENDED, null, null,
+            LocalDateTime.now(java.time.ZoneId.systemDefault()));
     }
 
     /**
@@ -451,7 +476,7 @@ public class CriticalValueNotificationService {
             try {
                 if (noLongerCritical(result)) {
                     // QA D305: not critical any more, so nothing to chase.
-                    leaveChain(result);
+                    leaveChain(result, now);
                     continue;
                 }
                 if (escalateOne(result, now)) {
@@ -468,13 +493,17 @@ public class CriticalValueNotificationService {
     /**
      * QA D305: clears the critical stamps of a result that no longer grades as
      * critical, exactly as an amendment of its value does, so the sweep drops it
-     * and a later critical value can page afresh.
+     * and a later critical value can page afresh. A conditional UPDATE, never a
+     * save of the loaded row (see {@code stampEscalationIfUnacknowledged}); its
+     * open incident, if any, is closed as no longer critical.
      */
-    private void leaveChain(LabResult result) {
-        result.setCriticalNotifiedAt(null);
-        result.setCriticalEscalatedAt(null);
-        result.setCriticalEscalationLevel((short) 0);
-        labResultRepository.save(result);
+    private void leaveChain(LabResult result, LocalDateTime now) {
+        if (labResultRepository.leaveCriticalChainIfUnacknowledged(result.getId(), (short) 0) == 0) {
+            // Acknowledged while the sweep ran: the read-back stands, and its stamps with it.
+            return;
+        }
+        endIncident(result.getId(), com.example.hms.model.CriticalResultIncident.RESOLVED_NO_LONGER_CRITICAL,
+            null, null, now);
         log.info("Lab result {} no longer grades as critical; escalation stopped", result.getId());
     }
 
@@ -482,6 +511,11 @@ public class CriticalValueNotificationService {
      * Takes the next step of the ladder that is due for one result: one step a pass, in order. A sweep that was
      * down, or a hospital that shortened its minutes, catches up one sweep at a time, so each circle is told in
      * its turn and the level always counts the steps actually taken.
+     *
+     * <p>The step is claimed on the row first, by a conditional UPDATE that succeeds only while nobody has
+     * acknowledged and the row stands where the sweep read it; nobody is told about a result a clinician
+     * acknowledged a moment ago, and the acknowledgement is never written over. A step that could not be told
+     * is given back, so the next sweep takes it again.
      *
      * @return true when a step was taken
      */
@@ -492,8 +526,20 @@ public class CriticalValueNotificationService {
         if (due.isEmpty()) {
             return false;
         }
-        takeStep(result, due.get(), now);
-        labResultRepository.save(result);
+        short from = result.getCriticalEscalationLevel();
+        short to = levelAfter(from, due.get());
+        LocalDateTime stampedBefore = result.getCriticalEscalatedAt();
+        if (labResultRepository.stampEscalationIfUnacknowledged(result.getId(), from, to, now) == 0) {
+            log.info("Critical lab result {} was acknowledged or changed while the sweep ran; no step taken",
+                result.getId());
+            return false;
+        }
+        try {
+            tell(result, due.get(), now);
+        } catch (RuntimeException ex) {
+            labResultRepository.stampEscalationIfUnacknowledged(result.getId(), to, from, stampedBefore);
+            throw ex;
+        }
         return true;
     }
 
@@ -602,7 +648,8 @@ public class CriticalValueNotificationService {
         result.setAcknowledgedByDisplay(byDisplay);
         result.setCriticalAckRole(role);
         result.setCriticalAckChannel(channel == null || channel.isBlank() ? "IN_APP" : channel);
-        resolveIncident(result, byUserId, byDisplay, at);
+        endIncident(result.getId(), com.example.hms.model.CriticalResultIncident.RESOLVED_READ_BACK,
+            byUserId, byDisplay, at);
         LabResult saved = result;
         // QA D726: the alert is answered, so its notifications (to the
         // orderer and to every escalation recipient) no longer read as unread.

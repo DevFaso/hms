@@ -3964,4 +3964,18 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V364 (QA r70 scorecard C5, review of #1291): the results already
+         waiting when the ladder is switched on are marked (never texted
+         about), an incident says how it ended (read-back, amended, no longer
+         critical), and a result may have several incidents, one open at a
+         time. Additive, idempotent, no DO block.
+         ================================================================= -->
+    <changeSet id="V364-r70-critical-escalation-backlog-and-incident-end" author="hms-team" runOnChange="false">
+        <sqlFile path="V364__r70_critical_escalation_backlog_and_incident_end.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

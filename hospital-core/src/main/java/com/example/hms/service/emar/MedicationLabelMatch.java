@@ -79,6 +79,19 @@ final class MedicationLabelMatch {
         return Basis.NONE;
     }
 
+    /**
+     * QA D1223: an order whose written name contradicts the catalogue item it is linked to (« Amoxicilline » on
+     * the paracetamol item) is recognised by its own text and by nothing of that item: not its names, codes or
+     * ATC, and not the link itself either. The item's id and the code the order copied from it identify the
+     * item, which is not what was ordered: scanning the paracetamol box must not pass an amoxicillin order.
+     */
+    static Basis matchOwnTextOnly(Prescription rx, String scan) {
+        if (rx == null || blank(scan) || scan.length() > MAX_READ) {
+            return Basis.NONE;
+        }
+        return isDesignation(rx, null, scan) ? Basis.DESIGNATION : Basis.NONE;
+    }
+
     private static boolean isIdentifier(Prescription rx, MedicationCatalogItem item, String scan) {
         String value = compact(scan);
         List<String> identifiers = new ArrayList<>();

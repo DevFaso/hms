@@ -2646,4 +2646,40 @@ class TransfusionServiceImplTest {
         assertThat(oNeg.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
         verify(rule, never()).askRetrospectiveCrossmatch(any(), any());
     }
+
+    @Test
+    void reviewM3_anEmergencyIssuedOnAStandingPlainCrossmatchAsksForTheCrossmatchAfterwards() {
+        com.example.hms.service.transfusion.PositiveAntibodyScreenService rule = antibodyRule();
+        TransfusionRequest req = request(group(AboGroup.O, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE),
+            TransfusionUrgency.EMERGENCY);
+        BloodUnit bag = unit(AboGroup.O, RhFactor.POSITIVE, BloodProductType.PACKED_RED_CELLS, BloodUnitStatus.CROSSMATCHED);
+        bag.setRequest(req);
+        TransfusionCrossmatch standing = usableCrossmatch(req, bag);
+        // The rule holds the request and its standing « compatible » result is not « compatibilisé ».
+        when(rule.requireRoutineIssueAllowed(req, standing)).thenReturn(true);
+
+        service.issueUnit(req.getId(), bag.getId());
+
+        assertThat(bag.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
+        verify(rule).askRetrospectiveCrossmatch(req, bag);
+        // It left on its crossmatch: no emergency release row, and the emergency path was not the one asked.
+        verify(rule, never()).requireEmergencyReleaseAllowed(any());
+        verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    @Test
+    void reviewM3_anIssueOnACompatibilisedCrossmatchAsksNothingAfterwards() {
+        com.example.hms.service.transfusion.PositiveAntibodyScreenService rule = antibodyRule();
+        TransfusionRequest req = request(group(AboGroup.O, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE),
+            TransfusionUrgency.EMERGENCY);
+        BloodUnit bag = unit(AboGroup.O, RhFactor.POSITIVE, BloodProductType.PACKED_RED_CELLS, BloodUnitStatus.CROSSMATCHED);
+        bag.setRequest(req);
+        TransfusionCrossmatch standing = usableCrossmatch(req, bag);
+        when(rule.requireRoutineIssueAllowed(req, standing)).thenReturn(false);
+
+        service.issueUnit(req.getId(), bag.getId());
+
+        assertThat(bag.getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
+        verify(rule, never()).askRetrospectiveCrossmatch(any(), any());
+    }
 }

@@ -999,13 +999,13 @@ public class TransfusionServiceImpl implements TransfusionService {
         BusinessException refusal = standingCrossmatchRefusal(request, unit, crossmatch);
         // QA D3351: red cells for an allo-immunised patient leave on a « compatibilisé » crossmatch, or on the
         // emergency path of an EMERGENCY request; nothing else, and nobody overrides it here.
+        // An EMERGENCY request that leaves on a standing crossmatch which is not « compatibilisé » owes the
+        // crossmatch afterwards just as an uncrossmatched release does.
         boolean crossmatchAfterwards = false;
         if (antibodyScreen != null) {
-            if (refusal == null) {
-                antibodyScreen.requireRoutineIssueAllowed(request, crossmatch);
-            } else {
-                crossmatchAfterwards = antibodyScreen.requireEmergencyReleaseAllowed(request);
-            }
+            crossmatchAfterwards = refusal == null
+                ? antibodyScreen.requireRoutineIssueAllowed(request, crossmatch)
+                : antibodyScreen.requireEmergencyReleaseAllowed(request);
         }
         if (refusal != null) {
             // Emergency release: group O red cells may go out uncrossmatched, because in a
@@ -1015,9 +1015,9 @@ public class TransfusionServiceImpl implements TransfusionService {
             log.warn("EMERGENCY uncrossmatched release of unit {} against request {}",
                 unit.getUnitNumber(), requestId);
             recordRelease(request, unit, EmergencyReleaseType.UNCROSSMATCHED, null, null, List.of());
-            if (crossmatchAfterwards) {
-                notifySafely(() -> antibodyScreen.askRetrospectiveCrossmatch(request, unit), unit.getId());
-            }
+        }
+        if (crossmatchAfterwards) {
+            notifySafely(() -> antibodyScreen.askRetrospectiveCrossmatch(request, unit), unit.getId());
         }
         return putOut(request, unit);
     }

@@ -3,6 +3,7 @@ package com.example.hms.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyShort;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.contains;
@@ -90,6 +91,8 @@ class CriticalValueNotificationServiceTest {
         lenient().when(notificationService.created(anyString(), anyString(), anyString()))
             .thenReturn(new Notification());
         lenient().when(smsService.deliversRealSms()).thenReturn(false);
+        // QA r70 (C5): the sweep writes its stamps by conditional UPDATE; here the result plays the row.
+        com.example.hms.testsupport.CriticalResultRows.of(labResultRepository).with(result);
     }
 
     @Test
@@ -463,7 +466,9 @@ class CriticalValueNotificationServiceTest {
         assertThat(result.getCriticalNotifiedAt()).isNull();
         assertThat(result.getCriticalEscalatedAt()).isNull();
         assertThat(result.getCriticalEscalationLevel()).isZero();
-        verify(labResultRepository).save(result);
+        // QA r70 (C5): cleared on the row by a conditional UPDATE, never by saving the result as it was read.
+        verify(labResultRepository).leaveCriticalChainIfUnacknowledged(result.getId(), (short) 0);
+        verify(labResultRepository, never()).save(any(LabResult.class));
     }
 
     @Test
@@ -476,7 +481,8 @@ class CriticalValueNotificationServiceTest {
         Integer escalated = service.escalateOverdue();
 
         assertThat(escalated).isEqualTo(1);
-        verify(labResultRepository).save(result);
+        verify(labResultRepository).stampEscalationIfUnacknowledged(eq(result.getId()), eq((short) 0), eq((short) 1), any());
+        verify(labResultRepository, never()).save(any(LabResult.class));
     }
 
     @Test
@@ -492,7 +498,8 @@ class CriticalValueNotificationServiceTest {
         verify(notificationService).created(
             contains("ESCALADE"), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT_ESCALATION"));
         assertThat(result.getCriticalEscalatedAt()).isNotNull();
-        verify(labResultRepository).save(result);
+        verify(labResultRepository).stampEscalationIfUnacknowledged(eq(result.getId()), eq((short) 0), eq((short) 1), any());
+        verify(labResultRepository, never()).save(any(LabResult.class));
     }
 
     @Test
@@ -523,12 +530,14 @@ class CriticalValueNotificationServiceTest {
 
         when(labResultRepository.findCriticalUnacknowledged())
             .thenReturn(List.of(broken, result));
-        doThrow(new IllegalStateException("boom")).when(labResultRepository).save(broken);
+        when(labResultRepository.stampEscalationIfUnacknowledged(eq(broken.getId()), anyShort(), anyShort(), any()))
+            .thenThrow(new IllegalStateException("boom"));
 
         int escalated = service.escalateOverdue();
 
         assertThat(escalated).isEqualTo(1); // broken row skipped, second processed
-        verify(labResultRepository).save(result);
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 1);
+        assertThat(broken.getCriticalEscalationLevel()).isZero();
     }
 
     // ── The escalation is a CHAIN and it REPEATS (P0 #5) ───────────────────

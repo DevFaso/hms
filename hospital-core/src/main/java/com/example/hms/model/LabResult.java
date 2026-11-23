@@ -252,6 +252,16 @@ public class LabResult extends BaseEntity {
     @Column(name = "critical_ack_channel", length = 20)
     private String criticalAckChannel;
 
+    /**
+     * V364, rule CRITICAL_RESULT_ESCALATION: this result was already waiting, unacknowledged, when the ladder
+     * was switched on (set once, by the migration). It stays on the ladder, but the ladder never sends an SMS
+     * about it: the first sweeps after a deploy must not text whole chains about old results. An amendment that
+     * pages afresh clears it.
+     */
+    @Builder.Default
+    @Column(name = "critical_backlog", nullable = false)
+    private boolean criticalBacklog = false;
+
     @Builder.Default
     @Column(name = "released", nullable = false)
     private boolean released = false;
