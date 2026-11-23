@@ -26,6 +26,7 @@ import {
 } from '../../services/order-set.service';
 import { CdsCardListComponent } from '../../shared/cds-card/cds-card.component';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { countUnit } from '../../shared/pipes/count-unit.pipe';
 import { refusalReason } from '../../shared/refusal-reason';
 
 type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
@@ -376,8 +377,7 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
         : '',
       item['quantity']
         ? this.translate.instant('ORDER_SETS.QUANTITY_VALUE', {
-            value: item['quantity'],
-            unit: item['quantityUnit'] ?? '',
+            value: countUnit(item['quantity'] as number | string, item['quantityUnit'] as string),
           })
         : '',
     ];

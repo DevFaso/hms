@@ -230,8 +230,7 @@
                   'PHARMACY_MONEY.PACK.PREVIEW'
                     | translate
                       : {
-                          qty: packPreview(pItem).qty,
-                          unit: packTargetUnit.trim(),
+                          qty: (packPreview(pItem).qty | countUnit: packTargetUnit.trim()),
                           threshold: packPreview(pItem).threshold,
                           order: packPreview(pItem).order,
                         }
@@ -305,10 +304,8 @@
                       'PHARMACY_MONEY.PACK.BREAKDOWN'
                         | translate
                           : {
-                              packs: item.fullPacksOnHand ?? 0,
-                              packUnit: item.packUnit ?? '',
-                              loose: item.looseUnitsOnHand ?? 0,
-                              unit: item.unit ?? '',
+                              packs: (item.fullPacksOnHand ?? 0 | countUnit: item.packUnit),
+                              loose: (item.looseUnitsOnHand ?? 0 | countUnit: item.unit),
                             }
                     }}</small>
                   }
@@ -323,8 +320,7 @@
                         | translate
                           : {
                               packUnit: item.packUnit ?? '',
-                              n: item.unitsPerPack,
-                              unit: item.unit ?? '',
+                              n: (item.unitsPerPack | countUnit: item.unit),
                             }
                     }}</small>
                   } @else if (!item.controlled) {
@@ -493,8 +489,9 @@
                   'PHARMACY.STOCK_REMAINING'
                     | translate
                       : {
-                          qty: item.quantityOnHand,
-                          unit: item.unit ?? ('PHARMACY.UNITS' | translate),
+                          qty:
+                            (item.quantityOnHand
+                            | countUnit: item.unit ?? ('PHARMACY.UNITS' | translate)),
                           threshold: item.reorderThreshold,
                         }
                 }}

@@ -182,8 +182,16 @@ describe('TransfusionComponent', () => {
     expect(component.patientGroup()).toBe(group);
   });
 
-  it('leaves the group empty when the patient has never been typed', () => {
-    txSpy.getCurrentBloodGroup.and.returnValue(throwError(() => new Error('404')));
+  it('leaves the group empty when the patient has never been typed (QA D3352: 204, no body)', () => {
+    txSpy.getCurrentBloodGroup.and.returnValue(of(null));
+
+    component.onPatientPicked({ id: 'p1' } as PatientResponse);
+
+    expect(component.patientGroup()).toBeNull();
+  });
+
+  it('leaves the group empty when the read fails', () => {
+    txSpy.getCurrentBloodGroup.and.returnValue(throwError(() => new Error('500')));
 
     component.onPatientPicked({ id: 'p1' } as PatientResponse);
 

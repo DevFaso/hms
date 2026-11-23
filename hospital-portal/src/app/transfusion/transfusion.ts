@@ -493,7 +493,7 @@ export class TransfusionComponent implements OnInit {
     // Surface the standing type and screen before the clinician commits, so a
     // missing or lapsed one is visible here rather than as a 400 on submit.
     this.transfusion.getCurrentBloodGroup(patient.id).subscribe({
-      next: (group) => this.patientGroup.set(group),
+      next: (group) => this.patientGroup.set(group ?? null),
       error: () => this.patientGroup.set(null),
     });
   }

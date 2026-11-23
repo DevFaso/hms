@@ -27,6 +27,7 @@ import java.util.UUID;
 class MedicationLabelMatchTest {
 
     private static final UUID ITEM_ID = UUID.fromString("0f7a2c1e-6f0b-4a57-9d0e-0c7d4b1a2e33");
+    private static final UUID AMOX_ID = UUID.fromString("5b2e8d40-1c3f-4e6a-8b7d-2f9a0c4e6d11");
 
     @Test
     void theCatalogueItemIdIsTheProduct() {
@@ -130,6 +131,82 @@ class MedicationLabelMatchTest {
         }
         assertThat(service.verify(mar, patientId().toString(), "Amoxicilline 500 mg", "1000 mg", "PO",
             LocalDateTime.now()).getOutcomes().get(FiveRightsCheck.DRUG)).isTrue();
+    }
+
+    /**
+     * QA D3552 (r71, regression): the catalogue stores the form as its code (CAPSULE) and the box, the order's own
+     * display and the nurse write it in French. The order of the report: amoxicilline 500 mg capsules, written
+     * « Amoxicilline 500 mg », shown « Amoxicilline 500 mg 500 mg Gélule ».
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "Amoxicilline 500 mg 500 mg Gélule",    // the order's own display
+        "Amoxicilline 500 mg gélule",
+        "AMOXICILLINE 500 MG GELULE",
+        "Amoxicilline gélule",
+        "Amoxicilline 500 mg gélules",
+        "Amoxicilline 500 mg capsule",
+        "Amoxicilline 500 mg CAPSULE",
+        "Amoxicilline 500 mg cápsula",
+        "Amoxicilline 0,5 g gélule"
+    })
+    void theFrenchFormWordIsTheCatalogueForm(String scan) {
+        assertThat(MedicationLabelMatch.match(amoxicillinOrder(), amoxicillin(), scan)).isEqualTo(Basis.DESIGNATION);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "Amoxicilline 1 g gélule",              // another strength
+        "Amoxicilline 250 mg gélule",
+        "Amoxicilline 500 mg comprimé",         // another form, in French
+        "Amoxicilline 500 mg sirop",
+        "Amoxicilline 500 mg suspension",
+        "Amox",                                 // a prefix
+        "Amox gélule",
+        "Amox 500 mg gélule",
+        "Ibuprofène 400 mg gélule",             // another drug
+        "Paracétamol 500 mg gélule",
+        "Gélule",
+        "500 mg gélule",
+        "Amoxicilline acide clavulanique 500 mg gélule"
+    })
+    void aFrenchFormWordDoesNotWidenTheMatch(String scan) {
+        assertThat(MedicationLabelMatch.match(amoxicillinOrder(), amoxicillin(), scan)).isEqualTo(Basis.NONE);
+    }
+
+    /** With no catalogue item, the form word the order is written with may be read in another language only. */
+    @Test
+    void aFreeTextOrderReadsItsOwnFormWordInAnyLanguage() {
+        Prescription rx = new Prescription();
+        rx.setMedicationName("Amoxicilline 500 mg gélule");
+
+        for (String scan : new String[] {"Amoxicilline 500 mg gélule", "Amoxicilline 500 mg capsules",
+            "AMOXICILLINE 500MG CAPSULA"}) {
+            assertThat(MedicationLabelMatch.match(rx, null, scan)).as(scan).isEqualTo(Basis.DESIGNATION);
+        }
+        for (String scan : new String[] {"Amoxicilline", "Amoxicilline 500 mg", "Amoxicilline 500 mg comprimé",
+            "Amoxicilline 1 g gélule", "Amox gélule"}) {
+            assertThat(MedicationLabelMatch.match(rx, null, scan)).as(scan).isEqualTo(Basis.NONE);
+        }
+    }
+
+    private static Prescription amoxicillinOrder() {
+        Prescription rx = new Prescription();
+        rx.setMedicationName("Amoxicilline 500 mg");
+        rx.setMedicationCatalogItemId(AMOX_ID);
+        return rx;
+    }
+
+    private static MedicationCatalogItem amoxicillin() {
+        MedicationCatalogItem item = new MedicationCatalogItem();
+        item.setId(AMOX_ID);
+        item.setNameFr("Amoxicilline 500 mg");
+        item.setGenericName("Amoxicilline");
+        item.setAtcCode("J01CA04");
+        item.setStrength("500");
+        item.setStrengthUnit("mg");
+        item.setForm("CAPSULE");
+        return item;
     }
 
     /**
