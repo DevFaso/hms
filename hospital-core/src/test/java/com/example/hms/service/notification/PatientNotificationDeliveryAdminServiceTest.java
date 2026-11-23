@@ -163,12 +163,12 @@ class PatientNotificationDeliveryAdminServiceTest {
     void retriesAFailedSend() {
         when(repository.findByIdAndHospitalId(failed.getId(), hospitalId)).thenReturn(Optional.of(failed));
         when(repository.requeueFailed(eq(failed.getId()), eq(hospitalId), eq(NotificationDeliveryStatus.FAILED),
-            eq(NotificationDeliveryStatus.PENDING), any(), eq(adminId))).thenReturn(1);
+            eq(NotificationDeliveryStatus.PENDING), any(), eq(adminId), eq(0))).thenReturn(1);
 
-        service.retry(failed.getId());
+        service.retry(failed.getId(), 0);
 
         verify(repository).requeueFailed(eq(failed.getId()), eq(hospitalId), eq(NotificationDeliveryStatus.FAILED),
-            eq(NotificationDeliveryStatus.PENDING), any(), eq(adminId));
+            eq(NotificationDeliveryStatus.PENDING), any(), eq(adminId), eq(0));
     }
 
     @Test
@@ -177,8 +177,8 @@ class PatientNotificationDeliveryAdminServiceTest {
         when(repository.findByIdAndHospitalId(failed.getId(), hospitalId)).thenReturn(Optional.empty());
 
         UUID id = failed.getId();
-        assertThatThrownBy(() -> service.retry(id)).isInstanceOf(ResourceNotFoundException.class);
-        verify(repository, never()).requeueFailed(any(), any(), any(), any(), any(), any());
+        assertThatThrownBy(() -> service.retry(id, 0)).isInstanceOf(ResourceNotFoundException.class);
+        verify(repository, never()).requeueFailed(any(), any(), any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyInt());
     }
 
     @Test
@@ -188,17 +188,34 @@ class PatientNotificationDeliveryAdminServiceTest {
         when(repository.findByIdAndHospitalId(failed.getId(), hospitalId)).thenReturn(Optional.of(failed));
 
         UUID id = failed.getId();
-        assertThatThrownBy(() -> service.retry(id)).isInstanceOf(BusinessException.class);
-        verify(repository, never()).requeueFailed(any(), any(), any(), any(), any(), any());
+        assertThatThrownBy(() -> service.retry(id, 0)).isInstanceOf(BusinessException.class);
+        verify(repository, never()).requeueFailed(any(), any(), any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyInt());
     }
 
     @Test
     @DisplayName("a concurrent requeue wins once; the second click is refused")
     void doubleClick() {
         when(repository.findByIdAndHospitalId(failed.getId(), hospitalId)).thenReturn(Optional.of(failed));
-        when(repository.requeueFailed(any(), any(), any(), any(), any(), any())).thenReturn(0);
+        when(repository.requeueFailed(any(), any(), any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyInt())).thenReturn(0);
 
         UUID id = failed.getId();
-        assertThatThrownBy(() -> service.retry(id)).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> service.retry(id, 0)).isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void replayAfterAnotherFailureCannotSpendAnotherBudget() {
+        failed.setManualRetries(1);
+        when(repository.findByIdAndHospitalId(failed.getId(), hospitalId)).thenReturn(Optional.of(failed));
+        assertThatThrownBy(() -> service.retry(failed.getId(), 0)).isInstanceOf(BusinessException.class);
+        verify(repository, never()).requeueFailed(any(), any(), any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"OUTCOME_UNKNOWN", "ATTEMPTS_EXHAUSTED", "PROVIDER_REJECTED", "NEW_UNKNOWN_CODE"})
+    void ambiguousPermanentAndUnknownFailuresCannotBeRequeued(String code) {
+        failed.setErrorCode(code);
+        when(repository.findByIdAndHospitalId(failed.getId(), hospitalId)).thenReturn(Optional.of(failed));
+        assertThatThrownBy(() -> service.retry(failed.getId(), 0)).isInstanceOf(BusinessException.class);
+        verify(repository, never()).requeueFailed(any(), any(), any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyInt());
     }
 }

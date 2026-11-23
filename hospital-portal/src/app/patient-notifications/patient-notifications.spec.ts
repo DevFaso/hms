@@ -109,26 +109,17 @@ describe('PatientNotificationsComponent', () => {
     await component.retry(delivery({}));
 
     expect(confirm.ask).not.toHaveBeenCalled();
-    expect(service.retry).toHaveBeenCalledOnceWith('d-1');
+    expect(service.retry).toHaveBeenCalledOnceWith('d-1', 0);
     expect(toast.success).toHaveBeenCalled();
     expect(service.search).toHaveBeenCalledTimes(2);
   });
 
-  it('warns and asks before retrying a send the patient may already have received', async () => {
-    const unknown = delivery({ errorCode: 'OUTCOME_UNKNOWN' });
-    setup(pageOf([unknown]));
-    service.retry.and.returnValue(of(delivery({ status: 'PENDING', retryable: false })));
-    confirm.ask.and.resolveTo(false);
-
-    const host = fixture.nativeElement as HTMLElement;
-    expect(host.querySelector('[data-testid="pn-maybe-delivered-d-1"]')).not.toBeNull();
-    await component.retry(unknown);
-    expect(confirm.ask).toHaveBeenCalled();
-    expect(service.retry).not.toHaveBeenCalled();
-
-    confirm.ask.and.resolveTo(true);
+  it('never retries an outcome that may already have been delivered, even if a stale client says retryable', async () => {
+    setup(pageOf([delivery({ errorCode: 'OUTCOME_UNKNOWN' })]));
+    await component.retry(delivery({ errorCode: 'OUTCOME_UNKNOWN' }));
     await component.retry(delivery({ errorCode: 'ATTEMPTS_EXHAUSTED' }));
-    expect(service.retry).toHaveBeenCalledOnceWith('d-1');
+    expect(service.retry).not.toHaveBeenCalled();
+    expect(confirm.ask).not.toHaveBeenCalled();
   });
 
   it('offers no retry on a send that is not FAILED', () => {

@@ -15134,7 +15134,8 @@
     "RECORDED": "Enregistré (aucune tentative)",
     "SUBJECT_APPOINTMENT": "Rendez-vous du {{date}} à {{time}}",
     "SUBJECT_INVOICE": "Facture {{number}}",
-    "SUBJECT_LAB_ORDER": "Demande d'examen {{number}}"
+    "SUBJECT_LAB_ORDER": "Demande d'examen {{number}}",
+    "COL_NEXT_ATTEMPT": "Prochaine tentative"
   },
   "IMAGING_PACS": {
     "STUDY_LINKED": "Étude liée",

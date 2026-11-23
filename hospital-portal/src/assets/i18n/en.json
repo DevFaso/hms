@@ -15134,7 +15134,8 @@
     "RECORDED": "Recorded (no attempt)",
     "SUBJECT_APPOINTMENT": "Appointment on {{date}} at {{time}}",
     "SUBJECT_INVOICE": "Invoice {{number}}",
-    "SUBJECT_LAB_ORDER": "Lab order {{number}}"
+    "SUBJECT_LAB_ORDER": "Lab order {{number}}",
+    "COL_NEXT_ATTEMPT": "Next attempt"
   },
   "IMAGING_PACS": {
     "STUDY_LINKED": "Study linked",

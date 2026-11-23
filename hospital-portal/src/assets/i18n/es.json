@@ -15134,7 +15134,8 @@
     "RECORDED": "Registrado (sin intento)",
     "SUBJECT_APPOINTMENT": "Cita del {{date}} a las {{time}}",
     "SUBJECT_INVOICE": "Factura {{number}}",
-    "SUBJECT_LAB_ORDER": "Solicitud de análisis {{number}}"
+    "SUBJECT_LAB_ORDER": "Solicitud de análisis {{number}}",
+    "COL_NEXT_ATTEMPT": "Próximo intento"
   },
   "IMAGING_PACS": {
     "STUDY_LINKED": "Estudio vinculado",
