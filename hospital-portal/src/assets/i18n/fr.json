@@ -4252,6 +4252,8 @@
   },
   "IMAGING": {
     "ADDENDUM_ORIGINAL": "Compte rendu signé complété par cet addendum",
+    "REVISE_SIGNED_REPORT": "Réviser le compte rendu signé",
+    "REVISION_ORIGINAL": "Compte rendu signé faisant l’objet de la révision",
     "RESULTS_PARTIAL_FAILURE": "Les comptes rendus de ces hôpitaux n'ont pas pu être chargés, la liste est donc incomplète : {{hospitals}}.",
     "ADMIN_READ_ONLY": "Consultation seule : demandes d'imagerie et comptes rendus validés. La prescription, l'interprétation et la signature reviennent à l'équipe clinique.",
     "ALL_HOSPITALS": "Tous les hôpitaux",

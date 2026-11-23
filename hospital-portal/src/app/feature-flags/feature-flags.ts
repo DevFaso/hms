@@ -41,6 +41,7 @@ interface FeatureFlag {
 interface FlagOverride {
   id: string;
   flagKey: string;
+  organizationId?: string | null;
   enabled: boolean;
   description: string;
   updatedBy: string;
@@ -78,7 +79,7 @@ export class FeatureFlagsComponent implements OnInit {
       (f) =>
         f.key.toLowerCase().includes(q) ||
         this.flagTitle(f).toLowerCase().includes(q) ||
-        this.flagDescription(f).toLowerCase().includes(q),
+        this.searchableDescription(f).toLowerCase().includes(q),
     );
   });
 
@@ -88,11 +89,17 @@ export class FeatureFlagsComponent implements OnInit {
   }
 
   flagDescription(flag: FeatureFlag): string {
+    return this.searchableDescription(flag) || this.translate.instant('FLAGS.NO_DESCRIPTION');
+  }
+
+  /** These controls write global overrides; tenant text cannot describe them. */
+  private searchableDescription(flag: FeatureFlag): string {
     const supplied = this.overrides().find(
-      (override) => override.flagKey === flag.key,
+      (override) => override.flagKey === flag.key && override.organizationId == null,
     )?.description;
     if (supplied?.trim()) return supplied;
-    return this.translate.instant(FLAG_CATALOG[flag.key]?.description ?? 'FLAGS.NO_DESCRIPTION');
+    const entry = FLAG_CATALOG[flag.key];
+    return entry ? this.translate.instant(entry.description) : '';
   }
 
   enabledCount = computed(() => this.flags().filter((f) => f.enabled).length);

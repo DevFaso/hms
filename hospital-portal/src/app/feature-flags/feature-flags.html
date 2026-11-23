@@ -70,7 +70,9 @@
           </div>
           <div class="col-key">
             <span class="flag-name">{{ flagTitle(flag) }}</span>
-            <p class="muted">{{ flag.key }}</p>
+            @if (flagTitle(flag) !== flag.key) {
+              <p class="muted">{{ flag.key }}</p>
+            }
             <p>{{ flagDescription(flag) }}</p>
             {{ ' '
             }}<span class="flag-badge" [class.on]="flag.enabled">
