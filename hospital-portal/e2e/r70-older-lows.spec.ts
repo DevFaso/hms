@@ -5,6 +5,75 @@ import { heightFor, LAYOUT_WIDTHS } from './helpers/layout-audit';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
+test('D2653: every report revision kind is available at four widths', async ({
+  page,
+  baseURL,
+}, testInfo) => {
+  await signInAs(page, 'ROLE_RADIOLOGIST', baseURL!);
+  await installLocalIconFonts(page);
+  const order = {
+    id: TEST_ID,
+    patientId: TEST_ID,
+    patientDisplayName: 'cdx-Local Patient',
+    hospitalId: TEST_ID,
+    modality: 'XRAY',
+    studyType: 'cdx-Chest study',
+    bodyRegion: 'Thorax',
+    priority: 'ROUTINE',
+    status: 'RESULTS_AVAILABLE',
+  };
+  const source = {
+    id: 'cdx-signed-report',
+    imagingOrderId: TEST_ID,
+    patientId: TEST_ID,
+    patientDisplayName: 'cdx-Local Patient',
+    modality: 'XRAY',
+    reportStatus: 'FINAL',
+    reportVersion: 1,
+    reportTitle: 'cdx-Chest study',
+    signed: true,
+    signedByName: 'cdx-Radiologist',
+    signedAt: '2026-11-22T09:00:00',
+    findings: 'cdx-Original signed findings',
+    statusHistory: [],
+  };
+  await page.route(`**/api/imaging/orders/${TEST_ID}`, (route) => route.fulfill({ json: order }));
+  await page.route(`**/api/imaging/results/order/${TEST_ID}/all`, (route) =>
+    route.fulfill({ json: [source] }),
+  );
+  await page.route('**/api/imaging/results/cdx-signed-report', (route) =>
+    route.fulfill({ json: source }),
+  );
+  await page.goto(`/imaging?order=${TEST_ID}`);
+  await page.getByTestId('imaging-open-report-cdx-signed-report').click();
+  await page.getByTestId('imaging-add-addendum').click();
+  const dialog = page.getByRole('dialog');
+  const picker = page.locator('#rep-status');
+  for (const width of LAYOUT_WIDTHS) {
+    await page.setViewportSize({ width, height: heightFor(width) });
+    await page.evaluate(() => {
+      const backdrop = document.querySelector<HTMLElement>('.sidebar-backdrop');
+      if (backdrop && getComputedStyle(backdrop).display !== 'none') backdrop.click();
+    });
+    expect(
+      await picker
+        .locator('option')
+        .evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value)),
+    ).toEqual(['ADDENDUM', 'CORRECTED', 'AMENDED']);
+    for (const kind of ['ADDENDUM', 'CORRECTED', 'AMENDED']) {
+      await picker.selectOption(kind);
+      await expect(picker).toHaveValue(kind);
+    }
+    await picker.scrollIntoViewIfNeeded();
+    await expect(picker).toBeInViewport();
+    const bounds = await dialog.boundingBox();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width + 1);
+    await expect(page.getByTestId('addendum-original-report')).toContainText(source.findings);
+    await page.screenshot({ path: testInfo.outputPath(`revision-kinds-${width}.png`) });
+  }
+});
+
 test('D2770: organization facts and hospital links fit four widths', async ({
   page,
   baseURL,

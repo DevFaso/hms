@@ -421,9 +421,17 @@ export class ImagingComponent implements OnInit {
     'AMENDED',
   ] as const;
 
+  private readonly revisionStatuses = ['ADDENDUM', 'CORRECTED', 'AMENDED'] as const;
+
   get authorableStatuses(): readonly ImagingReportStatus[] {
-    if (this.writingAddendum()) return ['ADDENDUM'];
-    return this.reportEditId() ? this.allAuthorableStatuses : ['DRAFT', 'PRELIMINARY'];
+    if (
+      this.writingAddendum() ||
+      (this.reportEditId() &&
+        this.revisionStatuses.some((status) => status === this.reportForm.reportStatus))
+    ) {
+      return this.revisionStatuses;
+    }
+    return ['DRAFT', 'PRELIMINARY'];
   }
 
   /** What the void modal may write. */
