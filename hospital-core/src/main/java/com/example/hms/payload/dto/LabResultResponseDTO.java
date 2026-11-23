@@ -85,6 +85,9 @@ public class LabResultResponseDTO {
     private String criticalReadBackBy;
     /** What was read back: only for a CONFIRMED read-back ({@code criticalReadBackAt} set). */
     private String criticalReadBackValue;
+    /** Rule CRITICAL_RESULT_ESCALATION: the role and the channel of a CONFIRMED read-back. */
+    private String criticalAckRole;
+    private String criticalAckChannel;
     /**
      * QA D2952 (r66): the last REFUSED read-back (the repeated value did not match), kept for the audit under its
      * own name. It used to fill {@code criticalReadBackBy} and {@code criticalReadBackValue} while the result

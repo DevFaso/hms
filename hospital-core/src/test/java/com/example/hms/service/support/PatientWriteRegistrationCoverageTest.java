@@ -95,6 +95,9 @@ class PatientWriteRegistrationCoverageTest {
             + " only the two recipient-verification controllers call it. Staff require registration at their resolved"
             + " hospital, self-service derives the linked patient. RecipientVerificationControllersTest and"
             + " PatientRecipientVerificationGuardTest freeze those authorized entry points"),
+        entry("PositiveAntibodyScreenService#recordWorkup", "QA D3351: its only caller,"
+            + " TransfusionServiceImpl#recordAntibodyWorkup, hands it the patient PatientChartAccess.require returned"
+            + " for the acting hospital; it takes no raw id"),
         entry("BillingInvoiceServiceImpl#recordPayment", BOUND_TO_PARENT + " (the invoice, locked and matched to the patient)"),
         entry("BillingInvoiceServiceImpl#recordPatientPayment", BOUND_TO_PARENT
             + " (the invoice, locked and matched to the patient)"),

@@ -521,10 +521,27 @@ public class AdmissionServiceImpl implements AdmissionService {
             });
     }
 
+    /** QA D3308: a labouring woman's bed change out of maternity goes through the transfer order. */
+    private com.example.hms.service.maternity.LabourBedMove labourBedMove;
+    private com.example.hms.repository.BedRepository labourBedRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setLabourBedMove(com.example.hms.service.maternity.LabourBedMove labourBedMove,
+                                 com.example.hms.repository.BedRepository labourBedRepository) {
+        this.labourBedMove = labourBedMove;
+        this.labourBedRepository = labourBedRepository;
+    }
+
     @Override
     @Transactional
     public AdmissionResponseDTO assignBed(UUID admissionId, UUID bedId) {
         Admission admission = loadTenantScopedAdmission(admissionId);
+        if (labourBedMove != null && admission.getBed() != null && bedId != null && admission.getHospital() != null) {
+            UUID hospitalId = admission.getHospital().getId();
+            com.example.hms.model.Bed destination =
+                labourBedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId).orElse(null);
+            labourBedMove.requireTransferOrderForABedChange(admission, destination, hospitalId, "bedId");
+        }
         // Policy rule 2 (provisional): a midwife assigns maternity beds and cots; a NICU cot for a
         // newborn is assigned too and a physician is asked to review (a task, never a refusal).
         boolean askPhysician = midwifeNewbornCare != null

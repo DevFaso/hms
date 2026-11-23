@@ -5,6 +5,9 @@ import com.example.hms.enums.FiveRightsCheck;
 import com.example.hms.model.MedicationAdministrationRecord;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
+import com.example.hms.model.medication.MedicationCatalogItem;
+import com.example.hms.repository.MedicationCatalogItemRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -31,6 +34,19 @@ public class FiveRightsVerificationService {
 
     /** Default ±60 min window around the scheduled administration time. */
     public static final Duration DEFAULT_TIME_WINDOW = Duration.ofMinutes(60);
+
+    /** Reads the catalogue item an order was written from; null where a caller has no catalogue (unit tests). */
+    private final MedicationCatalogItemRepository catalogItemRepository;
+
+    /** Without a catalogue: an order is matched on its own code and name only. */
+    public FiveRightsVerificationService() {
+        this(null);
+    }
+
+    @Autowired
+    public FiveRightsVerificationService(MedicationCatalogItemRepository catalogItemRepository) {
+        this.catalogItemRepository = catalogItemRepository;
+    }
 
     /**
      * Verify the supplied bedside scan values against the prescription bound
@@ -90,9 +106,10 @@ public class FiveRightsVerificationService {
     }
 
     /**
-     * Right drug: prefer matching on {@code medication_code} (formulary or
-     * RxNorm). Fall back to a case-insensitive match on the medication name
-     * when no code is recorded on the prescription.
+     * Right drug (QA D3302): the scanned or typed value is the ordered product when it is one of its identifiers
+     * (catalogue item id, formulary code, RxNorm code, the order's code), its designation (a name of the product
+     * with any strength and form the label carries) or its ATC code: {@link MedicationLabelMatch}. Nothing looser;
+     * a value that is none of these fails, and the dose then needs a documented reason.
      */
     private void verifyDrug(Prescription rx, String scan, FiveRightsVerificationResult.Builder b) {
         if (isBlank(scan)) {
@@ -103,22 +120,27 @@ public class FiveRightsVerificationService {
             b.fail(FiveRightsCheck.DRUG, reason("emar.fiveRights.drug.noPrescription"));
             return;
         }
-        String normalized = normalize(scan);
-        String code = normalize(rx.getMedicationCode());
-        if (!isBlank(code)) {
-            if (code.equals(normalized)) {
-                b.pass(FiveRightsCheck.DRUG);
-            } else {
-                b.fail(FiveRightsCheck.DRUG, reason("emar.fiveRights.drug.codeMismatch"));
-            }
-            return;
-        }
-        String name = normalize(rx.getMedicationName());
-        if (!isBlank(name) && name.equals(normalized)) {
-            b.pass(FiveRightsCheck.DRUG);
-        } else {
+        MedicationCatalogItem item = catalogItemOf(rx);
+        // QA D1223: an order whose written name contradicts the item it is linked to (« Amoxicilline » on the
+        // paracetamol item) is recognised by its own text only: not by that item's names, codes or ATC, and
+        // not by the item's id or the code the order copied from it.
+        boolean contradicted = item != null
+            && com.example.hms.service.pharmacy.OrderedDrugIdentity.contradicts(rx.getMedicationName(), item);
+        MedicationLabelMatch.Basis basis = contradicted
+            ? MedicationLabelMatch.matchOwnTextOnly(rx, scan) : MedicationLabelMatch.match(rx, item, scan);
+        if (basis == MedicationLabelMatch.Basis.NONE) {
             b.fail(FiveRightsCheck.DRUG, reason("emar.fiveRights.drug.mismatch"));
+        } else {
+            b.pass(FiveRightsCheck.DRUG);
         }
+    }
+
+    /** The catalogue item the order was written from, when it was picked from the catalogue. */
+    private MedicationCatalogItem catalogItemOf(Prescription rx) {
+        if (catalogItemRepository == null || rx.getMedicationCatalogItemId() == null) {
+            return null;
+        }
+        return catalogItemRepository.findById(rx.getMedicationCatalogItemId()).orElse(null);
     }
 
     /** Right dose: the scanned dose token must match the prescription's dosage. */

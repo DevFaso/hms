@@ -59,6 +59,9 @@ class InBasketRecipientGuardTest {
             rolesOf(constant(TransfusionController.class, "BEDSIDE")),
             codes(setConstant(TransfusionServiceImpl.class, "LAB_DIRECTOR_ROLE_CODES")),
             codes(EmergencyReleasePolicy.INCOMPATIBLE_AUTHORISER_ROLE_CODES))),
+        // QA D3351: the hospital's biologists, for a positive antibody screen and a crossmatch afterwards.
+        Map.entry("PositiveAntibodyScreenService.java",
+            codes(com.example.hms.service.support.PositiveAntibodyScreenPolicy.BIOLOGIST_ROLE_CODES)),
         // The clinician who ordered the test.
         Map.entry("LabResultServiceImpl.java", labOrderers()),
         Map.entry("LabSpecimenRejectionNotifier.java", labOrderers()),

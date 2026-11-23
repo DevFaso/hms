@@ -154,6 +154,9 @@ public class SecurityConfig {
     /** V346 (policy rule 3): a hospital's imaging reporting settings; the same admins as the PACS connection. */
     static final String API_HOSPITAL_IMAGING_REPORTING_SETTINGS = "/hospitals/*/imaging-reporting-settings";
 
+    /** V363 (QA r70, C5): a hospital's critical-result escalation steps; the same admins as the settings above. */
+    static final String API_HOSPITAL_CRITICAL_RESULT_ESCALATION = "/hospitals/*/critical-result-escalation";
+
     /**
      * Policy 2026-11-20 (V347): a hospital's adolescent confidentiality age. As the posture: its
      * controller admits HOSPITAL_ADMIN on PUT and QUALITY_MANAGER on GET, which the /hospitals/**
@@ -848,6 +851,11 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, API_HOSPITAL_IMAGING_REPORTING_SETTINGS)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.PUT, API_HOSPITAL_IMAGING_REPORTING_SETTINGS)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                // V363 critical-result escalation steps: ahead of the /hospitals matchers, like the two above.
+                .requestMatchers(HttpMethod.GET, API_HOSPITAL_CRITICAL_RESULT_ESCALATION)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.PUT, API_HOSPITAL_CRITICAL_RESULT_ESCALATION)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
                 .requestMatchers(HttpMethod.GET, API_HOSPITALS, API_HOSPITALS + "/", API_HOSPITALS_PATTERN)

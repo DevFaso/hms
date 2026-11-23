@@ -79,7 +79,8 @@ import static org.mockito.Mockito.when;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-@Import({TransfusionServiceImpl.class, TransfusionMapper.class, com.example.hms.security.EncryptionKeyHolder.class,
+@Import({TransfusionServiceImpl.class,
+    com.example.hms.service.transfusion.PositiveAntibodyScreenService.class, TransfusionMapper.class, com.example.hms.security.EncryptionKeyHolder.class,
     TransfusionEmergencyReleasePostgresIT.Config.class})
 @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @DisplayName("emergency blood release, on PostgreSQL")

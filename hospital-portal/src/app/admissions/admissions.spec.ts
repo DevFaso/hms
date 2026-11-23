@@ -10,7 +10,7 @@ import { AdmissionsComponent } from './admissions';
 import { AdmissionResponse, AdmissionService } from '../services/admission.service';
 import { DischargeService, DischargeSummary } from '../services/discharge.service';
 import { PrescriptionService, PrescriptionResponse } from '../services/prescription.service';
-import { goesHome } from './admissions';
+import { awaitsSignatureForHome, goesHome } from './admissions';
 import { HospitalResponse, HospitalService } from '../services/hospital.service';
 import { StaffResponse, StaffService } from '../services/staff.service';
 import { PatientResponse, PatientService } from '../services/patient.service';
@@ -705,6 +705,24 @@ describe('AdmissionsComponent', () => {
       expect(component.takeHomeOrders().map((r) => r.id)).toEqual(['home', 'dispensed']);
       expect(goesHome({ takeHome: true, status: 'PENDING_SIGNATURE' })).toBeFalse();
       expect(goesHome({ takeHome: true, status: 'CANCELLED' })).toBeFalse();
+    });
+
+    it('QA D3303: a take-home order still to sign is listed, never « aucun traitement de sortie »', () => {
+      prescriptionService.list.and.returnValue(
+        of([
+          rx({ id: 'draft', status: 'DRAFT' }),
+          rx({ id: 'pending', status: 'PENDING_SIGNATURE' }),
+          rx({ id: 'ward-draft', status: 'DRAFT', takeHome: false }),
+          rx({ id: 'cancelled', status: 'CANCELLED' }),
+        ]),
+      );
+      component.confirmDischarge(adm({ encounterId: 'e1' }));
+      expect(component.takeHomeOrders()).toEqual([]);
+      expect(component.takeHomeUnsigned().map((r) => r.id)).toEqual(['draft', 'pending']);
+      component.cancelDischarge();
+      expect(component.takeHomeUnsigned()).toEqual([]);
+      expect(awaitsSignatureForHome({ takeHome: true, status: 'SIGNED' })).toBeFalse();
+      expect(awaitsSignatureForHome({ takeHome: false, status: 'DRAFT' })).toBeFalse();
     });
 
     it('QA D2553: the follow-up date and purpose are sent for the stay summary', () => {

@@ -1544,7 +1544,9 @@
     "TAKE_HOME_HINT": "Las prescripciones firmadas marcadas « Tratamiento al alta » figuran en el resumen de alta, incluidas las redactadas en las 24 h siguientes al alta.",
     "FOLLOW_UP_DATE": "Cita de seguimiento",
     "FOLLOW_UP_PURPOSE": "Motivo del seguimiento",
-    "FOLLOW_UP_PURPOSE_PLACEHOLDER": "p. ej. control, curas, análisis de control"
+    "FOLLOW_UP_PURPOSE_PLACEHOLDER": "p. ej. control, curas, análisis de control",
+    "TAKE_HOME_UNSIGNED_TITLE": "Redactadas, aún sin firmar",
+    "TAKE_HOME_UNSIGNED_HINT": "Estas prescripciones de alta solo se entregan al paciente, y solo figuran en el resumen de alta, una vez firmadas. Fírmelas desde la página de prescripciones, antes del alta o en las 24 h siguientes."
   },
   "ANALYTICS": {
     "LOAD_FAILED": "No se pudieron cargar los indicadores. Inténtelo de nuevo.",
@@ -1907,6 +1909,7 @@
       "CROSS_TENANT_READ": "Lectura del superadministrador en todos los hospitales: {{view}} ({{rows}} filas)",
       "CROSS_HOSPITAL_READ_LAB": "Solicitud de laboratorio de otro hospital consultada por el laboratorio que la realiza",
       "CROSS_HOSPITAL_READ_LAB_RESULT": "Resultado de laboratorio de otro hospital consultado por el laboratorio que lo realiza",
+      "CROSS_HOSPITAL_ANTIBODY_FLAG": "Alerta de aloinmunización de otro hospital consultada (seguridad transfusional, mostrada sea cual sea la elección de compartir el expediente)",
       "EMERGENCY_BLOOD_RELEASED": "Entrega de urgencia sin prueba cruzada de la unidad {{unit}} para la solicitud {{request}}",
       "EMERGENCY_BLOOD_RELEASED_O_POSITIVE": "Entrega de urgencia con decisión documentada O positivo de la unidad {{unit}} para la solicitud {{request}}",
       "EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE": "Entrega de urgencia — serológicamente incompatible, de la unidad {{unit}} para la solicitud {{request}}",
@@ -4929,7 +4932,11 @@
     "QC_OVERRIDE": "Released despite rejected QC",
     "RELEASE_CRITICAL_FROM_WORKLIST": "A critical result is released from the release worklist, where you record who was told.",
     "RELEASE_FROM_WORKLIST": "Release it from the release worklist.",
-    "READ_BACK_CONFIRMED_DETAIL": "Relectura confirmada: {{test}} « {{value}} » — {{patient}}"
+    "READ_BACK_CONFIRMED_DETAIL": "Relectura confirmada: {{test}} « {{value}} » — {{patient}}",
+    "READ_BACK_CHANNEL": "Cómo le llegó el resultado",
+    "READ_BACK_CHANNEL_IN_APP": "En la aplicación",
+    "READ_BACK_CHANNEL_PHONE": "Por teléfono",
+    "READ_BACK_CHANNEL_IN_PERSON": "En persona"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Anormal",
@@ -13703,7 +13710,39 @@
     "DECLARED_VALUE": "{{group}} (declarado, no verificado)",
     "DECLARED_GROUP": "Historia: {{group}} (no verificado)",
     "DECLARED_MISMATCH": "La historia indica {{declared}} pero el laboratorio tipificó {{typed}}. Compruebe la identidad del paciente y la historia; el grupo del laboratorio rige para la compatibilidad.",
-    "DECLARED_MISMATCH_SHORT": "Difiere de la historia"
+    "DECLARED_MISMATCH_SHORT": "Difiere de la historia",
+    "ALLO_IMMUNISED": "Paciente aloinmunizado (escrutinio de anticuerpos positivo en la historia)",
+    "ALLO_IMMUNISED_RULE": "Regla provisional: los glóbulos rojos solo se entregan para un anticuerpo identificado (o por decisión de derivación del biólogo), en una unidad antígeno-negativa con fenotipo RH-KEL1 respetado, con una prueba cruzada por antiglobulina compatible sobre una muestra de 72 horas como máximo. Un escrutinio negativo posterior no anula esta regla.",
+    "ALLO_IMMUNISED_REQUEST": "Aloinmunizado: los glóbulos rojos exigen una unidad compatibilizada, o una urgencia vital declarada (regla provisional)",
+    "ANTIBODY_IDENTIFIED": "Anticuerpo identificado: {{antibody}}",
+    "ANTIBODY_WORKUP_MISSING": "El anticuerpo no está identificado y ninguna decisión de derivación sirve a esta solicitud: los glóbulos rojos quedan retenidos.",
+    "ANTIBODY_RECORD": "Registrar el anticuerpo o una decisión de derivación",
+    "ANTIBODY_RECORD_HINT": "Solo el biólogo registra esta información. Queda de forma definitiva en la historia del paciente.",
+    "ANTIBODY_STATUS": "Qué se registra",
+    "ANTIBODY_STATUS_IDENTIFIED": "Anticuerpo identificado",
+    "ANTIBODY_STATUS_REFERRED": "Derivado al CNTS/CRTS: atender esta solicitud antes de la respuesta",
+    "ANTIBODY_SPECIFICITIES": "Anticuerpo identificado (especificidad)",
+    "ANTIBODY_REFERRAL_HINT": "La unidad fenotipada y la prueba cruzada por antiglobulina siguen siendo obligatorias. La decisión solo sirve a esta solicitud.",
+    "ANTIBODY_REFERRAL_CENTRE": "Centro de derivación (CNTS, CRTS)",
+    "ANTIBODY_DECISION_REASON": "Por qué se atiende esta solicitud antes de la identificación",
+    "ANTIBODY_RECORDED": "Registrado.",
+    "ANTIBODY_ERROR": "No se pudo guardar el registro.",
+    "VITAL_URGENCY_WARNING": "Este paciente está aloinmunizado. En urgencia vital la transfusión no se retrasa, pero existe riesgo de hemólisis: declare el nivel y el motivo, y extraiga la muestra pretransfusional antes de la primera unidad (regla provisional).",
+    "VITAL_URGENCY_LEVEL": "Nivel de urgencia vital",
+    "VITAL_URGENCY_UVI": "Urgencia vital inmediata (UVI): grupo O sin demora",
+    "VITAL_URGENCY_UV": "Urgencia vital (UV): entrega en 30 minutos",
+    "VITAL_URGENCY_REASON": "Motivo de la urgencia vital",
+    "VITAL_URGENCY_SAMPLE": "La muestra pretransfusional se extrae antes de la primera unidad",
+    "VITAL_URGENCY_DECLARED": "Declarado por el prescriptor: {{level}}. Motivo: {{reason}}",
+    "COMPATIBILISATION_HINT": "Paciente aloinmunizado: un resultado compatible debe ser una prueba cruzada por antiglobulina, sobre una muestra de 72 horas como máximo, en una unidad negativa para el antígeno diana y con fenotipo RH-KEL1 respetado (regla provisional).",
+    "XM_SAMPLE_AT": "Muestra de esta prueba extraída el",
+    "XM_ANTIGLOBULIN": "Realizada por la técnica de antiglobulina indirecta",
+    "XM_ANTIGEN_NEGATIVE": "La unidad es negativa para el antígeno diana",
+    "XM_RH_KELL": "La unidad respeta el fenotipo RH-KEL1",
+    "HAEMOLYSIS_WARNING": "Paciente aloinmunizado: una entrega sin prueba cruzada compatible conlleva riesgo de hemólisis. Avise al equipo clínico, mantenga el control a pie de cama; el biólogo realiza la prueba cruzada después (regla provisional).",
+    "ANTIBODY_FROM_OTHER_HOSPITAL": "Información de seguridad transfusional registrada por: {{hospitals}}",
+    "ANTIBODY_KNOWN_IDENTIFIED": "Anticuerpo identificado: {{antibody}} ({{hospital}}, {{date}}).",
+    "ANTIBODY_KNOWN_NOT_IDENTIFIED": "Escrutinio de anticuerpos positivo, anticuerpo no identificado ({{hospital}}, {{date}})."
   },
   "MORTALITY": {
     "DISPUTE": "Impugnar este fallecimiento",
@@ -13943,7 +13982,16 @@
     "WARD_OVERVIEW": "Vista de unidades",
     "SNAPSHOT_AT": "Actualizado",
     "LEGEND": "Leyenda del estado de camas",
-    "HOSPITAL_NAMES_ERROR": "No se pudieron cargar los nombres de hospitales. Se muestran identificadores; las capacidades están disponibles."
+    "HOSPITAL_NAMES_ERROR": "No se pudieron cargar los nombres de hospitales. Se muestran identificadores; las capacidades están disponibles.",
+    "IN_LABOR": "En trabajo de parto",
+    "LABOR_NOTICE": "{{name}} está en trabajo de parto. Un traslado a otra cama de maternidad no requiere confirmación; un traslado fuera de la unidad de maternidad sí.",
+    "LABOR_WARNING": "{{name}} está en trabajo de parto y esta cama no está en una unidad de maternidad. Compruebe que es la paciente correcta y explique el porqué en el motivo.",
+    "LABOR_CONFIRM": "Confirmo el traslado de una paciente en trabajo de parto fuera de la unidad de maternidad",
+    "LABOR_COMPLETE_TITLE": "¿Trasladar a una paciente en trabajo de parto?",
+    "LABOR_COMPLETE_MESSAGE": "{{name}} está en trabajo de parto y {{bed}} no está en una unidad de maternidad. Realice este traslado solo si está destinado a ella.",
+    "LABOR_COMPLETE_CONFIRM": "Sí, realizar el traslado",
+    "SEARCH_RESULTS": "{{shown}} de {{total}} camas coinciden con la búsqueda.",
+    "SEARCH_CLEAR": "Mostrar todas las camas"
   },
   "EMAR": {
     "ORDER_NO_LONGER_ACTIVE": "Esta receta ya no está activa. No se registró ninguna dosis.",
@@ -15056,9 +15104,9 @@
       "RECIPIENT_NOT_ALLOWED": "Number not on this environment's test list",
       "OPTED_OUT": "The patient turned this channel off",
       "NO_CONTACT": "No phone number or email address",
-      "RECIPIENT_UNVERIFIED": "Contacto sin verificar",
       "SUBJECT_WITHDRAWN": "Appointment cancelled or past, or result withdrawn",
-      "PATIENT_DECEASED": "The patient has died"
+      "PATIENT_DECEASED": "The patient has died",
+      "RECIPIENT_UNVERIFIED": "Contacto sin verificar"
     },
     "MAYBE_DELIVERED": "The patient may already have received this message.",
     "RETRY_CONFIRM_TITLE": "Send this message again?",
@@ -15299,7 +15347,18 @@
     "EMPTY": "Ningún resultado crítico espera repetición.",
     "ORDERED_BY": "Solicitado por",
     "PAGING_SINCE": "Alerta enviada",
-    "ROUNDS": "Escaladas"
+    "ROUNDS": "Escaladas",
+    "ESCALATION_TITLE": "Etapas de la escalada (regla provisional)",
+    "ESCALATION_HINT": "Un resultado crítico que nadie confirma pasa al médico de cobertura, luego al médico jefe y al biólogo, y después se convierte en un « resultado crítico no resuelto » con un registro de incidente. Solo la relectura por un clínico le pone fin. Los minutos cuentan desde el primer aviso. Regla provisional, pendiente de la validación del médico jefe y del biólogo.",
+    "ESCALATION_COVER": "Médico de cobertura tras (min)",
+    "ESCALATION_LEAD": "Médico jefe y biólogo tras (min)",
+    "ESCALATION_UNRESOLVED": "No resuelto, incidente tras (min)",
+    "ESCALATION_CHIEF": "Médico jefe",
+    "ESCALATION_CHIEF_NONE": "Sin designar: jefes de servicio, si no todos los médicos",
+    "ESCALATION_INVALID": "Las tres etapas deben ser crecientes, de 5 minutos a 1440 (por ejemplo 15, 30 y 60).",
+    "ESCALATION_SAVED": "Etapas de la escalada guardadas.",
+    "ESCALATION_SAVE_ERROR": "No se pudieron guardar las etapas de la escalada.",
+    "ESCALATION_LOAD_ERROR": "No se pudieron cargar las etapas de la escalada."
   },
   "PHARMACY_MONEY": {
     "HANDOVER": {

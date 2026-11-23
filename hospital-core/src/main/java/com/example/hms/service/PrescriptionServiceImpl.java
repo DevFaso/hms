@@ -942,7 +942,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 com.example.hms.service.impl.PrnMinInterval.highestDosesPerDay(
                     com.example.hms.service.impl.PrnMinInterval.isAsNeeded(prescription),
                     prescription.getPrnMinIntervalHours()),
-                prescription.getRoute(), item == null ? null : item.getForm()));
+                prescription.getRoute(), item == null ? null : item.getForm(),
+                // QA D3303: an order for home is not added to the ward orders the discharge stops.
+                prescription.isTakeHome()));
         return cards == null ? List.of() : cards;
     }
 
@@ -3526,7 +3528,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 edited == null ? null : edited.getId(),
                 prnDosesPerDay(request, edited),
                 routeOrderedBy(request, edited),
-                catalogItem == null ? null : catalogItem.getForm()));
+                catalogItem == null ? null : catalogItem.getForm(),
+                // QA D3303: an order for home is not added to the ward orders the discharge stops.
+                request.getTakeHome() != null ? request.getTakeHome() : edited != null && edited.isTakeHome()));
         if (advisories.isEmpty()) {
             return advisories;
         }

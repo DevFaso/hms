@@ -165,18 +165,30 @@ class PediatricDoseRouteLimitTest {
         });
     }
 
+    /**
+     * QA D3306 (r70): paracetamol alone with no limit on the catalogue is judged by the registered default, which
+     * is for the oral route. By another route, or with none stated, it is still "cannot assess", one card.
+     */
     @Test
-    void paracetamolWithNoLimitOnFileIsReviewedAnyRoute() {
+    void paracetamolWithNoLimitOnFileIsReviewedOnEveryRouteTheDefaultDoesNotCover() {
         ParacetamolFacts paracetamol = new ParacetamolFacts(true, List.of(), java.util.Set.of());
-        for (String route : new String[] {"PO", "IV", null}) {
+        for (String route : new String[] {"IV", null}) {
             assertThat(rule.evaluate(new CdsRuleContext(childAgedMonths(6), UUID.randomUUID(), "Paracétamol", null, null,
                     100d, null, SIX_MONTH_KG, List.of(), List.of(), "3 fois par jour", null,
                     LocalDateTime.now(ZoneId.systemDefault()), null, paracetamol).withRoute(route, null)))
                 .singleElement().satisfies(card -> {
-                    assertThat(card.summary()).contains(CANNOT_ASSESS).contains("no paracetamol limit");
+                    assertThat(card.summary()).contains(CANNOT_ASSESS);
                     assertThat(card.requiresReview()).isTrue();
                 });
         }
+        assertThat(rule.evaluate(new CdsRuleContext(childAgedMonths(6), UUID.randomUUID(), "Paracétamol", null, null,
+                100d, null, SIX_MONTH_KG, List.of(), List.of(), "3 fois par jour", null,
+                LocalDateTime.now(ZoneId.systemDefault()), null, paracetamol).withRoute("PO", null)))
+            .anySatisfy(card -> {
+                assertThat(card.summary()).contains("default paediatric paracetamol limits");
+                assertThat(card.requiresReview()).isTrue();
+            })
+            .noneSatisfy(card -> assertThat(card.summary()).contains("no paracetamol limit"));
     }
 
     @Test

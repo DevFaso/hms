@@ -37,4 +37,13 @@ public class CrossmatchRequestDTO {
 
     /** When the reservation lapses. Defaults to 72h from now when omitted. */
     private LocalDateTime expiresAt;
+
+    /**
+     * QA D3351: required for a compatible result on red cells for an allo-immunised patient: when the sample was
+     * drawn (72 hours or less), the indirect antiglobulin technique, and the two attestations about the unit.
+     */
+    private LocalDateTime sampleCollectedAt;
+    private Boolean antiglobulinMethod;
+    private Boolean antigenNegative;
+    private Boolean rhKellMatched;
 }
