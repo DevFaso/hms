@@ -162,7 +162,11 @@
                   </td>
                   <td class="scope-cell">
                     <span>{{ requestKindKey(row) | translate }}</span>
-                    <strong>{{ row.purpose }}</strong><span>{{ row.scopeDescription === 'FULL_RECORD' ? ('RECORD_RIGHTS.FULL_RECORD' | translate) : row.scopeDescription }}</span>
+                    <strong>{{ row.purpose }}</strong><span>{{
+                      row.scopeDescription === 'FULL_RECORD'
+                        ? ('RECORD_RIGHTS.FULL_RECORD' | translate)
+                        : row.scopeDescription
+                    }}</span>
                   </td>
                   <td>{{ row.requestedOn | serverTime | date: 'mediumDate' }}</td>
                   <td>{{ (row.dueOn | serverTime | date: 'mediumDate') || '—' }}</td>
@@ -175,8 +179,19 @@
                     </td>
                   }
                   <td class="actions-cell">
-                    @if (canExport() && row.status === 'FULFILLED' && row.requestKind !== 'CORRECTION' && row.scopeDescription === 'FULL_RECORD') {
-                      <button type="button" class="btn-link" [disabled]="!!exportingId()" (click)="exportCopy(row)" data-testid="roi-export-copy">
+                    @if (
+                      canExport() &&
+                      row.status === 'FULFILLED' &&
+                      row.requestKind !== 'CORRECTION' &&
+                      row.scopeDescription === 'FULL_RECORD'
+                    ) {
+                      <button
+                        type="button"
+                        class="btn-link"
+                        [disabled]="!!exportingId()"
+                        (click)="exportCopy(row)"
+                        data-testid="roi-export-copy"
+                      >
                         {{ 'RECORD_RIGHTS.EXPORT' | translate }}
                       </button>
                     }
@@ -188,7 +203,12 @@
                           data-testid="fulfil-btn"
                           (click)="openDecision(row, 'fulfil', $event)"
                         >
-                          {{ (row.requestKind === 'CORRECTION' ? 'RECORD_RIGHTS.COMPLETE_CORRECTION' : 'ROI.FULFIL') | translate }}
+                          {{
+                            (row.requestKind === 'CORRECTION'
+                              ? 'RECORD_RIGHTS.COMPLETE_CORRECTION'
+                              : 'ROI.FULFIL'
+                            ) | translate
+                          }}
                         </button>
                         <button
                           type="button"
@@ -253,13 +273,23 @@
 
     <label class="field">
       <span>{{ 'RECORD_RIGHTS.KIND' | translate }}</span>
-      <select name="requestKind" [ngModel]="formRequestKind()" (ngModelChange)="formRequestKind.set($event)">
+      <select
+        name="requestKind"
+        [ngModel]="formRequestKind()"
+        (ngModelChange)="formRequestKind.set($event)"
+      >
         <option value="COPY">{{ 'RECORD_RIGHTS.COPY' | translate }}</option>
         <option value="CORRECTION">{{ 'RECORD_RIGHTS.CORRECTION' | translate }}</option>
       </select>
     </label>
     @if (formRequestKind() === 'COPY') {
-      <label class="field"><input type="checkbox" name="fullRecord" [ngModel]="formFullRecord()" (ngModelChange)="formFullRecord.set($event)" />
+      <label class="field"
+        ><input
+          type="checkbox"
+          name="fullRecord"
+          [ngModel]="formFullRecord()"
+          (ngModelChange)="formFullRecord.set($event)"
+        />
         {{ 'RECORD_RIGHTS.FULL_RECORD' | translate }}
       </label>
     }
@@ -319,7 +349,7 @@
         name="roiScope"
         maxlength="500"
         [ngModel]="formScope()"
-          [disabled]="formRequestKind() === 'COPY' && formFullRecord()"
+        [disabled]="formRequestKind() === 'COPY' && formFullRecord()"
         (ngModelChange)="formScope.set($event)"
         [attr.placeholder]="'ROI.SCOPE_PLACEHOLDER' | translate"
       />
@@ -378,7 +408,12 @@
     }
     <p class="hint">{{ 'ROI.ACTOR_HELP' | translate }}</p>
     @if (d.kind === 'fulfil') {
-      <p class="hint">{{ (d.row.requestKind === 'CORRECTION' ? 'RECORD_RIGHTS.CORRECTION_HINT' : 'ROI.FULFIL_HINT') | translate }}</p>
+      <p class="hint">
+        {{
+          (d.row.requestKind === 'CORRECTION' ? 'RECORD_RIGHTS.CORRECTION_HINT' : 'ROI.FULFIL_HINT')
+            | translate
+        }}
+      </p>
     } @else if (d.kind === 'deny') {
       <p class="hint">{{ 'ROI.DENY_HINT' | translate }}</p>
     }
@@ -405,17 +440,23 @@
       </div>
       <div>
         <dt>{{ 'ROI.SCOPE' | translate }}</dt>
-        <dd>{{ d.row.scopeDescription === 'FULL_RECORD' ? ('RECORD_RIGHTS.FULL_RECORD' | translate) : d.row.scopeDescription }}</dd>
+        <dd>
+          {{
+            d.row.scopeDescription === 'FULL_RECORD'
+              ? ('RECORD_RIGHTS.FULL_RECORD' | translate)
+              : d.row.scopeDescription
+          }}
+        </dd>
       </div>
     </dl>
     <label class="field">
       <span>
         {{ 'ROI.DECISION_NOTE' | translate }}
-          *
+        *
       </span>
       <textarea
         name="roiDecisionNote"
-          required
+        required
         rows="3"
         maxlength="500"
         [ngModel]="decisionNote()"

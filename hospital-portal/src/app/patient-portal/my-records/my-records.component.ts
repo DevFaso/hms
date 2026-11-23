@@ -31,7 +31,15 @@ export const CONDITION_CARD_ROWS = 5;
 @Component({
   selector: 'app-my-records',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, DatePipe, RouterLink, EnumLabelPipe, TranslateModule, RecordRightsComponent],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    DatePipe,
+    RouterLink,
+    EnumLabelPipe,
+    TranslateModule,
+    RecordRightsComponent,
+  ],
   templateUrl: './my-records.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-records.component.scss', '../patient-portal-pages.scss'],

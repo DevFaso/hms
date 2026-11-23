@@ -63,9 +63,13 @@ describe('MyRecordsComponent', () => {
 
     TestBed.configureTestingModule({
       imports: [MyRecordsComponent, TranslateModule.forRoot()],
-      providers: [{ provide: PatientPortalService, useValue: portal }, provideRouter([]),
-        provideHttpClient(), provideHttpClientTesting(),
-        { provide: RoleContextService, useValue: { hasAnyActiveRole: () => true } }],
+      providers: [
+        { provide: PatientPortalService, useValue: portal },
+        provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: RoleContextService, useValue: { hasAnyActiveRole: () => true } },
+      ],
     });
     const translate = TestBed.inject(TranslateService);
     translate.setFallbackLang('fr');

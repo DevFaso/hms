@@ -128,7 +128,9 @@ export class RoiComponent implements OnInit, OnDestroy {
   formRequestKind = signal<RoiRequestKind>('COPY');
   formFullRecord = signal(false);
   exportingId = signal<string | null>(null);
-  readonly canExport = computed(() => this.roleCtx.hasAnyActiveRole(actionRoles('patientRecordPdfExport')));
+  readonly canExport = computed(() =>
+    this.roleCtx.hasAnyActiveRole(actionRoles('patientRecordPdfExport')),
+  );
 
   /* ── decision modal ── */
   deciding = signal<{ row: RoiRequest; kind: DecisionKind } | null>(null);
@@ -245,8 +247,11 @@ export class RoiComponent implements OnInit, OnDestroy {
   }
 
   intakeValid(): boolean {
-    return !!this.selectedPatient() && !!this.formPurpose().trim()
-      && (this.formRequestKind() === 'COPY' && this.formFullRecord() || !!this.formScope().trim());
+    return (
+      !!this.selectedPatient() &&
+      !!this.formPurpose().trim() &&
+      ((this.formRequestKind() === 'COPY' && this.formFullRecord()) || !!this.formScope().trim())
+    );
   }
 
   submitIntake(): void {
@@ -259,7 +264,10 @@ export class RoiComponent implements OnInit, OnDestroy {
       requesterName: this.formRequesterName().trim() || undefined,
       requesterContact: this.formRequesterContact().trim() || undefined,
       purpose: this.formPurpose().trim(),
-      scopeDescription: this.formRequestKind() === 'COPY' && this.formFullRecord() ? 'FULL_RECORD' : this.formScope().trim(),
+      scopeDescription:
+        this.formRequestKind() === 'COPY' && this.formFullRecord()
+          ? 'FULL_RECORD'
+          : this.formScope().trim(),
       requestedOn: this.formRequestedOn() || undefined,
     };
     this.roiService.create(patient.id, req).subscribe({
@@ -331,13 +339,26 @@ export class RoiComponent implements OnInit, OnDestroy {
   }
 
   exportCopy(row: RoiRequest): void {
-    if (!this.canExport() || this.exportingId() || row.status !== 'FULFILLED'
-      || row.requestKind === 'CORRECTION' || row.scopeDescription !== 'FULL_RECORD') return;
+    if (
+      !this.canExport() ||
+      this.exportingId() ||
+      row.status !== 'FULFILLED' ||
+      row.requestKind === 'CORRECTION' ||
+      row.scopeDescription !== 'FULL_RECORD'
+    )
+      return;
     this.exportingId.set(row.id);
     this.roiService.downloadCopy(row.id).subscribe({
-      next: blob => { this.exportingId.set(null); saveBlob(blob, `record-copy-${row.requestedOn}.pdf`); },
-      error: err => { this.exportingId.set(null); void blobRefusalReason(err).then(message =>
-        this.toast.error(message ?? this.translate.instant('ROI.ACTION_FAILED'))); },
+      next: (blob) => {
+        this.exportingId.set(null);
+        saveBlob(blob, `record-copy-${row.requestedOn}.pdf`);
+      },
+      error: (err) => {
+        this.exportingId.set(null);
+        void blobRefusalReason(err).then((message) =>
+          this.toast.error(message ?? this.translate.instant('ROI.ACTION_FAILED')),
+        );
+      },
     });
   }
 
@@ -355,7 +376,8 @@ export class RoiComponent implements OnInit, OnDestroy {
   };
 
   decisionActionKey(kind: DecisionKind, row?: RoiRequest): string {
-    if (kind === 'fulfil' && row?.requestKind === 'CORRECTION') return 'RECORD_RIGHTS.COMPLETE_CORRECTION';
+    if (kind === 'fulfil' && row?.requestKind === 'CORRECTION')
+      return 'RECORD_RIGHTS.COMPLETE_CORRECTION';
     return RoiComponent.ACTION_KEYS[kind];
   }
 
