@@ -144,12 +144,23 @@ public class ParacetamolFactsReader {
         List<PatientProblem> surfaced = live.stream()
             .filter(p -> CrossHospitalRows.maySurface(scope, acting, p.getSensitivityCategory()))
             .toList();
-        ParacetamolFacts.Documented documented = child || scope == null || dosesGiven == null
-            ? ParacetamolFacts.Documented.NOT_READ
-            : dosesGiven.read(patient.getId(), scope, paracetamol, combinations, active);
+        ParacetamolFacts.Documented documented = child ? ParacetamolFacts.Documented.NOT_READ
+            : dosesDocumented(patient.getId(), scope, paracetamol, combinations, active);
+        boolean freeText = item == null && named;
         return new ParacetamolFacts(true, orders.counted, ParacetamolRisk.of(surfaced), orders.mayStillBeInUse,
             orders.combinations, combination, acting == null, scope == null,
-            item == null && named ? freeTextLimits(paracetamol) : null, orders.notRecognised, false, documented);
+            freeText ? freeTextLimits(paracetamol) : null, orders.notRecognised, false, documented);
+    }
+
+    /** The doses the record says were given; not read with no hospital to read at, or no record of doses. */
+    private ParacetamolFacts.Documented dosesDocumented(UUID patientId, UUID scope,
+                                                        List<MedicationCatalogItem> paracetamol,
+                                                        List<MedicationCatalogItem> combinations,
+                                                        List<MedicationCatalogItem> active) {
+        if (scope == null || dosesGiven == null) {
+            return ParacetamolFacts.Documented.NOT_READ;
+        }
+        return dosesGiven.read(patientId, scope, paracetamol, combinations, active);
     }
 
     /** A catalogue item or a cited brand names it, or it carries a class member's INN stem. */

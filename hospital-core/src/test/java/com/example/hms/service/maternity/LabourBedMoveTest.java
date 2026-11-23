@@ -56,12 +56,13 @@ class LabourBedMoveTest {
         assertThat(rule.needsAcknowledgement(admission, bed(null), hospitalId)).isTrue();
         assertThat(rule.needsAcknowledgement(admission, bed(WardType.MATERNITY), hospitalId)).isFalse();
 
-        assertThatThrownBy(() -> rule.requireAcknowledged(admission, bed(WardType.SURGICAL), hospitalId, null))
+        Bed surgical = bed(WardType.SURGICAL);
+        assertThatThrownBy(() -> rule.requireAcknowledged(admission, surgical, hospitalId, null))
             .isInstanceOfSatisfying(FieldBusinessException.class,
                 e -> assertThat(e.getField()).isEqualTo(LabourBedMove.FIELD));
-        assertThatThrownBy(() -> rule.requireAcknowledged(admission, bed(WardType.SURGICAL), hospitalId, false))
+        assertThatThrownBy(() -> rule.requireAcknowledged(admission, surgical, hospitalId, false))
             .isInstanceOf(FieldBusinessException.class);
-        assertThatCode(() -> rule.requireAcknowledged(admission, bed(WardType.SURGICAL), hospitalId, true))
+        assertThatCode(() -> rule.requireAcknowledged(admission, surgical, hospitalId, true))
             .doesNotThrowAnyException();
     }
 
