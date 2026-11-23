@@ -47,6 +47,10 @@ class SmsPartnerNotificationChannelTest {
     @Mock
     private PatientLocaleResolver patientLocaleResolver;
 
+    @Mock private com.example.hms.service.notification.PatientChannelConsent consent;
+    @Mock private com.example.hms.service.notification.PatientNotificationLedger ledger;
+    @Mock private com.example.hms.service.EmailService email;
+    @Mock private com.example.hms.service.notification.PatientRecipientCurrentCheck currentCheck;
     private SmsPartnerNotificationChannel channel;
 
     private PrescriptionRoutingDecision decision;
@@ -57,8 +61,13 @@ class SmsPartnerNotificationChannelTest {
 
     @BeforeEach
     void setUp() {
-        channel = new SmsPartnerNotificationChannel(smsServiceProvider,
+        channel = new SmsPartnerNotificationChannel(new PartnerPharmacySmsTransport(smsServiceProvider),
+                new com.example.hms.service.notification.PatientMessageGate(consent, ledger, smsService, email,
+                    new com.example.hms.service.notification.PatientRecipientVerification(), currentCheck),
                 new PartnerSmsTemplates(TestMessageSources.bundles()), patientLocaleResolver);
+        lenient().when(smsService.deliversRealSms()).thenReturn(true);
+        lenient().when(smsServiceProvider.getIfAvailable()).thenReturn(smsService);
+        lenient().when(consent.allows(any(), any(), any())).thenReturn(true);
         lenient().when(patientLocaleResolver.resolve(any(), any()))
                 .thenAnswer(inv -> inv.getArgument(1));
 
@@ -77,6 +86,7 @@ class SmsPartnerNotificationChannelTest {
         patient.setFirstName("Alice");
         patient.setLastName("Barro");
         patient.setPhoneNumberPrimary("+22670111111");
+        patient.setVerifiedSmsRecipient("+22670111111");
 
         prescription = new Prescription();
         prescription.setId(UUID.randomUUID());
@@ -106,6 +116,18 @@ class SmsPartnerNotificationChannelTest {
     void buildRefTokenNullId() {
         PrescriptionRoutingDecision d = PrescriptionRoutingDecision.builder().build();
         assertThat(channel.buildRefToken(d)).isEmpty();
+    }
+
+    @Test
+    void allPartnerNoticesRefuseALoggingOnlyGateway() {
+        when(smsService.deliversRealSms()).thenReturn(false);
+        channel.sendPrescriptionOffer(decision, prescription, partner);
+        channel.sendReminder(decision, partner);
+        channel.sendAutoRejected(decision, partner);
+        channel.sendSuperseded(decision, partner);
+        channel.sendWithdrawn(decision, partner);
+        channel.sendHeldForReview(decision, partner);
+        verify(smsService, never()).send(anyString(), anyString());
     }
 
     // ---------- sendPrescriptionOffer ----------
@@ -367,12 +389,65 @@ class SmsPartnerNotificationChannelTest {
         verifyNoInteractions(smsServiceProvider, smsService);
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"1,true", "1,false", "3,true", "3,false"})
+    void realPartnerReplyEndpointOnlyNotifiesTheVerifiedPatient(int action, boolean verified) throws Exception {
+        var decisions = org.mockito.Mockito.mock(com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository.class);
+        var prescriptions = org.mockito.Mockito.mock(com.example.hms.repository.PrescriptionRepository.class);
+        var audit = org.mockito.Mockito.mock(com.example.hms.service.AuditEventLogService.class);
+        var prescriber = org.mockito.Mockito.mock(com.example.hms.service.pharmacy.PrescriberPharmacyNotifier.class);
+        var stay = org.mockito.Mockito.mock(com.example.hms.service.StayOrderDiscontinuation.class);
+        prescription.setStatus(action == 1 ? com.example.hms.enums.PrescriptionStatus.SENT_TO_PARTNER
+            : com.example.hms.enums.PrescriptionStatus.PARTNER_ACCEPTED);
+        decision.setPrescription(prescription); decision.setTargetPharmacy(partner); decision.setDecidedForPatient(patient);
+        decision.setRoutingType(com.example.hms.enums.RoutingType.PARTNER);
+        decision.setStatus(action == 1 ? com.example.hms.enums.RoutingDecisionStatus.PENDING
+            : com.example.hms.enums.RoutingDecisionStatus.ACCEPTED);
+        if (!verified) patient.setPhoneNumberPrimary("+22670999999");
+        String token = decisionId.toString().substring(0, 8);
+        when(decisions.findOpenByIdPrefix(com.example.hms.enums.RoutingType.PARTNER,
+            PartnerExchangeService.OPEN_STATUSES, token.toLowerCase(java.util.Locale.ROOT))).thenReturn(java.util.List.of(decision));
+        when(decisions.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(prescriptions.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        var exchange = new PartnerExchangeService(decisions, prescriptions, channel, new PartnerSmsReplyParser(), audit,
+            prescriber, new WithdrawnOrderPartnerHandler(decisions, channel, audit, prescriber), stay, "226");
+        var controller = new com.example.hms.controller.pharmacy.PartnerSmsWebhookController(exchange);
+        org.springframework.test.util.ReflectionTestUtils.setField(controller, "configuredSecret", "local-test-only");
+        var mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(controller).build();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/webhooks/partner-sms")
+            .header("X-HMS-Partner-Signature", "local-test-only").contentType("application/json")
+            .content("{\"from\":\"+22670000000\",\"body\":\"" + action + " " + token + "\"}"))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.status").value("applied"));
+        if (verified) verify(smsService).send(eq("+22670111111"), anyString());
+        else verify(smsService, never()).send(anyString(), anyString());
+        verifyNoInteractions(smsServiceProvider);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void bothPatientNoticesRequireCurrentPrimaryProofAndConsent(boolean dispensed) {
+        patient.setPhoneNumberPrimary("+22670999999"); // setter invalidates old proof
+        if (dispensed) channel.notifyPatientDispensed(patient, partner);
+        else channel.notifyPatientAccepted(patient, partner);
+        verify(smsService, never()).send(anyString(), anyString());
+        verifyNoInteractions(smsServiceProvider);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void bothPatientNoticesRespectOptOut(boolean dispensed) {
+        when(consent.allows(any(), any(), any())).thenReturn(false);
+        if (dispensed) channel.notifyPatientDispensed(patient, partner);
+        else channel.notifyPatientAccepted(patient, partner);
+        verify(smsService, never()).send(anyString(), anyString());
+    }
+
     // ---------- notifyPatientAccepted ----------
 
     @Test
     @DisplayName("notifyPatientAccepted sends SMS to patient primary phone")
     void notifyPatientAcceptedPrimary() {
-        when(smsServiceProvider.getIfAvailable()).thenReturn(smsService);
 
         channel.notifyPatientAccepted(patient, partner);
 
@@ -383,15 +458,14 @@ class SmsPartnerNotificationChannelTest {
     }
 
     @Test
-    @DisplayName("notifyPatientAccepted falls back to secondary phone when primary blank")
+    @DisplayName("notifyPatientAccepted never falls back to an unverifiable secondary phone")
     void notifyPatientAcceptedSecondaryFallback() {
         patient.setPhoneNumberPrimary("   ");
         patient.setPhoneNumberSecondary("+22671222222");
-        when(smsServiceProvider.getIfAvailable()).thenReturn(smsService);
 
         channel.notifyPatientAccepted(patient, partner);
 
-        verify(smsService).send(eq("+22671222222"), anyString());
+        verify(smsService, never()).send(anyString(), anyString());
     }
 
     @Test
@@ -402,28 +476,30 @@ class SmsPartnerNotificationChannelTest {
 
         channel.notifyPatientAccepted(patient, partner);
 
-        verifyNoInteractions(smsServiceProvider, smsService);
+        verifyNoInteractions(smsServiceProvider);
+        verify(smsService, never()).send(anyString(), anyString());
     }
 
     @Test
     @DisplayName("notifyPatientAccepted is a no-op when patient is null")
     void notifyPatientAcceptedNullPatient() {
         channel.notifyPatientAccepted(null, partner);
-        verifyNoInteractions(smsServiceProvider, smsService);
+        verifyNoInteractions(smsServiceProvider);
+        verify(smsService, never()).send(anyString(), anyString());
     }
 
     @Test
     @DisplayName("notifyPatientAccepted is a no-op when partner is null")
     void notifyPatientAcceptedNullPartner() {
         channel.notifyPatientAccepted(patient, null);
-        verifyNoInteractions(smsServiceProvider, smsService);
+        verifyNoInteractions(smsServiceProvider);
+        verify(smsService, never()).send(anyString(), anyString());
     }
 
     @Test
     @DisplayName("notifyPatientAccepted uses fallback name when partner name blank")
     void notifyPatientAcceptedBlankPartnerName() {
         partner.setName("   ");
-        when(smsServiceProvider.getIfAvailable()).thenReturn(smsService);
 
         channel.notifyPatientAccepted(patient, partner);
 
@@ -437,7 +513,6 @@ class SmsPartnerNotificationChannelTest {
     @Test
     @DisplayName("notifyPatientDispensed sends SMS containing partner name")
     void notifyPatientDispensedSuccess() {
-        when(smsServiceProvider.getIfAvailable()).thenReturn(smsService);
 
         channel.notifyPatientDispensed(patient, partner);
 
@@ -451,20 +526,21 @@ class SmsPartnerNotificationChannelTest {
     @DisplayName("notifyPatientDispensed no-op when patient null")
     void notifyPatientDispensedNullPatient() {
         channel.notifyPatientDispensed(null, partner);
-        verifyNoInteractions(smsServiceProvider, smsService);
+        verifyNoInteractions(smsServiceProvider);
+        verify(smsService, never()).send(anyString(), anyString());
     }
 
     @Test
     @DisplayName("notifyPatientDispensed no-op when partner null")
     void notifyPatientDispensedNullPartner() {
         channel.notifyPatientDispensed(patient, null);
-        verifyNoInteractions(smsServiceProvider, smsService);
+        verifyNoInteractions(smsServiceProvider);
+        verify(smsService, never()).send(anyString(), anyString());
     }
 
     @Test
     @DisplayName("notifyPatientDispensed swallows gateway exceptions")
     void notifyPatientDispensedGatewayThrows() {
-        when(smsServiceProvider.getIfAvailable()).thenReturn(smsService);
         doThrow(new RuntimeException("boom")).when(smsService).send(anyString(), anyString());
 
         // Must not throw

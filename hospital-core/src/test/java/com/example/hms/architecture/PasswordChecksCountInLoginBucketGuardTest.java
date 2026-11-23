@@ -57,6 +57,11 @@ class PasswordChecksCountInLoginBucketGuardTest {
         // The 6-digit code mailed for an e-mail change, not a password: dead
         // after MAX_CODE_ATTEMPTS wrong tries.
         Map.entry("OwnEmailChangeService#confirmChange", 1),
+        // A recipient-verification one-time code, never an account password:
+        // actor/contact-bound, consumed once, expires in ten minutes; five
+        // guesses and a five-requests/hour budget persist even on refusal
+        // (PatientRecipientChallengeServiceTest).
+        Map.entry("PatientRecipientChallengeService#confirm", 1),
         // The 6-digit code sent to a recovery contact, not a password: has its
         // own attempt limit.
         Map.entry("UserCredentialLifecycleServiceImpl#verifyRecoveryContact", 1),

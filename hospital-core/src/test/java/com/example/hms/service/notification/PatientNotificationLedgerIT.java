@@ -253,6 +253,10 @@ class PatientNotificationLedgerIT extends BaseIT {
     @Test
     @DisplayName("one sweep round trip: a result that no longer exists is SKIPPED and nothing is sent")
     void sweepRoundTrip() {
+        // Satisfy the current-recipient proof so this test reaches its withdrawn-subject check.
+        patient.setVerifiedSmsRecipient(patient.getPhoneNumberPrimary());
+        patient.setVerifiedEmailRecipient(patient.getEmail());
+        patientRepository.saveAndFlush(patient);
         PatientNotificationDelivery saved = repository.saveAndFlush(row(UUID.randomUUID(), hospital.getId()));
         // The production service and queries, on a clock that has reached dueAt.
         PatientNotificationDispatchService sweepAtDueTime = new PatientNotificationDispatchService(repository,

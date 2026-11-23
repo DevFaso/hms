@@ -15124,7 +15124,8 @@
       "OPTED_OUT": "The patient turned this channel off",
       "NO_CONTACT": "No phone number or email address",
       "SUBJECT_WITHDRAWN": "Appointment cancelled or past, or result withdrawn",
-      "PATIENT_DECEASED": "The patient has died"
+      "PATIENT_DECEASED": "The patient has died",
+      "RECIPIENT_UNVERIFIED": "Contact not verified"
     },
     "MAYBE_DELIVERED": "The patient may already have received this message.",
     "RETRY_CONFIRM_TITLE": "Send this message again?",
@@ -16301,5 +16302,16 @@
   },
   "LOADING_SHELL": {
     "SLOW": "Loading is taking longer than expected. Check your connection; your open page is preserved."
+  },
+  "RECIPIENT_VERIFICATION": {
+    "TITLE": "Verify contact details",
+    "INTRO": "Clinical messages are sent only to the current phone number or e-mail after verification. Codes contain no clinical information.",
+    "VERIFIED": "Verified",
+    "NOT_VERIFIED": "Not verified: clinical messages are paused for this channel.",
+    "SEND": "Send a code",
+    "CODE": "Six-digit code",
+    "CONFIRM": "Confirm code",
+    "ERROR": "Unable to verify this contact. Try again.",
+    "CODE_REQUIRED": "Enter the six-digit code."
   }
 }

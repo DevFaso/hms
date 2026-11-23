@@ -1,3 +1,4 @@
+import { PatientRecipientVerificationComponent } from '../../shared/patient-recipient-verification.component';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -40,7 +41,7 @@ export interface ChannelChoice {
 @Component({
   selector: 'app-patient-channel-preferences',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [PatientRecipientVerificationComponent, FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (canRecord) {
@@ -54,6 +55,7 @@ export interface ChannelChoice {
           {{ 'PATIENT_CHANNELS.TITLE' | translate }}
         </h3>
         <p class="hint">{{ 'PATIENT_CHANNELS.INTRO' | translate }}</p>
+        <app-patient-recipient-verification [patientId]="patientId()" />
         @if (loadFailed()) {
           <p class="error" role="alert">{{ 'PATIENT_CHANNELS.LOAD_FAILED' | translate }}</p>
         } @else if (choices().length > 0) {

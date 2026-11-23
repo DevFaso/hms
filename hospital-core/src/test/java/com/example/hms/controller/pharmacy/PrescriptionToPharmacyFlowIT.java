@@ -176,6 +176,8 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
 
     @BeforeEach
     void seed() {
+        // These end-to-end flows use a mocked real gateway, never the logging-only transport.
+        org.mockito.Mockito.when(smsService.deliversRealSms()).thenReturn(true);
         auditEventLogRepository.deleteAllInBatch();
 
         organization = organizationRepository.save(Organization.builder()
