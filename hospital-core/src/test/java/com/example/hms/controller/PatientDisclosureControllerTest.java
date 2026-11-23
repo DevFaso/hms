@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -104,7 +105,7 @@ class PatientDisclosureControllerTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
         // The global view places the reader at no hospital: no family release is listed (null).
         when(disclosureAccountingService.getAccounting(eq(patientId), any(), any(), eq(pageable),
-            org.mockito.ArgumentMatchers.isNull())).thenReturn(expected);
+            isNull())).thenReturn(expected);
 
         var response = controller.getDisclosures(patientId, null, null, pageable);
 

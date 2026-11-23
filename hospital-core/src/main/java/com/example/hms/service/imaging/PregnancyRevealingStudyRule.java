@@ -201,13 +201,15 @@ public final class PregnancyRevealingStudyRule {
     private static Verdict verdict(ImagingOrder order, ExamDecision decision, boolean recordedMale,
                                    Integer ageYears) {
         Boolean flag = decision == null ? null : decision.flag();
+        String examRegion = decision == null ? null : decision.examRegion();
         if (order == null || Boolean.TRUE.equals(flag)) {
             return Verdict.REVEALING;
         }
-        boolean cleared = Boolean.FALSE.equals(flag);
+        // Not flagged (answered above): a decision that is there is a clearance.
+        boolean cleared = flag != null;
         // What the orderer typed about this one patient is read whatever the exam says: the question, and a
         // body region that is not the cleared exam's own.
-        boolean regionIsTheExams = cleared && sameText(order.getBodyRegion(), decision.examRegion());
+        boolean regionIsTheExams = cleared && sameText(order.getBodyRegion(), examRegion);
         if (namesPregnancyStudy(order.getClinicalQuestion())
                 || (!regionIsTheExams && namesPregnancyStudy(order.getBodyRegion()))) {
             return Verdict.REVEALING;

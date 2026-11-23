@@ -85,6 +85,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -1199,8 +1200,8 @@ class PatientPortalServiceImplPhase2Test {
         private void renewalRouting(User prescriberUser, UUID atHospital, boolean mayRenew) {
             prescriberUser.setId(UUID.randomUUID());
             com.example.hms.utility.RoleValidator renewalRoles =
-                org.mockito.Mockito.mock(com.example.hms.utility.RoleValidator.class);
-            org.mockito.Mockito.lenient()
+                mock(com.example.hms.utility.RoleValidator.class);
+            lenient()
                 .when(renewalRoles.canApproveRenewal(prescriberUser.getId(), atHospital, false)).thenReturn(mayRenew);
             service.setRenewalAlertRouting(new com.example.hms.service.pharmacy.RenewalAlertRouting(renewalRoles));
         }

@@ -32,6 +32,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -207,7 +208,7 @@ class FamilyReleaseDisclosureTest {
         service.getAccounting(patientId, null, null, PageRequest.of(0, 20));
         service.getEntries(patientId, null, null, PageRequest.of(0, 20));
 
-        verify(auditRepository, org.mockito.Mockito.times(2))
+        verify(auditRepository, times(2))
             .findDisclosuresForPatient(eq(patientId), asked.capture(), any(), any(), any());
         assertThat(asked.getAllValues()).allSatisfy(types -> assertThat(types)
             .doesNotContain(AuditEventType.SENSITIVE_RESULT_RELEASED_TO_PROXY)

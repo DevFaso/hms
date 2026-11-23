@@ -41,13 +41,19 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
     @Transactional(readOnly = true)
     public DisclosureAccountingDTO getAccounting(UUID patientId, LocalDateTime from,
                                                  LocalDateTime to, Pageable pageable) {
-        return getAccounting(patientId, from, to, pageable, null);
+        return staffAccounting(patientId, from, to, pageable, null);
     }
 
     @Override
     @Transactional(readOnly = true)
     public DisclosureAccountingDTO getAccounting(UUID patientId, LocalDateTime from, LocalDateTime to,
                                                  Pageable pageable, UUID callerHospitalId) {
+        return staffAccounting(patientId, from, to, pageable, callerHospitalId);
+    }
+
+    /** The staff accounting, read from {@code callerHospitalId} (null: from no hospital in particular). */
+    private DisclosureAccountingDTO staffAccounting(UUID patientId, LocalDateTime from, LocalDateTime to,
+                                                    Pageable pageable, UUID callerHospitalId) {
         Page<AccessLogEntryDTO> entries = staffEntries(patientId, from, to, pageable, callerHospitalId);
         Map<DisclosureCategory, Long> counts = folded(callerHospitalId == null
             ? auditRepository.countDisclosureCategoriesForPatient(patientId, STAFF_ANYWHERE, from, to)
