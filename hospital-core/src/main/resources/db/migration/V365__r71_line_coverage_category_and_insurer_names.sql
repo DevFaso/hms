@@ -14,17 +14,31 @@ ALTER TABLE billing.invoice_items
     CHECK (coverage_category IS NULL OR coverage_category IN ('CONSULTATION', 'LAB_TEST', 'IMAGING', 'PROCEDURE',
         'BED_DAY', 'TRANSFUSION', 'DELIVERY', 'OTHER_SERVICE'));
 
---    The lines of invoices still in DRAFT (not issued: no payer share is fixed yet) that no price-list item names:
---    a lab line, and an order's line named as its order (the checkout names an unpriced imaging or procedure line by
---    its study or procedure, as written). An issued invoice is never touched.
+--    The lines of invoices still in DRAFT (not issued: no payer share is fixed yet) that no price-list item names
+--    and that are not stamped yet, by what the checkout or the delivery charge posted them for (review of #1301, L1):
+--    the server's own wording (default consultation, bed days, transfusion, delivery), a lab line, and an order's
+--    line named as its order (an imaging study or a procedure, compared trimmed on both sides). A line typed at the
+--    till matches none and stays NULL. An issued invoice is never touched. Each statement fills NULLs only.
+--    A default consultation or a bed-day line named after the hospital's own service (no wording code, no order)
+--    cannot be told from a typed line here: it keeps the default rate until it is posted again.
 UPDATE billing.invoice_items ii
-   SET coverage_category = 'LAB_TEST'
+   SET coverage_category = CASE
+           WHEN ii.text_code = 'billing.checkout.consultation' THEN 'CONSULTATION'
+           WHEN ii.text_code = 'billing.checkout.bedDays' THEN 'BED_DAY'
+           WHEN ii.text_code = 'billing.checkout.transfusion' THEN 'TRANSFUSION'
+           WHEN ii.text_code IN ('maternity.delivery.charge.caesarean', 'maternity.delivery.charge.vaginal')
+               OR bi.notes_code = 'maternity.delivery.charge.note' THEN 'DELIVERY'
+           ELSE 'LAB_TEST'
+       END
   FROM billing.billing_invoices bi
  WHERE ii.billing_invoice_id = bi.id
    AND bi.status = 'DRAFT'
    AND ii.coverage_category IS NULL
    AND ii.price_list_item_id IS NULL
-   AND ii.item_category = 'LAB_TEST';
+   AND (ii.text_code IN ('billing.checkout.consultation', 'billing.checkout.bedDays', 'billing.checkout.transfusion',
+                         'maternity.delivery.charge.caesarean', 'maternity.delivery.charge.vaginal')
+        OR bi.notes_code = 'maternity.delivery.charge.note'
+        OR ii.item_category = 'LAB_TEST');
 
 UPDATE billing.invoice_items ii
    SET coverage_category = 'IMAGING'
@@ -33,11 +47,12 @@ UPDATE billing.invoice_items ii
    AND bi.status = 'DRAFT'
    AND ii.coverage_category IS NULL
    AND ii.price_list_item_id IS NULL
+   AND ii.text_code IS NULL
    AND bi.encounter_id IS NOT NULL
    AND EXISTS (SELECT 1
                  FROM clinical.imaging_orders io
                 WHERE io.encounter_id = bi.encounter_id
-                  AND btrim(io.study_type) = ii.item_description);
+                  AND btrim(io.study_type) = btrim(ii.item_description));
 
 UPDATE billing.invoice_items ii
    SET coverage_category = 'PROCEDURE'
@@ -46,11 +61,12 @@ UPDATE billing.invoice_items ii
    AND bi.status = 'DRAFT'
    AND ii.coverage_category IS NULL
    AND ii.price_list_item_id IS NULL
+   AND ii.text_code IS NULL
    AND bi.encounter_id IS NOT NULL
    AND EXISTS (SELECT 1
                  FROM clinical.procedure_orders po
                 WHERE po.encounter_id = bi.encounter_id
-                  AND btrim(po.procedure_name) = ii.item_description);
+                  AND btrim(po.procedure_name) = btrim(ii.item_description));
 
 -- 2. QA D3600: the desk's link form sends a payer code and no insurer name, so each coverage row it made was named by
 --    its code (provider_name = payer_code, « MUT-TEST-A »). A row of a hospital that has a payer of that code is

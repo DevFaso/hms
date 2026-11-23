@@ -410,6 +410,9 @@ class PatientInsuranceOtherHospitalTest {
         when(payerCatalogueService.activeAgreementsAt(hospitalB)).thenReturn(List.of(
             new PayerCatalogueService.Agreement("AUTRE", "Autre mutuelle"),
             new PayerCatalogueService.Agreement("MUT-TEST-A", "Mutuelle Test A (FICTIVE)")));
+        when(payerCatalogueService.labelOf(planAtA)).thenReturn(
+            new PayerCatalogueService.PlanLabel(planAtA, "ESS", "Formule Test Essentielle", "MUT-TEST-A",
+                "Mutuelle Test A (FICTIVE)"));
         when(patientInsuranceRepository.save(any(PatientInsurance.class))).thenAnswer(call -> {
             PatientInsurance saved = call.getArgument(0);
             saved.setId(UUID.randomUUID());
@@ -430,43 +433,83 @@ class PatientInsuranceOtherHospitalTest {
     }
 
     /**
-     * QA D3600 (r71), the whole class: B's agreement (payer MUT-TEST-A « Mutuelle Test A ») is found for a coverage
-     * row made by each writer, in the shape each one stores it.
+     * QA D3600 (r71), the whole class, as review of #1301 (M1) fixed it: B's agreement (payer MUT-TEST-A « Mutuelle
+     * Test A ») is found for a row of hospital A made by each writer, in the shape each one stores it. A row named by
+     * its code is given its insurer's name from A's OWN catalogue (A's payer of that code), never from B's: the code
+     * alone never matches across hospitals. A patient's own add is untagged (shared): it is held at every hospital,
+     * never shown here as another hospital's.
      */
     @Test
     void theAgreementHereIsFoundForARowOfEveryWriter_D3600() {
-        PayerCatalogueService.Agreement other = new PayerCatalogueService.Agreement("MUT-B", "Mutuelle Beta");
         PayerCatalogueService.Agreement agreement = new PayerCatalogueService.Agreement("MUT-TEST-A", "Mutuelle Test A");
-        List<PayerCatalogueService.Agreement> atB = List.of(other, agreement);
+        when(payerCatalogueService.activeAgreementsAt(hospitalB)).thenReturn(List.of(
+            new PayerCatalogueService.Agreement("MUT-B", "Mutuelle Beta"), agreement));
+        when(payerCatalogueService.payerNameAt(hospitalA, "MUT-TEST-A")).thenReturn(Optional.of("Mutuelle Test A"));
+        rowA.setPayerPlanId(null);
+        bReadsA();
         // {writer, recorded code, recorded name}
         String[][] rows = {
             // the desk's link form (natural key), the code alone, before this fix: the name is the code
             {"desk link, legacy", "MUT-TEST-A", "MUT-TEST-A"},
-            // the desk's link form after this fix: filed under that hospital's payer name
+            // the desk's link form after this fix: filed under A's payer name for that code
             {"desk link", "MUT-TEST-A", "Mutuelle Test A"},
-            // the patient's own add (natural key, no hospital, no catalogue): the code, in any case
-            {"patient self-add", "mut-test-a", "mut-test-a"},
             // the desk's create / edit form and the pre-check-in: a typed name, no code
             {"desk create", null, "  mutuelle   test a "},
             {"pre-check-in", null, "Mutuelle Test A"},
-            // a code typed as the name, no code
-            {"typed code", null, "MUT-TEST-A"},
-            // a takeover without an agreement (#1293): no code, the name as recorded
-            {"takeover without agreement", null, "MUT-TEST-A"},
+            // a code of A's catalogue typed as the name, no code
+            {"typed code", null, "mut-test-a"},
             // the dev seed / an import naming both
             {"import", "MUT-TEST-A", "Mutuelle Test A"},
         };
         for (String[] row : rows) {
-            assertThat(PayerCatalogueService.Agreement.bestFor(atB, row[1], row[2]))
-                .as(row[0]).contains(agreement);
+            rowA.setPayerCode(row[1]);
+            rowA.setProviderName(row[2]);
+            when(payerCatalogueService.payerNameAt(hospitalA, "mut-test-a")).thenReturn(Optional.of("Mutuelle Test A"));
+            OtherHospitalInsuranceDTO card = service.getOtherHospitalPolicies(patientId).get(0);
+            assertThat(card.isAgreementHere()).as(row[0]).isTrue();
+            assertThat(card.getInsurerName().replaceAll("\\s+", " ")).as(row[0])
+                .isEqualToIgnoringCase("Mutuelle Test A");
         }
-        // Review of #1293 holds: the same code beside another insurer's name is another insurer.
-        assertThat(PayerCatalogueService.Agreement.bestFor(atB, "MUT-TEST-A", "Mutuelle Alpha")).isEmpty();
-        // The code first: a code match beside a name that is only a code beats a name-only match.
-        PayerCatalogueService.Agreement sameNameOtherCode =
-            new PayerCatalogueService.Agreement("MTA-2", "MUT-TEST-A");
-        assertThat(PayerCatalogueService.Agreement.bestFor(List.of(sameNameOtherCode, agreement),
-            "MUT-TEST-A", "MUT-TEST-A")).contains(agreement);
+    }
+
+    /**
+     * Review of #1301 (M1): a payer code is unique only within one hospital. A's desk linked policy 123 under the code
+     * « MS », and A has no payer MS; B has a payer MS, « Mutuelle Sociale », another insurer. B's card says there is
+     * no agreement and shows the insurer as A recorded it; the takeover is an identity-only record (never filed under
+     * Mutuelle Sociale); B's own Mutuelle Sociale row of the same number does not hide A's policy.
+     */
+    @Test
+    void aCodeAloneNeverMatchesAnotherHospitalsPayer_review1301M1() {
+        rowA.setPayerCode("MS");
+        rowA.setProviderName("MS");
+        rowA.setPayerPlanId(null);
+        rowA.setPolicyNumber("123");
+        bReadsA();
+        when(payerCatalogueService.activeAgreementsAt(hospitalB))
+            .thenReturn(List.of(new PayerCatalogueService.Agreement("MS", "Mutuelle Sociale")));
+        when(payerCatalogueService.payerNameAt(hospitalA, "MS")).thenReturn(Optional.empty());
+        when(payerCatalogueService.payerNameAt(hospitalB, "MS")).thenReturn(Optional.of("Mutuelle Sociale"));
+        PatientInsurance ownAtB = PatientInsurance.builder().patient(patient).assignment(atB)
+            .payerCode("MS").providerName("Mutuelle Sociale").policyNumber("123").build();
+        when(patientInsuranceRepository.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalB))
+            .thenReturn(List.of(ownAtB));
+        when(patientInsuranceRepository.save(any(PatientInsurance.class))).thenAnswer(call -> {
+            PatientInsurance saved = call.getArgument(0);
+            saved.setId(UUID.randomUUID());
+            return saved;
+        });
+
+        OtherHospitalInsuranceDTO card = service.getOtherHospitalPolicies(patientId).get(0);
+        assertThat(card.isAgreementHere()).isFalse();
+        assertThat(card.getInsurerName()).isEqualTo("MS");
+
+        when(patientInsuranceRepository.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalB))
+            .thenReturn(List.of());
+        service.reuseOtherHospitalPolicy(rowA.getId());
+        ArgumentCaptor<PatientInsurance> written = ArgumentCaptor.forClass(PatientInsurance.class);
+        verify(patientInsuranceRepository, times(1)).save(written.capture());
+        assertThat(written.getValue().getPayerCode()).isNull();
+        assertThat(written.getValue().getProviderName()).isEqualTo("MS");
     }
 
     /** QA D3601 (r71): a policy A holds twice shows once, by the row that names A's formule. */
