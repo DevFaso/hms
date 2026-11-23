@@ -52,6 +52,10 @@ export interface ClinicalRuleStatus {
   signoff: RuleSignoff | null;
   /** While pending: an earlier version this hospital had signed. */
   lastSignedVersion: string | null;
+  /** The area of the product it belongs to (CLINICAL_RULES.AREA.*); the screen never shows class names. */
+  area: string;
+  /** The public page of the main published source, when it has one. */
+  sourceUrl: string | null;
 }
 
 export interface ClinicalRulesOverview {

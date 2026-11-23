@@ -480,7 +480,8 @@ class PharmacySaleServiceImplTest {
         dto.setClientRequestId(key);
         PharmacySale first = PharmacySale.builder().pharmacy(pharmacy).hospital(hospital)
                 .paymentMethod(PharmacyPaymentMethod.CASH).clientRequestId(key).totalAmount(BigDecimal.TEN).build();
-        first.addLine(com.example.hms.model.pharmacy.SaleLine.builder().quantity(BigDecimal.ONE).build());
+        first.addLine(com.example.hms.model.pharmacy.SaleLine.builder().medicationCatalogItem(item)
+                .quantity(BigDecimal.ONE).build());
         PharmacySaleResponseDTO answer = PharmacySaleResponseDTO.builder().build();
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
@@ -496,6 +497,48 @@ class PharmacySaleServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D3402 (r70): the same key with a different basket (3 instead of 1) is refused 409, never answered")
+    void d3402_theSameKeyWithAnotherBasketIsRefused() {
+        PharmacySaleRequestDTO dto = request(List.of(line(new BigDecimal("3"), BigDecimal.TEN)));
+        UUID key = UUID.randomUUID();
+        dto.setClientRequestId(key);
+        PharmacySale first = PharmacySale.builder().pharmacy(pharmacy).hospital(hospital)
+                .paymentMethod(PharmacyPaymentMethod.CASH).clientRequestId(key).totalAmount(BigDecimal.TEN).build();
+        first.addLine(com.example.hms.model.pharmacy.SaleLine.builder().medicationCatalogItem(item)
+                .quantity(BigDecimal.ONE).build());
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(pharmacyRepository.findLockedByIdAndHospitalId(pharmacyId, hospitalId)).thenReturn(Optional.of(pharmacy));
+        when(saleRepository.findByHospital_IdAndClientRequestId(hospitalId, key)).thenReturn(Optional.of(first));
+
+        assertThatThrownBy(() -> service.createSale(dto))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        verify(saleRepository, never()).saveAndFlush(any());
+        verify(stockLotRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D3402 (r70): the same key naming another medication is refused 409")
+    void d3402_theSameKeyWithAnotherMedicationIsRefused() {
+        SaleLineRequestDTO other = line(BigDecimal.ONE, BigDecimal.TEN);
+        other.setMedicationCatalogItemId(UUID.randomUUID());
+        PharmacySaleRequestDTO dto = request(List.of(other));
+        UUID key = UUID.randomUUID();
+        dto.setClientRequestId(key);
+        PharmacySale first = PharmacySale.builder().pharmacy(pharmacy).hospital(hospital)
+                .paymentMethod(PharmacyPaymentMethod.CASH).clientRequestId(key).totalAmount(BigDecimal.TEN).build();
+        first.addLine(com.example.hms.model.pharmacy.SaleLine.builder().medicationCatalogItem(item)
+                .quantity(BigDecimal.ONE).build());
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(pharmacyRepository.findLockedByIdAndHospitalId(pharmacyId, hospitalId)).thenReturn(Optional.of(pharmacy));
+        when(saleRepository.findByHospital_IdAndClientRequestId(hospitalId, key)).thenReturn(Optional.of(first));
+
+        assertThatThrownBy(() -> service.createSale(dto))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
+    }
+
+    @Test
     @DisplayName("PR 11 (QA D2430): the key of another sale (other method) is refused, never answered")
     void d2430_theKeyOfAnotherSaleIsRefused() {
         PharmacySaleRequestDTO dto = request(List.of(line(BigDecimal.ONE, BigDecimal.TEN)));
@@ -503,7 +546,8 @@ class PharmacySaleServiceImplTest {
         dto.setClientRequestId(key);
         PharmacySale first = PharmacySale.builder().pharmacy(pharmacy).hospital(hospital)
                 .paymentMethod(PharmacyPaymentMethod.MOBILE_MONEY).clientRequestId(key).totalAmount(BigDecimal.TEN).build();
-        first.addLine(com.example.hms.model.pharmacy.SaleLine.builder().quantity(BigDecimal.ONE).build());
+        first.addLine(com.example.hms.model.pharmacy.SaleLine.builder().medicationCatalogItem(item)
+                .quantity(BigDecimal.ONE).build());
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(pharmacyRepository.findLockedByIdAndHospitalId(pharmacyId, hospitalId)).thenReturn(Optional.of(pharmacy));
@@ -526,7 +570,8 @@ class PharmacySaleServiceImplTest {
         dto.setClientRequestId(key);
         PharmacySale first = PharmacySale.builder().pharmacy(pharmacy).hospital(hospital)
                 .paymentMethod(PharmacyPaymentMethod.MOBILE_MONEY).clientRequestId(key).totalAmount(BigDecimal.TEN).build();
-        first.addLine(com.example.hms.model.pharmacy.SaleLine.builder().quantity(BigDecimal.ONE).build());
+        first.addLine(com.example.hms.model.pharmacy.SaleLine.builder().medicationCatalogItem(item)
+                .quantity(BigDecimal.ONE).build());
         PharmacySaleResponseDTO answer = PharmacySaleResponseDTO.builder().build();
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));

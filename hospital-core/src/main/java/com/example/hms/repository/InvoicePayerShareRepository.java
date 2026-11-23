@@ -23,6 +23,10 @@ public interface InvoicePayerShareRepository extends JpaRepository<InvoicePayerS
     /** Every share of one invoice at one hospital, oldest first: the history, rejected and cancelled ones included. */
     List<InvoicePayerShare> findByInvoiceIdAndHospitalIdOrderByCreatedAtAsc(UUID invoiceId, UUID hospitalId);
 
+    /** QA D2706 (r70): the shares of one hospital in these statuses, oldest first (the « Parts assureurs » list). */
+    List<InvoicePayerShare> findByHospitalIdAndStatusInOrderByCreatedAtAsc(UUID hospitalId,
+                                                                          java.util.Collection<PayerShareStatus> statuses);
+
     /** The shares of one invoice at one hospital in the given statuses. */
     List<InvoicePayerShare> findByInvoiceIdAndHospitalIdAndStatusIn(UUID invoiceId, UUID hospitalId,
                                                                    Collection<PayerShareStatus> statuses);

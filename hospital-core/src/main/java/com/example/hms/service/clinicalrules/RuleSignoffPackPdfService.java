@@ -46,6 +46,8 @@ public class RuleSignoffPackPdfService {
         ClinicalRulesOverviewDTO overview = signoffService.overview(hospitalId, readerUserId);
         LocalDate today = HospitalCalendar.today(hospital);
         try (PharmacyPdfWriter pdf = new PharmacyPdfWriter(false)) {
+            pdf.pageFurniture(hospital.getName() + " — " + label("clinicalRules.pack.title") + " — "
+                + DisplayDates.date(today, PACK_LOCALE), label("clinicalRules.pack.page"));
             pdf.paragraph(PharmacyPdfWriter.BOLD, 15f, label("clinicalRules.pack.title"));
             pdf.paragraph(PharmacyPdfWriter.REGULAR, 10f, label("clinicalRules.pack.hospital", hospital.getName()));
             pdf.paragraph(PharmacyPdfWriter.REGULAR, 10f, label("clinicalRules.pack.printedOn", DisplayDates.date(today, PACK_LOCALE)));
@@ -62,6 +64,9 @@ public class RuleSignoffPackPdfService {
                     + "  (" + label("clinicalRules.pack.version", rule.version()) + ")");
                 pdf.field(label("clinicalRules.pack.description"), rule.description().fr(), 9f);
                 pdf.field(label("clinicalRules.pack.source"), rule.source().fr(), 9f);
+                if (sourceUrl(rule.key()) != null) {
+                    pdf.field(label("clinicalRules.pack.sourceUrl"), sourceUrl(rule.key()), 9f);
+                }
                 pdf.field(label("clinicalRules.pack.approver"), rule.approverRole().fr(), 9f);
                 pdf.field(label("clinicalRules.pack.status"), statusText(rule), 9f);
                 pdf.space(2f);
@@ -80,6 +85,10 @@ public class RuleSignoffPackPdfService {
         } catch (IOException e) {
             throw new BusinessException("clinicalRules.pack.failed", e);
         }
+    }
+
+    private static String sourceUrl(String ruleKey) {
+        return ClinicalRuleRegistry.find(ruleKey).map(ClinicalRuleSet::sourceUrl).orElse(null);
     }
 
     private String statusText(ClinicalRuleStatusDTO rule) {

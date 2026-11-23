@@ -170,6 +170,15 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
     """)
     List<Staff> findAllWithLicenseExpiringBefore(@Param("cutoff") LocalDate cutoff);
 
+    /**
+     * The roles a patient can book (QA D169), in JPQL. QA r70 D3204: a surgeon IS a doctor ({@code RoleExpansion}
+     * grants both ROLE_PHYSICIAN and ROLE_SURGEON the doctor's rights), yet a surgeon's staff row is filed under
+     * ROLE_SURGEON, so their Chirurgie slots were never offered and the checklist never counted them.
+     * {@code BookableProviderRolesGuardTest} keeps every doctor-equivalent role here.
+     */
+    String BOOKABLE_PROVIDER_ROLES_JPQL =
+        "('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON','ROLE_NURSE','ROLE_MIDWIFE')";
+
     // ── Portal: active providers by hospital + department (for patient booking) ──
     @EntityGraph(attributePaths = {"user","department","assignment","assignment.role","hospital"})
     @Query("""
@@ -178,7 +187,7 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
           AND s.department.id = :departmentId
           AND s.active = true
           AND s.user.isDeleted = false
-          AND UPPER(s.assignment.role.code) IN ('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')
+          AND UPPER(s.assignment.role.code) IN """ + BOOKABLE_PROVIDER_ROLES_JPQL + """
         ORDER BY s.name ASC
     """)
     List<Staff> findActiveProvidersByHospitalAndDepartment(
@@ -197,8 +206,7 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
           AND s.department IS NOT NULL
           AND s.active = true
           AND s.user.isDeleted = false
-          AND UPPER(s.assignment.role.code) IN ('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')
-    """)
+          AND UPPER(s.assignment.role.code) IN """ + BOOKABLE_PROVIDER_ROLES_JPQL)
     java.util.Set<UUID> findDepartmentIdsWithActiveProviders(@Param("hospitalId") UUID hospitalId);
 
     /**
@@ -209,6 +217,16 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
     @Query("SELECT COUNT(s) FROM Staff s WHERE s.hospital.id = :hospitalId AND s.active = true"
         + " AND s.user.isActive = true AND s.user.isDeleted = false")
     long countActiveByHospitalId(@Param("hospitalId") UUID hospitalId);
+
+    /**
+     * QA r70 D3203: {@link #countActiveByHospitalId} without the hospital's administrators. « Personnel » on the
+     * onboarding checklist ticked as soon as the administrator existed, before any clinician was registered.
+     */
+    @Query("SELECT COUNT(s) FROM Staff s LEFT JOIN s.assignment a LEFT JOIN a.role r"
+        + " WHERE s.hospital.id = :hospitalId AND s.active = true"
+        + " AND s.user.isActive = true AND s.user.isDeleted = false"
+        + " AND (r.code IS NULL OR UPPER(r.code) <> 'ROLE_HOSPITAL_ADMIN')")
+    long countActiveNonAdministratorsByHospitalId(@Param("hospitalId") UUID hospitalId);
 
     // ── MVP 3: Lab staff filtered by lab roles ──────────────────
     @EntityGraph(attributePaths = {"user","department","assignment","assignment.role","hospital"})

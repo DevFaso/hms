@@ -437,7 +437,8 @@
       "SCOPE_UNKNOWN": "Scope not recorded",
       "IMPERSONATOR": "Impersonated by {{actor}}",
       "SHOW_TEN": "Show up to 10 events",
-      "HOSPITAL_FILTER": "Hospital filter (ID)"
+      "HOSPITAL_FILTER": "Hospital",
+      "ALL_HOSPITALS": "All hospitals"
     },
     "STAT": {
       "ORGANIZATIONS": "Organizations",
@@ -907,6 +908,7 @@
     "RETRY": "Retry",
     "EMPTY": "No integrations are registered.",
     "ENABLED": "Enabled",
+    "NOT_CONFIGURED": "Not configured",
     "DISABLED": "Disabled",
     "NO_ORG_HISTORY": "No call history recorded for this integration yet.",
     "PLATFORM_WIDE": "Platform-wide",
@@ -2151,7 +2153,10 @@
       "ORDONNANCE_PRINTED": "Ordonnance printed by its prescriber (prescriptions {{ids}})",
       "CLINICAL_RULE_SIGNED_OFF": "Clinical rule set {{rule}} signed off (version {{version}})",
       "CLINICAL_RULE_SIGNOFF_REVOKED": "Clinical rule set {{rule}} sign-off revoked (version {{version}})",
-      "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Support session refused: {{what}} (clinical-rule sign-off)"
+      "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Support session refused: {{what}} (clinical-rule sign-off)",
+      "PATIENT_ACTIVATION_CODE_SHOWN": "Patient portal activation code shown to the desk",
+      "PATIENT_ACTIVATION_RESENT": "Patient portal activation re-sent by the desk",
+      "DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED": "Deferred billing withdrawn: the prepared fill it was approved on was cancelled"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -4443,6 +4448,7 @@
     "ACTIVE_ORDERS": "Active Orders",
     "ALL_ORDERS": "All Orders",
     "ATTESTATION": "Attestation",
+    "ATTESTATION_MEANING": "I electronically attest that the information above is accurate.",
     "AUTO_FILLED": "Auto-filled",
     "CANCELLED": "Cancelled",
     "CANCELLING": "Cancelling...",
@@ -4639,6 +4645,8 @@
     "STAFF_COUNT": "{{count}} staff"
   },
   "LAB_TEST_CONFIG": {
+    "APPROVAL_NEXT_STEP": "Continue in the lab approval queue",
+    "COMPONENT_RANGES": "{{components}} components · {{ranges}} ranges",
     "ACTIONS": "Actions",
     "ADD_RANGE": "Add Range",
     "AGE_MAX": "Age Max",
@@ -5326,7 +5334,8 @@
     "PHARMACY_RECONCILIATION": "Pharmacy reconciliation",
     "PHARMACY_TILL_CLOSE": "Pharmacy till close",
     "PHARMACY_BILLING_DEFERRALS": "Deferred billing (pharmacy)",
-    "CLINICAL_RULES": "Clinical rules"
+    "CLINICAL_RULES": "Clinical rules",
+    "PAYER_SHARES": "Insurer shares"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Critical alert",
@@ -5782,13 +5791,16 @@
     "OTHER_ROLES_HINT": "If your welcome email lists other roles, confirm each one with its own code, using the button under that code.",
     "DIGIT_OF": "Digit {{n}} of {{total}}",
     "BY_PHONE_TITLE": "Activate your account",
-    "BY_PHONE_INTRO": "Enter the phone number the reception registered and the 6-digit code you received by SMS.",
+    "BY_PHONE_INTRO": "Enter the phone number given when you were registered and the 6-digit code you received (by SMS, by e-mail or in person).",
     "PHONE_LABEL": "Phone number",
     "CODE_LABEL": "Activation code (6 digits)",
     "BY_PHONE_SUBMIT": "Activate my account",
     "ERR_PHONE_REQUIRED": "Enter your phone number.",
     "ERR_CODE_FORMAT": "The code has 6 digits.",
-    "ERR_PHONE_CODE_INCORRECT": "This number and code do not match. Check the SMS and try again."
+    "ERR_PHONE_CODE_INCORRECT": "This number and code do not match. Check the SMS and try again.",
+    "CREDENTIALS_REISSUED": "This temporary password replaces the one in the welcome e-mail.",
+    "ENTER_CODE_TITLE": "Activate your account",
+    "ENTER_CODE_INTRO": "Enter the 6-digit code you received by SMS, by e-mail or in person."
   },
   "ORGANIZATIONS": {
     "CONTACT": "Contact",
@@ -8126,7 +8138,9 @@
         "ADJUSTMENT": "Adjustment",
         "TRANSFER": "Transfer",
         "RETURN": "Return",
-        "SALE": "Counter sale"
+        "SALE": "Counter sale",
+        "QUARANTINE": "Quarantine",
+        "DESTRUCTION": "Destruction"
       },
       "INVOICE_ITEM_CATEGORY": {
         "SERVICE": "Service",
@@ -10071,7 +10085,9 @@
     "USERNAME": "Username",
     "USER_AND_HOSPITAL_REQUIRED": "User and hospital are required",
     "VIEW_DEPARTMENT_DETAILS": "View Department Details",
-    "WEEKLY_SHIFTS": "Weekly Shifts"
+    "WEEKLY_SHIFTS": "Weekly Shifts",
+    "NO_DEPARTMENT_OPTION": "— No department —",
+    "DEPARTMENTS_LOAD_FAILED": "The departments could not be loaded."
   },
   "TREATMENT": {
     "ACTIVE": "Active",
@@ -10213,7 +10229,8 @@
       "RESTORE_FAILED": "Failed to restore user",
       "IMPERSONATE_REASON_TOO_SHORT": "Reason must be at least 5 characters.",
       "IMPERSONATE_STARTED": "Now acting as {{name}}.",
-      "IMPERSONATE_FAILED": "Failed to start impersonation"
+      "IMPERSONATE_FAILED": "Failed to start impersonation",
+      "USERNAME_ISSUED": "Temporary username: {{username}}. The person chooses their own at first sign-in."
     },
     "TOTAL": "Total",
     "USER": "User",
@@ -10236,7 +10253,9 @@
       "FAILED": "Two-step verification could not be reset."
     },
     "HOSPITAL_SCOPE": "Hospital: {{name}}",
-    "HOSPITAL_SCOPE_CLEAR": "Show every hospital"
+    "HOSPITAL_SCOPE_CLEAR": "Show every hospital",
+    "DEPARTMENT": "Department",
+    "DEPARTMENT_HINT": "The department a clinician is booked in. It can be changed later on « Staff »."
   },
   "TRIAGE": {
     "ACUITY": "Acuity Level",
@@ -10326,6 +10345,8 @@
     "ASSESSMENT_REQUIRED": "Record the assessment before submitting: allergies, medications, pain, fall risk or nursing notes."
   },
   "PRE_CHECKIN": {
+    "CURRENT_CONTACT": "Current contact details",
+    "CURRENT_CONTACT_ERROR": "Current contact details could not be loaded. Leaving an update field empty keeps its existing value.",
     "ADDRESS": "Address",
     "ADDRESS_LABEL": "Address",
     "ADDRESS_LINE1": "Address Line 1",
@@ -10360,7 +10381,7 @@
     "PHONE_LABEL": "Phone",
     "PHONE_PLACEHOLDER": "e.g. +226 70 12 34 56",
     "QUESTIONNAIRES_COMPLETED": "Questionnaires Completed",
-    "STATE": "State",
+    "STATE": "Region / State (if applicable)",
     "STEPS_NAV_LABEL": "Pre-check-in steps",
     "STEP_DEMOGRAPHICS": "Demographics",
     "STEP_DESCRIPTION": "Please update any information that has changed since your last visit. Leave fields blank to keep current values.",
@@ -10372,7 +10393,7 @@
     "TITLE": "Pre-Check-In",
     "UPDATED_DEMOGRAPHICS": "Updated Demographics",
     "YES": "Yes",
-    "ZIP": "Zip Code",
+    "ZIP": "Postal code (if applicable)",
     "DATE_AT_TIME": "{{date}} at {{time}}",
     "EMAIL_INVALID": "Enter a valid e-mail address, or leave the field empty."
   },
@@ -10868,7 +10889,7 @@
     "CANCEL_DISPENSE_CONFIRM": "Cancel this dispense and reverse stock changes?",
     "CANCEL_FAILED": "Cancel failed",
     "CATALOG_LOAD_FAILED": "Failed to load medication catalog",
-    "CATALOG_SUBTITLE": "Manage the national medication catalog",
+    "CATALOG_SUBTITLE": "Manage this hospital's medication catalog",
     "CATALOG_TITLE": "Medication Catalog",
     "CATEGORY": "Category",
     "CHECK": "Check",
@@ -11201,7 +11222,7 @@
     "HAND_OVER": "Hand over",
     "HAND_OVER_CONFIRM": "Hand this prepared fill over to the patient?",
     "CANCEL_READY": "Cancel preparation",
-    "CANCEL_READY_CONFIRM": "Cancel this preparation? The stock is returned and the patient is told it is no longer ready.",
+    "CANCEL_READY_CONFIRM": "Cancel this preparation? The patient is told it is no longer ready. The medicine goes back on sale only if it is intact.",
     "CANCEL_READY_REASON_LABEL": "Reason",
     "CANCEL_READY_REASON": {
       "STOCK_UNAVAILABLE": "Stock missing or damaged",
@@ -11319,7 +11340,55 @@
     "SAVE_PRICE": "Save the price",
     "WRITE_OFF_REMOVES_ONLY": "Damage and expiry only take stock off: enter a negative quantity.",
     "WRITE_OFF_SIGN_HINT": "This reason takes stock off: enter a negative quantity (for example −2).",
-    "ALLERGY_ALERTS_TITLE": "Allergy alerts"
+    "ALLERGY_ALERTS_TITLE": "Allergy alerts",
+    "RECEIVED_IN": "Quantity received counted in",
+    "RECEIVED_IN_PACKS": "{{packUnit}} (1 {{packUnit}} = {{n}} {{unit}})",
+    "RECEIVED_IN_UNITS": "{{unit}} (single units)",
+    "RECEIVED_IN_TOTAL": "Adds {{qty}} {{unit}} to stock.",
+    "RECEIVED_IN_REQUIRED": "Say whether the quantity received counts packs or single units.",
+    "UNIT_COST_PER_PACK": "Cost per {{packUnit}}",
+    "CANCEL_READY_CHOOSE": "Choose the reason and the state of the prepared medicine.",
+    "CANCEL_READY_CHOOSE_REASON": "Choose the reason",
+    "STOCK_CONDITION_LABEL": "State of the medicine",
+    "STOCK_CONDITION_CHOOSE": "Choose the state",
+    "STOCK_CONDITION": {
+      "INTACT": "Not given, intact",
+      "DAMAGED": "Damaged",
+      "EXPIRED": "Expired",
+      "CONTAMINATED": "Contaminated",
+      "MISSING": "Missing (loss)"
+    },
+    "STOCK_CONDITION_BACK_ON_SALE": "Put back into saleable stock.",
+    "STOCK_CONDITION_QUARANTINED": "Quarantined: it will not be sold again and waits to be destroyed.",
+    "STOCK_CONDITION_CONTROLLED_QUARANTINED": "Returned controlled drug: always quarantined, never back on sale; it is destroyed in front of a witness.",
+    "RETURN_CONDITION_REQUIRED": "Say what state the returned medicine is in.",
+    "LEDGER_REASON_PREPARED_NOT_FOR_SALE": "Preparation cancelled, not put back on sale",
+    "LEDGER_REASON_QUARANTINED": "Quarantined ({{condition}})",
+    "LEDGER_REASON_DESTROYED": "Destroyed: {{reason}}",
+    "QUARANTINE": {
+      "TITLE": "Quarantine",
+      "EXPLAIN": "Returned medicines that are damaged, expired or contaminated, and returned controlled drugs: they can no longer be sold and wait to be destroyed.",
+      "LOAD_FAILED": "The quarantine could not be loaded.",
+      "EMPTY": "Nothing in quarantine.",
+      "LOT": "Lot {{lot}}",
+      "NO_LOT": "No lot",
+      "DESTROY": "Destroy",
+      "DESTROY_TITLE": "Destroy {{name}} ({{held}} in quarantine)",
+      "QUANTITY": "Quantity destroyed",
+      "REASON": "How it was destroyed",
+      "REASON_PLACEHOLDER": "Incineration, returned to the supplier…",
+      "DESTROY_CONFIRM": "Record the destruction",
+      "DESTROY_INVALID": "Enter a quantity from 1 to {{max}}, how it was destroyed and, for a controlled drug, the witness.",
+      "DESTROYED": "Destruction recorded.",
+      "DESTROY_FAILED": "The destruction could not be recorded."
+    },
+    "REGISTER_QUARANTINE": "In quarantine",
+    "REGISTER_QUARANTINE_MOVE": "quarantine {{qty}} → {{after}}",
+    "FIRST_PHARMACY_ASK_ADMIN": "No pharmacy is registered yet. The hospital administrator registers it: ask them.",
+    "STOCK_CONDITION_CHOOSE_UNIT": "Choose: packs or single units",
+    "STOCK_CONDITION_MISSING_LOSS": "Nothing comes back to stock: the units are recorded as a loss.",
+    "CANCEL_READY_NOT_INTACT": "« Stock missing or damaged » cannot go back on sale as intact: choose damaged, expired, contaminated or missing.",
+    "LEDGER_REASON_MISSING": "Missing from a cancelled fill (loss)"
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",
@@ -13432,7 +13501,8 @@
     "VT_RESTORED": "Visit type restored",
     "VT_RETIRED": "Visit type retired",
     "VT_SAVED": "Visit type saved",
-    "VT_SAVE_ERROR": "Could not save the visit type."
+    "VT_SAVE_ERROR": "Could not save the visit type.",
+    "GENERATED_ONE_TEMPLATE": "{{created}} slots generated from 1 template ({{skipped}} already existed)"
   },
   "TRANSFUSION": {
     "LATE_INCOMPATIBLE_RESULT": "Record an incompatible result",
@@ -13601,7 +13671,12 @@
     "REACTION_ERROR": "The reaction could not be recorded",
     "PLATELET_O_TO_B": "Pending confirmation",
     "PLATELET_O_TO_B_DETAIL": "Group O platelets to a group B recipient. Permitted by this facility's protocol — this transfusion is not blocked or in question. The protocol excludes O platelets for A and AB recipients but not for B, and whether that difference is intended has not yet been confirmed with haematology. Raise it at the next review.",
-    "CANCEL_REQUEST_CONFIRM": "Cancel the request"
+    "CANCEL_REQUEST_CONFIRM": "Cancel the request",
+    "DECLARED_LABEL": "Group on the chart",
+    "DECLARED_VALUE": "{{group}} (declared, not verified)",
+    "DECLARED_GROUP": "Chart: {{group}} (not verified)",
+    "DECLARED_MISMATCH": "The chart says {{declared}} but the lab typed {{typed}}. Check the patient’s identity and the chart; the lab group stands for the crossmatch.",
+    "DECLARED_MISMATCH_SHORT": "Differs from the chart"
   },
   "MORTALITY": {
     "DISPUTE": "Dispute this death",
@@ -15236,7 +15311,13 @@
       "FAILED": "The pack size could not be saved.",
       "BREAKDOWN": "{{packs}} {{packUnit}} + {{loose}} {{unit}}",
       "SIZE": "1 {{packUnit}} = {{n}} {{unit}}",
-      "SET": "Pack size"
+      "SET": "Pack size",
+      "COUNTED_IN": "This item's current stock is counted in",
+      "COUNTED_IN_UNITS": "{{unit}} (already in units): nothing is multiplied",
+      "COUNTED_IN_PACKS": "{{packUnit}} (in packs): stock, lots, threshold and order quantity are multiplied by {{n}}",
+      "COUNTED_IN_REQUIRED": "Say what the current stock is counted in: units or packs.",
+      "PREVIEW": "After saving: stock {{qty}} {{unit}}, reorder threshold {{threshold}}, order quantity {{order}}.",
+      "DECLARE": "Save the pack size"
     },
     "REFUND": {
       "TITLE": "Refunds of returns to process",
@@ -15634,7 +15715,7 @@
         },
         "STAFF": {
           "TITLE": "Staff",
-          "DONE": "Active staff members: {{count}}",
+          "DONE": "Active staff besides the administrators: {{count}}",
           "TODO": "Register the staff. Each person then activates their account with the code they receive."
         },
         "PROVIDERS_IN_DEPARTMENT": {
@@ -15671,6 +15752,11 @@
           "TITLE": "Clinical rules signed off",
           "DONE": "Clinical rules signed off: {{count}} / {{total}}",
           "TODO": "Clinical rules signed off: {{count}} / {{total}}. Print the sign-off pack for the chief medical officer, then record each signature."
+        },
+        "LAB_TESTS": {
+          "TITLE": "Laboratory tests",
+          "DONE": "Tests a doctor can order: {{count}}",
+          "TODO": "Set up the lab tests (reference ranges, validation) before the price list: a lab price line links to a test by its code."
         }
       }
     },
@@ -15818,6 +15904,17 @@
     "APPROVER": "Approver",
     "VERSION": "Version",
     "ENFORCED_IN": "Applied in",
+    "SOURCE_OPEN": "Open the source",
+    "AREA": {
+      "PRESCRIBING": "Prescribing",
+      "MATERNITY": "Maternity",
+      "VITALS": "Vital signs",
+      "DEATH": "Deaths and stillbirths",
+      "RECORDS": "Patient record and privacy",
+      "IMAGING": "Imaging",
+      "BILLING": "Billing",
+      "LAB": "Laboratory and blood bank"
+    },
     "NOTE": "Note",
     "REVOKE_REASON": "Reason for revoking",
     "SIGNED_BY": "Signed off on {{date}} by {{title}} ({{name}})",
@@ -15876,5 +15973,190 @@
       "STILLBIRTHS_WHO_DEFINITION": "WHO indicator: no signs of life at {{weeks}} or more completed weeks",
       "STILLBIRTHS_ICD_DEFINITION": "ICD level: from {{weeks}} completed weeks"
     }
+  },
+  "PATIENT_SAFETY": {
+    "ARIA_LABEL": "Patient safety header",
+    "LOADING": "Loading the patient safety details…",
+    "UNAVAILABLE": "Patient safety details unavailable: check the chart before acting.",
+    "NAME": "Patient",
+    "AGE": "Age",
+    "AGE_YEARS": "{{n}} y",
+    "AGE_MONTHS": "{{n}} mo",
+    "SEX": "Sex",
+    "WEIGHT": "Weight",
+    "WEIGHT_KG": "{{kg}} kg",
+    "WEIGHED_ON": "(weighed {{date}})",
+    "NOT_WEIGHED": "No weight recorded",
+    "BLOOD_GROUP": "Blood group",
+    "NOT_DOCUMENTED": "Not recorded",
+    "ALLERGIES": "Allergies",
+    "NO_KNOWN_ALLERGIES": "No known allergies",
+    "HISTORY_HINT": "Personal past medical history (doctor, nurse or midwife). It appears in the summary.",
+    "HISTORY_ADD": "Record the medical history",
+    "HISTORY_EDIT": "Edit the medical history"
+  },
+  "PORTAL_ACTIVATION": {
+    "TITLE": "Patient portal access",
+    "HELP": "If the activation SMS did not arrive, show the code and give it to the patient in person, or send the activation again.",
+    "SHOW": "Show the activation code",
+    "RESEND": "Send the activation again",
+    "HOW_TO": "The patient opens the sign-in page, chooses « I have an activation code », then enters their phone number and this code. Showing the code is recorded in the audit log.",
+    "RESENT": "Activation sent again.",
+    "RESENT_NOWHERE": "The activation was not delivered: show the code and give it in person.",
+    "RESEND_FAILED": "The activation could not be sent again."
+  },
+  "R70_MONEY": {
+    "DEFERRAL": {
+      "FILL_CHARGE": "Amount of the fill",
+      "FILL_DUE": "Still owed on the fill",
+      "INSURER_SHARE": "Insurer share",
+      "PATIENT_SHARE": "Patient share (paid at the checkout)",
+      "COVER_SHARE_HINT": "The insurer share is computed from the patient's plan; the patient pays the rest before the hand-over.",
+      "LIMIT_AT_LEAST": "At least {{amount}}: what the fill owes.",
+      "LIMIT_BELOW_DUE": "The ceiling is below what the fill owes ({{amount}}): set at least that amount, or reject the request."
+    },
+    "CHECKOUT": {
+      "INSURER_SHARE": "Charge {{charge}}, of which the insurer pays {{insurer}}: the patient pays the rest."
+    },
+    "CHECKIN": {
+      "COVERAGE_TITLE": "Coverage to verify",
+      "PAYER": "Payer",
+      "PLAN": "Plan",
+      "NO_PLAN": "No plan linked",
+      "PERCENT": "{{percent}} %",
+      "POLICY": "Policy no.",
+      "VALIDITY": "Valid",
+      "EXPIRED": "Expired",
+      "FROM_TO": "from {{from}} to {{to}}",
+      "UNTIL": "until {{to}}",
+      "NO_END": "no end date",
+      "NO_COVERAGE": "No insurance at this hospital: the patient pays the whole bill.",
+      "SUGGESTED_SHARED": "Suggested patient share: {{copay}} (consultation {{fee}}, insurer {{payer}}).",
+      "SUGGESTED_FULL": "Consultation fee: {{copay}} (no insurer share).",
+      "USE_SUGGESTED": "Use this amount"
+    },
+    "BILLING": {
+      "REVERSAL_PENDING": "Reversal requested",
+      "TO_PRICE": "to price"
+    },
+    "CASH": {
+      "CLOSE_CONFIRM_TITLE": "Close this till?",
+      "CLOSE_CONFIRM_MESSAGE": "Counted {{counted}} for {{expected}} expected (difference {{difference}}). Once closed, only a manager can reopen it."
+    },
+    "SHARES": {
+      "TITLE": "Insurer shares",
+      "SUBTITLE": "What the payers owe on the hospital's invoices: claim them, record their payment or their refusal.",
+      "REFRESH": "Refresh",
+      "VIEWS": "Shares to show",
+      "VIEW_OPEN": "To claim or claimed",
+      "VIEW_CLOSED": "Paid or refused",
+      "LOAD_FAILED": "The insurer shares could not be loaded.",
+      "EMPTY": "No insurer share here.",
+      "TOTAL": "{{count}} share(s), {{amount}} in all",
+      "PLAN": "Plan",
+      "INVOICE": "Invoice",
+      "AMOUNT": "Amount",
+      "CLAIM": "Mark claimed",
+      "PAID": "Mark paid",
+      "PAID_CONFIRM": "Mark this {{amount}} share of {{payer}} as paid? It can no longer be claimed or refused.",
+      "REJECT": "Refused by the payer",
+      "REASON": "Payer's reason",
+      "REASON_REQUIRED": "Type the payer's reason for refusing.",
+      "DECIDE_FAILED": "The share could not be updated.",
+      "DONE": {
+        "CLAIM": "Share marked claimed.",
+        "PAID": "Share marked paid.",
+        "REJECT": "Refusal recorded: the patient owes this share again."
+      },
+      "STATUS": {
+        "OPEN": "To claim",
+        "CLAIMED": "Claimed",
+        "PAID": "Paid",
+        "REJECTED": "Refused",
+        "CANCELLED": "Cancelled"
+      }
+    },
+    "PRICE_LIST": {
+      "LINK_BY_CODE": "Link by code",
+      "LINKED_ALL": "{{linked}} lab line(s) linked to their test.",
+      "LINKED_WITH_LEFT": "{{linked}} lab line(s) linked; {{left}} left unlinked (no single live test with that code, or already linked): {{codes}}.",
+      "LINK_FAILED": "The lab lines could not be linked."
+    }
+  },
+  "PHARMACY_SALE": {
+    "NAV": "Counter sale",
+    "TITLE": "Counter sale",
+    "SUBTITLE": "Sell over-the-counter medicines to a walk-in customer, without a prescription. The sale is recorded in your pharmacy till.",
+    "PHARMACIES_FAILED": "The pharmacies could not be loaded.",
+    "PICKER_TITLE": "Items",
+    "SEARCH_LABEL": "Find an item",
+    "SEARCH_PLACEHOLDER": "Medicine name or code",
+    "CONTROLLED_HIDDEN": "Controlled medicines are not sold over the counter: they are dispensed on a prescription.",
+    "ITEMS_FAILED": "The pharmacy's stock could not be loaded.",
+    "NO_ITEMS": "No item of this pharmacy can be sold over the counter (none active, uncontrolled and in stock).",
+    "NO_MATCH": "No item in stock matches this search.",
+    "MORE_ITEMS": "{{shown}} of {{total}} items shown: refine the search.",
+    "STOCK_ON_HAND": "{{qty}} {{unit}} in stock",
+    "PACK_BREAKDOWN": "{{packs}} {{packUnit}} + {{loose}} {{unit}}",
+    "UNIT_PRICE": "{{price}} per {{unit}}",
+    "NO_PRICE": "No selling price set: it cannot be sold until the price is entered in the inventory.",
+    "ADD": "Add",
+    "ADD_LABEL": "Add {{name}} to the basket",
+    "BASKET": "Basket",
+    "BASKET_EMPTY": "The basket is empty: add an item from the list.",
+    "BASKET_REQUIRED": "Add at least one item to the basket.",
+    "REMOVE": "Remove",
+    "REMOVE_LABEL": "Remove {{name}} from the basket",
+    "LOT": "Lot",
+    "LOT_CHOOSE": "Choose the lot",
+    "LOT_OPTION": "{{lot}} · expires {{date}} · {{qty}} {{unit}}",
+    "LOTS_LOADING": "Loading the lots…",
+    "LOTS_FAILED": "The lots could not be loaded.",
+    "NOT_IN_LOTS": "Not kept in lots",
+    "NO_USABLE_LOT": "No lot of this item can be sold (all empty or expired).",
+    "LOT_REQUIRED": "Choose the lot the item is taken from.",
+    "QUANTITY": "Quantity",
+    "QUANTITY_POSITIVE": "Enter a quantity greater than zero.",
+    "PACKS_WHOLE": "A quantity in packs is a whole number of packs.",
+    "COUNTED_IN": "Quantity counted in",
+    "IN_UNITS": "units",
+    "IN_PACKS": "packs",
+    "PACK_SIZE": "1 {{packUnit}} = {{n}} {{unit}}",
+    "LINE_UNITS": "{{units}} {{unit}} in all",
+    "FEFO_REASON": "Reason for taking this lot",
+    "FEFO_WARNING": "Lot {{lot}} expires sooner ({{date}}) and still holds {{left}}: say why this lot is taken first.",
+    "FEFO_REASON_REQUIRED": "Give the reason for taking a lot that expires later.",
+    "LOT_SHORT": "Lot {{lot}} holds only {{qty}} {{unit}}: add the item again for the rest from the next lot.",
+    "LINE_TOTAL": "Line total",
+    "TOTAL": "Estimated total",
+    "PRICED_BY_SERVER": "Preview at the pharmacy's selling price: the amount charged is calculated by the server when the sale is recorded.",
+    "PAYMENT": "Payment",
+    "PAYMENT_METHOD": "Payment method",
+    "REFERENCE": "Transaction reference",
+    "REFERENCE_PLACEHOLDER": "Reference shown on the customer's phone",
+    "REFERENCE_REQUIRED": "Enter the mobile-money transaction reference.",
+    "NOTES": "Notes",
+    "SUBMIT": "Take payment",
+    "SAVING": "Recording the sale…",
+    "SAVED": "Sale recorded.",
+    "FAILED": "The sale could not be recorded.",
+    "RECEIPT_TITLE": "Sale recorded",
+    "RECEIPT_NUMBER": "Sale number",
+    "RECEIPT_DATE": "Date",
+    "COL_ITEM": "Item",
+    "COL_QUANTITY": "Quantity",
+    "COL_UNIT_PRICE": "Unit price",
+    "COL_LINE_TOTAL": "Amount",
+    "TOTAL_PAID": "Total paid",
+    "NEW_SALE": "New sale",
+    "TODAY_TITLE": "Today's sales",
+    "REFRESH": "Refresh",
+    "TODAY_FAILED": "Today's sales could not be loaded.",
+    "TODAY_EMPTY": "No counter sale recorded at this pharmacy today.",
+    "COL_TIME": "Time",
+    "COL_ITEMS": "Items",
+    "COL_TOTAL": "Total",
+    "TODAY_MORE": "Only the {{shown}} most recent sales of today are shown: the till close counts them all.",
+    "UNSETTLED": "No answer came back: the sale may have been recorded. « Take payment » resends exactly the same sale, never twice; the basket is frozen until then."
   }
 }

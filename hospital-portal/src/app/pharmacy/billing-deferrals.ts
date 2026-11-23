@@ -18,6 +18,7 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
+import { formatCfa } from '../shared/i18n/app-locale';
 import { DashPipe } from '../shared/pipes/dash.pipe';
 import { KeyLabelPipe } from '../shared/pipes/key-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
@@ -222,6 +223,17 @@ export class BillingDeferralsComponent implements OnInit {
           this.refuse(row, 'limit', 'PHARMACY_MONEY.DEFERRAL.LIMIT_INVALID');
           return;
         }
+        // QA D3406 (r70): a ceiling below what the fill owes is refused here, not at the hand-over.
+        if (row.fillDue !== null && row.fillDue !== undefined && Number(limit) < row.fillDue) {
+          this.refuseWith(
+            row,
+            'limit',
+            this.translate.instant('R70_MONEY.DEFERRAL.LIMIT_BELOW_DUE', {
+              amount: formatCfa(row.fillDue, 'XOF'),
+            }),
+          );
+          return;
+        }
         body.creditLimit = Number(limit);
       }
     }
@@ -263,7 +275,10 @@ export class BillingDeferralsComponent implements OnInit {
   }
 
   private refuse(row: BillingDeferral, name: string, key: string): void {
-    const message = this.translate.instant(key);
+    this.refuseWith(row, name, this.translate.instant(key));
+  }
+
+  private refuseWith(row: BillingDeferral, name: string, message: string): void {
     const id = this.fieldId(row, name);
     refuseFields(this.host.nativeElement, [id], [id], message);
     this.toast.error(message);

@@ -202,7 +202,8 @@ $shadow-md:
     }
 
     .ring-pct {
-      font-size: 14px;
+      font-size: 12px;
+      white-space: nowrap;
       small {
         font-size: 9px;
       }
@@ -210,7 +211,13 @@ $shadow-md:
 
     .ring-sub,
     .ring-caption {
-      font-size: 9px;
+      font-size: 8px;
+    }
+
+    // QA D3510: « 100 % » must stay inside the ring.
+    .ring-label {
+      padding: 0 6px;
+      overflow: hidden;
     }
   }
 }
@@ -1926,8 +1933,10 @@ $shadow-md:
 // ─────────────────────────────────────────────────────────────────────────────
 .fallback-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  // QA D3257 (r70): a 360 px track overflowed a 334 px phone column (accountant, claims reviewer at 390).
+  grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr));
   gap: 20px;
+  min-width: 0;
 }
 
 .empty-card {
@@ -2032,6 +2041,13 @@ $shadow-md:
 }
 
 @media (max-width: 480px) {
+  // QA D3257 (r70): the dashboard fits a 390 px phone (it was 376 px in 366 px).
+  .dashboard {
+    padding: 12px;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
   .nurse-workflow-tiles {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -2079,7 +2095,8 @@ $shadow-md:
 
 // ── Role badge ───────────────────────────────────────────────────────────────
 .role-badge {
-  display: inline-flex;
+  // QA r70 D3205: on its own line; inline, the badge ran into « BONJOUR » at 1366.
+  display: flex;
   align-items: center;
   gap: 5px;
   background: var(--primary-tint);
@@ -2627,13 +2644,13 @@ $shadow-md:
   font-size: 12px;
   font-weight: 600;
   color: #fff;
-  background: #059669;
+  background: var(--primary);
   border-radius: 8px;
   text-decoration: none;
   transition: background 0.15s;
 
   &:hover {
-    background: #047857;
+    background: var(--primary-dark);
   }
 }
 

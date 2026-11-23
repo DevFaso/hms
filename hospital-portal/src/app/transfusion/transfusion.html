@@ -92,7 +92,7 @@
               <th scope="col">{{ 'TRANSFUSION.URGENCY' | translate }}</th>
               <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
               <th scope="col">{{ 'TRANSFUSION.REQUESTED_AT' | translate }}</th>
-              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+              <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
             </tr>
           </thead>
           <tbody>
@@ -117,6 +117,22 @@
                     }
                   } @else {
                     <span class="group-badge untyped">{{ 'TRANSFUSION.UNTYPED' | translate }}</span>
+                  }
+                  <!-- QA r70 D3221: the chart's group, declared and unverified, and any disagreement. -->
+                  @if (r.patientDeclaredBloodType) {
+                    <div class="cell-secondary" data-testid="declared-group">
+                      {{
+                        'TRANSFUSION.DECLARED_GROUP'
+                          | translate: { group: r.patientDeclaredBloodType }
+                      }}
+                    </div>
+                  }
+                  @if (
+                    groupsDisagree(r.patientDeclaredBloodType, r.patientAboGroup, r.patientRhFactor)
+                  ) {
+                    <div class="warn-inline" role="note" data-testid="declared-group-mismatch">
+                      {{ 'TRANSFUSION.DECLARED_MISMATCH_SHORT' | translate }}
+                    </div>
                   }
                 </td>
                 <td>
@@ -185,7 +201,7 @@
               <th scope="col">{{ 'TRANSFUSION.EXPIRES' | translate }}</th>
               <th scope="col">{{ 'TRANSFUSION.SOURCE' | translate }}</th>
               <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+              <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
             </tr>
           </thead>
           <tbody>
@@ -279,7 +295,35 @@
             </div>
           }
 
+          <!-- QA r70 D3221: a lab-typed group that disagrees with the chart is said out loud. -->
+          @if (
+            groupsDisagree(req.patientDeclaredBloodType, req.patientAboGroup, req.patientRhFactor)
+          ) {
+            <div class="warn-banner" role="alert" data-testid="detail-declared-mismatch">
+              <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+              {{
+                'TRANSFUSION.DECLARED_MISMATCH'
+                  | translate
+                    : {
+                        declared: req.patientDeclaredBloodType,
+                        typed: labGroupCode(req.patientAboGroup, req.patientRhFactor),
+                      }
+              }}
+            </div>
+          }
+
           <div class="detail-grid">
+            <div class="detail-field">
+              <span class="field-label">{{ 'TRANSFUSION.DECLARED_LABEL' | translate }}</span>
+              <span class="field-value" data-testid="detail-declared-group">
+                {{
+                  req.patientDeclaredBloodType
+                    ? ('TRANSFUSION.DECLARED_VALUE'
+                      | translate: { group: req.patientDeclaredBloodType })
+                    : ('PATIENT_SAFETY.NOT_DOCUMENTED' | translate)
+                }}
+              </span>
+            </div>
             <div class="detail-field">
               <span class="field-label">{{ 'TRANSFUSION.GROUP' | translate }}</span>
               <span class="field-value">
@@ -568,7 +612,7 @@
                     <th scope="col">{{ 'TRANSFUSION.GROUP' | translate }}</th>
                     <th scope="col">{{ 'TRANSFUSION.CROSSMATCH' | translate }}</th>
                     <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-                    <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+                    <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -668,6 +712,34 @@
           />
 
           @if (selectedPatient()) {
+            <!-- QA r70 D3221: the chart's group, declared and unverified, and any disagreement. -->
+            <p class="declared-line" data-testid="request-declared-group">
+              {{ 'TRANSFUSION.DECLARED_LABEL' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{
+                selectedPatient()!.bloodType
+                  ? ('TRANSFUSION.DECLARED_VALUE'
+                    | translate: { group: selectedPatient()!.bloodType })
+                  : ('PATIENT_SAFETY.NOT_DOCUMENTED' | translate)
+              }}
+            </p>
+            @if (
+              groupsDisagree(
+                selectedPatient()!.bloodType,
+                patientGroup()?.aboGroup,
+                patientGroup()?.rhFactor
+              )
+            ) {
+              <p class="warn-inline" role="alert" data-testid="request-declared-mismatch">
+                {{
+                  'TRANSFUSION.DECLARED_MISMATCH'
+                    | translate
+                      : {
+                          declared: selectedPatient()!.bloodType,
+                          typed: labGroupCode(patientGroup()?.aboGroup, patientGroup()?.rhFactor),
+                        }
+                }}
+              </p>
+            }
             <div class="group-summary">
               @if (patientGroup(); as g) {
                 <span class="group-badge"
@@ -820,6 +892,25 @@
               <label for="grp-detail">{{ 'TRANSFUSION.ANTIBODY_DETAIL' | translate }}</label>
               <input id="grp-detail" type="text" [(ngModel)]="groupForm.antibodyDetail" />
             </div>
+          }
+          <!-- QA r70 D3221: the chart's group is a cross-check, never a default: the result comes from the specimen. -->
+          @if (groupDeclared(); as declared) {
+            <p class="declared-line" data-testid="group-form-declared">
+              {{ 'TRANSFUSION.DECLARED_LABEL' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ 'TRANSFUSION.DECLARED_VALUE' | translate: { group: declared } }}
+            </p>
+            @if (groupsDisagree(declared, groupForm.aboGroup, groupForm.rhFactor)) {
+              <p class="warn-inline" role="alert" data-testid="group-form-mismatch">
+                {{
+                  'TRANSFUSION.DECLARED_MISMATCH'
+                    | translate
+                      : {
+                          declared: declared,
+                          typed: labGroupCode(groupForm.aboGroup, groupForm.rhFactor),
+                        }
+                }}
+              </p>
+            }
           }
           <div class="field">
             <label for="grp-correction">{{ 'TRANSFUSION.CORRECTION_REASON' | translate }}</label>

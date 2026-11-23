@@ -2019,6 +2019,13 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Deferred billing of a fill closed: the order left the counter with nothing due$/,
     params: [],
   },
+  // Review of #1284 (QA D3408): a third-party cover withdrawn because the prepared fill it was approved on was
+  // cancelled (constant description, ids on the row).
+  {
+    key: 'AUDIT.DESC.DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED',
+    re: /^Deferred billing of a fill closed: the prepared fill was cancelled$/,
+    params: [],
+  },
   {
     key: 'AUDIT.DESC.PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED',
     re: /^Pharmacy claim acceptance confirmed by a money desk$/,
@@ -2047,5 +2054,16 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     key: 'AUDIT.DESC.CLINICAL_RULE_SIGNOFF_REVOKED',
     re: /^Clinical rule set (\S+) sign-off revoked \(version (\S+)\)$/,
     params: ['rule', 'version'],
+  },
+  // QA r70 D3206: the desk showed or re-sent a patient's portal activation (never the code).
+  {
+    key: 'AUDIT.DESC.PATIENT_ACTIVATION_CODE_SHOWN',
+    re: /^Patient portal activation code shown to the desk$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PATIENT_ACTIVATION_RESENT',
+    re: /^Patient portal activation re-sent by the desk$/,
+    params: [],
   },
 ];

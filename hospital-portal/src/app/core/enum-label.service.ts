@@ -61,6 +61,8 @@ export class EnumLabelService implements OnDestroy {
    * under `PORTAL.ENUM.*`; this map exists so a missing translation key never
    * leaks into the UI. Keep groups alphabetically ordered within each section. */
   private static readonly LABELS: Record<string, Record<string, string>> = {
+    // Citation text has no controlled codes. asTyped preserves it verbatim.
+    referenceSource: {},
     recoveryContactType: {
       EMAIL: 'Email',
       PHONE: 'Phone',

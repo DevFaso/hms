@@ -35,7 +35,10 @@ public class PharmacyClaimRequestDTO {
 
     private PharmacyClaimStatus claimStatus;
 
-    @NotNull(message = "{pharmacyClaim.amount.required}")
+    /**
+     * QA D3408 (r70): optional. The server takes the insurer share by the patient coverage; a typed amount must match
+     * it. Only a coverage with no payer plan needs the amount typed.
+     */
     private BigDecimal amount;
 
     @Size(max = 10)

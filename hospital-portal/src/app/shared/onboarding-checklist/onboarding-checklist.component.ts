@@ -32,6 +32,8 @@ export const ONBOARDING_STEP_ROUTES: Readonly<Record<OnboardingStep, string>> = 
   SESSION_TEMPLATES: '/slot-admin',
   OPEN_SLOTS: '/slot-admin',
   BEDS: '/bed-management',
+  // QA r70 D3213: the lab catalogue, before the price list (a lab price line links to a test).
+  LAB_TESTS: '/lab-test-config',
   PRICE_LIST: '/billing/tarifs',
   PAYERS: '/billing/organismes',
   // V356: « Règles cliniques et validation », where the admin records each sign-off.

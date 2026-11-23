@@ -38,6 +38,29 @@ import java.util.UUID;
 public class StockTransactionController {
 
     private final StockTransactionService stockTransactionService;
+    /** QA D3415 (r70): the quarantine and its witnessed destruction. */
+    private final com.example.hms.service.pharmacy.QuarantineDestructionService quarantineService;
+
+    @GetMapping("/quarantine")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'INVENTORY_CLERK', 'STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Quarantined stock",
+            description = "QA D3415: units set aside (not for sale) per item and lot, waiting to be destroyed")
+    @ApiResponse(responseCode = "200", description = "Quarantine returned")
+    public ResponseEntity<ApiResponseWrapper<List<com.example.hms.payload.dto.pharmacy.QuarantineLineDTO>>> quarantine(
+            @RequestParam UUID pharmacyId) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(quarantineService.list(pharmacyId)));
+    }
+
+    @PostMapping("/quarantine/destructions")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'STORE_MANAGER', 'HOSPITAL_ADMIN')")
+    @Operation(summary = "Destroy quarantined stock",
+            description = "QA D3415: a DESTRUCTION of quarantined units, witnessed for a controlled drug")
+    @ApiResponse(responseCode = "201", description = "Destruction recorded")
+    @ApiResponse(responseCode = "400", description = "Missing field, more than the quarantine holds, or no witness")
+    public ResponseEntity<ApiResponseWrapper<StockTransactionResponseDTO>> destroyQuarantined(
+            @Valid @RequestBody com.example.hms.payload.dto.pharmacy.QuarantineDestructionRequestDTO dto) {
+        return ResponseEntity.status(201).body(ApiResponseWrapper.success(quarantineService.destroy(dto)));
+    }
 
     @PostMapping
     @PreAuthorize("hasAnyRole('PHARMACIST', 'INVENTORY_CLERK', 'STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")

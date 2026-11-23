@@ -11,6 +11,7 @@ import { CashClosingComponent } from '../billing/cash-closing/cash-closing.compo
 import { CashSessionComponent } from '../billing/cash-session/cash-session.component';
 import { CashSupervisorComponent } from '../billing/cash-session/cash-supervisor.component';
 import { InvoicePayerSharesComponent } from '../billing/payer-shares/invoice-payer-shares.component';
+import { PayerSharesListComponent } from '../billing/payer-shares/payer-shares-list.component';
 import { PayersComponent } from '../billing/payers/payers.component';
 import { PriceListImportComponent } from '../billing/price-list/price-list-import.component';
 import { PriceListComponent } from '../billing/price-list/price-list.component';
@@ -47,6 +48,7 @@ import { SafeguardingBannerComponent } from '../patients/safeguarding-banner/saf
 import { BillingDeferralChoiceComponent } from '../pharmacy/billing-deferral-choice';
 import { BillingDeferralsComponent } from '../pharmacy/billing-deferrals';
 import { ControlledRegisterComponent } from '../pharmacy/controlled-register';
+import { CounterSaleComponent } from '../pharmacy/counter-sale';
 import { DispensingComponent } from '../pharmacy/dispensing';
 import { DrugInteractionsComponent } from '../pharmacy/drug-interactions';
 import { GoodsReceiptComponent } from '../pharmacy/goods-receipt';
@@ -127,6 +129,11 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     name: 'InvoicePayerSharesComponent',
     file: 'billing/payer-shares/invoice-payer-shares.component',
     type: InvoicePayerSharesComponent,
+  },
+  {
+    name: 'PayerSharesListComponent',
+    file: 'billing/payer-shares/payer-shares-list.component',
+    type: PayerSharesListComponent,
   },
   { name: 'PayersComponent', file: 'billing/payers/payers.component', type: PayersComponent },
   {
@@ -292,6 +299,7 @@ export const FORM_BEHAVIOUR_COMPONENTS: readonly {
     file: 'pharmacy/controlled-register',
     type: ControlledRegisterComponent,
   },
+  { name: 'CounterSaleComponent', file: 'pharmacy/counter-sale', type: CounterSaleComponent },
   { name: 'DispensingComponent', file: 'pharmacy/dispensing', type: DispensingComponent },
   {
     name: 'DrugInteractionsComponent',

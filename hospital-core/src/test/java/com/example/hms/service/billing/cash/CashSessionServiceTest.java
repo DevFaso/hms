@@ -159,6 +159,35 @@ class CashSessionServiceTest {
     }
 
     @Test
+    @DisplayName("QA D3410 (r70): a payout comes from the payer open till, never one opened by the payout itself")
+    void d3410_aPayoutNeedsATillThePayerAlreadyHolds() {
+        when(sessionRepo.findLockedForDay(HOSPITAL, CASHIER, CashTill.PHARMACY, DAY)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.stampPayout(CashTill.PHARMACY, HOSPITAL, CASHIER, "CASH",
+            new BigDecimal("200")))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("caisse");
+        verify(writes, never()).insertIfAbsent(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("QA D3410 (r70): a cash payout above the cash in the till is refused; within it, it is stamped")
+    void d3410_aCashPayoutNeverTakesTheTillNegative() {
+        when(sessionRepo.findLockedForDay(HOSPITAL, CASHIER, CashTill.BILLING, DAY)).thenReturn(Optional.of(session));
+
+        // The till holds 800 F cash (see setUp).
+        assertThatThrownBy(() -> service.stampPayout(CashTill.BILLING, HOSPITAL, CASHIER, "CASH",
+            new BigDecimal("801")))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("801").hasMessageContaining("800");
+        assertThat(service.stampPayout(CashTill.BILLING, HOSPITAL, CASHIER, "CASH", new BigDecimal("800")))
+            .isEqualTo(session.getId());
+        // A mobile-money payout is not bounded by the cash drawer.
+        assertThat(service.stampPayout(CashTill.BILLING, HOSPITAL, CASHIER, "MOBILE_MONEY", new BigDecimal("5000")))
+            .isEqualTo(session.getId());
+    }
+
+    @Test
     @DisplayName("QA D2714: expected per method is in - out; the cash to count is the cash line alone")
     void expectedPerMethodAndCashToCount() {
         actAs(CASHIER);

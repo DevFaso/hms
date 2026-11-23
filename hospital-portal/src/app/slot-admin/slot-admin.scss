@@ -352,11 +352,22 @@
 
 .form-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  // QA r70 D3210: minmax(0, …) so a long option never widens a column past the dialog (390 px).
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0.75rem;
 
   @media (width <= 560px) {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  label {
+    min-width: 0;
+  }
+
+  select,
+  input {
+    min-width: 0;
+    max-width: 100%;
   }
 }
 

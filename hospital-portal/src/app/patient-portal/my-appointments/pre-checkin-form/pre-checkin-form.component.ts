@@ -11,7 +11,9 @@ import {
   inject,
   signal,
   ChangeDetectionStrategy,
+  DestroyRef,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -22,6 +24,7 @@ import {
   QuestionnaireQuestion,
   PreCheckInRequest,
   QuestionnaireSubmission,
+  PatientProfileDTO,
 } from '../../../services/patient-portal.service';
 import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
 import { ClockTimePipe } from '../../../shared/pipes/clock-time.pipe';
@@ -66,6 +69,30 @@ export class PreCheckinFormComponent implements OnInit, OnChanges {
   private readonly translate = inject(TranslateService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly destroyRef = inject(DestroyRef);
+  readonly currentContact = signal<PatientProfileDTO | null>(null);
+  readonly contactLoadFailed = signal(false);
+  readonly contactFailureReason = signal<string | null>(null);
+
+  currentAddress(): string {
+    const contact = this.currentContact();
+    if (!contact) return '—';
+    return (
+      [
+        contact.addressLine1,
+        contact.addressLine2,
+        contact.city,
+        contact.state,
+        contact.zipCode,
+        contact.country,
+      ]
+        .map((part) => part?.trim())
+        .filter(Boolean)
+        .join(', ') ||
+      contact.address?.trim() ||
+      '—'
+    );
+  }
 
   // ── State ──────────────────────────────────────────────────────────
   step = signal<'demographics' | 'questionnaires' | 'review'>('demographics');
@@ -97,6 +124,16 @@ export class PreCheckinFormComponent implements OnInit, OnChanges {
 
   ngOnInit(): void {
     this.loadQuestionnaires();
+    this.portal
+      .getMyProfile()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (profile) => this.currentContact.set(profile),
+        error: (err) => {
+          this.contactFailureReason.set(refusalReason(err));
+          this.contactLoadFailed.set(true);
+        },
+      });
   }
 
   ngOnChanges(): void {

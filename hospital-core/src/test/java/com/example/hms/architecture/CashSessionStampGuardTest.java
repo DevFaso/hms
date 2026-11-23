@@ -49,7 +49,12 @@ class CashSessionStampGuardTest {
             + "|(?:claimTransition|transitionStatus)\\([^;]*?PaymentStatus\\.PENDING\\s*+,\\s*+PaymentStatus\\.CONFIRMED");
     /** A stamp call: the session service itself, or the writer's one-line wrapper around it. */
     private static final Pattern STAMPS = Pattern.compile(
-        "cashSessions\\s*+\\.\\s*+stamp\\(|stampCashSession\\(|stampPharmacyTill\\(");
+        "cashSessions\\s*+\\.\\s*+stamp(?:Payout)?\\(|stampCashSession\\(|stampPharmacyTill\\(");
+    /** QA D3410 (r70): money OUT (a refund or a reversal handed over). */
+    private static final Pattern PAYS_OUT = Pattern.compile(
+        "refundRepository\\s*+\\.\\s*+markPaid\\("
+            + "|setStatus\\(\\s*+(?:[\\w.]*\\.)?PharmacyRefundStatus\\.PAID\\s*+\\)");
+    private static final Pattern STAMPS_PAYOUT = Pattern.compile("cashSessions\\s*+\\.\\s*+stampPayout\\(");
     private static final Pattern METHOD_HEADER = Pattern.compile(
         "\\n\\s*+(?:(?:public|private|protected|static|final|synchronized)\\s++)++[\\w<>\\[\\], .]++\\(");
 
@@ -77,6 +82,58 @@ class CashSessionStampGuardTest {
             "PharmacyRefundService.java");
         assertThat(missing).as("a money writer whose method does not name its cash session (CashSessionService.stamp)")
             .isEmpty();
+    }
+
+    @Test
+    @DisplayName("QA D3410: every payout is taken from a till the payer holds open, never below its cash")
+    void everyPayoutIsBoundedByItsTill() throws IOException {
+        List<String> payouts = new ArrayList<>();
+        List<String> unbounded = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(SERVICES)) {
+            for (Path file : files.filter(f -> f.toString().endsWith(".java")).sorted().toList()) {
+                String code = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+                Matcher out = PAYS_OUT.matcher(code);
+                while (out.find()) {
+                    payouts.add(file.getFileName().toString());
+                    if (!paysOutOfItsTill(code, enclosingMethod(code, out.start()))) {
+                        unbounded.add(file.getFileName() + ":" + SourceScan.lineOf(code, out.start()));
+                    }
+                }
+            }
+        }
+        assertThat(payouts).as("the payout writers").contains("InvoiceRefundService.java",
+            "PharmacyRefundService.java");
+        assertThat(unbounded)
+            .as("money paid out with CashSessionService.stamp, which opens an empty till on the spot and lets its"
+                + " cash go negative (QA D3410): use stampPayout")
+            .isEmpty();
+    }
+
+    @Test
+    @DisplayName("the payout scan itself: a payout stamped with the plain stamp is a finding")
+    void thePayoutScanFindsTheClass() {
+        String plain = """
+            class A {
+                private UUID stampPharmacyTill(UUID h, UUID c) { return cashSessions.stamp(PHARMACY, h, c); }
+                public void pay() { refund.setCashSessionId(stampPharmacyTill(h, c)); refund.setStatus(PharmacyRefundStatus.PAID); }
+            }
+            """;
+        Matcher out = PAYS_OUT.matcher(plain);
+        assertThat(out.find()).isTrue();
+        assertThat(paysOutOfItsTill(plain, enclosingMethod(plain, out.start()))).isFalse();
+        String bounded = plain.replace("cashSessions.stamp(", "cashSessions.stampPayout(");
+        Matcher again = PAYS_OUT.matcher(bounded);
+        assertThat(again.find()).isTrue();
+        assertThat(paysOutOfItsTill(bounded, enclosingMethod(bounded, again.start()))).isTrue();
+    }
+
+    /** Whether a payout method stamps through stampPayout, directly or through the one-line till wrapper. */
+    private static boolean paysOutOfItsTill(String code, String method) {
+        if (STAMPS_PAYOUT.matcher(method).find()) {
+            return true;
+        }
+        return method.contains("stampPharmacyTill(")
+            && STAMPS_PAYOUT.matcher(SourceScan.methodBody(code, "stampPharmacyTill")).find();
     }
 
     @Test

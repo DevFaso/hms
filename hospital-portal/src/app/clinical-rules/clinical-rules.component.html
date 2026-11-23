@@ -65,7 +65,19 @@
           <dl class="rule-facts">
             <div>
               <dt>{{ 'CLINICAL_RULES.SOURCE' | translate }}</dt>
-              <dd>{{ rule.sourceText }}</dd>
+              <dd>
+                {{ rule.sourceText }}
+                @if (rule.sourceUrl) {
+                  <a
+                    class="rule-source-link"
+                    data-testid="rule-source-link"
+                    [href]="rule.sourceUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >{{ 'CLINICAL_RULES.SOURCE_OPEN' | translate }}</a
+                  >
+                }
+              </dd>
             </div>
             <div>
               <dt>{{ 'CLINICAL_RULES.APPROVER' | translate }}</dt>
@@ -77,7 +89,7 @@
             </div>
             <div>
               <dt>{{ 'CLINICAL_RULES.ENFORCED_IN' | translate }}</dt>
-              <dd class="rule-code">{{ rule.enforcedIn.join(', ') }}</dd>
+              <dd data-testid="rule-area">{{ 'CLINICAL_RULES.AREA.' + rule.area | translate }}</dd>
             </div>
           </dl>
 

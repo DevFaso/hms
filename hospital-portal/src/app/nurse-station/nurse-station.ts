@@ -122,6 +122,7 @@ import { AllergyHoldDialogComponent } from '../shared/allergy-acknowledgement/al
 import { AllergyReviewStateComponent } from '../shared/allergy-acknowledgement/allergy-review-state.component';
 import type { AllergyReviewState } from '../shared/allergy-acknowledgement/allergy-acknowledgement';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { PatientSafetyHeaderComponent } from '../shared/patient-safety-header/patient-safety-header.component';
 type FilterMode = 'me' | 'unit' | 'all';
 type SectionType =
   | 'vitals'
@@ -148,6 +149,7 @@ export function localInputToUtcIso(value: string | undefined | null): string | u
   selector: 'app-nurse-station',
   standalone: true,
   imports: [
+    PatientSafetyHeaderComponent,
     DateTimePipe,
     SubmitGuardDirective,
     ModalDialogDirective,

@@ -168,7 +168,7 @@
                 <th scope="col">{{ 'DISCHARGE.REQUESTED_AT' | translate }}</th>
                 <th scope="col">{{ 'DISCHARGE.NURSE_SUMMARY' | translate }}</th>
                 <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-                <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+                <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
               </tr>
             </thead>
             <tbody>
@@ -341,7 +341,7 @@
                 <th scope="col">{{ 'DISCHARGE.DISPOSITION' | translate }}</th>
                 <th scope="col">{{ 'DISCHARGE.PROVIDER' | translate }}</th>
                 <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-                <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+                <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
               </tr>
             </thead>
             <tbody>
@@ -658,6 +658,10 @@
         </button>
       </div>
       <div class="modal-body">
+        <!-- QA r70 D3220: the patient-safety header (blood group, allergies, weight). -->
+        @if (summaryForm.patientId) {
+          <app-patient-safety-header [patientId]="summaryForm.patientId" />
+        }
         @if (!editingSummaryId()) {
           <div class="field">
             <label for="summary-patient">{{ 'DISCHARGE.PATIENT' | translate }} *</label>
@@ -970,6 +974,8 @@
         </button>
       </div>
       <div class="modal-body">
+        <!-- QA r70 D3220: the patient-safety header (blood group, allergies, weight). -->
+        <app-patient-safety-header [patientId]="s.patientId" [showName]="false" />
         <div class="view-section">
           <h4>{{ 'DISCHARGE.DISCHARGE_DATE' | translate }}</h4>
           <p>

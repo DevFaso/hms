@@ -324,6 +324,7 @@
                 id="retDispense"
                 data-testid="return-dispense"
                 [(ngModel)]="returnDispenseId"
+                (ngModelChange)="onReturnDispenseChange()"
                 name="returnDispenseId"
               >
                 <option value="">{{ 'PHARMACY.RETURN_NO_DISPENSE_OPTION' | translate }}</option>
@@ -363,6 +364,38 @@
               />
             </div>
           </div>
+          <!-- QA D3415 (r70): only « intact » goes back on sale; a controlled drug is quarantined. -->
+          <div class="form-row">
+            <div class="field">
+              <label for="retCondition">{{ 'PHARMACY.STOCK_CONDITION_LABEL' | translate }} *</label>
+              <select
+                id="retCondition"
+                name="returnCondition"
+                data-server-field="stockCondition"
+                required
+                [(ngModel)]="returnCondition"
+              >
+                <option [ngValue]="null">
+                  {{ 'PHARMACY.STOCK_CONDITION_CHOOSE' | translate }}
+                </option>
+                @for (condition of returnedStockConditions; track condition) {
+                  <option [ngValue]="condition">
+                    {{ 'PHARMACY.STOCK_CONDITION.' + condition | translate }}
+                  </option>
+                }
+              </select>
+              @if (returnCondition || selectedItem()?.controlled) {
+                <small class="field-hint" data-testid="return-stock-fate">{{
+                  (returnGoesToQuarantine()
+                    ? selectedItem()?.controlled
+                      ? 'PHARMACY.STOCK_CONDITION_CONTROLLED_QUARANTINED'
+                      : 'PHARMACY.STOCK_CONDITION_QUARANTINED'
+                    : 'PHARMACY.STOCK_CONDITION_BACK_ON_SALE'
+                  ) | translate
+                }}</small>
+              }
+            </div>
+          </div>
         }
 
         <!-- DISPENSE: this screen is read-mostly for dispenses; encourage the proper UI. -->
@@ -394,11 +427,130 @@
     </div>
   }
 
+  <!-- QA D3415 (r70): units set aside, not for sale, until their (witnessed) destruction. -->
+  <section class="quarantine-card" data-testid="quarantine" aria-labelledby="quarantineTitle">
+    <h3 id="quarantineTitle">
+      <span class="material-symbols-outlined" aria-hidden="true">block</span>
+      {{ 'PHARMACY.QUARANTINE.TITLE' | translate }}
+    </h3>
+    <p class="workspace-note">{{ 'PHARMACY.QUARANTINE.EXPLAIN' | translate }}</p>
+    @if (quarantineFailed()) {
+      <p class="workspace-error-inline" role="alert">
+        {{ 'PHARMACY.QUARANTINE.LOAD_FAILED' | translate }}
+        <button type="button" class="btn-link" (click)="loadQuarantine()">
+          {{ 'PHARMACY_DASH.RETRY' | translate }}
+        </button>
+      </p>
+    } @else if (quarantine().length === 0) {
+      <p class="workspace-note" data-testid="quarantine-empty">
+        {{ 'PHARMACY.QUARANTINE.EMPTY' | translate }}
+      </p>
+    } @else {
+      <ul class="quarantine-list">
+        @for (line of quarantine(); track line.inventoryItemId + (line.stockLotId ?? '')) {
+          <li [attr.data-testid]="'quarantine-' + line.inventoryItemId">
+            <span class="quarantine-what">
+              <strong>{{ line.medicationName ?? ('PHARMACY.UNKNOWN_ITEM' | translate) }}</strong>
+              @if (line.controlled) {
+                {{ ' '
+                }}<span class="badge-controlled">{{ 'PHARMACY.CONTROLLED' | translate }}</span>
+              }
+              <small>{{
+                line.lotNumber
+                  ? ('PHARMACY.QUARANTINE.LOT' | translate: { lot: line.lotNumber })
+                  : ('PHARMACY.QUARANTINE.NO_LOT' | translate)
+              }}</small>
+            </span>
+            <span class="quarantine-qty">{{ line.heldQuantity }} {{ line.unit ?? '' }}</span>
+            <button
+              type="button"
+              class="btn-secondary"
+              [attr.data-testid]="'destroy-' + line.inventoryItemId"
+              (click)="openDestroy(line)"
+            >
+              {{ 'PHARMACY.QUARANTINE.DESTROY' | translate }}
+            </button>
+          </li>
+        }
+      </ul>
+    }
+    @if (destroying(); as line) {
+      <form class="form-card destroy-form" data-testid="destroy-form" (ngSubmit)="confirmDestroy()">
+        <h4>
+          {{
+            'PHARMACY.QUARANTINE.DESTROY_TITLE'
+              | translate: { name: line.medicationName ?? '', held: line.heldQuantity }
+          }}
+        </h4>
+        <div class="form-row">
+          <div class="field">
+            <label for="destroyQty">{{ 'PHARMACY.QUARANTINE.QUANTITY' | translate }} *</label>
+            <input
+              id="destroyQty"
+              name="destroyQty"
+              appFocusOnRender
+              type="number"
+              min="1"
+              [max]="line.heldQuantity"
+              required
+              data-server-field="quantity"
+              [(ngModel)]="destroyQuantity"
+            />
+          </div>
+          <div class="field">
+            <label for="destroyReason">{{ 'PHARMACY.QUARANTINE.REASON' | translate }} *</label>
+            <input
+              id="destroyReason"
+              name="destroyReason"
+              type="text"
+              maxlength="300"
+              required
+              data-server-field="reason"
+              [placeholder]="'PHARMACY.QUARANTINE.REASON_PLACEHOLDER' | translate"
+              [(ngModel)]="destroyReason"
+            />
+          </div>
+          @if (line.controlled) {
+            <div class="field">
+              <label for="destroyWitness">{{ 'PHARMACY.WITNESS' | translate }} *</label>
+              <select
+                id="destroyWitness"
+                name="destroyWitness"
+                required
+                data-server-field="witnessedBy"
+                [(ngModel)]="destroyWitness"
+              >
+                <option [ngValue]="undefined">
+                  {{ 'PHARMACY.SELECT_WITNESS_OPTION' | translate }}
+                </option>
+                @for (w of witnessCandidates(); track w.userId) {
+                  <option [ngValue]="w.userId">{{ w.displayName }}</option>
+                }
+              </select>
+            </div>
+          }
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" (click)="destroying.set(null)">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="submit"
+            class="btn-primary"
+            data-testid="destroy-confirm"
+            [disabled]="destroySaving()"
+          >
+            {{ 'PHARMACY.QUARANTINE.DESTROY_CONFIRM' | translate }}
+          </button>
+        </div>
+      </form>
+    }
+  </section>
+
   <div class="workspace-strip">
     <p>
-      <strong>{{ txLoading() ? '—' : transactions().length }}</strong><span>{{
-        'PHARMACY_WORKSPACE.LOADED_MOVEMENTS' | translate
-      }}</span>
+      <strong>{{ txLoading() ? '—' : transactions().length }}</strong>{{ ' '
+      }}<span>{{ 'PHARMACY_WORKSPACE.LOADED_MOVEMENTS' | translate }}</span>
     </p>
     <p>{{ 'PHARMACY_WORKSPACE.STOCK_HINT' | translate }}</p>
   </div>

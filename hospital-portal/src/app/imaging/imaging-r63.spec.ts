@@ -295,6 +295,18 @@ describe('ImagingComponent — r63 imaging completion', () => {
     window.dispatchEvent(new Event('afterprint'));
   });
 
+  it('D3354: browser printing isolates the open report and clears isolation afterwards', () => {
+    setUp(['ROLE_DOCTOR']);
+    component.openReport(report());
+    fixture.detectChanges();
+    window.dispatchEvent(new Event('beforeprint'));
+    expect(q('.' + PRINT_ROOT_CLASS)?.getAttribute('data-testid')).toBe('imaging-report-panel');
+    expect(document.body.classList.contains('print-isolated')).toBeTrue();
+    window.dispatchEvent(new Event('afterprint'));
+    expect(q('.' + PRINT_ROOT_CLASS)).toBeNull();
+    expect(document.body.classList.contains('print-isolated')).toBeFalse();
+  });
+
   it('QA D2642: the open report says whom it is about and what was asked, on screen and on paper', () => {
     setUp(['ROLE_RADIOLOGIST']);
     component.openReport(

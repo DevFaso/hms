@@ -86,6 +86,21 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
             @Param("medicationCatalogItemId") UUID medicationCatalogItemId,
             @Param("statuses") Collection<DispenseStatus> statuses);
 
+    /**
+     * QA D3409 (r70): every fill taken from any lot of an inventory item, in the given states, newest first, with
+     * its patient (the return form before a lot is chosen).
+     */
+    @org.springframework.data.jpa.repository.Query("""
+        SELECT d FROM Dispense d
+        LEFT JOIN FETCH d.patient
+        WHERE d.stockLot.inventoryItem.id = :inventoryItemId
+          AND d.status IN :statuses
+        ORDER BY d.createdAt DESC, d.id DESC
+        """)
+    List<Dispense> findReturnableFillsOfItemLots(
+            @Param("inventoryItemId") UUID inventoryItemId,
+            @Param("statuses") Collection<DispenseStatus> statuses);
+
     /** QA D653: the fills taken from one lot in the given states, newest first. */
     List<Dispense> findByStockLot_IdAndStatusInOrderByCreatedAtDesc(UUID stockLotId,
                                                                     Collection<DispenseStatus> statuses);

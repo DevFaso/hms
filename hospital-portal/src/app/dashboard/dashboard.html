@@ -59,7 +59,13 @@
               {{ specialization() | enumLabel: 'specialization' }}
             </span>
           }
-          @if (departmentName() && departmentName() !== specialization()) {
+          <!-- QA D3510: compare what the reader sees, not the stored code (« Médecine générale » twice). -->
+          @let specialtyLabel = (specialization() | enumLabel: 'specialization') ?? '';
+          @if (
+            departmentName() &&
+            departmentName()!.trim().toLowerCase() !== specialtyLabel.trim().toLowerCase() &&
+            departmentName() !== specialization()
+          ) {
             {{ ' '
             }}<span class="doctor-chip dept-chip">
               <span class="material-symbols-outlined">domain</span>
@@ -265,6 +271,10 @@
   }
 
   @if (!loading() && activeView() === 'hospitaladmin') {
+    <!-- QA r65 D2731: what the hospital still needs before patients can book
+         (shown to its hospital admin until every step is done). QA r70 D3205: first, above the
+         tiles and the quick actions, so a new admin sees it without scrolling. -->
+    <app-onboarding-checklist [hospitalId]="checklistHospitalId()" [hideWhenComplete]="true" />
     <section class="stat-strip">
       @for (card of hospitalAdminStatCards(); track card.key) {
         <a class="stat-card" [routerLink]="card.route ?? null">
@@ -365,10 +375,6 @@
         </div>
       </section>
     }
-
-    <!-- QA r65 D2731: what the hospital still needs before patients can book
-         (shown to its hospital admin until every step is done). -->
-    <app-onboarding-checklist [hospitalId]="checklistHospitalId()" [hideWhenComplete]="true" />
 
     <div class="admin-workspace">
       <div class="admin-workspace-left">

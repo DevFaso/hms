@@ -18,8 +18,19 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@com.example.hms.validation.StockUnavailableNotIntact
 public class CancelReadyRequestDTO {
 
     @NotNull(message = "{dispense.ready.cancelReason.required}")
     private ReadyCancelReason reason;
+
+    /**
+     * QA D3403 (r70): the state of the prepared medicine, said every time (no default). Only INTACT (not given,
+     * intact) goes back on sale; damaged, expired or contaminated stock is quarantined.
+     */
+    @NotNull(message = "{dispense.ready.stockConditionRequired}")
+    private com.example.hms.enums.ReturnedStockCondition stockCondition;
+
+    /** Review of #1285: the witness of a controlled fill set aside or lost (required then, never the actor). */
+    private java.util.UUID witnessedBy;
 }

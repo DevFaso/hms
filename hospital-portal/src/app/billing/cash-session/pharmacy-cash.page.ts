@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 
+import { PageHeaderComponent } from '../../shared/page-header/page-header.component';
 import { CashSessionComponent } from './cash-session.component';
 
 /**
@@ -10,10 +11,12 @@ import { CashSessionComponent } from './cash-session.component';
 @Component({
   selector: 'app-pharmacy-cash-page',
   standalone: true,
-  imports: [TranslateModule, CashSessionComponent],
+  imports: [TranslateModule, PageHeaderComponent, CashSessionComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="page-container" data-testid="pharmacy-cash-page">
+      <!-- QA D3506: the page title in the page-title style every other page uses (the card keeps its own heading). -->
+      <app-page-header [title]="'BILLING.CASH_SESSION.TITLE' | translate" icon="point_of_sale" />
       <app-cash-session till="PHARMACY" />
     </div>
   `,
