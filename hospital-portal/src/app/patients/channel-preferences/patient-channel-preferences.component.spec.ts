@@ -41,12 +41,16 @@ describe('PatientChannelPreferencesComponent', () => {
     fixture = TestBed.createComponent(PatientChannelPreferencesComponent);
     fixture.componentRef.setInput('patientId', 'p-1');
     fixture.detectChanges();
-    if (desk) {
-      http.expectOne('/patients/p-1/recipient-verification').flush([
-        { channel: 'SMS', verified: true },
-        { channel: 'EMAIL', verified: false },
-      ]);
-    }
+    if (desk) flushVerification('p-1');
+  }
+
+  function flushVerification(patientId: string): void {
+    const request = http.expectOne(`/patients/${patientId}/recipient-verification`);
+    expect(request.request.method).toBe('GET');
+    request.flush([
+      { channel: 'SMS', verified: true },
+      { channel: 'EMAIL', verified: false },
+    ]);
   }
 
   const box = (testid: string): HTMLInputElement =>
@@ -185,6 +189,7 @@ describe('PatientChannelPreferencesComponent', () => {
     const oldSave = http.expectOne('/patients/p-1/channel-preferences');
     fixture.componentRef.setInput('patientId', 'p-2');
     fixture.detectChanges();
+    flushVerification('p-2');
     expect(component.choices()).toEqual([]);
     http.expectOne('/patients/p-2/channel-preferences').flush(matrix());
     component.toggle('LAB_RESULT', 'SMS', false);
@@ -211,9 +216,11 @@ describe('PatientChannelPreferencesComponent', () => {
     const oldA = http.expectOne('/patients/p-1/channel-preferences');
     fixture.componentRef.setInput('patientId', 'p-2');
     fixture.detectChanges();
+    flushVerification('p-2');
     const oldB = http.expectOne('/patients/p-2/channel-preferences');
     fixture.componentRef.setInput('patientId', 'p-1');
     fixture.detectChanges();
+    flushVerification('p-1');
     const currentA = http.expectOne('/patients/p-1/channel-preferences');
     currentA.flush(matrix());
     const stale = matrix().map((row) => ({ ...row, enabled: true }));
@@ -247,6 +254,7 @@ describe('PatientChannelPreferencesComponent', () => {
     const oldRead = http.expectOne('/patients/p-1/channel-preferences');
     fixture.componentRef.setInput('patientId', 'p-2');
     fixture.detectChanges();
+    flushVerification('p-2');
     http.expectOne('/patients/p-2/channel-preferences').flush(matrix());
     oldRead.flush({}, { status: 503, statusText: 'offline' });
     expect(fixture.componentInstance.loadFailed()).toBeFalse();
@@ -263,6 +271,7 @@ describe('PatientChannelPreferencesComponent', () => {
     const oldSave = http.expectOne('/patients/p-1/channel-preferences');
     fixture.componentRef.setInput('patientId', 'p-2');
     fixture.detectChanges();
+    flushVerification('p-2');
     component.toggle('LAB_RESULT', 'SMS', false);
     expect(component.choices()).toEqual([]);
     http.expectOne('/patients/p-2/channel-preferences').flush(matrix());

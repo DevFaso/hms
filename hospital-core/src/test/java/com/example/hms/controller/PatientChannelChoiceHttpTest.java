@@ -43,6 +43,9 @@ class PatientChannelChoiceHttpTest {
         var account = new User(); account.setId(UUID.randomUUID());
         var patient = new Patient(); patient.setId(UUID.randomUUID()); patient.setUser(account);
         patient.setPhoneNumberPrimary("+22670000000"); patient.setEmail("cdx-contact@example.invalid");
+        // Verified recipients isolate consent: an opt-out must refuse even an otherwise deliverable notice.
+        patient.setVerifiedSmsRecipient(patient.getPhoneNumberPrimary());
+        patient.setVerifiedEmailRecipient(patient.getEmail());
         var hospital = UUID.randomUUID(); var recorder = UUID.randomUUID();
         var stored = new ArrayList<NotificationPreference>();
         when(patients.findByIdUnscoped(patient.getId())).thenReturn(Optional.of(patient));
@@ -66,7 +69,9 @@ class PatientChannelChoiceHttpTest {
         var mvc = MockMvcBuilders.standaloneSetup(new PatientChannelPreferenceController(writer, auth)).build();
         var principal = new UsernamePasswordAuthenticationToken("cdx-desk", null);
         var consent = new PatientChannelConsent(preferences);
-        var gate = new PatientMessageGate(consent, mock(PatientNotificationLedger.class), sms, email);
+        var verification = new PatientRecipientVerification();
+        var gate = new PatientMessageGate(consent, mock(PatientNotificationLedger.class), sms, email,
+            verification, new PatientRecipientCurrentCheck(patients, verification));
         for (var type : PatientChannelPreferenceService.DESK_TYPES) {
             for (var channel : PatientChannelPreferenceService.DESK_CHANNELS) {
                 String body = "[{\"notificationType\":\"" + type + "\",\"channel\":\"" + channel + "\",\"enabled\":false}]";
