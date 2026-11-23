@@ -1,9 +1,9 @@
 import { TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { provideRouter } from '@angular/router';
 import { NotificationSettingsComponent } from './notification-settings';
-import { NotificationService } from '../services/notification.service';
+import { NotificationPreference, NotificationService } from '../services/notification.service';
 import { ToastService } from '../core/toast.service';
 
 describe('NotificationSettingsComponent consent preservation', () => {
@@ -71,5 +71,57 @@ describe('NotificationSettingsComponent consent preservation', () => {
     expect(component.dirty()).toBeFalse();
     component.save();
     expect(api.updatePreferences).not.toHaveBeenCalled();
+  });
+  it('locks every switch while a save is pending and accepts fresh edits only after its response', async () => {
+    const fixture = render();
+    const component = fixture.componentInstance;
+    const response = new Subject<NotificationPreference[]>();
+    api.updatePreferences.and.returnValue(response);
+    component.toggle('LAB_RESULT', 'SMS', false);
+    component.save();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const boxes = [
+      ...fixture.nativeElement.querySelectorAll('input[type="checkbox"]'),
+    ] as HTMLInputElement[];
+    expect(boxes.length).toBeGreaterThan(0);
+    expect(boxes.every((box) => box.disabled)).toBeTrue();
+    component.toggle('BILLING', 'EMAIL', false);
+    expect(
+      component.rows().find((row) => row.notificationType === 'BILLING')!.channels['EMAIL'],
+    ).toBeTrue();
+    response.next([{ notificationType: 'LAB_RESULT', channel: 'SMS', enabled: false }]);
+    response.complete();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(boxes.every((box) => !box.disabled)).toBeTrue();
+    component.toggle('BILLING', 'EMAIL', false);
+    expect(component.dirty()).toBeTrue();
+    expect(
+      component.rows().find((row) => row.notificationType === 'BILLING')!.channels['EMAIL'],
+    ).toBeFalse();
+  });
+
+  it('reenables switches after a failed save without discarding the draft refusal', async () => {
+    const fixture = render();
+    const component = fixture.componentInstance;
+    const response = new Subject<NotificationPreference[]>();
+    api.updatePreferences.and.returnValue(response);
+    component.toggle('LAB_RESULT', 'SMS', false);
+    component.save();
+    response.error(new Error('offline'));
+    fixture.detectChanges();
+    expect(component.saving()).toBeFalse();
+    expect(component.dirty()).toBeTrue();
+    expect(
+      component.rows().find((row) => row.notificationType === 'LAB_RESULT')!.channels['SMS'],
+    ).toBeFalse();
+    expect(
+      [...fixture.nativeElement.querySelectorAll('input[type="checkbox"]')].every(
+        (box) => !(box as HTMLInputElement).disabled,
+      ),
+    ).toBeTrue();
   });
 });

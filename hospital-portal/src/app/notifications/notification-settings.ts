@@ -78,8 +78,9 @@ interface PrefRow {
                           [attr.aria-label]="
                             (row.labelKey | translate) + ' — ' + (channelLabelKey(ch) | translate)
                           "
-                          [(ngModel)]="row.channels[ch]"
-                          (ngModelChange)="markChanged()"
+                          [ngModel]="row.channels[ch]"
+                          (ngModelChange)="toggle(row.notificationType, ch, $event)"
+                          [disabled]="saving()"
                         />
                         <span class="slider"></span>
                       </label>
@@ -296,6 +297,18 @@ export class NotificationSettingsComponent implements OnInit {
       }
     }
     return updates;
+  }
+
+  toggle(type: string, channel: string, enabled: boolean): void {
+    if (this.saving() || this.loading() || this.loadFailed()) return;
+    this.rows.update((rows) =>
+      rows.map((row) =>
+        row.notificationType === type
+          ? { ...row, channels: { ...row.channels, [channel]: enabled } }
+          : row,
+      ),
+    );
+    this.markChanged();
   }
 
   markChanged(): void {

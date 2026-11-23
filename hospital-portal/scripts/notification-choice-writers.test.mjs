@@ -19,6 +19,10 @@ test('every active preference editor sends only edited cells, not its stale full
       continue;
     writers.push(path.replaceAll('\\', '/').slice(app.replaceAll('\\', '/').length));
     assert.match(source, /changedChannelChoices\(/, path);
+    const inputs = [...source.matchAll(/<input\b[^>]*type="checkbox"[^>]*>/g)];
+    assert.ok(inputs.length > 0, path);
+    for (const [input] of inputs) assert.match(input, /\[disabled\]="saving\(\)"/, path);
+    assert.match(source, /toggle\([^)]*\)[^{]*\{\s*if \(this\.saving\(\)/, path);
   }
   assert.equal(writers.length, 2, JSON.stringify(writers));
 });

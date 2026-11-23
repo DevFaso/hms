@@ -41,6 +41,17 @@ describe('PatientPhotoComponent', () => {
     expect(extrasSpy.getPhotoBlob).not.toHaveBeenCalled();
   });
 
+  it('includes the visible initials in the edit button name for voice-control users', () => {
+    component.canEdit = true;
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('button.photo-avatar').getAttribute('aria-label'),
+    ).toContain('AK');
+    component.canEdit = false;
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.initials').textContent).toContain('AK');
+  });
+
   it('fetches the photo as an authenticated blob when one exists', () => {
     // <img src> URLs carry no bearer token — the blob fetch is the contract.
     extrasSpy.getPhotoBlob.and.returnValue(of(new Blob([new Uint8Array([1])])));

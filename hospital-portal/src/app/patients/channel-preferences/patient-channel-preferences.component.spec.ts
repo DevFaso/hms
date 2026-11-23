@@ -136,5 +136,147 @@ describe('PatientChannelPreferencesComponent', () => {
     ).toBeNull();
   });
 
+  it('locks every desk switch during the pending write, then permits another edit', async () => {
+    setUp(true);
+    http.expectOne('/patients/p-1/channel-preferences').flush(matrix());
+    fixture.detectChanges();
+    const component = fixture.componentInstance;
+    component.toggle('APPOINTMENT_REMINDER', 'SMS', false);
+    component.save();
+    const put = http.expectOne('/patients/p-1/channel-preferences');
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const boxes = [
+      ...fixture.nativeElement.querySelectorAll('input[type="checkbox"]'),
+    ] as HTMLInputElement[];
+    expect(boxes.length).toBeGreaterThan(0);
+    expect(boxes.every((box) => box.disabled)).toBeTrue();
+    component.toggle('BILLING', 'SMS', false);
+    expect(component.isOn('BILLING', 'SMS')).toBeTrue();
+    put.flush(
+      matrix().map((row) =>
+        row.notificationType === 'APPOINTMENT_REMINDER' && row.channel === 'SMS'
+          ? { ...row, enabled: false }
+          : row,
+      ),
+    );
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(boxes.every((box) => !box.disabled)).toBeTrue();
+    component.toggle('BILLING', 'SMS', false);
+    expect(component.dirty()).toBeTrue();
+    expect(component.isOn('BILLING', 'SMS')).toBeFalse();
+  });
+
+  it('ignores an old patient save while another patient has an unsaved or in-flight refusal', () => {
+    setUp(true);
+    http.expectOne('/patients/p-1/channel-preferences').flush(matrix());
+    const component = fixture.componentInstance;
+    component.toggle('APPOINTMENT_REMINDER', 'SMS', false);
+    component.save();
+    const oldSave = http.expectOne('/patients/p-1/channel-preferences');
+    fixture.componentRef.setInput('patientId', 'p-2');
+    fixture.detectChanges();
+    expect(component.choices()).toEqual([]);
+    http.expectOne('/patients/p-2/channel-preferences').flush(matrix());
+    component.toggle('LAB_RESULT', 'SMS', false);
+    component.save();
+    const currentSave = http.expectOne('/patients/p-2/channel-preferences');
+    oldSave.flush(matrix());
+    expect(component.isOn('LAB_RESULT', 'SMS')).toBeFalse();
+    expect(component.saving()).toBeTrue();
+    expect(toast.success).not.toHaveBeenCalled();
+    currentSave.flush(
+      matrix().map((row) =>
+        row.notificationType === 'LAB_RESULT' && row.channel === 'SMS'
+          ? { ...row, enabled: false }
+          : row,
+      ),
+    );
+    expect(component.saving()).toBeFalse();
+    expect(component.isOn('LAB_RESULT', 'SMS')).toBeFalse();
+    expect(toast.success).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores earlier loads even when navigation returns to the original patient', () => {
+    setUp(true);
+    const oldA = http.expectOne('/patients/p-1/channel-preferences');
+    fixture.componentRef.setInput('patientId', 'p-2');
+    fixture.detectChanges();
+    const oldB = http.expectOne('/patients/p-2/channel-preferences');
+    fixture.componentRef.setInput('patientId', 'p-1');
+    fixture.detectChanges();
+    const currentA = http.expectOne('/patients/p-1/channel-preferences');
+    currentA.flush(matrix());
+    const stale = matrix().map((row) => ({ ...row, enabled: true }));
+    oldA.flush(stale);
+    oldB.flush(stale);
+    expect(fixture.componentInstance.isOn('BILLING', 'EMAIL')).toBeFalse();
+  });
+
+  it('keeps the draft refusal and reenables the desk after a current save fails', async () => {
+    setUp(true);
+    http.expectOne('/patients/p-1/channel-preferences').flush(matrix());
+    const component = fixture.componentInstance;
+    component.toggle('APPOINTMENT_REMINDER', 'SMS', false);
+    component.save();
+    http
+      .expectOne('/patients/p-1/channel-preferences')
+      .flush({}, { status: 503, statusText: 'offline' });
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(component.saving()).toBeFalse();
+    expect(component.dirty()).toBeTrue();
+    expect(component.isOn('APPOINTMENT_REMINDER', 'SMS')).toBeFalse();
+    expect(box('channel-BILLING-SMS').disabled).toBeFalse();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('an old patient read error cannot hide the current patient matrix', () => {
+    setUp(true);
+    const oldRead = http.expectOne('/patients/p-1/channel-preferences');
+    fixture.componentRef.setInput('patientId', 'p-2');
+    fixture.detectChanges();
+    http.expectOne('/patients/p-2/channel-preferences').flush(matrix());
+    oldRead.flush({}, { status: 503, statusText: 'offline' });
+    expect(fixture.componentInstance.loadFailed()).toBeFalse();
+    expect(fixture.componentInstance.choices().length).toBe(matrix().length);
+    expect(fixture.componentInstance.isOn('BILLING', 'EMAIL')).toBeFalse();
+  });
+
+  it('an old patient save error cannot unlock or alter the current patient pending save', () => {
+    setUp(true);
+    http.expectOne('/patients/p-1/channel-preferences').flush(matrix());
+    const component = fixture.componentInstance;
+    component.toggle('APPOINTMENT_REMINDER', 'SMS', false);
+    component.save();
+    const oldSave = http.expectOne('/patients/p-1/channel-preferences');
+    fixture.componentRef.setInput('patientId', 'p-2');
+    fixture.detectChanges();
+    component.toggle('LAB_RESULT', 'SMS', false);
+    expect(component.choices()).toEqual([]);
+    http.expectOne('/patients/p-2/channel-preferences').flush(matrix());
+    component.toggle('LAB_RESULT', 'SMS', false);
+    component.save();
+    const currentSave = http.expectOne('/patients/p-2/channel-preferences');
+    oldSave.flush({}, { status: 503, statusText: 'offline' });
+    expect(component.saving()).toBeTrue();
+    expect(component.isOn('LAB_RESULT', 'SMS')).toBeFalse();
+    expect(toast.error).not.toHaveBeenCalled();
+    currentSave.flush(
+      matrix().map((row) =>
+        row.notificationType === 'LAB_RESULT' && row.channel === 'SMS'
+          ? { ...row, enabled: false }
+          : row,
+      ),
+    );
+    expect(component.saving()).toBeFalse();
+    expect(component.dirty()).toBeFalse();
+  });
+
   afterEach(() => http.verify());
 });

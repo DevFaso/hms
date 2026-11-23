@@ -27,6 +27,10 @@ test('the desk records one choice with attributed canonical feedback', async ({
     });
   });
   let writes = 0;
+  let releaseWrite!: () => void;
+  const pendingWrite = new Promise<void>((resolve) => {
+    releaseWrite = resolve;
+  });
   await page.route(`**/api/patients/${TEST_ID}/channel-preferences*`, async (route) => {
     const choices = [
       'APPOINTMENT_REMINDER',
@@ -42,6 +46,7 @@ test('the desk records one choice with attributed canonical feedback', async ({
       { notificationType: 'LAB_RESULT', channel: 'SMS', enabled: false },
     ]);
     writes++;
+    await pendingWrite;
     return route.fulfill({
       json: choices.map((choice) =>
         choice.notificationType === 'LAB_RESULT' && choice.channel === 'SMS'
@@ -59,6 +64,8 @@ test('the desk records one choice with attributed canonical feedback', async ({
   await page.getByTestId('administration-section-button').click();
   await page.getByTestId('channel-LAB_RESULT-SMS').uncheck();
   await page.getByTestId('channel-prefs-save').click();
+  await expect(page.getByTestId('channel-BILLING-SMS')).toBeDisabled();
+  releaseWrite();
   const attribution = page.getByTestId('choice-recorder-LAB_RESULT-SMS');
   await expect(attribution).toContainText('cdx-Receptionist');
   await expect(attribution.locator('time')).toHaveAttribute('datetime', '2026-11-22T08:00:00Z');
@@ -80,12 +87,17 @@ test('self-service sends only edited choices and adopts concurrent refusals', as
   await signInAs(page, 'ROLE_PATIENT', baseURL!);
   await installLocalIconFonts(page);
   let writes = 0;
+  let releaseWrite!: () => void;
+  const pendingWrite = new Promise<void>((resolve) => {
+    releaseWrite = resolve;
+  });
   await page.route('**/api/notifications/preferences', async (route) => {
     if (route.request().method() === 'GET') return route.fulfill({ json: [] });
     expect(route.request().postDataJSON()).toEqual([
       { notificationType: 'APPOINTMENT_REMINDER', channel: 'SMS', enabled: false },
     ]);
     writes++;
+    await pendingWrite;
     return route.fulfill({
       json: [
         { notificationType: 'APPOINTMENT_REMINDER', channel: 'SMS', enabled: false },
@@ -97,6 +109,8 @@ test('self-service sends only edited choices and adopts concurrent refusals', as
   const first = page.locator('.pref-table tbody tr').first();
   await first.locator('label.toggle').nth(2).click();
   await page.locator('.settings-actions button').click();
+  await expect(first.getByRole('checkbox').nth(1)).toBeDisabled();
+  releaseWrite();
   await expect(
     page.locator('.pref-table tbody tr').nth(3).getByRole('checkbox').nth(1),
   ).not.toBeChecked();
