@@ -505,6 +505,36 @@ describe('errorInterceptor', () => {
     expect(noteRefusal).not.toHaveBeenCalled();
   });
 
+  for (const url of [
+    '/hospitals/h1/clinical-rules',
+    '/api/hospitals/h1/clinical-rules?view=labels',
+  ]) {
+    it(`a refused optional rule overview preserves the page and propagates the 403: ${url}`, () => {
+      let error: HttpErrorResponse | undefined;
+      http.get(url).subscribe({ error: (e) => (error = e) });
+      httpMock.expectOne(url).flush(null, { status: 403, statusText: 'Forbidden' });
+      const audit = httpMock.expectOne('/frontend-audit');
+      expect(audit.request.body.type).toBe('SILENT_403');
+      audit.flush({});
+      expect(error?.status).toBe(403);
+      expect(router.navigate).not.toHaveBeenCalled();
+    });
+  }
+
+  for (const url of [
+    '/hospitals/h1/clinical-rules',
+    '/hospitals/h1/clinical-rules/MIDWIFE_NEWBORN_CARE/signoff',
+  ]) {
+    it(`a refused rule write still follows normal refusal handling: ${url}`, () => {
+      let error: HttpErrorResponse | undefined;
+      http.post(url, {}).subscribe({ error: (e) => (error = e) });
+      httpMock.expectOne(url).flush(null, { status: 403, statusText: 'Forbidden' });
+      expect(error?.status).toBe(403);
+      expect(router.navigate).toHaveBeenCalledWith(['/error/403']);
+      httpMock.expectNone('/frontend-audit');
+    });
+  }
+
   it('a refused mortality register read still redirects to the forbidden page', () => {
     let error: HttpErrorResponse | undefined;
     http.get('/api/mortality/register').subscribe({ error: (e) => (error = e) });

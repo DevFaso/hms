@@ -15540,7 +15540,7 @@
     "LOAD_FAILED": "séjour inconnu : les admissions n'ont pas pu être lues. Rechargez avant d'admettre.",
     "MIDWIFE_NEWBORN_RULE": "Une sage-femme admet le nouveau-né d'un accouchement auquel elle a participé et en est la clinicienne responsable. Règle provisoire, en attente d'approbation par une sage-femme ou un obstétricien désigné.",
     "MIDWIFE_BED_RULE": "Une sage-femme attribue les lits des unités de maternité. Règle provisoire, en attente d'approbation par une sage-femme ou un obstétricien désigné.",
-    "MIDWIFE_COT_RULE": "Une sage-femme attribue les berceaux de maternité. Lorsqu’un berceau de néonatologie est disponible et attribué, un médecin est invité à revoir le nouveau-né.",
+    "MIDWIFE_COT_RULE": "Une sage-femme attribue les berceaux de maternité. Lorsqu’un berceau de néonatologie est disponible et attribué, un médecin est invité à revoir le nouveau-né. Règle provisoire, en attente d'approbation par une sage-femme ou un obstétricien désigné.",
     "BED_ASSIGNED_PHYSICIAN_ASKED": "Lit {{bed}} attribué. Un médecin est invité à examiner le nouveau-né."
   },
   "SENSITIVITY_TAG": {

@@ -15540,7 +15540,7 @@
     "LOAD_FAILED": "stay unknown: the admissions could not be read. Reload before admitting.",
     "MIDWIFE_NEWBORN_RULE": "A midwife admits the newborn of a delivery she attended and is its responsible clinician. Provisional rule, pending approval by a named midwife or obstetrician.",
     "MIDWIFE_BED_RULE": "A midwife assigns the beds of maternity wards. Provisional rule, pending approval by a named midwife or obstetrician.",
-    "MIDWIFE_COT_RULE": "A midwife assigns maternity cots. When a neonatal cot is available and assigned, a doctor is asked to review the newborn.",
+    "MIDWIFE_COT_RULE": "A midwife assigns maternity cots. When a neonatal cot is available and assigned, a doctor is asked to review the newborn. Provisional rule, pending approval by a named midwife or obstetrician.",
     "BED_ASSIGNED_PHYSICIAN_ASKED": "Bed {{bed}} assigned. A doctor has been asked to review the newborn."
   },
   "SENSITIVITY_TAG": {

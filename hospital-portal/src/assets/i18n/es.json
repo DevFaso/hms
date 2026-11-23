@@ -15540,7 +15540,7 @@
     "LOAD_FAILED": "estancia desconocida: no se pudieron leer los ingresos. Recargue antes de ingresar.",
     "MIDWIFE_NEWBORN_RULE": "Una matrona ingresa al recién nacido de un parto que atendió y es su clínica responsable. Regla provisional, pendiente de aprobación por una matrona o un obstetra designado.",
     "MIDWIFE_BED_RULE": "Una matrona asigna las camas de maternidad. Regla provisional, pendiente de aprobación por una matrona o un obstetra designado.",
-    "MIDWIFE_COT_RULE": "Una matrona asigna las cunas de maternidad. Cuando se dispone de una cuna neonatal y se asigna, se solicita a un médico que revise al recién nacido.",
+    "MIDWIFE_COT_RULE": "Una matrona asigna las cunas de maternidad. Cuando se dispone de una cuna neonatal y se asigna, se solicita a un médico que revise al recién nacido. Regla provisional, pendiente de aprobación por una matrona o un obstetra designado.",
     "BED_ASSIGNED_PHYSICIAN_ASKED": "Cama {{bed}} asignada. Se ha pedido a un médico que valore al recién nacido."
   },
   "SENSITIVITY_TAG": {

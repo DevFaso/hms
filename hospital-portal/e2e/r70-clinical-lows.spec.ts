@@ -10,6 +10,9 @@ test('D3310/D3312: a newborn without a neonatal cot and a wide partograph at fou
 }, testInfo) => {
   await signInAs(page, 'ROLE_MIDWIFE', baseURL!);
   await installLocalIconFonts(page);
+  await page.route('**/api/hospitals/*/clinical-rules', (route) =>
+    route.fulfill({ status: 403, json: { message: 'Not available to this test role' } }),
+  );
   const patient = {
     id: TEST_ID,
     firstName: 'Local',
@@ -69,6 +72,10 @@ test('D3310/D3312: a newborn without a neonatal cot and a wide partograph at fou
   await page.getByRole('option').filter({ hasText: 'Local' }).first().click();
   const empty = page.getByTestId('maternity-stay-no-neonatal-cot');
   await expect(empty).toBeVisible();
+  const cotRule = page
+    .getByTestId('maternity-stay-NEWBORN')
+    .getByTestId('maternity-stay-midwife-bed-rule');
+  await expect(cotRule).toContainText("Règle provisoire, en attente d'approbation");
   const region = page.getByRole('region', { name: 'Partogramme', exact: true });
   await expect(region).toHaveAttribute('tabindex', '0');
   for (const width of LAYOUT_WIDTHS) {
@@ -82,6 +89,9 @@ test('D3310/D3312: a newborn without a neonatal cot and a wide partograph at fou
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true,
     );
+    await cotRule.scrollIntoViewIfNeeded();
+    await expect(cotRule).toBeInViewport();
+    expect(await cotRule.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
     await page.screenshot({
       path: testInfo.outputPath(`clinical-${width}.png`),
     });
