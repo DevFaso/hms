@@ -1,9 +1,18 @@
-import { Component, ChangeDetectionStrategy, inject, input, signal, effect } from '@angular/core';
+import {
+  Component,
+  ChangeDetectionStrategy,
+  ElementRef,
+  inject,
+  input,
+  signal,
+  effect,
+} from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { RoleContextService } from '../core/role-context.service';
-import { refusalReason } from './refusal-reason';
+import { refusalReason, refusedFieldReasons } from './refusal-reason';
+import { refuseFields } from './forms/invalid-fields';
 import { SubmitGuardDirective } from './forms/submit-guard.directive';
 
 interface VerificationStatus {
@@ -58,6 +67,7 @@ interface VerificationStatus {
                   />
                   <button
                     type="submit"
+                    data-testid="recipient-code-confirm"
                     [disabled]="busy()"
                     [appSubmitGuard]="
                       !validCode() && ('RECIPIENT_VERIFICATION.CODE_REQUIRED' | translate)
@@ -113,6 +123,7 @@ interface VerificationStatus {
   ],
 })
 export class PatientRecipientVerificationComponent {
+  private readonly host = inject(ElementRef<HTMLElement>);
   readonly patientId = input<string>();
   private readonly http = inject(HttpClient);
   private readonly roles = inject(RoleContextService);
@@ -189,6 +200,15 @@ export class PatientRecipientVerificationComponent {
         },
         error: (err) => {
           this.busy.set(false);
+          const id = 'recipient-code-' + channel;
+          refuseFields(
+            this.host.nativeElement,
+            refusedFieldReasons(err, { code: id }).map(([fieldId, message]) => ({
+              id: fieldId,
+              message,
+            })),
+            [id],
+          );
           this.fail(err);
         },
       });
