@@ -79,7 +79,20 @@ class PatientMessageGateGuardTest {
         entry("ScheduledReportService.java", STAFF + " (scheduled reports)"),
         entry("PatientPortalServiceImpl.java", STAFF + " (refill request to the care team); its patient mail uses the gate"),
         entry("PrescriptionSmsDispatchServiceImpl.java", PARTNER),
-        entry("SmsPartnerNotificationChannel.java", PARTNER));
+        entry("PartnerPharmacySmsTransport.java", PARTNER));
+
+    @Test
+    void partnerTransportCannotAcceptPatientsOrArbitraryDestinations() throws IOException {
+        String source = SourceScan.stripComments(Files.readString(MAIN.resolve(
+            "com/example/hms/service/pharmacy/partner/PartnerPharmacySmsTransport.java")));
+        assertThat(source).contains("send(Pharmacy partner, String message)", "partner.getPhoneNumber()");
+        assertThat(source).doesNotContain("Patient", "getPhoneNumberPrimary", "getPhoneNumberSecondary");
+        String channel = SourceScan.stripComments(Files.readString(MAIN.resolve(
+            "com/example/hms/service/pharmacy/partner/SmsPartnerNotificationChannel.java")));
+        assertThat(holdsTransport(channel)).isFalse();
+        assertThat(channel).doesNotContain("patientPhone(", "getPhoneNumberPrimary", "getPhoneNumberSecondary");
+        assertThat(channel).contains("patientMessages.smsAfterCommit(patient,");
+    }
 
     static boolean holdsTransport(String source) {
         return HOLDS_TRANSPORT.matcher(SourceScan.stripComments(source)).find();
