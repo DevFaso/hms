@@ -22,6 +22,7 @@ import { apiPrefixInterceptor } from './interceptors/auth.interceptor';
 import { csrfInterceptor } from './interceptors/csrf.interceptor';
 import { hospitalCacheInterceptor } from './interceptors/hospital-cache.interceptor';
 import { errorInterceptor } from './interceptors/error.interceptor';
+import { apiTimeoutInterceptor } from './interceptors/api-timeout.interceptor';
 import { connectivityInterceptor } from './interceptors/connectivity.interceptor';
 import { offlineDispenseInterceptor } from './interceptors/offline-dispense.interceptor';
 import { languageInterceptor } from './interceptors/language.interceptor';
@@ -45,6 +46,7 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(
       withXhr(),
       withInterceptors([
+        apiTimeoutInterceptor,
         // QA D1341 / D1320 / D1321: a write refused with `fieldErrors` marks
         // the named fields in the form it was sent from (outermost, so it sees
         // the refusal the page sees, after CSRF replays and the error path).

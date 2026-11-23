@@ -1,7 +1,7 @@
 import { isPlatformBrowser } from '@angular/common';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Injectable, inject, PLATFORM_ID, signal } from '@angular/core';
-import { EMPTY, Observable, catchError } from 'rxjs';
+import { Injectable, inject, PLATFORM_ID, signal, DestroyRef } from '@angular/core';
+import { EMPTY, Observable, Subject, catchError } from 'rxjs';
 
 import { RoleContextService } from '../core/role-context.service';
 import { expandRoleEquivalents } from '../core/role-equivalence';
@@ -103,6 +103,13 @@ export class AuthService {
 
   /** Reactive signal that updates whenever setUserProfile() is called. */
   readonly currentProfile = signal<LoginUserProfile | null>(null);
+
+  private readonly sessionEnd = new Subject<void>();
+  readonly sessionEnded$ = this.sessionEnd.asObservable();
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => this.sessionEnd.next());
+  }
 
   // ---------- Storage ----------
   getToken(): string | null {
@@ -437,6 +444,7 @@ export class AuthService {
   }
 
   logout(): void {
+    this.sessionEnd.next();
     this.revokeServerSession();
     this.clearToken();
     this.clearRefreshToken();

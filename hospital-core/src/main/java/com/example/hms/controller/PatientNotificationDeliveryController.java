@@ -10,6 +10,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.RequestBody;
+import com.example.hms.payload.dto.notification.PatientNotificationRetryDTO;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -67,7 +70,8 @@ public class PatientNotificationDeliveryController {
     @ApiResponse(responseCode = "200", description = "Requeued")
     @ApiResponse(responseCode = "400", description = "Not FAILED")
     @ApiResponse(responseCode = "404", description = "No such send in this hospital")
-    public ResponseEntity<ApiResponseWrapper<PatientNotificationDeliveryDTO>> retry(@PathVariable UUID id) {
-        return ResponseEntity.ok(ApiResponseWrapper.success(service.retry(id)));
+    public ResponseEntity<ApiResponseWrapper<PatientNotificationDeliveryDTO>> retry(@PathVariable UUID id,
+        @Valid @RequestBody PatientNotificationRetryDTO request) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(service.retry(id, request.expectedManualRetries())));
     }
 }

@@ -1,3 +1,4 @@
+import { API_REQUEST_TIMEOUT_MS } from '../core/api-request-timeout';
 import {
   HttpClient,
   HttpInterceptorFn,
@@ -15,6 +16,11 @@ import {
   catchError,
   defer,
   filter,
+  finalize,
+  shareReplay,
+  tap,
+  takeUntil,
+  timeout,
   retry,
   switchMap,
   take,
@@ -318,11 +324,6 @@ function sentAnExpiredBearer(auth: AuthService): boolean {
   return !token || auth.isExpired(token);
 }
 
-/** Wraps the retried credential-check error so it bypasses the refresh-failure sign-out. */
-class CredentialRetryError {
-  constructor(readonly error: unknown) {}
-}
-
 function tryRefreshAndRetry(
   req: HttpRequest<unknown>,
   next: HttpHandlerFn,
@@ -331,43 +332,56 @@ function tryRefreshAndRetry(
   credentialCheck = false,
 ): Observable<HttpEvent<unknown>> {
   const isSilentBackground = SILENT_401_PATTERNS.some((p) => p.test(req.url));
+  const fail = (error: unknown): Observable<never> =>
+    isSilentBackground ? EMPTY : throwError(() => error);
 
   if (!isRefreshing) {
     isRefreshing = true;
-    refreshDone$.next(null); // reset before the call
-
-    return refreshWithSupersededRetry(auth).pipe(
-      switchMap((tokens) => {
+    refreshDone$.next(null);
+    let refreshPending = true;
+    const sharedRefresh = refreshWithSupersededRetry(auth).pipe(
+      // Token responses (not HTTP events): independently bounded even if every page leaves.
+      timeout({ first: API_REQUEST_TIMEOUT_MS }),
+      takeUntil(auth.sessionEnded$),
+      tap((tokens) => {
+        refreshPending = false;
         isRefreshing = false;
         auth.setToken(tokens.accessToken);
-        if (tokens.refreshToken) {
-          auth.setRefreshToken(tokens.refreshToken);
-        }
-        // Unblock all queued requests with the new token.
+        if (tokens.refreshToken) auth.setRefreshToken(tokens.refreshToken);
         refreshDone$.next(tokens.accessToken);
-
-        const retried = next(cloneWithToken(req, tokens.accessToken));
-        // A credential check retried on a fresh token that still answers 401
-        // means the typed password is wrong: hand it to the form, never sign
-        // out (D87). The marker lets the catchError below tell it apart from
-        // a refresh failure.
-        return credentialCheck
-          ? retried.pipe(catchError((e) => throwError(() => new CredentialRetryError(e))))
-          : retried;
       }),
-      catchError((refreshError) => {
-        if (refreshError instanceof CredentialRetryError) {
-          return throwError(() => refreshError.error);
-        }
+      catchError((error) => {
+        refreshPending = false;
         isRefreshing = false;
         refreshDone$.next('__REFRESH_FAILED__');
-        // Reset to null so refreshDone$ is ready for the next login session.
         refreshDone$.next(null);
-        // Refresh token is expired/invalid → full logout.
         auth.logout();
         void router.navigate(['/login']);
-        return isSilentBackground ? EMPTY : throwError(() => refreshError);
+        return throwError(() => error);
       }),
+      finalize(() => {
+        // Only explicit logout/teardown completes without a refresh result.
+        if (!refreshPending) return;
+        isRefreshing = false;
+        refreshDone$.next('__SESSION_ENDED__');
+        refreshDone$.next(null);
+      }),
+      shareReplay({ bufferSize: 1, refCount: false }),
+    );
+    return sharedRefresh.pipe(
+      switchMap((tokens) =>
+        next(cloneWithToken(req, tokens.accessToken)).pipe(
+          catchError((error) => {
+            // Preserve the existing credential-check/business-retry policy.
+            if (!credentialCheck) {
+              auth.logout();
+              void router.navigate(['/login']);
+            }
+            return fail(error);
+          }),
+        ),
+      ),
+      catchError(fail),
     );
   }
 
@@ -375,6 +389,7 @@ function tryRefreshAndRetry(
     filter((t): t is string => t !== null),
     take(1),
     switchMap((newToken) => {
+      if (newToken === '__SESSION_ENDED__') return EMPTY;
       if (newToken === '__REFRESH_FAILED__') {
         return throwError(
           () => new HttpErrorResponse({ status: 401, statusText: 'Refresh failed' }),

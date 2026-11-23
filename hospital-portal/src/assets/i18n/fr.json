@@ -1,4 +1,11 @@
 {
+  "API_TIMEOUT": {
+    "TITLE": "Le serveur met trop de temps à répondre",
+    "MESSAGE": "Le délai de la requête est dépassé. Réessayez l’action lorsque la connexion est disponible, ou rechargez la page pour charger ses données.",
+    "WRITE_UNKNOWN": "L’action a peut-être été enregistrée. Vérifiez son état avant de la soumettre à nouveau.",
+    "KEEP_INPUT": "Votre saisie reste sur cette page. Avant de recharger, copiez tout texte non enregistré ; le rechargement l’efface. Le rechargement ne soumet pas de nouveau un formulaire.",
+    "RELOAD": "Recharger la page et réessayer"
+  },
   "ORGANIZATION_DETAIL": {
     "INFORMATION": "Informations de l’organisation",
     "EMAIL": "Courriel du contact",
@@ -15128,7 +15135,8 @@
     "RECORDED": "Enregistré (aucune tentative)",
     "SUBJECT_APPOINTMENT": "Rendez-vous du {{date}} à {{time}}",
     "SUBJECT_INVOICE": "Facture {{number}}",
-    "SUBJECT_LAB_ORDER": "Demande d'examen {{number}}"
+    "SUBJECT_LAB_ORDER": "Demande d'examen {{number}}",
+    "COL_NEXT_ATTEMPT": "Prochaine tentative"
   },
   "IMAGING_PACS": {
     "STUDY_LINKED": "Étude liée",

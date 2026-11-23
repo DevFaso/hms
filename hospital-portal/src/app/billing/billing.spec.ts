@@ -161,6 +161,33 @@ describe('BillingComponent', () => {
     expect(host.querySelector('.summary-cards .card-value')!.textContent!.trim()).not.toBe('—');
   });
 
+  it('D3602: totals stay unknown during the list and summary requests, including a refresh', () => {
+    const list = new Subject<InvoicePage>();
+    const summary = new Subject<ReturnType<BillingComponent['stats']>>();
+    billingSpy.searchInvoices.and.returnValue(list);
+    billingSpy.getSummary.and.returnValue(summary);
+    fixture.detectChanges();
+    const values = (): string[] =>
+      Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll('.summary-cards .card-value'),
+      ).map((v) => v.textContent!.trim());
+    expect(values().every((v) => v === '—')).toBeTrue();
+    list.next(mockPage([mockInvoice()]));
+    fixture.detectChanges();
+    expect(component.loading()).toBeFalse();
+    expect(values().every((v) => v === '—')).toBeTrue();
+    summary.next({ total: 1, paid: 0, outstanding: 1, overdue: 0, totalRevenue: 0, balance: 1000 });
+    fixture.detectChanges();
+    expect(values()[0]).toBe('1');
+    component.loadInvoices();
+    fixture.detectChanges();
+    expect(values().every((v) => v === '—')).toBeTrue();
+    list.error(new HttpErrorResponse({ status: 504 }));
+    fixture.detectChanges();
+    expect(values().every((v) => v === '—')).toBeTrue();
+    expect(component.loadFailed()).toBeTrue();
+  });
+
   it('paid tab requests only PAID invoices', () => {
     fixture.detectChanges();
     billingSpy.searchInvoices.calls.reset();

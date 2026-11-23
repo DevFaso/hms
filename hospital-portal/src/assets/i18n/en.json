@@ -1,4 +1,11 @@
 {
+  "API_TIMEOUT": {
+    "TITLE": "The server is taking too long to respond",
+    "MESSAGE": "The request timed out. Retry the action when the connection is available, or reload the page to load its data again.",
+    "WRITE_UNKNOWN": "The action may have been saved. Check its status before submitting it again.",
+    "KEEP_INPUT": "Your input stays on this page. Before reloading, copy any unsaved text; reloading clears it. Reloading does not resubmit a form.",
+    "RELOAD": "Reload page and retry loading"
+  },
   "ORGANIZATION_DETAIL": {
     "INFORMATION": "Organisation details",
     "EMAIL": "Contact email",
@@ -15128,7 +15135,8 @@
     "RECORDED": "Recorded (no attempt)",
     "SUBJECT_APPOINTMENT": "Appointment on {{date}} at {{time}}",
     "SUBJECT_INVOICE": "Invoice {{number}}",
-    "SUBJECT_LAB_ORDER": "Lab order {{number}}"
+    "SUBJECT_LAB_ORDER": "Lab order {{number}}",
+    "COL_NEXT_ATTEMPT": "Next attempt"
   },
   "IMAGING_PACS": {
     "STUDY_LINKED": "Study linked",
