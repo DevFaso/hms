@@ -41,8 +41,9 @@ import java.util.function.Function;
  * scope, same registration gate, same PATIENT_EXPORT audit row, and the same reason it
  * exists (a referral, a transfer, a patient asking for their record). It reads through
  * {@link PatientStoryboardService} and {@link ChartReviewService}, so the E8 cross-hospital
- * rules that decide what a clinician may see on screen decide what is on paper, and rows those
- * rules hold back are counted, never listed.
+ * rules that decide what a clinician may see on screen decide what is on a treatment export.
+ * Approved ROI copies instead use hospital-owned disclosure views, without treatment reach
+ * or break-glass; shared narrative fields without source-hospital provenance are omitted.
  *
  * <p>Every label on the page comes from the message bundle in the locale of the request that
  * asked for the document (the clinician who clicked), resolved once in {@link #render(UUID)}
@@ -93,12 +94,16 @@ public class PatientRecordPdfService {
         if (!registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)) {
             throw new ResourceNotFoundException(NOT_FOUND_KEY, patientId);
         }
-        PatientStoryboardDTO storyboard = storyboardService.getStoryboard(patientId, hospitalId);
+        PatientStoryboardDTO storyboard = requestId == null
+            ? storyboardService.getStoryboard(patientId, hospitalId)
+            : storyboardService.getHospitalReleaseStoryboard(patientId, hospitalId);
         // QA D1380: the printed record carries every row of every section. It
         // asked for 200 per section and the chart review silently cut it at 100.
-        ChartReviewDTO chart = chartReviewService.getCompleteChartReview(patientId, hospitalId);
+        ChartReviewDTO chart = requestId == null
+            ? chartReviewService.getCompleteChartReview(patientId, hospitalId)
+            : chartReviewService.getHospitalReleaseChart(patientId, hospitalId);
 
-        byte[] pdf = write(storyboard, chart, patient.getAllergies(), labels);
+        byte[] pdf = write(storyboard, chart, requestId == null ? patient.getAllergies() : null, labels);
         emitAudit(patient, hospitalId, chart, requestId);
         return pdf;
     }

@@ -96,15 +96,18 @@ class PatientRecordPdfServiceTest {
         return locales.getAllValues();
     }
 
-    private void stubHappyPath() {
+    private void stubCommonPath() {
         Patient patient = new Patient();
         patient.setId(patientId);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
-        when(storyboardService.getStoryboard(patientId, hospitalId)).thenReturn(storyboard());
-        when(chartReviewService.getCompleteChartReview(patientId, hospitalId))
-            .thenReturn(chart());
         echoKeys();
+    }
+
+    private void stubHappyPath() {
+        stubCommonPath();
+        when(storyboardService.getStoryboard(patientId, hospitalId)).thenReturn(storyboard());
+        when(chartReviewService.getCompleteChartReview(patientId, hospitalId)).thenReturn(chart());
     }
 
     private static String textOf(byte[] pdf) throws Exception {
@@ -149,7 +152,9 @@ class PatientRecordPdfServiceTest {
 
     @Test
     void roiDownloadEmitsExactlyOneRequestLinkedEventAndReturnsARealPdf() throws Exception {
-        stubHappyPath();
+        stubCommonPath();
+        when(storyboardService.getHospitalReleaseStoryboard(patientId, hospitalId)).thenReturn(storyboard());
+        when(chartReviewService.getHospitalReleaseChart(patientId, hospitalId)).thenReturn(chart());
         UUID requestId = UUID.randomUUID();
         when(auditEventLogService.logEvent(any())).thenReturn(
             com.example.hms.payload.dto.AuditEventLogResponseDTO.builder().id(UUID.randomUUID()).build());
@@ -165,7 +170,9 @@ class PatientRecordPdfServiceTest {
 
     @Test
     void roiDownloadRefusesBothANullAuditResultAndAnAuditException() {
-        stubHappyPath();
+        stubCommonPath();
+        when(storyboardService.getHospitalReleaseStoryboard(patientId, hospitalId)).thenReturn(storyboard());
+        when(chartReviewService.getHospitalReleaseChart(patientId, hospitalId)).thenReturn(chart());
         UUID requestId = UUID.randomUUID();
         assertThatThrownBy(() -> service.renderForRoi(patientId, requestId))
             .isInstanceOf(com.example.hms.exception.RoiAuditUnavailableException.class);
