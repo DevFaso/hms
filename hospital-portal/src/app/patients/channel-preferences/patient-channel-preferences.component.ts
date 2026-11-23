@@ -12,16 +12,20 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
+import { DatePipe } from '@angular/common';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { actionRoles } from '../../core/action-permissions';
 import { refusalReason } from '../../shared/refusal-reason';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import {
   DESK_NOTICE_CHANNELS,
   NOTICE_TYPES,
   NoticeType,
+  changedChannelChoices,
 } from '../../shared/notification-channel-choices';
 
 /** One switch of the desk's matrix, as the API reads and writes it. */
@@ -29,6 +33,9 @@ export interface ChannelChoice {
   notificationType: NoticeType;
   channel: 'SMS' | 'EMAIL';
   enabled: boolean;
+  recordedByUserId?: string | null;
+  recordedByName?: string | null;
+  recordedAt?: string | null;
 }
 
 /**
@@ -40,7 +47,7 @@ export interface ChannelChoice {
 @Component({
   selector: 'app-patient-channel-preferences',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule, DatePipe, ServerTimePipe, SubmitGuardDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (canRecord) {
@@ -85,6 +92,20 @@ export interface ChannelChoice {
                           (ngModelChange)="toggle(type, ch, $event)"
                           [disabled]="saving()"
                         />
+                        @if (choice(type, ch); as storedChoice) {
+                          @if (storedChoice.recordedAt) {
+                            <small
+                              class="choice-recorder"
+                              [attr.data-testid]="'choice-recorder-' + type + '-' + ch"
+                            >
+                              {{ 'PATIENT_CHANNELS.RECORDED_BY' | translate }}
+                              {{ storedChoice.recordedByName || ('COMMON.UNKNOWN' | translate) }}
+                              <time [attr.datetime]="storedChoice.recordedAt | serverTime">{{
+                                storedChoice.recordedAt | serverTime | date: 'short'
+                              }}</time>
+                            </small>
+                          }
+                        }
                       </td>
                     }
                   </tr>
@@ -99,6 +120,7 @@ export interface ChannelChoice {
               class="btn-primary"
               data-testid="channel-prefs-save"
               [disabled]="saving()"
+              [appSubmitGuard]="!dirty() && ('SUBMIT_GUARD.NO_CHANGES' | translate)"
               (click)="save()"
             >
               {{ (saving() ? 'COMMON.SAVING' : 'PATIENT_CHANNELS.SAVE') | translate }}
@@ -129,6 +151,15 @@ export interface ChannelChoice {
       }
       .channel-table td {
         text-align: center;
+      }
+      .choice-recorder {
+        display: block;
+        max-width: 12rem;
+        overflow-wrap: anywhere;
+        font-size: 0.75rem;
+      }
+      .choice-recorder time {
+        display: block;
       }
       .channel-prefs .actions {
         display: flex;
@@ -194,6 +225,10 @@ export class PatientChannelPreferencesComponent {
       });
   }
 
+  choice(type: string, channel: string): ChannelChoice | undefined {
+    return this.choices().find((row) => row.notificationType === type && row.channel === channel);
+  }
+
   isOn(type: string, channel: string): boolean {
     return (
       this.choices().find((c) => c.notificationType === type && c.channel === channel)?.enabled ??
@@ -209,10 +244,13 @@ export class PatientChannelPreferencesComponent {
   }
 
   save(): void {
-    if (this.saving()) return;
+    if (this.saving() || !this.dirty()) return;
     this.saving.set(true);
     this.http
-      .put<ChannelChoice[]>(this.url(this.patientId()), this.choices())
+      .put<ChannelChoice[]>(
+        this.url(this.patientId()),
+        changedChannelChoices(this.choices(), this.saved()),
+      )
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (rows) => {

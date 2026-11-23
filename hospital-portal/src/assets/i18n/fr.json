@@ -5363,6 +5363,7 @@
     "PAYER_SHARES": "Parts assureurs"
   },
   "NOTIFICATIONS": {
+    "PREFERENCES_LOAD_FAILED": "Impossible de charger les choix de communication. Réessayez avant de les modifier.",
     "CRITICAL_ALERT": "Alerte critique",
     "ALL": "Tout",
     "ALL_CAUGHT_UP": "Vous êtes à jour !",
@@ -14991,6 +14992,7 @@
     "EXISTS_HERE_NUMBERED": "Dossier existant {{index}} sur {{count}} avec cet identifiant : l’ouvrir."
   },
   "PATIENT_NOTIFICATIONS": {
+    "CONSENT_RECORDED_BY": "Choix du canal enregistré par :",
     "TITLE": "Notifications aux patients",
     "SUBTITLE": "SMS et e-mails envoyés à vos patients : rendez-vous, résultats, pharmacie et factures. Un envoi en échec peut être relancé. « Non envoyé » avec le motif « Le patient a désactivé ce canal » est un choix du patient.",
     "FILTER_STATUS": "Statut",
@@ -15215,6 +15217,7 @@
     "DECLARE_SUBMIT": "Déclarer"
   },
   "PATIENT_CHANNELS": {
+    "RECORDED_BY": "Dernier enregistrement par :",
     "TITLE": "SMS et e-mails au patient",
     "INTRO": "Ce que le patient accepte de recevoir, par type d'avis. Décochez à sa demande : l'envoi s'arrête et la page « Notifications aux patients » le montre comme « Non envoyé ».",
     "KIND": "Type d'avis",

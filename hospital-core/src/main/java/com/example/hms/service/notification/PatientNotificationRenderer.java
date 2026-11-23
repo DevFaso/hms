@@ -241,6 +241,12 @@ public class PatientNotificationRenderer {
     private Prepared skip(PatientNotificationDelivery row, PatientNotificationErrorCode code) {
         row.setStatus(NotificationDeliveryStatus.SKIPPED);
         row.setErrorCode(code.name());
+        if (code == PatientNotificationErrorCode.OPTED_OUT) {
+            var refusal = patientRepository.findNotificationAccountScoped(row.getPatientId(), row.getHospitalId())
+                .flatMap(accountId -> consent.refusal(accountId, row.getEventType().preferenceType(), row.getChannel()));
+            row.setConsentRecordedBy(refusal.map(com.example.hms.model.NotificationPreference::getRecordedByUserId).orElse(null));
+            row.setConsentRecordedAt(refusal.map(com.example.hms.model.NotificationPreference::getRecordedAt).orElse(null));
+        }
         repository.save(row);
         log.info("Patient notification {} ({} {}) skipped: {}", row.getId(), row.getEventType(), row.getChannel(),
             code);

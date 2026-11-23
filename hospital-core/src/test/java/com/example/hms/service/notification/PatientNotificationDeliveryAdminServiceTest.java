@@ -46,6 +46,7 @@ class PatientNotificationDeliveryAdminServiceTest {
 
     @Mock private PatientNotificationDeliveryRepository repository;
     @Mock private PatientRepository patientRepository;
+    @Mock private com.example.hms.repository.UserRepository userRepository;
     @Mock private ActingScopeResolver actingScopeResolver;
     @Mock private RoleValidator roleValidator;
     @Mock private com.example.hms.repository.AppointmentRepository appointmentRepository;
@@ -60,7 +61,7 @@ class PatientNotificationDeliveryAdminServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new PatientNotificationDeliveryAdminService(repository, patientRepository, appointmentRepository,
+        service = new PatientNotificationDeliveryAdminService(repository, patientRepository, userRepository, appointmentRepository,
             invoiceRepository, labOrderRepository, actingScopeResolver,
             roleValidator, Clock.fixed(Instant.parse("2026-11-17T08:00:00Z"), ZoneOffset.UTC));
         lenient().when(actingScopeResolver.requirePinned()).thenReturn(hospitalId);

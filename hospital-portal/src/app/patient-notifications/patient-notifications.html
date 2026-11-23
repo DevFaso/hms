@@ -120,6 +120,15 @@
               <!-- QA D2402: an opt-out has no attempt: the day it was recorded is shown instead. -->
               <td [attr.data-testid]="'pn-date-' + row.id">
                 {{ rowDate(row) | serverTime | date: 'short' }}
+                @if (row.errorCode === 'OPTED_OUT') {
+                  <div class="cell-secondary" [attr.data-testid]="'pn-consent-recorder-' + row.id">
+                    {{ 'PATIENT_NOTIFICATIONS.CONSENT_RECORDED_BY' | translate }}
+                    {{ row.consentRecordedByName || ('COMMON.UNKNOWN' | translate) }}
+                    @if (row.consentRecordedAt) {
+                      <div>{{ row.consentRecordedAt | serverTime | date: 'short' }}</div>
+                    }
+                  </div>
+                }
                 @if (!row.lastAttemptAt) {
                   <div class="cell-secondary">
                     {{ 'PATIENT_NOTIFICATIONS.RECORDED' | translate }}

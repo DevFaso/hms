@@ -48,6 +48,26 @@ describe('PatientChannelPreferencesComponent', () => {
       `[data-testid="${testid}"]`,
     ) as HTMLInputElement;
 
+  it('shows the server-recorded actor and time without treating a legacy row as newly recorded', () => {
+    setUp(true);
+    const choices = matrix();
+    choices[0] = {
+      ...choices[0],
+      recordedByUserId: 'recorder-1',
+      recordedByName: 'cdx Desk Recorder',
+      recordedAt: '2026-11-22T08:00:00',
+    };
+    http.expectOne('/patients/p-1/channel-preferences').flush(choices);
+    fixture.detectChanges();
+    const provenance = fixture.nativeElement.querySelector(
+      `[data-testid="choice-recorder-${choices[0].notificationType}-${choices[0].channel}"]`,
+    ) as HTMLElement;
+    expect(provenance.textContent).toContain('cdx Desk Recorder');
+    expect(provenance.querySelector('time')?.dateTime).toBe('2026-11-22T08:00:00Z');
+    expect(provenance.querySelector('time')?.textContent?.trim()).toBeTruthy();
+    expect(fixture.nativeElement.querySelectorAll('.choice-recorder').length).toBe(1);
+  });
+
   it('shows the stored choices: the patient turned billing e-mails off', async () => {
     setUp(true);
     http.expectOne('/patients/p-1/channel-preferences').flush(matrix());
@@ -77,14 +97,22 @@ describe('PatientChannelPreferencesComponent', () => {
     const put = http.expectOne('/patients/p-1/channel-preferences');
     expect(put.request.method).toBe('PUT');
     const sent = put.request.body as ChannelChoice[];
+    expect(sent.length).toBe(1);
     expect(
       sent.find((c) => c.notificationType === 'APPOINTMENT_REMINDER' && c.channel === 'SMS')
         ?.enabled,
     ).toBeFalse();
-    put.flush(sent);
+    put.flush(
+      matrix().map((row) =>
+        row.notificationType === 'APPOINTMENT_REMINDER' && row.channel === 'SMS'
+          ? { ...row, enabled: false }
+          : row,
+      ),
+    );
 
     expect(toast.success).toHaveBeenCalledWith('PATIENT_CHANNELS.SAVED');
     expect(fixture.componentInstance.dirty()).toBeFalse();
+    expect(fixture.componentInstance.isOn('BILLING', 'EMAIL')).toBeFalse();
   });
 
   it('is not shown, and reads nothing, for a role the endpoint refuses', () => {

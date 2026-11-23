@@ -5363,6 +5363,7 @@
     "PAYER_SHARES": "Partes de aseguradoras"
   },
   "NOTIFICATIONS": {
+    "PREFERENCES_LOAD_FAILED": "No se pudieron cargar las preferencias de contacto. Reintente antes de modificarlas.",
     "CRITICAL_ALERT": "Alerta crítica",
     "ALL": "Todo",
     "ALL_CAUGHT_UP": "¡Todo al día!",
@@ -14991,6 +14992,7 @@
     "EXISTS_HERE_NUMBERED": "Registro existente {{index}} de {{count}} con este identificador: abrirlo."
   },
   "PATIENT_NOTIFICATIONS": {
+    "CONSENT_RECORDED_BY": "Preferencia de canal registrada por:",
     "TITLE": "Patient notifications",
     "SUBTITLE": "SMS and e-mails sent to your patients: appointments, results, pharmacy and invoices. A failed send can be retried. « Not sent » with the reason “The patient turned this channel off” is a patient’s choice.",
     "FILTER_STATUS": "Status",
@@ -15215,6 +15217,7 @@
     "DECLARE_SUBMIT": "Declare"
   },
   "PATIENT_CHANNELS": {
+    "RECORDED_BY": "Último registro por:",
     "TITLE": "SMS y correos al paciente",
     "INTRO": "Lo que el paciente acepta recibir, por tipo de aviso. Desmarque a petición suya: el envío se detiene y « Notificaciones a pacientes » lo muestra como « No enviado ».",
     "KIND": "Tipo de aviso",

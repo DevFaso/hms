@@ -179,6 +179,9 @@ describe('PatientNotificationsComponent', () => {
           createdAt: '2026-11-19T09:15:00',
           subjectDate: '2026-11-20',
           subjectTime: '10:30:00',
+          consentRecordedBy: 'recorder-1',
+          consentRecordedByName: 'cdx Desk Recorder',
+          consentRecordedAt: '2026-11-18T08:00:00',
         }),
       ]),
     );
@@ -193,6 +196,9 @@ describe('PatientNotificationsComponent', () => {
       params: { date: '20/11/2026', time: '10:30' },
     });
     expect(host.querySelector('[data-testid="pn-subject-d-9"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="pn-consent-recorder-d-9"]')?.textContent).toContain(
+      'cdx Desk Recorder',
+    );
   });
 
   it('QA D2402: an invoice row names its invoice', () => {

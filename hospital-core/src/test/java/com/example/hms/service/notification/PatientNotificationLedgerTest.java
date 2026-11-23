@@ -35,6 +35,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -71,10 +72,34 @@ class PatientNotificationLedgerTest {
         user.setId(UUID.randomUUID());
         patient.setUser(user);
         lenient().when(patientRepository.findByIdUnscoped(patient.getId())).thenReturn(Optional.of(patient));
+        lenient().when(patientRepository.findNotificationAccountScoped(eq(patient.getId()), any()))
+            .thenAnswer(call -> Optional.of(patient.getUser().getId()));
         lenient().when(smsService.deliversRealSms()).thenReturn(true);
         lenient().when(emailService.deliversRealEmail()).thenReturn(true);
         lenient().when(consent.allows(any(), any(), any())).thenReturn(true);
     }
+
+    @Test
+    void anOptOutTraceSnapshotsWhoRecordedTheRefusalAndWhen() {
+        var recorder = UUID.randomUUID();
+        var recorded = java.time.LocalDateTime.of(2026, 11, 22, 8, 0);
+        var choice = com.example.hms.model.NotificationPreference.builder().notificationType(NotificationType.LAB_RESULT)
+            .channel(NotificationChannel.SMS).enabled(false).build();
+        choice.recordChoice(false, recorder, recorded);
+        when(consent.allows(patient.getUser().getId(), NotificationType.LAB_RESULT, NotificationChannel.SMS)).thenReturn(false);
+        when(consent.refusal(patient.getUser().getId(), NotificationType.LAB_RESULT, NotificationChannel.SMS))
+            .thenReturn(Optional.of(choice));
+        ledger.enqueue(PatientNotificationEvent.LAB_RESULT_AVAILABLE, hospitalId, patient.getId(), subjectId);
+        var saved = ArgumentCaptor.forClass(PatientNotificationDelivery.class);
+        verify(repository, times(2)).saveAndFlush(saved.capture());
+        assertThat(saved.getAllValues()).filteredOn(row -> row.getChannel() == NotificationChannel.SMS)
+            .singleElement().satisfies(row -> {
+                assertThat(row.getConsentRecordedBy()).isEqualTo(recorder);
+                assertThat(row.getConsentRecordedAt()).isEqualTo(recorded);
+                assertThat(row.getStatus()).isEqualTo(com.example.hms.enums.NotificationDeliveryStatus.SKIPPED);
+            });
+    }
+
 
     @Test
     @DisplayName("a result queues one SMS and one email row, keyed event:subject:channel")

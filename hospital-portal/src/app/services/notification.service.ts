@@ -32,6 +32,9 @@ export interface NotificationPage {
 
 export interface NotificationPreference {
   id?: string;
+  recordedByUserId?: string | null;
+  recordedByName?: string | null;
+  recordedAt?: string | null;
   notificationType: string;
   channel: string;
   enabled: boolean;

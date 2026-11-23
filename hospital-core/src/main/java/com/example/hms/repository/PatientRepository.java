@@ -275,6 +275,11 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     @Query("SELECT p FROM Patient p WHERE p.id = :id")
     Optional<Patient> findByIdUnscoped(@Param("id") UUID id);
 
+    /** Consent provenance needs only the account id, and only for a registration at the delivery's hospital. */
+    @Query("select p.user.id from Patient p where p.id = :patientId and exists "
+        + "(select r.id from PatientHospitalRegistration r where r.patient.id = p.id and r.hospital.id = :hospitalId)")
+    Optional<UUID> findNotificationAccountScoped(@Param("patientId") UUID patientId, @Param("hospitalId") UUID hospitalId);
+
     /**
      * QA D624 (user decision): would the caller's patient search find this
      * patient? The same tenant clause as {@link #searchPatientsExtended}: an

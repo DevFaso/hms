@@ -5363,6 +5363,7 @@
     "PAYER_SHARES": "Insurer shares"
   },
   "NOTIFICATIONS": {
+    "PREFERENCES_LOAD_FAILED": "Channel choices could not be loaded. Retry before making changes.",
     "CRITICAL_ALERT": "Critical alert",
     "ALL": "All",
     "ALL_CAUGHT_UP": "All caught up!",
@@ -14991,6 +14992,7 @@
     "EXISTS_HERE_NUMBERED": "Existing record {{index}} of {{count}} with this identifier: open it."
   },
   "PATIENT_NOTIFICATIONS": {
+    "CONSENT_RECORDED_BY": "Channel choice recorded by:",
     "TITLE": "Patient notifications",
     "SUBTITLE": "SMS and e-mails sent to your patients: appointments, results, pharmacy and invoices. A failed send can be retried. « Not sent » with the reason “The patient turned this channel off” is a patient’s choice.",
     "FILTER_STATUS": "Status",
@@ -15215,6 +15217,7 @@
     "DECLARE_SUBMIT": "Declare"
   },
   "PATIENT_CHANNELS": {
+    "RECORDED_BY": "Last recorded by:",
     "TITLE": "Texts and e-mails to the patient",
     "INTRO": "What the patient agrees to receive, by kind of notice. Untick at their request: the send stops and « Patient notifications » shows it as « Not sent ».",
     "KIND": "Kind of notice",

@@ -17,6 +17,11 @@ import java.util.UUID;
 @Repository
 public interface UserRepository extends JpaRepository<User, UUID> {
 
+    /** Serialize every preference writer, including the insertion of the first choice. */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from User u where u.id = :id")
+    Optional<User> lockForNotificationPreferences(@Param("id") UUID id);
+
     interface ClinicalActorName {
         UUID getId();
         String getFirstName();

@@ -49,6 +49,9 @@ export interface PatientNotificationDelivery {
   retryable: boolean;
   manualRetries: number;
   createdAt: string;
+  consentRecordedBy?: string | null;
+  consentRecordedByName?: string | null;
+  consentRecordedAt?: string | null;
   lastAttemptAt?: string | null;
   nextAttemptAt?: string | null;
   sentAt?: string | null;

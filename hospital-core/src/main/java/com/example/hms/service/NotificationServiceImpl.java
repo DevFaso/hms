@@ -253,38 +253,41 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     @Transactional(readOnly = true)
     public List<NotificationPreferenceDTO> getPreferences(UUID userId) {
-        return notificationPreferenceRepository.findByUser_Id(userId)
-                .stream().map(this::toDTO).toList();
+        return com.example.hms.service.notification.NotificationPreferenceViews.describe(
+            notificationPreferenceRepository.findByUser_Id(userId).stream().map(this::toDTO).toList(), userRepository);
     }
 
     @Override
     @Transactional
     public List<NotificationPreferenceDTO> updatePreferences(UUID userId, List<NotificationPreferenceUpdateDTO> updates) {
-        User user = userRepository.findById(userId)
+        User user = userRepository.lockForNotificationPreferences(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.notFound", userId));
-
-        notificationPreferenceRepository.deleteByUser_Id(userId);
-        notificationPreferenceRepository.flush();
-
-        List<NotificationPreference> entities = updates.stream().map(u ->
-                NotificationPreference.builder()
-                        .user(user)
-                        .notificationType(u.getNotificationType())
-                        .channel(u.getChannel())
-                        .enabled(Boolean.TRUE.equals(u.getEnabled()))
-                        .build()
-        ).toList();
-
-        return notificationPreferenceRepository.saveAll(entities)
-                .stream().map(this::toDTO).toList();
+        // A settings page is a partial matrix. Omitted choices (including a desk-recorded refusal)
+        // are never deleted or implicitly enabled. The account lock serializes both writers.
+        var existing = notificationPreferenceRepository.findByUser_Id(userId).stream()
+            .collect(java.util.stream.Collectors.toMap(
+                row -> row.getNotificationType().name() + "/" + row.getChannel().name(), row -> row));
+        var changed = new java.util.LinkedHashMap<String, NotificationPreference>();
+        for (var update : updates == null ? List.<NotificationPreferenceUpdateDTO>of() : updates) {
+            if (update == null || update.getNotificationType() == null || update.getChannel() == null) continue;
+            String key = update.getNotificationType().name() + "/" + update.getChannel().name();
+            var row = existing.get(key);
+            boolean enabled = Boolean.TRUE.equals(update.getEnabled());
+            if (row != null && row.isEnabled() == enabled) continue;
+            if (row == null) {
+                row = NotificationPreference.builder().user(user).notificationType(update.getNotificationType())
+                    .channel(update.getChannel()).build();
+                existing.put(key, row);
+            }
+            row.recordChoice(enabled, userId, LocalDateTime.now());
+            changed.put(key, row);
+        }
+        notificationPreferenceRepository.saveAll(new java.util.ArrayList<>(changed.values()));
+        return com.example.hms.service.notification.NotificationPreferenceViews.describe(
+            existing.values().stream().map(this::toDTO).toList(), userRepository);
     }
 
     private NotificationPreferenceDTO toDTO(NotificationPreference p) {
-        return NotificationPreferenceDTO.builder()
-                .id(p.getId())
-                .notificationType(p.getNotificationType())
-                .channel(p.getChannel())
-                .enabled(p.isEnabled())
-                .build();
+        return com.example.hms.service.notification.NotificationPreferenceViews.of(p);
     }
 }
