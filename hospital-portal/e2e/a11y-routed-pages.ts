@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { test, expect } from './fixtures/test-fixtures';
 import { routedPages } from './helpers/routed-page-inventory';
 import { installLocalIconFonts } from './helpers/local-icon-fonts';
+import { MAIN_JOURNEY_ROUTES, MAIN_JOURNEY_ROLES } from './helpers/main-journey-routes';
 
 const ID = '00000000-0000-0000-0000-00000000cd12';
 const inventory = routedPages();
@@ -29,12 +30,22 @@ const publicPaths = new Set([
 test.describe('all routed pages', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
+  test('the CI inventory contains at least twenty-five distinct main journeys', () => {
+    const distinct = new Set<string>(MAIN_JOURNEY_ROUTES);
+    expect(distinct.size).toBeGreaterThanOrEqual(25);
+    expect(
+      MAIN_JOURNEY_ROUTES.filter((path) => !inventory.some((screen) => screen.path === path)),
+    ).toEqual([]);
+  });
+
   for (const screen of inventory) {
     test(`routed accessibility: ${screen.path}`, async ({ page }, testInfo) => {
       const pathname = screen.path.replace(/:[^/]+/g, ID);
-      const role = screen.roles.includes('ROLE_HOSPITAL_ADMIN')
-        ? 'ROLE_HOSPITAL_ADMIN'
-        : (screen.roles[0] ?? 'ROLE_HOSPITAL_ADMIN');
+      const role =
+        MAIN_JOURNEY_ROLES[screen.path] ??
+        (screen.roles.includes('ROLE_HOSPITAL_ADMIN')
+          ? 'ROLE_HOSPITAL_ADMIN'
+          : (screen.roles[0] ?? 'ROLE_HOSPITAL_ADMIN'));
       const publicPage = publicPaths.has(screen.path);
       // Block external assets/providers; shared fixtures intercept all API calls.
       const origin = new URL(testInfo.project.use.baseURL as string).origin;
@@ -43,6 +54,54 @@ test.describe('all routed pages', () => {
         return url.origin === origin ? route.fallback() : route.abort('blockedbyclient');
       });
       await installLocalIconFonts(page);
+      // Detail endpoints return an object, never the empty list used by directory fixtures.
+      const detail = {
+        id: ID,
+        name: 'cdx Test facility',
+        firstName: 'cdx',
+        lastName: 'Test',
+        fullName: 'cdx Test',
+        username: 'cdx-test',
+        email: 'cdx@example.invalid',
+        active: true,
+        hospitalId: ID,
+        hospitalName: 'cdx Hospital',
+        roles: [role],
+        departments: [],
+        hospitalRegistrations: [],
+        staffMembers: [],
+        address: 'cdx Test address',
+      };
+      const detailPaths: Record<string, string> = {
+        '/patients/:id': `/api/patients/${ID}`,
+        '/staff/:id': `/api/staff/${ID}/active`,
+        '/departments/:id': `/api/departments/${ID}`,
+        '/hospitals/:id': `/api/hospitals/${ID}`,
+        '/organizations/:id': `/api/organizations/${ID}`,
+        '/super-admin/providers/:id': `/api/super-admin/providers/${ID}`,
+        '/profile': `/api/users/${ID}`,
+      };
+      if (detailPaths[screen.path]) {
+        await page.route(`**${detailPaths[screen.path]}?*`, (route) =>
+          route.fulfill({ json: detail }),
+        );
+        await page.route(`**${detailPaths[screen.path]}`, (route) =>
+          route.fulfill({ json: detail }),
+        );
+      }
+      if (screen.path === '/pharmacy/dispensing') {
+        await page.route('**/api/pharmacy-registry?**', (route) =>
+          route.fulfill({
+            json: {
+              content: [{ id: ID, hospitalId: ID, name: 'cdx-Fixture pharmacy', active: true }],
+              totalElements: 1,
+              totalPages: 1,
+              number: 0,
+              size: 20,
+            },
+          }),
+        );
+      }
       if (!publicPage) {
         const profile = {
           id: ID,
@@ -88,7 +147,20 @@ test.describe('all routed pages', () => {
       await page.goto(pathname, { waitUntil: 'domcontentloaded' });
       // Explicit destination/render assertions prevent a guard/error redirect or empty shell being counted.
       await expect(page).toHaveURL((url) => url.pathname === pathname);
-      await expect(page.locator('h1, h2, [role="heading"]').first()).toBeVisible();
+      // A sidebar heading, directory or scope chooser is not proof that the requested screen loaded.
+      const content = publicPage
+        ? page.locator('app-root')
+        : page.locator('#main-content router-outlet + *').first();
+      await expect(content).toBeVisible();
+      await expect(content.locator('h1, h2, [role="heading"]').first()).toBeVisible();
+      if (MAIN_JOURNEY_ROUTES.some((path) => path === screen.path)) {
+        await expect(
+          page.locator('[data-testid="scope-gate"], app-hospital-network-workspace'),
+        ).toHaveCount(0);
+        if (!screen.path.startsWith('/my-')) {
+          await expect(content.locator('button, input, select, a[href]').first()).toBeVisible();
+        }
+      }
       await page.evaluate(() => document.fonts.ready.then(() => undefined));
       // Two frames: the design conventions (shared/a11y/design-conventions.ts)
       // work once per animation frame after the page renders.
