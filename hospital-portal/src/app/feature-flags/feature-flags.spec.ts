@@ -29,6 +29,39 @@ describe('FeatureFlagsComponent', () => {
 
   const flag = { key: 'beta.x', enabled: true, editing: false, description: '' };
 
+  it('D2769: known flags have readable labels and supplied descriptions stay authoritative', () => {
+    const flag = { key: 'ff.platform.billing', enabled: true, editing: false, description: '' };
+    expect(component.flagTitle(flag)).toBe('FLAGS.CATALOG.BILLING_TITLE');
+    expect(component.flagDescription(flag)).toBe('FLAGS.CATALOG.BILLING_DESCRIPTION');
+    component.overrides.set([
+      {
+        id: 'override',
+        flagKey: flag.key,
+        enabled: true,
+        description: 'Description locale validée',
+        updatedBy: 'cdx-admin',
+        updatedAt: '2026-11-22',
+      },
+    ]);
+    expect(component.flagDescription(flag)).toBe('Description locale validée');
+    const custom = { ...flag, key: 'hospital.custom' };
+    expect(component.flagTitle(custom)).toBe('hospital.custom');
+    expect(component.flagDescription(custom)).toBe('FLAGS.NO_DESCRIPTION');
+  });
+
+  it('D2769: the configure dialog offers only keys declared by the server', () => {
+    const fixture = TestBed.createComponent(FeatureFlagsComponent);
+    fixture.detectChanges();
+    httpMock.expectOne('/feature-flags').flush({ 'known.flag': true });
+    httpMock.match('/feature-flags/overrides').forEach((r) => r.flush([]));
+    fixture.componentInstance.openCreate();
+    fixture.detectChanges();
+    const select = fixture.nativeElement.querySelector('select#flag-key') as HTMLSelectElement;
+    expect(select).not.toBeNull();
+    expect(Array.from(select.options).map((option) => option.value)).toEqual(['', 'known.flag']);
+    expect(fixture.nativeElement.querySelector('input#flag-key')).toBeNull();
+  });
+
   it('does not delete an override the admin did not confirm (D126)', async () => {
     spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
     await component.removeOverride(flag);

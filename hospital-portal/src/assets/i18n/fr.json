@@ -1,4 +1,12 @@
 {
+  "ORGANIZATION_DETAIL": {
+    "INFORMATION": "Informations de l’organisation",
+    "EMAIL": "Courriel du contact",
+    "PHONE": "Téléphone du contact",
+    "TIMEZONE": "Fuseau horaire",
+    "HOSPITALS": "Hôpitaux",
+    "NO_HOSPITALS": "Aucun hôpital n’est rattaché à cette organisation."
+  },
   "A11Y": {
     "SKIP_TO_MAIN": "Aller au contenu principal"
   },
@@ -4080,10 +4088,20 @@
     "TITLE": "Changer le mot de passe"
   },
   "FLAGS": {
+    "CATALOG": {
+      "BILLING_TITLE": "Module de facturation",
+      "BILLING_DESCRIPTION": "Indicateur de fonctionnalité du module de facturation.",
+      "EHR_TITLE": "Dossier médical informatisé",
+      "EHR_DESCRIPTION": "Indicateur de fonctionnalité du module de dossier médical informatisé.",
+      "INVENTORY_TITLE": "Gestion des stocks",
+      "INVENTORY_DESCRIPTION": "Indicateur de fonctionnalité du module de gestion des stocks."
+    },
+    "NO_DESCRIPTION": "Aucune description renseignée.",
+    "SELECT_DECLARED": "Sélectionner un drapeau déclaré",
     "CREATE": "Créer",
     "CREATED": "Drapeau {{key}} créé",
     "CREATE_FAILED": "Échec de la création du drapeau",
-    "CREATE_TITLE": "Créer un drapeau",
+    "CREATE_TITLE": "Configurer un drapeau déclaré",
     "CREATING": "Création…",
     "DESCRIPTION_LABEL": "Description",
     "DESCRIPTION_PLACEHOLDER": "Décrivez la fonctionnalité…",
@@ -4098,7 +4116,7 @@
     "KEY_REQUIRED": "La clé du drapeau est obligatoire",
     "LOADING": "Chargement des drapeaux…",
     "LOAD_FAILED": "Échec du chargement des drapeaux de fonctionnalité",
-    "NEW_FLAG": "Nouveau drapeau",
+    "NEW_FLAG": "Configurer un drapeau",
     "NO_FLAGS": "Aucun drapeau trouvé",
     "NO_FLAGS_MATCHING": "Aucun drapeau ne correspond à « {{query}} »",
     "OFF": "DÉSACTIVÉ",
@@ -4232,6 +4250,7 @@
     "NEW_REPORT_HINT": "Les images ajoutées maintenant vont sur l’examen. Enregistrez d’abord le compte rendu pour les y joindre."
   },
   "IMAGING": {
+    "ADDENDUM_ORIGINAL": "Compte rendu signé complété par cet addendum",
     "RESULTS_PARTIAL_FAILURE": "Les comptes rendus de ces hôpitaux n'ont pas pu être chargés, la liste est donc incomplète : {{hospitals}}.",
     "ADMIN_READ_ONLY": "Consultation seule : demandes d'imagerie et comptes rendus validés. La prescription, l'interprétation et la signature reviennent à l'équipe clinique.",
     "ALL_HOSPITALS": "Tous les hôpitaux",
@@ -4436,6 +4455,8 @@
     "ORDER_NO_OPEN_VISIT": "Aucune visite ouverte pour ce patient ici : la demande ne sera rattachée à aucune visite."
   },
   "LAB": {
+    "SPECIMEN_SCROLL_HINT": "Faites défiler horizontalement pour voir le statut du prélèvement et toutes les actions.",
+    "EXISTING_SPECIMENS": "Cette demande possède déjà {{count}} prélèvement(s). Vérifiez la liste avant d’en recueillir un autre.",
     "DUPLICATE": {
       "TITLE": "Demande possiblement en double",
       "BODY": "Ce patient a déjà une demande en cours pour le même examen ici, passée dans les dernières 24 heures. Vérifiez qu'une nouvelle demande est vraiment nécessaire.",
@@ -4781,6 +4802,7 @@
     }
   },
   "LAB_RESULTS": {
+    "SAVE_CORRECTION": "Enregistrer la correction",
     "QUOTED_READ_BACK_VALUE": "« {{value}} »",
     "ALL_AGES": "Tous âges",
     "CORRECTED": "Corrigé",
@@ -4820,7 +4842,7 @@
     "AGE_RANGE": "Tranche d'âge",
     "TREND_HISTORY": "Historique des tendances",
     "DELTA": "Δ",
-    "SELECT_ORDER": "Sélectionner une commande de laboratoire",
+    "SELECT_ORDER": "Sélectionner une demande de laboratoire",
     "NO_RESULTS": "Aucun résultat de laboratoire trouvé",
     "NO_RESULTS_YET": "Aucun résultat pour le moment",
     "DELETE_TITLE": "Supprimer le résultat",

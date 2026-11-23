@@ -4,8 +4,16 @@
       <span class="material-symbols-outlined">folder_open</span>
       {{ 'PORTAL.DOCUMENTS.TITLE' | translate }}
     </h1>
-    <button class="btn-primary" (click)="showUploadForm.set(!showUploadForm())">
-      <span class="material-symbols-outlined">upload_file</span>
+    <button
+      type="button"
+      data-testid="document-upload-toggle"
+      [class.btn-primary]="!showUploadForm()"
+      [class.btn-secondary]="showUploadForm()"
+      (click)="showUploadForm.set(!showUploadForm())"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">{{
+        showUploadForm() ? 'close' : 'upload_file'
+      }}</span>
       {{
         showUploadForm()
           ? ('PORTAL.DOCUMENTS.CANCEL' | translate)

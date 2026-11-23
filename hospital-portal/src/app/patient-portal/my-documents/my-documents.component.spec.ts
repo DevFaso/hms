@@ -59,6 +59,21 @@ describe('MyDocumentsComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('presents the open upload toggle as a secondary cancel action (D2344)', () => {
+    const toggle = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '[data-testid="document-upload-toggle"]',
+    )!;
+    expect(toggle.classList.contains('btn-primary')).toBeTrue();
+    toggle.click();
+    fixture.detectChanges();
+    expect(toggle.classList.contains('btn-secondary')).toBeTrue();
+    expect(toggle.classList.contains('btn-primary')).toBeFalse();
+    expect(toggle.textContent).toContain('close');
+    toggle.click();
+    fixture.detectChanges();
+    expect(component.showUploadForm()).toBeFalse();
+  });
+
   it('shows the document type through its translation key, never the raw enum (QA D434)', () => {
     const badge = (fixture.nativeElement as HTMLElement).querySelector('.doc-type');
     expect(badge?.textContent?.trim()).toBe('PORTAL.DOCUMENTS.TYPE_LAB_RESULT');

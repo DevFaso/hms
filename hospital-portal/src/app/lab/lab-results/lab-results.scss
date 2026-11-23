@@ -955,6 +955,16 @@
   min-width: 0;
 }
 
+/* Native selects retain a long option's intrinsic width unless both boxes can shrink. */
+.field {
+  min-width: 0;
+  select {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
 .panel-code {
   font-weight: 400;
   color: var(--text-secondary);
