@@ -381,4 +381,47 @@ describe('TransfusionComponent: positive antibody screen (QA D3351)', () => {
     fixture.detectChanges();
     expect(el().querySelector('[data-testid="antibody-other-hospital"]')).toBeNull();
   });
+
+  it('review H1: the nurse who gives the unit opens a flagged request, and reads the antibody and where it comes from', async () => {
+    // The server refused her this read for one build (403): the portal asks for it whenever it opens a flagged
+    // request, and the refusal took the request off her screen, for the allo-immunised patients only.
+    await setUp(['ROLE_NURSE']);
+    txSpy.getRequest.and.returnValue(of(flagged({ status: 'ISSUED' })));
+    txSpy.getAntibodyStatus.and.returnValue(
+      of(
+        status({
+          identified: true,
+          antibodySpecificities: 'anti-K',
+          identifiedHospitalName: 'CHU Yalgado',
+          otherHospitalNames: ['CHU Yalgado'],
+        }),
+      ),
+    );
+
+    component.openRequest(flagged({ status: 'ISSUED' }));
+    fixture.detectChanges();
+
+    expect(txSpy.getAntibodyStatus).toHaveBeenCalledWith('p1');
+    expect(component.selectedRequest()?.id).toBe('req-1');
+    expect(el().querySelector('[data-testid="allo-immunised"]')).not.toBeNull();
+    expect(el().querySelector('[data-testid="antibody-identified"]')).not.toBeNull();
+    expect(el().querySelector('[data-testid="antibody-other-hospital"]')).not.toBeNull();
+    // She reads; she does not record the antibody.
+    expect(component.canRecordAntibody).toBeFalse();
+    expect(el().querySelector('[data-testid="antibody-record"]')).toBeNull();
+  });
+
+  it('a status that cannot be read leaves the request on the screen, with its flag', async () => {
+    await setUp(['ROLE_NURSE']);
+    txSpy.getRequest.and.returnValue(of(flagged()));
+    txSpy.getAntibodyStatus.and.returnValue(throwError(() => new Error('503')));
+
+    component.openRequest(flagged());
+    fixture.detectChanges();
+
+    expect(component.selectedRequest()?.id).toBe('req-1');
+    expect(component.antibodyStatus()).toBeNull();
+    expect(el().querySelector('[data-testid="allo-immunised"]')).not.toBeNull();
+    expect(el().querySelector('[data-testid="antibody-identified"]')).toBeNull();
+  });
 });

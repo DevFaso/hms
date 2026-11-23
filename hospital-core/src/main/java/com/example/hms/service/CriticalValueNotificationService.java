@@ -173,7 +173,8 @@ public class CriticalValueNotificationService {
         if (recipients != null && (username == null || recipients.prescriberAbsent(orderingStaffOf(result)))) {
             // Rule CRITICAL_RESULT_ESCALATION: nobody to answer at T0 (no account, or on approved leave): the
             // cover is told now, not in fifteen minutes.
-            tell(result, CriticalResultEscalationLadder.Step.COVER, notifiedAt);
+            // The prescriber was texted a moment ago (above): the cover step texts the cover, not them again.
+            tell(result, CriticalResultEscalationLadder.Step.COVER, notifiedAt, username);
             // The release's own transaction, on the entity it is saving: the stamp is written with the result.
             result.setCriticalEscalationLevel(
                 levelAfter(result.getCriticalEscalationLevel(), CriticalResultEscalationLadder.Step.COVER));
@@ -282,10 +283,14 @@ public class CriticalValueNotificationService {
 
     /**
      * One step of the ladder: its notices (and, for the steps that widen the circle, an SMS to the clinicians
-     * told, after the commit) and the incident at the last step. It writes nothing on the result: the caller
+     * told, after the commit) and the incident from the last step on. It writes nothing on the result: the caller
      * stamps the step. A step with nobody to tell is logged as an error: the next step widens further.
+     *
+     * @param alreadyTexted a clinician of the chain texted a moment ago in this same transaction (the prescriber
+     *                      at T0), who gets the notice of this step and no second SMS; null in the sweep
      */
-    private void tell(LabResult result, CriticalResultEscalationLadder.Step step, LocalDateTime now) {
+    private void tell(LabResult result, CriticalResultEscalationLadder.Step step, LocalDateTime now,
+                      String alreadyTexted) {
         NotificationText escalation = buildText(result, true);
         String prescriber = resolveOrderingUsername(result);
         long minutes = result.getCriticalNotifiedAt() == null ? 0
@@ -308,10 +313,12 @@ public class CriticalValueNotificationService {
             notificationService.createNotification(sent.key(), sent.args(), recipient, ESCALATION_TYPE, result.getId());
         }
         if (step != CriticalResultEscalationLadder.Step.REMINDER) {
-            smsTheChain(result, chain, escalation.render(messageSource, NotificationLocales.STAFF));
+            smsTheChain(result, chain, escalation.render(messageSource, NotificationLocales.STAFF), alreadyTexted);
         }
-        if (step == CriticalResultEscalationLadder.Step.UNRESOLVED) {
-            openIncident(result, now, (int) minutes, chain.size());
+        // The incident opens at the last step. A result already past it with none on record (one left by the
+        // old chain, which stopped after twelve rounds and opened none) gets its incident at its next reminder:
+        // an unresolved critical result is never left without one. The administrators are flagged once, with it.
+        if (unresolved && openIncident(result, now, (int) minutes, chain.size())) {
             flagAdministrators(result, minutes);
         }
         if (chain.isEmpty()) {
@@ -330,11 +337,15 @@ public class CriticalValueNotificationService {
      * rolled back texts nobody. The numbers are read here, while the session is open. A result that was already
      * waiting when the ladder was switched on ({@code escalationBacklog}, V364) is never texted about.
      */
-    private void smsTheChain(LabResult result, java.util.Set<String> chain, String message) {
+    private void smsTheChain(LabResult result, java.util.Set<String> chain, String message, String alreadyTexted) {
         if (users == null || chain.isEmpty() || result.isEscalationBacklog() || !smsService.deliversRealSms()) {
             return;
         }
-        List<String> lower = chain.stream().map(name -> name.toLowerCase(java.util.Locale.ROOT)).toList();
+        List<String> lower = chain.stream().filter(name -> !name.equalsIgnoreCase(alreadyTexted))
+            .map(name -> name.toLowerCase(java.util.Locale.ROOT)).toList();
+        if (lower.isEmpty()) {
+            return;
+        }
         List<String> phones = users.findByUsernameInIgnoreCase(lower).stream()
             .map(User::getPhoneNumber)
             .filter(phone -> phone != null && !phone.isBlank())
@@ -348,12 +359,16 @@ public class CriticalValueNotificationService {
             () -> phones.forEach(phone -> sendCriticalSms(resultId, phone, message)));
     }
 
-    /** « Résultat critique non résolu »: the incident, one open at a time for a result. */
-    private void openIncident(LabResult result, LocalDateTime now, int minutes, int told) {
+    /**
+     * « Résultat critique non résolu »: the incident, one open at a time for a result.
+     *
+     * @return true when one was opened now; false when one is open already (or nothing can hold it)
+     */
+    private boolean openIncident(LabResult result, LocalDateTime now, int minutes, int told) {
         UUID hospitalId = resolveHospitalId(result);
         if (incidents == null || hospitalId == null
                 || incidents.findByLabResultIdAndResolvedAtIsNull(result.getId()).isPresent()) {
-            return;
+            return false;
         }
         incidents.save(com.example.hms.model.CriticalResultIncident.builder()
             .labResultId(result.getId())
@@ -365,6 +380,7 @@ public class CriticalValueNotificationService {
             .build());
         log.error("Critical lab result {} unresolved after {} minutes at hospital {}: incident opened",
             result.getId(), minutes, hospitalId);
+        return true;
     }
 
     /** The administrators learn that an incident is open, and nothing about the result. */
@@ -537,7 +553,7 @@ public class CriticalValueNotificationService {
             return false;
         }
         try {
-            tell(result, due.get(), now);
+            tell(result, due.get(), now, null);
         } catch (RuntimeException ex) {
             labResultRepository.stampEscalationIfUnacknowledged(result.getId(), to, from, stampedBefore);
             throw ex;

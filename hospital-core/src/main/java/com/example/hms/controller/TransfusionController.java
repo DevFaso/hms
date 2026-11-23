@@ -84,14 +84,6 @@ public class TransfusionController {
         "hasAnyRole('SUPER_ADMIN','DOCTOR','SURGEON','MIDWIFE','NURSE',"
             + "'LAB_SCIENTIST','LAB_TECHNICIAN','LAB_MANAGER','LAB_DIRECTOR')";
 
-    /**
-     * Who reads what is known of a patient's antibodies. The flag follows the patient, so this may be another
-     * hospital's record (the antibody, the date, that hospital's name): it is read on the transfusion path only,
-     * by the bench and by the prescriber writing a request. The bedside sees the flag on the request it gives,
-     * not this; a general chart viewer sees neither.
-     */
-    private static final String ANTIBODY_READER = LABORATORY + " or " + PRESCRIBER;
-
     private final TransfusionService transfusionService;
 
     // ── Type and screen ─────────────────────────────────────────────────
@@ -125,9 +117,10 @@ public class TransfusionController {
     }
 
     @GetMapping("/antibody-status/patient/{patientId}")
-    @PreAuthorize(ANTIBODY_READER)
+    @PreAuthorize(READER)
     @Operation(summary = "The patient's allo-immunisation, wherever it is on record",
-        description = "The permanent flag of a positive antibody screen and the antibody identified. Of another "
+        description = "The permanent flag of a positive antibody screen and the antibody identified, for everyone "
+            + "on the transfusion path: the bench, the prescriber and the nurse who gives the unit. Of another "
             + "hospital's record: the antibody, the date and that hospital's name only. Each read is accounted.")
     public ResponseEntity<com.example.hms.payload.dto.transfusion.AntibodyStatusResponseDTO> getAntibodyStatus(
         @PathVariable UUID patientId) {

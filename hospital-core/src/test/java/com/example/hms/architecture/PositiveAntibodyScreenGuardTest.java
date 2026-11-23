@@ -193,13 +193,13 @@ class PositiveAntibodyScreenGuardTest {
             .doesNotContain("getRecordedByDisplay").doesNotContain("getTransfusionRequestId").doesNotContain(".id(");
         // And nothing of another hospital's blood group record but the time of its positive screen and its name.
         assertThat(rule).doesNotContain("getAntibodyDetail").doesNotContain("getAboGroup").doesNotContain("getRhFactor");
-        // Who reads the antibody and its source: the bench and the prescriber, not the bedside, not a chart viewer.
+        // Who reads the antibody and its source: everyone on the transfusion path (the bench, the prescriber,
+        // the nurse who gives the unit: a 403 there took the request off her screen), nobody else.
         String controller = code(CONTROLLER);
-        assertThat(controller).contains("ANTIBODY_READER = LABORATORY + \" or \" + PRESCRIBER;");
         int read = controller.indexOf("@GetMapping(\"/antibody-status/patient/{patientId}\")");
         assertThat(read).isNotNegative();
         assertThat(controller.substring(read, controller.indexOf("public ResponseEntity", read)))
-            .contains("@PreAuthorize(ANTIBODY_READER)");
+            .contains("@PreAuthorize(READER)");
         // The flag is a field of the transfusion screens' own answers, and of nothing else that is sent.
         List<String> carriers = new ArrayList<>();
         try (Stream<Path> files = Files.walk(MAIN.resolve("payload"))) {

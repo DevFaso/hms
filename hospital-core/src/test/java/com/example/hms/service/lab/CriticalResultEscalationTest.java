@@ -344,6 +344,10 @@ class CriticalResultEscalationTest {
     @Test
     @DisplayName("no administrator is ever on a value-bearing step, whatever the level")
     void noAdministratorOnAValueBearingStep() {
+        // Past the last step the incident is on record (a result with none gets it, and the administrators their
+        // flag with no value in it: aResultLeftByTheOldChainGetsItsIncident).
+        when(incidents.findByLabResultIdAndResolvedAtIsNull(result.getId()))
+            .thenReturn(Optional.of(new CriticalResultIncident()));
         for (int[] at : new int[][] {{16, 0}, {31, 1}, {600, 5}}) {
             clearInvocations(notifications);
             minutesAgo(at[0], at[1]);
@@ -686,5 +690,78 @@ class CriticalResultEscalationTest {
         // And no telephone rings about it.
         verify(users, never()).findByUsernameInIgnoreCase(any());
         verify(sms, never()).send(anyString(), anyString());
+    }
+
+    // ── Focused review of #1291 ───────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("a result left past the last step with no incident (the old chain opened none) gets its incident at its next reminder, and the administrators are flagged once")
+    void aResultLeftByTheOldChainGetsItsIncident() {
+        // Left at round 7 by the chain that stopped after twelve and kept no register of incidents.
+        result.setEscalationBacklog(true);
+        minutesAgo(20 * 24 * 60, 7);
+        result.setCriticalEscalatedAt(LocalDateTime.now().minusDays(3));
+
+        assertThat(service.escalateOverdue()).isEqualTo(1);
+
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 8);
+        ArgumentCaptor<CriticalResultIncident> opened = ArgumentCaptor.forClass(CriticalResultIncident.class);
+        verify(incidents).save(opened.capture());
+        assertThat(opened.getValue().getLabResultId()).isEqualTo(result.getId());
+        assertThat(opened.getValue().getHospitalId()).isEqualTo(hospital.getId());
+        assertThat(opened.getValue().getResolvedAt()).isNull();
+        // The administrators' flag: that an incident is open, and nothing of the result.
+        ArgumentCaptor<String> flag = ArgumentCaptor.forClass(String.class);
+        verify(notifications).created(flag.capture(), eq("admin.sawadogo"), eq(ESCALATION));
+        assertThat(flag.getValue()).contains("incident").doesNotContain("7,1").doesNotContain("7.1")
+            .doesNotContain("Potassium").doesNotContain("Bea").doesNotContain("Ward");
+
+        // The next reminder finds the incident open: no second one, no second flag.
+        when(incidents.findByLabResultIdAndResolvedAtIsNull(result.getId())).thenReturn(Optional.of(opened.getValue()));
+        result.setCriticalEscalatedAt(LocalDateTime.now().minusDays(3));
+
+        assertThat(service.escalateOverdue()).isEqualTo(1);
+
+        verify(incidents).save(any());
+        verify(notifications).created(anyString(), eq("admin.sawadogo"), eq(ESCALATION));
+        // A backlog row all along: nobody was texted.
+        verify(sms, never()).send(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("at T0 an absent prescriber is texted once: the cover step, taken at once, texts the cover and not the prescriber again")
+    void anAbsentPrescriberIsTextedOnceAtT0() {
+        when(sms.deliversRealSms()).thenReturn(true);
+        prescriber.getUser().setPhoneNumber("+22670000001");
+        when(recipients.prescriberAbsent(prescriber)).thenReturn(true);
+        when(users.findByUsernameInIgnoreCase(any())).thenAnswer(call -> {
+            List<String> asked = call.getArgument(0);
+            return java.util.stream.Stream.of(account("dr.diallo", "+22670000001"), account("dr.garde", "+22670000002"))
+                .filter(account -> asked.contains(account.getUsername())).toList();
+        });
+
+        service.notifyIfCritical(result);
+
+        // Both are told in the application; each telephone rings once.
+        told("dr.garde", ESCALATION);
+        verify(sms).send(eq("+22670000001"), anyString());
+        verify(sms).send(eq("+22670000002"), anyString());
+        ArgumentCaptor<List<String>> asked = ArgumentCaptor.captor();
+        verify(users).findByUsernameInIgnoreCase(asked.capture());
+        assertThat(asked.getValue()).containsExactly("dr.garde");
+    }
+
+    @Test
+    @DisplayName("in the sweep the prescriber stays copied by SMS at the cover step: only the T0 double is left out")
+    void theSweepStillTextsThePrescriberAtTheCoverStep() {
+        when(sms.deliversRealSms()).thenReturn(true);
+        when(users.findByUsernameInIgnoreCase(any())).thenReturn(List.of());
+        minutesAgo(16, 0);
+
+        assertThat(service.escalateOverdue()).isEqualTo(1);
+
+        ArgumentCaptor<List<String>> asked = ArgumentCaptor.captor();
+        verify(users).findByUsernameInIgnoreCase(asked.capture());
+        assertThat(asked.getValue()).containsExactlyInAnyOrder("dr.diallo", "dr.garde");
     }
 }
