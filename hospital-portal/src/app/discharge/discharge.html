@@ -168,7 +168,7 @@
                 <th scope="col">{{ 'DISCHARGE.REQUESTED_AT' | translate }}</th>
                 <th scope="col">{{ 'DISCHARGE.NURSE_SUMMARY' | translate }}</th>
                 <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-                <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+                <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
               </tr>
             </thead>
             <tbody>
@@ -341,7 +341,7 @@
                 <th scope="col">{{ 'DISCHARGE.DISPOSITION' | translate }}</th>
                 <th scope="col">{{ 'DISCHARGE.PROVIDER' | translate }}</th>
                 <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-                <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+                <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
               </tr>
             </thead>
             <tbody>
@@ -658,6 +658,10 @@
         </button>
       </div>
       <div class="modal-body">
+        <!-- QA r70 D3220: the patient-safety header (blood group, allergies, weight). -->
+        @if (summaryForm.patientId) {
+          <app-patient-safety-header [patientId]="summaryForm.patientId" />
+        }
         @if (!editingSummaryId()) {
           <div class="field">
             <label for="summary-patient">{{ 'DISCHARGE.PATIENT' | translate }} *</label>
@@ -874,11 +878,22 @@
         <div class="dynamic-rows">
           @for (f of summaryForm.followUpAppointments; track $index) {
             <div class="dynamic-row">
-              <input
-                type="text"
-                [placeholder]="'DISCHARGE.FOLLOW_UP_TYPE' | translate"
-                [(ngModel)]="f.appointmentType"
-              />
+              @if (isSystemFollowUpType(f.appointmentType)) {
+                <input
+                  type="text"
+                  readonly
+                  [value]="
+                    followUpTypeLabel(f.appointmentType) + (f.purpose ? ' — ' + f.purpose : '')
+                  "
+                  [attr.aria-label]="'DISCHARGE.FOLLOW_UP_TYPE' | translate"
+                />
+              } @else {
+                <input
+                  type="text"
+                  [placeholder]="'DISCHARGE.FOLLOW_UP_TYPE' | translate"
+                  [(ngModel)]="f.appointmentType"
+                />
+              }
               <input
                 type="text"
                 [placeholder]="'DISCHARGE.PROVIDER' | translate"
@@ -959,6 +974,8 @@
         </button>
       </div>
       <div class="modal-body">
+        <!-- QA r70 D3220: the patient-safety header (blood group, allergies, weight). -->
+        <app-patient-safety-header [patientId]="s.patientId" [showName]="false" />
         <div class="view-section">
           <h4>{{ 'DISCHARGE.DISCHARGE_DATE' | translate }}</h4>
           <p>
@@ -1026,8 +1043,15 @@
             <h4>{{ 'DISCHARGE.FOLLOW_UPS' | translate }}</h4>
             <ul>
               @for (f of s.followUpAppointments; track $index) {
-                <li>
-                  {{ f.appointmentType }} — {{ f.providerName }}
+                <!-- QA D3152: the type in words (never DISCHARGE_FOLLOW_UP), its purpose, and no dangling dash. -->
+                <li data-testid="discharge-view-follow-up">
+                  {{ followUpTypeLabel(f.appointmentType) }}
+                  @if (f.purpose) {
+                    — {{ f.purpose }}
+                  }
+                  @if (f.providerName) {
+                    · {{ f.providerName }}
+                  }
                   @if (f.appointmentDate) {
                     ({{ f.appointmentDate | serverTime | date: 'mediumDate' }})
                   }

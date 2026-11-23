@@ -22,8 +22,12 @@ describe('languageInterceptor', () => {
   });
 
   afterEach(() => {
-    backend.verify();
-    localStorage.removeItem('lang');
+    try {
+      backend.verify();
+    } finally {
+      localStorage.removeItem('lang');
+      resetStoredLangForTests();
+    }
   });
 
   it('sends French when nothing is stored — the product default, not the browser', () => {

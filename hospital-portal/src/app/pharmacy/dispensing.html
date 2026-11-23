@@ -30,9 +30,8 @@
 
   <div class="workspace-strip">
     <p>
-      <strong>{{ queueLoading() ? '—' : workQueue().length }}</strong><span>{{
-        'PHARMACY_WORKSPACE.LOADED_QUEUE' | translate
-      }}</span>
+      <strong>{{ queueLoading() ? '—' : workQueue().length }}</strong>{{ ' '
+      }}<span>{{ 'PHARMACY_WORKSPACE.LOADED_QUEUE' | translate }}</span>
     </p>
     <p>{{ 'PHARMACY_WORKSPACE.DISPENSE_HINT' | translate }}</p>
   </div>
@@ -110,6 +109,9 @@
           {{ selectedPrescription?.patient | personName }}
         </span>
       </div>
+
+      <!-- QA r70 D3220: the patient-safety header (blood group, allergies, weight). -->
+      <app-patient-safety-header [patientId]="selectedPrescription?.patient?.id" />
 
       <!-- QA D1555: the order's allergy cards against the patient's current allergies. -->
       @if (selectedPrescription?.allergyAlerts?.length) {
@@ -519,7 +521,7 @@
             <dl class="handover-payment-grid">
               <div>
                 <dt>{{ 'PHARMACY_MONEY.HANDOVER.QUANTITY' | translate }}</dt>
-                <dd>{{ pay.quantity }} {{ pay.unit ?? '' }}</dd>
+                <dd>{{ pay.quantity | countUnit: pay.unit }}</dd>
               </div>
               <div>
                 <dt>{{ 'PHARMACY_MONEY.HANDOVER.CHARGE' | translate }}</dt>
@@ -610,17 +612,76 @@
         <p>{{ 'PHARMACY.CANCEL_READY_CONFIRM' | translate }}</p>
         <div class="form-row">
           <div class="field full-width">
-            <label for="cancelReadyReason">{{
-              'PHARMACY.CANCEL_READY_REASON_LABEL' | translate
-            }}</label>
-            <select id="cancelReadyReason" name="cancelReadyReason" [(ngModel)]="cancelReason">
+            <label for="cancelReadyReason"
+              >{{ 'PHARMACY.CANCEL_READY_REASON_LABEL' | translate }} *</label
+            >
+            <select
+              id="cancelReadyReason"
+              name="cancelReadyReason"
+              data-server-field="reason"
+              required
+              [(ngModel)]="cancelReason"
+            >
+              <option [ngValue]="null">
+                {{ 'PHARMACY.CANCEL_READY_CHOOSE_REASON' | translate }}
+              </option>
               @for (reason of readyCancelReasons; track reason) {
-                <option [value]="reason">
+                <option [ngValue]="reason">
                   {{ 'PHARMACY.CANCEL_READY_REASON.' + reason | translate }}
                 </option>
               }
             </select>
           </div>
+          <!-- QA D3403 (r70): only « intact » goes back on sale; the rest is quarantined. -->
+          <div class="field full-width">
+            <label for="cancelReadyCondition"
+              >{{ 'PHARMACY.STOCK_CONDITION_LABEL' | translate }} *</label
+            >
+            <select
+              id="cancelReadyCondition"
+              name="cancelReadyCondition"
+              data-server-field="stockCondition"
+              required
+              [(ngModel)]="cancelCondition"
+            >
+              <option [ngValue]="null">{{ 'PHARMACY.STOCK_CONDITION_CHOOSE' | translate }}</option>
+              @for (condition of returnedStockConditions; track condition) {
+                <option [ngValue]="condition">
+                  {{ 'PHARMACY.STOCK_CONDITION.' + condition | translate }}
+                </option>
+              }
+            </select>
+            @if (cancelCondition) {
+              <small class="field-hint" data-testid="cancel-ready-stock-fate">{{
+                (cancelCondition === 'INTACT'
+                  ? 'PHARMACY.STOCK_CONDITION_BACK_ON_SALE'
+                  : cancelCondition === 'MISSING'
+                    ? 'PHARMACY.STOCK_CONDITION_MISSING_LOSS'
+                    : 'PHARMACY.STOCK_CONDITION_QUARANTINED'
+                ) | translate
+              }}</small>
+            }
+          </div>
+          <!-- Review of #1285: a controlled fill set aside or lost is witnessed (not the actor). -->
+          @if (cancelReadyNeedsWitness()) {
+            <div class="field full-width">
+              <label for="cancelReadyWitness">{{ 'PHARMACY.WITNESS' | translate }} *</label>
+              <select
+                id="cancelReadyWitness"
+                name="cancelReadyWitness"
+                data-server-field="witnessedBy"
+                required
+                [(ngModel)]="cancelReadyWitness"
+              >
+                <option [ngValue]="undefined">
+                  {{ 'PHARMACY.SELECT_WITNESS_OPTION' | translate }}
+                </option>
+                @for (w of witnessCandidates(); track w.userId) {
+                  <option [ngValue]="w.userId">{{ w.displayName }}</option>
+                }
+              </select>
+            </div>
+          }
         </div>
         <div class="form-actions">
           <button type="button" class="btn-secondary" (click)="closeReadyAction()">
@@ -752,7 +813,7 @@
               <th>{{ 'PHARMACY.STATUS' | translate }}</th>
               <th>{{ 'PHARMACY.REFILL' | translate }}</th>
               <th>{{ 'PHARMACY.PRESCRIBER' | translate }}</th>
-              <th>{{ 'COMMON.ACTIONS' | translate }}</th>
+              <th class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
             </tr>
           </thead>
           <tbody>
@@ -775,7 +836,7 @@
                 </td>
                 <td>{{ rx.dosage }}</td>
                 <td>
-                  {{ rx.quantity }} {{ rx.quantityUnit }}
+                  {{ rx.quantity | countUnit: rx.quantityUnit }}
                   <!-- QA D1001: a partly filled order says what is still owed -->
                   @if (isPartlyDispensed(rx)) {
                     <span class="cell-sub" [attr.data-testid]="'rx-remaining-' + rx.id">{{
@@ -1113,7 +1174,7 @@
               <th>{{ 'PHARMACY.VERIFICATION' | translate }}</th>
               <th>{{ 'PHARMACY.DISPENSED_BY' | translate }}</th>
               <th>{{ 'PHARMACY.DISPENSED_AT' | translate }}</th>
-              <th>{{ 'COMMON.ACTIONS' | translate }}</th>
+              <th class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
             </tr>
           </thead>
           <tbody>
@@ -1121,7 +1182,7 @@
               <tr>
                 <td data-testid="recent-dispense-patient">{{ d.patientName || '—' }}</td>
                 <td>{{ d.medicationName }}</td>
-                <td>{{ d.quantityDispensed }} {{ d.unit }}</td>
+                <td>{{ d.quantityDispensed | countUnit: d.unit }}</td>
                 <td>
                   <span class="badge" [ngClass]="getStatusClass(d.status)">{{
                     d.status | enumLabel: 'dispenseStatus'

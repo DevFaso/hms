@@ -113,6 +113,7 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
   '/pharmacy/stock-routing': 'PHARMACY',
   '/pharmacy/claims': 'PHARMACY',
   '/pharmacy/checkout': 'PHARMACY',
+  '/pharmacy/counter-sale': 'PHARMACY',
   '/pharmacy/mtm': 'PHARMACY',
   '/pharmacy/reconciliation': 'PHARMACY',
   '/pharmacy/billing-deferrals': 'PHARMACY',
@@ -139,6 +140,7 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
   '/billing': 'BILLING',
   '/billing/tarifs': 'BILLING',
   '/billing/organismes': 'BILLING',
+  '/billing/parts-assureurs': 'BILLING',
 
   // ── INSIGHTS ─────────────────────────────────────────────────────────
   '/analytics': 'INSIGHTS',
@@ -165,6 +167,8 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
   // The same entry resolves to one path or the other depending on whether the
   // active role is super admin, so both spellings need a home.
   '/audit-logs': 'ADMINISTRATION',
+  // V356: the provisional rules and this hospital's sign-off of each.
+  '/clinical-rules': 'ADMINISTRATION',
 
   // ── PLATFORM (super-admin) ───────────────────────────────────────────
   '/super-admin': 'PLATFORM',

@@ -1,0 +1,181 @@
+// V356: « Règles cliniques et validation ». A list of cards (never a table),
+// every text wraps, nothing has a fixed width: it holds from 1366 px down to
+// 390 px.
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.rules-page {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.rules-note {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--primary-tint);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+}
+
+.rules-note--warn {
+  background: #fef3c7;
+  color: #7c2d12;
+}
+
+.rules-note--error {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.rules-progress {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.rules-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.rule-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.rule-card[data-status='SIGNED'] {
+  border-left: 4px solid var(--primary);
+}
+
+.rule-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px 12px;
+  min-width: 0;
+}
+
+.rule-title {
+  flex: 1 1 240px;
+  min-width: 0;
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.rule-chip {
+  flex: 0 0 auto;
+  max-width: 100%;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #fef3c7;
+  color: #7c2d12;
+}
+
+.rule-chip[data-status='SIGNED'] {
+  background: var(--primary-soft);
+  color: var(--primary-deep);
+}
+
+.rule-chip[data-status='REVOKED'] {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.rule-desc {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.9375rem;
+}
+
+.rule-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 6px 16px;
+  margin: 0;
+  min-width: 0;
+
+  div {
+    min-width: 0;
+  }
+
+  dt {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  dd {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+  }
+}
+
+.rule-source-link {
+  display: block;
+  margin-top: 2px;
+  color: var(--brand-primary, #0e7c6b);
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+.rule-signoff {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+
+  p {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+  }
+
+  .material-symbols-outlined {
+    font-size: 1rem;
+    vertical-align: -0.1875em;
+    color: var(--primary);
+  }
+}
+
+.rule-muted {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.rule-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rule-sign-rule {
+  overflow-wrap: anywhere;
+}
+
+.rule-self {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+}

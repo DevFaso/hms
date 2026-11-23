@@ -19,7 +19,15 @@ export interface PatientProfileDTO {
   email: string;
   /** The record's phone, as the backend names it (the hospital calls this one). */
   phoneNumberPrimary: string;
-  address: string;
+  /** Structured address fields returned by portal.PatientProfileDTO. */
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
+  country?: string | null;
+  /** Older profile adapters may still supply a formatted address. */
+  address?: string;
   emergencyContactName: string;
   emergencyContactPhone: string;
   emergencyContactRelationship: string;
@@ -914,7 +922,9 @@ export type DisclosureCategory =
   | 'SHARED_WITH_PROVIDER'
   | 'INSURANCE'
   | 'COPY_RELEASED'
-  | 'IDENTITY_CHANGE';
+  | 'IDENTITY_CHANGE'
+  /** QA D3451 (r70): a clinician released one of the patient's results to a parent or guardian. */
+  | 'RELEASED_TO_FAMILY';
 
 export interface AccessLogEntry {
   id: string;
@@ -929,6 +939,12 @@ export interface AccessLogEntry {
   timestamp: string;
   category: DisclosureCategory | null;
   externalDisclosure: boolean;
+  /** QA D3451 (r70): on a result released to the family, who received it; absent on other rows. */
+  recipientName?: string | null;
+  /** How the recipient is related to the patient (PARENT, LEGAL_GUARDIAN). */
+  recipientRelationship?: string | null;
+  /** The category of the released result (HIV), never its value. */
+  resultCategory?: string | null;
 }
 
 export interface DisclosureAccounting {

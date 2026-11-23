@@ -227,6 +227,8 @@ export interface NurseWorkboardPatient {
   patientId: string;
   patientName: string;
   mrn: string;
+  /** QA r70 D3220: the blood group recorded on the chart. */
+  bloodType?: string | null;
   roomBed: string;
   acuityLevel: string;
   admissionId: string;

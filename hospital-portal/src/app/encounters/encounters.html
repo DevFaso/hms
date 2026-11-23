@@ -203,7 +203,7 @@
               <th scope="col">{{ 'COMMON.TYPE' | translate }}</th>
               <th scope="col">{{ 'COMMON.DATE' | translate }}</th>
               <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+              <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
             </tr>
           </thead>
           <tbody>
@@ -344,6 +344,8 @@
           </button>
         </div>
         <div class="detail-body">
+          <!-- QA r70 D3220: the patient-safety header (blood group, allergies, weight). -->
+          <app-patient-safety-header [patientId]="enc.patientId" [hospitalId]="enc.hospitalId" />
           @if (canCloseUnseen() && isNeverSeen(enc.status)) {
             <!-- QA D954: left without being seen, closed from the visit's detail. -->
             <div class="detail-actions">

@@ -1,5 +1,7 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.AdmissionType;
 import com.example.hms.exception.BusinessException;
@@ -50,6 +52,7 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
  */
 @Service
 @RequiredArgsConstructor
+@ProvisionalRule(ClinicalRuleSetKey.MIDWIFE_LABOUR_ADMISSION)
 public class AdmissionServiceImpl implements AdmissionService {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AdmissionServiceImpl.class);
     private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
@@ -428,6 +431,7 @@ public class AdmissionServiceImpl implements AdmissionService {
         if (request.getFollowUpAppointments() != null) {
             admission.setFollowUpAppointments(request.getFollowUpAppointments());
         }
+        addDialogFollowUp(admission, request);
 
         admission = admissionRepository.save(admission);
 
@@ -517,10 +521,27 @@ public class AdmissionServiceImpl implements AdmissionService {
             });
     }
 
+    /** QA D3308: a labouring woman's bed change out of maternity goes through the transfer order. */
+    private com.example.hms.service.maternity.LabourBedMove labourBedMove;
+    private com.example.hms.repository.BedRepository labourBedRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setLabourBedMove(com.example.hms.service.maternity.LabourBedMove labourBedMove,
+                                 com.example.hms.repository.BedRepository labourBedRepository) {
+        this.labourBedMove = labourBedMove;
+        this.labourBedRepository = labourBedRepository;
+    }
+
     @Override
     @Transactional
     public AdmissionResponseDTO assignBed(UUID admissionId, UUID bedId) {
         Admission admission = loadTenantScopedAdmission(admissionId);
+        if (labourBedMove != null && admission.getBed() != null && bedId != null && admission.getHospital() != null) {
+            UUID hospitalId = admission.getHospital().getId();
+            com.example.hms.model.Bed destination =
+                labourBedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId).orElse(null);
+            labourBedMove.requireTransferOrderForABedChange(admission, destination, hospitalId, "bedId");
+        }
         // Policy rule 2 (provisional): a midwife assigns maternity beds and cots; a NICU cot for a
         // newborn is assigned too and a physician is asked to review (a task, never a refusal).
         boolean askPhysician = midwifeNewbornCare != null
@@ -905,5 +926,26 @@ public class AdmissionServiceImpl implements AdmissionService {
 
         orderSet.deactivate(reason, deactivatedBy);
         orderSetRepository.save(orderSet);
+    }
+
+    /** QA D2553: the dialog's follow-up date and purpose, as one of the stay's follow-up appointments. */
+    private static void addDialogFollowUp(Admission admission, AdmissionDischargeRequestDTO request) {
+        String purpose = request.getFollowUpPurpose() == null ? null : request.getFollowUpPurpose().trim();
+        boolean hasPurpose = purpose != null && !purpose.isEmpty();
+        if (request.getFollowUpDate() == null && !hasPurpose) {
+            return;
+        }
+        java.util.Map<String, Object> row = new java.util.LinkedHashMap<>();
+        row.put("appointmentType", "DISCHARGE_FOLLOW_UP");
+        if (request.getFollowUpDate() != null) {
+            row.put("appointmentDate", request.getFollowUpDate().toString());
+        }
+        if (hasPurpose) {
+            row.put("purpose", purpose);
+        }
+        java.util.List<java.util.Map<String, Object>> all = admission.getFollowUpAppointments() == null
+            ? new java.util.ArrayList<>() : new java.util.ArrayList<>(admission.getFollowUpAppointments());
+        all.add(row);
+        admission.setFollowUpAppointments(all);
     }
 }

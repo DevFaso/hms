@@ -1,5 +1,7 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.service.i18n.NotificationText;
 import com.example.hms.service.i18n.NotificationLocalizer;
 import com.example.hms.controller.support.ControllerAuthUtils;
@@ -34,6 +36,7 @@ import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@ProvisionalRule(ClinicalRuleSetKey.PRESCRIPTION_RENEWAL)
 public class RefillApprovalServiceImpl implements RefillApprovalService {
 
     private static final String NOTIFICATION_TYPE = "MEDICATION_REFILL";
@@ -94,9 +97,49 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
 
     private Page<RefillRequest> listForPrescriber(Authentication auth, RefillStatus status, Pageable pageable) {
         UUID staffId = resolveStaffId(auth);
+        java.util.Set<UUID> answered = answeredPrescribers(auth, staffId);
+        if (answered.size() > 1) {
+            // QA D3301: the designated cover of a prescriber who no longer answers lists their requests too.
+            return refillRequestRepository.findAnsweredBy(answered,
+                status == null ? java.util.EnumSet.allOf(RefillStatus.class) : java.util.EnumSet.of(status), pageable);
+        }
         return (status == null)
                 ? refillRequestRepository.findByPrescription_Staff_Id(staffId, pageable)
                 : refillRequestRepository.findByPrescription_Staff_IdAndStatus(staffId, status, pageable);
+    }
+
+    /** QA D3301: who is told of a renewal request and answers it, over this service's role reader. */
+    private com.example.hms.service.pharmacy.RenewalAlertRouting routing() {
+        return new com.example.hms.service.pharmacy.RenewalAlertRouting(roleValidator);
+    }
+
+    /**
+     * The caller's staff record AT the hospital they act at, when they may approve a renewal there: the only
+     * record a cover's reach is read from (review of #1290: never the first staff row of the account, which may
+     * be a row at another hospital). Empty for anybody else.
+     */
+    private java.util.Optional<Staff> coverRecordHere(Authentication auth) {
+        UUID hospitalId = roleValidator.getCurrentHospitalId();
+        UUID userId = authUtils.resolveUserId(auth).orElse(null);
+        if (hospitalId == null || userId == null || !roleValidator.canApproveRenewal(userId, hospitalId, false)) {
+            return java.util.Optional.empty();
+        }
+        return staffRepository.findByUserIdAndHospitalId(userId, hospitalId);
+    }
+
+    /**
+     * The prescribers whose requests the caller answers: their own staff record, and the prescribers of the
+     * departments they head at the acting hospital who no longer answer there ({@code RenewalAlertRouting}).
+     */
+    private java.util.Set<UUID> answeredPrescribers(Authentication auth, UUID ownStaffId) {
+        java.util.Set<UUID> answered = new java.util.LinkedHashSet<>();
+        answered.add(ownStaffId);
+        coverRecordHere(auth).ifPresent(cover -> {
+            UUID hospitalId = roleValidator.getCurrentHospitalId();
+            answered.addAll(routing().noLongerAnswering(cover,
+                staffRepository.findInDepartmentsHeadedBy(cover.getId(), hospitalId), hospitalId));
+        });
+        return answered;
     }
 
     @Override
@@ -110,6 +153,10 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
                             hospitalId, RefillStatus.REQUESTED);
         }
         UUID staffId = resolveStaffId(auth);
+        java.util.Set<UUID> answered = answeredPrescribers(auth, staffId);
+        if (answered.size() > 1) {
+            return refillRequestRepository.countAnsweredBy(answered, java.util.EnumSet.of(RefillStatus.REQUESTED));
+        }
         return refillRequestRepository.countByPrescription_Staff_IdAndStatus(staffId, RefillStatus.REQUESTED);
     }
 
@@ -158,7 +205,11 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
 
         Prescription prescription = refill.getPrescription();
         Staff prescriber = prescription != null ? prescription.getStaff() : null;
-        if (prescriber == null || !staffId.equals(prescriber.getId())) {
+        // QA D3301: the prescriber, or the designated cover of a prescriber who no longer answers. The cover is
+        // the caller's staff record at the hospital they act at, never another hospital's.
+        boolean answers = prescriber != null && (staffId.equals(prescriber.getId())
+            || coverRecordHere(auth).map(cover -> routing().isCoverOf(cover.getId(), prescription)).orElse(false));
+        if (!answers) {
             throw new AccessDeniedException("patient.refill.decision.notOwnPrescription");
         }
         UUID deciderId = requireAuthorisedPrescriber(auth, prescription, newStatus);
@@ -344,12 +395,15 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
     /** Tells the prescriber what the pharmacy flagged or refused, in the language they read it in. */
     private void notifyPrescriber(RefillRequest refill, String messageKey, String note) {
         Prescription prescription = refill.getPrescription();
-        Staff prescriber = prescription != null ? prescription.getStaff() : null;
-        String username = prescriber != null && prescriber.getUser() != null ? prescriber.getUser().getUsername() : null;
+        // QA D3301: whoever answers the request (the prescriber, else the designated cover), nobody else.
+        Staff reader = prescription == null ? null : routing().answererOf(prescription).orElse(null);
+        String username = reader != null && reader.getUser() != null ? reader.getUser().getUsername() : null;
         if (username == null || username.isBlank()) {
             return;
         }
-        Object medicationName = prescription.getMedicationName() != null
+        // The medicine is named to its prescriber only; a cover reads « the prescription » and opens the request.
+        boolean toPrescriber = com.example.hms.service.pharmacy.RenewalAlertRouting.isPrescriber(reader, prescription);
+        Object medicationName = toPrescriber && prescription.getMedicationName() != null
                 ? prescription.getMedicationName() : NotificationLocalizer.key(MSG_MEDICATION_FALLBACK);
         String patientName = refill.getPatient() != null ? refill.getPatient().getFullName() : "";
         try {

@@ -107,6 +107,21 @@
   font-size: 0.85rem;
 }
 
+/* QA D3150: the desk's verification, under the status badge. */
+.verified-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.verified-icon {
+  font-size: 1rem;
+  color: #2e7d32;
+}
+
 .actions-cell {
   display: flex;
   gap: 6px;
@@ -278,4 +293,101 @@
   &:hover {
     color: #0f172a;
   }
+}
+
+/* Owner decision 2026-11-22: another hospital's policy, identity only, to verify. */
+.other-policies {
+  border: 1px dashed #f59e0b;
+  border-radius: 12px;
+  background: #fffbeb;
+  padding: 0.9rem 1rem;
+  min-width: 0;
+
+  h4 {
+    margin: 0 0 0.25rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* The shared .muted grey is too light on the tinted block (AA): these lines use the secondary text token. */
+.other-hint,
+.other-declared,
+.other-no-agreement {
+  color: var(--text-secondary);
+}
+
+.other-hint {
+  margin: 0 0 0.75rem;
+}
+
+.other-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.other-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.other-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.other-insurer {
+  overflow-wrap: anywhere;
+}
+
+.flag-badge.to-verify-badge {
+  margin-left: 0;
+}
+
+.other-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.5rem 1rem;
+  margin: 0;
+
+  dt {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  dd {
+    margin: 0;
+    font-size: 0.88rem;
+    color: #374151;
+    overflow-wrap: anywhere;
+  }
+}
+
+.other-reuse {
+  align-self: flex-start;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+}
+
+.other-no-agreement,
+.other-declared {
+  margin: 0;
+  overflow-wrap: anywhere;
 }

@@ -73,6 +73,20 @@ public interface PatientInsuranceService {
      */
     PatientInsuranceResponseDTO setPayerPlan(UUID insuranceId, UUID payerPlanId, Locale locale);
 
+    /**
+     * Owner decision 2026-11-22: the patient's policies recorded at OTHER hospitals this one may read
+     * (RecordAccessPolicy), by their identity only, « à vérifier ». Hospital admin, billing specialist and reception
+     * of the acting hospital only.
+     */
+    List<com.example.hms.payload.dto.OtherHospitalInsuranceDTO> getOtherHospitalPolicies(UUID patientId);
+
+    /**
+     * Owner decision 2026-11-22: the acting hospital's OWN coverage made from a policy recorded at another hospital
+     * (its identity fields only), unverified, with no plan; named after this hospital's payer when it has an agreement
+     * with that insurer, else an identity-only record. The source row is never changed.
+     */
+    PatientInsuranceResponseDTO reuseOtherHospitalPolicy(UUID sourceInsuranceId);
+
 
 }
 

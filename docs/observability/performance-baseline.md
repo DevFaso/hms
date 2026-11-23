@@ -1,5 +1,58 @@
 # Pharmacy Dispense — Performance Baseline
 
+## Go-live registration, consultation and billing scripts (C-O2)
+
+The scripts `scripts/perf/registration-k6.js`, `consultation-k6.js` and
+`billing-k6.js` add reproducible load profiles. These are **proposed acceptance
+targets, not measurements**: Codex has not run them on dev. Claude owns the dev
+run and records the commit, fixture set, hardware, concurrency and measured
+percentiles before any scorecard PASS.
+
+Each profile ramps to 10 concurrent users over 30 seconds, holds for 2 minutes,
+then ramps down for 30 seconds. Proposed server targets: read p95 below 1 second,
+synthetic draft creation p95 below 2 seconds and HTTP failures below 1%. Start
+with one virtual user when checking fixtures; agree a peak-load profile with
+operations before increasing concurrency. Browser startup is measured separately:
+visible loading feedback within 3 seconds under Slow 3G, with a slow-connection
+message after 20 seconds. That target does not promise interactive startup in
+3 seconds or change the pharmacy targets below.
+
+The default is read-only. Set `BASE_URL` explicitly to localhost `/api` or
+`https://dev.e-keneya.com/api`; other hosts and redirects are refused. Supply a
+test `AUTH_TOKEN` and fixture `HOSPITAL_ID` via the process environment. Tokens,
+response bodies and real patient fixtures must never be committed or printed.
+
+Example after the owner has approved the dev load window:
+
+```powershell
+# AUTH_TOKEN and HOSPITAL_ID are supplied privately to this process.
+$env:BASE_URL = 'https://dev.e-keneya.com/api'
+k6 run scripts/perf/registration-k6.js
+k6 run scripts/perf/consultation-k6.js
+k6 run scripts/perf/billing-k6.js
+```
+
+Synthetic writes require all of `ALLOW_SYNTHETIC_WRITES=yes`, a unique `RUN_ID`,
+`MOCK_GATEWAYS_CONFIRMED=yes` and `FIXTURE_FILE` pointing to a private JSON
+request fixture. This flag is the operator's assertion, not a remote check:
+verify that SMS/e-mail gateways are mocked before opting in. Use an isolated
+fixture hospital and a suitably scoped test role (receptionist, doctor or
+accountant respectively), never real patient data. Each fixture can contain
+`{{RUN_ID}}`, `{{VU}}` and `{{ITER}}` to make identifiers unique. Registration
+fixtures must use synthetic identity/contact data; consultation fixtures must
+refer only to seeded synthetic patients, staff and departments. Billing fixtures
+must explicitly have `status: "DRAFT"`; the script refuses any other status.
+No script posts payments, checkout, refunds or insurance settlements, retries
+writes automatically, or deletes records. The dev owner plans fixture cleanup
+and verifies outbound communications before and after the run.
+
+Each script uses the actual list/create controller paths (`/patients`,
+`/encounters`, `/billing-invoices/hospital/{hospitalId}` and
+`/billing-invoices`). Save aggregate k6 metrics with the acceptance evidence;
+the scripts discard response bodies and label metrics by fixed operation names.
+
+---
+
 > Roadmap row: **v1.0 / Pharmacy / T-72 perf baseline** ([`docs/roadmap.csv`](../roadmap.csv))
 >
 > What this is: a recorded, reproducible measurement of how the dispense path

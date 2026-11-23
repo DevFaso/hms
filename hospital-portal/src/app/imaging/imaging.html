@@ -16,7 +16,7 @@
       }
     </div>
   </div>
-  @if (canSeeResults) {
+  @if (canSeeResults || canEditCatalogue) {
     <div class="filter-bar">
       <div class="tabs">
         <button
@@ -35,8 +35,23 @@
         >
           {{ 'IMAGING.RESULTS_TAB' | translate }}
         </button>
+        @if (canEditCatalogue) {
+          <!-- QA D3450 (r70): the hospital admin and the radiologist keep the imaging catalogue. -->
+          <button
+            class="tab-btn"
+            data-testid="imaging-catalogue-tab"
+            [class.active]="view() === 'catalogue'"
+            (click)="setView('catalogue')"
+            [attr.aria-pressed]="view() === 'catalogue'"
+          >
+            {{ 'IMAGING_CATALOGUE.TAB' | translate }}
+          </button>
+        }
       </div>
     </div>
+  }
+  @if (view() === 'catalogue') {
+    <app-imaging-catalogue />
   }
   @if (canPickHospital) {
     <!-- User decision 2026-11-14: the super-admin reads every hospital, or one. -->
@@ -237,7 +252,7 @@
               <th scope="col">{{ 'IMAGING.BODY_REGION' | translate }}</th>
               <th scope="col">{{ 'IMAGING.PRIORITY' | translate }}</th>
               <th scope="col">{{ 'IMAGING.ORDERED' | translate }}</th>
-              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+              <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
             </tr>
           </thead>
           <tbody>
@@ -465,7 +480,7 @@
               <th scope="col">{{ 'IMAGING.INTERPRETED_BY' | translate }}</th>
               <th scope="col">{{ 'COMMON.DATE' | translate }}</th>
               <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+              <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
             </tr>
           </thead>
           <tbody>
@@ -554,7 +569,8 @@
         data-testid="imaging-report-panel"
       >
         <div class="detail-header">
-          <h2 id="imaging-panel-1-title">
+          <!-- QA D3153: on paper the print header carries the title; it is printed once. -->
+          <h2 id="imaging-panel-1-title" class="no-print">
             {{ rep.reportTitle || rep.reportNumber || ('IMAGING.REPORT' | translate) }}
           </h2>
           <div class="header-actions no-print">
@@ -597,6 +613,18 @@
           </div>
         </div>
         <div class="detail-body">
+          <!-- QA D2642 (r65): the printed report says which hospital issued it and whom it is about. -->
+          <app-print-identity
+            [hospitalName]="rep.hospitalName"
+            [hospitalAddress]="rep.hospitalAddress"
+            [title]="rep.reportTitle || rep.reportNumber || ('IMAGING.REPORT' | translate)"
+            [patientName]="rep.patientDisplayName"
+            [dateOfBirth]="rep.patientDateOfBirth"
+            [sex]="rep.patientGender"
+            [mrn]="rep.patientMrn"
+            [prescriber]="rep.orderingProviderName"
+            [examDate]="reportExamDate(rep)"
+          />
           @if (rep.signed) {
             <div class="signed-banner">
               <span class="material-symbols-outlined">verified</span>
@@ -684,16 +712,45 @@
             </p>
           }
           <div class="detail-grid">
-            <div class="detail-field" data-testid="imaging-report-drawer-patient">
+            <div class="detail-field no-print" data-testid="imaging-report-drawer-patient">
               <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span><span
                 class="field-value"
                 >{{ rep.patientDisplayName || ('COMMON.UNKNOWN' | translate) }}</span
               >
             </div>
-            <div class="detail-field" data-testid="imaging-report-drawer-mrn">
+            <div class="detail-field no-print" data-testid="imaging-report-drawer-mrn">
               <span class="field-label">{{ 'IMAGING.MRN' | translate }}</span><span
                 class="field-value"
                 >{{ rep.patientMrn || '—' }}</span
+              >
+            </div>
+            <!-- QA D2642 (r65): who the patient is and what was asked, on screen. QA D3153: on
+                 paper the print header carries the identity, so these fields print once, there. -->
+            <div class="detail-field no-print" data-testid="imaging-report-drawer-dob">
+              <span class="field-label">{{ 'PATIENTS.DATE_OF_BIRTH' | translate }}</span><span
+                class="field-value"
+                >{{
+                  rep.patientDateOfBirth
+                    ? (rep.patientDateOfBirth | serverTime | date: 'mediumDate')
+                    : '—'
+                }}
+                @if (rep.patientGender) {
+                  · {{ rep.patientGender | enumLabel: 'gender' }}
+                }
+              </span>
+            </div>
+            <div class="detail-field no-print" data-testid="imaging-report-drawer-prescriber">
+              <span class="field-label">{{ 'IMAGING.ORDERING_PROVIDER' | translate }}</span><span
+                class="field-value"
+                >{{ rep.orderingProviderName || '—' }}</span
+              >
+            </div>
+            <div class="detail-field no-print" data-testid="imaging-report-drawer-exam-date">
+              <span class="field-label">{{ 'PRINT_IDENTITY.EXAM_DATE' | translate }}</span><span
+                class="field-value"
+                >{{
+                  reportExamDate(rep) ? (reportExamDate(rep) | serverTime | dateTime) : '—'
+                }}</span
               >
             </div>
             <div class="detail-field">
@@ -775,6 +832,12 @@
               </div>
             </div>
           }
+          @if (rep.clinicalQuestion) {
+            <div class="detail-notes" data-testid="imaging-report-drawer-clinical-question">
+              <span class="field-label">{{ 'IMAGING.CLINICAL_QUESTION' | translate }}</span>
+              <p>{{ rep.clinicalQuestion }}</p>
+            </div>
+          }
           @if (rep.technique) {
             <div class="detail-notes">
               <span class="field-label">{{ 'IMAGING.TECHNIQUE' | translate }}</span>
@@ -796,7 +859,6 @@
           <!-- V317: the report's images, streamed through e-Keneya from the PACS. -->
           @if (canViewImages) {
             <div class="detail-notes" data-testid="imaging-report-images">
-              <span class="field-label">{{ 'IMAGING_PACS.IMAGES' | translate }}</span>
               @if (rep.pacsViewerUrl) {
                 <button
                   type="button"
@@ -989,7 +1051,14 @@
     >
       <div class="modal-header">
         <h2 id="imaging-dialog-2-title">
-          {{ (reportEditId() ? 'IMAGING.EDIT_REPORT' : 'IMAGING.AUTHOR_REPORT') | translate }}
+          {{
+            (writingAddendum()
+              ? 'IMAGING.REVISE_SIGNED_REPORT'
+              : reportEditId()
+                ? 'IMAGING.EDIT_REPORT'
+                : 'IMAGING.AUTHOR_REPORT'
+            ) | translate
+          }}
         </h2>
         <button
           class="modal-close"
@@ -1001,6 +1070,15 @@
       </div>
       <div class="modal-body">
         <!-- QA D1923 (r53): the report is written for this patient. -->
+        @if (addendumSource(); as source) {
+          <section class="detail-notes" data-testid="addendum-original-report">
+            <h3>{{ 'IMAGING.REVISION_ORIGINAL' | translate }}</h3>
+            <strong>{{ 'IMAGING.FINDINGS' | translate }}</strong>
+            <p>{{ source.findings || '—' }}</p>
+            <strong>{{ 'IMAGING.IMPRESSION' | translate }}</strong>
+            <p>{{ source.impression || '—' }}</p>
+          </section>
+        }
         <p class="report-patient" data-testid="imaging-report-form-patient">
           <strong>{{ 'PATIENTS.PATIENT_NAME' | translate }}{{ 'COMMON.COLON' | translate }}</strong>
           {{ reportPatient()?.name || ('COMMON.UNKNOWN' | translate) }}
@@ -1556,7 +1634,8 @@
               <select
                 required
                 id="img-hospitalId"
-                [(ngModel)]="form.hospitalId"
+                [ngModel]="form.hospitalId"
+                (ngModelChange)="onOrderHospitalChange($event)"
                 [title]="'ENCOUNTERS.HOSPITAL' | translate"
               >
                 <option value="">{{ 'IMAGING.SELECT_HOSPITAL' | translate }}</option>
@@ -1567,12 +1646,67 @@
             }
           </div>
         </div>
+        <!-- QA D3154 (r70a): the visit the study is asked in, as a lab order names its visit. -->
+        @if (!editing() && form.patientId) {
+          <div class="form-row">
+            <div class="field full-width" data-testid="img-visit-field">
+              @if (orderVisits().length) {
+                <label for="img-encounterId">{{ 'IMAGING.ORDER_VISIT' | translate }}</label>
+                <select
+                  id="img-encounterId"
+                  [(ngModel)]="form.encounterId"
+                  name="encounterId"
+                  [title]="'IMAGING.ORDER_VISIT' | translate"
+                >
+                  @for (e of orderVisits(); track e.id) {
+                    <option [value]="e.id">
+                      {{ orderVisitLabel(e)
+                      }}{{
+                        e.encounterType
+                          ? ' · ' + (e.encounterType | enumLabel: 'encounterType')
+                          : ''
+                      }}
+                    </option>
+                  }
+                </select>
+              } @else {
+                <span class="field-label">{{ 'IMAGING.ORDER_VISIT' | translate }}</span>
+                <p class="field-hint" data-testid="img-no-open-visit">
+                  {{ 'IMAGING.ORDER_NO_OPEN_VISIT' | translate }}
+                </p>
+              }
+            </div>
+          </div>
+        }
+        <!-- QA D3450 / D3254 (r70): the exam is picked from the hospital's imaging catalogue. -->
+        <div class="form-row">
+          <div class="field full-width">
+            <label for="img-catalogueExam">{{ 'IMAGING_CATALOGUE.EXAM' | translate }}</label>
+            <select
+              id="img-catalogueExam"
+              data-testid="img-catalogue-exam"
+              data-server-field="catalogueItemId"
+              [ngModel]="form.catalogueItemId ?? ''"
+              (ngModelChange)="pickCatalogueExam($event)"
+              [title]="'IMAGING_CATALOGUE.EXAM' | translate"
+            >
+              <option value="">{{ 'IMAGING_CATALOGUE.FREE_TEXT_OPTION' | translate }}</option>
+              @for (exam of catalogue(); track exam.id) {
+                <option [value]="exam.id">{{ exam.label }} ({{ exam.code }})</option>
+              }
+            </select>
+            <p class="field-hint" data-testid="img-catalogue-hint">
+              {{ catalogueHintKey() | translate }}
+            </p>
+          </div>
+        </div>
         <div class="form-row">
           <div class="field">
             <label for="img-modality">{{ 'IMAGING.MODALITY' | translate }}</label>
             <select
               id="img-modality"
               [(ngModel)]="form.modality"
+              [disabled]="!!pickedExam()?.modality"
               [title]="'IMAGING.MODALITY' | translate"
             >
               @for (m of modalities; track m) {
@@ -1601,6 +1735,7 @@
               id="img-studyType"
               type="text"
               [(ngModel)]="form.studyType"
+              [readOnly]="!!pickedExam()"
               [placeholder]="'IMAGING.STUDY_TYPE_PLACEHOLDER' | translate"
             />
           </div>
@@ -1628,6 +1763,9 @@
               }
             </select>
           </div>
+        </div>
+        <!-- QA D2644 (r65): a full-width field takes its own row; beside it « Latéralité » was squeezed to nothing. -->
+        <div class="form-row">
           <div class="field full-width">
             <label for="img-clinicalQ">{{ 'IMAGING.CLINICAL_QUESTION' | translate }}</label>
             <input

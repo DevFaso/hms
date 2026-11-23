@@ -1,5 +1,7 @@
 package com.example.hms.service.support;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.cdshooks.rules.PediatricDoseRule;
 import com.example.hms.config.SecurityConstants;
 import com.example.hms.enums.ChildbearingPotential;
@@ -20,6 +22,7 @@ import java.util.Set;
  * apply here. That age rule and the roles below are local choices informed by the guidance, not
  * requirements prescribed by AABB.
  */
+@ProvisionalRule(ClinicalRuleSetKey.BLOOD_EMERGENCY_RELEASE)
 public final class EmergencyReleasePolicy {
 
     /** What an O positive red-cell bag needs before it goes out uncrossmatched. */

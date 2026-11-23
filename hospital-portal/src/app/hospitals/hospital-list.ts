@@ -29,6 +29,7 @@ import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
 import { missingRequiredMessage } from '../shared/required-fields';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { refusedFieldReasons } from '../shared/refusal-reason';
+import { PhonePipe } from '../shared/pipes/phone.pipe';
 
 type RequiredHospitalField = 'name' | 'phoneNumber' | 'country' | 'city' | 'address';
 
@@ -83,6 +84,7 @@ const REQUIRED_HOSPITAL_FIELDS: readonly {
   selector: 'app-hospital-list',
   standalone: true,
   imports: [
+    PhonePipe,
     PhoneFieldDirective,
     SubmitGuardDirective,
     ModalDialogDirective,

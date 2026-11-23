@@ -1,5 +1,7 @@
 package com.example.hms.service;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.cdshooks.CdsCriticalBlockException;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
 import com.example.hms.cdshooks.rules.CdsRuleEngine;
@@ -54,6 +56,7 @@ import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
+@ProvisionalRule(ClinicalRuleSetKey.ALLERGY_OVERRIDE_REASON)
 public class PrescriptionServiceImpl implements PrescriptionService {
 
     private static final Logger logger = LoggerFactory.getLogger(PrescriptionServiceImpl.class);
@@ -152,6 +155,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
     /** Round 18: the prescriber's step-up re-authentication at a controlled signature. */
     private final PrescriberReauthenticationService prescriberReauthentication;
+    /** QA D2553: a take-home order signed joins its stay's discharge summary. */
+    private final DischargeTakeHomeMedicines takeHomeMedicines;
 
     /**
      * Round 19 (QA D1096): the reviewer written on a paediatric dose review.
@@ -598,6 +603,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             prescription.setPediatricDoseUrgentExceptionAt(signedAt);
         }
         PrescriptionResponseDTO signed = prescriptionMapper.toResponseDTO(prescriptionRepository.save(prescription));
+        if (takeHomeMedicines != null) {
+            takeHomeMedicines.onSigned(prescription);
+        }
         if (allergyAcknowledgement != null) {
             // The warning, the reason, the signer and the time together: this row (actor, its own time,
             // the allergy the warning named, the reason's digest) beside the order's signer, time and reason.
@@ -934,7 +942,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 com.example.hms.service.impl.PrnMinInterval.highestDosesPerDay(
                     com.example.hms.service.impl.PrnMinInterval.isAsNeeded(prescription),
                     prescription.getPrnMinIntervalHours()),
-                prescription.getRoute(), item == null ? null : item.getForm()));
+                prescription.getRoute(), item == null ? null : item.getForm(),
+                // QA D3303: an order for home is not added to the ward orders the discharge stops.
+                prescription.isTakeHome()));
         return cards == null ? List.of() : cards;
     }
 
@@ -2455,6 +2465,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         voidPreparedFillOnEdit(existing, statusBefore);
         releaseQueueClaimOnEdit(existing, currentUserId);
         Prescription saved = prescriptionRepository.save(existing);
+        takeHomeLeavesTheSummary(saved);
         auditSignedWithdrawalAfterCommit(saved, currentUserId, statusBefore, byPrescriber, reason);
     }
 
@@ -2482,8 +2493,19 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         voidPreparedFillOnEdit(existing, statusBefore);
         releaseQueueClaimOnEdit(existing, currentUserId);
         Prescription saved = prescriptionRepository.save(existing);
+        takeHomeLeavesTheSummary(saved);
         auditSignedWithdrawalAfterCommit(saved, currentUserId, statusBefore, byPrescriber, reason);
         return prescriptionMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * Review of #1276 (QA D2553): a withdrawn take-home order leaves its stay's discharge summary, so the
+     * stopped drug and its replacement are not both listed as going home.
+     */
+    private void takeHomeLeavesTheSummary(Prescription withdrawn) {
+        if (takeHomeMedicines != null) {
+            takeHomeMedicines.onWithdrawn(withdrawn);
+        }
     }
 
     /**
@@ -3506,7 +3528,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 edited == null ? null : edited.getId(),
                 prnDosesPerDay(request, edited),
                 routeOrderedBy(request, edited),
-                catalogItem == null ? null : catalogItem.getForm()));
+                catalogItem == null ? null : catalogItem.getForm(),
+                // QA D3303: an order for home is not added to the ward orders the discharge stops.
+                request.getTakeHome() != null ? request.getTakeHome() : edited != null && edited.isTakeHome()));
         if (advisories.isEmpty()) {
             return advisories;
         }

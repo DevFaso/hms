@@ -121,7 +121,11 @@
               {{
                 'LAB_QC.TARGET.CURRENT'
                   | translate
-                    : { mean: target.targetMean, sd: target.targetSd, lot: target.lotNumber || '—' }
+                    : {
+                        mean: (target.targetMean | localeNumber),
+                        sd: (target.targetSd | localeNumber),
+                        lot: target.lotNumber || '—',
+                      }
               }}
             </span>
             @if (liveFlag(); as flag) {
@@ -639,7 +643,7 @@
                                     ) | translate
                                   }}
                                 </td>
-                                <td>{{ run.measuredValue }}</td>
+                                <td>{{ run.measuredValue | localeNumber }}</td>
                                 <td>{{ run.lotNumber || '—' }}</td>
                                 <td>{{ run.recordedByDisplay || '—' }}</td>
                                 <td>

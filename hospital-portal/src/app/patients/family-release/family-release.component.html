@@ -11,7 +11,15 @@
       </h3>
       <p class="family-release__hint">{{ 'SENSITIVE_POLICY.RELEASE.HINT' | translate }}</p>
       <p class="family-release__provisional" role="note" data-testid="family-release-provisional">
-        {{ 'SENSITIVE_POLICY.RELEASE.PROVISIONAL' | translate: { age: view.adolescentAge } }}
+        <app-rule-status
+          ruleKey="MINOR_HIV_RESULT_RELEASE"
+          [detail]="
+            'CLINICAL_RULES.SURFACE.MINOR_RELEASE_AGE' | translate: { age: view.adolescentAge }
+          "
+          >{{
+            'SENSITIVE_POLICY.RELEASE.PROVISIONAL' | translate: { age: view.adolescentAge }
+          }}</app-rule-status
+        >
       </p>
 
       <h4 class="family-release__subtitle">

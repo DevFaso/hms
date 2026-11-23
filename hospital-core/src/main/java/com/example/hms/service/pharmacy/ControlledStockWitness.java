@@ -29,7 +29,7 @@ public class ControlledStockWitness {
 
     /** Roles whose holder may witness a controlled-substance movement (QA D157). */
     public static final Set<String> WITNESS_ROLE_CODES =
-            Set.of("ROLE_PHARMACIST", "ROLE_STORE_MANAGER", "ROLE_HOSPITAL_ADMIN");
+            Set.of("ROLE_PHARMACIST", "ROLE_PHARMACY_VERIFIER", "ROLE_STORE_MANAGER", "ROLE_HOSPITAL_ADMIN");
 
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final UserRepository userRepository;

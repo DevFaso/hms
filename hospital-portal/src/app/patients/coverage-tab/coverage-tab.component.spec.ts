@@ -90,7 +90,10 @@ describe('CoverageTabComponent (P3 #21 additions)', () => {
       'update',
       'delete',
       'setPayerPlan',
+      'otherHospitals',
+      'reuseOtherHospital',
     ]);
+    insuranceSpy.otherHospitals.and.returnValue(of([]));
     payersSpy = jasmine.createSpyObj('PayerCatalogueService', ['list']);
     payersSpy.list.and.returnValue(of([MUT_A]));
     insuranceSpy.forPatient.and.returnValue(of([]));
@@ -308,6 +311,39 @@ describe('CoverageTabComponent (P3 #21 additions)', () => {
     expect(cells[1].textContent).toContain('COVERAGE.NO_PLAN');
   });
 
+  it('QA D3150: a verified coverage says « Assurance vérifiée » with who verified it and when', () => {
+    insuranceSpy.forPatient.and.returnValue(
+      of([
+        {
+          id: 'i1',
+          patientId: 'p1',
+          providerName: 'Mutuelle Test A',
+          policyNumber: 'MTA-TEST-0002',
+          verifiedAt: '2026-11-22T02:52:30',
+          verifiedByName: 'Awa Ouedraogo',
+        },
+        { id: 'i2', patientId: 'p1', providerName: 'Ancienne assurance', policyNumber: 'X-1' },
+      ]),
+    );
+    fixture.detectChanges();
+    const lines = fixture.nativeElement.querySelectorAll('[data-testid="coverage-verified"]');
+    expect(lines.length).toBe(1);
+    expect(lines[0].textContent).toContain('COVERAGE.VERIFIED');
+    expect(lines[0].textContent).toContain('Awa Ouedraogo');
+    expect(lines[0].textContent).toContain('2026');
+    // It wraps inside its cell at every width, a long name included.
+    const host = fixture.nativeElement as HTMLElement;
+    host.style.display = 'block';
+    for (const width of [1366, 768, 390]) {
+      host.style.width = `${width - 32}px`;
+      fixture.detectChanges();
+      const cell = (lines[0] as HTMLElement).closest('td')!;
+      expect((lines[0] as HTMLElement).getBoundingClientRect().width)
+        .withContext(`verified line at ${width}px`)
+        .toBeLessThanOrEqual(cell.getBoundingClientRect().width + 1);
+    }
+  });
+
   it('links a coverage to a plan of the hospital and shows the answer', () => {
     insuranceSpy.forPatient.and.returnValue(
       of([{ id: 'i1', patientId: 'p1', providerName: 'Mutuelle Test A', policyNumber: 'P-1' }]),
@@ -359,5 +395,74 @@ describe('CoverageTabComponent (P3 #21 additions)', () => {
     expect(insuranceSpy.setPayerPlan).toHaveBeenCalledWith('i1', null);
     expect(toastSpy.error).toHaveBeenCalled();
     expect(component.planTarget()).not.toBeNull();
+  });
+
+  /** Owner decision 2026-11-22: another hospital's policy, identity only, to verify. */
+  const otherPolicy = (agreementHere: boolean) => ({
+    sourceInsuranceId: 'src-1',
+    sourceHospitalName: 'Clinique Test B (FICTIVE)',
+    insurerName: 'Mutuelle Test A (FICTIVE)',
+    policyNumber: 'MTA-0042',
+    planName: 'Formule Test Essentielle',
+    holderRelationship: 'Conjoint',
+    effectiveDate: '2026-01-01',
+    expirationDate: '2026-12-31',
+    declaredOn: '2026-02-14',
+    agreementHere,
+  });
+
+  it("shows another hospital's policy as declared there, to verify, and takes it over", () => {
+    insuranceSpy.otherHospitals.and.returnValue(of([otherPolicy(true)]));
+    insuranceSpy.reuseOtherHospital.and.returnValue(of({ id: 'own-1', patientId: 'p1' }));
+    fixture.detectChanges();
+
+    const block = fixture.nativeElement.querySelector('[data-testid="other-hospital-policies"]');
+    expect(block).toBeTruthy();
+    expect(block.textContent).toContain('MTA-0042');
+    expect(block.textContent).toContain('COVERAGE.OTHER_DECLARED');
+    expect(block.textContent).toContain('COVERAGE.TO_VERIFY');
+    expect(block.textContent).not.toContain('COVERAGE.VERIFIED');
+    expect(block.querySelector('[data-testid="other-no-agreement"]')).toBeNull();
+
+    block.querySelector('[data-testid="reuse-other-policy"]').click();
+    fixture.detectChanges();
+
+    expect(insuranceSpy.reuseOtherHospital).toHaveBeenCalledWith('src-1');
+    expect(toastSpy.success).toHaveBeenCalledWith('COVERAGE.OTHER_REUSED');
+    expect(insuranceSpy.forPatient).toHaveBeenCalledTimes(2);
+  });
+
+  it('without an agreement here it says so, and a takeover records the policy only', () => {
+    insuranceSpy.otherHospitals.and.returnValue(of([otherPolicy(false)]));
+    insuranceSpy.reuseOtherHospital.and.returnValue(of({ id: 'own-1', patientId: 'p1' }));
+    fixture.detectChanges();
+
+    const block = fixture.nativeElement.querySelector('[data-testid="other-hospital-policies"]');
+    expect(block.querySelector('[data-testid="other-no-agreement"]')).toBeTruthy();
+    block.querySelector('[data-testid="reuse-other-policy"]').click();
+
+    expect(toastSpy.success).toHaveBeenCalledWith('COVERAGE.OTHER_REUSED_NO_AGREEMENT');
+  });
+
+  it('a refused takeover says why and keeps the block', () => {
+    insuranceSpy.otherHospitals.and.returnValue(of([otherPolicy(true)]));
+    insuranceSpy.reuseOtherHospital.and.returnValue(
+      throwError(() => ({ status: 404, error: { message: 'Assurance introuvable' } })),
+    );
+    fixture.detectChanges();
+    component.reuseOther(otherPolicy(true));
+
+    expect(toastSpy.error).toHaveBeenCalledWith('Assurance introuvable');
+    expect(component.reusingId()).toBeNull();
+    expect(component.otherPolicies().length).toBe(1);
+  });
+
+  it('no block when no other hospital holds a policy this one may read', () => {
+    fixture.detectChanges();
+
+    expect(insuranceSpy.otherHospitals).toHaveBeenCalledWith('p1');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="other-hospital-policies"]'),
+    ).toBeNull();
   });
 });

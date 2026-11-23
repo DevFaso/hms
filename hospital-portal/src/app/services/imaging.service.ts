@@ -47,6 +47,9 @@ export interface ImagingOrderResponse {
   hospitalName: string;
   modality: ImagingModality;
   studyType: string;
+  /** QA D3450 / D3254 (r70): the catalogue exam the order was picked from; null for free text. */
+  catalogueItemId?: string | null;
+  catalogueCode?: string | null;
   bodyRegion: string;
   laterality: ImagingLaterality | '';
   priority: ImagingPriority;
@@ -131,6 +134,12 @@ export interface ImagingOrderRequest {
   encounterId?: string;
   modality: ImagingModality;
   studyType: string;
+  /**
+   * QA D3450 / D3254 (r70): the exam picked from the hospital's imaging catalogue. The server then
+   * writes the exam's own name and modality, prices the order by it and decides a family reader's
+   * access by its flag. Absent: a free-text order.
+   */
+  catalogueItemId?: string;
   bodyRegion?: string;
   priority: ImagingPriority;
   laterality?: ImagingLaterality;
@@ -217,6 +226,16 @@ export interface ImagingReportResponse {
   examContrastAdministered?: boolean | null;
   examContrastDetails?: string | null;
   examRadiationDoseMgy?: number | null;
+  /** QA D2642 (r65): what the printed report says to identify the patient and the request. */
+  hospitalName?: string | null;
+  hospitalAddress?: string | null;
+  patientDateOfBirth?: string | null;
+  patientGender?: string | null;
+  orderingProviderName?: string | null;
+  clinicalQuestion?: string | null;
+  orderedAt?: string | null;
+  /** When the study was acquired (the report's own, else the exam record's start). */
+  performedAt?: string | null;
   interpretingProviderName: string;
   signedByName: string;
   signedAt: string | null;
@@ -292,7 +311,10 @@ export interface ImagingReadingContext {
     value?: string | null;
     unit?: string | null;
     resultDate?: string | null;
-    abnormalFlag?: string | null;
+    /** QA D2640: the laboratory's grade, as the lab results screen shows it (HIGH, LOW, CRITICAL…). */
+    severityFlag?: string | null;
+    /** QA D2640: the range it was graded against, e.g. "62 - 106 µmol/L". */
+    referenceRange?: string | null;
     /** It corrects an earlier released value (QA D1016). */
     corrected?: boolean;
   } | null;

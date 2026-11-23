@@ -38,6 +38,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.example.hms.testsupport.RandomIds.withoutRandomIds;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
@@ -122,7 +123,7 @@ class PatientNotificationRendererTest {
             .startsWith("CMA Pissy : un nouveau résultat est disponible.")
             .contains("e-Keneya")
             .doesNotContain("7.2", "mmol", "HIV", "positive");
-        assertThat(prepared.toString()).doesNotContain("7070").doesNotContain("résultat");
+        assertThat(withoutRandomIds(prepared)).doesNotContain("7070").doesNotContain("résultat");
     }
 
     @Test

@@ -99,6 +99,7 @@ public class PdfInvoiceService {
             w.down(20);
             w.text(BODY, 11, MARGIN, t.get(HOSPITAL, hospitalName(invoice)));
             w.down(15);
+            hospitalContact(w, t, invoice);
             w.text(BODY, 11, MARGIN,
                 t.get("pdf.invoice.dates", t.fmt(invoice.getInvoiceDate()), t.fmt(invoice.getDueDate())));
             w.down(15);
@@ -295,6 +296,35 @@ public class PdfInvoiceService {
     public byte[] generateReceiptPdf(BillingInvoice invoice, PaymentTransaction payment, String receiptNumber,
                                      BigDecimal paidAsOfPayment, BigDecimal totalOverride, BigDecimal payerShareThen,
                                      boolean carriedOver, Locale locale) {
+        return generateReceiptPdf(invoice, payment, receiptNumber, paidAsOfPayment, totalOverride, payerShareThen,
+            carriedOver, null, locale);
+    }
+
+    /**
+     * QA D2523 (r65): the receipt also says what was paid for (the invoice's lines), at what time, who took the
+     * money ({@code receivedByName}, null when unknown) and how to reach the hospital. It used to give the date,
+     * the method and the amount only, so neither the patient nor the accountant could tell what the money was for.
+     * The lines are those standing when the money was received ({@link #linesWhenReceived}).
+     */
+    @SuppressWarnings("java:S107")
+    public byte[] generateReceiptPdf(BillingInvoice invoice, PaymentTransaction payment, String receiptNumber,
+                                     BigDecimal paidAsOfPayment, BigDecimal totalOverride, BigDecimal payerShareThen,
+                                     boolean carriedOver, String receivedByName, Locale locale) {
+        return generateReceiptPdf(invoice, payment, receiptNumber, paidAsOfPayment, totalOverride, payerShareThen,
+            carriedOver, receivedByName, linesWhenReceived(invoice.getInvoiceItems(), payment), locale);
+    }
+
+    /**
+     * Review of #1276 (QA D2523): {@code paidFor} is what the money was for, as it stood when it was received
+     * (QA D228: a receipt is one moment): a line added to the invoice later is not on an earlier receipt. A
+     * check-in copay folded onto a visit invoice (QA D210) was received before that invoice's lines existed:
+     * its caller passes the copay's own line.
+     */
+    @SuppressWarnings("java:S107")
+    public byte[] generateReceiptPdf(BillingInvoice invoice, PaymentTransaction payment, String receiptNumber,
+                                     BigDecimal paidAsOfPayment, BigDecimal totalOverride, BigDecimal payerShareThen,
+                                     boolean carriedOver, String receivedByName, List<InvoiceItem> paidFor,
+                                     Locale locale) {
         PdfLabels t = PdfLabels.of(messageSource, locale);
         try (var doc = new PDDocument()) {
             var w = new Writer(doc);
@@ -303,14 +333,14 @@ public class PdfInvoiceService {
             w.down(20);
             w.text(BODY, 11, MARGIN, t.get(HOSPITAL, hospitalName(invoice)));
             w.down(15);
+            hospitalContact(w, t, invoice);
             w.text(BODY, 11, MARGIN, t.get("pdf.receipt.number", safe(receiptNumber)));
             w.down(15);
             w.text(BODY, 11, MARGIN, t.get("pdf.receipt.invoice", safe(invoice.getInvoiceNumber())));
             w.down(15);
             w.text(BODY, 11, MARGIN, t.get(PATIENT, patientLine(invoice)));
             w.down(15);
-            w.text(BODY, 11, MARGIN, t.get("pdf.receipt.date", t.fmt(payment.getPaymentDate())));
-            w.down(15);
+            receiptMoment(w, t, payment, receivedByName);
             boolean hasReference = payment.getReferenceNumber() != null && !payment.getReferenceNumber().isBlank();
             if (hasReference && payment.getPaymentMethod() == com.example.hms.enums.PaymentMethod.MOBILE_MONEY) {
                 // Billing plan PR 9: "Orange Money, réf. …" on one line.
@@ -326,6 +356,13 @@ public class PdfInvoiceService {
             if (carriedOver) {
                 w.down(15);
                 w.text(BODY, 11, MARGIN, t.get("pdf.receipt.carriedOver"));
+            }
+            receiptPurpose(w, t, paidFor);
+            // QA D3251 (r70): money received on this invoice before this receipt (a copay credited to it).
+            BigDecimal before = nz(paidAsOfPayment).subtract(nz(payment.getAmount()));
+            if (before.signum() > 0) {
+                w.down(15);
+                w.text(BODY, 10, MARGIN + 12, t.get("pdf.receipt.paidBefore", money(before)));
             }
             w.down(28);
             w.text(BOLD, 14, MARGIN, t.get("pdf.receipt.amount", money(payment.getAmount())));
@@ -364,14 +401,30 @@ public class PdfInvoiceService {
      */
     public byte[] generateRefundReceiptPdf(BillingInvoice invoice, com.example.hms.model.InvoiceRefund refund,
                                            String receiptNumber, String paidByName, Locale locale) {
+        return generateRefundReceiptPdf(invoice, refund, receiptNumber, paidByName, null, locale);
+    }
+
+    /**
+     * QA D3253 (r70): what a payment reversal says that a refund of an overpayment does not: the receipt of the
+     * payment it reverses, why, and who approved it. A plain refund passes {@code null}.
+     */
+    public record ReversalDetails(String reversedReceiptNumber, String reason, String approvedByName) {
+    }
+
+    /** {@link #generateRefundReceiptPdf(BillingInvoice, com.example.hms.model.InvoiceRefund, String, String, Locale)}
+     *  with the details of a payment reversal (QA D3253), or {@code null} for a refund. */
+    public byte[] generateRefundReceiptPdf(BillingInvoice invoice, com.example.hms.model.InvoiceRefund refund,
+                                           String receiptNumber, String paidByName, ReversalDetails reversal,
+                                           Locale locale) {
         PdfLabels t = PdfLabels.of(messageSource, locale);
         try (var doc = new PDDocument()) {
             var w = new Writer(doc);
             w.logo();
-            w.text(BOLD, 16, MARGIN, t.get("pdf.refund.title"));
+            w.text(BOLD, 16, MARGIN, t.get(reversal != null ? "pdf.reversal.title" : "pdf.refund.title"));
             w.down(20);
             w.text(BODY, 11, MARGIN, t.get(HOSPITAL, hospitalName(invoice)));
             w.down(15);
+            hospitalContact(w, t, invoice);
             w.text(BODY, 11, MARGIN, t.get("pdf.receipt.number", safe(receiptNumber)));
             w.down(15);
             w.text(BODY, 11, MARGIN, t.get("pdf.receipt.invoice", safe(invoice.getInvoiceNumber())));
@@ -388,8 +441,21 @@ public class PdfInvoiceService {
                 w.text(BODY, 11, MARGIN, t.get("pdf.receipt.reference", refund.getReference()));
             }
             w.down(15);
-            // PR 8 review: the paper the patient keeps says what the money is, never the staff's typed reason.
-            w.paragraph(BODY, 11, MARGIN, t.get("pdf.refund.purpose"));
+            if (reversal == null) {
+                // PR 8 review: the paper the patient keeps says what the money is, never the staff's typed reason.
+                w.paragraph(BODY, 11, MARGIN, t.get("pdf.refund.purpose"));
+            } else {
+                // QA D3253: a reversal names the receipt it cancels, its reason and its approver.
+                w.paragraph(BODY, 11, MARGIN, t.get("pdf.reversal.purpose", safe(reversal.reversedReceiptNumber())));
+                if (reversal.reason() != null && !reversal.reason().isBlank()) {
+                    w.down(15);
+                    w.paragraph(BODY, 11, MARGIN, t.get("pdf.reversal.reason", reversal.reason().strip()));
+                }
+                if (reversal.approvedByName() != null && !reversal.approvedByName().isBlank()) {
+                    w.down(15);
+                    w.text(BODY, 11, MARGIN, t.get("pdf.reversal.approvedBy", reversal.approvedByName().strip()));
+                }
+            }
             w.down(28);
             w.text(BOLD, 14, MARGIN, t.get("pdf.refund.amount", money(refund.getAmount())));
             w.down(36);
@@ -433,6 +499,117 @@ public class PdfInvoiceService {
             return item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
         }
         return BigDecimal.ZERO;
+    }
+
+    /** QA D2523: when the money was received (with its time when known) and who received it. */
+    private static void receiptMoment(Writer w, PdfLabels t, PaymentTransaction payment, String receivedByName)
+            throws IOException {
+        java.time.LocalDateTime receivedAt = payment.getConfirmedAt() != null
+            ? payment.getConfirmedAt() : payment.getCreatedAt();
+        w.text(BODY, 11, MARGIN, receivedAt != null
+            ? t.get("pdf.receipt.receivedAt", t.fmt(receivedAt))
+            : t.get("pdf.receipt.date", t.fmt(payment.getPaymentDate())));
+        w.down(15);
+        if (receivedByName != null && !receivedByName.isBlank()) {
+            w.text(BODY, 11, MARGIN, t.get("pdf.receipt.receivedBy", receivedByName.strip()));
+            w.down(15);
+        }
+    }
+
+    /** How many lines the receipt names before « and N more » (a receipt is one page). */
+    private static final int RECEIPT_PURPOSE_LINES = 8;
+
+    /**
+     * Review of #1276 (QA D2523): the invoice lines that stood when {@code payment}'s money was received: those
+     * written at or before that moment (the cashier's confirmation, else the row's own time, else the end of
+     * its payment day). A line with no time of its own (never saved) is kept; with no moment at all, every line.
+     */
+    public static List<InvoiceItem> linesWhenReceived(java.util.Collection<InvoiceItem> items,
+                                                      PaymentTransaction payment) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        java.time.LocalDateTime moment = receiptMomentOf(payment);
+        return items.stream()
+            .filter(item -> moment == null || item.getCreatedAt() == null || !item.getCreatedAt().isAfter(moment))
+            .toList();
+    }
+
+    private static java.time.LocalDateTime receiptMomentOf(PaymentTransaction payment) {
+        if (payment == null) {
+            return null;
+        }
+        if (payment.getConfirmedAt() != null) {
+            return payment.getConfirmedAt();
+        }
+        if (payment.getCreatedAt() != null) {
+            return payment.getCreatedAt();
+        }
+        return payment.getPaymentDate() != null ? payment.getPaymentDate().atTime(java.time.LocalTime.MAX) : null;
+    }
+
+    /**
+     * QA D2523: what the money was for: each line it paid, as on the invoice. Nothing when there is no line.
+     */
+    private static void receiptPurpose(Writer w, PdfLabels t, List<InvoiceItem> paidFor) throws IOException {
+        List<InvoiceItem> lines = paidFor == null ? List.of() : paidFor.stream()
+            .sorted(java.util.Comparator.comparing(InvoiceItem::getCreatedAt,
+                    java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder()))
+                .thenComparing(it -> String.valueOf(it.getId())))
+            .toList();
+        if (lines.isEmpty()) {
+            return;
+        }
+        w.down(22);
+        w.text(BOLD, 11, MARGIN, t.get("pdf.receipt.purpose"));
+        for (InvoiceItem line : lines.subList(0, Math.min(lines.size(), RECEIPT_PURPOSE_LINES))) {
+            w.ensureRoom(16);
+            w.down(15);
+            BigDecimal payer = nz(line.getPayerShareAmount()).max(BigDecimal.ZERO);
+            String quantity = String.valueOf(line.getQuantity() != null ? line.getQuantity() : 1);
+            if (payer.signum() > 0) {
+                // QA D3251 (r70): the patient settles the line's patient share, not its full total.
+                BigDecimal total = lineTotal(line);
+                w.paragraph(BODY, 10, MARGIN + 12, t.get("pdf.receipt.purposeLineShared", designation(t, line),
+                    quantity, money(total), money(payer), money(total.subtract(payer).max(BigDecimal.ZERO))));
+            } else {
+                w.paragraph(BODY, 10, MARGIN + 12, t.get("pdf.receipt.purposeLine", designation(t, line), quantity,
+                    money(lineTotal(line))));
+            }
+        }
+        if (lines.size() > RECEIPT_PURPOSE_LINES) {
+            w.down(15);
+            w.text(BODY, 10, MARGIN + 12,
+                t.get("pdf.receipt.purposeMore", String.valueOf(lines.size() - RECEIPT_PURPOSE_LINES)));
+        }
+    }
+
+    /**
+     * QA D2523: the hospital's address and telephone under its name, on every paper handed to a patient (invoice,
+     * receipt, refund receipt). Nothing when the hospital has neither.
+     */
+    private static void hospitalContact(Writer w, PdfLabels t, BillingInvoice invoice) throws IOException {
+        if (invoice.getHospital() == null) {
+            return;
+        }
+        String address = java.util.stream.Stream.of(invoice.getHospital().getAddress(), invoice.getHospital().getCity())
+            .filter(v -> v != null && !v.isBlank()).map(String::strip)
+            .collect(java.util.stream.Collectors.joining(", "));
+        String phone = invoice.getHospital().getPhoneNumber();
+        boolean hasPhone = phone != null && !phone.isBlank();
+        if (address.isEmpty() && !hasPhone) {
+            return;
+        }
+        String line;
+        if (address.isEmpty()) {
+            line = t.get("pdf.hospital.phone", phone.strip());
+        } else if (hasPhone) {
+            line = t.get("pdf.hospital.addressAndPhone", address, phone.strip());
+        } else {
+            line = t.get("pdf.hospital.address", address);
+        }
+        w.paragraph(BODY, 10, MARGIN, line);
+        w.down(15);
     }
 
     private static String hospitalName(BillingInvoice invoice) {

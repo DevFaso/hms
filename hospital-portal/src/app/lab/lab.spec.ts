@@ -217,6 +217,15 @@ describe('LabComponent — performing laboratory', () => {
     expect(renderPickerSublines(fixture, component)).toEqual(EXPECTED_PICKER_SUBLINES);
   });
 
+  it('D3357: the required attestation states what the clinician confirms', async () => {
+    await setup(['ROLE_DOCTOR'], []);
+    component.openCreate();
+    fixture.detectChanges();
+    const label = fixture.nativeElement.querySelector('.checkbox-label') as HTMLElement;
+    expect(label.textContent).toContain('LAB.ATTESTATION_MEANING');
+    expect(label.querySelector('input[required]')).not.toBeNull();
+  });
+
   it('QA D1257 (round 26): an empty "Créer" names the patient with the other blank fields', async () => {
     await setup(['ROLE_DOCTOR'], []);
     const cmp = component;
@@ -293,6 +302,34 @@ describe('LabComponent — performing laboratory', () => {
     component.openSpecimens(order({ labTestCode: 'CBC' }));
 
     expect(component.specimenForm.specimenType).toBe('Sang total EDTA');
+    labService.createSpecimen.and.returnValue(of({ id: 's1' } as LabSpecimen));
+    labService.listSpecimens.and.returnValue(
+      of([{ id: 's1', status: 'COLLECTED' } as LabSpecimen]),
+    );
+    component.collectSpecimen();
+    fixture.detectChanges();
+    expect(component.specimenForm.specimenType).toBe('Sang total EDTA');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="existing-specimens-warning"]'),
+    ).not.toBeNull();
+  });
+
+  it('D2622: the complete worklist puts STAT then URGENT first without reordering equal priorities', async () => {
+    await setup(
+      ['ROLE_LAB_SCIENTIST'],
+      [
+        order({ id: 'routine', priority: 'ROUTINE' }),
+        order({ id: 'urgent1', priority: 'URGENT' }),
+        order({ id: 'stat', priority: 'STAT' }),
+        order({ id: 'urgent2', priority: 'URGENT' }),
+      ],
+    );
+    expect(component.filtered().map((o) => o.id)).toEqual([
+      'stat',
+      'urgent1',
+      'urgent2',
+      'routine',
+    ]);
   });
 
   it('QA D1428 class: a resulted or cancelled order offers no edit', async () => {

@@ -111,10 +111,19 @@
         <div class="card-info">
           <span class="card-value">{{ reg.perinatalDeaths }}</span>
           <span class="card-label">{{ 'MORTALITY.PERINATAL_DEATHS' | translate }}</span>
-          <small class="card-note" data-testid="perinatal-definition">{{
-            'MORTALITY.PERINATAL_DEFINITION'
-              | translate: { weeks: reg.whoStillbirthMinWeeks ?? '—' }
-          }}</small>
+          <small class="card-note" data-testid="perinatal-definition"
+            ><app-rule-status
+              ruleKey="PERINATAL_CLASSIFICATION"
+              [detail]="
+                'CLINICAL_RULES.SURFACE.PERINATAL_DEFINITION'
+                  | translate: { weeks: reg.whoStillbirthMinWeeks ?? '—' }
+              "
+              >{{
+                'MORTALITY.PERINATAL_DEFINITION'
+                  | translate: { weeks: reg.whoStillbirthMinWeeks ?? '—' }
+              }}</app-rule-status
+            ></small
+          >
           <small class="card-note"
             >{{ 'MORTALITY.STILLBIRTHS_WHO' | translate }}{{ 'COMMON.COLON' | translate }}
             {{ reg.stillbirthsWho ?? 0 }}</small
@@ -165,20 +174,38 @@
           <div class="card-info">
             <span class="card-value">{{ reg.stillbirthsWho ?? 0 }}</span>
             <span class="card-label">{{ 'MORTALITY.STILLBIRTHS_WHO' | translate }}</span>
-            <small class="card-note">{{
-              'MORTALITY.STILLBIRTHS_WHO_DEFINITION'
-                | translate: { weeks: reg.whoStillbirthMinWeeks ?? '—' }
-            }}</small>
+            <small class="card-note"
+              ><app-rule-status
+                ruleKey="STILLBIRTH_COUNTING"
+                [detail]="
+                  'CLINICAL_RULES.SURFACE.STILLBIRTHS_WHO_DEFINITION'
+                    | translate: { weeks: reg.whoStillbirthMinWeeks ?? '—' }
+                "
+                >{{
+                  'MORTALITY.STILLBIRTHS_WHO_DEFINITION'
+                    | translate: { weeks: reg.whoStillbirthMinWeeks ?? '—' }
+                }}</app-rule-status
+              ></small
+            >
           </div>
         </div>
         <div class="summary-card" data-testid="stillbirths-icd">
           <div class="card-info">
             <span class="card-value">{{ reg.stillbirthsIcd ?? 0 }}</span>
             <span class="card-label">{{ 'MORTALITY.STILLBIRTHS_ICD' | translate }}</span>
-            <small class="card-note">{{
-              'MORTALITY.STILLBIRTHS_ICD_DEFINITION'
-                | translate: { weeks: reg.icdFetalDeathMinWeeks ?? '—' }
-            }}</small>
+            <small class="card-note"
+              ><app-rule-status
+                ruleKey="STILLBIRTH_COUNTING"
+                [detail]="
+                  'CLINICAL_RULES.SURFACE.STILLBIRTHS_ICD_DEFINITION'
+                    | translate: { weeks: reg.icdFetalDeathMinWeeks ?? '—' }
+                "
+                >{{
+                  'MORTALITY.STILLBIRTHS_ICD_DEFINITION'
+                    | translate: { weeks: reg.icdFetalDeathMinWeeks ?? '—' }
+                }}</app-rule-status
+              ></small
+            >
           </div>
         </div>
         <div class="summary-card" data-testid="stillbirths-incomplete">
@@ -201,7 +228,7 @@
                 <th scope="col">{{ 'MORTALITY.STILLBIRTH_GESTATION' | translate }}</th>
                 <th scope="col">{{ 'MORTALITY.FLAGS' | translate }}</th>
                 <th scope="col">{{ 'MORTALITY.STILLBIRTH_SOURCE' | translate }}</th>
-                <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+                <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
               </tr>
             </thead>
             <tbody>
@@ -309,7 +336,7 @@
               <th scope="col">{{ 'MORTALITY.PLACE' | translate }}</th>
               <th scope="col">{{ 'MORTALITY.UNDERLYING_CAUSE' | translate }}</th>
               <th scope="col">{{ 'MORTALITY.FLAGS' | translate }}</th>
-              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+              <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
             </tr>
           </thead>
           <tbody>
@@ -402,7 +429,7 @@
             <th scope="col">{{ 'MORTALITY.DISPUTED_ON' | translate }}</th>
             <th scope="col">{{ 'MORTALITY.DISPUTED_BY' | translate }}</th>
             <th scope="col">{{ 'MORTALITY.DISPUTE_REASON' | translate }}</th>
-            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
           </tr>
         </thead>
         <tbody>

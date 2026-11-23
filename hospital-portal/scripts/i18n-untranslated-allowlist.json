@@ -94,7 +94,6 @@
     "DISCHARGE.PATIENT": "Patient",
     "DISCHARGE.TEST_TYPE_CULTURE": "Culture",
     "DRUG_INTERACTIONS.ACTIONS": "Actions",
-    "DRUG_INTERACTIONS.ACTIVE": "Active",
     "DRUG_INTERACTIONS.DESCRIPTION": "Description",
     "DRUG_INTERACTIONS.NOTES": "Notes",
     "DRUG_INTERACTIONS.SOURCE": "Source",
@@ -480,7 +479,13 @@
     "inBasket.labNormal": "Normal",
     "inBasket.messages": "Messages",
     "inBasket.resultActions.column": "Actions",
-    "inBasket.urgent": "Urgent"
+    "inBasket.urgent": "Urgent",
+    "CLINICAL_RULES.NOTE": "Note",
+    "CLINICAL_RULES.SOURCE": "Source",
+    "CLINICAL_RULES.VERSION": "Version",
+    "PATIENT_SAFETY.ALLERGIES": "Allergies",
+    "PATIENT_SAFETY.NAME": "Patient",
+    "PATIENT_SAFETY.WEIGHT_KG": "{{kg}} kg"
   },
   "es": {
     "CHART.LAB_STATUS_NORMAL": "Normal",

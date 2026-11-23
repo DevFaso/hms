@@ -26,6 +26,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { refusalReason, refusedFieldReasons } from '../../shared/refusal-reason';
 import { sensitivityLabelKey } from '../../shared/sensitivity/sensitivity-category';
+import { RuleStatusComponent } from '../../shared/rule-status/rule-status.component';
 
 /** The shortest reason the server accepts (MinorResultReleaseRequestDTO). */
 export const RELEASE_REASON_MIN = 10;
@@ -50,6 +51,7 @@ const RELEASE_FIELD_IDS: Readonly<Record<string, string>> = {
   selector: 'app-family-release',
   standalone: true,
   imports: [
+    RuleStatusComponent,
     FormsModule,
     TranslateModule,
     DateTimePipe,

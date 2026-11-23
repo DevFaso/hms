@@ -21,6 +21,9 @@ import {
   CashTill,
 } from '../../services/cash-session.service';
 import { CfaPipe } from '../../shared/pipes/cfa.pipe';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
+import { formatCfa } from '../../shared/i18n/app-locale';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
 import { isMobileMoney, mobileMoneyOperatorLabelKey } from '../../shared/mobile-money-operator';
@@ -55,7 +58,15 @@ interface Typed {
 @Component({
   selector: 'app-cash-session',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, CfaPipe, ServerTimePipe, KeyLabelPipe],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    CfaPipe,
+    ServerTimePipe,
+    KeyLabelPipe,
+    DateTimePipe,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './cash-session.component.html',
   styleUrl: './cash-session.component.scss',
@@ -66,6 +77,7 @@ export class CashSessionComponent {
   private readonly translate = inject(TranslateService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly confirm = inject(ConfirmService);
 
   /** Only this till (the pharmacy page shows the PHARMACY till); every till when empty. */
   readonly till = input<CashTill | null>(null);
@@ -169,7 +181,15 @@ export class CashSessionComponent {
     return line.method ?? '';
   }
 
-  close(s: CashSession): void {
+  /**
+   * QA D3256 (r70): a signed amount with the minus sign (U+2212) the totals use, never a hyphen: « −100 F CFA ».
+   */
+  signedCfa(value: number | null | undefined): string {
+    if (value === null || value === undefined) return '';
+    return value < 0 ? `\u2212${formatCfa(-value)}` : formatCfa(value);
+  }
+
+  async close(s: CashSession): Promise<void> {
     if (this.busy()) return;
     const problems = this.closeProblems(s);
     const allIds = s.methods.flatMap((line) => [
@@ -182,6 +202,19 @@ export class CashSessionComponent {
     if (problems.length > 0) {
       return;
     }
+    // QA D3256 (r70): the cashier cannot reopen a closed till; the close is confirmed on the counted figures.
+    const counted = s.methods.reduce((sum, line) => sum + (this.countedOf(s, line) ?? 0), 0);
+    const sure = await this.confirm.ask({
+      titleKey: 'R70_MONEY.CASH.CLOSE_CONFIRM_TITLE',
+      messageKey: 'R70_MONEY.CASH.CLOSE_CONFIRM_MESSAGE',
+      params: {
+        counted: formatCfa(counted),
+        expected: formatCfa(s.totalExpected),
+        difference: this.signedCfa(counted - (s.totalExpected ?? 0)),
+      },
+      confirmKey: 'BILLING.CASH_SESSION.CLOSE',
+    });
+    if (!sure || this.busy()) return;
     this.busy.set(s.id);
     const counts = s.methods.map((line) => ({
       method: line.method,

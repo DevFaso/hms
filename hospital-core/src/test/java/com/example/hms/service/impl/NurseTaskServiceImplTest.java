@@ -1993,7 +1993,7 @@ class NurseTaskServiceImplTest {
         UUID nurseId = UUID.randomUUID();
         UUID patientId = UUID.randomUUID();
 
-        Patient pat = Patient.builder().firstName("John").lastName("Doe").build();
+        Patient pat = Patient.builder().firstName("John").lastName("Doe").bloodType("B-").build();
         pat.setId(patientId);
         Department dept = Department.builder().name("Cardiology").build();
         User drUser = User.builder().firstName("Dr").lastName("Smith").build();
@@ -2025,6 +2025,8 @@ class NurseTaskServiceImplTest {
         assertThat(card.getPatientId()).isEqualTo(patientId);
         assertThat(card.getPatientName()).isEqualTo("John Doe");
         assertThat(card.getRoomBed()).isEqualTo("201-A");
+        // QA r70 D3220: the nurse reads the blood group on the workboard.
+        assertThat(card.getBloodType()).isEqualTo("B-");
         assertThat(card.getDepartmentName()).isEqualTo("Cardiology");
         assertThat(card.getAttendingDoctor()).isEqualTo("Dr Smith");
         assertThat(card.isVitalsDue()).isTrue(); // no vitals recorded

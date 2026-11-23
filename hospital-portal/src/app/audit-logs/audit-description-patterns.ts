@@ -563,6 +563,20 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Cross-hospital lab result read at the performing laboratory$/,
   },
   {
+    // Owner decision 2026-11-22: another hospital's policy, identity only, read to verify or taken over.
+    key: 'AUDIT.DESC.CROSS_HOSPITAL_INSURANCE_READ',
+    re: /^Cross-hospital insurance policy identity read to verify at the desk$/,
+  },
+  {
+    key: 'AUDIT.DESC.CROSS_HOSPITAL_INSURANCE_REUSED',
+    re: /^Cross-hospital insurance policy identity reused into this hospital's own coverage$/,
+  },
+  {
+    // QA D3351 (owner decision 2026-11-22): the allo-immunisation flag follows the patient across hospitals.
+    key: 'AUDIT.DESC.CROSS_HOSPITAL_ANTIBODY_FLAG',
+    re: /^Cross-hospital allo-immunisation flag read \(transfusion safety, shown whatever the sharing choice\)$/,
+  },
+  {
     key: 'AUDIT.DESC.CROSS_HOSPITAL_READ',
     re: /^Cross-hospital (.+) read on the treatment relationship(.*)$/,
     params: ['subject', 'extra'],
@@ -572,6 +586,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     // Billing-money plan PR 8 review: a support session never moves money as the user it impersonates.
     key: 'AUDIT.DESC.SUPPORT_SESSION_MONEY_REFUSED',
     re: /^Support session refused: (.+) \(money\)$/,
+    params: ['what'],
+  },
+  {
+    // V356: a support session never signs off or revokes a hospital's provisional rules in the admin's name.
+    key: 'AUDIT.DESC.SUPPORT_SESSION_RULE_SIGNOFF_REFUSED',
+    re: /^Support session refused: (.+) \(clinical-rule sign-off\)$/,
     params: ['what'],
   },
   {
@@ -1964,6 +1984,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     key: 'AUDIT.DESC.IMAGING_REPORTING_SETTINGS_CHANGED',
     re: /^Imaging reporting settings changed$/,
   },
+  // QA D3450 (r70, V361): an exam of the imaging catalogue changed (its pregnancy flag or body region; the
+  // item is the row's resource, the new value is in the details).
+  {
+    key: 'AUDIT.DESC.IMAGING_CATALOGUE_EXAM_CHANGED',
+    re: /^Imaging catalogue exam changed$/,
+  },
   // Policy rule 3 (V346): an exam record written (what changed is in the details; never the free text).
   {
     key: 'AUDIT.DESC.IMAGING_EXAM_RECORD_UPDATED',
@@ -2013,6 +2039,13 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Deferred billing of a fill closed: the order left the counter with nothing due$/,
     params: [],
   },
+  // Review of #1284 (QA D3408): a third-party cover withdrawn because the prepared fill it was approved on was
+  // cancelled (constant description, ids on the row).
+  {
+    key: 'AUDIT.DESC.DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED',
+    re: /^Deferred billing of a fill closed: the prepared fill was cancelled$/,
+    params: [],
+  },
   {
     key: 'AUDIT.DESC.PHARMACY_CLAIM_ACCEPTANCE_CONFIRMED',
     re: /^Pharmacy claim acceptance confirmed by a money desk$/,
@@ -2030,5 +2063,27 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     key: 'AUDIT.DESC.ORDONNANCE_PRINTED',
     re: /^Ordonnance printed by its prescriber: prescriptions (\S+)$/,
     params: ['ids'],
+  },
+  // V356: a hospital's sign-off of a provisional rule set recorded or revoked (key and version only).
+  {
+    key: 'AUDIT.DESC.CLINICAL_RULE_SIGNED_OFF',
+    re: /^Clinical rule set (\S+) signed off \(version (\S+)\)$/,
+    params: ['rule', 'version'],
+  },
+  {
+    key: 'AUDIT.DESC.CLINICAL_RULE_SIGNOFF_REVOKED',
+    re: /^Clinical rule set (\S+) sign-off revoked \(version (\S+)\)$/,
+    params: ['rule', 'version'],
+  },
+  // QA r70 D3206: the desk showed or re-sent a patient's portal activation (never the code).
+  {
+    key: 'AUDIT.DESC.PATIENT_ACTIVATION_CODE_SHOWN',
+    re: /^Patient portal activation code shown to the desk$/,
+    params: [],
+  },
+  {
+    key: 'AUDIT.DESC.PATIENT_ACTIVATION_RESENT',
+    re: /^Patient portal activation re-sent by the desk$/,
+    params: [],
   },
 ];

@@ -94,6 +94,25 @@ describe('OrganizationDetailComponent', () => {
     expect(c.loading()).toBeFalse();
   });
 
+  it('D2770: renders existing contact details and linked hospitals', () => {
+    orgService.getById.and.returnValue(
+      of({
+        ...fakeOrg(),
+        hospitals: [
+          { id: 'h1', name: 'Hospital One', code: 'H1', city: 'Ouagadougou', active: true },
+        ],
+      }),
+    );
+    orgService.getLifecycle.and.returnValue(of(fakeLifecycle()));
+    setup();
+    const fixture = TestBed.createComponent(OrganizationDetailComponent);
+    fixture.detectChanges();
+    const details = fixture.nativeElement.querySelector('[data-testid="organization-details"]');
+    expect(details.textContent).toContain('ops@acme.example');
+    expect(details.textContent).toContain('Hospital One');
+    expect(details.querySelector('a').getAttribute('href')).toBe('/hospitals/h1');
+  });
+
   it('blocks confirm when reason is required but blank', () => {
     orgService.getById.and.returnValue(of(fakeOrg()));
     orgService.getLifecycle.and.returnValue(of(fakeLifecycle()));

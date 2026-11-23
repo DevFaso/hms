@@ -9,6 +9,7 @@ import {
   OnInit,
   signal,
   ChangeDetectionStrategy,
+  HostListener,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -30,9 +31,16 @@ import {
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { ImagingReadingService } from '../services/imaging-reading.service';
 import { ImagingReadingContextComponent } from './reading-context/imaging-reading-context.component';
-import { printOnly } from '../shared/print/print-only';
+import { printOnly, isolatePrint } from '../shared/print/print-only';
+import { PrintIdentityComponent } from '../shared/print/print-identity.component';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
 import { PatientService, PatientResponse } from '../services/patient.service';
+import {
+  EncounterService,
+  EncounterResponse,
+  isClosedEncounterStatus,
+} from '../services/encounter.service';
+import { encounterOptionLabel } from '../shared/encounter-option-label';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
@@ -61,6 +69,11 @@ import { DateTimePipe } from '../shared/pipes/date-time.pipe';
 import { localDateString, serverLocalDate } from '../shared/date-utils';
 import { ActivatedRoute } from '@angular/router';
 import { ImagingStudyViewerComponent } from './study-viewer/imaging-study-viewer.component';
+import { ImagingCatalogueComponent } from './catalogue/imaging-catalogue.component';
+import {
+  ImagingCatalogueExam,
+  ImagingCatalogueService,
+} from '../services/imaging-catalogue.service';
 import { catchError, forkJoin, map, of, Subscription } from 'rxjs';
 
 /** The cancellation reason's field (QA D1098), marked when it is refused. */
@@ -164,6 +177,7 @@ const ORDER_FIELD_IDS: Readonly<Record<string, string>> = {
   modality: 'img-modality',
   priority: 'img-priority',
   studyType: 'img-studyType',
+  catalogueItemId: 'img-catalogueExam',
   bodyRegion: 'img-bodyRegion',
   laterality: 'img-laterality',
   clinicalQuestion: 'img-clinicalQ',
@@ -182,6 +196,7 @@ const ORDER_FIELD_LABELS: Readonly<Record<string, string>> = {
   modality: 'IMAGING.MODALITY',
   priority: 'IMAGING.PRIORITY',
   studyType: 'IMAGING.STUDY_TYPE',
+  catalogueItemId: 'IMAGING_CATALOGUE.EXAM',
   bodyRegion: 'IMAGING.BODY_REGION',
   laterality: 'IMAGING.LATERALITY',
   clinicalQuestion: 'IMAGING.CLINICAL_QUESTION',
@@ -212,7 +227,9 @@ const ORDER_FIELD_LABELS: Readonly<Record<string, string>> = {
     ImagingExamRecordComponent,
     ImagingStudyViewerComponent,
     ImagingReadingContextComponent,
+    ImagingCatalogueComponent,
     MeasurePipe,
+    PrintIdentityComponent,
   ],
   templateUrl: './imaging.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -220,11 +237,22 @@ const ORDER_FIELD_LABELS: Readonly<Record<string, string>> = {
 })
 export class ImagingComponent implements OnInit {
   private readonly imagingService = inject(ImagingService);
+  /** QA D3450 / D3254 (r70): the catalogue the order's exam is picked from. */
+  private readonly catalogueService = inject(ImagingCatalogueService);
   /** r63: the « À signer » list and the order's reading context. */
   private readonly readingService = inject(ImagingReadingService);
   private readonly authorship = inject(AuthorshipService);
   private readonly hospitalService = inject(HospitalService);
   private readonly patientService = inject(PatientService);
+  private readonly encounterService = inject(EncounterService);
+  /**
+   * QA D3154 (r70a): the selected patient's open visits here, newest first. A
+   * new order is placed in one of them (the latest by default), as a lab order
+   * is, so the study belongs to the visit it was asked in.
+   */
+  readonly orderVisits = signal<EncounterResponse[]>([]);
+  /** Bumped on every patient or hospital change: a late answer for another patient is dropped. */
+  private orderVisitsRequest = 0;
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly auth = inject(AuthService);
@@ -263,6 +291,17 @@ export class ImagingComponent implements OnInit {
   saving = signal(false);
   editId = '';
   form: ImagingForm = this.emptyForm();
+  /**
+   * QA D3450 / D3254 (r70): the acting hospital's imaging catalogue, read each time the order form
+   * opens. An exam picked here names the order (its name, its modality) and prices it; « hors
+   * catalogue » keeps the free-text field, for an exam the catalogue does not hold yet.
+   */
+  readonly catalogue = signal<ImagingCatalogueExam[]>([]);
+  readonly catalogueFailed = signal(false);
+  /** The hospital admin and the radiologist decide, per exam, whether it may reveal a pregnancy. */
+  readonly canEditCatalogue = this.roleContext.hasAnyActiveRole(
+    actionRoles('imagingCatalogueUpdate'),
+  );
   /** QA D1922: the earliest exam day the form offers (the server refuses a past one). */
   readonly today = localDateString();
 
@@ -310,7 +349,7 @@ export class ImagingComponent implements OnInit {
   deleting = signal(false);
 
   /* ── Results state ── */
-  view = signal<'orders' | 'results'>('orders');
+  view = signal<'orders' | 'results' | 'catalogue'>('orders');
   reports = signal<ImagingReportResponse[]>([]);
   reportsLoading = signal(false);
   reportStatusFilter = signal<ImagingReportStatus>('FINAL');
@@ -344,6 +383,8 @@ export class ImagingComponent implements OnInit {
   signing = signal(false);
   /** Set when revising an existing draft; null when authoring a new report. */
   reportEditId = signal<string | null>(null);
+  readonly addendumSource = signal<ImagingReportResponse | null>(null);
+  readonly writingAddendum = signal(false);
   reportOrderId = signal<string | null>(null);
   reportForm: ReportForm = this.emptyReportForm();
   /** QA D1923 (r53): whose report the authoring form writes. */
@@ -394,13 +435,26 @@ export class ImagingComponent implements OnInit {
    * outcomes that require a reason — both enforced backend-side too, so this
    * list is a convenience, not the gate.
    */
-  readonly authorableStatuses = [
+  private readonly allAuthorableStatuses = [
     'DRAFT',
     'PRELIMINARY',
     'ADDENDUM',
     'CORRECTED',
     'AMENDED',
   ] as const;
+
+  private readonly revisionStatuses = ['ADDENDUM', 'CORRECTED', 'AMENDED'] as const;
+
+  get authorableStatuses(): readonly ImagingReportStatus[] {
+    if (
+      this.writingAddendum() ||
+      (this.reportEditId() &&
+        this.revisionStatuses.some((status) => status === this.reportForm.reportStatus))
+    ) {
+      return this.revisionStatuses;
+    }
+    return ['DRAFT', 'PRELIMINARY'];
+  }
 
   /** What the void modal may write. */
   readonly voidStatuses: VoidReportStatus[] = ['CANCELLED', 'ERROR'];
@@ -613,10 +667,11 @@ export class ImagingComponent implements OnInit {
         if (draft) {
           this.openEditReport(draft);
         } else {
-          this.openAuthorReport(
-            o,
-            live.some((r) => r.signed),
-          );
+          const signed = live
+            .filter((r) => r.signed)
+            .sort((a, b) => (b.reportVersion ?? 0) - (a.reportVersion ?? 0));
+          this.openAuthorReport(o, signed.length > 0);
+          this.addendumSource.set(signed[0] ?? null);
         }
       },
       error: () => this.openAuthorReport(o, o.status === 'RESULTS_AVAILABLE'),
@@ -666,7 +721,10 @@ export class ImagingComponent implements OnInit {
 
   constructor() {
     // Rex on #1169: a preview still pending when the page is left is dropped.
-    inject(DestroyRef).onDestroy(() => this.clearDuplicateWarning());
+    inject(DestroyRef).onDestroy(() => {
+      this.clearDuplicateWarning();
+      this.browserPrintCleanup?.();
+    });
   }
 
   ngOnInit(): void {
@@ -685,6 +743,49 @@ export class ImagingComponent implements OnInit {
       },
       error: () => this.toast.error(this.translate.instant('IMAGING.ORDER_NOT_FOUND')),
     });
+  }
+
+  /** Reads the catalogue for the order form; a failed read leaves the free-text field usable. */
+  private loadCatalogue(): void {
+    this.catalogueFailed.set(false);
+    this.catalogueService.list().subscribe({
+      next: (exams) => this.catalogue.set(exams ?? []),
+      error: () => {
+        this.catalogue.set([]);
+        this.catalogueFailed.set(true);
+      },
+    });
+  }
+
+  /** The exam picked in the form, or undefined for a free-text order. */
+  pickedExam(): ImagingCatalogueExam | undefined {
+    const id = this.form.catalogueItemId;
+    return id ? this.catalogue().find((exam) => exam.id === id) : undefined;
+  }
+
+  /**
+   * QA D3450 / D3254: an exam picked from the catalogue names the order: its name, its modality when
+   * it has one, and its body region when the form's is empty. « Hors catalogue » ('') keeps what
+   * was typed.
+   */
+  pickCatalogueExam(id: string): void {
+    const exam = this.catalogue().find((candidate) => candidate.id === id);
+    this.form.catalogueItemId = exam ? exam.id : undefined;
+    if (!exam) return;
+    this.form.studyType = exam.label.slice(0, 150);
+    if (exam.modality) this.form.modality = exam.modality;
+    if (exam.bodyRegion && !(this.form.bodyRegion ?? '').trim()) {
+      this.form.bodyRegion = exam.bodyRegion;
+    }
+  }
+
+  /** The hint under the exam picker: what the catalogue is, or why it is not offered. */
+  catalogueHintKey(): string {
+    if (this.catalogueFailed()) return 'IMAGING_CATALOGUE.ORDER_LOAD_FAILED';
+    if (!this.catalogue().length) return 'IMAGING_CATALOGUE.EMPTY_HINT';
+    return this.form.catalogueItemId
+      ? 'IMAGING_CATALOGUE.PICK_HINT'
+      : 'IMAGING_CATALOGUE.FREE_TEXT_HINT';
   }
 
   emptyForm(): ImagingForm {
@@ -741,6 +842,45 @@ export class ImagingComponent implements OnInit {
   onPatientPicked(p: PatientResponse | null): void {
     this.selectedPatient.set(p);
     this.form.patientId = p?.id ?? '';
+    this.loadOrderVisits();
+  }
+
+  /** A super-admin changing the hospital: the visits offered are the patient's there. */
+  onOrderHospitalChange(hospitalId: string): void {
+    this.form.hospitalId = hospitalId;
+    this.loadOrderVisits();
+  }
+
+  /**
+   * QA D3154 (r70a): the patient's open visits at the order's hospital, the
+   * latest chosen. A closed visit takes no new order, so it is not offered;
+   * with none open the order stands alone, as the server would place it.
+   */
+  private loadOrderVisits(): void {
+    const request = ++this.orderVisitsRequest;
+    this.orderVisits.set([]);
+    this.form.encounterId = undefined;
+    const patientId = this.form.patientId;
+    const hospitalId = this.form.hospitalId;
+    if (this.editing() || !patientId || !hospitalId) return;
+    this.encounterService.list({ patientId, hospitalId }).subscribe({
+      next: (list) => {
+        if (request !== this.orderVisitsRequest) return;
+        const open = [...(list ?? [])]
+          .filter((e) => !isClosedEncounterStatus(e.status))
+          .sort((a, b) => (b.encounterDate ?? '').localeCompare(a.encounterDate ?? ''));
+        this.orderVisits.set(open);
+        this.form.encounterId = open[0]?.id;
+      },
+      error: () => {
+        if (request === this.orderVisitsRequest) this.orderVisits.set([]);
+      },
+    });
+  }
+
+  /** QA D3154: a visit's day, time and department, as every encounter picker shows it. */
+  orderVisitLabel(e: EncounterResponse): string {
+    return encounterOptionLabel(e);
   }
 
   openCreate(): void {
@@ -751,20 +891,25 @@ export class ImagingComponent implements OnInit {
     this.editing.set(false);
     this.editId = '';
     this.selectedPatient.set(null);
+    this.orderVisitsRequest++;
+    this.orderVisits.set([]);
     // Re-apply locked hospital after emptyForm() reset
     if (this.hospitalLocked) {
       const h = this.hospitals();
       if (h.length === 1) this.form.hospitalId = h[0].id;
     }
+    this.loadCatalogue();
     this.showModal.set(true);
   }
 
   openEdit(o: ImagingOrderResponse): void {
+    this.loadCatalogue();
     this.form = {
       patientId: o.patientId,
       hospitalId: o.hospitalId ?? '',
       modality: o.modality ?? 'XRAY',
       studyType: o.studyType ?? '',
+      catalogueItemId: o.catalogueItemId ?? undefined,
       bodyRegion: o.bodyRegion ?? '',
       priority: o.priority ?? 'ROUTINE',
       laterality: (o.laterality as ImagingLaterality) || '',
@@ -791,6 +936,9 @@ export class ImagingComponent implements OnInit {
     this.editId = o.id;
     this.formError.set(null);
     this.editing.set(true);
+    // QA D3154: an edit keeps the order's visit (the server keeps it when none is sent).
+    this.orderVisitsRequest++;
+    this.orderVisits.set([]);
     this.showModal.set(true);
   }
 
@@ -942,6 +1090,9 @@ export class ImagingComponent implements OnInit {
     };
     const payload: ImagingOrderRequest = {
       ...this.form,
+      // QA D3450 / D3254: only an exam the catalogue still offers is named. An order whose exam was
+      // withdrawn since is sent without it, and the server keeps the exam it was placed with.
+      catalogueItemId: this.pickedExam()?.id,
       laterality: this.form.laterality || undefined,
       scheduledDate: (this.form.scheduledDate ?? '').trim() || undefined,
     };
@@ -1276,7 +1427,7 @@ export class ImagingComponent implements OnInit {
 
   /* ── Results ── */
 
-  setView(view: 'orders' | 'results'): void {
+  setView(view: 'orders' | 'results' | 'catalogue'): void {
     this.view.set(view);
     if (view === 'results' && this.reports().length === 0) {
       this.loadReports();
@@ -1487,6 +1638,8 @@ export class ImagingComponent implements OnInit {
   }
 
   openAddendum(report: ImagingReportResponse): void {
+    this.addendumSource.set(report);
+    this.writingAddendum.set(true);
     this.reportForm = {
       ...this.emptyReportForm(),
       reportTitle: report.reportTitle ?? '',
@@ -1513,12 +1666,31 @@ export class ImagingComponent implements OnInit {
     return recorded(report.examContrastAdministered) || recorded(report.examRadiationDoseMgy);
   }
 
+  /** QA D2642 (r65): when the study was done: the report's performed time, else the exam's start. */
+  reportExamDate(report: ImagingReportResponse): string | null {
+    return report.performedAt || report.examStartedAt || null;
+  }
+
   /** r63: print the open report alone (the shared print isolation). */
   printReport(): void {
     const panel = this.host.nativeElement.querySelector<HTMLElement>(
       '[data-testid="imaging-report-panel"]',
     );
     if (panel) printOnly(panel);
+  }
+
+  /** Ctrl+P must print the open report just as the report's print action does. */
+  private browserPrintCleanup?: () => void;
+
+  @HostListener('window:beforeprint')
+  prepareBrowserPrint(): void {
+    const panel = this.host.nativeElement.querySelector<HTMLElement>(
+      '[data-testid="imaging-report-panel"]',
+    );
+    if (panel) {
+      this.browserPrintCleanup?.();
+      this.browserPrintCleanup = isolatePrint(panel);
+    }
   }
 
   /** Open the latest report for an order (from the orders table/detail). */
@@ -1564,6 +1736,8 @@ export class ImagingComponent implements OnInit {
    * and the backend enforces the same rule.
    */
   openAuthorReport(order: ImagingOrderResponse, existingSigned = false): void {
+    this.addendumSource.set(null);
+    this.writingAddendum.set(existingSigned);
     this.reportForm = {
       reportTitle: order.studyType ?? '',
       modality: order.modality,
@@ -1597,6 +1771,8 @@ export class ImagingComponent implements OnInit {
       this.toast.error(this.translate.instant('IMAGING.REPORT_LOCKED'));
       return;
     }
+    this.writingAddendum.set(false);
+    this.addendumSource.set(null);
     this.reportForm = {
       reportTitle: report.reportTitle ?? '',
       modality: report.modality,
@@ -1624,6 +1800,8 @@ export class ImagingComponent implements OnInit {
   }
 
   closeReportModal(): void {
+    this.addendumSource.set(null);
+    this.writingAddendum.set(false);
     this.showReportModal.set(false);
     this.reportEditId.set(null);
     this.reportOrderId.set(null);
@@ -1707,7 +1885,7 @@ export class ImagingComponent implements OnInit {
    * to PRELIMINARY rather than sending a value the backend will refuse.
    */
   private authorableStatusOf(status: ImagingReportStatus): AuthorableReportStatus {
-    return (this.authorableStatuses as readonly string[]).includes(status)
+    return (this.allAuthorableStatuses as readonly string[]).includes(status)
       ? (status as AuthorableReportStatus)
       : 'PRELIMINARY';
   }

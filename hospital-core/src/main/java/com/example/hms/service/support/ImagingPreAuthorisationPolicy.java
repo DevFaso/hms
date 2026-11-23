@@ -1,5 +1,7 @@
 package com.example.hms.service.support;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.ImagingOrderPriority;
 import com.example.hms.enums.ImagingOrderStatus;
 import com.example.hms.exception.FieldBusinessException;
@@ -36,6 +38,7 @@ import java.util.Set;
  * </ul>
  * Who may start a study is unchanged: that is the status endpoint's roles.
  */
+@ProvisionalRule(ClinicalRuleSetKey.IMAGING_URGENT_PREAUTHORISATION)
 public final class ImagingPreAuthorisationPolicy {
 
     /** The priorities that start without the pre-authorisation number. */

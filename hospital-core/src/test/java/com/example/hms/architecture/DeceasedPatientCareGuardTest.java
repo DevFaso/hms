@@ -42,6 +42,8 @@ class DeceasedPatientCareGuardTest {
         Admission#admitPatient | AdmissionServiceImpl#admitPatient
         AdvanceDirective#create | AdvanceDirectiveServiceImpl#create
         Appointment#createAppointment | AppointmentServiceImpl#createAppointment
+        PatientPortalActivation#revealCode | UserRoleHospitalAssignmentServiceImpl#pendingPatientInvitation
+        PatientPortalActivation#resend | UserRoleHospitalAssignmentServiceImpl#pendingPatientInvitation
         Appointment#updateAppointment | AppointmentServiceImpl#updateAppointment
         Appointment#updateAppointmentStatus | AppointmentServiceImpl#confirmOrCancelAppointment
         BirthPlan#createBirthPlan | BirthPlanServiceImpl#createBirthPlan
@@ -193,6 +195,8 @@ class DeceasedPatientCareGuardTest {
         Transfusion#completeAdministration,stopAdministration | ends a transfusion already running
         Transfusion#cancelRequest | closes a request
         Transfusion#recordCrossmatch,recordBloodGroup | a laboratory result on a sample collected before the death
+        Transfusion#recordAntibodyWorkup | the biologist's finding on a sample collected before the death (QA D3351); it gives no care
+        HospitalCriticalResultEscalation#set | a hospital's escalation settings, no patient
         Transfusion#receiveUnit,discardUnit | blood bank stock, no patient
         TreatmentConsent#revoke | closes a consent
         TreatmentPlan#update,addFollowUp,updateFollowUp,addReview | an existing plan, late documentation
@@ -233,6 +237,10 @@ class DeceasedPatientCareGuardTest {
         Map.entry("EmpiProbabilistic", NOT_CARE), Map.entry("FeatureFlag", NOT_CARE), Map.entry("FrontendAudit", NOT_CARE),
         Map.entry("Hospital", NOT_CARE), Map.entry("HospitalRecordAccessPosture", NOT_CARE),
         Map.entry("HospitalPacsSettings", NOT_CARE), Map.entry("HospitalImagingReportingSettings", NOT_CARE),
+        // QA D3450 (r70, V361): an exam of the imaging catalogue and its pregnancy flag are master data, no patient.
+        Map.entry("ImagingCatalogue", NOT_CARE),
+        // V356: a hospital's sign-off of its provisional rule sets is governance, about no patient.
+        Map.entry("HospitalClinicalRules", NOT_CARE),
         Map.entry("InBasket", NOT_CARE),
         Map.entry("Inventory", NOT_CARE), Map.entry("LabInstrument", NOT_CARE), Map.entry("LabInventory", NOT_CARE),
         Map.entry("LabQcEvent", NOT_CARE), Map.entry("LabQcTarget", NOT_CARE), Map.entry("LabReflexRule", NOT_CARE), Map.entry("LabTestDefinition", NOT_CARE),

@@ -709,7 +709,13 @@
         </button>
       </div>
       <div class="modal-body">
-        <p class="muted">{{ 'LABOR.TRANSFER.HINT' | translate }}</p>
+        <p class="muted">
+          <app-rule-status
+            ruleKey="LABOUR_TRANSFER"
+            [detail]="'CLINICAL_RULES.SURFACE.LABOUR_TRANSFER_HINT' | translate"
+            >{{ 'LABOR.TRANSFER.HINT' | translate }}</app-rule-status
+          >
+        </p>
         <div class="field">
           <label for="lt-destination">{{ 'LABOR.TRANSFER.DESTINATION' | translate }} *</label>
           <select
@@ -786,7 +792,16 @@
       </div>
       <div class="modal-body">
         <p class="muted">
-          {{ 'LABOR.ARRIVAL.HINT' | translate: { hospital: activeEpisode()?.hospitalName || '—' } }}
+          <app-rule-status
+            ruleKey="LABOUR_TRANSFER"
+            [detail]="
+              'CLINICAL_RULES.SURFACE.LABOUR_ARRIVAL_HINT'
+                | translate: { hospital: activeEpisode()?.hospitalName || '—' }
+            "
+            >{{
+              'LABOR.ARRIVAL.HINT' | translate: { hospital: activeEpisode()?.hospitalName || '—' }
+            }}</app-rule-status
+          >
         </p>
         <div class="field">
           <label for="la-reason">{{ 'LABOR.TRANSFER.REASON' | translate }} *</label>
@@ -1054,7 +1069,13 @@
 
 <!-- The partograph rows of one episode: this one, or (read only) the one it continues. -->
 <ng-template #entryTable let-rows>
-  <div class="data-table">
+  <p class="muted">{{ 'LABOR.PARTOGRAPH_SCROLL_HINT' | translate }}</p>
+  <div
+    class="data-table"
+    role="region"
+    tabindex="0"
+    [attr.aria-label]="'LABOR.PARTOGRAPH' | translate"
+  >
     <table>
       <thead>
         <tr>

@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { API_TIMEOUT_PROFILE } from '../core/api-request-timeout';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { AssignmentAdminService } from './assignment-admin.service';
@@ -69,6 +70,7 @@ describe('AssignmentAdminService', () => {
       .bulkImport({ csvContent: 'email,role_name\na@x.org,DOCTOR', delimiter: ',' })
       .subscribe();
     const req = httpMock.expectOne('/assignments/bulk-import');
+    expect(req.request.context.get(API_TIMEOUT_PROFILE)).toBe('upload');
     expect(req.request.method).toBe('POST');
     expect(typeof req.request.body.csvContent).toBe('string');
     req.flush({ processed: 1, created: 1, skipped: 0, failed: 0, results: [] });

@@ -1,5 +1,7 @@
 package com.example.hms.service.maternity;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.GlucoseUnit;
 import com.example.hms.enums.NewbornAlertSeverity;
 import com.example.hms.enums.NewbornAlertType;
@@ -43,6 +45,7 @@ import java.util.List;
  * preterm baby, or for SpO2 in the first minutes after birth: no other number is applied, and
  * the wording says so.
  */
+@ProvisionalRule(ClinicalRuleSetKey.NEWBORN_VITALS)
 public final class NewbornAlertRules {
 
     public static final int REFERENCE_HEART_RATE_LOW = 120;

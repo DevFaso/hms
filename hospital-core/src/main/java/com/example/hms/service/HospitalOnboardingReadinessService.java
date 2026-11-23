@@ -8,11 +8,14 @@ import com.example.hms.payload.dto.HospitalOnboardingReadinessDTO.Step;
 import com.example.hms.repository.BedRepository;
 import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.PayerRepository;
 import com.example.hms.repository.PriceListItemRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.scheduling.SessionTemplateRepository;
+import com.example.hms.service.clinicalrules.ClinicalRuleRegistry;
+import com.example.hms.service.clinicalrules.HospitalRuleSignoffService;
 import com.example.hms.service.scheduling.AppointmentSlotPolicy;
 import com.example.hms.utility.HospitalCalendar;
 import lombok.RequiredArgsConstructor;
@@ -51,8 +54,12 @@ public class HospitalOnboardingReadinessService {
     private final PriceListItemRepository priceListItemRepository;
     private final PayerRepository payerRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
+    /** QA r70 D3213: the lab step. */
+    private final LabTestDefinitionRepository labTestDefinitionRepository;
     /** Owns what "a slot can still be taken" means, for the patient form and for this checklist. */
     private final AppointmentSlotPolicy slotPolicy;
+    /** V356: the rule sets this hospital's approver signed off, of the registry's. */
+    private final HospitalRuleSignoffService ruleSignoffService;
 
     @Transactional(readOnly = true)
     public HospitalOnboardingReadinessDTO readiness(UUID hospitalId) {
@@ -62,7 +69,8 @@ public class HospitalOnboardingReadinessService {
 
         long hospitalAdmins = assignmentRepository.countHospitalAdminAssignmentsAt(hospitalId);
         long departments = departmentRepository.countByHospitalId(hospitalId);
-        long staff = staffRepository.countActiveByHospitalId(hospitalId);
+        // QA r70 D3203: the administrator alone is not « personnel » ready to work.
+        long staff = staffRepository.countActiveNonAdministratorsByHospitalId(hospitalId);
         Set<UUID> staffedDepartments = staffRepository.findDepartmentIdsWithActiveProviders(hospitalId);
         long templates = sessionTemplateRepository.countByHospital_IdAndActiveTrue(hospitalId);
         // Slots still to come on the hospital's own clock, as the patient lookup judges them.
@@ -71,8 +79,11 @@ public class HospitalOnboardingReadinessService {
         Set<UUID> bookableDepartments = new HashSet<>(staffedDepartments);
         bookableDepartments.retainAll(departmentsWithSlots);
         long beds = bedRepository.countByWard_Hospital_IdAndActiveTrue(hospitalId);
+        long labTests = labTestDefinitionRepository.countOrderableAt(hospitalId);
         long prices = priceListItemRepository.countByHospitalIdAndActiveTrue(hospitalId);
         long payers = payerRepository.countByHospitalIdAndActiveTrue(hospitalId);
+        long rulesSigned = ruleSignoffService.signedCount(hospitalId);
+        long rulesTotal = ClinicalRuleRegistry.all().size();
 
         List<Item> items = List.of(
             // First: a department cannot be created until the hospital has its administrator.
@@ -83,8 +94,10 @@ public class HospitalOnboardingReadinessService {
             item(Step.SESSION_TEMPLATES, templates, true),
             item(Step.OPEN_SLOTS, bookableDepartments.size(), true),
             item(Step.BEDS, beds, false),
+            item(Step.LAB_TESTS, labTests, false),
             item(Step.PRICE_LIST, prices, false),
-            item(Step.PAYERS, payers, false));
+            item(Step.PAYERS, payers, false),
+            new Item(Step.CLINICAL_RULES, rulesSigned >= rulesTotal, rulesSigned, false, rulesTotal));
         return new HospitalOnboardingReadinessDTO(hospitalId, !bookableDepartments.isEmpty(), items);
     }
 

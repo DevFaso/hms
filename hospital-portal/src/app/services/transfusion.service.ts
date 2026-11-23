@@ -33,7 +33,59 @@ export type TransfusionReactionType =
 
 export type TransfusionReactionSeverity = 'MILD' | 'MODERATE' | 'SEVERE' | 'LIFE_THREATENING';
 
+/** QA D3351: the two levels of life-threatening urgency a prescriber declares. */
+export type VitalUrgencyLevel = 'UVI' | 'UV';
+
+export type AntibodyWorkupStatus = 'IDENTIFIED' | 'REFERRED';
+
+export interface AntibodyWorkup {
+  id: string;
+  status: AntibodyWorkupStatus;
+  antibodySpecificities: string | null;
+  referralCentre: string | null;
+  decisionReason: string | null;
+  transfusionRequestId: string | null;
+  recordedByDisplay: string | null;
+  recordedAt: string;
+  notes: string | null;
+  /** The hospital that made this record. */
+  hospitalName?: string | null;
+  /** Made at another hospital: only the antibody, the date and the hospital's name are filled. */
+  otherHospital?: boolean;
+}
+
+/**
+ * QA D3351: the permanent allo-immunisation flag and what the biologists recorded. The flag follows the
+ * patient: it may rest on another hospital's record, of which only the antibody, the date and the hospital's
+ * name are sent.
+ */
+export interface AntibodyStatusResponse {
+  patientId: string;
+  alloImmunised: boolean;
+  positiveScreenAt: string | null;
+  positiveScreenHospitalName?: string | null;
+  identified: boolean;
+  antibodySpecificities: string | null;
+  identifiedHospitalName?: string | null;
+  identifiedAt?: string | null;
+  /** The other hospitals this safety information comes from; empty when it is all on record here. */
+  otherHospitalNames?: string[];
+  workups: AntibodyWorkup[];
+}
+
+export interface AntibodyWorkupRequest {
+  patientId: string;
+  status: AntibodyWorkupStatus;
+  antibodySpecificities?: string;
+  referralCentre?: string;
+  decisionReason?: string;
+  transfusionRequestId?: string;
+  notes?: string;
+}
+
 export interface PatientBloodGroupResponse {
+  /** QA D3351: a positive antibody screen is on record here, this one or an earlier one: never cleared. */
+  alloImmunised?: boolean;
   id: string;
   patientId: string;
   patientName: string;
@@ -127,6 +179,11 @@ export interface CrossmatchRequest {
   method?: string;
   incompatibilityReason?: string;
   expiresAt?: string;
+  /** QA D3351: required for a compatible result on red cells for an allo-immunised patient. */
+  sampleCollectedAt?: string;
+  antiglobulinMethod?: boolean;
+  antigenNegative?: boolean;
+  rhKellMatched?: boolean;
 }
 
 export interface TransfusionReactionResponse {
@@ -257,6 +314,13 @@ export interface TransfusionAdministrationRequest {
 }
 
 export interface TransfusionRequestResponse {
+  /** QA D3351: the patient is allo-immunised here; red cells follow the positive antibody screen rule. */
+  alloImmunised?: boolean;
+  /** QA D3351: the antibody is identified, or a referral decision serves this request. */
+  antibodyWorkupServes?: boolean;
+  vitalUrgencyLevel?: VitalUrgencyLevel | null;
+  vitalUrgencyReason?: string | null;
+  preTransfusionSampleDrawn?: boolean | null;
   /** Existing when a recorded death was disputed: a prescriber reviews it first. */
   heldForReview?: boolean;
   /** QA D1081: the user the server's author check compares with (shared/authorship.service). */
@@ -280,6 +344,8 @@ export interface TransfusionRequestResponse {
   bloodGroupId: string | null;
   patientAboGroup: AboGroup | null;
   patientRhFactor: RhFactor | null;
+  /** QA r70 D3221: the group a clinician recorded on the chart: declared, never typed. */
+  patientDeclaredBloodType?: string | null;
   screenCurrent: boolean;
   units: BloodUnitResponse[];
   crossmatches: CrossmatchResponse[];
@@ -296,6 +362,10 @@ export interface TransfusionRequestRequest {
   urgency?: TransfusionUrgency;
   requiredBy?: string;
   notes?: string;
+  /** QA D3351: an emergency for an allo-immunised patient declares the level, why, and the sample drawn first. */
+  vitalUrgencyLevel?: VitalUrgencyLevel;
+  vitalUrgencyReason?: string;
+  preTransfusionSampleDrawn?: boolean;
 }
 
 /**
@@ -316,8 +386,12 @@ export class TransfusionService {
     return this.http.post<PatientBloodGroupResponse>(`${this.baseUrl}/blood-groups`, req);
   }
 
-  getCurrentBloodGroup(patientId: string): Observable<PatientBloodGroupResponse> {
-    return this.http.get<PatientBloodGroupResponse>(
+  /**
+   * The patient's current type and screen at this hospital, or `null` when none is on record yet
+   * (QA D3352: the server answers 204, not a 404 the browser logs as an error).
+   */
+  getCurrentBloodGroup(patientId: string): Observable<PatientBloodGroupResponse | null> {
+    return this.http.get<PatientBloodGroupResponse | null>(
       `${this.baseUrl}/blood-groups/patient/${patientId}`,
     );
   }
@@ -354,6 +428,18 @@ export class TransfusionService {
     return this.http.post<BloodUnitResponse>(`${this.baseUrl}/units/${unitId}/discard`, null, {
       params,
     });
+  }
+
+  /* ── Positive antibody screen (QA D3351) ── */
+
+  getAntibodyStatus(patientId: string): Observable<AntibodyStatusResponse> {
+    return this.http.get<AntibodyStatusResponse>(
+      `${this.baseUrl}/antibody-status/patient/${patientId}`,
+    );
+  }
+
+  recordAntibodyWorkup(req: AntibodyWorkupRequest): Observable<AntibodyStatusResponse> {
+    return this.http.post<AntibodyStatusResponse>(`${this.baseUrl}/antibody-workups`, req);
   }
 
   /* ── Requests ── */

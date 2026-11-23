@@ -931,6 +931,21 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         ],
       },
       {
+        icon: 'request_quote',
+        label: 'Insurer shares',
+        translationKey: 'NAV.PAYER_SHARES',
+        route: '/billing/parts-assureurs',
+        permission: 'View Billing',
+        // QA D2706 (r70): mirrors the /billing/parts-assureurs RoleGuard.
+        roles: [
+          'ROLE_SUPER_ADMIN',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_ACCOUNTANT',
+          'ROLE_BILLING_SPECIALIST',
+          'ROLE_CLAIMS_REVIEWER',
+        ],
+      },
+      {
         icon: 'science',
         label: 'Laboratory',
         translationKey: 'NAV.LABORATORY',
@@ -1140,6 +1155,26 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
       });
     }
+    // V356: « Règles cliniques et validation ». Mirrors the /clinical-rules RoleGuard: the admins
+    // record the approver's sign-off, the clinicians who see a « provisoire » rule read the list.
+    if (
+      this.hasAnyRole([
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_SUPER_ADMIN',
+        'ROLE_DOCTOR',
+        'ROLE_SURGEON',
+        'ROLE_NURSE',
+        'ROLE_MIDWIFE',
+        'ROLE_PHARMACIST',
+      ])
+    ) {
+      items.push({
+        icon: 'rule',
+        label: 'Clinical rules',
+        translationKey: 'NAV.CLINICAL_RULES',
+        route: '/clinical-rules',
+      });
+    }
     // Governance console — SUPER_ADMIN-only backends (matrix, /super-admin/**)
     if (this.hasAnyRole(['ROLE_SUPER_ADMIN'])) {
       items.push({
@@ -1292,6 +1327,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           translationKey: 'NAV.STOCK_ROUTING',
           route: '/pharmacy/stock-routing',
         },
+        {
+          // QA D3411 (r70): the verifier witnesses controlled movements and reads their register.
+          icon: 'local_police',
+          label: 'Controlled-Drug Register',
+          translationKey: 'NAV.CONTROLLED_REGISTER',
+          route: '/pharmacy/controlled-register',
+        },
       );
     }
     // QA D2927 (r66): the pharmacy's two money pages are finance's too. They sat inside the block
@@ -1357,6 +1399,15 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         label: 'Pharmacy Checkout',
         translationKey: 'NAV.PHARMACY_CHECKOUT',
         route: '/pharmacy/checkout',
+      });
+    }
+    // QA D2309: the counter (OTC) sale; mirrors the /pharmacy/counter-sale RoleGuard (POST /pharmacy-sales).
+    if (this.hasAnyRole(['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN'])) {
+      items.push({
+        icon: 'storefront',
+        label: 'Counter Sale',
+        translationKey: 'PHARMACY_SALE.NAV',
+        route: '/pharmacy/counter-sale',
       });
     }
     // Billing-money plan PR 10 (QA r65 D2672): the pharmacist's till close; mirrors the /pharmacy/caisse guard.

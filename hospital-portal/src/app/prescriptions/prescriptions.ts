@@ -70,6 +70,7 @@ import { refusalReason } from '../shared/refusal-reason';
 import { PrintLabelService } from '../services/print-label.service';
 import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { CountUnitPipe } from '../shared/pipes/count-unit.pipe';
 import {
   AllergyHold,
   allergyHoldRefusal,
@@ -247,6 +248,7 @@ const RX_FREQUENCY_IDS = ['rx-frequency'];
     EnumLabelPipe,
     PrescriptionClarificationComponent,
     RangePagerComponent,
+    CountUnitPipe,
   ],
   templateUrl: './prescriptions.html',
   changeDetection: ChangeDetectionStrategy.Eager,

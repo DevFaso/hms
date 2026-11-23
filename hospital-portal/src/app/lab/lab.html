@@ -132,7 +132,7 @@
             }
             <th scope="col">{{ 'LAB.ORDERED' | translate }}</th>
             <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
           </tr>
         </thead>
         <tbody>
@@ -291,6 +291,8 @@
           </button>
         </div>
         <div class="panel-body">
+          <!-- QA r70 D3220: the patient-safety header (blood group, allergies, weight). -->
+          <app-patient-safety-header [patientId]="o.patientId" />
           <div class="detail-grid">
             <div class="detail-field">
               <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span><span
@@ -744,6 +746,7 @@
               [checked]="!!form.providerSignature"
             />
             {{ 'LAB.ATTESTATION' | translate }} *
+            {{ 'LAB.ATTESTATION_MEANING' | translate }}
           </label>
         </div>
       </div>
@@ -940,6 +943,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-dialog-title-4"
+      data-testid="specimens-dialog"
       appModalDialog
       (escaped)="closeSpecimens()"
       (keydown.escape)="$event.stopPropagation()"
@@ -966,6 +970,9 @@
         } @else if (specimens().length === 0) {
           <p class="empty-hint">{{ 'LAB.NO_SPECIMENS' | translate }}</p>
         } @else {
+          <p class="field-hint specimen-scroll-hint">
+            {{ 'LAB.SPECIMEN_SCROLL_HINT' | translate }}
+          </p>
           <div class="data-table" tabindex="0" role="region" aria-labelledby="lab-dialog-title-4">
             <table>
               <thead>
@@ -975,7 +982,7 @@
                   <th scope="col">{{ 'LAB.COLLECTED_AT' | translate }}</th>
                   <th scope="col">{{ 'LAB.LOCATION' | translate }}</th>
                   <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-                  <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+                  <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1050,6 +1057,11 @@
           </p>
         }
         @if (specimensOrderAcceptsSpecimens()) {
+          @if (specimens().length > 0) {
+            <p class="field-hint" data-testid="existing-specimens-warning">
+              {{ 'LAB.EXISTING_SPECIMENS' | translate: { count: specimens().length } }}
+            </p>
+          }
           <h3 class="specimen-form-title">{{ 'LAB.COLLECT_SPECIMEN' | translate }}</h3>
           <div class="form-row">
             <div class="field">

@@ -292,6 +292,14 @@
         }
       }
 
+      <!-- QA D2641 (r65): the grantor's released imaging reports and key images. -->
+      @if (activeTab() === 'imaging') {
+        <app-my-imaging
+          data-testid="proxy-imaging"
+          [grantorPatientId]="patientId"
+          [embedded]="true"
+        />
+      }
       <!-- Health records summary -->
       @if (activeTab() === 'records') {
         @if (records(); as summary) {

@@ -83,6 +83,7 @@ describe('MyImagingComponent (D2342)', () => {
           LOAD_FAILED: 'Vos comptes rendus d’imagerie n’ont pas pu être chargés.',
           REPORT: 'Compte rendu',
           IMAGES: 'Images',
+          PRESCRIBED_BY: 'Demandé par {{name}}',
         },
       },
       PORTAL: { ENUM: { IMAGING_REPORT_STATUS: { ADDENDUM: 'Addendum' } } },
@@ -115,7 +116,7 @@ describe('MyImagingComponent (D2342)', () => {
     imaging.studies.and.returnValue(of([study()]));
     create();
     // The PNG is read as a thumbnail; the PDF only when opened.
-    expect(imaging.image).toHaveBeenCalledOnceWith('i1');
+    expect(imaging.image).toHaveBeenCalledOnceWith('i1', null);
     expect(host().querySelectorAll('[data-testid="my-imaging-images"] .thumb').length).toBe(2);
   });
 
@@ -132,6 +133,53 @@ describe('MyImagingComponent (D2342)', () => {
     expect(window.print).toHaveBeenCalledTimes(1);
     expect(rootDuringPrint).toBe('o1');
     window.dispatchEvent(new Event('afterprint'));
+  });
+
+  it('QA D2643: the printed study names the hospital, the patient and the prescriber', () => {
+    const base = study();
+    imaging.studies.and.returnValue(
+      of([
+        study({
+          reports: base.reports.map((r) => ({
+            ...r,
+            patientDisplayName: 'Patient Test 12',
+            patientMrn: 'CMT1386',
+            patientDateOfBirth: '1990-03-04',
+            orderingProviderName: 'Dr Awa Sawadogo',
+            hospitalName: 'CHU Yalgado',
+            hospitalAddress: 'Ouagadougou',
+          })),
+        }),
+      ]),
+    );
+    create();
+    const card = host().querySelector('[data-study-id="o1"]')!;
+    const identity = card.querySelector('[data-testid="print-identity"]')?.textContent ?? '';
+    expect(identity).toContain('Patient Test 12');
+    expect(identity).toContain('CMT1386');
+    expect(identity).toContain('1990');
+    expect(identity).toContain('Dr Awa Sawadogo');
+    expect(identity).toContain('CHU Yalgado');
+    expect(card.querySelector('[data-testid="my-imaging-prescriber"]')?.textContent).toContain(
+      'Dr Awa Sawadogo',
+    );
+    // QA D3153 class: the print header carries the title, so the card's own title prints no second time.
+    expect(card.querySelector('[data-testid="my-imaging-study-title"]')!.classList).toContain(
+      'no-print',
+    );
+  });
+
+  it("QA D2641: for a caregiver, reads the grantor's studies and images through the proxy endpoints", () => {
+    imaging.studies.and.returnValue(of([study()]));
+    fixture = TestBed.createComponent(MyImagingComponent);
+    fixture.componentRef.setInput('grantorPatientId', 'grantor-1');
+    fixture.componentRef.setInput('embedded', true);
+    fixture.detectChanges();
+    expect(imaging.studies).toHaveBeenCalledOnceWith('grantor-1');
+    expect(imaging.image).toHaveBeenCalledOnceWith('i1', 'grantor-1');
+    // Embedded in the family-access viewer: no page title of its own.
+    expect(host().querySelector('h1')).toBeNull();
+    expect(texts('[data-testid="my-imaging-report"]').length).toBe(2);
   });
 
   it('says the read failed, with the server reason, never "nothing yet"', () => {

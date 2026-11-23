@@ -109,7 +109,7 @@ import static org.mockito.Mockito.when;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
-@Import({PrescriptionQueueClaimService.class, DispenseServiceImpl.class, PreparedFillVoider.class, PharmacyPaymentVoider.class,
+@Import({PrescriptionQueueClaimService.class, DispenseServiceImpl.class, PreparedFillVoider.class, StockQuarantine.class, PharmacyPaymentVoider.class,
         DispenseVerificationService.class, ControlledSubstanceGuard.class, PrescriptionControlledResolver.class, ControlledStockWitness.class, FefoLotPolicy.class, StockOutRoutingServiceImpl.class,
         DispenseMapper.class, PrescriptionRoutingMapper.class, com.example.hms.mapper.pharmacy.StockLotMapper.class,
         EncryptionKeyHolder.class,

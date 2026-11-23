@@ -57,4 +57,10 @@ public class TransferOrderResponseDTO {
 
     /** Derived on read: the destination cannot contain an active airborne case. */
     private boolean destinationIsolationMismatch;
+
+    /**
+     * QA D3308: the patient is a woman in active labour and the destination is outside a maternity ward. Shown
+     * on the worklist; carrying the move out then needs the acknowledgement.
+     */
+    private boolean laborAcknowledgementRequired;
 }

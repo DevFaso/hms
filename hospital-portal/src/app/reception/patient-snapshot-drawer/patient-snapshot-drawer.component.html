@@ -163,11 +163,14 @@
         <!-- MVP 11: Eligibility attestation badge + button -->
         @if (s.insurance.verifiedAt) {
           <div class="snap-field">
-            <span class="field-label">{{ 'RECEPTION.ELIGIBILITY_VERIFIED' | translate }}</span>
+            <span class="field-label">{{ 'RECEPTION.INSURANCE_VERIFIED' | translate }}</span>
             {{ ' '
-            }}<span class="field-val attested-chip">
-              <span class="material-symbols-outlined small">verified</span>
-              {{ s.insurance.verifiedBy }} ·
+            }}<span class="field-val attested-chip" data-testid="snapshot-insurance-verified">
+              <span class="material-symbols-outlined small" aria-hidden="true">verified</span>
+              <!-- QA D3150: the verifier's name, never their login. -->
+              @if (s.insurance.verifiedByName) {
+                {{ s.insurance.verifiedByName }} ·
+              }
               {{ s.insurance.verifiedAt | serverTime | date: 'mediumDate' }}
             </span>
           </div>

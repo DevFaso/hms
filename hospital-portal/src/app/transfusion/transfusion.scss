@@ -250,3 +250,44 @@
   gap: 0.5rem;
   margin-top: 0.75rem;
 }
+
+/* QA D3351: the allo-immunisation flag and the fields the positive antibody screen rule asks for. */
+.antibody-banner {
+  align-items: flex-start;
+
+  &__text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+
+    .btn-secondary {
+      align-self: flex-start;
+      margin-top: 4px;
+    }
+  }
+}
+.antibody-declaration {
+  border-left: 4px solid #b45309;
+  padding: 8px 0 8px 12px;
+  margin: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+
+  input[type='datetime-local'],
+  select,
+  textarea {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+// QA r70 D3221: the chart's group, declared and unverified, shown as a reference line.
+.declared-line {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}

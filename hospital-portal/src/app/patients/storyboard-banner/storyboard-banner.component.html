@@ -26,6 +26,20 @@
           {{ 'CHART.RECORDS_WITHHELD' | translate }}
         </p>
       }
+      <!-- QA r70 D3222: the model carried the blood group and the banner never rendered it. -->
+      <p class="storyboard__blood" data-testid="storyboard-blood-group">
+        <span class="material-symbols-outlined storyboard__icon" aria-hidden="true">bloodtype</span>
+        <span class="storyboard__blood-label">{{
+          'PATIENT_SAFETY.BLOOD_GROUP' | translate
+        }}</span>{{ 'COMMON.COLON' | translate }}
+        @if (s.patient?.bloodType) {
+          <strong class="storyboard__blood-value">{{ s.patient.bloodType }}</strong>
+        } @else {
+          <span class="storyboard__blood-missing">{{
+            'PATIENT_SAFETY.NOT_DOCUMENTED' | translate
+          }}</span>
+        }
+      </p>
       <div class="storyboard__sections">
         <!-- Allergies -->
         <div

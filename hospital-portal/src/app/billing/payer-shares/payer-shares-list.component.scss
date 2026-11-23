@@ -1,0 +1,125 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.share-views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+}
+
+.share-view {
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--border-color, #d0d5dd);
+  border-radius: 999px;
+  background: var(--surface-color, #fff);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.share-view-on {
+  border-color: var(--primary);
+  background: var(--primary-tint);
+  font-weight: 600;
+}
+
+.share-total {
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+}
+
+.share-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
+}
+
+.share-card {
+  min-width: 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border-color, #e4e7ec);
+  border-radius: 8px;
+  background: var(--surface-color, #fff);
+}
+
+.share-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  overflow-wrap: anywhere;
+}
+
+.share-status {
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: #f2f4f7;
+  font-size: 0.78rem;
+  white-space: nowrap;
+
+  &[data-status='CLAIMED'] {
+    background: #fef3c7;
+    color: #92400e;
+  }
+
+  &[data-status='PAID'] {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  &[data-status='REJECTED'] {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+}
+
+.share-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.4rem 1rem;
+  margin: 0.6rem 0 0;
+
+  div {
+    min-width: 0;
+  }
+
+  dt {
+    font-size: 0.75rem;
+    color: var(--text-secondary, #5b6472);
+  }
+
+  dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.share-amount {
+  font-weight: 600;
+}
+
+.share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.share-reject {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+
+  input {
+    max-width: 100%;
+    min-width: 0;
+  }
+}

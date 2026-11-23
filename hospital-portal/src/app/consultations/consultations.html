@@ -216,7 +216,7 @@
             <th scope="col">{{ 'CONSULTATIONS.URGENCY' | translate }}</th>
             <th scope="col">{{ 'CONSULTATIONS.REQUESTED' | translate }}</th>
             <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
           </tr>
         </thead>
         <tbody>
@@ -372,6 +372,8 @@
           </button>
         </div>
         <div class="detail-body">
+          <!-- QA r70 D3220: the patient-safety header (blood group, allergies, weight). -->
+          <app-patient-safety-header [patientId]="con.patientId" />
           <div class="detail-grid">
             <div class="detail-field">
               <span class="field-label">{{ 'PATIENTS.PATIENT' | translate }}</span><span

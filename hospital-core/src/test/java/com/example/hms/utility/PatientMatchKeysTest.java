@@ -114,4 +114,26 @@ class PatientMatchKeysTest {
         // Another country's code is still another subscriber.
         assertThat(PatientMatchKeys.samePhone("22570001002", "+22670001002", "226")).isFalse();
     }
+
+    @Test
+    @DisplayName("QA D2520 (r65): one space or one or two letters off is a near spelling, in either order")
+    void nearSpellingsAreSimilar() {
+        assertThat(PatientMatchKeys.similarName("Awa Test Diallo", "Awa", null, "TestDiallo")).isTrue();
+        assertThat(PatientMatchKeys.similarName("Awa TestDyallo", "Awa", null, "TestDiallo")).isTrue();
+        assertThat(PatientMatchKeys.similarName("Awa TestDialo", "Awa", null, "TestDiallo")).isTrue();
+        assertThat(PatientMatchKeys.similarName("Aoua TestDiallo", "Awa", null, "TestDiallo")).isTrue();
+        assertThat(PatientMatchKeys.similarName("TestDiallo Awa", "Awa", null, "TestDiallo")).isTrue();
+        assertThat(PatientMatchKeys.similarName("Aïcha Kabore", "Aicha", "Mariam", "Kaboré")).isTrue();
+        assertThat(PatientMatchKeys.similarName("Aicha Mariam Kabore", "Aicha", "Mariam", "Kaboré")).isTrue();
+    }
+
+    @Test
+    @DisplayName("QA D2520: another name, or a short name two letters off, is not a near spelling")
+    void otherNamesAreNotSimilar() {
+        assertThat(PatientMatchKeys.similarName("Awa Ki", "Ama", null, "Ki")).isFalse();
+        assertThat(PatientMatchKeys.similarName("Issa Ouedraogo", "Awa", null, "TestDiallo")).isFalse();
+        assertThat(PatientMatchKeys.similarName("Fatimata Zongo", "Fatimata", null, "Sawadogo")).isFalse();
+        assertThat(PatientMatchKeys.similarName(null, "Awa", null, "TestDiallo")).isFalse();
+        assertThat(PatientMatchKeys.similarName("  ", "Awa", null, "TestDiallo")).isFalse();
+    }
 }

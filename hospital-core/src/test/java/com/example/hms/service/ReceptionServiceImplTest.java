@@ -79,6 +79,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -805,6 +806,33 @@ class ReceptionServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D3150: the verification names the verifier, never their login")
+        void theVerificationNamesTheVerifier() {
+            patient.setHospitalRegistrations(Collections.emptySet());
+            PatientInsurance verified = mock(PatientInsurance.class);
+            when(verified.isPrimary()).thenReturn(true);
+            when(verified.getId()).thenReturn(UUID.randomUUID());
+            when(verified.getVerifiedAt()).thenReturn(java.time.LocalDateTime.of(2026, 11, 22, 2, 52));
+            when(verified.getVerifiedBy()).thenReturn("Test.Receptionist.T2.r67");
+            com.example.hms.model.User verifier = new com.example.hms.model.User();
+            verifier.setUsername("test.receptionist.t2.r67");
+            verifier.setFirstName("Awa");
+            verifier.setLastName("Ouedraogo");
+            when(userRepo.findByUsernameInIgnoreCase(List.of("test.receptionist.t2.r67")))
+                    .thenReturn(List.of(verifier));
+            when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepo.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+            when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId))
+                    .thenReturn(List.of(verified));
+            when(invoiceRepo.findByPatient_IdAndHospital_Id(eq(patientId), eq(hospitalId), any()))
+                    .thenReturn(new PageImpl<>(Collections.emptyList()));
+
+            FrontDeskPatientSnapshotDTO result = service.getPatientSnapshot(patientId, hospitalId);
+
+            assertThat(result.getInsurance().getVerifiedByName()).isEqualTo("Awa Ouedraogo");
+        }
+
+        @Test
         @DisplayName("detects expired insurance")
         void detectsExpiredInsurance() {
             patient.setHospitalRegistrations(Collections.emptySet());
@@ -930,22 +958,38 @@ class ReceptionServiceImplTest {
         }
 
         @Test
-        @DisplayName("reports NO_PRIMARY when active insurance but no primary")
+        @DisplayName("QA D3250: reports NO_PRIMARY when SEVERAL coverages are in force and none is primary")
         void reportsNoPrimary() {
             Appointment appt = makeAppointment(AppointmentStatus.SCHEDULED);
             when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today))
                     .thenReturn(List.of(appt));
 
-            PatientInsurance active = mock(PatientInsurance.class);
-            when(active.getExpirationDate()).thenReturn(null);
-            when(active.isPrimary()).thenReturn(false);
+            PatientInsurance one = new PatientInsurance();
+            one.setId(UUID.randomUUID());
+            PatientInsurance two = new PatientInsurance();
+            two.setId(UUID.randomUUID());
             when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId))
-                    .thenReturn(List.of(active));
+                    .thenReturn(List.of(one, two));
 
             List<InsuranceIssueDTO> issues = service.getInsuranceIssues(today, hospitalId);
 
             assertThat(issues).hasSize(1);
             assertThat(issues.get(0).getIssueType()).isEqualTo("NO_PRIMARY");
+        }
+
+        @Test
+        @DisplayName("QA D3250 (r70): a patient's ONLY coverage in force, never ticked primary, is no insurance issue")
+        void d3250_theOnlyCoverageInForceIsNoIssue() {
+            Appointment appt = makeAppointment(AppointmentStatus.SCHEDULED);
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today))
+                    .thenReturn(List.of(appt));
+
+            PatientInsurance only = new PatientInsurance();
+            only.setId(UUID.randomUUID());
+            when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId))
+                    .thenReturn(List.of(only));
+
+            assertThat(service.getInsuranceIssues(today, hospitalId)).isEmpty();
         }
 
         @Test
@@ -1159,6 +1203,44 @@ class ReceptionServiceImplTest {
                 assertThat(c.getPatientId()).isEqualTo(aicha.getId());
                 assertThat(c.getConfidenceScore()).isEqualTo(50);
             });
+        }
+
+        @Test
+        @DisplayName("QA D2520 (r65): one space or one letter off, born that day, is offered as a possible duplicate")
+        void aNearSpellingBornThatDayIsOffered_D2520() {
+            Patient awa = registered("Awa", "TestDiallo", LocalDate.of(1991, 5, 3), "70000001", true);
+            Patient other = registered("Issa", "Ouedraogo", LocalDate.of(1991, 5, 3), "70000002", true);
+            when(patientRepo.searchPatientsExtended(any(), any(), any(), any(), any(), eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(List.of()));
+            when(patientRepo.findActiveBornBetweenAtHospital(eq(LocalDate.of(1991, 5, 2)), eq(LocalDate.of(1991, 5, 4)),
+                    eq(hospitalId), any()))
+                    .thenReturn(List.of(awa, other));
+
+            for (String typed : new String[] {"Awa Test Diallo", "Awa TestDyallo", "Awa TestDialo"}) {
+                List<DuplicateCandidateDTO> result = service.getDuplicateCandidates(typed, "1991-05-03", "76999999",
+                        hospitalId);
+                assertThat(result).as(typed).singleElement().satisfies(c -> {
+                    assertThat(c.getPatientId()).isEqualTo(awa.getId());
+                    assertThat(c.getConfidenceScore()).isEqualTo(65);
+                });
+            }
+        }
+
+        @Test
+        @DisplayName("QA D2520: a near spelling born a day off is offered; one born a week off, or with no date typed, is not")
+        void aNearSpellingADayOffIsOffered_D2520() {
+            Patient awa = registered("Awa", "TestDiallo", LocalDate.of(1991, 5, 3), "70000001", true);
+            when(patientRepo.searchPatientsExtended(any(), any(), any(), any(), any(), eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(List.of()));
+            when(patientRepo.findActiveBornBetweenAtHospital(eq(LocalDate.of(1991, 5, 3)), eq(LocalDate.of(1991, 5, 5)),
+                    eq(hospitalId), any()))
+                    .thenReturn(List.of(awa));
+
+            assertThat(service.getDuplicateCandidates("Aoua TestDiallo", "04/05/1991", null, hospitalId))
+                    .singleElement().satisfies(c -> assertThat(c.getConfidenceScore()).isEqualTo(50));
+            // No date typed: no near-spelling source at all (a near name alone is never a duplicate).
+            assertThat(service.getDuplicateCandidates("Aoua TestDiallo", null, null, hospitalId)).isEmpty();
+            verify(patientRepo, times(1)).findActiveBornBetweenAtHospital(any(), any(), any(), any());
         }
 
         @Test
@@ -1940,6 +2022,137 @@ class ReceptionServiceImplTest {
             assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
                     .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
             verify(encounterRepo, org.mockito.Mockito.never()).save(any());
+        }
+
+        private com.example.hms.model.PatientInsurance coverage(boolean primary, LocalDate expires) {
+            com.example.hms.model.PatientInsurance ins = new com.example.hms.model.PatientInsurance();
+            ins.setId(UUID.randomUUID());
+            ins.setPrimary(primary);
+            ins.setExpirationDate(expires);
+            return ins;
+        }
+
+        @Test
+        @DisplayName("QA D2522 (r65): « Assurance vérifiée » at check-in stamps the coverage the desk reads (who, when)")
+        void insuranceVerifiedStampsTheCoverage_D2522() {
+            Appointment appointment = scheduledAppointment();
+            when(appointmentRepo.lockById(appointment.getId())).thenReturn(Optional.of(appointment));
+            com.example.hms.model.PatientInsurance secondary = coverage(false, null);
+            com.example.hms.model.PatientInsurance primary = coverage(true, today.plusYears(1));
+            when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patient.getId(), hospitalId))
+                    .thenReturn(List.of(secondary, primary));
+            CheckInRequestDTO request = CheckInRequestDTO.builder().appointmentId(appointment.getId())
+                    .identityConfirmed(true).insuranceVerified(true).build();
+
+            service.checkInPatient(request, hospitalId, "receptionist1");
+
+            assertThat(primary.getVerifiedBy()).isEqualTo("receptionist1");
+            assertThat(primary.getVerifiedAt()).isNotNull();
+            assertThat(secondary.getVerifiedAt()).isNull();
+            verify(insuranceRepo).save(primary);
+        }
+
+        @Test
+        @DisplayName("QA D2522: unticked, or an expired policy, stamps nothing")
+        void noTickOrExpiredCoverageStampsNothing_D2522() {
+            Appointment appointment = scheduledAppointment();
+            when(appointmentRepo.lockById(appointment.getId())).thenReturn(Optional.of(appointment));
+            com.example.hms.model.PatientInsurance expired = coverage(true, today.minusDays(1));
+            when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patient.getId(), hospitalId))
+                    .thenReturn(List.of(expired));
+
+            service.checkInPatient(CheckInRequestDTO.builder().appointmentId(appointment.getId())
+                    .identityConfirmed(true).insuranceVerified(true).build(), hospitalId, "receptionist1");
+            assertThat(expired.getVerifiedAt()).isNull();
+
+            appointment.setStatus(AppointmentStatus.SCHEDULED);
+            com.example.hms.model.PatientInsurance current = coverage(true, null);
+            when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patient.getId(), hospitalId))
+                    .thenReturn(List.of(current));
+            service.checkInPatient(CheckInRequestDTO.builder().appointmentId(appointment.getId())
+                    .identityConfirmed(true).insuranceVerified(false).build(), hospitalId, "receptionist1");
+            assertThat(current.getVerifiedAt()).isNull();
+            verify(insuranceRepo, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("review of #1276: with no primary coverage nothing is stamped, and the audit does not say verified")
+        void noPrimaryCoverageStampsNothingAndTheAuditSaysSo_D2522() {
+            Appointment appointment = scheduledAppointment();
+            when(appointmentRepo.lockById(appointment.getId())).thenReturn(Optional.of(appointment));
+            com.example.hms.model.PatientInsurance first = coverage(false, null);
+            com.example.hms.model.PatientInsurance second = coverage(false, today.plusYears(1));
+            when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patient.getId(), hospitalId))
+                    .thenReturn(List.of(first, second));
+
+            service.checkInPatient(CheckInRequestDTO.builder().appointmentId(appointment.getId())
+                    .identityConfirmed(true).insuranceVerified(true).build(), hospitalId, "receptionist1");
+
+            assertThat(first.getVerifiedAt()).isNull();
+            assertThat(second.getVerifiedAt()).isNull();
+            verify(insuranceRepo, never()).save(any());
+            org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+                    org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+            verify(auditEventLogService, org.mockito.Mockito.atLeastOnce()).logEvent(audit.capture());
+            assertThat(audit.getAllValues()).noneSatisfy(a -> assertThat(a.getEventDescription()).contains("Insurance verified"));
+        }
+
+        @Test
+        @DisplayName("QA D3250 (r70): the patient ONLY policy, never ticked primary, is the one stamped verified")
+        void theOnlyPolicyIsStampedThoughNotPrimary_D3250() {
+            Appointment appointment = scheduledAppointment();
+            when(appointmentRepo.lockById(appointment.getId())).thenReturn(Optional.of(appointment));
+            com.example.hms.model.PatientInsurance only = coverage(false, today.plusYears(1));
+            when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patient.getId(), hospitalId))
+                    .thenReturn(List.of(only));
+
+            service.checkInPatient(CheckInRequestDTO.builder().appointmentId(appointment.getId())
+                    .identityConfirmed(true).insuranceVerified(true).build(), hospitalId, "receptionist1");
+
+            assertThat(only.getVerifiedBy()).isEqualTo("receptionist1");
+            assertThat(only.getVerifiedAt()).isNotNull();
+            verify(insuranceRepo).save(only);
+        }
+
+        @Test
+        @DisplayName("QA D3250 (r70): with several policies and none primary, the one the invoice bills is stamped")
+        void theBilledPolicyIsStamped_D3250() {
+            Appointment appointment = scheduledAppointment();
+            when(appointmentRepo.lockById(appointment.getId())).thenReturn(Optional.of(appointment));
+            com.example.hms.model.PatientInsurance first = coverage(false, null);
+            com.example.hms.model.PatientInsurance billed = coverage(false, null);
+            when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patient.getId(), hospitalId))
+                    .thenReturn(List.of(first, billed));
+            com.example.hms.service.billing.InvoiceCoverageService coverage =
+                    mock(com.example.hms.service.billing.InvoiceCoverageService.class);
+            when(coverage.billedCoverage(eq(patient.getId()), eq(hospitalId), any()))
+                    .thenReturn(Optional.of(billed));
+            service.setInvoiceCoverage(coverage);
+
+            service.checkInPatient(CheckInRequestDTO.builder().appointmentId(appointment.getId())
+                    .identityConfirmed(true).insuranceVerified(true).build(), hospitalId, "receptionist1");
+
+            assertThat(billed.getVerifiedAt()).isNotNull();
+            assertThat(first.getVerifiedAt()).isNull();
+        }
+
+        @Test
+        @DisplayName("review of #1276: a stamped primary coverage is what the audit's « Insurance verified » says")
+        void aStampedCoverageIsAudited_D2522() {
+            Appointment appointment = scheduledAppointment();
+            when(appointmentRepo.lockById(appointment.getId())).thenReturn(Optional.of(appointment));
+            com.example.hms.model.PatientInsurance primary = coverage(true, null);
+            when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patient.getId(), hospitalId))
+                    .thenReturn(List.of(primary));
+
+            service.checkInPatient(CheckInRequestDTO.builder().appointmentId(appointment.getId())
+                    .identityConfirmed(true).insuranceVerified(true).build(), hospitalId, "receptionist1");
+
+            assertThat(primary.getVerifiedAt()).isNotNull();
+            org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+                    org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+            verify(auditEventLogService, org.mockito.Mockito.atLeastOnce()).logEvent(audit.capture());
+            assertThat(audit.getAllValues()).anySatisfy(a -> assertThat(a.getEventDescription()).contains("Insurance verified"));
         }
 
         @Test

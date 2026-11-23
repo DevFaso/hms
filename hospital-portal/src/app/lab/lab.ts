@@ -65,6 +65,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { ListEscapeDirective } from '../shared/a11y/list-escape.directive';
 import { DateTimePipe } from '../shared/pipes/date-time.pipe';
+import { PatientSafetyHeaderComponent } from '../shared/patient-safety-header/patient-safety-header.component';
 /** One recorded step of a lab order's timeline in the drawer. */
 export interface LabTimelineStep {
   key: string;
@@ -94,6 +95,7 @@ class DialogSession {
   selector: 'app-lab',
   standalone: true,
   imports: [
+    PatientSafetyHeaderComponent,
     DateTimePipe,
     ListEscapeDirective,
     SubmitGuardDirective,
@@ -1092,7 +1094,9 @@ export class LabComponent implements OnInit {
           (o.status ?? '').toLowerCase().includes(term),
       );
     }
-    this.filtered.set(list);
+    const priorityRank = (order: LabOrderResponse): number =>
+      order.priority === 'STAT' ? 0 : order.priority === 'URGENT' ? 1 : 2;
+    this.filtered.set([...list].sort((a, b) => priorityRank(a) - priorityRank(b)));
   }
 
   /** Invalidates every drawer request, including a previous opening of the same order. */
@@ -1285,7 +1289,11 @@ export class LabComponent implements OnInit {
           this.specimenSaving.set(false);
           if (!this.specimensSession.isCurrent(session)) return;
           this.toast.success(this.translate.instant('LAB.TOAST.SPECIMEN_COLLECTED'));
-          this.specimenForm = { specimenType: '', currentLocation: '', notes: '' };
+          this.specimenForm = {
+            specimenType: this.sampleTypeOf(order),
+            currentLocation: '',
+            notes: '',
+          };
           this.loadSpecimens(order.id);
         },
         error: (err: { error?: { errors?: Record<string, string>; message?: string } }) => {

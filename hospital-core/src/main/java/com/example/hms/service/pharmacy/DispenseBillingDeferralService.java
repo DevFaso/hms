@@ -1,5 +1,7 @@
 package com.example.hms.service.pharmacy;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.DispenseBillingDeferralKind;
@@ -66,6 +68,7 @@ import java.util.function.BiPredicate;
  */
 @Service
 @RequiredArgsConstructor
+@ProvisionalRule(ClinicalRuleSetKey.DEFERRED_BILLING)
 public class DispenseBillingDeferralService {
 
     static final String NOT_FOUND = "pharmacy.deferral.notFound";
@@ -196,11 +199,21 @@ public class DispenseBillingDeferralService {
         if (note != null) {
             requireText(note, FIELD_NOTE);
         }
+        FillCoverShare.PreparedFill fill = coverShare != null
+                ? coverShare.preparedFill(deferral.getPrescriptionId(), actor.hospitalId()).orElse(null) : null;
         if (thirdParty) {
             requireReference(cover);
             deferral.setCoverReference(cover);
+            // QA D3408 (r70): the insurer pays its share by the patient's coverage, never the whole fill on a voucher.
+            deferral.setCreditLimit(requireInsurerShare(deferral, fill, actor.hospitalId()));
         } else {
-            deferral.setCreditLimit(requireLimit(decision.getCreditLimit()));
+            BigDecimal limit = requireLimit(decision.getCreditLimit());
+            // QA D3406 (r70): a ceiling below what the fill owes was approved, then refused at the hand-over.
+            if (limit != null && fill != null && limit.compareTo(fill.due()) < 0) {
+                throw new FieldBusinessException(FIELD_LIMIT, "pharmacy.deferral.creditLimitBelowDue",
+                        DisplayNumbers.quantity(limit), DisplayNumbers.quantity(fill.due()));
+            }
+            deferral.setCreditLimit(limit);
         }
         deferral.setStatus(DispenseBillingDeferralStatus.APPROVED);
         deferral.setDecidedBy(actor.userId());
@@ -376,7 +389,7 @@ public class DispenseBillingDeferralService {
     @Transactional
     public DispenseBillingDeferral admit(Prescription prescription, UUID hospitalId, BigDecimal due, Choice choice,
                                          User actor) {
-        return admitFill(prescription, hospitalId, due, choice, actor, FillClaimCover.Gap.NONE);
+        return admitFill(prescription, hospitalId, due, choice, actor, FillClaimCover.Gap.NONE, null);
     }
 
     /**
@@ -387,12 +400,34 @@ public class DispenseBillingDeferralService {
     @Transactional
     public DispenseBillingDeferral admit(Prescription prescription, UUID hospitalId, BigDecimal due, Choice choice,
                                          User actor, FillClaimCover.Gap claimGap) {
-        return admitFill(prescription, hospitalId, due, choice, actor, claimGap);
+        return admitFill(prescription, hospitalId, due, choice, actor, claimGap, null);
     }
 
-    /** The gate itself; both public entries bring the transaction. */
+    /**
+     * Review of #1284: the money of the fill handing over, for a third-party cover: its charge and what the patient
+     * paid on it. The cover holds the insurer share of THIS fill only; claims are not taken off here, so a claim sent
+     * for the fill never also stands in for the patient share.
+     */
+    public record FillMoney(BigDecimal charge, BigDecimal paid) {
+        BigDecimal unpaidByPatient() {
+            BigDecimal c = charge != null ? charge : BigDecimal.ZERO;
+            return c.subtract(paid != null ? paid : BigDecimal.ZERO).max(BigDecimal.ZERO);
+        }
+    }
+
+    /** {@link #admit(Prescription, UUID, BigDecimal, Choice, User, FillClaimCover.Gap)} with the fill's money. */
+    @Transactional
+    @SuppressWarnings("java:S107") // the gate's own inputs; a parameter object would only rename them
+    public DispenseBillingDeferral admit(Prescription prescription, UUID hospitalId, BigDecimal due, Choice choice,
+                                         User actor, FillClaimCover.Gap claimGap, FillMoney money) {
+        return admitFill(prescription, hospitalId, due, choice, actor, claimGap, money);
+    }
+
+    /** The gate itself; the public entries bring the transaction. */
+    @SuppressWarnings("java:S107") // the gate's own inputs; a parameter object would only rename them
     private DispenseBillingDeferral admitFill(Prescription prescription, UUID hospitalId, BigDecimal due,
-                                              Choice choice, User actor, FillClaimCover.Gap claimGap) {
+                                              Choice choice, User actor, FillClaimCover.Gap claimGap,
+                                              FillMoney money) {
         UUID actorId = actor != null ? actor.getId() : null;
         if (prescription == null || hospitalId == null || actorId == null) {
             throw unpaid(FillClaimCover.Gap.NONE, due);
@@ -425,7 +460,7 @@ public class DispenseBillingDeferralService {
         com.example.hms.security.context.ImpersonationLimits.refuseMoneyWrite(() -> auditEventLogService,
                 "deferred billing of a fill");
         if (deferralId != null) {
-            return execute(deferralId, prescription, hospitalId, due, actorId, now);
+            return execute(deferralId, prescription, hospitalId, due, actorId, now, money);
         }
         return overrideForUrgency(prescription, hospitalId, due, actorId, urgency, now);
     }
@@ -486,8 +521,9 @@ public class DispenseBillingDeferralService {
      * limit. One approval covers one hand-over; a fill the counter splits over two lots is two rows of that one
      * hand-over, so the same person may go on with it the same day, and the limit holds for their total.
      */
+    @SuppressWarnings("java:S107") // the gate's own inputs; a parameter object would only rename them
     private DispenseBillingDeferral execute(UUID deferralId, Prescription prescription, UUID hospitalId,
-                                            BigDecimal due, UUID actorId, LocalDateTime now) {
+                                            BigDecimal due, UUID actorId, LocalDateTime now, FillMoney money) {
         DispenseBillingDeferral deferral = deferralRepository.findLockedByIdAndHospitalId(deferralId, hospitalId)
                 .orElseThrow(() -> new FieldBusinessException(FIELD_DEFERRAL, "pharmacy.handOver.deferralNotApproved"));
         boolean first = deferral.getStatus() == DispenseBillingDeferralStatus.APPROVED;
@@ -502,7 +538,9 @@ public class DispenseBillingDeferralService {
             throw new FieldBusinessException(FIELD_DEFERRAL, "pharmacy.handOver.deferralApproverHandsOver");
         }
         BigDecimal total = first || deferral.getAmountDue() == null ? due : deferral.getAmountDue().add(due);
-        if (deferral.getCreditLimit() != null && total.compareTo(deferral.getCreditLimit()) > 0) {
+        if (deferral.getKind() == DispenseBillingDeferralKind.THIRD_PARTY_COVER) {
+            requirePatientSharePaid(deferral, prescription, hospitalId, total, money);
+        } else if (deferral.getCreditLimit() != null && total.compareTo(deferral.getCreditLimit()) > 0) {
             throw new FieldBusinessException(FIELD_DEFERRAL, "pharmacy.handOver.deferralOverLimit",
                     DisplayNumbers.quantity(total), DisplayNumbers.quantity(deferral.getCreditLimit()));
         }
@@ -513,6 +551,59 @@ public class DispenseBillingDeferralService {
         }
         deferral.setAmountDue(total);
         return deferral;
+    }
+
+    /**
+     * QA D3408 (r70), review of #1284: a fill leaves on a third-party cover only once the patient paid everything but
+     * the insurer share of THIS fill: the share the cover recorded, or the plan's share of this fill's charge, whichever
+     * is less. What the patient has not paid is the charge less the patient's payments (claims are not taken off: the
+     * claim is the insurer share itself, never the patient's).
+     */
+    private void requirePatientSharePaid(DispenseBillingDeferral deferral, Prescription prescription,
+                                         UUID hospitalId, BigDecimal total, FillMoney money) {
+        BigDecimal recorded = deferral.getCreditLimit();
+        if (recorded == null) {
+            return;
+        }
+        BigDecimal unpaid = money != null ? money.unpaidByPatient() : total;
+        BigDecimal cap = recorded;
+        if (coverShare != null && money != null) {
+            UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
+            cap = coverShare.capOf(recorded, patientId, hospitalId, money.charge(), prescription.getId());
+        }
+        if (unpaid.compareTo(cap) > 0) {
+            throw new FieldBusinessException(FIELD_DEFERRAL, "pharmacy.handOver.coverPatientShareDue",
+                    DisplayNumbers.quantity(unpaid.subtract(cap)), DisplayNumbers.quantity(cap));
+        }
+    }
+
+    /**
+     * Review of #1284: the prepared fill a third-party cover was approved on was cancelled. The insurer share was
+     * computed on that fill; a fill prepared again must be asked for and approved again. The open covers of the
+     * prescription are withdrawn, with the reason. Called in the transaction of the cancel.
+     */
+    public void withdrawCoversOfCancelledFill(Prescription prescription, UUID hospitalId) {
+        if (prescription == null || prescription.getId() == null || hospitalId == null) {
+            return;
+        }
+        UUID actorId = roleValidator.getCurrentUserId();
+        for (DispenseBillingDeferral listed : deferralRepository
+                .findByHospitalIdAndPrescriptionIdAndStatusInOrderByRequestedAtAsc(hospitalId, prescription.getId(),
+                        OPEN_STATUSES)) {
+            DispenseBillingDeferral deferral = listed.getKind() == DispenseBillingDeferralKind.THIRD_PARTY_COVER
+                    ? deferralRepository.findLockedByIdAndHospitalId(listed.getId(), hospitalId).orElse(null) : null;
+            if (deferral == null || !OPEN_STATUSES.contains(deferral.getStatus())) {
+                continue;
+            }
+            deferral.setStatus(DispenseBillingDeferralStatus.CANCELLED);
+            deferral.setCancelledBy(actorId);
+            deferral.setCancelledAt(now());
+            deferral.setCancelReason(MessageUtil.resolve(com.example.hms.service.i18n.NotificationLocales.STAFF,
+                    "pharmacy.deferral.closedFillCancelled"));
+            audit(AuditEventType.DISPENSE_BILLING_DEFERRAL_CANCELLED,
+                    "Deferred billing of a fill closed: the prepared fill was cancelled", deferral);
+            followUp.close(deferral);
+        }
     }
 
     /**
@@ -623,12 +714,39 @@ public class DispenseBillingDeferralService {
         }
         Encounter encounter = prescription.getEncounter();
         UUID admissionId = encounter != null ? encounter.getAdmissionId() : null;
-        if (admissionId == null) {
+        if (admissionId != null) {
+            // The visit names its stay: that stay or none (never another one of the patient's).
+            return admissionRepository.findById(admissionId)
+                    .filter(stay -> stay.getHospital() != null && hospitalId.equals(stay.getHospital().getId()))
+                    .filter(stay -> OPEN_STAY.contains(stay.getStatus()))
+                    .orElse(null);
+        }
+        return openStayOfPatient(prescription, hospitalId);
+    }
+
+    /**
+     * QA D3404 (r70): an inpatient order written without the stay's visit (the visit is optional in the prescribing
+     * form) was refused at hand-over as unpaid although the patient lay in a bed. Such an order belongs to the
+     * patient's open stay at this hospital when it is an order of that stay by the rule the ward uses
+     * ({@link com.example.hms.service.InpatientOrderEnd#orderOfStay}): no visit or an inpatient visit, written since
+     * the admission, or the emergency visit that led to it. An outpatient visit's order is never the stay's, a stay
+     * that has ended is never charged, and an order written before the admission stays an outpatient one.
+     */
+    private Admission openStayOfPatient(Prescription prescription, UUID hospitalId) {
+        if (prescription.getPatient() == null || prescription.getPatient().getId() == null) {
             return null;
         }
-        return admissionRepository.findById(admissionId)
+        List<Admission> open = admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(
+                prescription.getPatient().getId(), hospitalId, OPEN_STAY);
+        if (open == null) {
+            return null;
+        }
+        return open.stream()
                 .filter(stay -> stay.getHospital() != null && hospitalId.equals(stay.getHospital().getId()))
                 .filter(stay -> OPEN_STAY.contains(stay.getStatus()))
+                .filter(stay -> com.example.hms.service.InpatientOrderEnd.orderOfStay(prescription, stay))
+                .max(java.util.Comparator.comparing(Admission::getAdmissionDateTime,
+                        java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
                 .orElse(null);
     }
 
@@ -718,6 +836,39 @@ public class DispenseBillingDeferralService {
         CardNumbers.requireNone(reference, FIELD_COVER);
     }
 
+    /**
+     * QA D3408 (r70): the insurer share of the prepared fill, by the patient's coverage at this hospital today
+     * ({@link FillCoverShare#planShare}); the most that may leave on the cover. Refused when no fill is prepared
+     * (nothing to price), when no coverage with a plan applies, or when the plan pays nothing of it.
+     */
+    private BigDecimal requireInsurerShare(DispenseBillingDeferral deferral, FillCoverShare.PreparedFill fill,
+                                           UUID hospitalId) {
+        if (coverShare == null) {
+            return null;
+        }
+        if (fill == null) {
+            throw new FieldBusinessException(FIELD_COVER, "pharmacy.deferral.coverNeedsPreparedFill");
+        }
+        BigDecimal share = coverShare.planShare(deferral.getPatientId(), hospitalId, fill.charge(),
+                        deferral.getPrescriptionId())
+                .orElseThrow(() -> new FieldBusinessException(FIELD_COVER, "pharmacy.deferral.coverNoPlan"));
+        if (share.signum() <= 0) {
+            throw new FieldBusinessException(FIELD_COVER, "pharmacy.deferral.coverNothingCovered");
+        }
+        return share;
+    }
+
+    /**
+     * QA D3406 / D3408: the fill a deferral is about, and the coverage split of it. A required setter: the
+     * application always wires it; a service built by hand in a unit test has none and approves as before.
+     */
+    private FillCoverShare coverShare;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setCoverShare(FillCoverShare coverShare) {
+        this.coverShare = coverShare;
+    }
+
     /** An optional ceiling: whole francs, above zero. */
     private static BigDecimal requireLimit(BigDecimal limit) {
         if (limit == null) {
@@ -745,7 +896,12 @@ public class DispenseBillingDeferralService {
                 && roleValidator.canReviewDispenseBillingOverride(actor.userId(), actor.hospitalId());
         boolean canExecute = actor != null && d.getStatus() == DispenseBillingDeferralStatus.APPROVED
                 && !actor.userId().equals(d.getDecidedBy());
+        FillFigures figures = fillFigures(d);
         return DispenseBillingDeferralDTO.builder()
+                .fillCharge(figures.charge())
+                .fillDue(figures.due())
+                .insurerShare(figures.insurerShare())
+                .patientShare(figures.patientShare())
                 .id(d.getId())
                 .prescriptionId(d.getPrescriptionId())
                 .patientId(d.getPatientId())
@@ -785,6 +941,36 @@ public class DispenseBillingDeferralService {
                 .canReview(canReview)
                 .canExecute(canExecute)
                 .build();
+    }
+
+    /** QA D3406 / D3408: what a deferral card shows of its fill; every figure null when it is unknown. */
+    private record FillFigures(BigDecimal charge, BigDecimal due, BigDecimal insurerShare, BigDecimal patientShare) {
+    }
+
+    /**
+     * QA D3406 (r70): the card shows the fill it is about while it is open; QA D3408: for a cover, the insurer share
+     * (recorded at approval, estimated before) and the patient share.
+     */
+    private FillFigures fillFigures(DispenseBillingDeferral d) {
+        if (coverShare == null) {
+            return new FillFigures(null, null, null, null);
+        }
+        FillCoverShare.PreparedFill fill = OPEN_STATUSES.contains(d.getStatus())
+                ? coverShare.preparedFill(d.getPrescriptionId(), d.getHospitalId()).orElse(null) : null;
+        BigDecimal insurerShare = null;
+        if (d.getKind() == DispenseBillingDeferralKind.THIRD_PARTY_COVER) {
+            insurerShare = d.getCreditLimit();
+            if (insurerShare == null && fill != null) {
+                insurerShare = coverShare.planShare(d.getPatientId(), d.getHospitalId(), fill.charge(),
+                        d.getPrescriptionId()).orElse(null);
+            }
+        }
+        if (fill == null) {
+            return new FillFigures(null, null, insurerShare, null);
+        }
+        BigDecimal patientShare = insurerShare != null ? fill.charge().subtract(insurerShare).max(BigDecimal.ZERO)
+                : null;
+        return new FillFigures(fill.charge(), fill.due(), insurerShare, patientShare);
     }
 
     /** A staff member's name as shown on the list; read once per call. */

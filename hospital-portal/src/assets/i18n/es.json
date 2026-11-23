@@ -1,4 +1,19 @@
 {
+  "API_TIMEOUT": {
+    "TITLE": "El servidor tarda demasiado en responder",
+    "MESSAGE": "Se agotó el tiempo de espera. Vuelva a intentar la acción cuando haya conexión, o recargue la página para cargar sus datos.",
+    "WRITE_UNKNOWN": "Es posible que la acción se haya guardado. Compruebe su estado antes de enviarla de nuevo.",
+    "KEEP_INPUT": "Lo escrito permanece en esta página. Antes de recargar, copie el texto sin guardar; la recarga lo borra. Recargar no vuelve a enviar un formulario.",
+    "RELOAD": "Recargar la página y reintentar"
+  },
+  "ORGANIZATION_DETAIL": {
+    "INFORMATION": "Datos de la organización",
+    "EMAIL": "Correo de contacto",
+    "PHONE": "Teléfono de contacto",
+    "TIMEZONE": "Zona horaria",
+    "HOSPITALS": "Hospitales",
+    "NO_HOSPITALS": "No hay hospitales vinculados a esta organización."
+  },
   "A11Y": {
     "SKIP_TO_MAIN": "Saltar al contenido principal"
   },
@@ -158,6 +173,7 @@
     "TITLE": "Acceso denegado"
   },
   "LABOR": {
+    "PARTOGRAPH_SCROLL_HINT": "Desplácese horizontalmente para ver todas las observaciones, incluidas las notas.",
     "ACTION_LINE": "Línea de acción",
     "ACTIVE_EPISODE": "Trabajo de parto en curso",
     "FOREIGN": {
@@ -436,7 +452,8 @@
       "SCOPE_UNKNOWN": "Ámbito no registrado",
       "IMPERSONATOR": "Suplantado por {{actor}}",
       "SHOW_TEN": "Mostrar hasta 10 eventos",
-      "HOSPITAL_FILTER": "Filtro de hospital (ID)"
+      "HOSPITAL_FILTER": "Hospital",
+      "ALL_HOSPITALS": "Todos los hospitales"
     },
     "STAT": {
       "ORGANIZATIONS": "Organizaciones",
@@ -906,6 +923,7 @@
     "RETRY": "Reintentar",
     "EMPTY": "No hay integraciones registradas.",
     "ENABLED": "Activada",
+    "NOT_CONFIGURED": "No configurada",
     "DISABLED": "Desactivada",
     "NO_ORG_HISTORY": "Aún no hay historial de llamadas para esta integración.",
     "PLATFORM_WIDE": "Plataforma completa",
@@ -1270,7 +1288,7 @@
     "OPEN_IMAGING_REPORT": "Abrir el informe"
   },
   "ORDER_SETS": {
-    "QUANTITY_VALUE": "Cantidad: {{value}} {{unit}}",
+    "QUANTITY_VALUE": "Cantidad: {{value}}",
     "FIELD_CATALOG_ITEM": "Artículo exacto del catálogo",
     "QUANTITY_HINT": "Obligatorio para un estupefaciente.",
     "APPLIED_RESULT_ONE": "Aplicado. 1 orden creada ({{skipped}} omitida(s)).",
@@ -1527,7 +1545,15 @@
     "OVERVIEW_TITLE": "Admisiones cargadas",
     "MATCHING_COUNT": "Admisiones coincidentes: {{count}}",
     "MISSING_BED_SUBSET": "Activas sin datos de cama",
-    "MISSING_BED_HINT": "Los datos de cama faltantes corresponden a un subconjunto de admisiones activas ya incluido en su total."
+    "MISSING_BED_HINT": "Los datos de cama faltantes corresponden a un subconjunto de admisiones activas ya incluido en su total.",
+    "TAKE_HOME_TITLE": "Tratamiento al alta",
+    "TAKE_HOME_NONE": "No hay tratamiento al alta prescrito para esta estancia.",
+    "TAKE_HOME_HINT": "Las prescripciones firmadas marcadas « Tratamiento al alta » figuran en el resumen de alta, incluidas las redactadas en las 24 h siguientes al alta.",
+    "FOLLOW_UP_DATE": "Cita de seguimiento",
+    "FOLLOW_UP_PURPOSE": "Motivo del seguimiento",
+    "FOLLOW_UP_PURPOSE_PLACEHOLDER": "p. ej. control, curas, análisis de control",
+    "TAKE_HOME_UNSIGNED_TITLE": "Redactadas, aún sin firmar",
+    "TAKE_HOME_UNSIGNED_HINT": "Estas prescripciones de alta solo se entregan al paciente, y solo figuran en el resumen de alta, una vez firmadas. Fírmelas desde la página de prescripciones, antes del alta o en las 24 h siguientes."
   },
   "ANALYTICS": {
     "LOAD_FAILED": "No se pudieron cargar los indicadores. Inténtelo de nuevo.",
@@ -1890,6 +1916,7 @@
       "CROSS_TENANT_READ": "Lectura del superadministrador en todos los hospitales: {{view}} ({{rows}} filas)",
       "CROSS_HOSPITAL_READ_LAB": "Solicitud de laboratorio de otro hospital consultada por el laboratorio que la realiza",
       "CROSS_HOSPITAL_READ_LAB_RESULT": "Resultado de laboratorio de otro hospital consultado por el laboratorio que lo realiza",
+      "CROSS_HOSPITAL_ANTIBODY_FLAG": "Alerta de aloinmunización de otro hospital consultada (seguridad transfusional, mostrada sea cual sea la elección de compartir el expediente)",
       "EMERGENCY_BLOOD_RELEASED": "Entrega de urgencia sin prueba cruzada de la unidad {{unit}} para la solicitud {{request}}",
       "EMERGENCY_BLOOD_RELEASED_O_POSITIVE": "Entrega de urgencia con decisión documentada O positivo de la unidad {{unit}} para la solicitud {{request}}",
       "EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE": "Entrega de urgencia — serológicamente incompatible, de la unidad {{unit}} para la solicitud {{request}}",
@@ -2128,6 +2155,7 @@
       "ADOLESCENT_AGE_SET": "Edad de confidencialidad de los adolescentes fijada en {{age}} años",
       "ADOLESCENT_AGE_RESET": "Edad de confidencialidad de los adolescentes devuelta al valor por defecto ({{age}} años)",
       "IMAGING_REPORTING_SETTINGS_CHANGED": "Ajuste de ecografía modificado",
+      "IMAGING_CATALOGUE_EXAM_CHANGED": "Examen del catálogo de imagen modificado",
       "IMAGING_EXAM_RECORD_UPDATED": "Realización del examen de imagen actualizada",
       "DISPENSE_BILLING_DEFERRAL_REQUESTED": "Deferred billing of a fill requested",
       "DISPENSE_BILLING_DEFERRAL_APPROVED": "Deferred billing of a fill approved",
@@ -2141,7 +2169,15 @@
       "ADOLESCENT_AGE_SET_ZERO": "Edad de confidencialidad de los adolescentes fijada en 0 años",
       "ADOLESCENT_AGE_SET_ONE": "Edad de confidencialidad de los adolescentes fijada en 1 año",
       "ACTIVATION_CODE_SHOWN": "Código de activación mostrado a la persona que creó la asignación",
-      "ORDONNANCE_PRINTED": "Receta impresa por su prescriptor (recetas {{ids}})"
+      "ORDONNANCE_PRINTED": "Receta impresa por su prescriptor (recetas {{ids}})",
+      "CLINICAL_RULE_SIGNED_OFF": "Conjunto de reglas clínicas {{rule}} validado (versión {{version}})",
+      "CLINICAL_RULE_SIGNOFF_REVOKED": "Validación del conjunto de reglas clínicas {{rule}} revocada (versión {{version}})",
+      "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Sesión de soporte rechazada: {{what}} (validación de una regla clínica)",
+      "PATIENT_ACTIVATION_CODE_SHOWN": "Código de activación del portal del paciente mostrado en recepción",
+      "PATIENT_ACTIVATION_RESENT": "Activación del portal del paciente reenviada por recepción",
+      "DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED": "Deferred billing withdrawn: the prepared fill it was approved on was cancelled",
+      "CROSS_HOSPITAL_INSURANCE_READ": "Seguro de otro hospital consultado en admisión para verificarlo (solo identidad)",
+      "CROSS_HOSPITAL_INSURANCE_REUSED": "Seguro de otro hospital retomado como cobertura propia de este hospital (solo identidad)"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -4065,10 +4101,20 @@
     "TITLE": "Cambiar contraseña"
   },
   "FLAGS": {
+    "CATALOG": {
+      "BILLING_TITLE": "Módulo de facturación",
+      "BILLING_DESCRIPTION": "Indicador de funcionalidad del módulo de facturación.",
+      "EHR_TITLE": "Historia clínica electrónica",
+      "EHR_DESCRIPTION": "Indicador de funcionalidad del módulo de historia clínica electrónica.",
+      "INVENTORY_TITLE": "Gestión de existencias",
+      "INVENTORY_DESCRIPTION": "Indicador de funcionalidad del módulo de gestión de existencias."
+    },
+    "NO_DESCRIPTION": "No se ha indicado ninguna descripción.",
+    "SELECT_DECLARED": "Seleccionar un indicador declarado",
     "CREATE": "Crear",
     "CREATED": "Indicador {{key}} creado",
     "CREATE_FAILED": "Error al crear el indicador",
-    "CREATE_TITLE": "Crear indicador de función",
+    "CREATE_TITLE": "Configurar un indicador declarado",
     "CREATING": "Creando...",
     "DESCRIPTION_LABEL": "Descripción",
     "DESCRIPTION_PLACEHOLDER": "Describa la función...",
@@ -4083,7 +4129,7 @@
     "KEY_REQUIRED": "La clave del indicador es obligatoria",
     "LOADING": "Cargando indicadores de funciones...",
     "LOAD_FAILED": "Error al cargar los indicadores de funcionalidad",
-    "NEW_FLAG": "Nuevo indicador",
+    "NEW_FLAG": "Configurar indicador",
     "NO_FLAGS": "No se encontraron indicadores de funciones",
     "NO_FLAGS_MATCHING": "Ningún indicador coincide con «{{query}}»",
     "OFF": "NO",
@@ -4217,6 +4263,9 @@
     "NEW_REPORT_HINT": "Las imágenes añadidas ahora van al estudio. Guarde primero el informe para adjuntarlas a él."
   },
   "IMAGING": {
+    "ADDENDUM_ORIGINAL": "Informe firmado que se amplía",
+    "REVISE_SIGNED_REPORT": "Revisar el informe firmado",
+    "REVISION_ORIGINAL": "Informe firmado que se revisa",
     "RESULTS_PARTIAL_FAILURE": "No se pudieron cargar los informes de estos hospitales, por lo que la lista está incompleta: {{hospitals}}.",
     "ADMIN_READ_ONLY": "Solo lectura: solicitudes de imagen e informes validados. La solicitud, la interpretación y la firma corresponden al equipo clínico.",
     "ALL_HOSPITALS": "Todos los hospitales",
@@ -4416,9 +4465,13 @@
       "RECORDED": "Número de autorización previa registrado.",
       "RECORD_ERROR": "No se pudo registrar el número de autorización previa.",
       "NUMBER_REQUIRED": "Introduzca el número de autorización previa."
-    }
+    },
+    "ORDER_VISIT": "Visita",
+    "ORDER_NO_OPEN_VISIT": "No hay ninguna visita abierta para este paciente aquí: la solicitud no se vinculará a ninguna visita."
   },
   "LAB": {
+    "SPECIMEN_SCROLL_HINT": "Desplácese horizontalmente para ver el estado de la muestra y todas las acciones.",
+    "EXISTING_SPECIMENS": "Esta solicitud ya tiene {{count}} muestra(s). Compruebe la lista antes de recoger otra.",
     "DUPLICATE": {
       "TITLE": "Posible orden duplicada",
       "BODY": "Este paciente ya tiene una orden activa de la misma prueba aquí, realizada en las últimas 24 horas. Compruebe que una nueva orden sea realmente necesaria.",
@@ -4431,6 +4484,7 @@
     "ACTIVE_ORDERS": "Órdenes activas",
     "ALL_ORDERS": "Todas las órdenes",
     "ATTESTATION": "Certificación",
+    "ATTESTATION_MEANING": "Declaro electrónicamente que la información anterior es correcta.",
     "AUTO_FILLED": "Autocompletado",
     "CANCELLED": "Cancelada",
     "CANCELLING": "Cancelando...",
@@ -4627,6 +4681,8 @@
     "STAFF_COUNT": "{{count}} miembros del personal"
   },
   "LAB_TEST_CONFIG": {
+    "APPROVAL_NEXT_STEP": "Continuar en la cola de aprobación del laboratorio",
+    "COMPONENT_RANGES": "{{components}} componentes · {{ranges}} rangos",
     "ACTIONS": "Acciones",
     "ADD_RANGE": "Agregar rango",
     "AGE_MAX": "Edad máx",
@@ -4761,6 +4817,7 @@
     }
   },
   "LAB_RESULTS": {
+    "SAVE_CORRECTION": "Guardar corrección",
     "QUOTED_READ_BACK_VALUE": "«{{value}}»",
     "ALL_AGES": "Todas las edades",
     "CORRECTED": "Corregido",
@@ -4884,7 +4941,11 @@
     "QC_OVERRIDE": "Released despite rejected QC",
     "RELEASE_CRITICAL_FROM_WORKLIST": "A critical result is released from the release worklist, where you record who was told.",
     "RELEASE_FROM_WORKLIST": "Release it from the release worklist.",
-    "READ_BACK_CONFIRMED_DETAIL": "Relectura confirmada: {{test}} « {{value}} » — {{patient}}"
+    "READ_BACK_CONFIRMED_DETAIL": "Relectura confirmada: {{test}} « {{value}} » — {{patient}}",
+    "READ_BACK_CHANNEL": "Cómo le llegó el resultado",
+    "READ_BACK_CHANNEL_IN_APP": "En la aplicación",
+    "READ_BACK_CHANNEL_PHONE": "Por teléfono",
+    "READ_BACK_CHANNEL_IN_PERSON": "En persona"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Anormal",
@@ -5313,7 +5374,9 @@
     "LAB_CRITICAL_PENDING": "Resultados críticos por repetir",
     "PHARMACY_RECONCILIATION": "Conciliación de farmacia",
     "PHARMACY_TILL_CLOSE": "Pharmacy till close",
-    "PHARMACY_BILLING_DEFERRALS": "Deferred billing (pharmacy)"
+    "PHARMACY_BILLING_DEFERRALS": "Deferred billing (pharmacy)",
+    "CLINICAL_RULES": "Reglas clínicas",
+    "PAYER_SHARES": "Partes de aseguradoras"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerta crítica",
@@ -5769,13 +5832,16 @@
     "OTHER_ROLES_HINT": "Si su correo de bienvenida menciona otros roles, confirme cada uno con su propio código, usando el botón que aparece debajo de ese código.",
     "DIGIT_OF": "Dígito {{n}} de {{total}}",
     "BY_PHONE_TITLE": "Active su cuenta",
-    "BY_PHONE_INTRO": "Introduzca el número de teléfono registrado en recepción y el código de 6 dígitos recibido por SMS.",
+    "BY_PHONE_INTRO": "Introduzca el número de teléfono que dio al inscribirse y el código de 6 dígitos recibido (por SMS, por correo o en persona).",
     "PHONE_LABEL": "Número de teléfono",
     "CODE_LABEL": "Código de activación (6 dígitos)",
     "BY_PHONE_SUBMIT": "Activar mi cuenta",
     "ERR_PHONE_REQUIRED": "Introduzca su número de teléfono.",
     "ERR_CODE_FORMAT": "El código tiene 6 dígitos.",
-    "ERR_PHONE_CODE_INCORRECT": "Este número y este código no coinciden. Revise el SMS e inténtelo de nuevo."
+    "ERR_PHONE_CODE_INCORRECT": "Este número y este código no coinciden. Revise el SMS e inténtelo de nuevo.",
+    "CREDENTIALS_REISSUED": "Esta contraseña provisional sustituye a la del correo de bienvenida.",
+    "ENTER_CODE_TITLE": "Active su cuenta",
+    "ENTER_CODE_INTRO": "Introduzca el código de 6 dígitos recibido por SMS, por correo o en persona."
   },
   "ORGANIZATIONS": {
     "CONTACT": "Contacto",
@@ -6821,7 +6887,7 @@
     },
     "SHARING": {
       "TITLE": "Quién consultó mi historial",
-      "ACCESS_LOG_SCOPE_NOTE": "Esta página indica quién abrió su expediente y a dónde se envió: las consultas del equipo que le atiende, el acceso de emergencia, el uso compartido con otro hospital, las copias entregadas y la información enviada a su aseguradora. Quien vuelve a su expediente varias veces durante una misma visita aparece una sola vez.",
+      "ACCESS_LOG_SCOPE_NOTE": "Esta página indica quién abrió su expediente y a dónde se envió: las consultas del equipo que le atiende, el acceso de emergencia, el uso compartido con otro hospital, las copias entregadas, la información enviada a su aseguradora y los resultados comunicados a un padre, una madre o un tutor. Quien vuelve a su expediente varias veces durante una misma visita aparece una sola vez.",
       "LOADING_LOG": "Cargando registro de accesos…",
       "NO_ACCESS_TITLE": "Sin divulgaciones registradas",
       "NO_ACCESS_DESC": "No se ha registrado ninguna divulgación de su expediente en este período.",
@@ -6835,6 +6901,7 @@
         "INSURANCE": "Enviado a su aseguradora",
         "COPY_RELEASED": "Se entregó una copia",
         "IDENTITY_CHANGE": "Historiales fusionados",
+        "RELEASED_TO_FAMILY": "Resultado comunicado a un padre, una madre o un tutor",
         "UNKNOWN": "Acceso registrado"
       },
       "SUMMARY_EMERGENCY": "accesos de emergencia a su historial",
@@ -6942,7 +7009,8 @@
         "STATUS": "Estado",
         "TEST": "Prueba",
         "TITLE": "Datos de salud de {{name}}",
-        "TITLE_FALLBACK": "Datos de salud compartidos"
+        "TITLE_FALLBACK": "Datos de salud compartidos",
+        "IMAGING_TAB": "Imaging"
       },
       "USER_NOT_FOUND": "Ninguna cuenta tiene este nombre de usuario. Compruebe la ortografía con la persona a la que quiere dar acceso.",
       "REVOKE_CONFIRM_TITLE": "¿Revocar este acceso?",
@@ -7730,7 +7798,9 @@
         "DISPENSE_BILLING_DEFERRAL_CANCELLED": "Deferred billing of a fill withdrawn",
         "DISPENSE_BILLING_URGENCY_OVERRIDE": "Fill handed over unpaid on an urgency override",
         "DISPENSE_BILLING_OVERRIDE_REVIEWED": "Urgency override of a fill’s billing reviewed",
-        "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay"
+        "DISPENSE_POSTED_TO_ADMISSION_ACCOUNT": "Fill charged to the account of the hospital stay",
+        "CLINICAL_RULE_SIGNED_OFF": "Conjunto de reglas clínicas validado",
+        "CLINICAL_RULE_SIGNOFF_REVOKED": "Validación de regla clínica revocada"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -8110,7 +8180,9 @@
         "ADJUSTMENT": "Ajuste",
         "TRANSFER": "Traslado",
         "RETURN": "Devolución",
-        "SALE": "Counter sale"
+        "SALE": "Counter sale",
+        "QUARANTINE": "Cuarentena",
+        "DESTRUCTION": "Destrucción"
       },
       "INVOICE_ITEM_CATEGORY": {
         "SERVICE": "Servicio",
@@ -8285,7 +8357,9 @@
         "PATIENT_PROXY": "Acceso familiar",
         "HOSPITAL_ADOLESCENT_CONFIDENTIALITY_AGE": "Edad de confidencialidad de los adolescentes",
         "HOSPITAL_IMAGING_REPORTING_SETTINGS": "Ajuste de ecografía",
-        "DISPENSE_BILLING_DEFERRAL": "Deferred pharmacy billing"
+        "IMAGING_CATALOGUE_EXAM": "Examen del catálogo de imagen",
+        "DISPENSE_BILLING_DEFERRAL": "Deferred pharmacy billing",
+        "HOSPITAL_RULE_SIGNOFF": "Validación de regla clínica"
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Alergia",
@@ -8774,7 +8848,6 @@
       "PARTIAL_ERROR_DISPENSES": "No se pudieron cargar las dispensaciones, por lo que esto no es todo.",
       "PARTIAL_ERROR_ROUTINGS": "No se pudieron cargar las decisiones de derivación, por lo que esto no es todo."
     },
-    "QUANTITY_VALUE": "{{value}} {{unit}}",
     "REFILLS_VALUE": "{{remaining}} de {{allowed}} restantes",
     "LIST_TRUNCATED": "Solo se muestran las recetas más recientes, por lo que estos totales son un mínimo. Use el buscador para encontrar una más antigua.",
     "ROUTE_NOT_RECORDED": "No registrada",
@@ -8805,7 +8878,7 @@
       "DUE": "Se requiere revisión de dosis por un farmacéutico o un médico",
       "ACTION": "Registrar la revisión de dosis",
       "TITLE": "Registrar la revisión de dosis pediátrica",
-      "HINT": "El control de dosis no puede valorar la dosis de este niño. Como farmacéutico o médico distinto del prescriptor, indique por qué la acepta; la receta podrá firmarse una vez registrada la revisión.",
+      "HINT": "Esta receta requiere una revisión de dosis pediátrica. Como farmacéutico o médico distinto del prescriptor, indique por qué acepta la dosis; la receta podrá firmarse una vez registrada la revisión.",
       "REASON": "Motivo para aceptar la dosis",
       "REASON_REQUIRED": "Indique el motivo por el que acepta esta dosis.",
       "CONFIRM": "Registrar la revisión",
@@ -10054,7 +10127,9 @@
     "USERNAME": "Nombre de usuario",
     "USER_AND_HOSPITAL_REQUIRED": "El usuario y el hospital son obligatorios",
     "VIEW_DEPARTMENT_DETAILS": "Ver detalles del departamento",
-    "WEEKLY_SHIFTS": "Turnos semanales"
+    "WEEKLY_SHIFTS": "Turnos semanales",
+    "NO_DEPARTMENT_OPTION": "— Ningún departamento —",
+    "DEPARTMENTS_LOAD_FAILED": "No se pudieron cargar los departamentos."
   },
   "TREATMENT": {
     "ACTIVE": "Activo",
@@ -10196,7 +10271,8 @@
       "RESTORE_FAILED": "Error al restaurar el usuario",
       "IMPERSONATE_REASON_TOO_SHORT": "El motivo debe tener al menos 5 caracteres.",
       "IMPERSONATE_STARTED": "Ahora actuando como {{name}}.",
-      "IMPERSONATE_FAILED": "Error al iniciar la suplantación"
+      "IMPERSONATE_FAILED": "Error al iniciar la suplantación",
+      "USERNAME_ISSUED": "Nombre de usuario provisional: {{username}}. La persona elige el suyo en su primer inicio de sesión."
     },
     "TOTAL": "Total",
     "USER": "Usuario",
@@ -10219,7 +10295,9 @@
       "FAILED": "No se pudo restablecer la verificación en dos pasos."
     },
     "HOSPITAL_SCOPE": "Hospital: {{name}}",
-    "HOSPITAL_SCOPE_CLEAR": "Mostrar todos los hospitales"
+    "HOSPITAL_SCOPE_CLEAR": "Mostrar todos los hospitales",
+    "DEPARTMENT": "Departamento",
+    "DEPARTMENT_HINT": "El departamento donde el profesional recibe citas. Se puede cambiar luego en « Personal »."
   },
   "TRIAGE": {
     "ACUITY": "Nivel de gravedad",
@@ -10309,6 +10387,8 @@
     "ASSESSMENT_REQUIRED": "Registre la evaluación antes de enviar: alergias, medicamentos, dolor, riesgo de caída o notas de enfermería."
   },
   "PRE_CHECKIN": {
+    "CURRENT_CONTACT": "Datos de contacto actuales",
+    "CURRENT_CONTACT_ERROR": "No se pudieron cargar los datos de contacto actuales. Dejar vacío un campo de actualización conserva su valor actual.",
     "ADDRESS": "Dirección",
     "ADDRESS_LABEL": "Dirección",
     "ADDRESS_LINE1": "Dirección línea 1",
@@ -10343,7 +10423,7 @@
     "PHONE_LABEL": "Teléfono",
     "PHONE_PLACEHOLDER": "ej. +226 70 12 34 56",
     "QUESTIONNAIRES_COMPLETED": "Cuestionarios completados",
-    "STATE": "Estado/Provincia",
+    "STATE": "Región / Provincia (si corresponde)",
     "STEPS_NAV_LABEL": "Pasos del pre-registro",
     "STEP_DEMOGRAPHICS": "Datos demográficos",
     "STEP_DESCRIPTION": "Actualice cualquier información que haya cambiado desde su última visita. Deje los campos en blanco para mantener los valores actuales.",
@@ -10355,7 +10435,7 @@
     "TITLE": "Pre-registro",
     "UPDATED_DEMOGRAPHICS": "Datos actualizados",
     "YES": "Sí",
-    "ZIP": "Código postal",
+    "ZIP": "Código postal (si corresponde)",
     "DATE_AT_TIME": "{{date}} a las {{time}}",
     "EMAIL_INVALID": "Introduzca una dirección de correo electrónico válida o deje el campo vacío."
   },
@@ -10675,7 +10755,8 @@
     "COUNT_SCOPE_HELP": "Los recuentos corresponden a solicitudes y resúmenes cargados según sus filtros respectivos. La aprobación de solicitudes y la finalización de resúmenes son pasos distintos.",
     "REQUESTS_LOADED": "Solicitudes cargadas",
     "NO_FILTERED_APPROVALS": "No hay solicitudes con estado: {{status}}",
-    "SHOW_ALL_REQUESTS": "Ver todas las solicitudes"
+    "SHOW_ALL_REQUESTS": "Ver todas las solicitudes",
+    "FOLLOW_UP_KIND": "Seguimiento"
   },
   "CHART": {
     "ALLERGIES_WITHHELD": "Las alergias registradas en otros hospitales no se muestran: este paciente rechazó compartir su historial. Esta lista puede estar incompleta.",
@@ -10850,7 +10931,7 @@
     "CANCEL_DISPENSE_CONFIRM": "¿Anular esta dispensación y revertir los movimientos de stock?",
     "CANCEL_FAILED": "Error al anular",
     "CATALOG_LOAD_FAILED": "Error al cargar el catálogo de medicamentos",
-    "CATALOG_SUBTITLE": "Gestionar el catálogo nacional de medicamentos",
+    "CATALOG_SUBTITLE": "Gestionar el catálogo de medicamentos de este establecimiento",
     "CATALOG_TITLE": "Catálogo de medicamentos",
     "CATEGORY": "Categoría",
     "CHECK": "Comprobar",
@@ -11183,7 +11264,7 @@
     "HAND_OVER": "Entregar al paciente",
     "HAND_OVER_CONFIRM": "¿Entregar esta dispensación preparada al paciente?",
     "CANCEL_READY": "Cancelar la preparación",
-    "CANCEL_READY_CONFIRM": "¿Cancelar esta preparación? Las existencias se reintegran y se informa al paciente de que ya no está lista.",
+    "CANCEL_READY_CONFIRM": "¿Cancelar esta preparación? Se informa al paciente de que ya no está lista. El medicamento vuelve a la venta solo si está intacto.",
     "CANCEL_READY_REASON_LABEL": "Motivo",
     "CANCEL_READY_REASON": {
       "STOCK_UNAVAILABLE": "Existencias faltantes o dañadas",
@@ -11198,7 +11279,7 @@
     "CANCEL_READY_SUCCESS": "Preparación cancelada.",
     "CANCEL_READY_FAILED": "No se pudo cancelar la preparación.",
     "PREPARED_BY": "Preparada por {{name}}",
-    "STOCK_REMAINING": "Quedan {{qty}} {{unit}} (umbral: {{threshold}})",
+    "STOCK_REMAINING": "Quedan {{qty}} (umbral: {{threshold}})",
     "UNITS": "unidades",
     "BADGE_ESSENTIAL": "Esencial",
     "BADGE_CONTROLLED": "Controlado",
@@ -11301,7 +11382,55 @@
     "SAVE_PRICE": "Guardar el precio",
     "WRITE_OFF_REMOVES_ONLY": "El deterioro y la caducidad solo retiran existencias: introduzca una cantidad negativa.",
     "WRITE_OFF_SIGN_HINT": "Este motivo retira existencias: introduzca una cantidad negativa (por ejemplo −2).",
-    "ALLERGY_ALERTS_TITLE": "Alertas de alergia"
+    "ALLERGY_ALERTS_TITLE": "Alertas de alergia",
+    "RECEIVED_IN": "Cantidad recibida contada en",
+    "RECEIVED_IN_PACKS": "{{packUnit}} (1 {{packUnit}} = {{n}})",
+    "RECEIVED_IN_UNITS": "{{unit}} (por unidad)",
+    "RECEIVED_IN_TOTAL": "Añade {{qty}} al stock.",
+    "RECEIVED_IN_REQUIRED": "Indique si la cantidad recibida cuenta envases o unidades.",
+    "UNIT_COST_PER_PACK": "Costo por {{packUnit}}",
+    "CANCEL_READY_CHOOSE": "Elija el motivo y el estado del medicamento preparado.",
+    "CANCEL_READY_CHOOSE_REASON": "Elija el motivo",
+    "STOCK_CONDITION_LABEL": "Estado del medicamento",
+    "STOCK_CONDITION_CHOOSE": "Elija el estado",
+    "STOCK_CONDITION": {
+      "INTACT": "No entregado, intacto",
+      "DAMAGED": "Dañado",
+      "EXPIRED": "Caducado",
+      "CONTAMINATED": "Contaminado",
+      "MISSING": "Faltante (pérdida)"
+    },
+    "STOCK_CONDITION_BACK_ON_SALE": "Vuelve al stock vendible.",
+    "STOCK_CONDITION_QUARANTINED": "En cuarentena: no se volverá a vender y espera su destrucción.",
+    "STOCK_CONDITION_CONTROLLED_QUARANTINED": "Estupefaciente devuelto: siempre en cuarentena, nunca vuelve a la venta; se destruye ante un testigo.",
+    "RETURN_CONDITION_REQUIRED": "Indique el estado del medicamento devuelto.",
+    "LEDGER_REASON_PREPARED_NOT_FOR_SALE": "Preparación anulada, no vuelve a la venta",
+    "LEDGER_REASON_QUARANTINED": "En cuarentena ({{condition}})",
+    "LEDGER_REASON_DESTROYED": "Destruido: {{reason}}",
+    "QUARANTINE": {
+      "TITLE": "Cuarentena",
+      "EXPLAIN": "Medicamentos devueltos dañados, caducados o contaminados, y estupefacientes devueltos: ya no se pueden vender y esperan su destrucción.",
+      "LOAD_FAILED": "No se pudo cargar la cuarentena.",
+      "EMPTY": "Nada en cuarentena.",
+      "LOT": "Lote {{lot}}",
+      "NO_LOT": "Sin lote",
+      "DESTROY": "Destruir",
+      "DESTROY_TITLE": "Destruir {{name}} ({{held}} en cuarentena)",
+      "QUANTITY": "Cantidad destruida",
+      "REASON": "Modo de destrucción",
+      "REASON_PLACEHOLDER": "Incineración, devolución al proveedor…",
+      "DESTROY_CONFIRM": "Registrar la destrucción",
+      "DESTROY_INVALID": "Indique una cantidad de 1 a {{max}}, el modo de destrucción y, para un estupefaciente, el testigo.",
+      "DESTROYED": "Destrucción registrada.",
+      "DESTROY_FAILED": "No se pudo registrar la destrucción."
+    },
+    "REGISTER_QUARANTINE": "En cuarentena",
+    "REGISTER_QUARANTINE_MOVE": "cuarentena {{qty}} → {{after}}",
+    "FIRST_PHARMACY_ASK_ADMIN": "Todavía no hay ninguna farmacia registrada. La registra el administrador del establecimiento: pídaselo.",
+    "STOCK_CONDITION_CHOOSE_UNIT": "Elija: envases o unidades",
+    "STOCK_CONDITION_MISSING_LOSS": "Nada vuelve al stock: las unidades se registran como pérdida.",
+    "CANCEL_READY_NOT_INTACT": "« Stock faltante o dañado » no puede volver a la venta como intacto: elija dañado, caducado, contaminado o faltante.",
+    "LEDGER_REASON_MISSING": "Faltante en una preparación anulada (pérdida)"
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",
@@ -11807,7 +11936,19 @@
     "PICK_PLAN": "Choose the plan",
     "PLAN_HINT": "The payer plan this coverage is billed under. Without a plan, the patient pays the whole invoice.",
     "PLAN_SAVED": "Plan saved.",
-    "PLAN_SAVE_ERROR": "The plan could not be saved."
+    "PLAN_SAVE_ERROR": "The plan could not be saved.",
+    "VERIFIED": "Seguro verificado",
+    "OTHER_TITLE": "Seguro registrado en otro hospital — por verificar",
+    "OTHER_HINT": "Tal como se introdujo allí, sin verificar aquí. Verifíquelo con la tarjeta del paciente y la aseguradora antes de retomarlo. Las verificaciones, bonos, autorizaciones, reclamaciones e importes de ese hospital no se comparten.",
+    "TO_VERIFY": "Por verificar",
+    "OTHER_REUSE": "Retomar para este hospital",
+    "OTHER_REUSED": "Seguro retomado para este hospital, sin verificar. Verifíquelo y luego elija su plan.",
+    "OTHER_REUSE_ERROR": "No se pudo retomar el seguro",
+    "OTHER_NO_AGREEMENT": "Ningún convenio con esta aseguradora en este hospital. Retomarlo solo registra el seguro: no se factura ninguna parte a la aseguradora hasta que el hospital tenga su propio convenio.",
+    "OTHER_DECLARED": "Declarado en {{hospital}} el {{date}} — por verificar",
+    "OTHER_DECLARED_NO_DATE": "Declarado en {{hospital}} — por verificar",
+    "OTHER_CARD_HINT": "La tarjeta de seguro que subió el paciente, si la hay, está en la pestaña «Documentos».",
+    "OTHER_REUSED_NO_AGREEMENT": "Seguro registrado para este hospital, sin verificar y sin convenio: no se factura ninguna parte a la aseguradora."
   },
   "PATIENT_DOCUMENTS": {
     "TAB": "Documentos",
@@ -13336,7 +13477,7 @@
     "DAY_5": "Viernes",
     "DAY_6": "Sábado",
     "DAY_7": "Domingo",
-    "DEPARTMENT": "Servicio",
+    "DEPARTMENT": "Departamento",
     "FROM": "Desde",
     "GENERATE": "Generar",
     "GENERATED": "{{created}} espacios generados a partir de {{templates}} plantillas ({{skipped}} ya existentes)",
@@ -13353,7 +13494,7 @@
     "RETIRE": "Retirar",
     "RETIRED": "Retirado",
     "SEARCH": "Buscar",
-    "SELECT_DEPARTMENT": "Seleccionar servicio",
+    "SELECT_DEPARTMENT": "Seleccionar departamento",
     "SELECT_STAFF": "Seleccionar personal",
     "SHOW_INACTIVE": "Mostrar retirados",
     "SLOTS_EMPTY": "Ningún espacio coincide con estos filtros.",
@@ -13413,7 +13554,8 @@
     "VT_RESTORED": "Tipo de visita restaurado",
     "VT_RETIRED": "Tipo de visita retirado",
     "VT_SAVED": "Tipo de visita guardado",
-    "VT_SAVE_ERROR": "No se pudo guardar el tipo de visita."
+    "VT_SAVE_ERROR": "No se pudo guardar el tipo de visita.",
+    "GENERATED_ONE_TEMPLATE": "{{created}} espacios generados a partir de una plantilla ({{skipped}} ya existentes)"
   },
   "TRANSFUSION": {
     "LATE_INCOMPATIBLE_RESULT": "Registrar un resultado incompatible",
@@ -13582,7 +13724,44 @@
     "REACTION_ERROR": "No se pudo registrar la reacción",
     "PLATELET_O_TO_B": "Pendiente de confirmación",
     "PLATELET_O_TO_B_DETAIL": "Plaquetas de grupo O para un receptor de grupo B. Permitido por el protocolo de este centro: esta transfusión no está bloqueada ni cuestionada. El protocolo excluye las plaquetas O para receptores A y AB pero no para receptores B, y aún no se ha confirmado con hematología si esa diferencia es intencionada. Plantéelo en la próxima revisión.",
-    "CANCEL_REQUEST_CONFIRM": "Cancelar la solicitud"
+    "CANCEL_REQUEST_CONFIRM": "Cancelar la solicitud",
+    "DECLARED_LABEL": "Grupo en la historia",
+    "DECLARED_VALUE": "{{group}} (declarado, no verificado)",
+    "DECLARED_GROUP": "Historia: {{group}} (no verificado)",
+    "DECLARED_MISMATCH": "La historia indica {{declared}} pero el laboratorio tipificó {{typed}}. Compruebe la identidad del paciente y la historia; el grupo del laboratorio rige para la compatibilidad.",
+    "DECLARED_MISMATCH_SHORT": "Difiere de la historia",
+    "ALLO_IMMUNISED": "Paciente aloinmunizado (escrutinio de anticuerpos positivo en la historia)",
+    "ALLO_IMMUNISED_RULE": "Regla provisional: los glóbulos rojos solo se entregan para un anticuerpo identificado (o por decisión de derivación del biólogo), en una unidad antígeno-negativa con fenotipo RH-KEL1 respetado, con una prueba cruzada por antiglobulina compatible sobre una muestra de 72 horas como máximo. Un escrutinio negativo posterior no anula esta regla.",
+    "ALLO_IMMUNISED_REQUEST": "Aloinmunizado: los glóbulos rojos exigen una unidad compatibilizada, o una urgencia vital declarada (regla provisional)",
+    "ANTIBODY_IDENTIFIED": "Anticuerpo identificado: {{antibody}}",
+    "ANTIBODY_WORKUP_MISSING": "El anticuerpo no está identificado y ninguna decisión de derivación sirve a esta solicitud: los glóbulos rojos quedan retenidos.",
+    "ANTIBODY_RECORD": "Registrar el anticuerpo o una decisión de derivación",
+    "ANTIBODY_RECORD_HINT": "Solo el biólogo registra esta información. Queda de forma definitiva en la historia del paciente.",
+    "ANTIBODY_STATUS": "Qué se registra",
+    "ANTIBODY_STATUS_IDENTIFIED": "Anticuerpo identificado",
+    "ANTIBODY_STATUS_REFERRED": "Derivado al CNTS/CRTS: atender esta solicitud antes de la respuesta",
+    "ANTIBODY_SPECIFICITIES": "Anticuerpo identificado (especificidad)",
+    "ANTIBODY_REFERRAL_HINT": "La unidad fenotipada y la prueba cruzada por antiglobulina siguen siendo obligatorias. La decisión solo sirve a esta solicitud.",
+    "ANTIBODY_REFERRAL_CENTRE": "Centro de derivación (CNTS, CRTS)",
+    "ANTIBODY_DECISION_REASON": "Por qué se atiende esta solicitud antes de la identificación",
+    "ANTIBODY_RECORDED": "Registrado.",
+    "ANTIBODY_ERROR": "No se pudo guardar el registro.",
+    "VITAL_URGENCY_WARNING": "Este paciente está aloinmunizado. En urgencia vital la transfusión no se retrasa, pero existe riesgo de hemólisis: declare el nivel y el motivo, y extraiga la muestra pretransfusional antes de la primera unidad (regla provisional).",
+    "VITAL_URGENCY_LEVEL": "Nivel de urgencia vital",
+    "VITAL_URGENCY_UVI": "Urgencia vital inmediata (UVI): grupo O sin demora",
+    "VITAL_URGENCY_UV": "Urgencia vital (UV): entrega en 30 minutos",
+    "VITAL_URGENCY_REASON": "Motivo de la urgencia vital",
+    "VITAL_URGENCY_SAMPLE": "La muestra pretransfusional se extrae antes de la primera unidad",
+    "VITAL_URGENCY_DECLARED": "Declarado por el prescriptor: {{level}}. Motivo: {{reason}}",
+    "COMPATIBILISATION_HINT": "Paciente aloinmunizado: un resultado compatible debe ser una prueba cruzada por antiglobulina, sobre una muestra de 72 horas como máximo, en una unidad negativa para el antígeno diana y con fenotipo RH-KEL1 respetado (regla provisional).",
+    "XM_SAMPLE_AT": "Muestra de esta prueba extraída el",
+    "XM_ANTIGLOBULIN": "Realizada por la técnica de antiglobulina indirecta",
+    "XM_ANTIGEN_NEGATIVE": "La unidad es negativa para el antígeno diana",
+    "XM_RH_KELL": "La unidad respeta el fenotipo RH-KEL1",
+    "HAEMOLYSIS_WARNING": "Paciente aloinmunizado: una entrega sin prueba cruzada compatible conlleva riesgo de hemólisis. Avise al equipo clínico, mantenga el control a pie de cama; el biólogo realiza la prueba cruzada después (regla provisional).",
+    "ANTIBODY_FROM_OTHER_HOSPITAL": "Información de seguridad transfusional registrada por: {{hospitals}}",
+    "ANTIBODY_KNOWN_IDENTIFIED": "Anticuerpo identificado: {{antibody}} ({{hospital}}, {{date}}).",
+    "ANTIBODY_KNOWN_NOT_IDENTIFIED": "Escrutinio de anticuerpos positivo, anticuerpo no identificado ({{hospital}}, {{date}})."
   },
   "MORTALITY": {
     "DISPUTE": "Impugnar este fallecimiento",
@@ -13822,7 +14001,16 @@
     "WARD_OVERVIEW": "Vista de unidades",
     "SNAPSHOT_AT": "Actualizado",
     "LEGEND": "Leyenda del estado de camas",
-    "HOSPITAL_NAMES_ERROR": "No se pudieron cargar los nombres de hospitales. Se muestran identificadores; las capacidades están disponibles."
+    "HOSPITAL_NAMES_ERROR": "No se pudieron cargar los nombres de hospitales. Se muestran identificadores; las capacidades están disponibles.",
+    "IN_LABOR": "En trabajo de parto",
+    "LABOR_NOTICE": "{{name}} está en trabajo de parto. Un traslado a otra cama de maternidad no requiere confirmación; un traslado fuera de la unidad de maternidad sí.",
+    "LABOR_WARNING": "{{name}} está en trabajo de parto y esta cama no está en una unidad de maternidad. Compruebe que es la paciente correcta y explique el porqué en el motivo.",
+    "LABOR_CONFIRM": "Confirmo el traslado de una paciente en trabajo de parto fuera de la unidad de maternidad",
+    "LABOR_COMPLETE_TITLE": "¿Trasladar a una paciente en trabajo de parto?",
+    "LABOR_COMPLETE_MESSAGE": "{{name}} está en trabajo de parto y {{bed}} no está en una unidad de maternidad. Realice este traslado solo si está destinado a ella.",
+    "LABOR_COMPLETE_CONFIRM": "Sí, realizar el traslado",
+    "SEARCH_RESULTS": "{{shown}} de {{total}} camas coinciden con la búsqueda.",
+    "SEARCH_CLEAR": "Mostrar todas las camas"
   },
   "EMAR": {
     "ORDER_NO_LONGER_ACTIVE": "Esta receta ya no está activa. No se registró ninguna dosis.",
@@ -15132,7 +15320,8 @@
       "NO_CREATININE": "No released creatinine result at this hospital",
       "PRIOR_STUDIES": "Prior imaging studies",
       "NO_PRIOR": "No prior imaging study at this hospital",
-      "OPEN_REPORT": "Open its report"
+      "OPEN_REPORT": "Open its report",
+      "REFERENCE_RANGE": "Reference range: {{range}}"
     },
     "PORTAL": {
       "TITLE": "Imaging",
@@ -15142,7 +15331,8 @@
       "EMPTY_DESC": "A report appears here once the radiologist has signed it.",
       "REPORT": "Report",
       "IMAGES": "Images",
-      "IMAGE_N": "Image {{n}}"
+      "IMAGE_N": "Image {{n}}",
+      "PRESCRIBED_BY": "Requested by {{name}}"
     },
     "MAX_SIZE_LABEL": "10 MB",
     "IMAGES": {
@@ -15175,7 +15365,18 @@
     "EMPTY": "Ningún resultado crítico espera repetición.",
     "ORDERED_BY": "Solicitado por",
     "PAGING_SINCE": "Alerta enviada",
-    "ROUNDS": "Escaladas"
+    "ROUNDS": "Escaladas",
+    "ESCALATION_TITLE": "Etapas de la escalada (regla provisional)",
+    "ESCALATION_HINT": "Un resultado crítico que nadie confirma pasa al médico de cobertura, luego al médico jefe y al biólogo, y después se convierte en un « resultado crítico no resuelto » con un registro de incidente. Solo la relectura por un clínico le pone fin. Los minutos cuentan desde el primer aviso. Regla provisional, pendiente de la validación del médico jefe y del biólogo.",
+    "ESCALATION_COVER": "Médico de cobertura tras (min)",
+    "ESCALATION_LEAD": "Médico jefe y biólogo tras (min)",
+    "ESCALATION_UNRESOLVED": "No resuelto, incidente tras (min)",
+    "ESCALATION_CHIEF": "Médico jefe",
+    "ESCALATION_CHIEF_NONE": "Sin designar: jefes de servicio, si no todos los médicos",
+    "ESCALATION_INVALID": "Las tres etapas deben ser crecientes, de 5 minutos a 1440 (por ejemplo 15, 30 y 60).",
+    "ESCALATION_SAVED": "Etapas de la escalada guardadas.",
+    "ESCALATION_SAVE_ERROR": "No se pudieron guardar las etapas de la escalada.",
+    "ESCALATION_LOAD_ERROR": "No se pudieron cargar las etapas de la escalada."
   },
   "PHARMACY_MONEY": {
     "HANDOVER": {
@@ -15213,9 +15414,15 @@
       "INVALID": "Enter the units per pack (2 to 10,000), the dispensing unit and a reason.",
       "SAVED": "Pack size saved: the stock is counted in units.",
       "FAILED": "The pack size could not be saved.",
-      "BREAKDOWN": "{{packs}} {{packUnit}} + {{loose}} {{unit}}",
-      "SIZE": "1 {{packUnit}} = {{n}} {{unit}}",
-      "SET": "Pack size"
+      "BREAKDOWN": "{{packs}} + {{loose}}",
+      "SIZE": "1 {{packUnit}} = {{n}}",
+      "SET": "Pack size",
+      "COUNTED_IN": "El stock actual de este artículo se cuenta en",
+      "COUNTED_IN_UNITS": "{{unit}} (ya en unidades): no se multiplica nada",
+      "COUNTED_IN_PACKS": "{{packUnit}} (en envases): stock, lotes, umbral y cantidad a pedir se multiplican por {{n}}",
+      "COUNTED_IN_REQUIRED": "Indique en qué se cuenta el stock actual: unidades o envases.",
+      "PREVIEW": "Tras guardar: stock {{qty}}, umbral de reposición {{threshold}}, cantidad a pedir {{order}}.",
+      "DECLARE": "Guardar el envase"
     },
     "REFUND": {
       "TITLE": "Refunds of returns to process",
@@ -15412,6 +15619,7 @@
     "MARK_READ": "Marcar como leído"
   },
   "MATERNITY_STAY": {
+    "NO_NEONATAL_COT": "No hay ninguna cuna neonatal disponible en esta lista. Pida al equipo de la unidad que compruebe la configuración y la disponibilidad de neonatología.",
     "LOADING": "Comprobando la estancia…",
     "NOT_ADMITTED": "no ingresado(a): no aparece en el puesto de enfermería ni en el tablero de camas.",
     "ACUITY": "Nivel de gravedad",
@@ -15437,7 +15645,7 @@
     "LOAD_FAILED": "estancia desconocida: no se pudieron leer los ingresos. Recargue antes de ingresar.",
     "MIDWIFE_NEWBORN_RULE": "Una matrona ingresa al recién nacido de un parto que atendió y es su clínica responsable. Regla provisional, pendiente de aprobación por una matrona o un obstetra designado.",
     "MIDWIFE_BED_RULE": "Una matrona asigna las camas de maternidad. Regla provisional, pendiente de aprobación por una matrona o un obstetra designado.",
-    "MIDWIFE_COT_RULE": "Una matrona asigna las cunas de maternidad. Una cuna de neonatología también se asigna, y entonces se pide a un médico que valore al recién nacido. Regla provisional, pendiente de aprobación por una matrona o un obstetra designado.",
+    "MIDWIFE_COT_RULE": "Una matrona asigna las cunas de maternidad. Cuando se dispone de una cuna neonatal y se asigna, se solicita a un médico que revise al recién nacido. Regla provisional, pendiente de aprobación por una matrona o un obstetra designado.",
     "BED_ASSIGNED_PHYSICIAN_ASKED": "Cama {{bed}} asignada. Se ha pedido a un médico que valore al recién nacido."
   },
   "SENSITIVITY_TAG": {
@@ -15570,6 +15778,40 @@
     "RECORDED_AT_EXAM": "Registrado durante el examen",
     "AWAITS_PREAUTH_NUMBER": "El número de preautorización de este examen aún no está registrado: un médico o un radiólogo lo registra antes de que el examen pueda comenzar."
   },
+  "IMAGING_CATALOGUE": {
+    "TAB": "Catálogo de exámenes",
+    "TITLE": "Catálogo de imagen",
+    "INTRO": "Los exámenes que una solicitud de imagen puede elegir: las líneas «Imagen» de la lista de precios. El nombre, el código y el precio se modifican en la lista de precios; aquí, la región anatómica y la respuesta a «puede revelar un embarazo».",
+    "PROVISIONAL": "Regla provisional: un examen que puede revelar un embarazo nunca se muestra a un familiar.",
+    "LOAD_FAILED": "No se pudo cargar el catálogo de imagen.",
+    "RETRY": "Reintentar",
+    "EMPTY": "El catálogo está vacío. Añada los exámenes a la lista de precios, categoría «Imagen»: aparecerán aquí y en el formulario de solicitud.",
+    "BODY_REGION": "Región anatómica",
+    "FLAG": "Puede revelar un embarazo",
+    "FLAG_UNDECIDED": "Sin decidir",
+    "FLAG_YES": "Sí: nunca se muestra a familiares",
+    "FLAG_NO": "No: se muestra a familiares",
+    "STATUS_YES": "Nunca se muestra a un familiar, ni el examen ni su factura.",
+    "STATUS_NO": "Se muestra a familiares, salvo si la pregunta clínica o la región escritas en la solicitud, el informe o una leyenda de imagen mencionan un embarazo. Solo vale para las solicitudes que llevan el nombre actual del examen.",
+    "STATUS_UNDECIDED_NAMED": "Sin decidir: su nombre es el de un examen obstétrico, pélvico o ginecológico, por lo que se oculta a los familiares.",
+    "STATUS_UNDECIDED": "Sin decidir: por prudencia, se oculta a los familiares cuando es una ecografía, un examen abdominal o pélvico, o un examen que no dice de qué parte del cuerpo se trata, para una persona de 10 a 55 años (o de edad desconocida) que no está registrada como de sexo masculino.",
+    "DECIDED_BY": "Decidido por {{name}}, el {{date}}.",
+    "SOMEONE": "un responsable del hospital",
+    "SAVED": "Examen actualizado",
+    "SAVE_FAILED": "No se pudo actualizar el examen.",
+    "EXAM": "Examen del catálogo",
+    "FREE_TEXT_OPTION": "Fuera del catálogo (texto libre)",
+    "PICK_HINT": "Examen del catálogo del hospital: se tarifica según la lista de precios.",
+    "FREE_TEXT_HINT": "Elija el examen en el catálogo cuando figure en él. Fuera del catálogo, la línea puede quedar por tarificar en caja, y el examen puede ocultarse a los familiares por prudencia.",
+    "EMPTY_HINT": "El catálogo de imagen del hospital está vacío: escriba el examen en texto libre.",
+    "ORDER_LOAD_FAILED": "No se pudo cargar el catálogo: escriba el examen en texto libre."
+  },
+  "R70_PRIVACY": {
+    "OPEN_REFILLS": "Abrir las solicitudes de renovación",
+    "RELEASED_TO": "Comunicado a {{recipient}}",
+    "RELEASED_TO_UNNAMED": "Comunicado a un padre, una madre o un tutor",
+    "RESULT_CATEGORY": "Categoría del resultado: {{category}}"
+  },
   "IMAGING_REPORTING_SETTINGS": {
     "TITLE": "Ecografía",
     "ULTRASOUND": "Ecografía por un no médico",
@@ -15612,7 +15854,7 @@
         },
         "STAFF": {
           "TITLE": "Personal",
-          "DONE": "Miembros del personal activos: {{count}}",
+          "DONE": "Personal activo (sin administradores): {{count}}",
           "TODO": "Inscriba al personal. Cada persona debe después activar su cuenta con el código recibido."
         },
         "PROVIDERS_IN_DEPARTMENT": {
@@ -15644,6 +15886,16 @@
           "TITLE": "Entidades pagadoras",
           "DONE": "Entidades pagadoras activas: {{count}}",
           "TODO": "Añada las mutuas y los seguros si el establecimiento atiende a pacientes asegurados."
+        },
+        "CLINICAL_RULES": {
+          "TITLE": "Reglas clínicas validadas",
+          "DONE": "Reglas clínicas validadas: {{count}} / {{total}}",
+          "TODO": "Reglas clínicas validadas: {{count}} / {{total}}. Imprima el dossier de firma para el médico jefe y registre cada firma."
+        },
+        "LAB_TESTS": {
+          "TITLE": "Pruebas de laboratorio",
+          "DONE": "Pruebas que se pueden pedir: {{count}}",
+          "TODO": "Configure las pruebas (valores de referencia, validación) antes de la tarifa: un precio de laboratorio se vincula a una prueba por su código."
         }
       }
     },
@@ -15770,5 +16022,283 @@
     "DESCENDING": "Descendente",
     "ASCENDING_FLIP": "Ascendente, cambiar a descendente",
     "DESCENDING_FLIP": "Descendente, cambiar a ascendente"
+  },
+  "PRINT_IDENTITY": {
+    "PATIENT": "Patient",
+    "SEX": "Sex",
+    "EXAM_DATE": "Exam date",
+    "PRINTED_ON": "Printed on {{date}}"
+  },
+  "CLINICAL_RULES": {
+    "TITLE": "Reglas clínicas y validación",
+    "SUBTITLE": "Cada regla que aplica la plataforma, su fuente, quién la aprueba y si este establecimiento la ha validado.",
+    "BEHAVIOUR_NOTE": "Una regla se aplica igual, validada o no: la validación registra la decisión del aprobador y solo cambia la mención « provisional ».",
+    "NO_HOSPITAL": "Elija un establecimiento para ver sus reglas clínicas.",
+    "LOAD_FAILED": "No se pudieron cargar las reglas clínicas.",
+    "PROGRESS": "Reglas validadas: {{signed}} / {{total}}",
+    "READ_ONLY": "Solo lectura: el administrador del establecimiento registra cada validación.",
+    "PACK": "Imprimir el dossier de firma (PDF)",
+    "PACK_FAILED": "No se pudo imprimir el dossier de firma.",
+    "SOURCE": "Fuente",
+    "APPROVER": "Aprobador",
+    "VERSION": "Versión",
+    "ENFORCED_IN": "Aplicada en",
+    "SOURCE_OPEN": "Abrir la fuente",
+    "AREA": {
+      "PRESCRIBING": "Prescripción",
+      "MATERNITY": "Maternidad",
+      "VITALS": "Constantes vitales",
+      "DEATH": "Defunciones y mortinatos",
+      "RECORDS": "Historia clínica y privacidad",
+      "IMAGING": "Imagen",
+      "BILLING": "Facturación",
+      "LAB": "Laboratorio y banco de sangre"
+    },
+    "NOTE": "Nota",
+    "REVOKE_REASON": "Motivo de la revocación",
+    "SIGNED_BY": "Validada el {{date}} por {{title}} ({{name}})",
+    "REVOKED_BY": "Validación revocada el {{date}} por {{name}}",
+    "RECORDED_BY": "Registrada por {{name}} el {{date}}",
+    "NEW_VERSION": "Se había validado la versión {{version}}; la regla ha cambiado y debe validarse de nuevo.",
+    "STATUS": {
+      "PENDING": "Provisional",
+      "SIGNED": "Validada",
+      "REVOKED": "Validación revocada"
+    },
+    "LABEL": {
+      "PENDING": "Provisional — fuente: {{source}}. A validar por: {{approver}}.",
+      "SIGNED": "Validada el {{date}} por {{title}}"
+    },
+    "SIGN": {
+      "ACTION": "Registrar la validación",
+      "TITLE": "Registrar la validación",
+      "HINT": "Introduzca la firma del aprobador tal como figura en el dossier de firma. El aprobador no necesita una cuenta.",
+      "SIGNER_NAME": "Nombre del firmante",
+      "SIGNER_TITLE": "Cargo del firmante",
+      "DEFAULT_TITLE": "Médico jefe",
+      "SIGNED_ON": "Fecha de firma",
+      "NOTE": "Nota (opcional)",
+      "SELF": "Soy el firmante (mi cuenta se registra con la validación)",
+      "CONFIRM": "Registrar",
+      "DONE": "Validación registrada.",
+      "FAILED": "No se pudo registrar la validación.",
+      "FUTURE_DATE": "La fecha de firma no puede estar en el futuro."
+    },
+    "REVOKE": {
+      "ACTION": "Revocar",
+      "TITLE": "Revocar la validación",
+      "MESSAGE": "El conjunto de reglas vuelve a ser « provisional » en este establecimiento. La regla sigue aplicándose como antes.",
+      "CONFIRM": "Revocar",
+      "DONE": "Validación revocada.",
+      "FAILED": "No se pudo revocar la validación."
+    },
+    "SURFACE": {
+      "MIDWIFE_NEWBORN": "Una matrona ingresa al recién nacido de un parto que atendió y es su clínica responsable.",
+      "MIDWIFE_BED": "Una matrona asigna las camas de maternidad.",
+      "MIDWIFE_COT": "Una matrona asigna las cunas de maternidad. Cuando se dispone de una cuna neonatal y se asigna, se solicita a un médico que revise al recién nacido.",
+      "IMAGING_TECHNICIAN": "Como técnico de imagen, usted recibe al paciente, realiza y documenta el examen y adjunta sus imágenes. La solicitud del examen y la redacción o firma del informe corresponden al médico.",
+      "ULTRASOUND_PHYSICIANS_ONLY": "Ecografía: en este hospital el examen lo realiza un médico. Usted puede registrar la llegada del paciente y adjuntar imágenes.",
+      "MINOR_RELEASE_AGE": "A partir de los {{age}} años, las demás categorías sensibles también se ocultan a los padres (edad ajustable por el establecimiento).",
+      "VITALS_NEWBORN": "Recién nacido (menos de 28 días): la medición se ha guardado y se ha evaluado con los valores del recién nacido.",
+      "VITALS_NEWBORN_URGENT": "Recién nacido (menos de 28 días): la medición se ha guardado, se ha evaluado con los valores del recién nacido y se ha avisado al equipo asistencial.",
+      "VITALS_POSTPARTUM_URGENT": "Embarazo o posparto: la medición se ha guardado y se ha avisado al equipo asistencial.",
+      "VITALS_ADULT_HTN": "Presión arterial muy elevada: la medición se ha guardado.",
+      "VITALS_ADULT_HTN_URGENT": "Presión arterial muy elevada con un signo de daño de órganos: la medición se ha guardado y se ha avisado al equipo asistencial.",
+      "VITALS_MATERNAL_EWS": "Embarazo o posparto: la medición queda registrada.",
+      "VITALS_MATERNAL_EWS_PAGED": "Embarazo o posparto: la medición queda registrada y se ha avisado al equipo asistencial.",
+      "LABOUR_TRANSFER_HINT": "Su episodio de trabajo de parto aquí se cierra y el hospital elegido recibe un nuevo episodio vinculado, con su partograma de aquí en solo lectura. Se alerta a su equipo de maternidad.",
+      "LABOUR_ARRIVAL_HINT": "Su episodio de trabajo de parto en {{hospital}} se cierra y aquí se abre uno nuevo, vinculado; se alerta a {{hospital}}.",
+      "PERINATAL_DEFINITION": "OMS: mortinatos a las {{weeks}} semanas completas o más y muertes neonatales precoces (días 0 a 6)",
+      "STILLBIRTHS_WHO_DEFINITION": "Indicador OMS: sin signos de vida a las {{weeks}} semanas completas o más",
+      "STILLBIRTHS_ICD_DEFINITION": "Nivel CIE: desde las {{weeks}} semanas completas"
+    }
+  },
+  "PATIENT_SAFETY": {
+    "ARIA_LABEL": "Cabecera de seguridad del paciente",
+    "LOADING": "Cargando la cabecera de seguridad…",
+    "UNAVAILABLE": "Cabecera de seguridad no disponible: compruebe la historia antes de actuar.",
+    "NAME": "Paciente",
+    "AGE": "Edad",
+    "AGE_YEARS": "{{n}} años",
+    "AGE_MONTHS": "{{n}} meses",
+    "SEX": "Sexo",
+    "WEIGHT": "Peso",
+    "WEIGHT_KG": "{{kg}} kg",
+    "WEIGHED_ON": "(pesado el {{date}})",
+    "NOT_WEIGHED": "Sin peso registrado",
+    "BLOOD_GROUP": "Grupo sanguíneo",
+    "NOT_DOCUMENTED": "No registrado",
+    "ALLERGIES": "Alergias",
+    "NO_KNOWN_ALLERGIES": "Sin alergias conocidas",
+    "HISTORY_HINT": "Antecedentes médicos personales (médico, enfermero o matrona). Aparecen en el resumen.",
+    "HISTORY_ADD": "Registrar los antecedentes",
+    "HISTORY_EDIT": "Modificar los antecedentes"
+  },
+  "PORTAL_ACTIVATION": {
+    "TITLE": "Acceso al portal del paciente",
+    "HELP": "Si el SMS de activación no llegó, muestre el código y entrégueselo al paciente en persona, o vuelva a enviar la activación.",
+    "SHOW": "Mostrar el código de activación",
+    "RESEND": "Volver a enviar la activación",
+    "HOW_TO": "El paciente abre la página de inicio de sesión, elige « Tengo un código de activación » e introduce su número de teléfono y este código. La consulta del código queda registrada en la auditoría.",
+    "RESENT": "Activación enviada de nuevo.",
+    "RESENT_NOWHERE": "La activación no se pudo enviar: muestre el código y entréguelo en persona.",
+    "RESEND_FAILED": "No se pudo volver a enviar la activación."
+  },
+  "R70_MONEY": {
+    "DEFERRAL": {
+      "FILL_CHARGE": "Amount of the fill",
+      "FILL_DUE": "Still owed on the fill",
+      "INSURER_SHARE": "Insurer share",
+      "PATIENT_SHARE": "Patient share (paid at the checkout)",
+      "COVER_SHARE_HINT": "The insurer share is computed from the patient's plan; the patient pays the rest before the hand-over.",
+      "LIMIT_AT_LEAST": "At least {{amount}}: what the fill owes.",
+      "LIMIT_BELOW_DUE": "The ceiling is below what the fill owes ({{amount}}): set at least that amount, or reject the request."
+    },
+    "CHECKOUT": {
+      "INSURER_SHARE": "Charge {{charge}}, of which the insurer pays {{insurer}}: the patient pays the rest."
+    },
+    "CHECKIN": {
+      "COVERAGE_TITLE": "Coverage to verify",
+      "PAYER": "Payer",
+      "PLAN": "Plan",
+      "NO_PLAN": "No plan linked",
+      "PERCENT": "{{percent}} %",
+      "POLICY": "Policy no.",
+      "VALIDITY": "Valid",
+      "EXPIRED": "Expired",
+      "FROM_TO": "from {{from}} to {{to}}",
+      "UNTIL": "until {{to}}",
+      "NO_END": "no end date",
+      "NO_COVERAGE": "No insurance at this hospital: the patient pays the whole bill.",
+      "SUGGESTED_SHARED": "Suggested patient share: {{copay}} (consultation {{fee}}, insurer {{payer}}).",
+      "SUGGESTED_FULL": "Consultation fee: {{copay}} (no insurer share).",
+      "USE_SUGGESTED": "Use this amount"
+    },
+    "BILLING": {
+      "REVERSAL_PENDING": "Reversal requested",
+      "TO_PRICE": "to price"
+    },
+    "CASH": {
+      "CLOSE_CONFIRM_TITLE": "Close this till?",
+      "CLOSE_CONFIRM_MESSAGE": "Counted {{counted}} for {{expected}} expected (difference {{difference}}). Once closed, only a manager can reopen it."
+    },
+    "SHARES": {
+      "TITLE": "Insurer shares",
+      "SUBTITLE": "What the payers owe on the hospital's invoices: claim them, record their payment or their refusal.",
+      "REFRESH": "Refresh",
+      "VIEWS": "Shares to show",
+      "VIEW_OPEN": "To claim or claimed",
+      "VIEW_CLOSED": "Paid or refused",
+      "LOAD_FAILED": "The insurer shares could not be loaded.",
+      "EMPTY": "No insurer share here.",
+      "TOTAL": "{{count}} share(s), {{amount}} in all",
+      "PLAN": "Plan",
+      "INVOICE": "Invoice",
+      "AMOUNT": "Amount",
+      "CLAIM": "Mark claimed",
+      "PAID": "Mark paid",
+      "PAID_CONFIRM": "Mark this {{amount}} share of {{payer}} as paid? It can no longer be claimed or refused.",
+      "REJECT": "Refused by the payer",
+      "REASON": "Payer's reason",
+      "REASON_REQUIRED": "Type the payer's reason for refusing.",
+      "DECIDE_FAILED": "The share could not be updated.",
+      "DONE": {
+        "CLAIM": "Share marked claimed.",
+        "PAID": "Share marked paid.",
+        "REJECT": "Refusal recorded: the patient owes this share again."
+      },
+      "STATUS": {
+        "OPEN": "To claim",
+        "CLAIMED": "Claimed",
+        "PAID": "Paid",
+        "REJECTED": "Refused",
+        "CANCELLED": "Cancelled"
+      }
+    },
+    "PRICE_LIST": {
+      "LINK_BY_CODE": "Link by code",
+      "LINKED_ALL": "{{linked}} lab line(s) linked to their test.",
+      "LINKED_WITH_LEFT": "{{linked}} lab line(s) linked; {{left}} left unlinked (no single live test with that code, or already linked): {{codes}}.",
+      "LINK_FAILED": "The lab lines could not be linked."
+    }
+  },
+  "PHARMACY_SALE": {
+    "NAV": "Venta en mostrador",
+    "TITLE": "Venta en mostrador",
+    "SUBTITLE": "Venda medicamentos sin receta a un cliente de paso. La venta se registra en su caja de la farmacia.",
+    "PHARMACIES_FAILED": "No se pudieron cargar las farmacias.",
+    "PICKER_TITLE": "Artículos",
+    "SEARCH_LABEL": "Buscar un artículo",
+    "SEARCH_PLACEHOLDER": "Nombre o código del medicamento",
+    "CONTROLLED_HIDDEN": "Los medicamentos controlados no se venden en mostrador: se dispensan con receta.",
+    "ITEMS_FAILED": "No se pudo cargar el stock de la farmacia.",
+    "NO_ITEMS": "Ningún artículo de esta farmacia puede venderse en mostrador (ninguno activo, no controlado y con stock).",
+    "NO_MATCH": "Ningún artículo en stock coincide con esta búsqueda.",
+    "MORE_ITEMS": "Se muestran {{shown}} de {{total}} artículos: precise la búsqueda.",
+    "STOCK_ON_HAND": "En stock: {{stock}}",
+    "PACK_BREAKDOWN": "{{packs}} + {{loose}}",
+    "UNIT_PRICE": "{{price}} por unidad ({{unit}})",
+    "NO_PRICE": "Precio de venta no definido: no puede venderse hasta que se registre su precio en el inventario.",
+    "ADD": "Añadir",
+    "ADD_LABEL": "Añadir {{name}} a la cesta",
+    "BASKET": "Cesta",
+    "BASKET_EMPTY": "La cesta está vacía: añada un artículo de la lista.",
+    "BASKET_REQUIRED": "Añada al menos un artículo a la cesta.",
+    "REMOVE": "Quitar",
+    "REMOVE_LABEL": "Quitar {{name}} de la cesta",
+    "LOT": "Lote",
+    "LOT_CHOOSE": "Elegir el lote",
+    "LOT_OPTION": "{{lot}} · caduca {{date}} · {{qty}}",
+    "LOTS_LOADING": "Cargando los lotes…",
+    "LOTS_FAILED": "No se pudieron cargar los lotes.",
+    "NOT_IN_LOTS": "No gestionado por lotes",
+    "NO_USABLE_LOT": "Ningún lote de este artículo puede venderse (todos vacíos o caducados).",
+    "LOT_REQUIRED": "Elija el lote del que sale el artículo.",
+    "QUANTITY": "Cantidad",
+    "QUANTITY_POSITIVE": "Introduzca una cantidad mayor que cero.",
+    "PACKS_WHOLE": "Una cantidad en envases es un número entero de envases.",
+    "COUNTED_IN": "Cantidad contada en",
+    "IN_UNITS": "unidades",
+    "IN_PACKS": "envases",
+    "PACK_SIZE": "1 {{packUnit}} = {{n}}",
+    "LINE_UNITS": "{{units}} en total",
+    "FEFO_REASON": "Motivo de la elección de este lote",
+    "FEFO_WARNING": "El lote {{lot}} caduca antes ({{date}}) y aún contiene {{left}}: indique por qué sale primero este lote.",
+    "FEFO_REASON_REQUIRED": "Indique el motivo de sacar un lote que caduca más tarde.",
+    "LOT_SHORT": "El lote {{lot}} solo contiene {{qty}}: añada de nuevo el artículo para tomar el resto del lote siguiente.",
+    "LINE_TOTAL": "Importe de la línea",
+    "TOTAL": "Total estimado",
+    "PRICED_BY_SERVER": "Vista previa al precio de venta de la farmacia: el importe cobrado lo calcula el servidor al registrar la venta.",
+    "PAYMENT": "Pago",
+    "PAYMENT_METHOD": "Forma de pago",
+    "REFERENCE": "Referencia de la transacción",
+    "REFERENCE_PLACEHOLDER": "Referencia que aparece en el teléfono del cliente",
+    "REFERENCE_REQUIRED": "Introduzca la referencia de la transacción de dinero móvil.",
+    "NOTES": "Notas",
+    "SUBMIT": "Cobrar",
+    "SAVING": "Registrando la venta…",
+    "SAVED": "Venta registrada.",
+    "FAILED": "No se pudo registrar la venta.",
+    "RECEIPT_TITLE": "Venta registrada",
+    "RECEIPT_NUMBER": "N.º de venta",
+    "RECEIPT_DATE": "Fecha",
+    "COL_ITEM": "Artículo",
+    "COL_QUANTITY": "Cantidad",
+    "COL_UNIT_PRICE": "Precio unitario",
+    "COL_LINE_TOTAL": "Importe",
+    "TOTAL_PAID": "Total pagado",
+    "NEW_SALE": "Nueva venta",
+    "TODAY_TITLE": "Ventas del día",
+    "REFRESH": "Actualizar",
+    "TODAY_FAILED": "No se pudieron cargar las ventas del día.",
+    "TODAY_EMPTY": "Ninguna venta en mostrador registrada hoy en esta farmacia.",
+    "COL_TIME": "Hora",
+    "COL_ITEMS": "Artículos",
+    "COL_TOTAL": "Total",
+    "TODAY_MORE": "Solo se muestran las {{shown}} ventas más recientes del día: el cierre de caja las cuenta todas.",
+    "UNSETTLED": "No llegó la respuesta: la venta puede haberse registrado. « Cobrar » reenvía exactamente la misma venta, sin duplicarla; la cesta queda congelada hasta entonces."
+  },
+  "LOADING_SHELL": {
+    "SLOW": "La carga está tardando más de lo previsto. Compruebe su conexión; se conserva la página abierta."
   }
 }

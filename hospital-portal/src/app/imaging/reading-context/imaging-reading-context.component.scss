@@ -50,6 +50,12 @@
   font-weight: 600;
 }
 
+/* QA D2640: "Not graded" is said, not alarmed. */
+.context-flag-muted {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
 .muted {
   color: var(--text-secondary);
 }

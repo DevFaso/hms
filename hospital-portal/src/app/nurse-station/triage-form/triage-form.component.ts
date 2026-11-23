@@ -1,3 +1,5 @@
+import { ClinicalRulesService } from '../../services/clinical-rules.service';
+import { RoleContextService } from '../../core/role-context.service';
 import { refusalReason } from '../../shared/refusal-reason';
 import {
   announceNewbornWarning,
@@ -119,6 +121,18 @@ export class TriageFormComponent {
   }
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly clinicalRules = inject(ClinicalRulesService);
+  private readonly ruleScope = inject(RoleContextService);
+  /**
+   * V356: a warning's « provisoire » sentence follows this hospital's sign-off of its rule (« validée le … »).
+   * The hospital's statuses are read once, as the page opens; until then the fixed wording stays.
+   */
+  private readonly ruleStatus = (ruleKey: string): string | null =>
+    this.clinicalRules.statusSentence(
+      this.ruleScope.effectiveHospitalIdForRequest(),
+      ruleKey,
+      this.translate,
+    );
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /* ── Vital signs ────────────────────────── */
@@ -189,6 +203,8 @@ export class TriageFormComponent {
   }
 
   constructor() {
+    // V356: the hospital's rule statuses, for the warnings' « provisoire » sentences.
+    this.clinicalRules.ensureLoaded(this.ruleScope.effectiveHospitalIdForRequest());
     this.translate.onLangChange
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => (this.esiOptionsCache = this.buildEsiOptions()));
@@ -360,6 +376,7 @@ export class TriageFormComponent {
           this.toast,
           this.translate,
           this.encounter?.patientFullName || this.encounter?.patientName,
+          this.ruleStatus,
         );
         // QA D1890: a mother's severe pressure after birth; saved, and warned (URGENT).
         announcePostpartumWarning(
@@ -367,6 +384,7 @@ export class TriageFormComponent {
           this.toast,
           this.translate,
           this.encounter?.patientFullName || this.encounter?.patientName,
+          this.ruleStatus,
         );
         // r54: an adult's severe pressure; saved, and warned (a recheck; URGENT with a sign of organ damage).
         announceHypertensionWarning(
@@ -374,6 +392,7 @@ export class TriageFormComponent {
           this.toast,
           this.translate,
           this.encounter?.patientFullName || this.encounter?.patientName,
+          this.ruleStatus,
         );
         // Policy 2026-11-20 (provisional): a pregnant or postpartum woman's maternal early warning; saved, and warned.
         announceMaternalWarning(
@@ -381,6 +400,7 @@ export class TriageFormComponent {
           this.toast,
           this.translate,
           this.encounter?.patientFullName || this.encounter?.patientName,
+          this.ruleStatus,
         );
         this.triageCompleted.emit(response);
       },

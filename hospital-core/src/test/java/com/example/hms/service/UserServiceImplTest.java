@@ -47,6 +47,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+import static com.example.hms.testsupport.RandomIds.withoutRandomIds;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -88,6 +89,8 @@ class UserServiceImplTest {
     @Mock private UserAccountAccess accountAccess;
     @Mock private com.example.hms.security.provider.FacilityAssignmentGuard facilityAssignmentGuard;
     @Mock private SmsService smsService;
+
+    @Mock private com.example.hms.repository.DepartmentRepository departmentRepository;
 
     @InjectMocks
     private UserServiceImpl userService;
@@ -2959,6 +2962,61 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA r70 D3202 / D3209: the department and specialization chosen at registration are kept")
+        void registrationKeepsDepartmentAndSpecialization() {
+            Role role = new Role();
+            role.setId(UUID.randomUUID());
+            role.setCode("ROLE_DOCTOR");
+            stubCreation(role);
+            UUID hospitalId = UUID.randomUUID();
+            Hospital hospital = new Hospital();
+            hospital.setId(hospitalId);
+            lenient().when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            com.example.hms.model.Department medicine = new com.example.hms.model.Department();
+            medicine.setId(UUID.randomUUID());
+            medicine.setHospital(hospital);
+            when(departmentRepository.findByIdWithHospital(medicine.getId())).thenReturn(Optional.of(medicine));
+            AdminSignupRequest req = request("ROLE_DOCTOR", "dr.r70@example.com", "70202022");
+            req.setHospitalId(hospitalId);
+            req.setDepartmentId(medicine.getId());
+            req.setSpecialization(com.example.hms.enums.Specialization.values()[0]);
+
+            userService.createUserWithRolesAndHospital(req);
+
+            org.mockito.ArgumentCaptor<Staff> staff = org.mockito.ArgumentCaptor.forClass(Staff.class);
+            verify(staffRepository).save(staff.capture());
+            assertThat(staff.getValue().getDepartment()).isSameAs(medicine);
+            assertThat(staff.getValue().getSpecialization())
+                .isEqualTo(com.example.hms.enums.Specialization.values()[0].name());
+        }
+
+        @Test
+        @DisplayName("QA r70 D3202: another hospital's department is refused on the field")
+        void registrationRefusesAnotherHospitalsDepartment() {
+            Role role = new Role();
+            role.setId(UUID.randomUUID());
+            role.setCode("ROLE_NURSE");
+            stubCreation(role);
+            UUID hospitalId = UUID.randomUUID();
+            Hospital hospital = new Hospital();
+            hospital.setId(hospitalId);
+            lenient().when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            Hospital other = new Hospital();
+            other.setId(UUID.randomUUID());
+            com.example.hms.model.Department foreign = new com.example.hms.model.Department();
+            foreign.setId(UUID.randomUUID());
+            foreign.setHospital(other);
+            when(departmentRepository.findByIdWithHospital(foreign.getId())).thenReturn(Optional.of(foreign));
+            AdminSignupRequest req = request("ROLE_NURSE", "nurse.r70@example.com", "70202023");
+            req.setHospitalId(hospitalId);
+            req.setDepartmentId(foreign.getId());
+
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
+            verify(staffRepository, never()).save(any());
+        }
+
+        @Test
         @DisplayName("a patient registration carrying a clinician's licence creates a new user, never resolves the clinician")
         void patientCarryingStaffLicenceCreatesNewUser() {
             stubCreation(patientRole);
@@ -3050,7 +3108,7 @@ class UserServiceImplTest {
                 .isInstanceOfSatisfying(com.example.hms.exception.FieldBusinessException.class, refusal -> {
                     assertThat(refusal.getField()).isEqualTo("licenseNumber");
                     // The number the caller typed, and nothing of the account behind it.
-                    assertThat(String.valueOf(refusal.getMessage()))
+                    assertThat(withoutRandomIds(refusal.getMessage()))
                         .doesNotContain("awa", "Sanou", "other-hospital", "70000091");
                 });
             assertThat(held.isForcePasswordChange()).isFalse();

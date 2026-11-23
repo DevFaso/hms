@@ -561,6 +561,8 @@ public class PatientServiceImpl implements PatientService {
         // review: by a clinician of the acting hospital only.
         if (writesClinicalFields()) {
             applyNullable(request.getBloodType(), patient::setBloodType);
+            // QA r70 D3223: the personal history the Synthèse reads, written where the blood group is.
+            applyNullable(request.getMedicalHistorySummary(), patient::setMedicalHistorySummary);
         }
     }
 
@@ -676,6 +678,10 @@ public class PatientServiceImpl implements PatientService {
         m.put("preferredPharmacy", p.getPreferredPharmacy());
         m.put("careTeamNotes", p.getCareTeamNotes());
         m.put("chronicConditions", p.getChronicConditions());
+        // QA r70 review: the clinician-only fields are on the trail too (D3223, D3224). The audit names the
+        // field, never its value: the row says « bloodType » or « medicalHistorySummary » changed, nothing more.
+        m.put("bloodType", p.getBloodType());
+        m.put("medicalHistorySummary", p.getMedicalHistorySummary());
         return m;
     }
 
@@ -874,6 +880,13 @@ public class PatientServiceImpl implements PatientService {
             activeFilter,
             pageable
         ).getContent());
+        if (page == 0 && mrn == null && typedName == null && dob == null && emailPattern == null
+                && trimToNull(criteria.getPhone()) == null) {
+            // QA D2521 (r65): twelve digits typed into the one search box may be the patient's IU
+            // (stored encrypted, found by its keyed fingerprint), read above as a phone number and
+            // found nobody. The exact IU match comes first, in the same scope and filters.
+            prependNationalUniqueIdMatches(found, typedPhone, hospitalId, activeFilter, size);
+        }
         boolean nameOnly = mrn == null && dob == null && phonePattern == null && emailPattern == null;
         if (nameOnly && page == 0 && found.size() < size && isEmailFragmentCandidate(typedName)) {
             // QA D1274: the start of an address with no @ yet ("awa.kabore")
@@ -891,6 +904,35 @@ public class PatientServiceImpl implements PatientService {
         return found.stream()
             .map(patient -> buildPatientDto(patient, hospitalId))
             .toList();
+    }
+
+    /** QA D2521: the patients whose IU is {@code term}, first, within the search's hospital and status filters. */
+    private void prependNationalUniqueIdMatches(List<Patient> found, String term, UUID hospitalId,
+                                                Boolean activeFilter, int size) {
+        if (term == null || nationalUniqueIds == null) {
+            return;
+        }
+        PatientNationalUniqueIdService identities = nationalUniqueIds.getIfAvailable();
+        if (identities == null) {
+            return;
+        }
+        List<Patient> matches = identities.matchesForSearch(term).stream()
+            .filter(p -> activeFilter == null || activeFilter.equals(p.isActive()))
+            .filter(p -> hospitalId == null || p.getHospitalRegistrations().stream()
+                .anyMatch(r -> r.isActive() && r.getHospital() != null && hospitalId.equals(r.getHospital().getId())))
+            .toList();
+        if (matches.isEmpty()) {
+            return;
+        }
+        Set<UUID> seen = new HashSet<>();
+        matches.forEach(p -> seen.add(p.getId()));
+        List<Patient> rest = found.stream().filter(p -> !seen.contains(p.getId())).toList();
+        found.clear();
+        found.addAll(matches);
+        found.addAll(rest);
+        if (found.size() > size) {
+            found.subList(size, found.size()).clear();
+        }
     }
 
     /**

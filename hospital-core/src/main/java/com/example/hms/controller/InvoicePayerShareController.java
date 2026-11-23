@@ -40,6 +40,15 @@ public class InvoicePayerShareController {
 
     private final InvoiceCoverageService coverageService;
 
+    @GetMapping("/payer-shares")
+    @PreAuthorize(READERS)
+    @Operation(summary = "QA D2706: the acting hospital's payer shares (OPEN and CLAIMED by default), oldest first")
+    public ResponseEntity<List<com.example.hms.payload.dto.billing.OpenPayerShareDTO>> listAtHospital(
+            @org.springframework.web.bind.annotation.RequestParam(required = false)
+            List<com.example.hms.enums.PayerShareStatus> status) {
+        return ResponseEntity.ok(coverageService.listAtHospital(status));
+    }
+
     @GetMapping("/{invoiceId}/payer-shares")
     @PreAuthorize(READERS)
     @Operation(summary = "List the payer shares of an invoice, oldest first")

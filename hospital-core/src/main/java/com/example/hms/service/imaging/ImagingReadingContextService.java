@@ -6,6 +6,8 @@ import com.example.hms.mapper.LabResultMapper;
 import com.example.hms.model.ImagingOrder;
 import com.example.hms.model.ImagingReport;
 import com.example.hms.model.LabResult;
+import com.example.hms.model.LabTestDefinition;
+import com.example.hms.payload.dto.LabResultReferenceRangeDTO;
 import com.example.hms.model.MaternalHistory;
 import com.example.hms.model.Patient;
 import com.example.hms.payload.dto.imaging.ImagingReadingContextDTO;
@@ -18,6 +20,7 @@ import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.MaternalHistoryRepository;
 import com.example.hms.service.lab.ClinicalLabResultView;
 import com.example.hms.service.lab.LabResultCorrections;
+import com.example.hms.service.lab.PatientLabResultGrade;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -73,6 +76,7 @@ public class ImagingReadingContextService {
     private final LabResultRepository labResultRepository;
     private final MaternalHistoryRepository maternalHistoryRepository;
     private final RoleValidator roleValidator;
+    private final LabResultMapper labResultMapper;
 
     @Transactional(readOnly = true)
     public ImagingReadingContextDTO contextOf(UUID orderId) {
@@ -124,9 +128,24 @@ public class ImagingReadingContextService {
                 patientId, hospitalId, CREATININE_LOINC, PageRequest.of(0, CREATININE_CANDIDATES))).stream()
             .filter(ImagingReadingContextService::isSerumCreatinine)
             .findFirst()
-            .map(result -> new Creatinine(testNameOf(result), result.getResultValue(), LabResultMapper.unitOf(result),
-                result.getResultDate(), result.getAbnormalFlag(), LabResultCorrections.isCorrection(result)))
+            .map(this::creatinineOf)
             .orElse(null);
+    }
+
+    /**
+     * QA D2640 (r65): the creatinine reads as the laboratory graded it. The
+     * row's stored {@code abnormalFlag} is only what an analyser or the
+     * technologist recorded, null when the grade comes from the test's
+     * reference ranges, so 118 µmol/L on 62–106 read with no flag. The
+     * severity and the range are the lab screen's own ({@link LabResultMapper}):
+     * nothing is graded here, no threshold is added.
+     */
+    private Creatinine creatinineOf(LabResult result) {
+        LabResultReferenceRangeDTO graded = labResultMapper.gradedReferenceRange(result);
+        LabTestDefinition definition = result.getLabOrder() != null ? result.getLabOrder().getLabTestDefinition() : null;
+        return new Creatinine(testNameOf(result), result.getResultValue(), LabResultMapper.unitOf(result),
+            result.getResultDate(), labResultMapper.severityFlagOf(result),
+            PatientLabResultGrade.referenceTextOf(graded, definition), LabResultCorrections.isCorrection(result));
     }
 
     static boolean isSerumCreatinine(LabResult result) {

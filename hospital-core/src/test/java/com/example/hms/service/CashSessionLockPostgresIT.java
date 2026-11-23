@@ -361,6 +361,9 @@ class CashSessionLockPostgresIT {
         visit.setVersion(0L);
         visit.setHospital(hospital);
         visit.setPatient(patient);
+        // QA D2523: the copay line is owned by the visit's assignment, as on a real visit (never null there).
+        visit.setAssignment(assignments.findFirstByUser_IdAndHospital_IdAndActiveTrue(receptionist.getId(),
+            hospital.getId()).orElseThrow());
         UUID receptionistId = receptionist.getId();
 
         refusedByTheClosedTill("a check-in copay", () -> tx.executeWithoutResult(status -> {
@@ -465,10 +468,11 @@ class CashSessionLockPostgresIT {
     /** Today: the money out, and nothing in. */
     private static void todayShowsTheMoneyOut(CashSessionDTO dayTwo) {
         assertThat(dayTwo.getStatus()).isEqualTo("OPEN");
-        assertThat(dayTwo.getTotalIn()).isEqualByComparingTo("0");
+        // QA D3410 (r70): the payout came out of cash the till took today; the till never goes negative.
+        assertThat(dayTwo.getTotalIn()).isEqualByComparingTo("1000");
         assertThat(dayTwo.getTotalOut()).isEqualByComparingTo("1000");
-        assertThat(dayTwo.getCashToCount()).isEqualByComparingTo("-1000");
-        assertThat(dayTwo.getMovements()).singleElement().satisfies(m -> {
+        assertThat(dayTwo.getCashToCount()).isEqualByComparingTo("0");
+        assertThat(dayTwo.getMovements()).anySatisfy(m -> {
             assertThat(m.getKind()).isEqualTo("REVERSAL");
             assertThat(m.getDirection()).isEqualTo("OUT");
         });
@@ -503,12 +507,21 @@ class CashSessionLockPostgresIT {
         // Today: asked by the cashier, approved by the accountant, handed back by the cashier.
         InvoiceRefundDTO reversal = approvedReversal(invoice, payment);
         actAs(cashier);
+        // QA D3410 (r70): no till open today, so nothing to hand the money back from: refused, nothing written.
+        UUID invoiceId = invoice.getId();
+        UUID reversalId = reversal.getId();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> refundService.pay(invoiceId, reversalId, null))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        // The cashier takes 1 000 F cash today; the reversal is handed back from it.
+        BillingInvoice other = invoiceOf("5000", "0", InvoiceStatus.SENT);
+        invoiceService.recordStaffPayment(other.getId(),
+            new StaffPaymentRequestDTO(new BigDecimal("1000"), "CASH", null, null), cashier.getId(), Locale.FRENCH);
         InvoiceRefundDTO paid = refundService.pay(invoice.getId(), reversal.getId(), null);
 
         assertThat(paid.getStatus()).isEqualTo("PAID");
         UUID todaysSession = jdbc.queryForObject("SELECT cash_session_id FROM billing.invoice_refunds WHERE id = ?",
             UUID.class, reversal.getId());
-        assertThat(todaysSession).as("the payout opened today's session, it did not touch yesterday's closed one")
+        assertThat(todaysSession).as("the payout left today's session, it did not touch yesterday's closed one")
             .isNotNull().isNotEqualTo(yesterdaysSession);
         assertThat(jdbc.queryForObject("SELECT business_date FROM billing.cash_sessions WHERE id = ?",
             LocalDate.class, todaysSession)).isEqualTo(today);

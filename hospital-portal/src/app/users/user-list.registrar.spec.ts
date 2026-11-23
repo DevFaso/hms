@@ -158,10 +158,38 @@ describe('UserListComponent — « Inscrire » only for a role the server lets r
       ].map((code) => ({ id: code, code, name: code }) as never),
     );
 
-    expect(component.grantableRoles().map((role) => role.code)).toEqual([
-      'ROLE_NURSE',
-      'ROLE_DOCTOR',
-    ]);
+    // QA r70 D3200: listed by label, so the order is the reader's, not the server's.
+    expect(component.grantableRoles().map((role) => role.code)).toEqual(
+      jasmine.arrayWithExactContents(['ROLE_NURSE', 'ROLE_DOCTOR']),
+    );
+  });
+
+  it('QA r70 D3200: roles come sorted by label, and a hospital registration never offers super-admin', () => {
+    const fixture = render('ROLE_SUPER_ADMIN');
+    const component = fixture.componentInstance;
+    component.availableRoles.set(
+      ['ROLE_PHARMACIST', 'ROLE_ACCOUNTANT', 'ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'].map(
+        (code) => ({ id: code, code, name: code }) as never,
+      ),
+    );
+    const codes = () => component.grantableRoles().map((role) => role.code);
+    // Without a hospital: the super-admin may register another super-admin.
+    component.loadRegistrationDepartments(null);
+    expect(codes()).toContain('ROLE_SUPER_ADMIN');
+    const labels = component
+      .grantableRoles()
+      .map((r) =>
+        (
+          component as unknown as { roleLabels: { transform: (v: string, d: string) => string } }
+        ).roleLabels.transform(r.code.replace('ROLE_', ''), 'role'),
+      );
+    expect(labels).toEqual(
+      [...labels].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })),
+    );
+    // At a hospital: no super-admin.
+    component.createForm.hospitalId = 'h-1';
+    component.loadRegistrationDepartments('h-1');
+    expect(codes()).not.toContain('ROLE_SUPER_ADMIN');
   });
 
   it('an organisation admin with no hospital chosen is stopped on the hospital field, and nothing is sent', () => {

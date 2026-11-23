@@ -1,0 +1,565 @@
+<div class="page-container counter-sale">
+  <header class="page-header">
+    <div>
+      <p class="workspace-eyebrow">
+        <span class="material-symbols-outlined" aria-hidden="true">storefront</span
+        ><span>{{ 'PHARMACY_DASH.WORKSPACE' | translate }}</span>
+      </p>
+      <h1 class="page-title">{{ 'PHARMACY_SALE.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'PHARMACY_SALE.SUBTITLE' | translate }}</p>
+    </div>
+    <div class="header-actions">
+      @if (pharmaciesLoaded() && pharmacies().length === 0) {
+        <p class="pharmacy-empty-hint" role="status" data-testid="no-pharmacy-hint">
+          {{ 'PHARMACY.NO_PHARMACY_HINT' | translate }}
+        </p>
+      } @else {
+        <label class="sr-only" for="salePharmacy">{{
+          'PHARMACY.SELECT_PHARMACY' | translate
+        }}</label>
+        <select
+          id="salePharmacy"
+          class="pharmacy-select"
+          data-server-field="pharmacyId hospitalId"
+          [(ngModel)]="selectedPharmacyId"
+          (ngModelChange)="onPharmacyChange()"
+          [disabled]="saving() || !!unsettledRequest()"
+        >
+          @for (p of pharmacies(); track p.id) {
+            <option [value]="p.id">{{ p.name }}</option>
+          }
+        </select>
+      }
+    </div>
+  </header>
+
+  @if (pharmacyFailed()) {
+    <div class="state-banner" role="alert">
+      <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+      <p>{{ 'PHARMACY_SALE.PHARMACIES_FAILED' | translate }}</p>
+      <button type="button" class="btn-secondary" (click)="loadPharmacies()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  }
+
+  <!-- ===== Receipt of the sale just recorded ===== -->
+  @if (receipt(); as r) {
+    <section class="section-card sale-receipt" data-testid="sale-receipt" aria-live="polite">
+      <h2 class="section-title">
+        <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
+        {{ 'PHARMACY_SALE.RECEIPT_TITLE' | translate }}
+      </h2>
+      <dl class="receipt-meta">
+        <dt>{{ 'PHARMACY_SALE.RECEIPT_NUMBER' | translate }}</dt>
+        <dd class="receipt-id">{{ r.id }}</dd>
+        <dt>{{ 'PHARMACY_SALE.RECEIPT_DATE' | translate }}</dt>
+        <dd>{{ r.saleDate | serverTime | date: 'short' }}</dd>
+        <dt>{{ 'PHARMACY_SALE.PAYMENT_METHOD' | translate }}</dt>
+        <dd>
+          {{ methodLabelKey(r.paymentMethod) | translate }}
+          @if (r.paymentMethod === 'MOBILE_MONEY') {
+            — {{ operatorLabelKey(r.mobileMoneyOperator) | translate }}
+          }
+        </dd>
+        @if (r.referenceNumber) {
+          <dt>{{ 'PHARMACY_SALE.REFERENCE' | translate }}</dt>
+          <dd>{{ r.referenceNumber }}</dd>
+        }
+      </dl>
+      <div class="table-wrapper">
+        <table class="data-table receipt-lines">
+          <thead>
+            <tr>
+              <th scope="col">{{ 'PHARMACY_SALE.COL_ITEM' | translate }}</th>
+              <th scope="col" class="num">{{ 'PHARMACY_SALE.COL_QUANTITY' | translate }}</th>
+              <th scope="col" class="num">{{ 'PHARMACY_SALE.COL_UNIT_PRICE' | translate }}</th>
+              <th scope="col" class="num">{{ 'PHARMACY_SALE.COL_LINE_TOTAL' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (l of r.lines ?? []; track l.id) {
+              <tr>
+                <td>{{ l.medicationName || ('PHARMACY.UNKNOWN_ITEM' | translate) }}</td>
+                <td class="num">{{ l.quantity }}</td>
+                <td class="num">{{ l.unitPrice | cfa: r.currency }}</td>
+                <td class="num">{{ l.lineTotal | cfa: r.currency }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="receipt-total">
+        <span>{{ 'PHARMACY_SALE.TOTAL_PAID' | translate }}</span>
+        <strong data-testid="receipt-total">{{ r.totalAmount | cfa: r.currency }}</strong>
+      </p>
+      <div class="form-actions">
+        <button type="button" class="btn-primary" data-testid="new-sale" (click)="newSale()">
+          <span class="material-symbols-outlined" aria-hidden="true">add_shopping_cart</span>
+          {{ 'PHARMACY_SALE.NEW_SALE' | translate }}
+        </button>
+      </div>
+    </section>
+  } @else if (selectedPharmacyId) {
+    <!-- ===== The sale form ===== -->
+    <form class="sale-layout" novalidate data-submit-scope (ngSubmit)="submit()">
+      <section
+        class="section-card item-picker"
+        [attr.aria-busy]="itemsLoading()"
+        [attr.inert]="unsettledRequest() ? '' : null"
+      >
+        <h2 class="section-title">
+          <span class="material-symbols-outlined" aria-hidden="true">search</span>
+          {{ 'PHARMACY_SALE.PICKER_TITLE' | translate }}
+        </h2>
+        <div class="field">
+          <label for="saleItemSearch">{{ 'PHARMACY_SALE.SEARCH_LABEL' | translate }}</label>
+          <input
+            id="saleItemSearch"
+            name="saleItemSearch"
+            type="search"
+            autocomplete="off"
+            data-server-field="lines"
+            [ngModel]="searchTerm()"
+            (ngModelChange)="searchTerm.set($event)"
+            (keydown.enter)="onSearchEnter($event)"
+            [placeholder]="'PHARMACY_SALE.SEARCH_PLACEHOLDER' | translate"
+          />
+          <small class="field-hint">{{ 'PHARMACY_SALE.CONTROLLED_HIDDEN' | translate }}</small>
+        </div>
+
+        @if (itemsFailed()) {
+          <div class="state-banner" role="alert">
+            <p>{{ 'PHARMACY_SALE.ITEMS_FAILED' | translate }}</p>
+            <button type="button" class="btn-secondary" (click)="loadItems()">
+              {{ 'COMMON.RETRY' | translate }}
+            </button>
+          </div>
+        } @else if (itemsLoading()) {
+          <p class="field-hint" role="status">{{ 'COMMON.LOADING' | translate }}</p>
+        } @else if (sellableItems().length === 0) {
+          <p class="field-hint" role="status" data-testid="no-sellable-items">
+            {{ 'PHARMACY_SALE.NO_ITEMS' | translate }}
+          </p>
+        } @else if (matchingItems().length === 0) {
+          <p class="field-hint" role="status">{{ 'PHARMACY_SALE.NO_MATCH' | translate }}</p>
+        } @else {
+          <ul class="item-results" data-testid="item-results">
+            @for (item of pickerItems(); track item.id) {
+              <li class="item-result" [attr.data-testid]="'item-' + item.id">
+                <div class="item-info">
+                  <span class="item-name">{{ itemName(item) }}</span>
+                  {{ ' '
+                  }}<span class="item-meta">
+                    {{
+                      'PHARMACY_SALE.STOCK_ON_HAND'
+                        | translate: { stock: (item.quantityOnHand | countUnit: item.unit) }
+                    }}
+                    @if (item.unitsPerPack) {
+                      ·
+                      {{
+                        'PHARMACY_SALE.PACK_BREAKDOWN'
+                          | translate
+                            : {
+                                packs: (item.fullPacksOnHand ?? 0 | countUnit: item.packUnit),
+                                loose: (item.looseUnitsOnHand ?? 0 | countUnit: item.unit),
+                              }
+                      }}
+                    }
+                  </span>
+                  @if (hasPrice(item)) {
+                    {{ ' '
+                    }}<span class="item-price">{{
+                      'PHARMACY_SALE.UNIT_PRICE'
+                        | translate: { price: (item.unitPrice | cfa), unit: item.unit ?? '' }
+                    }}</span>
+                  } @else {
+                    {{ ' '
+                    }}<span class="item-no-price">{{ 'PHARMACY_SALE.NO_PRICE' | translate }}</span>
+                  }
+                </div>
+                @if (hasPrice(item)) {
+                  <button
+                    type="button"
+                    class="btn-secondary btn-add"
+                    [disabled]="saving()"
+                    [attr.aria-label]="
+                      'PHARMACY_SALE.ADD_LABEL' | translate: { name: itemName(item) }
+                    "
+                    (click)="addItem(item)"
+                  >
+                    <span class="material-symbols-outlined" aria-hidden="true">add</span>
+                    {{ 'PHARMACY_SALE.ADD' | translate }}
+                  </button>
+                }
+              </li>
+            }
+          </ul>
+          @if (matchingItems().length > pickerItems().length) {
+            <p class="field-hint">
+              {{
+                'PHARMACY_SALE.MORE_ITEMS'
+                  | translate: { shown: pickerItems().length, total: matchingItems().length }
+              }}
+            </p>
+          }
+        }
+      </section>
+
+      <section class="section-card basket">
+        <h2 class="section-title">
+          <span class="material-symbols-outlined" aria-hidden="true">shopping_basket</span>
+          {{ 'PHARMACY_SALE.BASKET' | translate }}
+        </h2>
+
+        @if (lines().length === 0) {
+          <p class="field-hint" data-testid="basket-empty">
+            {{ 'PHARMACY_SALE.BASKET_EMPTY' | translate }}
+          </p>
+        }
+
+        <ul class="basket-lines" [attr.inert]="unsettledRequest() ? '' : null">
+          @for (line of lines(); track line.key; let i = $index) {
+            <li class="basket-line" [attr.data-testid]="'line-' + line.item.id">
+              <div class="line-head">
+                <span class="item-name">{{ itemName(line.item) }}</span>
+                <button
+                  type="button"
+                  class="btn-text btn-remove"
+                  [disabled]="saving()"
+                  [attr.aria-label]="
+                    'PHARMACY_SALE.REMOVE_LABEL' | translate: { name: itemName(line.item) }
+                  "
+                  (click)="removeLine(line)"
+                >
+                  <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                  {{ 'PHARMACY_SALE.REMOVE' | translate }}
+                </button>
+              </div>
+
+              <div class="form-row">
+                <div class="field">
+                  <label [for]="lineLotId(line)"
+                    >{{ 'PHARMACY_SALE.LOT' | translate }}{{ keptInLots(line) ? ' *' : '' }}</label
+                  >
+                  @if (lotsLoading(line)) {
+                    <select [id]="lineLotId(line)" [name]="lineLotId(line)" disabled>
+                      <option>{{ 'PHARMACY_SALE.LOTS_LOADING' | translate }}</option>
+                    </select>
+                  } @else if (lotsFailed(line)) {
+                    <select [id]="lineLotId(line)" [name]="lineLotId(line)" disabled>
+                      <option>{{ 'PHARMACY_SALE.LOTS_FAILED' | translate }}</option>
+                    </select>
+                    <button type="button" class="btn-text" (click)="loadLots(line.item.id)">
+                      {{ 'COMMON.RETRY' | translate }}
+                    </button>
+                  } @else if (!keptInLots(line)) {
+                    <select [id]="lineLotId(line)" [name]="lineLotId(line)" disabled>
+                      <option>{{ 'PHARMACY_SALE.NOT_IN_LOTS' | translate }}</option>
+                    </select>
+                  } @else {
+                    <select
+                      [id]="lineLotId(line)"
+                      [name]="lineLotId(line)"
+                      [attr.data-server-field]="'lines[' + i + '].stockLotId'"
+                      required
+                      [(ngModel)]="line.stockLotId"
+                      (ngModelChange)="onLotChange(line)"
+                    >
+                      <option value="">{{ 'PHARMACY_SALE.LOT_CHOOSE' | translate }}</option>
+                      @for (lot of lineLots(line); track lot.id) {
+                        <option [value]="lot.id">
+                          {{
+                            'PHARMACY_SALE.LOT_OPTION'
+                              | translate
+                                : {
+                                    lot: lot.lotNumber,
+                                    date: (lot.expiryDate | serverTime | date: 'mediumDate'),
+                                    qty: (lot.remainingQuantity | countUnit: line.item.unit),
+                                  }
+                          }}
+                        </option>
+                      }
+                    </select>
+                    @if (lineLots(line).length === 0) {
+                      <small class="field-hint" role="alert">{{
+                        'PHARMACY_SALE.NO_USABLE_LOT' | translate
+                      }}</small>
+                    }
+                  }
+                </div>
+
+                <div class="field">
+                  <label [for]="lineQtyId(line)"
+                    >{{ 'PHARMACY_SALE.QUANTITY' | translate }} *</label
+                  >
+                  <div class="qty-row">
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      inputmode="numeric"
+                      required
+                      [id]="lineQtyId(line)"
+                      [name]="lineQtyId(line)"
+                      [attr.data-server-field]="
+                        'lines[' + i + '].quantity lines[' + i + '].inPacks'
+                      "
+                      [(ngModel)]="line.quantity"
+                    />
+                    @if (packable(line.item)) {
+                      <select
+                        [id]="'saleUnit-' + line.key"
+                        [name]="'saleUnit-' + line.key"
+                        [attr.aria-label]="'PHARMACY_SALE.COUNTED_IN' | translate"
+                        [(ngModel)]="line.inPacks"
+                      >
+                        <option [ngValue]="false">
+                          {{ 'PHARMACY_SALE.IN_UNITS' | translate }}
+                        </option>
+                        <option [ngValue]="true">{{ 'PHARMACY_SALE.IN_PACKS' | translate }}</option>
+                      </select>
+                    } @else if (line.item.unit) {
+                      <span class="qty-unit">{{ line.item.unit }}</span>
+                    }
+                  </div>
+                  @if (packable(line.item)) {
+                    <small class="field-hint">
+                      {{
+                        'PHARMACY_SALE.PACK_SIZE'
+                          | translate
+                            : {
+                                packUnit: line.item.packUnit ?? '',
+                                n: (line.item.unitsPerPack | countUnit: line.item.unit),
+                              }
+                      }}
+                      @if (line.inPacks) {
+                        ·
+                        {{
+                          'PHARMACY_SALE.LINE_UNITS'
+                            | translate: { units: (lineUnits(line) | countUnit: line.item.unit) }
+                        }}
+                      }
+                    </small>
+                  }
+                </div>
+              </div>
+
+              <!-- QA D964: a later lot while a shorter-dated one still holds stock needs a reason -->
+              @if (earlierLot(line); as earlier) {
+                <div class="field fefo-field" [attr.data-testid]="'fefo-' + line.key">
+                  <label [for]="lineFefoId(line)"
+                    >{{ 'PHARMACY_SALE.FEFO_REASON' | translate }} *</label
+                  >
+                  {{ ' '
+                  }}<small class="field-hint" role="alert">{{
+                    'PHARMACY_SALE.FEFO_WARNING'
+                      | translate
+                        : {
+                            lot: earlier.lotNumber,
+                            date: (earlier.expiryDate | serverTime | date: 'mediumDate'),
+                            left: (earlier.remainingQuantity | countUnit: line.item.unit),
+                          }
+                  }}</small>
+                  <input
+                    type="text"
+                    maxlength="300"
+                    required
+                    [id]="lineFefoId(line)"
+                    [name]="lineFefoId(line)"
+                    [attr.data-server-field]="'lines[' + i + '].fefoOverrideReason'"
+                    [(ngModel)]="line.fefoOverrideReason"
+                  />
+                </div>
+              }
+
+              @if (lotShort(line); as short) {
+                <p class="field-hint line-warning" role="status">
+                  {{
+                    'PHARMACY_SALE.LOT_SHORT'
+                      | translate
+                        : {
+                            lot: short.lotNumber,
+                            qty: (short.remainingQuantity | countUnit: line.item.unit),
+                          }
+                  }}
+                </p>
+              }
+
+              <p class="line-total">
+                <span>{{ 'PHARMACY_SALE.LINE_TOTAL' | translate }}</span>
+                <strong>{{ lineTotal(line) | cfa }}</strong>
+              </p>
+            </li>
+          }
+        </ul>
+
+        <p class="sale-total">
+          <span>{{ 'PHARMACY_SALE.TOTAL' | translate }}</span>
+          <strong data-testid="sale-total">{{ total() | cfa }}</strong>
+        </p>
+        <p class="field-hint">{{ 'PHARMACY_SALE.PRICED_BY_SERVER' | translate }}</p>
+
+        <fieldset class="payment" [attr.inert]="unsettledRequest() ? '' : null">
+          <legend>{{ 'PHARMACY_SALE.PAYMENT' | translate }}</legend>
+          <div
+            id="saleMethod"
+            class="radio-group"
+            role="radiogroup"
+            data-server-field="paymentMethod"
+            [attr.aria-label]="'PHARMACY_SALE.PAYMENT_METHOD' | translate"
+          >
+            @for (m of methods; track m.value) {
+              <label class="radio">
+                <input
+                  type="radio"
+                  name="saleMethod"
+                  [value]="m.value"
+                  [(ngModel)]="paymentMethod"
+                />
+                {{ m.labelKey | translate }}
+              </label>
+            }
+          </div>
+
+          @if (paymentMethod === 'MOBILE_MONEY') {
+            <div class="form-row">
+              <div class="field">
+                <label for="saleOperator">{{ 'MOBILE_MONEY.OPERATOR_LABEL' | translate }} *</label>
+                <select
+                  id="saleOperator"
+                  name="saleOperator"
+                  required
+                  aria-required="true"
+                  data-server-field="mobileMoneyOperator"
+                  [(ngModel)]="mobileMoneyOperator"
+                >
+                  <option [ngValue]="null">{{ 'MOBILE_MONEY.OPERATOR_CHOOSE' | translate }}</option>
+                  @for (o of mobileMoneyOperators; track o.value) {
+                    <option [ngValue]="o.value">{{ o.labelKey | translate }}</option>
+                  }
+                </select>
+                <small class="field-hint">{{
+                  'MOBILE_MONEY.MANUAL_ENTRY_NOTICE' | translate
+                }}</small>
+              </div>
+              <div class="field">
+                <label for="saleRef">{{ 'PHARMACY_SALE.REFERENCE' | translate }} *</label>
+                <input
+                  id="saleRef"
+                  name="saleRef"
+                  type="text"
+                  maxlength="120"
+                  required
+                  autocomplete="off"
+                  data-server-field="referenceNumber"
+                  [(ngModel)]="referenceNumber"
+                  [placeholder]="'PHARMACY_SALE.REFERENCE_PLACEHOLDER' | translate"
+                />
+                <small class="field-hint">{{ 'MOBILE_MONEY.NO_CARD_DETAILS' | translate }}</small>
+              </div>
+            </div>
+          }
+
+          <div class="field">
+            <label for="saleNotes">{{ 'PHARMACY_SALE.NOTES' | translate }}</label>
+            <textarea
+              id="saleNotes"
+              name="saleNotes"
+              rows="2"
+              maxlength="1000"
+              data-server-field="notes"
+              [(ngModel)]="notes"
+            ></textarea>
+          </div>
+        </fieldset>
+
+        @if (serverError(); as error) {
+          <p class="sale-error" role="alert" data-testid="sale-error">{{ error }}</p>
+        }
+        @if (unsettledRequest()) {
+          <p class="field-hint" data-testid="sale-unsettled">
+            {{ 'PHARMACY_SALE.UNSETTLED' | translate }}
+            <button type="button" class="btn-link" (click)="newSale()">
+              {{ 'PHARMACY_SALE.NEW_SALE' | translate }}
+            </button>
+          </p>
+        }
+
+        <div class="form-actions">
+          <button type="submit" class="btn-primary" data-testid="sale-submit" [disabled]="saving()">
+            <span class="material-symbols-outlined" aria-hidden="true">point_of_sale</span>
+            {{ (saving() ? 'PHARMACY_SALE.SAVING' : 'PHARMACY_SALE.SUBMIT') | translate }}
+          </button>
+        </div>
+      </section>
+    </form>
+  }
+
+  <!-- ===== Today's sales at this pharmacy ===== -->
+  @if (selectedPharmacyId) {
+    <section class="section-card today-sales" [attr.aria-busy]="todayLoading()">
+      <div class="today-head">
+        <h2 class="section-title">
+          <span class="material-symbols-outlined" aria-hidden="true">history</span>
+          {{ 'PHARMACY_SALE.TODAY_TITLE' | translate }}
+        </h2>
+        <button
+          type="button"
+          class="btn-secondary"
+          [disabled]="todayLoading()"
+          (click)="loadTodaySales()"
+        >
+          {{ 'PHARMACY_SALE.REFRESH' | translate }}
+        </button>
+      </div>
+      @if (todayFailed()) {
+        <div class="state-banner" role="alert">
+          <p>{{ 'PHARMACY_SALE.TODAY_FAILED' | translate }}</p>
+          <button type="button" class="btn-secondary" (click)="loadTodaySales()">
+            {{ 'COMMON.RETRY' | translate }}
+          </button>
+        </div>
+      } @else if (todayLoading()) {
+        <p class="field-hint" role="status">{{ 'COMMON.LOADING' | translate }}</p>
+      } @else if (todaySales().length === 0) {
+        <p class="field-hint" data-testid="today-empty">
+          {{ 'PHARMACY_SALE.TODAY_EMPTY' | translate }}
+        </p>
+      } @else {
+        <div class="table-wrapper">
+          <table class="data-table" data-testid="today-sales">
+            <thead>
+              <tr>
+                <th scope="col">{{ 'PHARMACY_SALE.COL_TIME' | translate }}</th>
+                <th scope="col">{{ 'PHARMACY_SALE.COL_ITEMS' | translate }}</th>
+                <th scope="col">{{ 'PHARMACY_SALE.PAYMENT_METHOD' | translate }}</th>
+                <th scope="col" class="num">{{ 'PHARMACY_SALE.COL_TOTAL' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (s of todaySales(); track s.id) {
+                <tr>
+                  <td>{{ s.saleDate | serverTime | date: 'shortTime' }}</td>
+                  <td class="items-cell">{{ saleItems(s) }}</td>
+                  <td>
+                    {{ methodLabelKey(s.paymentMethod) | translate }}
+                    @if (s.paymentMethod === 'MOBILE_MONEY') {
+                      — {{ operatorLabelKey(s.mobileMoneyOperator) | translate }}
+                    }
+                  </td>
+                  <td class="num">{{ s.totalAmount | cfa: s.currency }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        @if (todayMore()) {
+          <p class="field-hint" data-testid="today-more">
+            {{ 'PHARMACY_SALE.TODAY_MORE' | translate: { shown: todaySales().length } }}
+          </p>
+        }
+      }
+    </section>
+  }
+</div>

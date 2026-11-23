@@ -139,7 +139,7 @@
             <th scope="col">{{ 'PRESCRIPTIONS.DURATION' | translate }}</th>
             <th scope="col">{{ 'PRESCRIPTIONS.PRESCRIBED_BY' | translate }}</th>
             <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
           </tr>
         </thead>
         <tbody>
@@ -451,10 +451,7 @@
                   class="field-value"
                   data-testid="rx-quantity"
                   >{{
-                    rx.quantityUnit
-                      ? ('PRESCRIPTIONS.QUANTITY_VALUE'
-                        | translate: { value: rx.quantity, unit: rx.quantityUnit })
-                      : rx.quantity
+                    rx.quantityUnit ? (rx.quantity | countUnit: rx.quantityUnit) : rx.quantity
                   }}</span
                 >
               </div>
@@ -738,8 +735,7 @@
                       'PRESCRIPTIONS.PHARMACY.OUTSTANDING' | translate
                     }}</span><span class="field-value" data-testid="rx-outstanding-quantity">{{
                       outstandingQuantityUnit()
-                        ? ('PRESCRIPTIONS.QUANTITY_VALUE'
-                          | translate: { value: outstanding, unit: outstandingQuantityUnit() })
+                        ? (outstanding | countUnit: outstandingQuantityUnit())
                         : outstanding
                     }}</span>
                   </div>

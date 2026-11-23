@@ -1,0 +1,298 @@
+<section class="rules-page" data-testid="clinical-rules">
+  <app-page-header
+    [title]="'CLINICAL_RULES.TITLE' | translate"
+    [subtitle]="'CLINICAL_RULES.SUBTITLE' | translate"
+    icon="rule"
+  >
+    @if (overview()) {
+      <button
+        type="button"
+        class="btn-secondary"
+        data-testid="clinical-rules-pack"
+        [disabled]="printing()"
+        (click)="printPack()"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">print</span>
+        {{ 'CLINICAL_RULES.PACK' | translate }}
+      </button>
+    }
+  </app-page-header>
+
+  <p class="rules-note" role="note">{{ 'CLINICAL_RULES.BEHAVIOUR_NOTE' | translate }}</p>
+
+  @if (!hospitalId()) {
+    <p class="rules-note rules-note--warn" role="status" data-testid="clinical-rules-no-hospital">
+      {{ 'CLINICAL_RULES.NO_HOSPITAL' | translate }}
+    </p>
+  } @else if (loading()) {
+    <p class="rules-note" role="status">{{ 'COMMON.LOADING' | translate }}</p>
+  } @else if (failed()) {
+    <p class="rules-note rules-note--error" role="alert" data-testid="clinical-rules-failed">
+      {{ 'CLINICAL_RULES.LOAD_FAILED' | translate }}
+    </p>
+  } @else if (overview(); as current) {
+    <p class="rules-progress" role="status" data-testid="clinical-rules-progress">
+      {{
+        'CLINICAL_RULES.PROGRESS' | translate: { signed: current.signedCount, total: current.total }
+      }}
+    </p>
+    @if (!current.canManage) {
+      <p class="rules-note" role="note" data-testid="clinical-rules-read-only">
+        {{ 'CLINICAL_RULES.READ_ONLY' | translate }}
+      </p>
+    }
+
+    <ol class="rules-list">
+      @for (rule of rules(); track rule.key) {
+        <li class="rule-card" [attr.data-rule]="rule.key" [attr.data-status]="rule.status">
+          <div class="rule-head">
+            <h2 class="rule-title">{{ rule.titleText }}</h2>
+            <span class="rule-chip" [attr.data-status]="rule.status">
+              @switch (rule.status) {
+                @case ('SIGNED') {
+                  {{ 'CLINICAL_RULES.STATUS.SIGNED' | translate }}
+                }
+                @case ('REVOKED') {
+                  {{ 'CLINICAL_RULES.STATUS.REVOKED' | translate }}
+                }
+                @default {
+                  {{ 'CLINICAL_RULES.STATUS.PENDING' | translate }}
+                }
+              }
+            </span>
+          </div>
+          <p class="rule-desc">{{ rule.descriptionText }}</p>
+          <dl class="rule-facts">
+            <div>
+              <dt>{{ 'CLINICAL_RULES.SOURCE' | translate }}</dt>
+              <dd>
+                {{ rule.sourceText }}
+                @if (rule.sourceUrl) {
+                  <a
+                    class="rule-source-link"
+                    data-testid="rule-source-link"
+                    [href]="rule.sourceUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    >{{ 'CLINICAL_RULES.SOURCE_OPEN' | translate }}</a
+                  >
+                }
+              </dd>
+            </div>
+            <div>
+              <dt>{{ 'CLINICAL_RULES.APPROVER' | translate }}</dt>
+              <dd>{{ rule.approverText }}</dd>
+            </div>
+            <div>
+              <dt>{{ 'CLINICAL_RULES.VERSION' | translate }}</dt>
+              <dd>{{ rule.version }}</dd>
+            </div>
+            <div>
+              <dt>{{ 'CLINICAL_RULES.ENFORCED_IN' | translate }}</dt>
+              <dd data-testid="rule-area">{{ 'CLINICAL_RULES.AREA.' + rule.area | translate }}</dd>
+            </div>
+          </dl>
+
+          @if (rule.signoff; as signoff) {
+            <div class="rule-signoff" data-testid="rule-signoff">
+              @if (rule.status === 'SIGNED') {
+                <p>
+                  <span class="material-symbols-outlined" aria-hidden="true">verified</span>
+                  {{
+                    'CLINICAL_RULES.SIGNED_BY'
+                      | translate
+                        : {
+                            date: signoff.signedOn | dayMonth: undefined : true,
+                            title: signoff.signerTitle,
+                            name: signoff.signerName,
+                          }
+                  }}
+                </p>
+              } @else {
+                <p>
+                  {{
+                    'CLINICAL_RULES.REVOKED_BY'
+                      | translate
+                        : {
+                            date: signoff.revokedAt | dayMonth: undefined : true,
+                            name: signoff.revokedByName ?? '—',
+                          }
+                  }}
+                </p>
+                @if (signoff.revokeReason) {
+                  <p class="rule-muted">
+                    {{ 'CLINICAL_RULES.REVOKE_REASON' | translate }}{{ 'COMMON.COLON' | translate }}
+                    {{ signoff.revokeReason }}
+                  </p>
+                }
+              }
+              @if (signoff.note) {
+                <p class="rule-muted">
+                  {{ 'CLINICAL_RULES.NOTE' | translate }}{{ 'COMMON.COLON' | translate }}
+                  {{ signoff.note }}
+                </p>
+              }
+              <p class="rule-muted">
+                {{
+                  'CLINICAL_RULES.RECORDED_BY'
+                    | translate
+                      : {
+                          name: signoff.recordedByName ?? '—',
+                          date: signoff.recordedAt | dayMonth: undefined : true,
+                        }
+                }}
+              </p>
+            </div>
+          } @else if (rule.lastSignedVersion) {
+            <p class="rule-muted" data-testid="rule-new-version">
+              {{ 'CLINICAL_RULES.NEW_VERSION' | translate: { version: rule.lastSignedVersion } }}
+            </p>
+          }
+
+          @if (current.canManage) {
+            <div class="rule-actions">
+              <!-- One button whose action follows the status (QA D2100: never two swapped buttons). -->
+              <button
+                type="button"
+                [class.btn-primary]="rule.status !== 'SIGNED'"
+                [class.btn-secondary]="rule.status === 'SIGNED'"
+                [attr.data-testid]="rule.status === 'SIGNED' ? 'rule-revoke' : 'rule-sign'"
+                [disabled]="busy()"
+                (click)="rule.status === 'SIGNED' ? revoking.set(rule) : openSign(rule)"
+              >
+                {{
+                  (rule.status === 'SIGNED'
+                    ? 'CLINICAL_RULES.REVOKE.ACTION'
+                    : 'CLINICAL_RULES.SIGN.ACTION'
+                  ) | translate
+                }}
+              </button>
+            </div>
+          }
+        </li>
+      }
+    </ol>
+  }
+</section>
+
+@if (signing(); as rule) {
+  <div class="modal-backdrop" tabindex="-1" (click)="closeSign()" (keydown.escape)="closeSign()">
+    <div
+      class="modal shared-dialog"
+      appModalDialog
+      tabindex="-1"
+      aria-labelledby="rule-sign-title"
+      data-testid="rule-sign-dialog"
+      data-submit-scope
+      (escaped)="closeSign()"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <h2 id="rule-sign-title">{{ 'CLINICAL_RULES.SIGN.TITLE' | translate }}</h2>
+      <div class="dialog-body">
+        <p class="rule-sign-rule">
+          <strong>{{ text(rule.title) }}</strong>
+          — {{ 'CLINICAL_RULES.VERSION' | translate }} {{ rule.version }}
+        </p>
+        <p class="rule-muted">{{ 'CLINICAL_RULES.SIGN.HINT' | translate }}</p>
+        <div class="field">
+          <label for="rule-signer-name"
+            >{{ 'CLINICAL_RULES.SIGN.SIGNER_NAME' | translate }} *</label
+          >
+          <input
+            id="rule-signer-name"
+            type="text"
+            maxlength="200"
+            required
+            aria-required="true"
+            data-testid="rule-signer-name"
+            [(ngModel)]="draft.signerName"
+          />
+        </div>
+        <div class="field">
+          <label for="rule-signer-title"
+            >{{ 'CLINICAL_RULES.SIGN.SIGNER_TITLE' | translate }} *</label
+          >
+          <input
+            id="rule-signer-title"
+            type="text"
+            maxlength="200"
+            required
+            aria-required="true"
+            data-testid="rule-signer-title"
+            [(ngModel)]="draft.signerTitle"
+          />
+        </div>
+        <div class="field">
+          <label for="rule-signed-on">{{ 'CLINICAL_RULES.SIGN.SIGNED_ON' | translate }} *</label>
+          <input
+            id="rule-signed-on"
+            type="date"
+            required
+            aria-required="true"
+            data-testid="rule-signed-on"
+            [max]="today"
+            [(ngModel)]="draft.signedOn"
+          />
+        </div>
+        <div class="field">
+          <label for="rule-signer-note">{{ 'CLINICAL_RULES.SIGN.NOTE' | translate }}</label>
+          <textarea
+            id="rule-signer-note"
+            rows="2"
+            maxlength="1000"
+            data-testid="rule-signer-note"
+            [(ngModel)]="draft.note"
+          ></textarea>
+        </div>
+        <label class="rule-self" for="rule-signer-self">
+          <input
+            id="rule-signer-self"
+            type="checkbox"
+            data-testid="rule-signer-self"
+            [ngModel]="draft.selfSigned"
+            (ngModelChange)="toggleSelf($event)"
+          />
+          {{ 'CLINICAL_RULES.SIGN.SELF' | translate }}
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button
+          type="button"
+          class="btn-secondary"
+          data-testid="rule-sign-cancel"
+          (click)="closeSign()"
+        >
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          data-testid="rule-sign-confirm"
+          [disabled]="busy()"
+          [appSubmitGuard]="signBlocked()"
+          [submitGuardFields]="['rule-signer-name', 'rule-signer-title', 'rule-signed-on']"
+          submitGuardRequired
+          (click)="submitSign()"
+        >
+          {{ 'CLINICAL_RULES.SIGN.CONFIRM' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+@if (revoking(); as rule) {
+  <app-reason-dialog
+    titleKey="CLINICAL_RULES.REVOKE.TITLE"
+    messageKey="CLINICAL_RULES.REVOKE.MESSAGE"
+    confirmKey="CLINICAL_RULES.REVOKE.CONFIRM"
+    [busy]="busy()"
+    (confirmed)="revoke(rule, $event)"
+    (cancelled)="revoking.set(null)"
+  >
+    <p>
+      <strong>{{ text(rule.title) }}</strong>
+    </p>
+  </app-reason-dialog>
+}

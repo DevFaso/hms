@@ -82,4 +82,13 @@
   color: #4b5563;
 }
 
+// QA D3415 (r70): the quarantine a row moved, under its stock quantity.
+.quarantine-move {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #9a3412;
+  white-space: nowrap;
+}
+
 @include operations.workspace;

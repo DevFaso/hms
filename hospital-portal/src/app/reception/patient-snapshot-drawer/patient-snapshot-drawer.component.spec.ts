@@ -5,7 +5,7 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { ReceptionService } from '../reception.service';
 import { ToastService } from '../../core/toast.service';
-import { of } from 'rxjs';
+import { Observable, of } from 'rxjs';
 
 describe('PatientSnapshotDrawerComponent', () => {
   let component: PatientSnapshotDrawerComponent;
@@ -41,7 +41,10 @@ describe('PatientSnapshotDrawerComponent', () => {
     },
   };
 
-  const mockReceptionService = {
+  const mockReceptionService: {
+    getPatientSnapshot: () => Observable<unknown>;
+    attestEligibility: () => Observable<unknown>;
+  } = {
     getPatientSnapshot: () => of(mockSnapshot),
     attestEligibility: () => of({}),
   };
@@ -124,6 +127,40 @@ describe('PatientSnapshotDrawerComponent', () => {
       expect(labels).not.toContain(
         hasPrimary ? 'RECEPTION.INSURANCE_PROVIDER' : 'RECEPTION.PRIMARY_PAYER',
       );
+    });
+  }
+
+  /** QA D3150 (r70a): « Assurance vérifiée » names the verifier by name, never by login. */
+  for (const name of ['Awa Ouedraogo', null]) {
+    it(`shows the verification ${name ? 'with the name' : 'without a name'}, never the login`, () => {
+      mockReceptionService.getPatientSnapshot = () =>
+        of({
+          ...mockSnapshot,
+          insurance: {
+            ...mockSnapshot.insurance,
+            verifiedAt: '2026-11-22T02:52:30',
+            verifiedBy: 'test.receptionist.t2.r67',
+            verifiedByName: name,
+          },
+        });
+      component.patientId = 'p1';
+      component.ngOnChanges({
+        patientId: {
+          currentValue: 'p1',
+          previousValue: null,
+          firstChange: true,
+          isFirstChange: () => true,
+        },
+      });
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      const chip = host.querySelector('[data-testid="snapshot-insurance-verified"]')!.textContent!;
+      expect(chip).not.toContain('test.receptionist.t2.r67');
+      if (name) expect(chip).toContain(name);
+      const labels = Array.from(host.querySelectorAll('.field-label')).map((e) =>
+        e.textContent?.trim(),
+      );
+      expect(labels).toContain('RECEPTION.INSURANCE_VERIFIED');
     });
   }
 

@@ -21,6 +21,13 @@
             {{ summary().patientMrn }}</span
           >
         }
+        <!-- QA r70 D3220: the blood group on the summary and its print (the desk's copy has none). -->
+        @if (summary().patientBloodType) {
+          <span data-testid="avs-blood-group"
+            >{{ 'PATIENT_SAFETY.BLOOD_GROUP' | translate }}{{ 'COMMON.COLON' | translate }}
+            <strong>{{ summary().patientBloodType }}</strong></span
+          >
+        }
       </p>
       <dl class="vss-identity-visit">
         @if (summary().visitDate) {

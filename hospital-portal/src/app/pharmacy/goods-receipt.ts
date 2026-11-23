@@ -26,6 +26,7 @@ import { localDateString } from '../shared/date-utils';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { blankFields, refuseFields } from '../shared/forms/invalid-fields';
 import { DashPipe } from '../shared/pipes/dash.pipe';
+import { CountUnitPipe } from '../shared/pipes/count-unit.pipe';
 import { missingRequiredMessage } from '../shared/required-fields';
 
 /** QA D1233: how many recent lots the receipt page lists. */
@@ -34,7 +35,7 @@ const RECENT_LOTS = 20;
 const RECENT_LOTS_SORT = ['receivedDate,desc', 'createdAt,desc'] as const;
 
 /** Every field the receipt form may refuse (QA D1306). */
-const GR_FIELD_IDS = ['grItem', 'grLot', 'grExpiry', 'grQty', 'grWitness', 'grCost'];
+const GR_FIELD_IDS = ['grItem', 'grLot', 'grExpiry', 'grQty', 'grQtyIn', 'grWitness', 'grCost'];
 
 @Component({
   selector: 'app-goods-receipt',
@@ -47,6 +48,7 @@ const GR_FIELD_IDS = ['grItem', 'grLot', 'grExpiry', 'grQty', 'grWitness', 'grCo
     FormsModule,
     TranslateModule,
     CfaPipe,
+    CountUnitPipe,
   ],
   templateUrl: './goods-receipt.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -104,6 +106,46 @@ export class GoodsReceiptComponent implements OnInit {
       next: (res) => this.witnessCandidates.set(res?.data ?? []),
       error: () => this.witnessCandidates.set([]),
     });
+  }
+
+  /** The item chosen in the form, or undefined. */
+  selectedItem(): InventoryItemResponse | undefined {
+    return this.inventoryItems().find((i) => i.id === this.selectedInventoryItemId);
+  }
+
+  /**
+   * QA D3401 (r70): « 50 » plaquettes of a tablet item were recorded as 50 tablets. An item with
+   * a pack size is received in packs or in units, said every time (no default); stock stays in units.
+   */
+  receivedIn: 'PACKS' | 'UNITS' | null = null;
+
+  hasPackSize(): boolean {
+    return (this.selectedItem()?.unitsPerPack ?? 0) >= 2;
+  }
+
+  /** The units the receipt adds, as the server will convert it. */
+  receivedUnits(): number {
+    const qty = Number(this.form.initialQuantity) || 0;
+    const perPack = this.selectedItem()?.unitsPerPack ?? 1;
+    return this.hasPackSize() && this.receivedIn === 'PACKS' ? qty * perPack : qty;
+  }
+
+  /** The unit the quantity field counts in, shown next to it. */
+  quantityUnit(): string {
+    const item = this.selectedItem();
+    if (!item) return '';
+    if (this.hasPackSize() && this.receivedIn === 'PACKS') return item.packUnit ?? '';
+    return item.unit && item.unit !== 'UNIT' ? item.unit : '';
+  }
+
+  onItemChange(): void {
+    this.receivedIn = null;
+  }
+
+  /** The item unit a lot's quantities count in. */
+  lotUnit(lot: StockLotResponse): string {
+    const unit = this.inventoryItems().find((entry) => entry.id === lot.inventoryItemId)?.unit;
+    return unit && unit !== 'UNIT' ? unit : '';
   }
 
   /** QA D655: a controlled substance is received in front of a witness. */
@@ -184,6 +226,7 @@ export class GoodsReceiptComponent implements OnInit {
   openReceiveForm(): void {
     this.form = this.emptyForm();
     this.selectedInventoryItemId = '';
+    this.receivedIn = null;
     this.showForm.set(true);
   }
 
@@ -236,6 +279,13 @@ export class GoodsReceiptComponent implements OnInit {
       return;
     }
 
+    if (this.hasPackSize() && !this.receivedIn) {
+      const message = this.translate.instant('PHARMACY.RECEIVED_IN_REQUIRED');
+      refuseFields(root, ['grQtyIn'], GR_FIELD_IDS, message);
+      this.toast.error(message);
+      return;
+    }
+
     if (this.needsWitness() && !this.form.witnessedBy) {
       const message = this.translate.instant('PHARMACY.WITNESS_REQUIRED');
       refuseFields(root, ['grWitness'], GR_FIELD_IDS, message);
@@ -249,6 +299,7 @@ export class GoodsReceiptComponent implements OnInit {
       ...this.form,
       inventoryItemId: this.selectedInventoryItemId,
       witnessedBy: this.needsWitness() ? this.form.witnessedBy : undefined,
+      inPacks: this.hasPackSize() && this.receivedIn === 'PACKS',
     };
     this.svc.receiveStock(req).subscribe({
       next: () => {

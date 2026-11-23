@@ -107,13 +107,27 @@ class DischargeSummaryControllerTest {
 
     @Test
     void getDischargeSummaryByEncounterReturnsOk() {
-        when(dischargeSummaryService.getDischargeSummaryByEncounter(encounterId, locale)).thenReturn(response);
+        when(dischargeSummaryService.findDischargeSummaryByEncounter(encounterId, locale))
+                .thenReturn(java.util.Optional.of(response));
 
         ResponseEntity<DischargeSummaryResponseDTO> result =
                 controller.getDischargeSummaryByEncounter(encounterId, locale);
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(result.getBody()).isEqualTo(response);
+    }
+
+    /** QA D3155 (r70a): no summary yet is a 204 with no body, never a 404 the browser logs as an error. */
+    @Test
+    void getDischargeSummaryByEncounterWithNoneYetIsNoContent() {
+        when(dischargeSummaryService.findDischargeSummaryByEncounter(encounterId, locale))
+                .thenReturn(java.util.Optional.empty());
+
+        ResponseEntity<DischargeSummaryResponseDTO> result =
+                controller.getDischargeSummaryByEncounter(encounterId, locale);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThat(result.getBody()).isNull();
     }
 
     // ─── getDischargeSummariesByPatient ──────────────────────────

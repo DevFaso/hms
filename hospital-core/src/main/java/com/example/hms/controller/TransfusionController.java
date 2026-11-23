@@ -101,9 +101,34 @@ public class TransfusionController {
 
     @GetMapping("/blood-groups/patient/{patientId}")
     @PreAuthorize(READER)
-    @Operation(summary = "Current type and screen for a patient")
+    @Operation(summary = "Current type and screen for a patient",
+        description = "204 No Content when the patient has no type and screen at this hospital yet (QA D3352): "
+            + "an ordinary answer before the first one, not a missing resource.")
     public ResponseEntity<PatientBloodGroupResponseDTO> getCurrentBloodGroup(@PathVariable UUID patientId) {
-        return ResponseEntity.ok(transfusionService.getCurrentBloodGroup(patientId));
+        return transfusionService.findCurrentBloodGroup(patientId)
+            .map(ResponseEntity::ok)
+            .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    @PostMapping("/antibody-workups")
+    @PreAuthorize("T(com.example.hms.security.ClinicalActor).holdsOwnRole(authentication, 'LAB_DIRECTOR')")
+    @Operation(summary = "Record the antibody identified, or the referral decision for one request",
+        description = "The hospital's biologist only (rule set TRANSFUSION_POSITIVE_ANTIBODY_SCREEN); "
+            + "a super-admin alone is refused.")
+    public ResponseEntity<com.example.hms.payload.dto.transfusion.AntibodyStatusResponseDTO> recordAntibodyWorkup(
+        @Valid @RequestBody com.example.hms.payload.dto.transfusion.AntibodyWorkupRequestDTO request) {
+        return new ResponseEntity<>(transfusionService.recordAntibodyWorkup(request), HttpStatus.CREATED);
+    }
+
+    @GetMapping("/antibody-status/patient/{patientId}")
+    @PreAuthorize(READER)
+    @Operation(summary = "The patient's allo-immunisation, wherever it is on record",
+        description = "The permanent flag of a positive antibody screen and the antibody identified, for everyone "
+            + "on the transfusion path: the bench, the prescriber and the nurse who gives the unit. Of another "
+            + "hospital's record: the antibody, the date and that hospital's name only. Each read is accounted.")
+    public ResponseEntity<com.example.hms.payload.dto.transfusion.AntibodyStatusResponseDTO> getAntibodyStatus(
+        @PathVariable UUID patientId) {
+        return ResponseEntity.ok(transfusionService.getAntibodyStatus(patientId));
     }
 
     @GetMapping("/blood-groups/patient/{patientId}/history")

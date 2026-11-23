@@ -26,7 +26,7 @@ public record HospitalOnboardingReadinessDTO(UUID hospitalId, boolean patientBoo
         HOSPITAL_ADMIN,
         /** At least one department. */
         DEPARTMENTS,
-        /** At least one activated staff account. */
+        /** At least one activated staff account besides the hospital's administrators (QA r70 D3203). */
         STAFF,
         /** At least one department with a doctor, nurse or midwife attached to it. */
         PROVIDERS_IN_DEPARTMENT,
@@ -36,10 +36,20 @@ public record HospitalOnboardingReadinessDTO(UUID hospitalId, boolean patientBoo
         OPEN_SLOTS,
         /** At least one active bed (inpatient care). */
         BEDS,
+        /**
+         * QA r70 D3213: at least one lab test a doctor can order here (ACTIVE, the hospital's own or the platform
+         * catalogue's). Before the price list: a lab price line links to a test by its code.
+         */
+        LAB_TESTS,
         /** At least one active price-list item (billing). */
         PRICE_LIST,
         /** At least one active payer (insured patients). */
-        PAYERS
+        PAYERS,
+        /**
+         * V356: every provisional rule set signed off by the hospital's approver at its current version
+         * ({@code count} signed of {@code total}). Never needed for booking: a pending rule still enforces.
+         */
+        CLINICAL_RULES
     }
 
     /**
@@ -47,7 +57,13 @@ public record HospitalOnboardingReadinessDTO(UUID hospitalId, boolean patientBoo
      * @param done               whether the hospital has it
      * @param count              how many it has (departments, staff, slots…)
      * @param requiredForBooking true for the steps online booking cannot work without
+     * @param total              the count the step is done at ({@code count} of {@code total}), or null for the
+     *                           steps that are done at one
      */
-    public record Item(Step step, boolean done, long count, boolean requiredForBooking) {
+    public record Item(Step step, boolean done, long count, boolean requiredForBooking, Long total) {
+
+        public Item(Step step, boolean done, long count, boolean requiredForBooking) {
+            this(step, done, count, requiredForBooking, null);
+        }
     }
 }

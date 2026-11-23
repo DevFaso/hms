@@ -183,7 +183,9 @@
       }
     </fieldset>
   }
-  <small class="deferral-hint deferral-provisional" data-testid="deferral-provisional">{{
-    'PHARMACY_MONEY.DEFERRAL.PROVISIONAL' | translate
-  }}</small>
+  <small class="deferral-hint deferral-provisional" data-testid="deferral-provisional"
+    ><app-rule-status ruleKey="DEFERRED_BILLING">{{
+      'PHARMACY_MONEY.DEFERRAL.PROVISIONAL' | translate
+    }}</app-rule-status></small
+  >
 </section>

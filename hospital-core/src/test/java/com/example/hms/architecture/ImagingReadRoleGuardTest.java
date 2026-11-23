@@ -286,7 +286,11 @@ class ImagingReadRoleGuardTest {
         // Released reports of exams they performed (ImagingReportServiceImpl).
         "ImagingResultController.getReport",
         "ImagingResultController.getLatestReportForOrder",
-        "ImagingResultController.getAllReportsForOrder");
+        "ImagingResultController.getAllReportsForOrder",
+        // V356: the provisional rules of their hospital and their sign-off status (the technician's own rule
+        // shows « provisoire » or « validée » from it), and the printed pack. Read-only, no patient.
+        "HospitalClinicalRulesController.list",
+        "HospitalClinicalRulesController.pack");
 
     /** What the policy forbids, by name, so a widened gate fails with the rule it broke. */
     private static final Set<String> NEVER_THE_TECHNICIAN = Set.of(

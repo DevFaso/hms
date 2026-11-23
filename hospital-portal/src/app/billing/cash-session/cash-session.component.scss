@@ -16,6 +16,12 @@
   justify-content: space-between;
 }
 
+.cash-session-head .page-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .session-card {
   margin-top: 1rem;
   padding-top: 0.75rem;
@@ -154,4 +160,26 @@ tr.money-out td {
 /* PR 10 review: in a table cell the status badge needs no offset (it cost the 1024 px screen 8 px). */
 .cash-supervisor .data-table .status-badge {
   margin-left: 0;
+}
+
+/* QA D3256 (r70): the « Jour » picker is a styled field, apart from its label, at every width. */
+.cash-session-day {
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+
+  label {
+    font-weight: 600;
+  }
+}
+
+.cash-session-day__input {
+  min-height: 2.25rem;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--border-color, #d0d5dd);
+  border-radius: 6px;
+  background: var(--surface-color, #fff);
+  color: inherit;
+  font: inherit;
+  max-width: 100%;
 }

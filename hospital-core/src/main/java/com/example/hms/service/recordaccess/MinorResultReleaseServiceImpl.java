@@ -1,5 +1,7 @@
 package com.example.hms.service.recordaccess;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.ProxyRelationship;
@@ -69,6 +71,7 @@ import java.util.UUID;
  */
 @Service
 @RequiredArgsConstructor
+@ProvisionalRule(ClinicalRuleSetKey.MINOR_HIV_RESULT_RELEASE)
 public class MinorResultReleaseServiceImpl implements MinorResultReleaseService {
 
     private static final Logger log = LoggerFactory.getLogger(MinorResultReleaseServiceImpl.class);

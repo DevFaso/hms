@@ -50,6 +50,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.example.hms.testsupport.RandomIds.withoutRandomIds;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -395,7 +396,7 @@ class InvoiceRefundServiceTest {
             .isInstanceOfSatisfying(FieldBusinessException.class, refusal -> {
                 assertThat(refusal.getField()).isEqualTo("reason");
                 assertThat(refusal.getMessageKey()).isEqualTo(com.example.hms.validation.NoCardNumber.MESSAGE_KEY);
-                assertThat(refusal.getMessage()).doesNotContain("4111").contains("carte");
+                assertThat(withoutRandomIds(refusal.getMessage())).doesNotContain("4111").contains("carte");
             });
         InvoiceRefundRequestDTO inReference = InvoiceRefundRequestDTO.builder().amount(new BigDecimal("500"))
             .method("BANK_TRANSFER").reference("4111111111111111").reason("Trop-perçu").build();
@@ -635,7 +636,7 @@ class InvoiceRefundServiceTest {
             .containsExactly(AuditEventType.REFUND_REQUESTED, AuditEventType.REFUND_APPROVED,
                 AuditEventType.REFUND_ISSUED);
         assertThat(logged.getAllValues()).allSatisfy(event -> {
-            assertThat(event.getEventDescription()).doesNotContain("500").doesNotContain("Trop-perçu");
+            assertThat(withoutRandomIds(event.getEventDescription())).doesNotContain("500").doesNotContain("Trop-perçu");
             assertThat(event.getResourceId()).isEqualTo(invoice.getId().toString());
         });
     }

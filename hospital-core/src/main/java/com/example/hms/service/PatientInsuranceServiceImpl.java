@@ -20,6 +20,9 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.utility.RoleValidator;
 import com.example.hms.exception.ClientSafeAccessDeniedException;
 import com.example.hms.service.billing.PayerCatalogueService;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import com.example.hms.payload.dto.OtherHospitalInsuranceDTO;
 import com.example.hms.utility.MessageUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.MessageSource;
@@ -27,9 +30,13 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -44,6 +51,11 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     private static final String INSURANCE_LINK_FORBIDDEN_KEY = "insurance.link.forbidden";
     private static final String INSURANCE_LINK_FORBIDDEN_MSG = "You don't have permission to link insurance in this hospital";
     private static final String ASSIGNMENT_REQUIRED_KEY = "assignment.required";
+    /** Owner decision 2026-11-22: the disclosure ledger's reasons for another hospital's policy read here. */
+    static final String OTHER_HOSPITAL_READ_DESCRIPTION =
+        "Cross-hospital insurance policy identity read to verify at the desk";
+    static final String OTHER_HOSPITAL_REUSE_DESCRIPTION =
+        "Cross-hospital insurance policy identity reused into this hospital's own coverage";
 
 
     private final PatientInsuranceRepository patientInsuranceRepository;
@@ -64,6 +76,10 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     private final ActingScopeResolver actingScopeResolver;
     /** Billing-money plan PR 6: the payer catalogue, which says whether a plan may be linked at a hospital. */
     private final PayerCatalogueService payerCatalogueService;
+    /** Owner decision 2026-11-22: which other hospitals' policies this caller may see (opt-out, posture, isolation). */
+    private final RecordAccessPolicy recordAccessPolicy;
+    /** Owner decision 2026-11-22: every policy surfaced from another hospital is accounted like any other reach. */
+    private final CrossHospitalReachRecorder reachRecorder;
 
     @Override
     @Transactional
@@ -133,6 +149,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         if (targetPatient == null) {
             throw new FieldBusinessException("patientId", PATIENT_REQUIRED_KEY);
         }
+        lockPatient(targetPatient.getId());
 
         enforceSelfAccessIfPatient(targetPatient, () -> patientNotFound(targetPatient.getId()));
 
@@ -146,6 +163,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
 
         PatientInsurance saved = patientInsuranceRepository.save(existing);
         auditPlanLink(planLink, saved);
+        saved = keepOnePrimary(saved, false);
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
     }
 
@@ -154,7 +172,12 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     public void deletePatientInsurance(UUID insuranceId, Locale locale) {
         PatientInsurance existing = getScopedInsuranceOrThrow(insuranceId);
         enforceSelfAccessIfPatient(existing.getPatient(), () -> insuranceNotFound(insuranceId));
+        UUID patientId = existing.getPatient() != null ? existing.getPatient().getId() : null;
+        UUID hospitalId = hospitalOf(existing);
+        lockPatient(patientId);
         patientInsuranceRepository.deleteById(insuranceId);
+        // QA D3250: the primary removed, another coverage in force takes its place.
+        promotePrimary(patientId, hospitalId, null);
     }
 
     @Override
@@ -191,6 +214,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             UUID hospitalId = resolveHospitalId(req, ctx);
             enforceStaffAuthorization(hospitalId, actorUserId, ctx, locale);
             patientChartAccess.require(patient.getId(), hospitalId);
+            lockPatient(patient.getId());
             insurance = rowAtHospital(insurance, hospitalId, actorUserId, () -> insuranceNotFound(insuranceId));
             planLink = applyRequestedPlan(insurance, req.getPayerPlanId(), hospitalId, actorUserId,
                 () -> insuranceNotFound(insuranceId));
@@ -201,6 +225,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
 
         PatientInsurance saved = patientInsuranceRepository.save(insurance);
         auditPlanLink(planLink, saved);
+        saved = keepOnePrimary(saved, false);
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
     }
 
@@ -320,6 +345,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             UUID hospitalId = resolveHospitalId(req, ctx);
             enforceStaffAuthorization(hospitalId, actorUserId, ctx, locale);
             patientChartAccess.require(patient.getId(), hospitalId);
+            lockPatient(patient.getId());
             insurance = rowAtHospital(insurance, hospitalId, actorUserId, () -> insuranceNotFound(insuranceId));
             insurance.setPatient(patient);
             planLink = applyRequestedPlan(insurance, req.getPayerPlanId(), hospitalId, actorUserId,
@@ -328,6 +354,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
 
         PatientInsurance saved = patientInsuranceRepository.save(insurance);
         auditPlanLink(planLink, saved);
+        saved = keepOnePrimary(saved, false);
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
     }
 
@@ -358,6 +385,8 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             hospitalIdForStaff = resolveHospitalId(req, ctx);
             enforceStaffAuthorization(hospitalIdForStaff, actorUserId, ctx, locale);
             patientChartAccess.require(patientId, hospitalIdForStaff);
+            // Review of #1284: before any coverage row is written (the primary flag bulk-updates the others).
+            lockPatient(patientId);
         }
 
         PatientInsurance found = findOrCreateInsurance(patientId, payerCode, policyNumber, patient,
@@ -369,7 +398,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         PlanLink planLink = null;
         final PatientInsurance insurance = actAsPatient ? found
             : rowAtHospital(found, hospitalIdForStaff, actorUserId, () -> insuranceNotFound(found.getId()));
-        applyProviderName(insurance, req.getProviderName(), payerCode);
+        applyProviderName(insurance, req.getProviderName(), payerCode, hospitalIdForStaff);
         if (!actAsPatient) {
             planLink = applyRequestedPlan(insurance, req.getPayerPlanId(), hospitalIdForStaff, actorUserId,
                 () -> insuranceNotFound(insurance.getId()));
@@ -389,6 +418,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         }
 
         auditPlanLink(planLink, saved);
+        saved = keepOnePrimary(saved, !actAsPatient && Boolean.FALSE.equals(req.getPrimary()));
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
     }
 
@@ -414,6 +444,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         // Review of #1202: the patient is one this hospital may chart (registered here, or treated here), else
         // the row answers as a missing one; a shared row is never re-tagged: this hospital gets its own copy.
         patientChartAccess.require(scoped.getPatient() != null ? scoped.getPatient().getId() : null, hospitalId);
+        lockPatient(scoped.getPatient() != null ? scoped.getPatient().getId() : null);
         PatientInsurance insurance = scoped.getAssignment() != null
             ? scoped
             : rowAtHospital(scoped, hospitalId, actorUserId, () -> insuranceNotFound(insuranceId));
@@ -421,7 +452,294 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             () -> insuranceNotFound(insuranceId));
         PatientInsurance saved = patientInsuranceRepository.save(insurance);
         auditPlanLink(planLink, saved);
+        saved = keepOnePrimary(saved, false);
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
+    }
+
+    /* ==================== another hospital's policy, to verify (owner decision 2026-11-22) ==================== */
+
+    /**
+     * Owner decision 2026-11-22 (replaces "cross-hospital insurance stays hidden", 2026-11-12): the policy belongs to
+     * the patient, the agreement with the insurer to each hospital. The desk (hospital admin, billing specialist,
+     * reception) of the acting hospital sees the patient's policies recorded at the other hospitals
+     * {@link RecordAccessPolicy#readableHospitalIds} lets it read - so the patient's sharing opt-out and a source
+     * hospital's EXPLICIT_CONSENT or SCHEMA isolation still hide them - by their identity only
+     * ({@link OtherHospitalInsuranceDTO}), never through {@code patientInsuranceMapper}. A policy this hospital already
+     * holds is not repeated. Every one shown is accounted in the disclosure ledger.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<OtherHospitalInsuranceDTO> getOtherHospitalPolicies(UUID patientId) {
+        UUID hospitalId = requireActingHospital();
+        UUID actorUserId = resolveActorUserId(null);
+        requirePlanLinker(hospitalId, actorUserId);
+        patientChartAccess.require(patientId, hospitalId);
+        Set<UUID> others = new HashSet<>(recordAccessPolicy.readableHospitalIds(actorUserId, patientId, hospitalId));
+        others.remove(hospitalId);
+        if (others.isEmpty()) {
+            return List.of();
+        }
+        List<PatientInsurance> here = heldAt(patientId, hospitalId);
+        List<PatientInsurance> candidates = patientInsuranceRepository
+            .findByPatient_IdAndAssignment_Hospital_IdIn(patientId, others).stream()
+            .filter(row -> others.contains(hospitalOf(row)))
+            .toList();
+        if (candidates.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, PayerCatalogueService.PlanLabel> plans = payerCatalogueService.labelsOf(
+            candidates.stream().map(PatientInsurance::getPayerPlanId).filter(Objects::nonNull).toList());
+        InsurerNames names = new InsurerNames(hospitalId, plans);
+        List<PatientInsurance> shown = onePerPolicyAndHospital(candidates.stream()
+            .filter(row -> here.stream().noneMatch(own -> samePolicy(own, row, names)))
+            .toList(), names);
+        if (shown.isEmpty()) {
+            return List.of();
+        }
+        List<PayerCatalogueService.Agreement> agreements = payerCatalogueService.activeAgreementsAt(hospitalId);
+        reachRecorder.recordReach(patientId, hospitalId, actorUserId, null,
+            CrossHospitalReachRecorder.reachOf(shown.stream().map(PatientInsuranceServiceImpl::hospitalOf).toList(),
+                hospitalId),
+            OTHER_HOSPITAL_READ_DESCRIPTION);
+        return shown.stream()
+            .map(row -> toVerify(row, row.getPayerPlanId() == null ? null : plans.get(row.getPayerPlanId()),
+                names.of(row), agreements))
+            .toList();
+    }
+
+    /**
+     * Owner decision 2026-11-22: "Reprendre pour cet établissement". The acting hospital gets its OWN coverage row,
+     * made from the source policy's identity fields only (policy number, holder relationship, validity dates),
+     * unverified, with no plan: it bills no payer share until the desk links one of THIS hospital's formules (plan
+     * A-9). With an agreement here the row is named after this hospital's payer (its code and name); without one it
+     * keeps the insurer as recorded, an identity-only record, and the desk is told there is no agreement (research
+     * 2026-11-22: tiers payant only where the facility holds its own convention). The source row is read only through
+     * {@link RecordAccessPolicy} (another one answers as a missing id) and never written. Taking it twice returns the
+     * row this hospital already holds.
+     */
+    @Override
+    @Transactional
+    public PatientInsuranceResponseDTO reuseOtherHospitalPolicy(UUID sourceInsuranceId) {
+        UUID hospitalId = requireActingHospital();
+        UUID actorUserId = resolveActorUserId(null);
+        requirePlanLinker(hospitalId, actorUserId);
+        PatientInsurance source = getInsuranceOrThrow(sourceInsuranceId);
+        UUID patientId = source.getPatient() != null ? source.getPatient().getId() : null;
+        UUID sourceHospitalId = hospitalOf(source);
+        if (patientId == null || sourceHospitalId == null || sourceHospitalId.equals(hospitalId)
+            || !recordAccessPolicy.readableHospitalIds(actorUserId, patientId, hospitalId).contains(sourceHospitalId)) {
+            throw insuranceNotFound(sourceInsuranceId);
+        }
+        patientChartAccess.require(patientId, hospitalId);
+        lockPatient(patientId);
+        reachRecorder.recordReach(patientId, hospitalId, actorUserId, null,
+            CrossHospitalReachRecorder.reachOf(List.of(sourceHospitalId), hospitalId),
+            OTHER_HOSPITAL_REUSE_DESCRIPTION);
+        // Review of #1293: under the patient lock, the same "already held" rule as the list (its own rows and the
+        // shared ones it sees), so a stale page or a direct call never makes a second row of the policy.
+        InsurerNames names = new InsurerNames(hospitalId, Map.of());
+        java.util.Optional<PatientInsurance> held = heldAt(patientId, hospitalId).stream()
+            .filter(own -> samePolicy(own, source, names))
+            .findFirst();
+        if (held.isPresent()) {
+            return patientInsuranceMapper.toPatientInsuranceResponseDTO(held.get());
+        }
+        // This hospital's agreement with the insurer, by the insurer's name as the source hospital knows it (review of
+        // #1293 and #1301 M1: never by the code alone), else none: identity only.
+        String insurer = names.of(source);
+        PayerCatalogueService.Agreement agreement = agreementFor(payerCatalogueService.activeAgreementsAt(hospitalId),
+            source, insurer);
+        PatientInsurance own = rowAtHospital(identityOf(source, agreement, insurer), hospitalId, actorUserId,
+            () -> insuranceNotFound(sourceInsuranceId));
+        own.setLinkedByUserId(actorUserId);
+        own.setLinkedAs("STAFF");
+        PatientInsurance saved = keepOnePrimary(patientInsuranceRepository.save(own), false);
+        return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
+    }
+
+    /**
+     * A new, untagged row: the source policy's identity, unverified, no plan. Under this hospital's payer when it has
+     * an agreement; otherwise the insurer's name (as the source hospital knows it, QA D3601, else as recorded) and no
+     * payer code (another hospital's code is free text that means nothing here, review of #1293).
+     */
+    private static PatientInsurance identityOf(PatientInsurance source, PayerCatalogueService.Agreement agreement,
+                                               String insurer) {
+        String name = insurer != null ? insurer : source.getProviderName();
+        return PatientInsurance.builder()
+            .patient(source.getPatient())
+            .payerCode(agreement == null ? null : agreement.payerCode())
+            .providerName(agreement == null ? name : agreement.payerName())
+            .policyNumber(source.getPolicyNumber())
+            .subscriberRelationship(source.getSubscriberRelationship())
+            .effectiveDate(source.getEffectiveDate())
+            .expirationDate(source.getExpirationDate())
+            .primary(false)
+            .build();
+    }
+
+    /**
+     * QA D3601 (r71): one card per policy and hospital. A hospital may hold the same policy twice (its link and an
+     * earlier copy); the card shows the row that names a formule, so « FORMULE — » is never shown for a policy the
+     * other hospital did file under one.
+     */
+    private static List<PatientInsurance> onePerPolicyAndHospital(List<PatientInsurance> rows, InsurerNames names) {
+        List<PatientInsurance> kept = new java.util.ArrayList<>();
+        for (PatientInsurance row : rows) {
+            int at = -1;
+            for (int i = 0; i < kept.size() && at < 0; i++) {
+                PatientInsurance other = kept.get(i);
+                if (Objects.equals(hospitalOf(other), hospitalOf(row)) && samePolicy(other, row, names)) {
+                    at = i;
+                }
+            }
+            if (at < 0) {
+                kept.add(row);
+            } else if (kept.get(at).getPayerPlanId() == null && row.getPayerPlanId() != null) {
+                kept.set(at, row);
+            }
+        }
+        return kept;
+    }
+
+    /**
+     * The identity of another hospital's policy, and nothing else of the row (owner decision 2026-11-22). QA D3601
+     * (r71): the insurer is shown by its name as the source hospital knows it ({@link InsurerNames}), never this
+     * hospital's payer's name (review of #1301 M1), and by the code only when the source names none; the formule by
+     * its name.
+     */
+    private static OtherHospitalInsuranceDTO toVerify(PatientInsurance row, PayerCatalogueService.PlanLabel plan,
+                                                      String insurer,
+                                                      List<PayerCatalogueService.Agreement> agreements) {
+        UserRoleHospitalAssignment assignment = row.getAssignment();
+        String recorded = trimToNull(row.getProviderName()) != null ? row.getProviderName().trim() : row.getPayerCode();
+        return OtherHospitalInsuranceDTO.builder()
+            .sourceInsuranceId(row.getId())
+            .sourceHospitalName(assignment != null && assignment.getHospital() != null
+                ? assignment.getHospital().getName() : null)
+            .insurerName(insurer != null ? insurer : recorded)
+            .policyNumber(row.getPolicyNumber())
+            .planName(plan == null ? null : plan.planName())
+            .holderRelationship(row.getSubscriberRelationship())
+            .effectiveDate(row.getEffectiveDate())
+            .expirationDate(row.getExpirationDate())
+            .declaredOn(row.getCreatedAt() == null ? null : row.getCreatedAt().toLocalDate())
+            .agreementHere(agreementFor(agreements, row, insurer) != null)
+            .build();
+    }
+
+    /** {@link PayerCatalogueService.Agreement#matchRank}: 2 and 3 are the same insurer name. */
+    private static final int SAME_NAME_RANK = 2;
+
+    /**
+     * This hospital's agreement with the insurer of another hospital's row (review of #1293): matched on the
+     * insurer's NAME as that hospital knows it ({@code insurer}, {@link InsurerNames}); a code counts only beside the
+     * same name. Without a name there is no agreement: a payer code is unique only within one hospital (V305), so the
+     * code alone never matches across hospitals (review of #1301 M1).
+     */
+    private static PayerCatalogueService.Agreement agreementFor(List<PayerCatalogueService.Agreement> agreements,
+                                                                PatientInsurance row, String insurer) {
+        if (insurer == null) {
+            return null;
+        }
+        return PayerCatalogueService.Agreement.bestFor(agreements, row.getPayerCode(), insurer)
+            .filter(found -> found.matchRank(row.getPayerCode(), insurer) >= SAME_NAME_RANK)
+            .orElse(null);
+    }
+
+    /**
+     * QA D3600 (r71), review of #1301 (M1): the insurer a coverage row names, as the hospital that HOLDS the row knows
+     * it. The desk's link form sent the payer code alone, so many rows are named by their code (« MUT-TEST-A »). A
+     * code means something only in its own hospital's catalogue, so such a row is named after its own hospital's
+     * formule's payer, else its own hospital's payer of that code; with neither it names no insurer (null). A shared
+     * (untagged) row is read with the acting hospital's catalogue, where it is held. Lookups are kept per call.
+     */
+    private final class InsurerNames {
+
+        private final UUID actingHospitalId;
+        private final Map<UUID, PayerCatalogueService.PlanLabel> plans;
+        private final Map<String, java.util.Optional<String>> catalogue = new HashMap<>();
+
+        InsurerNames(UUID actingHospitalId, Map<UUID, PayerCatalogueService.PlanLabel> plans) {
+            this.actingHospitalId = actingHospitalId;
+            this.plans = new HashMap<>(plans);
+        }
+
+        String of(PatientInsurance row) {
+            String code = trimToNull(row.getPayerCode());
+            String name = trimToNull(row.getProviderName());
+            UUID holder = hospitalOf(row) != null ? hospitalOf(row) : actingHospitalId;
+            if (name != null && (code == null || !name.equalsIgnoreCase(code))) {
+                // A name; with no code it may still be a code of the holder's catalogue, typed as the name.
+                return code == null ? catalogueName(holder, name).orElse(name) : name;
+            }
+            PayerCatalogueService.PlanLabel plan = planOf(row.getPayerPlanId());
+            if (plan != null && trimToNull(plan.payerName()) != null) {
+                return plan.payerName().trim();
+            }
+            return code == null ? null : catalogueName(holder, code).orElse(null);
+        }
+
+        private PayerCatalogueService.PlanLabel planOf(UUID planId) {
+            if (planId == null) {
+                return null;
+            }
+            if (!plans.containsKey(planId)) {
+                plans.put(planId, payerCatalogueService.labelOf(planId));
+            }
+            return plans.get(planId);
+        }
+
+        private java.util.Optional<String> catalogueName(UUID hospitalId, String code) {
+            return catalogue.computeIfAbsent(hospitalId + "|" + code.toUpperCase(java.util.Locale.ROOT),
+                key -> payerCatalogueService.payerNameAt(hospitalId, code));
+        }
+    }
+
+    private static String trimToNull(String text) {
+        return text == null || text.isBlank() ? null : text.trim();
+    }
+
+    /**
+     * Review of #1293 (L3): the rows this hospital already holds for the patient - its own and the shared (untagged)
+     * ones it sees ({@link PatientInsurance#isVisibleAt}).
+     */
+    private List<PatientInsurance> heldAt(UUID patientId, UUID hospitalId) {
+        List<PatientInsurance> held = new java.util.ArrayList<>(
+            patientInsuranceRepository.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId));
+        held.addAll(patientInsuranceRepository.findByPatient_IdAndAssignmentIsNull(patientId));
+        return held;
+    }
+
+    /**
+     * The same policy: the same number, of the same insurer. Within one hospital its codes are one catalogue's, so
+     * the same code is the same insurer (and so is the same name, {@link PayerCatalogueService.Agreement#matches}).
+     * Across hospitals only the same insurer NAME, as each holding hospital knows it ({@link InsurerNames}): the code
+     * alone never (review of #1293 and #1301 M1).
+     */
+    private static boolean samePolicy(PatientInsurance own, PatientInsurance other, InsurerNames names) {
+        if (own.getPolicyNumber() == null || !own.getPolicyNumber().equalsIgnoreCase(other.getPolicyNumber())) {
+            return false;
+        }
+        String ownInsurer = names.of(own);
+        String otherInsurer = names.of(other);
+        boolean sameName = ownInsurer != null && otherInsurer != null
+            && new PayerCatalogueService.Agreement(own.getPayerCode(), ownInsurer)
+                .matchRank(other.getPayerCode(), otherInsurer) >= SAME_NAME_RANK;
+        if (!Objects.equals(hospitalOf(own), hospitalOf(other))) {
+            return sameName;
+        }
+        String ownCode = trimToNull(own.getPayerCode());
+        return sameName || (ownCode != null && ownCode.equalsIgnoreCase(trimToNull(other.getPayerCode())))
+            || new PayerCatalogueService.Agreement(own.getPayerCode(), own.getProviderName())
+                .matches(other.getPayerCode(), other.getProviderName());
+    }
+
+    private UUID requireActingHospital() {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null) {
+            throw new BusinessException(HOSPITAL_REQUIRED_KEY);
+        }
+        return hospitalId;
     }
 
     /* ==================== payer plan link (billing-money plan PR 6) ==================== */
@@ -691,16 +1009,30 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
      * QA D925: {@code provider_name} is required, and a policy created through
      * the natural-key link had none, so every new link answered 500 (or 400
      * "providerName: must not be blank" when it was also made primary). A
-     * typed name wins; otherwise a new policy keeps the payer code as its name
-     * and an existing one keeps the name it has.
+     * typed name wins; otherwise an existing policy keeps the name it has.
+     *
+     * <p>QA D3600 (r71): the desk's link form sends the payer code alone, so
+     * every row it made was named by its code (« MUT-TEST-A »), and another
+     * hospital's agreement with the insurer was never recognised by name. A
+     * name that is only the code is no name: the row is filed under the name
+     * of the acting hospital's payer of that code, and keeps the code only
+     * when there is none (a patient's own add names no hospital).
      */
-    private static void applyProviderName(PatientInsurance insurance, String typed, String payerCode) {
+    private void applyProviderName(PatientInsurance insurance, String typed, String payerCode, UUID hospitalId) {
         String name = typed == null ? null : typed.trim();
-        if (name != null && !name.isEmpty()) {
+        if (namesTheInsurer(name, payerCode)) {
             insurance.setProviderName(name);
-        } else if (insurance.getProviderName() == null || insurance.getProviderName().isBlank()) {
-            insurance.setProviderName(payerCode);
+            return;
         }
+        if (namesTheInsurer(insurance.getProviderName(), payerCode)) {
+            return;
+        }
+        insurance.setProviderName(payerCatalogueService.payerNameAt(hospitalId, payerCode).orElse(payerCode));
+    }
+
+    /** A name that is neither blank nor only the payer code. */
+    private static boolean namesTheInsurer(String name, String payerCode) {
+        return name != null && !name.isBlank() && !name.trim().equalsIgnoreCase(payerCode);
     }
 
     private void applyPrimaryFlag(LinkPatientInsuranceRequestDTO req, boolean actAsPatient,
@@ -714,6 +1046,83 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         } else {
             insurance.setPrimary(false);
         }
+    }
+
+    /**
+     * QA D3250 (r70): exactly one primary coverage per patient and hospital. A patient's only policy, linked without
+     * « Définir comme principale », stayed non-primary: the invoice billed it ({@code CoverageOrder}) while the desk
+     * said « Problème d'assurance » and the check-in tick recorded nothing. After every write of a hospital's
+     * coverage row: when no coverage of that patient at that hospital in force today is primary, the first in force
+     * ({@link com.example.hms.service.billing.CoverageOrder#ordered}: the oldest) becomes primary; a second primary
+     * is unset. A row the staff explicitly unticked ({@code declined}) is passed over while another is in force. A
+     * shared (untagged) row has no hospital and is left alone.
+     *
+     * @return the row written, as it now stands
+     */
+    private PatientInsurance keepOnePrimary(PatientInsurance saved, boolean declined) {
+        UUID hospitalId = hospitalOf(saved);
+        UUID patientId = saved.getPatient() != null ? saved.getPatient().getId() : null;
+        if (hospitalId == null || patientId == null || saved.getId() == null) {
+            return saved;
+        }
+        // Review of #1284: every write took the patient row lock first (lockPatient), so two links of one patient
+        // run one after the other and the second reads the first's coverage before choosing the primary.
+        lockPatient(patientId);
+        if (saved.isPrimary()) {
+            // The row just made (or kept) primary is the one; any other primary of this hospital is unset.
+            patientInsuranceRepository.unsetOtherPrimariesForPatientInHospital(patientId, saved.getId(), hospitalId);
+        } else {
+            promotePrimary(patientId, hospitalId, declined ? saved.getId() : null);
+        }
+        return patientInsuranceRepository.findByIdAndAssignment_Hospital_Id(saved.getId(), hospitalId).orElse(saved);
+    }
+
+    /**
+     * Review of #1284: the patient row lock, taken at the START of every coverage write, before any coverage row is
+     * written: two writes of one patient's coverage then queue on one lock and can never deadlock on the rows the
+     * primary flag bulk-updates. Taking it again in the same transaction is free.
+     */
+    private void lockPatient(UUID patientId) {
+        if (patientId != null) {
+            patientRepository.lockByIdUnscoped(patientId);
+        }
+    }
+
+    /** Makes the first coverage in force today primary when none in force is (QA D3250); {@code passOver} last. */
+    private void promotePrimary(UUID patientId, UUID hospitalId, UUID passOver) {
+        if (patientId == null || hospitalId == null) {
+            return;
+        }
+        List<PatientInsurance> rows = patientInsuranceRepository.findByPatient_IdAndAssignment_Hospital_Id(patientId,
+            hospitalId);
+        List<PatientInsurance> inForce = com.example.hms.service.billing.CoverageOrder.ordered(rows,
+            java.time.LocalDate.now(java.time.ZoneId.systemDefault()));
+        if (inForce.isEmpty()) {
+            return;
+        }
+        if (inForce.get(0).isPrimary()) {
+            // Review of #1284: a second primary (written before this rule, or by a race) is unset.
+            if (com.example.hms.service.billing.CoverageOrder.primaryCount(rows) > 1) {
+                patientInsuranceRepository.unsetOtherPrimariesForPatientInHospital(patientId, inForce.get(0).getId(),
+                    hospitalId);
+            }
+            return;
+        }
+        PatientInsurance chosen = inForce.stream()
+            .filter(row -> passOver == null || !passOver.equals(row.getId()))
+            .findFirst()
+            .orElse(inForce.get(0));
+        patientInsuranceRepository.unsetOtherPrimariesForPatientInHospital(patientId, chosen.getId(), hospitalId);
+        PatientInsurance fresh = patientInsuranceRepository.findByIdAndAssignment_Hospital_Id(chosen.getId(), hospitalId)
+            .orElse(chosen);
+        fresh.setPrimary(true);
+        patientInsuranceRepository.save(fresh);
+    }
+
+    /** The hospital a coverage row is tagged to, or null for a shared (untagged) row. */
+    private static UUID hospitalOf(PatientInsurance insurance) {
+        return insurance != null && insurance.getAssignment() != null && insurance.getAssignment().getHospital() != null
+            ? insurance.getAssignment().getHospital().getId() : null;
     }
 
     private UUID resolveHospitalId(LinkPatientInsuranceRequestDTO req, ActingContext ctx) {

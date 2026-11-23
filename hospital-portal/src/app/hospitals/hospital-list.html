@@ -44,7 +44,7 @@
             <th>{{ 'PATIENTS.PHONE' | translate }}</th>
             <th>{{ 'HOSPITALS.ORGANIZATION' | translate }}</th>
             <th>{{ 'COMMON.STATUS' | translate }}</th>
-            <th>{{ 'COMMON.ACTIONS' | translate }}</th>
+            <th class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
           </tr>
         </thead>
         <tbody>
@@ -70,7 +70,8 @@
                 {{ h.city }}{{ h.state ? ', ' + h.state : ''
                 }}{{ h.country ? ', ' + h.country : '' }}
               </td>
-              <td>{{ h.phoneNumber || '—' }}</td>
+              <!-- QA r70 D3212: grouped as everywhere else (« +226 70 20 20 20 »). -->
+              <td>{{ (h.phoneNumber | appPhone) || '—' }}</td>
               <td>
                 @if (h.organizationName) {
                   <span class="org-chip">{{

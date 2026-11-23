@@ -25,6 +25,7 @@ import {
   InvoiceAdjustmentRow,
   InvoiceAdjustmentType,
   INVOICE_STATUSES,
+  InvoiceRefund,
   PaymentRow,
   STAFF_PAYMENT_METHODS,
   StaffPaymentMethod,
@@ -232,7 +233,10 @@ export class BillingComponent implements OnInit {
   loadFailed = signal(false);
   /** QA D1145: the totals could not be read; the tiles say "—", never 0. */
   private readonly summaryFailed = signal(false);
-  readonly statsUnknown = computed(() => this.loadFailed() || this.summaryFailed());
+  private readonly summaryLoading = signal(true);
+  readonly statsUnknown = computed(
+    () => this.loading() || this.summaryLoading() || this.loadFailed() || this.summaryFailed(),
+  );
   activeTab = signal<BillingTab>('all');
   selectedInvoice = signal<BillingInvoiceResponse | null>(null);
 
@@ -813,9 +817,11 @@ export class BillingComponent implements OnInit {
    * page of 20 rows undercounted revenue and money owed.
    */
   private refreshStats(): void {
+    this.summaryLoading.set(true);
     // QA D1059: the tiles follow the list's date filter (the invoice date, as the search reads it).
     this.billingService.getSummary(this.appliedRange).subscribe({
       next: (summary) => {
+        this.summaryLoading.set(false);
         this.summaryFailed.set(false);
         this.stats.set({
           total: Number(summary?.total ?? 0),
@@ -826,7 +832,10 @@ export class BillingComponent implements OnInit {
           balance: Number(summary?.balance ?? 0),
         });
       },
-      error: () => this.summaryFailed.set(true),
+      error: () => {
+        this.summaryLoading.set(false);
+        this.summaryFailed.set(true);
+      },
     });
   }
 
@@ -1251,6 +1260,24 @@ export class BillingComponent implements OnInit {
     });
   }
 
+  /**
+   * QA D3252 (r70): the payments with a reversal asked for or approved and not yet handed back. « Contre-passer »
+   * stayed on them and the server answered 409 « …attend déjà une approbation ».
+   */
+  readonly pendingReversals = signal<ReadonlySet<string>>(new Set<string>());
+
+  refundsLoaded(rows: InvoiceRefund[]): void {
+    this.pendingReversals.set(
+      new Set(
+        rows
+          .filter(
+            (r) => !!r.reversedPaymentId && (r.status === 'REQUESTED' || r.status === 'APPROVED'),
+          )
+          .map((r) => r.reversedPaymentId as string),
+      ),
+    );
+  }
+
   openReversal(p: PaymentRow, mode: 'reverse' | 'reject'): void {
     this.reversingPayment.set(p);
     this.reversalMode.set(mode);
@@ -1291,6 +1318,9 @@ export class BillingComponent implements OnInit {
             reversing ? 'BILLING.PAYMENT_REVERSAL_REQUESTED' : 'BILLING.PAYMENT_REJECTED',
           ),
         );
+        if (reversing) {
+          this.pendingReversals.set(new Set([...this.pendingReversals(), p.id]));
+        }
         this.closeReversal();
         this.applyUpdated(updated);
       },

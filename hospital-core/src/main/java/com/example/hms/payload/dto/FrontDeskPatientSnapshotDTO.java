@@ -42,6 +42,20 @@ public class FrontDeskPatientSnapshotDTO {
         // MVP 11: attestation fields
         private java.time.LocalDateTime verifiedAt;
         private String verifiedBy;
+        /** QA D3150: the name of the person who verified, never their login; null when it names nobody. */
+        private String verifiedByName;
+        /** QA D3258: the payer name (never its code), the plan, and when the coverage starts. */
+        private String payerName;
+        private String planName;
+        private LocalDate effectiveFrom;
+        /** The plan default coverage percent today; a rule may differ for a given act. */
+        private Integer coveragePercent;
+        /** QA D3258: the hospital default consultation tariff today, and its label; null when none is set. */
+        private BigDecimal consultationFee;
+        private String consultationLabel;
+        /** The payer share and the patient share of that tariff; the patient share is the copay suggested. */
+        private BigDecimal suggestedPayerShare;
+        private BigDecimal suggestedCopay;
     }
 
     @Data

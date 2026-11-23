@@ -1,6 +1,7 @@
 package com.example.hms.service.billing;
 
 import com.example.hms.enums.ItemCategory;
+import com.example.hms.enums.PriceListCategory;
 import com.example.hms.enums.PriceListLinkType;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Treatment;
@@ -46,6 +47,11 @@ public interface VisitChargeSource {
         public Optional<TariffResolver.Tariff> tariff(PriceListLinkType type, String rawKey) {
             return tariffs.find(type, rawKey);
         }
+
+        /** QA D3254 (r70): the tariff of one named price-list item on the service day (an order's catalogue exam). */
+        public Optional<TariffResolver.Tariff> tariffOfItem(java.util.UUID itemId) {
+            return tariffs.findItem(itemId);
+        }
     }
 
     /**
@@ -59,7 +65,8 @@ public interface VisitChargeSource {
      * shown as written and has no {@code text}.
      */
     record VisitCharge(String description, BillingText text, ItemCategory category, int quantity,
-                       BigDecimal unitPrice, Treatment service, TariffResolver.Tariff tariff) {
+                       BigDecimal unitPrice, Treatment service, TariffResolver.Tariff tariff,
+                       PriceListCategory coverageCategory) {
 
         public VisitCharge {
             quantity = Math.max(quantity, 1);
@@ -68,7 +75,15 @@ public interface VisitChargeSource {
         /** A line priced by a service, or not at all (no price-list tariff). */
         public VisitCharge(String description, BillingText text, ItemCategory category, int quantity,
                            BigDecimal unitPrice, Treatment service) {
-            this(description, text, category, quantity, unitPrice, service, null);
+            this(description, text, category, quantity, unitPrice, service, null, null);
+        }
+
+        /**
+         * QA D3603 (r71): what a payer plan's category rule sees this line as, however it ends up priced. Null
+         * leaves it to the source's {@link BillableOrderType#coverageCategory()}.
+         */
+        public VisitCharge coveredAs(PriceListCategory coverage) {
+            return new VisitCharge(description, text, category, quantity, unitPrice, service, tariff, coverage);
         }
 
         /**
@@ -76,7 +91,7 @@ public interface VisitChargeSource {
          * 3.7: no code, never translated) and copies the version's price.
          */
         public static VisitCharge tariffed(TariffResolver.Tariff tariff, ItemCategory category, int quantity) {
-            return new VisitCharge(tariff.label(), null, category, quantity, tariff.unitPrice(), null, tariff);
+            return new VisitCharge(tariff.label(), null, category, quantity, tariff.unitPrice(), null, tariff, null);
         }
 
         /** A line named as written (a hospital's service, an order), priced by its service when one matched. */

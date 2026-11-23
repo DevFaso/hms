@@ -1,5 +1,7 @@
 package com.example.hms.service.billing;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.PriceListPriceStatus;
 import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.model.PriceListPrice;
@@ -32,6 +34,7 @@ import java.util.function.Predicate;
  *       same-day correction: it has priced a bill. The refusal names the version's price and its start.</li>
  * </ul>
  */
+@ProvisionalRule(ClinicalRuleSetKey.SAME_DAY_PRICE_CORRECTION)
 public final class PriceVersionRules {
 
     static final String FIELD_UNIT_PRICE = "unitPrice";

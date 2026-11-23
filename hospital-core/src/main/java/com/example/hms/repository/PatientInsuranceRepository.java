@@ -18,6 +18,16 @@ public interface PatientInsuranceRepository extends JpaRepository<PatientInsuran
 
     List<PatientInsurance> findByPatient_IdAndAssignment_Hospital_Id(UUID patientId, UUID hospitalId);
 
+    /**
+     * Owner decision 2026-11-22: the patient's coverage rows held by the hospitals named, which the caller has
+     * already narrowed to the ones RecordAccessPolicy lets it read. Untagged (shared) rows are not among them.
+     */
+    List<PatientInsurance> findByPatient_IdAndAssignment_Hospital_IdIn(UUID patientId,
+                                                                      java.util.Collection<UUID> hospitalIds);
+
+    /** The patient's shared (legacy, untagged) rows, which every hospital sees (PatientInsurance#isVisibleAt). */
+    List<PatientInsurance> findByPatient_IdAndAssignmentIsNull(UUID patientId);
+
     /** QA D1590: the patient's policy by payer and member number, as THIS hospital holds it. */
     Optional<PatientInsurance> findFirstByPatient_IdAndAssignment_Hospital_IdAndProviderNameIgnoreCaseAndPolicyNumberIgnoreCase(
         UUID patientId, UUID hospitalId, String providerName, String policyNumber);

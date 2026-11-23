@@ -122,6 +122,18 @@ describe('LaborTabComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('D3312: the wide partograph has a named keyboard-scrollable region and a scroll cue', () => {
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.patient.set({ id: 'p1' } as PatientResponse);
+    fixture.componentInstance.entries.set([entry('pe1')]);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[role="region"][tabindex="0"]')?.getAttribute('aria-label')).toBe(
+      'LABOR.PARTOGRAPH',
+    );
+    expect(host.textContent).toContain('LABOR.PARTOGRAPH_SCROLL_HINT');
+  });
+
   it('D65: with no patient picked, shows the labour hint, not the referrals one', () => {
     const fixture = TestBed.createComponent(LaborTabComponent);
     fixture.detectChanges();

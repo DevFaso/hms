@@ -124,7 +124,9 @@
         {{
           searchTerm
             ? ('COMMON.TRY_ADJUSTING' | translate)
-            : ('PHARMACY.CREATE_FIRST_PHARMACY' | translate)
+            : canManage()
+              ? ('PHARMACY.CREATE_FIRST_PHARMACY' | translate)
+              : ('PHARMACY.FIRST_PHARMACY_ASK_ADMIN' | translate)
         }}
       </p>
     </div>

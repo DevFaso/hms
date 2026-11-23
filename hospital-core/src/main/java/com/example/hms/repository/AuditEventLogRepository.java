@@ -210,6 +210,43 @@ public interface AuditEventLogRepository
                                                   Pageable pageable);
 
     /**
+     * Review of #1290 (QA D3451): {@link #findDisclosuresForPatient} for the STAFF accounting at one hospital. A
+     * row of {@code scopedType} (a result released to the family: it names the category of a sensitive result) is
+     * returned only when it was written at {@code scopedHospitalId}; every other accountable row is returned as
+     * before. Another hospital's release is never listed to this one's staff.
+     */
+    @Query("SELECT DISTINCT a FROM AuditEventLog a WHERE "
+           + "a.patientId = :patientId "
+           + "AND a.eventType IN :eventTypes "
+           + "AND (a.eventType <> :scopedType OR a.hospitalId = :scopedHospitalId) "
+           + "AND (CAST(:fromDate AS LocalDateTime) IS NULL OR a.eventTimestamp >= :fromDate) "
+           + "AND (CAST(:toDate AS LocalDateTime) IS NULL OR a.eventTimestamp <= :toDate) "
+           + "ORDER BY a.eventTimestamp DESC")
+    Page<AuditEventLog> findDisclosuresForPatientAtHospital(@Param("patientId") UUID patientId,
+                                                            @Param("eventTypes") Collection<AuditEventType> eventTypes,
+                                                            @Param("scopedType") AuditEventType scopedType,
+                                                            @Param("scopedHospitalId") UUID scopedHospitalId,
+                                                            @Param("fromDate") LocalDateTime fromDate,
+                                                            @Param("toDate") LocalDateTime toDate,
+                                                            Pageable pageable);
+
+    /** The counts of {@link #findDisclosuresForPatientAtHospital}, grouped as the unscoped counts are. */
+    @Query("SELECT a.eventType AS eventType, a.entityType AS entityType, COUNT(a) AS cnt "
+           + "FROM AuditEventLog a "
+           + "WHERE a.patientId = :patientId "
+           + "AND a.eventType IN :eventTypes "
+           + "AND (a.eventType <> :scopedType OR a.hospitalId = :scopedHospitalId) "
+           + "AND (CAST(:fromDate AS LocalDateTime) IS NULL OR a.eventTimestamp >= :fromDate) "
+           + "AND (CAST(:toDate AS LocalDateTime) IS NULL OR a.eventTimestamp <= :toDate) "
+           + "GROUP BY a.eventType, a.entityType")
+    List<Object[]> countDisclosureCategoriesForPatientAtHospital(@Param("patientId") UUID patientId,
+                                                                 @Param("eventTypes") Collection<AuditEventType> eventTypes,
+                                                                 @Param("scopedType") AuditEventType scopedType,
+                                                                 @Param("scopedHospitalId") UUID scopedHospitalId,
+                                                                 @Param("fromDate") LocalDateTime fromDate,
+                                                                 @Param("toDate") LocalDateTime toDate);
+
+    /**
      * Per-category counts for one patient over the same window, so the
      * report can headline "2 emergency accesses, 1 release to another
      * hospital" without paging the whole history client-side. Grouped on

@@ -92,7 +92,7 @@
               <th scope="col">{{ 'TRANSFUSION.URGENCY' | translate }}</th>
               <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
               <th scope="col">{{ 'TRANSFUSION.REQUESTED_AT' | translate }}</th>
-              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+              <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
             </tr>
           </thead>
           <tbody>
@@ -117,6 +117,22 @@
                     }
                   } @else {
                     <span class="group-badge untyped">{{ 'TRANSFUSION.UNTYPED' | translate }}</span>
+                  }
+                  <!-- QA r70 D3221: the chart's group, declared and unverified, and any disagreement. -->
+                  @if (r.patientDeclaredBloodType) {
+                    <div class="cell-secondary" data-testid="declared-group">
+                      {{
+                        'TRANSFUSION.DECLARED_GROUP'
+                          | translate: { group: r.patientDeclaredBloodType }
+                      }}
+                    </div>
+                  }
+                  @if (
+                    groupsDisagree(r.patientDeclaredBloodType, r.patientAboGroup, r.patientRhFactor)
+                  ) {
+                    <div class="warn-inline" role="note" data-testid="declared-group-mismatch">
+                      {{ 'TRANSFUSION.DECLARED_MISMATCH_SHORT' | translate }}
+                    </div>
                   }
                 </td>
                 <td>
@@ -185,7 +201,7 @@
               <th scope="col">{{ 'TRANSFUSION.EXPIRES' | translate }}</th>
               <th scope="col">{{ 'TRANSFUSION.SOURCE' | translate }}</th>
               <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+              <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
             </tr>
           </thead>
           <tbody>
@@ -254,6 +270,56 @@
           </button>
         </div>
         <div class="detail-body">
+          <!-- QA D3351: the permanent flag, what the biologist recorded, and what red cells still wait for. -->
+          @if (req.alloImmunised) {
+            <div class="emergency-banner antibody-banner" role="alert" data-testid="allo-immunised">
+              <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+              <div class="antibody-banner__text">
+                <strong>{{ 'TRANSFUSION.ALLO_IMMUNISED' | translate }}</strong>
+                <span>{{ 'TRANSFUSION.ALLO_IMMUNISED_RULE' | translate }}</span>
+                @if (antibodyStatus(); as status) {
+                  @if (status.identified) {
+                    <span data-testid="antibody-identified">{{
+                      'TRANSFUSION.ANTIBODY_IDENTIFIED'
+                        | translate: { antibody: status.antibodySpecificities ?? '' }
+                    }}</span>
+                  }
+                  @if (status.otherHospitalNames?.length) {
+                    <span data-testid="antibody-other-hospital">{{
+                      'TRANSFUSION.ANTIBODY_FROM_OTHER_HOSPITAL'
+                        | translate: { hospitals: status.otherHospitalNames!.join(', ') }
+                    }}</span>
+                  }
+                }
+                @if (!req.antibodyWorkupServes) {
+                  <span data-testid="antibody-workup-missing">{{
+                    'TRANSFUSION.ANTIBODY_WORKUP_MISSING' | translate
+                  }}</span>
+                }
+                @if (req.vitalUrgencyLevel) {
+                  <span data-testid="vital-urgency-declared">{{
+                    'TRANSFUSION.VITAL_URGENCY_DECLARED'
+                      | translate
+                        : {
+                            level:
+                              ('TRANSFUSION.VITAL_URGENCY_' + req.vitalUrgencyLevel | translate),
+                            reason: req.vitalUrgencyReason ?? '',
+                          }
+                  }}</span>
+                }
+                @if (canRecordAntibody) {
+                  <button
+                    type="button"
+                    class="btn-secondary small"
+                    data-testid="antibody-record"
+                    (click)="openAntibodyWorkup()"
+                  >
+                    {{ 'TRANSFUSION.ANTIBODY_RECORD' | translate }}
+                  </button>
+                }
+              </div>
+            </div>
+          }
           @if (req.urgency === 'EMERGENCY' && !req.bloodGroupId) {
             <div class="emergency-banner">
               <span class="material-symbols-outlined">emergency</span>
@@ -279,7 +345,35 @@
             </div>
           }
 
+          <!-- QA r70 D3221: a lab-typed group that disagrees with the chart is said out loud. -->
+          @if (
+            groupsDisagree(req.patientDeclaredBloodType, req.patientAboGroup, req.patientRhFactor)
+          ) {
+            <div class="warn-banner" role="alert" data-testid="detail-declared-mismatch">
+              <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+              {{
+                'TRANSFUSION.DECLARED_MISMATCH'
+                  | translate
+                    : {
+                        declared: req.patientDeclaredBloodType,
+                        typed: labGroupCode(req.patientAboGroup, req.patientRhFactor),
+                      }
+              }}
+            </div>
+          }
+
           <div class="detail-grid">
+            <div class="detail-field">
+              <span class="field-label">{{ 'TRANSFUSION.DECLARED_LABEL' | translate }}</span>
+              <span class="field-value" data-testid="detail-declared-group">
+                {{
+                  req.patientDeclaredBloodType
+                    ? ('TRANSFUSION.DECLARED_VALUE'
+                      | translate: { group: req.patientDeclaredBloodType })
+                    : ('PATIENT_SAFETY.NOT_DOCUMENTED' | translate)
+                }}
+              </span>
+            </div>
             <div class="detail-field">
               <span class="field-label">{{ 'TRANSFUSION.GROUP' | translate }}</span>
               <span class="field-value">
@@ -568,7 +662,7 @@
                     <th scope="col">{{ 'TRANSFUSION.GROUP' | translate }}</th>
                     <th scope="col">{{ 'TRANSFUSION.CROSSMATCH' | translate }}</th>
                     <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-                    <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+                    <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -668,6 +762,34 @@
           />
 
           @if (selectedPatient()) {
+            <!-- QA r70 D3221: the chart's group, declared and unverified, and any disagreement. -->
+            <p class="declared-line" data-testid="request-declared-group">
+              {{ 'TRANSFUSION.DECLARED_LABEL' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{
+                selectedPatient()!.bloodType
+                  ? ('TRANSFUSION.DECLARED_VALUE'
+                    | translate: { group: selectedPatient()!.bloodType })
+                  : ('PATIENT_SAFETY.NOT_DOCUMENTED' | translate)
+              }}
+            </p>
+            @if (
+              groupsDisagree(
+                selectedPatient()!.bloodType,
+                patientGroup()?.aboGroup,
+                patientGroup()?.rhFactor
+              )
+            ) {
+              <p class="warn-inline" role="alert" data-testid="request-declared-mismatch">
+                {{
+                  'TRANSFUSION.DECLARED_MISMATCH'
+                    | translate
+                      : {
+                          declared: selectedPatient()!.bloodType,
+                          typed: labGroupCode(patientGroup()?.aboGroup, patientGroup()?.rhFactor),
+                        }
+                }}
+              </p>
+            }
             <div class="group-summary">
               @if (patientGroup(); as g) {
                 <span class="group-badge"
@@ -680,6 +802,11 @@
                 @if (!g.screenCurrent) {
                   <span class="warn-inline">{{ 'TRANSFUSION.SCREEN_LAPSED' | translate }}</span>
                 }
+                @if (g.alloImmunised) {
+                  <span class="warn-inline" role="alert" data-testid="request-allo-immunised">{{
+                    'TRANSFUSION.ALLO_IMMUNISED_REQUEST' | translate
+                  }}</span>
+                }
                 @if (g.correctionReason) {
                   {{ ' '
                   }}<span>{{
@@ -688,6 +815,36 @@
                 }
               } @else {
                 <span class="warn-inline">{{ 'TRANSFUSION.NO_GROUP_ON_FILE' | translate }}</span>
+              }
+              @if (requestAntibody(); as known) {
+                @if (known.alloImmunised) {
+                  <span class="warn-inline" role="alert" data-testid="request-antibody-known">
+                    @if (known.identified) {
+                      {{
+                        'TRANSFUSION.ANTIBODY_KNOWN_IDENTIFIED'
+                          | translate
+                            : {
+                                antibody: known.antibodySpecificities ?? '',
+                                hospital: known.identifiedHospitalName ?? '',
+                                date: (known.identifiedAt | serverTime | date: 'mediumDate') ?? '',
+                              }
+                      }}
+                    } @else {
+                      {{
+                        'TRANSFUSION.ANTIBODY_KNOWN_NOT_IDENTIFIED'
+                          | translate
+                            : {
+                                hospital: known.positiveScreenHospitalName ?? '',
+                                date:
+                                  (known.positiveScreenAt | serverTime | date: 'mediumDate') ?? '',
+                              }
+                      }}
+                    }
+                    @if (!patientGroup()?.alloImmunised) {
+                      {{ 'TRANSFUSION.ALLO_IMMUNISED_REQUEST' | translate }}
+                    }
+                  </span>
+                }
               }
               @if (canLab) {
                 <button class="btn-secondary" (click)="openGroupModal()">
@@ -728,6 +885,55 @@
           @if (requestForm.urgency === 'EMERGENCY') {
             <small class="field-hint">{{ 'TRANSFUSION.EMERGENCY_HINT' | translate }}</small>
           }
+          <!-- QA D3351: a vital emergency for an allo-immunised patient is declared before it is sent. -->
+          @if (needsVitalUrgency) {
+            <div class="antibody-declaration" data-testid="vital-urgency-block">
+              <p class="modal-hint warn" role="alert">
+                {{ 'TRANSFUSION.VITAL_URGENCY_WARNING' | translate }}
+              </p>
+              <div class="field">
+                <label for="tx-vital-level"
+                  >{{ 'TRANSFUSION.VITAL_URGENCY_LEVEL' | translate }} *</label
+                >
+                <select
+                  required
+                  id="tx-vital-level"
+                  data-server-field="vitalUrgencyLevel"
+                  [(ngModel)]="requestForm.vitalUrgencyLevel"
+                >
+                  <option value="">{{ 'COMMON.SELECT' | translate }}</option>
+                  @for (level of vitalUrgencyLevels; track level) {
+                    <option [value]="level">
+                      {{ 'TRANSFUSION.VITAL_URGENCY_' + level | translate }}
+                    </option>
+                  }
+                </select>
+              </div>
+              <div class="field">
+                <label for="tx-vital-reason"
+                  >{{ 'TRANSFUSION.VITAL_URGENCY_REASON' | translate }} *</label
+                >
+                <textarea
+                  required
+                  id="tx-vital-reason"
+                  rows="2"
+                  maxlength="500"
+                  data-server-field="vitalUrgencyReason"
+                  [(ngModel)]="requestForm.vitalUrgencyReason"
+                ></textarea>
+              </div>
+              <label class="checkbox-field">
+                <input
+                  required
+                  id="tx-vital-sample"
+                  type="checkbox"
+                  data-server-field="preTransfusionSampleDrawn"
+                  [(ngModel)]="requestForm.preTransfusionSampleDrawn"
+                />
+                {{ 'TRANSFUSION.VITAL_URGENCY_SAMPLE' | translate }} *
+              </label>
+            </div>
+          }
           <div class="field">
             <label for="tx-indication">{{ 'TRANSFUSION.INDICATION' | translate }} *</label>
             <textarea
@@ -750,8 +956,16 @@
             class="btn-primary"
             (click)="submitRequest()"
             [disabled]="requestSubmitting()"
-            [appSubmitGuard]="!requestForm.patientId || !requestForm.indication"
-            [submitGuardFields]="['tx-patientSearch', 'tx-indication']"
+            [appSubmitGuard]="
+              !requestForm.patientId || !requestForm.indication || !vitalUrgencyDeclared
+            "
+            [submitGuardFields]="[
+              'tx-patientSearch',
+              'tx-indication',
+              'tx-vital-level',
+              'tx-vital-reason',
+              'tx-vital-sample',
+            ]"
           >
             {{ 'COMMON.SAVE' | translate }}
           </button>
@@ -820,6 +1034,25 @@
               <label for="grp-detail">{{ 'TRANSFUSION.ANTIBODY_DETAIL' | translate }}</label>
               <input id="grp-detail" type="text" [(ngModel)]="groupForm.antibodyDetail" />
             </div>
+          }
+          <!-- QA r70 D3221: the chart's group is a cross-check, never a default: the result comes from the specimen. -->
+          @if (groupDeclared(); as declared) {
+            <p class="declared-line" data-testid="group-form-declared">
+              {{ 'TRANSFUSION.DECLARED_LABEL' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ 'TRANSFUSION.DECLARED_VALUE' | translate: { group: declared } }}
+            </p>
+            @if (groupsDisagree(declared, groupForm.aboGroup, groupForm.rhFactor)) {
+              <p class="warn-inline" role="alert" data-testid="group-form-mismatch">
+                {{
+                  'TRANSFUSION.DECLARED_MISMATCH'
+                    | translate
+                      : {
+                          declared: declared,
+                          typed: labGroupCode(groupForm.aboGroup, groupForm.rhFactor),
+                        }
+                }}
+              </p>
+            }
           }
           <div class="field">
             <label for="grp-correction">{{ 'TRANSFUSION.CORRECTION_REASON' | translate }}</label>
@@ -989,6 +1222,54 @@
               {{ 'TRANSFUSION.COMPATIBLE' | translate }}
             </label>
           }
+          <!-- QA D3351: for an allo-immunised patient a compatible result is « compatibilisé » or it is refused. -->
+          @if (crossmatchNeedsCompatibilisation) {
+            <div class="antibody-declaration" data-testid="compatibilisation-block">
+              <p class="modal-hint warn" role="alert">
+                {{ 'TRANSFUSION.COMPATIBILISATION_HINT' | translate }}
+              </p>
+              <div class="field">
+                <label for="xm-sample">{{ 'TRANSFUSION.XM_SAMPLE_AT' | translate }} *</label>
+                <input
+                  required
+                  id="xm-sample"
+                  type="datetime-local"
+                  data-server-field="sampleCollectedAt"
+                  [(ngModel)]="crossmatchForm.sampleCollectedAt"
+                />
+              </div>
+              <label class="checkbox-field">
+                <input
+                  required
+                  id="xm-antiglobulin"
+                  type="checkbox"
+                  data-server-field="antiglobulinMethod"
+                  [(ngModel)]="crossmatchForm.antiglobulinMethod"
+                />
+                {{ 'TRANSFUSION.XM_ANTIGLOBULIN' | translate }} *
+              </label>
+              <label class="checkbox-field">
+                <input
+                  required
+                  id="xm-antigen-negative"
+                  type="checkbox"
+                  data-server-field="antigenNegative"
+                  [(ngModel)]="crossmatchForm.antigenNegative"
+                />
+                {{ 'TRANSFUSION.XM_ANTIGEN_NEGATIVE' | translate }} *
+              </label>
+              <label class="checkbox-field">
+                <input
+                  required
+                  id="xm-rh-kell"
+                  type="checkbox"
+                  data-server-field="rhKellMatched"
+                  [(ngModel)]="crossmatchForm.rhKellMatched"
+                />
+                {{ 'TRANSFUSION.XM_RH_KELL' | translate }} *
+              </label>
+            </div>
+          }
           <div class="field">
             <label for="xm-method">{{ 'TRANSFUSION.METHOD' | translate }}</label>
             <input id="xm-method" type="text" [(ngModel)]="crossmatchForm.method" />
@@ -1015,9 +1296,119 @@
             [disabled]="crossmatchSubmitting()"
             [appSubmitGuard]="
               !crossmatchForm.bloodUnitId ||
-              (!crossmatchForm.compatible && !crossmatchForm.incompatibilityReason.trim())
+              (!crossmatchForm.compatible && !crossmatchForm.incompatibilityReason.trim()) ||
+              !crossmatchCompatibilised
             "
-            [submitGuardFields]="crossmatchForm.compatible ? ['xm-unit'] : ['xm-unit', 'xm-reason']"
+            [submitGuardFields]="
+              crossmatchForm.compatible
+                ? ['xm-unit', 'xm-sample', 'xm-antiglobulin', 'xm-antigen-negative', 'xm-rh-kell']
+                : ['xm-unit', 'xm-reason']
+            "
+          >
+            {{ 'COMMON.SAVE' | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ══ Antibody work-up modal (QA D3351: the biologist only) ══ -->
+  @if (showAntibodyModal()) {
+    <div class="modal-overlay" tabindex="-1" (keydown.escape)="showAntibodyModal.set(false)">
+      <div
+        appModalDialog
+        aria-labelledby="transfusion-dialog-antibody-title"
+        (escaped)="showAntibodyModal.set(false)"
+        class="modal"
+        data-testid="antibody-modal"
+      >
+        <div class="modal-header">
+          <h2 id="transfusion-dialog-antibody-title">
+            {{ 'TRANSFUSION.ANTIBODY_RECORD' | translate }}
+          </h2>
+          <button class="modal-close" (click)="showAntibodyModal.set(false)">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-hint">{{ 'TRANSFUSION.ANTIBODY_RECORD_HINT' | translate }}</p>
+          <div class="field">
+            <label for="ab-status">{{ 'TRANSFUSION.ANTIBODY_STATUS' | translate }}</label>
+            <select id="ab-status" [(ngModel)]="antibodyForm.status">
+              <option value="IDENTIFIED">
+                {{ 'TRANSFUSION.ANTIBODY_STATUS_IDENTIFIED' | translate }}
+              </option>
+              <option value="REFERRED">
+                {{ 'TRANSFUSION.ANTIBODY_STATUS_REFERRED' | translate }}
+              </option>
+            </select>
+          </div>
+          @if (antibodyForm.status === 'IDENTIFIED') {
+            <div class="field">
+              <label for="ab-specificities"
+                >{{ 'TRANSFUSION.ANTIBODY_SPECIFICITIES' | translate }} *</label
+              >
+              <input
+                required
+                id="ab-specificities"
+                type="text"
+                maxlength="500"
+                data-server-field="antibodySpecificities"
+                [(ngModel)]="antibodyForm.antibodySpecificities"
+              />
+            </div>
+          } @else {
+            <p class="modal-hint warn">{{ 'TRANSFUSION.ANTIBODY_REFERRAL_HINT' | translate }}</p>
+            <div class="field">
+              <label for="ab-centre"
+                >{{ 'TRANSFUSION.ANTIBODY_REFERRAL_CENTRE' | translate }} *</label
+              >
+              <input
+                required
+                id="ab-centre"
+                type="text"
+                maxlength="200"
+                data-server-field="referralCentre"
+                [(ngModel)]="antibodyForm.referralCentre"
+              />
+            </div>
+            <div class="field">
+              <label for="ab-reason"
+                >{{ 'TRANSFUSION.ANTIBODY_DECISION_REASON' | translate }} *</label
+              >
+              <textarea
+                required
+                id="ab-reason"
+                rows="2"
+                maxlength="1000"
+                data-server-field="decisionReason"
+                [(ngModel)]="antibodyForm.decisionReason"
+              ></textarea>
+            </div>
+          }
+          <div class="field">
+            <label for="ab-notes">{{ 'COMMON.NOTES' | translate }}</label>
+            <textarea
+              id="ab-notes"
+              rows="2"
+              maxlength="1000"
+              [(ngModel)]="antibodyForm.notes"
+            ></textarea>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-secondary" (click)="showAntibodyModal.set(false)">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            class="btn-primary"
+            data-testid="submit-antibody-workup"
+            (click)="submitAntibodyWorkup()"
+            [disabled]="antibodySubmitting()"
+            [appSubmitGuard]="!antibodyFormComplete"
+            [submitGuardFields]="
+              antibodyForm.status === 'IDENTIFIED'
+                ? ['ab-specificities']
+                : ['ab-centre', 'ab-reason']
+            "
           >
             {{ 'COMMON.SAVE' | translate }}
           </button>
@@ -1047,6 +1438,12 @@
         </div>
         <div class="modal-body">
           <p class="modal-hint warn">{{ 'TRANSFUSION.EMERGENCY_RELEASE_HINT' | translate }}</p>
+          @if (selectedRequest()?.alloImmunised) {
+            <div class="emergency-banner" role="alert" data-testid="haemolysis-warning">
+              <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+              <span>{{ 'TRANSFUSION.HAEMOLYSIS_WARNING' | translate }}</span>
+            </div>
+          }
           @if (emergencyOptions(); as options) {
             @if (options.antibodyWarning) {
               <div class="emergency-banner" role="alert" data-testid="antibody-warning">

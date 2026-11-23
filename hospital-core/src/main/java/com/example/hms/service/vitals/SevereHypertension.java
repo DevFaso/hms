@@ -1,5 +1,7 @@
 package com.example.hms.service.vitals;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.LaborStatus;
 import com.example.hms.model.MaternalHistory;
 import com.example.hms.model.labor.DeliveryRecord;
@@ -63,6 +65,7 @@ import java.util.UUID;
  * changing a number.
  */
 @Component
+@ProvisionalRule({ClinicalRuleSetKey.SEVERE_HYPERTENSION_OBSTETRIC, ClinicalRuleSetKey.SEVERE_HYPERTENSION_ADULT})
 public class SevereHypertension {
 
     /** Obstetric severe range, systolic (mmHg, inclusive). */

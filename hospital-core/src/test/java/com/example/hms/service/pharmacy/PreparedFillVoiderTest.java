@@ -47,7 +47,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -65,6 +67,8 @@ class PreparedFillVoiderTest {
     @Mock private PharmacyServiceSupport support;
     @Mock private EntityManager entityManager;
     @Mock private PharmacyPaymentVoider paymentVoider;
+    @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Mock private com.example.hms.repository.UserRepository userRepository;
 
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-07T09:00:00Z"), ZoneOffset.UTC);
 
@@ -81,7 +85,9 @@ class PreparedFillVoiderTest {
         MessageUtil.setMessageSource(TestMessageSources.bundles());
         LocaleContextHolder.setLocale(Locale.ENGLISH);
         voider = new PreparedFillVoider(dispenseRepository, stockLotRepository, inventoryItemRepository,
-                stockTransactionRepository, support, entityManager, CLOCK, paymentVoider);
+                stockTransactionRepository, support, entityManager, CLOCK, paymentVoider,
+                new StockQuarantine(stockTransactionRepository),
+                new ControlledStockWitness(assignmentRepository, userRepository));
 
         prescription = new Prescription();
         prescription.setId(UUID.randomUUID());
@@ -139,7 +145,7 @@ class PreparedFillVoiderTest {
     void cancelReturnsTheStock(ReadyCancelReason reason) {
         theUpdateCancels(reason);
 
-        Dispense result = voider.cancel(prepared, reason);
+        Dispense result = voider.cancel(prepared, reason, com.example.hms.enums.ReturnedStockCondition.INTACT, null);
 
         assertThat(result.getStatus()).isEqualTo(DispenseStatus.CANCELLED);
         verify(entityManager).refresh(prepared);
@@ -157,6 +163,113 @@ class PreparedFillVoiderTest {
         verify(paymentVoider).voidForCancelledDispense(eq(prepared), argThat(r -> r.contains(reason.name())));
     }
 
+    @ParameterizedTest
+    @EnumSource(value = com.example.hms.enums.ReturnedStockCondition.class, names = {"INTACT", "MISSING"},
+            mode = EnumSource.Mode.EXCLUDE)
+    @DisplayName("QA D3403: damaged, expired or contaminated stock is quarantined, never back on sale")
+    void stockNotIntactIsQuarantined(com.example.hms.enums.ReturnedStockCondition condition) {
+        theUpdateCancels(ReadyCancelReason.STOCK_UNAVAILABLE);
+
+        voider.cancel(prepared, ReadyCancelReason.STOCK_UNAVAILABLE, condition, null);
+
+        // The saleable lot and the item do not move.
+        assertThat(lot.getRemainingQuantity()).isEqualByComparingTo("40");
+        assertThat(item.getQuantityOnHand()).isEqualByComparingTo("90");
+        verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
+        verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+        // The RETURN that brought it back, then the QUARANTINE: the ledger still adds up to the lot.
+        ArgumentCaptor<StockTransaction> tx = ArgumentCaptor.forClass(StockTransaction.class);
+        verify(stockTransactionRepository, times(2)).save(tx.capture());
+        assertThat(tx.getAllValues()).extracting(StockTransaction::getTransactionType)
+                .containsExactly(StockTransactionType.RETURN, StockTransactionType.QUARANTINE);
+        assertThat(tx.getAllValues()).allSatisfy(row -> {
+            assertThat(row.getQuantity()).isEqualByComparingTo("10");
+            assertThat(row.getStockLot()).isSameAs(lot);
+            assertThat(row.getReferenceId()).isEqualTo(prepared.getId());
+        });
+        assertThat(tx.getAllValues().get(0).getReason()).startsWith(PreparedFillVoider.NOT_FOR_SALE_PREFIX);
+        assertThat(tx.getAllValues().get(1).getReason()).isEqualTo(StockQuarantine.REASON_PREFIX + condition.name());
+        assertThat(ControlledDrugRegisterService.signed(StockTransactionType.RETURN, BigDecimal.TEN)
+                .add(ControlledDrugRegisterService.signed(StockTransactionType.QUARANTINE, BigDecimal.TEN)))
+                .isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("review of #1285: missing stock is a recorded loss: RETURN then ADJUSTMENT out, the lot unchanged")
+    void missingStockIsARecordedLoss() {
+        theUpdateCancels(ReadyCancelReason.STOCK_UNAVAILABLE);
+
+        voider.cancel(prepared, ReadyCancelReason.STOCK_UNAVAILABLE,
+                com.example.hms.enums.ReturnedStockCondition.MISSING, null);
+
+        assertThat(lot.getRemainingQuantity()).isEqualByComparingTo("40");
+        ArgumentCaptor<StockTransaction> tx = ArgumentCaptor.forClass(StockTransaction.class);
+        verify(stockTransactionRepository, times(2)).save(tx.capture());
+        assertThat(tx.getAllValues()).extracting(StockTransaction::getTransactionType)
+                .containsExactly(StockTransactionType.RETURN, StockTransactionType.ADJUSTMENT);
+        assertThat(tx.getAllValues().get(1).getQuantity()).isEqualByComparingTo("-10");
+        assertThat(tx.getAllValues().get(1).getReason()).isEqualTo(StockQuarantine.LOSS_REASON);
+        assertThat(ControlledDrugRegisterService.signed(StockTransactionType.RETURN, BigDecimal.TEN)
+                .add(ControlledDrugRegisterService.signed(StockTransactionType.ADJUSTMENT, new BigDecimal("-10"))))
+                .isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("review of #1285: a controlled fill set aside needs a witness (not the actor), recorded on the row")
+    void aControlledFillSetAsideIsWitnessed() {
+        com.example.hms.model.medication.MedicationCatalogItem morphine =
+                new com.example.hms.model.medication.MedicationCatalogItem();
+        morphine.setControlled(true);
+        item.setMedicationCatalogItem(morphine);
+        com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+        hospital.setId(UUID.randomUUID());
+        pharmacy.setHospital(hospital);
+        item.setPharmacy(pharmacy);
+        User actor = new User();
+        actor.setId(UUID.randomUUID());
+        when(support.resolveCurrentUser()).thenReturn(actor);
+
+        assertThatThrownBy(() -> voider.cancel(prepared, ReadyCancelReason.STOCK_UNAVAILABLE,
+                com.example.hms.enums.ReturnedStockCondition.DAMAGED, null))
+                .hasFieldOrPropertyWithValue("field", "witnessedBy");
+        UUID actorId = actor.getId();
+        assertThatThrownBy(() -> voider.cancel(prepared, ReadyCancelReason.STOCK_UNAVAILABLE,
+                com.example.hms.enums.ReturnedStockCondition.DAMAGED, actorId))
+                .hasFieldOrPropertyWithValue("field", "witnessedBy");
+        verify(dispenseRepository, never()).cancelPreparedFill(any(), any(), any());
+
+        User witness = new User();
+        witness.setId(UUID.randomUUID());
+        when(assignmentRepository.existsActiveWitness(witness.getId(), hospital.getId(),
+                ControlledStockWitness.WITNESS_ROLE_CODES)).thenReturn(true);
+        when(userRepository.findById(witness.getId())).thenReturn(Optional.of(witness));
+        theUpdateCancels(ReadyCancelReason.STOCK_UNAVAILABLE);
+        when(support.resolveCurrentUser()).thenReturn(actor);
+
+        voider.cancel(prepared, ReadyCancelReason.STOCK_UNAVAILABLE,
+                com.example.hms.enums.ReturnedStockCondition.DAMAGED, witness.getId());
+
+        ArgumentCaptor<StockTransaction> tx = ArgumentCaptor.forClass(StockTransaction.class);
+        verify(stockTransactionRepository, times(2)).save(tx.capture());
+        assertThat(tx.getAllValues().get(1).getTransactionType()).isEqualTo(StockTransactionType.QUARANTINE);
+        assertThat(tx.getAllValues().get(1).getWitnessedByUser()).isSameAs(witness);
+    }
+
+    @Test
+    @DisplayName("review of #1284: a cancelled prepared fill withdraws the open third-party covers of its order")
+    void aCancelledFillWithdrawsItsCovers() {
+        DispenseBillingDeferralService deferrals = mock(DispenseBillingDeferralService.class);
+        voider.setBillingDeferrals(deferrals);
+        com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+        hospital.setId(UUID.randomUUID());
+        pharmacy.setHospital(hospital);
+        theUpdateCancels(ReadyCancelReason.OTHER);
+
+        voider.cancel(prepared, ReadyCancelReason.OTHER, com.example.hms.enums.ReturnedStockCondition.INTACT, null);
+
+        verify(deferrals).withdrawCoversOfCancelledFill(prescription, hospital.getId());
+    }
+
     @Test
     @DisplayName("AC-7: a row that is no longer PENDING is a 409, and nothing is returned or sent")
     void notPendingIsAConflict() {
@@ -164,7 +277,7 @@ class PreparedFillVoiderTest {
         when(entityManager.contains(prepared)).thenReturn(false);
         when(dispenseRepository.findById(prepared.getId())).thenReturn(Optional.of(prepared));
 
-        assertThatThrownBy(() -> voider.cancel(prepared, ReadyCancelReason.OTHER))
+        assertThatThrownBy(() -> voider.cancel(prepared, ReadyCancelReason.OTHER, com.example.hms.enums.ReturnedStockCondition.INTACT, null))
                 .isInstanceOf(ConflictException.class)
                 .hasMessage("This fill is no longer waiting for collection.");
         verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
@@ -181,7 +294,7 @@ class PreparedFillVoiderTest {
         when(dispenseRepository.cancelPreparedFill(any(), any(), any())).thenReturn(1);
         when(entityManager.contains(prepared)).thenReturn(true);
 
-        voider.cancel(prepared, ReadyCancelReason.NOT_COLLECTED);
+        voider.cancel(prepared, ReadyCancelReason.NOT_COLLECTED, com.example.hms.enums.ReturnedStockCondition.INTACT, null);
 
         verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
         verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());

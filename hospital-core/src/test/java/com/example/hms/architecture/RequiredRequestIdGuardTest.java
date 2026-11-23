@@ -540,6 +540,13 @@ class RequiredRequestIdGuardTest {
             "only when « Commander quand même » is claimed over a duplicate warning (provisional rule 2)"),
         Map.entry("OrderReviewDecisionDTO.orderVersion", "only to continue an order, not to stop it or assess a treatment"),
         Map.entry("CrossmatchRequestDTO.incompatibilityReason", "only when the verdict is incompatible (QA D1507)"),
+        Map.entry("AntibodyWorkupRequestDTO.antibodySpecificities", "only when the antibody is identified (QA D3351)"),
+        Map.entry("AntibodyWorkupRequestDTO.referralCentre", "only for a referral decision (QA D3351)"),
+        Map.entry("AntibodyWorkupRequestDTO.decisionReason", "only for a referral decision (QA D3351)"),
+        Map.entry("TransfusionRequestRequestDTO.vitalUrgencyLevel",
+            "only for a red-cell emergency of an allo-immunised patient (QA D3351)"),
+        Map.entry("TransfusionRequestRequestDTO.vitalUrgencyReason",
+            "only for a red-cell emergency of an allo-immunised patient (QA D3351)"),
         Map.entry("DeliveryRecordRequestDTO.bornBeforeArrivalReason",
             "only when a birth marked born before arrival precedes the continued episode's start (QA r46)"),
         Map.entry("DeathRecordRequestDTO.maternalDeathTiming", "only when the death is a maternal death"),
@@ -575,8 +582,16 @@ class RequiredRequestIdGuardTest {
             "KNOWN GAP D1300: filled from the caller's scope when absent, after binding; validateRequest names it (D1299)"),
         Map.entry("LabSpecimenRequestDTO.labOrderId", "the controller sets it from the path after binding: never absent"));
 
-    /** The field carries @NotNull / @NotBlank / @NotEmpty (any group), or a class-level @OneOf lists it. */
+    /**
+     * The field carries @NotNull / @NotBlank / @NotEmpty (any group), or a class-level @OneOf lists it, or (review
+     * of #1285) a RETURN's stock state, required only for a RETURN, is named at the edge by the class-level
+     * {@code @ReturnStockStateRequired}.
+     */
     private static boolean constrainedPresent(Class<?> body, String field) {
+        if ("stockCondition".equals(field)
+                && body.isAnnotationPresent(com.example.hms.validation.ReturnStockStateRequired.class)) {
+            return true;
+        }
         for (Class<?> c = body; c != null && c != Object.class; c = c.getSuperclass()) {
             for (com.example.hms.payload.dto.OneOf oneOf : c.getAnnotationsByType(com.example.hms.payload.dto.OneOf.class)) {
                 if (List.of(oneOf.fields()).contains(field)) {

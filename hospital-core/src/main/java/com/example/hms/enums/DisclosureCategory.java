@@ -50,7 +50,14 @@ public enum DisclosureCategory {
     COPY_RELEASED,
 
     /** The record was merged with another identity. */
-    IDENTITY_CHANGE;
+    IDENTITY_CHANGE,
+
+    /**
+     * QA D3451 (r70): a clinician released one of the patient's sensitive results to their parent or guardian
+     * (policy 2026-11-20: a minor's HIV result). The patient is told who released it, to whom, when and which
+     * category of result, never the value. A disclosure outside the treating team.
+     */
+    RELEASED_TO_FAMILY;
 
     /** Entity type stamped by {@code EligibilityServiceImpl} on its audit rows. */
     private static final String ELIGIBILITY_ENTITY = "EligibilityCheck";
@@ -73,6 +80,7 @@ public enum DisclosureCategory {
             case RECORD_SHARE -> SHARED_WITH_PROVIDER;
             case PATIENT_EXPORT, DATA_EXPORT -> COPY_RELEASED;
             case PATIENT_MERGE -> IDENTITY_CHANGE;
+            case SENSITIVE_RESULT_RELEASED_TO_PROXY -> RELEASED_TO_FAMILY;
             case PATIENT_ACCESS -> ELIGIBILITY_ENTITY.equalsIgnoreCase(entityType)
                 ? INSURANCE
                 : TREATMENT_ACCESS;
@@ -97,7 +105,8 @@ public enum DisclosureCategory {
             AuditEventType.PATIENT_EXPORT,
             AuditEventType.DATA_EXPORT,
             AuditEventType.PATIENT_MERGE,
-            AuditEventType.PATIENT_ACCESS
+            AuditEventType.PATIENT_ACCESS,
+            AuditEventType.SENSITIVE_RESULT_RELEASED_TO_PROXY
         );
     }
 
@@ -113,6 +122,7 @@ public enum DisclosureCategory {
     public boolean isExternalDisclosure() {
         return this == SHARED_WITH_PROVIDER
             || this == INSURANCE
-            || this == COPY_RELEASED;
+            || this == COPY_RELEASED
+            || this == RELEASED_TO_FAMILY;
     }
 }

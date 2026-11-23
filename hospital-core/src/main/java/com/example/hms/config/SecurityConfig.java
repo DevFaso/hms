@@ -71,6 +71,7 @@ import static com.example.hms.config.SecurityConstants.ROLE_RADIOLOGIST;
 import static com.example.hms.config.SecurityConstants.ROLE_STAFF;
 import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
 import static com.example.hms.config.SecurityConstants.ROLE_SURGEON;
+import static com.example.hms.config.SecurityConstants.ROLE_IMAGING_TECHNICIAN;
 import static com.example.hms.config.SecurityConstants.ROLE_BILLING_SPECIALIST;
 import static com.example.hms.config.SecurityConstants.ROLE_ACCOUNTANT;
 import static com.example.hms.config.SecurityConstants.ROLE_CLAIMS_REVIEWER;
@@ -153,6 +154,9 @@ public class SecurityConfig {
     /** V346 (policy rule 3): a hospital's imaging reporting settings; the same admins as the PACS connection. */
     static final String API_HOSPITAL_IMAGING_REPORTING_SETTINGS = "/hospitals/*/imaging-reporting-settings";
 
+    /** V363 (QA r70, C5): a hospital's critical-result escalation steps; the same admins as the settings above. */
+    static final String API_HOSPITAL_CRITICAL_RESULT_ESCALATION = "/hospitals/*/critical-result-escalation";
+
     /**
      * Policy 2026-11-20 (V347): a hospital's adolescent confidentiality age. As the posture: its
      * controller admits HOSPITAL_ADMIN on PUT and QUALITY_MANAGER on GET, which the /hospitals/**
@@ -160,6 +164,14 @@ public class SecurityConfig {
      * they are acting in.
      */
     static final String API_HOSPITAL_ADOLESCENT_AGE = "/hospitals/*/adolescent-confidentiality-age";
+
+    /**
+     * V356 (owner direction 2026-11-21): a hospital's clinical rules and their sign-off. Read by the admins and
+     * the staff who see a « provisoire » label (HospitalClinicalRulesController.READ_ROLES), written by the admins;
+     * the /hospitals/** matchers below would refuse both at the edge. The controller pins the request to the
+     * hospital it acts at.
+     */
+    static final String API_HOSPITAL_CLINICAL_RULES = "/hospitals/*/clinical-rules";
 
     /**
      * The HAPI FHIR servlet ({@code FhirConfig}, mounted at {@code /fhir/*}).
@@ -828,10 +840,22 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.POST, API_HOSPITAL_PACS_SETTINGS + "/test")
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                // V356 clinical rules and their sign-off: ahead of the /hospitals matchers, as the posture.
+                .requestMatchers(HttpMethod.GET, API_HOSPITAL_CLINICAL_RULES, API_HOSPITAL_CLINICAL_RULES + "/**")
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN, ROLE_DOCTOR, ROLE_SURGEON, ROLE_NURSE,
+                    ROLE_MIDWIFE, ROLE_PHARMACIST, ROLE_RADIOLOGIST, ROLE_IMAGING_TECHNICIAN, ROLE_LAB_DIRECTOR,
+                    ROLE_QUALITY_MANAGER, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT)
+                .requestMatchers(HttpMethod.POST, API_HOSPITAL_CLINICAL_RULES + "/**")
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
                 // V346 imaging reporting settings: ahead of the /hospitals matchers, as the PACS connection.
                 .requestMatchers(HttpMethod.GET, API_HOSPITAL_IMAGING_REPORTING_SETTINGS)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.PUT, API_HOSPITAL_IMAGING_REPORTING_SETTINGS)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                // V363 critical-result escalation steps: ahead of the /hospitals matchers, like the two above.
+                .requestMatchers(HttpMethod.GET, API_HOSPITAL_CRITICAL_RESULT_ESCALATION)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.PUT, API_HOSPITAL_CRITICAL_RESULT_ESCALATION)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
                 .requestMatchers(HttpMethod.GET, API_HOSPITALS, API_HOSPITALS + "/", API_HOSPITALS_PATTERN)
@@ -945,6 +969,10 @@ public class SecurityConfig {
 
                 // Billing-money plan PR 7: an invoice's payer shares, read and decided by the claims reviewer too
                 // (plan 3.8, bordereau row); mirrors InvoicePayerShareController. Before the broader patterns.
+                // QA D2706 (r70): the hospital-wide list of payer shares, the claims reviewer's own screen.
+                .requestMatchers(HttpMethod.GET, API_BILLING_INVOICES + "/payer-shares")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_ACCOUNTANT, ROLE_BILLING_SPECIALIST,
+                    ROLE_CLAIMS_REVIEWER)
                 .requestMatchers(HttpMethod.GET, API_BILLING_INVOICES + "/*/payer-shares")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_ACCOUNTANT, ROLE_BILLING_SPECIALIST,
                     ROLE_CLAIMS_REVIEWER)

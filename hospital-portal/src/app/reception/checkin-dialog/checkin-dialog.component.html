@@ -101,6 +101,96 @@
         </label>
       </div>
 
+      <!-- QA D3258 (r70): what the desk verifies, and the patient share it may collect. -->
+      <section class="checkin-coverage" data-testid="checkin-coverage" aria-live="polite">
+        <h4 class="checkin-coverage__title">
+          {{ 'R70_MONEY.CHECKIN.COVERAGE_TITLE' | translate }}
+        </h4>
+        @if (!coverageLoaded()) {
+          <p class="hint">{{ 'COMMON.LOADING' | translate }}</p>
+        } @else if (hasCoverage()) {
+          @let c = coverage()!;
+          <dl class="checkin-coverage__grid">
+            <div>
+              <dt>{{ 'R70_MONEY.CHECKIN.PAYER' | translate }}</dt>
+              <dd data-testid="checkin-coverage-payer">
+                {{ c.payerName || c.primaryPayer || '—' }}
+              </dd>
+            </div>
+            <div>
+              <dt>{{ 'R70_MONEY.CHECKIN.PLAN' | translate }}</dt>
+              <dd data-testid="checkin-coverage-plan">
+                {{ c.planName || ('R70_MONEY.CHECKIN.NO_PLAN' | translate) }}
+                @if (c.coveragePercent !== null && c.coveragePercent !== undefined) {
+                  ({{
+                    'R70_MONEY.CHECKIN.PERCENT'
+                      | translate: { percent: (c.coveragePercent | number) }
+                  }})
+                }
+              </dd>
+            </div>
+            <div>
+              <dt>{{ 'R70_MONEY.CHECKIN.POLICY' | translate }}</dt>
+              <dd data-testid="checkin-coverage-policy">{{ c.policyNumber || '—' }}</dd>
+            </div>
+            <div>
+              <dt>{{ 'R70_MONEY.CHECKIN.VALIDITY' | translate }}</dt>
+              <dd data-testid="checkin-coverage-validity">
+                @if (c.expired) {
+                  <span class="checkin-coverage__expired">{{
+                    'R70_MONEY.CHECKIN.EXPIRED' | translate
+                  }}</span>
+                } @else if (c.effectiveFrom && c.expiresOn) {
+                  {{
+                    'R70_MONEY.CHECKIN.FROM_TO'
+                      | translate
+                        : {
+                            from: (c.effectiveFrom | dayMonth: undefined : true),
+                            to: (c.expiresOn | dayMonth: undefined : true),
+                          }
+                  }}
+                } @else if (c.expiresOn) {
+                  {{
+                    'R70_MONEY.CHECKIN.UNTIL'
+                      | translate: { to: (c.expiresOn | dayMonth: undefined : true) }
+                  }}
+                } @else {
+                  {{ 'R70_MONEY.CHECKIN.NO_END' | translate }}
+                }
+              </dd>
+            </div>
+          </dl>
+        } @else {
+          <p class="hint" data-testid="checkin-coverage-none">
+            {{ 'R70_MONEY.CHECKIN.NO_COVERAGE' | translate }}
+          </p>
+        }
+        @if (coverage()?.suggestedCopay !== null && coverage()?.suggestedCopay !== undefined) {
+          <p class="checkin-coverage__copay" data-testid="checkin-suggested-copay">
+            <span>{{
+              (hasCoverage() && coverage()?.suggestedPayerShare
+                ? 'R70_MONEY.CHECKIN.SUGGESTED_SHARED'
+                : 'R70_MONEY.CHECKIN.SUGGESTED_FULL'
+              )
+                | translate
+                  : {
+                      copay: (coverage()?.suggestedCopay | cfa: 'XOF'),
+                      fee: (coverage()?.consultationFee | cfa: 'XOF'),
+                      payer: (coverage()?.suggestedPayerShare | cfa: 'XOF'),
+                    }
+            }}</span>
+            <button
+              type="button"
+              class="btn-link"
+              data-testid="checkin-use-suggested-copay"
+              (click)="useSuggestedCopay()"
+            >
+              {{ 'R70_MONEY.CHECKIN.USE_SUGGESTED' | translate }}
+            </button>
+          </p>
+        }
+      </section>
+
       <!-- Insurance verification -->
       <div class="form-group checkbox-group">
         <label>

@@ -23,6 +23,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { refusalReason, refusedFieldReasons } from '../shared/refusal-reason';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { RuleStatusComponent } from '../shared/rule-status/rule-status.component';
 
 const STATUS_FILTERS: { value: RefillStatus | 'ALL'; labelKey: string }[] = [
   { value: 'REQUESTED', labelKey: 'REFILLS.STATUS_REQUESTED' },
@@ -43,7 +44,14 @@ function notesFieldId(refillId: string): string {
 @Component({
   selector: 'app-refill-approval-list',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, RouterLink, TranslateModule],
+  imports: [
+    RuleStatusComponent,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './refill-approval-list.component.html',
   styleUrls: ['./refill-approval-list.component.scss'],

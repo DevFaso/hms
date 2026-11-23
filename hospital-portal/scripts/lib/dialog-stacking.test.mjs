@@ -224,6 +224,11 @@ const NESTED_DIALOGS = new Map([
     'src/app/transfusion/transfusion.html::div.detail-panel[transfusion-panel-1-title] => div.modal[transfusion-dialog-6-title]',
     SPEC_SHAPES,
   ],
+  // QA D3351: the biologist's antibody record, opened from the request's detail panel.
+  [
+    'src/app/transfusion/transfusion.html::div.detail-panel[transfusion-panel-1-title] => div.modal[transfusion-dialog-antibody-title]',
+    SPEC_SHAPES,
+  ],
   [
     'src/app/transfusion/transfusion.html::div.detail-panel[transfusion-panel-1-title] => app-confirm-dialog[TRANSFUSION.ADMIN_COMPLETE_TITLE]',
     SPEC_SHAPES,

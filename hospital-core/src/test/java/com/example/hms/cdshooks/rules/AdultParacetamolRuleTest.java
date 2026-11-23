@@ -22,6 +22,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
 
+import static com.example.hms.testsupport.RandomIds.withoutRandomIds;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -502,7 +503,7 @@ class AdultParacetamolRuleTest {
         List<CdsCard> cards = evaluate(order);
         assertThat(letters(cards)).isEqualTo("C");
         assertThat(cards.get(0).indicator()).isEqualTo(CdsCard.Indicator.CRITICAL);
-        assertThat(cards.get(0).detail()).doesNotContain("Daily limit").doesNotContain("4000").doesNotContain("Lower limits");
+        assertThat(withoutRandomIds(cards.get(0).detail())).doesNotContain("Daily limit").doesNotContain("4000").doesNotContain("Lower limits");
         Order noRisk = new Order("2 g", "6 fois par jour");
         noRisk.patient = agedYears(10);
         assertThat(evaluate(noRisk)).isEmpty();

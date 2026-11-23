@@ -1,5 +1,7 @@
 package com.example.hms.service.support;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.OrderReviewStatus;
 import com.example.hms.enums.OrderReviewType;
 import com.example.hms.exception.FieldBusinessException;
@@ -25,6 +27,7 @@ import java.util.function.BiPredicate;
  */
 @Component
 @RequiredArgsConstructor
+@ProvisionalRule(ClinicalRuleSetKey.ORDER_REVIEW_HOLD)
 public class OrderReviewHoldGuard implements InitializingBean {
 
     public static final String PRESCRIPTION_KEY = "order.review.held.prescription";

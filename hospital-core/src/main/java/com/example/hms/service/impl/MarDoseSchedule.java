@@ -1,5 +1,7 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.model.Prescription;
 import com.example.hms.utility.HospitalTime;
 
@@ -60,6 +62,7 @@ import java.util.regex.Pattern;
  * limit must at least judge, and the limit's card says the total is unknown
  * ({@link #writtenWithNoCount}).
  */
+@ProvisionalRule(ClinicalRuleSetKey.CLOCK_TIME_FREQUENCIES)
 public final class MarDoseSchedule {
 
     /** What a frequency says about repeating. */

@@ -64,6 +64,8 @@ class PatientStoryboardServiceImplTest {
         mock(com.example.hms.service.recordaccess.CrossHospitalReachRecorder.class);
     private final com.example.hms.service.recordaccess.BreakGlassGate breakGlassGate =
         mock(com.example.hms.service.recordaccess.BreakGlassGate.class);
+    private final com.example.hms.repository.PatientVitalSignRepository vitalSignRepo =
+        mock(com.example.hms.repository.PatientVitalSignRepository.class);
 
     private PatientStoryboardServiceImpl service;
 
@@ -77,7 +79,7 @@ class PatientStoryboardServiceImplTest {
     void setUp() {
         service = new PatientStoryboardServiceImpl(
             patientChartAccess, allergyRepo, problemRepo, encounterRepo, directiveRepo, hospitalRepo,
-            recordAccessPolicy, sensitivityClassifier, reachRecorder, breakGlassGate);
+            recordAccessPolicy, sensitivityClassifier, reachRecorder, breakGlassGate, vitalSignRepo);
         // E9 #59 — the readable set is the acting hospital alone unless a test widens it.
         when(recordAccessPolicy.readableHospitalIds(any(), eq(PATIENT_ID), eq(HOSPITAL_ID)))
             .thenReturn(Set.of(HOSPITAL_ID));
@@ -98,6 +100,34 @@ class PatientStoryboardServiceImplTest {
             .thenThrow(new ResourceNotFoundException("patient.notFound", missingId));
         assertThatThrownBy(() -> service.getStoryboard(missingId, HOSPITAL_ID))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    /** QA r70 D3220: the safety header carries the blood group and the latest weight, dated. */
+    @Test
+    void headerCarriesBloodGroupAndLatestWeight() {
+        LocalDateTime weighedAt = LocalDateTime.now().minusDays(2);
+        com.example.hms.model.PatientVitalSign weighing = new com.example.hms.model.PatientVitalSign();
+        weighing.setWeightKg(12.0);
+        weighing.setRecordedAt(weighedAt);
+        when(vitalSignRepo.findFirstByPatient_IdAndHospital_IdAndWeightKgIsNotNullOrderByRecordedAtDesc(
+            PATIENT_ID, HOSPITAL_ID)).thenReturn(Optional.of(weighing));
+
+        PatientStoryboardDTO dto = service.getStoryboard(PATIENT_ID, HOSPITAL_ID);
+
+        assertThat(dto.getPatient().getBloodType()).isEqualTo("O+");
+        assertThat(dto.getPatient().getLatestWeightKg()).isEqualTo(12.0);
+        assertThat(dto.getPatient().getLatestWeightRecordedAt()).isEqualTo(weighedAt);
+    }
+
+    @Test
+    void headerWithoutAWeighingHasNoWeight() {
+        when(vitalSignRepo.findFirstByPatient_IdAndHospital_IdAndWeightKgIsNotNullOrderByRecordedAtDesc(
+            PATIENT_ID, HOSPITAL_ID)).thenReturn(Optional.empty());
+
+        PatientStoryboardDTO dto = service.getStoryboard(PATIENT_ID, HOSPITAL_ID);
+
+        assertThat(dto.getPatient().getLatestWeightKg()).isNull();
+        assertThat(dto.getPatient().getLatestWeightRecordedAt()).isNull();
     }
 
     @Test

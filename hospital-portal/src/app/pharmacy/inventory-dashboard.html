@@ -186,6 +186,57 @@
                 [(ngModel)]="packTargetUnit"
               />
             </div>
+            <!-- QA D3400 (r70): said, never guessed; the preview shows what will be multiplied. -->
+            <fieldset class="field pack-size-counted-in" data-server-field="alreadyInUnits">
+              <legend>{{ 'PHARMACY_MONEY.PACK.COUNTED_IN' | translate }} *</legend>
+              <label class="radio-option">
+                <input
+                  id="packCountedInUnits"
+                  type="radio"
+                  name="packCountedIn"
+                  value="UNITS"
+                  [(ngModel)]="packCountedIn"
+                />
+                {{
+                  'PHARMACY_MONEY.PACK.COUNTED_IN_UNITS'
+                    | translate
+                      : {
+                          unit:
+                            packTargetUnit.trim() ||
+                            ('PHARMACY_MONEY.PACK.UNIT_PLACEHOLDER' | translate),
+                        }
+                }}
+              </label>
+              <label class="radio-option">
+                <input
+                  id="packCountedInPacks"
+                  type="radio"
+                  name="packCountedIn"
+                  value="PACKS"
+                  [(ngModel)]="packCountedIn"
+                />
+                {{
+                  'PHARMACY_MONEY.PACK.COUNTED_IN_PACKS'
+                    | translate
+                      : {
+                          packUnit: packUnit.trim() || pItem.unit || '',
+                          n: packUnitsPerPack ?? '…',
+                        }
+                }}
+              </label>
+              @if (packCountedIn) {
+                {{ ' '
+                }}<small class="field-hint" data-testid="pack-size-preview">{{
+                  'PHARMACY_MONEY.PACK.PREVIEW'
+                    | translate
+                      : {
+                          qty: (packPreview(pItem).qty | countUnit: packTargetUnit.trim()),
+                          threshold: packPreview(pItem).threshold,
+                          order: packPreview(pItem).order,
+                        }
+                }}</small>
+              }
+            </fieldset>
             <div class="field pack-size-reason">
               <label for="packReason">{{ 'PHARMACY_MONEY.PACK.REASON' | translate }} *</label>
               <input
@@ -209,7 +260,12 @@
               [disabled]="packSaving()"
               data-testid="pack-size-save"
             >
-              {{ 'PHARMACY_MONEY.PACK.SAVE' | translate }}
+              {{
+                (packCountedIn === 'UNITS'
+                  ? 'PHARMACY_MONEY.PACK.DECLARE'
+                  : 'PHARMACY_MONEY.PACK.SAVE'
+                ) | translate
+              }}
             </button>
           </div>
         </form>
@@ -248,10 +304,8 @@
                       'PHARMACY_MONEY.PACK.BREAKDOWN'
                         | translate
                           : {
-                              packs: item.fullPacksOnHand ?? 0,
-                              packUnit: item.packUnit ?? '',
-                              loose: item.looseUnitsOnHand ?? 0,
-                              unit: item.unit ?? '',
+                              packs: (item.fullPacksOnHand ?? 0 | countUnit: item.packUnit),
+                              loose: (item.looseUnitsOnHand ?? 0 | countUnit: item.unit),
                             }
                     }}</small>
                   }
@@ -266,8 +320,7 @@
                         | translate
                           : {
                               packUnit: item.packUnit ?? '',
-                              n: item.unitsPerPack,
-                              unit: item.unit ?? '',
+                              n: (item.unitsPerPack | countUnit: item.unit),
                             }
                     }}</small>
                   } @else if (!item.controlled) {
@@ -339,16 +392,18 @@
                     <span class="price-text" [attr.data-testid]="'price-' + item.id">{{
                       (item.unitPrice ?? null) !== null ? (item.unitPrice | cfa: 'XOF') : '—'
                     }}</span>
-                    <button
-                      type="button"
-                      class="btn-icon price-edit"
-                      [attr.aria-label]="'PHARMACY.EDIT_PRICE' | translate"
-                      [title]="'PHARMACY.EDIT_PRICE' | translate"
-                      [attr.data-testid]="'price-edit-' + item.id"
-                      (click)="editingPriceId.set(item.id)"
-                    >
-                      <span class="material-symbols-outlined" aria-hidden="true">edit</span>
-                    </button>
+                    @if (canSetPrice()) {
+                      <button
+                        type="button"
+                        class="btn-icon price-edit"
+                        [attr.aria-label]="'PHARMACY.EDIT_PRICE' | translate"
+                        [title]="'PHARMACY.EDIT_PRICE' | translate"
+                        [attr.data-testid]="'price-edit-' + item.id"
+                        (click)="editingPriceId.set(item.id)"
+                      >
+                        <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                      </button>
+                    }
                   }
                 </td>
                 <td>
@@ -434,8 +489,9 @@
                   'PHARMACY.STOCK_REMAINING'
                     | translate
                       : {
-                          qty: item.quantityOnHand,
-                          unit: item.unit ?? ('PHARMACY.UNITS' | translate),
+                          qty:
+                            (item.quantityOnHand
+                            | countUnit: item.unit ?? ('PHARMACY.UNITS' | translate)),
                           threshold: item.reorderThreshold,
                         }
                 }}
@@ -623,17 +679,20 @@
                   min="0"
                 />
               </div>
-              <div class="field">
-                <label for="ciUnitPrice">{{ 'PHARMACY.UNIT_PRICE' | translate }}</label>
-                <input
-                  id="ciUnitPrice"
-                  type="number"
-                  [(ngModel)]="createForm.unitPrice"
-                  name="unitPrice"
-                  min="0"
-                  step="1"
-                />
-              </div>
+              <!-- QA D3407 (r70): only the store manager or the hospital admin sets a price. -->
+              @if (canSetPrice()) {
+                <div class="field">
+                  <label for="ciUnitPrice">{{ 'PHARMACY.UNIT_PRICE' | translate }}</label>
+                  <input
+                    id="ciUnitPrice"
+                    type="number"
+                    [(ngModel)]="createForm.unitPrice"
+                    name="unitPrice"
+                    min="0"
+                    step="1"
+                  />
+                </div>
+              }
             </div>
           </div>
           <div class="modal-actions">

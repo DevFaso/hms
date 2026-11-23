@@ -252,10 +252,12 @@ public class DiagnosticReportFhirMapper {
         } else {
             code.setText("Imaging report");
         }
-        if (src.getModality() != null) {
+        // QA D3000: a report saved with no modality is the read of its order's study.
+        com.example.hms.enums.ImagingModality modality = com.example.hms.mapper.ImagingReportMapper.studyModalityOf(src);
+        if (modality != null) {
             code.addCoding(new Coding()
                 .setSystem("urn:hms:imaging:modality")
-                .setCode(src.getModality().name()));
+                .setCode(modality.name()));
         }
         report.setCode(code);
         var patient = src.getImagingOrder() != null ? src.getImagingOrder().getPatient() : null;

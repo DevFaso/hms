@@ -69,6 +69,8 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
     private final SensitivityClassifier sensitivityClassifier;
     private final CrossHospitalReachRecorder reachRecorder;
     private final BreakGlassGate breakGlassGate;
+    /** QA r70 D3220: the latest recorded weight, for the patient-safety header. */
+    private final com.example.hms.repository.PatientVitalSignRepository vitalSignRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -151,6 +153,7 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
                 mrn = patient.getMrnForHospital(primary.getId());
             }
         }
+        Optional<com.example.hms.model.PatientVitalSign> weighing = latestWeighing(patient.getId(), hospitalId);
         return PatientHeaderDTO.builder()
             .id(patient.getId())
             .firstName(patient.getFirstName())
@@ -161,7 +164,24 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
             .ageYears(age)
             .gender(patient.getGender())
             .bloodType(patient.getBloodType())
+            .latestWeightKg(weighing.map(com.example.hms.model.PatientVitalSign::getWeightKg).orElse(null))
+            .latestWeightRecordedAt(weighing.map(com.example.hms.model.PatientVitalSign::getRecordedAt)
+                .orElse(null))
             .build();
+    }
+
+    /**
+     * QA r70 D3220: the latest row that records a weight, at the acting hospital when there is one (the dose
+     * checks read the same row, {@code CdsRuleEngine#loadLatestWeighing}); dated, so an old weight shows as old.
+     */
+    private Optional<com.example.hms.model.PatientVitalSign> latestWeighing(UUID patientId, UUID hospitalId) {
+        if (vitalSignRepository == null || patientId == null) {
+            return Optional.empty();
+        }
+        return hospitalId != null
+            ? vitalSignRepository.findFirstByPatient_IdAndHospital_IdAndWeightKgIsNotNullOrderByRecordedAtDesc(
+                patientId, hospitalId)
+            : vitalSignRepository.findFirstByPatient_IdAndWeightKgIsNotNullOrderByRecordedAtDesc(patientId);
     }
 
     /**

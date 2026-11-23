@@ -183,6 +183,52 @@ class ObstetricAlertReaderLanguageTest {
         assertThat(read(filed.getTitleKey(), filed.getTitleArgs(), Locale.FRENCH)).contains("Alerte post-partum");
     }
 
+    /**
+     * QA D3304 (r70): a maternal early-warning page from the ward vital signs. Its first notice is the item to
+     * acknowledge only (the page already rang these people), read in each doctor's language.
+     */
+    @Test
+    void aMaternalWarningFromTheWardVitalsFilesTheItemAndRingsNoSecondBell() throws Exception {
+        InBasketService inBasket = mock(InBasketService.class);
+        worker = new ObstetricAlertEscalationWorker(escalationRepository, inBasketItemRepository,
+            onCallScheduleRepository, staffRepository, userRepository, patientRepository,
+            notificationService, inBasket, MESSAGES,
+            Clock.fixed(Instant.parse("2026-10-23T10:00:00Z"), ZoneOffset.UTC), mock(ObstetricAlertCurrency.class));
+        User doctor = new User();
+        doctor.setId(UUID.randomUUID());
+        doctor.setUsername("drA");
+        when(userRepository.findByUsernameInIgnoreCase(anyList())).thenReturn(List.of(doctor));
+        List<Object> sentenceArgs = NotificationLocalizer.storable(new Object[]{7, 0, 0,
+            NotificationLocalizer.key("mews.alert.SEVERE_HYPERTENSION")});
+
+        worker.raise(new ObstetricAlertEscalationService.UrgentAlert(HOSPITAL, PATIENT, "Rihanata Sankara",
+            ObstetricAlertEscalationService.SOURCE_VITAL_SIGN, UUID.randomUUID(), "MEWS_RED", "alerte rouge",
+            "tension artérielle sévère, MEWS 7", null, "Alerte maternelle (alerte rouge) pour Rihanata Sankara",
+            "maternalWarning.alert.msg.MEWS_RED", sentenceArgs));
+
+        // No bell from the worker: the maternal page rang its circle for this reading already.
+        org.mockito.Mockito.verifyNoInteractions(notificationService);
+        ArgumentCaptor<com.example.hms.payload.dto.clinical.CreateInBasketItemRequest> item =
+            ArgumentCaptor.forClass(com.example.hms.payload.dto.clinical.CreateInBasketItemRequest.class);
+        verify(inBasket).createItemInNewTransaction(item.capture());
+        com.example.hms.payload.dto.clinical.CreateInBasketItemRequest filed = item.getValue();
+        assertThat(filed.getPriority()).isEqualTo(com.example.hms.enums.InBasketPriority.CRITICAL);
+        assertThat(filed.getRecipientUserId()).isEqualTo(doctor.getId());
+        assertThat(filed.getReferenceType()).isEqualTo(ObstetricAlertEscalationWorker.REFERENCE_TYPE);
+        assertThat(filed.getTitleKey()).isEqualTo("maternalWarning.alert.notification");
+        assertThat(filed.getBodyKey()).isEqualTo("maternalWarning.alert.msg.MEWS_RED");
+
+        String en = read(filed.getTitleKey(), filed.getTitleArgs(), Locale.ENGLISH);
+        String fr = read(filed.getTitleKey(), filed.getTitleArgs(), Locale.FRENCH);
+        String es = read(filed.getTitleKey(), filed.getTitleArgs(), Locale.of("es"));
+        assertThat(en).startsWith("Maternal alert (red alert) for Rihanata Sankara")
+            .contains("severe blood pressure, MEWS 7").contains("Provisional rule");
+        assertThat(fr).startsWith("Alerte maternelle (alerte rouge) pour Rihanata Sankara")
+            .contains("tension artérielle sévère, MEWS 7").contains("Règle provisoire");
+        assertThat(es).startsWith("Alerta materna (alerta roja) para Rihanata Sankara").contains("MEWS 7");
+        assertNoFrench(en);
+    }
+
     @Test
     void aRowRaisedWithoutAKeyKeepsItsStoredSentence() {
         assertThat(ObstetricAlertEscalationWorker.alertMessageArg(null, null, "BP")).isEqualTo("BP");

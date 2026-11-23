@@ -1,5 +1,7 @@
 package com.example.hms.utility;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.model.Patient;
 
@@ -44,6 +46,7 @@ import java.util.Set;
  * When a male value is wrong, the fix is to correct the patient record, which
  * then unblocks these screens.
  */
+@ProvisionalRule(ClinicalRuleSetKey.OBSTETRIC_ELIGIBILITY)
 public final class ObstetricEligibility {
 
     public static final String MESSAGE_KEY = "maternity.patient.male";

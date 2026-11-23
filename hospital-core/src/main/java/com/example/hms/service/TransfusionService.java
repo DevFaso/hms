@@ -58,6 +58,19 @@ public interface TransfusionService {
 
     PatientBloodGroupResponseDTO getCurrentBloodGroup(UUID patientId);
 
+    /**
+     * QA D3352 (r71): the patient's current type and screen at this hospital, or empty when none is on record
+     * yet. Having no group is an ordinary answer (every patient before the first type and screen), not an error.
+     */
+    java.util.Optional<PatientBloodGroupResponseDTO> findCurrentBloodGroup(UUID patientId);
+
+    /** QA D3351: the biologist records the antibody identified, or the referral and the decision for one request. */
+    com.example.hms.payload.dto.transfusion.AntibodyStatusResponseDTO recordAntibodyWorkup(
+        com.example.hms.payload.dto.transfusion.AntibodyWorkupRequestDTO request);
+
+    /** QA D3351: the patient's allo-immunisation at the active hospital. */
+    com.example.hms.payload.dto.transfusion.AntibodyStatusResponseDTO getAntibodyStatus(UUID patientId);
+
     List<PatientBloodGroupResponseDTO> getBloodGroupHistory(UUID patientId);
 
     // ── Units ───────────────────────────────────────────────────────────

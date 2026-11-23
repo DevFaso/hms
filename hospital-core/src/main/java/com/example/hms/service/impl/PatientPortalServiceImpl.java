@@ -2,7 +2,6 @@ package com.example.hms.service.impl;
 
 import com.example.hms.service.support.EducationProgressRows;
 import com.example.hms.service.support.LinkedPatientLookup;
-import com.example.hms.config.SecurityConstants;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.EducationComprehensionStatus;
 import com.example.hms.enums.ProxyStatus;
@@ -1694,23 +1693,24 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // Every recipient is a clinician reading it later, so the body is
         // rendered in the staff locale — never in the patient's request locale.
         Locale locale = NotificationLocales.STAFF;
-        String medicationName = medicationDisplayName(prescription, locale);
         String patientName = formatPatientName(patient, locale);
 
+        // QA D3301 (r70): one reader, the prescriber (or the designated cover of a prescriber who left), and the
+        // announcement never names the medicine: the reader opens the request to see what is asked.
         Recipients recipients = collectRefillRecipients(prescription);
         // The bell renders it in each reader's language when read (QA D665).
-        dispatchRefillInAppNotifications(recipients.usernames(),
-            new Object[]{patientName, medicationName}, refill);
-        dispatchRefillEmailNotifications(recipients.emails(), patientName, medicationName, refill, locale);
+        dispatchRefillInAppNotifications(recipients.usernames(), new Object[]{patientName}, refill);
+        dispatchRefillEmailNotifications(recipients.emails(), patientName, refill, locale);
     }
 
     private record Recipients(Set<String> usernames, Set<String> emails) {}
 
-    private String medicationDisplayName(Prescription prescription, Locale locale) {
-        String name = prescription.getMedicationName();
-        return (name != null && !name.isBlank())
-            ? name
-            : messageSource.getMessage("refill.request.medicationFallback", null, locale);
+    /** QA D3301: who answers a renewal request; null in a hand-built unit test (then nobody is told). */
+    private com.example.hms.service.pharmacy.RenewalAlertRouting renewalAlertRouting;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setRenewalAlertRouting(com.example.hms.service.pharmacy.RenewalAlertRouting renewalAlertRouting) {
+        this.renewalAlertRouting = renewalAlertRouting;
     }
 
     private String formatPatientName(Patient patient, Locale locale) {
@@ -1724,25 +1724,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         Set<String> usernames = new LinkedHashSet<>();
         Set<String> emails = new LinkedHashSet<>();
 
-        Staff prescriber = prescription.getStaff();
-        addStaffContact(usernames, emails, prescriber);
-        if (hasResolvableCareTeamScope(prescription, prescriber)) {
-            staffRepository.findActiveProvidersByHospitalAndDepartment(
-                    prescription.getHospital().getId(),
-                    prescriber.getDepartment().getId())
-                .stream()
-                .filter(s -> isDoctorOrNurse(s) && s.getUser() != null)
-                .forEach(s -> addStaffContact(usernames, emails, s));
-        }
+        // QA D3301: never the department's doctors and nurses. A renewal is the prescriber's to answer.
+        java.util.Optional<Staff> answerer = renewalAlertRouting != null
+            ? renewalAlertRouting.answererOf(prescription)
+            : java.util.Optional.empty();
+        answerer.ifPresent(staff -> addStaffContact(usernames, emails, staff));
         return new Recipients(usernames, emails);
-    }
-
-    private boolean hasResolvableCareTeamScope(Prescription prescription, Staff prescriber) {
-        return prescription.getHospital() != null
-                && prescription.getHospital().getId() != null
-                && prescriber != null
-                && prescriber.getDepartment() != null
-                && prescriber.getDepartment().getId() != null;
     }
 
     private void addStaffContact(Set<String> usernames, Set<String> emails, Staff staff) {
@@ -1771,13 +1758,13 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     }
 
     private void dispatchRefillEmailNotifications(Set<String> emails, String patientName,
-                                                  String medicationName, RefillRequest refill, Locale locale) {
+                                                  RefillRequest refill, Locale locale) {
         if (emails.isEmpty()) {
             return;
         }
         String subject = messageSource.getMessage("refill.request.email.subject", null, locale);
-        String body = messageSource.getMessage(
-            "refill.request.email.body", new Object[]{patientName, medicationName}, locale);
+        // QA D3301: a mailbox is read on a phone and forwarded; the medicine is not written in it.
+        String body = messageSource.getMessage("refill.request.email.body", new Object[]{patientName}, locale);
         for (String email : emails) {
             try {
                 emailService.sendHtml(List.of(email), List.of(), List.of(), subject, body);
@@ -1785,15 +1772,6 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 log.warn("Failed to send refill email to {} for refill {}", email, refill.getId());
             }
         }
-    }
-
-    private boolean isDoctorOrNurse(Staff staff) {
-        if (staff.getAssignment() == null || staff.getAssignment().getRole() == null) {
-            return false;
-        }
-        String roleCode = staff.getAssignment().getRole().getCode();
-        return SecurityConstants.ROLE_DOCTOR.equalsIgnoreCase(roleCode)
-                || SecurityConstants.ROLE_NURSE.equalsIgnoreCase(roleCode);
     }
 
     /** Map a RefillRequest entity to its response DTO. */
@@ -2682,8 +2660,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
         boolean thisHospitals = insurance.getAssignment() != null && insurance.getAssignment().getHospital() != null
             && hospitalId != null && hospitalId.equals(insurance.getAssignment().getHospital().getId());
-        if (thisHospitals && !insurance.isPrimary() && patientInsuranceRepository
-                .findByPatient_IdAndPrimaryTrueAndAssignment_Hospital_Id(patient.getId(), hospitalId).isEmpty()) {
+        // Review of #1284: read as a list, so a second primary left behind never throws as an Optional finder would.
+        if (thisHospitals && !insurance.isPrimary() && !com.example.hms.service.billing.CoverageOrder.hasPrimary(
+                patientInsuranceRepository.findByPatient_IdAndAssignment_Hospital_Id(patient.getId(), hospitalId))) {
             insurance.setPrimary(true);
         }
         patientInsuranceRepository.save(insurance);

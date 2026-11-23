@@ -149,7 +149,7 @@
             <th>{{ 'USERS.ROLE' | translate }}</th>
             <th>{{ 'USERS.PROFILE' | translate }}</th>
             <th>{{ 'COMMON.STATUS' | translate }}</th>
-            <th>{{ 'COMMON.ACTIONS' | translate }}</th>
+            <th class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
           </tr>
         </thead>
         <tbody>
@@ -510,6 +510,15 @@
                         (change)="onRoleToggle(role.code, $any($event.target).checked)"
                       />
                       <span class="role-label">{{ role.name || role.code | roleLabel }}</span>
+                      <!-- QA D3509: a bare « Personnel » says nothing about what it grants. -->
+                      @if (roleHintKey(role); as hintKey) {
+                        {{ ' '
+                        }}<span
+                          class="hint-text role-hint"
+                          [attr.data-testid]="'role-hint-' + role.code"
+                          >{{ hintKey | translate }}</span
+                        >
+                      }
                     </label>
                   }
                   @if (availableRoles().length === 0) {
@@ -564,6 +573,7 @@
                 <select
                   id="hospitalId"
                   [(ngModel)]="createForm.hospitalId"
+                  (ngModelChange)="loadRegistrationDepartments($event)"
                   name="hospitalId"
                   [attr.aria-required]="organisationRegistrar || null"
                   [attr.aria-describedby]="organisationRegistrar ? 'hospitalIdScope' : null"
@@ -580,6 +590,28 @@
                 }
               }
             </div>
+
+            <!-- QA r70 D3202: the department is chosen here, from the hospital's own list. -->
+            @if (!editing() && createForm.hospitalId) {
+              <div class="field">
+                <label for="departmentId">{{ 'USERS.DEPARTMENT' | translate }}</label>
+                <select id="departmentId" [(ngModel)]="createForm.departmentId" name="departmentId">
+                  <option [ngValue]="undefined">
+                    {{ 'STAFF.NO_DEPARTMENT_OPTION' | translate }}
+                  </option>
+                  @for (d of registrationDepartments(); track d.id) {
+                    <option [ngValue]="d.id">{{ d.name }}</option>
+                  }
+                </select>
+                @if (registrationDepartmentsFailed()) {
+                  <span class="hint-text" role="alert">{{
+                    'STAFF.DEPARTMENTS_LOAD_FAILED' | translate
+                  }}</span>
+                } @else {
+                  <span class="hint-text">{{ 'USERS.DEPARTMENT_HINT' | translate }}</span>
+                }
+              </div>
+            }
 
             <!-- Job Title & Employment Type -->
             <div class="field-row">

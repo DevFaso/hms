@@ -438,11 +438,17 @@ export class SlotAdminComponent implements OnInit {
         this.lastGeneration.set(result);
         this.generating.set(false);
         this.toast.success(
-          this.translate.instant('SLOT_ADMIN.GENERATED', {
-            created: result.slotsCreated,
-            templates: result.templatesApplied,
-            skipped: result.skippedExisting,
-          }),
+          // QA r70 D3211: « à partir de 1 modèles » — the one-template sentence agrees.
+          this.translate.instant(
+            result.templatesApplied === 1
+              ? 'SLOT_ADMIN.GENERATED_ONE_TEMPLATE'
+              : 'SLOT_ADMIN.GENERATED',
+            {
+              created: result.slotsCreated,
+              templates: result.templatesApplied,
+              skipped: result.skippedExisting,
+            },
+          ),
         );
         if (this.section() === 'slots') {
           this.searchSlots();

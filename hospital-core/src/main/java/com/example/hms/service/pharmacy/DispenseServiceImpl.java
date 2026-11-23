@@ -9,6 +9,7 @@ import com.example.hms.enums.QueueClaimFilter;
 import com.example.hms.enums.QueueClaimReleaseReason;
 import com.example.hms.enums.DispenseVerificationStatus;
 import com.example.hms.enums.ReadyCancelReason;
+import com.example.hms.enums.ReturnedStockCondition;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RefillStatus;
 import com.example.hms.enums.RoutingDecisionStatus;
@@ -663,11 +664,23 @@ public class DispenseServiceImpl implements DispenseService {
         if (reason == null || !reason.isPharmacistChoice()) {
             throw new com.example.hms.exception.FieldBusinessException(FIELD_REASON, "dispense.ready.cancelReason.invalid");
         }
+        // QA D3403 (r70): what happens to the stock is said, never assumed (damaged stock went back on sale).
+        com.example.hms.enums.ReturnedStockCondition condition = request.getStockCondition();
+        if (condition == null) {
+            throw new com.example.hms.exception.FieldBusinessException("stockCondition",
+                    "dispense.ready.stockConditionRequired");
+        }
+        // Review of #1285: « stock manquant ou endommagé » is never an intact bag going back on sale.
+        if (reason == ReadyCancelReason.STOCK_UNAVAILABLE && condition.isFitForSale()) {
+            throw new com.example.hms.exception.FieldBusinessException("stockCondition",
+                    "dispense.ready.stockUnavailableNotIntact");
+        }
         LockedPreparedFill locked = lockPreparedFill(dispenseId);
         if (locked.dispense().getStatus() != DispenseStatus.PENDING) {
             throw new ConflictException(MessageUtil.resolve(READY_NOT_PENDING));
         }
-        Dispense cancelled = preparedFillVoider.cancel(locked.dispense(), reason);
+        Dispense cancelled = preparedFillVoider.cancel(locked.dispense(), reason, condition,
+                request.getWitnessedBy());
         // QA D792 (#953 review, round 2): the prepared fill was what held a
         // ward order of an ended stay live (migration V233 leaves such orders
         // to the counter). With the fill gone nothing else would ever end it:
@@ -704,6 +717,51 @@ public class DispenseServiceImpl implements DispenseService {
                 .orElseThrow(this::dispenseNotFound);
         // The row as it is now that nobody else can move it.
         return new LockedPreparedFill(resync(dispense), prescription);
+    }
+
+    /**
+     * The stock of a cancelled fill (Sonar S3776: split out of the cancel). QA D604: only what was not already
+     * returned against the fill comes back; review of #1285: a controlled drug comes back into quarantine.
+     */
+    private void reverseCancelledFillStock(Dispense dispense, UUID witnessedBy) {
+        BigDecimal stillOut = dispense.getStockLot() != null ? notYetReturned(dispense) : BigDecimal.ZERO;
+        if (stillOut.signum() > 0) {
+            StockLot lot = dispense.getStockLot();
+            InventoryItem item = lot.getInventoryItem();
+            User performer = resolveCurrentUser();
+            // QA D654: a controlled substance goes back on the shelf in front
+            // of a witness, as it left.
+            User witness = ControlledStockWitness.isControlled(item)
+                    ? controlledStockWitness.resolve(witnessedBy, item, performer) : null;
+            // Review of #1285: a controlled drug that was handed over left the pharmacy's custody; whatever comes
+            // back is quarantined (the RETURN, then a QUARANTINE, the lot unchanged), never put straight back on sale.
+            // Other stock goes back: the cancel corrects a fill recorded in error.
+            boolean quarantine = StockQuarantine.quarantines(item, ReturnedStockCondition.INTACT, true);
+            if (!quarantine) {
+                LocalDateTime now = LocalDateTime.now(clock);
+                stockLotRepository.incrementRemaining(lot.getId(), stillOut, now);
+                inventoryItemRepository.incrementOnHand(item.getId(), stillOut, now);
+                refreshIfManaged(lot);
+                refreshIfManaged(item);
+            }
+
+            StockTransaction reverseTx = StockTransaction.builder()
+                    .inventoryItem(item)
+                    .stockLot(lot)
+                    .transactionType(StockTransactionType.RETURN)
+                    .referenceId(dispense.getId())
+                    .quantity(stillOut)
+                    .reason("Dispense cancelled — stock returned for prescription "
+                            + dispense.getPrescription().getId())
+                    .performedByUser(performer)
+                    .witnessedByUser(witness)
+                    .build();
+            stockTransactionRepository.save(reverseTx);
+            if (quarantine) {
+                new StockQuarantine(stockTransactionRepository).quarantine(item, lot, stillOut, dispense.getId(),
+                        ReturnedStockCondition.INTACT, performer, witness);
+            }
+        }
     }
 
     private record LockedPreparedFill(Dispense dispense, Prescription prescription) {}
@@ -755,7 +813,8 @@ public class DispenseServiceImpl implements DispenseService {
                 request != null ? request.getBillingDeferralId() : null,
                 request != null ? request.getBillingUrgencyReason() : null), settlement.due(), actor,
                 // QA D2931 (r66): a claim sent for the fill that does not count for this person is named.
-                FillClaimCover.gapFor(claimRepository, dispense.getId(), actor != null ? actor.getId() : null));
+                FillClaimCover.gapFor(claimRepository, dispense.getId(), actor != null ? actor.getId() : null),
+                new DispenseBillingDeferralService.FillMoney(settlement.charge(), settlement.paid()));
     }
 
     /**
@@ -784,7 +843,8 @@ public class DispenseServiceImpl implements DispenseService {
         if (charge.signum() <= 0) {
             return null;
         }
-        return requireDeferral(newFill, prescription, choice, charge, actor, FillClaimCover.Gap.NONE);
+        return requireDeferral(newFill, prescription, choice, charge, actor, FillClaimCover.Gap.NONE,
+                new DispenseBillingDeferralService.FillMoney(charge, BigDecimal.ZERO));
     }
 
     /**
@@ -793,12 +853,12 @@ public class DispenseServiceImpl implements DispenseService {
      */
     private com.example.hms.model.pharmacy.DispenseBillingDeferral requireDeferral(
             Dispense dispense, Prescription prescription, DispenseBillingDeferralService.Choice choice,
-            BigDecimal due, User actor, FillClaimCover.Gap claimGap) {
+            BigDecimal due, User actor, FillClaimCover.Gap claimGap, DispenseBillingDeferralService.FillMoney money) {
         if (billingDeferrals == null) {
             throw DispenseBillingDeferralService.unpaid(claimGap, due);
         }
         UUID hospitalId = dispense.getPharmacy().getHospital().getId();
-        return billingDeferrals.admit(prescription, hospitalId, due, choice, actor, claimGap);
+        return billingDeferrals.admit(prescription, hospitalId, due, choice, actor, claimGap, money);
     }
 
     /**
@@ -810,6 +870,14 @@ public class DispenseServiceImpl implements DispenseService {
     @Autowired
     public void setBillingDeferrals(DispenseBillingDeferralService billingDeferrals) {
         this.billingDeferrals = billingDeferrals;
+    }
+
+    /** QA D3408: the insurer share of a fill, read by the checkout. A required setter; a unit test may omit it. */
+    private FillCoverShare fillCoverShare;
+
+    @Autowired(required = false)
+    public void setFillCoverShare(FillCoverShare fillCoverShare) {
+        this.fillCoverShare = fillCoverShare;
     }
 
     @Override
@@ -1576,6 +1644,15 @@ public class DispenseServiceImpl implements DispenseService {
         DispenseResponseDTO dto = dispenseMapper.toResponseDTO(dispense);
         // QA D264: the checkout takes the amount from here, not from a typed figure.
         dto.setChargeAmount(DispenseCharge.of(dispense, inventoryItemRepository).orElse(null));
+        // QA D3408 (r70): with an insurer share, the checkout takes the patient share, not the whole charge.
+        if (fillCoverShare != null && dto.getChargeAmount() != null && dispense.getPharmacy() != null
+                && dispense.getPharmacy().getHospital() != null) {
+            BigDecimal insurer = fillCoverShare.insurerShare(dispense, dispense.getPharmacy().getHospital().getId());
+            if (insurer.signum() > 0) {
+                dto.setInsurerShareAmount(insurer);
+                dto.setPatientShareAmount(dto.getChargeAmount().subtract(insurer).max(BigDecimal.ZERO));
+            }
+        }
         // QA D843: a paid fill was offered at the checkout with nothing saying so.
         dto.setPaid(paymentRepository.existsByDispense_IdAndStatus(
                 dispense.getId(), com.example.hms.enums.PharmacyPaymentStatus.POSTED));
@@ -1733,34 +1810,7 @@ public class DispenseServiceImpl implements DispenseService {
         // returns of 2 and 3 then put 4 more back on cancel), counted under
         // the dispense row lock that a referenced return also takes, and the
         // reversal names the dispense so it counts as one of its returns.
-        BigDecimal stillOut = dispense.getStockLot() != null ? notYetReturned(dispense) : BigDecimal.ZERO;
-        if (stillOut.signum() > 0) {
-            StockLot lot = dispense.getStockLot();
-            InventoryItem item = lot.getInventoryItem();
-            User performer = resolveCurrentUser();
-            // QA D654: a controlled substance goes back on the shelf in front
-            // of a witness, as it left.
-            User witness = ControlledStockWitness.isControlled(item)
-                    ? controlledStockWitness.resolve(witnessedBy, item, performer) : null;
-            LocalDateTime now = LocalDateTime.now(clock);
-            stockLotRepository.incrementRemaining(lot.getId(), stillOut, now);
-            inventoryItemRepository.incrementOnHand(item.getId(), stillOut, now);
-            refreshIfManaged(lot);
-            refreshIfManaged(item);
-
-            StockTransaction reverseTx = StockTransaction.builder()
-                    .inventoryItem(item)
-                    .stockLot(lot)
-                    .transactionType(StockTransactionType.RETURN)
-                    .referenceId(dispense.getId())
-                    .quantity(stillOut)
-                    .reason("Dispense cancelled — stock returned for prescription "
-                            + dispense.getPrescription().getId())
-                    .performedByUser(performer)
-                    .witnessedByUser(witness)
-                    .build();
-            stockTransactionRepository.save(reverseTx);
-        }
+        reverseCancelledFillStock(dispense, witnessedBy);
 
         Dispense saved = dispenseRepository.save(dispense);
         // Policy rule 6 (review of #1244): a cancelled fill owes nothing; its deferral gives the amount back.
@@ -1987,6 +2037,9 @@ public class DispenseServiceImpl implements DispenseService {
                 .quantity(prepared.getQuantityDispensed())
                 .unit(prepared.getUnit())
                 .reminderSentAt(prepared.getReadyReminderSentAt())
+                // Review of #1285: a controlled fill set aside or lost on cancel is witnessed.
+                .controlled(prepared.getStockLot() != null && prepared.getStockLot().getInventoryItem() != null
+                        && ControlledStockWitness.isControlled(prepared.getStockLot().getInventoryItem()))
                 .build();
     }
 

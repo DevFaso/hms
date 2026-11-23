@@ -231,6 +231,63 @@ describe('MySharingComponent', () => {
     expect((fixture.nativeElement as HTMLElement).querySelectorAll('.pli-external').length).toBe(1);
   });
 
+  it('QA D3451: a result released to a parent says who released it, to whom and which category, never the value', () => {
+    disclosureResponse = () =>
+      of(
+        accounting(
+          [
+            entry({
+              id: 'rel-1',
+              actor: 'Test Médecin T1',
+              eventType: 'SENSITIVE_RESULT_RELEASED_TO_PROXY',
+              entityType: 'PROXY_SENSITIVE_RELEASE',
+              description: 'Sensitive result (HIV) released to a verified parent or guardian',
+              category: 'RELEASED_TO_FAMILY',
+              externalDisclosure: true,
+              recipientName: 'Patient Test 11',
+              recipientRelationship: 'PARENT',
+              resultCategory: 'HIV',
+            }),
+          ],
+          { externalDisclosures: 1, countsByCategory: { RELEASED_TO_FAMILY: 1 } },
+        ),
+      );
+    fixture.detectChanges();
+
+    const row = (fixture.nativeElement as HTMLElement).querySelector('.portal-list-item')!;
+    expect(row.classList).toContain('pli-external');
+    expect(row.querySelector('.pli-title')?.textContent).toContain('Test Médecin T1');
+    expect(row.querySelector('.pli-category')?.textContent).toContain(
+      'PORTAL.SHARING.CATEGORY.RELEASED_TO_FAMILY',
+    );
+    const release = el('released-to-family')!;
+    expect(release.textContent).toContain('R70_PRIVACY.RELEASED_TO');
+    expect(release.textContent).toContain('R70_PRIVACY.RESULT_CATEGORY');
+    // The patient's page does not print the audit description (staff wording), nor any value.
+    expect(row.textContent).not.toContain('Sensitive result');
+    expect(row.textContent).not.toContain('Positif');
+    expect(component.resultCategoryLabelKey(component.accessLog()[0])).toBe(
+      'SENSITIVITY_TAG.CATEGORY_HIV',
+    );
+  });
+
+  it('QA D3451: a release whose recipient cannot be read is still listed, without a name', () => {
+    disclosureResponse = () =>
+      of(accounting([entry({ category: 'RELEASED_TO_FAMILY', externalDisclosure: true })]));
+    fixture.detectChanges();
+
+    const release = el('released-to-family')!;
+    expect(release.textContent).toContain('R70_PRIVACY.RELEASED_TO_UNNAMED');
+    expect(release.textContent).not.toContain('R70_PRIVACY.RESULT_CATEGORY');
+  });
+
+  it('an ordinary chart read carries no release line', () => {
+    disclosureResponse = () => of(accounting([entry()]));
+    fixture.detectChanges();
+
+    expect(el('released-to-family')).toBeNull();
+  });
+
   it('shows a failure state instead of telling the patient nobody looked', () => {
     // The service used to catchError into an empty array, so an outage
     // rendered as "Nobody has accessed your records yet" — a false

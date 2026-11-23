@@ -27,5 +27,9 @@ public record ControlledRegisterEntryDTO(
         /** QA D1084: for a return booked against a fill, its lot, so the screen words it itself. */
         String reasonFillLot,
         /** QA D1084: and the minute the fill was given (server time), shown on the reader clock. */
-        LocalDateTime reasonFillAt) {
+        LocalDateTime reasonFillAt,
+        /** QA D3415 (r70): what the row did to the quarantine (signed), null when nothing. */
+        BigDecimal quarantineQuantity,
+        /** QA D3415: the drug's quarantine after the row, null when the row did not move it. */
+        BigDecimal quarantineAfter) {
 }

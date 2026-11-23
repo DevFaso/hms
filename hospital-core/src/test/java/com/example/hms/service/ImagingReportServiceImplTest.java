@@ -178,8 +178,10 @@ class ImagingReportServiceImplTest {
 
     // ── Authoring ────────────────────────────────────────────────────────
 
-    @Test
-    void createReportDerivesVersionAndDemotesExistingLatest() {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = ImagingReportStatus.class,
+        names = {"ADDENDUM", "CORRECTED", "AMENDED"})
+    void createReportDerivesVersionAndDemotesExistingLatest(ImagingReportStatus revisionKind) {
         ImagingReport existingLatest = new ImagingReport();
         existingLatest.setId(UUID.randomUUID());
         existingLatest.setImagingOrder(imagingOrder);
@@ -187,6 +189,8 @@ class ImagingReportServiceImplTest {
         existingLatest.setReportVersion(1);
         existingLatest.setLatestVersion(true);
         existingLatest.setSignedAt(LocalDateTime.now());
+        existingLatest.setFindings("Original signed findings");
+        LocalDateTime originalSignature = existingLatest.getSignedAt();
 
         when(imagingReportRepository.findByReportNumberAndHospital_Id("IR-100", hospitalId)).thenReturn(Optional.empty());
         when(imagingReportRepository.findTopByImagingOrder_IdOrderByReportVersionDesc(orderId))
@@ -201,12 +205,17 @@ class ImagingReportServiceImplTest {
             .reportNumber("IR-100")
             .findings("Pas de lésion") // QA D1150: a report says what the study showed
             .modality(ImagingModality.MRI)
-            .reportStatus(ImagingReportStatus.ADDENDUM)
+            .reportStatus(revisionKind)
             .build());
 
         assertThat(existingLatest.getLatestVersion()).isFalse();
         ImagingReport created = capturedNewReport(existingLatest);
         assertThat(created.getReportVersion()).isEqualTo(2);
+        assertThat(created.getReportStatus()).isEqualTo(revisionKind);
+        assertThat(created.getSignedAt()).isNull();
+        assertThat(existingLatest.getFindings()).isEqualTo("Original signed findings");
+        assertThat(existingLatest.getSignedAt()).isEqualTo(originalSignature);
+        assertThat(created.getImagingOrder()).isSameAs(imagingOrder);
         assertThat(created.getLatestVersion()).isTrue();
         // Hospital comes from the ORDER; the request can no longer name one.
         assertThat(created.getHospital()).isSameAs(hospital);
@@ -765,6 +774,19 @@ class ImagingReportServiceImplTest {
     /** The super-admin as the token carries them: every inherited role, DOCTOR and NURSE among them. */
     private static final String[] SUPER_ADMIN = {"ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN", "ROLE_RECEPTIONIST",
         "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_LAB_SCIENTIST", "ROLE_STAFF", "ROLE_PATIENT"};
+
+    @Test
+    void missingReportForAnOrderNamesTheStudyRatherThanAReportIdentifier() {
+        signIn("ROLE_DOCTOR");
+        assertThatThrownBy(() -> imagingReportService.getLatestReportForOrder(orderId))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .satisfies(error -> {
+                ResourceNotFoundException missing = (ResourceNotFoundException) error;
+                assertThat(missing.getMessageKey()).isEqualTo("imaging.report.forOrder.notFound");
+                assertThat(missing.getArgs()).containsExactly(orderId);
+                assertThat(missing.getMessage()).contains("study", orderId.toString());
+            });
+    }
 
     @Test
     void adminDecision_everyAdminReadOfAnOrdersReportsLeavesOutWorkInProgress() {

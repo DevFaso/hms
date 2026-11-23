@@ -114,6 +114,7 @@ describe('ImagingComponent — r63 imaging completion', () => {
       'getReport',
       'getReportsForOrder',
       'getReportsByHospital',
+      'createReport',
     ]);
     imaging.getAllOrders.and.returnValue(of([order()]));
     imaging.getOrder.and.returnValue(of(order()));
@@ -218,7 +219,99 @@ describe('ImagingComponent — r63 imaging completion', () => {
     });
   });
 
+  for (const status of ['ADDENDUM', 'CORRECTED', 'AMENDED'] as const) {
+    it(`preserves the unsigned ${status} kind when reopening its revision form`, () => {
+      setUp(['ROLE_RADIOLOGIST']);
+      component.openEditReport(report({ signed: false, reportStatus: status }));
+      expect(component.reportForm.reportStatus).toBe(status);
+      expect(component.authorableStatuses).toEqual(['ADDENDUM', 'CORRECTED', 'AMENDED']);
+      component.closeReportModal();
+      component.openAuthorReport(order());
+      expect(component.authorableStatuses).toEqual(['DRAFT', 'PRELIMINARY']);
+    });
+  }
+
+  for (const status of ['DRAFT', 'PRELIMINARY'] as const) {
+    it(`editing an unsigned ${status} read keeps revision kinds out of its picker`, () => {
+      setUp(['ROLE_RADIOLOGIST']);
+      component.openEditReport(report({ signed: false, reportStatus: status }));
+      expect(component.reportForm.reportStatus).toBe(status);
+      expect(component.authorableStatuses).toEqual(['DRAFT', 'PRELIMINARY']);
+    });
+  }
+
+  it('shows the latest signed source when an addendum is opened from its study', () => {
+    setUp(['ROLE_RADIOLOGIST'], {
+      reports: [
+        report({ id: 'first', reportVersion: 1, findings: 'First signed text' }),
+        report({ id: 'latest', reportVersion: 2, findings: 'Latest signed text' }),
+      ],
+    });
+    component.authorForOrder(order());
+    fixture.detectChanges();
+    expect(component.addendumSource()?.id).toBe('latest');
+    expect(q('[data-testid="addendum-original-report"]')?.textContent).toContain(
+      'Latest signed text',
+    );
+    expect(component.reportForm.reportStatus).toBe('ADDENDUM');
+    expect(component.reportForm.findings).toBe('');
+    expect(component.authorableStatuses).toEqual(['ADDENDUM', 'CORRECTED', 'AMENDED']);
+  });
+
   describe('D2307: the addendum to a signed report', () => {
+    for (const entryPoint of ['report', 'study'] as const) {
+      for (const status of ['ADDENDUM', 'CORRECTED', 'AMENDED'] as const) {
+        it(`offers and submits ${status} from the signed ${entryPoint} without editing its source`, async () => {
+          setUp(['ROLE_RADIOLOGIST'], { reports: [report()] });
+          imaging.createReport.and.returnValue(
+            of(report({ id: 'revision', signed: false, reportStatus: status })),
+          );
+          if (entryPoint === 'report') component.openAddendum(report());
+          else component.authorForOrder(order());
+          fixture.detectChanges();
+          const picker = q('#rep-status') as HTMLSelectElement;
+          expect(Array.from(picker.options, (option) => option.value)).toEqual([
+            'ADDENDUM',
+            'CORRECTED',
+            'AMENDED',
+          ]);
+          expect(q('#imaging-dialog-2-title')?.textContent).toContain(
+            fr.IMAGING.REVISE_SIGNED_REPORT,
+          );
+          expect(q('[data-testid="addendum-original-report"] h3')?.textContent).toContain(
+            fr.IMAGING.REVISION_ORIGINAL,
+          );
+          picker.value = status;
+          picker.dispatchEvent(new Event('change'));
+          await fixture.whenStable();
+          component.reportForm.findings = 'Documented revision';
+          component.submitReport();
+          expect(imaging.createReport).toHaveBeenCalledWith(
+            jasmine.objectContaining({ imagingOrderId: 'o1', reportStatus: status }),
+          );
+          expect(component.reportEditId()).toBeNull();
+        });
+      }
+    }
+
+    it('D2653: names the revision, shows its signed source and offers every revision kind', () => {
+      setUp(['ROLE_RADIOLOGIST']);
+      component.openAddendum(
+        report({ signed: true, findings: 'Original findings', impression: 'Original conclusion' }),
+      );
+      fixture.detectChanges();
+      expect(q('#imaging-dialog-2-title')?.textContent).toContain(fr.IMAGING.REVISE_SIGNED_REPORT);
+      expect(q('[data-testid="addendum-original-report"]')?.textContent).toContain(
+        'Original findings',
+      );
+      expect(q('[data-testid="addendum-original-report"]')?.textContent).toContain(
+        'Original conclusion',
+      );
+      expect(component.authorableStatuses).toEqual(['ADDENDUM', 'CORRECTED', 'AMENDED']);
+      component.closeReportModal();
+      component.openAuthorReport(order());
+      expect(component.authorableStatuses).toEqual(['DRAFT', 'PRELIMINARY']);
+    });
     it('« Rédiger » on a signed study opens an addendum, never an edit of the signed read', () => {
       setUp(['ROLE_RADIOLOGIST'], { reports: [report()] });
       component.authorForOrder(order());
@@ -295,6 +388,74 @@ describe('ImagingComponent — r63 imaging completion', () => {
     window.dispatchEvent(new Event('afterprint'));
   });
 
+  it('D3354: browser printing isolates the open report and clears isolation afterwards', () => {
+    setUp(['ROLE_DOCTOR']);
+    component.openReport(report());
+    fixture.detectChanges();
+    window.dispatchEvent(new Event('beforeprint'));
+    expect(q('.' + PRINT_ROOT_CLASS)?.getAttribute('data-testid')).toBe('imaging-report-panel');
+    expect(document.body.classList.contains('print-isolated')).toBeTrue();
+    window.dispatchEvent(new Event('afterprint'));
+    expect(q('.' + PRINT_ROOT_CLASS)).toBeNull();
+    expect(document.body.classList.contains('print-isolated')).toBeFalse();
+  });
+
+  it('QA D2642: the open report says whom it is about and what was asked, on screen and on paper', () => {
+    setUp(['ROLE_RADIOLOGIST']);
+    component.openReport(
+      report({
+        hospitalName: 'CHU Yalgado',
+        hospitalAddress: 'Avenue Kwame Nkrumah, Ouagadougou',
+        patientDateOfBirth: '1949-05-01',
+        patientGender: 'MALE',
+        orderingProviderName: 'Dr Awa Sawadogo',
+        clinicalQuestion: 'Toux persistante',
+        performedAt: '2026-11-15T08:30:00',
+      }),
+    );
+    fixture.detectChanges();
+    const identity = q('[data-testid="print-identity"]')!.textContent ?? '';
+    expect(identity).toContain('CHU Yalgado');
+    expect(identity).toContain('Avenue Kwame Nkrumah');
+    expect(identity).toContain('Salamata Ouedraogo');
+    expect(identity).toContain('CHW6076');
+    expect(identity).toContain('Dr Awa Sawadogo');
+    expect(identity).toContain('1949');
+    expect(q('[data-testid="imaging-report-drawer-prescriber"]')?.textContent).toContain(
+      'Dr Awa Sawadogo',
+    );
+    expect(q('[data-testid="imaging-report-drawer-clinical-question"]')?.textContent).toContain(
+      'Toux persistante',
+    );
+    expect(q('[data-testid="imaging-report-drawer-dob"]')?.textContent).toContain('1949');
+    // The identity block is inside the element printed alone.
+    expect(q('[data-testid="imaging-report-panel"] [data-testid="print-identity"]')).not.toBeNull();
+  });
+
+  it('QA D3153: on paper the title and the identity are printed once, in the print header', () => {
+    setUp(['ROLE_RADIOLOGIST']);
+    component.openReport(
+      report({
+        patientDateOfBirth: '1949-05-01',
+        orderingProviderName: 'Dr Awa Sawadogo',
+        clinicalQuestion: 'Toux persistante',
+      }),
+    );
+    fixture.detectChanges();
+    expect(q('[data-testid="imaging-report-panel"] [data-testid="print-identity"]')).not.toBeNull();
+    // The drawer's own title and identity fields stay on screen and off paper.
+    expect(q('#imaging-panel-1-title')!.classList).toContain('no-print');
+    for (const id of ['patient', 'mrn', 'dob', 'prescriber', 'exam-date']) {
+      expect(q(`[data-testid="imaging-report-drawer-${id}"]`)!.classList)
+        .withContext(id)
+        .toContain('no-print');
+    }
+    // What the header does not carry still prints from the drawer.
+    expect(q('[data-testid="imaging-report-drawer-clinical-question"]')!.classList).not.toContain(
+      'no-print',
+    );
+  });
+
   describe('the reading context beside the order', () => {
     it('shows age, sex, the recorded pregnancy, the creatinine and the prior study', () => {
       setUp(['ROLE_RADIOLOGIST']);
@@ -310,6 +471,30 @@ describe('ImagingComponent — r63 imaging completion', () => {
       (q('[data-testid="imaging-context-open-prior-o-prior"]') as HTMLButtonElement).click();
       fixture.detectChanges();
       expect(imaging.getReport).toHaveBeenCalledWith('r-prior');
+    });
+
+    it("QA D2640: shows the laboratory's grade and range beside the creatinine", () => {
+      setUp(['ROLE_RADIOLOGIST']);
+      reading.readingContext.and.returnValue(
+        of({
+          ...CONTEXT,
+          creatinine: {
+            ...CONTEXT.creatinine!,
+            value: '118',
+            unit: 'µmol/L',
+            severityFlag: 'HIGH',
+            referenceRange: '62 - 106 µmol/L',
+          },
+        }),
+      );
+      component.viewDetail(order());
+      fixture.detectChanges();
+      const flag = q('[data-testid="imaging-context-creatinine-flag"]');
+      expect(flag).not.toBeNull();
+      expect(flag!.textContent!.trim().length).toBeGreaterThan(0);
+      expect(q('[data-testid="imaging-context-creatinine-range"]')?.textContent).toContain(
+        '62 – 106 µmol/L',
+      );
     });
 
     it('is not shown to an administrator (labs and pregnancy are clinical data)', () => {

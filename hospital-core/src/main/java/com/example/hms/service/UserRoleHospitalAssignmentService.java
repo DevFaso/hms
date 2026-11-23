@@ -179,6 +179,20 @@ public interface UserRoleHospitalAssignmentService {
     com.example.hms.payload.dto.AssignmentActivationCodeDTO revealActivationCode(UUID assignmentId);
 
     /**
+     * QA r70 D3206: the pending portal activation code of a patient registered at the acting hospital, for the
+     * desk (receptionist or hospital administrator there) to hand over in person when the SMS went nowhere.
+     * Only the PATIENT assignment at {@code hospitalId}, only while it is unverified and its code unexpired;
+     * audited (DATA_ACCESS) without the code. Anything else answers as a missing invitation.
+     */
+    com.example.hms.payload.dto.AssignmentActivationCodeDTO revealPatientActivationCode(UUID patientId, UUID hospitalId);
+
+    /**
+     * QA r70 D3206: re-send that patient's portal activation (e-mail and SMS) from the desk; an expired code is
+     * replaced first, so what goes out works. Same scope and refusals as {@link #revealPatientActivationCode}.
+     */
+    void resendPatientActivation(UUID patientId, UUID hospitalId);
+
+    /**
      * Fetch a public view of an assignment by its human-facing assignment code.
      */
     UserRoleAssignmentPublicViewDTO getAssignmentPublicView(String assignmentCode);

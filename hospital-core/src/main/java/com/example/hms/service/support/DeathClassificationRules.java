@@ -1,5 +1,7 @@
 package com.example.hms.service.support;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.PerinatalAgeBasis;
 import com.example.hms.enums.PerinatalBirthStatus;
 import com.example.hms.enums.PerinatalDeathType;
@@ -26,6 +28,7 @@ import java.time.temporal.ChronoUnit;
  * <p>A record here marks THIS patient deceased, so a stillbirth cannot be recorded on the mother's chart: it would
  * close her stays and refuse her care. Her stillbirth belongs on the delivery record (LaborOutcome.STILLBIRTH).
  */
+@ProvisionalRule(ClinicalRuleSetKey.PERINATAL_CLASSIFICATION)
 public final class DeathClassificationRules {
 
     /**

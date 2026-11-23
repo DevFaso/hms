@@ -1,5 +1,7 @@
 package com.example.hms.service.imaging;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.ImagingDuplicateOverrideReason;
@@ -28,6 +30,7 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 @Slf4j
+@ProvisionalRule(ClinicalRuleSetKey.IMAGING_DUPLICATE_OVERRIDE)
 public class ImagingDuplicateOverride {
 
     static final String AUDIT_ENTITY = "IMAGING_ORDER";

@@ -143,7 +143,7 @@
             <th scope="col">{{ 'LAB_RESULTS.SEVERITY' | translate }}</th>
             <th scope="col">{{ 'LAB_RESULTS.RESULT_DATE' | translate }}</th>
             <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
           </tr>
         </thead>
         <tbody>
@@ -993,7 +993,7 @@
               ? ('COMMON.SAVING' | translate)
               : editing()
                 ? ('COMMON.UPDATE' | translate)
-                : ('COMMON.CREATE' | translate)
+                : ((correcting() ? 'LAB_RESULTS.SAVE_CORRECTION' : 'COMMON.CREATE') | translate)
           }}
         </button>
       </div>
@@ -1372,6 +1372,22 @@
             [placeholder]="target.resultUnit"
             autocomplete="off"
           />
+        </div>
+        <!-- QA r70 (C5): who acknowledged, as what, when and HOW: the channel is recorded with the read-back. -->
+        <div class="field">
+          <label for="readBackChannel">{{ 'LAB_RESULTS.READ_BACK_CHANNEL' | translate }}</label>
+          <select
+            id="readBackChannel"
+            data-testid="read-back-channel"
+            [value]="readBackChannel()"
+            (change)="readBackChannel.set($any($event.target).value)"
+          >
+            @for (channel of readBackChannels; track channel) {
+              <option [value]="channel">
+                {{ 'LAB_RESULTS.READ_BACK_CHANNEL_' + channel | translate }}
+              </option>
+            }
+          </select>
         </div>
         <p class="muted">{{ 'LAB_RESULTS.READ_BACK_HINT' | translate }}</p>
       </div>

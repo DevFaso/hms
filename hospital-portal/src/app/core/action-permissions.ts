@@ -71,6 +71,14 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'ImagingOrderController#recordExam',
     roles: ['ROLE_IMAGING_TECHNICIAN', 'ROLE_RADIOLOGIST', 'ROLE_DOCTOR'],
   },
+  /**
+   * QA D3450 (r70): an exam's pregnancy flag and body region in the imaging catalogue. Master data,
+   * set by the hospital's administrator or a radiologist in a role of their own, never a super-admin alone.
+   */
+  imagingCatalogueUpdate: {
+    endpoint: 'ImagingCatalogueController#update',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_RADIOLOGIST'],
+  },
   /** V316 + policy rule 3: key images on a study; the technician attaches to the study only. */
   imagingImageUpload: {
     endpoint: 'ImagingStudyImageController#upload',
@@ -419,6 +427,11 @@ export const ACTION_PERMISSIONS = {
   // Plan section 3.8: the "Formule" picker on the Coverage tab.
   patientInsuranceSetPayerPlan: {
     endpoint: 'PatientInsuranceController#setPayerPlan',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_BILLING_SPECIALIST', 'ROLE_RECEPTIONIST'],
+  },
+  // Owner decision 2026-11-22: « Reprendre pour cet établissement » (another hospital's policy, to verify).
+  patientInsuranceReuseOtherHospital: {
+    endpoint: 'PatientInsuranceController#reuseOtherHospitalPolicy',
     roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_BILLING_SPECIALIST', 'ROLE_RECEPTIONIST'],
   },
   // QA D2203: the desk records a patient's SMS / e-mail choices.

@@ -1,0 +1,91 @@
+@if (state() !== 'hidden') {
+  <section
+    class="psh"
+    data-testid="patient-safety-header"
+    [attr.data-state]="state()"
+    [attr.aria-label]="'PATIENT_SAFETY.ARIA_LABEL' | translate"
+  >
+    @if (state() === 'loading') {
+      <p class="psh-status">{{ 'PATIENT_SAFETY.LOADING' | translate }}</p>
+    } @else if (state() === 'error') {
+      <p class="psh-status psh-status-error" role="status" data-testid="patient-safety-error">
+        <span class="material-symbols-outlined" aria-hidden="true">error</span>
+        {{ 'PATIENT_SAFETY.UNAVAILABLE' | translate }}
+      </p>
+    } @else if (patient(); as p) {
+      <dl class="psh-facts">
+        @if (showName()) {
+          <div class="psh-fact psh-fact-name">
+            <dt class="psh-visually-hidden">{{ 'PATIENT_SAFETY.NAME' | translate }}</dt>
+            <dd class="psh-name" data-testid="patient-safety-name">{{ p.fullName }}</dd>
+          </div>
+        }
+        @if (age(); as a) {
+          <div class="psh-fact">
+            <dt>{{ 'PATIENT_SAFETY.AGE' | translate }}</dt>
+            <dd data-testid="patient-safety-age">{{ a.key | translate: { n: a.n } }}</dd>
+          </div>
+        }
+        @if (p.gender) {
+          <div class="psh-fact">
+            <dt>{{ 'PATIENT_SAFETY.SEX' | translate }}</dt>
+            <dd>{{ p.gender | enumLabel: 'gender' }}</dd>
+          </div>
+        }
+        <div class="psh-fact">
+          <dt>{{ 'PATIENT_SAFETY.WEIGHT' | translate }}</dt>
+          <dd data-testid="patient-safety-weight">
+            @if (p.latestWeightKg !== null && p.latestWeightKg !== undefined) {
+              {{
+                'PATIENT_SAFETY.WEIGHT_KG' | translate: { kg: (p.latestWeightKg | number: '1.0-1') }
+              }}
+              @if (p.latestWeightRecordedAt) {
+                <span class="psh-muted">{{
+                  'PATIENT_SAFETY.WEIGHED_ON'
+                    | translate
+                      : { date: (p.latestWeightRecordedAt | serverTime | date: 'shortDate') }
+                }}</span>
+              }
+            } @else {
+              <span class="psh-muted">{{ 'PATIENT_SAFETY.NOT_WEIGHED' | translate }}</span>
+            }
+          </dd>
+        </div>
+        <div class="psh-fact psh-fact-blood" [class.psh-fact-missing]="!p.bloodType">
+          <dt>{{ 'PATIENT_SAFETY.BLOOD_GROUP' | translate }}</dt>
+          <dd data-testid="patient-safety-blood-group">
+            @if (p.bloodType) {
+              <span class="psh-blood">{{ p.bloodType }}</span>
+            } @else {
+              <span class="psh-muted">{{ 'PATIENT_SAFETY.NOT_DOCUMENTED' | translate }}</span>
+            }
+          </dd>
+        </div>
+        <div class="psh-fact psh-fact-allergies" [class.psh-fact-alert]="hasSevereAllergy()">
+          <dt>{{ 'PATIENT_SAFETY.ALLERGIES' | translate }}</dt>
+          <dd data-testid="patient-safety-allergies">
+            @if (allergies().length > 0) {
+              <ul class="psh-allergies">
+                @for (a of allergies(); track a.id) {
+                  <li class="psh-allergy" [class.psh-allergy-severe]="isSevere(a.severity)">
+                    {{ a.allergenDisplay }}
+                    @if (a.severity) {
+                      <span class="psh-muted"
+                        >({{ a.severity | keyLabel: 'STORYBOARD.SEVERITY.' }})</span
+                      >
+                    }
+                  </li>
+                }
+              </ul>
+            } @else {
+              {{ 'PATIENT_SAFETY.NO_KNOWN_ALLERGIES' | translate }}
+            }
+            @if (summary()?.allergiesWithheld) {
+              <span class="psh-muted">{{ 'CHART.ALLERGIES_WITHHELD' | translate }}</span>
+            }
+          </dd>
+        </div>
+      </dl>
+    }
+  </section>
+}

@@ -1,5 +1,7 @@
 package com.example.hms.service.recordaccess;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.SensitivityCategory;
 
 import java.time.LocalDate;
@@ -34,6 +36,7 @@ import java.util.Map;
  * {@link #honoursReleases} says when one counts.
  * Pure: no repository, no clock but the one it is given.
  */
+@ProvisionalRule({ClinicalRuleSetKey.SENSITIVE_CATEGORIES, ClinicalRuleSetKey.MINOR_HIV_RESULT_RELEASE, ClinicalRuleSetKey.ADOLESCENT_CONFIDENTIALITY_AGE})
 public final class ProxySensitivityPolicy {
 
     /**

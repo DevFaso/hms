@@ -30,6 +30,7 @@ import { ReasonDialogComponent } from '../../shared/reason-dialog/reason-dialog.
 import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 import { MeasurePipe } from '../../shared/pipes/measure.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { RuleStatusComponent } from '../../shared/rule-status/rule-status.component';
 
 /** An order a patient can still be checked in for: placed and not yet done (ImagingExamRecord). */
 const CHECK_IN_OPEN: readonly ImagingOrderStatus[] = [
@@ -55,6 +56,7 @@ const RECORD_OPEN: readonly ImagingOrderStatus[] = ['IN_PROGRESS', 'COMPLETED'];
   selector: 'app-imaging-exam-record',
   standalone: true,
   imports: [
+    RuleStatusComponent,
     FormsModule,
     TranslateModule,
     SubmitGuardDirective,
@@ -70,12 +72,20 @@ const RECORD_OPEN: readonly ImagingOrderStatus[] = ['IN_PROGRESS', 'COMPLETED'];
         <h3 class="exam-record__title">{{ 'IMAGING_EXAM.TITLE' | translate }}</h3>
         @if (technician) {
           <p class="field-hint exam-record__rule" data-testid="imaging-exam-technician-rule">
-            {{ 'IMAGING_EXAM.TECHNICIAN_RULE' | translate }}
+            <app-rule-status
+              ruleKey="IMAGING_TECHNICIAN_SCOPE"
+              [detail]="'CLINICAL_RULES.SURFACE.IMAGING_TECHNICIAN' | translate"
+              >{{ 'IMAGING_EXAM.TECHNICIAN_RULE' | translate }}</app-rule-status
+            >
           </p>
         }
         @if (physiciansOnly()) {
           <p class="field-hint exam-record__rule" data-testid="imaging-exam-ultrasound-physicians">
-            {{ 'IMAGING_EXAM.ULTRASOUND_PHYSICIANS_ONLY' | translate }}
+            <app-rule-status
+              ruleKey="NON_PHYSICIAN_ULTRASOUND"
+              [detail]="'CLINICAL_RULES.SURFACE.ULTRASOUND_PHYSICIANS_ONLY' | translate"
+              >{{ 'IMAGING_EXAM.ULTRASOUND_PHYSICIANS_ONLY' | translate }}</app-rule-status
+            >
           </p>
         }
         <dl class="exam-record__facts">

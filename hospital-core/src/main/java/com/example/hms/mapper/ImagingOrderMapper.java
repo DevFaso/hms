@@ -183,6 +183,8 @@ public class ImagingOrderMapper {
             .hospitalName(hospital != null ? hospital.getName() : null)
             .modality(order.getModality())
             .studyType(order.getStudyType())
+            .catalogueItemId(order.getCatalogueItemId())
+            .catalogueCode(order.getCatalogueCode())
             .bodyRegion(order.getBodyRegion())
             .laterality(order.getLaterality())
             .priority(order.getPriority())

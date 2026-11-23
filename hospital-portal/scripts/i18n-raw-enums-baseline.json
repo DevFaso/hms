@@ -26,6 +26,7 @@
     "src/app/admin-governance/security-tab.html::template.category",
     "src/app/admin/order-sets/order-set-edit.component.html::item.frequency",
     "src/app/admissions/admissions.html::a.acuityLevel",
+    "src/app/admissions/admissions.html::rx.frequency",
     "src/app/appointments/appointment-detail.html::appt.overbookReason",
     "src/app/appointments/appointment-detail.html::appt.reason",
     "src/app/appointments/appointment-detail.html::appt.statusReason",
@@ -171,6 +172,7 @@
     "src/app/patients/coverage-tab/coverage-tab.component.html::c.revocationReason",
     "src/app/patients/coverage-tab/coverage-tab.component.html::g.deactivationReason",
     "src/app/patients/coverage-tab/coverage-tab.component.html::g.relationship",
+    "src/app/patients/coverage-tab/coverage-tab.component.html::o.holderRelationship",
     "src/app/patients/coverage-tab/coverage-tab.component.html::i.subscriberRelationship",
     "src/app/patients/fluid-balance/fluid-balance-tab.component.html::entry.route",
     "src/app/patients/medical-history-tab/medical-history-tab.component.html::f.conditionCategory",
@@ -258,6 +260,7 @@
     "src/app/transfusion/transfusion.html::a.stopReason",
     "src/app/transfusion/transfusion.html::g.correctionReason",
     "src/app/transfusion/transfusion.html::r.reason",
+    "src/app/transfusion/transfusion.html::req.vitalUrgencyReason",
     "src/app/transfusion/transfusion.html::u.source",
     "src/app/transfusion/transfusion.html::xm.incompatibilityReason",
     "src/app/encounters/visit-summary-sections/visit-summary-sections.component.html::a.reaction",
@@ -272,7 +275,16 @@
     "src/app/billing/cash-session/cash-session.component.html::s.reopenReason",
     "src/app/billing/cash-session/cash-supervisor.component.html::line.reason",
     "src/app/patients/family-release/family-release.component.html::release.reason",
-    "src/app/pharmacy/billing-deferrals.html::r.reason"
+    "src/app/pharmacy/billing-deferrals.html::r.reason",
+    "src/app/clinical-rules/clinical-rules.component.html::signoff.revokeReason",
+    "src/app/encounters/visit-summary-sections/visit-summary-sections.component.html::summary().patientBloodType",
+    "src/app/nurse-station/nurse-station.html::p.bloodType",
+    "src/app/patients/storyboard-banner/storyboard-banner.component.html::s.patient.bloodType",
+    "src/app/shared/patient-safety-header/patient-safety-header.component.html::p.bloodType",
+    "src/app/staff/staff-list.html::<option>d",
+    "src/app/transfusion/transfusion.html::r.patientDeclaredBloodType",
+    "src/app/transfusion/transfusion.html::req.patientDeclaredBloodType",
+    "src/app/transfusion/transfusion.html::selectedPatient()!.bloodType"
   ],
   "reasons": {
     "src/app/billing/billing.html::it.overrideReason": "InvoiceItemRequestDTO.overrideReason is a size-bounded String (500 characters), typed in the billing.html input with data-testid line-override-reason-<id> via editLineOverrideReason and submitted by BillingComponent.saveLine. InvoiceItemServiceImpl.applyPrice trims and stores that explanation; InvoiceItemMapper returns it as InvoiceItemResponseDTO.overrideReason. It is the cashier's free text, not an enum token, and must remain as typed.",
@@ -301,6 +313,16 @@
     "src/app/billing/cash-session/cash-session.component.html::s.reopenReason": "CashSessionNoteRequestDTO.note is a size-bounded String (500 characters) a hospital admin or accountant types in cash-supervisor.component.html textarea#cash-supervisor-note; CashSessionService.reopen stores it as CashSession.reopenReason. It is a person's free text (why the till was reopened), not an enum token, and must remain as typed.",
     "src/app/billing/cash-session/cash-supervisor.component.html::line.reason": "The delete reason is a size-bounded String (500 characters) a cashier types in billing.html input#line-remove-reason; InvoiceItemServiceImpl.deleteInvoiceItem stores it as InvoiceLineRemoval.reason and InvoiceLineRemovalDTO.reason carries it. It is a person's free text (why the line was taken off the invoice), not an enum token, and must remain as typed.",
     "src/app/patients/family-release/family-release.component.html::release.reason": "Policy 2026-11-20: ProxySensitiveReleaseDTO.reason is the free text a doctor or a midwife typed when releasing a minor's result to a parent (textarea#family-release-reason, 10 to 1000 characters); shown as typed to the clinicians, not a wire token.",
-    "src/app/pharmacy/billing-deferrals.html::r.reason": "Policy rule 6 (V345): DispenseBillingDeferralDTO.reason is the free text a person typed, a size-bounded String (500 characters): why the fill should leave before it is paid, or the reason of an urgency override. Not an enum token; it must remain as typed."
+    "src/app/pharmacy/billing-deferrals.html::r.reason": "Policy rule 6 (V345): DispenseBillingDeferralDTO.reason is the free text a person typed, a size-bounded String (500 characters): why the fill should leave before it is paid, or the reason of an urgency override. Not an enum token; it must remain as typed.",
+    "src/app/clinical-rules/clinical-rules.component.html::signoff.revokeReason": "V356: the reason the hospital admin typed when revoking a sign-off (free text)",
+    "src/app/transfusion/transfusion.html::req.vitalUrgencyReason": "QA D3351 (V362): TransfusionRequestResponseDTO.vitalUrgencyReason is the free text the prescriber typed when declaring a vital emergency (textarea#tx-vital-reason, 500 characters); shown as typed, not a wire token.",
+    "src/app/encounters/visit-summary-sections/visit-summary-sections.component.html::summary().patientBloodType": "QA r70 D3220/D3221: Patient.bloodType (String, validated by AboGroup.BLOOD_TYPE_CODES: A+ A- B+ B- AB+ AB- O+ O-), sent as PatientStoryboardDTO.PatientHeaderDTO.bloodType / NurseWorkboardPatientDTO.bloodType / AfterVisitSummaryDTO.patientBloodType / TransfusionRequestResponseDTO.patientDeclaredBloodType / PatientResponseDTO.bloodType. A blood group is written the same in every language (as patient-detail's pinned p.bloodType); no enumLabel domain exists for it.",
+    "src/app/nurse-station/nurse-station.html::p.bloodType": "QA r70 D3220/D3221: Patient.bloodType (String, validated by AboGroup.BLOOD_TYPE_CODES: A+ A- B+ B- AB+ AB- O+ O-), sent as PatientStoryboardDTO.PatientHeaderDTO.bloodType / NurseWorkboardPatientDTO.bloodType / AfterVisitSummaryDTO.patientBloodType / TransfusionRequestResponseDTO.patientDeclaredBloodType / PatientResponseDTO.bloodType. A blood group is written the same in every language (as patient-detail's pinned p.bloodType); no enumLabel domain exists for it.",
+    "src/app/patients/storyboard-banner/storyboard-banner.component.html::s.patient.bloodType": "QA r70 D3220/D3221: Patient.bloodType (String, validated by AboGroup.BLOOD_TYPE_CODES: A+ A- B+ B- AB+ AB- O+ O-), sent as PatientStoryboardDTO.PatientHeaderDTO.bloodType / NurseWorkboardPatientDTO.bloodType / AfterVisitSummaryDTO.patientBloodType / TransfusionRequestResponseDTO.patientDeclaredBloodType / PatientResponseDTO.bloodType. A blood group is written the same in every language (as patient-detail's pinned p.bloodType); no enumLabel domain exists for it.",
+    "src/app/shared/patient-safety-header/patient-safety-header.component.html::p.bloodType": "QA r70 D3220/D3221: Patient.bloodType (String, validated by AboGroup.BLOOD_TYPE_CODES: A+ A- B+ B- AB+ AB- O+ O-), sent as PatientStoryboardDTO.PatientHeaderDTO.bloodType / NurseWorkboardPatientDTO.bloodType / AfterVisitSummaryDTO.patientBloodType / TransfusionRequestResponseDTO.patientDeclaredBloodType / PatientResponseDTO.bloodType. A blood group is written the same in every language (as patient-detail's pinned p.bloodType); no enumLabel domain exists for it.",
+    "src/app/transfusion/transfusion.html::r.patientDeclaredBloodType": "QA r70 D3220/D3221: Patient.bloodType (String, validated by AboGroup.BLOOD_TYPE_CODES: A+ A- B+ B- AB+ AB- O+ O-), sent as PatientStoryboardDTO.PatientHeaderDTO.bloodType / NurseWorkboardPatientDTO.bloodType / AfterVisitSummaryDTO.patientBloodType / TransfusionRequestResponseDTO.patientDeclaredBloodType / PatientResponseDTO.bloodType. A blood group is written the same in every language (as patient-detail's pinned p.bloodType); no enumLabel domain exists for it.",
+    "src/app/transfusion/transfusion.html::req.patientDeclaredBloodType": "QA r70 D3220/D3221: Patient.bloodType (String, validated by AboGroup.BLOOD_TYPE_CODES: A+ A- B+ B- AB+ AB- O+ O-), sent as PatientStoryboardDTO.PatientHeaderDTO.bloodType / NurseWorkboardPatientDTO.bloodType / AfterVisitSummaryDTO.patientBloodType / TransfusionRequestResponseDTO.patientDeclaredBloodType / PatientResponseDTO.bloodType. A blood group is written the same in every language (as patient-detail's pinned p.bloodType); no enumLabel domain exists for it.",
+    "src/app/transfusion/transfusion.html::selectedPatient()!.bloodType": "QA r70 D3220/D3221: Patient.bloodType (String, validated by AboGroup.BLOOD_TYPE_CODES: A+ A- B+ B- AB+ AB- O+ O-), sent as PatientStoryboardDTO.PatientHeaderDTO.bloodType / NurseWorkboardPatientDTO.bloodType / AfterVisitSummaryDTO.patientBloodType / TransfusionRequestResponseDTO.patientDeclaredBloodType / PatientResponseDTO.bloodType. A blood group is written the same in every language (as patient-detail's pinned p.bloodType); no enumLabel domain exists for it.",
+    "src/app/staff/staff-list.html::<option>d": "QA r70 D3202: DepartmentOption.name from GET /departments/active-minimal/{hospitalId} (Department.name, a hospital admin's free text); the staff write resolves the department by that name. Not an enum."
   }
 }

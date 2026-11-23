@@ -138,6 +138,8 @@ describe('ImagingComponent — r66 (D2912, D2913, D2914)', () => {
             selectedHospitalId: () => 'h1',
             activeHospitalId: 'h1',
             hasAnyActiveRole: (wanted: string[]) => roles.some((r) => wanted.includes(r)),
+            // V356: the « provisoire » label reads the acting hospital; none here, the screen's wording stays.
+            effectiveHospitalIdForRequest: () => null,
           } as unknown as RoleContextService,
         },
       ],

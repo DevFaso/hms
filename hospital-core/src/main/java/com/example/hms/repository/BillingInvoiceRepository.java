@@ -241,6 +241,9 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
                                                                           java.util.Collection<InvoiceStatus> statuses);
 
 
+    /** Review of #1276 (QA D2523): the check-in copays folded onto this visit invoice (QA D210/D428). */
+    List<BillingInvoice> findByCreditedToInvoice_IdAndCheckInCopayTrue(UUID invoiceId);
+
     /** The invoice an earlier create with this idempotency key produced (QA D94). */
     java.util.Optional<BillingInvoice> findByHospital_IdAndClientRequestId(UUID hospitalId, UUID clientRequestId);
 

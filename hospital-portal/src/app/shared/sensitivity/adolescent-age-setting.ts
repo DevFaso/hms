@@ -18,6 +18,7 @@ import {
 import { SubmitGuardDirective } from '../forms/submit-guard.directive';
 import { refuseFields } from '../forms/invalid-fields';
 import { refusalReason, refusedFieldReasons } from '../refusal-reason';
+import { RuleStatusComponent } from '../rule-status/rule-status.component';
 
 const AGE_FIELD_ID = 'adolescent-age-input';
 
@@ -31,7 +32,7 @@ const AGE_FIELD_ID = 'adolescent-age-input';
 @Component({
   selector: 'app-adolescent-age-setting',
   standalone: true,
-  imports: [FormsModule, TranslateModule, SubmitGuardDirective],
+  imports: [RuleStatusComponent, FormsModule, TranslateModule, SubmitGuardDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './adolescent-age-setting.scss',
   template: `
@@ -48,7 +49,9 @@ const AGE_FIELD_ID = 'adolescent-age-input';
         </h2>
         <p class="adolescent-age__hint">{{ 'SENSITIVE_POLICY.AGE.HINT' | translate }}</p>
         <p class="adolescent-age__provisional" role="note" data-testid="adolescent-age-provisional">
-          {{ 'SENSITIVE_POLICY.AGE.PROVISIONAL' | translate: { age: current.defaultAge } }}
+          <app-rule-status ruleKey="ADOLESCENT_CONFIDENTIALITY_AGE">{{
+            'SENSITIVE_POLICY.AGE.PROVISIONAL' | translate: { age: current.defaultAge }
+          }}</app-rule-status>
         </p>
         <div class="adolescent-age__row">
           <label class="adolescent-age__label" for="adolescent-age-input"

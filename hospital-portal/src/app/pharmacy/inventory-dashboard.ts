@@ -32,6 +32,7 @@ import { serverDateOrInstant } from '../shared/date-utils';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { DashPipe } from '../shared/pipes/dash.pipe';
+import { CountUnitPipe } from '../shared/pipes/count-unit.pipe';
 import { missingRequiredMessage } from '../shared/required-fields';
 import { PharmacyMoneyService } from '../services/pharmacy-money.service';
 
@@ -53,6 +54,7 @@ const CI_FIELD_IDS = ['ciMed'];
     TranslateModule,
     CfaPipe,
     ModalDialogDirective,
+    CountUnitPipe,
   ],
   templateUrl: './inventory-dashboard.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -100,6 +102,15 @@ export class InventoryDashboardComponent implements OnInit {
     return this.roleContext.hasAnyActiveRoleExactly(actionRoles('inventoryReorderTrigger'));
   }
 
+  /**
+   * QA D3407 (r70): the selling price is the store manager's or the hospital admin's
+   * (RoleValidator.canSetPharmacyPrice); the pharmacist was offered the price field and the
+   * pencil, and the first item creation failed on the server's refusal.
+   */
+  canSetPrice(): boolean {
+    return this.roleContext.hasAnyActiveRoleExactly(['ROLE_STORE_MANAGER', 'ROLE_HOSPITAL_ADMIN']);
+  }
+
   // Pharmacy selection
   pharmacies = signal<PharmacyResponse[]>([]);
   /** True once the pharmacy list answered, so an empty list shows a hint, not a blank select (D59). */
@@ -117,6 +128,11 @@ export class InventoryDashboardComponent implements OnInit {
   packUnit = '';
   packTargetUnit = '';
   packReason = '';
+  /**
+   * QA D3400 (r70): what the item's current stock is counted in. No default: setting a pack on an
+   * item already counted in tablets multiplied its threshold and order quantity by the pack size.
+   */
+  packCountedIn: 'UNITS' | 'PACKS' | null = null;
   stockLoading = signal(false);
   currentPage = 0;
   pageSize = 20;
@@ -303,7 +319,11 @@ export class InventoryDashboardComponent implements OnInit {
     }
     refuseFields(root, [], CI_FIELD_IDS, '');
     this.saving.set(true);
-    this.svc.createInventoryItem(this.createForm).subscribe({
+    // QA D3407: a price is sent only by those who may set it; the pharmacist's item has none yet.
+    const request = this.canSetPrice()
+      ? this.createForm
+      : { ...this.createForm, unitPrice: undefined };
+    this.svc.createInventoryItem(request).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('PHARMACY.ITEM_CREATED'));
         this.closeCreateModal();
@@ -326,6 +346,18 @@ export class InventoryDashboardComponent implements OnInit {
     this.packUnit = item.unit && item.unit !== 'UNIT' ? item.unit : '';
     this.packTargetUnit = '';
     this.packReason = '';
+    this.packCountedIn = null;
+  }
+
+  /** QA D3400: the item's figures after the save, as the server will leave them. */
+  packPreview(item: InventoryItemResponse): { qty: number; threshold: number; order: number } {
+    const n = Number(this.packUnitsPerPack);
+    const factor = this.packCountedIn === 'PACKS' && Number.isInteger(n) && n >= 2 ? n : 1;
+    return {
+      qty: (item.quantityOnHand ?? 0) * factor,
+      threshold: (item.reorderThreshold ?? 0) * factor,
+      order: (item.reorderQuantity ?? 0) * factor,
+    };
   }
 
   /**
@@ -340,8 +372,13 @@ export class InventoryDashboardComponent implements OnInit {
     if (!Number.isInteger(n) || n < 2 || n > 10000) missing.push('packUnitsPerPack');
     if (!this.packTargetUnit.trim()) missing.push('packTargetUnit');
     if (!this.packReason.trim()) missing.push('packReason');
+    if (!this.packCountedIn) missing.push('packCountedInUnits');
     if (missing.length) {
-      const message = this.translate.instant('PHARMACY_MONEY.PACK.INVALID');
+      const message = this.translate.instant(
+        missing.length === 1 && missing[0] === 'packCountedInUnits'
+          ? 'PHARMACY_MONEY.PACK.COUNTED_IN_REQUIRED'
+          : 'PHARMACY_MONEY.PACK.INVALID',
+      );
       refuseFields(this.host.nativeElement, missing, missing, message);
       this.toast.error(message);
       return;
@@ -353,6 +390,7 @@ export class InventoryDashboardComponent implements OnInit {
         unit: this.packTargetUnit.trim(),
         packUnit: this.packUnit.trim() || undefined,
         reason: this.packReason.trim(),
+        alreadyInUnits: this.packCountedIn === 'UNITS',
       })
       .subscribe({
         next: (res) => {

@@ -42,8 +42,12 @@ export type OnboardingStep =
   | 'SESSION_TEMPLATES'
   | 'OPEN_SLOTS'
   | 'BEDS'
+  // QA r70 D3213: lab tests a doctor can order here, before the price list.
+  | 'LAB_TESTS'
   | 'PRICE_LIST'
-  | 'PAYERS';
+  | 'PAYERS'
+  // V356: every provisional rule set signed off by the hospital's approver (count of total).
+  | 'CLINICAL_RULES';
 
 /** QA r65 D2731: what a hospital still needs, and whether a patient can book online yet. */
 export interface HospitalOnboardingReadiness {
@@ -54,6 +58,8 @@ export interface HospitalOnboardingReadiness {
     done: boolean;
     count: number;
     requiredForBooking: boolean;
+    /** V356: the count the step is done at (CLINICAL_RULES: n of N); absent for the steps done at one. */
+    total?: number | null;
   }[];
 }
 

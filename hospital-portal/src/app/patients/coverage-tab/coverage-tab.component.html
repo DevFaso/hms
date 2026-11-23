@@ -24,7 +24,7 @@
             <th scope="col">{{ 'COVERAGE.SUBSCRIBER' | translate }}</th>
             <th scope="col">{{ 'COVERAGE.VALIDITY' | translate }}</th>
             <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
           </tr>
         </thead>
         <tbody>
@@ -83,6 +83,20 @@
                     {{ 'COMMON.ACTIVE' | translate }}
                   </span>
                 }
+                <!-- QA D3150: the desk's verification, by the verifier's name. -->
+                @if (i.verifiedAt) {
+                  {{ ' '
+                  }}<span class="muted verified-line" data-testid="coverage-verified">
+                    <span class="material-symbols-outlined verified-icon" aria-hidden="true"
+                      >verified</span
+                    >
+                    {{ 'COVERAGE.VERIFIED' | translate }}
+                    @if (i.verifiedByName) {
+                      · {{ i.verifiedByName }}
+                    }
+                    · {{ i.verifiedAt | serverTime | date: 'mediumDate' }}
+                  </span>
+                }
               </td>
               <td class="actions-cell">
                 @if (canEdit) {
@@ -113,6 +127,89 @@
         </tbody>
       </table>
     </div>
+  }
+
+  <!-- Owner decision 2026-11-22: another hospital's policy, identity only, to verify. -->
+  @if (otherPolicies().length > 0) {
+    <section
+      class="other-policies"
+      data-testid="other-hospital-policies"
+      aria-labelledby="other-policies-title"
+    >
+      <h4 id="other-policies-title">{{ 'COVERAGE.OTHER_TITLE' | translate }}</h4>
+      <p class="muted other-hint">{{ 'COVERAGE.OTHER_HINT' | translate }}</p>
+      @if (canOpenInsuranceDocuments) {
+        <p class="muted other-hint" data-testid="other-card-hint">
+          {{ 'COVERAGE.OTHER_CARD_HINT' | translate }}
+        </p>
+      }
+      <ul class="other-list">
+        @for (o of otherPolicies(); track o.sourceInsuranceId) {
+          <li class="other-card" data-testid="other-hospital-policy">
+            <div class="other-head">
+              <strong class="other-insurer">{{ o.insurerName || '—' }}</strong>{{ ' '
+              }}<span class="flag-badge to-verify-badge">{{
+                'COVERAGE.TO_VERIFY' | translate
+              }}</span>
+            </div>
+            <!-- A declaration, never a verification: the other hospital's check is not shown. -->
+            <p class="muted other-declared" data-testid="other-declared">
+              @if (o.declaredOn) {
+                {{
+                  'COVERAGE.OTHER_DECLARED'
+                    | translate
+                      : {
+                          hospital: o.sourceHospitalName || '—',
+                          date: o.declaredOn | serverTime | date: 'mediumDate',
+                        }
+                }}
+              } @else {
+                {{
+                  'COVERAGE.OTHER_DECLARED_NO_DATE'
+                    | translate: { hospital: o.sourceHospitalName || '—' }
+                }}
+              }
+            </p>
+            <dl class="other-fields">
+              <div>
+                <dt>{{ 'COVERAGE.POLICY' | translate }}</dt>
+                <dd>{{ o.policyNumber || '—' }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'COVERAGE.PLAN' | translate }}</dt>
+                <dd>{{ o.planName || '—' }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'COVERAGE.RELATIONSHIP' | translate }}</dt>
+                <dd>{{ o.holderRelationship || '—' }}</dd>
+              </div>
+              <div>
+                <dt>{{ 'COVERAGE.VALIDITY' | translate }}</dt>
+                <dd>
+                  {{ o.effectiveDate ? (o.effectiveDate | serverTime | date: 'shortDate') : '—' }} —
+                  {{ o.expirationDate ? (o.expirationDate | serverTime | date: 'shortDate') : '…' }}
+                </dd>
+              </div>
+            </dl>
+            @if (!o.agreementHere) {
+              <p class="muted other-no-agreement" data-testid="other-no-agreement">
+                {{ 'COVERAGE.OTHER_NO_AGREEMENT' | translate }}
+              </p>
+            }
+            <button
+              type="button"
+              class="btn-primary btn-sm other-reuse"
+              data-testid="reuse-other-policy"
+              [disabled]="reusingId() !== null"
+              (click)="reuseOther(o)"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+              {{ 'COVERAGE.OTHER_REUSE' | translate }}
+            </button>
+          </li>
+        }
+      </ul>
+    </section>
   }
 
   <div class="section-toolbar">
@@ -195,7 +292,7 @@
             <th scope="col">{{ 'COVERAGE.GUARANTOR_CONTACT' | translate }}</th>
             <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
             @if (canEdit) {
-              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+              <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
             }
           </tr>
         </thead>
@@ -308,7 +405,7 @@
             <th scope="col">{{ 'COVERAGE.CONSENT_SIGNED_BY' | translate }}</th>
             <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
             @if (canEdit) {
-              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+              <th scope="col" class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
             }
           </tr>
         </thead>

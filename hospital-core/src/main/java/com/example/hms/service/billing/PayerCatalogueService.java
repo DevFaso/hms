@@ -623,6 +623,102 @@ public class PayerCatalogueService {
             AUDIT_ENTITY_COVERAGE, insuranceId);
     }
 
+    /**
+     * Owner decision 2026-11-22: the hospital's AGREEMENT with an insurer is its own. The active payers of
+     * {@code hospitalId} only (its code and name, nothing priced), against which a policy recorded at another
+     * hospital is matched before it may be reused here.
+     */
+    @Transactional(readOnly = true)
+    public List<Agreement> activeAgreementsAt(UUID hospitalId) {
+        if (hospitalId == null) {
+            return List.of();
+        }
+        return payerRepository.findByHospitalIdOrderByCodeAsc(hospitalId).stream()
+            .filter(Payer::isActive)
+            .map(payer -> new Agreement(payer.getCode(), payer.getName()))
+            .toList();
+    }
+
+    /**
+     * QA D3600 (r71): the name of {@code hospitalId}'s payer coded {@code payerCode} (case ignored), active or not:
+     * the insurer's name a coverage row linked by that code is filed under, instead of the code itself. Empty when
+     * the hospital has no such payer (or no hospital is named: a patient's own add).
+     */
+    @Transactional(readOnly = true)
+    public Optional<String> payerNameAt(UUID hospitalId, String payerCode) {
+        if (hospitalId == null || payerCode == null || payerCode.isBlank()) {
+            return Optional.empty();
+        }
+        String code = payerCode.trim();
+        return payerRepository.findByHospitalIdOrderByCodeAsc(hospitalId).stream()
+            .filter(payer -> payer.getCode() != null && payer.getCode().equalsIgnoreCase(code))
+            .map(Payer::getName)
+            .filter(name -> name != null && !name.isBlank())
+            .map(String::trim)
+            .findFirst();
+    }
+
+    /**
+     * An active payer of one hospital: the insurer it has an agreement with.
+     *
+     * <p>Review of #1293: a payer code is unique only within one hospital (V305) and a coverage row's code is free
+     * text, so another hospital's "MS" may be a different insurer than this hospital's "MS". The insurer is matched on
+     * its name (trimmed, spaces collapsed, case ignored); a code counts only beside the same name, or when a name is
+     * missing on either side.
+     *
+     * <p>QA D3600 (r71), review of #1301 (M1): a coverage row of another hospital whose name is only its code is
+     * given its insurer's name from THAT hospital's catalogue before it is matched here
+     * ({@code PatientInsuranceServiceImpl}); with no name there it matches no agreement. The code alone never
+     * matches across hospitals.
+     */
+    public record Agreement(String payerCode, String payerName) {
+
+        /** 3 = same name and code, 2 = same name, 1 = same code where a name is missing, 0 = another insurer. */
+        public int matchRank(String recordedCode, String recordedName) {
+            boolean sameName = sameText(payerName, recordedName);
+            boolean sameCode = sameText(payerCode, recordedCode);
+            if (sameName) {
+                return sameCode ? 3 : 2;
+            }
+            return sameCode && (isBlank(payerName) || isBlank(recordedName)) ? 1 : 0;
+        }
+
+        /** The insurer recorded elsewhere is this payer ({@link #matchRank} above 0). */
+        public boolean matches(String recordedCode, String recordedName) {
+            return matchRank(recordedCode, recordedName) > 0;
+        }
+
+        /**
+         * The payer of {@code agreements} that is the insurer recorded: the best {@link #matchRank}, and among equal
+         * ranks the first in the list (the catalogue reads them by code), so the answer is always the same.
+         */
+        public static Optional<Agreement> bestFor(List<Agreement> agreements, String recordedCode,
+                                                  String recordedName) {
+            Agreement best = null;
+            int bestRank = 0;
+            for (Agreement candidate : agreements) {
+                int rank = candidate.matchRank(recordedCode, recordedName);
+                if (rank > bestRank) {
+                    best = candidate;
+                    bestRank = rank;
+                }
+            }
+            return Optional.ofNullable(best);
+        }
+
+        private static boolean sameText(String ours, String recorded) {
+            return !isBlank(ours) && !isBlank(recorded) && normalised(ours).equals(normalised(recorded));
+        }
+
+        private static boolean isBlank(String text) {
+            return text == null || text.isBlank();
+        }
+
+        private static String normalised(String text) {
+            return text.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+        }
+    }
+
     /** The label of one plan a coverage row names (null when it names none). */
     @Transactional(readOnly = true)
     public PlanLabel labelOf(UUID planId) {

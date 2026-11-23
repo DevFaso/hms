@@ -100,6 +100,29 @@ final class ComputedKeys {
     private static Map<String, Domain> registry() {
         Map<String, Domain> d = domains();
         Map<String, Domain> r = new LinkedHashMap<>();
+        // Known specialty codes have localized PDF labels; other entered text falls back unchanged.
+        r.put("com/example/hms/service/pharmacy/OrdonnancePdfService.java|\"pdf.ordonnance.specialty.\" + specialization.trim()",
+            enumValues("pdf.ordonnance.specialty.", com.example.hms.enums.Specialization.class));
+        // V356: a provisional rule set's texts, one per ClinicalRuleSetKey.
+        site(r, d, "com/example/hms/service/clinicalrules/ClinicalRuleSet.java|return TEXT_PREFIX + key.name() + \".title\"",
+            "ClinicalRuleSet.java|clinicalRules.rule.title");
+        r.put("com/example/hms/service/clinicalrules/HospitalRuleSignoffService.java|rule.titleKey()",
+            ruleSetTexts("title"));
+        // V356: a provisional rule set's texts, one per ClinicalRuleSetKey.
+        site(r, d, "com/example/hms/service/clinicalrules/ClinicalRuleSet.java|return TEXT_PREFIX + key.name() + \".description\"",
+            "ClinicalRuleSet.java|clinicalRules.rule.description");
+        r.put("com/example/hms/service/clinicalrules/HospitalRuleSignoffService.java|rule.descriptionKey()",
+            ruleSetTexts("description"));
+        // V356: a provisional rule set's source.
+        site(r, d, "com/example/hms/service/clinicalrules/ClinicalRuleSet.java|return TEXT_PREFIX + key.name() + \".source\"",
+            "ClinicalRuleSet.java|clinicalRules.rule.source");
+        r.put("com/example/hms/service/clinicalrules/HospitalRuleSignoffService.java|rule.sourceKey()",
+            ruleSetTexts("source"));
+        // V356: a provisional rule set's texts, one per ClinicalRuleSetKey.
+        site(r, d, "com/example/hms/service/clinicalrules/ClinicalRuleSet.java|return TEXT_PREFIX + key.name() + \".approver\"",
+            "ClinicalRuleSet.java|clinicalRules.rule.approver");
+        r.put("com/example/hms/service/clinicalrules/HospitalRuleSignoffService.java|rule.approverKey()",
+            ruleSetTexts("approver"));
         site(r, d, "com/example/hms/cdshooks/CdsCardText.java|\"cds.severity.\" + value.name()",
             "CdsCardText.java|cds.severity.");
         site(r, d, "com/example/hms/cdshooks/CdsCardText.java|\"cds.enum.\" + value.name()",
@@ -154,6 +177,9 @@ final class ComputedKeys {
         site(r, d, "com/example/hms/security/tenant/ActingScopeResolver.java|String key = \"hospitalScope.refused.\" + reasonName",
             "ActingScopeResolver.java|hospitalScope.refused.");
         r.put("com/example/hms/service/CriticalValueNotificationService.java|text.key()",
+            new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
+        // QA r70 (C5): the same first notice, to the nurse in charge.
+        r.put("com/example/hms/service/CriticalValueNotificationService.java|text.key() #2",
             new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
         // r65 D2183: the escalation text, the orderer's or the tier-2 coordinator's
         // (COORDINATOR_ESCALATION_KEY), both NotificationText.of literal sites.
@@ -314,6 +340,22 @@ final class ComputedKeys {
             values("mews.escalation.", List.of("lowMedium", "medium", "high", "red")));
         r.put("com/example/hms/service/vitals/MaternalEarlyWarningService.java|ALERT_LABEL_PREFIX + a.name()",
             enumValues("mews.alert.", com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert.class));
+        // QA D3351: the biologist's tasks; the keys are the literals set on the item (setTitleKey / setBodyKey).
+        r.put("com/example/hms/service/transfusion/PositiveAntibodyScreenService.java|titleKey",
+            new Open("read back from the item: IDENTIFY_TITLE_KEY or RETROSPECTIVE_TITLE_KEY, both literal constants"));
+        r.put("com/example/hms/service/transfusion/PositiveAntibodyScreenService.java|bodyKey",
+            new Open("read back from the item: IDENTIFY_BODY_KEY or RETROSPECTIVE_BODY_KEY, both literal constants"));
+        // QA D3351: what a routine issue to an allo-immunised patient still lacks (PositiveAntibodyScreenPolicy.Missing).
+        r.put("com/example/hms/service/transfusion/PositiveAntibodyScreenService.java|lack.messageKey()",
+            values("transfusion.antibody.", List.of("workupRequired", "antiglobulinRequired", "antigenNegativeRequired",
+                "rhKellRequired", "sampleTimeRequired", "sampleInFuture", "sampleTooOld")));
+        // QA D3304: the in-basket item of a medium, high or red page.
+        r.put("com/example/hms/service/vitals/MaternalEarlyWarningService.java|ALERT_LABEL_PREFIX + a.name() #2",
+            enumValues("mews.alert.", com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert.class));
+        r.put("com/example/hms/service/vitals/MaternalEarlyWarningService.java|ITEM_TYPE_PREFIX + alertType",
+            values("maternalWarning.alert.type.", List.of("MEWS_MEDIUM", "MEWS_HIGH", "MEWS_RED")));
+        r.put("com/example/hms/service/vitals/MaternalEarlyWarningService.java|String messageKey = ITEM_MESSAGE_PREFIX + alertType",
+            values("maternalWarning.alert.msg.", List.of("MEWS_MEDIUM", "MEWS_HIGH", "MEWS_RED")));
         r.put("com/example/hms/cdshooks/bpa/NewsScoreProtocolRule.java|MaternalEarlyWarningService.ALERT_LABEL_PREFIX + a.name()",
             enumValues("mews.alert.", com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert.class));
         r.put("com/example/hms/cdshooks/bpa/NewsScoreProtocolRule.java|\"cds.bpa.mews.tier.\" + tier.name()",
@@ -383,6 +425,9 @@ final class ComputedKeys {
             "ControlledDrugRegisterService.java|pharmacy.register.adjustment.");
         site(r, d, "com/example/hms/service/pharmacy/ControlledDrugRegisterService.java|\"pharmacy.register.movement.\" + type",
             "ControlledDrugRegisterService.java|pharmacy.register.movement.");
+        // QA D3403 / D3415 (r70): the state of returned stock, one per ReturnedStockCondition.
+        site(r, d, "com/example/hms/service/pharmacy/ControlledDrugRegisterService.java|\"pharmacy.stockCondition.\" + c.name()",
+            "ControlledDrugRegisterService.java|pharmacy.stockCondition.");
         site(r, d, "com/example/hms/service/pharmacy/PharmacyClaimServiceImpl.java|\"pharmacy.claim.status.\" + target.name()",
             "PharmacyClaimServiceImpl.java|pharmacy.claim.status.");
         site(r, d, "com/example/hms/service/pharmacy/PharmacyClaimServiceImpl.java|\"pharmacy.claim.status.\" + claim.getClaimStatus().name()",
@@ -472,6 +517,9 @@ final class ComputedKeys {
         Map<String, Domain> r = new LinkedHashMap<>();
 
         // ---- per enum value ----------------------------------------------------------------
+        for (String part : List.of("title", "description", "source", "approver")) {
+            r.put("ClinicalRuleSet.java|clinicalRules.rule." + part, ruleSetTexts(part));
+        }
         r.put("AppointmentStatus.java|appointment.statusLabel.", enumValues("appointment.statusLabel.", AppointmentStatus.class));
         r.put("EncounterStatus.java|encounter.statusLabel.", enumValues("encounter.statusLabel.", EncounterStatus.class));
         r.put("InvoiceStatus.java|pdf.invoice.statusValue.", enumValues("pdf.invoice.statusValue.", InvoiceStatus.class));
@@ -531,6 +579,8 @@ final class ComputedKeys {
             enumValues("transfusion.productType.", BloodProductType.class));
         r.put("ControlledDrugRegisterService.java|pharmacy.register.movement.",
             enumValues("pharmacy.register.movement.", StockTransactionType.class));
+        r.put("ControlledDrugRegisterService.java|pharmacy.stockCondition.",
+            enumValues("pharmacy.stockCondition.", com.example.hms.enums.ReturnedStockCondition.class));
         r.put("NewsScoreProtocolRule.java|cds.bpa.news2.band.",
             enumValues("cds.bpa.news2.band.", NewsScoreCalculator.RiskBand.class));
         // The reason of a HospitalScopeRefusedException: an ActingScope.Reason, GLOBAL_VIEW or PATIENT_OWNED.
@@ -663,6 +713,18 @@ final class ComputedKeys {
                 for (Enum<?> constant : e.getEnumConstants()) {
                     keys.add(prefix + constant.name());
                 }
+            }
+            return keys;
+        };
+    }
+
+    /** V356: clinicalRules.rule.<KEY>.<part> for every provisional rule set (ClinicalRuleSetKey). */
+    private static Domain ruleSetTexts(String part) {
+        return () -> {
+            Set<String> keys = new TreeSet<>();
+            for (com.example.hms.service.clinicalrules.ClinicalRuleSetKey key
+                    : com.example.hms.service.clinicalrules.ClinicalRuleSetKey.values()) {
+                keys.add("clinicalRules.rule." + key.name() + "." + part);
             }
             return keys;
         };

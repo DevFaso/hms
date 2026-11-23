@@ -1,5 +1,7 @@
 package com.example.hms.service.billing;
 
+import com.example.hms.service.clinicalrules.ClinicalRuleSetKey;
+import com.example.hms.service.clinicalrules.ProvisionalRule;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.BloodProductType;
@@ -81,6 +83,7 @@ import java.util.regex.Pattern;
  */
 @Slf4j
 @Service
+@ProvisionalRule(ClinicalRuleSetKey.SAME_DAY_PRICE_CORRECTION)
 public class PriceListService {
 
     static final String NOT_FOUND_KEY = "billing.priceList.notFound";
@@ -256,6 +259,24 @@ public class PriceListService {
         auditAfterCommit(AuditEventType.PRICE_LIST_ITEM_CREATED, actor,
             "Price list item " + saved.getId() + " created with price version " + price.getId(), saved.getId());
         return detail(saved);
+    }
+
+    /**
+     * QA r70 (lab set-up): « Lier par code ». Every active, unlinked lab price line of the acting hospital is linked
+     * to the one live lab test of the same code ({@link LabPriceAutoLink}); the rest is reported, never guessed.
+     */
+    @Transactional
+    public com.example.hms.payload.dto.billing.PriceListAutoLinkReportDTO linkLabTestsByCode() {
+        Maintainer actor = requireMaintainer();
+        return java.util.Objects.requireNonNull(labPriceAutoLink).link(actor.hospitalId(), actor.userId(), true);
+    }
+
+    private LabPriceAutoLink labPriceAutoLink;
+
+    /** QA r70: the lab auto-link. A required setter; a unit test built by hand may omit it. */
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setLabPriceAutoLink(LabPriceAutoLink labPriceAutoLink) {
+        this.labPriceAutoLink = labPriceAutoLink;
     }
 
     /** The label, the category and the link; the code and the prices never change here. */
