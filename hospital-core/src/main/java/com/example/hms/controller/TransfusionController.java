@@ -101,9 +101,13 @@ public class TransfusionController {
 
     @GetMapping("/blood-groups/patient/{patientId}")
     @PreAuthorize(READER)
-    @Operation(summary = "Current type and screen for a patient")
+    @Operation(summary = "Current type and screen for a patient",
+        description = "204 No Content when the patient has no type and screen at this hospital yet (QA D3352): "
+            + "an ordinary answer before the first one, not a missing resource.")
     public ResponseEntity<PatientBloodGroupResponseDTO> getCurrentBloodGroup(@PathVariable UUID patientId) {
-        return ResponseEntity.ok(transfusionService.getCurrentBloodGroup(patientId));
+        return transfusionService.findCurrentBloodGroup(patientId)
+            .map(ResponseEntity::ok)
+            .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
     @PostMapping("/antibody-workups")

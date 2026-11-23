@@ -153,7 +153,7 @@
                   }}<span class="item-meta">
                     {{
                       'PHARMACY_SALE.STOCK_ON_HAND'
-                        | translate: { qty: item.quantityOnHand, unit: item.unit ?? '' }
+                        | translate: { stock: (item.quantityOnHand | countUnit: item.unit) }
                     }}
                     @if (item.unitsPerPack) {
                       ·
@@ -161,10 +161,8 @@
                         'PHARMACY_SALE.PACK_BREAKDOWN'
                           | translate
                             : {
-                                packs: item.fullPacksOnHand ?? 0,
-                                packUnit: item.packUnit ?? '',
-                                loose: item.looseUnitsOnHand ?? 0,
-                                unit: item.unit ?? '',
+                                packs: (item.fullPacksOnHand ?? 0 | countUnit: item.packUnit),
+                                loose: (item.looseUnitsOnHand ?? 0 | countUnit: item.unit),
                               }
                       }}
                     }
@@ -277,8 +275,7 @@
                                 : {
                                     lot: lot.lotNumber,
                                     date: (lot.expiryDate | serverTime | date: 'mediumDate'),
-                                    qty: lot.remainingQuantity,
-                                    unit: line.item.unit ?? '',
+                                    qty: (lot.remainingQuantity | countUnit: line.item.unit),
                                   }
                           }}
                         </option>
@@ -333,15 +330,14 @@
                           | translate
                             : {
                                 packUnit: line.item.packUnit ?? '',
-                                n: line.item.unitsPerPack,
-                                unit: line.item.unit ?? '',
+                                n: (line.item.unitsPerPack | countUnit: line.item.unit),
                               }
                       }}
                       @if (line.inPacks) {
                         ·
                         {{
                           'PHARMACY_SALE.LINE_UNITS'
-                            | translate: { units: lineUnits(line), unit: line.item.unit ?? '' }
+                            | translate: { units: (lineUnits(line) | countUnit: line.item.unit) }
                         }}
                       }
                     </small>
@@ -362,7 +358,7 @@
                         : {
                             lot: earlier.lotNumber,
                             date: (earlier.expiryDate | serverTime | date: 'mediumDate'),
-                            left: earlier.remainingQuantity,
+                            left: (earlier.remainingQuantity | countUnit: line.item.unit),
                           }
                   }}</small>
                   <input
@@ -384,8 +380,7 @@
                       | translate
                         : {
                             lot: short.lotNumber,
-                            qty: short.remainingQuantity,
-                            unit: line.item.unit ?? '',
+                            qty: (short.remainingQuantity | countUnit: line.item.unit),
                           }
                   }}
                 </p>

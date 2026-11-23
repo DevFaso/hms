@@ -444,6 +444,46 @@ class PatientInsuranceServiceImplTest {
     }
 
     /**
+     * QA D3600 (r71): the desk's link form sends the payer code alone. The row is filed under the name of this
+     * hospital's payer of that code, never the code; a row named by its code before is renamed; a code typed as the
+     * name is no name.
+     */
+    @Test
+    void upsertAndLinkByNaturalKey_aCodeOnlyLinkIsNamedAfterThisHospitalsPayer_D3600() {
+        ActingContext ctx = new ActingContext(userId, hospitalId, ActingMode.STAFF, null);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(roleValidator.isPatientOnlyFromAuth()).thenReturn(false);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
+        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
+            .thenReturn(Optional.of(new UserRoleHospitalAssignment()));
+        when(patientInsuranceRepository.save(any(PatientInsurance.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(patientInsuranceMapper.toPatientInsuranceResponseDTO(any())).thenReturn(new PatientInsuranceResponseDTO());
+        when(payerCatalogueService.payerNameAt(hospitalId, "MUT-TEST-A"))
+            .thenReturn(Optional.of("Mutuelle Test A (FICTIVE)"));
+
+        // A new row, no name typed.
+        service.upsertAndLinkByNaturalKey(LinkPatientInsuranceRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId).payerCode("MUT-TEST-A").policyNumber("P-1").build(),
+            ctx, locale);
+        // An existing row named by its code, and the code typed as the name.
+        PatientInsurance namedByCode = new PatientInsurance();
+        namedByCode.setPayerCode("MUT-TEST-A");
+        namedByCode.setProviderName("mut-test-a");
+        when(patientInsuranceRepository
+                .findFirstByPatient_IdAndAssignment_Hospital_IdAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(
+                    patientId, hospitalId, "MUT-TEST-A", "P-2")).thenReturn(Optional.of(namedByCode));
+        service.upsertAndLinkByNaturalKey(LinkPatientInsuranceRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId).payerCode("MUT-TEST-A").policyNumber("P-2")
+            .providerName("MUT-TEST-A").build(), ctx, locale);
+
+        org.mockito.ArgumentCaptor<PatientInsurance> saved = org.mockito.ArgumentCaptor.forClass(PatientInsurance.class);
+        verify(patientInsuranceRepository, org.mockito.Mockito.atLeast(2)).save(saved.capture());
+        assertThat(saved.getAllValues()).extracting(PatientInsurance::getProviderName)
+            .containsOnly("Mutuelle Test A (FICTIVE)");
+        assertThat(saved.getAllValues()).extracting(PatientInsurance::getPayerCode).containsOnly("MUT-TEST-A");
+    }
+
+    /**
      * Review of #1131 (the D1590 class): hospital A holds the policy; B's desk
      * links the same policy. A's row is untouched (still A's, still primary)
      * and B gets its own row, primary at B.
@@ -581,7 +621,9 @@ class PatientInsuranceServiceImplTest {
     /**
      * QA D1651: B's staff read hospital A's row by id (200, with A's payer and
      * policy). A read by id now answers exactly as a missing id, and B's list
-     * holds only B's row and the legacy untagged one.
+     * holds only B's row and the legacy untagged one. Owner decision
+     * 2026-11-22 keeps this: B sees A's policy only by its identity, to verify,
+     * through its own read (PatientInsuranceOtherHospitalTest), never this row.
      */
     @Test
     void readByIdAndList_anotherHospitalsRowIsHidden_qaD1651() {

@@ -193,11 +193,19 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
         // QA D1901: pricing a line in place echoes its description in the
         // reader's language; an echo keeps the server's code, anything else
         // is the person's own text, shown as typed.
-        if (!com.example.hms.service.billing.BillingTextRenderer.isShownText(dto.getItemDescription(), item.getTextCode(),
-                item.getTextArgs(), item.getItemDescription())) {
+        boolean rewritten = !com.example.hms.service.billing.BillingTextRenderer.isShownText(dto.getItemDescription(),
+            item.getTextCode(), item.getTextArgs(), item.getItemDescription());
+        if (rewritten) {
             item.setItemDescription(dto.getItemDescription());
             item.setTextCode(null);
             item.setTextArgs(null);
+        }
+        // QA D3603 / review of #1301 (L2): the category a plan rule sees is what the line was posted for, kept through
+        // a price edit (the till echoes the label and category). A line rewritten as something else - its label or
+        // its item category changed - is the cashier's own line: no posted category, the plan reads it like any typed
+        // line (a lab category still counts as a lab test).
+        if (rewritten || dto.getItemCategory() != item.getItemCategory()) {
+            item.setCoverageCategory(null);
         }
         item.setQuantity(dto.getQuantity());
         item.setItemCategory(dto.getItemCategory());

@@ -429,6 +429,11 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'PatientInsuranceController#setPayerPlan',
     roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_BILLING_SPECIALIST', 'ROLE_RECEPTIONIST'],
   },
+  // Owner decision 2026-11-22: « Reprendre pour cet établissement » (another hospital's policy, to verify).
+  patientInsuranceReuseOtherHospital: {
+    endpoint: 'PatientInsuranceController#reuseOtherHospitalPolicy',
+    roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_BILLING_SPECIALIST', 'ROLE_RECEPTIONIST'],
+  },
   // QA D2203: the desk records a patient's SMS / e-mail choices.
   patientChannelPreferencesUpdate: {
     endpoint: 'PatientChannelPreferenceController#update',

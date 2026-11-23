@@ -563,6 +563,15 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Cross-hospital lab result read at the performing laboratory$/,
   },
   {
+    // Owner decision 2026-11-22: another hospital's policy, identity only, read to verify or taken over.
+    key: 'AUDIT.DESC.CROSS_HOSPITAL_INSURANCE_READ',
+    re: /^Cross-hospital insurance policy identity read to verify at the desk$/,
+  },
+  {
+    key: 'AUDIT.DESC.CROSS_HOSPITAL_INSURANCE_REUSED',
+    re: /^Cross-hospital insurance policy identity reused into this hospital's own coverage$/,
+  },
+  {
     // QA D3351 (owner decision 2026-11-22): the allo-immunisation flag follows the patient across hospitals.
     key: 'AUDIT.DESC.CROSS_HOSPITAL_ANTIBODY_FLAG',
     re: /^Cross-hospital allo-immunisation flag read \(transfusion safety, shown whatever the sharing choice\)$/,

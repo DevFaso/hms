@@ -184,7 +184,7 @@ public class EncounterCheckoutChargeListener {
                 continue;
             }
             for (VisitChargeSource.VisitCharge charge : source.charges(visit)) {
-                invoice = addLine(invoice, line(charge, owner.get()));
+                invoice = addLine(invoice, line(charge, source.type(), owner.get()));
             }
         }
         // addItem keeps a priced draft a DRAFT; the cashier issues it.
@@ -205,7 +205,8 @@ public class EncounterCheckoutChargeListener {
         return invoiceRepository.save(invoice);
     }
 
-    private static InvoiceItem line(VisitChargeSource.VisitCharge charge, UserRoleHospitalAssignment owner) {
+    static InvoiceItem line(VisitChargeSource.VisitCharge charge, BillableOrderType type,
+                            UserRoleHospitalAssignment owner) {
         BigDecimal unit = (charge.unitPrice() != null ? charge.unitPrice() : BigDecimal.ZERO)
             .setScale(2, RoundingMode.HALF_UP);
         String description = charge.description();
@@ -228,6 +229,8 @@ public class EncounterCheckoutChargeListener {
             .priceSource(priceSourceOf(charge))
             .priceListItemId(tariff != null ? tariff.itemId() : null)
             .priceListPriceId(tariff != null ? tariff.priceId() : null)
+            // QA D3603 (r71): the category a plan rule sees, whatever the price source turns out to be.
+            .coverageCategory(charge.coverageCategory() != null ? charge.coverageCategory() : type.coverageCategory())
             .build();
     }
 
