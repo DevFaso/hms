@@ -4,6 +4,11 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
+// Execute the production selector, so a wrong budget cannot pass a source-only guard.
+await import('@angular/compiler');
+const { HttpRequest, HttpContext } = await import('@angular/common/http');
+const { withApiTimeoutProfile, API_TIMEOUT_PROFILE, API_TIMEOUT_BUDGETS } =
+  await import('../../src/app/core/api-request-timeout.ts');
 
 const portal = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (p) => readFileSync(join(portal, p), 'utf8');
@@ -49,12 +54,21 @@ test('D3602: every browser API caller inherits the shared deadline; no bypass cl
   assert.match(read('src/app/app.config.ts'), /withInterceptors\(\[\s*apiTimeoutInterceptor,/);
   const interceptor = read('src/app/interceptors/api-timeout.interceptor.ts');
   assert.match(interceptor, /takeUntil\(\s*timer\(deadline\)/);
-  assert.match(interceptor, /API_REQUEST_TIMEOUT_MS\s*=\s*20_000/);
-  assert.match(interceptor, /API_UPLOAD_TIMEOUT_MS\s*=\s*120_000/);
+  const policy = read('src/app/core/api-request-timeout.ts');
+  assert.match(interceptor, /withApiTimeoutProfile\(req\)/);
+  assert.match(policy, /new HttpContextToken/);
+  assert.match(policy, /req\.body instanceof FormData/);
+  assert.match(policy, /req\.responseType === 'blob'/);
+  assert.match(policy, /API_EXPORT_TIMEOUT_MS\s*=\s*180_000/);
+  assert.match(policy, /API_REQUEST_TIMEOUT_MS\s*=\s*20_000/);
+  assert.match(policy, /API_UPLOAD_TIMEOUT_MS\s*=\s*120_000/);
   for (const path of files(join(portal, 'src'))) {
     const file = relative(portal, path).replaceAll('\\', '/');
     assert.deepEqual(bypasses(readFileSync(path, 'utf8'), file), [], file);
   }
+  const auth = read('src/app/interceptors/error.interceptor.ts');
+  assert.match(auth, /shareReplay\(\{ bufferSize: 1, refCount: false \}\)/);
+  assert.match(auth, /takeUntil\(auth\.sessionEnded\$\)/);
   assert.match(read('src/app/app.component.ts'), /<app-api-timeout-banner\s*\/>/);
   assert.match(
     read('src/app/billing/billing.ts'),
@@ -72,4 +86,59 @@ test('D3602: the class guard detects new routes creating bypass transports', () 
     assert.notDeepEqual(bypasses(source, 'src/app/new-view.ts'), []);
   }
   assert.deepEqual(bypasses('this.fetch(offset)', 'src/app/pager.ts'), []);
+});
+
+test('the shared API boundary keeps every upload and export beyond the ordinary deadline', () => {
+  const cases = [
+    [new HttpRequest('GET', '/ordinary'), 'default', 20_000],
+    [new HttpRequest('POST', '/multipart', new globalThis.FormData()), 'upload', 120_000],
+    [new HttpRequest('POST', '/raw-file', new globalThis.Blob(['file'])), 'upload', 120_000],
+    [new HttpRequest('GET', '/export.pdf', { responseType: 'blob' }), 'export', 180_000],
+    [
+      new HttpRequest('GET', '/json-export', {
+        context: new HttpContext().set(API_TIMEOUT_PROFILE, 'export'),
+      }),
+      'export',
+      180_000,
+    ],
+  ];
+  for (const [request, profile, milliseconds] of cases) {
+    const marked = withApiTimeoutProfile(request);
+    assert.equal(marked.context.get(API_TIMEOUT_PROFILE), profile, request.url);
+    assert.equal(API_TIMEOUT_BUDGETS[profile], milliseconds, request.url);
+  }
+});
+
+test('JSON file imports and base64 exports explicitly select their transfer context', () => {
+  const transfers = [
+    ['src/app/services/super-admin-governance.service.ts', 'importUsers', 'upload'],
+    ['src/app/services/assignment-admin.service.ts', 'bulkImport', 'upload'],
+    ['src/app/services/super-admin-governance.service.ts', 'exportLatestBaseline', 'export'],
+  ];
+  for (const [file, method, profile] of transfers) {
+    const source = read(file);
+    const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+    let body;
+    function find(node) {
+      if (ts.isMethodDeclaration(node) && node.name.getText(ast) === method)
+        body = node.body?.getText(ast);
+      ts.forEachChild(node, find);
+    }
+    find(ast);
+    assert.ok(body, file + '#' + method);
+    assert.ok(
+      body.includes(`new HttpContext().set(API_TIMEOUT_PROFILE, '${profile}')`),
+      file + '#' + method,
+    );
+  }
+  for (const file of files(join(portal, 'src/app/services'))) {
+    const source = readFileSync(file, 'utf8');
+    if (/\bcsvContent:\s*string/.test(source)) {
+      const relativeFile = relative(portal, file).replaceAll('\\', '/');
+      assert.ok(
+        transfers.some(([path]) => path === relativeFile),
+        relativeFile + ': JSON file import needs a transfer-context guard entry',
+      );
+    }
+  }
 });

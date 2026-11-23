@@ -4,8 +4,16 @@ import { TranslateService } from '@ngx-translate/core';
 import { mergeMap, takeUntil, throwError, timer } from 'rxjs';
 import { ApiTimeoutService } from '../core/api-timeout.service';
 
-export const API_REQUEST_TIMEOUT_MS = 20_000;
-export const API_UPLOAD_TIMEOUT_MS = 120_000;
+import {
+  API_TIMEOUT_BUDGETS,
+  API_TIMEOUT_PROFILE,
+  withApiTimeoutProfile,
+} from '../core/api-request-timeout';
+export {
+  API_REQUEST_TIMEOUT_MS,
+  API_UPLOAD_TIMEOUT_MS,
+  API_EXPORT_TIMEOUT_MS,
+} from '../core/api-request-timeout';
 
 /**
  * D3602: outermost, so CSRF bootstrap, refresh and requests waiting for a
@@ -22,8 +30,9 @@ export const apiTimeoutInterceptor: HttpInterceptorFn = (req, next) => {
 
   const notice = inject(ApiTimeoutService);
   const translate = inject(TranslateService);
-  const deadline = req.reportProgress ? API_UPLOAD_TIMEOUT_MS : API_REQUEST_TIMEOUT_MS;
-  return next(req).pipe(
+  const request = withApiTimeoutProfile(req);
+  const deadline = API_TIMEOUT_BUDGETS[request.context.get(API_TIMEOUT_PROFILE)!];
+  return next(request).pipe(
     takeUntil(
       timer(deadline).pipe(
         mergeMap(() => {

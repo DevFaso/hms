@@ -1,6 +1,8 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import {
   HttpClient,
+  HttpContext,
+  HttpContextToken,
   HttpErrorResponse,
   HttpEventType,
   provideHttpClient,
@@ -20,6 +22,7 @@ import {
   paymentOutcomeUnknown,
 } from '../shared/payment-request-key';
 import fr from '../../assets/i18n/fr.json';
+import { API_TIMEOUT_PROFILE, API_EXPORT_TIMEOUT_MS } from '../core/api-request-timeout';
 
 describe('D3602 API request deadline', () => {
   let client: HttpClient;
@@ -73,6 +76,62 @@ describe('D3602 API request deadline', () => {
     tick(1);
     expect(failure?.status).toBe(504);
     expect(request.cancelled).toBeTrue();
+  }));
+
+  it('gives multipart uploads without progress reporting their upload context and longer deadline', fakeAsync(() => {
+    const form = new FormData();
+    form.append('file', new Blob(['report']), 'report.pdf');
+    let uploaded = false;
+    client.post('/api/documents', form).subscribe(() => (uploaded = true));
+    const request = backend.expectOne('/api/documents');
+    expect(request.request.reportProgress).toBeFalse();
+    expect(request.request.context.get(API_TIMEOUT_PROFILE)).toBe('upload');
+    tick(API_REQUEST_TIMEOUT_MS + 1);
+    expect(request.cancelled).toBeFalse();
+    request.flush({ id: 'document' });
+    tick(API_UPLOAD_TIMEOUT_MS);
+    expect(uploaded).toBeTrue();
+    expect(notice.failure()).toBeNull();
+  }));
+
+  it('gives generated PDFs/exports their export context and longer bounded deadline', fakeAsync(() => {
+    let error: HttpErrorResponse | undefined;
+    client
+      .get('/api/record.pdf', { responseType: 'blob' })
+      .subscribe({ error: (value) => (error = value) });
+    const request = backend.expectOne('/api/record.pdf');
+    expect(request.request.context.get(API_TIMEOUT_PROFILE)).toBe('export');
+    tick(API_REQUEST_TIMEOUT_MS + 1);
+    expect(request.cancelled).toBeFalse();
+    tick(API_EXPORT_TIMEOUT_MS - API_REQUEST_TIMEOUT_MS - 1);
+    expect(error?.status).toBe(504);
+    expect(request.cancelled).toBeTrue();
+  }));
+
+  it('allows a completed export after 20 seconds and removes its deadline', fakeAsync(() => {
+    let file: Blob | undefined;
+    client.get('/api/export.csv', { responseType: 'blob' }).subscribe((value) => (file = value));
+    const request = backend.expectOne('/api/export.csv');
+    tick(API_REQUEST_TIMEOUT_MS + 1);
+    request.flush(new Blob(['export']));
+    tick(API_EXPORT_TIMEOUT_MS);
+    expect(file?.size).toBe(6);
+    expect(notice.failure()).toBeNull();
+  }));
+
+  it('honours an explicit profile for JSON exports and preserves other context tokens', fakeAsync(() => {
+    const scope = new HttpContextToken<string>(() => '');
+    const context = new HttpContext()
+      .set(API_TIMEOUT_PROFILE, 'export')
+      .set(scope, 'hospital-scope');
+    client.get('/api/export/fhir', { context }).subscribe();
+    const request = backend.expectOne('/api/export/fhir');
+    expect(request.request.context.get(scope)).toBe('hospital-scope');
+    tick(API_REQUEST_TIMEOUT_MS + 1);
+    expect(request.cancelled).toBeFalse();
+    request.flush({ resourceType: 'Bundle' });
+    tick(API_EXPORT_TIMEOUT_MS);
+    expect(notice.failure()).toBeNull();
   }));
 
   it('preserves the existing keyed payment retry, with the same key and a bounded final outcome', fakeAsync(() => {

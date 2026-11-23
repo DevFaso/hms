@@ -129,3 +129,79 @@ for (const path of ['/billing', '/patients']) {
     }
   });
 }
+
+test('a patient document upload without progress reporting survives the ordinary deadline', async ({
+  page,
+  baseURL,
+}) => {
+  await signInAs(page, 'ROLE_PATIENT', baseURL!);
+  let uploadCalls = 0;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route('**/api/me/patient/documents**', async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ json: { data: { content: [], totalElements: 0 } } });
+      return;
+    }
+    uploadCalls++;
+    await held;
+    await route.fulfill({
+      json: {
+        data: {
+          id: 'slow-document',
+          displayName: 'slow-report.pdf',
+          documentType: 'OTHER',
+          fileSizeBytes: 6,
+        },
+      },
+    });
+  });
+  try {
+    await page.goto('/my-documents');
+    await expect(page.getByTestId('document-upload-toggle')).toBeVisible();
+    await page.clock.install();
+    await page.getByTestId('document-upload-toggle').click();
+    await page.locator('#portal-document-file').setInputFiles({
+      name: 'slow-report.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('report'),
+    });
+    await page.locator('.upload-form button.btn-primary').click();
+    await expect.poll(() => uploadCalls).toBe(1);
+    await page.clock.fastForward(30000);
+    await expect(page.getByTestId('api-timeout-banner')).toHaveCount(0);
+    await expect(page.locator('.upload-form button.btn-primary')).toBeDisabled();
+    release();
+    await expect(page.locator('.doc-name')).toHaveText('slow-report.pdf');
+    expect(uploadCalls).toBe(1);
+  } finally {
+    release();
+  }
+});
+
+test('a generated PDF export completes beyond the ordinary deadline', async ({ page, baseURL }) => {
+  await signInAs(page, 'ROLE_SUPER_ADMIN', baseURL!);
+  let exportCalls = 0;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route('**/api/lab-test-definitions/export/pdf', async (route) => {
+    exportCalls++;
+    await held;
+    await route.fulfill({ contentType: 'application/pdf', body: '%PDF-1.4 slow export' });
+  });
+  try {
+    await page.goto('/lab-test-config');
+    await expect(page.locator('.btn-pdf')).toBeVisible();
+    await page.clock.install();
+    const download = page.waitForEvent('download');
+    await page.locator('.btn-pdf').click();
+    await expect.poll(() => exportCalls).toBe(1);
+    await page.clock.fastForward(30000);
+    await expect(page.getByTestId('api-timeout-banner')).toHaveCount(0);
+    release();
+    expect((await download).suggestedFilename()).toBe('lab-test-definitions.pdf');
+    expect(exportCalls).toBe(1);
+  } finally {
+    release();
+  }
+});
