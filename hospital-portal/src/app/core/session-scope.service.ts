@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, catchError, map, of } from 'rxjs';
 
 import { AuthService, LoginUserProfile, SessionBootstrapResponse } from '../auth/auth.service';
+import { expandRoleEquivalents } from './role-equivalence';
 import { RoleContextService } from './role-context.service';
 
 /** Login-response fields the session bootstrap does not carry, kept on the stored profile. */
@@ -64,9 +65,15 @@ export class SessionScopeService {
     // bootstrap lists account assignments, not permission to change that choice.
     // SSO keeps its existing live-assignment hydration contract.
     const tokenRoles = this.auth.getRoles();
+    // QA D3300 (r70): the role picker offers what the account holds PLUS the
+    // doctor equivalence (RoleExpansion.selectableAtLogin): a surgeon or a
+    // physician may sign in as « Médecin ». The bootstrap lists the account's
+    // own assignments, so ROLE_DOCTOR was "not held" and the session was ended
+    // with no word. The held roles are widened the same way the picker is.
+    const heldRoles = expandRoleEquivalents(bootstrap.roles ?? []);
     if (
       bootstrap.authSource === 'internal' &&
-      tokenRoles.some((role) => !bootstrap.roles?.includes(role))
+      tokenRoles.some((role) => !heldRoles.includes(role))
     ) {
       // A selected role was revoked. End this session rather than promoting
       // another assignment or leaving JWT-based guard fallbacks authorized.

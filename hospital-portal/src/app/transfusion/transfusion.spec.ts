@@ -83,7 +83,19 @@ describe('TransfusionComponent', () => {
       'completeAdministration',
       'stopAdministration',
       'listVerifierCandidates',
+      'getAntibodyStatus',
     ]);
+    // QA D3351: the request form also asks what is known of the patient's antibodies (nothing here).
+    txSpy.getAntibodyStatus.and.returnValue(
+      of({
+        patientId: 'p1',
+        alloImmunised: false,
+        positiveScreenAt: null,
+        identified: false,
+        antibodySpecificities: null,
+        workups: [],
+      }),
+    );
     txSpy.listAdministrationsForPatient.and.returnValue(of([]));
     txSpy.listVerifierCandidates.and.returnValue(of([]));
     txSpy.listRequests.and.returnValue(of([mockRequest()]));
@@ -402,7 +414,19 @@ describe('TransfusionComponent — platelet pairing pending confirmation', () =>
       'completeAdministration',
       'stopAdministration',
       'listVerifierCandidates',
+      'getAntibodyStatus',
     ]);
+    // QA D3351: the request form also asks what is known of the patient's antibodies (nothing here).
+    txSpy.getAntibodyStatus.and.returnValue(
+      of({
+        patientId: 'p1',
+        alloImmunised: false,
+        positiveScreenAt: null,
+        identified: false,
+        antibodySpecificities: null,
+        workups: [],
+      }),
+    );
     txSpy.listAdministrationsForPatient.and.returnValue(of([]));
     txSpy.listVerifierCandidates.and.returnValue(of([]));
     txSpy.listRequests.and.returnValue(of([mockRequest()]));

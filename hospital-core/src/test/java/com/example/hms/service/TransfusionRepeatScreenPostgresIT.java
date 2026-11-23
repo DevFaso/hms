@@ -71,7 +71,8 @@ import static org.mockito.Mockito.when;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
-@Import({TransfusionServiceImpl.class, TransfusionMapper.class, TransfusionRepeatScreenPostgresIT.Config.class})
+@Import({TransfusionServiceImpl.class,
+    com.example.hms.service.transfusion.PositiveAntibodyScreenService.class, TransfusionMapper.class, TransfusionRepeatScreenPostgresIT.Config.class})
 @DisplayName("CX-011: a repeat type and screen supersedes the current one, on PostgreSQL")
 class TransfusionRepeatScreenPostgresIT {
 

@@ -1544,7 +1544,9 @@
     "TAKE_HOME_HINT": "Les prescriptions signées marquées « Traitement de sortie » figurent dans le résumé de sortie, y compris celles rédigées dans les 24 h suivant la sortie.",
     "FOLLOW_UP_DATE": "Rendez-vous de suivi",
     "FOLLOW_UP_PURPOSE": "Motif du suivi",
-    "FOLLOW_UP_PURPOSE_PLACEHOLDER": "ex. contrôle, pansement, bilan biologique"
+    "FOLLOW_UP_PURPOSE_PLACEHOLDER": "ex. contrôle, pansement, bilan biologique",
+    "TAKE_HOME_UNSIGNED_TITLE": "Rédigées, pas encore signées",
+    "TAKE_HOME_UNSIGNED_HINT": "Ces prescriptions de sortie ne sont remises au patient, et ne figurent dans le résumé de sortie, qu’une fois signées. Signez-les depuis la page des prescriptions, avant la sortie ou dans les 24 h qui suivent."
   },
   "ANALYTICS": {
     "LOAD_FAILED": "Impossible de charger les indicateurs. Réessayez.",
@@ -1907,6 +1909,7 @@
       "CROSS_TENANT_READ": "Lecture du super-administrateur sur tous les hôpitaux : {{view}} ({{rows}} lignes)",
       "CROSS_HOSPITAL_READ_LAB": "Demande d’analyses d’un autre hôpital consultée par le laboratoire exécutant",
       "CROSS_HOSPITAL_READ_LAB_RESULT": "Résultat d’analyses d’un autre hôpital consulté par le laboratoire exécutant",
+      "CROSS_HOSPITAL_ANTIBODY_FLAG": "Alerte d’allo-immunisation d’un autre hôpital consultée (sécurité transfusionnelle, affichée quel que soit le choix de partage du dossier)",
       "EMERGENCY_BLOOD_RELEASED": "Délivrance en urgence sans épreuve de compatibilité de la poche {{unit}} pour la demande {{request}}",
       "EMERGENCY_BLOOD_RELEASED_O_POSITIVE": "Délivrance d'urgence sur décision documentée O positif de la poche {{unit}} pour la demande {{request}}",
       "EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE": "Délivrance d'urgence — sérologiquement incompatible, de la poche {{unit}} pour la demande {{request}}",
@@ -1941,7 +1944,6 @@
       "SHARING_OPTED_OUT": "Le patient a refusé le partage de son dossier entre hôpitaux",
       "SHARING_OPT_OUT_REVOKED": "Refus du partage du dossier entre hôpitaux retiré",
       "PATIENT_PDF_DOWNLOADED": "PDF du dossier patient téléchargé pour le patient {{patient}} à l’hôpital {{hospital}} ({{entries}} entrées)",
-      "ROI_PDF_DOWNLOADED": "PDF du dossier patient téléchargé pour le patient {{patient}} à l’hôpital {{hospital}} ({{entries}} entrées) dans le cadre de la demande {{request}}",
       "EMPI_MERGE": "Fusion d’identités : {{secondary}} fusionné dans {{primary}} ({{details}})",
       "BREAK_GLASS_READ_NO_PURPOSE": "Lecture en accès d’urgence (aucun motif indiqué)",
       "BREAK_GLASS_READ": "Lecture en accès d’urgence : {{what}}",
@@ -2166,7 +2168,8 @@
       "SUPPORT_SESSION_RULE_SIGNOFF_REFUSED": "Session de support refusée : {{what}} (validation d’une règle clinique)",
       "PATIENT_ACTIVATION_CODE_SHOWN": "Code d’activation du portail patient affiché à l’accueil",
       "PATIENT_ACTIVATION_RESENT": "Activation du portail patient renvoyée par l’accueil",
-      "DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED": "Report « à facturer » retiré : la délivrance préparée sur laquelle il avait été approuvé a été annulée"
+      "DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED": "Report « à facturer » retiré : la délivrance préparée sur laquelle il avait été approuvé a été annulée",
+      "ROI_PDF_DOWNLOADED": "PDF du dossier patient téléchargé pour le patient {{patient}} à l’hôpital {{hospital}} ({{entries}} entrées) dans le cadre de la demande {{request}}"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -4930,7 +4933,11 @@
     "QC_OVERRIDE": "Validé malgré un CQ rejeté",
     "RELEASE_CRITICAL_FROM_WORKLIST": "Un résultat critique se valide depuis la file de validation, où vous notez qui a été prévenu.",
     "RELEASE_FROM_WORKLIST": "Validez-le depuis la file de validation.",
-    "READ_BACK_CONFIRMED_DETAIL": "Relecture confirmée : {{test}} « {{value}} » — {{patient}}"
+    "READ_BACK_CONFIRMED_DETAIL": "Relecture confirmée : {{test}} « {{value}} » — {{patient}}",
+    "READ_BACK_CHANNEL": "Comment le résultat vous est parvenu",
+    "READ_BACK_CHANNEL_IN_APP": "Dans l’application",
+    "READ_BACK_CHANNEL_PHONE": "Par téléphone",
+    "READ_BACK_CHANNEL_IN_PERSON": "En personne"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Anormal",
@@ -13704,7 +13711,39 @@
     "DECLARED_VALUE": "{{group}} (déclaré, non vérifié)",
     "DECLARED_GROUP": "Dossier : {{group}} (non vérifié)",
     "DECLARED_MISMATCH": "Le dossier indique {{declared}} mais le laboratoire a groupé {{typed}}. Vérifiez l’identité du patient et le dossier ; le groupe du laboratoire fait foi pour la compatibilité.",
-    "DECLARED_MISMATCH_SHORT": "Diffère du dossier"
+    "DECLARED_MISMATCH_SHORT": "Diffère du dossier",
+    "ALLO_IMMUNISED": "Patient allo-immunisé (RAI positive au dossier)",
+    "ALLO_IMMUNISED_RULE": "Règle provisoire : les globules rouges ne sont délivrés que pour un anticorps identifié (ou sur décision d’adressage du biologiste), sur une poche antigène-négative respectant le phénotype RH-KEL1, avec une épreuve de compatibilité à l’antiglobuline compatible sur un prélèvement de 72 heures au plus. Une RAI négative ultérieure ne lève pas cette règle.",
+    "ALLO_IMMUNISED_REQUEST": "Allo-immunisé : les globules rouges exigent une poche compatibilisée, ou une urgence vitale déclarée (règle provisoire)",
+    "ANTIBODY_IDENTIFIED": "Anticorps identifié : {{antibody}}",
+    "ANTIBODY_WORKUP_MISSING": "L’anticorps n’est pas identifié et aucune décision d’adressage ne sert cette demande : les globules rouges sont retenus.",
+    "ANTIBODY_RECORD": "Enregistrer l’anticorps ou une décision d’adressage",
+    "ANTIBODY_RECORD_HINT": "Seul le biologiste enregistre cette information. Elle reste définitivement au dossier du patient.",
+    "ANTIBODY_STATUS": "Ce qui est enregistré",
+    "ANTIBODY_STATUS_IDENTIFIED": "Anticorps identifié",
+    "ANTIBODY_STATUS_REFERRED": "Adressé au CNTS/CRTS : servir cette demande avant la réponse",
+    "ANTIBODY_SPECIFICITIES": "Anticorps identifié (spécificité)",
+    "ANTIBODY_REFERRAL_HINT": "La poche phénotypée et l’épreuve de compatibilité à l’antiglobuline restent exigées. La décision ne sert que cette demande.",
+    "ANTIBODY_REFERRAL_CENTRE": "Centre d’adressage (CNTS, CRTS)",
+    "ANTIBODY_DECISION_REASON": "Pourquoi cette demande est servie avant l’identification",
+    "ANTIBODY_RECORDED": "Enregistré.",
+    "ANTIBODY_ERROR": "L’enregistrement a échoué.",
+    "VITAL_URGENCY_WARNING": "Ce patient est allo-immunisé. En urgence vitale, la transfusion n’est pas retardée, mais il existe un risque d’hémolyse : déclarez le niveau et le motif, et faites le prélèvement pré-transfusionnel avant la première poche (règle provisoire).",
+    "VITAL_URGENCY_LEVEL": "Niveau d’urgence vitale",
+    "VITAL_URGENCY_UVI": "Urgence vitale immédiate (UVI) : groupe O sans délai",
+    "VITAL_URGENCY_UV": "Urgence vitale (UV) : délivrance sous 30 minutes",
+    "VITAL_URGENCY_REASON": "Motif de l’urgence vitale",
+    "VITAL_URGENCY_SAMPLE": "Le prélèvement pré-transfusionnel est fait avant la première poche",
+    "VITAL_URGENCY_DECLARED": "Déclaré par le prescripteur : {{level}}. Motif : {{reason}}",
+    "COMPATIBILISATION_HINT": "Patient allo-immunisé : un résultat compatible doit être une épreuve de compatibilité à l’antiglobuline, sur un prélèvement de 72 heures au plus, sur une poche négative pour l’antigène cible et respectant le phénotype RH-KEL1 (règle provisoire).",
+    "XM_SAMPLE_AT": "Prélèvement de cette épreuve fait le",
+    "XM_ANTIGLOBULIN": "Réalisée en test indirect à l’antiglobuline",
+    "XM_ANTIGEN_NEGATIVE": "La poche est négative pour l’antigène cible",
+    "XM_RH_KELL": "La poche respecte le phénotype RH-KEL1",
+    "HAEMOLYSIS_WARNING": "Patient allo-immunisé : une délivrance sans épreuve de compatibilité expose à un risque d’hémolyse. Prévenez l’équipe clinique, maintenez le contrôle au lit du malade ; le biologiste réalise l’épreuve a posteriori (règle provisoire).",
+    "ANTIBODY_FROM_OTHER_HOSPITAL": "Information de sécurité transfusionnelle enregistrée par : {{hospitals}}",
+    "ANTIBODY_KNOWN_IDENTIFIED": "Anticorps identifié : {{antibody}} ({{hospital}}, {{date}}).",
+    "ANTIBODY_KNOWN_NOT_IDENTIFIED": "RAI positive, anticorps non identifié ({{hospital}}, {{date}})."
   },
   "MORTALITY": {
     "DISPUTE": "Contester ce décès",
@@ -13944,7 +13983,16 @@
     "WARD_OVERVIEW": "Vue des unités",
     "SNAPSHOT_AT": "Mis à jour le",
     "LEGEND": "Légende des lits",
-    "HOSPITAL_NAMES_ERROR": "Les noms des hôpitaux n’ont pas pu être chargés. Les identifiants sont affichés ; les capacités sont disponibles."
+    "HOSPITAL_NAMES_ERROR": "Les noms des hôpitaux n’ont pas pu être chargés. Les identifiants sont affichés ; les capacités sont disponibles.",
+    "IN_LABOR": "En travail",
+    "LABOR_NOTICE": "{{name}} est en travail. Un déplacement vers un autre lit de maternité ne demande pas de confirmation ; un déplacement hors de l’unité de maternité en demande une.",
+    "LABOR_WARNING": "{{name}} est en travail et ce lit n’est pas dans une unité de maternité. Vérifiez qu’il s’agit bien de la bonne patiente, et dites pourquoi dans le motif.",
+    "LABOR_CONFIRM": "Je confirme le transfert d’une patiente en travail hors de l’unité de maternité",
+    "LABOR_COMPLETE_TITLE": "Déplacer une patiente en travail ?",
+    "LABOR_COMPLETE_MESSAGE": "{{name}} est en travail et {{bed}} n’est pas dans une unité de maternité. N’effectuez ce transfert que s’il lui est bien destiné.",
+    "LABOR_COMPLETE_CONFIRM": "Oui, effectuer le transfert",
+    "SEARCH_RESULTS": "{{shown}} lit(s) sur {{total}} correspondent à la recherche.",
+    "SEARCH_CLEAR": "Afficher tous les lits"
   },
   "EMAR": {
     "ORDER_NO_LONGER_ACTIVE": "Cette prescription n’est plus active. Aucune dose n’a été enregistrée.",
@@ -15299,7 +15347,18 @@
     "EMPTY": "Aucun résultat critique n’attend de relecture.",
     "ORDERED_BY": "Prescripteur",
     "PAGING_SINCE": "Alerte envoyée",
-    "ROUNDS": "Relances"
+    "ROUNDS": "Relances",
+    "ESCALATION_TITLE": "Étapes de l’escalade (règle provisoire)",
+    "ESCALATION_HINT": "Un résultat critique que personne n’acquitte passe au médecin de couverture, puis au médecin-chef et au biologiste, puis devient un « résultat critique non résolu » avec un enregistrement d’incident. Seule la relecture par un clinicien y met fin. Les minutes comptent depuis la première notification. Règle provisoire, à valider par le médecin-chef et le biologiste.",
+    "ESCALATION_COVER": "Médecin de couverture après (min)",
+    "ESCALATION_LEAD": "Médecin-chef et biologiste après (min)",
+    "ESCALATION_UNRESOLVED": "Non résolu, incident après (min)",
+    "ESCALATION_CHIEF": "Médecin-chef",
+    "ESCALATION_CHIEF_NONE": "Non désigné : chefs de service, sinon tous les médecins",
+    "ESCALATION_INVALID": "Les trois étapes doivent être croissantes, de 5 minutes à 1440 (par exemple 15, 30 et 60).",
+    "ESCALATION_SAVED": "Étapes de l’escalade enregistrées.",
+    "ESCALATION_SAVE_ERROR": "Les étapes de l’escalade n’ont pas pu être enregistrées.",
+    "ESCALATION_LOAD_ERROR": "Les étapes de l’escalade n’ont pas pu être chargées."
   },
   "PHARMACY_MONEY": {
     "HANDOVER": {

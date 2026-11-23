@@ -563,6 +563,11 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Cross-hospital lab result read at the performing laboratory$/,
   },
   {
+    // QA D3351 (owner decision 2026-11-22): the allo-immunisation flag follows the patient across hospitals.
+    key: 'AUDIT.DESC.CROSS_HOSPITAL_ANTIBODY_FLAG',
+    re: /^Cross-hospital allo-immunisation flag read \(transfusion safety, shown whatever the sharing choice\)$/,
+  },
+  {
     key: 'AUDIT.DESC.CROSS_HOSPITAL_READ',
     re: /^Cross-hospital (.+) read on the treatment relationship(.*)$/,
     params: ['subject', 'extra'],

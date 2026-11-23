@@ -38,14 +38,20 @@ public class ObstetricAlertEscalationService {
     public static final String SOURCE_POSTPARTUM = "POSTPARTUM_OBSERVATION";
     /** QA D1762: the labour transfer and arrival notice (no clinical value behind it to re-measure). */
     public static final String SOURCE_TRANSFER = "LABOR_TRANSFER";
+    /**
+     * QA D3304 (r70): a maternal early-warning page (medium, high or a RED add-on alert) raised from a ward
+     * vital set. It reached the doctors as a bell notice only, with nothing to acknowledge and no reminder,
+     * while a partograph alert of the same severity on the same woman had both.
+     */
+    public static final String SOURCE_VITAL_SIGN = "VITAL_SIGN";
 
     /**
      * Every source type an escalation row may carry. The column's CHECK
-     * constraint (latest: V292) must allow each of them;
+     * constraint (latest: V362) must allow each of them;
      * ObstetricAlertEscalationSourceTypeGuardTest fails when the two drift.
      */
     public static final java.util.Set<String> SOURCE_TYPES = java.util.Set.of(
-        SOURCE_PARTOGRAPH, SOURCE_DELIVERY, SOURCE_NEWBORN, SOURCE_POSTPARTUM, SOURCE_TRANSFER);
+        SOURCE_PARTOGRAPH, SOURCE_DELIVERY, SOURCE_NEWBORN, SOURCE_POSTPARTUM, SOURCE_TRANSFER, SOURCE_VITAL_SIGN);
 
     /**
      * One URGENT alert, as plain values: the callback runs after the commit,

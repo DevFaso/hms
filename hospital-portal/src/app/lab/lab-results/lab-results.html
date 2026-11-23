@@ -1373,6 +1373,22 @@
             autocomplete="off"
           />
         </div>
+        <!-- QA r70 (C5): who acknowledged, as what, when and HOW: the channel is recorded with the read-back. -->
+        <div class="field">
+          <label for="readBackChannel">{{ 'LAB_RESULTS.READ_BACK_CHANNEL' | translate }}</label>
+          <select
+            id="readBackChannel"
+            data-testid="read-back-channel"
+            [value]="readBackChannel()"
+            (change)="readBackChannel.set($any($event.target).value)"
+          >
+            @for (channel of readBackChannels; track channel) {
+              <option [value]="channel">
+                {{ 'LAB_RESULTS.READ_BACK_CHANNEL_' + channel | translate }}
+              </option>
+            }
+          </select>
+        </div>
         <p class="muted">{{ 'LAB_RESULTS.READ_BACK_HINT' | translate }}</p>
       </div>
       <div class="modal-actions">

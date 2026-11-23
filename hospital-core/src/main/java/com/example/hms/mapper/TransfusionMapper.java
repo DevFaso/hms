@@ -112,6 +112,10 @@ public class TransfusionMapper {
             .performedAt(crossmatch.getPerformedAt())
             .expiresAt(crossmatch.getExpiresAt())
             .usable(crossmatch.isUsableAt(LocalDateTime.now(clock)))
+            .sampleCollectedAt(crossmatch.getSampleCollectedAt())
+            .antiglobulinMethod(crossmatch.getAntiglobulinMethod())
+            .antigenNegative(crossmatch.getAntigenNegative())
+            .rhKellMatched(crossmatch.getRhKellMatched())
             // Advisory only — computed from the pairing, never stored, and
             // deliberately not part of compatible/usable. See the DTO field.
             .plateletPairingPendingConfirmation(pendingConfirmation(crossmatch, unit))

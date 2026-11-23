@@ -305,6 +305,172 @@ describe('BedBoardComponent', () => {
     expect(component.board()?.census.totalBeds).toBe(1);
   });
 
+  // ---- QA D3308 (r70) ----
+
+  /** Two units, two occupied beds (one woman in labour), one free maternity bed and one free surgical bed. */
+  function labourBoard(): BedBoard {
+    return board({
+      wards: [
+        ward({
+          rooms: [
+            {
+              roomNumber: 'MT',
+              beds: [
+                bed({
+                  bedId: 'mt-03',
+                  bedNumber: 'MT-03',
+                  status: 'OCCUPIED',
+                  occupant: occupant({
+                    admissionId: 'a-04',
+                    patientId: 'p-04',
+                    patientName: 'Patient Test 04',
+                    mrn: 'TWP0004',
+                    inLabor: true,
+                  }),
+                }),
+                bed({ bedId: 'mt-05', bedNumber: 'MT-05' }),
+              ],
+            },
+          ],
+        }),
+        ward({
+          wardId: 'w2',
+          wardName: 'Chirurgie',
+          wardCode: 'CHI70A',
+          wardType: 'SURGICAL',
+          rooms: [
+            {
+              roomNumber: 'C',
+              beds: [
+                bed({
+                  bedId: 'c-01',
+                  bedNumber: 'C-01',
+                  status: 'OCCUPIED',
+                  occupant: occupant({
+                    admissionId: 'a-06',
+                    patientId: 'p-06',
+                    patientName: 'Patient Test 06',
+                    mrn: 'TWP0006',
+                  }),
+                }),
+                bed({ bedId: 'c-02', bedNumber: 'C-02' }),
+              ],
+            },
+          ],
+        }),
+      ],
+    });
+  }
+
+  it('QA D3308: typing in the board search leaves only the matching bed cards and their transfer button', () => {
+    boardSpy.getBoard.and.returnValue(of(labourBoard()));
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const names = () =>
+      Array.from(el.querySelectorAll('.occupant-name')).map((n) => n.textContent?.trim());
+    expect(names()).toEqual(['Patient Test 04', 'Patient Test 06']);
+    expect(el.querySelectorAll('.bed-grid article').length).toBe(4);
+    expect(el.querySelector('[data-testid="bed-board-search-summary"]')).toBeNull();
+
+    // The real input, as a nurse types in it (not the signal).
+    const input = el.querySelector<HTMLInputElement>('[data-testid="bed-board-search"]')!;
+    input.value = 'Patient Test 06';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(names()).toEqual(['Patient Test 06']);
+    expect(el.querySelectorAll('.bed-grid article').length).toBe(1);
+    // The only transfer button left on the board is the searched patient's.
+    const transferButtons = Array.from(
+      el.querySelectorAll<HTMLButtonElement>('.bed-actions button'),
+    ).filter((b) => b.textContent?.includes('BED_BOARD.TRANSFER'));
+    expect(transferButtons.length).toBe(1);
+    transferButtons[0].click();
+    expect(fixture.componentInstance.transferTarget()?.patientName).toBe('Patient Test 06');
+    expect(el.querySelector('[data-testid="bed-board-search-summary"]')).not.toBeNull();
+    expect(fixture.componentInstance.searchSummary()).toEqual({ shown: 1, total: 4 });
+  });
+
+  it('QA D3308: a woman in labour is marked, and her transfer out of maternity warns and needs the tick', () => {
+    boardSpy.getBoard.and.returnValue(of(labourBoard()));
+    transferSpy.requestTransfer.and.returnValue(of(transferOrder()));
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    const cmp = fixture.componentInstance;
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelectorAll('[data-testid="occupant-in-labor"]').length).toBe(1);
+
+    cmp.openTransfer(cmp.board()!.wards[0].rooms[0].beds[0].occupant!);
+    cmp.transferForm.reason = 'Urgent caesarean';
+    // Another maternity bed: her ordinary care, said but not asked.
+    cmp.transferForm.toBedId = 'mt-05';
+    fixture.detectChanges();
+    expect(cmp.transferNeedsLaborAck).toBeFalse();
+    expect(cmp.transferSubmittable).toBeTrue();
+    expect(el.querySelector('[data-testid="transfer-labor-warning"]')).not.toBeNull();
+    expect(el.querySelector('#labor-confirm')).toBeNull();
+
+    // A surgical bed: the warning, and no order without the tick.
+    cmp.transferForm.toBedId = 'c-02';
+    fixture.detectChanges();
+    expect(cmp.transferNeedsLaborAck).toBeTrue();
+    expect(el.querySelector('#labor-confirm')).not.toBeNull();
+    expect(cmp.transferSubmittable).toBeFalse();
+    cmp.submitTransfer();
+    expect(transferSpy.requestTransfer).not.toHaveBeenCalled();
+
+    cmp.transferForm.laborAcknowledged = true;
+    cmp.submitTransfer();
+    expect(transferSpy.requestTransfer).toHaveBeenCalledWith(
+      jasmine.objectContaining({ admissionId: 'a-04', toBedId: 'c-02', laborAcknowledged: true }),
+    );
+  });
+
+  it('QA D3308: a patient who is not in labour is asked nothing, and no flag is sent', () => {
+    boardSpy.getBoard.and.returnValue(of(labourBoard()));
+    transferSpy.requestTransfer.and.returnValue(of(transferOrder()));
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    const cmp = fixture.componentInstance;
+    fixture.detectChanges();
+    cmp.openTransfer(cmp.board()!.wards[1].rooms[0].beds[0].occupant!);
+    cmp.transferForm.reason = 'Surgical opinion';
+    cmp.transferForm.toBedId = 'c-02';
+    fixture.detectChanges();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="transfer-labor-warning"]',
+      ),
+    ).toBeNull();
+    cmp.submitTransfer();
+    expect(
+      transferSpy.requestTransfer.calls.mostRecent().args[0].laborAcknowledged,
+    ).toBeUndefined();
+  });
+
+  it('QA D3308: carrying out the transfer of a woman in labour out of maternity asks first', () => {
+    transferSpy.completeTransfer.and.returnValue(of(transferOrder({ status: 'COMPLETED' })));
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    const cmp = fixture.componentInstance;
+    fixture.detectChanges();
+    const order = transferOrder({ laborAcknowledgementRequired: true, toBedLabel: 'CHI70A/C-02' });
+
+    cmp.completeTransfer(order);
+    fixture.detectChanges();
+    expect(transferSpy.completeTransfer).not.toHaveBeenCalled();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('app-confirm-dialog'),
+    ).not.toBeNull();
+
+    cmp.confirmLaborTransferCompletion(order);
+    expect(transferSpy.completeTransfer).toHaveBeenCalledWith('t1', { laborAcknowledged: true });
+    expect(cmp.completingLaborTransfer()).toBeNull();
+
+    // Any other transfer is carried out at once, with no flag.
+    cmp.completeTransfer(transferOrder({ id: 't2' }));
+    expect(transferSpy.completeTransfer).toHaveBeenCalledWith('t2', {});
+  });
+
   it('carries no scope chip or hint of its own: the route gate owns them', () => {
     // /bed-board is flagged requiresHospitalScope; the shell shows the one
     // chip and keeps the page unbuilt until a hospital is pinned.

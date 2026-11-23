@@ -7,6 +7,7 @@ import { RoleContextService } from '../../core/role-context.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { LabValuePipe } from '../shared/lab-value.pipe';
 import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.component';
+import { CriticalEscalationSettingsComponent } from './critical-escalation-settings.component';
 
 /**
  * r65 D2183: the hospital's critical lab results still waiting for a
@@ -28,6 +29,7 @@ import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.comp
     ServerTimePipe,
     LabValuePipe,
     LabCorrectionBadgeComponent,
+    CriticalEscalationSettingsComponent,
   ],
   templateUrl: './lab-critical-pending.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -41,6 +43,8 @@ export class LabCriticalPendingComponent implements OnInit {
   failed = signal(false);
   noScope = signal(false);
   rows = signal<LabResultResponse[]>([]);
+  /** QA r70 (C5): the hospital whose escalation steps the administrator may set here. */
+  settingsHospitalId = signal<string | null>(null);
 
   /** How many escalation rounds this result has paged (a count, never an enum). */
   escalationRounds(row: LabResultResponse): number {
@@ -59,6 +63,7 @@ export class LabCriticalPendingComponent implements OnInit {
       return;
     }
     this.noScope.set(false);
+    this.settingsHospitalId.set(hospitalId);
     this.loading.set(true);
     this.failed.set(false);
     this.labService.criticalUnacknowledged(hospitalId).subscribe({

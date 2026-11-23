@@ -178,6 +178,9 @@ final class ComputedKeys {
             "ActingScopeResolver.java|hospitalScope.refused.");
         r.put("com/example/hms/service/CriticalValueNotificationService.java|text.key()",
             new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
+        // QA r70 (C5): the same first notice, to the nurse in charge.
+        r.put("com/example/hms/service/CriticalValueNotificationService.java|text.key() #2",
+            new Open("a NotificationText built by the service; each NotificationText.of / key(...) call is a literal site of its own"));
         // r65 D2183: the escalation text, the orderer's or the tier-2 coordinator's
         // (COORDINATOR_ESCALATION_KEY), both NotificationText.of literal sites.
         r.put("com/example/hms/service/CriticalValueNotificationService.java|sent.key()",
@@ -337,6 +340,22 @@ final class ComputedKeys {
             values("mews.escalation.", List.of("lowMedium", "medium", "high", "red")));
         r.put("com/example/hms/service/vitals/MaternalEarlyWarningService.java|ALERT_LABEL_PREFIX + a.name()",
             enumValues("mews.alert.", com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert.class));
+        // QA D3351: the biologist's tasks; the keys are the literals set on the item (setTitleKey / setBodyKey).
+        r.put("com/example/hms/service/transfusion/PositiveAntibodyScreenService.java|titleKey",
+            new Open("read back from the item: IDENTIFY_TITLE_KEY or RETROSPECTIVE_TITLE_KEY, both literal constants"));
+        r.put("com/example/hms/service/transfusion/PositiveAntibodyScreenService.java|bodyKey",
+            new Open("read back from the item: IDENTIFY_BODY_KEY or RETROSPECTIVE_BODY_KEY, both literal constants"));
+        // QA D3351: what a routine issue to an allo-immunised patient still lacks (PositiveAntibodyScreenPolicy.Missing).
+        r.put("com/example/hms/service/transfusion/PositiveAntibodyScreenService.java|lack.messageKey()",
+            values("transfusion.antibody.", List.of("workupRequired", "antiglobulinRequired", "antigenNegativeRequired",
+                "rhKellRequired", "sampleTimeRequired", "sampleInFuture", "sampleTooOld")));
+        // QA D3304: the in-basket item of a medium, high or red page.
+        r.put("com/example/hms/service/vitals/MaternalEarlyWarningService.java|ALERT_LABEL_PREFIX + a.name() #2",
+            enumValues("mews.alert.", com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert.class));
+        r.put("com/example/hms/service/vitals/MaternalEarlyWarningService.java|ITEM_TYPE_PREFIX + alertType",
+            values("maternalWarning.alert.type.", List.of("MEWS_MEDIUM", "MEWS_HIGH", "MEWS_RED")));
+        r.put("com/example/hms/service/vitals/MaternalEarlyWarningService.java|String messageKey = ITEM_MESSAGE_PREFIX + alertType",
+            values("maternalWarning.alert.msg.", List.of("MEWS_MEDIUM", "MEWS_HIGH", "MEWS_RED")));
         r.put("com/example/hms/cdshooks/bpa/NewsScoreProtocolRule.java|MaternalEarlyWarningService.ALERT_LABEL_PREFIX + a.name()",
             enumValues("mews.alert.", com.example.hms.service.vitals.MaternalEarlyWarning.HardAlert.class));
         r.put("com/example/hms/cdshooks/bpa/NewsScoreProtocolRule.java|\"cds.bpa.mews.tier.\" + tier.name()",

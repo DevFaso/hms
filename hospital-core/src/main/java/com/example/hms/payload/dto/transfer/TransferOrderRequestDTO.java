@@ -40,4 +40,10 @@ public class TransferOrderRequestDTO {
 
     @Size(max = 500)
     private String isolationOverrideReason;
+
+    /**
+     * QA D3308: the patient is a woman in active labour and the destination is outside a maternity ward: the
+     * person ordering the move has seen the warning. Required then; ignored otherwise.
+     */
+    private Boolean laborAcknowledged;
 }

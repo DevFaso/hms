@@ -114,6 +114,8 @@ public class LabResultMapper {
             // fields: it used to fill these two on an unacknowledged result.
             .criticalReadBackBy(ofConfirmedReadBack(result, result.getCriticalReadBackByDisplay()))
             .criticalReadBackValue(ofConfirmedReadBack(result, result.getCriticalReadBackValue()))
+            .criticalAckRole(ofConfirmedReadBack(result, result.getCriticalAckRole()))
+            .criticalAckChannel(ofConfirmedReadBack(result, result.getCriticalAckChannel()))
             .criticalReadBackRefusedBy(ofRefusedReadBack(result, result.getCriticalReadBackByDisplay()))
             .criticalReadBackRefusedValue(ofRefusedReadBack(result, result.getCriticalReadBackValue()))
             .acknowledgedAt(result.getAcknowledgedAt())
