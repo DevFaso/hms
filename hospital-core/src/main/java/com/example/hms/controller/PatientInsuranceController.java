@@ -1,6 +1,7 @@
 package com.example.hms.controller;
 
 import com.example.hms.payload.dto.LinkPatientInsuranceRequestDTO;
+import com.example.hms.payload.dto.OtherHospitalInsuranceDTO;
 import com.example.hms.payload.dto.PatientInsuranceResponseDTO;
 import com.example.hms.service.PatientInsuranceService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,6 +18,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -86,6 +88,28 @@ public class PatientInsuranceController {
         Locale locale
     ) {
         return ResponseEntity.ok(patientInsuranceService.getInsurancesByPatientId(patientId, locale));
+    }
+
+    /**
+     * Owner decision 2026-11-22: the patient's policies recorded at other hospitals this one may read, « à
+     * vérifier », by their identity only (insurer, member number, plan name, holder relationship, validity dates).
+     * Never that hospital's claims, amounts, approvals, documents or notes. The desk roles only.
+     */
+    @GetMapping("/patient/{patientId}/other-hospitals")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','BILLING_SPECIALIST','RECEPTIONIST')")
+    public ResponseEntity<List<OtherHospitalInsuranceDTO>> getOtherHospitalPolicies(@PathVariable UUID patientId) {
+        return ResponseEntity.ok(patientInsuranceService.getOtherHospitalPolicies(patientId));
+    }
+
+    /**
+     * Owner decision 2026-11-22: « Reprendre pour cet établissement ». Makes the acting hospital's own, unverified
+     * coverage from another hospital's policy identity, with no plan (an identity-only record when this hospital has
+     * no agreement with that insurer). The source row is never changed.
+     */
+    @PostMapping("/{insuranceId}/reuse")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','BILLING_SPECIALIST','RECEPTIONIST')")
+    public ResponseEntity<PatientInsuranceResponseDTO> reuseOtherHospitalPolicy(@PathVariable UUID insuranceId) {
+        return ResponseEntity.ok(patientInsuranceService.reuseOtherHospitalPolicy(insuranceId));
     }
 
     // Optional: keep this for callers that know the insurance UUID

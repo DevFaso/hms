@@ -2169,6 +2169,8 @@
       "PATIENT_ACTIVATION_CODE_SHOWN": "Código de activación del portal del paciente mostrado en recepción",
       "PATIENT_ACTIVATION_RESENT": "Activación del portal del paciente reenviada por recepción",
       "DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED": "Deferred billing withdrawn: the prepared fill it was approved on was cancelled",
+      "CROSS_HOSPITAL_INSURANCE_READ": "Seguro de otro hospital consultado en admisión para verificarlo (solo identidad)",
+      "CROSS_HOSPITAL_INSURANCE_REUSED": "Seguro de otro hospital retomado como cobertura propia de este hospital (solo identidad)",
       "ROI_PDF_DOWNLOADED": "PDF de la historia descargado para el paciente {{patient}} en el hospital {{hospital}} ({{entries}} entradas) bajo la solicitud {{request}}"
     },
     "SCOPE_REFUSAL": {
@@ -11930,7 +11932,18 @@
     "PLAN_HINT": "The payer plan this coverage is billed under. Without a plan, the patient pays the whole invoice.",
     "PLAN_SAVED": "Plan saved.",
     "PLAN_SAVE_ERROR": "The plan could not be saved.",
-    "VERIFIED": "Seguro verificado"
+    "VERIFIED": "Seguro verificado",
+    "OTHER_TITLE": "Seguro registrado en otro hospital — por verificar",
+    "OTHER_HINT": "Tal como se introdujo allí, sin verificar aquí. Verifíquelo con la tarjeta del paciente y la aseguradora antes de retomarlo. Las verificaciones, bonos, autorizaciones, reclamaciones e importes de ese hospital no se comparten.",
+    "TO_VERIFY": "Por verificar",
+    "OTHER_REUSE": "Retomar para este hospital",
+    "OTHER_REUSED": "Seguro retomado para este hospital, sin verificar. Verifíquelo y luego elija su plan.",
+    "OTHER_REUSE_ERROR": "No se pudo retomar el seguro",
+    "OTHER_NO_AGREEMENT": "Ningún convenio con esta aseguradora en este hospital. Retomarlo solo registra el seguro: no se factura ninguna parte a la aseguradora hasta que el hospital tenga su propio convenio.",
+    "OTHER_DECLARED": "Declarado en {{hospital}} el {{date}} — por verificar",
+    "OTHER_DECLARED_NO_DATE": "Declarado en {{hospital}} — por verificar",
+    "OTHER_CARD_HINT": "La tarjeta de seguro que subió el paciente, si la hay, está en la pestaña «Documentos».",
+    "OTHER_REUSED_NO_AGREEMENT": "Seguro registrado para este hospital, sin verificar y sin convenio: no se factura ninguna parte a la aseguradora."
   },
   "PATIENT_DOCUMENTS": {
     "TAB": "Documentos",

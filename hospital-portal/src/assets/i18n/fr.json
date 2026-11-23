@@ -2169,6 +2169,8 @@
       "PATIENT_ACTIVATION_CODE_SHOWN": "Code d’activation du portail patient affiché à l’accueil",
       "PATIENT_ACTIVATION_RESENT": "Activation du portail patient renvoyée par l’accueil",
       "DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED": "Report « à facturer » retiré : la délivrance préparée sur laquelle il avait été approuvé a été annulée",
+      "CROSS_HOSPITAL_INSURANCE_READ": "Assurance d’un autre établissement consultée à l’accueil pour vérification (identité seulement)",
+      "CROSS_HOSPITAL_INSURANCE_REUSED": "Assurance d’un autre établissement reprise comme couverture propre de cet établissement (identité seulement)",
       "ROI_PDF_DOWNLOADED": "PDF du dossier patient téléchargé pour le patient {{patient}} à l’hôpital {{hospital}} ({{entries}} entrées) dans le cadre de la demande {{request}}"
     },
     "SCOPE_REFUSAL": {
@@ -5821,7 +5823,7 @@
     "ERR_CODE_INCORRECT": "Code incorrect. Veuillez vérifier votre e-mail et réessayer.",
     "ERR_ASSIGNMENT_NOT_FOUND": "Affectation introuvable. Veuillez utiliser le lien de l'e-mail d'origine.",
     "ERR_GENERIC": "Une erreur s'est produite. Veuillez réessayer.",
-    "OTHER_ROLES_HINT": "Si votre e-mail de bienvenue mentionne d'autres rôles, confirmez chacun d'eux avec son propre code, à l'aide du bouton placé sous ce code.",
+    "OTHER_ROLES_HINT": "Si votre e-mail de bienvenue mentionne d’autres rôles, confirmez chacun d’eux avec son propre code, à l’aide du bouton placé sous ce code.",
     "DIGIT_OF": "Chiffre {{n}} sur {{total}}",
     "BY_PHONE_TITLE": "Activez votre compte",
     "BY_PHONE_INTRO": "Saisissez le numéro de téléphone donné lors de votre inscription et le code à 6 chiffres reçu (par SMS, par e-mail ou en main propre).",
@@ -11930,7 +11932,18 @@
     "PLAN_HINT": "La formule de l’organisme payeur au titre de laquelle cette couverture est facturée. Sans formule, le patient paie toute la facture.",
     "PLAN_SAVED": "Formule enregistrée.",
     "PLAN_SAVE_ERROR": "La formule n’a pas pu être enregistrée.",
-    "VERIFIED": "Assurance vérifiée"
+    "VERIFIED": "Assurance vérifiée",
+    "OTHER_TITLE": "Assurance enregistrée dans un autre établissement — à vérifier",
+    "OTHER_HINT": "Telle qu’elle y a été saisie, non vérifiée ici. Vérifiez-la avec la carte du patient et l’assureur avant de la reprendre. Les vérifications, bons de prise en charge, accords, demandes de remboursement et montants de cet établissement ne sont pas partagés.",
+    "TO_VERIFY": "À vérifier",
+    "OTHER_REUSE": "Reprendre pour cet établissement",
+    "OTHER_REUSED": "Assurance reprise pour cet établissement, à vérifier. Vérifiez-la, puis choisissez sa formule.",
+    "OTHER_REUSE_ERROR": "Échec de la reprise de l’assurance",
+    "OTHER_NO_AGREEMENT": "Aucune convention avec cet assureur dans cet établissement. La reprise enregistre seulement l’assurance : aucune part assureur n’est facturée tant que l’établissement n’a pas sa propre convention.",
+    "OTHER_DECLARED": "Déclarée à {{hospital}} le {{date}} — à vérifier",
+    "OTHER_DECLARED_NO_DATE": "Déclarée à {{hospital}} — à vérifier",
+    "OTHER_CARD_HINT": "La carte d’assurance déposée par le patient, s’il y en a une, se trouve dans l’onglet « Documents ».",
+    "OTHER_REUSED_NO_AGREEMENT": "Assurance enregistrée pour cet établissement, à vérifier, sans convention : aucune part assureur n’est facturée."
   },
   "PATIENT_DOCUMENTS": {
     "TAB": "Documents",
