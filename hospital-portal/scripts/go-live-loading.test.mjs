@@ -19,7 +19,7 @@ test('every optional remote font stylesheet is nonblocking and the root keeps lo
 const shared = readFileSync('../scripts/perf/go-live-journey.js', 'utf8')
   .replace(/^import .*;\r?\n/gm, '')
   .replace(/export /g, '');
-function run(env) {
+function run(env, csrfAvailable = true) {
   const calls = [];
   const sandbox = {
     __ENV: env,
@@ -30,6 +30,11 @@ function run(env) {
     http: {
       get(...args) {
         calls.push(['GET', ...args]);
+        if (args[0].endsWith('/auth/csrf-token'))
+          return {
+            status: 204,
+            cookies: csrfAvailable ? { 'XSRF-TOKEN': [{ value: 'cdx-xsrf' }] } : {},
+          };
         return { status: 200 };
       },
       post(...args) {
@@ -85,4 +90,25 @@ test('opted-in billing load cannot issue invoices or post money', () => {
     readFileSync('../scripts/perf/billing-k6.js', 'utf8'),
     /\/billing-invoices\/hospital\//,
   );
+});
+
+test('each opted-in write bootstraps its virtual-user CSRF cookie and echoes it, refusing a missing cookie', () => {
+  const env = {
+    ...safe,
+    ALLOW_SYNTHETIC_WRITES: 'yes',
+    MOCK_GATEWAYS_CONFIRMED: 'yes',
+    RUN_ID: 'cdx-run',
+  };
+  for (const lane of ['registration', 'consultation', 'billing']) {
+    const { sandbox, calls } = run(env);
+    sandbox.journey(lane, '/read', '/write', '{"status":"DRAFT"}');
+    assert.equal(calls[1][0], 'GET');
+    assert.equal(calls[1][1], `${safe.BASE_URL}/auth/csrf-token`);
+    assert.equal(calls[2][0], 'POST');
+    assert.equal(calls[2][3].headers['X-XSRF-TOKEN'], 'cdx-xsrf');
+    assert.equal(calls[2][3].redirects, 0);
+    const refused = run(env, false);
+    assert.throws(() => refused.sandbox.journey(lane, '/read', '/write', '{"status":"DRAFT"}'));
+    assert.equal(refused.calls.filter((call) => call[0] === 'POST').length, 0);
+  }
 });
