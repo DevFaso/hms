@@ -232,7 +232,7 @@ public class PatientMessageGate {
                 .filter(StringUtils::hasText).map(PatientMessageGate::normalised).toList();
             boolean unverified = Stream.of(mail.to(), mail.cc(), mail.bcc()).flatMap(List::stream)
                 .filter(StringUtils::hasText).filter(address -> own.contains(normalised(address)))
-                .anyMatch(address -> !verified(patient, notice, NotificationChannel.EMAIL, address));
+                .anyMatch(address -> !verifiedNow(patient, notice, address));
             if (unverified) return false;
         }
         emailService.sendWithAttachment(mail.to(), mail.cc(), mail.bcc(), mail.subject(), mail.html(),
@@ -257,6 +257,14 @@ public class PatientMessageGate {
     private boolean verified(Patient patient, Notice notice, NotificationChannel channel, String recipient) {
         if (verification.allows(patient, channel, recipient)) return true;
         ledger.recordUnverified(notice.event(), notice.hospitalId(), patient.getId(), notice.subjectId(), channel);
+        return false;
+    }
+
+    /** A PDF may have been composed after this patient snapshot was loaded. */
+    private boolean verifiedNow(Patient patient, Notice notice, String recipient) {
+        if (!verified(patient, notice, NotificationChannel.EMAIL, recipient)) return false;
+        if (patient.getId() != null && currentCheck.allows(patient.getId(), NotificationChannel.EMAIL, recipient)) return true;
+        ledger.recordUnverified(notice.event(), notice.hospitalId(), patient.getId(), notice.subjectId(), NotificationChannel.EMAIL);
         return false;
     }
 

@@ -205,6 +205,20 @@ class PatientMessageGateTest {
     }
 
     @Test
+    void attachmentMailRechecksCurrentProofAfterThePatientSnapshotWasLoaded() {
+        PatientMessageGate.OutgoingMail mail = new PatientMessageGate.OutgoingMail(
+            List.of(patient.getEmail()), null, null, "cdx-subject", "cdx-body");
+        assertThat(gate.emailWithAttachment(patient, notice(PatientNotificationEvent.INVOICE), mail,
+            new byte[] {1}, "cdx.pdf", "application/pdf")).isFalse();
+        verifyNoInteractions(emailService);
+        verify(ledger).recordUnverified(PatientNotificationEvent.INVOICE, hospitalId, patient.getId(), subjectId, NotificationChannel.EMAIL);
+        when(currentCheck.allows(patient.getId(), NotificationChannel.EMAIL, patient.getEmail())).thenReturn(true);
+        assertThat(gate.emailWithAttachment(patient, notice(PatientNotificationEvent.INVOICE), mail,
+            new byte[] {1}, "cdx.pdf", "application/pdf")).isTrue();
+        verify(emailService).sendWithAttachment(any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
     @DisplayName("D2201: an invoice mail that includes the patient's address follows BILLING; third parties do not")
     void invoiceRecipients() {
         optOut(NotificationType.BILLING, NotificationChannel.EMAIL);
