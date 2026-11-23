@@ -1941,6 +1941,7 @@
       "SHARING_OPTED_OUT": "El paciente rechazó compartir su historia entre hospitales",
       "SHARING_OPT_OUT_REVOKED": "Rechazo del paciente a compartir su historia entre hospitales retirado",
       "PATIENT_PDF_DOWNLOADED": "PDF de la historia descargado para el paciente {{patient}} en el hospital {{hospital}} ({{entries}} entradas)",
+      "ROI_PDF_DOWNLOADED": "PDF de la historia descargado para el paciente {{patient}} en el hospital {{hospital}} ({{entries}} entradas) bajo la solicitud {{request}}",
       "EMPI_MERGE": "Fusión de identidades: {{secondary}} fusionado en {{primary}} ({{details}})",
       "BREAK_GLASS_READ_NO_PURPOSE": "Lectura con acceso de emergencia (sin motivo indicado)",
       "BREAK_GLASS_READ": "Lectura con acceso de emergencia: {{what}}",

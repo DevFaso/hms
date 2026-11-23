@@ -1941,6 +1941,7 @@
       "SHARING_OPTED_OUT": "Patient refused record sharing between hospitals",
       "SHARING_OPT_OUT_REVOKED": "Patient’s refusal of record sharing between hospitals withdrawn",
       "PATIENT_PDF_DOWNLOADED": "Patient record PDF downloaded for patient {{patient}} at hospital {{hospital}} ({{entries}} entries)",
+      "ROI_PDF_DOWNLOADED": "Patient record PDF downloaded for patient {{patient}} at hospital {{hospital}} ({{entries}} entries) under record request {{request}}",
       "EMPI_MERGE": "Identity merge: {{secondary}} merged into {{primary}} ({{details}})",
       "BREAK_GLASS_READ_NO_PURPOSE": "Emergency-access read (no purpose given)",
       "BREAK_GLASS_READ": "Emergency-access read: {{what}}",

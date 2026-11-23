@@ -1941,6 +1941,7 @@
       "SHARING_OPTED_OUT": "Le patient a refusé le partage de son dossier entre hôpitaux",
       "SHARING_OPT_OUT_REVOKED": "Refus du partage du dossier entre hôpitaux retiré",
       "PATIENT_PDF_DOWNLOADED": "PDF du dossier patient téléchargé pour le patient {{patient}} à l’hôpital {{hospital}} ({{entries}} entrées)",
+      "ROI_PDF_DOWNLOADED": "PDF du dossier patient téléchargé pour le patient {{patient}} à l’hôpital {{hospital}} ({{entries}} entrées) dans le cadre de la demande {{request}}",
       "EMPI_MERGE": "Fusion d’identités : {{secondary}} fusionné dans {{primary}} ({{details}})",
       "BREAK_GLASS_READ_NO_PURPOSE": "Lecture en accès d’urgence (aucun motif indiqué)",
       "BREAK_GLASS_READ": "Lecture en accès d’urgence : {{what}}",
