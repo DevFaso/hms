@@ -17,9 +17,9 @@ class PatientRecipientContextTest {
         var check = new PatientRecipientCurrentCheck(patients, verification);
         UUID id = UUID.randomUUID(); Patient patient = new Patient();
         when(patients.findByIdUnscoped(id)).thenReturn(Optional.empty(), Optional.of(patient));
-        assertThat(check.allows(id, NotificationChannel.EMAIL, "cdx@example.invalid")).isFalse();
+        assertThat(check.isVerified(id, NotificationChannel.EMAIL, "cdx@example.invalid")).isFalse();
         when(verification.allows(patient, NotificationChannel.EMAIL, "cdx@example.invalid")).thenReturn(true);
-        assertThat(check.allows(id, NotificationChannel.EMAIL, "cdx@example.invalid")).isTrue();
+        assertThat(check.isVerified(id, NotificationChannel.EMAIL, "cdx@example.invalid")).isTrue();
         verify(patients, times(2)).findByIdUnscoped(id);
     }
 

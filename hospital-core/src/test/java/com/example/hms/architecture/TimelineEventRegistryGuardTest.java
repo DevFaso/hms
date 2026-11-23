@@ -81,6 +81,7 @@ class TimelineEventRegistryGuardTest {
 
     /** Patient-owned entities that are not chronology events, each with why. Decide before adding one. */
     static final Map<String, String> NOT_EVENTS = Map.ofEntries(
+        Map.entry("PatientRecipientChallenge", "C-K2b: ephemeral contact-security code, hash and resend budget; no clinical event or code material belongs on a shared clinical chronology"),
         Map.entry("ProxySensitiveRelease", "policy 2026-11-20: a disclosure of an existing result to a parent, on the"
             + " audit trail; the result itself is on the chronology, and a row here would name a hidden category to"
             + " every reader of it"),

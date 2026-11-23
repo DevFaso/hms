@@ -138,7 +138,7 @@ public class PatientMessageGate {
         boolean deferred = org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive();
         TransactionCallbacks.afterCommit(() -> {
             try {
-                if (deferred && !currentCheck.allows(patientId, NotificationChannel.SMS, phone)) {
+                if (deferred && !currentCheck.isVerified(patientId, NotificationChannel.SMS, phone)) {
                     ledger.recordUnverified(event, notice.hospitalId(), patientId, notice.subjectId(), NotificationChannel.SMS);
                     return;
                 }
@@ -263,7 +263,7 @@ public class PatientMessageGate {
     /** A PDF may have been composed after this patient snapshot was loaded. */
     private boolean verifiedNow(Patient patient, Notice notice, String recipient) {
         if (!verified(patient, notice, NotificationChannel.EMAIL, recipient)) return false;
-        if (patient.getId() != null && currentCheck.allows(patient.getId(), NotificationChannel.EMAIL, recipient)) return true;
+        if (patient.getId() != null && currentCheck.isVerified(patient.getId(), NotificationChannel.EMAIL, recipient)) return true;
         ledger.recordUnverified(notice.event(), notice.hospitalId(), patient.getId(), notice.subjectId(), NotificationChannel.EMAIL);
         return false;
     }

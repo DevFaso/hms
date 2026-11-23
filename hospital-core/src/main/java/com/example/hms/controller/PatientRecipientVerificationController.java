@@ -28,7 +28,7 @@ public class PatientRecipientVerificationController {
     @GetMapping
     public List<PatientRecipientChallengeService.View> status(@PathVariable UUID patientId,
         @RequestParam(required = false) UUID hospitalId, Authentication auth) {
-        authorize(patientId, hospitalId, auth); return service.status(patientId);
+        authorize(patientId, hospitalId, auth); return service.getStatus(patientId);
     }
     @PostMapping("/{channel}/request")
     @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_HOSPITAL_ADMIN')")

@@ -61,6 +61,7 @@ GET /me/patient/proxy-access/{patientId}/lab-results/count
 GET /me/patient/proxy-access/{patientId}/medications
 GET /me/patient/proxy-access/{patientId}/medications/page
 GET /me/patient/proxy-access/{patientId}/records
+GET /me/patient/recipient-verification
 GET /me/patient/referrals
 GET /me/patient/refills
 GET /me/patient/roi-requests
@@ -77,6 +78,8 @@ POST /me/patient/documents
 POST /me/patient/education/questions
 POST /me/patient/pro-screenings
 POST /me/patient/proxies
+POST /me/patient/recipient-verification/{channel}/confirm
+POST /me/patient/recipient-verification/{channel}/request
 POST /me/patient/refills
 POST /me/patient/roi-requests
 POST /me/patient/vitals

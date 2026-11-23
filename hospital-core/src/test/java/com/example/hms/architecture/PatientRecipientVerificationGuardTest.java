@@ -12,7 +12,7 @@ class PatientRecipientVerificationGuardTest {
         String gate = Files.readString(MAIN.resolve("service/notification/PatientMessageGate.java"));
         assertThat(gate.split("verified\\(patient, notice", -1)).hasSize(5);
         assertThat(gate).contains("verification.allows(patient, channel, recipient)", "ledger.recordUnverified(");
-        assertThat(gate).contains("currentCheck.allows(patientId, NotificationChannel.SMS, phone)");
+        assertThat(gate).contains("currentCheck.isVerified(patientId, NotificationChannel.SMS, phone)");
         assertThat(Files.readString(MAIN.resolve("service/notification/PatientRecipientCurrentCheck.java")))
             .contains("Propagation.REQUIRES_NEW", "verification.allows(patient, channel, recipient)");
         assertThat(gate).contains("VerifiedPatientMailScope.run(patient.getId(), to");
@@ -26,6 +26,8 @@ class PatientRecipientVerificationGuardTest {
     @Test void challengeContainsOnlySecurityContentAndTheContactChangesClearProof() throws Exception {
         String service = Files.readString(MAIN.resolve("service/notification/PatientRecipientChallengeService.java"));
         assertThat(service).contains("encoder.encode(code)", "patients.lockByIdUnscoped", "noRollbackFor = BusinessException.class");
+        assertThat(service).contains("Propagation.NOT_SUPPORTED", "PROPAGATION_REQUIRES_NEW", "email.sendWithAttachment(");
+        assertThat(service).doesNotContain("email.sendHtml(");
         assertThat(service).doesNotContain("getFullName", "getMedical", "getDiagnosis", "log.");
         String patient = Files.readString(MAIN.resolve("model/Patient.java"));
         assertThat(patient).contains("verifiedSmsRecipient = null", "verifiedEmailRecipient = null");

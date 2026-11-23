@@ -33,19 +33,37 @@ public class PatientRecipientChallengeService {
     private final MessageSource messages;
     private final Clock clock;
     private final PatientRecipientVerification verification;
+    private final org.springframework.transaction.PlatformTransactionManager transactions;
 
     public record View(NotificationChannel channel, boolean verified, LocalDateTime expiresAt) {}
 
     @Transactional(readOnly = true)
-    public List<View> status(UUID patientId) {
+    public List<View> getStatus(UUID patientId) {
         Patient patient = patients.findByIdUnscoped(patientId).orElseThrow(() -> missing(patientId));
         return List.of(NotificationChannel.SMS, NotificationChannel.EMAIL).stream().map(channel -> new View(channel,
             verification.allows(patient, channel, recipient(patient, channel)), null)).toList();
     }
 
-    @Transactional(noRollbackFor = BusinessException.class)
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public View request(UUID patientId, NotificationChannel channel, UUID actor, Locale locale) {
         checkChannel(channel);
+        Prepared prepared = newTransaction().execute(status -> reserve(patientId, channel, actor));
+        if (prepared == null) throw new BusinessException("recipientVerification.unavailable");
+        try {
+            String body = messages.getMessage("recipientVerification.code", new Object[] {prepared.code()}, locale);
+            if (channel == NotificationChannel.SMS) sms.send(prepared.recipient(), body);
+            else email.sendWithAttachment(List.of(prepared.recipient()), List.of(), List.of(),
+                messages.getMessage("recipientVerification.subject", null, locale),
+                org.springframework.web.util.HtmlUtils.htmlEscape(body), null, null, null);
+        } catch (RuntimeException failure) {
+            newTransaction().executeWithoutResult(status -> invalidate(patientId, channel, prepared.codeHash()));
+            throw new BusinessException("recipientVerification.unavailable");
+        }
+        return new View(channel, false, prepared.expiresAt());
+    }
+
+    /** Commit the guess/resend budget before talking to either provider, without holding the reservation transaction open during delivery. */
+    private Prepared reserve(UUID patientId, NotificationChannel channel, UUID actor) {
         Patient patient = patients.lockByIdUnscoped(patientId).orElseThrow(() -> missing(patientId));
         String recipient = recipient(patient, channel);
         if (recipient == null || recipient.isBlank() || actor == null) throw new BusinessException("recipientVerification.unavailable");
@@ -67,17 +85,27 @@ public class PatientRecipientChallengeService {
         row.setExpiresAt(now.plusMinutes(10)); row.setRequestedBy(actor); row.setLastRequestedAt(now);
         row.setRequestCount(row.getRequestCount() + 1);
         challenges.saveAndFlush(row);
-        String body = messages.getMessage("recipientVerification.code", new Object[] {code}, locale);
-        // Synchronous security send: no clinical data, no logging fallback, no retry after ambiguous delivery.
-        try {
-            if (channel == NotificationChannel.SMS) sms.send(recipient, body);
-            else email.sendHtml(List.of(recipient), List.of(), List.of(),
-                messages.getMessage("recipientVerification.subject", null, locale), org.springframework.web.util.HtmlUtils.htmlEscape(body));
-        } catch (RuntimeException failure) {
-            row.setCodeHash(null); challenges.save(row);
-            throw new BusinessException("recipientVerification.unavailable");
-        }
-        return new View(channel, false, row.getExpiresAt());
+        return new Prepared(recipient, code, row.getCodeHash(), row.getExpiresAt());
+    }
+
+    private void invalidate(UUID patientId, NotificationChannel channel, String codeHash) {
+        patients.lockByIdUnscoped(patientId).orElseThrow(() -> missing(patientId));
+        challenges.findByPatientIdAndChannel(patientId, channel).ifPresent(row -> {
+            // A slow, failed delivery must never invalidate a later challenge.
+            if (java.util.Objects.equals(row.getCodeHash(), codeHash)) {
+                row.setCodeHash(null); challenges.save(row);
+            }
+        });
+    }
+
+    private org.springframework.transaction.support.TransactionTemplate newTransaction() {
+        var transaction = new org.springframework.transaction.support.TransactionTemplate(transactions);
+        transaction.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return transaction;
+    }
+
+    private record Prepared(String recipient, String code, String codeHash, LocalDateTime expiresAt) {
+        @Override public String toString() { return "RecipientVerificationDelivery"; }
     }
 
     @Transactional(noRollbackFor = BusinessException.class)

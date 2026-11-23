@@ -14,7 +14,7 @@ public class PatientRecipientCurrentCheck {
     private final PatientRepository patients;
     private final PatientRecipientVerification verification;
     @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW)
-    public boolean allows(UUID patientId, NotificationChannel channel, String recipient) {
+    public boolean isVerified(UUID patientId, NotificationChannel channel, String recipient) {
         return patients.findByIdUnscoped(patientId).map(patient -> verification.allows(patient, channel, recipient)).orElse(false);
     }
 }

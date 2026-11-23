@@ -87,7 +87,7 @@ class PatientMessageGateTest {
             org.springframework.transaction.support.TransactionSynchronizationManager.setActualTransactionActive(false);
             org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations().forEach(
                 org.springframework.transaction.support.TransactionSynchronization::afterCommit);
-            verify(currentCheck).allows(patient.getId(), NotificationChannel.SMS, patient.getPhoneNumberPrimary());
+            verify(currentCheck).isVerified(patient.getId(), NotificationChannel.SMS, patient.getPhoneNumberPrimary());
             verify(smsService, never()).send(any(), any());
             verify(ledger).recordUnverified(PatientNotificationEvent.PHARMACY_READY, hospitalId, patient.getId(), subjectId, NotificationChannel.SMS);
         } finally {
@@ -212,7 +212,7 @@ class PatientMessageGateTest {
             new byte[] {1}, "cdx.pdf", "application/pdf")).isFalse();
         verifyNoInteractions(emailService);
         verify(ledger).recordUnverified(PatientNotificationEvent.INVOICE, hospitalId, patient.getId(), subjectId, NotificationChannel.EMAIL);
-        when(currentCheck.allows(patient.getId(), NotificationChannel.EMAIL, patient.getEmail())).thenReturn(true);
+        when(currentCheck.isVerified(patient.getId(), NotificationChannel.EMAIL, patient.getEmail())).thenReturn(true);
         assertThat(gate.emailWithAttachment(patient, notice(PatientNotificationEvent.INVOICE), mail,
             new byte[] {1}, "cdx.pdf", "application/pdf")).isTrue();
         verify(emailService).sendWithAttachment(any(), any(), any(), any(), any(), any(), any(), any());

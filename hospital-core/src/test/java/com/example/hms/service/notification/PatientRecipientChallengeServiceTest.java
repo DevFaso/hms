@@ -34,6 +34,7 @@ class PatientRecipientChallengeServiceTest {
     @Mock EmailService email;
     @Mock MessageSource messages;
     @Mock Clock clock;
+    @Mock org.springframework.transaction.PlatformTransactionManager transactions;
     final UUID actor = UUID.randomUUID();
     Patient patient;
     PatientRecipientChallengeService service;
@@ -56,22 +57,23 @@ class PatientRecipientChallengeServiceTest {
         lenient().when(messages.getMessage(eq("recipientVerification.code"), any(), any(Locale.class)))
             .thenAnswer(call -> { code = ((Object[])call.getArgument(1))[0].toString(); return "Code " + code; });
         lenient().when(messages.getMessage(eq("recipientVerification.subject"), isNull(), any(Locale.class))).thenReturn("Contact verification");
+        lenient().when(transactions.getTransaction(any())).thenAnswer(call -> new org.springframework.transaction.support.SimpleTransactionStatus());
         service = new PatientRecipientChallengeService(patients, challenges, new BCryptPasswordEncoder(), sms,
-            email, messages, clock, new PatientRecipientVerification());
+            email, messages, clock, new PatientRecipientVerification(), transactions);
     }
 
     @Test void statusRequiresCurrentRecipientProofForEachChannelAndNeverExposesTheRecipient() {
-        var unverified = service.status(patient.getId());
+        var unverified = service.getStatus(patient.getId());
         assertThat(unverified).hasSize(2).allMatch(view -> !view.verified());
         patient.setVerifiedEmailRecipient(patient.getEmail());
-        var current = service.status(patient.getId());
+        var current = service.getStatus(patient.getId());
         assertThat(current).filteredOn(view -> view.channel() == NotificationChannel.EMAIL)
             .allMatch(PatientRecipientChallengeService.View::verified);
         assertThat(current.toString()).doesNotContain(patient.getEmail(), patient.getPhoneNumberPrimary());
         patient.setEmail("changed@example.invalid");
-        assertThat(service.status(patient.getId())).allMatch(view -> !view.verified());
+        assertThat(service.getStatus(patient.getId())).allMatch(view -> !view.verified());
         when(patients.findByIdUnscoped(patient.getId())).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.status(patient.getId())).isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.getStatus(patient.getId())).isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
     }
 
     @Test void smsChallengeIsHashedBoundToActorAndRecipientConsumedOnce() {
@@ -91,8 +93,9 @@ class PatientRecipientChallengeServiceTest {
         service.confirm(patient.getId(), NotificationChannel.EMAIL, actor, code);
         assertThat(patient.getVerifiedEmailRecipient()).isEqualTo("cdx@example.invalid");
         assertThat(patient.getVerifiedSmsRecipient()).isNull();
-        verify(email).sendHtml(eq(java.util.List.of("cdx@example.invalid")), eq(java.util.List.of()),
-            eq(java.util.List.of()), eq("Contact verification"), eq("Code " + code));
+        verify(email).sendWithAttachment(eq(java.util.List.of("cdx@example.invalid")), eq(java.util.List.of()),
+            eq(java.util.List.of()), eq("Contact verification"), eq("Code " + code), isNull(), isNull(), isNull());
+        verify(email, never()).sendHtml(any(), any(), any(), any(), any());
         verifyNoInteractions(sms);
     }
 
@@ -135,5 +138,25 @@ class PatientRecipientChallengeServiceTest {
         assertThat(stored.get().getRequestCount()).isEqualTo(1);
         assertThat(stored.get().getCodeHash()).isNull();
         assertThatThrownBy(() -> service.request(patient.getId(), NotificationChannel.SMS, actor, Locale.FRENCH)).isInstanceOf(BusinessException.class);
+    }
+
+    @Test void anEmailProviderFailureInvalidatesTheCodeWithoutQueueingOrRetryingIt() {
+        doThrow(new IllegalStateException("provider detail must never reach client")).when(email)
+            .sendWithAttachment(any(), any(), any(), any(), any(), isNull(), isNull(), isNull());
+        assertThatThrownBy(() -> service.request(patient.getId(), NotificationChannel.EMAIL, actor, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class).hasMessageNotContaining("provider detail");
+        assertThat(stored.get().getRequestCount()).isEqualTo(1);
+        assertThat(stored.get().getCodeHash()).isNull();
+        verify(email, never()).sendHtml(any(), any(), any(), any(), any());
+    }
+
+    @Test void aLateFailureNeverInvalidatesASupersedingChallenge() {
+        doAnswer(call -> {
+            stored.get().setCodeHash("cdx-later-challenge");
+            throw new IllegalStateException("cdx-first-send-failed");
+        }).when(sms).send(any(), any());
+        assertThatThrownBy(() -> service.request(patient.getId(), NotificationChannel.SMS, actor, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class);
+        assertThat(stored.get().getCodeHash()).isEqualTo("cdx-later-challenge");
     }
 }

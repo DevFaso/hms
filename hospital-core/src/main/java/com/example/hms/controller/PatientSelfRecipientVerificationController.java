@@ -23,7 +23,7 @@ public class PatientSelfRecipientVerificationController {
     private final ControllerAuthUtils authUtils;
     @GetMapping
     public List<PatientRecipientChallengeService.View> status(Authentication auth) {
-        return service.status(portal.resolvePatientId(auth));
+        return service.getStatus(portal.resolvePatientId(auth));
     }
     @PostMapping("/{channel}/request")
     @PreAuthorize("hasAuthority('ROLE_PATIENT')")
