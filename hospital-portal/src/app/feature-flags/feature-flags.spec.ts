@@ -29,6 +29,48 @@ describe('FeatureFlagsComponent', () => {
 
   const flag = { key: 'beta.x', enabled: true, editing: false, description: '' };
 
+  it('uses only a global override description regardless of tenant row ordering', () => {
+    const global = {
+      id: 'global',
+      flagKey: flag.key,
+      organizationId: null,
+      enabled: true,
+      description: 'Global description',
+      updatedBy: 'admin',
+      updatedAt: '2026-11-22',
+    };
+    const tenant = {
+      ...global,
+      id: 'tenant',
+      organizationId: 'tenant-a',
+      description: 'Tenant description',
+    };
+    for (const rows of [[tenant, global], [global, tenant], [tenant]]) {
+      component.overrides.set(rows);
+      expect(component.flagDescription(flag)).toBe(
+        rows.includes(global) ? 'Global description' : 'FLAGS.NO_DESCRIPTION',
+      );
+      component.flags.set([flag]);
+      component.search.set('Tenant description');
+      expect(component.filteredFlags()).toEqual([]);
+    }
+  });
+
+  it('does not search the missing-description placeholder or repeat an uncatalogued key', () => {
+    const fixture = TestBed.createComponent(FeatureFlagsComponent);
+    fixture.detectChanges();
+    httpMock.expectOne('/feature-flags').flush({ 'beta.x': true });
+    httpMock.match('/feature-flags/overrides').forEach((r) => r.flush([]));
+    fixture.detectChanges();
+    const row = fixture.nativeElement.querySelector('.flag-row .col-key') as HTMLElement;
+    expect(row.querySelector('.flag-name')?.textContent).toBe('beta.x');
+    expect(row.querySelector('.muted')).toBeNull();
+    fixture.componentInstance.search.set('NO_DESCRIPTION');
+    expect(fixture.componentInstance.filteredFlags()).toEqual([]);
+    fixture.componentInstance.search.set('beta.x');
+    expect(fixture.componentInstance.filteredFlags().length).toBe(1);
+  });
+
   it('D2769: known flags have readable labels and supplied descriptions stay authoritative', () => {
     const flag = { key: 'ff.platform.billing', enabled: true, editing: false, description: '' };
     expect(component.flagTitle(flag)).toBe('FLAGS.CATALOG.BILLING_TITLE');

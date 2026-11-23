@@ -275,6 +275,12 @@ describe('ImagingComponent — r63 imaging completion', () => {
             'CORRECTED',
             'AMENDED',
           ]);
+          expect(q('#imaging-dialog-2-title')?.textContent).toContain(
+            fr.IMAGING.REVISE_SIGNED_REPORT,
+          );
+          expect(q('[data-testid="addendum-original-report"] h3')?.textContent).toContain(
+            fr.IMAGING.REVISION_ORIGINAL,
+          );
           picker.value = status;
           picker.dispatchEvent(new Event('change'));
           await fixture.whenStable();
@@ -294,7 +300,7 @@ describe('ImagingComponent — r63 imaging completion', () => {
         report({ signed: true, findings: 'Original findings', impression: 'Original conclusion' }),
       );
       fixture.detectChanges();
-      expect(q('#imaging-dialog-2-title')?.textContent).toContain('Ajouter un addendum');
+      expect(q('#imaging-dialog-2-title')?.textContent).toContain(fr.IMAGING.REVISE_SIGNED_REPORT);
       expect(q('[data-testid="addendum-original-report"]')?.textContent).toContain(
         'Original findings',
       );

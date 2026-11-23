@@ -8,6 +8,7 @@ import { RoleContextService } from '../../core/role-context.service';
 import { ClinicalRuleStatus, ClinicalRulesOverview } from '../../services/clinical-rules.service';
 import { RuleStatusComponent } from './rule-status.component';
 import fr from '../../../assets/i18n/fr.json';
+import { useTestLanguage } from '../../testing/test-language';
 
 @Component({
   standalone: true,
@@ -77,6 +78,9 @@ describe('RuleStatusComponent (V356)', () => {
   let fixture: ComponentFixture<HostComponent>;
   let host: HTMLElement;
   let httpMock: HttpTestingController;
+  let restoreLanguage: () => void;
+
+  beforeEach(() => (restoreLanguage = useTestLanguage('fr')));
 
   async function setUp(hospitalId: string | null): Promise<void> {
     await TestBed.configureTestingModule({
@@ -93,7 +97,13 @@ describe('RuleStatusComponent (V356)', () => {
     host = fixture.nativeElement as HTMLElement;
   }
 
-  afterEach(() => httpMock.verify());
+  afterEach(() => {
+    try {
+      httpMock.verify();
+    } finally {
+      restoreLanguage();
+    }
+  });
 
   const text = (testId: string) =>
     (host.querySelector(`[data-testid="${testId}"]`)?.textContent ?? '')

@@ -49,6 +49,9 @@ const SILENT_403_PATTERNS = [
   // The optional dispute review list handles refusals in the mortality page;
   // a caller who cannot review here must still keep the loaded register.
   /\/mortality\/disputes(\?|$)/,
+  // Rule-status labels keep their explicit provisional fallback when a role
+  // cannot read the hospital's overview. Writes/sign-offs remain page refusals.
+  /\/hospitals\/[^/?]+\/clinical-rules(\?|$)/,
 ];
 
 /**

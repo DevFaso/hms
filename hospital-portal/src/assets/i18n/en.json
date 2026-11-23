@@ -166,6 +166,7 @@
     "TITLE": "Access denied"
   },
   "LABOR": {
+    "PARTOGRAPH_SCROLL_HINT": "Scroll horizontally to see all observations, including notes.",
     "ACTION_LINE": "Action line",
     "ACTIVE_EPISODE": "Active labor",
     "FOREIGN": {
@@ -4254,6 +4255,8 @@
   },
   "IMAGING": {
     "ADDENDUM_ORIGINAL": "Signed report being supplemented",
+    "REVISE_SIGNED_REPORT": "Revise signed report",
+    "REVISION_ORIGINAL": "Signed report being revised",
     "RESULTS_PARTIAL_FAILURE": "The reports of these hospitals could not be loaded, so the list is incomplete: {{hospitals}}.",
     "ADMIN_READ_ONLY": "Read-only: imaging requests and released reports. Ordering, reporting and signing are done by the clinical team.",
     "ALL_HOSPITALS": "All hospitals",
@@ -8867,7 +8870,7 @@
       "DUE": "Dose review by a pharmacist or physician required",
       "ACTION": "Record the dose review",
       "TITLE": "Record the paediatric dose review",
-      "HINT": "The dose check could not judge this child’s dose. As a pharmacist or a physician other than the prescriber, record why you accept it; the order can be signed once the review is recorded.",
+      "HINT": "A paediatric dose review is required for this order. As a pharmacist or a physician other than the prescriber, record why you accept the dose; the order can be signed once the review is recorded.",
       "REASON": "Reason for accepting the dose",
       "REASON_REQUIRED": "Give the reason for accepting this dose.",
       "CONFIRM": "Record the review",
@@ -15597,6 +15600,7 @@
     "MARK_READ": "Mark as read"
   },
   "MATERNITY_STAY": {
+    "NO_NEONATAL_COT": "No neonatal cot is available in this list. Ask the ward team to check neonatal unit configuration and availability.",
     "LOADING": "Checking the hospital stay…",
     "NOT_ADMITTED": "not admitted: not on the nurse station or the bed board.",
     "ACUITY": "Acuity",
@@ -15622,7 +15626,7 @@
     "LOAD_FAILED": "stay unknown: the admissions could not be read. Reload before admitting.",
     "MIDWIFE_NEWBORN_RULE": "A midwife admits the newborn of a delivery she attended and is its responsible clinician. Provisional rule, pending approval by a named midwife or obstetrician.",
     "MIDWIFE_BED_RULE": "A midwife assigns the beds of maternity wards. Provisional rule, pending approval by a named midwife or obstetrician.",
-    "MIDWIFE_COT_RULE": "A midwife assigns the cots of maternity wards. A neonatal cot is assigned too, and a doctor is then asked to review the newborn. Provisional rule, pending approval by a named midwife or obstetrician.",
+    "MIDWIFE_COT_RULE": "A midwife assigns maternity cots. When a neonatal cot is available and assigned, a doctor is asked to review the newborn. Provisional rule, pending approval by a named midwife or obstetrician.",
     "BED_ASSIGNED_PHYSICIAN_ASKED": "Bed {{bed}} assigned. A doctor has been asked to review the newborn."
   },
   "SENSITIVITY_TAG": {
@@ -16072,7 +16076,7 @@
     "SURFACE": {
       "MIDWIFE_NEWBORN": "A midwife admits the newborn of a delivery she attended and is its responsible clinician.",
       "MIDWIFE_BED": "A midwife assigns the beds of maternity wards.",
-      "MIDWIFE_COT": "A midwife assigns the cots of maternity wards. A neonatal cot is assigned too, and a doctor is then asked to review the newborn.",
+      "MIDWIFE_COT": "A midwife assigns maternity cots. When a neonatal cot is available and assigned, a doctor is asked to review the newborn.",
       "IMAGING_TECHNICIAN": "As an imaging technician you check the patient in, perform and document the exam and attach its images. Ordering the exam and writing or signing the report stay with the physician.",
       "ULTRASOUND_PHYSICIANS_ONLY": "Ultrasound: at this hospital the exam is performed by a physician. You can check the patient in and attach images.",
       "MINOR_RELEASE_AGE": "From age {{age}}, the other sensitive categories are hidden from the parents too (age set by the hospital).",

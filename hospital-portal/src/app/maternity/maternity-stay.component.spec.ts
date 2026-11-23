@@ -1,12 +1,15 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { MaternityStayComponent, MaternityStayKind } from './maternity-stay.component';
 import { AdmissionResponse, AdmissionService } from '../services/admission.service';
 import { BedService } from '../services/bed.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
+import en from '../../assets/i18n/en.json';
+import fr from '../../assets/i18n/fr.json';
+import es from '../../assets/i18n/es.json';
 import {
   expectEmptySubmitRefusal,
   expectFieldsMarked,
@@ -61,6 +64,37 @@ describe('MaternityStayComponent (QA D2594)', () => {
     admissions.getCurrentByPatient.and.returnValue(of(null));
     beds.getAvailableBeds.and.returnValue(of([{ id: 'b1', label: 'MAT65A/M-01' } as never]));
   });
+
+  it('explains that no neonatal cot is available without changing the offered maternity beds', () => {
+    admissions.getCurrentByPatient.and.returnValue(of(stay(null)));
+    const fixture = render('NEWBORN');
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="maternity-stay-no-neonatal-cot"]')).not.toBeNull();
+    expect(host.querySelector('option[value="b1"]')).not.toBeNull();
+    fixture.componentInstance.beds.set([
+      { id: 'n1', label: 'NICU/N-01', wardType: 'NICU' } as never,
+    ]);
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="maternity-stay-no-neonatal-cot"]')).toBeNull();
+  });
+
+  for (const [language, messages] of Object.entries({ en, fr, es })) {
+    it(`keeps the provisional cot rule visible in ${language} while hospital rule status is unavailable`, () => {
+      admissions.getCurrentByPatient.and.returnValue(of(stay(null)));
+      const fixture = render('NEWBORN');
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation(language, messages);
+      translate.use(language);
+      fixture.detectChanges();
+      const rule = fixture.nativeElement.querySelector(
+        '[data-testid="maternity-stay-midwife-bed-rule"]',
+      );
+      expect(rule?.textContent).toContain(messages.MATERNITY_STAY.MIDWIFE_COT_RULE);
+      expect(rule?.textContent).toContain(
+        messages.MATERNITY_STAY.MIDWIFE_BED_RULE.split('. ').at(-1)!,
+      );
+    });
+  }
 
   it('says a woman in labour is not admitted, and refuses an admission with no acuity at the field', () => {
     const fixture = render();
