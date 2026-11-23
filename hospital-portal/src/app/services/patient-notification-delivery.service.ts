@@ -89,11 +89,11 @@ export class PatientNotificationDeliveryService {
       .pipe(map((res) => res.data));
   }
 
-  retry(id: string): Observable<PatientNotificationDelivery> {
+  retry(id: string, expectedManualRetries: number): Observable<PatientNotificationDelivery> {
     return this.http
       .post<ApiWrapper<PatientNotificationDelivery>>(
         `/patient-notification-deliveries/${id}/retry`,
-        {},
+        { expectedManualRetries },
       )
       .pipe(map((res) => res.data));
   }

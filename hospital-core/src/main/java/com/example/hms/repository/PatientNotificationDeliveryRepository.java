@@ -110,11 +110,12 @@ public interface PatientNotificationDeliveryRepository extends JpaRepository<Pat
     @Query("update PatientNotificationDelivery d set d.status = :pending, d.attempts = 0, d.errorCode = null, "
         + "d.nextAttemptAt = :now, d.manualRetries = d.manualRetries + 1, d.lastRetriedBy = :userId, "
         + "d.lastRetriedAt = :now, d.updatedAt = :now "
-        + "where d.id = :id and d.hospitalId = :hospitalId and d.status = :failed")
+        + "where d.id = :id and d.hospitalId = :hospitalId and d.status = :failed and d.manualRetries = :expectedManualRetries")
     int requeueFailed(@Param("id") UUID id,
                       @Param("hospitalId") UUID hospitalId,
                       @Param("failed") NotificationDeliveryStatus failed,
                       @Param("pending") NotificationDeliveryStatus pending,
                       @Param("now") LocalDateTime now,
-                      @Param("userId") UUID userId);
+                      @Param("userId") UUID userId,
+                      @Param("expectedManualRetries") int expectedManualRetries);
 }

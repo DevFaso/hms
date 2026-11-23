@@ -219,11 +219,11 @@ class PatientNotificationLedgerIT extends BaseIT {
         UUID admin = UUID.randomUUID();
 
         Integer foreign = tx.execute(s -> repository.requeueFailed(saved.getId(), otherHospital.getId(),
-            NotificationDeliveryStatus.FAILED, NotificationDeliveryStatus.PENDING, now, admin));
+            NotificationDeliveryStatus.FAILED, NotificationDeliveryStatus.PENDING, now, admin, 0));
         Integer own = tx.execute(s -> repository.requeueFailed(saved.getId(), hospital.getId(),
-            NotificationDeliveryStatus.FAILED, NotificationDeliveryStatus.PENDING, now, admin));
+            NotificationDeliveryStatus.FAILED, NotificationDeliveryStatus.PENDING, now, admin, 0));
         Integer again = tx.execute(s -> repository.requeueFailed(saved.getId(), hospital.getId(),
-            NotificationDeliveryStatus.FAILED, NotificationDeliveryStatus.PENDING, now, admin));
+            NotificationDeliveryStatus.FAILED, NotificationDeliveryStatus.PENDING, now, admin, 0));
 
         assertThat(foreign).isZero();
         assertThat(own).isEqualTo(1);
@@ -237,6 +237,17 @@ class PatientNotificationLedgerIT extends BaseIT {
         assertThat(repository.searchForHospital(otherHospital.getId(),
             List.of(NotificationDeliveryStatus.values()), PageRequest.of(0, 10)).getContent()).isEmpty();
         assertThat(repository.countByStatusForHospital(hospital.getId())).isNotEmpty();
+
+        // A delayed copy of the first HTTP request must not win after the worker fails again.
+        reloaded.setStatus(NotificationDeliveryStatus.FAILED);
+        reloaded.setErrorCode("PROVIDER_UNREACHABLE");
+        repository.saveAndFlush(reloaded);
+        Integer replay = tx.execute(s -> repository.requeueFailed(saved.getId(), hospital.getId(),
+            NotificationDeliveryStatus.FAILED, NotificationDeliveryStatus.PENDING, now, admin, 0));
+        assertThat(replay).isZero();
+        Integer freshGeneration = tx.execute(s -> repository.requeueFailed(saved.getId(), hospital.getId(),
+            NotificationDeliveryStatus.FAILED, NotificationDeliveryStatus.PENDING, now, admin, 1));
+        assertThat(freshGeneration).isEqualTo(1);
     }
 
     @Test

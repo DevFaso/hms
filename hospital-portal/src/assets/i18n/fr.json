@@ -15007,6 +15007,7 @@
     "COL_CHANNEL": "Canal",
     "COL_STATUS": "Statut",
     "COL_ATTEMPTS": "Tentatives",
+    "COL_NEXT_ATTEMPT": "Prochaine tentative",
     "COL_REASON": "Motif",
     "COL_LAST_ATTEMPT": "Date et heure",
     "COL_ACTIONS": "Actions",
