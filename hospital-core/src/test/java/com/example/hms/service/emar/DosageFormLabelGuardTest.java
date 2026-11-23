@@ -17,6 +17,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -29,8 +30,9 @@ import java.util.regex.Pattern;
 /**
  * QA D3552 (r71, regression), the class guard: a box, a label or the order's own display writes the dosage form in
  * the reader's language, and the bedside "right drug" check must read it as the catalogue's form whatever the
- * language. For EVERY dosage form, its English, French and Spanish words (singular and plural) pass for the
- * matching product, while another strength and another form stay refused. The forms and words are the portal's:
+ * language. For EVERY dosage form, its English, French and Spanish words (singular and plural) and its box
+ * wordings (« comprimé pelliculé », « gél. », « solution injectable »…) pass for the matching product, while another
+ * strength, another drug and another form stay refused. The forms and words are the portal's:
  * its {@code DOSAGE_FORMS} list and the three translations of {@code PHARMACY.FORM_OPTION}, so a form added there
  * without its words here fails this test.
  */
@@ -109,6 +111,58 @@ class DosageFormLabelGuardTest {
         }
     }
 
+    /**
+     * Review of #1300: the compound wordings and abbreviations a box carries, each read as its own form and no
+     * other. The list is the review's; every other wording is covered by the loops above.
+     */
+    @Test
+    void theBoxWordingsAreTheirOwnForm() {
+        Map<String, DosageForm> expected = new LinkedHashMap<>();
+        for (String wording : new String[] {"comprimé pelliculé", "comprimé effervescent", "comprimé dispersible",
+            "comprimé orodispersible", "cp", "film-coated tablet", "effervescent tablet", "dispersible tablet",
+            "orodispersible tablet", "comprimido recubierto", "comprimido efervescente", "comprimido dispersable",
+            "comprimido bucodispersable"}) {
+            expected.put(wording, DosageForm.TABLET);
+        }
+        expected.put("gél.", DosageForm.CAPSULE);
+        for (String wording : new String[] {"solution injectable", "solution for injection", "solución inyectable"}) {
+            expected.put(wording, DosageForm.INJECTION);
+        }
+        for (String wording : new String[] {"solution buvable", "oral solution", "solución oral"}) {
+            expected.put(wording, DosageForm.SYRUP);
+        }
+        for (String wording : new String[] {"suspension buvable", "poudre pour suspension buvable", "oral suspension",
+            "powder for oral suspension", "suspensión oral", "polvo para suspensión oral"}) {
+            expected.put(wording, DosageForm.SUSPENSION);
+        }
+        expected.forEach((wording, form) -> {
+            assertThat(DosageForm.of(wording)).as(wording).isEqualTo(form);
+            assertThat(match(item(form.name()), "Testamine 250 mg " + wording)).as(wording)
+                .isEqualTo(Basis.DESIGNATION);
+            assertThat(match(item(form.name()), "Testamine 500 mg " + wording)).as("another strength, " + wording)
+                .isEqualTo(Basis.NONE);
+            for (DosageForm other : DosageForm.values()) {
+                if (other != form) {
+                    assertThat(match(item(other.name()), "Testamine 250 mg " + wording))
+                        .as("%s on a %s item", wording, other).isEqualTo(Basis.NONE);
+                }
+            }
+        });
+        // A bare « gel » is a topical gel, not the capsule abbreviation « gél. ».
+        assertThat(DosageForm.of("gel")).isNull();
+        assertThat(match(item("CAPSULE"), "Testamine 250 mg gel")).isEqualTo(Basis.NONE);
+    }
+
+    /** The matcher reads a form of up to five words: no wording may be longer. */
+    @Test
+    void noWordingIsLongerThanTheMatcherReads() {
+        for (DosageForm form : DosageForm.values()) {
+            for (String word : wordsOf(form)) {
+                assertThat(word.split("[\\s-]+")).as(word).hasSizeLessThanOrEqualTo(5);
+            }
+        }
+    }
+
     @Test
     void theFormsAreThePortals() throws IOException {
         String catalog = Files.readString(CATALOG_TS, StandardCharsets.UTF_8);
@@ -144,6 +198,7 @@ class DosageFormLabelGuardTest {
         List<String> words = new ArrayList<>(form.english());
         words.addAll(form.french());
         words.addAll(form.spanish());
+        words.addAll(form.boxWordings());
         words.add(form.name());
         return words;
     }

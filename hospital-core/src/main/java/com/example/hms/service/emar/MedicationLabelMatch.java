@@ -56,6 +56,8 @@ final class MedicationLabelMatch {
      * texts are read up to here, so every expression below works on a bounded input.
      */
     private static final int MAX_READ = 300;
+    /** The longest wording of a dosage form, in words (« comprimidos recubiertos con película »). */
+    private static final int MAX_FORM_WORDS = 5;
 
     private MedicationLabelMatch() {
     }
@@ -136,13 +138,13 @@ final class MedicationLabelMatch {
         if (!strengths.isEmpty() && !strengths.containsAll(typed.strengths())) {
             return false;
         }
-        // The catalogue's form may be left off the label. With no form on record, the form word the order's own
-        // text ends with is the product's: it may be written in another language, never left off.
+        // The catalogue's form may be left off the label. With no form on record, the form the order's own text
+        // ends with is the product's: it may be written in another language or wording, never left off.
         boolean formOnRecord = !forms.isEmpty();
         if (!formOnRecord) {
-            labels.stream().map(label -> lastWord(label.words()))
-                .filter(word -> DosageForm.of(word) != null)
-                .forEach(word -> forms.addAll(formWords(word)));
+            labels.stream().map(label -> trailingForm(label.words()))
+                .filter(form -> !form.isEmpty())
+                .forEach(form -> forms.addAll(formWords(form)));
         }
         for (Label label : labels) {
             String name = withoutTrailingForm(label.words(), forms);
@@ -179,14 +181,26 @@ final class MedicationLabelMatch {
         return words;
     }
 
-    private static String lastWord(String words) {
-        int space = words.lastIndexOf(' ');
-        // A one-word text is a name, not a form that follows one.
-        return space < 0 ? "" : words.substring(space + 1);
+    /**
+     * The dosage form a text ends with, in one word or several (« comprimé pelliculé », « poudre pour suspension
+     * buvable »), the longest first; empty when it ends with none. A text that is only a form names no product.
+     */
+    private static String trailingForm(String words) {
+        String[] parts = words.split(" ");
+        for (int count = Math.min(MAX_FORM_WORDS, parts.length - 1); count > 0; count--) {
+            String suffix = String.join(" ", java.util.Arrays.copyOfRange(parts, parts.length - count, parts.length));
+            if (DosageForm.of(suffix) != null) {
+                return suffix;
+            }
+        }
+        return "";
     }
 
+    /** The name a label gives once the form it ends with is taken off; the longest wording of the form first. */
     private static String withoutTrailingForm(String words, Set<String> forms) {
-        for (String form : forms) {
+        List<String> longestFirst = forms.stream()
+            .sorted(java.util.Comparator.comparingInt(String::length).reversed()).toList();
+        for (String form : longestFirst) {
             if (words.endsWith(" " + form)) {
                 return words.substring(0, words.length() - form.length() - 1);
             }

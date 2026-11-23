@@ -51,7 +51,11 @@ class MedicationLabelMatchTest {
         "PARACETAMOL  500 MG",
         "Paracétamol 0,5 g",                    // the same strength in grams
         "Doliprane 500 mg",                     // the brand name of the same catalogue item
-        "Paracétamol comprimé"
+        "Paracétamol comprimé",
+        "Paracetamol 500 mg comprime effervescent", // QA D3552 (#1300 review): a box wording of the same form
+        "Paracétamol 500 mg comprimés pelliculés",
+        "Paracétamol 500 mg cp",
+        "Paracetamol 500 mg film-coated tablets"
     })
     void aDesignationOfTheProductIsTheProduct(String scan) {
         assertThat(match(scan)).isEqualTo(Basis.DESIGNATION);
@@ -70,7 +74,9 @@ class MedicationLabelMatchTest {
         "Paracétamol 500 mg 1 g",               // one strength right, one wrong
         "Paracétamol codéine 500 mg",           // a combination that starts with the same word
         "Para",                                 // a prefix
-        "Paracetamol 500 mg comprime effervescent",
+        "Paracétamol 500 mg solution buvable",  // another form, in a box wording
+        "Paracétamol 500 mg poudre pour suspension buvable",
+        "Paracétamol 500 mg comprimé sirop",
         "Ibuprofène 400 mg",
         "N02BE51",                              // the ATC code of the combinations
         "N02BE",                                // an ATC prefix
@@ -148,7 +154,10 @@ class MedicationLabelMatchTest {
         "Amoxicilline 500 mg capsule",
         "Amoxicilline 500 mg CAPSULE",
         "Amoxicilline 500 mg cápsula",
-        "Amoxicilline 0,5 g gélule"
+        "Amoxicilline 0,5 g gélule",
+        "Amoxicilline 500 mg gél.",             // the box abbreviations
+        "Amoxicilline 500 mg caps",
+        "Amoxicilline 500 mg cápsulas duras"
     })
     void theFrenchFormWordIsTheCatalogueForm(String scan) {
         assertThat(MedicationLabelMatch.match(amoxicillinOrder(), amoxicillin(), scan)).isEqualTo(Basis.DESIGNATION);
@@ -168,7 +177,11 @@ class MedicationLabelMatchTest {
         "Paracétamol 500 mg gélule",
         "Gélule",
         "500 mg gélule",
-        "Amoxicilline acide clavulanique 500 mg gélule"
+        "Amoxicilline acide clavulanique 500 mg gélule",
+        "Amoxicilline 500 mg gel",              // a topical gel, not « gél. »
+        "Amoxicilline 500 mg comprimé pelliculé",
+        "Amoxicilline 500 mg poudre pour suspension buvable",
+        "Amoxicilline 500 mg solution injectable"
     })
     void aFrenchFormWordDoesNotWidenTheMatch(String scan) {
         assertThat(MedicationLabelMatch.match(amoxicillinOrder(), amoxicillin(), scan)).isEqualTo(Basis.NONE);
