@@ -30,14 +30,20 @@
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
       rel="stylesheet"
+      media="print"
+      data-optional-font
     />
     <link
       href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=block"
       rel="stylesheet"
+      media="print"
+      data-optional-font
     />
     <link
       href="https://fonts.googleapis.com/icon?family=Material+Icons&display=block"
       rel="stylesheet"
+      media="print"
+      data-optional-font
     />
     <style>
       .material-symbols-outlined,
@@ -79,6 +85,17 @@
         border-radius: 50%;
         animation: boot-spin 0.9s linear infinite;
       }
+      .boot-retry {
+        min-height: 44px;
+        padding: 10px 18px;
+        color: white;
+        background: #0b7061;
+        border: 0;
+        border-radius: 6px;
+      }
+      .boot-retry[hidden] {
+        display: none;
+      }
       @keyframes boot-spin {
         to {
           transform: rotate(360deg);
@@ -93,6 +110,13 @@
     <script>
       // QA D2351: icons stay hidden until their font is loaded (never their names as words).
       (function () {
+        document.querySelectorAll('link[data-optional-font]').forEach(function (link) {
+          function activate() {
+            link.media = 'all';
+          }
+          if (link.sheet) activate();
+          else link.addEventListener('load', activate, { once: true });
+        });
         var root = document.documentElement;
         function iconsLoaded() {
           if (!document.fonts) return true;
@@ -128,10 +152,11 @@
   <body>
     <app-root>
       <!-- QA D2351: replaced by the application once it has started. -->
-      <div class="boot-screen" role="status" aria-live="polite">
+      <div class="boot-screen" id="boot-screen" role="status" aria-live="polite">
         <strong>e-Keneya</strong>
         <div class="boot-spinner" aria-hidden="true"></div>
         <p id="boot-message">Chargement de l’application…</p>
+        <button id="boot-retry" class="boot-retry" type="button" hidden>Réessayer</button>
         <noscript>JavaScript est nécessaire pour utiliser e-Keneya.</noscript>
       </div>
       <script>
@@ -142,6 +167,22 @@
           } catch (e) {}
           var text = { en: 'Loading the application…', es: 'Cargando la aplicación…' }[lang];
           if (text) document.getElementById('boot-message').textContent = text;
+          var retry = document.getElementById('boot-retry');
+          retry.textContent = { en: 'Try again', es: 'Reintentar' }[lang] || 'Réessayer';
+          retry.addEventListener('click', function () {
+            window.location.reload();
+          });
+          setTimeout(function () {
+            var message = document.getElementById('boot-message');
+            if (!message) return;
+            message.textContent =
+              {
+                en: 'Loading is taking longer than expected. Check your connection or try again.',
+                es: 'La carga está tardando más de lo previsto. Compruebe su conexión o inténtelo de nuevo.',
+              }[lang] ||
+              'Le chargement prend plus de temps que prévu. Vérifiez votre connexion ou réessayez.';
+            retry.hidden = false;
+          }, 20000);
         })();
       </script>
     </app-root>

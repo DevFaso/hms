@@ -13,7 +13,7 @@
     class="photo-avatar editable"
     data-testid="patient-photo-avatar"
     (click)="openModal()"
-    [attr.aria-label]="'PATIENT_PHOTO.EDIT' | translate"
+    [attr.aria-label]="('PATIENT_PHOTO.EDIT' | translate) + ' — ' + initials"
   >
     <ng-container [ngTemplateOutlet]="avatarFace" />
     <span class="edit-overlay"><span class="material-symbols-outlined">photo_camera</span></span>

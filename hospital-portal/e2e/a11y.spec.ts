@@ -5,6 +5,9 @@ import { test, expect } from './fixtures/test-fixtures';
 // Register the inventory-driven cases in the existing CI entry point.
 import './a11y-routed-pages';
 import { installLocalIconFonts } from './helpers/local-icon-fonts';
+import { signInAs } from './helpers/role-session';
+import { routedPages } from './helpers/routed-page-inventory';
+import './a11y-journey-forms';
 
 /**
  * v1.0 / Accessibility / axe-core/playwright smoke (roadmap row 10).
@@ -74,14 +77,22 @@ function summarize(violations: Violation[]) {
 }
 
 async function runAxe(page: Page, route: string) {
+  if (route !== '/login') {
+    const roles = routedPages().find((screen) => screen.path === route)?.roles ?? [];
+    const role = roles.includes('ROLE_HOSPITAL_ADMIN')
+      ? 'ROLE_HOSPITAL_ADMIN'
+      : (roles[0] ?? 'ROLE_HOSPITAL_ADMIN');
+    await signInAs(page, role, test.info().project.use.baseURL as string);
+  }
   await installLocalIconFonts(page);
   await page.goto(route, { waitUntil: 'domcontentloaded' });
-  // Let Angular finish its initial render — the body's data-cy="ready"
-  // hook isn't present on every page, so we fall back to networkidle
-  // (with a bounded catch — some pages keep polling forever).
-  await page.waitForLoadState('networkidle').catch(() => {
-    // Some screens poll continuously; navigation and the axe scan still have bounded waits.
-  });
+  await expect(page).toHaveURL((url) => url.pathname === route);
+  const content =
+    route === '/login'
+      ? page.locator('app-root')
+      : page.locator('#main-content router-outlet + *').first();
+  await expect(content).toBeVisible();
+  await expect(content.locator('h1, h2, [role="heading"]').first()).toBeVisible();
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
 
   const results = await new AxeBuilder({ page })
@@ -91,30 +102,21 @@ async function runAxe(page: Page, route: string) {
     // are excluded so the gate only catches genuine standard
     // violations.
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-    // Pre-existing soft-debt suppressed at the gate so the gate can
-    // start catching NEW regressions immediately, per the row 10
-    // deliverable ("fail PR on any new a11y violation"). Each entry
-    // here is a tracked exception that must be removed before v1.0.0
-    // GA.
-    .disableRules([
-      // Color-contrast debt is wider than the three forbidden hexes
-      // listed in docs/ui/accessibility.md §8. Row 11 finish PR
-      // migrated those documented foregrounds across 69 files (real
-      // net-positive), but axe still finds many other contrast
-      // violations across surfaces — language toggles, role badges,
-      // .btn-primary, .tab-bar buttons, gradient text, etc. Closing
-      // those is a design-system pass that's larger than row 11 and
-      // is tracked as v1.0.0 GA polish (docs/ui/accessibility.md §10
-      // carry-forward gaps). Keeping the suppression so we can still
-      // catch NEW a11y regressions on this PR — without it the gate
-      // would fail on pre-existing debt.
-      'color-contrast',
-    ])
     .analyze();
 
-  const blocking = results.violations.filter(
-    (v) => v.impact !== null && v.impact !== undefined && BLOCKING_IMPACTS.has(v.impact),
-  );
+  const blocking = results.violations
+    .map((violation) =>
+      violation.id === 'color-contrast'
+        ? {
+            ...violation,
+            nodes: violation.nodes.filter(
+              (node) => !node.html.includes('brand-word') && !node.html.includes('brand-accent'),
+            ),
+          }
+        : violation,
+    )
+    .filter((violation) => violation.nodes.length > 0)
+    .filter((v) => v.impact !== null && v.impact !== undefined && BLOCKING_IMPACTS.has(v.impact));
   const reportOnly = results.violations.filter(
     (v) => v.impact !== null && v.impact !== undefined && REPORT_ONLY_IMPACTS.has(v.impact),
   );
@@ -150,11 +152,6 @@ test.describe('a11y smoke (axe-core) — authenticated surfaces', () => {
   });
 
   test('AVS surface (my-medications) has no serious/critical violations', async ({ page }) => {
-    // Patient-portal route. Storage state in chromium project carries
-    // SuperAdmin which has cross-role read access; the role guard
-    // either passes or the redirect lands on /dashboard, in which
-    // case axe still scans a real page. Either outcome is useful
-    // signal.
     await runAxe(page, '/my-medications');
   });
 

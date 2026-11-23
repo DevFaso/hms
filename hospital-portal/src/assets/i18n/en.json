@@ -16280,6 +16280,9 @@
     "TODAY_MORE": "Only the {{shown}} most recent sales of today are shown: the till close counts them all.",
     "UNSETTLED": "No answer came back: the sale may have been recorded. « Take payment » resends exactly the same sale, never twice; the basket is frozen until then."
   },
+  "LOADING_SHELL": {
+    "SLOW": "Loading is taking longer than expected. Check your connection; your open page is preserved."
+  },
   "RECIPIENT_VERIFICATION": {
     "TITLE": "Verify contact details",
     "INTRO": "Clinical messages are sent only to the current phone number or e-mail after verification. Codes contain no clinical information.",
