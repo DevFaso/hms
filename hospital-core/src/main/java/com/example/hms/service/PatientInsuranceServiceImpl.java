@@ -20,6 +20,9 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.utility.RoleValidator;
 import com.example.hms.exception.ClientSafeAccessDeniedException;
 import com.example.hms.service.billing.PayerCatalogueService;
+import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
+import com.example.hms.payload.dto.OtherHospitalInsuranceDTO;
 import com.example.hms.utility.MessageUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.MessageSource;
@@ -27,9 +30,12 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -44,6 +50,11 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     private static final String INSURANCE_LINK_FORBIDDEN_KEY = "insurance.link.forbidden";
     private static final String INSURANCE_LINK_FORBIDDEN_MSG = "You don't have permission to link insurance in this hospital";
     private static final String ASSIGNMENT_REQUIRED_KEY = "assignment.required";
+    /** Owner decision 2026-11-22: the disclosure ledger's reasons for another hospital's policy read here. */
+    static final String OTHER_HOSPITAL_READ_DESCRIPTION =
+        "Cross-hospital insurance policy identity read to verify at the desk";
+    static final String OTHER_HOSPITAL_REUSE_DESCRIPTION =
+        "Cross-hospital insurance policy identity reused into this hospital's own coverage";
 
 
     private final PatientInsuranceRepository patientInsuranceRepository;
@@ -64,6 +75,10 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     private final ActingScopeResolver actingScopeResolver;
     /** Billing-money plan PR 6: the payer catalogue, which says whether a plan may be linked at a hospital. */
     private final PayerCatalogueService payerCatalogueService;
+    /** Owner decision 2026-11-22: which other hospitals' policies this caller may see (opt-out, posture, isolation). */
+    private final RecordAccessPolicy recordAccessPolicy;
+    /** Owner decision 2026-11-22: every policy surfaced from another hospital is accounted like any other reach. */
+    private final CrossHospitalReachRecorder reachRecorder;
 
     @Override
     @Transactional
@@ -438,6 +453,162 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         auditPlanLink(planLink, saved);
         saved = keepOnePrimary(saved, false);
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
+    }
+
+    /* ==================== another hospital's policy, to verify (owner decision 2026-11-22) ==================== */
+
+    /**
+     * Owner decision 2026-11-22 (replaces "cross-hospital insurance stays hidden", 2026-11-12): the policy belongs to
+     * the patient, the agreement with the insurer to each hospital. The desk (hospital admin, billing specialist,
+     * reception) of the acting hospital sees the patient's policies recorded at the other hospitals
+     * {@link RecordAccessPolicy#readableHospitalIds} lets it read - so the patient's sharing opt-out and a source
+     * hospital's EXPLICIT_CONSENT or SCHEMA isolation still hide them - by their identity only
+     * ({@link OtherHospitalInsuranceDTO}), never through {@code patientInsuranceMapper}. A policy this hospital already
+     * holds is not repeated. Every one shown is accounted in the disclosure ledger.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<OtherHospitalInsuranceDTO> getOtherHospitalPolicies(UUID patientId) {
+        UUID hospitalId = requireActingHospital();
+        UUID actorUserId = resolveActorUserId(null);
+        requirePlanLinker(hospitalId, actorUserId);
+        patientChartAccess.require(patientId, hospitalId);
+        Set<UUID> others = new HashSet<>(recordAccessPolicy.readableHospitalIds(actorUserId, patientId, hospitalId));
+        others.remove(hospitalId);
+        if (others.isEmpty()) {
+            return List.of();
+        }
+        List<PatientInsurance> here = heldAt(patientId, hospitalId);
+        List<PatientInsurance> shown = patientInsuranceRepository
+            .findByPatient_IdAndAssignment_Hospital_IdIn(patientId, others).stream()
+            .filter(row -> others.contains(hospitalOf(row)))
+            .filter(row -> here.stream().noneMatch(own -> samePolicy(own, row)))
+            .toList();
+        if (shown.isEmpty()) {
+            return List.of();
+        }
+        List<PayerCatalogueService.Agreement> agreements = payerCatalogueService.activeAgreementsAt(hospitalId);
+        Map<UUID, PayerCatalogueService.PlanLabel> plans = payerCatalogueService.labelsOf(
+            shown.stream().map(PatientInsurance::getPayerPlanId).filter(Objects::nonNull).toList());
+        reachRecorder.recordReach(patientId, hospitalId, actorUserId, null,
+            CrossHospitalReachRecorder.reachOf(shown.stream().map(PatientInsuranceServiceImpl::hospitalOf).toList(),
+                hospitalId),
+            OTHER_HOSPITAL_READ_DESCRIPTION);
+        return shown.stream()
+            .map(row -> toVerify(row, plans.get(row.getPayerPlanId()), agreements))
+            .toList();
+    }
+
+    /**
+     * Owner decision 2026-11-22: "Reprendre pour cet établissement". The acting hospital gets its OWN coverage row,
+     * made from the source policy's identity fields only (policy number, holder relationship, validity dates),
+     * unverified, with no plan: it bills no payer share until the desk links one of THIS hospital's formules (plan
+     * A-9). With an agreement here the row is named after this hospital's payer (its code and name); without one it
+     * keeps the insurer as recorded, an identity-only record, and the desk is told there is no agreement (research
+     * 2026-11-22: tiers payant only where the facility holds its own convention). The source row is read only through
+     * {@link RecordAccessPolicy} (another one answers as a missing id) and never written. Taking it twice returns the
+     * row this hospital already holds.
+     */
+    @Override
+    @Transactional
+    public PatientInsuranceResponseDTO reuseOtherHospitalPolicy(UUID sourceInsuranceId) {
+        UUID hospitalId = requireActingHospital();
+        UUID actorUserId = resolveActorUserId(null);
+        requirePlanLinker(hospitalId, actorUserId);
+        PatientInsurance source = getInsuranceOrThrow(sourceInsuranceId);
+        UUID patientId = source.getPatient() != null ? source.getPatient().getId() : null;
+        UUID sourceHospitalId = hospitalOf(source);
+        if (patientId == null || sourceHospitalId == null || sourceHospitalId.equals(hospitalId)
+            || !recordAccessPolicy.readableHospitalIds(actorUserId, patientId, hospitalId).contains(sourceHospitalId)) {
+            throw insuranceNotFound(sourceInsuranceId);
+        }
+        patientChartAccess.require(patientId, hospitalId);
+        lockPatient(patientId);
+        reachRecorder.recordReach(patientId, hospitalId, actorUserId, null,
+            CrossHospitalReachRecorder.reachOf(List.of(sourceHospitalId), hospitalId),
+            OTHER_HOSPITAL_REUSE_DESCRIPTION);
+        // Review of #1293: under the patient lock, the same "already held" rule as the list (its own rows and the
+        // shared ones it sees), so a stale page or a direct call never makes a second row of the policy.
+        java.util.Optional<PatientInsurance> held = heldAt(patientId, hospitalId).stream()
+            .filter(own -> samePolicy(own, source))
+            .findFirst();
+        if (held.isPresent()) {
+            return patientInsuranceMapper.toPatientInsuranceResponseDTO(held.get());
+        }
+        // This hospital's agreement with the insurer (matched by name, review of #1293), else none: identity only.
+        PayerCatalogueService.Agreement agreement = PayerCatalogueService.Agreement
+            .bestFor(payerCatalogueService.activeAgreementsAt(hospitalId), source.getPayerCode(),
+                source.getProviderName())
+            .orElse(null);
+        PatientInsurance own = rowAtHospital(identityOf(source, agreement), hospitalId, actorUserId,
+            () -> insuranceNotFound(sourceInsuranceId));
+        own.setLinkedByUserId(actorUserId);
+        own.setLinkedAs("STAFF");
+        PatientInsurance saved = keepOnePrimary(patientInsuranceRepository.save(own), false);
+        return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
+    }
+
+    /**
+     * A new, untagged row: the source policy's identity, unverified, no plan. Under this hospital's payer when it has
+     * an agreement; otherwise the insurer's name as recorded and no payer code (another hospital's code is free text
+     * that means nothing here, review of #1293).
+     */
+    private static PatientInsurance identityOf(PatientInsurance source, PayerCatalogueService.Agreement agreement) {
+        return PatientInsurance.builder()
+            .patient(source.getPatient())
+            .payerCode(agreement == null ? null : agreement.payerCode())
+            .providerName(agreement == null ? source.getProviderName() : agreement.payerName())
+            .policyNumber(source.getPolicyNumber())
+            .subscriberRelationship(source.getSubscriberRelationship())
+            .effectiveDate(source.getEffectiveDate())
+            .expirationDate(source.getExpirationDate())
+            .primary(false)
+            .build();
+    }
+
+    /** The identity of another hospital's policy, and nothing else of the row (owner decision 2026-11-22). */
+    private static OtherHospitalInsuranceDTO toVerify(PatientInsurance row, PayerCatalogueService.PlanLabel plan,
+                                                      List<PayerCatalogueService.Agreement> agreements) {
+        UserRoleHospitalAssignment assignment = row.getAssignment();
+        return OtherHospitalInsuranceDTO.builder()
+            .sourceInsuranceId(row.getId())
+            .sourceHospitalName(assignment != null && assignment.getHospital() != null
+                ? assignment.getHospital().getName() : null)
+            .insurerName(row.getProviderName())
+            .policyNumber(row.getPolicyNumber())
+            .planName(plan == null ? null : plan.planName())
+            .holderRelationship(row.getSubscriberRelationship())
+            .effectiveDate(row.getEffectiveDate())
+            .expirationDate(row.getExpirationDate())
+            .declaredOn(row.getCreatedAt() == null ? null : row.getCreatedAt().toLocalDate())
+            .agreementHere(agreements.stream().anyMatch(a -> a.matches(row.getPayerCode(), row.getProviderName())))
+            .build();
+    }
+
+    /**
+     * Review of #1293 (L3): the rows this hospital already holds for the patient - its own and the shared (untagged)
+     * ones it sees ({@link PatientInsurance#isVisibleAt}).
+     */
+    private List<PatientInsurance> heldAt(UUID patientId, UUID hospitalId) {
+        List<PatientInsurance> held = new java.util.ArrayList<>(
+            patientInsuranceRepository.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId));
+        held.addAll(patientInsuranceRepository.findByPatient_IdAndAssignmentIsNull(patientId));
+        return held;
+    }
+
+    /** The same policy: the same number, of the same insurer ({@link PayerCatalogueService.Agreement#matches}). */
+    private static boolean samePolicy(PatientInsurance own, PatientInsurance other) {
+        return own.getPolicyNumber() != null && own.getPolicyNumber().equalsIgnoreCase(other.getPolicyNumber())
+            && new PayerCatalogueService.Agreement(own.getPayerCode(), own.getProviderName())
+                .matches(other.getPayerCode(), other.getProviderName());
+    }
+
+    private UUID requireActingHospital() {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null) {
+            throw new BusinessException(HOSPITAL_REQUIRED_KEY);
+        }
+        return hospitalId;
     }
 
     /* ==================== payer plan link (billing-money plan PR 6) ==================== */
