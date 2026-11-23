@@ -16280,6 +16280,9 @@
     "TODAY_MORE": "Seules les {{shown}} ventes les plus récentes de la journée sont affichées : la clôture de caisse les compte toutes.",
     "UNSETTLED": "La réponse n’est pas arrivée : la vente a peut-être été enregistrée. « Encaisser » renvoie exactement la même vente, sans la doubler ; le panier est figé jusque-là."
   },
+  "LOADING_SHELL": {
+    "SLOW": "Le chargement prend plus de temps que prévu. Vérifiez votre connexion ; votre page ouverte est conservée."
+  },
   "RECORD_RIGHTS": {
     "TITLE": "Accéder à mon dossier ou le rectifier",
     "INTRO": "Demandez une copie ou une rectification à votre hôpital. Le personnel examine les demandes ; ce formulaire ne modifie jamais votre dossier clinique. Les dates de réponse sont des objectifs internes, sans valeur de délai légal.",

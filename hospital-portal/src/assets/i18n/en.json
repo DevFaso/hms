@@ -16280,6 +16280,9 @@
     "TODAY_MORE": "Only the {{shown}} most recent sales of today are shown: the till close counts them all.",
     "UNSETTLED": "No answer came back: the sale may have been recorded. « Take payment » resends exactly the same sale, never twice; the basket is frozen until then."
   },
+  "LOADING_SHELL": {
+    "SLOW": "Loading is taking longer than expected. Check your connection; your open page is preserved."
+  },
   "RECORD_RIGHTS": {
     "TITLE": "Access or correct my record",
     "INTRO": "Ask your hospital for a copy or a correction. Staff review requests; this form never changes your clinical record. Response dates are internal targets, not statutory deadlines.",
