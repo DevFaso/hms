@@ -5,6 +5,7 @@ import { EMPTY, Observable, Subject, catchError } from 'rxjs';
 
 import { RoleContextService } from '../core/role-context.service';
 import { expandRoleEquivalents } from '../core/role-equivalence';
+import { ApiTimeoutService } from '../core/api-timeout.service';
 
 const ACCESS_TOKEN_KEY = 'auth_token';
 const REFRESH_TOKEN_KEY = 'auth_refresh_token';
@@ -99,6 +100,7 @@ export class AuthService {
   private readonly roleContext = inject(RoleContextService);
   private readonly platformId = inject(PLATFORM_ID);
   private readonly http = inject(HttpClient);
+  private readonly timeouts = inject(ApiTimeoutService);
   private readonly isBrowser = isPlatformBrowser(this.platformId);
 
   /** Reactive signal that updates whenever setUserProfile() is called. */
@@ -108,7 +110,12 @@ export class AuthService {
   readonly sessionEnded$ = this.sessionEnd.asObservable();
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => this.sessionEnd.next());
+    inject(DestroyRef).onDestroy(() => this.endSession());
+  }
+
+  private endSession(): void {
+    this.timeouts.resetForSession();
+    this.sessionEnd.next();
   }
 
   // ---------- Storage ----------
@@ -243,6 +250,7 @@ export class AuthService {
   // ---------- User Profile ----------
   setUserProfile(profile: LoginUserProfile): void {
     if (!this.isBrowser) return;
+    if (this.getUserProfile()?.id !== profile.id) this.timeouts.resetForSession();
     try {
       const toStore = { ...profile };
       if (toStore.profileImageUrl) {
@@ -444,7 +452,7 @@ export class AuthService {
   }
 
   logout(): void {
-    this.sessionEnd.next();
+    this.endSession();
     this.revokeServerSession();
     this.clearToken();
     this.clearRefreshToken();

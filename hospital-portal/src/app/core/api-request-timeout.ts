@@ -1,4 +1,9 @@
-import { HttpContextToken, HttpRequest } from '@angular/common/http';
+import {
+  HttpContext,
+  HttpContextToken,
+  HttpErrorResponse,
+  HttpRequest,
+} from '@angular/common/http';
 
 export const API_REQUEST_TIMEOUT_MS = 20_000;
 export const API_UPLOAD_TIMEOUT_MS = 120_000;
@@ -16,15 +21,48 @@ export const API_TIMEOUT_BUDGETS: Record<ApiTimeoutProfile, number> = {
 
 /** All multipart/raw file uploads and binary downloads inherit their transfer budget. */
 export function withApiTimeoutProfile(req: HttpRequest<unknown>): HttpRequest<unknown> {
-  let profile = req.context.get(API_TIMEOUT_PROFILE);
+  let profile = req.context.has(API_TIMEOUT_PROFILE) ? req.context.get(API_TIMEOUT_PROFILE) : null;
   if (profile === null) {
     const upload =
       (typeof FormData !== 'undefined' && req.body instanceof FormData) ||
       (typeof Blob !== 'undefined' && req.body instanceof Blob) ||
       req.reportProgress;
     if (upload) profile = 'upload';
-    else if (req.responseType === 'blob') profile = 'export';
+    else if (req.responseType === 'blob' || req.responseType === 'arraybuffer') profile = 'export';
     else profile = 'default';
   }
-  return req.clone({ context: req.context.set(API_TIMEOUT_PROFILE, profile) });
+  const context = new HttpContext();
+  for (const token of req.context.keys()) context.set(token, req.context.get(token));
+  return req.clone({ context: context.set(API_TIMEOUT_PROFILE, profile) });
+}
+
+/** A transport failure says nothing about whether the refresh cookie is still valid. */
+export function isRefreshRejection(error: unknown): boolean {
+  return error instanceof HttpErrorResponse && [400, 401, 403, 410].includes(error.status);
+}
+
+/** Refresh protocol failures must never masquerade as resource conflicts or validation errors. */
+export function refreshFailureForCaller(error: unknown): unknown {
+  if (!(error instanceof HttpErrorResponse) || isRefreshRejection(error)) return error;
+  return new HttpErrorResponse({
+    status: 503,
+    statusText: 'Service Unavailable',
+    url: error.url ?? undefined,
+    error: { code: 'SESSION_REFRESH_UNAVAILABLE' },
+  });
+}
+
+export function isSignInRequest(req: HttpRequest<unknown>): boolean {
+  return /(?:^|\/)auth\/(?:login|mfa\/verify)\/?(?:[?#]|$)/i.test(req.url);
+}
+
+/** Session protocol POSTs are not uncertain clinical or financial writes. */
+export function timeoutNoticeMethod(req: HttpRequest<unknown>): string | null {
+  if (/(?:^|\/)auth\/logout\/?(?:[?#]|$)/i.test(req.url)) return null;
+  if (
+    isSignInRequest(req) ||
+    /(?:^|\/)auth\/(?:token\/refresh|verify-password)\/?(?:[?#]|$)/i.test(req.url)
+  )
+    return 'GET';
+  return req.method;
 }
