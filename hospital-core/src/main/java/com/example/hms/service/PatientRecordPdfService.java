@@ -72,6 +72,15 @@ public class PatientRecordPdfService {
     private final MessageSource messageSource;
 
     public byte[] render(UUID patientId) {
+        return render(patientId, null);
+    }
+
+    /** One mandatory request-linked disclosure event for an approved ROI download. */
+    public byte[] renderForRoi(UUID patientId, UUID requestId) {
+        return render(patientId, java.util.Objects.requireNonNull(requestId, "requestId"));
+    }
+
+    private byte[] render(UUID patientId, UUID requestId) {
         PdfLabels labels = PdfLabels.ofRequest(messageSource);
         UUID hospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
         if (hospitalId == null) {
@@ -90,7 +99,7 @@ public class PatientRecordPdfService {
         ChartReviewDTO chart = chartReviewService.getCompleteChartReview(patientId, hospitalId);
 
         byte[] pdf = write(storyboard, chart, patient.getAllergies(), labels);
-        emitAudit(patient, hospitalId, chart);
+        emitAudit(patient, hospitalId, chart, requestId);
         return pdf;
     }
 
@@ -256,25 +265,31 @@ public class PatientRecordPdfService {
 
     // ---------------------------------------------------------------- audit
 
-    private void emitAudit(Patient patient, UUID hospitalId, ChartReviewDTO chart) {
+    private void emitAudit(Patient patient, UUID hospitalId, ChartReviewDTO chart, UUID requestId) {
         try {
             String username = SecurityUtils.getCurrentUsername();
             User actor = username == null ? null : userRepository.findByUsername(username).orElse(null);
             int entries = size(chart.getEncounters()) + size(chart.getNotes()) + size(chart.getResults())
                 + size(chart.getMedications()) + size(chart.getImaging()) + size(chart.getProcedures());
-            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+            var persisted = auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .eventType(AuditEventType.PATIENT_EXPORT)
                 .status(AuditStatus.SUCCESS)
-                .entityType(AUDIT_ENTITY_TYPE)
+                .entityType(requestId == null ? AUDIT_ENTITY_TYPE : "ROI_REQUEST")
                 .hospitalId(hospitalId) // QA D533: anchored at the exporting hospital
                 .userId(actor != null ? actor.getId() : null)
                 .userName(actor != null ? actor.getUsername() : username)
-                .resourceId(patient.getId().toString())
+                .resourceId(requestId == null ? patient.getId().toString() : requestId.toString())
+                .patientId(patient.getId())
                 // No PHI in the description: the id is the resource, the name is not.
                 .eventDescription("Patient record PDF downloaded for Patient/" + patient.getId()
-                    + " at hospital " + hospitalId + " (" + entries + " chart entries)")
+                    + " at hospital " + hospitalId + " (" + entries + " chart entries)"
+                    + (requestId == null ? "" : " under ROI request " + requestId))
                 .build());
+            if (requestId != null && persisted == null)
+                throw new com.example.hms.exception.RoiAuditUnavailableException("roi.request.disclosureNotRecorded");
         } catch (RuntimeException ex) {
+            if (requestId != null)
+                throw new com.example.hms.exception.RoiAuditUnavailableException("roi.request.disclosureNotRecorded");
             log.warn("audit emission failed for the patient record PDF of {}: {}", patient.getId(), ex.toString());
         }
     }

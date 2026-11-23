@@ -51,7 +51,8 @@ import java.util.UUID;
  * COPY_RELEASED — and if that row cannot be persisted the fulfilment is
  * rolled back: a release the accounting cannot see must not be recorded
  * as fulfilled. The workflow's own trail entries (ROI_REQUESTED etc.)
- * stay best-effort, and audit descriptions carry no request narrative —
+ * also fail closed; an unavailable audit sink is a 503, not an invalid
+ * request field. Audit descriptions carry no request narrative —
  * {@code event_description} is a plaintext column, and {@code resourceId}
  * already links the row to the encrypted request.
  */
@@ -299,15 +300,6 @@ public class RoiRequestService {
         return request.getPatientId();
     }
 
-    /** Mandatory export accounting before a PDF leaves this workflow. No request narrative in the event. */
-    @Transactional(readOnly = true)
-    public void recordExport(UUID requestId) {
-        copyForExport(requestId);
-        RoiRequest request = roiRepository.findById(requestId)
-            .orElseThrow(() -> new ResourceNotFoundException("roi.request.notFound", requestId));
-        emitDisclosureOrFail(request);
-    }
-
     /**
      * The one MANDATORY audit write. {@code logEvent} commits in its own
      * transaction and returns null instead of throwing when the sink
@@ -331,9 +323,9 @@ public class RoiRequestService {
     private void emitAudit(AuditEventType type, RoiRequest request, String description) {
         try {
             if (auditService.logEvent(buildAudit(type, request, description)) == null)
-                throw new BusinessException("roi.request.auditUnavailable");
+                throw new com.example.hms.exception.RoiAuditUnavailableException("roi.request.auditUnavailable");
         } catch (RuntimeException ex) {
-            throw new BusinessException("roi.request.auditUnavailable");
+            throw new com.example.hms.exception.RoiAuditUnavailableException("roi.request.auditUnavailable");
         }
     }
 

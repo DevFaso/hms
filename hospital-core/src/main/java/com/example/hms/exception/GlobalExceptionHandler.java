@@ -880,6 +880,12 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request);
     }
 
+    @ExceptionHandler(RoiAuditUnavailableException.class)
+    public ResponseEntity<Object> handleRoiAuditUnavailable(
+            RoiAuditUnavailableException ex, WebRequest request) {
+        return buildErrorResponse(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request);
+    }
+
     /**
      * HAPI's {@code BaseServerResponseException} family carries its own HTTP
      * status, but only HAPI's servlet knows that. Thrown out of a service that

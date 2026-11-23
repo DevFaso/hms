@@ -148,6 +148,33 @@ class PatientRecordPdfServiceTest {
     }
 
     @Test
+    void roiDownloadEmitsExactlyOneRequestLinkedEventAndReturnsARealPdf() throws Exception {
+        stubHappyPath();
+        UUID requestId = UUID.randomUUID();
+        when(auditEventLogService.logEvent(any())).thenReturn(
+            com.example.hms.payload.dto.AuditEventLogResponseDTO.builder().id(UUID.randomUUID()).build());
+        assertThat(textOf(service.renderForRoi(patientId, requestId))).contains("Karim Porgo");
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.PATIENT_EXPORT);
+        assertThat(audit.getValue().getEntityType()).isEqualTo("ROI_REQUEST");
+        assertThat(audit.getValue().getResourceId()).isEqualTo(requestId.toString());
+        assertThat(audit.getValue().getPatientId()).isEqualTo(patientId);
+        assertThat(audit.getValue().getHospitalId()).isEqualTo(hospitalId);
+    }
+
+    @Test
+    void roiDownloadRefusesBothANullAuditResultAndAnAuditException() {
+        stubHappyPath();
+        UUID requestId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.renderForRoi(patientId, requestId))
+            .isInstanceOf(com.example.hms.exception.RoiAuditUnavailableException.class);
+        when(auditEventLogService.logEvent(any())).thenThrow(new IllegalStateException("cdx-audit-down"));
+        assertThatThrownBy(() -> service.renderForRoi(patientId, requestId))
+            .isInstanceOf(com.example.hms.exception.RoiAuditUnavailableException.class);
+    }
+
+    @Test
     void rendersIdentityStoryboardAndChartAndAuditsTheExportWithoutTheName() throws Exception {
         stubHappyPath();
 

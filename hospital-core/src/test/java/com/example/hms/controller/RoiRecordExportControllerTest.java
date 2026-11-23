@@ -30,23 +30,22 @@ class RoiRecordExportControllerTest {
         UUID requestId = UUID.randomUUID(), patientId = UUID.randomUUID();
         byte[] bytes = "%PDF-1.4 cdx-fixture".getBytes(StandardCharsets.US_ASCII);
         when(requests.copyForExport(requestId)).thenReturn(patientId);
-        when(pdf.render(patientId)).thenReturn(bytes);
+        when(pdf.renderForRoi(patientId, requestId)).thenReturn(bytes);
         mvc.perform(get("/roi-requests/{id}/record.pdf", requestId)).andExpect(status().isOk())
             .andExpect(content().contentType("application/pdf")).andExpect(content().bytes(bytes))
             .andExpect(header().string("Cache-Control", "no-store"))
             .andExpect(header().string("X-Content-Type-Options", "nosniff"));
         var order = inOrder(requests, pdf);
-        order.verify(requests).copyForExport(requestId); order.verify(pdf).render(patientId);
-        order.verify(requests).recordExport(requestId);
+        order.verify(requests).copyForExport(requestId); order.verify(pdf).renderForRoi(patientId, requestId);
+        verifyNoMoreInteractions(requests, pdf);
     }
 
     @Test
     void auditFailureDoesNotReturnPdfBytes() throws Exception {
         UUID requestId = UUID.randomUUID(), patientId = UUID.randomUUID();
         when(requests.copyForExport(requestId)).thenReturn(patientId);
-        when(pdf.render(patientId)).thenReturn("%PDF cdx-secret".getBytes(StandardCharsets.US_ASCII));
-        doThrow(new BusinessException("roi.request.disclosureNotRecorded")).when(requests).recordExport(requestId);
-        mvc.perform(get("/roi-requests/{id}/record.pdf", requestId)).andExpect(status().is4xxClientError())
+        when(pdf.renderForRoi(patientId, requestId)).thenThrow(new com.example.hms.exception.RoiAuditUnavailableException("roi.request.disclosureNotRecorded"));
+        mvc.perform(get("/roi-requests/{id}/record.pdf", requestId)).andExpect(status().isServiceUnavailable())
             .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("cdx-secret"))));
     }
 
@@ -55,6 +54,6 @@ class RoiRecordExportControllerTest {
         UUID requestId = UUID.randomUUID();
         when(requests.copyForExport(requestId)).thenThrow(new BusinessException("roi.request.copyNotApproved"));
         mvc.perform(get("/roi-requests/{id}/record.pdf", requestId)).andExpect(status().is4xxClientError());
-        verifyNoInteractions(pdf); verify(requests, never()).recordExport(any());
+        verifyNoInteractions(pdf);
     }
 }

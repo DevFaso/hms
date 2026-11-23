@@ -537,7 +537,7 @@ class RoiRequestServiceTest {
         doThrow(new RuntimeException("audit sink down")).when(auditService).logEvent(any());
 
         assertThatThrownBy(() -> service.create(patientId, createDto()))
-            .isInstanceOf(BusinessException.class)
+            .isInstanceOf(com.example.hms.exception.RoiAuditUnavailableException.class)
             .extracting("messageKey").isEqualTo("roi.request.auditUnavailable");
     }
 }
