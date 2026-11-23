@@ -69,6 +69,7 @@ class PatientMessageGateGuardTest {
         entry("OwnEmailChangeService.java", SECURITY),
         entry("UserCredentialLifecycleServiceImpl.java", SECURITY),
         entry("PhoneVerificationServiceImpl.java", SECURITY),
+        entry("PatientRecipientChallengeService.java", SECURITY + " (D2205 contact ownership code only; no clinical content)"),
         entry("PasswordRotationScheduler.java", SECURITY),
         entry("UserServiceImpl.java", SECURITY),
         entry("UserRoleHospitalAssignmentServiceImpl.java", STAFF + " (role assignment codes)"),

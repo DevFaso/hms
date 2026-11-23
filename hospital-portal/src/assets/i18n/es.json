@@ -15056,6 +15056,7 @@
       "RECIPIENT_NOT_ALLOWED": "Number not on this environment's test list",
       "OPTED_OUT": "The patient turned this channel off",
       "NO_CONTACT": "No phone number or email address",
+      "RECIPIENT_UNVERIFIED": "Contacto sin verificar",
       "SUBJECT_WITHDRAWN": "Appointment cancelled or past, or result withdrawn",
       "PATIENT_DECEASED": "The patient has died"
     },
@@ -16219,5 +16220,16 @@
     "COL_TOTAL": "Total",
     "TODAY_MORE": "Solo se muestran las {{shown}} ventas más recientes del día: el cierre de caja las cuenta todas.",
     "UNSETTLED": "No llegó la respuesta: la venta puede haberse registrado. « Cobrar » reenvía exactamente la misma venta, sin duplicarla; la cesta queda congelada hasta entonces."
+  },
+  "RECIPIENT_VERIFICATION": {
+    "TITLE": "Verificar datos de contacto",
+    "INTRO": "Los mensajes clínicos solo se envían al teléfono o correo actual tras verificarlo. Los códigos no contienen información clínica.",
+    "VERIFIED": "Verificado",
+    "NOT_VERIFIED": "Sin verificar: los mensajes clínicos están suspendidos para este canal.",
+    "SEND": "Enviar un código",
+    "CODE": "Código de seis dígitos",
+    "CONFIRM": "Confirmar código",
+    "ERROR": "No se pudo verificar este contacto. Inténtelo de nuevo.",
+    "CODE_REQUIRED": "Introduzca el código de seis dígitos."
   }
 }

@@ -64,7 +64,7 @@ class InvoiceEmailServiceTest {
     void setUp() {
         // The real gate over a mocked consent: the opt-out path is the gate's own.
         service = new InvoiceEmailService(billingInvoiceRepository, invoiceItemRepository, pdfInvoiceService,
-            new PatientMessageGate(consent, ledger, smsService, emailService), patientLocaleResolver,
+            new PatientMessageGate(consent, ledger, smsService, emailService, new com.example.hms.service.notification.PatientRecipientVerification(), org.mockito.Mockito.mock(com.example.hms.service.notification.PatientRecipientCurrentCheck.class)), patientLocaleResolver,
             TestMessageSources.bundles(), roleValidator, adjustmentRepository);
         lenient().when(patientLocaleResolver.resolve(any(), any())).thenAnswer(inv -> inv.getArgument(1));
         lenient().when(consent.allows(any(), any(), any())).thenReturn(true);
@@ -91,6 +91,7 @@ class InvoiceEmailServiceTest {
         Patient patient = new Patient();
         patient.setId(UUID.randomUUID());
         patient.setEmail("seydou@example.test");
+        patient.setVerifiedEmailRecipient("seydou@example.test");
         User user = new User();
         user.setId(UUID.randomUUID());
         patient.setUser(user);

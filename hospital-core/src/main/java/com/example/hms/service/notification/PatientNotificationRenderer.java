@@ -97,6 +97,7 @@ public class PatientNotificationRenderer {
     private final MessageSource messageSource;
     private final Clock clock;
     private final PatientNotificationProperties properties;
+    private final PatientRecipientVerification verification;
 
     /**
      * The fallback language, the reminder sweep's own setting ({@code AppointmentReminderService}):
@@ -189,6 +190,9 @@ public class PatientNotificationRenderer {
         String recipient = recipientOf(row, patient);
         if (!StringUtils.hasText(recipient)) {
             return PatientNotificationErrorCode.NO_CONTACT;
+        }
+        if (!verification.allows(patient, row.getChannel(), recipient)) {
+            return PatientNotificationErrorCode.RECIPIENT_UNVERIFIED;
         }
         if (row.getChannel() == NotificationChannel.EMAIL
             && !EmailRecipientAllowlist.parse(properties.getEmailRecipientAllowlist()).permits(recipient)) {

@@ -1,3 +1,4 @@
+import { PatientRecipientVerificationComponent } from '../shared/patient-recipient-verification.component';
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -26,7 +27,13 @@ interface PrefRow {
 @Component({
   selector: 'app-notification-settings',
   standalone: true,
-  imports: [SubmitGuardDirective, FormsModule, TranslateModule, PageHeaderComponent],
+  imports: [
+    PatientRecipientVerificationComponent,
+    SubmitGuardDirective,
+    FormsModule,
+    TranslateModule,
+    PageHeaderComponent,
+  ],
   template: `
     <div class="settings-page">
       <app-page-header
@@ -35,6 +42,7 @@ interface PrefRow {
         backLink="/notifications"
         [backLabel]="'NOTIFICATIONS.SETTINGS_BACK' | translate"
       />
+      <app-patient-recipient-verification />
 
       @if (loading()) {
         <div class="settings-loading">

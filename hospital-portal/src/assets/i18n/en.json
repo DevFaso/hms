@@ -15056,6 +15056,7 @@
       "RECIPIENT_NOT_ALLOWED": "Number not on this environment's test list",
       "OPTED_OUT": "The patient turned this channel off",
       "NO_CONTACT": "No phone number or email address",
+      "RECIPIENT_UNVERIFIED": "Contact not verified",
       "SUBJECT_WITHDRAWN": "Appointment cancelled or past, or result withdrawn",
       "PATIENT_DECEASED": "The patient has died"
     },
@@ -16219,5 +16220,16 @@
     "COL_TOTAL": "Total",
     "TODAY_MORE": "Only the {{shown}} most recent sales of today are shown: the till close counts them all.",
     "UNSETTLED": "No answer came back: the sale may have been recorded. « Take payment » resends exactly the same sale, never twice; the basket is frozen until then."
+  },
+  "RECIPIENT_VERIFICATION": {
+    "TITLE": "Verify contact details",
+    "INTRO": "Clinical messages are sent only to the current phone number or e-mail after verification. Codes contain no clinical information.",
+    "VERIFIED": "Verified",
+    "NOT_VERIFIED": "Not verified: clinical messages are paused for this channel.",
+    "SEND": "Send a code",
+    "CODE": "Six-digit code",
+    "CONFIRM": "Confirm code",
+    "ERROR": "Unable to verify this contact. Try again.",
+    "CODE_REQUIRED": "Enter the six-digit code."
   }
 }

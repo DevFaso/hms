@@ -106,7 +106,7 @@ class PharmacyServiceSupportTest {
     }
 
     private PatientMessageGate gate(SmsService sms) {
-        return new PatientMessageGate(consent, ledger, sms, emailService);
+        return new PatientMessageGate(consent, ledger, sms, emailService, new com.example.hms.service.notification.PatientRecipientVerification(), org.mockito.Mockito.mock(com.example.hms.service.notification.PatientRecipientCurrentCheck.class));
     }
 
     private Patient patient() {
@@ -114,6 +114,7 @@ class PharmacyServiceSupportTest {
         p.setId(UUID.randomUUID());
         p.setFirstName("Awa");
         p.setPhoneNumberPrimary("+22670000000");
+        p.setVerifiedSmsRecipient("+22670000000");
         return p;
     }
 
@@ -167,6 +168,7 @@ class PharmacyServiceSupportTest {
     void noopWhenNoPhone() {
         Patient p = patient();
         p.setPhoneNumberPrimary(null);
+        p.setVerifiedSmsRecipient(null);
         support.notifyDispensed(rx, p, pharmacy("X"), "Med");
         verifyNoInteractions(smsService);
     }
@@ -176,6 +178,7 @@ class PharmacyServiceSupportTest {
     void noopWhenPhoneBlank() {
         Patient p = patient();
         p.setPhoneNumberPrimary("   ");
+        p.setVerifiedSmsRecipient("   ");
         support.notifyDispensed(rx, p, pharmacy("X"), "Med");
         verifyNoInteractions(smsService);
     }
@@ -301,6 +304,7 @@ class PharmacyServiceSupportTest {
         Patient en = patient();
         Patient es = patient();
         es.setPhoneNumberPrimary("+22670000001");
+        es.setVerifiedSmsRecipient("+22670000001");
         when(patientLocaleResolver.resolve(eq(en), any())).thenReturn(Locale.ENGLISH);
         when(patientLocaleResolver.resolve(eq(es), any())).thenReturn(Locale.forLanguageTag("es"));
 
@@ -415,6 +419,7 @@ class PharmacyServiceSupportTest {
     void outOfStockNoopWhenNoPhone() {
         Patient p = patient();
         p.setPhoneNumberPrimary(null);
+        p.setVerifiedSmsRecipient(null);
         support.notifyOutOfStock(rx, p, "Med", PharmacyServiceSupport.OUT_OF_STOCK_PRINT);
         verifyNoInteractions(smsService);
     }
@@ -449,6 +454,7 @@ class PharmacyServiceSupportTest {
     void outOfStockBlankPhone() {
         Patient p = patient();
         p.setPhoneNumberPrimary("  ");
+        p.setVerifiedSmsRecipient("  ");
         support.notifyOutOfStock(rx, p, "Med", PharmacyServiceSupport.OUT_OF_STOCK_PRINT);
         verifyNoInteractions(smsService);
     }
@@ -493,6 +499,7 @@ class PharmacyServiceSupportTest {
     void refillReminderNoopWhenNoPhone() {
         Patient p = patient();
         p.setPhoneNumberPrimary(null);
+        p.setVerifiedSmsRecipient(null);
         support.notifyRefillReminder(rx, p, "Med", 3);
         verifyNoInteractions(smsService);
     }
@@ -527,6 +534,7 @@ class PharmacyServiceSupportTest {
     void refillReminderBlankPhone() {
         Patient p = patient();
         p.setPhoneNumberPrimary("  ");
+        p.setVerifiedSmsRecipient("  ");
         support.notifyRefillReminder(rx, p, "Med", 3);
         verifyNoInteractions(smsService);
     }

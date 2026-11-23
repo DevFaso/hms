@@ -39,6 +39,7 @@ class PatientMessageGateTest {
     @Mock private PatientNotificationLedger ledger;
     @Mock private SmsService smsService;
     @Mock private EmailService emailService;
+    @Mock private PatientRecipientCurrentCheck currentCheck;
 
     private PatientMessageGate gate;
     private Patient patient;
@@ -52,11 +53,13 @@ class PatientMessageGateTest {
 
     @BeforeEach
     void setUp() {
-        gate = new PatientMessageGate(consent, ledger, smsService, emailService);
+        gate = new PatientMessageGate(consent, ledger, smsService, emailService, new PatientRecipientVerification(), currentCheck);
         patient = new Patient();
         patient.setId(UUID.randomUUID());
         patient.setPhoneNumberPrimary("+22670707070");
+        patient.setVerifiedSmsRecipient("+22670707070");
         patient.setEmail("seydou@example.test");
+        patient.setVerifiedEmailRecipient("seydou@example.test");
         User user = new User();
         userId = UUID.randomUUID();
         user.setId(userId);
@@ -72,6 +75,25 @@ class PatientMessageGateTest {
 
     private void optOut(NotificationType type, NotificationChannel channel) {
         when(consent.allows(userId, type, channel)).thenReturn(false);
+    }
+
+    @Test
+    void deferredSmsRechecksCommittedRecipientOwnershipInsteadOfTheCachedPatient() {
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        org.springframework.transaction.support.TransactionSynchronizationManager.setActualTransactionActive(true);
+        try {
+            assertThat(gate.smsAfterCommit(patient, notice(PatientNotificationEvent.PHARMACY_READY), "ready")).isTrue();
+            verify(smsService, never()).send(any(), any());
+            org.springframework.transaction.support.TransactionSynchronizationManager.setActualTransactionActive(false);
+            org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations().forEach(
+                org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+            verify(currentCheck).allows(patient.getId(), NotificationChannel.SMS, patient.getPhoneNumberPrimary());
+            verify(smsService, never()).send(any(), any());
+            verify(ledger).recordUnverified(PatientNotificationEvent.PHARMACY_READY, hospitalId, patient.getId(), subjectId, NotificationChannel.SMS);
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+            org.springframework.transaction.support.TransactionSynchronizationManager.setActualTransactionActive(false);
+        }
     }
 
     @Test
@@ -103,6 +125,7 @@ class PatientMessageGateTest {
     @DisplayName("an appointment e-mail to a patient with no address is not a refusal: no trace")
     void noAddressNoTrace() {
         patient.setEmail(" ");
+        patient.setVerifiedEmailRecipient(" ");
         assertThat(gate.appointmentEmail(patient, notice(PatientNotificationEvent.APPOINTMENT_CONFIRMATION), MAIL))
             .isFalse();
         verifyNoInteractions(emailService, ledger, consent);
