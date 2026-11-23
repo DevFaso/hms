@@ -15125,7 +15125,8 @@
       "OPTED_OUT": "Le patient a désactivé ce canal",
       "NO_CONTACT": "Aucun numéro de téléphone ni adresse e-mail",
       "SUBJECT_WITHDRAWN": "Rendez-vous annulé ou passé, ou résultat retiré",
-      "PATIENT_DECEASED": "Le patient est décédé"
+      "PATIENT_DECEASED": "Le patient est décédé",
+      "RECIPIENT_UNVERIFIED": "Coordonnées non vérifiées"
     },
     "MAYBE_DELIVERED": "Le patient a peut-être déjà reçu ce message.",
     "RETRY_CONFIRM_TITLE": "Renvoyer ce message ?",
@@ -16304,5 +16305,16 @@
   },
   "LOADING_SHELL": {
     "SLOW": "Le chargement prend plus de temps que prévu. Vérifiez votre connexion ; votre page ouverte est conservée."
+  },
+  "RECIPIENT_VERIFICATION": {
+    "TITLE": "Vérifier les coordonnées",
+    "INTRO": "Les messages cliniques sont envoyés uniquement au numéro ou au courriel actuel après vérification. Les codes ne contiennent aucune information clinique.",
+    "VERIFIED": "Vérifié",
+    "NOT_VERIFIED": "Non vérifié : les messages cliniques sont suspendus pour ce canal.",
+    "SEND": "Envoyer un code",
+    "CODE": "Code à six chiffres",
+    "CONFIRM": "Confirmer le code",
+    "ERROR": "Impossible de vérifier ces coordonnées. Réessayez.",
+    "CODE_REQUIRED": "Saisissez le code à six chiffres."
   }
 }

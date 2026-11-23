@@ -134,6 +134,80 @@ describe('D3602 API request deadline', () => {
     expect(notice.failure()).toBeNull();
   }));
 
+  it('does not retain an inferred deadline in a context shared by ordinary and file requests', () => {
+    const scope = new HttpContextToken<string>(() => '');
+    const context = new HttpContext().set(scope, 'hospital-a');
+    for (const responseType of ['json', 'blob', 'json', 'arraybuffer'] as const) {
+      client.request('GET', '/api/shared-context', { context, responseType }).subscribe();
+      const request = backend.expectOne('/api/shared-context');
+      expect(request.request.context.get(API_TIMEOUT_PROFILE)).toBe(
+        responseType === 'json' ? 'default' : 'export',
+      );
+      expect(request.request.context.get(scope)).toBe('hospital-a');
+      expect(context.has(API_TIMEOUT_PROFILE)).toBeFalse();
+      request.flush(
+        responseType === 'blob'
+          ? new Blob(['file'])
+          : responseType === 'arraybuffer'
+            ? new ArrayBuffer(1)
+            : {},
+      );
+    }
+  });
+
+  it('allows array-buffer downloads beyond the ordinary deadline', fakeAsync(() => {
+    let bytes: ArrayBuffer | undefined;
+    client
+      .get('/api/export.bin', { responseType: 'arraybuffer' })
+      .subscribe((value) => (bytes = value));
+    const request = backend.expectOne('/api/export.bin');
+    tick(API_REQUEST_TIMEOUT_MS + 1);
+    expect(request.cancelled).toBeFalse();
+    request.flush(new ArrayBuffer(8));
+    expect(bytes?.byteLength).toBe(8);
+    tick(API_EXPORT_TIMEOUT_MS);
+    expect(notice.failure()).toBeNull();
+  }));
+
+  for (const url of [
+    '/api/auth/login',
+    '/api/auth/token/refresh',
+    '/api/auth/mfa/verify',
+    '/api/auth/verify-password',
+  ]) {
+    it(`a stalled session protocol call (${url}) is a read failure, not an uncertain saved action`, fakeAsync(() => {
+      client.post(url, {}).subscribe({ error: () => undefined });
+      const request = backend.expectOne(url);
+      tick(API_REQUEST_TIMEOUT_MS);
+      expect(request.cancelled).toBeTrue();
+      expect(notice.failure()).toBe('read');
+    }));
+  }
+
+  it('a slow logout is bounded without raising a notice on the next login screen', fakeAsync(() => {
+    client.post('/api/auth/logout', {}).subscribe({ error: () => undefined });
+    const request = backend.expectOne('/api/auth/logout');
+    tick(API_REQUEST_TIMEOUT_MS);
+    expect(request.cancelled).toBeTrue();
+    expect(notice.failure()).toBeNull();
+  }));
+
+  it('ignores late timeout notices from a session that has already ended', fakeAsync(() => {
+    client.post('/api/old-action', {}).subscribe({ error: () => undefined });
+    const request = backend.expectOne('/api/old-action');
+    notice.resetForSession();
+    tick(API_REQUEST_TIMEOUT_MS);
+    expect(request.cancelled).toBeTrue();
+    expect(notice.failure()).toBeNull();
+  }));
+
+  it('clears a prior warning when sign-in succeeds', () => {
+    notice.noteTimeout('POST');
+    client.post('/api/auth/login', {}).subscribe();
+    backend.expectOne('/api/auth/login').flush({ accessToken: 'new-session' });
+    expect(notice.failure()).toBeNull();
+  });
+
   it('preserves the existing keyed payment retry, with the same key and a bounded final outcome', fakeAsync(() => {
     const body = { clientRequestId: 'same-payment-key', amount: 100 };
     let failure: HttpErrorResponse | undefined;

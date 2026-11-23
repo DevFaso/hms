@@ -41,6 +41,12 @@ describe('PatientChannelPreferencesComponent', () => {
     fixture = TestBed.createComponent(PatientChannelPreferencesComponent);
     fixture.componentRef.setInput('patientId', 'p-1');
     fixture.detectChanges();
+    if (desk) {
+      http.expectOne('/patients/p-1/recipient-verification').flush([
+        { channel: 'SMS', verified: true },
+        { channel: 'EMAIL', verified: false },
+      ]);
+    }
   }
 
   const box = (testid: string): HTMLInputElement =>

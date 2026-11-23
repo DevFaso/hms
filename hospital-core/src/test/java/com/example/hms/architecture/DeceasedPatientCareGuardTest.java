@@ -171,6 +171,8 @@ class DeceasedPatientCareGuardTest {
         Patient#createPatientAllergy,updatePatientAllergy,deactivatePatientAllergy,createPatientDiagnosis,updatePatientDiagnosis,deletePatientDiagnosis,createPatientChartUpdate | late documentation: a final diagnosis is routinely written after a death
         PatientPanel#end | closes a panel assignment
         PatientChannelPreference#update | QA D2203: the family can still ask the desk to stop messages; never care
+        PatientRecipientVerification#request,confirm | security-only proof of the contact already on file; no care or clinical message is created (PatientRecipientChallengeServiceTest and PatientRecipientVerificationGuardTest)
+        PatientSelfRecipientVerification#request,confirm | own-account security-only contact proof, like account housekeeping; no care or clinical message is created
         PatientPortal#updateMyProfile,updateNotificationPreferences,markNotificationRead,markAllNotificationsRead | account housekeeping
         PatientPortal#payMyInvoice | billing and payments
         PatientPortal#cancelMyAppointment,cancelMyRefill | cancels

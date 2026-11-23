@@ -4007,6 +4007,11 @@
                  stripComments="true"/>
     </changeSet>
 
+    <changeSet id="V391-patient-recipient-verification" author="codex" runOnChange="false">
+        <sqlFile path="V391__patient_recipient_verification.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
+
     <changeSet id="V390-notification-choice-provenance" author="codex" runOnChange="false">
         <sqlFile path="V390__notification_choice_provenance.sql"
                  relativeToChangelogFile="true" splitStatements="true" stripComments="true"/>

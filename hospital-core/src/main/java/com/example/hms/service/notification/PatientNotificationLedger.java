@@ -139,11 +139,21 @@ public class PatientNotificationLedger {
      */
     public void recordOptOut(PatientNotificationEvent event, UUID hospitalId, UUID patientId, UUID subjectId,
                              NotificationChannel channel) {
+        recordSkipped(event, hospitalId, patientId, subjectId, channel, PatientNotificationErrorCode.OPTED_OUT);
+    }
+
+    public void recordUnverified(PatientNotificationEvent event, UUID hospitalId, UUID patientId, UUID subjectId,
+                                 NotificationChannel channel) {
+        recordSkipped(event, hospitalId, patientId, subjectId, channel, PatientNotificationErrorCode.RECIPIENT_UNVERIFIED);
+    }
+
+    private void recordSkipped(PatientNotificationEvent event, UUID hospitalId, UUID patientId, UUID subjectId,
+                               NotificationChannel channel, PatientNotificationErrorCode reason) {
         if (event == null || hospitalId == null || patientId == null || subjectId == null || channel == null) {
             return;
         }
         try {
-            insertOnce(event, hospitalId, patientId, subjectId, channel, PatientNotificationErrorCode.OPTED_OUT);
+            insertOnce(event, hospitalId, patientId, subjectId, channel, reason);
         } catch (RuntimeException ex) {
             log.warn("Opt-out trace of {} for subject {} not written: {}", event, subjectId,
                 ex.getClass().getSimpleName());

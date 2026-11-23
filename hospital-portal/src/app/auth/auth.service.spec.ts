@@ -4,6 +4,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 
 import { AuthService, type SessionBootstrapResponse } from './auth.service';
 import { RoleContextService } from '../core/role-context.service';
+import { ApiTimeoutService } from '../core/api-timeout.service';
 
 describe('AuthService — S-01 refresh-token cookie behaviour', () => {
   let service: AuthService;
@@ -23,6 +24,26 @@ describe('AuthService — S-01 refresh-token cookie behaviour', () => {
     httpMock.verify();
     localStorage.clear();
     sessionStorage.clear();
+  });
+
+  it('clears notices when the identity changes and preserves an uncertain action during a profile refresh', () => {
+    const notice = TestBed.inject(ApiTimeoutService);
+    const profile = {
+      id: 'first',
+      username: 'first',
+      email: 'first@example.test',
+      roles: ['ROLE_STAFF'],
+      active: true,
+    };
+    service.setUserProfile(profile);
+    notice.noteTimeout('POST');
+    const previousEpoch = notice.sessionEpoch;
+    service.setUserProfile({ ...profile, firstName: 'Updated' });
+    expect(notice.failure()).toBe('write');
+    service.setUserProfile({ ...profile, id: 'second' });
+    expect(notice.failure()).toBeNull();
+    notice.noteTimeout('POST', previousEpoch);
+    expect(notice.failure()).toBeNull();
   });
 
   it('setRefreshToken is a no-op — does NOT persist the token to localStorage or sessionStorage', () => {
@@ -286,19 +307,25 @@ describe('AuthService — logout revokes the server session', () => {
   });
 
   it('ends session-owned background work when the application injector is destroyed', () => {
+    const notice = TestBed.inject(ApiTimeoutService);
+    notice.noteTimeout('POST');
     const ended = jasmine.createSpy('session ended');
     service.sessionEnded$.subscribe(ended);
     TestBed.resetTestingModule();
     expect(ended).toHaveBeenCalledTimes(1);
+    expect(notice.failure()).toBeNull();
   });
 
   it('POSTs /auth/logout with the current bearer and the refresh cookie', () => {
+    const notice = TestBed.inject(ApiTimeoutService);
+    notice.noteTimeout('POST');
     const ended = jasmine.createSpy('session ended');
     service.sessionEnded$.subscribe(ended);
     localStorage.setItem('auth_token', 'current.jwt.token');
 
     service.logout();
     expect(ended).toHaveBeenCalledTimes(1);
+    expect(notice.failure()).toBeNull();
 
     const req = httpMock.expectOne((r) => r.url.endsWith('/api/auth/logout'));
     expect(req.request.method).toBe('POST');

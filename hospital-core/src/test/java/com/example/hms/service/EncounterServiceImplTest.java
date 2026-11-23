@@ -178,7 +178,7 @@ class EncounterServiceImplTest {
         org.springframework.test.util.ReflectionTestUtils.setField(service, "patientMessageGate",
             new com.example.hms.service.notification.PatientMessageGate(consent,
                 mock(com.example.hms.service.notification.PatientNotificationLedger.class),
-                mock(SmsService.class), emailService));
+                mock(SmsService.class), emailService, new com.example.hms.service.notification.PatientRecipientVerification(), mock(com.example.hms.service.notification.PatientRecipientCurrentCheck.class)));
         lenient().when(dischargeSummaryRepository.findByEncounter_Id(any(UUID.class))).thenReturn(Optional.empty());
         lenient().when(dischargeSummaryRepository.save(any(DischargeSummary.class))).thenAnswer(inv -> inv.getArgument(0));
     }
@@ -1091,6 +1091,7 @@ class EncounterServiceImplTest {
         Patient patient = new Patient();
         patient.setId(UUID.randomUUID());
         patient.setEmail("patient@example.com");
+        patient.setVerifiedEmailRecipient(patient.getEmail());
         patient.setFirstName("Jane");
         patient.setLastName("Doe");
         patient.setUser(patientUser);
@@ -1357,7 +1358,8 @@ class EncounterServiceImplTest {
         User patientUser = User.builder().username("patient1").email("patient.user@example.com").build();
         Patient patient = new Patient();
         patient.setId(UUID.randomUUID());
-        patient.setEmail(null); // force fallback to user email
+        patient.setEmail("patient.user@example.com"); // transport-failure scenario uses a verified clinical recipient
+        patient.setVerifiedEmailRecipient(patient.getEmail());
         patient.setFirstName("Jane");
         patient.setLastName("Doe");
         patient.setUser(patientUser);
@@ -2303,6 +2305,7 @@ class EncounterServiceImplTest {
         Patient patient = new Patient();
         patient.setId(patientId);
         patient.setEmail("patient@example.com");
+        patient.setVerifiedEmailRecipient(patient.getEmail());
         patient.setFirstName("Jane");
         patient.setLastName("Doe");
         patient.setUser(patientUser);

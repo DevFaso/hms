@@ -51,6 +51,7 @@ for (const [lang, strings] of Object.entries({ en, fr, es })) {
       await expect(banner).toBeVisible();
       await expect(banner).toContainText(strings.API_TIMEOUT.TITLE);
       await expect(banner).toContainText(strings.API_TIMEOUT.KEEP_INPUT);
+      await expect(page.getByTestId('api-timeout-write')).toHaveCount(0);
       expect(
         (await new AxeBuilder({ page }).include('[data-testid="api-timeout-banner"]').analyze())
           .violations,
@@ -205,3 +206,290 @@ test('a generated PDF export completes beyond the ordinary deadline', async ({ p
     release();
   }
 });
+
+test('a stalled refresh retains the open patient view, its input and the existing session', async ({
+  page,
+  baseURL,
+}) => {
+  await signInAs(page, 'ROLE_SUPER_ADMIN', baseURL!);
+  let unauthorized = false;
+  let refreshCalls = 0;
+  let logoutCalls = 0;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route('**/api/patients**', async (route) => {
+    if (!unauthorized) {
+      unauthorized = true;
+      await route.fulfill({ status: 401, json: { message: 'Expired access token' } });
+    } else {
+      await route.fulfill({
+        json: { content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 },
+      });
+    }
+  });
+  await page.route('**/api/auth/token/refresh', async (route) => {
+    refreshCalls++;
+    await held;
+    await route
+      .fulfill({ status: 503, json: { message: 'Temporarily unavailable' } })
+      .catch(() => undefined);
+  });
+  await page.route('**/api/auth/logout', async (route) => {
+    logoutCalls++;
+    await route.fulfill({ status: 204 });
+  });
+  try {
+    await page.clock.install();
+    await page.goto('/patients');
+    const search = page.locator('.filter-toolbar .search-bar input');
+    await expect(search).toBeVisible();
+    await expect.poll(() => refreshCalls).toBe(1);
+    const token = await page.evaluate(() => localStorage.getItem('auth_token'));
+    await search.fill('Keep this input');
+    await page.clock.fastForward(30000);
+    await expect(page).toHaveURL(/\/patients(?:[?#]|$)/);
+    await expect(search).toHaveValue('Keep this input');
+    await expect(page.getByTestId('api-timeout-banner')).toBeVisible();
+    await expect(page.getByTestId('api-timeout-write')).toHaveCount(0);
+    expect(await page.evaluate(() => localStorage.getItem('auth_token'))).toBe(token);
+    expect(logoutCalls).toBe(0);
+    expect(refreshCalls).toBe(1);
+  } finally {
+    release();
+  }
+});
+
+test('a late billing summary cannot replace the range the user most recently applied', async ({
+  page,
+  baseURL,
+}) => {
+  await signInAs(page, 'ROLE_SUPER_ADMIN', baseURL!);
+  let summaries = 0;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route('**/api/billing-invoices/**', async (route) => {
+    if (route.request().url().includes('/summary')) {
+      const requestNumber = ++summaries;
+      if (requestNumber === 1) await held;
+      await route.fulfill({
+        json: {
+          total: requestNumber === 1 ? 99 : 2,
+          paid: 0,
+          outstanding: 0,
+          overdue: 0,
+          totalRevenue: 0,
+          balance: 0,
+        },
+      });
+    } else {
+      await route.fulfill({
+        json: { content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 },
+      });
+    }
+  });
+  try {
+    await page.goto('/billing');
+    await expect.poll(() => summaries).toBe(1);
+    const total = page.locator('.summary-cards .card-value').first();
+    await expect(total).toHaveText('—');
+    await page.locator('input[type="date"]').first().fill('2026-02-01');
+    await page.locator('.server-filters button.btn-secondary').first().click();
+    await expect.poll(() => summaries).toBe(2);
+    await expect(total).toHaveText('2');
+    const response = page.waitForResponse(
+      (value) =>
+        value.url().includes('/billing-invoices/summary') && !value.url().includes('fromDate'),
+    );
+    release();
+    await (await response).finished();
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    await expect(total).toHaveText('2');
+  } finally {
+    release();
+  }
+});
+
+test('a business failure after a successful refresh keeps the user on the patient screen', async ({
+  page,
+  baseURL,
+}) => {
+  await signInAs(page, 'ROLE_SUPER_ADMIN', baseURL!);
+  const payload = Buffer.from(
+    JSON.stringify({ sub: 'layout-guard', roles: ['ROLE_SUPER_ADMIN'], exp: 9999999999 }),
+  ).toString('base64url');
+  const token = `eyJhbGciOiJIUzI1NiJ9.${payload}.refreshed-signature`;
+  let firstUrl = '';
+  let logoutCalls = 0;
+  await page.route('**/api/auth/token/refresh', (route) =>
+    route.fulfill({ json: { accessToken: token } }),
+  );
+  await page.route('**/api/auth/logout', async (route) => {
+    logoutCalls++;
+    await route.fulfill({ status: 204 });
+  });
+  await page.route('**/api/patients**', async (route) => {
+    if (!firstUrl) {
+      firstUrl = route.request().url();
+      await route.fulfill({ status: 401, json: { message: 'Expired access token' } });
+    } else {
+      await route.fulfill({ status: 500, json: { message: 'Temporarily unavailable' } });
+    }
+  });
+  const retried = page.waitForResponse(
+    (value) =>
+      value.url() === firstUrl &&
+      value.status() === 500 &&
+      value.request().headers()['authorization'] === `Bearer ${token}`,
+  );
+  await page.goto('/patients');
+  await (await retried).finished();
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  await expect(page).toHaveURL(/\/patients(?:[?#]|$)/);
+  await expect(page.locator('.filter-toolbar .search-bar input')).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('auth_token'))).toBe(token);
+  expect(logoutCalls).toBe(0);
+});
+
+test('an uncertain upload warning is cleared when the patient signs out', async ({
+  page,
+  baseURL,
+}) => {
+  await signInAs(page, 'ROLE_PATIENT', baseURL!);
+  let uploadCalls = 0;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route('**/api/me/patient/documents**', async (route) => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ json: { data: { content: [], totalElements: 0 } } });
+      return;
+    }
+    uploadCalls++;
+    await held;
+    await route.fulfill({ status: 503 }).catch(() => undefined);
+  });
+  await page.route('**/api/auth/logout', (route) => route.fulfill({ status: 204 }));
+  try {
+    await page.goto('/my-documents');
+    await page.clock.install();
+    await page.getByTestId('document-upload-toggle').click();
+    await page.locator('#portal-document-file').setInputFiles({
+      name: 'slow-report.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('report'),
+    });
+    await page.locator('.upload-form button.btn-primary').click();
+    await expect.poll(() => uploadCalls).toBe(1);
+    await page.clock.fastForward(121000);
+    await expect(page.getByTestId('api-timeout-write')).toBeVisible();
+    await page.getByTestId('shell-profile-btn').click();
+    await page.getByTestId('shell-profile-menu').locator('button.logout').click();
+    await expect(page).toHaveURL(/\/login(?:[?#]|$)/);
+    await expect(page.getByTestId('api-timeout-banner')).toHaveCount(0);
+    expect(await page.evaluate(() => localStorage.getItem('auth_token'))).toBeNull();
+  } finally {
+    release();
+  }
+});
+
+test('terminal refresh 410 ends the legacy session and opens login', async ({ page, baseURL }) => {
+  await signInAs(page, 'ROLE_SUPER_ADMIN', baseURL!);
+  let refreshCalls = 0;
+  await page.route('**/api/auth/token/refresh', async (route) => {
+    refreshCalls++;
+    await route.fulfill({ status: 410, json: { message: 'Legacy issuer retired' } });
+  });
+  await page.route('**/api/patients**', (route) =>
+    route.fulfill({ status: 401, json: { message: 'Expired access token' } }),
+  );
+  await page.goto('/patients');
+  await expect(page).toHaveURL(/\/login(?:[?#]|$)/);
+  expect(await page.evaluate(() => localStorage.getItem('auth_token'))).toBeNull();
+  expect(refreshCalls).toBe(1);
+});
+
+for (const resourceConflict of [false, true]) {
+  test(`only a genuine invoice conflict offers a supplementary invoice (${resourceConflict})`, async ({
+    page,
+    baseURL,
+  }) => {
+    await signInAs(page, 'ROLE_SUPER_ADMIN', baseURL!);
+    await page.addInitScript(() => localStorage.setItem('lang', 'en'));
+    const patientId = '00000000-0000-0000-0000-00000000ab12';
+    await page.route('**/api/patients/search**', (route) =>
+      route.fulfill({
+        json: [
+          {
+            id: patientId,
+            firstName: 'Test',
+            lastName: 'Patient',
+            active: true,
+          },
+        ],
+      }),
+    );
+    let writes = 0;
+    let refreshes = 0;
+    await page.route('**/api/billing-invoices**', async (route) => {
+      if (
+        route.request().method() === 'POST' &&
+        new URL(route.request().url()).pathname.endsWith('/billing-invoices')
+      ) {
+        writes++;
+        expect(route.request().postDataJSON().supplementary).not.toBe(true);
+        await route.fulfill(
+          writes === 1
+            ? { status: 401, json: { message: 'Expired access token' } }
+            : { status: 409, json: { message: 'Existing invoice for this visit' } },
+        );
+      } else if (route.request().url().includes('/summary')) {
+        await route.fulfill({
+          json: { total: 0, paid: 0, outstanding: 0, overdue: 0, totalRevenue: 0, balance: 0 },
+        });
+      } else {
+        await route.fulfill({
+          json: { content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 },
+        });
+      }
+    });
+    const payload = Buffer.from(
+      JSON.stringify({ sub: 'layout-guard', roles: ['ROLE_SUPER_ADMIN'], exp: 9999999999 }),
+    ).toString('base64url');
+    await page.route('**/api/auth/token/refresh', async (route) => {
+      refreshes++;
+      await route.fulfill(
+        resourceConflict
+          ? { json: { accessToken: `eyJhbGciOiJIUzI1NiJ9.${payload}.refreshed-signature` } }
+          : { status: 409, json: { message: 'Refresh superseded by another tab' } },
+      );
+    });
+    await page.goto('/billing');
+    await page.getByRole('button').filter({ hasText: en.BILLING.NEW_INVOICE }).click();
+    const form = page.locator('[aria-labelledby="bill-form-title"]');
+    await form.locator('#bill-patient').fill('Test');
+    await page.getByRole('option').filter({ hasText: 'Test Patient' }).click();
+    await form.locator('.modal-actions .btn-primary').click();
+    const confirmation = page.getByText(en.BILLING.SUPPLEMENTARY_CONFIRM, { exact: true });
+    if (resourceConflict) {
+      await expect(confirmation).toBeVisible();
+      expect(writes).toBe(2);
+      expect(refreshes).toBe(1);
+    } else {
+      await expect.poll(() => refreshes, { timeout: 12000 }).toBe(5);
+      await expect(form.locator('.modal-actions .btn-primary')).toBeEnabled();
+      await expect(confirmation).toHaveCount(0);
+      expect(writes).toBe(1);
+      await expect(page).toHaveURL(/\/billing(?:[?#]|$)/);
+      expect(await page.evaluate(() => localStorage.getItem('auth_token'))).not.toBeNull();
+    }
+  });
+}

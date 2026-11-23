@@ -75,11 +75,13 @@ class PatientNotificationRendererTest {
         renderer = new PatientNotificationRenderer(repository, patientRepository, hospitalRepository,
             appointmentRepository, labOrderRepository, labResultRepository, imagingReportRepository,
             ultrasoundReportRepository, consent, localeResolver, TestMessageSources.bundles(),
-            Clock.fixed(NOW, ZoneOffset.UTC), properties);
+            Clock.fixed(NOW, ZoneOffset.UTC), properties, new PatientRecipientVerification());
         patient = new Patient();
         patient.setId(UUID.randomUUID());
         patient.setPhoneNumberPrimary("+22670707070");
         patient.setEmail("awa@example.com");
+        patient.setVerifiedSmsRecipient(patient.getPhoneNumberPrimary());
+        patient.setVerifiedEmailRecipient(patient.getEmail());
         User user = new User();
         user.setId(UUID.randomUUID());
         patient.setUser(user);
