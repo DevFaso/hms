@@ -640,12 +640,36 @@ public class PayerCatalogueService {
     }
 
     /**
+     * QA D3600 (r71): the name of {@code hospitalId}'s payer coded {@code payerCode} (case ignored), active or not:
+     * the insurer's name a coverage row linked by that code is filed under, instead of the code itself. Empty when
+     * the hospital has no such payer (or no hospital is named: a patient's own add).
+     */
+    @Transactional(readOnly = true)
+    public Optional<String> payerNameAt(UUID hospitalId, String payerCode) {
+        if (hospitalId == null || payerCode == null || payerCode.isBlank()) {
+            return Optional.empty();
+        }
+        String code = payerCode.trim();
+        return payerRepository.findByHospitalIdOrderByCodeAsc(hospitalId).stream()
+            .filter(payer -> payer.getCode() != null && payer.getCode().equalsIgnoreCase(code))
+            .map(Payer::getName)
+            .filter(name -> name != null && !name.isBlank())
+            .map(String::trim)
+            .findFirst();
+    }
+
+    /**
      * An active payer of one hospital: the insurer it has an agreement with.
      *
      * <p>Review of #1293: a payer code is unique only within one hospital (V305) and a coverage row's code is free
      * text, so another hospital's "MS" may be a different insurer than this hospital's "MS". The insurer is matched on
      * its name (trimmed, spaces collapsed, case ignored); a code counts only beside the same name, or when a name is
      * missing on either side.
+     *
+     * <p>QA D3600 (r71), review of #1301 (M1): a coverage row of another hospital whose name is only its code is
+     * given its insurer's name from THAT hospital's catalogue before it is matched here
+     * ({@code PatientInsuranceServiceImpl}); with no name there it matches no agreement. The code alone never
+     * matches across hospitals.
      */
     public record Agreement(String payerCode, String payerName) {
 

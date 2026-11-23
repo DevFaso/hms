@@ -1,5 +1,6 @@
 package com.example.hms.service.billing;
 
+import com.example.hms.enums.PriceListCategory;
 import com.example.hms.enums.PriceListLinkType;
 import com.example.hms.model.Admission;
 import com.example.hms.model.EncounterTreatment;
@@ -29,25 +30,30 @@ public enum BillableOrderType {
 
     /** The services recorded on the visit, else one consultation line. */
     CONSULTATION(Route.VISIT_INVOICE, List.of(EncounterTreatment.class),
-        List.of(PriceListLinkType.TREATMENT, PriceListLinkType.SYSTEM)),
+        List.of(PriceListLinkType.TREATMENT, PriceListLinkType.SYSTEM), null),
     /** Each lab order not withdrawn. */
-    LAB_ORDER(Route.VISIT_INVOICE, List.of(LabOrder.class), List.of(PriceListLinkType.LAB_TEST_DEFINITION)),
+    LAB_ORDER(Route.VISIT_INVOICE, List.of(LabOrder.class), List.of(PriceListLinkType.LAB_TEST_DEFINITION),
+        PriceListCategory.LAB_TEST),
     /** Each imaging order not withdrawn (QA D972, round 18). */
-    IMAGING_ORDER(Route.VISIT_INVOICE, List.of(ImagingOrder.class), List.of(PriceListLinkType.IMAGING_STUDY)),
+    IMAGING_ORDER(Route.VISIT_INVOICE, List.of(ImagingOrder.class), List.of(PriceListLinkType.IMAGING_STUDY),
+        PriceListCategory.IMAGING),
     /** Each procedure order not withdrawn. */
-    PROCEDURE_ORDER(Route.VISIT_INVOICE, List.of(ProcedureOrder.class), List.of(PriceListLinkType.PROCEDURE_CODE)),
+    PROCEDURE_ORDER(Route.VISIT_INVOICE, List.of(ProcedureOrder.class), List.of(PriceListLinkType.PROCEDURE_CODE),
+        PriceListCategory.PROCEDURE),
     /** Each transfusion request whose blood was issued, by the units issued. */
     TRANSFUSION(Route.VISIT_INVOICE, List.of(TransfusionRequest.class),
-        List.of(PriceListLinkType.TRANSFUSION_PRODUCT)),
+        List.of(PriceListLinkType.TRANSFUSION_PRODUCT), PriceListCategory.TRANSFUSION),
     /** The days of the stay an inpatient visit belongs to. */
-    BED_DAYS(Route.VISIT_INVOICE, List.of(Admission.class), List.of(PriceListLinkType.SYSTEM)),
+    BED_DAYS(Route.VISIT_INVOICE, List.of(Admission.class), List.of(PriceListLinkType.SYSTEM),
+        PriceListCategory.BED_DAY),
     /**
      * A dispensed medicine is paid at the pharmacy checkout (its own payment,
      * QA D264); on the visit invoice it would be billed twice.
      */
-    PHARMACY_DISPENSE(Route.PHARMACY_CHECKOUT, List.of(Prescription.class), List.of()),
+    PHARMACY_DISPENSE(Route.PHARMACY_CHECKOUT, List.of(Prescription.class), List.of(), null),
     /** A birth is charged when the delivery is recorded ({@code DeliveryChargeService}, QA D516). */
-    DELIVERY(Route.DELIVERY_CHARGE, List.of(DeliveryRecord.class), List.of(PriceListLinkType.SYSTEM));
+    DELIVERY(Route.DELIVERY_CHARGE, List.of(DeliveryRecord.class), List.of(PriceListLinkType.SYSTEM),
+        PriceListCategory.DELIVERY);
 
     /** Where an item is charged. */
     public enum Route {
@@ -62,11 +68,25 @@ public enum BillableOrderType {
     private final Route route;
     private final List<Class<?>> entities;
     private final List<PriceListLinkType> linkTypes;
+    private final PriceListCategory coverageCategory;
 
-    BillableOrderType(Route route, List<Class<?>> entities, List<PriceListLinkType> linkTypes) {
+    BillableOrderType(Route route, List<Class<?>> entities, List<PriceListLinkType> linkTypes,
+                      PriceListCategory coverageCategory) {
         this.route = route;
         this.entities = entities;
         this.linkTypes = linkTypes;
+        this.coverageCategory = coverageCategory;
+    }
+
+    /**
+     * QA D3603 (r71): the price-list category a payer plan's category rule sees this charge's lines as, however each
+     * line is priced (price list, service of the same name, by hand at the till, or overridden). An imaging line
+     * priced by hand was billed at the plan's general rate instead of its IMAGING rule. Null for the services
+     * recorded on a visit (a mix: its default consultation line names CONSULTATION itself) and for a medicine
+     * (never on an invoice line).
+     */
+    public PriceListCategory coverageCategory() {
+        return coverageCategory;
     }
 
     public Route route() {
