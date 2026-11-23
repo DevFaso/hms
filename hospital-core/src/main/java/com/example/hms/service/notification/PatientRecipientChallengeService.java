@@ -48,7 +48,6 @@ public class PatientRecipientChallengeService {
     public View request(UUID patientId, NotificationChannel channel, UUID actor, Locale locale) {
         checkChannel(channel);
         Prepared prepared = newTransaction().execute(status -> reserve(patientId, channel, actor));
-        if (prepared == null) throw new BusinessException("recipientVerification.unavailable");
         try {
             String body = messages.getMessage("recipientVerification.code", new Object[] {prepared.code()}, locale);
             if (channel == NotificationChannel.SMS) sms.send(prepared.recipient(), body);
