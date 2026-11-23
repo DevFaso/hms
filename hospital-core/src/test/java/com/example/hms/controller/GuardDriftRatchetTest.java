@@ -275,6 +275,12 @@ class GuardDriftRatchetTest {
         listed.put("StockOutRoutingController.listByPrescription", STOCKOUTROUTINGCONTROLLER_REASON);
         listed.put("TransfusionController.cancelRequest", TRANSFUSIONCONTROLLER_REASON);
         listed.put("TransfusionController.createRequest", TRANSFUSIONCONTROLLER_REASON);
+        // QA D3351 (owner decision 2026-11-22): the antibody and its source hospital may be another hospital's
+        // record. They are read by the bench and by the prescriber writing a request; the bedside sees the flag on
+        // the request it gives, not the antibody (TransfusionController.ANTIBODY_READER).
+        listed.put("TransfusionController.getAntibodyStatus",
+            "The antibody and its source may be another hospital's record: the bench and the prescriber read them, "
+                + "the bedside reads the flag on the request (TransfusionController.ANTIBODY_READER)");
         listed.put("TreatmentController.createTreatment", TREATMENTCONTROLLER_REASON);
         listed.put("TreatmentController.updateTreatment", TREATMENTCONTROLLER_REASON);
         listed.put("TreatmentPlanController.addReview", TREATMENTPLANCONTROLLER_REASON);
