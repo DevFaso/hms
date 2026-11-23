@@ -16219,5 +16219,26 @@
     "COL_TOTAL": "Montant",
     "TODAY_MORE": "Seules les {{shown}} ventes les plus récentes de la journée sont affichées : la clôture de caisse les compte toutes.",
     "UNSETTLED": "La réponse n’est pas arrivée : la vente a peut-être été enregistrée. « Encaisser » renvoie exactement la même vente, sans la doubler ; le panier est figé jusque-là."
+  },
+  "RECORD_RIGHTS": {
+    "TITLE": "Accéder à mon dossier ou le rectifier",
+    "INTRO": "Demandez une copie ou une rectification à votre hôpital. Le personnel examine les demandes ; ce formulaire ne modifie jamais votre dossier clinique. Les dates de réponse sont des objectifs internes, sans valeur de délai légal.",
+    "HOSPITAL": "Hôpital",
+    "KIND": "Type de demande",
+    "COPY": "Copie du dossier",
+    "CORRECTION": "Rectification du dossier",
+    "PURPOSE": "Motif de la demande",
+    "DESCRIPTION": "Document, date et rectification demandée",
+    "FULL_RECORD": "Dossier complet",
+    "SUBMIT": "Envoyer la demande",
+    "SENT": "Votre demande a été enregistrée.",
+    "HISTORY": "Mes demandes",
+    "EMPTY": "Aucune demande pour le moment.",
+    "TARGET": "Réponse visée",
+    "DECISION": "Décision et motif :",
+    "FAILED": "Impossible de terminer cette action. Réessayez.",
+    "COMPLETE_CORRECTION": "Terminer l’examen de rectification",
+    "CORRECTION_HINT": "Examinez la rectification dans le parcours autorisé du dossier et expliquez la décision. Cette décision ne remplace aucune donnée clinique.",
+    "EXPORT": "Télécharger la copie approuvée (PDF)"
   }
 }

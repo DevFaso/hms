@@ -22,6 +22,14 @@ export interface ActionPermission {
 }
 
 export const ACTION_PERMISSIONS = {
+  patientRecordRequest: {
+    endpoint: 'PatientPortalController#createRoiRequest',
+    roles: ['ROLE_PATIENT'],
+  },
+  patientRecordPdfExport: {
+    endpoint: 'PatientRecordExportController#downloadRecordPdf',
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
+  },
   labOrderCreate: {
     endpoint: 'LabOrderController#createLabOrder',
     roles: ['ROLE_DOCTOR', 'ROLE_NURSE'],

@@ -16219,5 +16219,26 @@
     "COL_TOTAL": "Total",
     "TODAY_MORE": "Only the {{shown}} most recent sales of today are shown: the till close counts them all.",
     "UNSETTLED": "No answer came back: the sale may have been recorded. « Take payment » resends exactly the same sale, never twice; the basket is frozen until then."
+  },
+  "RECORD_RIGHTS": {
+    "TITLE": "Access or correct my record",
+    "INTRO": "Ask your hospital for a copy or a correction. Staff review requests; this form never changes your clinical record. Response dates are internal targets, not statutory deadlines.",
+    "HOSPITAL": "Hospital",
+    "KIND": "Request type",
+    "COPY": "Record copy",
+    "CORRECTION": "Record correction",
+    "PURPOSE": "Reason for the request",
+    "DESCRIPTION": "Record, date and correction requested",
+    "FULL_RECORD": "Full record",
+    "SUBMIT": "Send request",
+    "SENT": "Your request has been recorded.",
+    "HISTORY": "My requests",
+    "EMPTY": "No requests yet.",
+    "TARGET": "Response target",
+    "DECISION": "Decision and reason:",
+    "FAILED": "Unable to complete this action. Try again.",
+    "COMPLETE_CORRECTION": "Complete correction review",
+    "CORRECTION_HINT": "Review the requested correction in the authorized record workflow and explain the outcome. This decision does not overwrite clinical data.",
+    "EXPORT": "Download approved copy (PDF)"
   }
 }

@@ -21,6 +21,9 @@ public class RoiRequestMapper {
             return null;
         }
         return RoiRequestResponseDTO.builder()
+            .requestKind(r.getRequestKind())
+            .dueOn(r.getDueOn())
+            .decisionActorUserId(r.getDecisionActorUserId())
             .id(r.getId())
             .patientId(r.getPatientId())
             .patientName(r.getPatientName())

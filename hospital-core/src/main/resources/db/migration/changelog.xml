@@ -3952,4 +3952,8 @@
                  stripComments="true"/>
     </changeSet>
 
+    <changeSet id="V393-patient-record-rights" author="codex" runOnChange="false">
+        <sqlFile path="V393__patient_record_rights.sql" relativeToChangelogFile="true"
+                 splitStatements="true" stripComments="true"/>
+    </changeSet>
 </databaseChangeLog>

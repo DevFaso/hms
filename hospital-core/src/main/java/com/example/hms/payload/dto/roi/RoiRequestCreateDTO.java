@@ -24,6 +24,9 @@ import java.time.LocalDate;
 @Builder
 public class RoiRequestCreateDTO {
 
+    @Builder.Default
+    private com.example.hms.enums.RoiRequestKind requestKind = com.example.hms.enums.RoiRequestKind.COPY;
+
     @NotNull(message = "{roiRequest.requesterType.required}")
     private RoiRequesterType requesterType;
 

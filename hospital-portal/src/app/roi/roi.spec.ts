@@ -61,6 +61,7 @@ describe('RoiComponent', () => {
       'deny',
       'cancel',
       'patientRequests',
+      'downloadCopy',
     ]);
     roiService.worklist.and.returnValue(of(page([request()])));
     roiService.create.and.returnValue(of(request()));
@@ -293,15 +294,19 @@ describe('RoiComponent', () => {
     expect(component.decisionValid()).toBeTrue();
   });
 
-  it('fulfil needs no note and reloads the queue on success', () => {
+  it('fulfil refuses a missing reason and reloads only after a reasoned decision', () => {
     fixture.detectChanges();
     component.openDecision(request(), 'fulfil');
+    expect(component.decisionValid()).toBeFalse();
+    component.submitDecision();
+    expect(roiService.fulfil).not.toHaveBeenCalled();
+    component.decisionNote.set('Identity and scope checked');
     expect(component.decisionValid()).toBeTrue();
     roiService.worklist.calls.reset();
 
     component.submitDecision();
 
-    expect(roiService.fulfil).toHaveBeenCalledWith('r1', undefined);
+    expect(roiService.fulfil).toHaveBeenCalledWith('r1', 'Identity and scope checked');
     expect(roiService.worklist).toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalled();
   });

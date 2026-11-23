@@ -21,6 +21,7 @@ import {
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { moreCount } from '../../shared/more-count';
+import { RecordRightsComponent } from './record-rights.component';
 
 /** How many rows each card previews. */
 export const RECORD_CARD_ROWS = 4;
@@ -30,7 +31,7 @@ export const CONDITION_CARD_ROWS = 5;
 @Component({
   selector: 'app-my-records',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, DatePipe, RouterLink, EnumLabelPipe, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, DatePipe, RouterLink, EnumLabelPipe, TranslateModule, RecordRightsComponent],
   templateUrl: './my-records.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-records.component.scss', '../patient-portal-pages.scss'],
