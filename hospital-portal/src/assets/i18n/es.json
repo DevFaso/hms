@@ -16219,5 +16219,8 @@
     "COL_TOTAL": "Total",
     "TODAY_MORE": "Solo se muestran las {{shown}} ventas más recientes del día: el cierre de caja las cuenta todas.",
     "UNSETTLED": "No llegó la respuesta: la venta puede haberse registrado. « Cobrar » reenvía exactamente la misma venta, sin duplicarla; la cesta queda congelada hasta entonces."
+  },
+  "LOADING_SHELL": {
+    "SLOW": "La carga está tardando más de lo previsto. Compruebe su conexión; se conserva la página abierta."
   }
 }

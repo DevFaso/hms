@@ -1,4 +1,5 @@
 import { ChunkRecoveryService } from './core/chunk-recovery.service';
+import { RouteLoadingComponent } from './shared/route-loading.component';
 import { Component, inject, OnInit, ChangeDetectionStrategy } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
@@ -15,8 +16,9 @@ import { ConnectivityBannerComponent } from './shared/connectivity/connectivity-
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, TranslateModule, ConnectivityBannerComponent],
+  imports: [RouterOutlet, TranslateModule, ConnectivityBannerComponent, RouteLoadingComponent],
   template: `
+    <app-route-loading />
     @if (chunkRecovery.failedUrl()) {
       <section class="chunk-recovery" role="alert" aria-labelledby="chunk-recovery-title">
         @if (chunkRecovery.offline()) {
