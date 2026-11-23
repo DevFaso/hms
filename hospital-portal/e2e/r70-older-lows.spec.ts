@@ -5,6 +5,56 @@ import { heightFor, LAYOUT_WIDTHS } from './helpers/layout-audit';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
+test('global feature-flag descriptions stay scoped and custom keys appear once', async ({
+  page,
+  baseURL,
+}, testInfo) => {
+  await signInAs(page, 'ROLE_SUPER_ADMIN', baseURL!);
+  await installLocalIconFonts(page);
+  await page.route('**/api/feature-flags', (route) =>
+    route.fulfill({ json: { 'cdx.custom': true } }),
+  );
+  await page.route('**/api/feature-flags/overrides', (route) =>
+    route.fulfill({
+      json: [
+        {
+          id: 'tenant',
+          flagKey: 'cdx.custom',
+          organizationId: TEST_ID,
+          description: 'cdx-tenant-only description',
+        },
+        {
+          id: 'global',
+          flagKey: 'cdx.custom',
+          organizationId: null,
+          description: 'cdx-global description',
+        },
+      ],
+    }),
+  );
+  await page.goto('/feature-flags');
+  const row = page.locator('.flag-row');
+  await expect(row).toContainText('cdx-global description');
+  await expect(row).not.toContainText('cdx-tenant-only description');
+  await expect(row.locator('.flag-name')).toHaveText('cdx.custom');
+  await expect(row.locator('.muted')).toHaveCount(0);
+  const search = page.locator('.search-bar input');
+  await search.fill('cdx-tenant-only');
+  await expect(row).toHaveCount(0);
+  await search.fill('cdx-global');
+  await expect(row).toHaveCount(1);
+  for (const width of LAYOUT_WIDTHS) {
+    await page.setViewportSize({ width, height: heightFor(width) });
+    await page.evaluate(() => {
+      const backdrop = document.querySelector<HTMLElement>('.sidebar-backdrop');
+      if (backdrop && getComputedStyle(backdrop).display !== 'none') backdrop.click();
+    });
+    await expect(row).toBeVisible();
+    expect(await row.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`flags-${width}.png`) });
+  }
+});
+
 test('D2653: every report revision kind is available at four widths', async ({
   page,
   baseURL,
@@ -63,6 +113,10 @@ test('D2653: every report revision kind is available at four widths', async ({
     for (const kind of ['ADDENDUM', 'CORRECTED', 'AMENDED']) {
       await picker.selectOption(kind);
       await expect(picker).toHaveValue(kind);
+      await expect(dialog.locator('h2')).toHaveText('Réviser le compte rendu signé');
+      await expect(page.getByTestId('addendum-original-report').locator('h3')).toHaveText(
+        'Compte rendu signé faisant l’objet de la révision',
+      );
     }
     await picker.scrollIntoViewIfNeeded();
     await expect(picker).toBeInViewport();
@@ -218,9 +272,12 @@ test('D2302: specimen actions remain inside the dialog at four widths', async ({
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1);
     if (width >= 1024) {
+      await expect(dialog.locator('.specimen-scroll-hint')).toBeHidden();
       expect(
         await dialog.locator('.data-table').evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
       ).toBe(true);
+    } else {
+      await expect(dialog.locator('.specimen-scroll-hint')).toBeVisible();
     }
     const action = await dialog.getByTestId('print-specimen-label').boundingBox();
     expect(action!.x + action!.width).toBeLessThanOrEqual(box!.x + box!.width + 1);

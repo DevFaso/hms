@@ -4251,6 +4251,8 @@
   },
   "IMAGING": {
     "ADDENDUM_ORIGINAL": "Signed report being supplemented",
+    "REVISE_SIGNED_REPORT": "Revise signed report",
+    "REVISION_ORIGINAL": "Signed report being revised",
     "RESULTS_PARTIAL_FAILURE": "The reports of these hospitals could not be loaded, so the list is incomplete: {{hospitals}}.",
     "ADMIN_READ_ONLY": "Read-only: imaging requests and released reports. Ordering, reporting and signing are done by the clinical team.",
     "ALL_HOSPITALS": "All hospitals",

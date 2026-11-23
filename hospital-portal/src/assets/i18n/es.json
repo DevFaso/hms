@@ -4251,6 +4251,8 @@
   },
   "IMAGING": {
     "ADDENDUM_ORIGINAL": "Informe firmado que se amplía",
+    "REVISE_SIGNED_REPORT": "Revisar el informe firmado",
+    "REVISION_ORIGINAL": "Informe firmado que se revisa",
     "RESULTS_PARTIAL_FAILURE": "No se pudieron cargar los informes de estos hospitales, por lo que la lista está incompleta: {{hospitals}}.",
     "ADMIN_READ_ONLY": "Solo lectura: solicitudes de imagen e informes validados. La solicitud, la interpretación y la firma corresponden al equipo clínico.",
     "ALL_HOSPITALS": "Todos los hospitales",

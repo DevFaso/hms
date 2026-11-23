@@ -5,6 +5,9 @@ describe('formatLabNumber (QA D1002)', () => {
   it('writes a lab value with the reader decimal mark, keeping its precision', () => {
     expect(formatLabNumber('0.32', 'fr')).toBe('0,32');
     expect(formatLabNumber('0.320', 'fr')).toBe('0,320');
+    expect(formatLabNumber('0.0042', 'fr')).toBe('0,0042');
+    expect(formatLabNumber('0.0125', 'fr')).toBe('0,0125');
+    expect(formatLabNumber('5.10', 'fr')).toBe('5,10');
     expect(formatLabNumber('0.32', 'en')).toBe('0.32');
     expect(formatLabNumber('7,9', 'en')).toBe('7.9');
     expect(formatLabNumber(6.5, 'fr')).toBe('6,5');

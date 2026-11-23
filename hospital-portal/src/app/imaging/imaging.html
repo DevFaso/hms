@@ -1053,7 +1053,7 @@
         <h2 id="imaging-dialog-2-title">
           {{
             (writingAddendum()
-              ? 'IMAGING_COMPLETION.ADD_ADDENDUM'
+              ? 'IMAGING.REVISE_SIGNED_REPORT'
               : reportEditId()
                 ? 'IMAGING.EDIT_REPORT'
                 : 'IMAGING.AUTHOR_REPORT'
@@ -1072,7 +1072,7 @@
         <!-- QA D1923 (r53): the report is written for this patient. -->
         @if (addendumSource(); as source) {
           <section class="detail-notes" data-testid="addendum-original-report">
-            <h3>{{ 'IMAGING.ADDENDUM_ORIGINAL' | translate }}</h3>
+            <h3>{{ 'IMAGING.REVISION_ORIGINAL' | translate }}</h3>
             <strong>{{ 'IMAGING.FINDINGS' | translate }}</strong>
             <p>{{ source.findings || '—' }}</p>
             <strong>{{ 'IMAGING.IMPRESSION' | translate }}</strong>

@@ -473,6 +473,15 @@
   max-width: 640px;
 }
 
+.specimen-scroll-hint {
+  display: none;
+}
+@media (max-width: 900px) {
+  .specimen-scroll-hint {
+    display: block;
+  }
+}
+
 .modal.modal-lg[data-testid='specimens-dialog'] {
   max-width: 1100px;
   .data-table {
