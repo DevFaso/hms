@@ -56,8 +56,10 @@ class OrdonnancePdfServiceTest {
     private final com.example.hms.service.EndedStayOrderGuard endedStay =
             mock(com.example.hms.service.EndedStayOrderGuard.class);
     private final PharmacyServiceSupport support = mock(PharmacyServiceSupport.class);
+    private final com.example.hms.repository.PatientVitalSignRepository vitalSigns =
+            mock(com.example.hms.repository.PatientVitalSignRepository.class);
     private final OrdonnancePdfService service =
-            new OrdonnancePdfService(prescriptions, roleValidator, staffRepository, endedStay, support);
+            new OrdonnancePdfService(prescriptions, roleValidator, staffRepository, endedStay, support, vitalSigns);
     private final UUID doctorUserId = UUID.randomUUID();
 
     private final UUID hospitalId = UUID.randomUUID();
@@ -130,6 +132,38 @@ class OrdonnancePdfServiceTest {
         p.setStatus(status);
         p.setCreatedAt(at);
         return p;
+    }
+
+    @Test
+    void everyKnownSpecialtyRendersAsALocalizedLabelInEveryShippingLocale() throws Exception {
+        for (Locale locale : List.of(Locale.ENGLISH, Locale.FRENCH, Locale.forLanguageTag("es"))) {
+            LocaleContextHolder.setLocale(locale);
+            for (com.example.hms.enums.Specialization specialty : com.example.hms.enums.Specialization.values()) {
+                staff.setSpecialization(specialty.name());
+                String expected = MessageUtil.resolve(locale, "pdf.ordonnance.specialty." + specialty.name());
+                assertThat(expected).doesNotContain("[Missing translation]");
+                assertThat(textOf(service.forPrescriber(rx.getId())))
+                        .as("%s in %s", specialty, locale)
+                        .contains(expected)
+                        .doesNotContain(specialty.name());
+            }
+        }
+    }
+
+    @Test
+    void knownSpecialtyIsTranslatedAndChildAgeUsesThePrescriptionDate() throws Exception {
+        staff.setSpecialization("GENERAL_PRACTICE");
+        patient.setDateOfBirth(LocalDate.of(2024, 11, 21));
+        var vital = new com.example.hms.model.PatientVitalSign();
+        vital.setWeightKg(12.5);
+        vital.setRecordedAt(LocalDateTime.of(2026, 11, 21, 8, 0));
+        when(vitalSigns.findFirstByPatient_IdAndHospital_IdAndWeightKgIsNotNullOrderByRecordedAtDesc(
+                patient.getId(), hospitalId)).thenReturn(Optional.of(vital));
+        assertThat(textOf(service.forPrescriber(rx.getId())))
+                .contains("Médecine générale", "2 ans, 0 mois, 0 jours", "Dernier poids enregistré", "12,5 kg")
+                .doesNotContain("GENERAL_PRACTICE");
+        staff.setSpecialization("Médecine du sport");
+        assertThat(textOf(service.forPrescriber(rx.getId()))).contains("Médecine du sport");
     }
 
     @Test
