@@ -84,6 +84,19 @@ describe('PatientChannelPreferencesComponent', () => {
     expect(box('channel-BILLING-IN_APP')).toBeNull();
   });
 
+  it('explains an unchanged matrix without marking an optional consent choice invalid or sending it', () => {
+    setUp(true);
+    http.expectOne('/patients/p-1/channel-preferences').flush(matrix());
+    fixture.detectChanges();
+    fixture.nativeElement.querySelector('[data-testid="channel-prefs-save"]').click();
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="channel-prefs-unchanged"]').textContent,
+    ).toContain('SUBMIT_GUARD.NO_CHANGES');
+    http.expectNone('/patients/p-1/channel-preferences');
+    expect(fixture.nativeElement.querySelector('[aria-invalid="true"]')).toBeNull();
+  });
+
   it('records a change and says so', () => {
     setUp(true);
     http.expectOne('/patients/p-1/channel-preferences').flush(matrix());

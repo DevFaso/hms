@@ -20,7 +20,6 @@ import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { actionRoles } from '../../core/action-permissions';
 import { refusalReason } from '../../shared/refusal-reason';
-import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import {
   DESK_NOTICE_CHANNELS,
   NOTICE_TYPES,
@@ -47,7 +46,7 @@ export interface ChannelChoice {
 @Component({
   selector: 'app-patient-channel-preferences',
   standalone: true,
-  imports: [FormsModule, TranslateModule, DatePipe, ServerTimePipe, SubmitGuardDirective],
+  imports: [FormsModule, TranslateModule, DatePipe, ServerTimePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (canRecord) {
@@ -114,13 +113,17 @@ export interface ChannelChoice {
             </table>
           </div>
           <p class="hint">{{ 'PATIENT_CHANNELS.SECURITY_NOTE' | translate }}</p>
+          @if (unchanged()) {
+            <p role="status" data-testid="channel-prefs-unchanged">
+              {{ 'SUBMIT_GUARD.NO_CHANGES' | translate }}
+            </p>
+          }
           <div class="actions">
             <button
               type="button"
               class="btn-primary"
               data-testid="channel-prefs-save"
               [disabled]="saving()"
-              [appSubmitGuard]="!dirty() && ('SUBMIT_GUARD.NO_CHANGES' | translate)"
               (click)="save()"
             >
               {{ (saving() ? 'COMMON.SAVING' : 'PATIENT_CHANNELS.SAVE') | translate }}
@@ -190,6 +193,7 @@ export class PatientChannelPreferencesComponent {
   private readonly saved = signal<ChannelChoice[]>([]);
   readonly loadFailed = signal(false);
   readonly saving = signal(false);
+  readonly unchanged = signal(false);
   readonly dirty = computed(() =>
     this.choices().some((choice) => {
       const before = this.saved().find(
@@ -237,6 +241,7 @@ export class PatientChannelPreferencesComponent {
   }
 
   toggle(type: NoticeType, channel: 'SMS' | 'EMAIL', enabled: boolean): void {
+    this.unchanged.set(false);
     const others = this.choices().filter(
       (c) => !(c.notificationType === type && c.channel === channel),
     );
@@ -244,7 +249,11 @@ export class PatientChannelPreferencesComponent {
   }
 
   save(): void {
-    if (this.saving() || !this.dirty()) return;
+    if (this.saving()) return;
+    if (!this.dirty()) {
+      this.unchanged.set(true);
+      return;
+    }
     this.saving.set(true);
     this.http
       .put<ChannelChoice[]>(
