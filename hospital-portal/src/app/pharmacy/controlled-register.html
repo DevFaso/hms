@@ -128,6 +128,13 @@
                 >
               }
             </span>
+            <!-- QA D3415 (r70): returned or damaged units set aside, not counted as stock. -->
+            @if (drug.inQuarantine) {
+              <span [attr.data-testid]="'register-quarantine-' + drug.inventoryItemId"
+                >{{ 'PHARMACY.REGISTER_QUARANTINE' | translate }}{{ 'COMMON.COLON' | translate }}
+                <strong>{{ drug.inQuarantine }}</strong></span
+              >
+            }
           </div>
           @if (drug.entries.length === 0) {
             <p class="muted">{{ 'PHARMACY.REGISTER_NO_MOVEMENT' | translate }}</p>
@@ -160,6 +167,13 @@
                       <td>{{ e.movementType | enumLabel: 'stockTransactionType' }}</td>
                       <td [class.qty-in]="e.quantity > 0" [class.qty-out]="e.quantity < 0">
                         {{ signed(e.quantity) }}
+                        @if (e.quarantineQuantity) {
+                          <small class="quarantine-move">{{
+                            'PHARMACY.REGISTER_QUARANTINE_MOVE'
+                              | translate
+                                : { qty: signed(e.quarantineQuantity), after: e.quarantineAfter }
+                          }}</small>
+                        }
                       </td>
                       <td>{{ e.lotNumber || '—' }}</td>
                       <td>

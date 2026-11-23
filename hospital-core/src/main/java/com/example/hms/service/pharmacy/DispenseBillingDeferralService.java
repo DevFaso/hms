@@ -714,12 +714,39 @@ public class DispenseBillingDeferralService {
         }
         Encounter encounter = prescription.getEncounter();
         UUID admissionId = encounter != null ? encounter.getAdmissionId() : null;
-        if (admissionId == null) {
+        if (admissionId != null) {
+            // The visit names its stay: that stay or none (never another one of the patient's).
+            return admissionRepository.findById(admissionId)
+                    .filter(stay -> stay.getHospital() != null && hospitalId.equals(stay.getHospital().getId()))
+                    .filter(stay -> OPEN_STAY.contains(stay.getStatus()))
+                    .orElse(null);
+        }
+        return openStayOfPatient(prescription, hospitalId);
+    }
+
+    /**
+     * QA D3404 (r70): an inpatient order written without the stay's visit (the visit is optional in the prescribing
+     * form) was refused at hand-over as unpaid although the patient lay in a bed. Such an order belongs to the
+     * patient's open stay at this hospital when it is an order of that stay by the rule the ward uses
+     * ({@link com.example.hms.service.InpatientOrderEnd#orderOfStay}): no visit or an inpatient visit, written since
+     * the admission, or the emergency visit that led to it. An outpatient visit's order is never the stay's, a stay
+     * that has ended is never charged, and an order written before the admission stays an outpatient one.
+     */
+    private Admission openStayOfPatient(Prescription prescription, UUID hospitalId) {
+        if (prescription.getPatient() == null || prescription.getPatient().getId() == null) {
             return null;
         }
-        return admissionRepository.findById(admissionId)
+        List<Admission> open = admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(
+                prescription.getPatient().getId(), hospitalId, OPEN_STAY);
+        if (open == null) {
+            return null;
+        }
+        return open.stream()
                 .filter(stay -> stay.getHospital() != null && hospitalId.equals(stay.getHospital().getId()))
                 .filter(stay -> OPEN_STAY.contains(stay.getStatus()))
+                .filter(stay -> com.example.hms.service.InpatientOrderEnd.orderOfStay(prescription, stay))
+                .max(java.util.Comparator.comparing(Admission::getAdmissionDateTime,
+                        java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
                 .orElse(null);
     }
 

@@ -422,6 +422,9 @@ final class ComputedKeys {
             "ControlledDrugRegisterService.java|pharmacy.register.adjustment.");
         site(r, d, "com/example/hms/service/pharmacy/ControlledDrugRegisterService.java|\"pharmacy.register.movement.\" + type",
             "ControlledDrugRegisterService.java|pharmacy.register.movement.");
+        // QA D3403 / D3415 (r70): the state of returned stock, one per ReturnedStockCondition.
+        site(r, d, "com/example/hms/service/pharmacy/ControlledDrugRegisterService.java|\"pharmacy.stockCondition.\" + c.name()",
+            "ControlledDrugRegisterService.java|pharmacy.stockCondition.");
         site(r, d, "com/example/hms/service/pharmacy/PharmacyClaimServiceImpl.java|\"pharmacy.claim.status.\" + target.name()",
             "PharmacyClaimServiceImpl.java|pharmacy.claim.status.");
         site(r, d, "com/example/hms/service/pharmacy/PharmacyClaimServiceImpl.java|\"pharmacy.claim.status.\" + claim.getClaimStatus().name()",
@@ -573,6 +576,8 @@ final class ComputedKeys {
             enumValues("transfusion.productType.", BloodProductType.class));
         r.put("ControlledDrugRegisterService.java|pharmacy.register.movement.",
             enumValues("pharmacy.register.movement.", StockTransactionType.class));
+        r.put("ControlledDrugRegisterService.java|pharmacy.stockCondition.",
+            enumValues("pharmacy.stockCondition.", com.example.hms.enums.ReturnedStockCondition.class));
         r.put("NewsScoreProtocolRule.java|cds.bpa.news2.band.",
             enumValues("cds.bpa.news2.band.", NewsScoreCalculator.RiskBand.class));
         // The reason of a HospitalScopeRefusedException: an ActingScope.Reason, GLOBAL_VIEW or PATIENT_OWNED.

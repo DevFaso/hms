@@ -3,6 +3,7 @@ package com.example.hms.service.pharmacy;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.DispenseStatus;
 import com.example.hms.enums.ReadyCancelReason;
+import com.example.hms.enums.ReturnedStockCondition;
 import com.example.hms.enums.StockTransactionType;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.model.Prescription;
@@ -23,6 +24,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
  * The one implementation of "a prepared fill is no longer waiting" (G15
@@ -47,6 +49,9 @@ import java.time.LocalDateTime;
 @Slf4j
 public class PreparedFillVoider {
 
+    /** QA D3403 (r70): the RETURN row of a cancelled fill that is NOT put back on sale. */
+    public static final String NOT_FOR_SALE_PREFIX = "Prepared fill cancelled, not for sale";
+
     private final DispenseRepository dispenseRepository;
     private final StockLotRepository stockLotRepository;
     private final InventoryItemRepository inventoryItemRepository;
@@ -55,6 +60,9 @@ public class PreparedFillVoider {
     private final EntityManager entityManager;
     private final Clock clock;
     private final PharmacyPaymentVoider paymentVoider;
+    private final StockQuarantine stockQuarantine;
+    /** Review of #1285: a controlled fill that does not go back on sale is witnessed, as every controlled movement. */
+    private final ControlledStockWitness controlledStockWitness;
 
     /**
      * Review of #1284: the « à facturer » gate, whose open covers a cancelled fill withdraws. Optional: a sliced test
@@ -75,16 +83,20 @@ public class PreparedFillVoider {
      *               {@link ReadyCancelReason#PRESCRIPTION_CHANGED}
      */
     public void voidPreparedFill(Prescription prescription, ReadyCancelReason reason) {
+        // The bag never left the pharmacy and nobody reported it damaged: it goes back on sale.
         dispenseRepository.findFirstByPrescription_IdAndStatus(prescription.getId(), DispenseStatus.PENDING)
-                .ifPresent(open -> cancel(open, reason));
+                .ifPresent(open -> cancel(open, reason, ReturnedStockCondition.INTACT, null));
     }
 
     /**
      * Cancel one PENDING row. Returns the row as it now is in the database.
      *
+     * @param condition QA D3403 (r70): the state of the prepared medicine; only INTACT goes back on sale
+     * @param witnessId review of #1285: the colleague who saw a controlled fill set aside or lost (not the actor)
      * @throws ConflictException when the row is no longer PENDING
      */
-    Dispense cancel(Dispense dispense, ReadyCancelReason reason) {
+    Dispense cancel(Dispense dispense, ReadyCancelReason reason, ReturnedStockCondition condition, UUID witnessId) {
+        User witness = witnessOf(dispense, condition, witnessId);
         int changed = dispenseRepository.cancelPreparedFill(dispense.getId(), reason, LocalDateTime.now(clock));
         // The bulk UPDATE bypassed the managed copy; nothing touches it before
         // this resync, or a flush would write its stale PENDING back.
@@ -93,7 +105,7 @@ public class PreparedFillVoider {
             throw new ConflictException(MessageUtil.resolve("dispense.ready.notPending"));
         }
 
-        returnStock(current);
+        returnStock(current, condition, witness);
         // QA D404: a preparation paid at the till is voided with it.
         paymentVoider.voidForCancelledDispense(current, "Prepared fill cancelled: " + reason.name());
         // Review of #1284: a third-party cover was approved on this fill's charge: it goes with it.
@@ -105,7 +117,8 @@ public class PreparedFillVoider {
         String prescriptionId = current.getPrescription() != null
                 ? String.valueOf(current.getPrescription().getId()) : "unknown";
         support.logAudit(AuditEventType.DISPENSE_READY_CANCELLED,
-                "Prepared fill cancelled, prescription " + prescriptionId + ", reason " + reason.name(),
+                "Prepared fill cancelled, prescription " + prescriptionId + ", reason " + reason.name()
+                        + ", stock " + condition.name(),
                 current.getId().toString(), "DISPENSE");
         support.notifyReadyCancelled(current.getPrescription(), current.getPatient(), current.getPharmacy(), current.getMedicationName());
         log.info("Prepared fill {} cancelled ({})", current.getId(), reason);
@@ -113,16 +126,47 @@ public class PreparedFillVoider {
     }
 
     /**
-     * The bag goes back on the shelf, STOCK_UNAVAILABLE included: a damaged
-     * or missing pack is recorded through the stock-adjustment page
-     * (ADJUSTMENT), as for any other shelf loss.
+     * The bag goes back on the shelf when it is intact. QA D3403 (r70): every reason put the full quantity back into
+     * the saleable lot, damaged stock included. Stock that is damaged, expired or contaminated is now written as its
+     * RETURN followed by a QUARANTINE, the lot unchanged ({@link StockQuarantine}), and waits for its destruction.
      */
-    private void returnStock(Dispense dispense) {
+    private void returnStock(Dispense dispense, ReturnedStockCondition condition, User witness) {
         StockLot lot = dispense.getStockLot();
         if (lot == null) {
             return;
         }
         InventoryItem item = lot.getInventoryItem();
+        if (condition.isLoss()) {
+            User performer = support.resolveCurrentUser();
+            stockTransactionRepository.save(StockTransaction.builder()
+                    .inventoryItem(item)
+                    .stockLot(lot)
+                    .transactionType(StockTransactionType.RETURN)
+                    .referenceId(dispense.getId())
+                    .quantity(dispense.getQuantityDispensed())
+                    .reason(NOT_FOR_SALE_PREFIX + ": " + condition.name())
+                    .performedByUser(performer)
+                    .build());
+            stockQuarantine.recordLoss(item, lot, dispense.getQuantityDispensed(), dispense.getId(), performer,
+                    witness);
+            return;
+        }
+        if (StockQuarantine.quarantines(item, condition, false)) {
+            User performer = support.resolveCurrentUser();
+            stockTransactionRepository.save(StockTransaction.builder()
+                    .inventoryItem(item)
+                    .stockLot(lot)
+                    .transactionType(StockTransactionType.RETURN)
+                    .referenceId(dispense.getId())
+                    .quantity(dispense.getQuantityDispensed())
+                    // The fill (and through it the prescription) is the row's reference.
+                    .reason(NOT_FOR_SALE_PREFIX + ": " + condition.name())
+                    .performedByUser(performer)
+                    .build());
+            stockQuarantine.quarantine(item, lot, dispense.getQuantityDispensed(), dispense.getId(), condition,
+                    performer, witness);
+            return;
+        }
         // Atomic in the database (#825 security finding 1, round 5): every
         // stock writer moves quantities this way, so a return racing a fill,
         // a receipt or an adjustment of the same lot cannot be lost.
@@ -147,6 +191,18 @@ public class PreparedFillVoider {
                         + (dispense.getPrescription() != null ? dispense.getPrescription().getId() : "unknown"))
                 .performedByUser(performer)
                 .build());
+    }
+
+    /**
+     * Review of #1285: the witness of a controlled fill that does not go back on sale (quarantined or lost), checked
+     * before anything moves: required, not the actor, a stock-witness role at the hospital. Null otherwise.
+     */
+    private User witnessOf(Dispense dispense, ReturnedStockCondition condition, UUID witnessId) {
+        StockLot lot = dispense.getStockLot();
+        if (condition.isFitForSale() || lot == null || lot.getInventoryItem() == null) {
+            return null;
+        }
+        return controlledStockWitness.resolve(witnessId, lot.getInventoryItem(), support.resolveCurrentUser());
     }
 
     /**

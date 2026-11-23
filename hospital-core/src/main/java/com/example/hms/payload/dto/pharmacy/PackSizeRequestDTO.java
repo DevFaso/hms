@@ -39,4 +39,11 @@ public class PackSizeRequestDTO {
     @NotBlank
     @Size(max = 300)
     private String reason;
+
+    /**
+     * QA D3400 (r70): true when the stock, the reorder threshold and the order quantity are ALREADY counted in
+     * {@code unit} (the pack size is only declared, nothing is multiplied); false when they are counted in packs and
+     * are converted. Left out: already in units exactly when {@code unit} is the item's current unit.
+     */
+    private Boolean alreadyInUnits;
 }

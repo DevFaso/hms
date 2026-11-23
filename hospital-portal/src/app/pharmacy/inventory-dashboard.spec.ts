@@ -16,7 +16,7 @@ describe('InventoryDashboardComponent savePrice (QA D264)', () => {
       providers: [
         { provide: PharmacyService, useValue: svc },
         { provide: ToastService, useValue: toast },
-        { provide: RoleContextService, useValue: {} },
+        { provide: RoleContextService, useValue: { hasAnyActiveRoleExactly: () => true } },
       ],
     });
     const c = TestBed.createComponent(InventoryDashboardComponent).componentInstance;
@@ -53,7 +53,10 @@ describe('InventoryDashboardComponent savePrice (QA D264)', () => {
 });
 
 describe('InventoryDashboardComponent price column (QA D835)', () => {
-  function render(unitPrice: number | null) {
+  function render(
+    unitPrice: number | null,
+    priceSetter: (roles: string[]) => boolean = () => true,
+  ) {
     const svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
       'listPharmacies',
       'listInventoryByPharmacy',
@@ -94,13 +97,21 @@ describe('InventoryDashboardComponent price column (QA D835)', () => {
           provide: ToastService,
           useValue: jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']),
         },
-        { provide: RoleContextService, useValue: {} },
+        { provide: RoleContextService, useValue: { hasAnyActiveRoleExactly: priceSetter } },
       ],
     });
     const fixture = TestBed.createComponent(InventoryDashboardComponent);
     fixture.detectChanges();
     return { fixture, svc };
   }
+
+  it('QA D3407: the pharmacist sees the price but no pencil and no price field (the server refuses them)', () => {
+    const { fixture } = render(25, (roles: string[]) => roles.includes('ROLE_PHARMACIST'));
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="price-inv-1"]')?.textContent).toContain('25');
+    expect(host.querySelector('[data-testid="price-edit-inv-1"]')).toBeNull();
+    expect(fixture.componentInstance.canSetPrice()).toBeFalse();
+  });
 
   it('shows the selling price as text in the row, not only inside an input', () => {
     const { fixture } = render(25);
@@ -264,7 +275,7 @@ describe('Inventory workspace scoped reads', () => {
       imports: [InventoryDashboardComponent, TranslateModule.forRoot()],
       providers: [
         { provide: PharmacyService, useValue: svc },
-        { provide: RoleContextService, useValue: {} },
+        { provide: RoleContextService, useValue: { hasAnyActiveRoleExactly: () => true } },
         { provide: ToastService, useValue: { error: jasmine.createSpy('error') } },
       ],
     });

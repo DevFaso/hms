@@ -36,6 +36,8 @@ export interface PackSizeRequest {
   unit: string;
   packUnit?: string;
   reason: string;
+  /** QA D3400: true when the stock is already counted in `unit` (nothing is multiplied). */
+  alreadyInUnits?: boolean;
 }
 
 export type PharmacyRefundStatus = 'REQUESTED' | 'APPROVED' | 'REJECTED' | 'PAID' | 'CANCELLED';

@@ -113,6 +113,7 @@ export const NAV_GROUP_BY_ROUTE: Readonly<Record<string, NavGroupId>> = {
   '/pharmacy/stock-routing': 'PHARMACY',
   '/pharmacy/claims': 'PHARMACY',
   '/pharmacy/checkout': 'PHARMACY',
+  '/pharmacy/counter-sale': 'PHARMACY',
   '/pharmacy/mtm': 'PHARMACY',
   '/pharmacy/reconciliation': 'PHARMACY',
   '/pharmacy/billing-deferrals': 'PHARMACY',
