@@ -11,6 +11,7 @@ import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { RoleContextService } from '../core/role-context.service';
+import { actionRoles } from '../core/action-permissions';
 import { refusalReason, refusedFieldReasons } from './refusal-reason';
 import { refuseFields } from './forms/invalid-fields';
 import { SubmitGuardDirective } from './forms/submit-guard.directive';
@@ -142,8 +143,8 @@ export class PatientRecipientVerificationComponent {
   }
   allowed(): boolean {
     return this.patientId()
-      ? this.roles.hasAnyActiveRole(['ROLE_RECEPTIONIST', 'ROLE_HOSPITAL_ADMIN'])
-      : this.roles.hasAnyActiveRole(['ROLE_PATIENT']);
+      ? this.roles.hasAnyActiveRole(actionRoles('patientRecipientVerify'))
+      : this.roles.hasAnyActiveRole(actionRoles('patientSelfRecipientVerify'));
   }
   private endpoint(): string {
     return this.patientId()

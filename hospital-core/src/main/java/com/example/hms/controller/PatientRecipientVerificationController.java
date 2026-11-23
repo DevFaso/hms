@@ -31,6 +31,7 @@ public class PatientRecipientVerificationController {
         authorize(patientId, hospitalId, auth); return service.status(patientId);
     }
     @PostMapping("/{channel}/request")
+    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_HOSPITAL_ADMIN')")
     public PatientRecipientChallengeService.View request(@PathVariable UUID patientId, @PathVariable NotificationChannel channel,
         @RequestParam(required = false) UUID hospitalId, Authentication auth) {
         UUID actor = authorize(patientId, hospitalId, auth);

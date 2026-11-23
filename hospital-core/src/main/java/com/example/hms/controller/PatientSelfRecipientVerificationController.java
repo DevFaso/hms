@@ -26,6 +26,7 @@ public class PatientSelfRecipientVerificationController {
         return service.status(portal.resolvePatientId(auth));
     }
     @PostMapping("/{channel}/request")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
     public PatientRecipientChallengeService.View request(@PathVariable NotificationChannel channel, Authentication auth) {
         return service.request(portal.resolvePatientId(auth), channel, actor(auth), LocaleContextHolder.getLocale());
     }
