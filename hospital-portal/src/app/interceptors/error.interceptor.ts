@@ -1,4 +1,8 @@
-import { API_REQUEST_TIMEOUT_MS } from '../core/api-request-timeout';
+import {
+  API_REQUEST_TIMEOUT_MS,
+  isRefreshRejection,
+  refreshFailureForCaller,
+} from '../core/api-request-timeout';
 import {
   HttpClient,
   HttpInterceptorFn,
@@ -282,7 +286,8 @@ function rebootstrapScope(sessionScope: SessionScopeService): void {
 }
 
 let isRefreshing = false;
-const refreshDone$ = new BehaviorSubject<string | null>(null);
+type RefreshResult = { token: string } | { error: unknown } | { ended: true };
+const refreshDone$ = new BehaviorSubject<RefreshResult | null>(null);
 
 /**
  * A 409 from the refresh means another tab of this browser rotated the shared
@@ -348,22 +353,25 @@ function tryRefreshAndRetry(
         isRefreshing = false;
         auth.setToken(tokens.accessToken);
         if (tokens.refreshToken) auth.setRefreshToken(tokens.refreshToken);
-        refreshDone$.next(tokens.accessToken);
+        refreshDone$.next({ token: tokens.accessToken });
       }),
       catchError((error) => {
         refreshPending = false;
         isRefreshing = false;
-        refreshDone$.next('__REFRESH_FAILED__');
+        const callerError = refreshFailureForCaller(error);
+        refreshDone$.next({ error: callerError });
         refreshDone$.next(null);
-        auth.logout();
-        void router.navigate(['/login']);
-        return throwError(() => error);
+        if (isRefreshRejection(error)) {
+          auth.logout();
+          void router.navigate(['/login']);
+        }
+        return throwError(() => callerError);
       }),
       finalize(() => {
         // Only explicit logout/teardown completes without a refresh result.
         if (!refreshPending) return;
         isRefreshing = false;
-        refreshDone$.next('__SESSION_ENDED__');
+        refreshDone$.next({ ended: true });
         refreshDone$.next(null);
       }),
       shareReplay({ bufferSize: 1, refCount: false }),
@@ -372,8 +380,8 @@ function tryRefreshAndRetry(
       switchMap((tokens) =>
         next(cloneWithToken(req, tokens.accessToken)).pipe(
           catchError((error) => {
-            // Preserve the existing credential-check/business-retry policy.
-            if (!credentialCheck) {
+            // A business refusal or transport failure does not invalidate fresh credentials.
+            if (!credentialCheck && error instanceof HttpErrorResponse && error.status === 401) {
               auth.logout();
               void router.navigate(['/login']);
             }
@@ -386,16 +394,20 @@ function tryRefreshAndRetry(
   }
 
   return refreshDone$.pipe(
-    filter((t): t is string => t !== null),
+    filter((t): t is RefreshResult => t !== null),
     take(1),
-    switchMap((newToken) => {
-      if (newToken === '__SESSION_ENDED__') return EMPTY;
-      if (newToken === '__REFRESH_FAILED__') {
-        return throwError(
-          () => new HttpErrorResponse({ status: 401, statusText: 'Refresh failed' }),
-        );
-      }
-      return next(cloneWithToken(req, newToken));
+    switchMap((result) => {
+      if ('ended' in result) return EMPTY;
+      if ('error' in result) return fail(result.error);
+      return next(cloneWithToken(req, result.token)).pipe(
+        catchError((error) => {
+          if (!credentialCheck && error instanceof HttpErrorResponse && error.status === 401) {
+            auth.logout();
+            void router.navigate(['/login']);
+          }
+          return fail(error);
+        }),
+      );
     }),
   );
 }

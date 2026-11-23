@@ -46,9 +46,7 @@ class SmsRealTransportGuardTest {
      */
     private static final Map<String, String> KNOWN = Map.of(
         "service/impl/PrescriptionSmsDispatchServiceImpl.java",
-        "D2000-followup: records a SENT transmission and tells the prescriber the pharmacy was reached over the mock",
-        "service/pharmacy/partner/SmsPartnerNotificationChannel.java",
-        "D2000-followup: partner pharmacy notices go to the mock without a not-sent trace");
+        "D2000-followup: records a SENT transmission and tells the prescriber the pharmacy was reached over the mock");
 
     static boolean offends(String source) {
         return HOLDS_SMS_SERVICE.matcher(source).find()

@@ -447,6 +447,14 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'PatientChannelPreferenceController#update',
     roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_RECEPTIONIST'],
   },
+  patientRecipientVerify: {
+    endpoint: 'PatientRecipientVerificationController#request',
+    roles: ['ROLE_RECEPTIONIST', 'ROLE_HOSPITAL_ADMIN'],
+  },
+  patientSelfRecipientVerify: {
+    endpoint: 'PatientSelfRecipientVerificationController#request',
+    roles: ['ROLE_PATIENT'],
+  },
   // QA D2730: a visit's sensitive category - the clinicians who write the record, and the admins.
   encounterSensitivityTag: {
     endpoint: 'SensitivityTaggingController#tagEncounter',

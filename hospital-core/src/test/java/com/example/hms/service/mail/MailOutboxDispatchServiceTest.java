@@ -48,6 +48,7 @@ class MailOutboxDispatchServiceTest {
 
     @Mock private MailOutboxRepository repository;
     @Mock private EmailService emailService;
+    @Mock private com.example.hms.repository.PatientRepository patients;
 
     private MailOutboxProperties properties;
     private MailOutboxDispatchService service;
@@ -63,7 +64,7 @@ class MailOutboxDispatchServiceTest {
         properties.setMaxBackoffSeconds(100);
         // A bare mock manager: TransactionTemplate runs each callback inline.
         service = new MailOutboxDispatchService(repository, emailService, properties, clock,
-            mock(PlatformTransactionManager.class));
+            mock(PlatformTransactionManager.class), patients, new com.example.hms.service.notification.PatientRecipientVerification());
 
         id = UUID.randomUUID();
         message = MailOutboxMessage.builder()
@@ -86,6 +87,31 @@ class MailOutboxDispatchServiceTest {
     private void claimedAt(int attemptsAfterClaim) {
         message.setAttempts(attemptsAfterClaim);
         when(repository.findById(id)).thenReturn(Optional.of(message));
+    }
+
+    @Test
+    void clinicalMailQueuedBeforeAContactChangeNeverReachesSmtp() {
+        oneDueRow(1); claimedAt(1);
+        var patient = new com.example.hms.model.Patient();
+        patient.setId(UUID.randomUUID()); patient.setEmail("old@example.invalid");
+        patient.setVerifiedEmailRecipient(patient.getEmail());
+        message.setClinicalPatientId(patient.getId()); message.setVerifiedPatientRecipient(patient.getEmail());
+        patient.setEmail("new@example.invalid");
+        when(patients.findByIdUnscoped(patient.getId())).thenReturn(Optional.of(patient));
+        assertThat(service.dispatchPending()).isZero();
+        verifyNoInteractions(emailService);
+        assertThat(message.getStatus()).isEqualTo(MailOutboxStatus.FAILED);
+        assertThat(message.getLastError()).isEqualTo("RecipientUnverified");
+        assertThat(message.getHtmlBody()).isNull();
+    }
+
+    @Test
+    void legacyPendingMailWithoutOwnershipClassificationMustBeReissued() {
+        oneDueRow(1); claimedAt(1); message.setRecipientPolicyVersion(0);
+        assertThat(service.dispatchPending()).isZero();
+        verifyNoInteractions(emailService);
+        assertThat(message.getLastError()).isEqualTo("LegacyRecipientPolicy");
+        assertThat(message.getHtmlBody()).isNull();
     }
 
     @Test
