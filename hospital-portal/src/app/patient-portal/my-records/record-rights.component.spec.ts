@@ -4,6 +4,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TranslateModule } from '@ngx-translate/core';
 import { RecordRightsComponent } from './record-rights.component';
 import { RoleContextService } from '../../core/role-context.service';
+import { expectEmptySubmitRefusal, expectFieldsMarked } from '../../testing/form-refusal-behaviour';
 
 describe('RecordRightsComponent own-account requests', () => {
   let http: HttpTestingController;
@@ -84,5 +85,41 @@ describe('RecordRightsComponent own-account requests', () => {
     fixture.componentInstance.submit();
     http.expectNone('/me/patient/roi-requests');
     expect(fixture.nativeElement.querySelector('form')).toBeNull();
+  });
+
+  it('marks the required fields at an empty submit without filing a request', () => {
+    const fixture = create();
+    const marked = expectEmptySubmitRefusal(fixture, {
+      button: '[data-testid="record-rights-submit"]',
+    });
+    expect(marked).toContain('rights-hospital');
+    expect(marked).toContain('rights-purpose');
+    http.expectNone('/me/patient/roi-requests');
+  });
+
+  it('marks server field refusals beside the correction fields', () => {
+    const fixture = create(),
+      component = fixture.componentInstance;
+    component.kind = 'CORRECTION';
+    component.hospitalId = 'hospital-a';
+    component.purpose = 'Correction';
+    component.description = 'cdx description';
+    fixture.detectChanges();
+    component.submit();
+    http.expectOne('/me/patient/roi-requests').flush(
+      {
+        fieldErrors: {
+          purpose: 'cdx Purpose refused',
+          scopeDescription: 'cdx Correction refused',
+        },
+      },
+      { status: 400, statusText: 'Invalid request' },
+    );
+    fixture.detectChanges();
+    expectFieldsMarked(fixture, {
+      'rights-purpose': 'cdx Purpose refused',
+      'rights-description': 'cdx Correction refused',
+    });
+    expect(component.description).toBe('cdx description');
   });
 });

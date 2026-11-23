@@ -1,4 +1,12 @@
-import { Component, ChangeDetectionStrategy, OnInit, inject, input, signal } from '@angular/core';
+import {
+  Component,
+  ChangeDetectionStrategy,
+  ElementRef,
+  OnInit,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -8,7 +16,8 @@ import { PatientHospitalRecord } from '../../services/patient-portal.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { missingRequiredMessage } from '../../shared/required-fields';
-import { refusalReason } from '../../shared/refusal-reason';
+import { refusalReason, refusedFieldReasons } from '../../shared/refusal-reason';
+import { refuseFields } from '../../shared/forms/invalid-fields';
 import { RoleContextService } from '../../core/role-context.service';
 import { actionRoles } from '../../core/action-permissions';
 
@@ -70,6 +79,7 @@ import { actionRoles } from '../../core/action-permissions';
           }
           <button
             type="submit"
+            data-testid="record-rights-submit"
             [disabled]="saving()"
             [appSubmitGuard]="refusal()"
             [submitGuardFields]="['rights-hospital', 'rights-purpose', 'rights-description']"
@@ -158,6 +168,7 @@ import { actionRoles } from '../../core/action-permissions';
   ],
 })
 export class RecordRightsComponent implements OnInit {
+  private readonly host = inject(ElementRef<HTMLElement>);
   readonly hospitals = input<PatientHospitalRecord[]>([]);
   private readonly http = inject(HttpClient);
   private readonly translate = inject(TranslateService);
@@ -227,6 +238,16 @@ export class RecordRightsComponent implements OnInit {
         },
         error: (err) => {
           this.saving.set(false);
+          const fields = {
+            hospitalId: 'rights-hospital',
+            purpose: 'rights-purpose',
+            scopeDescription: 'rights-description',
+          };
+          refuseFields(
+            this.host.nativeElement,
+            refusedFieldReasons(err, fields).map(([id, message]) => ({ id, message })),
+            Object.values(fields),
+          );
           this.error.set(refusalReason(err) ?? this.translate.instant('RECORD_RIGHTS.FAILED'));
         },
       });
