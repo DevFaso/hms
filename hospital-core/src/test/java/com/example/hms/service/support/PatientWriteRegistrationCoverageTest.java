@@ -91,6 +91,9 @@ class PatientWriteRegistrationCoverageTest {
 
     /** {@code Class#method} -> why that one write needs no check of its own. Frozen: it only shrinks. */
     private static final Map<String, String> RECORDED_METHODS = Map.ofEntries(
+        entry("PositiveAntibodyScreenService#recordWorkup", "QA D3351: its only caller,"
+            + " TransfusionServiceImpl#recordAntibodyWorkup, hands it the patient PatientChartAccess.require returned"
+            + " for the acting hospital; it takes no raw id"),
         entry("BillingInvoiceServiceImpl#recordPayment", BOUND_TO_PARENT + " (the invoice, locked and matched to the patient)"),
         entry("BillingInvoiceServiceImpl#recordPatientPayment", BOUND_TO_PARENT
             + " (the invoice, locked and matched to the patient)"),

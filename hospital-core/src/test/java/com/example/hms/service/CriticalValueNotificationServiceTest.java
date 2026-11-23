@@ -3,6 +3,7 @@ package com.example.hms.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyShort;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.contains;
@@ -58,7 +59,6 @@ class CriticalValueNotificationServiceTest {
     void setUp() {
         // The body asserts it runs under the lock; unit tests have no proxy.
         LockAssert.TestHelper.makeAllAssertsPass(true);
-        ReflectionTestUtils.setField(service, "escalateAfterMinutes", 30L);
 
         orderingUser = new User();
         orderingUser.setId(UUID.randomUUID());
@@ -91,6 +91,8 @@ class CriticalValueNotificationServiceTest {
         lenient().when(notificationService.created(anyString(), anyString(), anyString()))
             .thenReturn(new Notification());
         lenient().when(smsService.deliversRealSms()).thenReturn(false);
+        // QA r70 (C5): the sweep writes its stamps by conditional UPDATE; here the result plays the row.
+        com.example.hms.testsupport.CriticalResultRows.of(labResultRepository).with(result);
     }
 
     @Test
@@ -454,7 +456,7 @@ class CriticalValueNotificationServiceTest {
         result.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(31));
         result.setCriticalEscalationLevel((short) 84);
         when(labResultMapper.severityFlagOf(result)).thenReturn("NORMAL");
-        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
+        when(labResultRepository.findCriticalUnacknowledged())
             .thenReturn(List.of(result));
 
         Integer escalated = service.escalateOverdue();
@@ -464,53 +466,30 @@ class CriticalValueNotificationServiceTest {
         assertThat(result.getCriticalNotifiedAt()).isNull();
         assertThat(result.getCriticalEscalatedAt()).isNull();
         assertThat(result.getCriticalEscalationLevel()).isZero();
-        verify(labResultRepository).save(result);
-    }
-
-    @Test
-    void escalateOverdueAsksOnlyForRowsBelowTheRoundCap() {
-        // QA D305: the chain is capped; the sweep query excludes capped rows.
-        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
-            .thenReturn(List.of());
-
-        service.escalateOverdue();
-
-        verify(labResultRepository).findCriticalAwaitingEscalation(any(LocalDateTime.class), eq((short) 12));
-    }
-
-    @Test
-    void escalateOverdueStopsAtTheRoundCap() {
-        // QA D305: the round that reaches the cap still pages, and is the last.
-        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
-        result.setCriticalNotifiedAt(LocalDateTime.now().minusHours(1));
-        result.setCriticalEscalationLevel((short) 11);
-        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
-            .thenReturn(List.of(result));
-
-        Integer escalated = service.escalateOverdue();
-
-        assertThat(escalated).isEqualTo(1);
-        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 12);
+        // QA r70 (C5): cleared on the row by a conditional UPDATE, never by saving the result as it was read.
+        verify(labResultRepository).leaveCriticalChainIfUnacknowledged(result.getId(), (short) 0);
+        verify(labResultRepository, never()).save(any(LabResult.class));
     }
 
     @Test
     void escalateOverdueReturnsTheBoxedCountTheLockedProxyReliesOn() {
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);
         result.setCriticalNotifiedAt(LocalDateTime.now().minusHours(1));
-        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
+        when(labResultRepository.findCriticalUnacknowledged())
             .thenReturn(List.of(result));
 
         Integer escalated = service.escalateOverdue();
 
         assertThat(escalated).isEqualTo(1);
-        verify(labResultRepository).save(result);
+        verify(labResultRepository).stampEscalationIfUnacknowledged(eq(result.getId()), eq((short) 0), eq((short) 1), any());
+        verify(labResultRepository, never()).save(any(LabResult.class));
     }
 
     @Test
     void escalateOverdueNotifiesAndStampsOnce() {
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);
-        result.setCriticalNotifiedAt(LocalDateTime.now().minusHours(1));
-        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
+        result.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(20));
+        when(labResultRepository.findCriticalUnacknowledged())
             .thenReturn(List.of(result));
 
         int escalated = service.escalateOverdue();
@@ -519,7 +498,8 @@ class CriticalValueNotificationServiceTest {
         verify(notificationService).created(
             contains("ESCALADE"), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT_ESCALATION"));
         assertThat(result.getCriticalEscalatedAt()).isNotNull();
-        verify(labResultRepository).save(result);
+        verify(labResultRepository).stampEscalationIfUnacknowledged(eq(result.getId()), eq((short) 0), eq((short) 1), any());
+        verify(labResultRepository, never()).save(any(LabResult.class));
     }
 
     @Test
@@ -527,7 +507,7 @@ class CriticalValueNotificationServiceTest {
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);
         result.setCriticalNotifiedAt(LocalDateTime.now().minusHours(1));
         result.getLabOrder().setOrderingStaff(null);
-        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
+        when(labResultRepository.findCriticalUnacknowledged())
             .thenReturn(List.of(result));
 
         int escalated = service.escalateOverdue();
@@ -548,14 +528,16 @@ class CriticalValueNotificationServiceTest {
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);
         result.setCriticalNotifiedAt(LocalDateTime.now().minusHours(1));
 
-        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
+        when(labResultRepository.findCriticalUnacknowledged())
             .thenReturn(List.of(broken, result));
-        doThrow(new IllegalStateException("boom")).when(labResultRepository).save(broken);
+        when(labResultRepository.stampEscalationIfUnacknowledged(eq(broken.getId()), anyShort(), anyShort(), any()))
+            .thenThrow(new IllegalStateException("boom"));
 
         int escalated = service.escalateOverdue();
 
         assertThat(escalated).isEqualTo(1); // broken row skipped, second processed
-        verify(labResultRepository).save(result);
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 1);
+        assertThat(broken.getCriticalEscalationLevel()).isZero();
     }
 
     // ── The escalation is a CHAIN and it REPEATS (P0 #5) ───────────────────
@@ -565,75 +547,6 @@ class CriticalValueNotificationServiceTest {
     // result nobody acknowledged produced two notifications to one person and
     // then went permanently quiet.
 
-    private UUID givenHospital() {
-        UUID hospitalId = UUID.randomUUID();
-        com.example.hms.model.Hospital hospital =
-            com.example.hms.model.Hospital.builder().name("CHU").code("CHU").build();
-        hospital.setId(hospitalId);
-        result.getLabOrder().setHospital(hospital);
-        return hospitalId;
-    }
-
-    @Test
-    void secondRoundWidensBeyondTheProviderWhoAlreadyIgnoredIt() {
-        UUID hospitalId = givenHospital();
-        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
-        result.setCriticalNotifiedAt(LocalDateTime.now().minusHours(2));
-        result.setCriticalEscalationLevel((short) 1);
-        when(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, "ROLE_HOSPITAL_ADMIN"))
-            .thenReturn(List.of("admin.kabore", "admin.sawadogo"));
-        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
-            .thenReturn(List.of(result));
-
-        service.escalateOverdue();
-
-        // The provider stays on the list — they can still act clinically — but
-        // they are no longer the ONLY person told.
-        verify(notificationService).created(
-            anyString(), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT_ESCALATION"));
-        verify(notificationService).created(
-            anyString(), eq("admin.kabore"), eq("CRITICAL_LAB_RESULT_ESCALATION"));
-        verify(notificationService).created(
-            anyString(), eq("admin.sawadogo"), eq("CRITICAL_LAB_RESULT_ESCALATION"));
-        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 2);
-    }
-
-    @Test
-    void firstRoundIsStillJustANudgeToTheProvider() {
-        givenHospital();
-        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
-        result.setCriticalNotifiedAt(LocalDateTime.now().minusHours(1));
-        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
-            .thenReturn(List.of(result));
-
-        service.escalateOverdue();
-
-        // Round 1: they may simply not have looked yet. No point waking the
-        // hospital's admins for that.
-        verify(staffRepository, never()).findActiveUsernamesByHospitalAndRole(any(), anyString());
-        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 1);
-    }
-
-    @Test
-    void keepsEscalatingRatherThanGoingSilent() {
-        UUID hospitalId = givenHospital();
-        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
-        result.setCriticalNotifiedAt(LocalDateTime.now().minusHours(9));
-        result.setCriticalEscalationLevel((short) 8);
-        when(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, "ROLE_HOSPITAL_ADMIN"))
-            .thenReturn(List.of("admin.kabore"));
-        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
-            .thenReturn(List.of(result));
-
-        service.escalateOverdue();
-
-        // There is deliberately no round cap. Going quiet on an unacknowledged
-        // critical value is the exact failure this service exists to prevent, so
-        // a cap would reintroduce it with extra steps.
-        verify(notificationService).created(
-            anyString(), eq("admin.kabore"), eq("CRITICAL_LAB_RESULT_ESCALATION"));
-        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 9);
-    }
 
     // ── Read-back (P0 #5) ─────────────────────────────────────────────────
     // Never built. The acknowledge endpoint takes no body, so nothing recorded
@@ -866,10 +779,10 @@ class CriticalValueNotificationServiceTest {
         // QA D402: GLU 30.2 is CRITICAL by its range, not by an analyzer flag;
         // the sweep must grade it from the stored definition and climb.
         result.setAbnormalFlag(null);
-        result.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(35));
+        result.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(20));
         when(labResultMapper.severityFlagOf(result)).thenReturn("CRITICAL");
         when(labResultMapper.raisesCriticalAlert("CRITICAL")).thenReturn(true);
-        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
+        when(labResultRepository.findCriticalUnacknowledged())
             .thenReturn(List.of(result));
 
         assertThat(service.escalateOverdue()).isEqualTo(1);
@@ -884,7 +797,7 @@ class CriticalValueNotificationServiceTest {
         result.setAbnormalFlag(null);
         result.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(35));
         when(labResultMapper.severityFlagOf(result)).thenReturn("UNSPECIFIED");
-        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
+        when(labResultRepository.findCriticalUnacknowledged())
             .thenReturn(List.of(result));
 
         assertThat(service.escalateOverdue()).isEqualTo(1);

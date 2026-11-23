@@ -145,6 +145,23 @@ public class Hospital extends BaseEntity {
     @Column(name = "ultrasound_by_non_physician", nullable = false)
     private boolean ultrasoundByNonPhysician = false;
 
+    /**
+     * V363, rule CRITICAL_RESULT_ESCALATION: the steps of the critical-result ladder in minutes after the first
+     * notice (null = the default: 15, 30, 60), and the doctor named médecin-chef for the +30 minute step
+     * (null = the heads of department, else every doctor). Read through {@code CriticalResultEscalationLadder}.
+     */
+    @Column(name = "critical_cover_after_minutes")
+    private Integer criticalCoverAfterMinutes;
+
+    @Column(name = "critical_lead_after_minutes")
+    private Integer criticalLeadAfterMinutes;
+
+    @Column(name = "critical_unresolved_after_minutes")
+    private Integer criticalUnresolvedAfterMinutes;
+
+    @Column(name = "critical_medical_lead_user_id")
+    private java.util.UUID criticalMedicalLeadUserId;
+
     /** V317: the PACS DICOMweb root, e.g. {@code https://pacs.example/dicom-web}. */
     @Size(max = 500)
     @Column(name = "pacs_dicomweb_base_url", length = 500)

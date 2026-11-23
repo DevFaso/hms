@@ -65,6 +65,7 @@ class OrderReviewHoldGuardTest {
 
     /** {@code Controller#endpoint,endpoint | why it does not use a held order}. */
     private static final String NOT_A_USE = """
+        Transfusion#recordAntibodyWorkup | the biologist's record of an antibody (QA D3351): no unit leaves on it, and issuing stays gated
         Prescription#create | a new order written after the dispute follows the normal workflow
         Prescription#pediatricDoseReview,allergyReview,requestClarification,resolveClarification | a review note: nothing leaves, signing and dispensing are refused
         Prescription#update,delete | an edit holds the order again (reviewAgainAfterChange, pinned below); a withdrawal stops the order

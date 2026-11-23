@@ -1544,7 +1544,9 @@
     "TAKE_HOME_HINT": "Signed prescriptions marked « Take-home medication » are listed in the discharge summary, including those written up to 24 h after the discharge.",
     "FOLLOW_UP_DATE": "Follow-up appointment",
     "FOLLOW_UP_PURPOSE": "Follow-up purpose",
-    "FOLLOW_UP_PURPOSE_PLACEHOLDER": "e.g. check-up, wound review, lab recheck"
+    "FOLLOW_UP_PURPOSE_PLACEHOLDER": "e.g. check-up, wound review, lab recheck",
+    "TAKE_HOME_UNSIGNED_TITLE": "Written but not signed yet",
+    "TAKE_HOME_UNSIGNED_HINT": "These take-home prescriptions go home, and reach the discharge summary, only once signed. Sign them from the prescriptions page, before or within 24 h of the discharge."
   },
   "ANALYTICS": {
     "LOAD_FAILED": "The analytics could not be loaded. Try again.",
@@ -1907,6 +1909,7 @@
       "CROSS_TENANT_READ": "Super-admin read across all hospitals: {{view}} ({{rows}} rows)",
       "CROSS_HOSPITAL_READ_LAB": "Lab order of another hospital read by the performing laboratory",
       "CROSS_HOSPITAL_READ_LAB_RESULT": "Lab result of another hospital read by the performing laboratory",
+      "CROSS_HOSPITAL_ANTIBODY_FLAG": "Allo-immunisation flag of another hospital read (transfusion safety, shown whatever the record-sharing choice)",
       "EMERGENCY_BLOOD_RELEASED": "Emergency uncrossmatched release of unit {{unit}} against request {{request}}",
       "EMERGENCY_BLOOD_RELEASED_O_POSITIVE": "Emergency release on a documented O positive decision of unit {{unit}} against request {{request}}",
       "EMERGENCY_BLOOD_RELEASED_INCOMPATIBLE": "Emergency release — serologically incompatible, of unit {{unit}} against request {{request}}",
@@ -4929,7 +4932,11 @@
     "QC_OVERRIDE": "Released despite rejected QC",
     "RELEASE_CRITICAL_FROM_WORKLIST": "A critical result is released from the release worklist, where you record who was told.",
     "RELEASE_FROM_WORKLIST": "Release it from the release worklist.",
-    "READ_BACK_CONFIRMED_DETAIL": "Read-back confirmed: {{test}} « {{value}} » — {{patient}}"
+    "READ_BACK_CONFIRMED_DETAIL": "Read-back confirmed: {{test}} « {{value}} » — {{patient}}",
+    "READ_BACK_CHANNEL": "How the result reached you",
+    "READ_BACK_CHANNEL_IN_APP": "In the application",
+    "READ_BACK_CHANNEL_PHONE": "By telephone",
+    "READ_BACK_CHANNEL_IN_PERSON": "In person"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Abnormal",
@@ -13703,7 +13710,39 @@
     "DECLARED_VALUE": "{{group}} (declared, not verified)",
     "DECLARED_GROUP": "Chart: {{group}} (not verified)",
     "DECLARED_MISMATCH": "The chart says {{declared}} but the lab typed {{typed}}. Check the patient’s identity and the chart; the lab group stands for the crossmatch.",
-    "DECLARED_MISMATCH_SHORT": "Differs from the chart"
+    "DECLARED_MISMATCH_SHORT": "Differs from the chart",
+    "ALLO_IMMUNISED": "Allo-immunised patient (positive antibody screen on record)",
+    "ALLO_IMMUNISED_RULE": "Provisional rule: red cells are released only for an identified antibody (or the biologist’s referral decision), on an antigen-negative, RH-KEL1 matched unit, with a compatible antiglobulin crossmatch on a sample of 72 hours or less. A later negative screen does not lift this.",
+    "ALLO_IMMUNISED_REQUEST": "Allo-immunised: red cells need the compatible unit, or a declared vital emergency (provisional rule)",
+    "ANTIBODY_IDENTIFIED": "Antibody identified: {{antibody}}",
+    "ANTIBODY_WORKUP_MISSING": "The antibody is not identified and no referral decision serves this request: red cells are held.",
+    "ANTIBODY_RECORD": "Record the antibody or a referral decision",
+    "ANTIBODY_RECORD_HINT": "Only the biologist records this. It is kept on the patient’s record for good.",
+    "ANTIBODY_STATUS": "What is recorded",
+    "ANTIBODY_STATUS_IDENTIFIED": "Antibody identified",
+    "ANTIBODY_STATUS_REFERRED": "Referred to CNTS/CRTS: serve this request before the answer",
+    "ANTIBODY_SPECIFICITIES": "Antibody identified (specificity)",
+    "ANTIBODY_REFERRAL_HINT": "The matched unit and the compatible antiglobulin crossmatch are still required. The decision serves this request only.",
+    "ANTIBODY_REFERRAL_CENTRE": "Referral centre (CNTS, CRTS)",
+    "ANTIBODY_DECISION_REASON": "Why this request is served before identification",
+    "ANTIBODY_RECORDED": "Recorded.",
+    "ANTIBODY_ERROR": "The record could not be saved.",
+    "VITAL_URGENCY_WARNING": "This patient is allo-immunised. In a vital emergency the transfusion is not delayed, but there is a risk of haemolysis: declare the level and the reason, and draw the pre-transfusion sample before the first unit (provisional rule).",
+    "VITAL_URGENCY_LEVEL": "Level of vital urgency",
+    "VITAL_URGENCY_UVI": "Immediate vital urgency (UVI): group O without delay",
+    "VITAL_URGENCY_UV": "Vital urgency (UV): release within 30 minutes",
+    "VITAL_URGENCY_REASON": "Reason for the vital urgency",
+    "VITAL_URGENCY_SAMPLE": "The pre-transfusion sample is drawn before the first unit",
+    "VITAL_URGENCY_DECLARED": "Declared by the prescriber: {{level}}. Reason: {{reason}}",
+    "COMPATIBILISATION_HINT": "Allo-immunised patient: a compatible result must be an antiglobulin crossmatch on a sample of 72 hours or less, on a unit negative for the target antigen and RH-KEL1 matched (provisional rule).",
+    "XM_SAMPLE_AT": "Sample of this crossmatch drawn at",
+    "XM_ANTIGLOBULIN": "Done by the indirect antiglobulin technique",
+    "XM_ANTIGEN_NEGATIVE": "The unit is negative for the target antigen",
+    "XM_RH_KELL": "The unit is RH-KEL1 matched",
+    "HAEMOLYSIS_WARNING": "Allo-immunised patient: releasing without a compatible crossmatch carries a risk of haemolysis. Tell the clinical team, keep the bedside check, and the biologist does the crossmatch afterwards (provisional rule).",
+    "ANTIBODY_FROM_OTHER_HOSPITAL": "Transfusion safety information recorded by: {{hospitals}}",
+    "ANTIBODY_KNOWN_IDENTIFIED": "Antibody identified: {{antibody}} ({{hospital}}, {{date}}).",
+    "ANTIBODY_KNOWN_NOT_IDENTIFIED": "Positive antibody screen, antibody not identified ({{hospital}}, {{date}})."
   },
   "MORTALITY": {
     "DISPUTE": "Dispute this death",
@@ -13943,7 +13982,16 @@
     "WARD_OVERVIEW": "Ward overview",
     "SNAPSHOT_AT": "Updated",
     "LEGEND": "Bed status legend",
-    "HOSPITAL_NAMES_ERROR": "Hospital names could not be loaded. Identifiers are shown; bed counts are available."
+    "HOSPITAL_NAMES_ERROR": "Hospital names could not be loaded. Identifiers are shown; bed counts are available.",
+    "IN_LABOR": "In labour",
+    "LABOR_NOTICE": "{{name}} is in active labour. A move to another maternity bed needs no confirmation; a move out of the maternity unit does.",
+    "LABOR_WARNING": "{{name}} is in active labour and this bed is not in a maternity unit. Make sure this is the right patient, and say why in the reason.",
+    "LABOR_CONFIRM": "I confirm the transfer of a woman in labour out of the maternity unit",
+    "LABOR_COMPLETE_TITLE": "Move a woman in labour?",
+    "LABOR_COMPLETE_MESSAGE": "{{name}} is in active labour and {{bed}} is not in a maternity unit. Carry out this transfer only if it is intended for her.",
+    "LABOR_COMPLETE_CONFIRM": "Yes, carry out the transfer",
+    "SEARCH_RESULTS": "{{shown}} of {{total}} beds match the search.",
+    "SEARCH_CLEAR": "Show every bed"
   },
   "EMAR": {
     "ORDER_NO_LONGER_ACTIVE": "This order is no longer active. No dose was recorded.",
@@ -15007,7 +15055,6 @@
     "COL_CHANNEL": "Channel",
     "COL_STATUS": "Status",
     "COL_ATTEMPTS": "Attempts",
-    "COL_NEXT_ATTEMPT": "Next attempt",
     "COL_REASON": "Reason",
     "COL_LAST_ATTEMPT": "Date and time",
     "COL_ACTIONS": "Actions",
@@ -15068,7 +15115,8 @@
     "RECORDED": "Recorded (no attempt)",
     "SUBJECT_APPOINTMENT": "Appointment on {{date}} at {{time}}",
     "SUBJECT_INVOICE": "Invoice {{number}}",
-    "SUBJECT_LAB_ORDER": "Lab order {{number}}"
+    "SUBJECT_LAB_ORDER": "Lab order {{number}}",
+    "COL_NEXT_ATTEMPT": "Next attempt"
   },
   "IMAGING_PACS": {
     "STUDY_LINKED": "Study linked",
@@ -15299,7 +15347,18 @@
     "EMPTY": "No critical result is waiting for a read-back.",
     "ORDERED_BY": "Ordered by",
     "PAGING_SINCE": "Alert sent",
-    "ROUNDS": "Escalation rounds"
+    "ROUNDS": "Escalation rounds",
+    "ESCALATION_TITLE": "Escalation steps (provisional rule)",
+    "ESCALATION_HINT": "A critical result nobody acknowledges goes to the covering doctor, then to the chief medical officer and the biologist, then becomes an « unresolved critical result » with an incident record. Only a clinician’s read-back ends it. The minutes count from the first notice. Provisional rule, to be signed off by the chief medical officer and the biologist.",
+    "ESCALATION_COVER": "Covering doctor after (min)",
+    "ESCALATION_LEAD": "Chief medical officer and biologist after (min)",
+    "ESCALATION_UNRESOLVED": "Unresolved, incident after (min)",
+    "ESCALATION_CHIEF": "Chief medical officer",
+    "ESCALATION_CHIEF_NONE": "Not named: heads of department, else every doctor",
+    "ESCALATION_INVALID": "The three steps must increase, from 5 minutes to 1440 (for example 15, 30 and 60).",
+    "ESCALATION_SAVED": "Escalation steps saved.",
+    "ESCALATION_SAVE_ERROR": "The escalation steps could not be saved.",
+    "ESCALATION_LOAD_ERROR": "The escalation steps could not be loaded."
   },
   "PHARMACY_MONEY": {
     "HANDOVER": {

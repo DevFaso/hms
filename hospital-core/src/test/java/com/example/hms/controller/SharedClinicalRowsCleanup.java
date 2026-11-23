@@ -47,6 +47,8 @@ final class SharedClinicalRowsCleanup {
         // Releasing a result enqueues an outbound message that references the
         // order, so the outbox goes before the orders.
         context.getBean(InstrumentOutboxRepository.class).deleteAll();
+        // QA r70 (C5): an incident names its lab result (V363), so it goes first.
+        context.getBean(com.example.hms.repository.CriticalResultIncidentRepository.class).deleteAllInBatch();
         context.getBean(LabResultRepository.class).deleteAll();
         // QA D820: a voided order's results do not load (LabResult's
         // restriction), so the repository wipe above cannot see them; they

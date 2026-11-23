@@ -48,7 +48,9 @@ public enum ClinicalRuleSetKey {
     OBSTETRIC_ELIGIBILITY(ClinicalRuleArea.MATERNITY),
     CLOCK_TIME_FREQUENCIES(ClinicalRuleArea.PRESCRIBING),
     LEGACY_ULTRASOUND_REPORTS(ClinicalRuleArea.IMAGING),
-    SAME_DAY_PRICE_CORRECTION(ClinicalRuleArea.BILLING);
+    SAME_DAY_PRICE_CORRECTION(ClinicalRuleArea.BILLING),
+    TRANSFUSION_POSITIVE_ANTIBODY_SCREEN(ClinicalRuleArea.LAB),
+    CRITICAL_RESULT_ESCALATION(ClinicalRuleArea.LAB);
 
     private final ClinicalRuleArea area;
 

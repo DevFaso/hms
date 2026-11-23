@@ -63,6 +63,7 @@ class ClosedRecordWriteGuardTest {
         "AnnouncementServiceImpl#updateAnnouncement", 1, NO_TERMINAL_STATE,
         "AuditSavedSearchServiceImpl#update", 1, NO_TERMINAL_STATE,
         "BedManagementServiceImpl#updateWard", 1, NO_TERMINAL_STATE,
+        "CriticalResultEscalationSettingsService#update", 1, NO_TERMINAL_STATE,
         "DepartmentServiceImpl#updateDepartment", 1, NO_TERMINAL_STATE,
         "DepartmentServiceImpl#updateDepartmentHead", 1, NO_TERMINAL_STATE,
         "Dhis2ConfigServiceImpl#updateMapping", 1, NO_TERMINAL_STATE,

@@ -617,6 +617,27 @@ interface PageResponse<T> {
  */
 export type LabResultPage = PageResponse<LabResultResponse>;
 
+/** QA r70 (C5): how a critical result reached the clinician who acknowledges it. */
+export type CriticalAckChannel = 'IN_APP' | 'PHONE' | 'IN_PERSON';
+
+/** QA r70 (C5): a hospital's steps of the critical-result ladder, in minutes after the first notice. */
+export interface CriticalEscalationSettings {
+  hospitalId: string;
+  coverAfterMinutes: number;
+  leadAfterMinutes: number;
+  unresolvedAfterMinutes: number;
+  usesDefaults: boolean;
+  medicalLeadUserId: string | null;
+  doctors: { userId: string; name: string }[];
+}
+
+export interface CriticalEscalationSettingsUpdate {
+  coverAfterMinutes: number;
+  leadAfterMinutes: number;
+  unresolvedAfterMinutes: number;
+  medicalLeadUserId: string | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class LabService {
   private readonly http = inject(HttpClient);
@@ -1031,10 +1052,33 @@ export class LabService {
    * clinician heard and the server checks it, which is what catches a
    * transcription error. A mismatch comes back 400 and is recorded.
    */
-  readBackCriticalValue(id: string, repeatedValue: string): Observable<LabResultResponse> {
+  readBackCriticalValue(
+    id: string,
+    repeatedValue: string,
+    channel?: CriticalAckChannel,
+  ): Observable<LabResultResponse> {
+    // QA r70 (C5): the channel is sent only when the clinician said one; the server records IN_APP otherwise.
     return this.http.post<LabResultResponse>(`/lab-results/${id}/critical-read-back`, {
       repeatedValue,
+      ...(channel ? { channel } : {}),
     });
+  }
+
+  /** QA r70 (C5): a hospital's steps of the critical-result escalation ladder. */
+  criticalEscalationSettings(hospitalId: string): Observable<CriticalEscalationSettings> {
+    return this.http.get<CriticalEscalationSettings>(
+      `/hospitals/${hospitalId}/critical-result-escalation`,
+    );
+  }
+
+  saveCriticalEscalationSettings(
+    hospitalId: string,
+    body: CriticalEscalationSettingsUpdate,
+  ): Observable<CriticalEscalationSettings> {
+    return this.http.put<CriticalEscalationSettings>(
+      `/hospitals/${hospitalId}/critical-result-escalation`,
+      body,
+    );
   }
 
   compareResult(id: string): Observable<LabResultComparison> {

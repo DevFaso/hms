@@ -89,6 +89,24 @@ public class TransferServiceImpl implements TransferService {
         this.midwifeNewbornCare = midwifeNewbornCare;
     }
 
+    /** QA D3308: a labouring woman's move out of maternity is acknowledged (setter-injected, as above). */
+    private com.example.hms.service.maternity.LabourBedMove labourBedMove;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setLabourBedMove(com.example.hms.service.maternity.LabourBedMove labourBedMove) {
+        this.labourBedMove = labourBedMove;
+    }
+
+    /** The order as the worklist reads it, with the labour warning of its move as it stands now. */
+    private TransferOrderResponseDTO toDto(TransferOrder order, List<IsolationPrecaution> precautions) {
+        TransferOrderResponseDTO dto = mapper.toDto(order, precautions);
+        if (dto != null && labourBedMove != null && order.isPending() && order.getHospital() != null) {
+            dto.setLaborAcknowledgementRequired(labourBedMove.needsAcknowledgement(order.getAdmission(),
+                order.getToBed(), order.getHospital().getId()));
+        }
+        return dto;
+    }
+
     @Override
     public TransferOrderResponseDTO requestTransfer(TransferOrderRequestDTO request) {
         UUID hospitalId = requireHospital();
@@ -126,6 +144,10 @@ public class TransferServiceImpl implements TransferService {
         if (midwifeNewbornCare != null) {
             midwifeNewbornCare.requireBedAMidwifeMayAssign(admission, destination.getId(),
                 BedAssignmentService.FIELD_TO_BED_ID);
+        }
+        // QA D3308: a woman in active labour leaves maternity only knowingly. Before the destination is held.
+        if (labourBedMove != null) {
+            labourBedMove.requireAcknowledged(admission, destination, hospitalId, request.getLaborAcknowledged());
         }
         transferOrderRepository.findPendingForDestinationBed(destination.getId())
             .ifPresent(existing -> {
@@ -172,7 +194,7 @@ public class TransferServiceImpl implements TransferService {
                 destination.getWard() != null ? destination.getWard().getId() : null,
                 request.getIsolationOverrideReason());
         }
-        return mapper.toDto(saved, precautions);
+        return toDto(saved, precautions);
     }
 
     @Override
@@ -198,6 +220,11 @@ public class TransferServiceImpl implements TransferService {
         boolean askPhysician = midwifeNewbornCare != null
             && midwifeNewbornCare.requireTransferAMidwifeMayComplete(order.getAdmission(),
                 order.getToBed().getId(), orderedByUserId);
+        // QA D3308: she may have gone into labour since the order was raised; whoever moves her says they know.
+        if (labourBedMove != null) {
+            labourBedMove.requireAcknowledged(order.getAdmission(), order.getToBed(), hospitalId,
+                request.getLaborAcknowledged());
+        }
 
         // The destination has been RESERVED for this order since it was
         // raised, so completion claims it from that state. The bed change
@@ -256,7 +283,7 @@ public class TransferServiceImpl implements TransferService {
         UUID hospitalId = requireHospital();
         return transferOrderRepository
             .findByHospitalAndStatus(hospitalId, TransferOrderStatus.REQUESTED).stream()
-            .map(order -> mapper.toDto(order, activePrecautions(order)))
+            .map(order -> toDto(order, activePrecautions(order)))
             .toList();
     }
 

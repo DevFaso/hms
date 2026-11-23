@@ -113,6 +113,21 @@ public class TransfusionRequest extends BaseEntity {
     @Column(name = "notes", length = 1000)
     private String notes;
 
+    /**
+     * QA D3351 (V362): the prescriber's declaration of a life-threatening emergency: the level (UVI or UV), why
+     * (a clinical narrative, so encrypted), and that the pre-transfusion sample is drawn before the first unit.
+     */
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(name = "vital_urgency_level", length = 10)
+    private com.example.hms.enums.VitalUrgencyLevel vitalUrgencyLevel;
+
+    @jakarta.persistence.Convert(converter = com.example.hms.security.EncryptedStringConverter.class)
+    @Column(name = "vital_urgency_reason", columnDefinition = "TEXT")
+    private String vitalUrgencyReason;
+
+    @Column(name = "pre_transfusion_sample_drawn")
+    private Boolean preTransfusionSampleDrawn;
+
     public boolean isTerminal() {
         return status == TransfusionRequestStatus.COMPLETED
             || status == TransfusionRequestStatus.CANCELLED;

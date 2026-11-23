@@ -55,7 +55,9 @@ import java.util.UUID;
  * which carries the score and the level) is not paged a second time. Cool-down (30 minutes,
  * provisional): a page is withheld when she was paged at the same level or a higher one in that time;
  * a level above every recent page always goes through at once, and a RED add-on alert is never
- * withheld. Only the page is withheld: the score, the chart, the round and the recorder's on-screen
+ * withheld. QA D3304: a page at the medium level, the high level or for a RED alert is also filed as an
+ * urgent obstetric alert to acknowledge (a CRITICAL in-basket item, with reminders), like a partograph alert.
+ * Only the page is withheld: the score, the chart, the round and the recorder's on-screen
  * warning follow every reading, and that warning says the page was withheld.
  * It runs in the caller's transaction, like the NEWS2 escalation: if the vital set commits, so do its
  * notifications and the mark the cool-down reads; a notice that cannot be created never fails the set.
@@ -72,6 +74,13 @@ public class MaternalEarlyWarningService {
     static final String KEY_MEDIUM = "mews.escalation.medium";
     static final String KEY_HIGH = "mews.escalation.high";
     static final String KEY_RED = "mews.escalation.red";
+    /** QA D3304: the in-basket item of a medium, high or red page: its title, its type label, its sentence. */
+    static final String ITEM_TITLE_KEY = "maternalWarning.alert.notification";
+    static final String ITEM_TYPE_PREFIX = "maternalWarning.alert.type.";
+    static final String ITEM_MESSAGE_PREFIX = "maternalWarning.alert.msg.";
+    public static final String ALERT_TYPE_MEDIUM = "MEWS_MEDIUM";
+    public static final String ALERT_TYPE_HIGH = "MEWS_HIGH";
+    public static final String ALERT_TYPE_RED = "MEWS_RED";
     /** The label of a CRADLE add-on alert, rendered in each reader's language. */
     public static final String ALERT_LABEL_PREFIX = "mews.alert.";
 
@@ -215,7 +224,84 @@ public class MaternalEarlyWarningService {
             saved.setMewsPagedTier(score.responseTier().name());
             saved.setMewsPagedAt(LocalDateTime.now(clock));
         }
+        // QA D3304: only a page that went out. A page the cool-down held back returned above, so the 30 minutes
+        // hold the item too, and a RED alert, never held, always files one.
+        fileForAcknowledgement(saved, score, patientId, hospitalId);
         return new Page(told ? PageStatus.SENT : PageStatus.NOBODY, paged);
+    }
+
+    /** QA D3304: the obstetric alert escalation (setter-injected; absent, the page stays a bell notice). */
+    private com.example.hms.service.maternity.ObstetricAlertEscalationService obstetricAlerts;
+    private NotificationLocalizer localizer;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setObstetricAlerts(@org.springframework.context.annotation.Lazy
+                            com.example.hms.service.maternity.ObstetricAlertEscalationService obstetricAlerts) {
+        this.obstetricAlerts = obstetricAlerts;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setLocalizer(NotificationLocalizer localizer) {
+        this.localizer = localizer;
+    }
+
+    /**
+     * QA D3304 (r70): a maternal warning paged from a ward vital set at the medium level (5 to 7), the high
+     * level (8 or more) or for a RED add-on alert is also an urgent obstetric alert to ACKNOWLEDGE, like a
+     * partograph or a post-partum alert of the same woman: a CRITICAL in-basket item for the doctors and
+     * midwives on call (all of them when nobody is on the rota), and the reminders of
+     * {@code ObstetricAlertEscalationService} until somebody other than the recorder acknowledges it. The
+     * low-medium page (2 to 4, review within 30 minutes) stays a notice: it is not an urgent alert.
+     *
+     * <p>Filed after the commit of the vital set, never failing it. It follows the page: nothing here when
+     * the cool-down withheld the page, always something for a RED alert.
+     */
+    private void fileForAcknowledgement(PatientVitalSign saved, Score score, UUID patientId, UUID hospitalId) {
+        String alertType = alertTypeOf(score);
+        if (obstetricAlerts == null || localizer == null || alertType == null || saved == null || saved.getId() == null) {
+            return;
+        }
+        try {
+            Locale staff = com.example.hms.service.i18n.NotificationLocales.STAFF;
+            String name = saved.getPatient() == null ? null : saved.getPatient().getFullName();
+            String patientName = name == null || name.isBlank()
+                ? localizer.render("patient.fallback.generic", List.of(), staff) : name;
+            Integer review = MaternalEarlyWarning.reviewWithinMinutes(rules, score.responseTier());
+            Object red = score.alerts().stream().filter(a -> a.light() == MaternalEarlyWarning.Light.RED).findFirst()
+                .<Object>map(a -> NotificationLocalizer.key(ALERT_LABEL_PREFIX + a.name())).orElse("");
+            // {0} the score, {1} review within (min), {2} observations every (min), {3} the red alert.
+            List<Object> messageArgs = NotificationLocalizer.storable(new Object[]{score.total(), review == null ? 0 : review,
+                MaternalEarlyWarning.observationInterval(rules, score, java.time.Duration.ofHours(12)).toMinutes(), red});
+            String messageKey = ITEM_MESSAGE_PREFIX + alertType;
+            String typeLabel = localizer.render(ITEM_TYPE_PREFIX + alertType, List.of(), staff);
+            String message = localizer.render(messageKey, messageArgs, staff);
+            String title = localizer.render(ITEM_TITLE_KEY, List.of(typeLabel, patientName, message), staff);
+            Staff recorder = saved.getRecordedByStaff();
+            User recorderUser = recorder == null ? null : recorder.getUser();
+            obstetricAlerts.raiseAfterCommit(new com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert(
+                hospitalId, patientId, patientName,
+                com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_VITAL_SIGN, saved.getId(),
+                alertType, typeLabel, message, recorderUser == null ? null : recorderUser.getId(), title,
+                messageKey, messageArgs));
+        } catch (RuntimeException ex) {
+            // An urgent alert left without its item is a lost safety net, never a WARN; the vital set still saves.
+            log.error("Maternal early-warning alert not filed for acknowledgement: {}", ex.getClass().getSimpleName());
+        }
+    }
+
+    /** The urgent alert a page is: a RED add-on alert, the high level, the medium level; null below. */
+    static String alertTypeOf(Score score) {
+        if (score == null) {
+            return null;
+        }
+        if (score.red()) {
+            return ALERT_TYPE_RED;
+        }
+        return switch (score.responseTier()) {
+            case HIGH -> ALERT_TYPE_HIGH;
+            case MEDIUM -> ALERT_TYPE_MEDIUM;
+            default -> null;
+        };
     }
 
     /**

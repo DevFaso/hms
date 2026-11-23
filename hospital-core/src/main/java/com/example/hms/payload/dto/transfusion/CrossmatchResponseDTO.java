@@ -27,6 +27,12 @@ public class CrossmatchResponseDTO {
     /** Compatible AND unexpired — what the issue path actually requires. */
     private Boolean usable;
 
+    /** QA D3351: what makes it « compatibilisé » for an allo-immunised patient; null otherwise. */
+    private LocalDateTime sampleCollectedAt;
+    private Boolean antiglobulinMethod;
+    private Boolean antigenNegative;
+    private Boolean rhKellMatched;
+
     /**
      * True for the one pairing the platelet protocol permits and nobody has
      * confirmed was meant: group O platelets to a group B recipient.
