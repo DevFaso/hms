@@ -714,15 +714,19 @@ public class InvoiceCoverageService {
     }
 
     /**
-     * The line's price-list category: its item's when it was priced from the price list; a lab line otherwise
-     * counts as a lab test (a rule on LAB_TEST covers it however it was priced); any other line has none and takes
-     * the plan's default rate unless an item rule names it.
+     * The line's price-list category: its item's when it was priced from the price list; otherwise what the line
+     * was posted for (QA D3603, r71: an imaging order priced by hand is still IMAGING, whatever its price source);
+     * a lab line otherwise counts as a lab test (a rule on LAB_TEST covers it however it was priced); any other
+     * line has none and takes the plan's default rate unless an item rule names it.
      */
     static PriceListCategory categoryOf(InvoiceItem line, Map<UUID, PriceListCategory> categories) {
         PriceListCategory fromItem = line.getPriceListItemId() != null ? categories.get(line.getPriceListItemId())
             : null;
         if (fromItem != null) {
             return fromItem;
+        }
+        if (line.getCoverageCategory() != null) {
+            return line.getCoverageCategory();
         }
         return line.getItemCategory() == ItemCategory.LAB_TEST ? PriceListCategory.LAB_TEST : null;
     }

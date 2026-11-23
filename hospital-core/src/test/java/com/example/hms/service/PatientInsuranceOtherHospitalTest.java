@@ -394,4 +394,95 @@ class PatientInsuranceOtherHospitalTest {
         assertThat(new PayerCatalogueService.Agreement("CNAMU", null).matches("CNAMU", "Caisse Nationale AMU"))
             .isTrue();
     }
+    /**
+     * QA D3600 (r71), the dev case: A's row is named by its payer code (the desk's link form sends the code alone),
+     * and B has an active payer of that code under its real name. B's agreement is recognised, the card shows the
+     * insurer by name (A's formule's insurer) and the formule, and the takeover is filed under B's payer.
+     */
+    @Test
+    void aRowNamedByItsCodeFindsTheAgreementHere_D3600() {
+        rowA.setPayerCode("MUT-TEST-A");
+        rowA.setProviderName("MUT-TEST-A");
+        bReadsA();
+        when(payerCatalogueService.labelsOf(anyCollection())).thenReturn(Map.of(planAtA,
+            new PayerCatalogueService.PlanLabel(planAtA, "ESS", "Formule Test Essentielle", "MUT-TEST-A",
+                "Mutuelle Test A (FICTIVE)")));
+        when(payerCatalogueService.activeAgreementsAt(hospitalB)).thenReturn(List.of(
+            new PayerCatalogueService.Agreement("AUTRE", "Autre mutuelle"),
+            new PayerCatalogueService.Agreement("MUT-TEST-A", "Mutuelle Test A (FICTIVE)")));
+        when(patientInsuranceRepository.save(any(PatientInsurance.class))).thenAnswer(call -> {
+            PatientInsurance saved = call.getArgument(0);
+            saved.setId(UUID.randomUUID());
+            return saved;
+        });
+
+        OtherHospitalInsuranceDTO card = service.getOtherHospitalPolicies(patientId).get(0);
+        assertThat(card.isAgreementHere()).isTrue();
+        assertThat(card.getInsurerName()).isEqualTo("Mutuelle Test A (FICTIVE)");
+        assertThat(card.getPlanName()).isEqualTo("Formule Test Essentielle");
+
+        service.reuseOtherHospitalPolicy(rowA.getId());
+        ArgumentCaptor<PatientInsurance> written = ArgumentCaptor.forClass(PatientInsurance.class);
+        verify(patientInsuranceRepository, times(1)).save(written.capture());
+        assertThat(written.getValue().getPayerCode()).isEqualTo("MUT-TEST-A");
+        assertThat(written.getValue().getProviderName()).isEqualTo("Mutuelle Test A (FICTIVE)");
+        assertThat(rowA.getProviderName()).isEqualTo("MUT-TEST-A");
+    }
+
+    /**
+     * QA D3600 (r71), the whole class: B's agreement (payer MUT-TEST-A « Mutuelle Test A ») is found for a coverage
+     * row made by each writer, in the shape each one stores it.
+     */
+    @Test
+    void theAgreementHereIsFoundForARowOfEveryWriter_D3600() {
+        PayerCatalogueService.Agreement other = new PayerCatalogueService.Agreement("MUT-B", "Mutuelle Beta");
+        PayerCatalogueService.Agreement agreement = new PayerCatalogueService.Agreement("MUT-TEST-A", "Mutuelle Test A");
+        List<PayerCatalogueService.Agreement> atB = List.of(other, agreement);
+        // {writer, recorded code, recorded name}
+        String[][] rows = {
+            // the desk's link form (natural key), the code alone, before this fix: the name is the code
+            {"desk link, legacy", "MUT-TEST-A", "MUT-TEST-A"},
+            // the desk's link form after this fix: filed under that hospital's payer name
+            {"desk link", "MUT-TEST-A", "Mutuelle Test A"},
+            // the patient's own add (natural key, no hospital, no catalogue): the code, in any case
+            {"patient self-add", "mut-test-a", "mut-test-a"},
+            // the desk's create / edit form and the pre-check-in: a typed name, no code
+            {"desk create", null, "  mutuelle   test a "},
+            {"pre-check-in", null, "Mutuelle Test A"},
+            // a code typed as the name, no code
+            {"typed code", null, "MUT-TEST-A"},
+            // a takeover without an agreement (#1293): no code, the name as recorded
+            {"takeover without agreement", null, "MUT-TEST-A"},
+            // the dev seed / an import naming both
+            {"import", "MUT-TEST-A", "Mutuelle Test A"},
+        };
+        for (String[] row : rows) {
+            assertThat(PayerCatalogueService.Agreement.bestFor(atB, row[1], row[2]))
+                .as(row[0]).contains(agreement);
+        }
+        // Review of #1293 holds: the same code beside another insurer's name is another insurer.
+        assertThat(PayerCatalogueService.Agreement.bestFor(atB, "MUT-TEST-A", "Mutuelle Alpha")).isEmpty();
+        // The code first: a code match beside a name that is only a code beats a name-only match.
+        PayerCatalogueService.Agreement sameNameOtherCode =
+            new PayerCatalogueService.Agreement("MTA-2", "MUT-TEST-A");
+        assertThat(PayerCatalogueService.Agreement.bestFor(List.of(sameNameOtherCode, agreement),
+            "MUT-TEST-A", "MUT-TEST-A")).contains(agreement);
+    }
+
+    /** QA D3601 (r71): a policy A holds twice shows once, by the row that names A's formule. */
+    @Test
+    void aPolicyHeldTwiceAtTheSourceShowsOnceWithItsFormule_D3601() {
+        PatientInsurance planless = PatientInsurance.builder().patient(patient).assignment(atA)
+            .payerCode("CNAMU").providerName("CNAMU").policyNumber("AMU-778899").build();
+        planless.setId(UUID.randomUUID());
+        when(recordAccessPolicy.readableHospitalIds(actor, patientId, hospitalB)).thenReturn(Set.of(hospitalB, hospitalA));
+        when(patientInsuranceRepository.findByPatient_IdAndAssignment_Hospital_IdIn(eq(patientId), anyCollection()))
+            .thenReturn(List.of(planless, rowA));
+
+        assertThat(service.getOtherHospitalPolicies(patientId)).singleElement().satisfies(card -> {
+            assertThat(card.getSourceInsuranceId()).isEqualTo(rowA.getId());
+            assertThat(card.getPlanName()).isEqualTo("Formule Famille");
+            assertThat(card.getInsurerName()).isEqualTo("Caisse Nationale AMU");
+        });
+    }
 }

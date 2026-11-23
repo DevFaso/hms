@@ -149,6 +149,8 @@ public class DeliveryChargeService {
             .priceSource(priceSource)
             .priceListItemId(tariff.map(TariffResolver.Tariff::itemId).orElse(null))
             .priceListPriceId(tariff.map(TariffResolver.Tariff::priceId).orElse(null))
+            // QA D3603 (r71): a delivery to a plan's category rule, however the line is priced.
+            .coverageCategory(com.example.hms.service.billing.BillableOrderType.DELIVERY.coverageCategory())
             .build();
         invoice.addItem(line);
         // addItem keeps a priced draft a DRAFT; a zero line must stay one too.

@@ -244,5 +244,7 @@ class DeliveryChargeServiceTest {
 
         assertThat(line.getPriceSource()).isEqualTo(com.example.hms.enums.InvoiceLinePriceSource.SERVICE_NAME);
         assertThat(line.getPriceListPriceId()).isNull();
+        // QA D3603 (r71): a delivery to a plan's category rule, with no price-list item to say so.
+        assertThat(line.getCoverageCategory()).isEqualTo(com.example.hms.enums.PriceListCategory.DELIVERY);
     }
 }

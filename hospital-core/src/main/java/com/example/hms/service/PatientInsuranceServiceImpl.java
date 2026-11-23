@@ -397,7 +397,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         PlanLink planLink = null;
         final PatientInsurance insurance = actAsPatient ? found
             : rowAtHospital(found, hospitalIdForStaff, actorUserId, () -> insuranceNotFound(found.getId()));
-        applyProviderName(insurance, req.getProviderName(), payerCode);
+        applyProviderName(insurance, req.getProviderName(), payerCode, hospitalIdForStaff);
         if (!actAsPatient) {
             planLink = applyRequestedPlan(insurance, req.getPayerPlanId(), hospitalIdForStaff, actorUserId,
                 () -> insuranceNotFound(insurance.getId()));
@@ -484,6 +484,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             .filter(row -> others.contains(hospitalOf(row)))
             .filter(row -> here.stream().noneMatch(own -> samePolicy(own, row)))
             .toList();
+        shown = onePerPolicyAndHospital(shown);
         if (shown.isEmpty()) {
             return List.of();
         }
@@ -535,7 +536,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         if (held.isPresent()) {
             return patientInsuranceMapper.toPatientInsuranceResponseDTO(held.get());
         }
-        // This hospital's agreement with the insurer (matched by name, review of #1293), else none: identity only.
+        // This hospital's agreement with the insurer (code first, then name: QA D3600), else none: identity only.
         PayerCatalogueService.Agreement agreement = PayerCatalogueService.Agreement
             .bestFor(payerCatalogueService.activeAgreementsAt(hospitalId), source.getPayerCode(),
                 source.getProviderName())
@@ -566,22 +567,54 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             .build();
     }
 
-    /** The identity of another hospital's policy, and nothing else of the row (owner decision 2026-11-22). */
+    /**
+     * QA D3601 (r71): one card per policy and hospital. A hospital may hold the same policy twice (its link and an
+     * earlier copy); the card shows the row that names a formule, so « FORMULE — » is never shown for a policy the
+     * other hospital did file under one.
+     */
+    private static List<PatientInsurance> onePerPolicyAndHospital(List<PatientInsurance> rows) {
+        List<PatientInsurance> kept = new java.util.ArrayList<>();
+        for (PatientInsurance row : rows) {
+            int at = -1;
+            for (int i = 0; i < kept.size() && at < 0; i++) {
+                PatientInsurance other = kept.get(i);
+                if (Objects.equals(hospitalOf(other), hospitalOf(row)) && samePolicy(other, row)) {
+                    at = i;
+                }
+            }
+            if (at < 0) {
+                kept.add(row);
+            } else if (kept.get(at).getPayerPlanId() == null && row.getPayerPlanId() != null) {
+                kept.set(at, row);
+            }
+        }
+        return kept;
+    }
+
+    /**
+     * The identity of another hospital's policy, and nothing else of the row (owner decision 2026-11-22). QA D3601
+     * (r71): the insurer is shown by its name - as recorded when that is a name, else the source formule's insurer,
+     * else this hospital's payer it matches - never by a bare code; the formule by its name.
+     */
     private static OtherHospitalInsuranceDTO toVerify(PatientInsurance row, PayerCatalogueService.PlanLabel plan,
                                                       List<PayerCatalogueService.Agreement> agreements) {
         UserRoleHospitalAssignment assignment = row.getAssignment();
+        PayerCatalogueService.Agreement agreementHere = PayerCatalogueService.Agreement
+            .bestFor(agreements, row.getPayerCode(), row.getProviderName()).orElse(null);
         return OtherHospitalInsuranceDTO.builder()
             .sourceInsuranceId(row.getId())
             .sourceHospitalName(assignment != null && assignment.getHospital() != null
                 ? assignment.getHospital().getName() : null)
-            .insurerName(row.getProviderName())
+            .insurerName(PayerCatalogueService.Agreement.insurerNameOf(row.getPayerCode(), row.getProviderName(),
+                plan == null ? null : plan.payerName(),
+                agreementHere == null ? null : agreementHere.payerName()))
             .policyNumber(row.getPolicyNumber())
             .planName(plan == null ? null : plan.planName())
             .holderRelationship(row.getSubscriberRelationship())
             .effectiveDate(row.getEffectiveDate())
             .expirationDate(row.getExpirationDate())
             .declaredOn(row.getCreatedAt() == null ? null : row.getCreatedAt().toLocalDate())
-            .agreementHere(agreements.stream().anyMatch(a -> a.matches(row.getPayerCode(), row.getProviderName())))
+            .agreementHere(agreementHere != null)
             .build();
     }
 
@@ -878,16 +911,30 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
      * QA D925: {@code provider_name} is required, and a policy created through
      * the natural-key link had none, so every new link answered 500 (or 400
      * "providerName: must not be blank" when it was also made primary). A
-     * typed name wins; otherwise a new policy keeps the payer code as its name
-     * and an existing one keeps the name it has.
+     * typed name wins; otherwise an existing policy keeps the name it has.
+     *
+     * <p>QA D3600 (r71): the desk's link form sends the payer code alone, so
+     * every row it made was named by its code (« MUT-TEST-A »), and another
+     * hospital's agreement with the insurer was never recognised by name. A
+     * name that is only the code is no name: the row is filed under the name
+     * of the acting hospital's payer of that code, and keeps the code only
+     * when there is none (a patient's own add names no hospital).
      */
-    private static void applyProviderName(PatientInsurance insurance, String typed, String payerCode) {
+    private void applyProviderName(PatientInsurance insurance, String typed, String payerCode, UUID hospitalId) {
         String name = typed == null ? null : typed.trim();
-        if (name != null && !name.isEmpty()) {
+        if (namesTheInsurer(name, payerCode)) {
             insurance.setProviderName(name);
-        } else if (insurance.getProviderName() == null || insurance.getProviderName().isBlank()) {
-            insurance.setProviderName(payerCode);
+            return;
         }
+        if (namesTheInsurer(insurance.getProviderName(), payerCode)) {
+            return;
+        }
+        insurance.setProviderName(payerCatalogueService.payerNameAt(hospitalId, payerCode).orElse(payerCode));
+    }
+
+    /** A name that is neither blank nor only the payer code. */
+    private static boolean namesTheInsurer(String name, String payerCode) {
+        return name != null && !name.isBlank() && !name.trim().equalsIgnoreCase(payerCode);
     }
 
     private void applyPrimaryFlag(LinkPatientInsuranceRequestDTO req, boolean actAsPatient,

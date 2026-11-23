@@ -640,23 +640,78 @@ public class PayerCatalogueService {
     }
 
     /**
+     * QA D3600 (r71): the name of {@code hospitalId}'s payer coded {@code payerCode} (case ignored), active or not:
+     * the insurer's name a coverage row linked by that code is filed under, instead of the code itself. Empty when
+     * the hospital has no such payer (or no hospital is named: a patient's own add).
+     */
+    @Transactional(readOnly = true)
+    public Optional<String> payerNameAt(UUID hospitalId, String payerCode) {
+        if (hospitalId == null || payerCode == null || payerCode.isBlank()) {
+            return Optional.empty();
+        }
+        String code = payerCode.trim();
+        return payerRepository.findByHospitalIdOrderByCodeAsc(hospitalId).stream()
+            .filter(payer -> payer.getCode() != null && payer.getCode().equalsIgnoreCase(code))
+            .map(Payer::getName)
+            .filter(name -> name != null && !name.isBlank())
+            .map(String::trim)
+            .findFirst();
+    }
+
+    /**
      * An active payer of one hospital: the insurer it has an agreement with.
      *
      * <p>Review of #1293: a payer code is unique only within one hospital (V305) and a coverage row's code is free
-     * text, so another hospital's "MS" may be a different insurer than this hospital's "MS". The insurer is matched on
-     * its name (trimmed, spaces collapsed, case ignored); a code counts only beside the same name, or when a name is
-     * missing on either side.
+     * text, so another hospital's "MS" may be a different insurer than this hospital's "MS": a code never matches
+     * beside two different names.
+     *
+     * <p>QA D3600 (r71): the code first, then the name. The desk's link form and the patient's own add send a payer
+     * code and no name, so a coverage row's name was often only its code (« MUT-TEST-A » as the insurer's name), and
+     * the name-first match never found the hospital's agreement. A name that is only a code (blank, or the same text
+     * as either side's code) says nothing about the insurer: the code alone decides then. A missing code is read
+     * from a name that is the other side's code (a row taken over without an agreement kept the code as its name).
      */
     public record Agreement(String payerCode, String payerName) {
 
-        /** 3 = same name and code, 2 = same name, 1 = same code where a name is missing, 0 = another insurer. */
+        /**
+         * 3 = same code and same name; 2 = same code where a name is missing or only a code; 1 = same name, another
+         * or no code; 0 = another insurer (including the same code beside two different names).
+         */
         public int matchRank(String recordedCode, String recordedName) {
+            boolean sameCode = sameText(payerCode, recordedCode)
+                || (isBlank(recordedCode) && sameText(payerCode, recordedName))
+                || (isBlank(payerCode) && sameText(payerName, recordedCode));
             boolean sameName = sameText(payerName, recordedName);
-            boolean sameCode = sameText(payerCode, recordedCode);
-            if (sameName) {
-                return sameCode ? 3 : 2;
+            if (sameCode && sameName) {
+                return 3;
             }
-            return sameCode && (isBlank(payerName) || isBlank(recordedName)) ? 1 : 0;
+            boolean ourNameSaysNothing = !isInsurerName(payerName, payerCode, recordedCode);
+            boolean recordedNameSaysNothing = !isInsurerName(recordedName, recordedCode, payerCode);
+            if (sameCode) {
+                return ourNameSaysNothing || recordedNameSaysNothing ? 2 : 0;
+            }
+            return sameName ? 1 : 0;
+        }
+
+        /** A name that names the insurer: neither blank nor only one of the two codes compared. */
+        private static boolean isInsurerName(String name, String ownCode, String otherCode) {
+            return !isBlank(name) && !sameText(name, ownCode) && !sameText(name, otherCode);
+        }
+
+        /**
+         * The insurer's name to show for a coverage row: its recorded name when that names the insurer, else this
+         * payer's name (QA D3601: the card showed the code « MUT-TEST-A » as the insurer).
+         */
+        public static String insurerNameOf(String recordedCode, String recordedName, String... fallbacks) {
+            if (isInsurerName(recordedName, recordedCode, null)) {
+                return recordedName.trim();
+            }
+            for (String fallback : fallbacks) {
+                if (!isBlank(fallback)) {
+                    return fallback.trim();
+                }
+            }
+            return isBlank(recordedName) ? recordedCode : recordedName.trim();
         }
 
         /** The insurer recorded elsewhere is this payer ({@link #matchRank} above 0). */
