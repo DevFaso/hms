@@ -46,6 +46,26 @@ export interface PatientInsurance {
   verifiedByName?: string | null;
 }
 
+/**
+ * Owner decision 2026-11-22: a policy recorded at another hospital, shown
+ * « à vérifier » by its identity only. The source hospital's claims, amounts,
+ * approvals, documents and notes are never sent.
+ */
+export interface OtherHospitalPolicy {
+  /** Named only to reuse it: the row itself is never readable here. */
+  sourceInsuranceId: string;
+  /** As the other hospital is named: never translated. */
+  sourceHospitalName?: string | null;
+  insurerName?: string | null;
+  policyNumber?: string | null;
+  planName?: string | null;
+  holderRelationship?: string | null;
+  effectiveDate?: string | null;
+  expirationDate?: string | null;
+  /** Whether this hospital has an active agreement (payer) with that insurer. */
+  agreementHere: boolean;
+}
+
 export interface LinkInsuranceRequest {
   patientId: string;
   hospitalId?: string;
@@ -78,6 +98,21 @@ export class PatientInsuranceService {
 
   forPatient(patientId: string): Observable<PatientInsurance[]> {
     return this.http.get<PatientInsurance[]>(`${this.baseUrl}/patient/${patientId}`);
+  }
+
+  /**
+   * Owner decision 2026-11-22: the patient's policies recorded at other
+   * hospitals this one may read (hospital admin, billing, reception only).
+   */
+  otherHospitals(patientId: string): Observable<OtherHospitalPolicy[]> {
+    return this.http.get<OtherHospitalPolicy[]>(
+      `${this.baseUrl}/patient/${patientId}/other-hospitals`,
+    );
+  }
+
+  /** « Reprendre pour cet établissement »: this hospital's own, unverified coverage. */
+  reuseOtherHospital(sourceInsuranceId: string): Observable<PatientInsurance> {
+    return this.http.post<PatientInsurance>(`${this.baseUrl}/${sourceInsuranceId}/reuse`, {});
   }
 
   /** Links an existing policy (payerCode + policyNumber) to the patient. */

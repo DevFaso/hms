@@ -581,7 +581,9 @@ class PatientInsuranceServiceImplTest {
     /**
      * QA D1651: B's staff read hospital A's row by id (200, with A's payer and
      * policy). A read by id now answers exactly as a missing id, and B's list
-     * holds only B's row and the legacy untagged one.
+     * holds only B's row and the legacy untagged one. Owner decision
+     * 2026-11-22 keeps this: B sees A's policy only by its identity, to verify,
+     * through its own read (PatientInsuranceOtherHospitalTest), never this row.
      */
     @Test
     void readByIdAndList_anotherHospitalsRowIsHidden_qaD1651() {

@@ -623,6 +623,36 @@ public class PayerCatalogueService {
             AUDIT_ENTITY_COVERAGE, insuranceId);
     }
 
+    /**
+     * Owner decision 2026-11-22: the hospital's AGREEMENT with an insurer is its own. The active payers of
+     * {@code hospitalId} only (its code and name, nothing priced), against which a policy recorded at another
+     * hospital is matched before it may be reused here.
+     */
+    @Transactional(readOnly = true)
+    public List<Agreement> activeAgreementsAt(UUID hospitalId) {
+        if (hospitalId == null) {
+            return List.of();
+        }
+        return payerRepository.findByHospitalIdOrderByCodeAsc(hospitalId).stream()
+            .filter(Payer::isActive)
+            .map(payer -> new Agreement(payer.getCode(), payer.getName()))
+            .toList();
+    }
+
+    /** An active payer of one hospital: the insurer it has an agreement with. */
+    public record Agreement(String payerCode, String payerName) {
+
+        /** The insurer recorded elsewhere is this payer: the same code, else the same name (case ignored). */
+        public boolean matches(String recordedCode, String recordedName) {
+            return sameText(payerCode, recordedCode) || sameText(payerName, recordedName);
+        }
+
+        private static boolean sameText(String ours, String recorded) {
+            return ours != null && recorded != null && !recorded.isBlank()
+                && ours.trim().equalsIgnoreCase(recorded.trim());
+        }
+    }
+
     /** The label of one plan a coverage row names (null when it names none). */
     @Transactional(readOnly = true)
     public PlanLabel labelOf(UUID planId) {

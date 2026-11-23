@@ -11897,7 +11897,18 @@
     "PLAN_HINT": "The payer plan this coverage is billed under. Without a plan, the patient pays the whole invoice.",
     "PLAN_SAVED": "Plan saved.",
     "PLAN_SAVE_ERROR": "The plan could not be saved.",
-    "VERIFIED": "Insurance verified"
+    "VERIFIED": "Insurance verified",
+    "OTHER_TITLE": "Insurance recorded at another hospital — to verify",
+    "OTHER_HINT": "As it was entered there, not verified here. Check it with the patient's card and the insurer before taking it over. That hospital's checks, vouchers, approvals, claims and amounts are not shared.",
+    "TO_VERIFY": "To verify",
+    "OTHER_REUSE": "Take over for this hospital",
+    "OTHER_REUSED": "Insurance taken over for this hospital, unverified. Verify it, then choose its plan.",
+    "OTHER_REUSE_ERROR": "Could not take over the insurance",
+    "OTHER_NO_AGREEMENT": "No agreement with this insurer at this hospital. Taking it over records the policy only: no insurer share is billed until this hospital has its own agreement.",
+    "OTHER_DECLARED": "Declared at {{hospital}} on {{date}} — to verify",
+    "OTHER_DECLARED_NO_DATE": "Declared at {{hospital}} — to verify",
+    "OTHER_CARD_HINT": "The insurance card the patient uploaded, if any, is in the Documents tab.",
+    "OTHER_REUSED_NO_AGREEMENT": "Insurance recorded for this hospital, unverified, with no agreement: no insurer share is billed."
   },
   "PATIENT_DOCUMENTS": {
     "TAB": "Documents",

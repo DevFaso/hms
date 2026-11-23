@@ -16,6 +16,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   PatientInsuranceService,
   LinkInsuranceRequest,
+  OtherHospitalPolicy,
   PatientInsurance,
   PatientInsuranceUpdateRequest,
 } from '../../services/patient-insurance.service';
@@ -94,6 +95,27 @@ export class CoverageTabComponent implements OnInit {
   readonly canLinkPlan = this.roleContext.hasAnyActiveRole(
     actionRoles('patientInsuranceSetPayerPlan'),
   );
+  /**
+   * Owner decision 2026-11-22: the desk (the API's own role list) sees the
+   * patient's policies recorded at other hospitals, « à vérifier », and can
+   * take one over as this hospital's own coverage.
+   */
+  readonly canReuseOther = this.roleContext.hasAnyActiveRole(
+    actionRoles('patientInsuranceReuseOtherHospital'),
+  );
+  /**
+   * QA D1599: the desk opens the insurance card the patient uploaded (it is
+   * the patient's, not another hospital's) from the Documents tab; billing
+   * is not admitted there, so the hint is not shown to it.
+   */
+  readonly canOpenInsuranceDocuments = this.roleContext.hasAnyActiveRole([
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_RECEPTIONIST',
+  ]);
+  otherPolicies = signal<OtherHospitalPolicy[]>([]);
+  /** The policy being taken over (one at a time). */
+  reusingId = signal<string | null>(null);
+
   /** The plans of this hospital a coverage can be linked to today (read once, when a picker opens). */
   planOptions = signal<PayerPlanOption[]>([]);
   planOptionsLoaded = signal(false);
@@ -149,6 +171,7 @@ export class CoverageTabComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadInsurances();
+    this.loadOtherPolicies();
     this.loadRegistrations();
     this.loadGuarantors();
     this.loadConsents();
@@ -371,6 +394,44 @@ export class CoverageTabComponent implements OnInit {
     });
   }
 
+  /** Owner decision 2026-11-22: identity only; a refusal or an error leaves the block hidden. */
+  loadOtherPolicies(): void {
+    if (!this.canReuseOther) return;
+    this.insuranceService.otherHospitals(this.patientId).subscribe({
+      next: (policies) => this.otherPolicies.set(policies ?? []),
+      error: () => this.otherPolicies.set([]),
+    });
+  }
+
+  /**
+   * « Reprendre pour cet établissement »: this hospital's own coverage,
+   * unverified, with no formule. Without an agreement with that insurer here
+   * it is an identity-only record. The other hospital's row is never changed.
+   */
+  reuseOther(policy: OtherHospitalPolicy): void {
+    if (this.reusingId()) return;
+    this.reusingId.set(policy.sourceInsuranceId);
+    this.insuranceService.reuseOtherHospital(policy.sourceInsuranceId).subscribe({
+      next: () => {
+        this.reusingId.set(null);
+        // Without an agreement here it is an identity-only record: no payer share.
+        this.toast.success(
+          this.translate.instant(
+            policy.agreementHere ? 'COVERAGE.OTHER_REUSED' : 'COVERAGE.OTHER_REUSED_NO_AGREEMENT',
+          ),
+        );
+        this.loadInsurances();
+        this.loadOtherPolicies();
+      },
+      error: (err: unknown) => {
+        this.reusingId.set(null);
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('COVERAGE.OTHER_REUSE_ERROR'),
+        );
+      },
+    });
+  }
+
   loadRegistrations(): void {
     this.registrationsLoading.set(true);
     this.registrationService.list({ patientId: this.patientId }).subscribe({
@@ -487,6 +548,7 @@ export class CoverageTabComponent implements OnInit {
           this.linkSaving.set(false);
           this.closeLink();
           this.loadInsurances();
+          this.loadOtherPolicies();
         },
         error: (err: unknown) => {
           this.toast.error(refusalReason(err) ?? this.translate.instant('COVERAGE.LINK_ERROR'));
