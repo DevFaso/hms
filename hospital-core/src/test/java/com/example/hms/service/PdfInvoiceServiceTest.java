@@ -476,6 +476,32 @@ class PdfInvoiceServiceTest {
         assertThat(text).contains(consultation, transfusion, "Pansement simple", reason);
     }
 
+    /**
+     * Scorecard K4: the copy mailed to the patient names no test and no medicine (their category only), and a
+     * service line whose words reveal a protected category prints its category; the desk's copy is unchanged.
+     */
+    @Test
+    void theMailedCopyNamesNoTestNoMedicineAndNoSensitiveService_K4() throws Exception {
+        PdfInvoiceService real = new PdfInvoiceService(com.example.hms.i18n.TestMessageSources.bundles());
+        List<InvoiceItem> lines = List.of(
+            categorised("Sérologie VIH", ItemCategory.LAB_TEST),
+            categorised("Ténofovir 300 mg", ItemCategory.MEDICATION),
+            categorised("Échographie obstétricale", ItemCategory.SERVICE),
+            categorised("Pansement simple", ItemCategory.SERVICE));
+
+        String mailed = textOf(real.generateMailedInvoicePdf(invoice, lines, List.of(), List.of(), Locale.FRENCH));
+        String desk = textOf(real.generateInvoicePdf(invoice, lines, List.of(), List.of(), Locale.FRENCH));
+
+        assertThat(mailed).doesNotContain("VIH", "Ténofovir", "obstétricale")
+            .contains("Analyse labo", "Médicament", "Pansement simple");
+        assertThat(desk).contains("Sérologie VIH", "Ténofovir 300 mg", "Échographie obstétricale");
+    }
+
+    private static InvoiceItem categorised(String description, ItemCategory category) {
+        return InvoiceItem.builder().itemDescription(description).itemCategory(category).quantity(1)
+            .unitPrice(new BigDecimal("0.00")).totalPrice(new BigDecimal("0.00")).build();
+    }
+
     private static InvoiceItem line(String description, String code, String args) {
         return InvoiceItem.builder().itemDescription(description).textCode(code).textArgs(args)
             .itemCategory(ItemCategory.SERVICE).quantity(1)

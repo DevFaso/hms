@@ -50,6 +50,7 @@ class InBasketServiceImplTest {
     @Mock private PatientRepository patientRepository;
     @Mock private EncounterRepository encounterRepository;
     @Mock private InBasketMapper inBasketMapper;
+    @Mock private com.example.hms.repository.LabResultRepository labResultRepository;
 
     @InjectMocks
     private InBasketServiceImpl service;
@@ -197,8 +198,21 @@ class InBasketServiceImplTest {
     @Nested
     class Acknowledge {
 
+        @org.junit.jupiter.api.AfterEach
+        void clearAuthentication() {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+
+        private void signInAs(String... roles) {
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("u", "p",
+                    java.util.Arrays.stream(roles)
+                        .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new).toList()));
+        }
+
         @Test
         void setsStatusAndAcknowledgedFields() {
+            signInAs("ROLE_DOCTOR");
             when(inBasketItemRepository.findById(itemId)).thenReturn(Optional.of(item));
             when(inBasketItemRepository.save(any(InBasketItem.class))).thenAnswer(inv -> inv.getArgument(0));
             when(inBasketMapper.toDto(any(InBasketItem.class))).thenReturn(dto);
@@ -212,6 +226,64 @@ class InBasketServiceImplTest {
             assertThat(saved.getAcknowledgedAt()).isNotNull();
             assertThat(saved.getAcknowledgedBy()).isEqualTo(userId);
             assertThat(saved.getReadAt()).isNotNull();
+        }
+
+        @Test
+        void k4_aCriticalItemIsNotAcknowledgedFromANonClinicalRole() {
+            signInAs("ROLE_RECEPTIONIST");
+            when(inBasketItemRepository.findById(itemId)).thenReturn(Optional.of(item));
+
+            assertThatThrownBy(() -> service.acknowledge(itemId, userId))
+                    .isInstanceOfSatisfying(BusinessException.class, e -> assertThat(e.getMessageKey())
+                        .isEqualTo("inBasket.acknowledge.clinicalRoleRequired"));
+            verify(inBasketItemRepository, never()).save(any());
+        }
+
+        @Test
+        void k4_aSuperAdminDoesNotAcknowledgeACriticalItemThroughTheInheritedRoles() {
+            signInAs("ROLE_SUPER_ADMIN", "ROLE_DOCTOR", "ROLE_NURSE");
+            when(inBasketItemRepository.findById(itemId)).thenReturn(Optional.of(item));
+
+            assertThatThrownBy(() -> service.acknowledge(itemId, userId)).isInstanceOf(BusinessException.class);
+            verify(inBasketItemRepository, never()).save(any());
+        }
+
+        @Test
+        void k4_aRoutineItemKeepsTheRecipientRuleAlone() {
+            signInAs("ROLE_BILLING_SPECIALIST");
+            item.setItemType(InBasketItemType.TASK);
+            item.setPriority(InBasketPriority.URGENT);
+            when(inBasketItemRepository.findById(itemId)).thenReturn(Optional.of(item));
+            when(inBasketItemRepository.save(any(InBasketItem.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(inBasketMapper.toDto(any(InBasketItem.class))).thenReturn(dto);
+
+            service.acknowledge(itemId, userId);
+
+            assertThat(item.getStatus()).isEqualTo(InBasketItemStatus.ACKNOWLEDGED);
+        }
+
+        @Test
+        void k4_theItemOfACriticalLabResultStaysOpenUntilItsReadBack() {
+            signInAs("ROLE_DOCTOR");
+            UUID resultId = UUID.randomUUID();
+            item.setReferenceId(resultId);
+            item.setReferenceType("LAB_RESULT");
+            com.example.hms.model.LabResult result = new com.example.hms.model.LabResult();
+            result.setCriticalNotifiedAt(java.time.LocalDateTime.now());
+            when(inBasketItemRepository.findById(itemId)).thenReturn(Optional.of(item));
+            when(labResultRepository.findById(resultId)).thenReturn(Optional.of(result));
+
+            assertThatThrownBy(() -> service.acknowledge(itemId, userId))
+                    .isInstanceOfSatisfying(BusinessException.class, e -> assertThat(e.getMessageKey())
+                        .isEqualTo("lab.result.criticalNeedsReadBack"));
+            verify(inBasketItemRepository, never()).save(any());
+
+            result.setAcknowledged(true);
+            when(inBasketItemRepository.save(any(InBasketItem.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(inBasketMapper.toDto(any(InBasketItem.class))).thenReturn(dto);
+            service.acknowledge(itemId, userId);
+            assertThat(item.getStatus()).isEqualTo(InBasketItemStatus.ACKNOWLEDGED);
+            assertThat(item.getAcknowledgedBy()).isEqualTo(userId);
         }
 
         @Test

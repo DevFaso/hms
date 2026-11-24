@@ -91,6 +91,30 @@ public class PdfInvoiceService {
                                      List<com.example.hms.model.InvoiceAdjustment> adjustments,
                                      List<com.example.hms.payload.dto.billing.InvoicePayerShareDTO> payerShares,
                                      Locale locale) {
+        return renderInvoice(invoice, items, payments, adjustments, payerShares, locale, false);
+    }
+
+    /**
+     * Scorecard K4 (minimum disclosure): the copy that leaves by e-mail. A mailbox is read on a shared phone and
+     * forwarded, so a line that names a test or a medicine (« Sérologie VIH », an antiretroviral) prints its
+     * category only (« Analyse labo », « Médicament »), and any other line or payer reason whose words reveal a
+     * protected category ({@link com.example.hms.service.notification.SensitiveWording}) prints its category or
+     * nothing. The amounts are unchanged; the full lines stay on the copy printed at the desk and in the portal.
+     */
+    public byte[] generateMailedInvoicePdf(BillingInvoice invoice,
+                                           List<InvoiceItem> items,
+                                           List<com.example.hms.model.InvoiceAdjustment> adjustments,
+                                           List<com.example.hms.payload.dto.billing.InvoicePayerShareDTO> payerShares,
+                                           Locale locale) {
+        return renderInvoice(invoice, items, List.of(), adjustments, payerShares, locale, true);
+    }
+
+    private byte[] renderInvoice(BillingInvoice invoice,
+                                 List<InvoiceItem> items,
+                                 List<PaymentTransaction> payments,
+                                 List<com.example.hms.model.InvoiceAdjustment> adjustments,
+                                 List<com.example.hms.payload.dto.billing.InvoicePayerShareDTO> payerShares,
+                                 Locale locale, boolean mailed) {
         PdfLabels t = PdfLabels.of(messageSource, locale);
         try (var doc = new PDDocument()) {
             var w = new Writer(doc);
@@ -123,7 +147,7 @@ public class PdfInvoiceService {
             for (var it : items) {
                 w.down(16);
                 w.row(BODY,
-                    designation(t, it),
+                    mailed ? mailedDesignation(t, it) : designation(t, it),
                     categoryLabel(t, it.getItemCategory()),
                     it.getQuantity() != null ? String.valueOf(it.getQuantity()) : "",
                     money(it.getUnitPrice()),
@@ -148,7 +172,7 @@ public class PdfInvoiceService {
             w.rule();
             w.down(18);
             w.right(BOLD, 12, t.get(GRAND_TOTAL, money(total)));
-            payerShareBlock(w, t, invoice, payerShares);
+            payerShareBlock(w, t, invoice, payerShares, mailed);
             w.down(16);
             w.right(BODY, 11, t.get(AMOUNT_PAID, money(paid)));
             w.down(16);
@@ -193,7 +217,8 @@ public class PdfInvoiceService {
      * rejected, with its reason (the payer's motif, shown as typed).
      */
     private static void payerShareBlock(Writer w, PdfLabels t, BillingInvoice invoice,
-                                        List<com.example.hms.payload.dto.billing.InvoicePayerShareDTO> shares)
+                                        List<com.example.hms.payload.dto.billing.InvoicePayerShareDTO> shares,
+                                        boolean mailed)
             throws IOException {
         BigDecimal payerShare = com.example.hms.utility.InvoiceBalance.payerShareOf(invoice);
         if (payerShare.signum() > 0) {
@@ -208,8 +233,11 @@ public class PdfInvoiceService {
             }
             w.ensureRoom(32);
             w.down(16);
-            w.paragraph(BODY, 10, MARGIN, t.get("pdf.invoice.payerShareRejected", money(share.getAmount()),
-                share.getRejectionReason() == null ? "" : share.getRejectionReason().strip()));
+            String reason = share.getRejectionReason() == null ? "" : share.getRejectionReason().strip();
+            if (mailed && com.example.hms.service.notification.SensitiveWording.reveals(reason)) {
+                reason = ""; // K4: the payer's words can name the condition; the desk explains it
+            }
+            w.paragraph(BODY, 10, MARGIN, t.get("pdf.invoice.payerShareRejected", money(share.getAmount()), reason));
         }
     }
 
@@ -663,6 +691,19 @@ public class PdfInvoiceService {
             return d;
         }
         return categoryLabel(t, it.getItemCategory());
+    }
+
+    /**
+     * K4: the line as the mailed copy prints it. A test or a medicine is named by its category only; any other
+     * line keeps its words unless they reveal a protected category.
+     */
+    static String mailedDesignation(PdfLabels t, InvoiceItem it) {
+        ItemCategory category = it.getItemCategory();
+        if (category == ItemCategory.LAB_TEST || category == ItemCategory.MEDICATION) {
+            return categoryLabel(t, category);
+        }
+        String d = designation(t, it);
+        return com.example.hms.service.notification.SensitiveWording.reveals(d) ? categoryLabel(t, category) : d;
     }
 
     /** The category's bundle label; the enum constant itself for a value the bundle does not know. */

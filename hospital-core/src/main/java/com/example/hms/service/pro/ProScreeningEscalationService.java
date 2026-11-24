@@ -114,7 +114,7 @@ public class ProScreeningEscalationService {
                 for (String recipient : recipients) {
                     notificationService.createNotification(text.key(), text.args(), recipient, CRITICAL_TYPE);
                 }
-                sendSmsBestEffort(response, text.render(messageSource, NotificationLocales.STAFF));
+                sendSmsBestEffort(response, smsText(response, false));
                 if (recipients.isEmpty()) {
                     log.warn("Critical PRO response {} has nobody to notify at hospital {}",
                         response.getId(), response.getHospital().getId());
@@ -170,7 +170,7 @@ public class ProScreeningEscalationService {
             notificationService.createNotification(text.key(), text.args(), recipient, ESCALATION_TYPE);
         }
         // SMS once per round, not once per recipient (same reasoning as the lab chain).
-        sendSmsBestEffort(response, text.render(messageSource, NotificationLocales.STAFF));
+        sendSmsBestEffort(response, smsText(response, true));
 
         // Stamp the round even with no resolvable recipient so the interval
         // advances and the sweep does not reconsider the row every pass —
@@ -262,6 +262,16 @@ public class ProScreeningEscalationService {
      * the caller — each in the language they read it in (QA D665); the SMS is
      * rendered once, in the staff locale.
      */
+    /**
+     * Scorecard K4: the SMS names neither the instrument (a depression or suicide-risk screen discloses a mental
+     * health concern) nor the patient's full name: the patient's initials, and the recipient opens the chart.
+     */
+    private String smsText(ProResponse response, boolean escalation) {
+        String initials = com.example.hms.utility.SmsPatientLabel.initials(response.getPatient());
+        return messageSource.getMessage(escalation ? "sms.staff.questionnaire.escalation" : "sms.staff.questionnaire",
+            new Object[] {initials}, NotificationLocales.STAFF);
+    }
+
     private NotificationText buildMessage(ProResponse response, boolean critical, boolean escalation) {
         Object instrument = response.getInstrument() != null
             ? response.getInstrument().getCode()

@@ -15,6 +15,8 @@ import { Router, provideRouter } from '@angular/router';
 
 import { resetStoredLangForTests } from '../../shared/i18n/app-locale';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { ToastService } from '../../core/toast.service';
+import { HttpErrorResponse } from '@angular/common/http';
 function mockItem(overrides: Partial<InBasketItem> = {}): InBasketItem {
   return {
     id: 'ib-1',
@@ -190,6 +192,19 @@ describe('InBasketPanelComponent', () => {
 
     component.acknowledgeItem(component.items()[0]);
     expect(inBasketSpy.acknowledge).toHaveBeenCalledWith('ib-1');
+  });
+
+  it('K4: shows the server reason when an acknowledgement is refused (critical result needs its read-back)', () => {
+    const toast = TestBed.inject(ToastService);
+    spyOn(toast, 'error');
+    const reason = 'Ceci est un résultat critique : utilisez l’action de relecture.';
+    inBasketSpy.acknowledge.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 400, error: { message: reason } })),
+    );
+    fixture.detectChanges();
+
+    component.acknowledgeItem(component.items()[0]);
+    expect(toast.error).toHaveBeenCalledWith(reason);
   });
 
   it('should not acknowledge already-acknowledged item', () => {

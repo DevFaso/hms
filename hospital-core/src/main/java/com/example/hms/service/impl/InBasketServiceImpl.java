@@ -36,12 +36,24 @@ public class InBasketServiceImpl implements InBasketService {
     /** The one kind of item a hospital administrator with no clinical role reads. */
     private static final String DISPUTE_REVIEW_TYPE = "DEATH_DISPUTE";
 
+    /** The reference type {@code LabResultServiceImpl} files a released result under. */
+    private static final String LAB_RESULT_REFERENCE_TYPE = "LAB_RESULT";
+
+    /**
+     * Scorecard K4: the roles that may acknowledge an urgent clinical item, held on the caller's own (never only
+     * through the super-admin inheritance, never during a support session: {@link
+     * com.example.hms.security.ClinicalActor#holdsOwnRole}). PHYSICIAN and SURGEON count as DOCTOR there.
+     */
+    private static final String[] CLINICAL_ACKNOWLEDGERS = {"DOCTOR", "NURSE", "MIDWIFE", "RADIOLOGIST", "ANESTHESIOLOGIST"};
+
     private final InBasketItemRepository inBasketItemRepository;
     private final UserRepository userRepository;
     private final HospitalRepository hospitalRepository;
     private final PatientRepository patientRepository;
     private final EncounterRepository encounterRepository;
     private final InBasketMapper inBasketMapper;
+    /** K4: a critical lab result is acknowledged by its read-back, not by closing its in-basket item. */
+    private final com.example.hms.repository.LabResultRepository labResultRepository;
 
     @Override
     public Page<InBasketItemDTO> getItems(UUID userId, UUID hospitalId,
@@ -117,6 +129,8 @@ public class InBasketServiceImpl implements InBasketService {
         if (item.getStatus() == InBasketItemStatus.ACKNOWLEDGED) {
             throw new BusinessException("In-Basket item is already acknowledged");
         }
+        requireClinicalAcknowledger(item);
+        requireReadBackOfCriticalResult(item);
 
         item.setStatus(InBasketItemStatus.ACKNOWLEDGED);
         item.setAcknowledgedAt(LocalDateTime.now());
@@ -127,6 +141,10 @@ public class InBasketServiceImpl implements InBasketService {
         item = inBasketItemRepository.save(item);
 
         log.info("In-Basket item {} acknowledged by user {}", itemId, userId);
+        // K4: the write-audit row of this acknowledgement names the item and its patient (ids only); who and
+        // when are the row's actor and time, and the item keeps acknowledgedBy / acknowledgedAt.
+        com.example.hms.security.audit.WriteAuditDetail.describe((com.example.hms.enums.AuditEventType) null,
+                item.getId(), item.getPatient() != null ? item.getPatient().getId() : null);
         return inBasketMapper.toDto(item);
     }
 
@@ -211,6 +229,49 @@ public class InBasketServiceImpl implements InBasketService {
     }
 
     // ─── helpers ──────────────────────────────────────────────
+
+    /**
+     * Scorecard K4: an urgent clinical item (any CRITICAL item, an URGENT result) is acknowledged by somebody who
+     * can act on it clinically. The recipient check alone let a person holding a clinical role at one moment
+     * acknowledge it from a non-clinical one, a super-admin through the inherited roles, or a support session
+     * acting as the clinician. A non-urgent item, or an urgent task addressed to an administrative reader (the
+     * review of a disputed death, a billing deferral), keeps the recipient rule alone.
+     */
+    private static void requireClinicalAcknowledger(InBasketItem item) {
+        if (!isUrgentClinical(item)) {
+            return;
+        }
+        org.springframework.security.core.Authentication auth =
+                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (!com.example.hms.security.ClinicalActor.holdsOwnRole(auth, CLINICAL_ACKNOWLEDGERS)) {
+            throw new BusinessException("inBasket.acknowledge.clinicalRoleRequired");
+        }
+    }
+
+    private static boolean isUrgentClinical(InBasketItem item) {
+        com.example.hms.enums.InBasketPriority priority = item.getPriority();
+        return priority == com.example.hms.enums.InBasketPriority.CRITICAL
+                || (priority == com.example.hms.enums.InBasketPriority.URGENT
+                    && item.getItemType() == InBasketItemType.RESULT);
+    }
+
+    /**
+     * Scorecard K4: the in-basket item of a critical lab result could be closed with one click while the result
+     * itself still waited for its read-back: the clinician saw « acknowledged », the escalation chain kept paging.
+     * The read-back is the acknowledgement ({@code LabResultServiceImpl#acknowledgeResult}); until it is on the
+     * record the item stays open.
+     */
+    private void requireReadBackOfCriticalResult(InBasketItem item) {
+        if (labResultRepository == null || item.getReferenceId() == null
+                || !LAB_RESULT_REFERENCE_TYPE.equals(item.getReferenceType())) {
+            return;
+        }
+        labResultRepository.findById(item.getReferenceId())
+                .filter(result -> result.getCriticalNotifiedAt() != null && !result.isAcknowledged())
+                .ifPresent(result -> {
+                    throw new BusinessException("lab.result.criticalNeedsReadBack");
+                });
+    }
 
     private long countByType(UUID userId, UUID hospitalId, InBasketItemType type) {
         return inBasketItemRepository

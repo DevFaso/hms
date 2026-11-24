@@ -405,7 +405,12 @@ class CriticalValueNotificationServiceTest {
 
         service.notifyIfCritical(result);
 
-        verify(smsService).send(eq("+22670707070"), contains("Potassium"));
+        // K4: the SMS names a critical result and the patient's initials, never the test, the value or the name.
+        org.mockito.ArgumentCaptor<String> text = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(smsService).send(eq("+22670707070"), text.capture());
+        assertThat(text.getValue()).contains("résultat de laboratoire critique", "BW")
+            .doesNotContain("Potassium", "mmol");
+        assertThat(text.getValue()).doesNotContain(result.getLabOrder().getPatient().getFullName());
     }
 
     @Test

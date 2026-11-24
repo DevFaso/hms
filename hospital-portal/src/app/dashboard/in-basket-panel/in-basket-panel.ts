@@ -20,6 +20,7 @@ import { currentLocale } from '../../shared/i18n/app-locale';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { actionRoles } from '../../core/action-permissions';
 import { AllergyReviewDialogComponent } from '../../shared/allergy-acknowledgement/allergy-review-dialog.component';
+import { refusalReason } from '../../shared/refusal-reason';
 
 /** Policy 4: the notice of an allergy conflict awaiting the prescriber's review (its reference is the order). */
 export const ALLERGY_REVIEW_REFERENCE = 'PRESCRIPTION_ALLERGY_REVIEW';
@@ -159,9 +160,12 @@ export class InBasketPanelComponent {
         this.loadSummary();
         this.toast.success(this.translate.instant('inBasket.acknowledged') || 'Item acknowledged');
       },
-      error: () =>
+      // K4: the server says why an acknowledgement is refused (a critical result needs its
+      // read-back; an urgent clinical item needs a clinician), so the reason is shown.
+      error: (err: unknown) =>
         this.toast.error(
-          this.translate.instant('inBasket.error.acknowledge') || 'Failed to acknowledge',
+          refusalReason(err) ??
+            (this.translate.instant('inBasket.error.acknowledge') || 'Failed to acknowledge'),
         ),
     });
   }
