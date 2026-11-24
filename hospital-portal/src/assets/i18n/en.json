@@ -71,7 +71,7 @@
       "ACUITY": "Default acuity level",
       "ENCOUNTER_TYPE": "Default encounter type",
       "CHIEF_COMPLAINT": "Default chief complaint",
-      "ENABLED": "Enable auto-create for this hospital",
+      "ENABLED": "Create admissions automatically for this hospital",
       "ASSIGNMENT": "Physician assignment for automatic visits",
       "ASSIGNMENT_NONE": "— None: admissions only —"
     },

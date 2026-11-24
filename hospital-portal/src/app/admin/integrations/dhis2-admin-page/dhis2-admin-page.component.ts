@@ -231,7 +231,7 @@ type Tab = 'config' | 'mappings' | 'exports';
         max-width: 100%;
         min-width: 0;
       }
-      .form-card label {
+      .dhis2-admin__config-form > label {
         min-width: 0;
         flex: 1 1 14rem;
       }

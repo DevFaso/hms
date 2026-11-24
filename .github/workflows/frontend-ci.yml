@@ -156,10 +156,17 @@ jobs:
       - name: Run axe-core smoke
         run: npm run e2e:a11y
 
+      - name: Build production SPA once for production-browser checks
+        run: npm run build
+
       - name: Production startup under Slow 3G
+        env:
+          PLAYWRIGHT_PREBUILT: "1"
         run: npm run e2e:slow-network
 
       - name: Production form display at phone and desktop widths
+        env:
+          PLAYWRIGHT_PREBUILT: "1"
         run: npm run e2e:form-display
 
       # QA D2230 / D2231: every routed page and the main drawers measured at

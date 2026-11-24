@@ -194,7 +194,7 @@ import { ConfirmService } from '../../../shared/confirm-dialog/confirm.service';
         max-width: 100%;
         min-width: 0;
       }
-      .form-card label {
+      .dhis2-mappings__add > label {
         min-width: 0;
         flex: 1 1 14rem;
       }

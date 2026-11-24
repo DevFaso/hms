@@ -35,11 +35,13 @@
   flex-direction: column;
   margin-bottom: 0.75rem;
 }
-.form-row label {
+.form-row label,
+.form-group label {
   font-weight: 500;
   margin-bottom: 0.25rem;
 }
-.form-row small {
+.form-row small,
+.form-group small {
   color: var(--text-secondary);
   margin-top: 0.25rem;
 }
@@ -73,6 +75,8 @@
 }
 
 .form-group {
+  display: flex;
+  flex-direction: column;
   gap: 0.375rem;
   margin-bottom: 1rem;
   min-width: 0;

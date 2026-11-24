@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadTemplates, PORTAL_DIR } from './lib/template-gate.mjs';
+import { controlStyleSources } from './lib/form-control-styles.mjs';
 import { bareControlFindings } from './lib/form-control-design.mjs';
 
 // First module of C-UI. The clinical/operations module extends this census in
@@ -11,7 +12,13 @@ export function checkFormControls(ctx = {}) {
   const exceptions = JSON.parse(
     readFileSync(resolve(PORTAL_DIR, 'scripts/form-control-exceptions.json'), 'utf8'),
   );
-  const findings = bareControlFindings(ctx.templates ?? loadTemplates(), exceptions, inScope);
+  const templates = ctx.templates ?? loadTemplates();
+  const findings = bareControlFindings(
+    templates,
+    exceptions,
+    inScope,
+    ctx.controlStyles ?? controlStyleSources(templates),
+  );
   for (const finding of findings) console.error(finding);
   return findings.length === 0;
 }

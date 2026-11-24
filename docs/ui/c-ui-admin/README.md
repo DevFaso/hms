@@ -2,8 +2,8 @@
 
 Display-only form work. The shared `appFormControl` directive adds the uniquely
 named `keneya-form-control` style to native controls. It has no value accessor,
-validator, event listener or API call. Existing component class bodies and
-form/event bindings are unchanged. Native text/select/textarea binding,
+validator, event listener or API call. Form values, validation and event bindings are unchanged. The shell gains a
+presentation-only wrapLabel flag for the admissions navigation label. Native text/select/textarea binding,
 validation and disabled behavior are covered by tests.
 
 These screenshots come from the local production SPA in Chromium using synthetic
@@ -42,3 +42,5 @@ Exception keys include an occurrence counter: 87 existing controls have 85
 previously recorded fingerprints (two pairs were identical siblings). Each
 control now has its own reasoned entry; copying one again fails the guard.
 This corrects the old collision rather than adding an exception for new code.
+
+Current review follow-up: the census checks the cited compiled component/global CSS selectors, not only reason text. Removing the order-set stylesheet fails the census. The ADT labels/help styles are carried over to form-group; reverting the stylesheet makes both-width browser checks fail (font weight 600 instead of 500). The mapping filter and DHIS label heights are measured too. Edit-state evidence: [390 px](automatic-admissions-edit-390.png), [1440 px](automatic-admissions-edit-1440.png). All 13 screenshots were refreshed from the passing production run. The two CI production suites reuse one build; the shared config still builds by default locally.

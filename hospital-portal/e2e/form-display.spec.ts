@@ -10,7 +10,20 @@ for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     await signInAs(page, 'ROLE_SUPER_ADMIN', baseURL!);
     await installLocalIconFonts(page);
-    await page.route('**/api/admin/adt-intake-configs*', (route) => route.fulfill({ json: [] }));
+    await page.route('**/api/admin/adt-intake-configs*', (route) =>
+      route.fulfill({
+        json: [
+          {
+            id: TEST_ID,
+            hospitalId: TEST_ID,
+            hospitalName: 'Centre hospitalier de démonstration',
+            admittingProviderId: null,
+            departmentId: null,
+            enabled: false,
+          },
+        ],
+      }),
+    );
     await page.goto('/admin/adt-intake-configs');
     const form = page.getByTestId('adt-intake-form');
     await expect(form).toBeVisible();
@@ -35,7 +48,6 @@ for (const width of [390, 1440]) {
           parentLeft: parent.left,
           parentRight: parent.right,
           radius: parseFloat(style.borderRadius),
-          font: style.fontFamily,
         };
       });
       expect(measured.height).toBeGreaterThanOrEqual(43);
@@ -48,10 +60,27 @@ for (const width of [390, 1440]) {
     );
     await expect(page.getByTestId('adt-intake-admin')).not.toContainText('ADT^');
     await expect(page.getByTestId('adt-intake-admin')).not.toContainText('app.hl7.');
+    const label = form.locator('label[for="adt-hospital-search"]');
+    expect(await label.evaluate((el) => getComputedStyle(el).fontWeight)).toBe('500');
+    expect(await label.locator('..').evaluate((el) => getComputedStyle(el).flexDirection)).toBe(
+      'column',
+    );
     const screenshot = info.outputPath(`automatic-admissions-${width}.png`);
     await page.screenshot({ path: screenshot, fullPage: true });
     await info.attach(`automatic-admissions-${width}`, {
       path: screenshot,
+      contentType: 'image/png',
+    });
+    await page.getByTestId('adt-intake-edit-' + TEST_ID).click();
+    const hospital = page.getByTestId('adt-intake-hospital-search');
+    await expect(hospital).toBeDisabled();
+    await expect(hospital).toHaveAttribute('aria-describedby', 'adt-hospital-help');
+    await expect(page.locator('#adt-hospital-help')).toContainText('hôpital');
+    await expect(page.locator('#adt-hospital-help')).toBeVisible();
+    const editScreenshot = info.outputPath(`automatic-admissions-edit-${width}.png`);
+    await page.screenshot({ path: editScreenshot, fullPage: true });
+    await info.attach(`automatic-admissions-edit-${width}`, {
+      path: editScreenshot,
       contentType: 'image/png',
     });
     if (width === 390) {
@@ -146,6 +175,9 @@ for (const width of [390, 1440]) {
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
       ).toBe(true);
+      for (const label of await form.locator(':scope > label').all()) {
+        expect(await label.evaluate((el) => el.getBoundingClientRect().height)).toBeLessThan(180);
+      }
       const screenshot = info.outputPath(`${name}-${width}.png`);
       await page.screenshot({ path: screenshot, fullPage: true });
       await info.attach(`${name}-${width}`, { path: screenshot, contentType: 'image/png' });
@@ -153,6 +185,23 @@ for (const width of [390, 1440]) {
     await checkAndCapture('dhis2-config-form', 'integration-settings');
     await page.getByTestId('dhis2-tab-mappings').click();
     await checkAndCapture('dhis2-mapping-add-form', 'integration-mappings');
+    const filter = page.getByTestId('dhis2-mapping-filter-dataset');
+    await expect(filter).toBeVisible();
+    const bounds = await filter.evaluate((el) => {
+      const box = el.getBoundingClientRect();
+      const parent = el.closest('.dhis2-mappings__filter')!.getBoundingClientRect();
+      return {
+        left: box.left,
+        right: box.right,
+        parentLeft: parent.left,
+        parentRight: parent.right,
+        height: box.height,
+      };
+    });
+    expect(bounds.left).toBeGreaterThanOrEqual(bounds.parentLeft);
+    expect(bounds.right).toBeLessThanOrEqual(bounds.parentRight);
+    expect(bounds.height).toBeGreaterThanOrEqual(43);
+
     await page.getByTestId('dhis2-tab-exports').click();
     await checkAndCapture('dhis2-export-form', 'integration-exports');
     await signInAs(page, 'ROLE_SUPER_ADMIN', baseURL!);
