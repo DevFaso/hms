@@ -17,6 +17,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent))
 
 import claude_review as cr  # noqa: E402
+import review_common as rc  # noqa: E402
 
 SHA = "abcdef1234567890"
 
@@ -76,8 +77,9 @@ def env(monkeypatch):
 
 
 def install(monkeypatch, fake):
-    monkeypatch.setattr(cr, "gh", fake)
-    monkeypatch.setattr(cr, "git_diff", lambda: fake.diff)
+    # gh and git live in review_common, shared with the OpenAI reviewer.
+    monkeypatch.setattr(rc, "gh", fake)
+    monkeypatch.setattr(rc, "git_diff", lambda: fake.diff)
     return fake
 
 
@@ -134,7 +136,7 @@ def test_git_failure_posts_a_note(monkeypatch):
 
     def boom():
         raise subprocess.CalledProcessError(128, ["git", "diff", "origin/x...HEAD"], stderr="bad")
-    monkeypatch.setattr(cr, "git_diff", boom)
+    monkeypatch.setattr(rc, "git_diff", boom)
     assert cr.main(lambda: FakeClient()) == 1
     assert "`git diff` failed with exit code 128" in fake.commented()[0][-1]
 
