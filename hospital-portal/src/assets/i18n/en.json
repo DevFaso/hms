@@ -15122,7 +15122,7 @@
       "MAIL_SEND_FAILED": "The mail server did not accept the email",
       "SEND_FAILED": "Send failed",
       "ATTEMPTS_EXHAUSTED": "Every attempt was used",
-      "RECIPIENT_NOT_ALLOWED": "Number not on this environment's test list",
+      "RECIPIENT_NOT_ALLOWED": "The contact is not on this environment's test list.",
       "OPTED_OUT": "The patient turned this channel off",
       "NO_CONTACT": "No phone number or email address",
       "SUBJECT_WITHDRAWN": "Appointment cancelled or past, or result withdrawn",
@@ -16316,7 +16316,11 @@
     "CODE": "Six-digit code",
     "CONFIRM": "Confirm code",
     "ERROR": "Unable to verify this contact. Try again.",
-    "CODE_REQUIRED": "Enter the six-digit code."
+    "CODE_REQUIRED": "Enter the six-digit code.",
+    "CONTACT": "Contact: {{contact}}",
+    "CODE_SENT": "A code was sent to {{contact}}.",
+    "CODE_SENT_GENERIC": "A code was sent.",
+    "EXPIRES": "Valid until {{time}}."
   },
   "RECORD_RIGHTS": {
     "TITLE": "Access or correct my record",
