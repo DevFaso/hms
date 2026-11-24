@@ -9,4 +9,14 @@ import com.example.hms.validation.RejectsUnknownFields;
  */
 @RejectsUnknownFields(RejectsUnknownFields.Kind.SEARCH)
 public record PatientSearchRequestDTO(String mrn, String name, String dob, String phone, String email) {
+
+    /** Never prints a value: a search's terms identify people. */
+    @Override
+    public String toString() {
+        return "PatientSearchRequestDTO[mrn=" + Redacted.presence(mrn)
+            + ", name=" + Redacted.presence(name)
+            + ", dob=" + Redacted.presence(dob)
+            + ", phone=" + Redacted.presence(phone)
+            + ", email=" + Redacted.presence(email) + "]";
+    }
 }

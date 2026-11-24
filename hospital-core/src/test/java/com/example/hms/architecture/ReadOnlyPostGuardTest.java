@@ -111,6 +111,7 @@ class ReadOnlyPostGuardTest {
         "AppointmentController#termSearchAppointments",
         "AuditEventLogController#termSearchAuditLogs",
         "ChatController#searchChatHistory",
+        "DepartmentController#searchDepartments",
         "NotificationController#termSearchNotifications",
         "PatientController#termSearchPatients",
         "PatientPortalController#termSearchMyNotifications",

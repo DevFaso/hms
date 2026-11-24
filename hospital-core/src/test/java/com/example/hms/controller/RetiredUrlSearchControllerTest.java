@@ -50,9 +50,9 @@ class RetiredUrlSearchControllerTest {
         MessageUtil.setMessageSource(null);
     }
 
-    private static List<String> paths(String method) throws NoSuchMethodException {
-        GetMapping mapping = RetiredUrlSearchController.class
-            .getMethod(method, jakarta.servlet.http.HttpServletRequest.class).getAnnotation(GetMapping.class);
+    private static List<String> paths(String method) {
+        GetMapping mapping = java.util.Arrays.stream(RetiredUrlSearchController.class.getMethods())
+            .filter(m -> m.getName().equals(method)).findFirst().orElseThrow().getAnnotation(GetMapping.class);
         return List.of(mapping.path().length > 0 ? mapping.path() : mapping.value());
     }
 
@@ -61,7 +61,15 @@ class RetiredUrlSearchControllerTest {
         if (search != null) {
             request.setParameter("search", search);
         }
-        HandlerExecutionChain chain = ControllerMappingRegistry.mapping().getHandler(request);
+        if ("POST".equals(method)) {
+            request.setContentType("application/json");
+        }
+        HandlerExecutionChain chain;
+        try {
+            chain = ControllerMappingRegistry.mapping().getHandler(request);
+        } catch (org.springframework.web.HttpRequestMethodNotSupportedException notThisMethod) {
+            return null; // a 405: no handler for this method at that path
+        }
         return chain == null ? null : (HandlerMethod) chain.getHandler();
     }
 
@@ -80,11 +88,42 @@ class RetiredUrlSearchControllerTest {
     @Test
     @DisplayName("a search moved to a POST at the same path answers 410 on GET, not « invalid identifier »")
     void aSearchMovedToAPostIsRetired() throws Exception {
-        for (String path : paths("searchMovedToBody")) {
-            assertThat(route("GET", path, null).getMethod().getName()).as(path).isEqualTo("searchMovedToBody");
-            HandlerMethod post = route("POST", path, null);
-            assertThat(post.hasMethodAnnotation(ReadsOnly.class)).as("POST " + path).isTrue();
+        for (String method : List.of("searchMovedToBody", "chatSearchMovedToBody")) {
+            for (String path : paths(method)) {
+                assertThat(route("GET", path, null).getMethod().getName()).as(path).isEqualTo(method);
+                HandlerMethod post = route("POST", path, null);
+                assertThat(post.hasMethodAnnotation(ReadsOnly.class)).as("POST " + path).isTrue();
+            }
         }
+    }
+
+    @Test
+    @DisplayName("every search whose terms moved into a body at the same path answers 410 on GET")
+    void everySamePathSearchIsRetired() throws Exception {
+        java.util.Set<String> unretired = new java.util.TreeSet<>();
+        for (var entry : ControllerMappingRegistry.mapping().getHandlerMethods().entrySet()) {
+            HandlerMethod handler = entry.getValue();
+            boolean termBody = java.util.Arrays.stream(handler.getMethodParameters()).anyMatch(p ->
+                p.hasParameterAnnotation(org.springframework.web.bind.annotation.RequestBody.class)
+                    && p.getParameterType().getPackageName()
+                        .equals("com.example.hms.payload.dto.identifiersearch"));
+            if (!entry.getKey().getMethodsCondition().getMethods()
+                    .contains(org.springframework.web.bind.annotation.RequestMethod.POST)
+                    || !handler.hasMethodAnnotation(ReadsOnly.class) || !termBody) {
+                continue;
+            }
+            for (String path : entry.getKey().getPathPatternsCondition().getPatternValues()) {
+                if (path.endsWith(RetiredUrlSearchController.TERM_SEARCH)) {
+                    continue;
+                }
+                HandlerMethod get = route("GET", path, null);
+                if (get != null && get.getBeanType() != RetiredUrlSearchController.class) {
+                    unretired.add("GET " + path + " -> " + get.getBeanType().getSimpleName() + "#"
+                        + get.getMethod().getName());
+                }
+            }
+        }
+        assertThat(unretired).as("retire these GETs in RetiredUrlSearchController (QA D3753)").isEmpty();
     }
 
     @Test
@@ -95,6 +134,11 @@ class RetiredUrlSearchControllerTest {
             .andExpect(status().isGone())
             .andExpect(jsonPath("$.message", allOf(
                 containsString("POST"), containsString("/patients/term-search"), containsString("corps"))));
+
+        mvc.perform(get("/api/departments/search").contextPath("/api").param("query", "cardio")
+                .header("Accept-Language", "en"))
+            .andExpect(status().isGone())
+            .andExpect(jsonPath("$.message", containsString("POST to /departments/search")));
 
         mvc.perform(get("/api/patients/search").contextPath("/api").param("name", "Awa")
                 .header("Accept-Language", "en"))

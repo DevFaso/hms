@@ -11,4 +11,14 @@ import java.time.LocalDate;
 @RejectsUnknownFields(RejectsUnknownFields.Kind.SEARCH)
 public record RegistrationMatchRequestDTO(String email, String phone, String firstName, String lastName,
                                           LocalDate dateOfBirth) {
+
+    /** Never prints a value: a search's terms identify people. */
+    @Override
+    public String toString() {
+        return "RegistrationMatchRequestDTO[email=" + Redacted.presence(email)
+            + ", phone=" + Redacted.presence(phone)
+            + ", firstName=" + Redacted.presence(firstName)
+            + ", lastName=" + Redacted.presence(lastName)
+            + ", dateOfBirth=" + Redacted.presence(dateOfBirth) + "]";
+    }
 }

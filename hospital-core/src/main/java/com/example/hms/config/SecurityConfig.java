@@ -958,7 +958,9 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST,
                         ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_QUALITY_MANAGER)
 
-                .requestMatchers(HttpMethod.POST, "/departments/filter")
+                // QA D3750: the department search's term (it matches the head's name and e-mail, the
+                // department's phone and e-mail) is a POST body read; same roles as the GET matcher.
+                .requestMatchers(HttpMethod.POST, "/departments/filter", "/departments/search")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST,
                         ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_QUALITY_MANAGER)
 

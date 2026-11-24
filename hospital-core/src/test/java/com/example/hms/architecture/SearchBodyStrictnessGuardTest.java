@@ -92,6 +92,33 @@ class SearchBodyStrictnessGuardTest {
     }
 
     @Test
+    @DisplayName("a search body never prints the terms it carries")
+    void aSearchBodyNeverPrintsItsTerms() throws Exception {
+        Set<Class<?>> bodies = new java.util.LinkedHashSet<>();
+        ControllerMappingRegistry.mapping().getHandlerMethods().values().forEach(handler -> {
+            for (MethodParameter parameter : handler.getMethodParameters()) {
+                Class<?> type = parameter.getParameterType();
+                if (parameter.hasParameterAnnotation(RequestBody.class) && type.isRecord()
+                        && type.getPackageName().equals("com.example.hms.payload.dto.identifiersearch")) {
+                    bodies.add(type);
+                }
+            }
+        });
+        bodies.add(com.example.hms.payload.dto.InvoiceSendToRequestDTO.class);
+        assertThat(bodies).hasSizeGreaterThan(10);
+        for (Class<?> type : bodies) {
+            java.lang.reflect.RecordComponent[] components = type.getRecordComponents();
+            Class<?>[] types = java.util.Arrays.stream(components)
+                .map(java.lang.reflect.RecordComponent::getType).toArray(Class<?>[]::new);
+            java.time.LocalDate born = java.time.LocalDate.of(1991, 7, 22);
+            Object[] values = java.util.Arrays.stream(types).map(t -> t == String.class ? "Secret-Awa-Kabore"
+                : t == java.time.LocalDate.class ? born : null).toArray();
+            String printed = type.getDeclaredConstructor(types).newInstance(values).toString();
+            assertThat(printed).as(type.getSimpleName()).doesNotContain("Secret").doesNotContain(born.toString());
+        }
+    }
+
+    @Test
     @DisplayName("the walk sees the search bodies it guards")
     void theWalkSeesTheSearchBodies() {
         assertThat(readOnlyPostBodies()).containsKeys(

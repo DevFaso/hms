@@ -8,4 +8,10 @@ import jakarta.validation.constraints.NotBlank;
 @RejectsUnknownFields(RejectsUnknownFields.Kind.SEARCH)
 public record EmailQueryDTO(
     @NotBlank @Email(message = "{validation.email.invalid}") String email) {
+
+    /** Never prints a value: a search's terms identify people. */
+    @Override
+    public String toString() {
+        return "EmailQueryDTO[email=" + Redacted.presence(email) + "]";
+    }
 }

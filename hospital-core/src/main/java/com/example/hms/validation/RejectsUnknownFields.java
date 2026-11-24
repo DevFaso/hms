@@ -32,6 +32,9 @@ public @interface RejectsUnknownFields {
     /** What the body is, which words the refusal. */
     Kind value() default Kind.UPDATE;
 
-    /** An update ("cannot be changed here") or the criteria of a search ("not a criterion of this search"). */
-    enum Kind { UPDATE, SEARCH }
+    /**
+     * An update ("cannot be changed here"), the criteria of a search ("not a criterion of this
+     * search"), or the fields of an action such as a send ("not a field of this request").
+     */
+    enum Kind { UPDATE, SEARCH, ACTION }
 }

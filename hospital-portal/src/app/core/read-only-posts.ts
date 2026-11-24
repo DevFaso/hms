@@ -24,6 +24,7 @@ export const READ_ONLY_POST_ROUTES: readonly string[] = [
   '/chat/messages/by-sender-email',
   '/chat/messages/by-sender-username',
   '/departments/filter',
+  '/departments/search',
   '/empi/candidates',
   '/encounters/by-doctor',
   '/lookup/appointment/patient/email',

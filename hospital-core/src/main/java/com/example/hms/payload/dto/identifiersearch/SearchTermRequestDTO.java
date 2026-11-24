@@ -19,8 +19,22 @@ public record SearchTermRequestDTO(@NotBlank @Size(max = MAX_LENGTH) String sear
     /** The longest term a search box sends. */
     public static final int MAX_LENGTH = 200;
 
-    /** The term without its surrounding spaces. */
+    /**
+     * The term is read without its surrounding whitespace (any Unicode space), so a term of spaces
+     * alone is empty and refused by {@code @NotBlank}.
+     */
+    public SearchTermRequestDTO {
+        search = search == null ? null : search.strip();
+    }
+
+    /** The typed term, stripped. */
     public String term() {
-        return search == null ? null : search.trim();
+        return search;
+    }
+
+    /** Never prints a value: a search's terms identify people. */
+    @Override
+    public String toString() {
+        return "SearchTermRequestDTO[search=" + Redacted.presence(search) + "]";
     }
 }

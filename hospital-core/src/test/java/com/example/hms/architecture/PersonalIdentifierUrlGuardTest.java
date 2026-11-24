@@ -76,7 +76,6 @@ class PersonalIdentifierUrlGuardTest {
         Map.entry("PasswordResetController#requestResetQuery identifier", LEGACY_RESET),
         Map.entry("PasswordResetController#requestResetQuery phone", LEGACY_RESET),
         Map.entry("AdmissionOrderSetController#list search", "searches the names of admission order sets (a catalogue)"),
-        Map.entry("DepartmentController#searchDepartments query", "searches department names and codes (a catalogue)"),
         Map.entry("LabTestDefinitionController#search keyword", "searches lab test definitions (a catalogue)"),
         Map.entry("MedicationCatalogController#search q", "searches the drug catalogue"),
         Map.entry("PatientEducationController#searchResources query",

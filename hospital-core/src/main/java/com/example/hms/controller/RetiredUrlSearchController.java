@@ -7,8 +7,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.util.UUID;
 
 /**
  * The GET forms of the searches whose terms now travel in the body of a POST (QA D3750, D3753).
@@ -60,11 +63,21 @@ public class RetiredUrlSearchController {
         "/chat/messages/by-sender-email",
         "/chat/messages/by-sender-username",
         "/chat/messages/by-recipient-email",
-        "/chat/messages/by-recipient-username"
+        "/chat/messages/by-recipient-username",
+        "/departments/search",
+        "/appointments/patients/by-username",
+        "/encounters/by-doctor"
     })
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> searchMovedToBody(HttpServletRequest request) {
         throw movedTo(path(request));
+    }
+
+    /** The conversation search, now a POST at the same path with its term in the body. */
+    @GetMapping("/chat/history/{user1Id}/{user2Id}/search")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> chatSearchMovedToBody(@PathVariable UUID user1Id, @PathVariable UUID user2Id) {
+        throw movedTo("/chat/history/" + user1Id + "/" + user2Id + "/search");
     }
 
     private static ResponseStatusException movedTo(String postPath) {
