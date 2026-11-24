@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../../../shared/forms/form-control-style.directive';
 import { allRows } from '../../../shared/all-pages';
 import { ChangeDetectionStrategy, Component, OnDestroy, inject, signal } from '@angular/core';
 
@@ -27,7 +28,7 @@ import { ConfirmService } from '../../../shared/confirm-dialog/confirm.service';
 @Component({
   selector: 'app-dhis2-mapping-editor',
   standalone: true,
-  imports: [SubmitGuardDirective, FormsModule, TranslateModule],
+  imports: [FormControlStyleDirective, SubmitGuardDirective, FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="dhis2-mappings" data-testid="dhis2-mapping-editor">
@@ -39,6 +40,7 @@ import { ConfirmService } from '../../../shared/confirm-dialog/confirm.service';
         <label>
           {{ 'DHIS2.MAPPINGS.FILTER_DATASET' | translate }}
           <input
+            appFormControl
             type="text"
             data-testid="dhis2-mapping-filter-dataset"
             [(ngModel)]="filterDatasetUid"
@@ -105,11 +107,16 @@ import { ConfirmService } from '../../../shared/confirm-dialog/confirm.service';
         </p>
       }
 
-      <form class="dhis2-mappings__add" (ngSubmit)="onAdd()" data-testid="dhis2-mapping-add-form">
+      <form
+        class="dhis2-mappings__add form-card"
+        (ngSubmit)="onAdd()"
+        data-testid="dhis2-mapping-add-form"
+      >
         <h3>{{ 'DHIS2.MAPPINGS.ADD' | translate }}</h3>
         <label>
           {{ 'DHIS2.MAPPINGS.COL_SYSTEM' | translate }} *
           <input
+            appFormControl
             type="text"
             data-testid="dhis2-mapping-add-system"
             [(ngModel)]="newRow.hmsConceptSystem"
@@ -120,6 +127,7 @@ import { ConfirmService } from '../../../shared/confirm-dialog/confirm.service';
         <label>
           {{ 'DHIS2.MAPPINGS.COL_CODE' | translate }} *
           <input
+            appFormControl
             type="text"
             data-testid="dhis2-mapping-add-code"
             [(ngModel)]="newRow.hmsConceptCode"
@@ -130,6 +138,7 @@ import { ConfirmService } from '../../../shared/confirm-dialog/confirm.service';
         <label>
           {{ 'DHIS2.MAPPINGS.COL_DATAELEMENT' | translate }} *
           <input
+            appFormControl
             type="text"
             data-testid="dhis2-mapping-add-dataelement"
             [(ngModel)]="newRow.dhis2DataElementUid"
@@ -142,6 +151,7 @@ import { ConfirmService } from '../../../shared/confirm-dialog/confirm.service';
         <label>
           {{ 'DHIS2.MAPPINGS.COL_COC' | translate }}
           <input
+            appFormControl
             type="text"
             data-testid="dhis2-mapping-add-coc"
             [(ngModel)]="newRow.dhis2CategoryOptionComboUid"
@@ -153,6 +163,7 @@ import { ConfirmService } from '../../../shared/confirm-dialog/confirm.service';
         <label>
           {{ 'DHIS2.MAPPINGS.COL_PERIOD' | translate }}
           <select
+            appFormControl
             data-testid="dhis2-mapping-add-period"
             [(ngModel)]="newRow.periodType"
             name="periodType"
@@ -177,6 +188,17 @@ import { ConfirmService } from '../../../shared/confirm-dialog/confirm.service';
   `,
   styles: [
     `
+      .form-card {
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+      }
+      .dhis2-mappings__add > label {
+        min-width: 0;
+        flex: 1 1 14rem;
+      }
+
       .dhis2-mappings {
         padding: 1.5rem;
       }
