@@ -1842,6 +1842,7 @@
       "FHIR_EVERYTHING": "FHIR full record of patient {{patient}} returned ({{count}} entries;{{details}})",
       "LOGIN_FAILED_BAD_CREDENTIALS": "Sign-in failed: wrong username or password",
       "LOGIN_FAILED_INACTIVE": "Sign-in failed: the account is not active",
+      "LOGIN_REFUSED_TEMP_PASSWORD_EXPIRED": "Sign-in refused: the temporary password has expired",
       "LOGIN_REFUSED_NO_ROLE": "Sign-in refused: the account has no active role",
       "LOGIN_REJECTED_LOCKED": "Sign-in refused: the account is locked",
       "FIRST_USER_BOOTSTRAP": "First system user created (super-admin)",

@@ -1842,6 +1842,7 @@
       "FHIR_EVERYTHING": "Dossier FHIR complet du patient {{patient}} renvoyé ({{count}} entrées ;{{details}})",
       "LOGIN_FAILED_BAD_CREDENTIALS": "Échec de connexion : identifiant ou mot de passe incorrect",
       "LOGIN_FAILED_INACTIVE": "Échec de connexion : le compte n’est pas actif",
+      "LOGIN_REFUSED_TEMP_PASSWORD_EXPIRED": "Connexion refusée : le mot de passe temporaire a expiré",
       "LOGIN_REFUSED_NO_ROLE": "Connexion refusée : le compte n’a aucun rôle actif",
       "LOGIN_REJECTED_LOCKED": "Connexion refusée : le compte est verrouillé",
       "FIRST_USER_BOOTSTRAP": "Premier utilisateur du système créé (super-administrateur)",

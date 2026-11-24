@@ -1842,6 +1842,7 @@
       "FHIR_EVERYTHING": "Historia FHIR completa del paciente {{patient}} devuelta ({{count}} entradas;{{details}})",
       "LOGIN_FAILED_BAD_CREDENTIALS": "Error de inicio de sesión: usuario o contraseña incorrectos",
       "LOGIN_FAILED_INACTIVE": "Error de inicio de sesión: la cuenta no está activa",
+      "LOGIN_REFUSED_TEMP_PASSWORD_EXPIRED": "Inicio de sesión rechazado: la contraseña temporal ha caducado",
       "LOGIN_REFUSED_NO_ROLE": "Inicio de sesión rechazado: la cuenta no tiene ningún rol activo",
       "LOGIN_REJECTED_LOCKED": "Inicio de sesión rechazado: la cuenta está bloqueada",
       "FIRST_USER_BOOTSTRAP": "Primer usuario del sistema creado (superadministrador)",
