@@ -266,7 +266,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
   },
   {
     key: 'AUDIT.DESC.REFRESH_REFUSED_SECOND_FACTOR',
-    re: /^Refresh refused — provider second factor missing or expired$/,
+    // Rows written before the rule covered every MFA-required role say "provider".
+    re: /^Refresh refused — (?:provider )?second factor missing or expired$/,
+  },
+  {
+    key: 'AUDIT.DESC.REFRESH_REFUSED_ROLES_GONE',
+    re: /^Refresh refused — the session's roles are no longer held$/,
   },
   {
     key: 'AUDIT.DESC.PASSWORD_REUSE_REJECTED',
