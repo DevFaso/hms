@@ -4,7 +4,7 @@ This is an **operator log template**, not a completed production drill or an O3
 scorecard pass. Run with the owner against an offline copy of the latest approved
 backup and its object files. The command never connects to a source database,
 accepts a database URL, mounts a host directory in Docker, publishes a port, pulls
-an image, deploys, or touches an existing database. It creates and removes only
+an image, deploys, or touches a pre-existing application database. It creates and removes only
 its newly labelled, network-isolated scratch container and its anonymous volumes.
 
 ## Preparation
@@ -42,12 +42,33 @@ archive), `manifest.json`, and every referenced document/image file. The manifes
 }
 ```
 
-All non-system base tables in **every schema**, including empty ones, must appear.
+All non-system physical tables in **every schema**, including empty ones, must appear.
+Partitioned parents, views and foreign tables are excluded; partition leaves are
+included once. `ONLY` prevents inherited rows being counted twice.
 The canonical table digest is SHA-256 over the byte stream returned by PostgreSQL
-`COPY (SELECT row_to_json(t)::text FROM "schema"."table" t ORDER BY
+`COPY (SELECT row_to_json(t)::text FROM ONLY "schema"."table" t ORDER BY
 row_to_json(t)::text COLLATE "C") TO STDOUT`, using UTC and
-`extra_float_digits=3`. Duplicate rows are retained. Use a compatible PostgreSQL
+`extra_float_digits=3`, `IntervalStyle=postgres`, `bytea_output=hex`,
+`lc_monetary=C` and `DateStyle=ISO, YMD`. Duplicate rows are retained. Use a compatible PostgreSQL
 version and the same serialization settings when preparing the trusted manifest.
+
+The canonical producer is `capture_bundle` in `scripts/restore/restore_drill.py`.
+It holds a read-only REPEATABLE READ transaction, exports its MVCC snapshot,
+imports that same snapshot for every table digest/reference read, and passes
+`--snapshot` to `pg_dump` while the holder remains open. The seeded test writes
+a new row after snapshot export and proves it is absent from both dump and digest.
+The producer and consumer therefore share the actual serialization implementation.
+
+`scripts/restore/capture_manifest.py` exposes that producer only for a tool-owned,
+labelled, network-isolated scratch source (`--owned-container`, `--owner-token`,
+`--bundle`, `--objects-index`). It accepts no DSN and does not remove the source.
+The objects index is the `objects` array above; object bytes must already be
+copied into the local bundle and are checked before capture completes. Existing
+dump/manifest files are never overwritten. Interrupted captures must be inspected
+and a fresh bundle used. This is executable engineering tooling, **not an approved
+production backup integration**. The backup owner must integrate/approve the same
+snapshot contract in their trusted source process; that operational drill remains
+manual and out of this PR's scope.
 
 File references are discovered from `storage_key`, `*_storage_key`, `file_path`,
 `photo_file_path` and `letter_storage_path` columns in every non-system schema.
@@ -75,6 +96,13 @@ instead. No report is overwritten. A checksum, table, missing file or restore
 failure exits nonzero and produces **no PASS report**. An unowned container is
 never removed. A Docker outage may require an operator to remove a leftover
 scratch container after independently verifying its ownership label and name.
+Both literal and resolved UNC paths are rejected. This is not detection of mapped
+Windows drives or Linux remote mounts: the operator must ensure the folder is a
+local offline copy. Archive bytes are hashed again while streaming to `pg_restore`,
+so a replacement after the initial checksum cannot yield a PASS. Reports include
+the immutable local image ID, both supplied timestamps and bundle directory name.
+If cleanup inspection fails, the original drill error is retained with a generic
+cleanup note; no unverified container is deleted.
 
 The local engineering proof uses synthetic data only:
 

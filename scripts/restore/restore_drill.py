@@ -9,9 +9,12 @@ import re
 import subprocess
 import time
 import uuid
+from contextlib import contextmanager
 
 LABEL = 'com.devfaso.hms.restore-drill'
 PREFIX = 'hms-restore-drill-'
+CANONICAL = "SET TIME ZONE 'UTC'; SET extra_float_digits=3; SET IntervalStyle='postgres'; SET bytea_output='hex'; SET lc_monetary='C'; SET DateStyle='ISO, YMD'; "
+PHYSICAL = "c.relkind='r' AND n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg\\_%' ESCAPE '\\'"
 
 
 def docker(*args, **kwargs):
@@ -45,8 +48,19 @@ class Scratch:
                 or item['HostConfig'].get('Binds')):
             raise ValueError('Refusing a container outside this isolated drill')
 
-    def sql(self, sql):
+    @classmethod
+    def attach_owned(cls, name, token):
+        if not re.fullmatch(r'[0-9a-f]{32}', token) or name != PREFIX + token:
+            raise ValueError('Only a tool-created scratch source may be captured')
+        db = cls.__new__(cls)
+        db.name, db.token = name, token
+        db.owned()
+        db.image = json.loads(text('container', 'inspect', name))[0]['Image']
+        return db
+
+    def sql(self, sql, snapshot=None):
         self.owned()
+        sql = snapshot_sql(snapshot) + sql
         return text('exec', self.name, 'psql', '-U', 'postgres', '-d', 'hms_drill', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-c', sql)
 
     def __enter__(self):
@@ -63,29 +77,50 @@ class Scratch:
                 except subprocess.CalledProcessError:
                     time.sleep(0.25)
             raise TimeoutError('Scratch Postgres did not become ready')
-        except BaseException:
-            self.__exit__(None, None, None)
+        except BaseException as error:
+            self.__exit__(type(error), error, error.__traceback__)
             raise
 
-    def __exit__(self, *_):
-        self.owned()
-        docker('rm', '--force', '--volumes', self.name, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    def __exit__(self, exception_type=None, error=None, traceback=None):
+        try:
+            self.owned()
+            docker('rm', '--force', '--volumes', self.name, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        except Exception:
+            # Never delete an unverified container or replace the useful drill error.
+            if error is not None:
+                error.add_note('Scratch cleanup could not verify/remove its container; inspect locally before cleanup.')
+            else:
+                raise RuntimeError('Scratch cleanup could not verify/remove its container') from None
 
-    def restore(self, archive):
+    def restore(self, archive, expected_sha256):
         self.owned()
         # Stream only into the freshly owned container; never mount a host path.
-        with archive.open('rb') as source:
-            docker('exec', '-i', self.name, 'pg_restore', '-U', 'postgres', '-d', 'hms_drill',
-                   '--no-owner', '--no-privileges', '--exit-on-error', stdin=source,
-                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        digest = hashlib.sha256()
+        with archive.open('rb') as source, subprocess.Popen(
+                ['docker', 'exec', '-i', self.name, 'pg_restore', '-U', 'postgres', '-d', 'hms_drill',
+                 '--no-owner', '--no-privileges', '--exit-on-error'], stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) as process:
+            try:
+                for block in iter(lambda: source.read(1024 * 1024), b''):
+                    process.stdin.write(block)
+                    digest.update(block)
+                process.stdin.close()
+                if process.wait() != 0:
+                    raise RuntimeError('Scratch archive restore failed; no record data is logged')
+            except BaseException:
+                process.kill()
+                process.wait()
+                raise
+        if digest.hexdigest() != expected_sha256:
+            raise ValueError('Streamed database backup checksum did not match')
 
-    def fingerprint(self):
-        names = json.loads(self.sql("SELECT COALESCE(json_agg(x), '[]') FROM (SELECT table_schema AS schema, table_name AS name FROM information_schema.tables WHERE table_type='BASE TABLE' AND table_schema NOT IN ('pg_catalog','information_schema') ORDER BY table_schema, table_name) x"))
+    def fingerprint(self, snapshot=None):
+        names = json.loads(self.sql(f"SELECT COALESCE(json_agg(x), '[]') FROM (SELECT n.nspname AS schema, c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE {PHYSICAL} ORDER BY n.nspname, c.relname) x", snapshot))
         result = {}
         for table in names:
             self.owned()
             identifier = quoted(table['schema']) + '.' + quoted(table['name'])
-            sql = f"SET TIME ZONE 'UTC'; SET extra_float_digits=3; COPY (SELECT row_to_json(t)::text FROM {identifier} t ORDER BY row_to_json(t)::text COLLATE \"C\") TO STDOUT"
+            sql = snapshot_sql(snapshot) + CANONICAL + f"COPY (SELECT row_to_json(t)::text FROM ONLY {identifier} t ORDER BY row_to_json(t)::text COLLATE \"C\") TO STDOUT"
             digest, count = hashlib.sha256(), 0
             with subprocess.Popen(['docker', 'exec', self.name, 'psql', '-U', 'postgres', '-d', 'hms_drill', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-c', sql], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL) as process:
                 for row in process.stdout:
@@ -96,19 +131,79 @@ class Scratch:
             result[table['schema'] + '.' + table['name']] = {'rows': count, 'sha256': digest.hexdigest()}
         return result
 
-    def references(self):
-        columns = json.loads(self.sql("SELECT COALESCE(json_agg(x), '[]') FROM (SELECT c.table_schema AS schema, c.table_name AS name, c.column_name AS column, EXISTS (SELECT 1 FROM information_schema.columns b WHERE b.table_schema=c.table_schema AND b.table_name=c.table_name AND b.column_name='storage_bucket') AS has_bucket FROM information_schema.columns c WHERE table_schema NOT IN ('pg_catalog','information_schema') AND (column_name IN ('storage_key','file_path','photo_file_path','letter_storage_path') OR column_name LIKE '%\\_storage_key' ESCAPE '\\') ORDER BY table_schema, table_name, column_name) x"))
+    def references(self, snapshot=None):
+        columns = json.loads(self.sql(f"SELECT COALESCE(json_agg(x), '[]') FROM (SELECT a.table_schema AS schema, a.table_name AS name, a.column_name AS column, EXISTS (SELECT 1 FROM information_schema.columns b WHERE b.table_schema=a.table_schema AND b.table_name=a.table_name AND b.column_name='storage_bucket') AS has_bucket FROM information_schema.columns a JOIN pg_namespace n ON n.nspname=a.table_schema JOIN pg_class c ON c.relnamespace=n.oid AND c.relname=a.table_name WHERE {PHYSICAL} AND (column_name IN ('storage_key','file_path','photo_file_path','letter_storage_path') OR column_name LIKE '%\\_storage_key' ESCAPE '\\') ORDER BY table_schema, table_name, column_name) x", snapshot))
         found = set()
         for column in columns:
             table = quoted(column['schema']) + '.' + quoted(column['name'])
             key = quoted(column['column'])
             bucket = "COALESCE(storage_bucket::text, '')" if column['has_bucket'] else "''"
-            values = json.loads(self.sql(f"SELECT COALESCE(json_agg(x), '[]') FROM (SELECT DISTINCT {key}::text AS value, {bucket} AS bucket FROM {table} WHERE {key} IS NOT NULL AND {key}::text <> '') x"))
+            values = json.loads(self.sql(f"SELECT COALESCE(json_agg(x), '[]') FROM (SELECT DISTINCT {key}::text AS value, {bucket} AS bucket FROM ONLY {table} WHERE {key} IS NOT NULL AND {key}::text <> '') x", snapshot))
             for value in values:
                 # A reference has table/column scope, so equal keys in different stores cannot alias.
                 raw = '\0'.join([column['schema'], column['name'], column['column'], value['bucket'], value['value']])
                 found.add(hashlib.sha256(raw.encode()).hexdigest())
         return sorted(found)
+
+    @contextmanager
+    def snapshot(self):
+        self.owned()
+        with subprocess.Popen(['docker', 'exec', '-i', self.name, 'psql', '-U', 'postgres', '-d', 'hms_drill', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1'],
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding='utf-8') as holder:
+            try:
+                holder.stdin.write("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; SELECT json_build_object('snapshot', pg_export_snapshot(), 'at', transaction_timestamp());\n")
+                holder.stdin.flush()
+                info = json.loads(holder.stdout.readline())
+                snapshot_sql(info['snapshot'])
+                yield info
+                holder.stdin.write('ROLLBACK;\n')
+                holder.stdin.close()
+                if holder.wait(timeout=30) != 0:
+                    raise RuntimeError('Snapshot holder failed')
+            finally:
+                if holder.poll() is None:
+                    holder.kill()
+                    holder.wait()
+
+
+def snapshot_sql(snapshot):
+    if snapshot is None:
+        return ''
+    if not re.fullmatch(r'[0-9A-Fa-f-]+', snapshot):
+        raise ValueError('Invalid exported snapshot identifier')
+    return f"BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; SET TRANSACTION SNAPSHOT '{snapshot}'; "
+
+
+def capture_bundle(db, bundle, objects):
+    """Canonical producer for an owned scratch source only, never an external DSN."""
+    db.owned()
+    bundle = local_path(bundle, strict=True)
+    archive = bundle / 'database.dump'
+    manifest = bundle / 'manifest.json'
+    if archive.exists() or manifest.exists():
+        raise ValueError('Refusing to overwrite a backup bundle')
+    with db.snapshot() as snapshot:
+        tables = db.fingerprint(snapshot['snapshot'])
+        required = db.references(snapshot['snapshot'])
+        check_files(bundle, required, objects)
+        db.owned()
+        with archive.open('xb') as stream:
+            docker('exec', db.name, 'pg_dump', '-U', 'postgres', '-d', 'hms_drill', '-Fc', '--snapshot=' + snapshot['snapshot'],
+                   stdout=stream, stderr=subprocess.DEVNULL)
+    metadata = {'snapshotAt': snapshot['at'], 'sourceObservedAt': datetime.now(timezone.utc).isoformat(),
+                'tables': tables, 'objects': objects, 'archiveSha256': sha256(archive)}
+    with manifest.open('x', encoding='utf-8', newline='\n') as stream:
+        stream.write(json.dumps(metadata, indent=2) + '\n')
+    return metadata
+
+
+def local_path(path, strict=False):
+    if str(path).startswith(('\\\\', '//')):
+        raise ValueError('Use a local copy; UNC network share paths are rejected')
+    resolved = path.resolve(strict=strict)
+    if str(resolved).startswith(('\\\\', '//')):
+        raise ValueError('Use a local copy; UNC network share paths are rejected')
+    return resolved
 
 
 def sha256(path):
@@ -154,11 +249,10 @@ def timestamp(value):
 
 def drill(bundle, image, report):
     start = time.monotonic()
-    if str(bundle).startswith(('\\\\', '//')) or str(report).startswith(('\\\\', '//')):
-        raise ValueError('Use an offline local copy, never a network share')
+    bundle = local_path(bundle, strict=True)
+    report = local_path(report)
     if report.exists():
         raise ValueError('Refusing to overwrite a drill report')
-    bundle = bundle.resolve(strict=True)
     metadata = json.loads(safe_file(bundle, 'manifest.json').read_text(encoding='utf-8'))
     if not metadata.get('tables'):
         raise ValueError('A hospital restore needs a nonempty table inventory')
@@ -170,7 +264,7 @@ def drill(bundle, image, report):
     if backup_at > observed_at or observed_at > datetime.now(timezone.utc):
         raise ValueError('Invalid backup observation timestamps')
     with Scratch(image) as db:
-        db.restore(archive)
+        db.restore(archive, metadata['archiveSha256'])
         actual = db.fingerprint()
         if actual != metadata['tables']:
             raise ValueError('Restored table inventory, row counts or checksums did not match')
@@ -178,6 +272,8 @@ def drill(bundle, image, report):
         version = db.sql('SHOW server_version')
     result = {'status': 'PASS', 'measuredAt': datetime.now(timezone.utc).isoformat(),
               'archiveSha256': metadata['archiveSha256'], 'postgresVersion': version,
+              'postgresImageId': db.image, 'snapshotAt': metadata['snapshotAt'],
+              'sourceObservedAt': metadata['sourceObservedAt'], 'bundle': bundle.name,
               'tables': actual, 'fileReferencesChecked': files,
               'rtoSeconds': round(time.monotonic() - start, 3),
               'rpoSeconds': (observed_at - backup_at).total_seconds(),
@@ -192,9 +288,7 @@ def drill(bundle, image, report):
 
 
 def latest_bundle(root):
-    if str(root).startswith(('\\\\', '//')):
-        raise ValueError('Use an offline local copy, never a network share')
-    root = root.resolve(strict=True)
+    root = local_path(root, strict=True)
     candidates = []
     for directory in root.iterdir():
         if not directory.is_dir() or not (directory / 'manifest.json').is_file():
