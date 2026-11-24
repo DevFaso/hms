@@ -3,7 +3,10 @@ package com.example.hms.controller.support;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -40,12 +43,15 @@ public class AuthControllerProperties {
     private final List<String> mfaRequiredRoles;
     private final boolean oidcRequired;
     private final String oidcIssuerUri;
+    /** {@code app.auth.refresh-not-before}; {@code null} when unset. */
+    private final Instant refreshNotBefore;
 
     public AuthControllerProperties(
             @Value("${app.frontend.base-url}") String frontendBaseUrl,
             @Value("${app.mfa.required-roles:}") List<String> mfaRequiredRoles,
             @Value("${app.auth.oidc.required:false}") boolean oidcRequired,
-            @Value("${app.auth.oidc.issuer-uri:}") String oidcIssuerUri) {
+            @Value("${app.auth.oidc.issuer-uri:}") String oidcIssuerUri,
+            @Value("${app.auth.refresh-not-before:}") String refreshNotBefore) {
         this.frontendBaseUrl = frontendBaseUrl;
         this.mfaRequiredRoles = mfaRequiredRoles == null
                 ? Collections.emptyList()
@@ -55,6 +61,24 @@ public class AuthControllerProperties {
         // so the legacyIssuerGone helper's `.isEmpty()` check still
         // works against null / blank inputs.
         this.oidcIssuerUri = oidcIssuerUri == null ? "" : oidcIssuerUri.trim();
+        this.refreshNotBefore = parseInstant(refreshNotBefore);
+    }
+
+    /**
+     * An ISO-8601 instant ({@code 2026-11-24T18:00:00Z}), or {@code null} when
+     * blank. A value that does not parse stops the start-up: a cutoff that is
+     * silently ignored would leave every older session running.
+     */
+    private static Instant parseInstant(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Instant.parse(value.trim());
+        } catch (DateTimeParseException ex) {
+            throw new org.springframework.beans.factory.BeanInitializationException(
+                "app.auth.refresh-not-before must be an ISO-8601 instant such as 2026-11-24T18:00:00Z", ex);
+        }
     }
 
     public String frontendBaseUrl() {
@@ -73,5 +97,23 @@ public class AuthControllerProperties {
     /** Never null; empty string means "no OIDC issuer configured". */
     public String oidcIssuerUri() {
         return oidcIssuerUri;
+    }
+
+    /** {@code app.auth.refresh-not-before} ({@code AUTH_REFRESH_NOT_BEFORE}); {@code null} when unset. */
+    public Instant refreshNotBefore() {
+        return refreshNotBefore;
+    }
+
+    /**
+     * A refresh token issued at {@code issuedAt} predates the configured
+     * cutoff, so it mints nothing and its session signs in again. A JWT
+     * {@code iat} has whole-second precision: compared to the cutoff
+     * truncated to the second, strictly, as {@code PasswordChangeCutoff} does.
+     */
+    public boolean refreshIssuedBeforeCutoff(Date issuedAt) {
+        if (refreshNotBefore == null || issuedAt == null) {
+            return false;
+        }
+        return issuedAt.toInstant().isBefore(refreshNotBefore.truncatedTo(java.time.temporal.ChronoUnit.SECONDS));
     }
 }

@@ -104,7 +104,8 @@ test.describe('super-admin control tower', () => {
       }),
     );
     await page.route('**/api/super-admin/audit-search**', (route) => {
-      const params = new URL(route.request().url()).searchParams;
+      // The filters travel in the POST body, never in the URL.
+      const filter = (route.request().postDataJSON() ?? {}) as Record<string, unknown>;
       const rows = [
         {
           id: 'routine',
@@ -125,15 +126,16 @@ test.describe('super-admin control tower', () => {
         },
       ].filter(
         (row) =>
-          (params.get('excludeRoutineSuccesses') !== 'true' || row.status !== 'SUCCESS') &&
-          (!params.get('status') || row.status === params.get('status')),
+          (filter['excludeRoutineSuccesses'] !== true || row.status !== 'SUCCESS') &&
+          (!filter['status'] || row.status === filter['status']),
       );
       return route.fulfill({
         json: {
           content: rows,
           totalElements: rows.length,
           pageNumber: 0,
-          pageSize: Number(params.get('size')),
+          // The page stays in the query.
+          pageSize: Number(new URL(route.request().url()).searchParams.get('size')),
           totalPages: 1,
         },
       });

@@ -40,14 +40,23 @@ class PhoneFieldValidationGuardTest {
             + "|DirectoryEntry|WithStaff|WithDepartments|Hierarchy)(DTO|Dto)?$");
 
     /** Classes a name cannot place, each with why its phone field is not a write. */
-    private static final Map<String, String> READ_ONLY = Map.of(
-        "PatientRecordDTO", "the chart record the server returns",
-        "PatientProfileDTO", "the portal profile the server returns (writes go through PatientProfileUpdateDTO)",
-        "ProviderProfileDTO", "the provider profile the server returns (writes go through ProviderProfileUpdateDTO)",
-        "PasswordResetRequestDTO", "a lookup key: an unknown value finds nobody and the answer must not differ"
-            + " (account enumeration)",
-        "ProgramEnrollmentResponseDTO", "a response",
-        "RegistrationDeskRow", "a read projection of the registration desk list");
+    private static final Map<String, String> READ_ONLY = Map.ofEntries(
+        Map.entry("PatientRecordDTO", "the chart record the server returns"),
+        Map.entry("PatientProfileDTO",
+            "the portal profile the server returns (writes go through PatientProfileUpdateDTO)"),
+        Map.entry("ProviderProfileDTO",
+            "the provider profile the server returns (writes go through ProviderProfileUpdateDTO)"),
+        Map.entry("PasswordResetRequestDTO", "a lookup key: an unknown value finds nobody and the answer must not"
+            + " differ (account enumeration)"),
+        Map.entry("ProgramEnrollmentResponseDTO", "a response"),
+        Map.entry("RegistrationDeskRow", "a read projection of the registration desk list"),
+        // Search bodies of the read-only POST searches: a partial or mistyped number must still search, and
+        // nothing is stored from them.
+        Map.entry("PatientSearchRequestDTO", "search criteria of a read-only patient search; nothing is stored"),
+        Map.entry("PatientLookupRequestDTO", "search criteria of a read-only patient lookup; nothing is stored"),
+        Map.entry("DuplicateCandidateRequestDTO", "search criteria of the read-only duplicate check"),
+        Map.entry("RegistrationMatchRequestDTO", "search criteria of the read-only registration match"),
+        Map.entry("PhoneQueryDTO", "a lookup key of a read-only search by phone; nothing is stored"));
 
     /**
      * Writes whose service already applies the STRICTER facility phone rule

@@ -5,6 +5,7 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.NotificationChannel;
 import com.example.hms.enums.NotificationType;
 import com.example.hms.enums.PatientNotificationEvent;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.NotificationPreference;
 import com.example.hms.model.Patient;
@@ -28,7 +29,6 @@ import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -42,6 +42,10 @@ import java.util.stream.Collectors;
  * <p>Only what a sender reads is offered ({@link #DESK_TYPES} x {@link #DESK_CHANNELS}); the in-app bell stays the
  * patient's own choice in the portal and is never touched here. The patient must be registered at the desk's
  * hospital (404 otherwise, as for the record). Every change is audited with the kinds and channels changed.
+ *
+ * <p>QA r73 D3702: an entry outside the desk's kinds and channels (the in-app bell above all) is refused with a
+ * 400, never acknowledged with a 200 and silently dropped. QA r73 D3700: the recorder of each choice is shown
+ * only as {@link ConsentRecorderLabels#forStaffViewer} allows for the desk's hospital.
  */
 @Service
 @RequiredArgsConstructor
@@ -57,38 +61,44 @@ public class PatientChannelPreferenceService {
         EnumSet.of(NotificationChannel.SMS, NotificationChannel.EMAIL);
 
     private static final String PATIENT_NOT_FOUND = "patient.notFound";
+    /** QA r73 D3702: the 400 for a kind or channel the desk does not record (the bell is the patient's own). */
+    static final String NOT_RECORDABLE_KEY = "patientChannel.preferences.notRecordable";
 
     private final PatientRepository patientRepository;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final NotificationPreferenceRepository preferenceRepository;
     private final com.example.hms.repository.UserRepository userRepository;
     private final AuditEventLogService auditEventLogService;
+    private final ConsentRecorderLabels recorderLabels;
 
     /** Every desk kind x channel, on unless the patient (or the desk) turned it off. */
     @Transactional(readOnly = true)
     public List<NotificationPreferenceDTO> read(UUID patientId, UUID hospitalId) {
         User account = accountAt(patientId, hospitalId);
-        return NotificationPreferenceViews.describe(matrix(stored(account.getId())), userRepository);
+        return matrix(stored(account.getId()), account.getId(), hospitalId);
     }
 
     /**
-     * Records the desk's choices. Only desk kinds and channels are written; any other entry is ignored and the
-     * other rows of the account (the bell, anything else) are kept as they are.
+     * Records the desk's choices. Only desk kinds and channels may be sent: any other entry (the in-app bell, a
+     * kind no sender reads) refuses the whole request with a 400 before anything is written. The other rows of
+     * the account (the bell, anything else) are kept as they are.
      */
     @Transactional
     public List<NotificationPreferenceDTO> update(UUID patientId, UUID hospitalId,
                                                   List<NotificationPreferenceUpdateDTO> updates, UUID actorId) {
         if (actorId == null) throw new ResourceNotFoundException("user.notFound", actorId);
         User account = accountAt(patientId, hospitalId);
+        // Only the desk's kinds and channels are recorded here. Anything else (the bell, a kind no sender
+        // reads) is refused, never acknowledged and dropped: a 200 must mean the choice was recorded.
+        List<NotificationPreferenceUpdateDTO> wanted = updates == null ? List.of() : updates;
+        for (NotificationPreferenceUpdateDTO update : wanted) {
+            if (update == null || !DESK_TYPES.contains(update.getNotificationType())
+                    || !DESK_CHANNELS.contains(update.getChannel())) {
+                throw new BusinessException(NOT_RECORDABLE_KEY);
+            }
+        }
         userRepository.lockForNotificationPreferences(account.getId())
             .orElseThrow(() -> new ResourceNotFoundException("user.notFound", account.getId()));
-        // Only the desk's kinds and channels are recorded here; anything else (the bell, a kind no
-        // sender reads) is left as it is, never written: the response shows what is recorded.
-        List<NotificationPreferenceUpdateDTO> wanted = updates == null ? List.of() : updates.stream()
-            .filter(Objects::nonNull)
-            .filter(update -> DESK_TYPES.contains(update.getNotificationType())
-                && DESK_CHANNELS.contains(update.getChannel()))
-            .toList();
         Map<NotificationType, Map<NotificationChannel, NotificationPreference>> rows = stored(account.getId());
         List<NotificationPreference> toSave = new ArrayList<>();
         Set<String> changes = new LinkedHashSet<>();
@@ -109,8 +119,8 @@ public class PatientChannelPreferenceService {
             row.recordChoice(enabled, actorId, java.time.LocalDateTime.now());
             toSave.add(row);
             if (current != enabled) {
-                changes.add(update.getNotificationType().name() + "/" + update.getChannel().name() + " "
-                    + (enabled ? "on" : "off"));
+                changes.add(NotificationPreferenceViews.change(update.getNotificationType(), update.getChannel(),
+                    current, enabled));
             }
         }
         preferenceRepository.saveAll(toSave);
@@ -126,7 +136,7 @@ public class PatientChannelPreferenceService {
                 .eventDescription("Patient channel choices recorded at the desk: " + String.join(", ", changes))
                 .build());
         }
-        return NotificationPreferenceViews.describe(matrix(rows), userRepository);
+        return matrix(rows, account.getId(), hospitalId);
     }
 
     /** The patient's account, when the patient is registered at the desk's hospital; 404 otherwise. */
@@ -151,22 +161,19 @@ public class PatientChannelPreferenceService {
         return rows;
     }
 
-    private static List<NotificationPreferenceDTO> matrix(
-            Map<NotificationType, Map<NotificationChannel, NotificationPreference>> rows) {
+    /** The desk matrix, each recorder labelled as the desk's hospital may see it (QA r73 D3700). */
+    private List<NotificationPreferenceDTO> matrix(
+            Map<NotificationType, Map<NotificationChannel, NotificationPreference>> rows, UUID accountId,
+            UUID hospitalId) {
+        List<NotificationPreference> cells = new ArrayList<>();
+        rows.values().forEach(byChannel -> cells.addAll(byChannel.values()));
+        ConsentRecorderLabels.Labels labels =
+            recorderLabels.forStaffViewer(NotificationPreferenceViews.recorders(cells), hospitalId);
         List<NotificationPreferenceDTO> out = new ArrayList<>();
         DESK_TYPES.stream().sorted(Comparator.comparing(Enum::ordinal)).forEach(type -> DESK_CHANNELS.stream()
             .sorted(Comparator.comparing(Enum::ordinal))
-            .forEach(channel -> {
-                NotificationPreference row = rows.getOrDefault(type, Map.of()).get(channel);
-                out.add(NotificationPreferenceDTO.builder()
-                    .id(row == null ? null : row.getId())
-                    .notificationType(type)
-                    .channel(channel)
-                    .enabled(row == null || row.isEnabled())
-                    .recordedByUserId(row == null ? null : row.getRecordedByUserId())
-                    .recordedAt(row == null ? null : row.getRecordedAt())
-                    .build());
-            }));
-        return out.stream().filter(Objects::nonNull).toList();
+            .forEach(channel -> out.add(NotificationPreferenceViews.of(type, channel,
+                rows.getOrDefault(type, Map.of()).get(channel), accountId, labels))));
+        return out;
     }
 }

@@ -62,7 +62,6 @@ class QueryParameterVocabularyGuardTest {
         Map.entry("AppointmentController#action", "AppointmentServiceImpl: FieldBusinessException(action, appointment.invalidAction)"),
         Map.entry("AuditEventLogController#status", NO_FIELD + "audit.status.invalid in AuditEventLogController"),
         Map.entry("AuditEventLogController#entityType", "an open set: the entity names audit emitters wrote, paired with resourceId"),
-        Map.entry("SuperAdminAuditSearchController#entityType", "an open set: the entity names audit emitters wrote"),
         Map.entry("GeneralReferralController#status", NO_FIELD + "GeneralReferralServiceImpl ReferralStatus.valueOf, raw text"),
         Map.entry("HospitalController#facilityType", NO_FIELD + "HospitalServiceImpl FacilityType, MSG_PROVIDER_TYPE_INVALID"),
         Map.entry("InstrumentOutboxController#status", NO_FIELD + "InstrumentOutboxServiceImpl instrumentOutbox.status.unknown"),
@@ -72,8 +71,6 @@ class QueryParameterVocabularyGuardTest {
             + " from encounters, appointments and consults; an unknown one lists nothing"),
         Map.entry("MeController#urgency", "OPEN (standing debt, D1385 class): DoctorWorklistServiceImpl urgencies come from"
             + " several enums; an unknown one lists nothing"),
-        Map.entry("UserController#role", "OPEN (standing debt, D1385 class): roles are rows of the roles table, not a"
-            + " code list; an unknown role answers an empty page"),
         Map.entry("FeatureFlagController#env", "OPEN (standing debt, D1385 class): the environments are the"
             + " configured app.feature-flags.environments keys; an unknown one reads the base flags"),
         Map.entry("ProResponseController#instrument", "OPEN (standing debt, D1385 class): the instruments are catalogue rows"

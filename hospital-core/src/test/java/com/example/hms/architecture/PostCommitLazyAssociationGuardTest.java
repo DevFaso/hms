@@ -115,13 +115,10 @@ class PostCommitLazyAssociationGuardTest {
     /** Controller chains as they stand. Shrink only. */
     private static final Map<String, Allowance> ALLOWED_IN_CONTROLLERS = allow(
         // The two QA D921 chains (verifyEmail) left with #972: activation runs in its service now.
-        "controller/AuthController.java", ".getRole().getCode(", 1, LOADED_HERE,
         "controller/AuthController.java", ".getHospital().getId(", 2, LOADED_HERE,
         "controller/AuthController.java", ".getHospital().getName(", 1, LOADED_HERE,
         "controller/CredentialingController.java", ".getStaff().getId(", 1, LOADED_HERE,
         "controller/LookupController.java", ".getUser().getEmail(", 1, LOADED_HERE,
-        "controller/MfaController.java", ".getRole().getName(", 1, LOADED_HERE,
-        "controller/MfaController.java", ".getRole().getCode(", 1, LOADED_HERE,
         "controller/OrganizationSecurityController.java", ".getOrganization().getId(", 2, LOADED_HERE,
         "controller/ReportController.java", ".getHospital().getId(", 1, LOADED_HERE,
         "controller/integration/Dhis2ExportController.java", ".getHospital().getId(", 3, LOADED_HERE);

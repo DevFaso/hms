@@ -131,7 +131,11 @@
                 @if (row.errorCode === 'OPTED_OUT') {
                   <div class="cell-secondary" [attr.data-testid]="'pn-consent-recorder-' + row.id">
                     {{ 'PATIENT_NOTIFICATIONS.CONSENT_RECORDED_BY' | translate }}
-                    {{ row.consentRecordedByName || ('COMMON.UNKNOWN' | translate) }}
+                    @if (recorderKey(row.consentRecordedByKind); as key) {
+                      {{ key | translate }}
+                    } @else {
+                      {{ row.consentRecordedByName || ('COMMON.UNKNOWN' | translate) }}
+                    }
                     @if (row.consentRecordedAt) {
                       <div>{{ row.consentRecordedAt | serverTime | date: 'short' }}</div>
                     }

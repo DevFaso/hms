@@ -30,6 +30,10 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'PatientRecordExportController#downloadRecordPdf',
     roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
   },
+  roiRecordPdfExport: {
+    endpoint: 'RoiRecordExportController#download',
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
+  },
   labOrderCreate: {
     endpoint: 'LabOrderController#createLabOrder',
     roles: ['ROLE_DOCTOR', 'ROLE_NURSE'],

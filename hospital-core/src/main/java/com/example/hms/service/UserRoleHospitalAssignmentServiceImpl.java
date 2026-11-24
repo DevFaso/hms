@@ -2721,7 +2721,12 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             String confirmationCode = assignment.getConfirmationCode();
             String roleLabel = smsRoleLabel(role, locale);
             String hospitalDisplay = messageHospitalName(hospital);
-            String assigneeDisplay = resolveDisplayName(user, user != null ? user.getEmail() : "user");
+            // K4: the registrar's and the hospital's copies are SMS too: a patient is named by first name and
+            // initial, never the full name (the role label already says « Patient(e) » and the hospital).
+            String assigneeDisplay = isPatientRole(assignment)
+                ? com.example.hms.utility.SmsPatientLabel.firstNameAndInitial(
+                    user != null ? user.getFirstName() : null, user != null ? user.getLastName() : null)
+                : resolveDisplayName(user, user != null ? user.getEmail() : "user");
 
             // The assignee's activation SMS goes FIRST and each FYI send is
             // isolated: a throwing registrar/hospital notification used to

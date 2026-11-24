@@ -9,5 +9,9 @@ public final class RoiAuditUnavailableException extends RuntimeException {
         super(MessageUtil.resolveOrRaw(messageKey));
         this.messageKey = messageKey;
     }
+    public RoiAuditUnavailableException(String messageKey, Throwable cause) {
+        super(MessageUtil.resolveOrRaw(messageKey), cause);
+        this.messageKey = messageKey;
+    }
     public String getMessageKey() { return messageKey; }
 }

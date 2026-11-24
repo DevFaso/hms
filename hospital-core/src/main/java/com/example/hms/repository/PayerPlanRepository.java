@@ -24,4 +24,11 @@ public interface PayerPlanRepository extends JpaRepository<PayerPlan, UUID> {
     List<PayerPlan> findByPayerIdInOrderByCodeAsc(Collection<UUID> payerIds);
 
     boolean existsByPayerIdAndCode(UUID payerId, String code);
+
+    /**
+     * QA D3601 (r72): the plans of coverage rows held at the named hospitals. A derived query, so the acting
+     * hospital's tenant scope of {@code findAllById} does not apply: the caller names each row's own hospital and
+     * keeps a plan only when it is of that hospital.
+     */
+    List<PayerPlan> findByIdInAndHospitalIdIn(Collection<UUID> ids, Collection<UUID> hospitalIds);
 }

@@ -48,7 +48,8 @@ class NotificationPreferenceConcurrencyIT extends BaseIT {
         }
         assertThat(service.getPreferences(account.getId())).hasSize(2).allSatisfy(choice -> {
             assertThat(choice.isEnabled()).isFalse();
-            assertThat(choice.getRecordedByUserId()).isEqualTo(account.getId());
+            // QA r73 D3700: the owner's own choice reads as the patient's, with no account id.
+            assertThat(choice.getRecordedByKind()).isEqualTo("PATIENT");
             assertThat(choice.getRecordedAt()).isNotNull();
         });
     }

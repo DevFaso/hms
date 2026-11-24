@@ -19,7 +19,7 @@ class RoiReleaseScopeGuardTest {
                 String endpoint = SourceScan.stripComments(Files.readString(file));
                 if (endpoint.contains("/roi-requests/") && endpoint.contains("record.pdf")) {
                     assertThat(endpoint).as(file.toString())
-                        .contains("pdf.renderForRoi(requests.copyForExport(requestId), requestId)")
+                        .contains("pdf.renderForRoi(requests.copyForExport(requestId))")
                         .doesNotContain("pdf.render(");
                 }
             }
@@ -37,5 +37,21 @@ class RoiReleaseScopeGuardTest {
         assertThat(source("service/impl/PatientStoryboardServiceImpl.java"))
             .contains("release ? allergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)",
                 "release ? null : patient.getCodeStatus()");
+    }
+
+    @Test
+    void everyOtherSectionQueriesTheOwningHospitalRatherThanThePerformingHospital() throws Exception {
+        String chart = source("service/impl/ChartReviewServiceImpl.java");
+        for (String repository : new String[]{"PrescriptionRepository", "ImagingOrderRepository",
+            "ProcedureOrderRepository", "NursingNoteRepository"}) {
+            assertThat(source("repository/" + repository + ".java"))
+                .as(repository).contains("findByPatient_IdAndHospital_IdIn");
+        }
+        assertThat(chart).contains("findByPatient_IdAndHospital_IdIn(patientId, readable, page)",
+            "findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientId, readable, page)",
+            "findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientId, readable)",
+            "findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, readable)");
+        assertThat(source("repository/EncounterRepository.java"))
+            .contains("e.hospital.id IN :hospitalIds");
     }
 }

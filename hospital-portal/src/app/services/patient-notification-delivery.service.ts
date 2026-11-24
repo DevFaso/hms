@@ -49,7 +49,8 @@ export interface PatientNotificationDelivery {
   retryable: boolean;
   manualRetries: number;
   createdAt: string;
-  consentRecordedBy?: string | null;
+  /** QA r73 D3700: PATIENT, STAFF or OTHER_FACILITY; never the recorder's account id. */
+  consentRecordedByKind?: 'PATIENT' | 'STAFF' | 'OTHER_FACILITY' | null;
   consentRecordedByName?: string | null;
   consentRecordedAt?: string | null;
   lastAttemptAt?: string | null;
