@@ -906,6 +906,24 @@ public class JwtTokenProvider {
         return roles != null ? roles : new ArrayList<>();
     }
 
+    /**
+     * The roles a token says its session was opened with, or
+     * {@link Optional#empty()} when it carries no {@code roles} list (an older
+     * shape, or a token that does not parse). A caller continuing a session
+     * refuses on empty, never falls back to every role the account holds.
+     */
+    public Optional<List<String>> carriedRoles(String token) {
+        try {
+            Object roles = jwtParser().parseSignedClaims(token).getPayload().get(ROLES_CLAIM);
+            if (roles instanceof Collection<?> carried) {
+                return Optional.of(carried.stream().filter(Objects::nonNull).map(String::valueOf).toList());
+            }
+            return Optional.empty();
+        } catch (RuntimeException unparsable) {
+            return Optional.empty();
+        }
+    }
+
     public String resolvePreferredRole(List<String> roles) {
     List<String> priority = List.of("ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_LAB_SCIENTIST", "ROLE_PATIENT");
         for (String preferred : priority) {

@@ -584,10 +584,13 @@ class AuthControllerTest {
      * bucket is under test in LockScreenLockoutIntegrationTest.
      */
     void checkPasswordRunsTheComparison() {
-        when(loginAttemptService.checkPassword(any(), any())).thenAnswer(inv ->
+        // doAnswer, not when(...): stubbing must not call the mock, whose
+        // previous answer would run with null arguments.
+        org.mockito.Mockito.doAnswer(inv ->
                 ((java.util.function.BooleanSupplier) inv.getArgument(1)).getAsBoolean()
                         ? LoginAttemptService.PasswordCheck.ACCEPTED
-                        : LoginAttemptService.PasswordCheck.REJECTED);
+                        : LoginAttemptService.PasswordCheck.REJECTED)
+                .when(loginAttemptService).checkPassword(any(), any());
     }
 
     /** The lock screen's account: verify-password looks the signed-in user up. */
@@ -1178,8 +1181,9 @@ class AuthControllerTest {
         // id is in BaseEntity; set via reflection since there's no setter
         org.springframework.test.util.ReflectionTestUtils.setField(activeUser, "id", userId);
 
+        // A role that requires no second factor: this refresh token carries none.
         com.example.hms.model.Role role = com.example.hms.model.Role.builder()
-                .code("ROLE_DOCTOR")
+                .code("ROLE_NURSE")
                 .build();
         com.example.hms.model.UserRoleHospitalAssignment assignment =
                 com.example.hms.model.UserRoleHospitalAssignment.builder()
@@ -1195,6 +1199,7 @@ class AuthControllerTest {
 
         when(jwtTokenProvider.isRefreshToken("old.refresh.token")).thenReturn(true);
         claimableRefresh("old.refresh.token");
+        carries("old.refresh.token", "ROLE_NURSE");
         when(jwtTokenProvider.getUsernameFromJWT("old.refresh.token"))
                 .thenReturn("doctor@example.com");
         when(userRepository.findByUsername("doctor@example.com"))
@@ -1210,7 +1215,7 @@ class AuthControllerTest {
                 .thenReturn("new.access.token");
         when(jwtTokenProvider.generateRefreshToken(
                 org.mockito.ArgumentMatchers.any(
-                        org.springframework.security.authentication.UsernamePasswordAuthenticationToken.class),
+                        com.example.hms.security.TokenUserDescriptor.class),
                 org.mockito.ArgumentMatchers.isNull(), any()))
                 .thenReturn("new.refresh.token");
         when(jwtTokenProvider.getExpiration("new.access.token"))
@@ -1236,6 +1241,33 @@ class AuthControllerTest {
         when(tokenBlacklistService.claim("jti-" + token, exp)).thenReturn(true);
     }
 
+    /** The roles the refresh token says its session was signed in with. */
+    private void carries(String token, String... roles) {
+        when(jwtTokenProvider.carriedRoles(token)).thenReturn(java.util.Optional.of(java.util.List.of(roles)));
+    }
+
+    /** An assignment row with its own id (rows without one are equal, and a Set keeps one). */
+    private static com.example.hms.model.UserRoleHospitalAssignment assignmentRow(
+            com.example.hms.model.User user, String code, boolean active) {
+        com.example.hms.model.UserRoleHospitalAssignment row = com.example.hms.model.UserRoleHospitalAssignment.builder()
+                .user(user)
+                .role(com.example.hms.model.Role.builder().code(code).build())
+                .active(active)
+                .assignedAt(java.time.LocalDateTime.now())
+                .build();
+        org.springframework.test.util.ReflectionTestUtils.setField(row, "id", java.util.UUID.randomUUID());
+        return row;
+    }
+
+    /** The roles the account holds now: one active assignment each. */
+    private void holds(com.example.hms.model.User user, String... roles) {
+        java.util.Set<com.example.hms.model.UserRoleHospitalAssignment> rows = new java.util.LinkedHashSet<>();
+        for (String code : roles) {
+            rows.add(assignmentRow(user, code, true));
+        }
+        when(assignmentRepository.findByUser(user)).thenReturn(rows);
+    }
+
     @Test
     void refreshToken_aTokenAnotherRefreshClaimedFirst_mintsNothing() throws Exception {
         long exp = System.currentTimeMillis() + 3_600_000L;
@@ -1248,6 +1280,8 @@ class AuthControllerTest {
         when(tokenBlacklistService.claim("jti-old", exp)).thenReturn(false);
         when(jwtTokenProvider.getUsernameFromJWT("old.refresh.token")).thenReturn("doctor@example.com");
         when(userRepository.findByUsername("doctor@example.com")).thenReturn(java.util.Optional.of(activeUser));
+        carries("old.refresh.token", "ROLE_NURSE");
+        holds(activeUser, "ROLE_NURSE");
 
         mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -1303,11 +1337,13 @@ class AuthControllerTest {
         claimableRefresh("old.refresh.token");
         when(jwtTokenProvider.getUsernameFromJWT("old.refresh.token")).thenReturn("doctor@example.com");
         when(userRepository.findByUsername("doctor@example.com")).thenReturn(java.util.Optional.of(activeUser));
+        carries("old.refresh.token", "ROLE_NURSE");
+        holds(activeUser, "ROLE_NURSE");
         // The refresh mints with the second-factor instant (#851): the two-argument forms.
         when(jwtTokenProvider.generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any()))
                 .thenReturn("new.access.token");
         when(jwtTokenProvider.generateRefreshToken(any(
-                org.springframework.security.authentication.UsernamePasswordAuthenticationToken.class), any(), any()))
+                com.example.hms.security.TokenUserDescriptor.class), any(), any()))
                 .thenReturn("new.refresh.token");
         when(jwtTokenProvider.getExpiration("new.access.token"))
                 .thenReturn(new java.util.Date(System.currentTimeMillis() + 60_000L));
@@ -1330,6 +1366,8 @@ class AuthControllerTest {
         claimableRefresh("old.refresh.token");
         when(jwtTokenProvider.getUsernameFromJWT("old.refresh.token")).thenReturn("doctor@example.com");
         when(userRepository.findByUsername("doctor@example.com")).thenReturn(java.util.Optional.of(activeUser));
+        carries("old.refresh.token", "ROLE_NURSE");
+        holds(activeUser, "ROLE_NURSE");
         when(jwtTokenProvider.generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any()))
                 .thenThrow(new IllegalStateException("transient"));
 
@@ -1385,7 +1423,7 @@ class AuthControllerTest {
         org.springframework.test.util.ReflectionTestUtils.setField(activeUser, "id", userId);
 
         com.example.hms.model.Role role = com.example.hms.model.Role.builder()
-                .code("ROLE_DOCTOR").build();
+                .code("ROLE_NURSE").build();
         com.example.hms.model.UserRoleHospitalAssignment assignment =
                 com.example.hms.model.UserRoleHospitalAssignment.builder()
                         .user(activeUser).role(role).active(true)
@@ -1396,6 +1434,7 @@ class AuthControllerTest {
                 .thenReturn("cookie.refresh.token");
         when(jwtTokenProvider.isRefreshToken("cookie.refresh.token")).thenReturn(true);
         claimableRefresh("cookie.refresh.token");
+        carries("cookie.refresh.token", "ROLE_NURSE");
         when(jwtTokenProvider.getUsernameFromJWT("cookie.refresh.token"))
                 .thenReturn("doctor@example.com");
         when(userRepository.findByUsername("doctor@example.com"))
@@ -1411,7 +1450,7 @@ class AuthControllerTest {
                 .thenReturn("new.access.token");
         when(jwtTokenProvider.generateRefreshToken(
                 org.mockito.ArgumentMatchers.any(
-                        org.springframework.security.authentication.UsernamePasswordAuthenticationToken.class),
+                        com.example.hms.security.TokenUserDescriptor.class),
                 org.mockito.ArgumentMatchers.isNull(), any()))
                 .thenReturn("new.refresh.token");
         when(jwtTokenProvider.getExpiration("new.access.token"))
@@ -1617,6 +1656,9 @@ class AuthControllerTest {
         when(userRepository.findByUsername("pharm@example.com")).thenReturn(java.util.Optional.of(pharmacist));
         when(jwtTokenProvider.secondFactorAt("old.refresh.token")).thenReturn(null);
         when(providerMfaGate.isProviderUser(pharmacist.getId(), "pharm@example.com")).thenReturn(true);
+        // A role that requires no second factor of its own: the provider rule is what refuses.
+        carries("old.refresh.token", "ROLE_NURSE");
+        holds(pharmacist, "ROLE_NURSE");
 
         mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", "en")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -1633,6 +1675,159 @@ class AuthControllerTest {
                 e.getEventType() == com.example.hms.enums.AuditEventType.TOKEN_REFRESH
                         && e.getStatus() == com.example.hms.enums.AuditStatus.FAILURE
                         && pharmacist.getId().equals(e.getUserId())));
+    }
+
+    // ── A refresh keeps the role set the session was signed in with ──
+
+    /** An active account, a claimable refresh token "session.refresh" naming it, mints that answer. */
+    private com.example.hms.model.User refreshableUser(String username) {
+        com.example.hms.model.User user = com.example.hms.model.User.builder()
+                .username(username).isActive(true).build();
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "id", java.util.UUID.randomUUID());
+        when(jwtTokenProvider.isRefreshToken("session.refresh")).thenReturn(true);
+        claimableRefresh("session.refresh");
+        when(jwtTokenProvider.getUsernameFromJWT("session.refresh")).thenReturn(username);
+        when(userRepository.findByUsername(username)).thenReturn(java.util.Optional.of(user));
+        when(jwtTokenProvider.generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any()))
+                .thenReturn("session.new.access");
+        when(jwtTokenProvider.generateRefreshToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any()))
+                .thenReturn("session.new.refresh");
+        when(jwtTokenProvider.getExpiration("session.new.access"))
+                .thenReturn(new java.util.Date(System.currentTimeMillis() + 60_000L));
+        when(jwtTokenProvider.getExpiration("session.new.refresh"))
+                .thenReturn(new java.util.Date(System.currentTimeMillis() + 3_600_000L));
+        return user;
+    }
+
+    @Autowired private AuthControllerProperties authControllerProperties;
+
+    /**
+     * This slice runs with no MFA-required role (app.mfa.required-roles=);
+     * the second-factor tests run with the production default's ROLE_DOCTOR,
+     * restored after, as the context is shared.
+     */
+    private void withDoctorRequiringMfa(org.junit.jupiter.api.function.Executable body) throws Throwable {
+        Object before = org.springframework.test.util.ReflectionTestUtils.getField(authControllerProperties, "mfaRequiredRoles");
+        org.springframework.test.util.ReflectionTestUtils.setField(authControllerProperties, "mfaRequiredRoles",
+                java.util.List.of("ROLE_DOCTOR", "ROLE_HOSPITAL_ADMIN"));
+        try {
+            body.execute();
+        } finally {
+            org.springframework.test.util.ReflectionTestUtils.setField(authControllerProperties, "mfaRequiredRoles", before);
+        }
+    }
+
+    private org.springframework.test.web.servlet.ResultActions refreshSession() throws Exception {
+        return mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", "en")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"refreshToken\":\"session.refresh\"}"));
+    }
+
+    /** The roles of the access and refresh token the refresh minted. */
+    private void assertMintedRoles(String... roles) {
+        var access = org.mockito.ArgumentCaptor.forClass(com.example.hms.security.TokenUserDescriptor.class);
+        var refresh = org.mockito.ArgumentCaptor.forClass(com.example.hms.security.TokenUserDescriptor.class);
+        verify(jwtTokenProvider).generateAccessToken(access.capture(), any(), any());
+        verify(jwtTokenProvider).generateRefreshToken(refresh.capture(), any(), any());
+        org.assertj.core.api.Assertions.assertThat(access.getValue().roles()).containsExactly(roles);
+        org.assertj.core.api.Assertions.assertThat(refresh.getValue().roles()).containsExactly(roles);
+    }
+
+    private void assertNothingMinted() {
+        verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any());
+        verify(jwtTokenProvider, never()).generateRefreshToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any());
+        verify(refreshTokenCookieService, never()).write(any(), any(), org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void sessionRoles_aReceptionistSessionOfAReceptionistDoctorAccount_refreshesAsReceptionistOnly() throws Exception {
+        com.example.hms.model.User user = refreshableUser("recep.doc");
+        holds(user, "ROLE_RECEPTIONIST", "ROLE_DOCTOR", "ROLE_HOSPITAL_ADMIN");
+        carries("session.refresh", "ROLE_RECEPTIONIST");
+
+        refreshSession().andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles", hasSize(1)))
+                .andExpect(jsonPath("$.roles[0]").value("ROLE_RECEPTIONIST"));
+
+        assertMintedRoles("ROLE_RECEPTIONIST");
+    }
+
+    @Test
+    void sessionRoles_anMfaRequiredRoleWithoutASecondFactor_isNeverRefreshed() throws Throwable {
+        com.example.hms.model.User user = refreshableUser("doc.nofactor");
+        holds(user, "ROLE_DOCTOR", "ROLE_RECEPTIONIST");
+        // A token rotated before the fix carried every role: the doctor role
+        // requires a second factor this token does not have.
+        carries("session.refresh", "ROLE_RECEPTIONIST", "ROLE_DOCTOR");
+        when(jwtTokenProvider.secondFactorAt("session.refresh")).thenReturn(null);
+
+        withDoctorRequiringMfa(() -> refreshSession().andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value(
+                        "Two-step verification is required. Please sign in again with your code.")));
+
+        assertNothingMinted();
+        verify(refreshTokenCookieService).clear(any());
+    }
+
+    @Test
+    void sessionRoles_anMfaRequiredRoleWithACurrentSecondFactor_refreshesWithIt() throws Throwable {
+        com.example.hms.model.User user = refreshableUser("doc.factor");
+        holds(user, "ROLE_DOCTOR", "ROLE_RECEPTIONIST");
+        carries("session.refresh", "ROLE_DOCTOR");
+        java.time.Instant verified = java.time.Instant.now().minusSeconds(600);
+        when(jwtTokenProvider.secondFactorAt("session.refresh")).thenReturn(verified);
+
+        withDoctorRequiringMfa(() -> refreshSession().andExpect(status().isOk()));
+
+        assertMintedRoles("ROLE_DOCTOR");
+        verify(jwtTokenProvider).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class),
+                org.mockito.ArgumentMatchers.eq(verified), any());
+    }
+
+    @Test
+    void sessionRoles_aRoleRevokedSinceSignIn_disappearsOnRefresh() throws Exception {
+        com.example.hms.model.User user = refreshableUser("nurse.recep");
+        holds(user, "ROLE_NURSE");
+        carries("session.refresh", "ROLE_NURSE", "ROLE_RECEPTIONIST");
+
+        refreshSession().andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles", hasSize(1)))
+                .andExpect(jsonPath("$.roles[0]").value("ROLE_NURSE"));
+
+        assertMintedRoles("ROLE_NURSE");
+    }
+
+    @Test
+    void sessionRoles_everyCarriedRoleRevoked_refusesTheRefreshAndDropsTheCookie() throws Exception {
+        com.example.hms.model.User user = refreshableUser("recep.revoked");
+        // The receptionist assignment was deactivated; a doctor one was granted since.
+        when(assignmentRepository.findByUser(user)).thenReturn(new java.util.LinkedHashSet<>(java.util.List.of(
+                assignmentRow(user, "ROLE_RECEPTIONIST", false), assignmentRow(user, "ROLE_DOCTOR", true))));
+        carries("session.refresh", "ROLE_RECEPTIONIST");
+
+        refreshSession().andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value(
+                        "The role of this session is no longer assigned to you. Please sign in again."));
+
+        assertNothingMinted();
+        verify(refreshTokenCookieService).clear(any());
+        verify(tokenBlacklistService, never()).claim(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyLong());
+        verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+                e.getEventType() == com.example.hms.enums.AuditEventType.TOKEN_REFRESH
+                        && e.getStatus() == com.example.hms.enums.AuditStatus.FAILURE
+                        && user.getId().equals(e.getUserId())));
+    }
+
+    @Test
+    void sessionRoles_aLegacyRefreshTokenCarryingNoRoleSet_isRefusedNeverWidened() throws Exception {
+        com.example.hms.model.User user = refreshableUser("legacy.token");
+        holds(user, "ROLE_DOCTOR", "ROLE_HOSPITAL_ADMIN");
+        when(jwtTokenProvider.carriedRoles("session.refresh")).thenReturn(java.util.Optional.empty());
+
+        refreshSession().andExpect(status().isUnauthorized());
+
+        assertNothingMinted();
+        verify(refreshTokenCookieService).clear(any());
     }
 
     // ── QA D311/D418: activation re-send for phone-only and staff accounts ──

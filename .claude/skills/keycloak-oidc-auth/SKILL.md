@@ -73,7 +73,18 @@ reports `mfaEnrollmentRequired` and the confinement filter answers 403
 `mfa.enrollment.required` outside the sign-in and MFA enrolment handlers
 (`CommonProviderConfinement.SECOND_FACTOR_EXEMPT_RULES`; the rest of `/auth`,
 the ws ticket included, needs the factor). Never mint a token with a
-second-factor time on any other path. Enrollment lives on
+second-factor time on any other path.
+
+**A session's roles are fixed at sign-in.** The legacy refresh and
+the MFA verify mint `SessionRoles.stillHeld(carried, held)`: the roles the
+refresh token / challenge carries, less any removed since, never one the
+account gained (a new role needs a new sign-in and its challenge). Empty, or
+a token with no `roles` claim: 401 and the cookie cleared. A refresh whose
+roles hit `app.mfa.required-roles` (or a provider user's) needs a current
+second factor in the refresh token. `SessionRoleScopeGuardTest` fails on any
+minting path that reads the account's roles outside that intersection.
+
+Enrollment lives on
 `UserMfaEnrollment` (TOTP secret encrypted via `TotpSecretEncryptor` —
 different converter from `EncryptedStringConverter`). Backup-code use
 emits `AuditEventType.MFA_BACKUP_USED`.

@@ -66,6 +66,17 @@ class JwtTokenProviderTokenUseTest {
     }
 
     @Test
+    @DisplayName("a refresh token carries the roles its session was signed in with; a token without them carries none")
+    void carriedRolesAreTheSignedInRoles() {
+        String refresh = provider.generateRefreshToken(
+            new TokenUserDescriptor(USER_ID, USERNAME, List.of("ROLE_RECEPTIONIST")), null, "sid-1");
+        assertThat(provider.carriedRoles(refresh)).contains(List.of("ROLE_RECEPTIONIST"));
+        // The MFA challenge carries no role set: absent, never "every role".
+        assertThat(provider.carriedRoles(provider.generateMfaToken(USERNAME))).isEmpty();
+        assertThat(provider.carriedRoles("not-a-token")).isEmpty();
+    }
+
+    @Test
     @DisplayName("a refresh token from either mint path is a refresh token")
     void refreshTokensAreRefreshTokens() {
         HospitalUserDetails principal = mock(HospitalUserDetails.class);

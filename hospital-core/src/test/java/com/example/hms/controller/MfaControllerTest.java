@@ -397,6 +397,32 @@ class MfaControllerTest {
     }
 
     @Test
+    void sessionRoles_aChallengeCarryingNoRole_neverWidensToTheActiveAssignments() throws Exception {
+        when(jwtTokenProvider.isMfaToken("mfa-tok-none")).thenReturn(true);
+        claimable("mfa-tok-none");
+        when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-none")).thenReturn(USERNAME);
+        when(jwtTokenProvider.mfaTokenSelectedRoles("mfa-tok-none")).thenReturn(Optional.of(List.of()));
+        holds("ROLE_DOCTOR", "ROLE_HOSPITAL_ADMIN");
+        currentTotp("654321");
+        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class), notNull(), any())).thenReturn("access-jwt");
+        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class), notNull(), any())).thenReturn("refresh-jwt");
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-none\",\"code\":\"654321\"}"))
+                .andExpect(status().isOk());
+
+        // The session carries what the login minted into the challenge
+        // (no role), never every active assignment of the account.
+        var access = org.mockito.ArgumentCaptor.forClass(TokenUserDescriptor.class);
+        var refresh = org.mockito.ArgumentCaptor.forClass(TokenUserDescriptor.class);
+        verify(jwtTokenProvider).generateAccessToken(access.capture(), notNull(), any());
+        verify(jwtTokenProvider).generateRefreshToken(refresh.capture(), notNull(), any());
+        org.assertj.core.api.Assertions.assertThat(access.getValue().roles()).isEmpty();
+        org.assertj.core.api.Assertions.assertThat(refresh.getValue().roles()).isEmpty();
+    }
+
+    @Test
     void verifyMfa_honoursARoleTheLoginOfferedThroughExpansion() throws Exception {
         when(jwtTokenProvider.isMfaToken("mfa-tok-sa")).thenReturn(true);
         claimable("mfa-tok-sa");

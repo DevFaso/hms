@@ -884,9 +884,31 @@ public class AuthController {
         return body != null ? body.get("refreshToken") : null;
     }
 
-    /** A provider user whose refresh token carries no (or an expired) second factor. */
-    private boolean lapsedProviderFactor(java.util.UUID userId, String username, java.time.Instant secondFactor) {
-        return secondFactor == null && isProviderUserChallenged(userId, username);
+    /** The session's role set is gone (a legacy token without one, or no carried role still held). */
+    private static final String REFRESH_ROLES_GONE_KEY = "auth.refresh.rolesNoLongerHeld";
+
+    /**
+     * The roles this refresh may mint — the roles the refresh token
+     * carries (fixed at sign-in) that the account still holds, never one it
+     * gained since. Empty: the session cannot continue (a legacy token
+     * carrying no role set, or every carried role was removed since).
+     */
+    private List<String> sessionRolesStillHeld(String refreshToken, com.example.hms.model.User user) {
+        return jwtTokenProvider.carriedRoles(refreshToken)
+                .map(carried -> com.example.hms.security.SessionRoles.stillHeld(carried,
+                        com.example.hms.security.EffectiveRoles.codes(user, assignmentRepository.findByUser(user))))
+                .orElse(List.of());
+    }
+
+    /**
+     * AC-13: a refresh token without a (current) second factor may not
+     * continue a session whose roles require one (app.mfa.required-roles), nor
+     * a provider user's: the sign-in would have challenged it.
+     */
+    private boolean lapsedSecondFactor(java.util.UUID userId, String username, List<String> roles,
+                                       java.time.Instant secondFactor) {
+        return secondFactor == null
+                && (isMfaRequiredForUser(roles) || isProviderUserChallenged(userId, username));
     }
 
     /** Another tab rotated this refresh token a moment ago: no tokens, retry with the new cookie. */
@@ -977,12 +999,25 @@ public class AuthController {
                         MessageUtil.resolve("auth.api.stopImpersonation")));
         }
 
-        // Resolve current roles from tenant assignments (authoritative source)
-        List<String> roles = assignmentRepository.findByUser(user).stream()
-                .filter(a -> Boolean.TRUE.equals(a.getActive()))
-                .map(a -> a.getRole().getCode())
-                .distinct()
-                .toList();
+        // The session keeps the role set it was signed in with, less any
+        // role removed since (SessionRoles). A role granted since sign-in
+        // needs a new sign-in, and the challenge that sign-in decides on.
+        List<String> roles = sessionRolesStillHeld(refreshToken, user);
+        if (roles.isEmpty()) {
+            log.warn("🔄 [REFRESH] Refused — no role the session was signed in with is still held (or none carried)");
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.TOKEN_REFRESH)
+                    .eventDescription("Refresh refused — the session's roles are no longer held")
+                    .userName(username)
+                    .userId(user.getId())
+                    .status(AuditStatus.FAILURE)
+                    .build());
+            // This token can never yield a pair: drop the cookie so the
+            // portal's silent refresh stops retrying and signs in instead.
+            refreshTokenCookieService.clear(response);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse(MessageUtil.resolve(REFRESH_ROLES_GONE_KEY)));
+        }
 
         // ── Idle session timeout gate (v1.0 row 7) ───────────────────────
         // Refusing refresh-while-idle is the spec invariant: a silent
@@ -1038,15 +1073,17 @@ public class AuthController {
             // factor on, with the time it was verified, until that is older than
             // the max age (AC-13); a password-only one never gains it.
             java.time.Instant secondFactor = jwtTokenProvider.secondFactorAt(refreshToken);
-            // A provider user whose factor has lapsed (older than the max age)
-            // would get a pair every call refuses (403 mfa.enrollment.required)
-            // with nothing in the portal to recover: refuse the refresh
-            // instead, so the normal sign-in and challenge take over.
-            if (lapsedProviderFactor(user.getId(), username, secondFactor)) {
+            // AC-13: a session whose roles require a second factor (or
+            // a provider user's) continues only while its refresh token
+            // carries a current one. Without it the sign-in would have
+            // challenged it; a lapsed provider factor would also get a pair
+            // every call refuses (403 mfa.enrollment.required). Refuse, so the
+            // normal sign-in and challenge take over.
+            if (lapsedSecondFactor(user.getId(), username, roles, secondFactor)) {
                 // Left spent, not released: this token can never yield a pair again.
                 auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                         .eventType(AuditEventType.TOKEN_REFRESH)
-                        .eventDescription("Refresh refused — provider second factor missing or expired")
+                        .eventDescription("Refresh refused — second factor missing or expired")
                         .userName(username)
                         .userId(user.getId())
                         .status(AuditStatus.FAILURE)
@@ -1063,17 +1100,9 @@ public class AuthController {
                     .orElseGet(JwtTokenProvider::newSessionId);
             String newAccessToken  = jwtTokenProvider.generateAccessToken(descriptor, secondFactor, sessionId);
 
-            // Rotate the refresh token so each use yields a fresh one
-            var refreshAuth = new UsernamePasswordAuthenticationToken(
-                    new com.example.hms.security.CustomUserDetails(user,
-                            roles.stream()
-                                 .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
-                                 .collect(java.util.stream.Collectors.toSet())),
-                    null,
-                    roles.stream()
-                         .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
-                         .toList());
-            String newRefreshToken = jwtTokenProvider.generateRefreshToken(refreshAuth, secondFactor, sessionId);
+            // Rotate the refresh token so each use yields a fresh one, carrying
+            // the same (possibly narrowed) role set on to the next refresh.
+            String newRefreshToken = jwtTokenProvider.generateRefreshToken(descriptor, secondFactor, sessionId);
 
             // ── Idle session timeout — touch on successful refresh ──────────
             // Only after the rotation has succeeded; touching pre-rotation

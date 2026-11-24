@@ -10,7 +10,6 @@ import com.example.hms.payload.dto.MessageResponse;
 import com.example.hms.payload.dto.mfa.MfaEnrollmentResponse;
 import com.example.hms.payload.dto.mfa.MfaVerifyRequest;
 import com.example.hms.repository.UserRepository;
-import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.GlobalSessionRevocationService;
 import com.example.hms.security.IdleSessionGate;
 import com.example.hms.security.JwtTokenProvider;
@@ -70,7 +69,6 @@ public class MfaController {
     private final AuditEventLogService auditEventLogService;
     private final JwtTokenProvider jwtTokenProvider;
     private final UserCredentialLifecycleService userCredentialLifecycleService;
-    private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final RefreshTokenCookieService refreshTokenCookieService;
     private final IdleSessionGate idleSessionGate;
     /** The challenge token is single-use: a spent or force-logged-out one is refused at verify. */
@@ -105,32 +103,26 @@ public class MfaController {
 
     /**
      * The roles the challenge carries from the login that the user still
-     * holds: an empty list for an older challenge that carries none (the
-     * session then takes the active assignments), and {@link Optional#empty()} when the
+     * holds ({@link com.example.hms.security.SessionRoles#stillHeld},
+     * never a role the login did not mint): an empty list for a challenge
+     * that carries none (a login with no role: the session gets none, it is
+     * never widened to the assignments), and {@link Optional#empty()} when the
      * pick cannot be honoured (the token no longer parses, or no picked role
      * is still held). Held roles are read from the same source the login
-     * offered them from (assignments and legacy global roles alike), so a
-     * pick that worked without a challenge also works with one.
+     * offered them from (assignments and legacy global roles alike), widened
+     * as the login widened them, so a pick that worked without a challenge
+     * also works with one.
      */
     private Optional<List<String>> honouredPick(String mfaToken, String username) {
         Optional<List<String>> picked = jwtTokenProvider.mfaTokenSelectedRoles(mfaToken);
         if (picked.isEmpty() || picked.get().isEmpty()) {
             return picked;
         }
-        // Widened exactly as the login's authorities were (the provider's
-        // authorities mapper): a super-admin's inherited roles, a surgeon's
-        // DOCTOR. Without it those picks would read as no longer held.
-        java.util.Set<String> held = com.example.hms.security.RoleExpansion.expand(
+        List<String> stillHeld = com.example.hms.security.SessionRoles.stillHeld(picked.get(),
                 userDetailsService.loadUserByUsername(username).getAuthorities().stream()
                         .map(org.springframework.security.core.GrantedAuthority::getAuthority)
                         .filter(java.util.Objects::nonNull)
                         .toList());
-        // The held spelling, not the one typed at login: the idle gate's
-        // machine-role carve-out and the response compare exact strings.
-        List<String> stillHeld = picked.get().stream()
-                .flatMap(role -> held.stream().filter(role::equalsIgnoreCase).limit(1))
-                .distinct()
-                .toList();
         return stillHeld.isEmpty() ? Optional.empty() : Optional.of(stillHeld);
     }
 
@@ -383,29 +375,14 @@ public class MfaController {
         }
         mfaService.clearCodeAttempts(user.getId());
 
-        // Issue the full JWT pair. A role picked at login (still held, checked
-        // above) is the session's only role, as the sign-in without a
-        // challenge mints it: the challenge never widens it.
-        // Authority strings for the idle-gate touch must be Spring Security
-        // canonical form (ROLE_*). `Role.name` is not guaranteed to carry the
-        // ROLE_ prefix (per the entity Javadoc, examples include both
-        // "HOSPITAL_ADMIN" and "ROLE_SUPER_ADMIN"), so naively wrapping
-        // `roles` would break IdleSessionGate#hasMachineRole's exact-string
-        // carve-out — a real machine client (e.g. ROLE_FHIR_CLIENT) routed
-        // through this path would be misclassified as human and pinned in
-        // Redis. Use `Role.code`, which is uppercased on persist (Role.java)
-        // and mirrors the AuthController#refreshToken pattern (line ~617).
-        List<String> roles;
-        List<String> roleCodes;
-        if (pickedRoles.isEmpty()) {
-            var activeAssignments = assignmentRepository.findByUser_IdAndActiveTrue(user.getId());
-            roles = activeAssignments.stream().map(a -> a.getRole().getName()).distinct().toList();
-            roleCodes = activeAssignments.stream().map(a -> a.getRole().getCode()).distinct().toList();
-        } else {
-            // Held spellings (honouredPick), already canonical ROLE_* authorities.
-            roles = pickedRoles;
-            roleCodes = pickedRoles;
-        }
+        // Issue the full JWT pair with the roles the login minted into the
+        // challenge (still held, checked above): the role picked, or the
+        // single role held, as the sign-in without a challenge mints it.
+        // The challenge never widens it; a challenge carrying no role
+        // opens a session with none, never one with every active assignment.
+        // Held spellings (honouredPick) are canonical ROLE_* authorities, as
+        // the idle gate's machine-role carve-out needs.
+        List<String> roles = pickedRoles;
 
         var descriptor = new TokenUserDescriptor(user.getId(), username, roles);
         // A verified TOTP or backup code: both tokens carry amr [pwd, otp], the
@@ -463,9 +440,9 @@ public class MfaController {
 
         // Seed the idle window on token issue, mirroring
         // AuthController.authenticateUser. The authority list is built from
-        // role codes — see the roleCodes block above for the rationale.
+        // the held role codes (canonical ROLE_* authorities, see above).
         idleSessionGate.touchIfHuman(user.getId(),
-                AuthorityUtils.createAuthorityList(roleCodes.toArray(new String[0])));
+                AuthorityUtils.createAuthorityList(roles.toArray(new String[0])));
 
         return ResponseEntity.ok(body);
     }
