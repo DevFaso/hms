@@ -811,6 +811,20 @@ describe('Dashboard onStartEncounter', () => {
     expect(navSpy).toHaveBeenCalledWith(['/encounters', 'enc-123']);
   });
 
+  it('QA D3750: the header search carries the term in the navigation state, never the URL', () => {
+    const navSpy = spyOn(router, 'navigate');
+    const input = document.createElement('input');
+    input.value = '  Patient Test 02 ';
+
+    component.searchPatients({ target: input } as unknown as Event);
+
+    expect(navSpy).toHaveBeenCalledOnceWith(['/patients'], {
+      state: { patientSearch: 'Patient Test 02' },
+    });
+    expect(JSON.stringify(navSpy.calls.mostRecent().args)).not.toContain('queryParams');
+    expect(input.value).toBe('');
+  });
+
   it('should show toast error with backend message on failure', () => {
     const errorResponse = {
       error: {

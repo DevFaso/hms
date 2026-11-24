@@ -14,7 +14,10 @@ export default defineConfig({
   },
   reporter: [['list'], ['html', { open: 'never' }]],
   webServer: {
-    command: 'npm run build && node scripts/serve-built-portal.mjs',
+    command:
+      process.env.PLAYWRIGHT_PREBUILT === '1'
+        ? 'node scripts/serve-built-portal.mjs'
+        : 'npm run build && node scripts/serve-built-portal.mjs',
     url: 'http://127.0.0.1:4281',
     reuseExistingServer: false,
     timeout: 240000,

@@ -202,19 +202,23 @@ public class ChatController {
     }
 
     // --- REST: Search in Chat History Between Two Users ---
-    @GetMapping("/history/{user1Id}/{user2Id}/search")
+    // The term (often a patient's name) travels in the body, never in the URL; the paging stays in the query.
+    @com.example.hms.security.ReadsOnly("a search of a conversation, under POST so the typed term stays out of the URL")
+    @PostMapping("/history/{user1Id}/{user2Id}/search")
     @PreAuthorize(CHAT_ROLES)
     @Operation(
             summary = "Search messages in chat history",
-            description = "Searches for messages containing a keyword between two users."
+            description = "Searches for messages containing the body's term between two users."
     )
     public ResponseEntity<List<ChatMessageResponseDTO>> searchChatHistory(
             @PathVariable UUID user1Id,
             @PathVariable UUID user2Id,
-            @RequestParam String keyword,
+            @jakarta.validation.Valid @RequestBody
+            com.example.hms.payload.dto.identifiersearch.SearchTermRequestDTO body,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        List<ChatMessageResponseDTO> messages = chatMessageService.searchMessages(user1Id, user2Id, keyword, page, size);
+        List<ChatMessageResponseDTO> messages =
+                chatMessageService.searchMessages(user1Id, user2Id, body.term(), page, size);
         return ResponseEntity.ok(messages);
     }
 

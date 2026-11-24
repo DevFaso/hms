@@ -43,11 +43,19 @@ export class AuditLogService {
     if (params?.eventType) httpParams = httpParams.set('eventType', params.eventType);
     if (params?.fromDate) httpParams = httpParams.set('fromDate', params.fromDate);
     if (params?.toDate) httpParams = httpParams.set('toDate', params.toDate);
-    if (params?.search) httpParams = httpParams.set('search', params.search);
-    return this.http.get<{ content: AuditEventLog[]; totalElements: number; totalPages: number }>(
-      this.baseUrl,
-      { params: httpParams },
-    );
+    // QA D3750: the typed term names people (an actor, a patient in a description), so it is
+    // posted in the body, never put in the URL; the other filters stay in the query.
+    const search = params?.search?.trim();
+    return search
+      ? this.http.post<{ content: AuditEventLog[]; totalElements: number; totalPages: number }>(
+          `${this.baseUrl}/term-search`,
+          { search },
+          { params: httpParams },
+        )
+      : this.http.get<{ content: AuditEventLog[]; totalElements: number; totalPages: number }>(
+          this.baseUrl,
+          { params: httpParams },
+        );
   }
 
   getByUser(

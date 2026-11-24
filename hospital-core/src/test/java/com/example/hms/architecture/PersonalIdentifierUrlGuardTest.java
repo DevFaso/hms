@@ -32,9 +32,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>This walks Spring's own mapping registry over every controller and fails on any handler, of
  * any HTTP method (a write's query string is logged like a read's), whose {@code @RequestParam},
  * {@code @PathVariable} or un-annotated simple parameter (which Spring binds from the query
- * string) carries one of those names, unless it is in {@link #ALLOWED} with its reason. Free-text
- * {@code search}/{@code q} boxes are not named here: they are list filters across many surfaces,
- * not identifier lookups.
+ * string) carries one of those names, unless it is in {@link #ALLOWED} with its reason.
+ *
+ * <p>QA D3750: a search box's free text ({@code search}, {@code q}, {@code query}, {@code keyword},
+ * …) is named too: what is typed there is very often a name, a phone number or an MRN, so a list's
+ * term goes in the body of {@code POST …/term-search}. Only a box that searches a catalogue of
+ * things (drugs, tests, departments, facilities), where a person's identifier has nothing to
+ * match, is allowlisted.
  */
 @DisplayName("No handler takes a personal identifier in its URL")
 class PersonalIdentifierUrlGuardTest {
@@ -46,7 +50,9 @@ class PersonalIdentifierUrlGuardTest {
         "phone", "phonenumber", "mobile", "msisdn", "telephone",
         "email", "emailaddress",
         "mrn", "mri", "nationalid", "nationaluniqueid", "nui",
-        "identifier", "username", "patientusername", "recipientusername");
+        "identifier", "username", "patientusername", "recipientusername",
+        // QA D3750: a search box's free text is whatever the user typed, very often one of the above.
+        "search", "q", "query", "term", "searchterm", "keyword", "keywords", "filter");
 
     private static final String RESEND = "the account's contact for a new activation link, before any session; the portal"
         + " posts it in the body, both patient mobile apps still send ?email=, so the query parameter stays until they post"
@@ -68,7 +74,17 @@ class PersonalIdentifierUrlGuardTest {
         Map.entry("AuthController#legacyRequestPasswordReset phone", LEGACY_RESET),
         Map.entry("PasswordResetController#requestResetQuery email", LEGACY_RESET),
         Map.entry("PasswordResetController#requestResetQuery identifier", LEGACY_RESET),
-        Map.entry("PasswordResetController#requestResetQuery phone", LEGACY_RESET));
+        Map.entry("PasswordResetController#requestResetQuery phone", LEGACY_RESET),
+        Map.entry("AdmissionOrderSetController#list search", "searches the names of admission order sets (a catalogue)"),
+        Map.entry("LabTestDefinitionController#search keyword", "searches lab test definitions (a catalogue)"),
+        Map.entry("MedicationCatalogController#search q", "searches the drug catalogue"),
+        Map.entry("PatientEducationController#searchResources query",
+            "searches published patient-education resources (a catalogue), never a patient's record"),
+        Map.entry("PharmacyRegistryController#search q", "searches pharmacies by name or city (facilities)"),
+        Map.entry("ProviderDirectoryController#search q",
+            "searches verified private pharmacies and laboratories by name (facilities)"),
+        Map.entry("SuperAdminDashboardController#searchHospitalsForScopeChip q",
+            "searches hospital names for the super-admin scope chip (facilities)"));
 
     private static final ParameterNameDiscoverer NAMES = new DefaultParameterNameDiscoverer();
 

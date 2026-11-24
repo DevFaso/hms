@@ -52,6 +52,7 @@ POST /auth/username/reminder
 POST /auth/verify-email
 POST /auth/verify-password
 POST /auth/ws-ticket
+POST /notifications/term-search
 POST /provider/staff/{userId}/activate
 POST /provider/staff/{userId}/deactivate
 POST /users/admin-register

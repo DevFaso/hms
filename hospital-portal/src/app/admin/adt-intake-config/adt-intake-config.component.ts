@@ -1,3 +1,4 @@
+import { FormControlStyleDirective } from '../../shared/forms/form-control-style.directive';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -121,7 +122,14 @@ const EMPTY_FORM: IntakeFormState = {
 @Component({
   selector: 'app-adt-intake-config',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe, SubmitGuardDirective, ListEscapeDirective],
+  imports: [
+    FormControlStyleDirective,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    SubmitGuardDirective,
+    ListEscapeDirective,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="adt-intake" data-testid="adt-intake-admin">
@@ -205,7 +213,7 @@ const EMPTY_FORM: IntakeFormState = {
       }
 
       <form
-        class="adt-intake__form"
+        class="adt-intake__form form-card"
         (submit)="save($event)"
         novalidate
         data-testid="adt-intake-form"
@@ -218,11 +226,22 @@ const EMPTY_FORM: IntakeFormState = {
           }}
         </h2>
 
-        <div class="form-row adt-intake__typeahead">
+        @if (editingId()) {
+          <p id="adt-hospital-help" class="adt-intake__help">
+            {{ 'ADT_INTAKE.HOSPITAL_LOCKED' | translate }}
+          </p>
+        }
+        @if (!form.hospitalId) {
+          <p id="adt-dependent-help" class="adt-intake__help">
+            {{ 'ADT_INTAKE.CHOOSE_HOSPITAL_FIRST' | translate }}
+          </p>
+        }
+        <div class="form-group adt-intake__typeahead">
           <label for="adt-hospital-search"
             >{{ 'ADT_INTAKE.FIELD.HOSPITAL_PICKER' | translate }} *</label
           >
           <input
+            appFormControl
             id="adt-hospital-search"
             name="hospitalSearch"
             type="text"
@@ -237,6 +256,7 @@ const EMPTY_FORM: IntakeFormState = {
             [appListEscape]="hospitalOptions().length > 0"
             (listEscape)="hospitalOptions.set([])"
             [disabled]="!!editingId()"
+            [attr.aria-describedby]="editingId() ? 'adt-hospital-help' : null"
             data-testid="adt-intake-hospital-search"
           />
           @if (form.hospitalId) {
@@ -284,15 +304,17 @@ const EMPTY_FORM: IntakeFormState = {
           }
         </div>
 
-        <div class="form-row">
+        <div class="form-group">
           <label for="adt-provider">{{ 'ADT_INTAKE.FIELD.PROVIDER' | translate }} *</label>
           <select
+            appFormControl
             id="adt-provider"
             name="admittingProviderId"
             required
             [(ngModel)]="form.admittingProviderId"
             (ngModelChange)="onProviderChange($event)"
             [disabled]="!form.hospitalId"
+            [attr.aria-describedby]="!form.hospitalId ? 'adt-dependent-help' : null"
             [attr.aria-invalid]="fieldError('admittingProviderId') ? true : null"
             data-testid="adt-intake-provider"
           >
@@ -321,13 +343,15 @@ const EMPTY_FORM: IntakeFormState = {
           }
         </div>
 
-        <div class="form-row">
+        <div class="form-group">
           <label for="adt-department">{{ 'ADT_INTAKE.FIELD.DEPARTMENT' | translate }}</label>
           <select
+            appFormControl
             id="adt-department"
             name="departmentId"
             [(ngModel)]="form.departmentId"
             [disabled]="!form.hospitalId"
+            [attr.aria-describedby]="!form.hospitalId ? 'adt-dependent-help' : null"
             data-testid="adt-intake-department"
           >
             <option value="">
@@ -346,14 +370,16 @@ const EMPTY_FORM: IntakeFormState = {
           }
         </div>
 
-        <div class="form-row">
+        <div class="form-group">
           <!-- QA D872: a picker of the hospital's physicians' assignments, not a typed UUID. -->
           <label for="adt-assignment">{{ 'ADT_INTAKE.FIELD.ASSIGNMENT' | translate }}</label>
           <select
+            appFormControl
             id="adt-assignment"
             name="defaultAssignmentId"
             [(ngModel)]="form.defaultAssignmentId"
             [disabled]="!form.hospitalId"
+            [attr.aria-describedby]="!form.hospitalId ? 'adt-dependent-help' : null"
             [attr.aria-invalid]="fieldError('defaultAssignmentId') ? true : null"
             data-testid="adt-intake-assignment"
           >
@@ -374,11 +400,12 @@ const EMPTY_FORM: IntakeFormState = {
           }
         </div>
 
-        <div class="form-row">
+        <div class="form-group">
           <label for="adt-admission-type">{{
             'ADT_INTAKE.FIELD.ADMISSION_TYPE' | translate
           }}</label>
           <select
+            appFormControl
             id="adt-admission-type"
             name="defaultAdmissionType"
             [(ngModel)]="form.defaultAdmissionType"
@@ -390,9 +417,10 @@ const EMPTY_FORM: IntakeFormState = {
           </select>
         </div>
 
-        <div class="form-row">
+        <div class="form-group">
           <label for="adt-acuity">{{ 'ADT_INTAKE.FIELD.ACUITY' | translate }}</label>
           <select
+            appFormControl
             id="adt-acuity"
             name="defaultAcuityLevel"
             [(ngModel)]="form.defaultAcuityLevel"
@@ -404,11 +432,12 @@ const EMPTY_FORM: IntakeFormState = {
           </select>
         </div>
 
-        <div class="form-row">
+        <div class="form-group">
           <label for="adt-encounter-type">{{
             'ADT_INTAKE.FIELD.ENCOUNTER_TYPE' | translate
           }}</label>
           <select
+            appFormControl
             id="adt-encounter-type"
             name="defaultEncounterType"
             [(ngModel)]="form.defaultEncounterType"
@@ -420,9 +449,10 @@ const EMPTY_FORM: IntakeFormState = {
           </select>
         </div>
 
-        <div class="form-row">
+        <div class="form-group">
           <label for="adt-complaint">{{ 'ADT_INTAKE.FIELD.CHIEF_COMPLAINT' | translate }}</label>
           <input
+            appFormControl
             id="adt-complaint"
             name="defaultChiefComplaint"
             type="text"
@@ -474,72 +504,7 @@ const EMPTY_FORM: IntakeFormState = {
       </form>
     </section>
   `,
-  styles: [
-    `
-      .adt-intake {
-        padding: 1.5rem;
-      }
-      .adt-intake__header h1 {
-        margin-bottom: 0.25rem;
-      }
-      .adt-intake__subtitle {
-        margin-top: 0;
-        color: var(--text-secondary);
-      }
-      .adt-intake__error,
-      .adt-intake__field-error {
-        color: var(--danger, #b00020);
-      }
-      .adt-intake__pill {
-        display: inline-block;
-        padding: 0.15rem 0.6rem;
-        border-radius: 999px;
-        font-size: 0.85em;
-      }
-      .adt-intake__pill--on {
-        background: var(--success-bg, #dcfce7);
-        color: var(--success, #166534);
-      }
-      .adt-intake__pill--off {
-        background: var(--muted-bg, #f1f5f9);
-        color: var(--muted, #475569);
-      }
-      .adt-intake__form {
-        margin-top: 2rem;
-        max-width: 640px;
-      }
-      .form-row {
-        display: flex;
-        flex-direction: column;
-        margin-bottom: 0.75rem;
-      }
-      .form-row label {
-        font-weight: 500;
-        margin-bottom: 0.25rem;
-      }
-      .form-row small {
-        color: var(--text-secondary);
-        margin-top: 0.25rem;
-      }
-      .form-row--checkbox {
-        flex-direction: row;
-        align-items: center;
-        gap: 0.5rem;
-      }
-      .form-row--checkbox label {
-        margin: 0;
-      }
-      .form-actions {
-        display: flex;
-        gap: 0.5rem;
-        margin-top: 1rem;
-      }
-      .actions {
-        display: flex;
-        gap: 0.5rem;
-      }
-    `,
-  ],
+  styleUrl: './adt-intake-config.component.scss',
 })
 export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
   protected readonly admissionTypes = ADMISSION_TYPES;
