@@ -28,7 +28,9 @@ public final class PatientMessageContractFixture {
     public final Patient patient = new Patient();
     public final Hospital hospital = new Hospital();
     public final UUID subjectId = UUID.randomUUID();
-    public final MessageSource messages = TestMessageSources.bundles();
+    // Bundles are read-only; retain one cache rather than one per parameterized case.
+    private static final MessageSource SHARED_MESSAGES = TestMessageSources.bundles();
+    public final MessageSource messages = SHARED_MESSAGES;
     public final Clock clock = Clock.fixed(Instant.parse("2026-11-24T08:00:00Z"), ZoneOffset.UTC);
     public final SmsService sms = mock(SmsService.class);
     public final JavaMailSender smtp = mock(JavaMailSender.class);

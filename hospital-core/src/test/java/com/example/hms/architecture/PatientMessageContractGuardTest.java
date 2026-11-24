@@ -27,6 +27,24 @@ class PatientMessageContractGuardTest {
         assertThat(PatientMessageContractFixture.coveredEvents()).isEqualTo(tested);
     }
 
+    @Test void parameterizedCasesShareOnlyTheReadOnlyBundleCache() {
+        var first = new PatientMessageContractFixture(PatientNotificationEvent.LAB_RESULT_AVAILABLE,
+            com.example.hms.enums.NotificationChannel.SMS, "en", PatientMessageContractFixture.Refusal.NONE);
+        var second = new PatientMessageContractFixture(PatientNotificationEvent.INVOICE,
+            com.example.hms.enums.NotificationChannel.EMAIL, "fr", PatientMessageContractFixture.Refusal.OPT_OUT);
+        assertThat(first.messages).isSameAs(second.messages);
+        assertThat(first.patient).isNotSameAs(second.patient);
+        assertThat(first.rows).isNotSameAs(second.rows);
+        assertThat(first.wire).isNotSameAs(second.wire);
+        List<String> translated = new ArrayList<>();
+        for (Locale locale : List.of(Locale.ENGLISH, Locale.FRENCH, Locale.forLanguageTag("es"))) {
+            String text = first.messages.getMessage("patient.notFound", new Object[]{"contract-patient"}, locale);
+            assertThat(text).contains("contract-patient").doesNotContain("patient.notFound");
+            translated.add(text);
+        }
+        assertThat(new HashSet<>(translated)).hasSize(3);
+    }
+
     @Test void partnerPatientNoticesCannotLoseTheirHospitalAndDecisionTrace() throws Exception {
         String source=SourceScan.stripComments(Files.readString(Path.of("src/main/java/com/example/hms/service/pharmacy/partner/SmsPartnerNotificationChannel.java")));
         assertThat(source.replaceAll("\\s+","")).doesNotContain(",null,null)");
