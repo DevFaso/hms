@@ -17,8 +17,8 @@
 // Rules, over every non-spec `.ts` of src/app:
 //  - `raw-name-search`: `patientService.search({ … name: … })` outside the
 //    service — the term goes out as a name only (use `searchPatientsByTerm`).
-//  - `direct-patient-search`: an HTTP call to `/patients/search` or
-//    `/patients?search` outside services/patient.service.ts.
+//  - `direct-patient-search`: an HTTP call to `/patients/search`,
+//    `/patients/term-search` or `/patients?search` outside services/patient.service.ts.
 //  - `hand-composed-filter`: a page that builds its own patient filter from
 //    `personNameMatches(` and `phoneMatches(` instead of `patientMatchesTerm(`.
 // Allowlist: none.
@@ -37,7 +37,7 @@ const SHARED = 'shared/person-search.ts';
 const ROUTE_LIST = 'core/read-only-posts.ts';
 
 const RAW_NAME_SEARCH = /\bpatientService\s*\.\s*search\(\s*\{[^}]*?\bname\s*:/g;
-const DIRECT_SEARCH = /['"`]\/patients(?:\/search\b|\?search=)/g;
+const DIRECT_SEARCH = /['"`]\/patients(?:\/search\b|\/term-search\b|\?search=)/g;
 
 /** The term-search offenders of one source: `{ line, rule }`. */
 export function patientTermFindings(source, rel = 'source') {

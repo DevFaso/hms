@@ -173,6 +173,11 @@ class DeceasedPatientCareGuardTest {
         Encounter#byDoctor | a read over POST: the doctor's identifier travels in the body
         Lookup#getAppointmentsByPatientEmail,getAppointmentsByPatientPhone,getAppointmentsByPatientMri,getAppointmentsByStaffEmail | reads over POST: the identifier travels in the body
         Reception#getDuplicateCandidates | a read over POST: what the desk typed travels in the body
+        Appointment#termSearchAppointments | a read over POST: the typed term travels in the body (QA D3750)
+        AuditEventLog#termSearchAuditLogs | a read over POST: the typed term travels in the body (QA D3750)
+        Patient#termSearchPatients | a read over POST: the typed term travels in the body (QA D3750)
+        PatientPortal#termSearchMyNotifications | a read over POST: the typed term travels in the body (QA D3750)
+        Prescription#search | a read over POST: the typed term travels in the body (QA D3750)
         SuperAdminAuditSearch#search,exportCsv | reads over POST: the audit filters travel in the body
         Patient#createPatientAllergy,updatePatientAllergy,deactivatePatientAllergy,createPatientDiagnosis,updatePatientDiagnosis,deletePatientDiagnosis,createPatientChartUpdate | late documentation: a final diagnosis is routinely written after a death
         PatientPanel#end | closes a panel assignment

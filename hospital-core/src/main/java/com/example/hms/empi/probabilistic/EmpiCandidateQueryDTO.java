@@ -12,6 +12,7 @@ import java.time.LocalDate;
  * additional discriminators (phone, address) are deferred to the
  * row-25 follow-on.
  */
+@com.example.hms.validation.RejectsUnknownFields(com.example.hms.validation.RejectsUnknownFields.Kind.SEARCH)
 public record EmpiCandidateQueryDTO(
     String firstName,
     String lastName,
