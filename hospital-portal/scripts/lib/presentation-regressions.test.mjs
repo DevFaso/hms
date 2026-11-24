@@ -1,6 +1,55 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { copiedTranslations, presentationFindings } from './presentation-regressions.mjs';
+import {
+  consentScopeFindings,
+  copiedTranslations,
+  deliveryTranslationFindings,
+  presentationFindings,
+} from './presentation-regressions.mjs';
+
+test('every locale names the full scope of both shared consent categories', () => {
+  for (const [language, all] of [
+    ['en', 'all messages'],
+    ['fr', 'tous les messages'],
+    ['es', 'todos los mensajes'],
+  ]) {
+    assert.equal(
+      consentScopeFindings(
+        {
+          NOTIFICATIONS: {
+            TYPE_APPOINTMENT_REMINDER: 'Reminder',
+            TYPE_MEDICATION_REFILL: 'Refill',
+          },
+        },
+        language,
+      ).length,
+      2,
+    );
+    assert.deepEqual(
+      consentScopeFindings(
+        { NOTIFICATIONS: { TYPE_APPOINTMENT_REMINDER: all, TYPE_MEDICATION_REFILL: all } },
+        language,
+      ),
+      [],
+    );
+  }
+});
+
+test('delivery translations include the navigation entry as well as every namespace leaf', () => {
+  const en = {
+    PATIENT_NOTIFICATIONS: { TITLE: 'Delivery' },
+    NAV: { PATIENT_NOTIFICATIONS: 'Delivery' },
+  };
+  const translated = {
+    PATIENT_NOTIFICATIONS: { TITLE: 'Entrega' },
+    NAV: { PATIENT_NOTIFICATIONS: 'Delivery' },
+  };
+  assert.deepEqual(deliveryTranslationFindings(en, translated), [
+    'es.NAV.PATIENT_NOTIFICATIONS: missing translation or copied English',
+  ]);
+  translated.NAV.PATIENT_NOTIFICATIONS = 'Entrega';
+  assert.deepEqual(deliveryTranslationFindings(en, translated), []);
+});
 
 test('rejects copied namespace prose and missing leaves, keeping only the documented SMS acronym', () => {
   assert.deepEqual(
@@ -46,6 +95,24 @@ test('zero is allowed only once matching-record data is known', () => {
       {
         rel: 'page.html',
         text: "'PATIENTS.MATCHING_RECORDS' | translate: { count: loading() || loadError() ? '—' : filtered().length }",
+      },
+    ]),
+    [],
+  );
+});
+
+test('an invoice row uses its stored specific category and keeps the legacy fallback explicit', () => {
+  assert.equal(
+    presentationFindings([
+      { rel: 'invoice.html', text: "{{ it.itemCategory | enumLabel: 'invoiceItemCategory' }}" },
+    ]).length,
+    1,
+  );
+  assert.deepEqual(
+    presentationFindings([
+      {
+        rel: 'invoice.html',
+        text: "{{ it.coverageCategory ? (it.coverageCategory | enumLabel: 'priceListCategory') : (it.itemCategory | enumLabel: 'invoiceItemCategory') }}",
       },
     ]),
     [],

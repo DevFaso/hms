@@ -111,6 +111,8 @@ export interface InvoiceItemResponse {
   billingInvoiceId: string;
   itemDescription: string;
   itemCategory: string;
+  /** Stored tariff category, used only as the line's display label. */
+  coverageCategory?: string | null;
   quantity: number;
   unitPrice: number;
   totalPrice: number;

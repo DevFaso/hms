@@ -18,7 +18,13 @@ test('own request reaches the hospital queue, needs a reason, then downloads the
             firstName: 'cdx',
             lastName: 'Patient',
             dateOfBirth: '1990-01-01',
-            hospitalRecords: [{ hospitalId: TEST_ID, hospitalName: 'cdx Hospital' }],
+            hospitalRecords: [
+              {
+                hospitalId: TEST_ID,
+                hospitalName:
+                  'cdx Centre hospitalier régional de Ouagadougou — consultation et suivi des dossiers',
+              },
+            ],
           },
           allergies: [],
           activeDiagnoses: [],
@@ -45,7 +51,8 @@ test('own request reaches the hospital queue, needs a reason, then downloads the
         patientName: 'cdx Patient',
         requesterType: 'PATIENT',
         requesterName: 'cdx Patient',
-        hospitalName: 'cdx Hospital',
+        hospitalName:
+          'cdx Centre hospitalier régional de Ouagadougou — consultation et suivi des dossiers',
         status: 'PENDING',
         requestedOn: '2026-11-23',
         dueOn: '2026-12-23',
