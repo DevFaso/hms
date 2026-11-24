@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -253,6 +254,13 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     boolean existsByUserId(@Param("userId") UUID userId);
 
     /**
+     * QA r73 D3702: the patient rows of an account, ids only (an audit row needs the id, never a decrypted
+     * name), in a stable order so a tenant carrying duplicate rows (V113) still answers deterministically.
+     */
+    @Query("SELECT p.id FROM Patient p WHERE p.user.id = :userId ORDER BY p.id")
+    List<UUID> findIdsByUserId(@Param("userId") UUID userId);
+
+    /**
      * QA D819: is this account already the login of a patient record other
      * than {@code patientId}? Same shape as {@link #existsByUserId}.
      */
@@ -274,6 +282,26 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
      */
     @Query("SELECT p FROM Patient p WHERE p.id = :id")
     Optional<Patient> findByIdUnscoped(@Param("id") UUID id);
+
+    /** Consent provenance needs only the account id, and only for a registration at the delivery's hospital. */
+    @Query("select p.user.id from Patient p where p.id = :patientId and exists "
+        + "(select r.id from PatientHospitalRegistration r where r.patient.id = p.id and r.hospital.id = :hospitalId)")
+    Optional<UUID> findNotificationAccountScoped(@Param("patientId") UUID patientId, @Param("hospitalId") UUID hospitalId);
+
+    /** A patient id and the id of the patient's own account; nothing decrypted. */
+    interface PatientAccountId {
+        UUID getPatientId();
+        UUID getAccountId();
+    }
+
+    /**
+     * QA r73 D3700: the same scoped projection as {@link #findNotificationAccountScoped} for a page of deliveries,
+     * so a refusal the patient recorded can be shown as the patient's own.
+     */
+    @Query("select p.id as patientId, p.user.id as accountId from Patient p where p.id in :patientIds and exists "
+        + "(select r.id from PatientHospitalRegistration r where r.patient.id = p.id and r.hospital.id = :hospitalId)")
+    List<PatientAccountId> findNotificationAccountsScoped(@Param("patientIds") Collection<UUID> patientIds,
+                                                          @Param("hospitalId") UUID hospitalId);
 
     /**
      * QA D624 (user decision): would the caller's patient search find this

@@ -260,7 +260,7 @@ test.describe('super-admin workspaces', () => {
   test('maternity four-digit MRN search remains hospital-scoped and requires choosing a patient', async ({
     page,
   }, testInfo) => {
-    const reads: string[] = [];
+    const reads: { url: string; method: string; body: Record<string, unknown> | null }[] = [];
     await page.route('**/api/maternal-history/**', (route) =>
       route.fulfill({
         json: { content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 },
@@ -273,7 +273,11 @@ test.describe('super-admin workspaces', () => {
     );
     await page.route('**/api/patients/search**', (route) => {
       expect(route.request().headers()['x-hospital-id']).toBe(TARGET);
-      reads.push(route.request().url());
+      reads.push({
+        url: route.request().url(),
+        method: route.request().method(),
+        body: route.request().postDataJSON(),
+      });
       return route.fulfill({
         json: [
           { id: HOME, firstName: 'Awa', lastName: 'Test', mrn: 'CHW5624', active: true },
@@ -291,9 +295,12 @@ test.describe('super-admin workspaces', () => {
     await expect(screen.getByRole('option')).toHaveCount(2);
     expect(
       reads.some(
-        (url) =>
-          new URL(url).searchParams.get('name') === '5624' &&
-          new URL(url).searchParams.get('hospitalId') === TARGET,
+        (read) =>
+          // The term travels in the POST body, never in the URL; the scope stays in the query.
+          read.method === 'POST' &&
+          read.body?.['name'] === '5624' &&
+          !new URL(read.url).searchParams.has('name') &&
+          new URL(read.url).searchParams.get('hospitalId') === TARGET,
       ),
     ).toBe(true);
     await expect(screen.locator('.picker-chip')).toHaveCount(0);

@@ -4,6 +4,7 @@ import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Notification;
+import com.example.hms.payload.dto.notification.AdminNotificationRequestDTO;
 import com.example.hms.payload.dto.portal.NotificationPreferenceDTO;
 import com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO;
 import com.example.hms.service.NotificationService;
@@ -40,10 +41,31 @@ public class NotificationController {
     public ResponseEntity<Page<Notification>> getNotifications(
             Principal principal,
             @RequestParam(required = false) Boolean read,
-            @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size
     ) {
+        return notificationPage(principal, read, null, page, size);
+    }
+
+    /**
+     * The caller's notifications narrowed to a typed term. A notification names patients, so the
+     * term travels in the body, never in the URL; the read filter and the paging stay in the query.
+     */
+    @com.example.hms.security.ReadsOnly("a search of the caller's notifications, under POST so the typed term"
+        + " stays out of the URL")
+    @PostMapping("/term-search")
+    public ResponseEntity<Page<Notification>> termSearchNotifications(
+            Principal principal,
+            @Valid @RequestBody com.example.hms.payload.dto.identifiersearch.SearchTermRequestDTO body,
+            @RequestParam(required = false) Boolean read,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        return notificationPage(principal, read, body.term(), page, size);
+    }
+
+    private ResponseEntity<Page<Notification>> notificationPage(Principal principal, Boolean read, String search,
+                                                                int page, int size) {
         if (principal == null) {
             return ResponseEntity.status(401).build();
         }
@@ -57,9 +79,11 @@ public class NotificationController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN')")
-    public ResponseEntity<Notification> createNotification(@RequestParam String message, @RequestParam String recipientUsername) {
-        // Typed by the administrator: shown as written, in every language.
-        Notification notification = notificationService.createLiteralNotification(message, recipientUsername, "ADMIN_MESSAGE");
+    public ResponseEntity<Notification> createNotification(@Valid @RequestBody AdminNotificationRequestDTO request) {
+        // Typed by the administrator: shown as written, in every language. In the body, so the
+        // recipient's login and the message stay out of the URL.
+        Notification notification = notificationService.createLiteralNotification(
+            request.message(), request.recipientUsername(), "ADMIN_MESSAGE");
         return ResponseEntity.ok(notification);
     }
 

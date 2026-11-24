@@ -30,13 +30,19 @@ describe('PatientService term search (QA D1274)', () => {
     let got: PatientResponse[] = [];
     service.list('h1', '15/03/2020').subscribe((r) => (got = r));
     http
-      .expectOne((r) => r.url === '/patients' && r.params.get('search') === '15/03/2020')
+      .expectOne(
+        (r) =>
+          r.method === 'POST' &&
+          r.url === '/patients/term-search' &&
+          r.body?.search === '15/03/2020',
+      )
       .flush([]);
-    const byDob = http.expectOne((r) => r.url === '/patients/search');
-    expect(byDob.request.params.get('dob')).toBe('2020-03-15');
+    const byDob = http.expectOne((r) => r.method === 'POST' && r.url === '/patients/search');
+    // The identifier travels in the body; only the scope and the flags stay in the query.
+    expect(byDob.request.body).toEqual({ dob: '2020-03-15' });
+    expect(byDob.request.params.has('dob')).toBeFalse();
     expect(byDob.request.params.get('hospitalId')).toBe('h1');
     expect(byDob.request.params.get('includeInactive')).toBe('true');
-    expect(byDob.request.params.has('name')).toBeFalse();
     byDob.flush([awa]);
     expect(got.map((p) => p.id)).toEqual(['p1']);
   });
@@ -44,9 +50,10 @@ describe('PatientService term search (QA D1274)', () => {
   it('list(): an e-mail, or a piece of one, also searches by e-mail', () => {
     let got: PatientResponse[] = [];
     service.list('h1', 'awa.kabore').subscribe((r) => (got = r));
-    http.expectOne((r) => r.url === '/patients').flush([awa]);
+    http.expectOne((r) => r.url === '/patients/term-search').flush([awa]);
     const byEmail = http.expectOne((r) => r.url === '/patients/search');
-    expect(byEmail.request.params.get('email')).toBe('awa.kabore');
+    expect(byEmail.request.body).toEqual({ email: 'awa.kabore' });
+    expect(byEmail.request.urlWithParams).not.toContain('awa.kabore');
     byEmail.flush([awa, other]);
     expect(got.map((p) => p.id)).toEqual(['p1', 'p2']);
   });
@@ -54,19 +61,43 @@ describe('PatientService term search (QA D1274)', () => {
   it('list(): a name or a phone number is one request, as before', () => {
     service.list('h1', 'Awa').subscribe();
     service.list('h1', '70002781').subscribe();
-    http.expectOne((r) => r.url === '/patients' && r.params.get('search') === 'Awa').flush([]);
-    http.expectOne((r) => r.url === '/patients' && r.params.get('search') === '70002781').flush([]);
+    http.expectOne((r) => r.url === '/patients/term-search' && r.body?.search === 'Awa').flush([]);
+    http
+      .expectOne((r) => r.url === '/patients/term-search' && r.body?.search === '70002781')
+      .flush([]);
     http.expectNone('/patients/search');
   });
 
   it('list(): a failed birth-date search still shows what the list found', () => {
     let got: PatientResponse[] = [];
     service.list('h1', '2020-03-15').subscribe((r) => (got = r));
-    http.expectOne((r) => r.url === '/patients').flush([awa]);
+    http.expectOne((r) => r.url === '/patients/term-search').flush([awa]);
     http
       .expectOne((r) => r.url === '/patients/search')
       .flush('x', { status: 500, statusText: 'Server Error' });
     expect(got.map((p) => p.id)).toEqual(['p1']);
+  });
+
+  it('list(): QA D3750, the typed term is posted in the body and never reaches the URL', () => {
+    service.list('h1', '  Patient Test 02 ').subscribe();
+    const req = http.expectOne((r) => r.url === '/patients/term-search');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ search: 'Patient Test 02' });
+    expect(req.request.params.get('hospitalId')).toBe('h1');
+    expect(req.request.params.has('search')).toBeFalse();
+    expect(req.request.urlWithParams).not.toContain('Patient');
+    req.flush([]);
+  });
+
+  it('list(): without a term it is the plain GET list', () => {
+    service.list('h1').subscribe();
+    service.list('h1', '   ').subscribe();
+    const lists = http.match((r) => r.method === 'GET' && r.url === '/patients');
+    expect(lists.length).toBe(2);
+    lists.forEach((r) => {
+      expect(r.request.params.has('search')).toBeFalse();
+      r.flush([]);
+    });
   });
 
   it('searchPatientsByTerm: an ISO or day-first date is searched by birth date only', () => {
@@ -101,10 +132,41 @@ describe('PatientService term search (QA D1274)', () => {
     );
   });
 
-  it('search(): sends dob when given', () => {
-    service.search({ dob: '2020-03-15', hospitalId: 'h1' }).subscribe();
-    const req = http.expectOne((r) => r.url === '/patients/search');
-    expect(req.request.params.get('dob')).toBe('2020-03-15');
+  it('search(): POSTs the identifiers in the body, never in the URL', () => {
+    service
+      .search({ dob: '2020-03-15', name: 'Awa', phone: '', hospitalId: 'h1', size: 20 })
+      .subscribe();
+    const req = http.expectOne((r) => r.method === 'POST' && r.url === '/patients/search');
+    expect(req.request.body).toEqual({ name: 'Awa', dob: '2020-03-15' });
+    expect(req.request.urlWithParams).toBe('/patients/search?hospitalId=h1&size=20');
     req.flush([]);
+  });
+
+  it('lookup() and registrationMatch(): the identifiers travel in the body', () => {
+    service.lookup({ phone: '+22670161099', mrn: 'MRN-1', hospitalId: 'h1' }).subscribe();
+    const lookup = http.expectOne((r) => r.method === 'POST' && r.url === '/patients/lookup');
+    expect(lookup.request.body).toEqual({ phone: '+22670161099', mrn: 'MRN-1' });
+    expect(lookup.request.urlWithParams).toBe('/patients/lookup?hospitalId=h1');
+    lookup.flush([]);
+
+    service
+      .registrationMatch({
+        email: 'a@b.c',
+        firstName: 'Awa',
+        lastName: 'Kaboré',
+        dateOfBirth: '1991-07-22',
+      })
+      .subscribe();
+    const match = http.expectOne(
+      (r) => r.method === 'POST' && r.url === '/patients/registration-match',
+    );
+    expect(match.request.body).toEqual({
+      email: 'a@b.c',
+      firstName: 'Awa',
+      lastName: 'Kaboré',
+      dateOfBirth: '1991-07-22',
+    });
+    expect(match.request.urlWithParams).toBe('/patients/registration-match');
+    match.flush([]);
   });
 });

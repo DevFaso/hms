@@ -104,13 +104,20 @@ public class ChartReviewServiceImpl implements ChartReviewService {
                                          ChartReviewSection section, int page) {
         int size = clampLimit(limit);
         int safePage = Math.max(page, 0);
-        return assemble(patientId, hospitalId, section, (long) safePage * size, size, safePage);
+        return assemble(patientId, hospitalId, section, (long) safePage * size, size, safePage, false);
     }
 
     @Override
     @Transactional(readOnly = true)
     public ChartReviewDTO getCompleteChartReview(UUID patientId, UUID hospitalId) {
-        return assemble(patientId, hospitalId, null, 0L, Integer.MAX_VALUE, 0);
+        return assemble(patientId, hospitalId, null, 0L, Integer.MAX_VALUE, 0, false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ChartReviewDTO getHospitalReleaseChart(UUID patientId, UUID hospitalId) {
+        java.util.Objects.requireNonNull(hospitalId, "release hospital");
+        return assemble(patientId, hospitalId, null, 0L, Integer.MAX_VALUE, 0, true);
     }
 
     /**
@@ -123,7 +130,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
      * returned are accounted as surfaced from another hospital.
      */
     private ChartReviewDTO assemble(UUID patientId, UUID hospitalId, ChartReviewSection section,
-                                    long offset, int size, int page) {
+                                    long offset, int size, int page, boolean release) {
         // Resolves unscoped then authorizes against the registration table —
         // the tenant-scoped findById used to 404 every cross-hospital patient
         // whose chart header had just loaded fine. See PatientChartAccess.
@@ -136,10 +143,11 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         // (super-admin global view) the patient-wide reads stay.
         UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
         Set<UUID> readable = hospitalId == null ? null
+            : release ? Set.of(hospitalId)
             : recordAccessPolicy.readableHospitalIds(requesterUserId, patient.getId(), hospitalId);
         // E9 #62 — a live break-the-glass session unlocks the foreign sensitive
         // encounters the D3 rule withholds; the ledger row names the session.
-        boolean unlocked = readable != null && breakGlassGate.isUnlocked(requesterUserId, patient.getId(), hospitalId);
+        boolean unlocked = !release && readable != null && breakGlassGate.isUnlocked(requesterUserId, patient.getId(), hospitalId);
         // Where each row came from, accounted only once the page is cut.
         // #751 — results this hospital's laboratory performed for another
         // hospital are their own disclosure reason, counted apart from the
@@ -150,7 +158,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         notes.addAll(loadNursingNotes(patient.getId(), readable, sources, unlocked, hospitalId));
         notes.sort(Comparator.comparing(NoteEntryDTO::getDocumentedAt, Comparator.nullsLast(Comparator.reverseOrder()))
             .thenComparing(NoteEntryDTO::getId, Comparator.nullsLast(Comparator.naturalOrder())));
-        List<ResultEntryDTO> results = loadResults(patient.getId(), hospitalId, readable, sources);
+        List<ResultEntryDTO> results = loadResults(patient.getId(), hospitalId, readable, sources, release);
         List<MedicationEntryDTO> medications = loadMedications(patient.getId(), hospitalId, readable, sources);
         List<ImagingEntryDTO> imaging = loadImaging(patient.getId(), hospitalId, readable, sources);
         List<ProcedureEntryDTO> procedures = loadProcedures(patient.getId(), readable, sources);
@@ -181,7 +189,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         List<TimelineEventDTO> timelinePage = wants(section, ChartReviewSection.TIMELINE)
             ? timeline.stream().skip(offset).limit(size).toList() : List.of();
 
-        if (hospitalId != null) {
+        if (!release && hospitalId != null) {
             Set<UUID> surfaced = new HashSet<>();
             encounterPage.forEach(e -> surfaced.add(e.getId()));
             notePage.forEach(n -> surfaced.add(n.getId()));
@@ -393,7 +401,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     }
 
     private List<ResultEntryDTO> loadResults(UUID patientId, UUID hospitalId, Set<UUID> readable,
-                                             RowSources sources) {
+                                             RowSources sources, boolean release) {
         // QA D1380: every result, counted; id breaks resultDate ties, so a
         // page boundary is the same on every read.
         Pageable page = Pageable.unpaged(Sort.by(Sort.Direction.DESC, "resultDate", "id"));
@@ -407,6 +415,10 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         List<LabResult> source = ClinicalLabResultView.current(readable != null
             ? labResultRepository.findPatientResultsReadableAt(patientId, readable, hospitalId, false, page)
             : labResultRepository.findAllPatientResults(patientId, page));
+        // A laboratory's treatment right to foreign orders is not disclosure authority.
+        if (release) {
+            source = source.stream().filter(r -> hospitalId.equals(orderingHospitalIdOf(r))).toList();
+        }
         for (LabResult r : source) {
             if (CrossHospitalReachRecorder.isPerformedHere(r, hospitalId)) {
                 sources.performedHere(r.getId(), orderingHospitalIdOf(r));

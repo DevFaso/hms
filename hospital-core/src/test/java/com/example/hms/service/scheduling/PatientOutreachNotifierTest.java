@@ -1,5 +1,9 @@
 package com.example.hms.service.scheduling;
 
+import static org.mockito.ArgumentMatchers.any;
+
+import com.example.hms.service.notification.PatientChannelConsent.Decision;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -61,7 +65,7 @@ class PatientOutreachNotifierTest {
     @BeforeEach
     void setUp() {
         notifier = new PatientOutreachNotifier(notificationService,
-            new PatientMessageGate(new PatientChannelConsent(preferenceRepository), ledger, smsService, emailService),
+            new PatientMessageGate(new PatientChannelConsent(preferenceRepository), ledger, smsService, emailService, new com.example.hms.service.notification.PatientRecipientVerification(), org.mockito.Mockito.mock(com.example.hms.service.notification.PatientRecipientCurrentCheck.class)),
             com.example.hms.i18n.TestMessageSources.bundles());
 
         portalUser = new User();
@@ -71,6 +75,7 @@ class PatientOutreachNotifierTest {
         patient = new Patient();
         patient.setId(UUID.randomUUID());
         patient.setPhoneNumberPrimary("+22670707070");
+        patient.setVerifiedSmsRecipient("+22670707070");
         patient.setUser(portalUser);
 
         lenient().when(notificationService.created(anyString(), anyString(), anyString()))
@@ -126,8 +131,12 @@ class PatientOutreachNotifierTest {
         verify(smsService, never()).send(anyString(), anyString());
         verify(notificationService).created(anyString(), anyString(), anyString());
         // QA D2206: the refusal is visible to staff, without the message or the number.
-        verify(ledger).recordOptOut(PatientNotificationEvent.RECALL_DUE, HOSPITAL_ID, patient.getId(), RECALL_ID,
-            NotificationChannel.SMS);
+        verify(ledger).recordOptOut(eq(PatientNotificationEvent.RECALL_DUE),
+            eq(HOSPITAL_ID),
+            eq(patient.getId()),
+            eq(RECALL_ID),
+            eq(NotificationChannel.SMS),
+            any(Decision.class));
     }
 
     @Test

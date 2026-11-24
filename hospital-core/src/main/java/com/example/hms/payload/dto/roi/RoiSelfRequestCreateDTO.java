@@ -24,6 +24,9 @@ import java.time.LocalDate;
 @Builder
 public class RoiSelfRequestCreateDTO {
 
+    @Builder.Default
+    private com.example.hms.enums.RoiRequestKind requestKind = com.example.hms.enums.RoiRequestKind.COPY;
+
     /** Where the copy should go — optional; defaults to the contact on file. */
     @Size(max = 500)
     private String requesterContact;

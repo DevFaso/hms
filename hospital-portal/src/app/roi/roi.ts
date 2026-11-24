@@ -22,6 +22,7 @@ import {
   RoiRequest,
   RoiRequestStatus,
   RoiRequesterType,
+  RoiRequestKind,
   RoiService,
 } from '../services/roi.service';
 import { PatientResponse } from '../services/patient.service';
@@ -30,6 +31,9 @@ import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { actionRoles } from '../core/action-permissions';
+import { saveBlob } from '../shared/download-file';
+import { blobRefusalReason } from '../shared/blob-refusal';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 type WorklistStatus = RoiRequestStatus | 'ALL';
@@ -121,6 +125,14 @@ export class RoiComponent implements OnInit, OnDestroy {
   formPurpose = signal('');
   formScope = signal('');
   formRequestedOn = signal('');
+  formRequestKind = signal<RoiRequestKind>('COPY');
+  formFullRecord = signal(false);
+  exportingId = signal<string | null>(null);
+  readonly canExport = computed(
+    () =>
+      !!this.roleCtx.effectiveHospitalIdForRequest() &&
+      this.roleCtx.hasAnyActiveRole(actionRoles('roiRecordPdfExport')),
+  );
 
   /* ── decision modal ── */
   deciding = signal<{ row: RoiRequest; kind: DecisionKind } | null>(null);
@@ -222,6 +234,8 @@ export class RoiComponent implements OnInit, OnDestroy {
     this.formPurpose.set('');
     this.formScope.set('');
     this.formRequestedOn.set('');
+    this.formRequestKind.set('COPY');
+    this.formFullRecord.set(false);
     this.focusDialogSoon(() => this.intakeDialog()?.nativeElement);
   }
 
@@ -235,7 +249,11 @@ export class RoiComponent implements OnInit, OnDestroy {
   }
 
   intakeValid(): boolean {
-    return !!this.selectedPatient() && !!this.formPurpose().trim() && !!this.formScope().trim();
+    return (
+      !!this.selectedPatient() &&
+      !!this.formPurpose().trim() &&
+      ((this.formRequestKind() === 'COPY' && this.formFullRecord()) || !!this.formScope().trim())
+    );
   }
 
   submitIntake(): void {
@@ -243,11 +261,15 @@ export class RoiComponent implements OnInit, OnDestroy {
     if (!patient || !this.intakeValid() || this.saving()) return;
     this.saving.set(true);
     const req: RoiCreateRequest = {
+      requestKind: this.formRequestKind(),
       requesterType: this.formRequesterType(),
       requesterName: this.formRequesterName().trim() || undefined,
       requesterContact: this.formRequesterContact().trim() || undefined,
       purpose: this.formPurpose().trim(),
-      scopeDescription: this.formScope().trim(),
+      scopeDescription:
+        this.formRequestKind() === 'COPY' && this.formFullRecord()
+          ? 'FULL_RECORD'
+          : this.formScope().trim(),
       requestedOn: this.formRequestedOn() || undefined,
     };
     this.roiService.create(patient.id, req).subscribe({
@@ -282,7 +304,7 @@ export class RoiComponent implements OnInit, OnDestroy {
     const d = this.deciding();
     if (!d) return false;
     // The deny reason is the outcome the requester is told.
-    return d.kind !== 'deny' || !!this.decisionNote().trim();
+    return !!this.decisionNote().trim();
   }
 
   submitDecision(): void {
@@ -314,6 +336,34 @@ export class RoiComponent implements OnInit, OnDestroy {
     return type === 'PATIENT' ? 'ROI.REQUESTER_PATIENT' : 'ROI.REQUESTER_THIRD_PARTY';
   }
 
+  requestKindKey(row: RoiRequest): string {
+    return row.requestKind === 'CORRECTION' ? 'RECORD_RIGHTS.CORRECTION' : 'RECORD_RIGHTS.COPY';
+  }
+
+  exportCopy(row: RoiRequest): void {
+    if (
+      !this.canExport() ||
+      this.exportingId() ||
+      row.status !== 'FULFILLED' ||
+      row.requestKind === 'CORRECTION' ||
+      row.scopeDescription !== 'FULL_RECORD'
+    )
+      return;
+    this.exportingId.set(row.id);
+    this.roiService.downloadCopy(row.id).subscribe({
+      next: (blob) => {
+        this.exportingId.set(null);
+        saveBlob(blob, `record-copy-${row.requestedOn}.pdf`);
+      },
+      error: (err) => {
+        this.exportingId.set(null);
+        void blobRefusalReason(err).then((message) =>
+          this.toast.error(message ?? this.translate.instant('ROI.ACTION_FAILED')),
+        );
+      },
+    });
+  }
+
   /** Static key maps, not concatenation — the i18n parity gate scans string literals. */
   private static readonly DECIDED_KEYS: Record<DecisionKind, string> = {
     fulfil: 'ROI.DECIDED_FULFIL',
@@ -327,7 +377,9 @@ export class RoiComponent implements OnInit, OnDestroy {
     cancel: 'ROI.CANCEL',
   };
 
-  decisionActionKey(kind: DecisionKind): string {
+  decisionActionKey(kind: DecisionKind, row?: RoiRequest): string {
+    if (kind === 'fulfil' && row?.requestKind === 'CORRECTION')
+      return 'RECORD_RIGHTS.COMPLETE_CORRECTION';
     return RoiComponent.ACTION_KEYS[kind];
   }
 

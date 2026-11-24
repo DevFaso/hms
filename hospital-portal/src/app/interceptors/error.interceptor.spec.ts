@@ -11,7 +11,7 @@ import {
 } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
-import { defer, of, throwError, Subject } from 'rxjs';
+import { defer, of, throwError, Subject, TimeoutError } from 'rxjs';
 
 import {
   errorInterceptor,
@@ -164,8 +164,158 @@ describe('errorInterceptor', () => {
     owner.unsubscribe();
     tick(20_000);
     expect(refresh.observed).toBeFalse();
-    expect(auth.logout).toHaveBeenCalledTimes(1);
+    expect(auth.logout).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
   }));
+
+  it('a stalled refresh fails owner and waiters without losing their session or the next retry', fakeAsync(() => {
+    auth.getRefreshToken.and.returnValue('r1');
+    const refresh = new Subject<{ accessToken: string; refreshToken: string }>();
+    auth.refreshTokenRequest.and.returnValue(refresh);
+    const errors: unknown[] = [];
+    for (const url of ['/owner', '/waiter']) {
+      http.get(url).subscribe({ error: (error) => errors.push(error) });
+      httpMock.expectOne(url).flush(null, { status: 401, statusText: 'Unauthorized' });
+    }
+    tick(20_000);
+    expect(errors.length).toBe(2);
+    expect(errors.every((error) => error instanceof TimeoutError)).toBeTrue();
+    expect(refresh.observed).toBeFalse();
+    expect(auth.logout).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+    auth.refreshTokenRequest.and.returnValue(
+      of({ accessToken: 'later-token', refreshToken: 'r2' }),
+    );
+    http.get('/manual-retry').subscribe();
+    httpMock.expectOne('/manual-retry').flush(null, { status: 401, statusText: 'Unauthorized' });
+    httpMock.expectOne('/manual-retry').flush({ ok: true });
+    expect(auth.refreshTokenRequest).toHaveBeenCalledTimes(2);
+  }));
+
+  for (const status of [0, 500, 502, 503, 504]) {
+    it(`a refresh transport failure (${status}) reaches every waiter as session unavailability without signing out`, () => {
+      auth.getRefreshToken.and.returnValue('r1');
+      const refresh = new Subject<{ accessToken: string; refreshToken: string }>();
+      auth.refreshTokenRequest.and.returnValue(refresh);
+      const errors: unknown[] = [];
+      for (const url of ['/owner', '/waiter']) {
+        http.get(url).subscribe({ error: (error) => errors.push(error) });
+        httpMock.expectOne(url).flush(null, { status: 401, statusText: 'Unauthorized' });
+      }
+      const failure = new HttpErrorResponse({ status, error: { code: 'REQUEST_TIMEOUT' } });
+      refresh.error(failure);
+      expect(errors.length).toBe(2);
+      expect(errors[0]).toBe(errors[1]);
+      expect((errors[0] as HttpErrorResponse).status).toBe(503);
+      expect((errors[0] as HttpErrorResponse).error).toEqual({
+        code: 'SESSION_REFRESH_UNAVAILABLE',
+      });
+      expect(auth.logout).not.toHaveBeenCalled();
+      expect(router.navigate).not.toHaveBeenCalled();
+      expect(auth.setToken).not.toHaveBeenCalled();
+    });
+  }
+
+  it('an exhausted refresh 409 never asks either invoice caller to bypass the duplicate guard', fakeAsync(() => {
+    auth.getRefreshToken.and.returnValue('r1');
+    auth.refreshTokenRequest.and.returnValue(
+      defer(() => throwError(() => new HttpErrorResponse({ status: 409 }))),
+    );
+    const errors: HttpErrorResponse[] = [];
+    for (const url of ['/billing-invoices', '/billing-invoices/queued']) {
+      http.post(url, { supplementary: false }).subscribe({ error: (error) => errors.push(error) });
+      httpMock.expectOne(url).flush(null, { status: 401, statusText: 'Unauthorized' });
+    }
+    tick(
+      (REFRESH_SUPERSEDED_DELAY_MS *
+        REFRESH_SUPERSEDED_RETRIES *
+        (REFRESH_SUPERSEDED_RETRIES + 1)) /
+        2,
+    );
+    expect(errors.length).toBe(2);
+    for (const error of errors) {
+      expect(error.status).toBe(503);
+      expect(error.error).toEqual({ code: 'SESSION_REFRESH_UNAVAILABLE' });
+    }
+    httpMock.expectNone('/billing-invoices');
+    expect(auth.logout).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+  }));
+
+  for (const status of [400, 403, 410]) {
+    it(`a real refresh rejection (${status}) still ends the session`, () => {
+      auth.getRefreshToken.and.returnValue('r1');
+      auth.refreshTokenRequest.and.returnValue(throwError(() => new HttpErrorResponse({ status })));
+      http.get('/owner').subscribe({ error: () => undefined });
+      httpMock.expectOne('/owner').flush(null, { status: 401, statusText: 'Unauthorized' });
+      expect(auth.logout).toHaveBeenCalledTimes(1);
+      expect(router.navigate).toHaveBeenCalledWith(['/login']);
+    });
+  }
+
+  for (const status of [404, 409, 422, 500]) {
+    it(`a retried business response (${status}) does not sign out either refresh caller`, () => {
+      auth.getRefreshToken.and.returnValue('r1');
+      const refresh = new Subject<{ accessToken: string; refreshToken: string }>();
+      auth.refreshTokenRequest.and.returnValue(refresh);
+      const errors: HttpErrorResponse[] = [];
+      for (const url of ['/owner', '/waiter']) {
+        http.get(url).subscribe({ error: (error) => errors.push(error) });
+        httpMock.expectOne(url).flush(null, { status: 401, statusText: 'Unauthorized' });
+      }
+      refresh.next({ accessToken: 'valid-token', refreshToken: 'r2' });
+      refresh.complete();
+      for (const url of ['/owner', '/waiter']) {
+        httpMock.expectOne(url).flush(null, { status, statusText: 'Business response' });
+      }
+      expect(errors.map((error) => error.status)).toEqual([status, status]);
+      expect(auth.logout).not.toHaveBeenCalled();
+      expect(router.navigate).not.toHaveBeenCalled();
+    });
+  }
+
+  for (const rejected of ['/owner', '/waiter']) {
+    it(`a genuine 401 after refreshing still ends the session (${rejected})`, () => {
+      auth.getRefreshToken.and.returnValue('r1');
+      const refresh = new Subject<{ accessToken: string; refreshToken: string }>();
+      auth.refreshTokenRequest.and.returnValue(refresh);
+      for (const url of ['/owner', '/waiter']) {
+        http.get(url).subscribe({ error: () => undefined });
+        httpMock.expectOne(url).flush(null, { status: 401, statusText: 'Unauthorized' });
+      }
+      refresh.next({ accessToken: 'new-token', refreshToken: 'r2' });
+      refresh.complete();
+      for (const url of ['/owner', '/waiter']) {
+        const request = httpMock.expectOne(url);
+        if (url === rejected) request.flush(null, { status: 401, statusText: 'Unauthorized' });
+        else request.flush({});
+      }
+      expect(auth.logout).toHaveBeenCalledTimes(1);
+      expect(router.navigate).toHaveBeenCalledWith(['/login']);
+    });
+  }
+
+  it('a queued credential check still returns a wrong-password 401 to its form after refresh', () => {
+    auth.getRefreshToken.and.returnValue('r1');
+    const refresh = new Subject<{ accessToken: string; refreshToken: string }>();
+    auth.refreshTokenRequest.and.returnValue(refresh);
+    http.get('/owner').subscribe();
+    httpMock.expectOne('/owner').flush(null, { status: 401, statusText: 'Unauthorized' });
+    let failure: HttpErrorResponse | undefined;
+    http.post('/api/auth/verify-password', {}).subscribe({ error: (error) => (failure = error) });
+    httpMock
+      .expectOne('/api/auth/verify-password')
+      .flush(null, { status: 401, statusText: 'Unauthorized' });
+    refresh.next({ accessToken: 'new-token', refreshToken: 'r2' });
+    refresh.complete();
+    httpMock.expectOne('/owner').flush({});
+    httpMock
+      .expectOne('/api/auth/verify-password')
+      .flush(null, { status: 401, statusText: 'Wrong password' });
+    expect(failure?.status).toBe(401);
+    expect(auth.logout).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
 
   it('passes successful responses through untouched', () => {
     let body: unknown;
@@ -257,9 +407,11 @@ describe('errorInterceptor', () => {
     expect(auth.refreshTokenRequest).toHaveBeenCalled();
   });
 
-  it('on 401 with a failing refresh, logs out and redirects to /login', () => {
+  it('on 401 with a rejected refresh, logs out and redirects to /login', () => {
     auth.getRefreshToken.and.returnValue('r1');
-    auth.refreshTokenRequest.and.returnValue(throwError(() => new Error('refresh dead')));
+    auth.refreshTokenRequest.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 401 })),
+    );
 
     let error: unknown;
     http.get('/data').subscribe({ error: (e) => (error = e) });
@@ -300,7 +452,7 @@ describe('errorInterceptor', () => {
       expect(body).toEqual({ ok: true });
     }));
 
-    it('gives up and signs out only after the retries are spent', fakeAsync(() => {
+    it('ends the superseded retry budget without treating a cross-tab conflict as revocation', fakeAsync(() => {
       auth.getRefreshToken.and.returnValue('r1');
       let calls = 0;
       auth.refreshTokenRequest.and.returnValue(
@@ -310,7 +462,8 @@ describe('errorInterceptor', () => {
         }),
       );
 
-      http.get('/data').subscribe({ error: () => undefined });
+      let error: HttpErrorResponse | undefined;
+      http.get('/data').subscribe({ error: (value) => (error = value) });
       httpMock.expectOne('/data').flush(null, { status: 401, statusText: 'Unauthorized' });
       // Every back-off step: 600 + 1200 + ... ms.
       tick(
@@ -321,7 +474,10 @@ describe('errorInterceptor', () => {
       );
 
       expect(calls).toBe(REFRESH_SUPERSEDED_RETRIES + 1);
-      expect(auth.logout).toHaveBeenCalled();
+      expect(error?.status).toBe(503);
+      expect(error?.error).toEqual({ code: 'SESSION_REFRESH_UNAVAILABLE' });
+      expect(auth.logout).not.toHaveBeenCalled();
+      expect(router.navigate).not.toHaveBeenCalled();
     }));
 
     it('a 401 from the refresh (a real replay) signs out at once, without retrying', fakeAsync(() => {
@@ -839,6 +995,17 @@ describe('errorInterceptor', () => {
         httpMock.expectOne('/imaging/orders').flush(null, { status: 403, statusText: 'Forbidden' });
         expect(router.navigate).withContext(page).toHaveBeenCalledWith(['/error/403']);
       }
+    });
+
+    it('a refused search sent as a POST (it only reads) stays on the landing page', () => {
+      onPage('/dashboard');
+      let error: HttpErrorResponse | undefined;
+      http.post('/patients/search', { name: 'x' }).subscribe({ error: (e) => (error = e) });
+      httpMock.expectOne('/patients/search').flush(null, { status: 403, statusText: 'Forbidden' });
+      expect(httpMock.expectOne('/frontend-audit').request.body.type).toBe('SILENT_403');
+
+      expect(router.navigate).not.toHaveBeenCalled();
+      expect(error?.status).toBe(403);
     });
 
     it('a refused write on the dashboard is not silenced by being there', () => {

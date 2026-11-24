@@ -11,6 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.MediaType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
@@ -22,11 +23,11 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * QA D798: {@code GET /super-admin/audit-search?eventType=USER_DELETE} came
+ * QA D798: {@code GET /super-admin/audit-search?eventType=USER_DELETE} (now a POST body) came
  * back 200 with every event type, because only the plural {@code eventTypes}
  * was bound. The singular form now filters (on the JSON search and on the CSV
  * export), merges with the plural, and an unknown value is a 400.
@@ -59,7 +60,7 @@ class SuperAdminAuditSearchEventTypeTest {
     void theSingularEventTypeFilters() throws Exception {
         when(service.search(any(), any())).thenReturn(new AuditSearchPageDTO());
 
-        mvc.perform(get("/super-admin/audit-search").param("size", "5").param("eventType", "USER_DELETE"))
+        mvc.perform(post("/super-admin/audit-search").contentType(MediaType.APPLICATION_JSON).content("{\"eventType\":[\"USER_DELETE\"]}").param("size", "5"))
             .andExpect(status().isOk());
 
         assertThat(searchedWith().eventTypes()).containsExactly(AuditEventType.USER_DELETE);
@@ -69,8 +70,7 @@ class SuperAdminAuditSearchEventTypeTest {
     void theSingularAndThePluralAreMerged() throws Exception {
         when(service.search(any(), any())).thenReturn(new AuditSearchPageDTO());
 
-        mvc.perform(get("/super-admin/audit-search")
-                .param("eventTypes", "USER_CREATE", "USER_DELETE").param("eventType", "LOGIN"))
+        mvc.perform(post("/super-admin/audit-search").contentType(MediaType.APPLICATION_JSON).content("{\"eventTypes\":[\"USER_CREATE\",\"USER_DELETE\"],\"eventType\":[\"LOGIN\"]}"))
             .andExpect(status().isOk());
 
         assertThat(searchedWith().eventTypes())
@@ -81,7 +81,7 @@ class SuperAdminAuditSearchEventTypeTest {
     void thePluralAloneIsUnchanged() throws Exception {
         when(service.search(any(), any())).thenReturn(new AuditSearchPageDTO());
 
-        mvc.perform(get("/super-admin/audit-search").param("eventTypes", "USER_DELETE"))
+        mvc.perform(post("/super-admin/audit-search").contentType(MediaType.APPLICATION_JSON).content("{\"eventTypes\":[\"USER_DELETE\"]}"))
             .andExpect(status().isOk());
 
         assertThat(searchedWith().eventTypes()).containsExactly(AuditEventType.USER_DELETE);
@@ -91,7 +91,7 @@ class SuperAdminAuditSearchEventTypeTest {
     void noEventTypeMeansNoFilter() throws Exception {
         when(service.search(any(), any())).thenReturn(new AuditSearchPageDTO());
 
-        mvc.perform(get("/super-admin/audit-search")).andExpect(status().isOk());
+        mvc.perform(post("/super-admin/audit-search")).andExpect(status().isOk());
 
         assertThat(searchedWith().eventTypes()).isNull();
         assertThat(searchedWith().excludeRoutineSuccesses()).isFalse();
@@ -99,7 +99,7 @@ class SuperAdminAuditSearchEventTypeTest {
 
     @Test
     void anUnknownEventTypeIsABadRequestNotEveryRow() throws Exception {
-        mvc.perform(get("/super-admin/audit-search").param("eventType", "NOT_A_TYPE"))
+        mvc.perform(post("/super-admin/audit-search").contentType(MediaType.APPLICATION_JSON).content("{\"eventType\":[\"NOT_A_TYPE\"]}"))
             .andExpect(status().isBadRequest());
 
         verifyNoInteractions(service);
@@ -109,7 +109,7 @@ class SuperAdminAuditSearchEventTypeTest {
     void theCsvExportHonoursTheSingularEventType() throws Exception {
         when(service.exportCsv(any(), anyInt())).thenReturn(new byte[0]);
 
-        mvc.perform(get("/super-admin/audit-search/csv").param("eventType", "USER_DELETE"))
+        mvc.perform(post("/super-admin/audit-search/csv").contentType(MediaType.APPLICATION_JSON).content("{\"eventType\":[\"USER_DELETE\"]}"))
             .andExpect(status().isOk());
 
         ArgumentCaptor<AuditSearchFilter> filter = ArgumentCaptor.forClass(AuditSearchFilter.class);
@@ -120,10 +120,10 @@ class SuperAdminAuditSearchEventTypeTest {
     void routineSuppressionIsExplicitAndSharedBySearchAndCsv() throws Exception {
         when(service.search(any(), any())).thenReturn(new AuditSearchPageDTO());
         when(service.exportCsv(any(), anyInt())).thenReturn(new byte[0]);
-        mvc.perform(get("/super-admin/audit-search").param("excludeRoutineSuccesses", "true"))
+        mvc.perform(post("/super-admin/audit-search").contentType(MediaType.APPLICATION_JSON).content("{\"excludeRoutineSuccesses\":true}"))
             .andExpect(status().isOk());
         assertThat(searchedWith().excludeRoutineSuccesses()).isTrue();
-        mvc.perform(get("/super-admin/audit-search/csv").param("excludeRoutineSuccesses", "true"))
+        mvc.perform(post("/super-admin/audit-search/csv").contentType(MediaType.APPLICATION_JSON).content("{\"excludeRoutineSuccesses\":true}"))
             .andExpect(status().isOk());
         ArgumentCaptor<AuditSearchFilter> filter = ArgumentCaptor.forClass(AuditSearchFilter.class);
         verify(service).exportCsv(filter.capture(), anyInt());

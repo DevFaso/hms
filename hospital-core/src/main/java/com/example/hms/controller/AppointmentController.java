@@ -5,6 +5,7 @@ import com.example.hms.security.audit.PatientAccessAudited;
 import com.example.hms.payload.dto.AppointmentRequestDTO;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
 import com.example.hms.payload.dto.AppointmentSummaryDTO;
+import com.example.hms.payload.dto.identifiersearch.SearchTermRequestDTO;
 import com.example.hms.service.AppointmentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -103,17 +104,19 @@ public class AppointmentController {
     // one patient's data, so the gap is marked rather than left to look like
     // an oversight — the fix is an explicit emission in the service, which
     // already resolves the patient.
+    // The username (often the patient's phone number) travels in the body, never in the URL.
     @PatientAccessAudited(skip = true)
-    @GetMapping("/patients/username/{patientUsername}")
+    @com.example.hms.security.ReadsOnly("a patient's appointments, under POST so the username stays out of the URL")
+    @PostMapping("/patients/by-username")
     @PreAuthorize(APPOINTMENT_READ_ROLES)
     public ResponseEntity<List<AppointmentResponseDTO>> getAppointmentsByPatientUsername(
-        @PathVariable String patientUsername,
+        @jakarta.validation.Valid @RequestBody com.example.hms.payload.dto.identifiersearch.UsernameQueryDTO body,
     @RequestHeader(name = "Accept-Language", required = false) String lang,
         Authentication authentication
     ) {
     Locale locale = parseLocale(lang);
         return ResponseEntity.ok(
-            appointmentService.getAppointmentsByPatientUsername(patientUsername, locale, getUsername(authentication))
+            appointmentService.getAppointmentsByPatientUsername(body.username(), locale, getUsername(authentication))
         );
     }
 
@@ -249,18 +252,15 @@ public class AppointmentController {
         @RequestParam(required = false) UUID hospitalId,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
-        @RequestParam(required = false) String search,
         @RequestParam(name = "page", defaultValue = "0") int page,
         @RequestParam(name = "size", defaultValue = "50") int size,
         @RequestHeader(name = "Accept-Language", required = false) String lang,
         Authentication authentication
     ) {
         Locale locale = parseLocale(lang);
-        // Normalize blank search to null so it does not bypass the no-filters branch
-        String normalizedSearch = (search != null && search.isBlank()) ? null : search;
         // When no filters provided, fall back to the original user-scoped list
         if (patientId == null && staffId == null && hospitalId == null
-                && fromDate == null && toDate == null && normalizedSearch == null) {
+                && fromDate == null && toDate == null) {
             return ResponseEntity.ok(
                 appointmentService.getAppointmentsForUser(getUsername(authentication), locale)
             );
@@ -271,8 +271,45 @@ public class AppointmentController {
             .hospitalId(hospitalId)
             .fromDate(fromDate)
             .toDate(toDate)
-            .search(normalizedSearch)
             .build();
+        return filteredList(filter, page, size, locale, authentication);
+    }
+
+    /**
+     * The list narrowed to a typed term (a patient's or a clinician's name, a phone number, an
+     * MRN). The term travels in the body, never in the URL (proxy and access logs, browser history,
+     * front-end tracing); the other filters and the paging stay in the query. Same roles and the
+     * same service scoping as the list.
+     */
+    @com.example.hms.security.ReadsOnly("the appointment list's search box, under POST so the typed term stays"
+        + " out of the URL")
+    @PostMapping("/term-search")
+    @PreAuthorize(APPOINTMENT_MANAGE_ROLES)
+    public ResponseEntity<List<AppointmentResponseDTO>> termSearchAppointments(
+        @Valid @RequestBody SearchTermRequestDTO body,
+        @RequestParam(required = false) UUID patientId,
+        @RequestParam(required = false) UUID staffId,
+        @RequestParam(required = false) UUID hospitalId,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+        @RequestParam(name = "page", defaultValue = "0") int page,
+        @RequestParam(name = "size", defaultValue = "50") int size,
+        @RequestHeader(name = "Accept-Language", required = false) String lang,
+        Authentication authentication
+    ) {
+        AppointmentFilterDTO filter = AppointmentFilterDTO.builder()
+            .patientId(patientId)
+            .staffId(staffId)
+            .hospitalId(hospitalId)
+            .fromDate(fromDate)
+            .toDate(toDate)
+            .search(body.term())
+            .build();
+        return filteredList(filter, page, size, parseLocale(lang), authentication);
+    }
+
+    private ResponseEntity<List<AppointmentResponseDTO>> filteredList(AppointmentFilterDTO filter, int page, int size,
+                                                                      Locale locale, Authentication authentication) {
         // Sonar S6890 (Pattern 10): Math.clamp replaces the
         // Math.min(Math.max(size, 1), 200) idiom for clarity.
         // Math.max(page, 0) is still needed because page has no upper

@@ -44,6 +44,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -96,15 +97,18 @@ class PatientRecordPdfServiceTest {
         return locales.getAllValues();
     }
 
-    private void stubHappyPath() {
+    private void stubCommonPath() {
         Patient patient = new Patient();
         patient.setId(patientId);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
-        when(storyboardService.getStoryboard(patientId, hospitalId)).thenReturn(storyboard());
-        when(chartReviewService.getCompleteChartReview(patientId, hospitalId))
-            .thenReturn(chart());
         echoKeys();
+    }
+
+    private void stubHappyPath() {
+        stubCommonPath();
+        when(storyboardService.getStoryboard(patientId, hospitalId)).thenReturn(storyboard());
+        when(chartReviewService.getCompleteChartReview(patientId, hospitalId)).thenReturn(chart());
     }
 
     private static String textOf(byte[] pdf) throws Exception {
@@ -147,6 +151,76 @@ class PatientRecordPdfServiceTest {
         });
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"en", "fr", "es"})
+    void anApprovedDirectivePrintsWithoutAGlobalCodeStatus(String language) throws Exception {
+        var bundles = com.example.hms.i18n.TestMessageSources.bundles();
+        var board = PatientStoryboardDTO.builder().codeStatus(PatientStoryboardDTO.CodeStatusDTO.builder()
+            .status(null).directives(List.of(PatientStoryboardDTO.DirectiveSummaryDTO.builder()
+                .directiveType("LIVING_WILL").status("ACTIVE")
+                .description("Hospital-owned approved directive").build())).build()).build();
+        var labels = PdfLabels.of(bundles, Locale.forLanguageTag(language));
+        String text = textOf(PatientRecordPdfService.write(board, ChartReviewDTO.builder().build(), null, labels));
+        assertThat(text).contains("Hospital-owned approved directive")
+            .doesNotContain(labels.get("pdf.record.codeStatus.none"));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"en", "fr", "es"})
+    void omittedReleaseFieldsNeverAssertClinicalAbsence(String language) throws Exception {
+        var bundles = com.example.hms.i18n.TestMessageSources.bundles();
+        var labels = PdfLabels.of(bundles, Locale.forLanguageTag(language));
+        var board = PatientStoryboardDTO.builder().codeStatus(PatientStoryboardDTO.CodeStatusDTO.builder()
+            .status(null).directives(List.of()).build()).build();
+        String release = textOf(PatientRecordPdfService.write(board, ChartReviewDTO.builder().build(), null, labels, true));
+        assertThat(release).contains(labels.get("pdf.record.notIncluded"))
+            .contains(labels.get("pdf.record.releaseScope").substring(0, 45))
+            .doesNotContain(labels.get("pdf.record.none"), labels.get("pdf.record.codeStatus.none"), labels.get("pdf.record.encounter.none"));
+        board.getCodeStatus().setStatus("DNR");
+        String treatment = textOf(PatientRecordPdfService.write(board, ChartReviewDTO.builder().build(), "LEGACY-PENICILLIN-ALLERGY", labels));
+        assertThat(treatment).contains("LEGACY-PENICILLIN-ALLERGY", labels.get("pdf.record.none"))
+            .doesNotContain(labels.get("pdf.record.notIncluded"));
+    }
+
+    @Test
+    void anApprovedHospitalMismatchFailsBeforeAnyPatientRead() {
+        var approved = new com.example.hms.service.roi.RoiRequestService.ApprovedCopy(patientId, UUID.randomUUID(), UUID.randomUUID());
+        assertThatThrownBy(() -> service.renderForRoi(approved)).isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verifyNoInteractions(patientRepository, registrationRepository, storyboardService, chartReviewService, auditEventLogService);
+    }
+
+    @Test
+    void roiDownloadEmitsExactlyOneRequestLinkedEventAndReturnsARealPdf() throws Exception {
+        stubCommonPath();
+        when(storyboardService.getHospitalReleaseStoryboard(patientId, hospitalId)).thenReturn(storyboard());
+        when(chartReviewService.getHospitalReleaseChart(patientId, hospitalId)).thenReturn(chart());
+        UUID requestId = UUID.randomUUID();
+        when(auditEventLogService.logEvent(any())).thenReturn(
+            com.example.hms.payload.dto.AuditEventLogResponseDTO.builder().id(UUID.randomUUID()).build());
+        assertThat(textOf(service.renderForRoi(new com.example.hms.service.roi.RoiRequestService.ApprovedCopy(patientId, requestId, hospitalId)))).contains("Karim Porgo");
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.DATA_ACCESS);
+        assertThat(com.example.hms.enums.DisclosureCategory.classify(audit.getValue().getEventType(), audit.getValue().getEntityType())).isNull();
+        assertThat(audit.getValue().getEntityType()).isEqualTo("ROI_REQUEST");
+        assertThat(audit.getValue().getResourceId()).isEqualTo(requestId.toString());
+        assertThat(audit.getValue().getPatientId()).isEqualTo(patientId);
+        assertThat(audit.getValue().getHospitalId()).isEqualTo(hospitalId);
+    }
+
+    @Test
+    void roiDownloadRefusesBothANullAuditResultAndAnAuditException() {
+        stubCommonPath();
+        when(storyboardService.getHospitalReleaseStoryboard(patientId, hospitalId)).thenReturn(storyboard());
+        when(chartReviewService.getHospitalReleaseChart(patientId, hospitalId)).thenReturn(chart());
+        UUID requestId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.renderForRoi(new com.example.hms.service.roi.RoiRequestService.ApprovedCopy(patientId, requestId, hospitalId)))
+            .isInstanceOf(com.example.hms.exception.RoiAuditUnavailableException.class);
+        when(auditEventLogService.logEvent(any())).thenThrow(new IllegalStateException("cdx-audit-down"));
+        assertThatThrownBy(() -> service.renderForRoi(new com.example.hms.service.roi.RoiRequestService.ApprovedCopy(patientId, requestId, hospitalId)))
+            .isInstanceOf(com.example.hms.exception.RoiAuditUnavailableException.class);
+    }
+
     @Test
     void rendersIdentityStoryboardAndChartAndAuditsTheExportWithoutTheName() throws Exception {
         stubHappyPath();
@@ -173,6 +247,7 @@ class PatientRecordPdfServiceTest {
         verify(auditEventLogService).logEvent(audit.capture());
         assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.PATIENT_EXPORT);
         assertThat(audit.getValue().getResourceId()).isEqualTo(patientId.toString());
+        assertThat(audit.getValue().getPatientId()).as("ordinary treatment retains its pre-ROI DTO shape").isNull();
         // QA D533: anchored at the exporting hospital so the row names it.
         assertThat(audit.getValue().getHospitalId()).isEqualTo(hospitalId);
         assertThat(audit.getValue().getEventDescription())

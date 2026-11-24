@@ -1,6 +1,7 @@
 package com.example.hms.controller;
 
 import com.example.hms.payload.dto.EmailInvoiceRequest;
+import com.example.hms.payload.dto.InvoiceSendToRequestDTO;
 import com.example.hms.service.InvoiceEmailService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -10,7 +11,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.OffsetDateTime;
@@ -37,12 +37,13 @@ public class InvoiceEmailController {
         return ResponseEntity.ok(Map.of(STATUS_KEY,"SENT","sentAt", OffsetDateTime.now()));
     }
 
-    // Quick path — email as query param to avoid URL-encoding issues with @, +, %
-    @PostMapping("/{invoiceId}/send-to")
+    // Quick path — one address, in the body so it never reaches a URL (access logs, tracing).
+    @PostMapping(path = "/{invoiceId}/send-to", consumes = "application/json")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST')")
     public ResponseEntity<Map<String,Object>> emailInvoiceQuick(
         @PathVariable UUID invoiceId,
-        @RequestParam String email) {
+        @RequestBody @Valid InvoiceSendToRequestDTO body) {
+        String email = body.email();
 
         // validate path email (strict)
         if (!isValidEmail(email)) {

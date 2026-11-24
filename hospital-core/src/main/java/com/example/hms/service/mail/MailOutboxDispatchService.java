@@ -64,18 +64,24 @@ public class MailOutboxDispatchService {
     private final MailOutboxProperties properties;
     private final Clock clock;
     private final TransactionTemplate transactionTemplate;
+    private final com.example.hms.repository.PatientRepository patients;
+    private final com.example.hms.service.notification.PatientRecipientVerification verification;
     private final AtomicReference<LocalDateTime> lastPurge = new AtomicReference<>();
 
     public MailOutboxDispatchService(MailOutboxRepository repository,
                                      EmailService emailService,
                                      MailOutboxProperties properties,
                                      Clock clock,
-                                     PlatformTransactionManager transactionManager) {
+                                     PlatformTransactionManager transactionManager,
+                                     com.example.hms.repository.PatientRepository patients,
+                                     com.example.hms.service.notification.PatientRecipientVerification verification) {
         this.repository = repository;
         this.emailService = emailService;
         this.properties = properties;
         this.clock = clock;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+        this.patients = patients;
+        this.verification = verification;
     }
 
     /**
@@ -146,9 +152,21 @@ public class MailOutboxDispatchService {
         if (message == null) {
             return null;
         }
+        if (message.getRecipientPolicyVersion() < 1) {
+            close(message, MailOutboxStatus.FAILED, "LegacyRecipientPolicy");
+            repository.save(message);
+            return null;
+        }
         if (message.getHtmlBody() == null) {
             // Nothing left to send: never retry an empty row.
             close(message, MailOutboxStatus.FAILED, MISSING_BODY);
+            repository.save(message);
+            return null;
+        }
+        if (message.getClinicalPatientId() != null && !patients.findByIdUnscoped(message.getClinicalPatientId())
+            .map(patient -> verification.allows(patient, com.example.hms.enums.NotificationChannel.EMAIL,
+                message.getVerifiedPatientRecipient())).orElse(false)) {
+            close(message, MailOutboxStatus.FAILED, "RecipientUnverified");
             repository.save(message);
             return null;
         }

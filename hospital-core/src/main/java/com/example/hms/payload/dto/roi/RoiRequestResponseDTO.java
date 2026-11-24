@@ -20,6 +20,10 @@ import java.util.UUID;
 @Builder
 public class RoiRequestResponseDTO {
 
+    private com.example.hms.enums.RoiRequestKind requestKind;
+    private LocalDate dueOn;
+    private UUID decisionActorUserId;
+
     private UUID id;
     private UUID patientId;
     private String patientName;

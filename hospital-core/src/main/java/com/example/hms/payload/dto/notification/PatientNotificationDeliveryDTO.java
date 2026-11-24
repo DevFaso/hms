@@ -41,6 +41,14 @@ public class PatientNotificationDeliveryDTO {
     private LocalDateTime sentAt;
     private LocalDateTime lastRetriedAt;
     /**
+     * QA r73 D3700: who recorded the refusal, as this hospital may know it: PATIENT, STAFF or OTHER_FACILITY
+     * ({@code ConsentRecorderLabels.Kind}). Never the recorder's account id.
+     */
+    private String consentRecordedByKind;
+    /** The recorder's display name, only when staff of the reader's own hospital (ConsentRecorderLabels). */
+    private String consentRecordedByName;
+    private LocalDateTime consentRecordedAt;
+    /**
      * QA D2402: what the notice was about, so a row (an opt-out above all, which has no attempt) can be traced:
      * the invoice number, or the lab order number. Null for the other kinds, and when the subject is gone.
      */

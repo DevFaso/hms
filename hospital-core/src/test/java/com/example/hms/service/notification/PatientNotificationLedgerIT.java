@@ -64,6 +64,8 @@ class PatientNotificationLedgerIT extends BaseIT {
     @Autowired private PlatformTransactionManager transactionManager;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private Clock clock;
+    @Autowired private com.example.hms.repository.PatientHospitalRegistrationRepository registrations;
+    @Autowired private com.example.hms.repository.NotificationPreferenceRepository preferences;
 
     private Hospital hospital;
     private Hospital otherHospital;
@@ -114,6 +116,7 @@ class PatientNotificationLedgerIT extends BaseIT {
     @AfterEach
     void clean() {
         jdbc.update("delete from clinical.patient_notification_deliveries where patient_id = ?", patient.getId());
+        jdbc.update("delete from clinical.patient_hospital_registrations where patient_id = ?", patient.getId());
         patientRepository.deleteById(patient.getId());
         userRepository.deleteById(account.getId());
         hospitalRepository.deleteById(hospital.getId());
@@ -127,6 +130,149 @@ class PatientNotificationLedgerIT extends BaseIT {
         Mockito.when(mail.deliversRealEmail()).thenReturn(true);
         return new PatientNotificationLedger(repository, patientRepository, consent, sms, mail, clock,
             transactionManager);
+    }
+
+    @Test
+    void provenanceProjectsOnlyTheAccountAtTheDeliveryHospitalEvenAfterRegistrationCloses() {
+        assertThat(patientRepository.findNotificationAccountScoped(patient.getId(), hospital.getId())).isEmpty();
+        registrations.saveAndFlush(com.example.hms.model.PatientHospitalRegistration.builder()
+            .patient(patient).hospital(hospital).mrn("cdx-" + UUID.randomUUID())
+            .registrationDate(java.time.LocalDate.now(clock)).active(false).build());
+        assertThat(patientRepository.findNotificationAccountScoped(patient.getId(), hospital.getId())).contains(account.getId());
+        assertThat(patientRepository.findNotificationAccountScoped(patient.getId(), otherHospital.getId())).isEmpty();
+        assertThat(patientRepository.findNotificationAccountScoped(UUID.randomUUID(), hospital.getId())).isEmpty();
+    }
+
+    @Autowired private com.example.hms.repository.RoleRepository roleRepository;
+    @Autowired private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
+
+    @Test
+    @DisplayName("QA r73 D3700: a recorder's name is read only for staff of the reader's hospital (PostgreSQL)")
+    void recorderNamesAreReadOnlyForStaffOfTheReadersHospital() {
+        int n = SEQ.incrementAndGet();
+        User receptionist = userRepository.saveAndFlush(User.builder()
+            .username("pnd-it-desk-" + n).passwordHash("noop").email("pnd-it-desk-" + n + "@hospital.test")
+            .firstName("Test").lastName("Accueil").phoneNumber("+22672" + String.format("%06d", n % 1_000_000))
+            .build());
+        var desk = roleRepository.findByCode("ROLE_RECEPTIONIST").orElseGet(() -> roleRepository.save(
+            com.example.hms.model.Role.builder().name("RECEPTIONIST").code("ROLE_RECEPTIONIST").build()));
+        var patientRole = roleRepository.findByCode("ROLE_PATIENT").orElseGet(() -> roleRepository.save(
+            com.example.hms.model.Role.builder().name("PATIENT").code("ROLE_PATIENT").build()));
+        var deskAtA = assignmentRepository.saveAndFlush(com.example.hms.model.UserRoleHospitalAssignment.builder()
+            .assignmentCode("PND-DESK-" + n).startDate(java.time.LocalDate.now(clock)).registeredBy(receptionist)
+            .user(receptionist).hospital(hospital).role(desk).assignedAt(LocalDateTime.now(clock)).active(true).build());
+        // A patient's own role at the hospital does not make the patient "staff" there.
+        var patientAtA = assignmentRepository.saveAndFlush(com.example.hms.model.UserRoleHospitalAssignment.builder()
+            .assignmentCode("PND-PAT-" + n).startDate(java.time.LocalDate.now(clock)).registeredBy(account)
+            .user(account).hospital(hospital).role(patientRole).assignedAt(LocalDateTime.now(clock)).active(true).build());
+        try {
+            var ids = List.of(receptionist.getId(), account.getId());
+            assertThat(userRepository.findStaffActorNamesAtHospital(ids, hospital.getId()))
+                .extracting(com.example.hms.repository.UserRepository.ClinicalActorName::getId)
+                .containsExactly(receptionist.getId());
+            assertThat(userRepository.findStaffActorNamesAtHospital(ids, otherHospital.getId())).isEmpty();
+
+            var labels = new ConsentRecorderLabels(userRepository);
+            var atB = new com.example.hms.payload.dto.notification.PatientNotificationDeliveryDTO();
+            labels.forStaffViewer(ids, otherHospital.getId()).apply(atB, receptionist.getId(), account.getId());
+            assertThat(atB.getConsentRecordedByKind()).isEqualTo("OTHER_FACILITY");
+            assertThat(atB.getConsentRecordedByName()).isNull();
+            var atA = new com.example.hms.payload.dto.notification.PatientNotificationDeliveryDTO();
+            labels.forStaffViewer(ids, hospital.getId()).apply(atA, receptionist.getId(), account.getId());
+            assertThat(atA.getConsentRecordedByKind()).isEqualTo("STAFF");
+            assertThat(atA.getConsentRecordedByName()).isEqualTo("Test Accueil");
+        } finally {
+            assignmentRepository.deleteAll(List.of(deskAtA, patientAtA));
+            userRepository.deleteById(receptionist.getId());
+        }
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void aCommittedConsentChangeCannotRewriteTheRefusalThatQueuedTheTrace(boolean enabledAfterDecision) throws Exception {
+        registrations.saveAndFlush(com.example.hms.model.PatientHospitalRegistration.builder()
+            .patient(patient).hospital(hospital).mrn("cdx-" + UUID.randomUUID())
+            .registrationDate(java.time.LocalDate.now(clock)).active(true).build());
+        UUID originalActor = account.getId();
+        LocalDateTime originalTime = LocalDateTime.of(2026, 11, 23, 8, 0);
+        UUID laterActor = UUID.randomUUID();
+        for (NotificationChannel channel : List.of(NotificationChannel.SMS, NotificationChannel.EMAIL)) {
+            var choice = com.example.hms.model.NotificationPreference.builder().user(account)
+                .notificationType(com.example.hms.enums.NotificationType.LAB_RESULT).channel(channel).build();
+            choice.recordChoice(false, originalActor, originalTime);
+            preferences.saveAndFlush(choice);
+        }
+        PatientRepository hookedPatients = Mockito.mock(PatientRepository.class,
+            org.mockito.AdditionalAnswers.delegatesTo(patientRepository));
+        var changed = new java.util.concurrent.atomic.AtomicBoolean();
+        Mockito.doAnswer(call -> {
+            if (changed.compareAndSet(false, true)) {
+                TransactionTemplate operatorWrite = new TransactionTemplate(transactionManager);
+                operatorWrite.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+                operatorWrite.executeWithoutResult(status -> {
+                    userRepository.lockForNotificationPreferences(account.getId()).orElseThrow();
+                    var choices = preferences.findByUser_IdAndNotificationType(account.getId(),
+                        com.example.hms.enums.NotificationType.LAB_RESULT);
+                    choices.forEach(choice -> choice.recordChoice(enabledAfterDecision, laterActor, originalTime.plusMinutes(1)));
+                    preferences.saveAllAndFlush(choices);
+                });
+            }
+            return patientRepository.findNotificationAccountScoped(patient.getId(), hospital.getId());
+        }).when(hookedPatients).findNotificationAccountScoped(patient.getId(), hospital.getId());
+        SmsService sms = Mockito.mock(SmsService.class);
+        EmailService mail = Mockito.mock(EmailService.class);
+        Mockito.when(sms.deliversRealSms()).thenReturn(true);
+        Mockito.when(mail.deliversRealEmail()).thenReturn(true);
+        var ledger = new PatientNotificationLedger(repository, hookedPatients, consent, sms, mail, clock, transactionManager);
+        try {
+            UUID subject = UUID.randomUUID();
+            assertThat(ledger.enqueue(PatientNotificationEvent.LAB_RESULT_AVAILABLE, hospital.getId(), patient.getId(), subject))
+                .isEmpty();
+            var traces = repository.findAll().stream().filter(row -> subject.equals(row.getSubjectId())).toList();
+            assertThat(changed).isTrue();
+            assertThat(traces).hasSize(2).allSatisfy(row -> {
+                assertThat(row.getStatus()).isEqualTo(NotificationDeliveryStatus.SKIPPED);
+                assertThat(row.getErrorCode()).isEqualTo("OPTED_OUT");
+                assertThat(row.getConsentRecordedBy()).isEqualTo(originalActor);
+                assertThat(row.getConsentRecordedAt()).isEqualTo(originalTime);
+            });
+            assertAdminEndpointShowsOriginalRefusal(originalActor);
+            Mockito.verify(sms).deliversRealSms();
+            Mockito.verify(mail).deliversRealEmail();
+            Mockito.verifyNoMoreInteractions(sms, mail);
+        } finally {
+            jdbc.update("delete from security.notification_preferences where user_id=?", account.getId());
+        }
+    }
+
+    private void assertAdminEndpointShowsOriginalRefusal(UUID originalActor) throws Exception {
+        // Real HTTP controller, admin search and database; only the caller's pinned scope is supplied.
+        var scope = Mockito.mock(com.example.hms.security.tenant.ActingScopeResolver.class);
+        Mockito.when(scope.requirePinned()).thenReturn(hospital.getId());
+        var admin = new PatientNotificationDeliveryAdminService(repository, patientRepository,
+            new ConsentRecorderLabels(userRepository),
+            Mockito.mock(com.example.hms.repository.AppointmentRepository.class),
+            Mockito.mock(com.example.hms.repository.BillingInvoiceRepository.class),
+            Mockito.mock(com.example.hms.repository.LabOrderRepository.class), scope,
+            Mockito.mock(com.example.hms.utility.RoleValidator.class), clock);
+        var mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(
+            new com.example.hms.controller.PatientNotificationDeliveryController(admin)).build();
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .get("/patient-notification-deliveries").param("status", "SKIPPED"))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .jsonPath("$.data.content.length()").value(2))
+            // QA r73 D3700: the refusal is the patient's own; the reader gets a kind, never an account id.
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .jsonPath("$.data.content[*].consentRecordedByKind")
+                .value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is("PATIENT"))))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .jsonPath("$.data.content[0].consentRecordedBy").doesNotExist())
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(originalActor.toString()))))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .jsonPath("$.data.content[*].consentRecordedAt")
+                .value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.startsWith("2026-11-23T08:00"))));
     }
 
     @Test
@@ -219,11 +365,11 @@ class PatientNotificationLedgerIT extends BaseIT {
         UUID admin = UUID.randomUUID();
 
         Integer foreign = tx.execute(s -> repository.requeueFailed(saved.getId(), otherHospital.getId(),
-            NotificationDeliveryStatus.FAILED, NotificationDeliveryStatus.PENDING, now, admin));
+            NotificationDeliveryStatus.FAILED, NotificationDeliveryStatus.PENDING, now, admin, 0));
         Integer own = tx.execute(s -> repository.requeueFailed(saved.getId(), hospital.getId(),
-            NotificationDeliveryStatus.FAILED, NotificationDeliveryStatus.PENDING, now, admin));
+            NotificationDeliveryStatus.FAILED, NotificationDeliveryStatus.PENDING, now, admin, 0));
         Integer again = tx.execute(s -> repository.requeueFailed(saved.getId(), hospital.getId(),
-            NotificationDeliveryStatus.FAILED, NotificationDeliveryStatus.PENDING, now, admin));
+            NotificationDeliveryStatus.FAILED, NotificationDeliveryStatus.PENDING, now, admin, 0));
 
         assertThat(foreign).isZero();
         assertThat(own).isEqualTo(1);
@@ -237,11 +383,26 @@ class PatientNotificationLedgerIT extends BaseIT {
         assertThat(repository.searchForHospital(otherHospital.getId(),
             List.of(NotificationDeliveryStatus.values()), PageRequest.of(0, 10)).getContent()).isEmpty();
         assertThat(repository.countByStatusForHospital(hospital.getId())).isNotEmpty();
+
+        // A delayed copy of the first HTTP request must not win after the worker fails again.
+        reloaded.setStatus(NotificationDeliveryStatus.FAILED);
+        reloaded.setErrorCode("PROVIDER_UNREACHABLE");
+        repository.saveAndFlush(reloaded);
+        Integer replay = tx.execute(s -> repository.requeueFailed(saved.getId(), hospital.getId(),
+            NotificationDeliveryStatus.FAILED, NotificationDeliveryStatus.PENDING, now, admin, 0));
+        assertThat(replay).isZero();
+        Integer freshGeneration = tx.execute(s -> repository.requeueFailed(saved.getId(), hospital.getId(),
+            NotificationDeliveryStatus.FAILED, NotificationDeliveryStatus.PENDING, now, admin, 1));
+        assertThat(freshGeneration).isEqualTo(1);
     }
 
     @Test
     @DisplayName("one sweep round trip: a result that no longer exists is SKIPPED and nothing is sent")
     void sweepRoundTrip() {
+        // Satisfy the current-recipient proof so this test reaches its withdrawn-subject check.
+        patient.setVerifiedSmsRecipient(patient.getPhoneNumberPrimary());
+        patient.setVerifiedEmailRecipient(patient.getEmail());
+        patientRepository.saveAndFlush(patient);
         PatientNotificationDelivery saved = repository.saveAndFlush(row(UUID.randomUUID(), hospital.getId()));
         // The production service and queries, on a clock that has reached dueAt.
         PatientNotificationDispatchService sweepAtDueTime = new PatientNotificationDispatchService(repository,

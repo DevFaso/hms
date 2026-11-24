@@ -1,5 +1,7 @@
 package com.example.hms.service;
 
+import com.example.hms.service.notification.PatientChannelConsent.Decision;
+
 import com.example.hms.enums.InvoiceStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -64,10 +66,11 @@ class InvoiceEmailServiceTest {
     void setUp() {
         // The real gate over a mocked consent: the opt-out path is the gate's own.
         service = new InvoiceEmailService(billingInvoiceRepository, invoiceItemRepository, pdfInvoiceService,
-            new PatientMessageGate(consent, ledger, smsService, emailService), patientLocaleResolver,
+            new PatientMessageGate(consent, ledger, smsService, emailService, new com.example.hms.service.notification.PatientRecipientVerification(), org.mockito.Mockito.mock(com.example.hms.service.notification.PatientRecipientCurrentCheck.class)), patientLocaleResolver,
             TestMessageSources.bundles(), roleValidator, adjustmentRepository);
         lenient().when(patientLocaleResolver.resolve(any(), any())).thenAnswer(inv -> inv.getArgument(1));
-        lenient().when(consent.allows(any(), any(), any())).thenReturn(true);
+        lenient().when(consent.decision(any(), any(), any()))
+            .thenAnswer(call -> new Decision(true, call.getArgument(0), null, null));
     }
 
     private final UUID hospitalA = UUID.randomUUID();
@@ -91,6 +94,7 @@ class InvoiceEmailServiceTest {
         Patient patient = new Patient();
         patient.setId(UUID.randomUUID());
         patient.setEmail("seydou@example.test");
+        patient.setVerifiedEmailRecipient("seydou@example.test");
         User user = new User();
         user.setId(UUID.randomUUID());
         patient.setUser(user);
@@ -169,7 +173,7 @@ class InvoiceEmailServiceTest {
             com.example.hms.model.InvoiceAdjustment.builder().invoice(invoice)
                 .type(com.example.hms.enums.InvoiceAdjustmentType.WAIVER)
                 .amount(new java.math.BigDecimal("500")).reason("indigent").build()));
-        when(pdfInvoiceService.generateInvoicePdf(any(), any(), any(), any(), any(), any())).thenReturn(new byte[] {1});
+        when(pdfInvoiceService.generateMailedInvoicePdf(any(), any(), any(), any(), any())).thenReturn(new byte[] {1});
 
         service.emailInvoice(invoice.getId(),
             new EmailInvoiceRequest(List.of("billing@example.test"), null, null, null, "fr", true));
@@ -177,7 +181,7 @@ class InvoiceEmailServiceTest {
         @SuppressWarnings("unchecked")
         org.mockito.ArgumentCaptor<List<com.example.hms.model.InvoiceAdjustment>> printed =
             org.mockito.ArgumentCaptor.forClass(List.class);
-        verify(pdfInvoiceService).generateInvoicePdf(any(), any(), any(), printed.capture(), any(), any());
+        verify(pdfInvoiceService).generateMailedInvoicePdf(any(), any(), printed.capture(), any(), any());
         assertEquals(1, printed.getValue().size());
         assertEquals(com.example.hms.enums.InvoiceAdjustmentType.WAIVER, printed.getValue().get(0).getType());
         org.junit.jupiter.api.Assertions.assertNull(printed.getValue().get(0).getReason());
@@ -216,7 +220,7 @@ class InvoiceEmailServiceTest {
         BillingInvoice invoice = invoiceAtA(InvoiceStatus.SENT);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalA);
         when(patientLocaleResolver.resolve(any(), any())).thenReturn(java.util.Locale.ENGLISH);
-        when(pdfInvoiceService.generateInvoicePdf(any(), any(), any(), any(), any(), any())).thenReturn(new byte[] {1});
+        when(pdfInvoiceService.generateMailedInvoicePdf(any(), any(), any(), any(), any())).thenReturn(new byte[] {1});
 
         service.emailInvoice(invoice.getId(),
             new EmailInvoiceRequest(List.of("billing@example.test"), null, null, null, "fr", true));
@@ -225,7 +229,7 @@ class InvoiceEmailServiceTest {
         assertThat(mail[0]).isEqualTo("Invoice INV-1 - Centre Hospitalier Wend-Panga");
         assertThat(mail[1]).contains("lang=\"en\"", "Due: Dec 7, 2026", "Balance due: <strong>4 300 F CFA</strong>")
             .doesNotContain("Échéance");
-        verify(pdfInvoiceService).generateInvoicePdf(any(), any(), any(), any(), any(), eq(java.util.Locale.ENGLISH));
+        verify(pdfInvoiceService).generateMailedInvoicePdf(any(), any(), any(), any(), eq(java.util.Locale.ENGLISH));
     }
 
     // ---------- QA D2201 class: the patient's BILLING e-mail choice ----------
@@ -235,8 +239,9 @@ class InvoiceEmailServiceTest {
     void optedOutPatientIsNotMailed() {
         BillingInvoice invoice = invoiceAtA(InvoiceStatus.SENT);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalA);
-        when(consent.allows(invoice.getPatient().getUser().getId(), NotificationType.BILLING,
-            NotificationChannel.EMAIL)).thenReturn(false);
+        when(consent.decision(invoice.getPatient().getUser().getId(), NotificationType.BILLING,
+            NotificationChannel.EMAIL))
+            .thenAnswer(call -> new Decision(false, call.getArgument(0), null, null));
         UUID id = invoice.getId();
         EmailInvoiceRequest toPatient = new EmailInvoiceRequest(List.of(" Seydou@Example.test "),
             List.of("billing@example.test"), null, null, null, false);
@@ -244,8 +249,12 @@ class InvoiceEmailServiceTest {
         assertThatThrownBy(() -> service.emailInvoice(id, toPatient))
             .isInstanceOf(BusinessException.class).extracting("messageKey").isEqualTo("billing.invoice.emailOptedOut");
         verify(emailService, never()).sendWithAttachment(any(), any(), any(), any(), any(), any(), any(), any());
-        verify(ledger).recordOptOut(PatientNotificationEvent.INVOICE, hospitalA, invoice.getPatient().getId(), id,
-            NotificationChannel.EMAIL);
+        verify(ledger).recordOptOut(eq(PatientNotificationEvent.INVOICE),
+            eq(hospitalA),
+            eq(invoice.getPatient().getId()),
+            eq(id),
+            eq(NotificationChannel.EMAIL),
+            any(Decision.class));
     }
 
     @Test
@@ -253,8 +262,8 @@ class InvoiceEmailServiceTest {
     void thirdPartyPayerStillMailed() {
         BillingInvoice invoice = invoiceAtA(InvoiceStatus.SENT);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalA);
-        lenient().when(consent.allows(any(), eq(NotificationType.BILLING), eq(NotificationChannel.EMAIL)))
-            .thenReturn(false);
+        lenient().when(consent.decision(any(), eq(NotificationType.BILLING), eq(NotificationChannel.EMAIL)))
+            .thenAnswer(call -> new Decision(false, call.getArgument(0), null, null));
 
         service.emailInvoice(invoice.getId(), request);
 

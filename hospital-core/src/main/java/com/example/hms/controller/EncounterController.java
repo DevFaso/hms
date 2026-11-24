@@ -250,15 +250,17 @@ public class EncounterController {
     // ----------------------------------------------------------
     // By Doctor
     // ----------------------------------------------------------
-    @GetMapping(value = "/doctor/{identifier}", consumes = MediaType.ALL_VALUE)
+    // A username, an e-mail or a licence number travels in the body, never in the URL.
+    @com.example.hms.security.ReadsOnly("encounters by doctor, under POST so the doctor's identifier stays out of the URL")
+    @PostMapping(value = "/by-doctor", consumes = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get encounters by doctor (UUID | username | email | license)")
     public ResponseEntity<List<EncounterResponseDTO>> byDoctor(
-        @PathVariable String identifier,
+        @jakarta.validation.Valid @RequestBody com.example.hms.payload.dto.identifiersearch.IdentifierQueryDTO body,
         Locale locale
     ) {
         return ResponseEntity.ok(
-            encounterService.getEncountersByDoctorIdentifier(identifier, locale)
+            encounterService.getEncountersByDoctorIdentifier(body.identifier(), locale)
         );
     }
 

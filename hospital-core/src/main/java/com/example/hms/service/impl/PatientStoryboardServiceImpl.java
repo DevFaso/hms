@@ -75,6 +75,17 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
     @Override
     @Transactional(readOnly = true)
     public PatientStoryboardDTO getStoryboard(UUID patientId, UUID hospitalId) {
+        return assemble(patientId, hospitalId, false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PatientStoryboardDTO getHospitalReleaseStoryboard(UUID patientId, UUID hospitalId) {
+        java.util.Objects.requireNonNull(hospitalId, "release hospital");
+        return assemble(patientId, hospitalId, true);
+    }
+
+    private PatientStoryboardDTO assemble(UUID patientId, UUID hospitalId, boolean release) {
         // See PatientChartAccess: the tenant-scoped findById 404'd the whole
         // storyboard for cross-hospital patients ("Impossible de charger le
         // résumé patient" on a chart that had otherwise rendered).
@@ -85,11 +96,12 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
         // is registered here. Null scope (super-admin global view) reads all.
         UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
         Set<UUID> readable = hospitalId == null ? null
+            : release ? Set.of(hospitalId)
             : recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
         // E9 #62 — a live break-the-glass session unlocks the foreign sensitive
         // problems the D3 rule withholds; the ledger row names the session.
-        boolean unlocked = readable != null && breakGlassGate.isUnlocked(requesterUserId, patientId, hospitalId);
-        List<AllergySummaryDTO> allergies = loadAllergies(patientId, hospitalId);
+        boolean unlocked = !release && readable != null && breakGlassGate.isUnlocked(requesterUserId, patientId, hospitalId);
+        List<AllergySummaryDTO> allergies = loadAllergies(patientId, hospitalId, release);
         // E9 #64 — what D3 withholds is counted, so the banner can say so.
         WithheldRows withheld = new WithheldRows();
         List<ProblemSummaryDTO> problems = loadProblems(patientId, hospitalId, readable, unlocked, withheld);
@@ -97,12 +109,12 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
         // QA D252: with no open visit the banner said "no visit" although the
         // patient had finished ones; it now names the last one.
         ActiveEncounterDTO lastEncounter = activeEncounter == null ? loadLastEncounter(patientId, hospitalId) : null;
-        CodeStatusDTO codeStatus = loadCodeStatus(patient, readable);
+        CodeStatusDTO codeStatus = loadCodeStatus(patient, readable, release);
         // E9 #60 — the storyboard surfaces foreign allergies (#56), problems and
         // directives (#59a); every one of them is accounted, once per source
         // hospital for the whole banner. #56 and #59a left this ledger row out
         // because the call carries no requester; the context has one.
-        if (readable != null) {
+        if (!release && readable != null) {
             Map<String, Long> reach = CrossHospitalReachRecorder.reachOf(
                 allergies.stream().map(AllergySummaryDTO::getHospitalId).toList(), hospitalId);
             CrossHospitalReachRecorder.merge(reach, CrossHospitalReachRecorder.reachOf(
@@ -124,10 +136,10 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
             .patient(buildHeader(patient, hospitalId))
             .allergies(allergies)
             // QA D504 (round 2): the list above is narrowed by the patient's opt-out; say so.
-            .allergiesWithheld(com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
+            .allergiesWithheld(!release && com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
                 allergyRepository, recordAccessPolicy, requesterUserId, patientId, hospitalId))
             // QA D504: the problems and encounters below are narrowed the same way.
-            .recordsWithheld(recordAccessPolicy.foreignRowsWithheld(requesterUserId, patientId, hospitalId))
+            .recordsWithheld(!release && recordAccessPolicy.foreignRowsWithheld(requesterUserId, patientId, hospitalId))
             .problems(problems)
             .activeEncounter(activeEncounter)
             .lastEncounter(lastEncounter)
@@ -190,12 +202,13 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
      * penicillin allergy recorded at Hôpital A is exactly the row the ED at
      * Hôpital B must see.
      */
-    private List<AllergySummaryDTO> loadAllergies(UUID patientId, UUID hospitalId) {
+    private List<AllergySummaryDTO> loadAllergies(UUID patientId, UUID hospitalId, boolean release) {
         // Round 33 (CX-003 class): every active allergy, problem and directive. The banner
         // stopped at 8, 8 and 5 with no word, and a clinician read a cut list as complete.
         // QA D110: an opted-out patient's other-hospital rows stay there.
         // QA D504: unless a break-the-glass session overrides the opt-out.
-        List<PatientAllergy> source = com.example.hms.service.allergy.AllergySharingVisibility.rowsVisibleAt(
+        List<PatientAllergy> source = release ? allergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)
+            : com.example.hms.service.allergy.AllergySharingVisibility.rowsVisibleAt(
             allergyRepository, recordAccessPolicy,
             HospitalContextHolder.getContextOrEmpty().getPrincipalUserId(), patientId, hospitalId);
         return source.stream()
@@ -271,7 +284,7 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
     }
 
     /** E9 #59 — a code status is a property of the patient; directives travel with them. */
-    private CodeStatusDTO loadCodeStatus(Patient patient, Set<UUID> readable) {
+    private CodeStatusDTO loadCodeStatus(Patient patient, Set<UUID> readable, boolean release) {
         List<AdvanceDirective> directives = readable != null
             ? advanceDirectiveRepository.findByPatient_IdAndHospital_IdIn(patient.getId(), readable)
             : advanceDirectiveRepository.findByPatient_Id(patient.getId());
@@ -287,7 +300,7 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
             return null;
         }
         return CodeStatusDTO.builder()
-            .status(patient.getCodeStatus())
+            .status(release ? null : patient.getCodeStatus())
             .directives(activeDirectives)
             .build();
     }

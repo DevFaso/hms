@@ -109,26 +109,17 @@ describe('PatientNotificationsComponent', () => {
     await component.retry(delivery({}));
 
     expect(confirm.ask).not.toHaveBeenCalled();
-    expect(service.retry).toHaveBeenCalledOnceWith('d-1');
+    expect(service.retry).toHaveBeenCalledOnceWith('d-1', 0);
     expect(toast.success).toHaveBeenCalled();
     expect(service.search).toHaveBeenCalledTimes(2);
   });
 
-  it('warns and asks before retrying a send the patient may already have received', async () => {
-    const unknown = delivery({ errorCode: 'OUTCOME_UNKNOWN' });
-    setup(pageOf([unknown]));
-    service.retry.and.returnValue(of(delivery({ status: 'PENDING', retryable: false })));
-    confirm.ask.and.resolveTo(false);
-
-    const host = fixture.nativeElement as HTMLElement;
-    expect(host.querySelector('[data-testid="pn-maybe-delivered-d-1"]')).not.toBeNull();
-    await component.retry(unknown);
-    expect(confirm.ask).toHaveBeenCalled();
-    expect(service.retry).not.toHaveBeenCalled();
-
-    confirm.ask.and.resolveTo(true);
+  it('never retries an outcome that may already have been delivered, even if a stale client says retryable', async () => {
+    setup(pageOf([delivery({ errorCode: 'OUTCOME_UNKNOWN' })]));
+    await component.retry(delivery({ errorCode: 'OUTCOME_UNKNOWN' }));
     await component.retry(delivery({ errorCode: 'ATTEMPTS_EXHAUSTED' }));
-    expect(service.retry).toHaveBeenCalledOnceWith('d-1');
+    expect(service.retry).not.toHaveBeenCalled();
+    expect(confirm.ask).not.toHaveBeenCalled();
   });
 
   it('offers no retry on a send that is not FAILED', () => {
@@ -179,6 +170,9 @@ describe('PatientNotificationsComponent', () => {
           createdAt: '2026-11-19T09:15:00',
           subjectDate: '2026-11-20',
           subjectTime: '10:30:00',
+          consentRecordedByKind: 'STAFF',
+          consentRecordedByName: 'cdx Desk Recorder',
+          consentRecordedAt: '2026-11-18T08:00:00',
         }),
       ]),
     );
@@ -193,6 +187,31 @@ describe('PatientNotificationsComponent', () => {
       params: { date: '20/11/2026', time: '10:30' },
     });
     expect(host.querySelector('[data-testid="pn-subject-d-9"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="pn-consent-recorder-d-9"]')?.textContent).toContain(
+      'cdx Desk Recorder',
+    );
+  });
+
+  it('QA r73 D3700: a refusal recorded at another facility is labelled, with no name or id', () => {
+    setup(
+      pageOf([
+        delivery({
+          id: 'd-10',
+          status: 'SKIPPED',
+          errorCode: 'OPTED_OUT',
+          retryable: false,
+          lastAttemptAt: null,
+          consentRecordedByKind: 'OTHER_FACILITY',
+          consentRecordedByName: null,
+          consentRecordedAt: '2026-11-24T01:29:00',
+        }),
+      ]),
+    );
+    const cell = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="pn-consent-recorder-d-10"]',
+    )?.textContent;
+    expect(cell).toContain('PATIENT_CHANNELS.RECORDER_OTHER_FACILITY');
+    expect(cell).not.toContain('COMMON.UNKNOWN');
   });
 
   it('QA D2402: an invoice row names its invoice', () => {

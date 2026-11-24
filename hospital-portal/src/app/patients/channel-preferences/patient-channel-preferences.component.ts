@@ -1,3 +1,4 @@
+import { PatientRecipientVerificationComponent } from '../../shared/patient-recipient-verification.component';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -12,6 +13,8 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
+import { DatePipe } from '@angular/common';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { RoleContextService } from '../../core/role-context.service';
@@ -22,6 +25,9 @@ import {
   DESK_NOTICE_CHANNELS,
   NOTICE_TYPES,
   NoticeType,
+  changedChannelChoices,
+  consentRecorderKey,
+  ConsentRecorderKind,
 } from '../../shared/notification-channel-choices';
 
 /** One switch of the desk's matrix, as the API reads and writes it. */
@@ -29,6 +35,9 @@ export interface ChannelChoice {
   notificationType: NoticeType;
   channel: 'SMS' | 'EMAIL';
   enabled: boolean;
+  recordedByKind?: ConsentRecorderKind | null;
+  recordedByName?: string | null;
+  recordedAt?: string | null;
 }
 
 /**
@@ -40,7 +49,13 @@ export interface ChannelChoice {
 @Component({
   selector: 'app-patient-channel-preferences',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [
+    PatientRecipientVerificationComponent,
+    FormsModule,
+    TranslateModule,
+    DatePipe,
+    ServerTimePipe,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (canRecord) {
@@ -54,6 +69,7 @@ export interface ChannelChoice {
           {{ 'PATIENT_CHANNELS.TITLE' | translate }}
         </h3>
         <p class="hint">{{ 'PATIENT_CHANNELS.INTRO' | translate }}</p>
+        <app-patient-recipient-verification [patientId]="patientId()" />
         @if (loadFailed()) {
           <p class="error" role="alert">{{ 'PATIENT_CHANNELS.LOAD_FAILED' | translate }}</p>
         } @else if (choices().length > 0) {
@@ -85,6 +101,24 @@ export interface ChannelChoice {
                           (ngModelChange)="toggle(type, ch, $event)"
                           [disabled]="saving()"
                         />
+                        @if (choice(type, ch); as storedChoice) {
+                          @if (storedChoice.recordedAt) {
+                            <small
+                              class="choice-recorder"
+                              [attr.data-testid]="'choice-recorder-' + type + '-' + ch"
+                            >
+                              {{ 'PATIENT_CHANNELS.RECORDED_BY' | translate }}
+                              @if (recorderKey(storedChoice.recordedByKind); as key) {
+                                {{ key | translate }}
+                              } @else {
+                                {{ storedChoice.recordedByName || ('COMMON.UNKNOWN' | translate) }}
+                              }
+                              <time [attr.datetime]="storedChoice.recordedAt | serverTime">{{
+                                storedChoice.recordedAt | serverTime | date: 'short'
+                              }}</time>
+                            </small>
+                          }
+                        }
                       </td>
                     }
                   </tr>
@@ -93,6 +127,11 @@ export interface ChannelChoice {
             </table>
           </div>
           <p class="hint">{{ 'PATIENT_CHANNELS.SECURITY_NOTE' | translate }}</p>
+          @if (unchanged()) {
+            <p role="status" data-testid="channel-prefs-unchanged">
+              {{ 'SUBMIT_GUARD.NO_CHANGES' | translate }}
+            </p>
+          }
           <div class="actions">
             <button
               type="button"
@@ -130,6 +169,15 @@ export interface ChannelChoice {
       .channel-table td {
         text-align: center;
       }
+      .choice-recorder {
+        display: block;
+        max-width: 12rem;
+        overflow-wrap: anywhere;
+        font-size: 0.75rem;
+      }
+      .choice-recorder time {
+        display: block;
+      }
       .channel-prefs .actions {
         display: flex;
         justify-content: flex-end;
@@ -150,15 +198,19 @@ export class PatientChannelPreferencesComponent {
 
   readonly types = NOTICE_TYPES;
   readonly channels = DESK_NOTICE_CHANNELS;
+  /** QA r73 D3700: « Autre établissement » / « Le patient » instead of a name the server withheld. */
+  readonly recorderKey = consentRecorderKey;
   /** The roles PatientChannelPreferenceController admits (ActionPermissionsMirrorTest). */
   readonly canRecord = this.roleContext.hasAnyActiveRole(
     actionRoles('patientChannelPreferencesUpdate'),
   );
 
+  private requestGeneration = 0;
   readonly choices = signal<ChannelChoice[]>([]);
   private readonly saved = signal<ChannelChoice[]>([]);
   readonly loadFailed = signal(false);
   readonly saving = signal(false);
+  readonly unchanged = signal(false);
   readonly dirty = computed(() =>
     this.choices().some((choice) => {
       const before = this.saved().find(
@@ -179,19 +231,35 @@ export class PatientChannelPreferencesComponent {
     return `/patients/${encodeURIComponent(id)}/channel-preferences`;
   }
 
+  private isCurrent(generation: number, id: string): boolean {
+    return generation === this.requestGeneration && id === this.patientId();
+  }
+
   private load(id: string): void {
+    const generation = ++this.requestGeneration;
+    this.saved.set([]);
+    this.choices.set([]);
+    this.saving.set(false);
+    this.loadFailed.set(false);
     if (!this.canRecord || !id) return;
     this.http
       .get<ChannelChoice[]>(this.url(id))
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (rows) => {
+          if (!this.isCurrent(generation, id)) return;
           this.saved.set(rows ?? []);
           this.choices.set((rows ?? []).map((row) => ({ ...row })));
           this.loadFailed.set(false);
         },
-        error: () => this.loadFailed.set(true),
+        error: () => {
+          if (this.isCurrent(generation, id)) this.loadFailed.set(true);
+        },
       });
+  }
+
+  choice(type: string, channel: string): ChannelChoice | undefined {
+    return this.choices().find((row) => row.notificationType === type && row.channel === channel);
   }
 
   isOn(type: string, channel: string): boolean {
@@ -202,6 +270,8 @@ export class PatientChannelPreferencesComponent {
   }
 
   toggle(type: NoticeType, channel: 'SMS' | 'EMAIL', enabled: boolean): void {
+    if (this.saving() || this.loadFailed() || this.choices().length === 0) return;
+    this.unchanged.set(false);
     const others = this.choices().filter(
       (c) => !(c.notificationType === type && c.channel === channel),
     );
@@ -210,18 +280,26 @@ export class PatientChannelPreferencesComponent {
 
   save(): void {
     if (this.saving()) return;
+    if (!this.dirty()) {
+      this.unchanged.set(true);
+      return;
+    }
+    const generation = this.requestGeneration;
+    const id = this.patientId();
     this.saving.set(true);
     this.http
-      .put<ChannelChoice[]>(this.url(this.patientId()), this.choices())
+      .put<ChannelChoice[]>(this.url(id), changedChannelChoices(this.choices(), this.saved()))
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (rows) => {
+          if (!this.isCurrent(generation, id)) return;
           this.saving.set(false);
           this.saved.set(rows ?? []);
           this.choices.set((rows ?? []).map((row) => ({ ...row })));
           this.toast.success(this.translate.instant('PATIENT_CHANNELS.SAVED'));
         },
         error: (err: unknown) => {
+          if (!this.isCurrent(generation, id)) return;
           this.saving.set(false);
           this.toast.error(
             refusalReason(err) ?? this.translate.instant('PATIENT_CHANNELS.SAVE_FAILED'),

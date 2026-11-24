@@ -168,9 +168,22 @@ class DeceasedPatientCareGuardTest {
         ObgynReferral#acknowledgeReferral,completeReferral,cancelReferral,addMessage | closes or follows a referral made before the death
         Patient#createPatientByReceptionist,updatePatient,setChartRestriction,patchPatient,deletePatient | the patient record itself, not care
         Patient#getDoctorRecord,getDoctorTimeline | reads over POST
+        Patient#searchPatients,lookupPatients,registrationMatch | reads over POST: the identifiers travel in the body
+        Appointment#getAppointmentsByPatientUsername | a read over POST: the username travels in the body
+        Encounter#byDoctor | a read over POST: the doctor's identifier travels in the body
+        Lookup#getAppointmentsByPatientEmail,getAppointmentsByPatientPhone,getAppointmentsByPatientMri,getAppointmentsByStaffEmail | reads over POST: the identifier travels in the body
+        Reception#getDuplicateCandidates | a read over POST: what the desk typed travels in the body
+        Appointment#termSearchAppointments | a read over POST: the typed term travels in the body (QA D3750)
+        AuditEventLog#termSearchAuditLogs | a read over POST: the typed term travels in the body (QA D3750)
+        Patient#termSearchPatients | a read over POST: the typed term travels in the body (QA D3750)
+        PatientPortal#termSearchMyNotifications | a read over POST: the typed term travels in the body (QA D3750)
+        Prescription#search | a read over POST: the typed term travels in the body (QA D3750)
+        SuperAdminAuditSearch#search,exportCsv | reads over POST: the audit filters travel in the body
         Patient#createPatientAllergy,updatePatientAllergy,deactivatePatientAllergy,createPatientDiagnosis,updatePatientDiagnosis,deletePatientDiagnosis,createPatientChartUpdate | late documentation: a final diagnosis is routinely written after a death
         PatientPanel#end | closes a panel assignment
         PatientChannelPreference#update | QA D2203: the family can still ask the desk to stop messages; never care
+        PatientRecipientVerification#request,confirm | security-only proof of the contact already on file; no care or clinical message is created (PatientRecipientChallengeServiceTest and PatientRecipientVerificationGuardTest)
+        PatientSelfRecipientVerification#request,confirm | own-account security-only contact proof, like account housekeeping; no care or clinical message is created
         PatientPortal#updateMyProfile,updateNotificationPreferences,markNotificationRead,markAllNotificationsRead | account housekeeping
         PatientPortal#payMyInvoice | billing and payments
         PatientPortal#cancelMyAppointment,cancelMyRefill | cancels

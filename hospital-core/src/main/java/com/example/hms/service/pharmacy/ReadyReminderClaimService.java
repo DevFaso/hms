@@ -35,7 +35,7 @@ public class ReadyReminderClaimService {
         }
         // Rendered inside this transaction; sent after it commits.
         dispenseRepository.findById(dispenseId).ifPresent(d ->
-                support.notifyReadyReminder(d.getPrescription(), d.getPatient(), d.getPharmacy(), d.getMedicationName()));
+                support.notifyReadyReminder(d.getPrescription(), d.getPatient(), d.getPharmacy()));
         return true;
     }
 }

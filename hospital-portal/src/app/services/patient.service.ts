@@ -4,6 +4,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, catchError, forkJoin, map, of } from 'rxjs';
 
 import { birthDateQuery, emailQuery, isCompactDate } from '../shared/patient-query';
+import { compactBody } from '../shared/identifier-body';
 import type { NationalUniqueIdChange } from '../patients/national-unique-id';
 import type { NotificationDeliveryStatus } from '../shared/delivery-warnings';
 
@@ -563,8 +564,12 @@ export class PatientService {
   list(hospitalId?: string, search?: string): Observable<PatientResponse[]> {
     let params = new HttpParams();
     if (hospitalId) params = params.set('hospitalId', hospitalId);
-    if (search) params = params.set('search', search);
-    const listed = this.http.get<PatientResponse[]>('/patients', { params });
+    // QA D3750: the typed term (a name, a phone number, an MRN…) is posted in the body, never put
+    // in the URL; the hospital scope stays in the query. Without a term it is the plain list.
+    const term = search?.trim();
+    const listed = term
+      ? this.http.post<PatientResponse[]>('/patients/term-search', { search: term }, { params })
+      : this.http.get<PatientResponse[]>('/patients', { params });
     // QA D1274: a typed birth date or e-mail is also asked of the search that
     // answers it by that field (the 11 hand-written typeaheads call list()).
     const byField = search ? this.fieldMatches(search, hospitalId) : null;
@@ -640,13 +645,16 @@ export class PatientService {
     mrn?: string;
     hospitalId?: string;
   }): Observable<PatientResponse[]> {
+    // The identifiers travel in the body, never in the URL (logs, history, telemetry).
     let httpParams = new HttpParams();
-    if (params.identifier) httpParams = httpParams.set('identifier', params.identifier);
-    if (params.email) httpParams = httpParams.set('email', params.email);
-    if (params.phone) httpParams = httpParams.set('phone', params.phone);
-    if (params.mrn) httpParams = httpParams.set('mrn', params.mrn);
     if (params.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
-    return this.http.get<PatientResponse[]>('/patients/lookup', { params: httpParams });
+    const body = compactBody({
+      identifier: params.identifier,
+      email: params.email,
+      phone: params.phone,
+      mrn: params.mrn,
+    });
+    return this.http.post<PatientResponse[]>('/patients/lookup', body, { params: httpParams });
   }
 
   /**
@@ -655,15 +663,18 @@ export class PatientService {
    */
   registrationMatch(params: RegistrationMatchQuery): Observable<RegistrationMatch[]> {
     let httpParams = new HttpParams();
-    if (params.email) httpParams = httpParams.set('email', params.email);
-    if (params.phone) httpParams = httpParams.set('phone', params.phone);
     if (params.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
     // QA D1061 / D1064: the identity, so a record is told apart from one that
     // only shares the phone, and found at another hospital when the phone differs.
-    if (params.firstName) httpParams = httpParams.set('firstName', params.firstName);
-    if (params.lastName) httpParams = httpParams.set('lastName', params.lastName);
-    if (params.dateOfBirth) httpParams = httpParams.set('dateOfBirth', params.dateOfBirth);
-    return this.http.get<RegistrationMatch[]>('/patients/registration-match', {
+    // What the form has typed travels in the body, never in the URL.
+    const body = compactBody({
+      email: params.email,
+      phone: params.phone,
+      firstName: params.firstName,
+      lastName: params.lastName,
+      dateOfBirth: params.dateOfBirth,
+    });
+    return this.http.post<RegistrationMatch[]>('/patients/registration-match', body, {
       params: httpParams,
     });
   }
@@ -690,7 +701,10 @@ export class PatientService {
     });
   }
 
-  /** Hospital-scoped free search (GET /patients/search) — name/MRN/birth date/phone/email. */
+  /**
+   * Hospital-scoped free search (POST /patients/search) — name/MRN/birth date/phone/email in the
+   * body, never in the URL; the scope and the page size stay in the query.
+   */
   search(params: {
     name?: string;
     mrn?: string;
@@ -704,15 +718,17 @@ export class PatientService {
     includeInactive?: boolean;
   }): Observable<PatientResponse[]> {
     let httpParams = new HttpParams();
-    if (params.name) httpParams = httpParams.set('name', params.name);
-    if (params.dob) httpParams = httpParams.set('dob', params.dob);
-    if (params.mrn) httpParams = httpParams.set('mrn', params.mrn);
-    if (params.phone) httpParams = httpParams.set('phone', params.phone);
-    if (params.email) httpParams = httpParams.set('email', params.email);
     if (params.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
     if (params.size) httpParams = httpParams.set('size', params.size);
     if (params.includeInactive) httpParams = httpParams.set('includeInactive', 'true');
-    return this.http.get<PatientResponse[]>('/patients/search', { params: httpParams });
+    const body = compactBody({
+      name: params.name,
+      dob: params.dob,
+      mrn: params.mrn,
+      phone: params.phone,
+      email: params.email,
+    });
+    return this.http.post<PatientResponse[]>('/patients/search', body, { params: httpParams });
   }
 
   /* ── Allergies ── */

@@ -1,13 +1,15 @@
-import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
+import { HttpErrorResponse, HttpInterceptorFn, HttpResponse } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
-import { mergeMap, takeUntil, throwError, timer } from 'rxjs';
+import { mergeMap, takeUntil, tap, throwError, timer } from 'rxjs';
 import { ApiTimeoutService } from '../core/api-timeout.service';
 
 import {
   API_TIMEOUT_BUDGETS,
   API_TIMEOUT_PROFILE,
   withApiTimeoutProfile,
+  isSignInRequest,
+  timeoutNoticeMethod,
 } from '../core/api-request-timeout';
 export {
   API_REQUEST_TIMEOUT_MS,
@@ -32,11 +34,21 @@ export const apiTimeoutInterceptor: HttpInterceptorFn = (req, next) => {
   const translate = inject(TranslateService);
   const request = withApiTimeoutProfile(req);
   const deadline = API_TIMEOUT_BUDGETS[request.context.get(API_TIMEOUT_PROFILE)!];
+  const sessionEpoch = notice.sessionEpoch;
   return next(request).pipe(
+    tap((event) => {
+      if (
+        event instanceof HttpResponse &&
+        isSignInRequest(request) &&
+        sessionEpoch === notice.sessionEpoch
+      )
+        notice.resetForSession();
+    }),
     takeUntil(
       timer(deadline).pipe(
         mergeMap(() => {
-          notice.noteTimeout(req.method);
+          const method = timeoutNoticeMethod(request);
+          if (method) notice.noteTimeout(method, sessionEpoch, request.url);
           return throwError(
             () =>
               new HttpErrorResponse({

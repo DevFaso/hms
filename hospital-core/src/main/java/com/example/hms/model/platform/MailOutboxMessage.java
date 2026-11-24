@@ -56,6 +56,19 @@ import java.time.LocalDateTime;
 @ToString(onlyExplicitlyIncluded = true)
 public class MailOutboxMessage extends BaseEntity {
 
+    /** Legacy pending mail cannot be classified safely; it must be reissued under the new gate. */
+    @Builder.Default
+    @Column(name = "recipient_policy_version", nullable = false)
+    private int recipientPolicyVersion = 1;
+
+    /** Null for account/security and staff messages; clinical mail is rechecked before SMTP. */
+    @Column(name = "clinical_patient_id")
+    private java.util.UUID clinicalPatientId;
+
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "verified_patient_recipient", columnDefinition = "TEXT")
+    private String verifiedPatientRecipient;
+
     /** Newline-separated To addresses. */
     @Convert(converter = EncryptedStringConverter.class)
     @Column(name = "recipients", nullable = false, columnDefinition = "TEXT")

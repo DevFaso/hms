@@ -1840,6 +1840,7 @@
       "FHIR_EVERYTHING": "Dossier FHIR complet du patient {{patient}} renvoyé ({{count}} entrées ;{{details}})",
       "LOGIN_FAILED_BAD_CREDENTIALS": "Échec de connexion : identifiant ou mot de passe incorrect",
       "LOGIN_FAILED_INACTIVE": "Échec de connexion : le compte n’est pas actif",
+      "LOGIN_REFUSED_NO_ROLE": "Connexion refusée : le compte n’a aucun rôle actif",
       "LOGIN_REJECTED_LOCKED": "Connexion refusée : le compte est verrouillé",
       "FIRST_USER_BOOTSTRAP": "Premier utilisateur du système créé (super-administrateur)",
       "ACCESS_TOKEN_REVOKED": "Jeton d’accès révoqué à la déconnexion (jti={{jti}})",
@@ -1859,7 +1860,9 @@
       "SESSION_REVOKED_LOCKOUT": "Session de connexion terminée au verrouillage depuis l'écran verrouillé (tous ses jetons révoqués)",
       "TOKEN_PAIR_ROTATED": "Jetons de session renouvelés (ancien jti de renouvellement={{jti}})",
       "REFRESH_REFUSED_IDLE": "Renouvellement de session refusé : inactivité trop longue",
-      "REFRESH_REFUSED_SECOND_FACTOR": "Renouvellement de session refusé : le second facteur du fournisseur d’identité est absent ou expiré",
+      "REFRESH_REFUSED_SECOND_FACTOR": "Renouvellement de session refusé : le second facteur est absent ou expiré",
+      "REFRESH_REFUSED_ROLES_GONE": "Renouvellement de session refusé : les rôles de la session ne sont plus attribués",
+      "REFRESH_REFUSED_CUTOFF": "Renouvellement de session refusé : la session a été ouverte avant la date limite de connexion",
       "PASSWORD_REUSE_REJECTED": "Changement de mot de passe refusé : identique à un mot de passe récent",
       "PASSWORD_RESET_COMPLETED": "Réinitialisation du mot de passe terminée",
       "PASSWORD_RESET_LINK_SMS": "Lien de réinitialisation du mot de passe envoyé par SMS",
@@ -1867,6 +1870,7 @@
       "OTP_DISPATCHED": "Code de vérification envoyé au {{phone}}",
       "OTP_CONFIRMED": "Code de vérification confirmé pour le {{phone}}",
       "MFA_SIGNIN_ROLE_LOST": "Connexion à double facteur refusée : le rôle choisi à la connexion n’est plus détenu",
+      "MFA_SIGNIN_NO_ROLE": "Connexion en deux étapes refusée : le compte n’a aucun rôle actif",
       "TOTP_ENROLLMENT_STARTED": "Inscription de l’application d’authentification commencée",
       "TOTP_REPLACEMENT_STARTED": "Remplacement de l’application d’authentification commencé (en attente de confirmation)",
       "TOTP_ENROLLMENT_INVALID_CODE": "Code d’authentification incorrect lors de la vérification de l’inscription",
@@ -2130,6 +2134,7 @@
       "MFA_RESET_REFUSED": "Réinitialisation de la validation en deux étapes refusée : ce compte n’est pas administré par l’auteur",
       "MFA_REMOVED_BY_USER": "Validation en deux étapes retirée par l’utilisateur",
       "PATIENT_CHANNEL_CHOICES": "Choix de canaux du patient enregistrés à l’accueil : {{changes}}",
+      "PATIENT_CHANNEL_CHOICES_SELF": "Choix de canaux enregistrés par le patient : {{changes}}",
       "IMAGING_PORTAL_READ_BY_PROXY": "Comptes rendus d’imagerie du patient {{patient}} consultés sur le portail patient par un mandataire ({{count}} examens)",
       "IMAGING_PORTAL_READ": "Comptes rendus d’imagerie du patient {{patient}} consultés sur le portail patient ({{count}} examens)",
       "IMAGING_PORTAL_IMAGE_VIEWED_BY_PROXY": "Image {{image}} de la demande d’imagerie {{order}} consultée sur le portail patient par un mandataire",
@@ -2177,7 +2182,8 @@
       "PATIENT_ACTIVATION_RESENT": "Activation du portail patient renvoyée par l’accueil",
       "DISPENSE_BILLING_DEFERRAL_CLOSED_FILL_CANCELLED": "Report « à facturer » retiré : la délivrance préparée sur laquelle il avait été approuvé a été annulée",
       "CROSS_HOSPITAL_INSURANCE_READ": "Assurance d’un autre établissement consultée à l’accueil pour vérification (identité seulement)",
-      "CROSS_HOSPITAL_INSURANCE_REUSED": "Assurance d’un autre établissement reprise comme couverture propre de cet établissement (identité seulement)"
+      "CROSS_HOSPITAL_INSURANCE_REUSED": "Assurance d’un autre établissement reprise comme couverture propre de cet établissement (identité seulement)",
+      "ROI_PDF_DOWNLOADED": "PDF du dossier patient téléchargé pour le patient {{patient}} à l’hôpital {{hospital}} ({{entries}} entrées) dans le cadre de la demande {{request}}"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -5416,7 +5422,8 @@
     "UNREAD": "Non lu",
     "UNREAD_COUNT": "{{count}} notifications non lues",
     "VIEW_ALL": "Voir tout",
-    "SETTINGS_SECURITY_NOTE": "Les messages de sécurité de votre compte (réinitialisation du mot de passe, codes de vérification) sont toujours envoyés, quel que soit votre choix."
+    "SETTINGS_SECURITY_NOTE": "Les messages de sécurité de votre compte (réinitialisation du mot de passe, codes de vérification) sont toujours envoyés, quel que soit votre choix.",
+    "PREFERENCES_LOAD_FAILED": "Impossible de charger les choix de communication. Réessayez avant de les modifier."
   },
   "NURSE": {
     "OVERSIGHT": {
@@ -11945,6 +11952,7 @@
     "OTHER_REUSED": "Assurance reprise pour cet établissement, à vérifier. Vérifiez-la, puis choisissez sa formule.",
     "OTHER_REUSE_ERROR": "Échec de la reprise de l’assurance",
     "OTHER_NO_AGREEMENT": "Aucune convention avec cet assureur dans cet établissement. La reprise enregistre seulement l’assurance : aucune part assureur n’est facturée tant que l’établissement n’a pas sa propre convention.",
+    "PLAN_NOT_RECORDED": "Formule non renseignée",
     "OTHER_DECLARED": "Déclarée à {{hospital}} le {{date}} — à vérifier",
     "OTHER_DECLARED_NO_DATE": "Déclarée à {{hospital}} — à vérifier",
     "OTHER_CARD_HINT": "La carte d’assurance déposée par le patient, s’il y en a une, se trouve dans l’onglet « Documents ».",
@@ -15124,7 +15132,8 @@
       "OPTED_OUT": "Le patient a désactivé ce canal",
       "NO_CONTACT": "Aucun numéro de téléphone ni adresse e-mail",
       "SUBJECT_WITHDRAWN": "Rendez-vous annulé ou passé, ou résultat retiré",
-      "PATIENT_DECEASED": "Le patient est décédé"
+      "PATIENT_DECEASED": "Le patient est décédé",
+      "RECIPIENT_UNVERIFIED": "Coordonnées non vérifiées"
     },
     "MAYBE_DELIVERED": "Le patient a peut-être déjà reçu ce message.",
     "RETRY_CONFIRM_TITLE": "Renvoyer ce message ?",
@@ -15134,7 +15143,9 @@
     "RECORDED": "Enregistré (aucune tentative)",
     "SUBJECT_APPOINTMENT": "Rendez-vous du {{date}} à {{time}}",
     "SUBJECT_INVOICE": "Facture {{number}}",
-    "SUBJECT_LAB_ORDER": "Demande d'examen {{number}}"
+    "SUBJECT_LAB_ORDER": "Demande d'examen {{number}}",
+    "COL_NEXT_ATTEMPT": "Prochaine tentative",
+    "CONSENT_RECORDED_BY": "Choix du canal enregistré par :"
   },
   "IMAGING_PACS": {
     "STUDY_LINKED": "Étude liée",
@@ -15289,7 +15300,10 @@
     "SAVE": "Enregistrer les choix",
     "SAVED": "Les choix du patient sont enregistrés.",
     "SAVE_FAILED": "Les choix du patient n'ont pas pu être enregistrés.",
-    "LOAD_FAILED": "Les choix du patient n'ont pas pu être chargés."
+    "LOAD_FAILED": "Les choix du patient n'ont pas pu être chargés.",
+    "RECORDED_BY": "Dernier enregistrement par :",
+    "RECORDER_PATIENT": "Le patient",
+    "RECORDER_OTHER_FACILITY": "Autre établissement"
   },
   "PAYMENT_OUTCOME": {
     "UNKNOWN": "La réponse du serveur n'est pas arrivée. Le paiement est peut-être déjà enregistré : appuyez de nouveau sur le bouton (il ne sera pas compté deux fois) ou vérifiez la liste des paiements.",
@@ -16300,5 +16314,37 @@
   },
   "LOADING_SHELL": {
     "SLOW": "Le chargement prend plus de temps que prévu. Vérifiez votre connexion ; votre page ouverte est conservée."
+  },
+  "RECIPIENT_VERIFICATION": {
+    "TITLE": "Vérifier les coordonnées",
+    "INTRO": "Les messages cliniques sont envoyés uniquement au numéro ou au courriel actuel après vérification. Les codes ne contiennent aucune information clinique.",
+    "VERIFIED": "Vérifié",
+    "NOT_VERIFIED": "Non vérifié : les messages cliniques sont suspendus pour ce canal.",
+    "SEND": "Envoyer un code",
+    "CODE": "Code à six chiffres",
+    "CONFIRM": "Confirmer le code",
+    "ERROR": "Impossible de vérifier ces coordonnées. Réessayez.",
+    "CODE_REQUIRED": "Saisissez le code à six chiffres."
+  },
+  "RECORD_RIGHTS": {
+    "TITLE": "Accéder à mon dossier ou le rectifier",
+    "INTRO": "Demandez une copie ou une rectification à votre hôpital. Le personnel examine les demandes ; ce formulaire ne modifie jamais votre dossier clinique. Les dates de réponse sont des objectifs internes, sans valeur de délai légal.",
+    "HOSPITAL": "Hôpital",
+    "KIND": "Type de demande",
+    "COPY": "Copie du dossier",
+    "CORRECTION": "Rectification du dossier",
+    "PURPOSE": "Motif de la demande",
+    "DESCRIPTION": "Document, date et rectification demandée",
+    "FULL_RECORD": "Dossier complet",
+    "SUBMIT": "Envoyer la demande",
+    "SENT": "Votre demande a été enregistrée.",
+    "HISTORY": "Mes demandes",
+    "EMPTY": "Aucune demande pour le moment.",
+    "TARGET": "Réponse visée",
+    "DECISION": "Décision et motif :",
+    "FAILED": "Impossible de terminer cette action. Réessayez.",
+    "COMPLETE_CORRECTION": "Terminer l’examen de rectification",
+    "CORRECTION_HINT": "Examinez la rectification dans le parcours autorisé du dossier et expliquez la décision. Cette décision ne remplace aucune donnée clinique.",
+    "EXPORT": "Télécharger la copie approuvée (PDF)"
   }
 }

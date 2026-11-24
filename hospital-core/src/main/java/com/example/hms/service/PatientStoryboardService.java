@@ -20,4 +20,7 @@ public interface PatientStoryboardService {
      * @return populated DTO; never {@code null}
      */
     PatientStoryboardDTO getStoryboard(UUID patientId, UUID hospitalId);
+
+    /** Hospital-owned summary for disclosure, independent of the clicking user's treatment access. */
+    PatientStoryboardDTO getHospitalReleaseStoryboard(UUID patientId, UUID hospitalId);
 }

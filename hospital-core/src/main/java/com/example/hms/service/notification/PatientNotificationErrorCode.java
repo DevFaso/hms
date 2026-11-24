@@ -53,6 +53,8 @@ public enum PatientNotificationErrorCode {
     OPTED_OUT(false),
     /** The patient no longer has a number (SMS) or an address (email). */
     NO_CONTACT(false),
+    /** A clinical notice requires proof for the exact current recipient. */
+    RECIPIENT_UNVERIFIED(false),
     /** The appointment was cancelled or has passed, or the result was voided. */
     SUBJECT_WITHDRAWN(false),
     /** The patient has died: no notice is sent to their phone or address. */

@@ -306,7 +306,27 @@ Inbound channels
                                   ▼
   Observability + reporting
     ├─ Splunk HEC               — TLS in transit; aud-log retention ≥ 6 yrs (target)
-    ├─ Grafana / OTel           — metrics only (no PHI)
+    ├─ Grafana / OTel           — server metrics only (no PHI)
+    ├─ Grafana Faro (portal RUM) — page loads, errors, request timings and traces from the
+    │                              clinician portal, scrubbed in the browser before export
+    │                              (shared/telemetry/telemetry-sanitizer.ts): every URL without
+    │                              its query string and fragment, path ids replaced by
+    │                              placeholders (:uuid, :email, :id), UUIDs and e-mail addresses
+    │                              removed from messages, no request or response header or body;
+    │                              long strings are cut before scrubbing and a failure exports
+    │                              the item with every string replaced.
+    │                              The portal puts no personal identifier in a request URL:
+    │                              searches and lookups send them in a POST body, and a list's
+    │                              search box posts its typed term to …/term-search
+    │                              (scripts/identifier-url.test.mjs). On the server every handler
+    │                              that binds one from its URL is listed with a reason
+    │                              (PersonalIdentifierUrlGuardTest, which also names search,
+    │                              q, query, keyword… and allows them only on catalogue
+    │                              searches of drugs, tests, departments and facilities):
+    │                              the pre-session activation
+    │                              and password-reset routes still accept query parameters from
+    │                              installed mobile app builds, and the deprecated e-mail
+    │                              verification link carries the address.
     ├─ Email + SMS notifications — via vendor APIs (BAA / sub-BAA required)
 ```
 

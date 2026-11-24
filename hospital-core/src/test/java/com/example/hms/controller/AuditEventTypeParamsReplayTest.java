@@ -30,6 +30,7 @@ import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.MediaType;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -54,6 +55,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -225,13 +227,21 @@ class AuditEventTypeParamsReplayTest {
             asHospitalAdminA();
             mvc.perform(get("/audit-logs").param("page", "0").param("size", "20").param("sort", "eventTimestamp,desc")
                     .param("fromDate", "2026-10-01T00:00:00").param("toDate", "2026-10-25T23:59:59")
-                    .param("eventType", "USER_CREATE").param("search", "Multi91064"))
+                    .param("eventType", "USER_CREATE"))
+                .andExpect(status().isOk());
+            // QA D3750: with a typed term, the same query parameters and the term in the body.
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/audit-logs/term-search")
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .content("{\"search\":\"Multi91064\"}")
+                    .param("page", "0").param("size", "20").param("sort", "eventTimestamp,desc")
+                    .param("fromDate", "2026-10-01T00:00:00").param("toDate", "2026-10-25T23:59:59")
+                    .param("eventType", "USER_CREATE"))
                 .andExpect(status().isOk());
         }
     }
 
     @Nested
-    @DisplayName("GET /super-admin/audit-search")
+    @DisplayName("POST /super-admin/audit-search")
     class SuperAdminSearch {
 
         @Mock private SuperAdminAuditSearchService service;
@@ -259,7 +269,8 @@ class AuditEventTypeParamsReplayTest {
         void aCommaSeparatedPluralIsEveryTypeNamed() throws Exception {
             when(service.search(any(), any())).thenReturn(new AuditSearchPageDTO());
 
-            mvc.perform(get("/super-admin/audit-search").param("size", "200").param("eventTypes", "USER_DELETE,USER_CREATE"))
+            mvc.perform(post("/super-admin/audit-search").param("size", "200").contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"eventTypes\":[\"USER_DELETE,USER_CREATE\"]}"))
                 .andExpect(status().isOk());
 
             assertThat(searchedWith().eventTypes())
@@ -271,7 +282,8 @@ class AuditEventTypeParamsReplayTest {
         void aCommaSeparatedSingularIsEveryTypeNamed() throws Exception {
             when(service.search(any(), any())).thenReturn(new AuditSearchPageDTO());
 
-            mvc.perform(get("/super-admin/audit-search").param("eventType", "USER_DELETE, USER_CREATE"))
+            mvc.perform(post("/super-admin/audit-search").contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"eventType\":[\"USER_DELETE, USER_CREATE\"]}"))
                 .andExpect(status().isOk());
 
             assertThat(searchedWith().eventTypes())
@@ -285,8 +297,8 @@ class AuditEventTypeParamsReplayTest {
          */
         @Test
         void bothNamesWithOneUnknownValueNamesTheValue() throws Exception {
-            mvc.perform(get("/super-admin/audit-search").param("size", "200")
-                    .param("eventType", "USER_DELETE").param("eventTypes", "LOGIN_SUCCESS")
+            mvc.perform(post("/super-admin/audit-search").param("size", "200").contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"eventType\":[\"USER_DELETE\"],\"eventTypes\":[\"LOGIN_SUCCESS\"]}")
                     .header("Accept-Language", "en"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message", containsString("Unknown audit event type: LOGIN_SUCCESS")));
@@ -295,9 +307,14 @@ class AuditEventTypeParamsReplayTest {
 
         @Test
         void anUnknownParameterIsRefusedOnTheSearchAndTheExport() throws Exception {
-            mvc.perform(get("/super-admin/audit-search").param("eventtype", "USER_DELETE"))
+            mvc.perform(post("/super-admin/audit-search").param("eventtype", "USER_DELETE"))
                 .andExpect(status().isBadRequest());
-            mvc.perform(get("/super-admin/audit-search/csv").param("type", "USER_DELETE"))
+            mvc.perform(post("/super-admin/audit-search/csv").param("type", "USER_DELETE"))
+                .andExpect(status().isBadRequest());
+            // A misspelt filter in the body is refused too, never read as "no filter".
+            mvc.perform(post("/super-admin/audit-search").contentType(MediaType.APPLICATION_JSON).content("{\"eventtype\":[\"USER_DELETE\"]}"))
+                .andExpect(status().isBadRequest());
+            mvc.perform(post("/super-admin/audit-search/csv").contentType(MediaType.APPLICATION_JSON).content("{\"type\":\"USER_DELETE\"}"))
                 .andExpect(status().isBadRequest());
             mvc.perform(get("/super-admin/audit-search/aggregated").param("eventTypes", "USER_DELETE"))
                 .andExpect(status().isBadRequest());
@@ -308,8 +325,8 @@ class AuditEventTypeParamsReplayTest {
         void theExportTakesTheSameFilter() throws Exception {
             when(service.exportCsv(any(), anyInt())).thenReturn(new byte[0]);
 
-            mvc.perform(get("/super-admin/audit-search/csv").param("eventTypes", "USER_DELETE,INVOICE_UPDATED")
-                    .param("maxRows", "100"))
+            mvc.perform(post("/super-admin/audit-search/csv").param("maxRows", "100").contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"eventTypes\":[\"USER_DELETE,INVOICE_UPDATED\"]}"))
                 .andExpect(status().isOk());
 
             ArgumentCaptor<AuditSearchFilter> filter = ArgumentCaptor.forClass(AuditSearchFilter.class);

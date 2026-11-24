@@ -491,9 +491,11 @@ class UserControllerTest {
         // and the live view answered instead.
         authenticateAs("hadmin", "ROLE_HOSPITAL_ADMIN");
 
-        for (String path : java.util.List.of("/users", "/users/search")) {
-            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                    .get(path).param("includeDeleted", "true").param("onlyDeleted", "true"))
+        // The directory list is a GET; the search is a POST whose name and e-mail travel in the body.
+        for (var request : java.util.List.of(
+                org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/users"),
+                org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/users/search"))) {
+            mockMvc.perform(request.param("includeDeleted", "true").param("onlyDeleted", "true"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isEmpty());
         }
@@ -501,6 +503,18 @@ class UserControllerTest {
         verify(userService, never()).getAllUsers(
             org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt(),
             org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
+
+    @Test
+    void search_refusesAMisspeltCriterion_neverTheWholeDirectory() throws Exception {
+        // QA D3753: an unknown body field used to be skipped, and the search ran with no filter.
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/users/search")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"nmae\":\"Awa\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.field").value("nmae"));
+
+        org.mockito.Mockito.verifyNoInteractions(userService);
     }
 
     @Test

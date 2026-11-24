@@ -22,6 +22,18 @@ export interface ActionPermission {
 }
 
 export const ACTION_PERMISSIONS = {
+  patientRecordRequest: {
+    endpoint: 'PatientPortalController#createRoiRequest',
+    roles: ['ROLE_PATIENT'],
+  },
+  patientRecordPdfExport: {
+    endpoint: 'PatientRecordExportController#downloadRecordPdf',
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
+  },
+  roiRecordPdfExport: {
+    endpoint: 'RoiRecordExportController#download',
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
+  },
   labOrderCreate: {
     endpoint: 'LabOrderController#createLabOrder',
     roles: ['ROLE_DOCTOR', 'ROLE_NURSE'],
@@ -438,6 +450,14 @@ export const ACTION_PERMISSIONS = {
   patientChannelPreferencesUpdate: {
     endpoint: 'PatientChannelPreferenceController#update',
     roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_RECEPTIONIST'],
+  },
+  patientRecipientVerify: {
+    endpoint: 'PatientRecipientVerificationController#request',
+    roles: ['ROLE_RECEPTIONIST', 'ROLE_HOSPITAL_ADMIN'],
+  },
+  patientSelfRecipientVerify: {
+    endpoint: 'PatientSelfRecipientVerificationController#request',
+    roles: ['ROLE_PATIENT'],
   },
   // QA D2730: a visit's sensitive category - the clinicians who write the record, and the admins.
   encounterSensitivityTag: {

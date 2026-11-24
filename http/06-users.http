@@ -22,9 +22,12 @@ Authorization: Bearer {{accessToken}}
 Accept: application/json
 
 ### Search users
-GET {{baseUrl}}/users/search?query=superadmin
+POST {{baseUrl}}/users/search?page=0&size=10
 Authorization: Bearer {{accessToken}}
+Content-Type: application/json
 Accept: application/json
+
+{"name": "superadmin"}
 
 ### Get user by ID
 GET {{baseUrl}}/users/{{userId}}

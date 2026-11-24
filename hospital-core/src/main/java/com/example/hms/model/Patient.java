@@ -59,7 +59,7 @@ import java.util.UUID;
 @ToString(exclude = {
     "user", "hospitalRegistrations", "appointments", "encounters",
     "billingInvoices", "patientInsurances", "labOrders", "allergyEntries",
-    "nationalUniqueId", "nationalUniqueIdHash"
+    "nationalUniqueId", "nationalUniqueIdHash", "verifiedSmsRecipient", "verifiedEmailRecipient"
 })
 public class Patient extends BaseEntity implements TenantScoped {
 
@@ -148,6 +148,30 @@ public class Patient extends BaseEntity implements TenantScoped {
     /** Set when a registration SMS OTP was confirmed for the primary phone (V107). */
     @Column(name = "phone_verified_at")
     private LocalDateTime phoneVerifiedAt;
+
+    /** Exact recipient confirmed for clinical notices; legacy registration stamps alone are not proof. */
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "verified_sms_recipient", columnDefinition = "TEXT")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private String verifiedSmsRecipient;
+
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "verified_email_recipient", columnDefinition = "TEXT")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private String verifiedEmailRecipient;
+
+    public void setPhoneNumberPrimary(String value) {
+        if (!java.util.Objects.equals(phoneNumberPrimary, value)) {
+            verifiedSmsRecipient = null;
+            phoneVerifiedAt = null;
+        }
+        phoneNumberPrimary = value;
+    }
+
+    public void setEmail(String value) {
+        if (!java.util.Objects.equals(email, value)) verifiedEmailRecipient = null;
+        email = value;
+    }
 
     @Size(max = 100)
     @Column(name = "emergency_contact_name", columnDefinition = "TEXT")

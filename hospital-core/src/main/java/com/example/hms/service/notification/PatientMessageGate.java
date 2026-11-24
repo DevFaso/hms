@@ -45,6 +45,8 @@ public class PatientMessageGate {
     private final PatientNotificationLedger ledger;
     private final SmsService smsService;
     private final EmailService emailService;
+    private final PatientRecipientVerification verification;
+    private final PatientRecipientCurrentCheck currentCheck;
 
     /**
      * What a message announces and about what: the event names the preference that turns it off,
@@ -87,10 +89,11 @@ public class PatientMessageGate {
             return false;
         }
         UUID userId = patient.getUser() != null ? patient.getUser().getId() : null;
-        if (consent.allows(userId, notice.event().preferenceType(), channel)) {
+        var decision = consent.decision(userId, notice.event().preferenceType(), channel);
+        if (decision.allowed()) {
             return true;
         }
-        ledger.recordOptOut(notice.event(), notice.hospitalId(), patient.getId(), notice.subjectId(), channel);
+        ledger.recordOptOut(notice.event(), notice.hospitalId(), patient.getId(), notice.subjectId(), channel, decision);
         log.info("Patient {} opted out of {} by {}: not sent", patient.getId(), notice.event(), channel);
         return false;
     }
@@ -100,7 +103,7 @@ public class PatientMessageGate {
         if (patient == null || patient.getUser() == null) {
             return false;
         }
-        return consent.allows(patient.getUser().getId(), type, NotificationChannel.IN_APP);
+        return consent.decision(patient.getUser().getId(), type, NotificationChannel.IN_APP).allowed();
     }
 
     /**
@@ -133,8 +136,13 @@ public class PatientMessageGate {
         }
         UUID patientId = patient.getId();
         PatientNotificationEvent event = notice.event();
+        boolean deferred = org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive();
         TransactionCallbacks.afterCommit(() -> {
             try {
+                if (deferred && !currentCheck.isVerified(patientId, NotificationChannel.SMS, phone)) {
+                    ledger.recordUnverified(event, notice.hospitalId(), patientId, notice.subjectId(), NotificationChannel.SMS);
+                    return;
+                }
                 smsService.send(phone, body);
             } catch (RuntimeException e) {
                 log.warn("Failed to send {} SMS to patient {}: {}", event, patientId, e.getClass().getSimpleName());
@@ -151,7 +159,7 @@ public class PatientMessageGate {
         if (!StringUtils.hasText(phone) || !allows(patient, notice, NotificationChannel.SMS)) {
             return null;
         }
-        return phone;
+        return verified(patient, notice, NotificationChannel.SMS, phone) ? phone : null;
     }
 
     /**
@@ -162,9 +170,11 @@ public class PatientMessageGate {
      */
     public boolean appointmentEmail(Patient patient, Notice notice, AppointmentMail mail) {
         String to = patient != null ? patient.getEmail() : null;
-        if (!StringUtils.hasText(to) || !allows(patient, notice, NotificationChannel.EMAIL)) {
+        if (!StringUtils.hasText(to) || !allows(patient, notice, NotificationChannel.EMAIL)
+            || !verified(patient, notice, NotificationChannel.EMAIL, to)) {
             return false;
         }
+        VerifiedPatientMailScope.run(patient.getId(), to, () -> {
         switch (notice.event()) {
             case APPOINTMENT_CONFIRMATION -> emailService.sendAppointmentConfirmationEmail(to, mail.patientName(),
                 mail.hospitalName(), mail.staffName(), mail.date(), mail.time(), mail.hospitalEmail(),
@@ -184,6 +194,7 @@ public class PatientMessageGate {
             // A programming error, never shown to a client: the event names itself.
             default -> throw new IllegalArgumentException(notice.event().name());
         }
+        });
         return true;
     }
 
@@ -194,10 +205,12 @@ public class PatientMessageGate {
      * @return true when the mail was queued
      */
     public boolean htmlEmail(Patient patient, Notice notice, String to, String subject, String html) {
-        if (!StringUtils.hasText(to) || !allows(patient, notice, NotificationChannel.EMAIL)) {
+        if (!StringUtils.hasText(to) || !allows(patient, notice, NotificationChannel.EMAIL)
+            || !verified(patient, notice, NotificationChannel.EMAIL, to)) {
             return false;
         }
-        emailService.sendHtml(List.of(to), List.of(), List.of(), subject, html);
+        VerifiedPatientMailScope.run(patient.getId(), to,
+            () -> emailService.sendHtml(List.of(to), List.of(), List.of(), subject, html));
         return true;
     }
 
@@ -214,6 +227,14 @@ public class PatientMessageGate {
                                        String filename, String contentType) {
         if (addressesPatient(patient, mail) && !allows(patient, notice, NotificationChannel.EMAIL)) {
             return false;
+        }
+        if (addressesPatient(patient, mail)) {
+            List<String> own = Stream.of(patient.getEmail(), patient.getUser() != null ? patient.getUser().getEmail() : null)
+                .filter(StringUtils::hasText).map(PatientMessageGate::normalised).toList();
+            boolean unverified = Stream.of(mail.to(), mail.cc(), mail.bcc()).flatMap(List::stream)
+                .filter(StringUtils::hasText).filter(address -> own.contains(normalised(address)))
+                .anyMatch(address -> !verifiedNow(patient, notice, address));
+            if (unverified) return false;
         }
         emailService.sendWithAttachment(mail.to(), mail.cc(), mail.bcc(), mail.subject(), mail.html(),
             attachment, filename, contentType);
@@ -232,6 +253,20 @@ public class PatientMessageGate {
         }
         return Stream.of(mail.to(), mail.cc(), mail.bcc()).flatMap(List::stream)
             .filter(Objects::nonNull).map(PatientMessageGate::normalised).anyMatch(own::contains);
+    }
+
+    private boolean verified(Patient patient, Notice notice, NotificationChannel channel, String recipient) {
+        if (verification.allows(patient, channel, recipient)) return true;
+        ledger.recordUnverified(notice.event(), notice.hospitalId(), patient.getId(), notice.subjectId(), channel);
+        return false;
+    }
+
+    /** A PDF may have been composed after this patient snapshot was loaded. */
+    private boolean verifiedNow(Patient patient, Notice notice, String recipient) {
+        if (!verified(patient, notice, NotificationChannel.EMAIL, recipient)) return false;
+        if (patient.getId() != null && currentCheck.isVerified(patient.getId(), NotificationChannel.EMAIL, recipient)) return true;
+        ledger.recordUnverified(notice.event(), notice.hospitalId(), patient.getId(), notice.subjectId(), NotificationChannel.EMAIL);
+        return false;
     }
 
     private static String normalised(String address) {

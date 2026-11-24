@@ -25,11 +25,12 @@ class UserDirectoryAuthorizationTest {
         List.of("ROLE_LAB_TECHNICIAN", "ROLE_PHARMACIST", "ROLE_NURSE", "ROLE_RECEPTIONIST", "ROLE_DOCTOR");
 
     @Test
-    @DisplayName("GET /users and GET /users/search admit the administrators only")
+    @DisplayName("GET /users and POST /users/search admit the administrators only")
     void directoryEndpointsAreAdminOnly() throws NoSuchMethodException {
         for (Method m : List.of(
                 UserController.class.getMethod("getAllUsers", int.class, int.class, boolean.class, boolean.class, java.util.UUID.class),
-                UserController.class.getMethod("searchUsers", String.class, String.class, String.class,
+                UserController.class.getMethod("searchUsers",
+                    com.example.hms.payload.dto.identifiersearch.UserSearchRequestDTO.class,
                     int.class, int.class, boolean.class, boolean.class))) {
             PreAuthorize gate = m.getAnnotation(PreAuthorize.class);
             assertThat(gate).as("%s must carry @PreAuthorize", m.getName()).isNotNull();

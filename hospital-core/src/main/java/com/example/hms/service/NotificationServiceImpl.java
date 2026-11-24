@@ -42,6 +42,9 @@ public class NotificationServiceImpl implements NotificationService {
     // live context; an ObjectProvider, so no bean cycle forms through it.
     private final ObjectProvider<ProviderCallerResolver> callerResolverProvider;
     private final com.example.hms.service.i18n.NotificationLocalizer localizer;
+    private final com.example.hms.service.notification.ConsentRecorderLabels recorderLabels;
+    private final com.example.hms.repository.PatientRepository patientRepository;
+    private final AuditEventLogService auditEventLogService;
 
     @Override
         public List<Notification> getNotificationsForUser(String username) {
@@ -253,38 +256,71 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     @Transactional(readOnly = true)
     public List<NotificationPreferenceDTO> getPreferences(UUID userId) {
-        return notificationPreferenceRepository.findByUser_Id(userId)
-                .stream().map(this::toDTO).toList();
+        return ownView(notificationPreferenceRepository.findByUser_Id(userId), userId);
     }
 
     @Override
     @Transactional
     public List<NotificationPreferenceDTO> updatePreferences(UUID userId, List<NotificationPreferenceUpdateDTO> updates) {
-        User user = userRepository.findById(userId)
+        User user = userRepository.lockForNotificationPreferences(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.notFound", userId));
-
-        notificationPreferenceRepository.deleteByUser_Id(userId);
-        notificationPreferenceRepository.flush();
-
-        List<NotificationPreference> entities = updates.stream().map(u ->
-                NotificationPreference.builder()
-                        .user(user)
-                        .notificationType(u.getNotificationType())
-                        .channel(u.getChannel())
-                        .enabled(Boolean.TRUE.equals(u.getEnabled()))
-                        .build()
-        ).toList();
-
-        return notificationPreferenceRepository.saveAll(entities)
-                .stream().map(this::toDTO).toList();
+        // A settings page is a partial matrix. Omitted choices (including a desk-recorded refusal)
+        // are never deleted or implicitly enabled. The account lock serializes both writers.
+        var existing = notificationPreferenceRepository.findByUser_Id(userId).stream()
+            .collect(java.util.stream.Collectors.toMap(
+                row -> row.getNotificationType().name() + "/" + row.getChannel().name(), row -> row));
+        var changed = new java.util.LinkedHashMap<String, NotificationPreference>();
+        var audited = new java.util.ArrayList<String>();
+        for (var update : updates == null ? List.<NotificationPreferenceUpdateDTO>of() : updates) {
+            if (update == null || update.getNotificationType() == null || update.getChannel() == null) continue;
+            String key = update.getNotificationType().name() + "/" + update.getChannel().name();
+            var row = existing.get(key);
+            boolean enabled = Boolean.TRUE.equals(update.getEnabled());
+            if (row != null && row.isEnabled() == enabled) continue;
+            boolean before = row == null || row.isEnabled();
+            if (row == null) {
+                row = NotificationPreference.builder().user(user).notificationType(update.getNotificationType())
+                    .channel(update.getChannel()).build();
+                existing.put(key, row);
+            }
+            row.recordChoice(enabled, userId, LocalDateTime.now());
+            changed.put(key, row);
+            if (before != enabled) {
+                audited.add(com.example.hms.service.notification.NotificationPreferenceViews.change(
+                    update.getNotificationType(), update.getChannel(), before, enabled));
+            }
+        }
+        notificationPreferenceRepository.saveAll(new java.util.ArrayList<>(changed.values()));
+        auditOwnChannelChoices(userId, audited);
+        return ownView(existing.values(), userId);
     }
 
-    private NotificationPreferenceDTO toDTO(NotificationPreference p) {
-        return NotificationPreferenceDTO.builder()
-                .id(p.getId())
-                .notificationType(p.getNotificationType())
-                .channel(p.getChannel())
-                .enabled(p.isEnabled())
-                .build();
+    /**
+     * QA r73 D3702: a patient's own change is audited exactly like the desk's (PATIENT_CHANNEL_PREFERENCES_UPDATED,
+     * the actor, the patient, each kind/channel old->new; never a contact). A staff account's own bell settings
+     * are not a patient's consent and write no patient audit row.
+     */
+    private void auditOwnChannelChoices(UUID userId, List<String> changes) {
+        if (changes.isEmpty()) return;
+        UUID patientId = patientRepository.findIdsByUserId(userId).stream().findFirst().orElse(null);
+        if (patientId == null) return;
+        auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+            .userId(userId)
+            .patientId(patientId)
+            .eventType(com.example.hms.enums.AuditEventType.PATIENT_CHANNEL_PREFERENCES_UPDATED)
+            .status(com.example.hms.enums.AuditStatus.SUCCESS)
+            .entityType("PATIENT")
+            .resourceId(patientId.toString())
+            .eventDescription("Patient channel choices recorded by the patient: " + String.join(", ", changes))
+            .build());
+    }
+
+    /** QA r73 D3700: the owner may see who recorded a choice by name, never by account id. */
+    private List<NotificationPreferenceDTO> ownView(java.util.Collection<NotificationPreference> rows, UUID userId) {
+        var labels = recorderLabels.forAccountOwner(
+            com.example.hms.service.notification.NotificationPreferenceViews.recorders(rows), userId);
+        return rows.stream()
+            .map(row -> com.example.hms.service.notification.NotificationPreferenceViews.of(row, userId, labels))
+            .toList();
     }
 }

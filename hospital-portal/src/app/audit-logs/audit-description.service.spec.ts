@@ -52,6 +52,18 @@ describe('AuditDescriptionService (QA D894)', () => {
     }
   }
 
+  it('localizes the single ROI export audit with its request and scope in every language', () => {
+    const stored =
+      'Patient record PDF downloaded for Patient/patient-id at hospital hospital-id (7 chart entries) under ROI request request-id';
+    for (const lang of ['en', 'fr', 'es']) {
+      const text = describeIn(lang, stored);
+      expect(text).not.toBe(stored);
+      for (const value of ['patient-id', 'hospital-id', '7', 'request-id'])
+        expect(text).toContain(value);
+      expect(text).not.toContain('AUDIT.DESC.');
+    }
+  });
+
   it('localizes the email-change refusal when sign-in has locked the account', () => {
     const description =
       'Own email change refused: the account is locked after repeated wrong passwords';

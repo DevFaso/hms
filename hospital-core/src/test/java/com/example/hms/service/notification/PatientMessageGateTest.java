@@ -1,5 +1,7 @@
 package com.example.hms.service.notification;
 
+import com.example.hms.service.notification.PatientChannelConsent.Decision;
+
 import com.example.hms.enums.NotificationChannel;
 import com.example.hms.enums.NotificationType;
 import com.example.hms.enums.PatientNotificationEvent;
@@ -39,6 +41,7 @@ class PatientMessageGateTest {
     @Mock private PatientNotificationLedger ledger;
     @Mock private SmsService smsService;
     @Mock private EmailService emailService;
+    @Mock private PatientRecipientCurrentCheck currentCheck;
 
     private PatientMessageGate gate;
     private Patient patient;
@@ -52,18 +55,21 @@ class PatientMessageGateTest {
 
     @BeforeEach
     void setUp() {
-        gate = new PatientMessageGate(consent, ledger, smsService, emailService);
+        gate = new PatientMessageGate(consent, ledger, smsService, emailService, new PatientRecipientVerification(), currentCheck);
         patient = new Patient();
         patient.setId(UUID.randomUUID());
         patient.setPhoneNumberPrimary("+22670707070");
+        patient.setVerifiedSmsRecipient("+22670707070");
         patient.setEmail("seydou@example.test");
+        patient.setVerifiedEmailRecipient("seydou@example.test");
         User user = new User();
         userId = UUID.randomUUID();
         user.setId(userId);
         user.setEmail("seydou.portal@example.test");
         patient.setUser(user);
         lenient().when(smsService.deliversRealSms()).thenReturn(true);
-        lenient().when(consent.allows(any(), any(), any())).thenReturn(true);
+        lenient().when(consent.decision(any(), any(), any()))
+            .thenAnswer(call -> new Decision(true, call.getArgument(0), null, null));
     }
 
     private PatientMessageGate.Notice notice(PatientNotificationEvent event) {
@@ -71,7 +77,27 @@ class PatientMessageGateTest {
     }
 
     private void optOut(NotificationType type, NotificationChannel channel) {
-        when(consent.allows(userId, type, channel)).thenReturn(false);
+        when(consent.decision(userId, type, channel))
+            .thenAnswer(call -> new Decision(false, call.getArgument(0), null, null));
+    }
+
+    @Test
+    void deferredSmsRechecksCommittedRecipientOwnershipInsteadOfTheCachedPatient() {
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        org.springframework.transaction.support.TransactionSynchronizationManager.setActualTransactionActive(true);
+        try {
+            assertThat(gate.smsAfterCommit(patient, notice(PatientNotificationEvent.PHARMACY_READY), "ready")).isTrue();
+            verify(smsService, never()).send(any(), any());
+            org.springframework.transaction.support.TransactionSynchronizationManager.setActualTransactionActive(false);
+            org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations().forEach(
+                org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+            verify(currentCheck).isVerified(patient.getId(), NotificationChannel.SMS, patient.getPhoneNumberPrimary());
+            verify(smsService, never()).send(any(), any());
+            verify(ledger).recordUnverified(PatientNotificationEvent.PHARMACY_READY, hospitalId, patient.getId(), subjectId, NotificationChannel.SMS);
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+            org.springframework.transaction.support.TransactionSynchronizationManager.setActualTransactionActive(false);
+        }
     }
 
     @Test
@@ -94,7 +120,12 @@ class PatientMessageGateTest {
             PatientNotificationEvent.APPOINTMENT_RESCHEDULED, PatientNotificationEvent.APPOINTMENT_CANCELLED,
             PatientNotificationEvent.APPOINTMENT_COMPLETED, PatientNotificationEvent.APPOINTMENT_NO_SHOW)) {
             assertThat(gate.appointmentEmail(patient, notice(event), MAIL)).as(event.name()).isFalse();
-            verify(ledger).recordOptOut(event, hospitalId, patient.getId(), subjectId, NotificationChannel.EMAIL);
+            verify(ledger).recordOptOut(eq(event),
+                eq(hospitalId),
+                eq(patient.getId()),
+                eq(subjectId),
+                eq(NotificationChannel.EMAIL),
+                any(Decision.class));
         }
         verifyNoInteractions(emailService);
     }
@@ -103,6 +134,7 @@ class PatientMessageGateTest {
     @DisplayName("an appointment e-mail to a patient with no address is not a refusal: no trace")
     void noAddressNoTrace() {
         patient.setEmail(" ");
+        patient.setVerifiedEmailRecipient(" ");
         assertThat(gate.appointmentEmail(patient, notice(PatientNotificationEvent.APPOINTMENT_CONFIRMATION), MAIL))
             .isFalse();
         verifyNoInteractions(emailService, ledger, consent);
@@ -125,8 +157,12 @@ class PatientMessageGateTest {
             "s", "<p>b</p>")).isFalse();
 
         verify(emailService, never()).sendHtml(any(), any(), any(), any(), any());
-        verify(ledger).recordOptOut(PatientNotificationEvent.VISIT_SUMMARY, hospitalId, patient.getId(), subjectId,
-            NotificationChannel.EMAIL);
+        verify(ledger).recordOptOut(eq(PatientNotificationEvent.VISIT_SUMMARY),
+            eq(hospitalId),
+            eq(patient.getId()),
+            eq(subjectId),
+            eq(NotificationChannel.EMAIL),
+            any(Decision.class));
         assertThat(gate.appointmentEmail(patient, notice(PatientNotificationEvent.APPOINTMENT_CONFIRMATION), MAIL))
             .isTrue();
     }
@@ -151,8 +187,12 @@ class PatientMessageGateTest {
         optOut(NotificationType.APPOINTMENT_REMINDER, NotificationChannel.SMS);
         assertThat(gate.smsNow(patient, notice(PatientNotificationEvent.WAITLIST_OFFER), "other")).isFalse();
         verify(smsService, never()).send(anyString(), eq("other"));
-        verify(ledger).recordOptOut(PatientNotificationEvent.WAITLIST_OFFER, hospitalId, patient.getId(), subjectId,
-            NotificationChannel.SMS);
+        verify(ledger).recordOptOut(eq(PatientNotificationEvent.WAITLIST_OFFER),
+            eq(hospitalId),
+            eq(patient.getId()),
+            eq(subjectId),
+            eq(NotificationChannel.SMS),
+            any(Decision.class));
     }
 
     @Test
@@ -169,7 +209,8 @@ class PatientMessageGateTest {
     @DisplayName("a patient with no portal account cannot opt out yet (D2203) and is allowed")
     void noPortalAccountAllowed() {
         patient.setUser(null);
-        when(consent.allows(null, NotificationType.MEDICATION_REFILL, NotificationChannel.SMS)).thenReturn(true);
+        when(consent.decision(null, NotificationType.MEDICATION_REFILL, NotificationChannel.SMS))
+            .thenAnswer(call -> new Decision(true, call.getArgument(0), null, null));
         assertThat(gate.smsAfterCommit(patient, notice(PatientNotificationEvent.PHARMACY_DISPENSED), "b")).isTrue();
         verify(smsService).send("+22670707070", "b");
     }
@@ -179,6 +220,20 @@ class PatientMessageGateTest {
     void afterCommitFailureSwallowed() {
         doThrow(new IllegalStateException("sms.provider.unreachable")).when(smsService).send(any(), any());
         assertThat(gate.smsAfterCommit(patient, notice(PatientNotificationEvent.PHARMACY_DISPENSED), "b")).isTrue();
+    }
+
+    @Test
+    void attachmentMailRechecksCurrentProofAfterThePatientSnapshotWasLoaded() {
+        PatientMessageGate.OutgoingMail mail = new PatientMessageGate.OutgoingMail(
+            List.of(patient.getEmail()), null, null, "cdx-subject", "cdx-body");
+        assertThat(gate.emailWithAttachment(patient, notice(PatientNotificationEvent.INVOICE), mail,
+            new byte[] {1}, "cdx.pdf", "application/pdf")).isFalse();
+        verifyNoInteractions(emailService);
+        verify(ledger).recordUnverified(PatientNotificationEvent.INVOICE, hospitalId, patient.getId(), subjectId, NotificationChannel.EMAIL);
+        when(currentCheck.isVerified(patient.getId(), NotificationChannel.EMAIL, patient.getEmail())).thenReturn(true);
+        assertThat(gate.emailWithAttachment(patient, notice(PatientNotificationEvent.INVOICE), mail,
+            new byte[] {1}, "cdx.pdf", "application/pdf")).isTrue();
+        verify(emailService).sendWithAttachment(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -197,8 +252,12 @@ class PatientMessageGateTest {
 
         verify(emailService).sendWithAttachment(List.of("claims@insurer.test"), List.of(), List.of(), "s", "b", null,
             "f.pdf", "application/pdf");
-        verify(ledger).recordOptOut(PatientNotificationEvent.INVOICE, hospitalId, patient.getId(), subjectId,
-            NotificationChannel.EMAIL);
+        verify(ledger).recordOptOut(eq(PatientNotificationEvent.INVOICE),
+            eq(hospitalId),
+            eq(patient.getId()),
+            eq(subjectId),
+            eq(NotificationChannel.EMAIL),
+            any(Decision.class));
         assertThat(toInsurer.toString()).doesNotContain("insurer");
     }
 }

@@ -380,8 +380,13 @@ public class GlobalExceptionHandler {
         for (String path : ex.getMalformedPaths()) {
             fieldErrors.putIfAbsent(path, invalidFieldReason(path));
         }
+        // QA D3753: a search's misspelt criterion (or an action's field) is named as such, with
+        // the fields the body accepts.
+        com.example.hms.validation.RejectsUnknownFields.Kind kind = strictKind(ex.getBodyType());
         for (String path : ex.getNotAcceptedPaths()) {
-            fieldErrors.putIfAbsent(path, notAcceptedReason(path));
+            fieldErrors.putIfAbsent(path, kind == com.example.hms.validation.RejectsUnknownFields.Kind.UPDATE
+                ? notAcceptedReason(path)
+                : listedFieldNotAcceptedReason(path, kind, acceptedFields(ex.getBodyType())));
         }
         java.util.List<String> globalReasons = new java.util.ArrayList<>();
         for (MalformedRequestBodyException.BodyViolation item : ex.getViolations()) {
@@ -451,6 +456,38 @@ public class GlobalExceptionHandler {
         }
         String label = messageSource.getMessage("field.label." + leaf, null, null, LocaleContextHolder.getLocale());
         return label == null || label.isBlank() ? null : label;
+    }
+
+    /** QA D3753: a field a search or an action does not take, named with the fields it accepts. */
+    private String listedFieldNotAcceptedReason(String path, com.example.hms.validation.RejectsUnknownFields.Kind kind,
+                                                String acceptedFields) {
+        String field = path.length() > 64 ? path.substring(0, 64) : path;
+        if (kind == com.example.hms.validation.RejectsUnknownFields.Kind.SEARCH) {
+            return localized("error.request.searchFieldNotAccepted",
+                "\"{0}\" is not a criterion of this search. Accepted fields: {1}.", field, acceptedFields);
+        }
+        return localized("error.request.actionFieldNotAccepted",
+            "\"{0}\" is not a field of this request. Accepted fields: {1}.", field, acceptedFields);
+    }
+
+    /** How a body marked {@code @RejectsUnknownFields} words a refusal; UPDATE when unmarked or unknown. */
+    private static com.example.hms.validation.RejectsUnknownFields.Kind strictKind(Class<?> bodyType) {
+        com.example.hms.validation.RejectsUnknownFields marker = bodyType == null ? null
+            : bodyType.getAnnotation(com.example.hms.validation.RejectsUnknownFields.class);
+        return marker == null ? com.example.hms.validation.RejectsUnknownFields.Kind.UPDATE : marker.value();
+    }
+
+    /** The fields a body takes, comma-separated: a record's components, else its instance fields. */
+    private static String acceptedFields(Class<?> bodyType) {
+        if (bodyType.isRecord()) {
+            return java.util.Arrays.stream(bodyType.getRecordComponents())
+                .map(java.lang.reflect.RecordComponent::getName)
+                .collect(java.util.stream.Collectors.joining(", "));
+        }
+        return java.util.Arrays.stream(bodyType.getDeclaredFields())
+            .filter(field -> !java.lang.reflect.Modifier.isStatic(field.getModifiers()) && !field.isSynthetic())
+            .map(java.lang.reflect.Field::getName)
+            .collect(java.util.stream.Collectors.joining(", "));
     }
 
     /**
@@ -877,6 +914,12 @@ public class GlobalExceptionHandler {
             NotificationTransportUnavailableException ex, WebRequest request) {
         // No stack trace: the gateway already logged which property is missing.
         log.warn("Notification transport unavailable at path {}", logPath(request));
+        return buildErrorResponse(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(RoiAuditUnavailableException.class)
+    public ResponseEntity<Object> handleRoiAuditUnavailable(
+            RoiAuditUnavailableException ex, WebRequest request) {
         return buildErrorResponse(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request);
     }
 

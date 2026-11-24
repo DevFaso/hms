@@ -76,6 +76,16 @@ class ReadOnlyPostGuardTest {
     /** Every declared read, so that declaring a write as a read needs this list to change too: review sees it. */
     private static final Set<String> DECLARED_READS = Set.of(
         "AppointmentController#searchAppointments",
+        "AppointmentController#getAppointmentsByPatientUsername",
+        "ChatController#getMessagesByRecipientEmail",
+        "ChatController#getMessagesByRecipientUsername",
+        "ChatController#getMessagesBySenderEmail",
+        "ChatController#getMessagesBySenderUsername",
+        "EncounterController#byDoctor",
+        "LookupController#getAppointmentsByPatientEmail",
+        "LookupController#getAppointmentsByPatientMri",
+        "LookupController#getAppointmentsByPatientPhone",
+        "LookupController#getAppointmentsByStaffEmail",
         "BillingInvoiceController#searchInvoices",
         "CdsHooksController#invoke",
         "DepartmentController#filterDepartments",
@@ -87,7 +97,27 @@ class ReadOnlyPostGuardTest {
         "PatientNationalUniqueIdController#search",
         "PatientNationalUniqueIdController#reveal",
         "PrenatalSchedulingController#generateSchedule",
-        "SuperAdminSecurityRuleController#simulatePolicyImpact");
+        "PatientController#lookupPatients",
+        "PatientController#registrationMatch",
+        "PatientController#searchPatients",
+        "ReceptionController#getDuplicateCandidates",
+        "StaffController#getByUserEmail",
+        "StaffController#getByUserPhone",
+        "SuperAdminAuditSearchController#exportCsv",
+        "SuperAdminAuditSearchController#search",
+        "UserController#searchUsers",
+        "SuperAdminSecurityRuleController#simulatePolicyImpact",
+        // QA D3750: a list's typed term left its query string for the body.
+        "AppointmentController#termSearchAppointments",
+        "AuditEventLogController#termSearchAuditLogs",
+        "ChatController#searchChatHistory",
+        "DepartmentController#searchDepartments",
+        "NotificationController#termSearchNotifications",
+        "PatientController#termSearchPatients",
+        "PatientPortalController#termSearchMyNotifications",
+        "PrescriptionController#search",
+        "SuperAdminOrganizationController#termSearchOrganizationHierarchy",
+        "UserRoleHospitalAssignmentController#termSearchAssignments");
 
     private record Post(RequestMappingInfo info, HandlerMethod handler) {
         String name() {

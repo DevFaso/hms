@@ -97,6 +97,7 @@ public class PatientNotificationRenderer {
     private final MessageSource messageSource;
     private final Clock clock;
     private final PatientNotificationProperties properties;
+    private final PatientRecipientVerification verification;
 
     /**
      * The fallback language, the reminder sweep's own setting ({@code AppointmentReminderService}):
@@ -118,9 +119,9 @@ public class PatientNotificationRenderer {
             return skip(row, PatientNotificationErrorCode.OPTED_OUT);
         }
         Patient patient = patientRepository.findByIdUnscoped(row.getPatientId()).orElse(null);
-        PatientNotificationErrorCode refusal = recipientRefusal(row, patient);
+        RecipientRefusal refusal = recipientRefusal(row, patient);
         if (refusal != null) {
-            return skip(row, refusal);
+            return skip(row, refusal.code(), refusal.decision());
         }
         String recipient = recipientOf(row, patient);
         Locale locale = localeResolver.resolve(patient, Locale.forLanguageTag(fallbackLocale));
@@ -174,26 +175,34 @@ public class PatientNotificationRenderer {
     }
 
     /** Why this patient must not get this send now, or null when they may. */
-    private PatientNotificationErrorCode recipientRefusal(PatientNotificationDelivery row, Patient patient) {
+    private record RecipientRefusal(PatientNotificationErrorCode code, PatientChannelConsent.Decision decision) {
+        private RecipientRefusal(PatientNotificationErrorCode code) { this(code, null); }
+    }
+
+    private RecipientRefusal recipientRefusal(PatientNotificationDelivery row, Patient patient) {
         if (patient == null) {
-            return PatientNotificationErrorCode.NO_CONTACT;
+            return new RecipientRefusal(PatientNotificationErrorCode.NO_CONTACT);
         }
         if (com.example.hms.service.support.DeceasedPatientGuard.careBlocked(patient)) {
             // Never text a dead patient's phone about a visit or a result.
-            return PatientNotificationErrorCode.PATIENT_DECEASED;
+            return new RecipientRefusal(PatientNotificationErrorCode.PATIENT_DECEASED);
         }
         UUID userId = patient.getUser() != null ? patient.getUser().getId() : null;
-        if (!consent.allows(userId, row.getEventType().preferenceType(), row.getChannel())) {
-            return PatientNotificationErrorCode.OPTED_OUT;
+        var decision = consent.decision(userId, row.getEventType().preferenceType(), row.getChannel());
+        if (!decision.allowed()) {
+            return new RecipientRefusal(PatientNotificationErrorCode.OPTED_OUT, decision);
         }
         String recipient = recipientOf(row, patient);
         if (!StringUtils.hasText(recipient)) {
-            return PatientNotificationErrorCode.NO_CONTACT;
+            return new RecipientRefusal(PatientNotificationErrorCode.NO_CONTACT);
+        }
+        if (!verification.allows(patient, row.getChannel(), recipient)) {
+            return new RecipientRefusal(PatientNotificationErrorCode.RECIPIENT_UNVERIFIED);
         }
         if (row.getChannel() == NotificationChannel.EMAIL
             && !EmailRecipientAllowlist.parse(properties.getEmailRecipientAllowlist()).permits(recipient)) {
             // Dev / uat: EMAIL_RECIPIENT_ALLOWLIST, the email twin of SMS_RECIPIENT_ALLOWLIST.
-            return PatientNotificationErrorCode.RECIPIENT_NOT_ALLOWED;
+            return new RecipientRefusal(PatientNotificationErrorCode.RECIPIENT_NOT_ALLOWED);
         }
         return null;
     }
@@ -239,8 +248,19 @@ public class PatientNotificationRenderer {
     }
 
     private Prepared skip(PatientNotificationDelivery row, PatientNotificationErrorCode code) {
+        return skip(row, code, null);
+    }
+
+    private Prepared skip(PatientNotificationDelivery row, PatientNotificationErrorCode code,
+                          PatientChannelConsent.Decision decision) {
         row.setStatus(NotificationDeliveryStatus.SKIPPED);
         row.setErrorCode(code.name());
+        if (code == PatientNotificationErrorCode.OPTED_OUT && decision != null) {
+            var refusal = patientRepository.findNotificationAccountScoped(row.getPatientId(), row.getHospitalId())
+                .map(decision::scopeTo);
+            row.setConsentRecordedBy(refusal.map(PatientChannelConsent.Decision::recordedBy).orElse(null));
+            row.setConsentRecordedAt(refusal.map(PatientChannelConsent.Decision::recordedAt).orElse(null));
+        }
         repository.save(row);
         log.info("Patient notification {} ({} {}) skipped: {}", row.getId(), row.getEventType(), row.getChannel(),
             code);

@@ -75,6 +75,12 @@ class NotificationServiceImplTest {
     private com.example.hms.service.i18n.NotificationLocalizer localizer =
         new com.example.hms.service.i18n.NotificationLocalizer(com.example.hms.i18n.TestMessageSources.bundles());
 
+    @Mock
+    private com.example.hms.repository.PatientRepository patientRepository;
+
+    @Mock
+    private AuditEventLogService auditEventLogService;
+
     @InjectMocks
     private NotificationServiceImpl service;
 
@@ -84,6 +90,8 @@ class NotificationServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "recorderLabels",
+            new com.example.hms.service.notification.ConsentRecorderLabels(userRepository));
         sampleNotification = Notification.builder()
                 .id(notificationId)
                 .message("Test message")
@@ -407,6 +415,86 @@ class NotificationServiceImplTest {
         }
     }
 
+    @Test
+    void aPartialSettingsSavePreservesADeskRecordedRefusalAndItsAuthor() {
+        UUID userId = UUID.randomUUID();
+        User user = new User(); user.setId(userId);
+        UUID recorder = UUID.randomUUID();
+        var recorded = LocalDateTime.of(2026, 11, 22, 8, 0);
+        var refusal = NotificationPreference.builder().user(user).notificationType(NotificationType.BILLING)
+            .channel(NotificationChannel.EMAIL).enabled(false).build();
+        refusal.recordChoice(false, recorder, recorded);
+        when(userRepository.lockForNotificationPreferences(userId)).thenReturn(Optional.of(user));
+        when(notificationPreferenceRepository.findByUser_Id(userId)).thenReturn(List.of(refusal));
+        var deskName = org.mockito.Mockito.mock(UserRepository.ClinicalActorName.class);
+        when(deskName.getId()).thenReturn(recorder);
+        when(deskName.getFirstName()).thenReturn("Test");
+        when(deskName.getLastName()).thenReturn("Accueil");
+        when(userRepository.findClinicalActorNames(List.of(recorder))).thenReturn(List.of(deskName));
+        var update = new NotificationPreferenceUpdateDTO(NotificationType.LAB_RESULT, NotificationChannel.SMS, true);
+        var result = service.updatePreferences(userId, List.of(update));
+        // QA r73 D3700: the patient sees who recorded a choice by name, never by internal account id.
+        assertThat(result).hasSize(2).filteredOn(dto -> dto.getNotificationType() == NotificationType.BILLING)
+            .singleElement().satisfies(dto -> {
+                assertThat(dto.isEnabled()).isFalse();
+                assertThat(dto.getRecordedByKind()).isEqualTo("STAFF");
+                assertThat(dto.getRecordedByName()).isEqualTo("Test Accueil");
+                assertThat(dto.getRecordedAt()).isEqualTo(recorded);
+            });
+        assertThat(result).filteredOn(dto -> dto.getNotificationType() == NotificationType.LAB_RESULT)
+            .singleElement().satisfies(dto -> {
+                assertThat(dto.getRecordedByKind()).isEqualTo("PATIENT");
+                assertThat(dto.getRecordedByName()).isNull();
+                assertThat(dto.getRecordedAt()).isNotNull();
+            });
+        // Recording a cell as on when it was already on (no row) is not a change: no audit row.
+        verifyNoInteractions(auditEventLogService);
+        verify(notificationPreferenceRepository, never()).deleteByUser_Id(userId);
+    }
+
+
+    @Test
+    @DisplayName("QA r73 D3702: a patient's own consent change writes the same audit event as the desk's")
+    void aPatientsOwnConsentChangeIsAuditedLikeTheDesks() {
+        UUID userId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        User user = new User(); user.setId(userId);
+        var choice = NotificationPreference.builder().user(user).notificationType(NotificationType.BILLING)
+            .channel(NotificationChannel.EMAIL).enabled(false).build();
+        when(userRepository.lockForNotificationPreferences(userId)).thenReturn(Optional.of(user));
+        when(notificationPreferenceRepository.findByUser_Id(userId)).thenReturn(List.of(choice));
+        when(patientRepository.findIdsByUserId(userId)).thenReturn(List.of(patientId));
+
+        service.updatePreferences(userId, List.of(
+            new NotificationPreferenceUpdateDTO(NotificationType.LAB_RESULT, NotificationChannel.EMAIL, false),
+            new NotificationPreferenceUpdateDTO(NotificationType.BILLING, NotificationChannel.EMAIL, true)));
+
+        ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType())
+            .isEqualTo(com.example.hms.enums.AuditEventType.PATIENT_CHANNEL_PREFERENCES_UPDATED);
+        assertThat(audit.getValue().getUserId()).isEqualTo(userId);
+        assertThat(audit.getValue().getPatientId()).isEqualTo(patientId);
+        assertThat(audit.getValue().getEventDescription()).isEqualTo(
+            "Patient channel choices recorded by the patient: LAB_RESULT/EMAIL on->off, BILLING/EMAIL off->on");
+    }
+
+    @Test
+    @DisplayName("QA r73 D3702: a staff account's own bell settings are not a patient's consent")
+    void aStaffAccountsOwnSettingsWriteNoPatientAuditRow() {
+        UUID userId = UUID.randomUUID();
+        User user = new User(); user.setId(userId);
+        when(userRepository.lockForNotificationPreferences(userId)).thenReturn(Optional.of(user));
+        when(notificationPreferenceRepository.findByUser_Id(userId)).thenReturn(List.of());
+        when(patientRepository.findIdsByUserId(userId)).thenReturn(List.of());
+
+        service.updatePreferences(userId, List.of(
+            new NotificationPreferenceUpdateDTO(NotificationType.GENERAL, NotificationChannel.IN_APP, false)));
+
+        verifyNoInteractions(auditEventLogService);
+    }
+
     // ── updatePreferences ────────────────────────────────────────────────────
 
     @Nested
@@ -414,13 +502,13 @@ class NotificationServiceImplTest {
     class UpdatePreferences {
 
         @Test
-        @DisplayName("deletes old prefs, saves new, and returns DTOs")
-        void deletesOldAndSavesNew() {
+        @DisplayName("records changed prefs without deleting omitted choices")
+        void recordsWithoutDeletingOmittedChoices() {
             UUID userId = UUID.randomUUID();
             User user = new User();
             user.setId(userId);
 
-            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.lockForNotificationPreferences(userId)).thenReturn(Optional.of(user));
 
             NotificationPreferenceUpdateDTO update = new NotificationPreferenceUpdateDTO();
             update.setNotificationType(NotificationType.LAB_RESULT);
@@ -440,8 +528,8 @@ class NotificationServiceImplTest {
 
             List<NotificationPreferenceDTO> result = service.updatePreferences(userId, List.of(update));
 
-            verify(notificationPreferenceRepository).deleteByUser_Id(userId);
-            verify(notificationPreferenceRepository).flush();
+            verify(notificationPreferenceRepository, never()).deleteByUser_Id(userId);
+            verify(notificationPreferenceRepository, never()).flush();
             assertThat(result).hasSize(1);
             assertThat(result.get(0).getNotificationType()).isEqualTo(NotificationType.LAB_RESULT);
         }
@@ -450,7 +538,7 @@ class NotificationServiceImplTest {
         @DisplayName("throws when user not found")
         void throwsWhenUserNotFound() {
             UUID userId = UUID.randomUUID();
-            when(userRepository.findById(userId)).thenReturn(Optional.empty());
+            when(userRepository.lockForNotificationPreferences(userId)).thenReturn(Optional.empty());
 
             List<NotificationPreferenceUpdateDTO> emptyList = List.of();
             assertThatThrownBy(() -> service.updatePreferences(userId, emptyList))

@@ -19,4 +19,36 @@ export const NOTICE_CHANNELS = ['IN_APP', 'EMAIL', 'SMS'] as const;
 export const DESK_NOTICE_CHANNELS = ['SMS', 'EMAIL'] as const;
 
 export type NoticeType = (typeof NOTICE_TYPES)[number];
+
+/**
+ * QA r73 D3700: who recorded a consent choice, as the server lets this reader know it. Another facility's staff
+ * member comes without a name, and no reader ever receives the recorder's account id.
+ */
+export type ConsentRecorderKind = 'PATIENT' | 'STAFF' | 'OTHER_FACILITY';
+
+/** The label key for a recorder shown without a name; null when the name (or « unknown ») is shown. */
+export function consentRecorderKey(kind: string | null | undefined): string | null {
+  if (kind === 'PATIENT') return 'PATIENT_CHANNELS.RECORDER_PATIENT';
+  if (kind === 'OTHER_FACILITY') return 'PATIENT_CHANNELS.RECORDER_OTHER_FACILITY';
+  return null;
+}
 export type NoticeChannel = (typeof NOTICE_CHANNELS)[number];
+
+export interface NotificationChoiceValue {
+  notificationType: string;
+  channel: string;
+  enabled: boolean;
+}
+
+/** Send only the choices actually edited, never stale neighbouring switches or server provenance. */
+export function changedChannelChoices(
+  current: readonly NotificationChoiceValue[],
+  saved: readonly NotificationChoiceValue[],
+): NotificationChoiceValue[] {
+  const prior = new Map(
+    saved.map((row) => [`${row.notificationType}/${row.channel}`, row.enabled]),
+  );
+  return current
+    .filter((row) => row.enabled !== (prior.get(`${row.notificationType}/${row.channel}`) ?? true))
+    .map(({ notificationType, channel, enabled }) => ({ notificationType, channel, enabled }));
+}

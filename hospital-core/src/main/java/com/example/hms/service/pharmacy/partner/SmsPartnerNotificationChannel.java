@@ -4,20 +4,23 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
-import com.example.hms.service.SmsService;
+import com.example.hms.service.notification.PatientMessageGate;
+import com.example.hms.enums.PatientNotificationEvent;
 import com.example.hms.service.pharmacy.FillAccounting;
 import com.example.hms.service.i18n.NotificationLocales;
 import com.example.hms.service.i18n.PatientLocaleResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 import java.util.Locale;
 
 /**
- * T-54 — Partner pharmacy channel backed by the existing {@link SmsService}.
+ * T-54 — Partner pharmacy channel backed by the existing {@link com.example.hms.service.SmsService}.
  * <p>
+ * Patient notices pass through the consent and current-recipient verification gate. Only
+ * partner notices use the partner-only raw transport.
+ *
  * Operates best-effort: when the partner or patient has no phone number, or
  * the {@code SmsService} bean is absent (e.g. local dev), the method is a no-op
  * so that business flow is never blocked by a missing notification.
@@ -27,7 +30,8 @@ import java.util.Locale;
 @Slf4j
 public class SmsPartnerNotificationChannel implements PartnerNotificationChannel {
 
-    private final ObjectProvider<SmsService> smsServiceProvider;
+    private final PartnerPharmacySmsTransport partnerSms;
+    private final PatientMessageGate patientMessages;
     private final PartnerSmsTemplates templates;
     private final PatientLocaleResolver patientLocaleResolver;
 
@@ -65,10 +69,10 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         // whatever had already been handed over (gap G3, round 3).
         String remainder = remainderLabel(decision, prescription);
         if (remainder != null) {
-            trySend(phone, templates.prescriptionOfferPartial(ref, medication, remainder, initials));
+            partnerSms.send(partner, templates.prescriptionOfferPartial(ref, medication, remainder, initials));
             return;
         }
-        trySend(phone, templates.prescriptionOffer(ref, medication, initials));
+        partnerSms.send(partner, templates.prescriptionOffer(ref, medication, initials));
     }
 
     @Override
@@ -77,7 +81,7 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         if (phone == null || phone.isBlank()) {
             return;
         }
-        trySend(phone, templates.reminder(buildRefToken(decision)));
+        partnerSms.send(partner, templates.reminder(buildRefToken(decision)));
     }
 
     @Override
@@ -86,7 +90,7 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         if (phone == null || phone.isBlank()) {
             return;
         }
-        trySend(phone, templates.autoRejected(buildRefToken(decision)));
+        partnerSms.send(partner, templates.autoRejected(buildRefToken(decision)));
     }
 
     @Override
@@ -95,7 +99,7 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         if (phone == null || phone.isBlank()) {
             return;
         }
-        trySend(phone, templates.superseded(buildRefToken(decision)));
+        partnerSms.send(partner, templates.superseded(buildRefToken(decision)));
     }
 
     @Override
@@ -104,7 +108,7 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         if (phone == null || phone.isBlank()) {
             return;
         }
-        trySend(phone, templates.withdrawn(buildRefToken(decision)));
+        partnerSms.send(partner, templates.withdrawn(buildRefToken(decision)));
     }
 
     @Override
@@ -113,44 +117,25 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         if (phone == null || phone.isBlank()) {
             return;
         }
-        trySend(phone, templates.heldForReview(buildRefToken(decision)));
+        partnerSms.send(partner, templates.heldForReview(buildRefToken(decision)));
     }
 
     @Override
     public void notifyPatientAccepted(Patient patient, Pharmacy partner) {
-        String phone = patientPhone(patient);
-        if (phone == null || partner == null) {
-            return;
-        }
+        if (patient == null || partner == null) return;
         Locale locale = patientLocale(patient);
-        trySend(phone, templates.patientAccepted(safeName(partner.getName(), locale), locale));
+        patientMessages.smsAfterCommit(patient,
+            new PatientMessageGate.Notice(PatientNotificationEvent.PHARMACY_OUT_OF_STOCK, null, null),
+            templates.patientAccepted(safeName(partner.getName(), locale), locale));
     }
 
     @Override
     public void notifyPatientDispensed(Patient patient, Pharmacy partner) {
-        String phone = patientPhone(patient);
-        if (phone == null || partner == null) {
-            return;
-        }
+        if (patient == null || partner == null) return;
         Locale locale = patientLocale(patient);
-        trySend(phone, templates.patientDispensed(safeName(partner.getName(), locale), locale));
-    }
-
-    // ---------- helpers ----------
-
-    private void trySend(String phone, String message) {
-        SmsService sms = smsServiceProvider.getIfAvailable();
-        if (sms == null) {
-            log.debug("SmsService unavailable; skipping partner SMS");
-            return;
-        }
-        try {
-            sms.send(phone, message);
-        } catch (Exception ex) {
-            // Never fail the business flow because the SMS gateway is transiently unavailable.
-            // Mask the destination number to avoid leaking patient/partner phone numbers into logs.
-            log.warn("Partner SMS failed for {}: {}", maskPhone(phone), ex.getMessage());
-        }
+        patientMessages.smsAfterCommit(patient,
+            new PatientMessageGate.Notice(PatientNotificationEvent.PHARMACY_DISPENSED, null, null),
+            templates.patientDispensed(safeName(partner.getName(), locale), locale));
     }
 
     /**
@@ -169,35 +154,9 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
         return "****" + tail;
     }
 
-    private static String patientPhone(Patient p) {
-        if (p == null) {
-            return null;
-        }
-        String primary = p.getPhoneNumberPrimary();
-        if (primary != null && !primary.isBlank()) {
-            return primary;
-        }
-        String secondary = p.getPhoneNumberSecondary();
-        return (secondary != null && !secondary.isBlank()) ? secondary : null;
-    }
-
+    /** K4: a partner reads the patient's initials, never the name ({@link com.example.hms.utility.SmsPatientLabel}). */
     private static String patientInitials(Patient p) {
-        if (p == null) {
-            return "—";
-        }
-        char first = initial(p.getFirstName());
-        char last = initial(p.getLastName());
-        if (first == 0 && last == 0) {
-            return "—";
-        }
-        StringBuilder sb = new StringBuilder(2);
-        if (first != 0) sb.append(first);
-        if (last != 0) sb.append(last);
-        return sb.toString();
-    }
-
-    private static char initial(String s) {
-        return (s == null || s.isBlank()) ? 0 : Character.toUpperCase(s.trim().charAt(0));
+        return com.example.hms.utility.SmsPatientLabel.initials(p);
     }
 
     /**

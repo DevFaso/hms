@@ -599,4 +599,37 @@ class PayerCatalogueServiceTest {
         assertThatThrownBy(() -> service.requireLinkablePlan(liveId, HOSPITAL))
             .isInstanceOf(FieldBusinessException.class);
     }
+
+    /**
+     * QA D3601 (r72): another hospital's plan is read at that hospital (the row's own), never through the acting
+     * scope; a plan of any other hospital than the one named for it is dropped, and a payer of another hospital is
+     * never named. The label holds names and codes only.
+     */
+    @Test
+    void labelsAtHospitalsReadsEachPlanAtItsRowsHospital_D3601() {
+        UUID hospitalA = UUID.randomUUID();
+        Payer payerAtA = withId(Payer.builder().hospitalId(hospitalA).code("MUT-TEST-A")
+            .name("Mutuelle Test A (FICTIVE)").payerType(PayerType.MUTUELLE).active(true).build());
+        PayerPlan planAtA = withId(PayerPlan.builder().hospitalId(hospitalA).payerId(payerAtA.getId()).code("MTA-ESS")
+            .name("Formule Test Essentielle").effectiveFrom(TODAY).build());
+        PayerPlan planElsewhere = withId(PayerPlan.builder().hospitalId(HOSPITAL).payerId(payerAtA.getId())
+            .code("X").name("Formule d'ailleurs").effectiveFrom(TODAY).build());
+        java.util.Map<UUID, UUID> asked = java.util.Map.of(planAtA.getId(), hospitalA, planElsewhere.getId(), hospitalA);
+        when(plans.findByIdInAndHospitalIdIn(org.mockito.ArgumentMatchers.anyCollection(),
+                org.mockito.ArgumentMatchers.anyCollection()))
+            .thenReturn(List.of(planAtA, planElsewhere));
+        when(payers.findByIdInAndHospitalIdIn(org.mockito.ArgumentMatchers.anyCollection(),
+                org.mockito.ArgumentMatchers.anyCollection()))
+            .thenReturn(List.of(payerAtA));
+
+        java.util.Map<UUID, PayerCatalogueService.PlanLabel> labels = service.labelsAtHospitals(asked);
+
+        assertThat(labels).containsOnlyKeys(planAtA.getId());
+        assertThat(labels.get(planAtA.getId())).isEqualTo(new PayerCatalogueService.PlanLabel(planAtA.getId(),
+            "MTA-ESS", "Formule Test Essentielle", "MUT-TEST-A", "Mutuelle Test A (FICTIVE)"));
+        verify(plans).findByIdInAndHospitalIdIn(java.util.Set.of(planAtA.getId(), planElsewhere.getId()),
+            java.util.Set.of(hospitalA));
+        verify(plans, never()).findAllById(org.mockito.ArgumentMatchers.any());
+        assertThat(service.labelsAtHospitals(java.util.Map.of())).isEmpty();
+    }
 }

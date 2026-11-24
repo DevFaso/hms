@@ -67,6 +67,11 @@ public class MailOutboxService {
             .htmlBody(htmlBody)
             .nextAttemptAt(LocalDateTime.now(clock))
             .build();
+        var clinical = com.example.hms.service.notification.VerifiedPatientMailScope.current();
+        if (clinical != null) {
+            message.setClinicalPatientId(clinical.patientId());
+            message.setVerifiedPatientRecipient(clinical.recipient());
+        }
         return ownTransaction.execute(status -> repository.save(message).getId());
     }
 

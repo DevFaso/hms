@@ -32,6 +32,10 @@ export interface NotificationPage {
 
 export interface NotificationPreference {
   id?: string;
+  /** QA r73 D3700: PATIENT, STAFF or OTHER_FACILITY; never the recorder's account id. */
+  recordedByKind?: 'PATIENT' | 'STAFF' | 'OTHER_FACILITY' | null;
+  recordedByName?: string | null;
+  recordedAt?: string | null;
   notificationType: string;
   channel: string;
   enabled: boolean;

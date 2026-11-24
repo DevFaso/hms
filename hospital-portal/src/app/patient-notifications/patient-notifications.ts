@@ -21,11 +21,11 @@ import {
 import { ToastService } from '../core/toast.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { refusalReason } from '../shared/refusal-reason';
-import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { consentRecorderKey } from '../shared/notification-channel-choices';
 
 /**
  * Codes after which the patient may already have the message: the provider gave no answer, or every
- * attempt ran out without one recorded. Retrying them can text the patient twice, so it is asked.
+ * attempt ran out without one recorded. Never offer a resend: it could text the patient twice.
  */
 const MAYBE_DELIVERED: ReadonlySet<string> = new Set(['OUTCOME_UNKNOWN', 'ATTEMPTS_EXHAUSTED']);
 
@@ -88,6 +88,7 @@ const ERROR_KEYS: Record<string, string> = {
   RECIPIENT_NOT_ALLOWED: 'PATIENT_NOTIFICATIONS.ERROR.RECIPIENT_NOT_ALLOWED',
   OPTED_OUT: 'PATIENT_NOTIFICATIONS.ERROR.OPTED_OUT',
   NO_CONTACT: 'PATIENT_NOTIFICATIONS.ERROR.NO_CONTACT',
+  RECIPIENT_UNVERIFIED: 'PATIENT_NOTIFICATIONS.ERROR.RECIPIENT_UNVERIFIED',
   SUBJECT_WITHDRAWN: 'PATIENT_NOTIFICATIONS.ERROR.SUBJECT_WITHDRAWN',
   PATIENT_DECEASED: 'PATIENT_NOTIFICATIONS.ERROR.PATIENT_DECEASED',
 };
@@ -110,10 +111,11 @@ export class PatientNotificationsComponent implements OnInit {
   private readonly service = inject(PatientNotificationDeliveryService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
-  private readonly confirm = inject(ConfirmService);
 
   readonly statuses = DELIVERY_STATUSES;
   readonly pageSize = 25;
+  /** QA r73 D3700: a refusal recorded at another facility is shown without its recorder's name. */
+  readonly recorderKey = consentRecorderKey;
 
   loading = signal(true);
   error = signal<string | null>(null);
@@ -238,23 +240,13 @@ export class PatientNotificationsComponent implements OnInit {
     return !!row.errorCode && MAYBE_DELIVERED.has(row.errorCode);
   }
 
-  async retry(row: PatientNotificationDelivery): Promise<void> {
-    if (this.retryingId() || !row.retryable) {
-      return;
-    }
-    if (
-      this.maybeDelivered(row) &&
-      !(await this.confirm.ask({
-        titleKey: 'PATIENT_NOTIFICATIONS.RETRY_CONFIRM_TITLE',
-        messageKey: 'PATIENT_NOTIFICATIONS.RETRY_CONFIRM_MESSAGE',
-        confirmKey: 'PATIENT_NOTIFICATIONS.RETRY',
-      }))
-    ) {
+  retry(row: PatientNotificationDelivery): void {
+    if (this.retryingId() || !row.retryable || this.maybeDelivered(row)) {
       return;
     }
     // The in-flight guard is set BEFORE the call (the #443 lesson).
     this.retryingId.set(row.id);
-    this.service.retry(row.id).subscribe({
+    this.service.retry(row.id, row.manualRetries).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('PATIENT_NOTIFICATIONS.RETRIED'));
         this.retryingId.set(null);

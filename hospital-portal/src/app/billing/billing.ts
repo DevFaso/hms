@@ -234,6 +234,8 @@ export class BillingComponent implements OnInit {
   /** QA D1145: the totals could not be read; the tiles say "—", never 0. */
   private readonly summaryFailed = signal(false);
   private readonly summaryLoading = signal(true);
+  private listGeneration = 0;
+  private summaryGeneration = 0;
   readonly statsUnknown = computed(
     () => this.loading() || this.summaryLoading() || this.loadFailed() || this.summaryFailed(),
   );
@@ -745,12 +747,16 @@ export class BillingComponent implements OnInit {
   }
 
   loadInvoices(page = 0): void {
+    const requestId = ++this.listGeneration;
+    ++this.summaryGeneration;
+    this.summaryLoading.set(true);
     this.loading.set(true);
     this.loadFailed.set(false);
     if (this.activeTab() === 'overdue') {
       // Dedicated server-side worklist (SENT/PARTIALLY_PAID past due).
       this.billingService.getOverdue().subscribe({
         next: (list) => {
+          if (requestId !== this.listGeneration) return;
           this.invoices.set(list ?? []);
           this.page.set(0);
           this.totalPages.set(1);
@@ -759,7 +765,7 @@ export class BillingComponent implements OnInit {
           this.applyFilter();
           this.loading.set(false);
         },
-        error: () => this.listLoadFailed(),
+        error: () => this.listLoadFailed(requestId),
       });
       return;
     }
@@ -790,6 +796,7 @@ export class BillingComponent implements OnInit {
       )
       .subscribe({
         next: (res) => {
+          if (requestId !== this.listGeneration) return;
           const list = res?.content ?? [];
           this.invoices.set(list);
           this.page.set(res?.number ?? page);
@@ -799,12 +806,13 @@ export class BillingComponent implements OnInit {
           this.applyFilter();
           this.loading.set(false);
         },
-        error: () => this.listLoadFailed(),
+        error: () => this.listLoadFailed(requestId),
       });
   }
 
   /** QA D1145: the list and its totals are not shown as empty when the read failed. */
-  private listLoadFailed(): void {
+  private listLoadFailed(requestId: number): void {
+    if (requestId !== this.listGeneration) return;
     this.toast.error(this.translate.instant('BILLING.LOAD_FAILED'));
     this.invoices.set([]);
     this.applyFilter();
@@ -817,10 +825,12 @@ export class BillingComponent implements OnInit {
    * page of 20 rows undercounted revenue and money owed.
    */
   private refreshStats(): void {
+    const requestId = ++this.summaryGeneration;
     this.summaryLoading.set(true);
     // QA D1059: the tiles follow the list's date filter (the invoice date, as the search reads it).
     this.billingService.getSummary(this.appliedRange).subscribe({
       next: (summary) => {
+        if (requestId !== this.summaryGeneration) return;
         this.summaryLoading.set(false);
         this.summaryFailed.set(false);
         this.stats.set({
@@ -833,6 +843,7 @@ export class BillingComponent implements OnInit {
         });
       },
       error: () => {
+        if (requestId !== this.summaryGeneration) return;
         this.summaryLoading.set(false);
         this.summaryFailed.set(true);
       },

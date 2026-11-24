@@ -1,5 +1,7 @@
 package com.example.hms.service;
 
+import com.example.hms.service.notification.PatientChannelConsent.Decision;
+
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.EncounterMapper;
@@ -174,11 +176,12 @@ class EncounterServiceImplTest {
         // mocked mail service; a patient with no stored preference allows every channel.
         com.example.hms.service.notification.PatientChannelConsent consent =
             mock(com.example.hms.service.notification.PatientChannelConsent.class);
-        lenient().when(consent.allows(any(), any(), any())).thenReturn(true);
+        lenient().when(consent.decision(any(), any(), any()))
+            .thenAnswer(call -> new Decision(true, call.getArgument(0), null, null));
         org.springframework.test.util.ReflectionTestUtils.setField(service, "patientMessageGate",
             new com.example.hms.service.notification.PatientMessageGate(consent,
                 mock(com.example.hms.service.notification.PatientNotificationLedger.class),
-                mock(SmsService.class), emailService));
+                mock(SmsService.class), emailService, new com.example.hms.service.notification.PatientRecipientVerification(), mock(com.example.hms.service.notification.PatientRecipientCurrentCheck.class)));
         lenient().when(dischargeSummaryRepository.findByEncounter_Id(any(UUID.class))).thenReturn(Optional.empty());
         lenient().when(dischargeSummaryRepository.save(any(DischargeSummary.class))).thenAnswer(inv -> inv.getArgument(0));
     }
@@ -1091,6 +1094,7 @@ class EncounterServiceImplTest {
         Patient patient = new Patient();
         patient.setId(UUID.randomUUID());
         patient.setEmail("patient@example.com");
+        patient.setVerifiedEmailRecipient(patient.getEmail());
         patient.setFirstName("Jane");
         patient.setLastName("Doe");
         patient.setUser(patientUser);
@@ -1357,7 +1361,8 @@ class EncounterServiceImplTest {
         User patientUser = User.builder().username("patient1").email("patient.user@example.com").build();
         Patient patient = new Patient();
         patient.setId(UUID.randomUUID());
-        patient.setEmail(null); // force fallback to user email
+        patient.setEmail("patient.user@example.com"); // transport-failure scenario uses a verified clinical recipient
+        patient.setVerifiedEmailRecipient(patient.getEmail());
         patient.setFirstName("Jane");
         patient.setLastName("Doe");
         patient.setUser(patientUser);
@@ -2303,6 +2308,7 @@ class EncounterServiceImplTest {
         Patient patient = new Patient();
         patient.setId(patientId);
         patient.setEmail("patient@example.com");
+        patient.setVerifiedEmailRecipient(patient.getEmail());
         patient.setFirstName("Jane");
         patient.setLastName("Doe");
         patient.setUser(patientUser);

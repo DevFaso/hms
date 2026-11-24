@@ -20,7 +20,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.RoiRequestRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
-import com.example.hms.service.AuditEventLogService;
+import com.example.hms.service.RequiredAuditEventLogPort;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -78,7 +78,7 @@ class RoiRequestServiceTest {
     @Mock private HospitalRepository hospitalRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private RoleValidator roleValidator;
-    @Mock private AuditEventLogService auditService;
+    @Mock private RequiredAuditEventLogPort auditService;
 
     private RoiRequestService service;
 
@@ -112,6 +112,7 @@ class RoiRequestServiceTest {
         Set<PatientHospitalRegistration> regs = new HashSet<>();
         regs.add(reg);
         patient.setHospitalRegistrations(regs);
+        org.mockito.Mockito.lenient().when(auditService.logRequiredEvent(any())).thenReturn(AuditEventLogResponseDTO.builder().id(UUID.randomUUID()).build());
     }
 
     private void asClinicianAtHospital() {
@@ -119,7 +120,7 @@ class RoiRequestServiceTest {
     }
 
     private void auditSinkUp() {
-        when(auditService.logEvent(any())).thenReturn(AuditEventLogResponseDTO.builder().build());
+        when(auditService.logRequiredEvent(any())).thenReturn(AuditEventLogResponseDTO.builder().build());
     }
 
     private RoiRequestCreateDTO createDto() {
@@ -156,6 +157,69 @@ class RoiRequestServiceTest {
         return request;
     }
 
+    @Test
+    void approvedFullCopyIsRequiredForPdfAndHospitalScopeIsRechecked() {
+        asClinicianAtHospital();
+        RoiRequest row = pendingRequest();
+        when(roiRepository.findById(row.getId())).thenReturn(Optional.of(row));
+        assertThatThrownBy(() -> service.copyForExport(row.getId())).isInstanceOf(BusinessException.class);
+        row.setStatus(RoiRequestStatus.FULFILLED);
+        assertThatThrownBy(() -> service.copyForExport(row.getId())).isInstanceOf(BusinessException.class);
+        row.setScopeDescription("FULL_RECORD");
+        assertThat(service.copyForExport(row.getId())).isEqualTo(new RoiRequestService.ApprovedCopy(patientId, row.getId(), hospitalId));
+        row.setRequestKind(com.example.hms.enums.RoiRequestKind.CORRECTION);
+        assertThatThrownBy(() -> service.copyForExport(row.getId())).isInstanceOf(BusinessException.class);
+        row.setRequestKind(com.example.hms.enums.RoiRequestKind.COPY);
+        Hospital foreign = new Hospital(); foreign.setId(UUID.randomUUID()); row.setHospital(foreign);
+        assertThatThrownBy(() -> service.copyForExport(row.getId())).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void correctionCompletionHasAnAttributedReasonButNeverClaimsARecordWasDisclosed() {
+        asClinicianAtHospital();
+        UUID actor = UUID.randomUUID();
+        when(roleValidator.getCurrentUserId()).thenReturn(actor);
+        RoiRequest row = pendingRequest();
+        row.setRequestKind(com.example.hms.enums.RoiRequestKind.CORRECTION);
+        when(roiRepository.findById(row.getId())).thenReturn(Optional.of(row));
+        when(roiRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+        service.fulfil(row.getId(), RoiDecisionDTO.builder().note("Reviewed and corrected through the authorized chart workflow").build());
+        assertThat(row.getDecisionActorUserId()).isEqualTo(actor);
+        assertThat(row.getDecidedAt()).isEqualTo(NOW);
+        assertThat(row.getDecisionNote()).contains("authorized chart workflow");
+        ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditService).logRequiredEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.ROI_FULFILLED);
+        assertThat(audit.getValue().getUserId()).isEqualTo(actor);
+        assertThat(audit.getValue().getEventDescription()).doesNotContain("authorized chart workflow");
+    }
+
+    @Test
+    void everyDecisionRequiresAReasonBeforeSaving() {
+        asClinicianAtHospital();
+        RoiRequest row = pendingRequest();
+        when(roiRepository.findById(row.getId())).thenReturn(Optional.of(row));
+        assertThatThrownBy(() -> service.fulfil(row.getId(), RoiDecisionDTO.builder().note(" ").build())).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> service.cancel(row.getId(), null)).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> service.deny(row.getId(), null)).isInstanceOf(BusinessException.class);
+        assertThat(row.getStatus()).isEqualTo(RoiRequestStatus.PENDING);
+        verify(roiRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void selfRequestUsesServerDateAndAnInternalDueDateAndKeepsCorrectionNarrativeOffTheAudit() {
+        when(hospitalRepository.getReferenceById(hospitalId)).thenReturn(hospital);
+        when(roiRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        RoiSelfRequestCreateDTO dto = selfDto();
+        dto.setRequestKind(com.example.hms.enums.RoiRequestKind.CORRECTION);
+        dto.setRequestedOn(TODAY.minusYears(1));
+        var result = service.createForSelf(patient, hospitalId, dto);
+        assertThat(result.getRequestedOn()).isEqualTo(TODAY);
+        assertThat(result.getDueOn()).isEqualTo(TODAY.plusDays(30));
+        assertThat(result.getRequestKind()).isEqualTo(com.example.hms.enums.RoiRequestKind.CORRECTION);
+        assertThat(result.getRequesterType()).isEqualTo(RoiRequesterType.PATIENT);
+    }
+
     // ── intake ──────────────────────────────────────────────────────────
 
     @Test
@@ -175,7 +239,7 @@ class RoiRequestServiceTest {
         assertThat(dto.getPatientName()).isEqualTo(patient.getFullName());
         ArgumentCaptor<AuditEventRequestDTO> audit =
             ArgumentCaptor.forClass(AuditEventRequestDTO.class);
-        verify(auditService).logEvent(audit.capture());
+        verify(auditService).logRequiredEvent(audit.capture());
         assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.ROI_REQUESTED);
         // event_description is a PLAINTEXT column - no encrypted narrative
         // may be copied into it.
@@ -259,7 +323,7 @@ class RoiRequestServiceTest {
         when(roiRepository.findById(request.getId())).thenReturn(Optional.of(request));
         when(roiRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        var dto = service.fulfil(request.getId(), RoiDecisionDTO.builder().build());
+        var dto = service.fulfil(request.getId(), RoiDecisionDTO.builder().note("cdx-Reviewed request").build());
 
         assertThat(dto.getStatus()).isEqualTo(RoiRequestStatus.FULFILLED);
         assertThat(dto.getDecidedAt()).isEqualTo(NOW);
@@ -269,7 +333,7 @@ class RoiRequestServiceTest {
         // patient's own report.
         ArgumentCaptor<AuditEventRequestDTO> audit =
             ArgumentCaptor.forClass(AuditEventRequestDTO.class);
-        verify(auditService, times(2)).logEvent(audit.capture());
+        verify(auditService, times(2)).logRequiredEvent(audit.capture());
         assertThat(audit.getAllValues())
             .extracting(AuditEventRequestDTO::getEventType, AuditEventRequestDTO::getPatientId)
             .containsExactlyInAnyOrder(
@@ -291,14 +355,14 @@ class RoiRequestServiceTest {
         RoiRequest request = pendingRequest();
         when(roiRepository.findById(request.getId())).thenReturn(Optional.of(request));
         when(roiRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
-        // The audit sink's failure mode is a null return, never a throw.
-        when(auditService.logEvent(any())).thenReturn(null);
-        RoiDecisionDTO decision = RoiDecisionDTO.builder().build();
+        // A defensive null result is refused as well as a thrown required-audit failure.
+        when(auditService.logRequiredEvent(any())).thenReturn(null);
+        RoiDecisionDTO decision = RoiDecisionDTO.builder().note("cdx-Reviewed request").build();
         UUID requestId = request.getId();
 
         assertThatThrownBy(() -> service.fulfil(requestId, decision))
-            .isInstanceOf(BusinessException.class)
-            .extracting("messageKey").isEqualTo("roi.request.disclosureNotRecorded");
+            .isInstanceOf(com.example.hms.exception.RoiAuditUnavailableException.class)
+            .extracting("messageKey").isEqualTo("roi.request.auditUnavailable");
     }
 
     @Test
@@ -331,7 +395,7 @@ class RoiRequestServiceTest {
         assertThat(dto.getDecisionNote()).isEqualTo("No valid authorisation presented");
         ArgumentCaptor<AuditEventRequestDTO> audit =
             ArgumentCaptor.forClass(AuditEventRequestDTO.class);
-        verify(auditService).logEvent(audit.capture());
+        verify(auditService).logRequiredEvent(audit.capture());
         // Nothing was disclosed — no PATIENT_EXPORT row.
         assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.ROI_DENIED);
     }
@@ -362,7 +426,7 @@ class RoiRequestServiceTest {
         when(roiRepository.findById(foreign.getId())).thenReturn(Optional.of(foreign));
         UUID unknownId = UUID.randomUUID();
         when(roiRepository.findById(unknownId)).thenReturn(Optional.empty());
-        RoiDecisionDTO decision = RoiDecisionDTO.builder().build();
+        RoiDecisionDTO decision = RoiDecisionDTO.builder().note("cdx-Reviewed request").build();
         UUID foreignId = foreign.getId();
 
         Throwable foreignT = catchThrowable(() -> service.fulfil(foreignId, decision));
@@ -383,7 +447,7 @@ class RoiRequestServiceTest {
         when(roiRepository.findById(request.getId())).thenReturn(Optional.of(request));
         when(roiRepository.saveAndFlush(any())).thenThrow(
             new ObjectOptimisticLockingFailureException(RoiRequest.class, request.getId()));
-        RoiDecisionDTO decision = RoiDecisionDTO.builder().build();
+        RoiDecisionDTO decision = RoiDecisionDTO.builder().note("cdx-Reviewed request").build();
         UUID requestId = request.getId();
 
         assertThatThrownBy(() -> service.fulfil(requestId, decision))
@@ -454,6 +518,17 @@ class RoiRequestServiceTest {
     }
 
     @Test
+    @DisplayName("QA r73 D3700: the patient sees who decided by name, never the decider's account id")
+    void requestsForSelfNeverCarryTheDecidersAccountId() {
+        RoiRequest decided = pendingRequest();
+        decided.setDecisionActorUserId(UUID.randomUUID());
+        when(roiRepository.findByPatientIdOrderByCreatedAtDesc(patientId)).thenReturn(List.of(decided));
+
+        assertThat(service.requestsForSelf(patient)).singleElement()
+            .satisfies(dto -> assertThat(dto.getDecisionActorUserId()).isNull());
+    }
+
+    @Test
     @DisplayName("no active hospital context refuses the staff entry points")
     void noHospitalContextRefuses() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
@@ -464,15 +539,16 @@ class RoiRequestServiceTest {
     }
 
     @Test
-    @DisplayName("a trail-entry audit failure never undoes a recorded request")
-    void auditFailureIsSwallowed() {
+    @DisplayName("an unaudited rights request is refused, so the transaction rolls it back")
+    void auditFailureRefusesTheAction() {
         asClinicianAtHospital();
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.getReferenceById(hospitalId)).thenReturn(hospital);
         when(roiRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        doThrow(new RuntimeException("audit sink down")).when(auditService).logEvent(any());
+        doThrow(new RuntimeException("audit sink down")).when(auditService).logRequiredEvent(any());
 
-        assertThatCode(() -> service.create(patientId, createDto()))
-            .doesNotThrowAnyException();
+        assertThatThrownBy(() -> service.create(patientId, createDto()))
+            .isInstanceOf(com.example.hms.exception.RoiAuditUnavailableException.class)
+            .extracting("messageKey").isEqualTo("roi.request.auditUnavailable");
     }
 }

@@ -42,6 +42,8 @@ class MailOutboxIT extends BaseIT {
     @Autowired private PlatformTransactionManager transactionManager;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private Clock clock;
+    @Autowired private com.example.hms.repository.PatientRepository patients;
+    @Autowired private com.example.hms.service.notification.PatientRecipientVerification verification;
 
     @AfterEach
     void clean() {
@@ -120,7 +122,7 @@ class MailOutboxIT extends BaseIT {
             + "updated_at = ? where id = ?", LocalDateTime.now(clock).minusDays(31), old);
         MailOutboxProperties enabled = new MailOutboxProperties();
         MailOutboxDispatchService sweep = new MailOutboxDispatchService(
-            repository, emailService, enabled, clock, transactionManager);
+            repository, emailService, enabled, clock, transactionManager, patients, verification);
 
         assertThat(sweep.dispatchPending()).as("nothing is due").isZero();
 
@@ -139,7 +141,7 @@ class MailOutboxIT extends BaseIT {
         MailOutboxProperties enabled = new MailOutboxProperties();
         enabled.setEnabled(true);
         MailOutboxDispatchService sweep = new MailOutboxDispatchService(
-            repository, emailService, enabled, clock, transactionManager);
+            repository, emailService, enabled, clock, transactionManager, patients, verification);
 
         assertThat(sweep.dispatchPending()).isEqualTo(1);
 
