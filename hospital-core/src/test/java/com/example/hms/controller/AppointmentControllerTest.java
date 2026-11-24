@@ -143,7 +143,9 @@ class AppointmentControllerTest {
         when(appointmentService.getAppointmentsByPatientUsername(eq("john"), any(Locale.class), eq("testuser")))
                 .thenReturn(List.of(responseDTO));
 
-        mockMvc.perform(get("/appointments/patients/username/john")
+        mockMvc.perform(post("/appointments/patients/by-username")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"john\"}")
                         .header("Accept-Language", "en-US")
                         .principal(auth))
                 .andExpect(status().isOk())
@@ -152,11 +154,26 @@ class AppointmentControllerTest {
     }
 
     @Test
+    void getAppointmentsByPatientUsername_theUsernameNeverTravelsInTheUrl() throws Exception {
+        // Identifiers left the URL: the old GET path is gone and a body without one is refused.
+        mockMvc.perform(get("/appointments/patients/username/john").principal(auth))
+                .andExpect(result -> org.assertj.core.api.Assertions.assertThat(result.getResponse().getStatus())
+                        .isIn(404, 405));
+        mockMvc.perform(post("/appointments/patients/by-username")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
+                        .principal(auth))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void getAppointmentsByPatientUsername_noLangHeader_shouldUseDefaultLocale() throws Exception {
         when(appointmentService.getAppointmentsByPatientUsername(eq("john"), any(Locale.class), eq("testuser")))
                 .thenReturn(List.of());
 
-        mockMvc.perform(get("/appointments/patients/username/john")
+        mockMvc.perform(post("/appointments/patients/by-username")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"john\"}")
                         .principal(auth))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(0)));

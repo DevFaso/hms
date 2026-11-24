@@ -306,7 +306,16 @@ Inbound channels
                                   ▼
   Observability + reporting
     ├─ Splunk HEC               — TLS in transit; aud-log retention ≥ 6 yrs (target)
-    ├─ Grafana / OTel           — metrics only (no PHI)
+    ├─ Grafana / OTel           — server metrics only (no PHI)
+    ├─ Grafana Faro (portal RUM) — page loads, errors, request timings and traces from the
+    │                              clinician portal, scrubbed in the browser before export
+    │                              (shared/telemetry/telemetry-sanitizer.ts): every URL without
+    │                              its query string and fragment, path ids replaced by
+    │                              placeholders (:uuid, :email, :id), UUIDs and e-mail addresses
+    │                              removed from messages, no request or response header or body.
+    │                              Patient identifiers never travel in a request URL: searches
+    │                              and lookups send them in a POST body
+    │                              (PersonalIdentifierUrlGuardTest, scripts/identifier-url.test.mjs)
     ├─ Email + SMS notifications — via vendor APIs (BAA / sub-BAA required)
 ```
 

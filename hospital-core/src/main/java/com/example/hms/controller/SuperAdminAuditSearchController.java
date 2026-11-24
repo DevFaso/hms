@@ -4,10 +4,10 @@ import com.example.hms.controller.support.AuditEventTypeParams;
 import com.example.hms.controller.support.StrictQueryParams;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditSource;
-import com.example.hms.enums.AuditStatus;
-import com.example.hms.enums.OrganizationRegion;
 import com.example.hms.payload.dto.superadmin.AggregatedAuditPageDTO;
 import com.example.hms.payload.dto.superadmin.AuditSearchFilter;
+import com.example.hms.payload.dto.superadmin.AuditSearchRequestDTO;
+import com.example.hms.security.ReadsOnly;
 import com.example.hms.payload.dto.superadmin.AuditSearchPageDTO;
 import com.example.hms.service.SuperAdminAuditAggregationService;
 import com.example.hms.service.SuperAdminAuditSearchService;
@@ -22,6 +22,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -30,7 +32,6 @@ import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
-import java.util.UUID;
 
 /**
  * MVP-8: Cross-tenant audit search for super admins. All filter params are
@@ -48,34 +49,34 @@ public class SuperAdminAuditSearchController {
     private final SuperAdminAuditSearchService service;
     private final SuperAdminAuditAggregationService aggregationService;
 
-    @GetMapping
+    // The filters (a user's login among them) travel in the body, never in the URL.
+    @ReadsOnly("an audit search, under POST so its filters stay out of the URL")
+    @PostMapping
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Cross-tenant search of AuditEventLog with optional filters")
     public ResponseEntity<AuditSearchPageDTO> search(
-        @RequestParam(required = false) UUID userId,
-        @RequestParam(required = false) String userName,
-        // QA D798/D801: one filter under two names, read by AuditEventTypeParams
-        // exactly as /audit-logs reads it (repeated or comma-separated, any match).
-        @RequestParam(required = false) List<String> eventTypes,
-        @RequestParam(required = false) List<String> eventType,
-        @RequestParam(required = false) AuditStatus status,
-        @RequestParam(required = false) UUID hospitalId,
-        @RequestParam(required = false) UUID organizationId,
-        @RequestParam(required = false) UUID impersonatorUserId,
-        @RequestParam(required = false) String entityType,
-        @RequestParam(required = false) String resourceId,
-        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fromDate,
-        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime toDate,
-        // MVP-9b — narrow the search to one regulatory region; joins
+        // QA D798/D801: eventType and eventTypes are one filter under two names, read by
+        // AuditEventTypeParams exactly as /audit-logs reads it (any match).
+        // MVP-9b: tenantRegion narrows the search to one regulatory region; joins
         // through assignment.hospital.organization.region in the service.
-        @RequestParam(required = false) OrganizationRegion tenantRegion,
-        @RequestParam(defaultValue = "false") boolean excludeRoutineSuccesses,
+        @RequestBody(required = false) AuditSearchRequestDTO body,
         Pageable pageable
     ) {
-        AuditSearchFilter filter = new AuditSearchFilter(
-            userId, userName, eventTypeFilter(eventType, eventTypes), status, hospitalId, organizationId,
-            impersonatorUserId, entityType, resourceId, fromDate, toDate, tenantRegion, excludeRoutineSuccesses);
-        return ResponseEntity.ok(service.search(filter, pageable));
+        return ResponseEntity.ok(service.search(filter(body), pageable));
+    }
+
+    private static AuditSearchFilter filter(AuditSearchRequestDTO body) {
+        AuditSearchRequestDTO f = body != null ? body : AuditSearchRequestDTO.none();
+        if (f.unknown() != null && !f.unknown().isEmpty()) {
+            // As an unknown query parameter is: a misspelt filter never widens the search.
+            String name = new java.util.TreeSet<>(f.unknown().keySet()).first();
+            throw new com.example.hms.exception.BusinessException("error.request.unknownParameter",
+                name.length() > 64 ? name.substring(0, 64) : name, AuditSearchRequestDTO.ACCEPTED);
+        }
+        return new AuditSearchFilter(
+            f.userId(), f.userName(), eventTypeFilter(f.eventType(), f.eventTypes()), f.status(), f.hospitalId(),
+            f.organizationId(), f.impersonatorUserId(), f.entityType(), f.resourceId(), f.fromDate(), f.toDate(),
+            f.tenantRegion(), Boolean.TRUE.equals(f.excludeRoutineSuccesses()));
     }
 
     /**
@@ -95,31 +96,16 @@ public class SuperAdminAuditSearchController {
      * sorted by eventTimestamp desc, with a Content-Disposition header
      * that triggers a browser download.
      */
-    @GetMapping(value = "/csv", produces = "text/csv")
+    // The same filters as the search, in the body; the row cap stays in the query.
+    @ReadsOnly("an audit export, under POST so its filters stay out of the URL")
+    @PostMapping(value = "/csv", produces = "text/csv")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Cross-tenant audit search export to CSV (same filters as the JSON endpoint)")
     public ResponseEntity<byte[]> exportCsv(
-        @RequestParam(required = false) UUID userId,
-        @RequestParam(required = false) String userName,
-        // QA D798/D801: one filter under two names, read by AuditEventTypeParams
-        // exactly as /audit-logs reads it (repeated or comma-separated, any match).
-        @RequestParam(required = false) List<String> eventTypes,
-        @RequestParam(required = false) List<String> eventType,
-        @RequestParam(required = false) AuditStatus status,
-        @RequestParam(required = false) UUID hospitalId,
-        @RequestParam(required = false) UUID organizationId,
-        @RequestParam(required = false) UUID impersonatorUserId,
-        @RequestParam(required = false) String entityType,
-        @RequestParam(required = false) String resourceId,
-        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fromDate,
-        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime toDate,
-        @RequestParam(required = false) OrganizationRegion tenantRegion,
-        @RequestParam(defaultValue = "false") boolean excludeRoutineSuccesses,
+        @RequestBody(required = false) AuditSearchRequestDTO body,
         @RequestParam(name = "maxRows", required = false, defaultValue = "10000") int maxRows
     ) {
-        AuditSearchFilter filter = new AuditSearchFilter(
-            userId, userName, eventTypeFilter(eventType, eventTypes), status, hospitalId, organizationId,
-            impersonatorUserId, entityType, resourceId, fromDate, toDate, tenantRegion, excludeRoutineSuccesses);
+        AuditSearchFilter filter = filter(body);
         byte[] csv = service.exportCsv(filter, maxRows);
         return ResponseEntity.ok()
             .contentType(MediaType.parseMediaType("text/csv"))

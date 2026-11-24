@@ -1,3 +1,5 @@
+import { Location } from '@angular/common';
+import { SpyLocation } from '@angular/common/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -16,6 +18,7 @@ describe('VerifyEmailComponent — the e-mail activation link lands somewhere', 
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         provideRouter([]),
+        { provide: Location, useClass: SpyLocation },
         {
           provide: ActivatedRoute,
           useValue: { snapshot: { queryParamMap: convertToParamMap(query) } },
@@ -34,15 +37,18 @@ describe('VerifyEmailComponent — the e-mail activation link lands somewhere', 
 
   afterEach(() => httpMock.verify());
 
-  it('activates through GET /auth/verify-email and offers to sign in', () => {
+  it('activates through POST /auth/verify-email, the address and token in the body, never the URL', () => {
     const fixture = open({ email: 'a@b.c', token: 't1' });
     const req = httpMock.expectOne(
       (r) =>
-        r.method === 'GET' &&
+        r.method === 'POST' &&
         r.url === '/auth/verify-email' &&
-        r.params.get('email') === 'a@b.c' &&
-        r.params.get('token') === 't1',
+        r.params.keys().length === 0 &&
+        r.urlWithParams === '/auth/verify-email',
     );
+    expect(req.request.body).toEqual({ email: 'a@b.c', token: 't1' });
+    // The link's query leaves the address bar once read.
+    expect((TestBed.inject(Location) as SpyLocation).path()).toBe('/verify');
     req.flush({ message: 'Email verified successfully.', success: true });
     fixture.detectChanges();
 

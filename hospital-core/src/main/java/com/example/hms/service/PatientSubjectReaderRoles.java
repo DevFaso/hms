@@ -107,7 +107,7 @@ public final class PatientSubjectReaderRoles {
 
     /**
      * {@code GET /appointments/{id}}, {@code GET /appointments/patients/{patientId}}
-     * and {@code GET /appointments/patients/username/{patientUsername}} — all
+     * and {@code POST /appointments/patients/by-username} — all
      * three carry {@code AppointmentController.APPOINTMENT_READ_ROLES}, which
      * concatenates {@code SecurityConstants.CONSULTING_CLINICIANS_ROLES}.
      *
