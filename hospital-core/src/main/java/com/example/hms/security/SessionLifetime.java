@@ -2,7 +2,6 @@ package com.example.hms.security;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Date;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -21,23 +20,17 @@ import java.util.Optional;
  * one, so a refresh cannot mint a pair without this check (the four-argument
  * refresh-token mint of {@link JwtTokenProvider} takes a {@code Live}).
  */
-public final class SessionLifetime {
+public record SessionLifetime(Duration maxLifetime) {
 
     /** The default: sessions end 12 h after sign-in. */
     public static final Duration DEFAULT_MAX_LIFETIME = Duration.ofHours(12);
 
-    private final Duration maxLifetime;
-
-    public SessionLifetime(Duration maxLifetime) {
+    public SessionLifetime {
         Objects.requireNonNull(maxLifetime, "maxLifetime is required");
         if (maxLifetime.isNegative() || maxLifetime.isZero()) {
-            throw new IllegalArgumentException("the session lifetime must be positive, was " + maxLifetime);
+            // A start-up configuration fault (AuthControllerProperties explains it), never a client answer.
+            throw new IllegalArgumentException("app.auth.session-max-lifetime");
         }
-        this.maxLifetime = maxLifetime;
-    }
-
-    public Duration maxLifetime() {
-        return maxLifetime;
     }
 
     /**
@@ -49,7 +42,7 @@ public final class SessionLifetime {
      *                   {@code null} for a token minted before it existed
      * @param issuedAt   the token's {@code iat}
      */
-    public Optional<Live> live(Instant signedInAt, Date issuedAt, Instant now) {
+    public Optional<Live> live(Instant signedInAt, Instant issuedAt, Instant now) {
         Objects.requireNonNull(now, "now is required");
         Instant start = sessionStart(signedInAt, issuedAt);
         if (start == null || !now.isBefore(start.plus(maxLifetime))) {
@@ -63,12 +56,11 @@ public final class SessionLifetime {
      * time is not one this issuer wrote, and never extends the session. With
      * neither, there is no start to count from: the session does not go on.
      */
-    private static Instant sessionStart(Instant signedInAt, Date issuedAt) {
-        Instant issued = issuedAt == null ? null : issuedAt.toInstant();
+    private static Instant sessionStart(Instant signedInAt, Instant issuedAt) {
         if (signedInAt == null) {
-            return issued;
+            return issuedAt;
         }
-        return issued == null || signedInAt.isBefore(issued) ? signedInAt : issued;
+        return issuedAt == null || signedInAt.isBefore(issuedAt) ? signedInAt : issuedAt;
     }
 
     /**

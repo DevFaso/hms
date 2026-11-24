@@ -1070,7 +1070,9 @@ public class AuthController {
         // sign-in time was carried counts from its own issue time. Only a
         // session found within its lifetime can mint the rotated refresh token.
         var liveSession = authProps.sessionLifetime().live(jwtTokenProvider.signedInAt(refreshToken),
-                jwtTokenProvider.getIssuedAt(refreshToken), java.time.Instant.now());
+                java.util.Optional.ofNullable(jwtTokenProvider.getIssuedAt(refreshToken))
+                        .map(java.util.Date::toInstant).orElse(null),
+                java.time.Instant.now());
         if (liveSession.isEmpty()) {
             log.warn("🔄 [REFRESH] Refused — the session reached its maximum lifetime");
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()

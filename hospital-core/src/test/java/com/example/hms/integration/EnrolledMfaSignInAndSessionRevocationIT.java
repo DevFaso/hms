@@ -267,14 +267,14 @@ class EnrolledMfaSignInAndSessionRevocationIT extends BaseIT {
 
         java.time.Instant longAgo = java.time.Instant.now().minus(java.time.Duration.ofHours(12)).minusSeconds(5);
         String expired = jwtTokenProvider.generateRefreshToken(descriptor, null, sessionId,
-            lifetime.live(longAgo, java.util.Date.from(longAgo), longAgo).orElseThrow());
+            lifetime.live(longAgo, longAgo, longAgo).orElseThrow());
         MvcResult refused = refresh(expired);
         assertThat(status(refused)).isEqualTo(401);
         assertThat(refused.getResponse().getHeader("WWW-Authenticate")).contains("session_lifetime");
 
         java.time.Instant recently = java.time.Instant.now().minus(java.time.Duration.ofHours(11));
         String live = jwtTokenProvider.generateRefreshToken(descriptor, null, sessionId,
-            lifetime.live(recently, java.util.Date.from(recently), recently).orElseThrow());
+            lifetime.live(recently, recently, recently).orElseThrow());
         JsonNode rotated = json(refresh(live));
         assertThat(jwtTokenProvider.signedInAt(rotated.get("refreshToken").asString()))
             .as("the rotated token keeps the original sign-in time")

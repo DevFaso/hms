@@ -30,7 +30,7 @@ class SessionLifetimeTest {
     @DisplayName("a session is live until 12 h after sign-in, and not a moment after")
     void boundary() {
         Instant deadline = SIGNED_IN.plus(TWELVE_HOURS);
-        Date refreshedJustNow = Date.from(deadline.minusSeconds(60));
+        Instant refreshedJustNow = deadline.minusSeconds(60);
 
         assertThat(LIFETIME.live(SIGNED_IN, refreshedJustNow, deadline.minusMillis(1)))
             .as("just under").get().extracting(SessionLifetime.Live::signedInAt).isEqualTo(SIGNED_IN);
@@ -41,7 +41,7 @@ class SessionLifetimeTest {
     @Test
     @DisplayName("a token without the sign-in time counts from its own issue time, never 'no limit'")
     void legacyTokenCountsFromItsIssueTime() {
-        Date issued = Date.from(SIGNED_IN);
+        Instant issued = SIGNED_IN;
         assertThat(LIFETIME.live(null, issued, SIGNED_IN.plus(TWELVE_HOURS).minusSeconds(1)))
             .get().extracting(SessionLifetime.Live::signedInAt).isEqualTo(SIGNED_IN);
         assertThat(LIFETIME.live(null, issued, SIGNED_IN.plus(TWELVE_HOURS))).isEmpty();
@@ -52,7 +52,7 @@ class SessionLifetimeTest {
     @DisplayName("a sign-in time later than the token's issue time never extends the session")
     void aLaterSignInTimeNeverExtends() {
         Instant claimed = SIGNED_IN.plus(Duration.ofHours(6));
-        assertThat(LIFETIME.live(claimed, Date.from(SIGNED_IN), SIGNED_IN.plus(TWELVE_HOURS))).isEmpty();
+        assertThat(LIFETIME.live(claimed, SIGNED_IN, SIGNED_IN.plus(TWELVE_HOURS))).isEmpty();
     }
 
     @Test
@@ -94,7 +94,7 @@ class SessionLifetimeTest {
         assertThat(stamped).isEqualTo(provider.getIssuedAt(signIn).toInstant());
 
         Instant original = Instant.now().minus(Duration.ofHours(5)).truncatedTo(ChronoUnit.SECONDS);
-        SessionLifetime.Live live = LIFETIME.live(original, provider.getIssuedAt(signIn), Instant.now()).orElseThrow();
+        SessionLifetime.Live live = LIFETIME.live(original, provider.getIssuedAt(signIn).toInstant(), Instant.now()).orElseThrow();
         String rotated = provider.generateRefreshToken(nurse(), null, "sid-1", live);
 
         assertThat(provider.signedInAt(rotated)).isEqualTo(original);
@@ -121,7 +121,7 @@ class SessionLifetimeTest {
 
         assertThat(provider.isRefreshToken(legacy)).isTrue();
         assertThat(provider.signedInAt(legacy)).isNull();
-        assertThat(LIFETIME.live(provider.signedInAt(legacy), provider.getIssuedAt(legacy), Instant.now()))
+        assertThat(LIFETIME.live(provider.signedInAt(legacy), provider.getIssuedAt(legacy).toInstant(), Instant.now()))
             .as("issued 13 h ago: past the lifetime").isEmpty();
     }
 }
