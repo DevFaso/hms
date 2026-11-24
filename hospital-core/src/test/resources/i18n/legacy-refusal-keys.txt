@@ -7,8 +7,8 @@ catalog.import.unreadable
 credential.renewal.otherRecorder
 dhis.mapping.otherOwner
 dhis.period.mismatch
-empi.alias.required
-empi.link.required
+empi.alias.requestRequired
+empi.link.requestRequired
 inbasket.acknowledgement.finished
 inbasket.item.otherOwner
 permission.name.taken
@@ -33,7 +33,7 @@ request.datetime.invalid
 request.day.invalid
 request.hospitalContext.denied
 request.hospitalContext.required
-request.session.required
+request.context.sessionRequired
 request.userContext.unavailable
 support.session.active
 support.session.missing
