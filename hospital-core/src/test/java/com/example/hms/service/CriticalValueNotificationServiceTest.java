@@ -405,7 +405,12 @@ class CriticalValueNotificationServiceTest {
 
         service.notifyIfCritical(result);
 
-        verify(smsService).send(eq("+22670707070"), contains("Potassium"));
+        // K4: the SMS names a critical result and the patient's initials, never the test, the value or the name.
+        org.mockito.ArgumentCaptor<String> text = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(smsService).send(eq("+22670707070"), text.capture());
+        assertThat(text.getValue()).contains("résultat de laboratoire critique", "BW")
+            .doesNotContain("Potassium", "mmol");
+        assertThat(text.getValue()).doesNotContain(result.getLabOrder().getPatient().getFullName());
     }
 
     @Test
@@ -444,6 +449,29 @@ class CriticalValueNotificationServiceTest {
         verify(notificationService, never()).created(anyString(), anyString(), anyString());
         assertThat(result.getCriticalNotifiedAt()).isNotNull(); // sweep convergence
         verify(labResultRepository).save(result);
+    }
+
+    @Test
+    void k4_aReadBackIsDueOnlyOnAPagedCriticalResultNotYetReadBack() {
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+        assertThat(service.readBackDue(result)).as("never paged").isFalse();
+
+        result.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(5));
+        assertThat(service.readBackDue(result)).as("paged, no read-back").isTrue();
+
+        // Amended after its read-back: the read-back stays on record, nothing is due.
+        result.setCriticalReadBackAt(LocalDateTime.now());
+        assertThat(service.readBackDue(result)).as("read back").isFalse();
+    }
+
+    @Test
+    void k4_noReadBackIsDueOnAResultNoLongerCritical() {
+        result.setResultValue("5.0");
+        result.setAbnormalFlag(AbnormalFlag.NORMAL);
+        result.setCriticalNotifiedAt(LocalDateTime.now().minusDays(1));
+        when(labResultMapper.severityFlagOf(result)).thenReturn("NORMAL");
+
+        assertThat(service.readBackDue(result)).isFalse();
     }
 
     @Test

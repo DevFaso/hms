@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -66,15 +65,36 @@ class JwtTokenProviderTokenUseTest {
     }
 
     @Test
-    @DisplayName("a refresh token from either mint path is a refresh token")
-    void refreshTokensAreRefreshTokens() {
-        HospitalUserDetails principal = mock(HospitalUserDetails.class);
-        when(principal.getUsername()).thenReturn(USERNAME);
-        when(principal.getAuthorities()).thenAnswer(inv -> List.<GrantedAuthority>of(() -> "ROLE_HOSPITAL_ADMIN"));
-        Authentication authentication = new UsernamePasswordAuthenticationToken(principal, null, List.of());
+    @DisplayName("an empty role set mints a token with no role, never one looked up from the assignments")
+    void anEmptyRoleSetMintsNoRole() {
+        // The account holds an active DOCTOR row: the tokens must still carry no role.
+        when(tenantRoleAssignmentAccessor.findAssignmentsForUser(USER_ID)).thenReturn(List.of(
+            new com.example.hms.security.auth.TenantRoleAssignment(null, null, "ROLE_DOCTOR", "DOCTOR", true, null)));
+        TokenUserDescriptor none = new TokenUserDescriptor(USER_ID, USERNAME, List.of());
 
+        assertThat(provider.getRolesFromToken(provider.generateAccessToken(none, null, "sid-0"))).isEmpty();
+        assertThat(provider.getRolesFromToken(provider.generateRefreshToken(none, null, "sid-0"))).isEmpty();
+        assertThat(provider.getRolesFromToken(provider.generateImpersonationAccessToken(
+            new TokenUserDescriptor(USER_ID, USERNAME, null), UUID.randomUUID(), "support.admin", 60_000L, null)))
+            .isEmpty();
+    }
+
+    @Test
+    @DisplayName("a refresh token carries the roles its session was signed in with; a token without them carries none")
+    void carriedRolesAreTheSignedInRoles() {
+        String refresh = provider.generateRefreshToken(
+            new TokenUserDescriptor(USER_ID, USERNAME, List.of("ROLE_RECEPTIONIST")), null, "sid-1");
+        assertThat(provider.carriedRoles(refresh)).contains(List.of("ROLE_RECEPTIONIST"));
+        // The MFA challenge carries no role set: absent, never "every role".
+        assertThat(provider.carriedRoles(provider.generateMfaToken(USERNAME))).isEmpty();
+        assertThat(provider.carriedRoles("not-a-token")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a refresh token from every overload is a refresh token")
+    void refreshTokensAreRefreshTokens() {
         assertThat(provider.isRefreshToken(provider.generateRefreshToken(descriptor()))).isTrue();
-        assertThat(provider.isRefreshToken(provider.generateRefreshToken(authentication))).isTrue();
+        assertThat(provider.isRefreshToken(provider.generateRefreshToken(descriptor(), null, "sid-1"))).isTrue();
     }
 
     @Test

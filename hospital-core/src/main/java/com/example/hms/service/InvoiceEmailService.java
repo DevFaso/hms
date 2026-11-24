@@ -81,8 +81,10 @@ public class InvoiceEmailService {
         // Billing-money plan PR 7: the payers' shares on the mailed paper too.
         List<com.example.hms.payload.dto.billing.InvoicePayerShareDTO> shares =
             coverageService != null ? coverageService.sharesOf(invoice) : List.of();
+        // Scorecard K4: the mailed copy names no test and no medicine (their category only), so a forwarded
+        // or shared mailbox does not disclose what the patient was treated for.
         byte[] pdf = req.attachPdf()
-            ? pdfInvoiceService.generateInvoicePdf(invoice, items, List.of(), adjustmentsWithoutReasons(invoiceId),
+            ? pdfInvoiceService.generateMailedInvoicePdf(invoice, items, adjustmentsWithoutReasons(invoiceId),
                 shares, locale)
             : null;
 

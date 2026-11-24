@@ -722,12 +722,22 @@ Content-Type: application/json
 POST http://localhost:8081/api/auth/refresh-token?refreshToken={{token}}
 
 
-### Search Users by Name
-GET http://localhost:8081/api/auth/users/search?name=adminuser
+### Search Users by Name (the name in the body, never in the URL)
+POST http://localhost:8081/api/users/search
+Content-Type: application/json
+
+{
+  "name": "adminuser"
+}
 
 
 ### Search Users by Role
-GET http://localhost:8081/api/auth/users/search?role=ROLE_ADMIN
+POST http://localhost:8081/api/users/search
+Content-Type: application/json
+
+{
+  "role": "ROLE_ADMIN"
+}
 
 
 ### Update User

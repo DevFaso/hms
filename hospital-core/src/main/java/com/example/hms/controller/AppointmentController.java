@@ -103,17 +103,19 @@ public class AppointmentController {
     // one patient's data, so the gap is marked rather than left to look like
     // an oversight — the fix is an explicit emission in the service, which
     // already resolves the patient.
+    // The username (often the patient's phone number) travels in the body, never in the URL.
     @PatientAccessAudited(skip = true)
-    @GetMapping("/patients/username/{patientUsername}")
+    @com.example.hms.security.ReadsOnly("a patient's appointments, under POST so the username stays out of the URL")
+    @PostMapping("/patients/by-username")
     @PreAuthorize(APPOINTMENT_READ_ROLES)
     public ResponseEntity<List<AppointmentResponseDTO>> getAppointmentsByPatientUsername(
-        @PathVariable String patientUsername,
+        @jakarta.validation.Valid @RequestBody com.example.hms.payload.dto.identifiersearch.UsernameQueryDTO body,
     @RequestHeader(name = "Accept-Language", required = false) String lang,
         Authentication authentication
     ) {
     Locale locale = parseLocale(lang);
         return ResponseEntity.ok(
-            appointmentService.getAppointmentsByPatientUsername(patientUsername, locale, getUsername(authentication))
+            appointmentService.getAppointmentsByPatientUsername(body.username(), locale, getUsername(authentication))
         );
     }
 

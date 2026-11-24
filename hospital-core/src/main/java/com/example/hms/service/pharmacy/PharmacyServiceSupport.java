@@ -117,20 +117,20 @@ class PharmacyServiceSupport {
      * prepared fill. "Ready for collection" has its own message
      * ({@link #notifyReadyForCollection}). Sent after commit, like every
      * message here: a dispense that rolls back sends nothing. No-op if the
-     * SMS service is unavailable, the patient has no primary phone number,
-     * or the medication name is blank.
+     * SMS service is unavailable or the patient has no primary phone number.
      *
      * <p>Every pharmacy SMS goes through {@link PatientMessageGate} (QA D2202):
      * a patient who turned SMS off for the prescription-refill notices
      * (MEDICATION_REFILL, the only medication preference) gets none of them, and
      * the hospital's administrators see a SKIPPED / OPTED_OUT row instead.
      *
-     * <p>Key {@code sms.pharmacy.dispensed}: {0} first name, {1} medication,
-     * {2} pharmacy name.
+     * <p>Key {@code sms.pharmacy.dispensed}: {0} first name, {1} pharmacy name.
+     * Scorecard K4: never the medicine, which can reveal a condition to whoever
+     * reads the phone ({@code MessageDisclosureGuardTest}).
      */
-    void notifyDispensed(Prescription prescription, Patient patient, Pharmacy pharmacy, String medicationName) {
+    void notifyDispensed(Prescription prescription, Patient patient, Pharmacy pharmacy) {
         sendAfterCommit(PatientNotificationEvent.PHARMACY_DISPENSED, "sms.pharmacy.dispensed",
-                prescription, patient, pharmacy, medicationName);
+                prescription, patient, pharmacy);
     }
 
     /**
@@ -138,10 +138,9 @@ class PharmacyServiceSupport {
      * {@code sms.pharmacy.readyForCollection}, same arguments as
      * {@link #notifyDispensed}.
      */
-    void notifyReadyForCollection(Prescription prescription, Patient patient, Pharmacy pharmacy,
-                                  String medicationName) {
+    void notifyReadyForCollection(Prescription prescription, Patient patient, Pharmacy pharmacy) {
         sendAfterCommit(PatientNotificationEvent.PHARMACY_READY, "sms.pharmacy.readyForCollection",
-                prescription, patient, pharmacy, medicationName);
+                prescription, patient, pharmacy);
     }
 
     /**
@@ -149,18 +148,18 @@ class PharmacyServiceSupport {
      * or the prescriber withdrew or changed the order). Key
      * {@code sms.pharmacy.readyCancelled}, same arguments.
      */
-    void notifyReadyCancelled(Prescription prescription, Patient patient, Pharmacy pharmacy, String medicationName) {
+    void notifyReadyCancelled(Prescription prescription, Patient patient, Pharmacy pharmacy) {
         sendAfterCommit(PatientNotificationEvent.PHARMACY_READY_CANCELLED, "sms.pharmacy.readyCancelled",
-                prescription, patient, pharmacy, medicationName);
+                prescription, patient, pharmacy);
     }
 
     /**
      * G15: the one reminder for a fill still waiting after the reminder
      * window. Key {@code sms.pharmacy.readyReminder}, same arguments.
      */
-    void notifyReadyReminder(Prescription prescription, Patient patient, Pharmacy pharmacy, String medicationName) {
+    void notifyReadyReminder(Prescription prescription, Patient patient, Pharmacy pharmacy) {
         sendAfterCommit(PatientNotificationEvent.PHARMACY_READY_REMINDER, "sms.pharmacy.readyReminder",
-                prescription, patient, pharmacy, medicationName);
+                prescription, patient, pharmacy);
     }
 
     /**
@@ -172,8 +171,8 @@ class PharmacyServiceSupport {
      * cross into the after-commit send ({@link PatientMessageGate#smsAfterCommit}).
      */
     private void sendAfterCommit(PatientNotificationEvent event, String key, Prescription prescription,
-                                 Patient patient, Pharmacy pharmacy, String medicationName) {
-        if (patient == null || medicationName == null || medicationName.isBlank()) {
+                                 Patient patient, Pharmacy pharmacy) {
+        if (patient == null) {
             return;
         }
         String phone = patient.getPhoneNumberPrimary();
@@ -183,7 +182,8 @@ class PharmacyServiceSupport {
         String firstName = patient.getFirstName() != null ? patient.getFirstName() : "";
         String pharmacyName = (pharmacy != null && pharmacy.getName() != null) ? pharmacy.getName() : "";
         try {
-            String body = render(key, patientLocale(patient), firstName, medicationName, pharmacyName);
+            // K4: the first name and the pharmacy, never the medicine (an SMS is read on a shared phone).
+            String body = render(key, patientLocale(patient), firstName, pharmacyName);
             messageGate.smsAfterCommit(patient, notice(event, prescription, pharmacy), body);
         } catch (Exception e) {
             logFailure(event, patient, e);
@@ -200,8 +200,7 @@ class PharmacyServiceSupport {
      *                    resolved in the patient's own language
      * @param routingArgs arguments for that sentence (partner name, restock date)
      */
-    void notifyOutOfStock(Prescription prescription, Patient patient, String medicationName, String routingKey,
-                          Object... routingArgs) {
+    void notifyOutOfStock(Prescription prescription, Patient patient, String routingKey, Object... routingArgs) {
         if (patient == null) {
             return;
         }
@@ -210,13 +209,12 @@ class PharmacyServiceSupport {
             return;
         }
         String firstName = patient.getFirstName() != null ? patient.getFirstName() : "";
-        String medication = medicationName != null ? medicationName : "";
         try {
             Locale locale = patientLocale(patient);
             String suffix = routingKey != null ? render(routingKey, locale, routingArgs) : "";
             messageGate.smsAfterCommit(patient,
                     notice(PatientNotificationEvent.PHARMACY_OUT_OF_STOCK, prescription, null),
-                    render("sms.pharmacy.outOfStock", locale, firstName, medication, suffix));
+                    render("sms.pharmacy.outOfStock", locale, firstName, suffix));
         } catch (Exception e) {
             logFailure(PatientNotificationEvent.PHARMACY_OUT_OF_STOCK, patient, e);
         }
@@ -229,11 +227,11 @@ class PharmacyServiceSupport {
      * swallowed.
      *
      * <p>Key {@code sms.pharmacy.refillReminder}: {0} first name, {1} days
-     * left, {2} medication.
+     * left. Never the medicine (K4).
      *
      * @return true when the reminder was admitted for sending
      */
-    boolean notifyRefillReminder(Prescription prescription, Patient patient, String medicationName, int daysLeft) {
+    boolean notifyRefillReminder(Prescription prescription, Patient patient, int daysLeft) {
         if (patient == null) {
             return false;
         }
@@ -242,13 +240,12 @@ class PharmacyServiceSupport {
             return false;
         }
         String firstName = patient.getFirstName() != null ? patient.getFirstName() : "";
-        String medication = medicationName != null ? medicationName : "";
         try {
             // The day count goes through as text so MessageFormat never groups it.
             return messageGate.smsAfterCommit(patient,
                     notice(PatientNotificationEvent.PHARMACY_REFILL_REMINDER, prescription, null),
                     render("sms.pharmacy.refillReminder", patientLocale(patient),
-                            firstName, String.valueOf(daysLeft), medication));
+                            firstName, String.valueOf(daysLeft)));
         } catch (Exception e) {
             logFailure(PatientNotificationEvent.PHARMACY_REFILL_REMINDER, patient, e);
             return false;

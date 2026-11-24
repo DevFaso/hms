@@ -281,7 +281,7 @@ class StockOutRoutingServiceImplTest {
         verify(prescriptionRepository).save(prescription);
         verify(routingDecisionRepository).save(decision);
         // T-40 / G14: patient notified out-of-stock with the partner routing sentence
-        verify(support).notifyOutOfStock(prescription, patient, prescription.getMedicationName(),
+        verify(support).notifyOutOfStock(prescription, patient,
                 PharmacyServiceSupport.OUT_OF_STOCK_PARTNER, "Partner Pharmacy");
         // G13 AC-8/AC-9: routing ends the work-queue claim, ROUTED, by the router as a queue role
         verify(queueClaimService).releaseOnExit(prescription,
@@ -794,7 +794,7 @@ class StockOutRoutingServiceImplTest {
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PRINTED_FOR_PATIENT);
         verify(prescriptionRepository).save(prescription);
         // T-40 / G14: patient notified out-of-stock with the print-for-patient sentence
-        verify(support).notifyOutOfStock(prescription, patient, prescription.getMedicationName(),
+        verify(support).notifyOutOfStock(prescription, patient,
                 PharmacyServiceSupport.OUT_OF_STOCK_PRINT);
         // G13: printing for the patient ends the claim as ROUTED
         verify(queueClaimService).releaseOnExit(prescription,
@@ -821,7 +821,7 @@ class StockOutRoutingServiceImplTest {
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PENDING_STOCK);
         verify(prescriptionRepository).save(prescription);
         // T-40 / G14: patient notified out-of-stock with the dated back-order sentence
-        verify(support).notifyOutOfStock(eq(prescription), eq(patient), eq(prescription.getMedicationName()),
+        verify(support).notifyOutOfStock(eq(prescription), eq(patient),
                 eq(PharmacyServiceSupport.OUT_OF_STOCK_BACKORDER_DATED), contains("-"));
         // G6: the prescriber hears about the back order
         verify(prescriberNotifier).notifyPrescriber(prescription, PrescriptionStatus.PENDING_STOCK);

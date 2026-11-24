@@ -88,9 +88,12 @@ Authorization: Bearer {{accessToken}}
 Accept: application/json
 
 ### Get appointments by patient username
-GET {{baseUrl}}/appointments/patients/username/alice.williams
+POST {{baseUrl}}/appointments/patients/by-username
 Authorization: Bearer {{accessToken}}
+Content-Type: application/json
 Accept: application/json
+
+{"username": "alice.williams"}
 
 ### Get appointments by staff
 GET {{baseUrl}}/appointments/staff/{{staffId}}
@@ -117,19 +120,28 @@ Accept: application/json
 ### ----------------------------------------
 
 ### Lookup patient by email (for scheduling)
-GET {{baseUrl}}/lookup/appointment/patient/email/alice.williams@hms.local
+POST {{baseUrl}}/lookup/appointment/patient/email
 Authorization: Bearer {{accessToken}}
+Content-Type: application/json
 Accept: application/json
+
+{"email": "alice.williams@hms.local"}
 
 ### Lookup patient by phone
-GET {{baseUrl}}/lookup/appointment/patient/phone/555-500-0001
+POST {{baseUrl}}/lookup/appointment/patient/phone
 Authorization: Bearer {{accessToken}}
+Content-Type: application/json
 Accept: application/json
 
+{"phone": "555-500-0001"}
+
 ### Lookup patient by MRI
-GET {{baseUrl}}/lookup/appointment/patient/mri/MRN-001
+POST {{baseUrl}}/lookup/appointment/patient/mrn
 Authorization: Bearer {{accessToken}}
+Content-Type: application/json
 Accept: application/json
+
+{"mrn": "MRN-001"}
 
 ### Lookup staff by number
 GET {{baseUrl}}/lookup/appointment/staff/number/MED-12345
@@ -137,9 +149,12 @@ Authorization: Bearer {{accessToken}}
 Accept: application/json
 
 ### Lookup staff by email
-GET {{baseUrl}}/lookup/appointment/staff/email/dr.smith@hms.local
+POST {{baseUrl}}/lookup/appointment/staff/email
 Authorization: Bearer {{accessToken}}
+Content-Type: application/json
 Accept: application/json
+
+{"email": "dr.smith@hms.local"}
 
 ### Lookup staff by ID
 GET {{baseUrl}}/lookup/appointment/staff/id/{{staffId}}

@@ -64,9 +64,7 @@ class PatientDisplayNameGuardTest {
         "service/UserServiceImpl.java", 1,
             "isSamePerson: the registration identity MATCH on the request's names (QA D1061), not a display",
         "utility/PatientMatchKeys.java", 1,
-            "PatientMatchKeys.sameIdentity: the registration identity MATCH (QA D1061 / D1064), not a display",
-        "service/pharmacy/partner/SmsPartnerNotificationChannel.java", 1,
-            "two INITIALS sent to a partner pharmacy by SMS (data minimisation), not a name display");
+            "PatientMatchKeys.sameIdentity: the registration identity MATCH (QA D1061 / D1064), not a display");
 
     @Test
     void aPatientsNameIsAssembledOnlyByGetFullName() throws IOException {

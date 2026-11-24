@@ -310,12 +310,12 @@ public class UserController {
 
     @Operation(summary = "Search users by name, role, or email with pagination (summary view)",
         description = "Administrators only (QA D790), scoped exactly as GET /users is.")
-    @GetMapping("/search")
+    // A name or an e-mail travels in the body, never in the URL; paging stays in the query.
+    @com.example.hms.security.ReadsOnly("a user search, under POST so its name and e-mail stay out of the URL")
+    @PostMapping("/search")
     @PreAuthorize("hasAnyAuthority(" + SecurityConstants.USER_DIRECTORY_AUTHORITIES + ")")
     public ResponseEntity<Page<UserSummaryDTO>> searchUsers(
-            @RequestParam(required = false) String name,
-            @RequestParam(required = false) String role,
-            @RequestParam(required = false) String email,
+            @RequestBody(required = false) com.example.hms.payload.dto.identifiersearch.UserSearchRequestDTO body,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "false") boolean includeDeleted,
@@ -326,7 +326,8 @@ public class UserController {
             return ResponseEntity.ok(org.springframework.data.domain.Page.empty(
                 org.springframework.data.domain.PageRequest.of(Math.max(page, 0), Math.max(size, 1))));
         }
-        return ResponseEntity.ok(userService.searchUsers(
-            name, role, email, page, size, includeDeleted && allowed, onlyDeleted && allowed));
+        return ResponseEntity.ok(userService.searchUsers(body != null ? body.name() : null,
+            body != null ? body.role() : null, body != null ? body.email() : null,
+            page, size, includeDeleted && allowed, onlyDeleted && allowed));
     }
 }

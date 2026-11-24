@@ -58,4 +58,17 @@ describe('patientChartChangeInterceptor (QA D957)', () => {
     mock.expectOne('/encounters/search').flush({});
     expect(seen).toEqual([id, '*']);
   });
+
+  it('stays quiet on the searches that only read, sent as POSTs', () => {
+    for (const url of [
+      '/reception/patients/duplicate-candidates',
+      '/api/patients/search?hospitalId=h1',
+      '/patients/registration-match',
+      '/encounters/by-doctor',
+    ]) {
+      http.post(url, {}).subscribe();
+      mock.expectOne(url).flush([]);
+    }
+    expect(seen).toEqual([]);
+  });
 });

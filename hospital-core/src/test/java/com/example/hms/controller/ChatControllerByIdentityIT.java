@@ -18,6 +18,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.util.List;
@@ -25,7 +26,8 @@ import java.util.UUID;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -67,8 +69,8 @@ class ChatControllerByIdentityIT extends BaseIT {
     @Test
     @DisplayName("D343: the recipient reads by own username, 200 with sender and recipient populated")
     void recipientByOwnUsername() throws Exception {
-        mockMvc.perform(get("/chat/messages/by-recipient-username")
-                .param("username", recipient.getUsername()).with(as(recipient)))
+        mockMvc.perform(post("/chat/messages/by-recipient-username").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                .content(body("username", recipient.getUsername())).with(as(recipient)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$", hasSize(1)))
             .andExpect(jsonPath("$[0].senderId").value(sender.getId().toString()))
@@ -80,8 +82,8 @@ class ChatControllerByIdentityIT extends BaseIT {
     @Test
     @DisplayName("D343: the sender reads by own email, 200 with sender and recipient populated")
     void senderByOwnEmail() throws Exception {
-        mockMvc.perform(get("/chat/messages/by-sender-email")
-                .param("email", sender.getEmail()).with(as(sender)))
+        mockMvc.perform(post("/chat/messages/by-sender-email").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                .content(body("email", sender.getEmail())).with(as(sender)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$", hasSize(1)))
             .andExpect(jsonPath("$[0].senderId").value(sender.getId().toString()))
@@ -93,12 +95,17 @@ class ChatControllerByIdentityIT extends BaseIT {
     @Test
     @DisplayName("D343: a non-participant asking for someone else's address gets 404")
     void nonParticipantGets404() throws Exception {
-        mockMvc.perform(get("/chat/messages/by-recipient-username")
-                .param("username", recipient.getUsername()).with(as(outsider)))
+        mockMvc.perform(post("/chat/messages/by-recipient-username").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                .content(body("username", recipient.getUsername())).with(as(outsider)))
             .andExpect(status().isNotFound());
-        mockMvc.perform(get("/chat/messages/by-sender-email")
-                .param("email", sender.getEmail()).with(as(outsider)))
+        mockMvc.perform(post("/chat/messages/by-sender-email").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                .content(body("email", sender.getEmail())).with(as(outsider)))
             .andExpect(status().isNotFound());
+    }
+
+    /** The identity travels in the body: it never reaches a URL. */
+    private static String body(String field, String value) {
+        return "{\"" + field + "\":\"" + value + "\"}";
     }
 
     private static User user(String prefix) {

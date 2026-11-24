@@ -4,15 +4,11 @@ import com.example.hms.security.auth.TenantRoleAssignmentAccessor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -67,20 +63,15 @@ class JwtTokenProviderSecondFactorTest {
     }
 
     @Test
-    @DisplayName("both refresh-token forms carry the proof and the ORIGINAL time only when asked to")
+    @DisplayName("every refresh-token form carries the proof and the ORIGINAL time only when asked to")
     void refreshTokensCarryTheProof() {
         Instant verified = now().minusSeconds(3_600);
-        Authentication authenticated = new UsernamePasswordAuthenticationToken(
-            new CustomUserDetails(com.example.hms.model.User.builder().username("pharm.one").passwordHash("x").build(),
-                Set.of(new SimpleGrantedAuthority("ROLE_PHARMACIST"))),
-            null, List.of(new SimpleGrantedAuthority("ROLE_PHARMACIST")));
 
         assertThat(provider.secondFactorAt(provider.generateRefreshToken(PHARMACIST, verified))).isEqualTo(verified);
         assertThat(provider.hasSecondFactor(provider.generateRefreshToken(PHARMACIST, (Instant) null))).isFalse();
         assertThat(provider.hasSecondFactor(provider.generateRefreshToken(PHARMACIST))).isFalse();
-        assertThat(provider.secondFactorAt(provider.generateRefreshToken(authenticated, verified))).isEqualTo(verified);
-        assertThat(provider.hasSecondFactor(provider.generateRefreshToken(authenticated, (Instant) null))).isFalse();
-        assertThat(provider.hasSecondFactor(provider.generateRefreshToken(authenticated))).isFalse();
+        assertThat(provider.secondFactorAt(provider.generateRefreshToken(PHARMACIST, verified, "sid-1"))).isEqualTo(verified);
+        assertThat(provider.hasSecondFactor(provider.generateRefreshToken(PHARMACIST, null, "sid-1"))).isFalse();
     }
 
     @Test

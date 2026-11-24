@@ -142,6 +142,8 @@ class IdleSessionRefreshIntegrationTest {
         when(userRepository.findByUsername(user.getUsername())).thenReturn(java.util.Optional.of(user));
         when(assignmentRepository.findByUser(user)).thenReturn(java.util.Set.of(assignment));
         when(jwtTokenProvider.isRefreshToken("cdx-refresh")).thenReturn(true);
+        // The session was signed in as NURSE; the refresh keeps that role.
+        when(jwtTokenProvider.carriedRoles("cdx-refresh")).thenReturn(java.util.Optional.of(java.util.List.of("ROLE_NURSE")));
         when(jwtTokenProvider.getUsernameFromJWT("cdx-refresh")).thenReturn(user.getUsername());
         when(jwtTokenProvider.getJtiFromToken("cdx-refresh")).thenReturn("cdx-jti");
         when(jwtTokenProvider.getExpiration(org.mockito.ArgumentMatchers.anyString()))
@@ -149,7 +151,7 @@ class IdleSessionRefreshIntegrationTest {
         when(tokenBlacklistService.claim(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyLong())).thenReturn(true);
         when(jwtTokenProvider.generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), org.mockito.ArgumentMatchers.isNull(), any()))
             .thenReturn("cdx-new-access");
-        when(jwtTokenProvider.generateRefreshToken(any(org.springframework.security.core.Authentication.class), org.mockito.ArgumentMatchers.isNull(), any()))
+        when(jwtTokenProvider.generateRefreshToken(any(com.example.hms.security.TokenUserDescriptor.class), org.mockito.ArgumentMatchers.isNull(), any()))
             .thenReturn("cdx-new-refresh");
         idleSessionGate.touchIfHuman(user.getId(), AuthorityUtils.createAuthorityList("ROLE_NURSE"));
     }
@@ -187,7 +189,7 @@ class IdleSessionRefreshIntegrationTest {
         }
         verify(tokenBlacklistService, never()).claim(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyLong());
         verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), org.mockito.ArgumentMatchers.any(), any());
-        verify(jwtTokenProvider, never()).generateRefreshToken(any(org.springframework.security.core.Authentication.class), org.mockito.ArgumentMatchers.any(), any());
+        verify(jwtTokenProvider, never()).generateRefreshToken(any(com.example.hms.security.TokenUserDescriptor.class), org.mockito.ArgumentMatchers.any(), any());
         verify(refreshTokenCookieService, never()).write(any(), any(), org.mockito.ArgumentMatchers.anyLong());
         var events = org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
         verify(auditEventLogService, times(2)).logEvent(events.capture());

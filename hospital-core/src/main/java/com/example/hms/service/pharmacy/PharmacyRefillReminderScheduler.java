@@ -70,7 +70,6 @@ public class PharmacyRefillReminderScheduler {
                         && support.notifyRefillReminder(
                             d.getPrescription(),
                             d.getPatient(),
-                            d.getMedicationName(),
                             leadDays)) {
                     sent++;
                 }

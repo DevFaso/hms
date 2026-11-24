@@ -51,10 +51,15 @@ GET http://localhost:8081/api/encounters/patient/minor_patient1
 Accept: application/json
 Authorization: Bearer {{token}}
 
-### List encounters by doctor
-GET http://localhost:8081/api/encounters/doctor/sandoff_doctor
+### List encounters by doctor (the identifier in the body, never in the URL)
+POST http://localhost:8081/api/encounters/by-doctor
 Accept: application/json
+Content-Type: application/json
 Authorization: Bearer {{token}}
+
+{
+  "identifier": "sandoff_doctor"
+}
 
 ### Error scenario: Get non-existent encounter
 GET http://localhost:8081/api/encounters/00000000-0000-0000-0000-000000000000

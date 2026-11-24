@@ -215,7 +215,9 @@ class ProScreeningEscalationServiceTest {
 
         service.notifyOnRecord(response);
 
-        verify(smsService).send(eq("+22670000000"), contains("Réponse positive à l'item de sécurité EPDS"));
+        // K4: never the instrument (EPDS discloses a perinatal depression screen) nor the full name.
+        verify(smsService).send(eq("+22670000000"), contains("une réponse à un questionnaire du patient AT"));
+        verify(smsService, never()).send(anyString(), contains("EPDS"));
     }
 
     @Test

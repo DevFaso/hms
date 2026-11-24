@@ -87,6 +87,7 @@ class AuditSearchParamsGuardTest {
             for (Method method : controller.getDeclaredMethods()) {
                 Set<String> names = new TreeSet<>();
                 for (int i = 0; i < method.getParameterCount(); i++) {
+                    bodyFilters(controller, method, i, names, problems);
                     MethodParameter parameter = new MethodParameter(method, i);
                     parameter.initParameterNameDiscovery(new DefaultParameterNameDiscoverer());
                     RequestParam requestParam = parameter.getParameterAnnotation(RequestParam.class);
@@ -116,6 +117,30 @@ class AuditSearchParamsGuardTest {
         assertThat(problems).withFailMessage("Inconsistent audit event-type filters: %s", problems).isEmpty();
     }
 
+    /**
+     * The same filter in a request body (a record whose components carry the two names): each must
+     * be a List<String>, read by AuditEventTypeParams like the query parameters.
+     */
+    private static void bodyFilters(Class<?> controller, Method method, int index, Set<String> names,
+                                    Set<String> problems) {
+        if (!new MethodParameter(method, index).hasParameterAnnotation(
+                org.springframework.web.bind.annotation.RequestBody.class)
+                || !method.getParameterTypes()[index].isRecord()) {
+            return;
+        }
+        for (java.lang.reflect.RecordComponent component : method.getParameterTypes()[index].getRecordComponents()) {
+            if (!EVENT_TYPE_NAMES.contains(component.getName())) {
+                continue;
+            }
+            names.add(component.getName());
+            if (!(component.getGenericType() instanceof ParameterizedType type) || type.getRawType() != List.class
+                    || type.getActualTypeArguments()[0] != String.class) {
+                problems.add(controller.getSimpleName() + "#" + method.getName() + " body binds "
+                    + component.getName() + " as " + component.getGenericType().getTypeName() + ", not List<String>");
+            }
+        }
+    }
+
     private static String nameOf(RequestParam requestParam, MethodParameter parameter) {
         if (StringUtils.hasText(requestParam.name())) {
             return requestParam.name();
@@ -137,7 +162,10 @@ class AuditSearchParamsGuardTest {
             boolean auditController = mapping != null && Arrays.stream(mapping.path())
                 .anyMatch(path -> path.toLowerCase(Locale.ROOT).contains("audit"));
             for (Method method : controller.getDeclaredMethods()) {
-                GetMapping get = AnnotatedElementUtils.findMergedAnnotation(method, GetMapping.class);
+                // A GET, or a POST that only reads because its filters travel in the body.
+                RequestMapping get = AnnotatedElementUtils.findMergedAnnotation(method, GetMapping.class) != null
+                    || method.isAnnotationPresent(com.example.hms.security.ReadsOnly.class)
+                    ? AnnotatedElementUtils.findMergedAnnotation(method, RequestMapping.class) : null;
                 if (get == null) {
                     continue;
                 }

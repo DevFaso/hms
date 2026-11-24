@@ -128,8 +128,10 @@ export class RoiComponent implements OnInit, OnDestroy {
   formRequestKind = signal<RoiRequestKind>('COPY');
   formFullRecord = signal(false);
   exportingId = signal<string | null>(null);
-  readonly canExport = computed(() =>
-    this.roleCtx.hasAnyActiveRole(actionRoles('patientRecordPdfExport')),
+  readonly canExport = computed(
+    () =>
+      !!this.roleCtx.effectiveHospitalIdForRequest() &&
+      this.roleCtx.hasAnyActiveRole(actionRoles('roiRecordPdfExport')),
   );
 
   /* ── decision modal ── */

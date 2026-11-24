@@ -92,7 +92,7 @@ class PharmacyRefillReminderSchedulerTest {
 
         scheduler.sendDailyRefillReminders();
 
-        verify(support).notifyRefillReminder(d.getPrescription(), patient, d.getMedicationName(), 3);
+        verify(support).notifyRefillReminder(d.getPrescription(), patient, 3);
     }
 
     @Test
@@ -108,7 +108,7 @@ class PharmacyRefillReminderSchedulerTest {
 
         scheduler.sendDailyRefillReminders();
 
-        verify(support, never()).notifyRefillReminder(any(), any(), anyString(), anyInt());
+        verify(support, never()).notifyRefillReminder(any(), any(), anyInt());
     }
 
     @Test
@@ -123,7 +123,7 @@ class PharmacyRefillReminderSchedulerTest {
 
         scheduler.sendDailyRefillReminders();
 
-        verify(support, never()).notifyRefillReminder(any(), any(), anyString(), anyInt());
+        verify(support, never()).notifyRefillReminder(any(), any(), anyInt());
     }
 
     @Test
@@ -134,7 +134,7 @@ class PharmacyRefillReminderSchedulerTest {
 
         scheduler.sendDailyRefillReminders();
 
-        verify(support, never()).notifyRefillReminder(any(), any(), anyString(), anyInt());
+        verify(support, never()).notifyRefillReminder(any(), any(), anyInt());
     }
 
     // ─── helpers ───
@@ -175,7 +175,7 @@ class PharmacyRefillReminderSchedulerTest {
 
         scheduler.sendDailyRefillReminders();
 
-        verify(support, never()).notifyRefillReminder(any(), any(), anyString(), anyInt());
+        verify(support, never()).notifyRefillReminder(any(), any(), anyInt());
     }
 
     @Test
@@ -189,7 +189,7 @@ class PharmacyRefillReminderSchedulerTest {
 
         scheduler.sendDailyRefillReminders();
 
-        verify(support, never()).notifyRefillReminder(any(), any(), anyString(), anyInt());
+        verify(support, never()).notifyRefillReminder(any(), any(), anyInt());
     }
 
     @Test
@@ -203,7 +203,7 @@ class PharmacyRefillReminderSchedulerTest {
 
         scheduler.sendDailyRefillReminders();
 
-        verify(support, never()).notifyRefillReminder(any(), any(), anyString(), anyInt());
+        verify(support, never()).notifyRefillReminder(any(), any(), anyInt());
     }
 
     @Test
@@ -214,7 +214,7 @@ class PharmacyRefillReminderSchedulerTest {
         Dispense goodDispense = dispenseFor(good, p, LocalDateTime.now().minusDays(7));
 
         org.mockito.Mockito.doThrow(new RuntimeException("sms boom"))
-                .when(support).notifyRefillReminder(any(), any(), anyString(), anyInt());
+                .when(support).notifyRefillReminder(any(), any(), anyInt());
 
         when(dispenseRepository.findByStatusAndDispensedAtBetween(any(), any(), any()))
                 .thenReturn(List.of(goodDispense));
@@ -222,6 +222,6 @@ class PharmacyRefillReminderSchedulerTest {
         // Must not throw
         scheduler.sendDailyRefillReminders();
 
-        verify(support).notifyRefillReminder(any(), any(), anyString(), anyInt());
+        verify(support).notifyRefillReminder(any(), any(), anyInt());
     }
 }

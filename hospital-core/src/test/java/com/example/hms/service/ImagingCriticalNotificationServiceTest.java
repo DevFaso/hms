@@ -252,7 +252,9 @@ class ImagingCriticalNotificationServiceTest {
 
         service.notifyIfCritical(flagged());
 
-        verify(smsService).send(eq("+22370000000"), anyString());
+        // K4: the patient's initials and nothing clinical: never the study, the impression or the full name.
+        verify(smsService).send("+22370000000",
+            "e-Keneya : un résultat d'imagerie critique du patient AD attend votre accusé de réception. Ouvrez e-Keneya.");
     }
 
     @Test

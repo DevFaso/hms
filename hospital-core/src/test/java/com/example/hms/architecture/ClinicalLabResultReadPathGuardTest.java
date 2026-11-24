@@ -68,7 +68,9 @@ class ClinicalLabResultReadPathGuardTest {
         Map.entry("com/example/hms/service/integration/impl/MllpInboundLabServiceImpl.java", "HL7 ingest"),
         Map.entry("com/example/hms/service/signature/SignableReportLocator.java", "owning hospital of a signature"),
         Map.entry("com/example/hms/service/signature/SignableReportFinder.java", "the signer's own worklist: ids, no values"),
-        Map.entry("com/example/hms/fhir/FhirTenantBoundary.java", "tenant check on ids, no values")
+        Map.entry("com/example/hms/fhir/FhirTenantBoundary.java", "tenant check on ids, no values"),
+        Map.entry("com/example/hms/service/impl/InBasketServiceImpl.java",
+            "K4: an in-basket acknowledgement waits for the read-back of a critical result; flags only, no values")
     );
 
     /**
