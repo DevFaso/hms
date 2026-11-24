@@ -114,8 +114,10 @@ class MfaControllerTest {
     void setUp() {
         // The user's wrong-code budget is not exhausted unless a test says so.
         when(mfaService.reserveCodeAttempt(any())).thenReturn(true);
-        // A readable challenge with no role picked at login, unless a test says so.
-        when(jwtTokenProvider.mfaTokenSelectedRoles(any())).thenReturn(Optional.of(List.of()));
+        // A readable challenge carrying the one role the login decided on, and
+        // the account still holding it, unless a test says so.
+        when(jwtTokenProvider.mfaTokenSelectedRoles(any())).thenReturn(Optional.of(List.of("ROLE_DOCTOR")));
+        holds("ROLE_DOCTOR");
 
         testUser = new User();
         testUser.setId(USER_ID);
@@ -397,29 +399,22 @@ class MfaControllerTest {
     }
 
     @Test
-    void sessionRoles_aChallengeCarryingNoRole_neverWidensToTheActiveAssignments() throws Exception {
+    void sessionRoles_aChallengeCarryingNoRole_opensNoSession() throws Exception {
         when(jwtTokenProvider.isMfaToken("mfa-tok-none")).thenReturn(true);
         claimable("mfa-tok-none");
         when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-none")).thenReturn(USERNAME);
         when(jwtTokenProvider.mfaTokenSelectedRoles("mfa-tok-none")).thenReturn(Optional.of(List.of()));
         holds("ROLE_DOCTOR", "ROLE_HOSPITAL_ADMIN");
-        currentTotp("654321");
-        when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class), notNull(), any())).thenReturn("access-jwt");
-        when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class), notNull(), any())).thenReturn("refresh-jwt");
 
         mockMvc.perform(post("/auth/mfa/verify")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mfaToken\":\"mfa-tok-none\",\"code\":\"654321\"}"))
-                .andExpect(status().isOk());
+                .andExpect(status().isForbidden());
 
-        // The session carries what the login minted into the challenge
-        // (no role), never every active assignment of the account.
-        var access = org.mockito.ArgumentCaptor.forClass(TokenUserDescriptor.class);
-        var refresh = org.mockito.ArgumentCaptor.forClass(TokenUserDescriptor.class);
-        verify(jwtTokenProvider).generateAccessToken(access.capture(), notNull(), any());
-        verify(jwtTokenProvider).generateRefreshToken(refresh.capture(), notNull(), any());
-        org.assertj.core.api.Assertions.assertThat(access.getValue().roles()).isEmpty();
-        org.assertj.core.api.Assertions.assertThat(refresh.getValue().roles()).isEmpty();
+        // Refused before any code is reserved or checked, and nothing is minted.
+        verify(mfaService, never()).reserveCodeAttempt(any());
+        verify(jwtTokenProvider, never()).generateAccessToken(any(TokenUserDescriptor.class), any(), any());
+        verify(jwtTokenProvider, never()).generateRefreshToken(any(TokenUserDescriptor.class), any(), any());
     }
 
     @Test

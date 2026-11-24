@@ -15,7 +15,6 @@ import com.example.hms.security.IdleSessionGate;
 import com.example.hms.security.JwtTokenProvider;
 import com.example.hms.security.RefreshTokenCookieService;
 import com.example.hms.security.TokenBlacklistService;
-import com.example.hms.security.TokenUserDescriptor;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.MfaService;
 import com.example.hms.service.UserCredentialLifecycleService;
@@ -83,12 +82,27 @@ public class MfaController {
 
     /**
      * Why {@link #honouredPick} refused, told apart: a challenge that no longer
-     * parses (expired meanwhile) is the usual invalid-token 401; a pick no
-     * longer held is said so, and audited.
+     * parses (expired meanwhile) is the usual invalid-token 401; a challenge
+     * carrying no role is a 403 (no session without an active role); a pick no
+     * longer held is said so. The last two are audited.
      */
     private ResponseEntity<Object> pickRefusal(String mfaToken, User user) {
-        if (jwtTokenProvider.mfaTokenSelectedRoles(mfaToken).isEmpty()) {
+        Optional<List<String>> picked = jwtTokenProvider.mfaTokenSelectedRoles(mfaToken);
+        if (picked.isEmpty()) {
             return ResponseEntity.status(401).body(new MessageResponse(message(INVALID_MFA_TOKEN)));
+        }
+        if (picked.get().isEmpty()) {
+            // A challenge carrying no role: an account with no active role
+            // opens no session, with or without the code.
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .userId(user.getId())
+                    .userName(user.getUsername())
+                    .eventType(AuditEventType.MFA_FAILURE)
+                    .status(AuditStatus.FAILURE)
+                    .eventDescription("MFA sign-in refused: no active role")
+                    .build());
+            return ResponseEntity.status(403).body(new MessageResponse(
+                    com.example.hms.utility.MessageUtil.resolve(AuthController.NO_ACTIVE_ROLE_KEY)));
         }
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .userId(user.getId())
@@ -102,28 +116,30 @@ public class MfaController {
     }
 
     /**
-     * The roles the challenge carries from the login that the user still
-     * holds ({@link com.example.hms.security.SessionRoles#stillHeld},
-     * never a role the login did not mint): an empty list for a challenge
-     * that carries none (a login with no role: the session gets none, it is
-     * never widened to the assignments), and {@link Optional#empty()} when the
-     * pick cannot be honoured (the token no longer parses, or no picked role
-     * is still held). Held roles are read from the same source the login
-     * offered them from (assignments and legacy global roles alike), widened
-     * as the login widened them, so a pick that worked without a challenge
-     * also works with one.
+     * The session's role set: the roles the challenge carries from the login
+     * that the user still holds ({@link com.example.hms.security.SessionRoles#stillHeld},
+     * never a role the login did not decide on). Empty when the challenge
+     * carries none or none is still held; {@link Optional#empty()} when the
+     * challenge no longer parses. Held roles are read from the same source the
+     * login offered them from (assignments and legacy global roles alike),
+     * widened as the login widened them, so a pick that worked without a
+     * challenge also works with one.
      */
-    private Optional<List<String>> honouredPick(String mfaToken, String username) {
+    private Optional<com.example.hms.security.SessionRoles.Granted> honouredPick(String mfaToken, String username) {
         Optional<List<String>> picked = jwtTokenProvider.mfaTokenSelectedRoles(mfaToken);
-        if (picked.isEmpty() || picked.get().isEmpty()) {
-            return picked;
+        if (picked.isEmpty()) {
+            return Optional.empty();
         }
-        List<String> stillHeld = com.example.hms.security.SessionRoles.stillHeld(picked.get(),
+        List<String> carried = picked.get();
+        if (carried.isEmpty()) {
+            // Nothing carried: nothing to look up, and nothing to mint.
+            return Optional.of(com.example.hms.security.SessionRoles.stillHeld(carried, List.of()));
+        }
+        return Optional.of(com.example.hms.security.SessionRoles.stillHeld(carried,
                 userDetailsService.loadUserByUsername(username).getAuthorities().stream()
                         .map(org.springframework.security.core.GrantedAuthority::getAuthority)
                         .filter(java.util.Objects::nonNull)
-                        .toList());
-        return stillHeld.isEmpty() ? Optional.empty() : Optional.of(stillHeld);
+                        .toList()));
     }
 
     /** 401 for a caller holding only a partial mfaToken, not a full access token. */
@@ -313,11 +329,11 @@ public class MfaController {
         // The role picked at login, checked now, before any code is reserved,
         // checked or spent: a refusal costs the user nothing, and a challenge
         // whose pick cannot be honoured is refused, never widened.
-        Optional<List<String>> honoured = honouredPick(request.mfaToken(), username);
-        if (honoured.isEmpty()) {
+        Optional<com.example.hms.security.SessionRoles.Granted> honoured = honouredPick(request.mfaToken(), username);
+        if (honoured.isEmpty() || honoured.get().isEmpty()) {
             return pickRefusal(request.mfaToken(), user);
         }
-        List<String> pickedRoles = honoured.get();
+        com.example.hms.security.SessionRoles.Granted granted = honoured.get();
 
         // The per-user budget of wrong LOGIN codes (its own, never the
         // step-ups': see MfaService), reserved BEFORE the code is checked, so
@@ -375,16 +391,13 @@ public class MfaController {
         }
         mfaService.clearCodeAttempts(user.getId());
 
-        // Issue the full JWT pair with the roles the login minted into the
-        // challenge (still held, checked above): the role picked, or the
-        // single role held, as the sign-in without a challenge mints it.
-        // The challenge never widens it; a challenge carrying no role
-        // opens a session with none, never one with every active assignment.
-        // Held spellings (honouredPick) are canonical ROLE_* authorities, as
-        // the idle gate's machine-role carve-out needs.
-        List<String> roles = pickedRoles;
-
-        var descriptor = new TokenUserDescriptor(user.getId(), username, roles);
+        // Issue the full JWT pair with the roles the login decided on (still
+        // held, checked above): the role picked, or the single role held, as
+        // the sign-in without a challenge mints it. Held spellings
+        // (honouredPick) are canonical ROLE_* authorities, as the idle gate's
+        // machine-role carve-out needs.
+        List<String> roles = granted.roles();
+        var descriptor = granted.descriptor(user.getId(), username);
         // A verified TOTP or backup code: both tokens carry amr [pwd, otp], the
         // second-factor proof the provider MFA gate reads (AC-13), and the
         // refresh token passes it on to the access tokens it later mints.

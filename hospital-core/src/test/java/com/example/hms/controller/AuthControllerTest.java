@@ -1756,8 +1756,7 @@ class AuthControllerTest {
     void sessionRoles_anMfaRequiredRoleWithoutASecondFactor_isNeverRefreshed() throws Throwable {
         com.example.hms.model.User user = refreshableUser("doc.nofactor");
         holds(user, "ROLE_DOCTOR", "ROLE_RECEPTIONIST");
-        // A token rotated before the fix carried every role: the doctor role
-        // requires a second factor this token does not have.
+        // A token carrying an MFA-required role without a second factor.
         carries("session.refresh", "ROLE_RECEPTIONIST", "ROLE_DOCTOR");
         when(jwtTokenProvider.secondFactorAt("session.refresh")).thenReturn(null);
 
@@ -1828,6 +1827,84 @@ class AuthControllerTest {
 
         assertNothingMinted();
         verify(refreshTokenCookieService).clear(any());
+    }
+
+    @Test
+    void sessionRoles_aSurgeonSessionWithoutASecondFactor_isNotRefreshed() throws Throwable {
+        com.example.hms.model.User user = refreshableUser("surgeon.nofactor");
+        holds(user, "ROLE_SURGEON");
+        carries("session.refresh", "ROLE_SURGEON");
+        when(jwtTokenProvider.secondFactorAt("session.refresh")).thenReturn(null);
+
+        // A surgeon acts as DOCTOR on every request, so DOCTOR's requirement is theirs.
+        withDoctorRequiringMfa(() -> refreshSession().andExpect(status().isUnauthorized()));
+
+        assertNothingMinted();
+    }
+
+    private void withRefreshCutoff(java.time.Instant cutoff, org.junit.jupiter.api.function.Executable body)
+            throws Throwable {
+        Object before = org.springframework.test.util.ReflectionTestUtils.getField(authControllerProperties, "refreshNotBefore");
+        org.springframework.test.util.ReflectionTestUtils.setField(authControllerProperties, "refreshNotBefore", cutoff);
+        try {
+            body.execute();
+        } finally {
+            org.springframework.test.util.ReflectionTestUtils.setField(authControllerProperties, "refreshNotBefore", before);
+        }
+    }
+
+    @Test
+    void sessionRoles_aRefreshTokenIssuedBeforeTheConfiguredCutoff_isRefused() throws Throwable {
+        com.example.hms.model.User user = refreshableUser("before.cutoff");
+        holds(user, "ROLE_NURSE");
+        carries("session.refresh", "ROLE_NURSE");
+        java.time.Instant cutoff = java.time.Instant.parse("2026-11-24T18:00:00Z");
+        when(jwtTokenProvider.getIssuedAt("session.refresh"))
+                .thenReturn(java.util.Date.from(cutoff.minusSeconds(1)));
+
+        withRefreshCutoff(cutoff, () -> refreshSession().andExpect(status().isUnauthorized()));
+
+        assertNothingMinted();
+        verify(refreshTokenCookieService).clear(any());
+        verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+                "Refresh refused — issued before the sign-in cutoff".equals(e.getEventDescription())));
+    }
+
+    @Test
+    void sessionRoles_aRefreshTokenIssuedAtOrAfterTheCutoff_refreshes() throws Throwable {
+        com.example.hms.model.User user = refreshableUser("after.cutoff");
+        holds(user, "ROLE_NURSE");
+        carries("session.refresh", "ROLE_NURSE");
+        java.time.Instant cutoff = java.time.Instant.parse("2026-11-24T18:00:00Z");
+        when(jwtTokenProvider.getIssuedAt("session.refresh")).thenReturn(java.util.Date.from(cutoff));
+
+        withRefreshCutoff(cutoff, () -> refreshSession().andExpect(status().isOk()));
+
+        assertMintedRoles("ROLE_NURSE");
+    }
+
+    @Test
+    void sessionRoles_anAccountWithNoActiveRole_opensNoSession() throws Exception {
+        givenAuthenticatedWith("FACTOR_PASSWORD");
+        com.example.hms.model.User user = com.example.hms.model.User.builder()
+                .username("norole").email("norole@example.com").build();
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "id", java.util.UUID.randomUUID());
+        when(userRepository.findByUsername("norole")).thenReturn(java.util.Optional.of(user));
+
+        LoginRequest login = new LoginRequest();
+        login.setUsername("norole");
+        login.setPassword("password123");
+
+        mockMvc.perform(post("/auth/login").header("Accept-Language", "en")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(login)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value(
+                        "Your account has no active role yet. Ask your administrator to assign or activate one, then sign in again."));
+
+        verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any());
+        verify(jwtTokenProvider, never()).generateRefreshToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any());
+        verify(jwtTokenProvider, never()).generateMfaToken(any(), any());
     }
 
     // ── QA D311/D418: activation re-send for phone-only and staff accounts ──

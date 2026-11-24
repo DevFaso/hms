@@ -278,29 +278,6 @@ public class JwtTokenProvider {
         return out;
     }
 
-    public String generateAccessToken(Authentication authentication) {
-        HospitalUserDetails userDetails = (HospitalUserDetails) authentication.getPrincipal();
-        List<String> roles = userDetails.getAuthorities().stream()
-            .map(GrantedAuthority::getAuthority)
-            .toList();
-        log.debug("Adding roles to JWT token: {}", roles);
-        Date now = new Date();
-        Date expiryDate = new Date(now.getTime() + accessTokenExpirationMs);
-        Map<String, Object> claims = buildTenantClaims(userDetails.getUserId(), roles);
-        claims.put(ROLES_CLAIM, roles);
-        if (userDetails.getUserId() != null) {
-            claims.put("uid", userDetails.getUserId().toString());
-        }
-        return Jwts.builder()
-            .id(UUID.randomUUID().toString())
-            .subject(userDetails.getUsername())
-            .claims(claims)
-            .issuedAt(now)
-            .expiration(expiryDate)
-            .signWith(signingKey)
-            .compact();
-    }
-
     public String generateAccessToken(TokenUserDescriptor descriptor) {
         return generateAccessToken(descriptor, null);
     }
@@ -327,14 +304,9 @@ public class JwtTokenProvider {
         Objects.requireNonNull(descriptor, "descriptor is required");
         UUID userId = descriptor.userId();
 
-        List<String> roles = Optional.ofNullable(descriptor.roles())
-            .filter(r -> !r.isEmpty())
-            .map(this::normalizeRoleCollection)
-            .orElseGet(() -> tenantRoleAssignmentAccessor.findAssignmentsForUser(userId).stream()
-                .map(this::normalizeRoleLabel)
-                .filter(StringUtils::hasText)
-                .distinct()
-                .toList());
+        // The roles the caller decided, and only those: an empty set mints
+        // no role, never one looked up from the account's assignments.
+        List<String> roles = descriptorRoles(descriptor);
 
         log.debug("✅ Roles for token: {}", roles);
         Date now = new Date();
@@ -391,14 +363,7 @@ public class JwtTokenProvider {
         Objects.requireNonNull(impersonatorUsername, "impersonatorUsername is required");
 
         UUID userId = target.userId();
-        List<String> roles = Optional.ofNullable(target.roles())
-            .filter(r -> !r.isEmpty())
-            .map(this::normalizeRoleCollection)
-            .orElseGet(() -> tenantRoleAssignmentAccessor.findAssignmentsForUser(userId).stream()
-                .map(this::normalizeRoleLabel)
-                .filter(StringUtils::hasText)
-                .distinct()
-                .toList());
+        List<String> roles = descriptorRoles(target);
 
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + ttlMillis);
@@ -415,43 +380,6 @@ public class JwtTokenProvider {
             .id(UUID.randomUUID().toString())
             .subject(target.username())
             .claims(claims)
-            .issuedAt(now)
-            .expiration(expiryDate)
-            .signWith(signingKey)
-            .compact();
-    }
-
-    public String generateRefreshToken(Authentication authentication) {
-        return generateRefreshToken(authentication, null);
-    }
-
-    /**
-     * A refresh token for the authenticated user; {@code secondFactorAt} carries
-     * the proof and its time (see {@link #generateAccessToken(TokenUserDescriptor, Instant)})
-     * so the access tokens it later mints keep it until it is too old.
-     */
-    public String generateRefreshToken(Authentication authentication, Instant secondFactorAt) {
-        return generateRefreshToken(authentication, secondFactorAt, null);
-    }
-
-    /** {@link #generateRefreshToken(Authentication, Instant)} for the sign-in session {@code sessionId}. */
-    public String generateRefreshToken(Authentication authentication, Instant secondFactorAt, String sessionId) {
-        HospitalUserDetails userDetails = (HospitalUserDetails) authentication.getPrincipal();
-
-        List<String> roles = userDetails.getAuthorities().stream()
-            .map(GrantedAuthority::getAuthority)
-            .toList();
-
-        Date now = new Date();
-        Date expiryDate = new Date(now.getTime() + refreshTokenExpirationMs);
-
-        return Jwts.builder()
-            .claim(TokenUse.CLAIM, TokenUse.REFRESH)
-            .id(UUID.randomUUID().toString())
-            .subject(userDetails.getUsername())
-            .claim(ROLES_CLAIM, roles)
-            .claims(secondFactorClaims(secondFactorAt))
-            .claims(sessionClaim(sessionId))
             .issuedAt(now)
             .expiration(expiryDate)
             .signWith(signingKey)
@@ -476,9 +404,7 @@ public class JwtTokenProvider {
     public String generateRefreshToken(TokenUserDescriptor descriptor, Instant secondFactorAt, String sessionId) {
         Objects.requireNonNull(descriptor, "descriptor is required");
 
-        List<String> roles = descriptor.roles() != null
-                ? descriptor.roles().stream().toList()
-                : List.of();
+        List<String> roles = descriptorRoles(descriptor);
 
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + refreshTokenExpirationMs);
@@ -494,6 +420,16 @@ public class JwtTokenProvider {
             .expiration(expiryDate)
             .signWith(signingKey)
             .compact();
+    }
+
+    /**
+     * The roles a token is minted with: the descriptor's, normalised, and
+     * nothing else. An empty or missing set mints a token with no role.
+     */
+    private List<String> descriptorRoles(TokenUserDescriptor descriptor) {
+        return descriptor.roles() == null || descriptor.roles().isEmpty()
+            ? List.of()
+            : normalizeRoleCollection(descriptor.roles());
     }
 
     /**
@@ -730,19 +666,6 @@ public class JwtTokenProvider {
             .map(this::ensureRolePrefix)
             .distinct()
             .toList();
-    }
-
-    private String normalizeRoleLabel(TenantRoleAssignment assignment) {
-        String candidate = assignment.roleName();
-        if (!StringUtils.hasText(candidate)) {
-            candidate = assignment.roleCode();
-        }
-
-        if (!StringUtils.hasText(candidate)) {
-            return "";
-        }
-
-        return ensureRolePrefix(candidate.trim());
     }
 
     private String ensureRolePrefix(String value) {

@@ -357,8 +357,17 @@ public class AuthController {
             var user = userRepository.findByUsername(loginRequest.getUsername())
                     .orElseThrow(() -> new RuntimeException("Authenticated user not found"));
 
-            var descriptor = new com.example.hms.security.TokenUserDescriptor(
-                    user.getId(), user.getUsername(), effectiveRoles);
+            // The session's role set, fixed here: every later token of the
+            // session (the MFA step, each refresh) carries these or fewer.
+            // An account with no active role opens no session.
+            var granted = com.example.hms.security.SessionRoles.atSignIn(effectiveRoles);
+            if (granted.isEmpty()) {
+                log.warn("🔐 [LOGIN] Sign-in refused: the account holds no active role.");
+                auditLoginFailure(loginRequest.getUsername(), NO_ACTIVE_ROLE_AUDIT);
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(new MessageResponse(MessageUtil.resolve(NO_ACTIVE_ROLE_KEY)));
+            }
+            var descriptor = granted.descriptor(user.getId(), user.getUsername());
 
             // ── MFA challenge gate (T-28) ──
             // A provider user (a live assignment at a pharmacy or laboratory)
@@ -517,6 +526,10 @@ public class AuthController {
      * (it may be a password typed into the wrong field) and never the password.
      * An unknown name is recorded with no id at all.
      */
+    /** A sign-in (or MFA step) whose role set is empty: no session without an active role. */
+    public static final String NO_ACTIVE_ROLE_KEY = "auth.login.noActiveRole";
+    private static final String NO_ACTIVE_ROLE_AUDIT = "Login refused: no active role";
+
     private void auditLoginFailure(String typedName, String description) {
         UUID accountId = null;
         if (typedName != null && !typedName.isBlank()) {
@@ -893,11 +906,11 @@ public class AuthController {
      * gained since. Empty: the session cannot continue (a legacy token
      * carrying no role set, or every carried role was removed since).
      */
-    private List<String> sessionRolesStillHeld(String refreshToken, com.example.hms.model.User user) {
-        return jwtTokenProvider.carriedRoles(refreshToken)
-                .map(carried -> com.example.hms.security.SessionRoles.stillHeld(carried,
-                        com.example.hms.security.EffectiveRoles.codes(user, assignmentRepository.findByUser(user))))
-                .orElse(List.of());
+    private com.example.hms.security.SessionRoles.Granted sessionRolesStillHeld(
+            String refreshToken, com.example.hms.model.User user) {
+        List<String> carried = jwtTokenProvider.carriedRoles(refreshToken).orElse(List.of());
+        return com.example.hms.security.SessionRoles.stillHeld(carried,
+                com.example.hms.security.EffectiveRoles.codes(user, assignmentRepository.findByUser(user)));
     }
 
     /**
@@ -985,6 +998,22 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse(MessageUtil.resolve(REFRESH_INVALID_MESSAGE)));
         }
+        // app.auth.refresh-not-before: every refresh token issued before the
+        // configured instant mints nothing, so each session signs in again
+        // once (and its role set and second factor are decided afresh).
+        if (authProps.refreshIssuedBeforeCutoff(jwtTokenProvider.getIssuedAt(refreshToken))) {
+            log.warn("🔄 [REFRESH] Refused — refresh token issued before the configured sign-in cutoff");
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.TOKEN_REFRESH)
+                    .eventDescription("Refresh refused — issued before the sign-in cutoff")
+                    .userName(username)
+                    .userId(user.getId())
+                    .status(AuditStatus.FAILURE)
+                    .build());
+            refreshTokenCookieService.clear(response);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse(MessageUtil.resolve(REFRESH_INVALID_MESSAGE)));
+        }
 
         // Closes Copilot review #4 on PR #224 — refuse to mint a new
         // super-admin access token from the surviving refresh cookie while
@@ -1002,8 +1031,8 @@ public class AuthController {
         // The session keeps the role set it was signed in with, less any
         // role removed since (SessionRoles). A role granted since sign-in
         // needs a new sign-in, and the challenge that sign-in decides on.
-        List<String> roles = sessionRolesStillHeld(refreshToken, user);
-        if (roles.isEmpty()) {
+        var granted = sessionRolesStillHeld(refreshToken, user);
+        if (granted.isEmpty()) {
             log.warn("🔄 [REFRESH] Refused — no role the session was signed in with is still held (or none carried)");
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .eventType(AuditEventType.TOKEN_REFRESH)
@@ -1018,6 +1047,7 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse(MessageUtil.resolve(REFRESH_ROLES_GONE_KEY)));
         }
+        List<String> roles = granted.roles();
 
         // ── Idle session timeout gate (v1.0 row 7) ───────────────────────
         // Refusing refresh-while-idle is the spec invariant: a silent
@@ -1068,7 +1098,7 @@ public class AuthController {
         // the new pair is out, give the old token back, or the session is
         // stranded (every retry would read "superseded" until it expires).
         try {
-            var descriptor = new com.example.hms.security.TokenUserDescriptor(user.getId(), username, roles);
+            var descriptor = granted.descriptor(user.getId(), username);
             // A refresh token minted after a verified TOTP code passes its second
             // factor on, with the time it was verified, until that is older than
             // the max age (AC-13); a password-only one never gains it.
@@ -1809,12 +1839,18 @@ public class AuthController {
      * Resolve hospital context from the user's active tenant role assignments.
      * Returns the primary hospital (first active assignment) and all permitted hospital IDs.
      */
+    /**
+     * A role of the set requires a second factor. The set is widened as every
+     * request widens it ({@link com.example.hms.security.RoleExpansion#expand}):
+     * a surgeon or physician acts as DOCTOR, so DOCTOR's requirement is theirs.
+     */
     private boolean isMfaRequiredForUser(List<String> roles) {
         List<String> required = authProps.mfaRequiredRoles();
-        if (required.isEmpty()) {
+        if (required.isEmpty() || roles == null) {
             return false;
         }
-        return roles.stream().anyMatch(required::contains);
+        return com.example.hms.security.RoleExpansion.expand(roles).stream()
+                .anyMatch(role -> required.stream().anyMatch(role::equalsIgnoreCase));
     }
 
     /**
