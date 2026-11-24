@@ -2130,6 +2130,7 @@
       "MFA_RESET_REFUSED": "Réinitialisation de la validation en deux étapes refusée : ce compte n’est pas administré par l’auteur",
       "MFA_REMOVED_BY_USER": "Validation en deux étapes retirée par l’utilisateur",
       "PATIENT_CHANNEL_CHOICES": "Choix de canaux du patient enregistrés à l’accueil : {{changes}}",
+      "PATIENT_CHANNEL_CHOICES_SELF": "Choix de canaux enregistrés par le patient : {{changes}}",
       "IMAGING_PORTAL_READ_BY_PROXY": "Comptes rendus d’imagerie du patient {{patient}} consultés sur le portail patient par un mandataire ({{count}} examens)",
       "IMAGING_PORTAL_READ": "Comptes rendus d’imagerie du patient {{patient}} consultés sur le portail patient ({{count}} examens)",
       "IMAGING_PORTAL_IMAGE_VIEWED_BY_PROXY": "Image {{image}} de la demande d’imagerie {{order}} consultée sur le portail patient par un mandataire",

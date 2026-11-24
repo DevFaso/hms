@@ -2130,6 +2130,7 @@
       "MFA_RESET_REFUSED": "Restablecimiento de la verificación en dos pasos rechazado: el autor no administra esta cuenta",
       "MFA_REMOVED_BY_USER": "Verificación en dos pasos quitada por el usuario",
       "PATIENT_CHANNEL_CHOICES": "Opciones de canal del paciente registradas en recepción: {{changes}}",
+      "PATIENT_CHANNEL_CHOICES_SELF": "Opciones de canal registradas por el paciente: {{changes}}",
       "IMAGING_PORTAL_READ_BY_PROXY": "Imaging reports of patient {{patient}} read on the patient portal by a proxy ({{count}} studies)",
       "IMAGING_PORTAL_READ": "Imaging reports of patient {{patient}} read on the patient portal ({{count}} studies)",
       "IMAGING_PORTAL_IMAGE_VIEWED_BY_PROXY": "Image {{image}} of imaging order {{order}} viewed on the patient portal by a proxy",
