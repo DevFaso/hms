@@ -40,6 +40,9 @@ public class PatientNotificationDeliveryDTO {
     private LocalDateTime nextAttemptAt;
     private LocalDateTime sentAt;
     private LocalDateTime lastRetriedAt;
+    private UUID consentRecordedBy;
+    private String consentRecordedByName;
+    private LocalDateTime consentRecordedAt;
     /**
      * QA D2402: what the notice was about, so a row (an opt-out above all, which has no attempt) can be traced:
      * the invoice number, or the lab order number. Null for the other kinds, and when the subject is gone.

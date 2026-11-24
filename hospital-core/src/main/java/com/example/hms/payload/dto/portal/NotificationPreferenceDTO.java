@@ -20,4 +20,8 @@ public class NotificationPreferenceDTO {
     private NotificationType notificationType;
     private NotificationChannel channel;
     private boolean enabled;
+    private UUID recordedByUserId;
+    /** Public display name only; never the account's username, address or phone. */
+    private String recordedByName;
+    private java.time.LocalDateTime recordedAt;
 }

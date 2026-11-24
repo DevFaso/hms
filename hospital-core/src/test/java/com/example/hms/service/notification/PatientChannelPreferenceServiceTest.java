@@ -46,6 +46,7 @@ class PatientChannelPreferenceServiceTest {
     @Mock private PatientRepository patientRepository;
     @Mock private PatientHospitalRegistrationRepository registrationRepository;
     @Mock private NotificationPreferenceRepository preferenceRepository;
+    @Mock private com.example.hms.repository.UserRepository userRepository;
     @Mock private AuditEventLogService auditEventLogService;
     @InjectMocks private PatientChannelPreferenceService service;
 
@@ -60,6 +61,7 @@ class PatientChannelPreferenceServiceTest {
         patient.setId(UUID.randomUUID());
         account.setId(UUID.randomUUID());
         patient.setUser(account);
+        when(userRepository.lockForNotificationPreferences(account.getId())).thenReturn(Optional.of(account));
         when(patientRepository.findByIdUnscoped(patient.getId())).thenReturn(Optional.of(patient));
         when(registrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospitalId)).thenReturn(true);
         when(preferenceRepository.findByUser_Id(account.getId())).thenReturn(stored);
@@ -138,6 +140,38 @@ class PatientChannelPreferenceServiceTest {
             .isInstanceOf(ResourceNotFoundException.class);
         assertThatThrownBy(() -> service.update(patient.getId(), null,
                 List.of(update(NotificationType.BILLING, NotificationChannel.SMS, false)), actorId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(preferenceRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    void aChangedChoiceCarriesTheAuthenticatedRecorderAndTime() {
+        var before = java.time.LocalDateTime.now();
+        var result = service.update(patient.getId(), hospitalId,
+            List.of(update(NotificationType.LAB_RESULT, NotificationChannel.SMS, false)), actorId);
+        assertThat(result).filteredOn(dto -> dto.getNotificationType() == NotificationType.LAB_RESULT
+            && dto.getChannel() == NotificationChannel.SMS).singleElement().satisfies(dto -> {
+                assertThat(dto.isEnabled()).isFalse();
+                assertThat(dto.getRecordedByUserId()).isEqualTo(actorId);
+                assertThat(dto.getRecordedAt()).isBetween(before, java.time.LocalDateTime.now());
+            });
+        verify(userRepository).lockForNotificationPreferences(account.getId());
+    }
+
+    @Test
+    void changingNothingDoesNotInventNewProvenanceForALegacyChoice() {
+        var legacy = row(NotificationType.LAB_RESULT, NotificationChannel.SMS, false);
+        stored.add(legacy);
+        service.update(patient.getId(), hospitalId,
+            List.of(update(NotificationType.LAB_RESULT, NotificationChannel.SMS, false)), actorId);
+        assertThat(legacy.getRecordedByUserId()).isNull();
+        assertThat(legacy.getRecordedAt()).isNull();
+    }
+
+    @Test
+    void anUnresolvableRecorderCannotWriteAChoice() {
+        assertThatThrownBy(() -> service.update(patient.getId(), hospitalId,
+            List.of(update(NotificationType.LAB_RESULT, NotificationChannel.SMS, false)), null))
             .isInstanceOf(ResourceNotFoundException.class);
         verify(preferenceRepository, never()).saveAll(anyList());
     }

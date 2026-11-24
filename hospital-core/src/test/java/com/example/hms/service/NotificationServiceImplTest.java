@@ -407,6 +407,34 @@ class NotificationServiceImplTest {
         }
     }
 
+    @Test
+    void aPartialSettingsSavePreservesADeskRecordedRefusalAndItsAuthor() {
+        UUID userId = UUID.randomUUID();
+        User user = new User(); user.setId(userId);
+        UUID recorder = UUID.randomUUID();
+        var recorded = LocalDateTime.of(2026, 11, 22, 8, 0);
+        var refusal = NotificationPreference.builder().user(user).notificationType(NotificationType.BILLING)
+            .channel(NotificationChannel.EMAIL).enabled(false).build();
+        refusal.recordChoice(false, recorder, recorded);
+        when(userRepository.lockForNotificationPreferences(userId)).thenReturn(Optional.of(user));
+        when(notificationPreferenceRepository.findByUser_Id(userId)).thenReturn(List.of(refusal));
+        var update = new NotificationPreferenceUpdateDTO(NotificationType.LAB_RESULT, NotificationChannel.SMS, true);
+        var result = service.updatePreferences(userId, List.of(update));
+        assertThat(result).hasSize(2).filteredOn(dto -> dto.getNotificationType() == NotificationType.BILLING)
+            .singleElement().satisfies(dto -> {
+                assertThat(dto.isEnabled()).isFalse();
+                assertThat(dto.getRecordedByUserId()).isEqualTo(recorder);
+                assertThat(dto.getRecordedAt()).isEqualTo(recorded);
+            });
+        assertThat(result).filteredOn(dto -> dto.getNotificationType() == NotificationType.LAB_RESULT)
+            .singleElement().satisfies(dto -> {
+                assertThat(dto.getRecordedByUserId()).isEqualTo(userId);
+                assertThat(dto.getRecordedAt()).isNotNull();
+            });
+        verify(notificationPreferenceRepository, never()).deleteByUser_Id(userId);
+    }
+
+
     // ── updatePreferences ────────────────────────────────────────────────────
 
     @Nested
@@ -414,13 +442,13 @@ class NotificationServiceImplTest {
     class UpdatePreferences {
 
         @Test
-        @DisplayName("deletes old prefs, saves new, and returns DTOs")
-        void deletesOldAndSavesNew() {
+        @DisplayName("records changed prefs without deleting omitted choices")
+        void recordsWithoutDeletingOmittedChoices() {
             UUID userId = UUID.randomUUID();
             User user = new User();
             user.setId(userId);
 
-            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.lockForNotificationPreferences(userId)).thenReturn(Optional.of(user));
 
             NotificationPreferenceUpdateDTO update = new NotificationPreferenceUpdateDTO();
             update.setNotificationType(NotificationType.LAB_RESULT);
@@ -440,8 +468,8 @@ class NotificationServiceImplTest {
 
             List<NotificationPreferenceDTO> result = service.updatePreferences(userId, List.of(update));
 
-            verify(notificationPreferenceRepository).deleteByUser_Id(userId);
-            verify(notificationPreferenceRepository).flush();
+            verify(notificationPreferenceRepository, never()).deleteByUser_Id(userId);
+            verify(notificationPreferenceRepository, never()).flush();
             assertThat(result).hasSize(1);
             assertThat(result.get(0).getNotificationType()).isEqualTo(NotificationType.LAB_RESULT);
         }
@@ -450,7 +478,7 @@ class NotificationServiceImplTest {
         @DisplayName("throws when user not found")
         void throwsWhenUserNotFound() {
             UUID userId = UUID.randomUUID();
-            when(userRepository.findById(userId)).thenReturn(Optional.empty());
+            when(userRepository.lockForNotificationPreferences(userId)).thenReturn(Optional.empty());
 
             List<NotificationPreferenceUpdateDTO> emptyList = List.of();
             assertThatThrownBy(() -> service.updatePreferences(userId, emptyList))

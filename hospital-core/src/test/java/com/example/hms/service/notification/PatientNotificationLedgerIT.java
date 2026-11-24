@@ -64,6 +64,7 @@ class PatientNotificationLedgerIT extends BaseIT {
     @Autowired private PlatformTransactionManager transactionManager;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private Clock clock;
+    @Autowired private com.example.hms.repository.PatientHospitalRegistrationRepository registrations;
 
     private Hospital hospital;
     private Hospital otherHospital;
@@ -114,6 +115,7 @@ class PatientNotificationLedgerIT extends BaseIT {
     @AfterEach
     void clean() {
         jdbc.update("delete from clinical.patient_notification_deliveries where patient_id = ?", patient.getId());
+        jdbc.update("delete from clinical.patient_hospital_registrations where patient_id = ?", patient.getId());
         patientRepository.deleteById(patient.getId());
         userRepository.deleteById(account.getId());
         hospitalRepository.deleteById(hospital.getId());
@@ -127,6 +129,17 @@ class PatientNotificationLedgerIT extends BaseIT {
         Mockito.when(mail.deliversRealEmail()).thenReturn(true);
         return new PatientNotificationLedger(repository, patientRepository, consent, sms, mail, clock,
             transactionManager);
+    }
+
+    @Test
+    void provenanceProjectsOnlyTheAccountAtTheDeliveryHospitalEvenAfterRegistrationCloses() {
+        assertThat(patientRepository.findNotificationAccountScoped(patient.getId(), hospital.getId())).isEmpty();
+        registrations.saveAndFlush(com.example.hms.model.PatientHospitalRegistration.builder()
+            .patient(patient).hospital(hospital).mrn("cdx-" + UUID.randomUUID())
+            .registrationDate(java.time.LocalDate.now(clock)).active(false).build());
+        assertThat(patientRepository.findNotificationAccountScoped(patient.getId(), hospital.getId())).contains(account.getId());
+        assertThat(patientRepository.findNotificationAccountScoped(patient.getId(), otherHospital.getId())).isEmpty();
+        assertThat(patientRepository.findNotificationAccountScoped(UUID.randomUUID(), hospital.getId())).isEmpty();
     }
 
     @Test

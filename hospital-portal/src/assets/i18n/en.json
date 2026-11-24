@@ -5417,7 +5417,8 @@
     "UNREAD": "Unread",
     "UNREAD_COUNT": "{{count}} unread notifications",
     "VIEW_ALL": "View all",
-    "SETTINGS_SECURITY_NOTE": "Your account's security messages (password reset, verification codes) are always sent, whatever you choose here."
+    "SETTINGS_SECURITY_NOTE": "Your account's security messages (password reset, verification codes) are always sent, whatever you choose here.",
+    "PREFERENCES_LOAD_FAILED": "Channel choices could not be loaded. Retry before making changes."
   },
   "NURSE": {
     "OVERSIGHT": {
@@ -15137,7 +15138,8 @@
     "SUBJECT_APPOINTMENT": "Appointment on {{date}} at {{time}}",
     "SUBJECT_INVOICE": "Invoice {{number}}",
     "SUBJECT_LAB_ORDER": "Lab order {{number}}",
-    "COL_NEXT_ATTEMPT": "Next attempt"
+    "COL_NEXT_ATTEMPT": "Next attempt",
+    "CONSENT_RECORDED_BY": "Channel choice recorded by:"
   },
   "IMAGING_PACS": {
     "STUDY_LINKED": "Study linked",
@@ -15292,7 +15294,8 @@
     "SAVE": "Save the choices",
     "SAVED": "The patient's choices are saved.",
     "SAVE_FAILED": "The patient's choices could not be saved.",
-    "LOAD_FAILED": "The patient's choices could not be loaded."
+    "LOAD_FAILED": "The patient's choices could not be loaded.",
+    "RECORDED_BY": "Last recorded by:"
   },
   "PAYMENT_OUTCOME": {
     "UNKNOWN": "The server's answer did not arrive. The payment may already be recorded: press the button again (it will not be counted twice) or check the payment list.",

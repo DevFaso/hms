@@ -61,13 +61,14 @@ public class PatientChannelPreferenceService {
     private final PatientRepository patientRepository;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final NotificationPreferenceRepository preferenceRepository;
+    private final com.example.hms.repository.UserRepository userRepository;
     private final AuditEventLogService auditEventLogService;
 
     /** Every desk kind x channel, on unless the patient (or the desk) turned it off. */
     @Transactional(readOnly = true)
     public List<NotificationPreferenceDTO> read(UUID patientId, UUID hospitalId) {
         User account = accountAt(patientId, hospitalId);
-        return matrix(stored(account.getId()));
+        return NotificationPreferenceViews.describe(matrix(stored(account.getId())), userRepository);
     }
 
     /**
@@ -77,7 +78,10 @@ public class PatientChannelPreferenceService {
     @Transactional
     public List<NotificationPreferenceDTO> update(UUID patientId, UUID hospitalId,
                                                   List<NotificationPreferenceUpdateDTO> updates, UUID actorId) {
+        if (actorId == null) throw new ResourceNotFoundException("user.notFound", actorId);
         User account = accountAt(patientId, hospitalId);
+        userRepository.lockForNotificationPreferences(account.getId())
+            .orElseThrow(() -> new ResourceNotFoundException("user.notFound", account.getId()));
         // Only the desk's kinds and channels are recorded here; anything else (the bell, a kind no
         // sender reads) is left as it is, never written: the response shows what is recorded.
         List<NotificationPreferenceUpdateDTO> wanted = updates == null ? List.of() : updates.stream()
@@ -102,7 +106,7 @@ public class PatientChannelPreferenceService {
                     .channel(update.getChannel()).build();
                 rows.get(update.getNotificationType()).put(update.getChannel(), row);
             }
-            row.setEnabled(enabled);
+            row.recordChoice(enabled, actorId, java.time.LocalDateTime.now());
             toSave.add(row);
             if (current != enabled) {
                 changes.add(update.getNotificationType().name() + "/" + update.getChannel().name() + " "
@@ -122,7 +126,7 @@ public class PatientChannelPreferenceService {
                 .eventDescription("Patient channel choices recorded at the desk: " + String.join(", ", changes))
                 .build());
         }
-        return matrix(rows);
+        return NotificationPreferenceViews.describe(matrix(rows), userRepository);
     }
 
     /** The patient's account, when the patient is registered at the desk's hospital; 404 otherwise. */
@@ -159,6 +163,8 @@ public class PatientChannelPreferenceService {
                     .notificationType(type)
                     .channel(channel)
                     .enabled(row == null || row.isEnabled())
+                    .recordedByUserId(row == null ? null : row.getRecordedByUserId())
+                    .recordedAt(row == null ? null : row.getRecordedAt())
                     .build());
             }));
         return out.stream().filter(Objects::nonNull).toList();

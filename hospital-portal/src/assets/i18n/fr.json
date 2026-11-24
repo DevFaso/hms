@@ -5417,7 +5417,8 @@
     "UNREAD": "Non lu",
     "UNREAD_COUNT": "{{count}} notifications non lues",
     "VIEW_ALL": "Voir tout",
-    "SETTINGS_SECURITY_NOTE": "Les messages de sécurité de votre compte (réinitialisation du mot de passe, codes de vérification) sont toujours envoyés, quel que soit votre choix."
+    "SETTINGS_SECURITY_NOTE": "Les messages de sécurité de votre compte (réinitialisation du mot de passe, codes de vérification) sont toujours envoyés, quel que soit votre choix.",
+    "PREFERENCES_LOAD_FAILED": "Impossible de charger les choix de communication. Réessayez avant de les modifier."
   },
   "NURSE": {
     "OVERSIGHT": {
@@ -15137,7 +15138,8 @@
     "SUBJECT_APPOINTMENT": "Rendez-vous du {{date}} à {{time}}",
     "SUBJECT_INVOICE": "Facture {{number}}",
     "SUBJECT_LAB_ORDER": "Demande d'examen {{number}}",
-    "COL_NEXT_ATTEMPT": "Prochaine tentative"
+    "COL_NEXT_ATTEMPT": "Prochaine tentative",
+    "CONSENT_RECORDED_BY": "Choix du canal enregistré par :"
   },
   "IMAGING_PACS": {
     "STUDY_LINKED": "Étude liée",
@@ -15292,7 +15294,8 @@
     "SAVE": "Enregistrer les choix",
     "SAVED": "Les choix du patient sont enregistrés.",
     "SAVE_FAILED": "Les choix du patient n'ont pas pu être enregistrés.",
-    "LOAD_FAILED": "Les choix du patient n'ont pas pu être chargés."
+    "LOAD_FAILED": "Les choix du patient n'ont pas pu être chargés.",
+    "RECORDED_BY": "Dernier enregistrement par :"
   },
   "PAYMENT_OUTCOME": {
     "UNKNOWN": "La réponse du serveur n'est pas arrivée. Le paiement est peut-être déjà enregistré : appuyez de nouveau sur le bouton (il ne sera pas compté deux fois) ou vérifiez la liste des paiements.",

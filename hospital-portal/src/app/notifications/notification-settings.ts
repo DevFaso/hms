@@ -7,12 +7,17 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   NotificationService,
   NotificationPreferenceUpdate,
+  NotificationPreference,
 } from '../services/notification.service';
 import { ToastService } from '../core/toast.service';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
-import { NOTICE_CHANNELS, NOTICE_TYPES } from '../shared/notification-channel-choices';
+import {
+  NOTICE_CHANNELS,
+  NOTICE_TYPES,
+  changedChannelChoices,
+} from '../shared/notification-channel-choices';
 // QA D2204: only what a sender reads (shared with the desk's view of a patient).
 const NOTIFICATION_TYPES = NOTICE_TYPES;
 const CHANNELS = NOTICE_CHANNELS;
@@ -49,6 +54,11 @@ interface PrefRow {
           <div class="spinner"></div>
           <span>{{ 'NOTIFICATIONS.LOADING_PREFERENCES' | translate }}</span>
         </div>
+      } @else if (loadFailed()) {
+        <p role="alert">{{ 'NOTIFICATIONS.PREFERENCES_LOAD_FAILED' | translate }}</p>
+        <button type="button" class="btn-secondary" (click)="loadPreferences()">
+          {{ 'COMMON.RETRY' | translate }}
+        </button>
       } @else {
         <p class="settings-desc">{{ 'NOTIFICATIONS.SETTINGS_DESC' | translate }}</p>
         <!-- QA r64: account security messages are not a choice. -->
@@ -76,8 +86,9 @@ interface PrefRow {
                           [attr.aria-label]="
                             (row.labelKey | translate) + ' — ' + (channelLabelKey(ch) | translate)
                           "
-                          [(ngModel)]="row.channels[ch]"
-                          (ngModelChange)="dirty.set(true)"
+                          [ngModel]="row.channels[ch]"
+                          (ngModelChange)="toggle(row.notificationType, ch, $event)"
+                          [disabled]="saving()"
                         />
                         <span class="slider"></span>
                       </label>
@@ -234,6 +245,8 @@ export class NotificationSettingsComponent implements OnInit {
 
   channels = CHANNELS;
   loading = signal(true);
+  loadFailed = signal(false);
+  private savedPreferences: NotificationPreference[] = [];
   saving = signal(false);
   dirty = signal(false);
   rows = signal<PrefRow[]>([]);
@@ -247,32 +260,40 @@ export class NotificationSettingsComponent implements OnInit {
     return `NOTIFICATIONS.CHANNEL_${ch}`;
   }
 
-  private loadPreferences(): void {
-    // Build default grid — all enabled
-    const defaultRows: PrefRow[] = NOTIFICATION_TYPES.map((t) => ({
-      notificationType: t,
-      labelKey: `NOTIFICATIONS.TYPE_${t}`,
-      channels: Object.fromEntries(CHANNELS.map((ch) => [ch, true])),
-    }));
-
+  loadPreferences(): void {
+    this.loading.set(true);
+    this.loadFailed.set(false);
     this.notifService.getPreferences().subscribe({
       next: (prefs) => {
-        // Merge saved preferences into the grid
-        for (const p of prefs) {
-          const row = defaultRows.find((r) => r.notificationType === p.notificationType);
-          if (row) row.channels[p.channel] = p.enabled;
-        }
-        this.rows.set(defaultRows);
+        this.applyPreferences(prefs);
         this.loading.set(false);
       },
       error: () => {
-        this.rows.set(defaultRows);
+        this.loadFailed.set(true);
         this.loading.set(false);
       },
     });
   }
 
-  save(): void {
+  private applyPreferences(prefs: NotificationPreference[]): void {
+    const defaultRows: PrefRow[] = NOTIFICATION_TYPES.map((type) => ({
+      notificationType: type,
+      labelKey: `NOTIFICATIONS.TYPE_${type}`,
+      channels: Object.fromEntries(CHANNELS.map((channel) => [channel, true])),
+    }));
+    for (const pref of prefs) {
+      const row = defaultRows.find(
+        (candidate) => candidate.notificationType === pref.notificationType,
+      );
+      if (row && this.channels.some((channel) => channel === pref.channel))
+        row.channels[pref.channel] = pref.enabled;
+    }
+    this.savedPreferences = prefs.map((pref) => ({ ...pref }));
+    this.rows.set(defaultRows);
+    this.dirty.set(false);
+  }
+
+  private currentChoices(): NotificationPreferenceUpdate[] {
     const updates: NotificationPreferenceUpdate[] = [];
     for (const row of this.rows()) {
       for (const ch of this.channels) {
@@ -283,9 +304,33 @@ export class NotificationSettingsComponent implements OnInit {
         });
       }
     }
+    return updates;
+  }
+
+  toggle(type: string, channel: string, enabled: boolean): void {
+    if (this.saving() || this.loading() || this.loadFailed()) return;
+    this.rows.update((rows) =>
+      rows.map((row) =>
+        row.notificationType === type
+          ? { ...row, channels: { ...row.channels, [channel]: enabled } }
+          : row,
+      ),
+    );
+    this.markChanged();
+  }
+
+  markChanged(): void {
+    this.dirty.set(changedChannelChoices(this.currentChoices(), this.savedPreferences).length > 0);
+  }
+
+  save(): void {
+    const updates = this.currentChoices();
+    const changed = changedChannelChoices(updates, this.savedPreferences);
+    if (this.loadFailed() || this.saving() || changed.length === 0) return;
     this.saving.set(true);
-    this.notifService.updatePreferences(updates).subscribe({
-      next: () => {
+    this.notifService.updatePreferences(changed).subscribe({
+      next: (prefs) => {
+        this.applyPreferences(prefs);
         this.saving.set(false);
         this.dirty.set(false);
         this.toast.success(this.translate.instant('NOTIFICATIONS.PREFERENCES_SAVED'));
