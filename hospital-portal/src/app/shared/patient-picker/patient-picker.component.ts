@@ -98,14 +98,15 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
         // across hospitals — the previous /patients?search call was silently
         // unfiltered because the backend never implemented that param.
         switchMap(({ q, revision, iuMode }) => {
-          if (q.length < 2) {
+          const term = q.trim();
+          if (term.length < 2) {
             this.searchLoading.set(false);
             return EMPTY;
           }
           this.searchLoading.set(true);
           this.noMatch.set(false);
           if (iuMode) {
-            const canonical = normalizedNationalUniqueId(q);
+            const canonical = normalizedNationalUniqueId(term);
             const exact =
               canonical?.length === 12
                 ? this.patientService
@@ -117,7 +118,7 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
             );
           }
           // QA D1274: a birth date or an e-mail is searched by that field too.
-          const scoped = searchPatientsByTerm(this.patientService, q, {
+          const scoped = searchPatientsByTerm(this.patientService, term, {
             hospitalId: this.hospitalId ?? undefined,
             // QA D1239: more than the list shows, so the ranking below
             // has the patient whose name starts with the query to offer.
@@ -128,9 +129,9 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
           }).pipe(catchError(() => of([] as PatientResponse[])));
           // Cross-hospital lookup fires only for EXACT identifiers (phone/email/
           // MRN) — free-text name fragments must never leave the hospital scope.
-          const exact = this.looksLikeIdentifier(q)
+          const exact = this.looksLikeIdentifier(term)
             ? this.patientService
-                .lookup({ identifier: q, hospitalId: this.hospitalId ?? undefined })
+                .lookup({ identifier: term, hospitalId: this.hospitalId ?? undefined })
                 .pipe(catchError(() => of([] as PatientResponse[])))
             : of([] as PatientResponse[]);
           return forkJoin([scoped, exact]).pipe(
@@ -161,7 +162,8 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
         const items = rankPeopleByName(merged, this.query()).slice(0, SHOWN);
         this.suggestions.set(items);
         this.dropdownOpen.set(items.length > 0);
-        this.noMatch.set(items.length === 0);
+        // Nothing typed is not "no match".
+        this.noMatch.set(items.length === 0 && this.query().trim().length > 0);
         this.searchLoading.set(false);
       });
   }
@@ -194,7 +196,7 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
     this.suggestions.set([]);
     this.dropdownOpen.set(false);
     this.noMatch.set(false);
-    this.searchLoading.set(q.length >= 2);
+    this.searchLoading.set(q.trim().length >= 2);
     this.search$.next({ q, revision, iuMode: this.nationalUniqueIdMode() });
   }
 

@@ -565,8 +565,12 @@ export class PatientService {
   list(hospitalId?: string, search?: string): Observable<PatientResponse[]> {
     let params = new HttpParams();
     if (hospitalId) params = params.set('hospitalId', hospitalId);
-    if (search) params = params.set('search', search);
-    const listed = this.http.get<PatientResponse[]>('/patients', { params });
+    // QA D3750: the typed term (a name, a phone number, an MRN…) is posted in the body, never put
+    // in the URL; the hospital scope stays in the query. Without a term it is the plain list.
+    const term = search?.trim();
+    const listed = term
+      ? this.http.post<PatientResponse[]>('/patients/term-search', { search: term }, { params })
+      : this.http.get<PatientResponse[]>('/patients', { params });
     // QA D1274: a typed birth date or e-mail is also asked of the search that
     // answers it by that field (the 11 hand-written typeaheads call list()).
     const byField = search ? this.fieldMatches(search, hospitalId) : null;

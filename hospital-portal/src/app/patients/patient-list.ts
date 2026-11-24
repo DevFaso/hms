@@ -23,6 +23,7 @@ import { TranslateModule } from '@ngx-translate/core';
 
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { DashPipe } from '../shared/pipes/dash.pipe';
+import { takePatientSearch } from '../shared/patient-search-handoff';
 import {
   CardSortChange,
   CardSortColumn,
@@ -214,6 +215,13 @@ export class PatientListComponent implements OnInit, OnDestroy {
       this.lookUpNationalUniqueId();
       this.applyFilter();
     });
+
+    // QA D3750: a search typed in the dashboard's header arrives in the navigation state.
+    const carried = takePatientSearch();
+    if (carried) {
+      this.searchTerm = carried;
+      this.lookUpNationalUniqueId();
+    }
 
     this.loadPatients();
     this.loadHospitals();

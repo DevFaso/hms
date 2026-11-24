@@ -806,8 +806,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             return assignmentRepository.findAll(pageable).map(this::toDtoWithLinks);
         }
 
-        log.info("📄 Fetching assignments with filters hospitalId={}, active={}, search='{}', assignmentCode='{}' (page {}, size {})",
-            hospitalId, active, search, assignmentCode, pageable.getPageNumber(), pageable.getPageSize());
+        // The typed term and the code are not logged: the term often names a person.
+        log.info("📄 Fetching assignments with filters hospitalId={}, active={}, term={}, assignmentCode={} (page {}, size {})",
+            hospitalId, active, StringUtils.hasText(search) ? "given" : "none",
+            StringUtils.hasText(assignmentCode) ? "given" : "none", pageable.getPageNumber(), pageable.getPageSize());
         return assignmentRepository.findAll(specification, pageable).map(this::toDtoWithLinks);
     }
 
