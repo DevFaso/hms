@@ -11947,6 +11947,7 @@
     "OTHER_REUSED": "Seguro retomado para este hospital, sin verificar. Verifíquelo y luego elija su plan.",
     "OTHER_REUSE_ERROR": "No se pudo retomar el seguro",
     "OTHER_NO_AGREEMENT": "Ningún convenio con esta aseguradora en este hospital. Retomarlo solo registra el seguro: no se factura ninguna parte a la aseguradora hasta que el hospital tenga su propio convenio.",
+    "PLAN_NOT_RECORDED": "Plan no indicado",
     "OTHER_DECLARED": "Declarado en {{hospital}} el {{date}} — por verificar",
     "OTHER_DECLARED_NO_DATE": "Declarado en {{hospital}} — por verificar",
     "OTHER_CARD_HINT": "La tarjeta de seguro que subió el paciente, si la hay, está en la pestaña «Documentos».",
