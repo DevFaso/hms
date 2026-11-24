@@ -66,7 +66,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  *
  * <p>Callers mapped before the rules were chosen:
  * <ul>
- *   <li>{@code GET /users}: staff-list's account picker; {@code GET /users/search}:
+ *   <li>{@code GET /users}: staff-list's account picker; {@code POST /users/search}:
  *       user-list and the super-admin emergency MFA-reset picker. Both are the
  *       administrators' (QA D790); chat's new-conversation picker reads
  *       {@code GET /users/chat-recipients}, open to every staff member;</li>
@@ -210,7 +210,7 @@ class UserEndpointAuthorizationIT extends BaseIT {
     void patientCannotEnumerateAccounts() throws Exception {
         for (String patient : new String[] {hms(patientA, "ROLE_PATIENT"), keycloakPatient()}) {
             assertThat(status(get("/users"), patient, null)).isEqualTo(403);
-            assertThat(status(get("/users/search").param("name", "a"), patient, null)).isEqualTo(403);
+            assertThat(status(userSearch("name", "a"), patient, null)).isEqualTo(403);
             assertThat(status(get("/users/chat-recipients"), patient, null)).isEqualTo(403);
         }
     }
@@ -365,7 +365,7 @@ class UserEndpointAuthorizationIT extends BaseIT {
         String sa = hms(superAdmin, "ROLE_SUPER_ADMIN");
 
         assertThat(status(get("/users").param("onlyDeleted", "true"), sa, null)).isEqualTo(200);
-        assertThat(status(get("/users/search").param("name", "doc"), sa, null)).isEqualTo(200);
+        assertThat(status(userSearch("name", "doc"), sa, null)).isEqualTo(200);
         assertThat(status(get("/users/" + doctorB.getId()), sa, null)).isEqualTo(200);
         assertThat(status(put("/users/" + doctorB.getId()), sa, Map.of("password", "Sa-Reset-Pass-1")))
             .isEqualTo(200);
@@ -389,14 +389,14 @@ class UserEndpointAuthorizationIT extends BaseIT {
         for (Map.Entry<String, String> caller : staff.entrySet()) {
             assertThat(status(get("/users").param("size", "100"), caller.getValue(), null))
                 .as(caller.getKey() + " GET /users").isEqualTo(403);
-            assertThat(status(get("/users/search").param("name", "a"), caller.getValue(), null))
-                .as(caller.getKey() + " GET /users/search").isEqualTo(403);
+            assertThat(status(userSearch("name", "a"), caller.getValue(), null))
+                .as(caller.getKey() + " POST /users/search").isEqualTo(403);
             assertThat(status(get("/users/chat-recipients"), caller.getValue(), null))
                 .as(caller.getKey() + " GET /users/chat-recipients").isEqualTo(200);
         }
         String admin = hms(adminA, "ROLE_HOSPITAL_ADMIN");
         assertThat(status(get("/users").param("size", "500"), admin, null)).isEqualTo(200);
-        assertThat(status(get("/users/search").param("name", "a"), admin, null)).isEqualTo(200);
+        assertThat(status(userSearch("name", "a"), admin, null)).isEqualTo(200);
 
         // The picker lists A's colleagues by id, name and role: never the patient,
         // never B's doctor, never a contact detail.
@@ -592,7 +592,7 @@ class UserEndpointAuthorizationIT extends BaseIT {
         // QA D790: a nurse no longer reads the directory at all (D430 kept her to colleagues).
         String nurse = hms(nurseA, "ROLE_NURSE");
         assertThat(status(get("/users").param("size", "100"), nurse, null)).isEqualTo(403);
-        assertThat(status(get("/users/search").param("email", "users-gate.test"), nurse, null)).isEqualTo(403);
+        assertThat(status(userSearch("email", "users-gate.test"), nurse, null)).isEqualTo(403);
 
         String admin = hms(adminA, "ROLE_HOSPITAL_ADMIN");
         var all = page(get("/users").param("size", "100"), admin);
@@ -608,14 +608,14 @@ class UserEndpointAuthorizationIT extends BaseIT {
 
         // Search: B's doctor is not found by name, email or role; A's accounts are.
         assertThat(List.of(
-                total(page(get("/users/search").param("name", doctorB.getUsername()), admin)),
-                total(page(get("/users/search").param("email", doctorB.getEmail()), admin)),
-                total(page(get("/users/search").param("name", superAdmin.getUsername()), admin))))
+                total(page(userSearch("name", doctorB.getUsername()), admin)),
+                total(page(userSearch("email", doctorB.getEmail()), admin)),
+                total(page(userSearch("name", superAdmin.getUsername()), admin))))
             .containsOnly(0L);
-        var doctors = page(get("/users/search").param("role", "ROLE_DOCTOR").param("size", "1"), admin);
+        var doctors = page(userSearch("role", "ROLE_DOCTOR").param("size", "1"), admin);
         assertThat(List.<Object>of(total(doctors), ids(doctors)))
             .containsExactly(1L, List.of(dualAB.getId()));
-        var byDomain = page(get("/users/search").param("email", "users-gate.test").param("size", "2"), admin);
+        var byDomain = page(userSearch("email", "users-gate.test").param("size", "2"), admin);
         assertThat(total(byDomain)).isEqualTo(atA.size());
         assertThat(ids(byDomain)).hasSize(2);
 
@@ -635,22 +635,22 @@ class UserEndpointAuthorizationIT extends BaseIT {
         assertThat(status(delete("/users/" + nurseA.getId()), sa, null)).isEqualTo(200);
         assertThat(status(delete("/users/" + doctorB.getId()), sa, null)).isEqualTo(200);
         for (boolean includeDeleted : List.of(false, true)) {
-            var hidden = page(get(endpoint).param("onlyDeleted", "true")
+            var hidden = page(directory(endpoint).param("onlyDeleted", "true")
                 .param("includeDeleted", Boolean.toString(includeDeleted)).param("size", "100"), admin);
             assertThat(ids(hidden)).isEmpty();
             assertThat(total(hidden)).isZero();
-            var deleted = page(get(endpoint).param("onlyDeleted", "true")
+            var deleted = page(directory(endpoint).param("onlyDeleted", "true")
                 .param("includeDeleted", Boolean.toString(includeDeleted)).param("size", "100"), sa);
             assertThat(ids(deleted)).contains(nurseA.getId(), doctorB.getId());
             deleted.get("content").forEach(row -> assertThat(row.path("deleted").asBoolean()).isTrue());
         }
-        var live = page(get(endpoint).param("includeDeleted", "true").param("size", "100"), admin);
+        var live = page(directory(endpoint).param("includeDeleted", "true").param("size", "100"), admin);
         assertThat(ids(live)).doesNotContain(nurseA.getId(), doctorB.getId());
         live.get("content").forEach(row -> assertThat(row.path("deleted").asBoolean()).isFalse());
 
         assertThat(status(patch("/users/" + nurseA.getId() + "/restore"), sa, null)).isEqualTo(204);
         assertThat(userRepository.findById(nurseA.getId()).orElseThrow().isDeleted()).isFalse();
-        var afterRestore = page(get(endpoint).param("onlyDeleted", "true").param("includeDeleted", "true")
+        var afterRestore = page(directory(endpoint).param("onlyDeleted", "true").param("includeDeleted", "true")
             .param("size", "100"), sa);
         assertThat(ids(afterRestore)).doesNotContain(nurseA.getId()).contains(doctorB.getId());
     }
@@ -722,10 +722,10 @@ class UserEndpointAuthorizationIT extends BaseIT {
     @DisplayName("the super-admin's directory is every account, on list and search")
     void superAdminSeesEveryAccount() throws Exception {
         String sa = hms(superAdmin, "ROLE_SUPER_ADMIN");
-        var byDomain = page(get("/users/search").param("email", "users-gate.test").param("size", "100"), sa);
+        var byDomain = page(userSearch("email", "users-gate.test").param("size", "100"), sa);
         assertThat(ids(byDomain)).contains(superAdmin.getId(), adminA.getId(), receptionistA.getId(),
             nurseA.getId(), doctorB.getId(), patientA.getId());
-        assertThat(ids(page(get("/users/search").param("name", doctorB.getUsername()), sa)))
+        assertThat(ids(page(userSearch("name", doctorB.getUsername()), sa)))
             .containsExactly(doctorB.getId());
     }
 
@@ -761,14 +761,14 @@ class UserEndpointAuthorizationIT extends BaseIT {
         String adminOfA = hms(adminA, "ROLE_HOSPITAL_ADMIN");
 
         for (String role : new String[] {"ROLE_HOSPITAL_ADMIN", "HOSPITAL_ADMIN"}) {
-            var admins = page(get("/users/search").param("role", role).param("size", "100"), adminOfA);
+            var admins = page(userSearch("role", role).param("size", "100"), adminOfA);
             assertThat(ids(admins)).as(role).containsExactly(adminA.getId());
             assertThat(total(admins)).as(role).isEqualTo(1);
         }
-        assertThat(ids(page(get("/users/search").param("role", "ROLE_RECEPTIONIST").param("size", "100"), adminOfA)))
+        assertThat(ids(page(userSearch("role", "ROLE_RECEPTIONIST").param("size", "100"), adminOfA)))
             .containsExactlyInAnyOrder(receptionistA.getId(), x.getId());
         // The super-admin, unscoped, sees X's admin role at B.
-        assertThat(ids(page(get("/users/search").param("role", "ROLE_HOSPITAL_ADMIN").param("size", "500"),
+        assertThat(ids(page(userSearch("role", "ROLE_HOSPITAL_ADMIN").param("size", "500"),
             hms(superAdmin, "ROLE_SUPER_ADMIN")))).contains(x.getId(), adminA.getId());
     }
 
@@ -781,13 +781,13 @@ class UserEndpointAuthorizationIT extends BaseIT {
         String adminOfA = hms(adminA, "ROLE_HOSPITAL_ADMIN");
 
         assertThat(ids(page(get("/users").param("size", "100"), adminOfA))).contains(pendingNurse.getId());
-        var nurses = page(get("/users/search").param("role", "ROLE_NURSE").param("size", "100"), adminOfA);
+        var nurses = page(userSearch("role", "ROLE_NURSE").param("size", "100"), adminOfA);
         assertThat(ids(nurses)).containsExactlyInAnyOrder(nurseA.getId(), pendingNurse.getId());
         assertThat(total(nurses)).isEqualTo(2);
         // A nurse assigned only at B, pending or not, stays out.
         User pendingAtB = account("pendB", "ROLE_NURSE", hospitalB);
         deactivateAssignments(pendingAtB);
-        assertThat(ids(page(get("/users/search").param("role", "NURSE").param("size", "100"), adminOfA)))
+        assertThat(ids(page(userSearch("role", "NURSE").param("size", "100"), adminOfA)))
             .doesNotContain(pendingAtB.getId());
     }
 
@@ -1038,7 +1038,9 @@ class UserEndpointAuthorizationIT extends BaseIT {
     void organisationAdminReadsNoPatientOrClinicalData() throws Exception {
         String token = organisationAdmin();
 
-        for (String path : List.of("/patients", "/patients/search", "/audit-logs", "/patient-tracker",
+        // The patient picker's search is a POST (its identifiers travel in the body).
+        assertThat(status(post("/patients/search"), token, java.util.Map.of("name", "a"))).isEqualTo(403);
+        for (String path : List.of("/patients", "/audit-logs", "/patient-tracker",
             "/dashboard/hospital-admin/summary", "/dashboard/lab-ops/summary", "/reception/queue",
             "/imaging/orders")) {
             assertThat(readOnly(get(path), token).getResponse().getStatus()).as(path).isEqualTo(403);
@@ -1293,6 +1295,21 @@ class UserEndpointAuthorizationIT extends BaseIT {
             request = request.contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(body));
         }
         return mockMvc.perform(request).andReturn();
+    }
+
+    /** POST /users/search: the name, the e-mail and the role travel in the body, never in the URL. */
+    private MockHttpServletRequestBuilder userSearch(String... filters) {
+        java.util.Map<String, String> body = new java.util.LinkedHashMap<>();
+        for (int i = 0; i < filters.length; i += 2) {
+            body.put(filters[i], filters[i + 1]);
+        }
+        return post("/users/search").contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(body));
+    }
+
+    /** The directory's two entry points: GET /users, POST /users/search with no filter. */
+    private MockHttpServletRequestBuilder directory(String endpoint) {
+        return "/users/search".equals(endpoint) ? userSearch() : get(endpoint);
     }
 
     private int status(MockHttpServletRequestBuilder request, String bearer, Object body) throws Exception {

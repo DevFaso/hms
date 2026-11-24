@@ -11,7 +11,7 @@ import java.util.UUID;
 /**
  * Privacy-minimal projection of an existing patient surfaced at registration
  * time when the typed email/phone exactly matches a record from ANY hospital
- * ({@code GET /patients/registration-match}).
+ * ({@code POST /patients/registration-match}).
  * <p>
  * Deliberately excludes address and every clinical field: the receptionist only
  * needs enough to confirm identity with the patient standing at the desk and

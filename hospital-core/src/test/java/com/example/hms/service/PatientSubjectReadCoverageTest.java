@@ -110,7 +110,8 @@ class PatientSubjectReadCoverageTest {
         stale.addAll(OWNED_ELSEWHERE.keySet());
         stale.removeAll(found);
         assertThat(stale)
-            .as("listed but no longer a GET that admits ROLE_PATIENT by path variable: remove or rename")
+            .as("listed but no longer a GET that admits ROLE_PATIENT by path variable (or a read by identifier"
+                + " body): remove or rename")
             .isEmpty();
 
         Set<String> both = new TreeSet<>(guarded);
@@ -124,7 +125,7 @@ class PatientSubjectReadCoverageTest {
             PreAuthorize classRule = AnnotatedElementUtils.findMergedAnnotation(controller, PreAuthorize.class);
             for (Method method : controller.getDeclaredMethods()) {
                 RequestMapping mapping = AnnotatedElementUtils.findMergedAnnotation(method, RequestMapping.class);
-                if (mapping == null || !servesGet(mapping)) {
+                if (mapping == null || !(servesGet(mapping) || readsByIdentifierBody(method))) {
                     continue;
                 }
                 PreAuthorize rule = AnnotatedElementUtils.findMergedAnnotation(method, PreAuthorize.class);
@@ -134,7 +135,8 @@ class PatientSubjectReadCoverageTest {
                 if (rule == null || !ADMITS_PATIENT.matcher(rule.value()).find()) {
                     continue;
                 }
-                if (Arrays.stream(method.getParameters()).anyMatch(PatientSubjectReadCoverageTest::isPathVariable)) {
+                if (readsByIdentifierBody(method)
+                        || Arrays.stream(method.getParameters()).anyMatch(PatientSubjectReadCoverageTest::isPathVariable)) {
                     found.add(controller.getSimpleName() + "#" + method.getName());
                 }
             }
@@ -144,6 +146,19 @@ class PatientSubjectReadCoverageTest {
 
     private static boolean servesGet(RequestMapping mapping) {
         return mapping.method().length == 0 || Arrays.asList(mapping.method()).contains(RequestMethod.GET);
+    }
+
+    /**
+     * A read whose patient identifier moved out of the URL into the body ({@code identifiersearch}
+     * request bodies under a {@code @ReadsOnly} POST): the same shape as a path variable, so the
+     * same ratchet.
+     */
+    private static boolean readsByIdentifierBody(Method method) {
+        return method.isAnnotationPresent(com.example.hms.security.ReadsOnly.class)
+            && Arrays.stream(method.getParameters()).anyMatch(parameter ->
+                AnnotatedElementUtils.hasAnnotation(parameter, org.springframework.web.bind.annotation.RequestBody.class)
+                    && parameter.getType().getPackageName()
+                        .equals("com.example.hms.payload.dto.identifiersearch"));
     }
 
     private static boolean isPathVariable(Parameter parameter) {

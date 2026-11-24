@@ -187,6 +187,16 @@ class ActivationSmsD1123Test {
         assertThat(smsTo("+22625000000")).contains("nouveau compte").doesNotContain("NURSE");
     }
 
+    @Test
+    void k4_theRegistrarAndHospitalCopiesNameAPatientByFirstNameAndInitialOnly() {
+        LocaleContextHolder.setLocale(Locale.FRENCH);
+
+        service.sendNotifications(assignment.getId());
+
+        assertThat(smsTo("+22671111111")).contains("Assita N.").doesNotContain("Nana");
+        assertThat(smsTo("+22625000000")).contains("Assita N.").doesNotContain("Nana");
+    }
+
     // ---- "I have a code": activation by phone + code, no e-mail ----
 
     @Test

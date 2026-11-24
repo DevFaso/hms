@@ -1,4 +1,4 @@
-import { changedChannelChoices } from './notification-channel-choices';
+import { changedChannelChoices, consentRecorderKey } from './notification-channel-choices';
 
 describe('notification choice deltas', () => {
   it('does not resend unchanged switches from a stale matrix', () => {
@@ -18,12 +18,20 @@ describe('notification choice deltas', () => {
         notificationType: 'LAB_RESULT',
         channel: 'SMS',
         enabled: false,
-        recordedByUserId: 'server-author',
+        recordedByKind: 'STAFF',
+        recordedByName: 'server-author',
       },
     ];
     expect(changedChannelChoices(current, [])).toEqual([
       { notificationType: 'LAB_RESULT', channel: 'SMS', enabled: false },
     ]);
     expect(changedChannelChoices(current, current)).toEqual([]);
+  });
+
+  it('QA r73 D3700: a recorder the server did not name gets a neutral label, never an id', () => {
+    expect(consentRecorderKey('OTHER_FACILITY')).toBe('PATIENT_CHANNELS.RECORDER_OTHER_FACILITY');
+    expect(consentRecorderKey('PATIENT')).toBe('PATIENT_CHANNELS.RECORDER_PATIENT');
+    expect(consentRecorderKey('STAFF')).toBeNull();
+    expect(consentRecorderKey(null)).toBeNull();
   });
 });

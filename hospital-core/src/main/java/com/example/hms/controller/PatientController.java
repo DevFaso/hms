@@ -1,5 +1,8 @@
 package com.example.hms.controller;
 
+import com.example.hms.payload.dto.identifiersearch.PatientLookupRequestDTO;
+import com.example.hms.payload.dto.identifiersearch.PatientSearchRequestDTO;
+import com.example.hms.payload.dto.identifiersearch.RegistrationMatchRequestDTO;
 import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
@@ -379,14 +382,13 @@ public class PatientController {
     @ApiResponse(responseCode = "200", description = "Patients found",
         content = @Content(mediaType = "application/json",
             schema = @Schema(implementation = PatientResponseDTO.class)))
-    @GetMapping("/search")
+    // The identifiers travel in the body, never in the URL (proxy logs, browser
+    // history, front-end tracing). Paging and the hospital scope identify no one.
+    @com.example.hms.security.ReadsOnly("a patient search, under POST so its identifiers stay out of the URL")
+    @PostMapping("/search")
     @PreAuthorize(PATIENT_PICKER_ROLES)
     public ResponseEntity<List<PatientResponseDTO>> searchPatients(
-        @RequestParam(required = false) String mrn,
-        @RequestParam(required = false) String name,
-        @RequestParam(required = false) String dob,
-        @RequestParam(required = false) String phone,
-        @RequestParam(required = false) String email,
+        @RequestBody(required = false) PatientSearchRequestDTO body,
         @RequestParam(required = false) UUID hospitalId,
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "10") int size,
@@ -400,12 +402,13 @@ public class PatientController {
         // QA D1019 / D1274: a number, a birth date or an e-mail typed into the
         // name box is searched as such by the service (each only when its own
         // filter is not given); dob accepts yyyy-mm-dd, dd/mm/yyyy, dd-mm-yyyy.
+        PatientSearchRequestDTO terms = body != null ? body : new PatientSearchRequestDTO(null, null, null, null, null);
         PatientSearchCriteria criteria = PatientSearchCriteria.builder()
-            .mrn(mrn)
-            .name(name)
-            .dateOfBirth(dob)
-            .phone(phone)
-            .email(email)
+            .mrn(terms.mrn())
+            .name(terms.name())
+            .dateOfBirth(terms.dob())
+            .phone(terms.phone())
+            .email(terms.email())
             .hospitalId(resolvedHospitalId)
             .active(active)
             .includeInactive(includeInactive)
@@ -424,25 +427,25 @@ public class PatientController {
     @ApiResponse(responseCode = "200", description = "Lookup completed",
         content = @Content(mediaType = "application/json",
             schema = @Schema(implementation = PatientResponseDTO.class)))
-    @GetMapping("/lookup")
+    // The identifiers travel in the body, never in the URL.
+    @com.example.hms.security.ReadsOnly("a patient lookup, under POST so its identifiers stay out of the URL")
+    @PostMapping("/lookup")
     @PreAuthorize(PATIENT_PICKER_ROLES)
     public ResponseEntity<List<PatientResponseDTO>> lookupPatients(
-        @RequestParam(required = false) String identifier,
-        @RequestParam(required = false) String email,
-        @RequestParam(required = false) String phone,
-        @RequestParam(required = false) String username,
-        @RequestParam(name = "mrn", required = false) String mrn,
-        @RequestParam(name = "mri", required = false) String legacyMri, // legacy alias
+        @RequestBody(required = false) PatientLookupRequestDTO body,
         @RequestParam(required = false) UUID hospitalId,
         @RequestHeader(name = "Accept-Language", required = false) String lang,
         Authentication auth
     ) {
         authUtils.requireAuth(auth);
         Locale locale = parseLocale(lang);
-        String effectiveMrn = (mrn != null && !mrn.isBlank()) ? mrn : legacyMri;
+        PatientLookupRequestDTO terms = body != null ? body
+            : new PatientLookupRequestDTO(null, null, null, null, null, null);
+        // "mri" is the legacy name of "mrn", read only when "mrn" is blank.
+        String effectiveMrn = (terms.mrn() != null && !terms.mrn().isBlank()) ? terms.mrn() : terms.mri();
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
-        List<PatientResponseDTO> list =
-            patientService.lookupPatients(identifier, email, phone, username, effectiveMrn, resolvedHospitalId, locale);
+        List<PatientResponseDTO> list = patientService.lookupPatients(terms.identifier(), terms.email(),
+            terms.phone(), terms.username(), effectiveMrn, resolvedHospitalId, locale);
         return ResponseEntity.ok(list);
     }
 
@@ -458,27 +461,26 @@ public class PatientController {
     @ApiResponse(responseCode = "200", description = "Match check completed",
         content = @Content(mediaType = "application/json",
             schema = @Schema(implementation = RegistrationMatchDTO.class)))
-    @GetMapping("/registration-match")
+    // What the form has typed travels in the body, never in the URL.
+    @com.example.hms.security.ReadsOnly("the registration form's duplicate check, under POST so its identifiers"
+        + " stay out of the URL")
+    @PostMapping("/registration-match")
     // Every role that can register a patient (POST /patients) must be able to run
     // the anti-duplicate match check, or the feature silently never fires for them.
     @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_HOSPITAL_ADMIN','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
     public ResponseEntity<List<RegistrationMatchDTO>> registrationMatch(
-        @RequestParam(required = false) String email,
-        @RequestParam(required = false) String phone,
-        @RequestParam(required = false) UUID hospitalId,
         // QA D1061 / D1064: the form's name and date of birth, to tell a shared
         // contact from the same person and to find that person by identity.
-        @RequestParam(required = false) String firstName,
-        @RequestParam(required = false) String lastName,
-        @RequestParam(required = false)
-        @org.springframework.format.annotation.DateTimeFormat(
-            iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate dateOfBirth,
+        @RequestBody(required = false) RegistrationMatchRequestDTO body,
+        @RequestParam(required = false) UUID hospitalId,
         Authentication auth
     ) {
         authUtils.requireAuth(auth);
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
-        return ResponseEntity.ok(patientService.findRegistrationMatches(email, phone, firstName, lastName,
-            dateOfBirth, resolvedHospitalId));
+        RegistrationMatchRequestDTO terms = body != null ? body
+            : new RegistrationMatchRequestDTO(null, null, null, null, null);
+        return ResponseEntity.ok(patientService.findRegistrationMatches(terms.email(), terms.phone(),
+            terms.firstName(), terms.lastName(), terms.dateOfBirth(), resolvedHospitalId));
     }
 
     @WriteAudited(skip = true, reason = "a read under POST; the service records the access itself")

@@ -487,8 +487,11 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         if (candidates.isEmpty()) {
             return List.of();
         }
-        Map<UUID, PayerCatalogueService.PlanLabel> plans = payerCatalogueService.labelsOf(
-            candidates.stream().map(PatientInsurance::getPayerPlanId).filter(Objects::nonNull).toList());
+        // QA D3601 (r72): each plan is read at its own row's hospital; labelsOf is scoped to this hospital.
+        Map<UUID, UUID> hospitalByPlan = new HashMap<>();
+        candidates.stream().filter(row -> row.getPayerPlanId() != null)
+            .forEach(row -> hospitalByPlan.putIfAbsent(row.getPayerPlanId(), hospitalOf(row)));
+        Map<UUID, PayerCatalogueService.PlanLabel> plans = payerCatalogueService.labelsAtHospitals(hospitalByPlan);
         InsurerNames names = new InsurerNames(hospitalId, plans);
         List<PatientInsurance> shown = onePerPolicyAndHospital(candidates.stream()
             .filter(row -> here.stream().noneMatch(own -> samePolicy(own, row, names)))
@@ -672,19 +675,20 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
                 // A name; with no code it may still be a code of the holder's catalogue, typed as the name.
                 return code == null ? catalogueName(holder, name).orElse(name) : name;
             }
-            PayerCatalogueService.PlanLabel plan = planOf(row.getPayerPlanId());
+            PayerCatalogueService.PlanLabel plan = planOf(row.getPayerPlanId(), holder);
             if (plan != null && trimToNull(plan.payerName()) != null) {
                 return plan.payerName().trim();
             }
             return code == null ? null : catalogueName(holder, code).orElse(null);
         }
 
-        private PayerCatalogueService.PlanLabel planOf(UUID planId) {
+        /** The plan's label, read at the hospital that holds the row (QA D3601: never through the acting scope). */
+        private PayerCatalogueService.PlanLabel planOf(UUID planId, UUID holder) {
             if (planId == null) {
                 return null;
             }
             if (!plans.containsKey(planId)) {
-                plans.put(planId, payerCatalogueService.labelOf(planId));
+                plans.put(planId, payerCatalogueService.labelsAtHospitals(Map.of(planId, holder)).get(planId));
             }
             return plans.get(planId);
         }

@@ -76,7 +76,7 @@ class PatientSubjectReaderRolesMirrorTest {
             Arguments.of(AppointmentController.class, "getAppointmentsByPatientId", "/patients/{patientId}",
                 PatientSubjectReaderRoles.APPOINTMENT_READS),
             Arguments.of(AppointmentController.class, "getAppointmentsByPatientUsername",
-                "/patients/username/{patientUsername}", PatientSubjectReaderRoles.APPOINTMENT_READS));
+                "/patients/by-username", PatientSubjectReaderRoles.APPOINTMENT_READS));
     }
 
     @ParameterizedTest(name = "{0}.{1} ({2})")
@@ -86,9 +86,14 @@ class PatientSubjectReaderRolesMirrorTest {
 
         // Pinned to its route as well as its name, so a rename that moved the
         // name onto a different endpoint cannot pass silently.
-        GetMapping mapping = method.getAnnotation(GetMapping.class);
-        assertThat(mapping).as("%s must still be a GET handler", handler).isNotNull();
-        assertThat(mapping.value()).as("%s must still serve %s", handler, path).containsExactly(path);
+        // A GET, or a POST that only reads because its identifier travels in the body.
+        GetMapping get = method.getAnnotation(GetMapping.class);
+        org.springframework.web.bind.annotation.PostMapping post =
+            method.getAnnotation(org.springframework.web.bind.annotation.PostMapping.class);
+        assertThat(get != null || (post != null && method.isAnnotationPresent(com.example.hms.security.ReadsOnly.class)))
+            .as("%s must still be a read handler", handler).isTrue();
+        assertThat(get != null ? get.value() : post.value()).as("%s must still serve %s", handler, path)
+            .containsExactly(path);
 
         PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
         assertThat(preAuthorize).as("%s must still carry its own annotation", handler).isNotNull();

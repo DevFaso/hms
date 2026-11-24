@@ -73,18 +73,19 @@ public class PatientRecordPdfService {
     private final MessageSource messageSource;
 
     public byte[] render(UUID patientId) {
-        return render(patientId, null);
+        return render(patientId, null, null);
     }
 
-    /** One mandatory request-linked disclosure event for an approved ROI download. */
-    public byte[] renderForRoi(UUID patientId, UUID requestId) {
-        return render(patientId, java.util.Objects.requireNonNull(requestId, "requestId"));
+    /** Retrieval is audited durably; fulfilment remains the single accounted disclosure. */
+    public byte[] renderForRoi(com.example.hms.service.roi.RoiRequestService.ApprovedCopy copy) {
+        java.util.Objects.requireNonNull(copy, "copy");
+        return render(copy.patientId(), copy.requestId(), copy.hospitalId());
     }
 
-    private byte[] render(UUID patientId, UUID requestId) {
+    private byte[] render(UUID patientId, UUID requestId, UUID approvedHospitalId) {
         PdfLabels labels = PdfLabels.ofRequest(messageSource);
         UUID hospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
-        if (hospitalId == null) {
+        if (hospitalId == null || (requestId != null && !hospitalId.equals(approvedHospitalId))) {
             throw new AccessDeniedException(
                 "A patient record download requires an active hospital scope; supply X-Hospital-Id or scope the session.");
         }
@@ -103,7 +104,7 @@ public class PatientRecordPdfService {
             ? chartReviewService.getCompleteChartReview(patientId, hospitalId)
             : chartReviewService.getHospitalReleaseChart(patientId, hospitalId);
 
-        byte[] pdf = write(storyboard, chart, requestId == null ? patient.getAllergies() : null, labels);
+        byte[] pdf = write(storyboard, chart, requestId == null ? patient.getAllergies() : null, labels, requestId != null);
         emitAudit(patient, hospitalId, chart, requestId);
         return pdf;
     }
@@ -111,8 +112,14 @@ public class PatientRecordPdfService {
     // ---------------------------------------------------------------- layout
 
     static byte[] write(PatientStoryboardDTO storyboard, ChartReviewDTO chart, String allergySummary, PdfLabels t) {
-        try (Pages pages = new Pages(t)) {
+        return write(storyboard, chart, allergySummary, t, false);
+    }
+
+    static byte[] write(PatientStoryboardDTO storyboard, ChartReviewDTO chart, String allergySummary,
+                        PdfLabels t, boolean release) {
+        try (Pages pages = new Pages(t, release)) {
             writeIdentity(pages, storyboard, t);
+            if (release) pages.wrapped(t.get("pdf.record.releaseScope"));
             writeStoryboard(pages, storyboard, allergySummary, t);
             writeChart(pages, chart, t);
             int held = storyboard.getRestrictedRows() == null ? 0 : storyboard.getRestrictedRows().size();
@@ -172,7 +179,7 @@ public class PatientRecordPdfService {
         pages.heading(t.get("pdf.record.section.activeEncounter"));
         PatientStoryboardDTO.ActiveEncounterDTO enc = storyboard.getActiveEncounter();
         if (enc == null) {
-            pages.text(t.get("pdf.record.encounter.none"));
+            pages.none(t.get("pdf.record.encounter.none"));
         } else {
             pages.text(join(SEPARATOR, label(t, enc.getEncounterType()), label(t, enc.getStatus()), t.fmt(enc.getEncounterDate()),
                 enc.getDepartmentName(), enc.getStaffFullName(), enc.getRoomAssignment()));
@@ -185,7 +192,7 @@ public class PatientRecordPdfService {
         PatientStoryboardDTO.CodeStatusDTO code = storyboard.getCodeStatus();
         boolean hasDirectives = code != null && code.getDirectives() != null && !code.getDirectives().isEmpty();
         if (code == null || (code.getStatus() == null && !hasDirectives)) {
-            pages.text(t.get("pdf.record.codeStatus.none"));
+            pages.none(t.get("pdf.record.codeStatus.none"));
         } else {
             if (code.getStatus() != null) pages.text(label(t, code.getStatus()));
             pages.rows(code.getDirectives(), d -> join(SEPARATOR, label(t, d.getDirectiveType()), label(t, d.getStatus()),
@@ -278,14 +285,14 @@ public class PatientRecordPdfService {
             int entries = size(chart.getEncounters()) + size(chart.getNotes()) + size(chart.getResults())
                 + size(chart.getMedications()) + size(chart.getImaging()) + size(chart.getProcedures());
             var persisted = auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                .eventType(AuditEventType.PATIENT_EXPORT)
+                .eventType(requestId == null ? AuditEventType.PATIENT_EXPORT : AuditEventType.DATA_ACCESS)
                 .status(AuditStatus.SUCCESS)
                 .entityType(requestId == null ? AUDIT_ENTITY_TYPE : "ROI_REQUEST")
                 .hospitalId(hospitalId) // QA D533: anchored at the exporting hospital
                 .userId(actor != null ? actor.getId() : null)
                 .userName(actor != null ? actor.getUsername() : username)
                 .resourceId(requestId == null ? patient.getId().toString() : requestId.toString())
-                .patientId(patient.getId())
+                .patientId(requestId == null ? null : patient.getId())
                 // No PHI in the description: the id is the resource, the name is not.
                 .eventDescription("Patient record PDF downloaded for Patient/" + patient.getId()
                     + " at hospital " + hospitalId + " (" + entries + " chart entries)"
@@ -295,7 +302,7 @@ public class PatientRecordPdfService {
                 throw new com.example.hms.exception.RoiAuditUnavailableException("roi.request.disclosureNotRecorded");
         } catch (RuntimeException ex) {
             if (requestId != null)
-                throw new com.example.hms.exception.RoiAuditUnavailableException("roi.request.disclosureNotRecorded");
+                throw new com.example.hms.exception.RoiAuditUnavailableException("roi.request.disclosureNotRecorded", ex);
             log.warn("audit emission failed for the patient record PDF of {}: {}", patient.getId(), ex.toString());
         }
     }
@@ -397,12 +404,14 @@ public class PatientRecordPdfService {
 
         private final PDDocument doc = new PDDocument();
         private final PdfLabels labels;
+        private final boolean release;
         private PDPageContentStream cs;
         private float y;
         private int pageNumber;
 
-        Pages(PdfLabels labels) throws IOException {
+        Pages(PdfLabels labels, boolean release) throws IOException {
             this.labels = labels;
+            this.release = release;
             newPage();
         }
 
@@ -431,13 +440,17 @@ public class PatientRecordPdfService {
 
         <T> void rows(List<T> rows, Function<T, String> render) throws IOException {
             if (rows == null || rows.isEmpty()) {
-                text(labels.get("pdf.record.none"));
+                none(labels.get("pdf.record.none"));
                 return;
             }
             for (T row : rows) {
                 String rendered = render.apply(row);
                 if (rendered != null && !rendered.isBlank()) wrapped("- " + rendered);
             }
+        }
+
+        void none(String treatmentText) throws IOException {
+            text(release ? labels.get("pdf.record.notIncluded") : treatmentText);
         }
 
         void wrapped(String text) throws IOException {

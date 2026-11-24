@@ -116,7 +116,7 @@ class PatientInsuranceOtherHospitalTest {
         when(subjectReadGuard.callerUserId()).thenReturn(Optional.of(actor));
         when(roleValidator.canLinkPayerPlan(actor, hospitalB)).thenReturn(true);
         when(patientChartAccess.require(patientId, hospitalB)).thenReturn(patient);
-        when(payerCatalogueService.labelsOf(anyCollection())).thenReturn(Map.of(planAtA,
+        when(payerCatalogueService.labelsAtHospitals(Map.of(planAtA, hospitalA))).thenReturn(Map.of(planAtA,
             new PayerCatalogueService.PlanLabel(planAtA, "F-A", "Formule Famille", "CNAMU", "Caisse Nationale AMU")));
         when(payerCatalogueService.activeAgreementsAt(hospitalB))
             .thenReturn(List.of(new PayerCatalogueService.Agreement("CNAMU-BF", "Caisse nationale  AMU")));
@@ -404,15 +404,12 @@ class PatientInsuranceOtherHospitalTest {
         rowA.setPayerCode("MUT-TEST-A");
         rowA.setProviderName("MUT-TEST-A");
         bReadsA();
-        when(payerCatalogueService.labelsOf(anyCollection())).thenReturn(Map.of(planAtA,
+        when(payerCatalogueService.labelsAtHospitals(Map.of(planAtA, hospitalA))).thenReturn(Map.of(planAtA,
             new PayerCatalogueService.PlanLabel(planAtA, "ESS", "Formule Test Essentielle", "MUT-TEST-A",
                 "Mutuelle Test A (FICTIVE)")));
         when(payerCatalogueService.activeAgreementsAt(hospitalB)).thenReturn(List.of(
             new PayerCatalogueService.Agreement("AUTRE", "Autre mutuelle"),
             new PayerCatalogueService.Agreement("MUT-TEST-A", "Mutuelle Test A (FICTIVE)")));
-        when(payerCatalogueService.labelOf(planAtA)).thenReturn(
-            new PayerCatalogueService.PlanLabel(planAtA, "ESS", "Formule Test Essentielle", "MUT-TEST-A",
-                "Mutuelle Test A (FICTIVE)"));
         when(patientInsuranceRepository.save(any(PatientInsurance.class))).thenAnswer(call -> {
             PatientInsurance saved = call.getArgument(0);
             saved.setId(UUID.randomUUID());
@@ -527,5 +524,37 @@ class PatientInsuranceOtherHospitalTest {
             assertThat(card.getPlanName()).isEqualTo("Formule Famille");
             assertThat(card.getInsurerName()).isEqualTo("Caisse Nationale AMU");
         });
+    }
+
+    /**
+     * QA D3601 (r72): the formule of A's policy reached B's card as null, because the plan was read through the
+     * acting hospital's (B's) tenant scope. The plan is read at the hospital of the row that names it (A), never
+     * through the acting-scoped labelsOf / labelOf; the card carries its NAME and nothing of its terms.
+     */
+    @Test
+    void theFormuleIsReadAtTheSourceHospitalNeverThroughTheActingScope_D3601() {
+        bReadsA();
+
+        OtherHospitalInsuranceDTO card = service.getOtherHospitalPolicies(patientId).get(0);
+
+        assertThat(card.getPlanName()).isEqualTo("Formule Famille");
+        verify(payerCatalogueService).labelsAtHospitals(Map.of(planAtA, hospitalA));
+        verify(payerCatalogueService, never()).labelsOf(anyCollection());
+        verify(payerCatalogueService, never()).labelOf(any());
+        // A label, never the plan's money: the card has no field for a rate, a ceiling, an amount or an agreement.
+        assertThat(java.util.Arrays.stream(OtherHospitalInsuranceDTO.class.getDeclaredFields())
+            .map(java.lang.reflect.Field::getName)
+            .filter(name -> name.matches("(?i).*(percent|rate|ceiling|amount|price|terms|rule|claim|plan(Id|Code)).*")))
+            .isEmpty();
+    }
+
+    /** QA D3601 (r72): a policy A filed under no formule shows none (the portal says « Formule non renseignée »). */
+    @Test
+    void aPolicyWithoutAFormuleShowsNoPlanName_D3601() {
+        rowA.setPayerPlanId(null);
+        bReadsA();
+
+        assertThat(service.getOtherHospitalPolicies(patientId)).singleElement()
+            .satisfies(card -> assertThat(card.getPlanName()).isNull());
     }
 }

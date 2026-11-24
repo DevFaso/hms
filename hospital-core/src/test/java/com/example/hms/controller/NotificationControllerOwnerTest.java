@@ -91,7 +91,9 @@ class NotificationControllerOwnerTest {
         NotificationController withRealService = new NotificationController(
             new NotificationServiceImpl(repository, mock(NotificationWebSocketController.class),
                 mock(NotificationPreferenceRepository.class), mock(UserRepository.class), callerResolverProvider,
-                new com.example.hms.service.i18n.NotificationLocalizer(com.example.hms.i18n.TestMessageSources.bundles())),
+                new com.example.hms.service.i18n.NotificationLocalizer(com.example.hms.i18n.TestMessageSources.bundles()),
+                new com.example.hms.service.notification.ConsentRecorderLabels(mock(UserRepository.class)),
+                mock(com.example.hms.repository.PatientRepository.class), mock(com.example.hms.service.AuditEventLogService.class)),
             mock(ControllerAuthUtils.class));
         HospitalContextHolder.clear();
 

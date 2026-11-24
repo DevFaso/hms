@@ -1,18 +1,31 @@
-### List Appointments by Patient Email
-GET http://localhost:8081/api/lookup/appointment/patient/email/minor1@example.com
+### List Appointments by Patient Email (the address in the body, never in the URL)
+POST http://localhost:8081/api/lookup/appointment/patient/email
 Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept-Language: en
 
-### List Appointments by Patient Phone
-GET http://localhost:8081/api/lookup/appointment/patient/phone/0700000011
+{
+  "email": "minor1@example.com"
+}
+
+### List Appointments by Patient Phone (the number in the body, never in the URL)
+POST http://localhost:8081/api/lookup/appointment/patient/phone
 Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept-Language: en
 
-### List Appointments by Patient MRI
-GET http://localhost:8081/api/lookup/appointment/patient/mri/{mri}
-Authorization: Bearer <JWT>
+{
+  "phone": "0700000011"
+}
+
+### List Appointments by Patient MRN (the MRN in the body, never in the URL)
+POST http://localhost:8081/api/lookup/appointment/patient/mrn
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "mrn": "{mrn}"
+}
 
 ### List Appointments by Staff Number
 GET http://localhost:8081/api/lookup/appointment/staff/number/{number}
@@ -20,11 +33,15 @@ Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept-Language: en
 
-### List Appointments by Staff Email
-GET http://localhost:8081/api/lookup/appointment/staff/email/sandoff_doctor@hospital.com
+### List Appointments by Staff Email (the address in the body, never in the URL)
+POST http://localhost:8081/api/lookup/appointment/staff/email
 Authorization: Bearer {{token}}
 Content-Type: application/json
 Accept-Language: en
+
+{
+  "email": "sandoff_doctor@hospital.com"
+}
 
 ### List Appointments by Staff ID
 GET http://localhost:8081/api/lookup/appointment/staff/id/bad141f5-8796-4196-9019-b242d7cbddea
@@ -95,10 +112,15 @@ Accept-Language: en
 DELETE http://localhost:8081/api/appointments/{id}
 Authorization: Bearer <JWT>
 
-### List by Patient
-GET http://localhost:8081/api/appointments/patients/{patientUsername}
+### List by Patient (the username in the body, never in the URL)
+POST http://localhost:8081/api/appointments/patients/by-username
 Authorization: Bearer <JWT>
+Content-Type: application/json
+
+{
+  "username": "{patientUsername}"
+}
 
 ### List by Staff
-GET http://localhost:8081/api/appointments/staff/{staffEmail}
+GET http://localhost:8081/api/appointments/staff/{staffId}
 Authorization: Bearer <JWT>

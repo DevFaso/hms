@@ -33,6 +33,18 @@ public interface UserRepository extends JpaRepository<User, UUID> {
         + "FROM User u WHERE u.id IN :ids")
     java.util.List<ClinicalActorName> findClinicalActorNames(@Param("ids") java.util.Collection<UUID> ids);
 
+    /**
+     * QA r73 D3700: the names a staff reader at {@code hospitalId} may see - only the accounts among {@code ids}
+     * that hold (or held) a staff assignment at that hospital. Another facility's staff member is simply absent,
+     * so their name never leaves the database for this reader.
+     */
+    @Query("SELECT u.id AS id, u.firstName AS firstName, u.lastName AS lastName, u.username AS username "
+        + "FROM User u WHERE u.id IN :ids AND EXISTS (SELECT a.id FROM UserRoleHospitalAssignment a "
+        + "LEFT JOIN a.role r WHERE a.user.id = u.id AND a.hospital.id = :hospitalId "
+        + "AND (r.code IS NULL OR UPPER(r.code) <> 'ROLE_PATIENT'))")
+    java.util.List<ClinicalActorName> findStaffActorNamesAtHospital(@Param("ids") java.util.Collection<UUID> ids,
+                                                                    @Param("hospitalId") UUID hospitalId);
+
   /* ---------- Lightweight counts for dashboards ---------- */
   long countByIsDeletedFalse();
   long countByIsActiveTrueAndIsDeletedFalse();

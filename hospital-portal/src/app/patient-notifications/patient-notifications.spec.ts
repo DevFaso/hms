@@ -170,7 +170,7 @@ describe('PatientNotificationsComponent', () => {
           createdAt: '2026-11-19T09:15:00',
           subjectDate: '2026-11-20',
           subjectTime: '10:30:00',
-          consentRecordedBy: 'recorder-1',
+          consentRecordedByKind: 'STAFF',
           consentRecordedByName: 'cdx Desk Recorder',
           consentRecordedAt: '2026-11-18T08:00:00',
         }),
@@ -190,6 +190,28 @@ describe('PatientNotificationsComponent', () => {
     expect(host.querySelector('[data-testid="pn-consent-recorder-d-9"]')?.textContent).toContain(
       'cdx Desk Recorder',
     );
+  });
+
+  it('QA r73 D3700: a refusal recorded at another facility is labelled, with no name or id', () => {
+    setup(
+      pageOf([
+        delivery({
+          id: 'd-10',
+          status: 'SKIPPED',
+          errorCode: 'OPTED_OUT',
+          retryable: false,
+          lastAttemptAt: null,
+          consentRecordedByKind: 'OTHER_FACILITY',
+          consentRecordedByName: null,
+          consentRecordedAt: '2026-11-24T01:29:00',
+        }),
+      ]),
+    );
+    const cell = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="pn-consent-recorder-d-10"]',
+    )?.textContent;
+    expect(cell).toContain('PATIENT_CHANNELS.RECORDER_OTHER_FACILITY');
+    expect(cell).not.toContain('COMMON.UNKNOWN');
   });
 
   it('QA D2402: an invoice row names its invoice', () => {

@@ -452,7 +452,9 @@ class PatientPortalControllerPhase2Test {
             NotificationService real = new NotificationServiceImpl(repository,
                 mock(NotificationWebSocketController.class), mock(NotificationPreferenceRepository.class),
                 mock(UserRepository.class), noResolver,
-                new com.example.hms.service.i18n.NotificationLocalizer(messages));
+                new com.example.hms.service.i18n.NotificationLocalizer(messages),
+                new com.example.hms.service.notification.ConsentRecorderLabels(mock(UserRepository.class)),
+                mock(com.example.hms.repository.PatientRepository.class), mock(com.example.hms.service.AuditEventLogService.class));
             Notification row = real.createNotification("breakGlass.patient.optOutOverridden",
                 new Object[]{"Hôpital B"}, "patient.jane", "BREAK_GLASS_OPT_OUT_OVERRIDE");
             when(notificationService.getNotificationsForUser(eq("patient.jane"), any(), any(), any()))
@@ -518,7 +520,9 @@ class PatientPortalControllerPhase2Test {
             ObjectProvider<ProviderCallerResolver> noResolver = mock(ObjectProvider.class);
             NotificationService real = new NotificationServiceImpl(repository,
                 mock(NotificationWebSocketController.class), mock(NotificationPreferenceRepository.class),
-                mock(UserRepository.class), noResolver, new com.example.hms.service.i18n.NotificationLocalizer(com.example.hms.i18n.TestMessageSources.bundles()));
+                mock(UserRepository.class), noResolver, new com.example.hms.service.i18n.NotificationLocalizer(com.example.hms.i18n.TestMessageSources.bundles()),
+                new com.example.hms.service.notification.ConsentRecorderLabels(mock(UserRepository.class)),
+                mock(com.example.hms.repository.PatientRepository.class), mock(com.example.hms.service.AuditEventLogService.class));
             when(notificationService.markAsRead(eq(id), any(), eq(false)))
                 .thenAnswer(invocation -> real.markAsRead(id, invocation.getArgument(1), invocation.getArgument(2)));
 

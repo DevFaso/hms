@@ -138,14 +138,15 @@ class ReceptionControllerTest {
     }
 
     /* ═══════════════════════════════════════════════════════════════════
-       GET /reception/patients/duplicate-candidates (QA D40)
+       POST /reception/patients/duplicate-candidates (QA D40)
        ═══════════════════════════════════════════════════════════════════ */
 
     @Test
     void duplicateCandidates_noPinnedHospital_returnsEmptyWithoutSearching() {
         HospitalContextHolder.clear();
 
-        var response = controller.getDuplicateCandidates("Awa", null, null);
+        var response = controller.getDuplicateCandidates(
+            new com.example.hms.payload.dto.identifiersearch.DuplicateCandidateRequestDTO("Awa", null, null));
 
         org.assertj.core.api.Assertions.assertThat(response.getBody()).isEmpty();
         org.mockito.Mockito.verifyNoInteractions(receptionService);

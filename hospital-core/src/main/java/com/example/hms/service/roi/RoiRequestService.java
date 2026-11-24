@@ -21,7 +21,7 @@ import com.example.hms.repository.RoiRequestRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.security.SecurityUtils;
-import com.example.hms.service.AuditEventLogService;
+import com.example.hms.service.RequiredAuditEventLogPort;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -73,7 +73,7 @@ public class RoiRequestService {
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
     private final RoleValidator roleValidator;
-    private final AuditEventLogService auditService;
+    private final RequiredAuditEventLogPort auditService;
     private final RoiRequestMapper mapper;
     private final Clock clock;
 
@@ -230,7 +230,7 @@ public class RoiRequestService {
             return List.of();
         }
         return roiRepository.findByPatientIdOrderByCreatedAtDesc(patient.getId()).stream()
-            .map(mapper::toDto)
+            .map(mapper::toPatientDto)
             .toList();
     }
 
@@ -289,7 +289,7 @@ public class RoiRequestService {
 
     /** Resolve the PDF's patient only after the request's hospital, kind and release decision match. */
     @Transactional(readOnly = true)
-    public UUID copyForExport(UUID requestId) {
+    public ApprovedCopy copyForExport(UUID requestId) {
         UUID hospitalId = requireHospital();
         RoiRequest request = roiRepository.findById(requestId)
             .filter(row -> row.getHospital() != null && hospitalId.equals(row.getHospital().getId()))
@@ -297,35 +297,33 @@ public class RoiRequestService {
         if (request.getRequestKind() == com.example.hms.enums.RoiRequestKind.CORRECTION
             || request.getStatus() != RoiRequestStatus.FULFILLED
             || !"FULL_RECORD".equals(request.getScopeDescription())) throw new BusinessException("roi.request.copyNotApproved");
-        return request.getPatientId();
+        return new ApprovedCopy(request.getPatientId(), request.getId(), hospitalId);
     }
 
-    /**
-     * The one MANDATORY audit write. {@code logEvent} commits in its own
-     * transaction and returns null instead of throwing when the sink
-     * fails — so the null is checked, and the thrown refusal rolls the
-     * FULFILLED status back. The guarantee this buys: a fulfilment can
-     * never commit without its PATIENT_EXPORT disclosure row. (The
-     * inverse window — disclosure committed, fulfilment lost to a crash
-     * at commit — errs toward over-reporting a release, the safe side
-     * for a disclosure ledger.)
-     */
-    private void emitDisclosureOrFail(RoiRequest request) {
-        var persisted = auditService.logEvent(
-            buildAudit(AuditEventType.PATIENT_EXPORT, request,
-                "Record copy released under ROI request " + request.getId()));
-        if (persisted == null) {
-            throw new BusinessException("roi.request.disclosureNotRecorded");
+    /** The approved request, patient and owning hospital travel together to the release renderer. */
+    public record ApprovedCopy(UUID patientId, UUID requestId, UUID hospitalId) {
+        public ApprovedCopy {
+            java.util.Objects.requireNonNull(patientId, "patientId");
+            java.util.Objects.requireNonNull(requestId, "requestId");
+            java.util.Objects.requireNonNull(hospitalId, "hospitalId");
         }
+    }
+
+    /** Disclosure and workflow trail participate in the SAME decision transaction. */
+    private void emitDisclosureOrFail(RoiRequest request) {
+        emitAudit(AuditEventType.PATIENT_EXPORT, request,
+            "Record copy released under ROI request " + request.getId());
     }
 
     /** A request or decision must not commit without its attributed audit event. */
     private void emitAudit(AuditEventType type, RoiRequest request, String description) {
         try {
-            if (auditService.logEvent(buildAudit(type, request, description)) == null)
+            if (auditService.logRequiredEvent(buildAudit(type, request, description)) == null)
                 throw new com.example.hms.exception.RoiAuditUnavailableException("roi.request.auditUnavailable");
         } catch (RuntimeException ex) {
-            throw new com.example.hms.exception.RoiAuditUnavailableException("roi.request.auditUnavailable");
+            log.warn("Required ROI audit failed: request={}, event={}, failure={}",
+                request.getId(), type, ex.getClass().getSimpleName());
+            throw new com.example.hms.exception.RoiAuditUnavailableException("roi.request.auditUnavailable", ex);
         }
     }
 
