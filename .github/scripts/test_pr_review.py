@@ -30,6 +30,7 @@ class FakeOpenAI:
 
     def __init__(self, error=None, text="Looks fine.", status="completed", refusal=None):
         self.error, self.kwargs, self.counted = error, None, 0
+        self.timeouts = []
         client = self
 
         class InputTokens:
@@ -53,6 +54,10 @@ class FakeOpenAI:
                     usage=types.SimpleNamespace(input_tokens=10, output_tokens=5))
 
         self.responses = Responses()
+
+    def with_options(self, timeout=None, **_):
+        self.timeouts.append(timeout)
+        return self
 
 
 def status_error(cls, status, message):
@@ -254,8 +259,11 @@ def test_blank_model_variable_uses_the_default(monkeypatch):
 
 def test_openai_refusal_and_length_limit(monkeypatch):
     fake = install(monkeypatch)
-    assert orv.main(lambda: FakeOpenAI(text="", refusal="no")) == 0
-    assert "The model declined to review this diff." in fake.commented()[-1][-1]
+    # A refusal is not a review: the run fails (so Claude is tried) and the
+    # head is not marked as reviewed.
+    assert orv.main(lambda: FakeOpenAI(text="", refusal="no")) == 1
+    assert "declined" in fake.commented()[-1][-1]
+    assert "claude-review-head" not in fake.commented()[-1][-1]
     fake.calls.clear()
     assert orv.main(lambda: FakeOpenAI(text="partial", status="incomplete")) == 0
     assert "may be incomplete" in fake.commented()[-1][-1]
@@ -282,3 +290,27 @@ def test_default_openai_client_has_one_attempt_inside_the_job_timeout(monkeypatc
 ])
 def test_redaction_catches_keys_glued_to_a_word(text):
     assert "sk-" not in rc.redact(text)
+
+
+def test_refusal_falls_back_to_claude(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai-test")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test")
+    fake = install(monkeypatch)
+    rc_ = pr_review.main({"openai": lambda: FakeOpenAI(text="", refusal="no"),
+                          "anthropic": lambda: FakeClient()})
+    assert rc_ == 0
+    assert "Claude" in fake.commented()[-1][-1]
+
+
+def test_openai_attempt_shares_one_deadline(monkeypatch):
+    install(monkeypatch)
+    client = FakeOpenAI()
+    assert orv.main(lambda: client) == 0
+    counts, create = client.timeouts[:-1], client.timeouts[-1]
+    assert all(t == orv.COUNT_TIMEOUT for t in counts)
+    assert create <= orv.ATTEMPT_SECONDS
+
+
+def test_configured_secret_of_any_shape_is_redacted(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "weird-shaped-secret-123")
+    assert "weird-shaped" not in rc.redact("bad key weird-shaped-secret-123 rejected")

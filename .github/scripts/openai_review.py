@@ -6,6 +6,7 @@ size limits and sticky comment as the Claude reviewer (review_common.py).
 Calls the Responses API with store=False; never prints secrets.
 """
 import os
+import time
 import sys
 from pathlib import Path
 
@@ -30,10 +31,17 @@ def model() -> str:
     return os.environ.get("OPENAI_REVIEW_MODEL", "").strip() or DEFAULT_MODEL
 
 
+# One OpenAI attempt, token counts included, must end within ATTEMPT_SECONDS
+# so the Claude fallback still fits in the job's timeout.
+ATTEMPT_SECONDS = 900.0
+COUNT_TIMEOUT = 60.0
+
+
 def fit(client, files, render, budget=TOKEN_BUDGET):
     """review_common.fit with OpenAI's input-token counter."""
     def count(text):
-        return client.responses.input_tokens.count(
+        # A token count is quick; never let one eat the attempt's deadline.
+        return client.with_options(timeout=COUNT_TIMEOUT).responses.input_tokens.count(
             model=model(), instructions=PROMPT, input=text).input_tokens
     return review_common.fit(count, files, render, budget)
 
@@ -53,13 +61,15 @@ def review(client, pr, meta, diff) -> str:
     def render(fs):
         return user_text(pr, meta, fs)
 
+    started = time.monotonic()
     kept, over = fit(client, files, render)
     sha = meta["headRefOid"]
     title = f"{head_marker(sha)}\n### OpenAI `{model()}` review of `{sha[:8]}`\n\n"
     if files and not kept:
         return (f"{title}Diff too large to review: no file fits the token budget."
                 f"{left_out_note(generated, over)}")
-    response = client.responses.create(
+    remaining = max(30.0, ATTEMPT_SECONDS - (time.monotonic() - started))
+    response = client.with_options(timeout=remaining).responses.create(
         model=model(),
         instructions=PROMPT,
         input=render(kept),
@@ -70,8 +80,10 @@ def review(client, pr, meta, diff) -> str:
     )
     text = response.output_text.strip()
     if not text and refusal(response):
-        text = "The model declined to review this diff."
-    elif not text:
+        # Not a review: fail so pr_review.py falls back to Claude and the head
+        # is not marked as reviewed.
+        raise RuntimeError("the model declined to review this diff")
+    if not text:
         # An empty review is a failure, so pr_review.py falls back to Claude.
         reason = getattr(response.incomplete_details, "reason", None) or response.status
         raise RuntimeError(f"empty response ({reason})")
@@ -88,7 +100,7 @@ def default_client():
     # Reads OPENAI_API_KEY from the environment. One 15-minute attempt and no
     # SDK retries (the defaults allow 3 x 10 min): the Claude fallback is the
     # retry, and it must still fit in the job's timeout after a slow failure.
-    return openai.OpenAI(timeout=900.0, max_retries=0)
+    return openai.OpenAI(timeout=ATTEMPT_SECONDS, max_retries=0)
 
 
 def provider(client_factory=default_client) -> Provider:

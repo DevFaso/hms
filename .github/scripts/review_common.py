@@ -186,7 +186,16 @@ def left_out_note(generated, over_budget) -> str:
     return "".join(f"\n\n> Note: {line}" for line in lines)
 
 
+SECRET_ENV = ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GH_TOKEN")
+
+
 def redact(text: str) -> str:
+    # The configured secrets themselves, whatever their shape, then anything
+    # that looks like a key.
+    for name in SECRET_ENV:
+        value = os.environ.get(name, "").strip()
+        if len(value) >= 8:
+            text = text.replace(value, "[redacted key]")
     return KEY_RE.sub("[redacted key]", text)
 
 
