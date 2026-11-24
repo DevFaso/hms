@@ -170,13 +170,18 @@ public class ReceptionController {
     // registrars, SecurityConstants.USER_REGISTRAR_AUTHORITIES): the form
     // calls this while the registrar types, and a nurse or midwife got a 403
     // that sent them to the error page (QA D40).
-    @GetMapping("/patients/duplicate-candidates")
+    // What the desk has typed travels in the body, never in the URL.
+    @com.example.hms.security.ReadsOnly("the registration form's duplicate check, under POST so its identifiers"
+        + " stay out of the URL")
+    @PostMapping("/patients/duplicate-candidates")
     @PreAuthorize("hasAnyAuthority(" + SecurityConstants.USER_REGISTRAR_AUTHORITIES + ")")
     @Operation(summary = "Return possible duplicate patient records ranked by confidence score")
     public ResponseEntity<List<DuplicateCandidateDTO>> getDuplicateCandidates(
-            @RequestParam(required = false) String name,
-            @RequestParam(required = false) String dob,
-            @RequestParam(required = false) String phone) {
+            @RequestBody(required = false)
+            com.example.hms.payload.dto.identifiersearch.DuplicateCandidateRequestDTO body) {
+        String name = body != null ? body.name() : null;
+        String dob = body != null ? body.dob() : null;
+        String phone = body != null ? body.phone() : null;
         UUID hospitalId = resolveHospitalId();
         if (hospitalId == null) {
             // No pinned hospital (a super-admin in global view, or a caller

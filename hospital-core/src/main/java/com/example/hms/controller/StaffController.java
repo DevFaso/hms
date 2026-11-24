@@ -1,5 +1,7 @@
 package com.example.hms.controller;
 
+import com.example.hms.payload.dto.identifiersearch.EmailQueryDTO;
+import com.example.hms.payload.dto.identifiersearch.PhoneQueryDTO;
 import com.example.hms.payload.dto.LabStaffRoleUpdateRequest;
 import com.example.hms.payload.dto.StaffResponseDTO;
 import com.example.hms.payload.dto.StaffRequestDTO;
@@ -24,7 +26,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Email;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -86,24 +87,28 @@ public class StaffController {
 
     // 2.1 Search: by user email
     @Operation(summary = "Find staff by user email")
-    @GetMapping("/search/by-email")
+    // The address travels in the body, never in the URL.
+    @com.example.hms.security.ReadsOnly("a staff lookup, under POST so the e-mail stays out of the URL")
+    @PostMapping("/search/by-email")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<List<StaffResponseDTO>> getByUserEmail(
-        @RequestParam @Email(message = "{validation.email.invalid}") String email,
+        @Valid @RequestBody EmailQueryDTO body,
         @RequestHeader(name = "Accept-Language", required = false) String lang) {
         Locale locale = parseLocale(lang);
-        return ResponseEntity.ok(staffService.getStaffByUserEmail(email, locale));
+        return ResponseEntity.ok(staffService.getStaffByUserEmail(body.email(), locale));
     }
 
     // 2.2 Search: by user phone
     @Operation(summary = "Find staff by user phone number")
-    @GetMapping("/search/by-phone")
+    // The number travels in the body, never in the URL.
+    @com.example.hms.security.ReadsOnly("a staff lookup, under POST so the phone number stays out of the URL")
+    @PostMapping("/search/by-phone")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<List<StaffResponseDTO>> getByUserPhone(
-        @RequestParam String phone,
+        @Valid @RequestBody PhoneQueryDTO body,
         @RequestHeader(name = "Accept-Language", required = false) String lang) {
         Locale locale = parseLocale(lang);
-        return ResponseEntity.ok(staffService.getStaffByUserPhoneNumber(phone, locale));
+        return ResponseEntity.ok(staffService.getStaffByUserPhoneNumber(body.phone(), locale));
     }
 
     // 2.3 Get any license for a given user (first/any)

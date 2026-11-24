@@ -139,6 +139,15 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
                 + " when the result is critical or its QC rejected; a normal release sends none"),
         Map.entry("POST /appointments/search",
             SEARCH_FILTER),
+        // Identifier searches and lookups: the identifiers travel in the body, never in the URL;
+        // every criterion stays optional, as the query parameters were.
+        Map.entry("POST /patients/search", SEARCH_FILTER),
+        Map.entry("POST /patients/lookup", SEARCH_FILTER),
+        Map.entry("POST /patients/registration-match", SEARCH_FILTER),
+        Map.entry("POST /reception/patients/duplicate-candidates", SEARCH_FILTER),
+        Map.entry("POST /users/search", SEARCH_FILTER),
+        Map.entry("POST /super-admin/audit-search", SEARCH_FILTER),
+        Map.entry("POST /super-admin/audit-search/csv", SEARCH_FILTER),
         Map.entry("POST /cash-sessions/{id}/review",
             "billing plan PR 10: a supervisor's review note is optional; marking a closed till reviewed needs nothing else"),
         Map.entry("POST /billing-invoices/{invoiceId}/refunds/{refundId}/pay",
@@ -320,6 +329,11 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
      */
     private static final Map<String, String> NOT_A_FIELD_ONCE_FILLED = Map.ofEntries(
         Map.entry("POST /auth/me/complete-setup", "state: the account has no pending username or password change"),
+        // QA r73 D3702: the sample is each enum's first constant (the IN_APP bell); the desk records SMS and
+        // e-mail only and refuses the whole list with one translated 400. The element type is shared with the
+        // patient's own settings (where IN_APP is valid), so the rule cannot be a constraint on it.
+        Map.entry("PUT /patients/{patientId}/channel-preferences",
+            "value: the sample is the in-app bell, which the desk does not record (refused, never silently dropped)"),
         // QA D2051: a sample token names no live reset link; refused 400, one message for every bad link.
         Map.entry("POST /auth/password/confirm", "state: the sample token is no live reset link"),
         Map.entry("POST /auth/password/reset-password", "state: the sample token is no live reset link"),

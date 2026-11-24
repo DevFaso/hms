@@ -142,7 +142,7 @@ public class ImagingCriticalNotificationService {
             log.warn("Critical-imaging notification failed for report {}; stamping anyway so the "
                 + "escalation sweep still owns it: {}", report.getId(), ex.getMessage(), ex);
         }
-        sendSmsBestEffort(report, message);
+        sendSmsBestEffort(report, false);
     }
 
     /**
@@ -189,7 +189,7 @@ public class ImagingCriticalNotificationService {
         // SMS once per round, not once per recipient: the transport targets the
         // study's chart context, so fanning it out would send the same text
         // repeatedly for one event.
-        sendSmsBestEffort(report, message);
+        sendSmsBestEffort(report, true);
 
         // Stamp even with no resolvable recipient, so the interval advances and
         // the sweep does not reconsider the row every pass.
@@ -241,7 +241,7 @@ public class ImagingCriticalNotificationService {
         return resolveOrderingUser(report).map(User::getUsername).orElse(null);
     }
 
-    private void sendSmsBestEffort(ImagingReport report, NotificationText text) {
+    private void sendSmsBestEffort(ImagingReport report, boolean escalation) {
         if (!smsService.deliversRealSms()) {
             return; // mock transport would only log — never route clinical alerts there
         }
@@ -250,20 +250,29 @@ public class ImagingCriticalNotificationService {
             return;
         }
         try {
-            // An SMS is sent once, so it is rendered once, in the staff locale.
-            smsService.send(phone, text.render(messageSource, NotificationLocales.STAFF));
+            // An SMS is sent once, so it is rendered once, in the staff locale. K4: the patient's initials and
+            // nothing clinical (never the study, the impression or the full name: MessageDisclosureGuardTest).
+            smsService.send(phone, messageSource.getMessage(
+                escalation ? "sms.staff.criticalImaging.escalation" : "sms.staff.criticalImaging",
+                new Object[] {smsInitials(report)}, NotificationLocales.STAFF));
         } catch (RuntimeException ex) {
             log.warn("Critical-imaging SMS failed for report {}: {}", report.getId(), ex.getMessage());
         }
     }
 
     /**
-     * The alert text. Names the study and the patient and says where to act; the
-     * impression is truncated rather than sent whole, because this same string
-     * goes down an SMS channel. Read by the ordering provider (and, on
-     * escalation, the desk's administrators), each in the language they read
-     * it in (QA D665); the SMS is rendered once, in the staff locale.
+     * The in-app alert text. Names the study and the patient and says where to
+     * act; the impression is truncated rather than sent whole. Read by the
+     * ordering provider (and, on escalation, the desk's administrators), each in
+     * the language they read it in (QA D665). The SMS does not reuse it (K4: it
+     * carries the patient's initials and nothing clinical).
      */
+    /** K4: the patient as an SMS names them, by initials. */
+    private static String smsInitials(ImagingReport report) {
+        ImagingOrder order = report.getImagingOrder();
+        return com.example.hms.utility.SmsPatientLabel.initials(order != null ? order.getPatient() : null);
+    }
+
     private NotificationText buildMessage(ImagingReport report, boolean escalation) {
         ImagingOrder order = report.getImagingOrder();
         return NotificationText.of(

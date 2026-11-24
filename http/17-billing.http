@@ -144,7 +144,5 @@ Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 {
-  "email": "billing@insurance.com",
-  "subject": "Invoice for patient claim",
-  "message": "Please find attached invoice for processing"
+  "email": "billing@insurance.com"
 }

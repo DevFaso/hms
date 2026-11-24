@@ -314,7 +314,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 prescriptionId.toString());
 
         // T-40: notify patient the medication is unavailable at hospital; routed to partner
-        support.notifyOutOfStock(prescription, patient, prescription.getMedicationName(),
+        support.notifyOutOfStock(prescription, patient,
                 PharmacyServiceSupport.OUT_OF_STOCK_PARTNER, targetPharmacy.getName());
 
         // T-54: notify the partner pharmacy via SMS (best-effort, never fails the routing)
@@ -362,7 +362,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 prescriptionId.toString());
 
         // T-40: notify patient the medication is unavailable; Rx printed for any pharmacy
-        support.notifyOutOfStock(prescription, patient, prescription.getMedicationName(),
+        support.notifyOutOfStock(prescription, patient,
                 PharmacyServiceSupport.OUT_OF_STOCK_PRINT);
 
         return routingMapper.toResponseDTO(saved);
@@ -407,10 +407,10 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
         // T-40: notify patient the medication is unavailable; back-ordered with optional restock date
         if (estimatedRestockDate != null) {
-            support.notifyOutOfStock(prescription, patient, prescription.getMedicationName(),
+            support.notifyOutOfStock(prescription, patient,
                     PharmacyServiceSupport.OUT_OF_STOCK_BACKORDER_DATED, estimatedRestockDate.toString());
         } else {
-            support.notifyOutOfStock(prescription, patient, prescription.getMedicationName(),
+            support.notifyOutOfStock(prescription, patient,
                     PharmacyServiceSupport.OUT_OF_STOCK_BACKORDER);
         }
 

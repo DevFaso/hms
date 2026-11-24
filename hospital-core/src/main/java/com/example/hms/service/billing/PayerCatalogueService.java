@@ -738,6 +738,46 @@ public class PayerCatalogueService {
         return readLabels(planIds);
     }
 
+    /**
+     * QA D3601 (r72): the labels of plans named by coverage rows of OTHER hospitals that the caller may already see
+     * by their identity ({@code PatientInsuranceServiceImpl#getOtherHospitalPolicies}). {@link #labelsOf} reads
+     * through {@code findAllById}, which the tenant scope limits to the acting hospital, so another hospital's plan
+     * was never found and its card showed « FORMULE — ». Here each plan is read at the hospital of the row that names
+     * it ({@code hospitalByPlanId}) and kept only when it is of that hospital. A label is names and codes only: never
+     * the plan's terms, rules, rates or ceilings.
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, PlanLabel> labelsAtHospitals(Map<UUID, UUID> hospitalByPlanId) {
+        Map<UUID, UUID> wanted = new HashMap<>();
+        hospitalByPlanId.forEach((planId, hospitalId) -> {
+            if (planId != null && hospitalId != null) {
+                wanted.put(planId, hospitalId);
+            }
+        });
+        if (wanted.isEmpty()) {
+            return Map.of();
+        }
+        Set<UUID> hospitals = new HashSet<>(wanted.values());
+        List<PayerPlan> plans = planRepository.findByIdInAndHospitalIdIn(wanted.keySet(), hospitals).stream()
+            .filter(plan -> plan.getHospitalId() != null && plan.getHospitalId().equals(wanted.get(plan.getId())))
+            .toList();
+        if (plans.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Payer> payers = new HashMap<>();
+        payerRepository.findByIdInAndHospitalIdIn(plans.stream().map(PayerPlan::getPayerId).collect(Collectors.toSet()),
+                hospitals)
+            .forEach(payer -> payers.put(payer.getId(), payer));
+        Map<UUID, PlanLabel> labels = new HashMap<>();
+        for (PayerPlan plan : plans) {
+            Payer payer = payers.get(plan.getPayerId());
+            boolean sameHospital = payer != null && plan.getHospitalId().equals(payer.getHospitalId());
+            labels.put(plan.getId(), new PlanLabel(plan.getId(), plan.getCode(), plan.getName(),
+                sameHospital ? payer.getCode() : null, sameHospital ? payer.getName() : null));
+        }
+        return labels;
+    }
+
     private Map<UUID, PlanLabel> readLabels(Collection<UUID> planIds) {
         Set<UUID> ids = new HashSet<>(planIds);
         ids.remove(null);

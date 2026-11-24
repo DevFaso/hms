@@ -21,6 +21,7 @@ import {
 import { ToastService } from '../core/toast.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { refusalReason } from '../shared/refusal-reason';
+import { consentRecorderKey } from '../shared/notification-channel-choices';
 
 /**
  * Codes after which the patient may already have the message: the provider gave no answer, or every
@@ -113,6 +114,8 @@ export class PatientNotificationsComponent implements OnInit {
 
   readonly statuses = DELIVERY_STATUSES;
   readonly pageSize = 25;
+  /** QA r73 D3700: a refusal recorded at another facility is shown without its recorder's name. */
+  readonly recorderKey = consentRecorderKey;
 
   loading = signal(true);
   error = signal<string | null>(null);

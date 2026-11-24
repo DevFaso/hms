@@ -40,6 +40,7 @@ import { STEP_UP_REQUEST, isStepUpRefusal } from '../services/step-up';
 import { BACKGROUND_REQUEST } from '../services/ws-transport';
 import { ToastService } from '../core/toast.service';
 import { CSRF_REPLAY, isCsrfRefusal } from './csrf.interceptor';
+import { isReadOnlyPost } from '../core/read-only-posts';
 
 const SILENT_403_PATTERNS = [
   /\/hospitals(\?|$|\/$)/,
@@ -516,9 +517,13 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       } else if (error.status === 403) {
         // Never redirect (or re-report) when the audit sink itself is forbidden.
         const isAuditCall = req.url.includes('/frontend-audit');
+        // A POST that only reads (a search whose terms travel in the body) is silenced like a
+        // GET; a reason the server gives for refusing it is still shown, as for any POST.
+        const isRead =
+          req.method === 'GET' || req.method === 'HEAD' || isReadOnlyPost(req.method, req.url);
         const isSilent =
           req.context.get(BACKGROUND_REQUEST) ||
-          ((req.method === 'GET' || req.method === 'HEAD') &&
+          (isRead &&
             (SILENT_403_PATTERNS.some((pattern) => pattern.test(req.url)) ||
               LANDING_PAGE_PATTERN.test(router.url))) ||
           (req.method === 'POST' &&

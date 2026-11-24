@@ -114,8 +114,10 @@ class MfaControllerTest {
     void setUp() {
         // The user's wrong-code budget is not exhausted unless a test says so.
         when(mfaService.reserveCodeAttempt(any())).thenReturn(true);
-        // A readable challenge with no role picked at login, unless a test says so.
-        when(jwtTokenProvider.mfaTokenSelectedRoles(any())).thenReturn(Optional.of(List.of()));
+        // A readable challenge carrying the one role the login decided on, and
+        // the account still holding it, unless a test says so.
+        when(jwtTokenProvider.mfaTokenSelectedRoles(any())).thenReturn(Optional.of(List.of("ROLE_DOCTOR")));
+        holds("ROLE_DOCTOR");
 
         testUser = new User();
         testUser.setId(USER_ID);
@@ -394,6 +396,25 @@ class MfaControllerTest {
         var minted = org.mockito.ArgumentCaptor.forClass(TokenUserDescriptor.class);
         verify(jwtTokenProvider).generateAccessToken(minted.capture(), notNull(), any());
         org.assertj.core.api.Assertions.assertThat(minted.getValue().roles()).containsExactly("ROLE_LAB_SCIENTIST");
+    }
+
+    @Test
+    void sessionRoles_aChallengeCarryingNoRole_opensNoSession() throws Exception {
+        when(jwtTokenProvider.isMfaToken("mfa-tok-none")).thenReturn(true);
+        claimable("mfa-tok-none");
+        when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-none")).thenReturn(USERNAME);
+        when(jwtTokenProvider.mfaTokenSelectedRoles("mfa-tok-none")).thenReturn(Optional.of(List.of()));
+        holds("ROLE_DOCTOR", "ROLE_HOSPITAL_ADMIN");
+
+        mockMvc.perform(post("/auth/mfa/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"mfaToken\":\"mfa-tok-none\",\"code\":\"654321\"}"))
+                .andExpect(status().isForbidden());
+
+        // Refused before any code is reserved or checked, and nothing is minted.
+        verify(mfaService, never()).reserveCodeAttempt(any());
+        verify(jwtTokenProvider, never()).generateAccessToken(any(TokenUserDescriptor.class), any(), any());
+        verify(jwtTokenProvider, never()).generateRefreshToken(any(TokenUserDescriptor.class), any(), any());
     }
 
     @Test

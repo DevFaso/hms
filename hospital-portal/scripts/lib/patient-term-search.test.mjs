@@ -33,6 +33,8 @@ import { walk } from './walk.mjs';
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 'app');
 const SERVICE = 'services/patient.service.ts';
 const SHARED = 'shared/person-search.ts';
+/** The list of POST routes that only read: route strings, never an HTTP call. */
+const ROUTE_LIST = 'core/read-only-posts.ts';
 
 const RAW_NAME_SEARCH = /\bpatientService\s*\.\s*search\(\s*\{[^}]*?\bname\s*:/g;
 const DIRECT_SEARCH = /['"`]\/patients(?:\/search\b|\?search=)/g;
@@ -41,7 +43,7 @@ const DIRECT_SEARCH = /['"`]\/patients(?:\/search\b|\?search=)/g;
 export function patientTermFindings(source, rel = 'source') {
   const out = [];
   const lineOf = (i) => source.slice(0, i).split('\n').length;
-  if (rel !== SERVICE) {
+  if (rel !== SERVICE && rel !== ROUTE_LIST) {
     for (const m of source.matchAll(RAW_NAME_SEARCH))
       out.push({ line: lineOf(m.index), rule: 'raw-name-search' });
     for (const m of source.matchAll(DIRECT_SEARCH))

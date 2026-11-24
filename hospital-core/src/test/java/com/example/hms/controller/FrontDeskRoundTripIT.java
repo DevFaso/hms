@@ -660,8 +660,8 @@ class FrontDeskRoundTripIT extends BaseIT {
     @Test
     @DisplayName("D924: the duplicate check finds the same name and birth date whatever phone is typed")
     void theDuplicateCheckIgnoresADifferentPhone() throws Exception {
-        mockMvc.perform(get(API + "/reception/patients/duplicate-candidates").contextPath(API)
-                .param("name", "Aicha Kabore").param("dob", "1991-07-22").param("phone", "+22670161000")
+        mockMvc.perform(post(API + "/reception/patients/duplicate-candidates").contextPath(API).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"Aicha Kabore\",\"dob\":\"1991-07-22\",\"phone\":\"+22670161000\"}")
                 .with(asReceptionist()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$", hasSize(1)))
@@ -672,8 +672,8 @@ class FrontDeskRoundTripIT extends BaseIT {
     @DisplayName("D942: the registration match finds a number stored as typed, whatever format is typed now")
     void theRegistrationMatchFoldsPhoneFormats() throws Exception {
         for (String typed : List.of("+22670161099", "70 16 10 99", "0022670161099")) {
-            mockMvc.perform(get(API + "/patients/registration-match").contextPath(API)
-                    .param("phone", typed).with(asReceptionist()))
+            mockMvc.perform(post(API + "/patients/registration-match").contextPath(API).contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"phone\":\"" + typed + "\"}").with(asReceptionist()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[*].patientId", hasItem(aicha.getId().toString())));
         }
@@ -688,8 +688,8 @@ class FrontDeskRoundTripIT extends BaseIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[*].id", hasItem(aicha.getId().toString())));
         }
-        mockMvc.perform(get(API + "/patients/search").contextPath(API)
-                .param("phone", "+226 70 16 10 99").with(asReceptionist()))
+        mockMvc.perform(post(API + "/patients/search").contextPath(API).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"phone\":\"+226 70 16 10 99\"}").with(asReceptionist()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$[*].id", hasItem(aicha.getId().toString())));
     }
@@ -712,8 +712,8 @@ class FrontDeskRoundTripIT extends BaseIT {
         assertThat(patientRepository.findById(aicha.getId()).orElseThrow().getPhoneNumberPrimary())
             .isEqualTo("+22670161099");
         // Both are found by the number, however it is typed.
-        mockMvc.perform(get(API + "/patients/registration-match").contextPath(API)
-                .param("phone", "70161099").with(asReceptionist()))
+        mockMvc.perform(post(API + "/patients/registration-match").contextPath(API).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"phone\":\"70161099\"}").with(asReceptionist()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$", hasSize(2)));
     }
@@ -757,7 +757,8 @@ class FrontDeskRoundTripIT extends BaseIT {
         appointment(aicha, LocalDate.now().plusDays(2), LocalTime.of(10, 0), AppointmentStatus.SCHEDULED);
 
         for (String typed : List.of("70161099", "70 16 10 99", "+22670161099")) {
-            mockMvc.perform(get(API + "/lookup/appointment/patient/phone/{phone}", typed).contextPath(API)
+            mockMvc.perform(post(API + "/lookup/appointment/patient/phone").contextPath(API).contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"phone\":\"" + typed + "\"}")
                     .with(asReceptionist()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)));

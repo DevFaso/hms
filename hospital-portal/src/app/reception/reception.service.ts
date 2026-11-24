@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { MobileMoneyOperator } from '../shared/mobile-money-operator';
+import { compactBody } from '../shared/identifier-body';
 
 export interface ReceptionDashboardSummary {
   date: string;
@@ -327,13 +328,11 @@ export class ReceptionService {
     dob?: string;
     phone?: string;
   }): Observable<DuplicateCandidate[]> {
-    let params = new HttpParams();
-    if (opts.name) params = params.set('name', opts.name);
-    if (opts.dob) params = params.set('dob', opts.dob);
-    if (opts.phone) params = params.set('phone', opts.phone);
-    return this.http.get<DuplicateCandidate[]>(`${this.base}/patients/duplicate-candidates`, {
-      params,
-    });
+    // What the desk has typed travels in the body, never in the URL.
+    return this.http.post<DuplicateCandidate[]>(
+      `${this.base}/patients/duplicate-candidates`,
+      compactBody({ name: opts.name, dob: opts.dob, phone: opts.phone }),
+    );
   }
 
   // ── MVP 11: Waitlist ───────────────────────────────────────────────────────

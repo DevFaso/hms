@@ -154,7 +154,9 @@ public class CriticalValueNotificationService {
             NotificationText text = buildText(result, false);
             notificationService.createNotification(text.key(), text.args(), username, NOTIFICATION_TYPE,
                 result.getId());
-            String message = text.render(messageSource, NotificationLocales.STAFF);
+            // K4: the SMS says a critical result waits, with the patient's initials; the test, the value
+            // and the name are read in e-Keneya, behind the sign-in (MessageDisclosureGuardTest).
+            String message = smsText(result, false);
             // The gateway call waits for the commit: a hung gateway must
             // not hold the clinical transaction's row locks, and an SMS
             // for a result that then rolled back would be worse than a
@@ -313,7 +315,7 @@ public class CriticalValueNotificationService {
             notificationService.createNotification(sent.key(), sent.args(), recipient, ESCALATION_TYPE, result.getId());
         }
         if (step != CriticalResultEscalationLadder.Step.REMINDER) {
-            smsTheChain(result, chain, escalation.render(messageSource, NotificationLocales.STAFF), alreadyTexted);
+            smsTheChain(result, chain, smsText(result, true), alreadyTexted);
         }
         // The incident opens at the last step. A result already past it with none on record (one left by the
         // old chain, which stopped after twelve rounds and opened none) gets its incident at its next reminder:
@@ -786,6 +788,16 @@ public class CriticalValueNotificationService {
      * sweep's {@link #noLongerCritical} exit), so a result the sweep still
      * pages can always be read back.
      */
+    /**
+     * Scorecard K4: whether a paged critical result still waits for its read-back, the acknowledgement that ends
+     * its chain: paged, not read back, and a read-back still applies ({@link #readBackApplies}). An amended result
+     * whose read-back is on record, or one positively graded as no longer critical, waits for nothing.
+     */
+    public boolean readBackDue(LabResult result) {
+        return result != null && result.getCriticalNotifiedAt() != null && result.getCriticalReadBackAt() == null
+            && readBackApplies(result);
+    }
+
     private boolean readBackApplies(LabResult result) {
         if (isCritical(result, null)) {
             return true;
@@ -857,6 +869,22 @@ public class CriticalValueNotificationService {
      * administrators) — never by the caller, and a sweep has no request
      * locale anyway — so the body is rendered in the staff locale.
      */
+    /**
+     * Scorecard K4: the text message of a critical result, in the staff locale. An SMS leaves the building and is
+     * read on a lock screen, so it carries the patient's initials and nothing clinical: never the test, the value
+     * or the full name, which the in-app alert ({@link #buildText}) shows behind the sign-in.
+     */
+    private String smsText(LabResult result, boolean escalation) {
+        LabOrder order = result.getLabOrder();
+        String initials = com.example.hms.utility.SmsPatientLabel.initials(order != null ? order.getPatient() : null);
+        return messageSource.getMessage(escalation ? SMS_ESCALATION_KEY : SMS_KEY, new Object[] {initials},
+            NotificationLocales.STAFF);
+    }
+
+    /** K4: the critical-result SMS keys (initials only). */
+    static final String SMS_KEY = "sms.staff.criticalLab";
+    static final String SMS_ESCALATION_KEY = "sms.staff.criticalLab.escalation";
+
     private NotificationText buildText(LabResult result, boolean escalation) {
         LabOrder order = result.getLabOrder();
         // QA D665: keyed so the reader's language is used; QA D648: an order
