@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('sync_record', Path(__file__).with_name('sync_record.py'))
@@ -94,6 +95,85 @@ class SyncRecordTest(unittest.TestCase):
             checks = m.check_evidence(self.head)
         self.assertEqual([row[0] for row in checks], ['CI', 'SonarCloud', 'Unit'])
         self.assertEqual(checks[-1][1], 'in_progress')
+
+    def test_changed_deleted_renamed_migrations_and_registration_are_never_hidden(self):
+        self.git('checkout', '-b', 'migration-baseline', self.previous)
+        directory = self.repo / m.MIGRATION_ROOT
+        directory.mkdir(parents=True, exist_ok=True)
+        for name in ['V1__modify.sql', 'V2__delete.sql', 'V3__rename.sql', 'changelog.xml']:
+            (directory / name).write_text('original ' + name, encoding='utf-8')
+        self.git('add', '.')
+        self.git('commit', '-m', 'Existing migrations')
+        self.git('checkout', '-b', 'migration-changes')
+        (directory / 'V1__modify.sql').write_text('changed', encoding='utf-8')
+        (directory / 'V2__delete.sql').unlink()
+        (directory / 'V3__rename.sql').rename(directory / 'V4__renamed.sql')
+        (directory / 'changelog.xml').write_text('registration changed', encoding='utf-8')
+        self.git('add', '.')
+        self.git('commit', '-m', 'Migration changes')
+        tip = self.git('rev-parse', 'HEAD')
+        self.git('checkout', 'migration-baseline')
+        self.git('merge', '--no-ff', 'migration-changes', '-m', f'Sync develop {tip} into main (sync #11)')
+        sync = self.git('rev-parse', 'HEAD')
+        self.git('update-ref', 'refs/remotes/origin/main', sync)
+        data = m.inspect_sync(sync, 11)
+        statuses = [row[0][0] for row in data['migration_changes']]
+        self.assertEqual(sorted(statuses), ['D', 'M', 'M', 'R'])
+        rendered = m.render(data, [], {sync: [], tip: []})
+        for name in ['V1__modify.sql', 'V2__delete.sql', 'V3__rename.sql', 'V4__renamed.sql', 'changelog.xml']:
+            self.assertIn(name.replace('_', r'\_'), rendered)
+
+    def test_event_selection_uses_triggering_head_and_normalizes_dispatch_hash(self):
+        event = {'workflow_run': {'event': 'push', 'head_branch': 'main', 'head_sha': self.head}}
+        self.assertEqual(m.select_event('workflow_run', event), (self.head, 10))
+        self.assertEqual(m.select_event('workflow_dispatch', {}, self.head[:9], '10'), (self.head, 10))
+        event['workflow_run']['head_sha'] = self.develop
+        self.assertIsNone(m.select_event('workflow_run', event))
+        event['workflow_run']['head_branch'] = 'develop'
+        self.assertIsNone(m.select_event('workflow_run', event))
+        self.assertIsNone(m.select_event('pull_request', {}))
+        for number in ['', '0', '10\nsha=evil', '11']:
+            with self.assertRaises(ValueError):
+                m.select_event('workflow_dispatch', {}, self.head, number)
+        output = self.repo / 'outputs'
+        m.write_selection((self.head, 10), output)
+        self.assertEqual(output.read_text(), f'created=true\nsha={self.head}\nnumber=10\n')
+
+    def test_own_workflow_checks_are_excluded_but_other_pending_checks_remain(self):
+        def fake_api(path):
+            if '/check-runs?' in path:
+                return [{'check_runs': [
+                    {'name': 'record', 'status': 'in_progress', 'html_url': 'https://github.com/DevFaso/hms/runs/77', 'details_url': 'https://github.com/DevFaso/hms/actions/runs/123/job/4'},
+                    {'name': 'Backend', 'status': 'queued', 'html_url': 'https://github.com/DevFaso/hms/actions/runs/1234/job/4'},
+                ]}]
+            return [[]]
+        with patch.object(m, 'api', side_effect=fake_api):
+            self.assertEqual(m.check_evidence(self.head, [123]), [('Backend', 'queued', 'https://github.com/DevFaso/hms/actions/runs/1234/job/4')])
+
+    def test_bounded_snapshot_refreshes_pending_evidence_and_retains_timeout_state(self):
+        data = {'main': 'main', 'develop': 'dev'}
+        pending = [('CI', 'pending', None)]
+        success = [('CI', 'success', None)]
+        with patch.object(m, 'api', return_value=[{'workflow_runs': []}]), patch.object(m, 'check_evidence', side_effect=[pending, success, success, success]), patch.object(m.time, 'sleep'):
+            evidence, complete = m.evidence_snapshot(data, 5)
+            self.assertTrue(complete)
+            self.assertEqual(evidence['main'], success)
+        with patch.object(m, 'api', return_value=[{'workflow_runs': []}]), patch.object(m, 'check_evidence', return_value=pending):
+            evidence, complete = m.evidence_snapshot(data, 0)
+            self.assertFalse(complete)
+            self.assertEqual(evidence['main'], pending)
+
+    def test_api_retries_only_transient_limits_without_exposing_responses(self):
+        limited = SimpleNamespace(returncode=1, stderr='HTTP 403 secondary rate limit', stdout='')
+        ok = SimpleNamespace(returncode=0, stderr='', stdout='[[]]')
+        with patch.object(m.subprocess, 'run', side_effect=[limited, ok]) as request, patch.object(m.time, 'sleep') as sleep:
+            self.assertEqual(m.api('pulls'), [[]])
+            self.assertEqual(request.call_count, 2)
+            sleep.assert_called_once()
+        denied = SimpleNamespace(returncode=1, stderr='HTTP 403 Forbidden private response', stdout='')
+        with patch.object(m.subprocess, 'run', return_value=denied) as request, self.assertRaisesRegex(RuntimeError, 'permissions'):
+            m.api('pulls')
+        self.assertEqual(request.call_count, 1)
 
 
 if __name__ == '__main__':

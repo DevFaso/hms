@@ -70,6 +70,44 @@ class PublishDraftTest(unittest.TestCase):
             self.assertTrue(p.publish(self.data, self.generated).endswith('/9998'))
             invoke.assert_not_called()
 
+    def test_failed_create_recovers_with_refreshed_evidence_and_open_pr_updates_fast_forward(self):
+        source = self.generated / '2026-11-23-sync-10.md'
+        def content(state):
+            return f'# Same immutable sync\n{p.records.EVIDENCE_START}\n{state}\n{p.records.EVIDENCE_END}\n'
+        source.write_text(content('pending'), encoding='utf-8')
+        existing = []
+        fail_create = True
+        calls = []
+        def invoke(*args):
+            nonlocal fail_create
+            calls.append(args)
+            if args[0] == 'git':
+                return self.git(*args[1:])
+            self.assertIn('--draft', args)
+            if fail_create:
+                fail_create = False
+                raise RuntimeError('simulated PR policy failure')
+            existing.append({'html_url': 'https://github.com/DevFaso/hms/pull/9999', 'state': 'open', 'draft': True})
+            return existing[0]['html_url']
+        with patch.object(p.records, 'api', side_effect=lambda _: [existing]), patch.object(p, 'invoke', side_effect=invoke):
+            with self.assertRaisesRegex(RuntimeError, 'policy'):
+                p.publish(self.data, self.generated)
+            first = self.git('rev-parse', 'HEAD')
+            source.write_text(content('success'), encoding='utf-8')
+            p.publish(self.data, self.generated)
+            second = self.git('rev-parse', 'HEAD')
+            self.assertEqual(self.git('rev-parse', second + '^'), first)
+            self.assertEqual(self.git('show', f'{second}:docs/releases/{source.name}'), content('success').strip())
+            source.write_text(content('failure'), encoding='utf-8')
+            p.publish(self.data, self.generated)
+            third = self.git('rev-parse', 'HEAD')
+            self.assertEqual(self.git('rev-parse', third + '^'), second)
+            self.assertEqual(sum(args[:3] == ('gh', 'pr', 'create') for args in calls), 2)
+            source.write_text(content('failure').replace('immutable', 'altered'), encoding='utf-8')
+            with self.assertRaisesRegex(ValueError, 'refusing to rewrite'):
+                p.publish(self.data, self.generated)
+        self.assertFalse(any('--force' in args or 'merge' in args or 'ready' in args for args in calls))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -8,7 +8,7 @@ import sync_record as records
 
 
 def invoke(*args):
-    return subprocess.check_output(args, text=True, encoding='utf-8').strip()
+    return subprocess.check_output(args, text=True, encoding='utf-8', timeout=90).strip()
 
 
 def publish(data, generated):
@@ -20,29 +20,42 @@ def publish(data, generated):
     if existing:
         if len(existing) != 1:
             raise ValueError('Ambiguous release-record PR')
-        # A repeat run is an artifact refresh, not a reason to reopen or overwrite a PR.
-        return existing[0]['html_url']
-    remote = subprocess.run(['git', 'ls-remote', '--exit-code', '--heads', 'origin', branch], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if existing[0]['state'] == 'closed':
+            return existing[0]['html_url']
+    remote = subprocess.run(['git', 'ls-remote', '--exit-code', '--heads', 'origin', branch], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=90)
+    destination = Path('docs/releases') / name
     if remote.returncode == 0:
-        # Recover a push-success/PR-create-failure without moving the existing branch.
+        # Fetch the exact published parent. Updates are ordinary fast-forwards;
+        # a racing writer causes a safe push failure, never a forced replacement.
         invoke('git', 'fetch', 'origin', branch)
-        saved = invoke('git', 'show', f'FETCH_HEAD:docs/releases/{name}')
+        parent = invoke('git', 'rev-parse', 'FETCH_HEAD')
+        base = invoke('git', 'merge-base', 'origin/develop', parent)
+        changed = invoke('git', 'diff', '--name-only', base, parent).splitlines()
+        if changed != [destination.as_posix()]:
+            raise ValueError('Existing record branch contains unrelated changes')
+        saved = invoke('git', 'show', f'{parent}:{destination.as_posix()}')
         if saved != content.strip():
-            raise ValueError('Existing record branch differs; refusing to rewrite it')
+            try:
+                same_stable = records.stable_content(saved) == records.stable_content(content.strip())
+            except ValueError:
+                same_stable = False
+            if not same_stable:
+                raise ValueError('Stable record differs; refusing to rewrite it')
+            invoke('git', 'switch', '--detach', parent)
+            destination.write_text(content, encoding='utf-8', newline='\n')
+            commit_and_push(destination, branch, data['number'])
     elif remote.returncode == 2:
         invoke('git', 'switch', '--create', branch, 'origin/develop')
-        destination = Path('docs/releases') / name
         if destination.exists():
             raise ValueError('Release record already exists on develop')
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(content, encoding='utf-8', newline='\n')
-        invoke('git', 'config', 'user.name', 'github-actions[bot]')
-        invoke('git', 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com')
-        invoke('git', 'add', '--', destination.as_posix())
-        invoke('git', 'commit', '-m', f'docs(release): record sync #{data["number"]}')
-        invoke('git', 'push', 'origin', f'HEAD:refs/heads/{branch}')
+        commit_and_push(destination, branch, data['number'])
     else:
         raise RuntimeError('Could not verify whether the record branch exists')
+    if existing:
+        # Preserve the current review/readiness state, including externally readied PRs.
+        return existing[0]['html_url']
     body = ('Generated sync evidence, automated on behalf of Tiego. Includes the exact main/develop commits, PRs, migrations, check links and code rollback point. '
             'This is a draft for review; no deployment, merge or readiness change is performed.')
     with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.md', delete=False) as stream:
@@ -54,6 +67,14 @@ def publish(data, generated):
     finally:
         # Delete only this explicitly created regular file, never a directory.
         body_file.unlink()
+
+
+def commit_and_push(destination, branch, number):
+    invoke('git', 'config', 'user.name', 'github-actions[bot]')
+    invoke('git', 'config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com')
+    invoke('git', 'add', '--', destination.as_posix())
+    invoke('git', 'commit', '-m', f'docs(release): record sync #{number} evidence')
+    invoke('git', 'push', 'origin', f'HEAD:refs/heads/{branch}')
 
 
 def main():
