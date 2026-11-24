@@ -242,7 +242,7 @@ import { serverInstant } from '../../shared/date-utils';
       padding: 6px;
       margin-left: 6px;
       border: 1px solid #9bb9b4;
-      border-radius: 6px;
+      border-radius: 8px;
       background: white;
     }
     .hint {
