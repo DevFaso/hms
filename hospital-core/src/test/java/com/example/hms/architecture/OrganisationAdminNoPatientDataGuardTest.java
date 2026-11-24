@@ -63,6 +63,7 @@ class OrganisationAdminNoPatientDataGuardTest {
         entry(ROLES + "createAssignment", STAFF_ROW),
         entry(ROLES + "getAssignment", STAFF_ROW),
         entry(ROLES + "getAllAssignments", "the staff assignments of its organisation; PATIENT rows are filtered out"),
+        entry(ROLES + "termSearchAssignments", "the same list narrowed to a typed term; PATIENT rows are filtered out"),
         entry(ROLES + "regenerateAssignmentCode", STAFF_ROW),
         entry(ROLES + "resendNotification", STAFF_ROW),
         entry(ROLES + "revealActivationCode", STAFF_ROW),

@@ -380,8 +380,14 @@ public class GlobalExceptionHandler {
         for (String path : ex.getMalformedPaths()) {
             fieldErrors.putIfAbsent(path, invalidFieldReason(path));
         }
+        // QA D3753: a search's misspelt criterion is named as such, with the criteria it accepts.
+        String acceptedCriteria = acceptedSearchCriteria(ex.getBodyType());
         for (String path : ex.getNotAcceptedPaths()) {
-            fieldErrors.putIfAbsent(path, notAcceptedReason(path));
+            fieldErrors.putIfAbsent(path, acceptedCriteria != null
+                ? localized("error.request.searchFieldNotAccepted",
+                    "\"{0}\" is not a criterion of this search. Accepted fields: {1}.",
+                    path.length() > 64 ? path.substring(0, 64) : path, acceptedCriteria)
+                : notAcceptedReason(path));
         }
         java.util.List<String> globalReasons = new java.util.ArrayList<>();
         for (MalformedRequestBodyException.BodyViolation item : ex.getViolations()) {
@@ -470,6 +476,30 @@ public class GlobalExceptionHandler {
      * QA D1672: a property the request does not take, named by its label: the
      * change it carried would otherwise have been dropped behind a 200.
      */
+    /**
+     * The fields a {@code @RejectsUnknownFields(SEARCH)} body takes, comma-separated, or null when
+     * the body is not a search's criteria.
+     */
+    private static String acceptedSearchCriteria(Class<?> bodyType) {
+        if (bodyType == null) {
+            return null;
+        }
+        com.example.hms.validation.RejectsUnknownFields marker =
+            bodyType.getAnnotation(com.example.hms.validation.RejectsUnknownFields.class);
+        if (marker == null || marker.value() != com.example.hms.validation.RejectsUnknownFields.Kind.SEARCH) {
+            return null;
+        }
+        if (bodyType.isRecord()) {
+            return java.util.Arrays.stream(bodyType.getRecordComponents())
+                .map(java.lang.reflect.RecordComponent::getName)
+                .collect(java.util.stream.Collectors.joining(", "));
+        }
+        return java.util.Arrays.stream(bodyType.getDeclaredFields())
+            .filter(field -> !java.lang.reflect.Modifier.isStatic(field.getModifiers()) && !field.isSynthetic())
+            .map(java.lang.reflect.Field::getName)
+            .collect(java.util.stream.Collectors.joining(", "));
+    }
+
     private String notAcceptedReason(String field) {
         String label = labelOrNull(field);
         if (label == null) {

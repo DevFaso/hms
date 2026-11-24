@@ -12,6 +12,10 @@ import { fileURLToPath } from 'node:url';
  * front-end telemetry. Searches and lookups keyed by one POST them in the body
  * (shared/identifier-body.ts); the backend twin is PersonalIdentifierUrlGuardTest.
  *
+ * QA D3750: a search box's typed term (search, q, query, keyword, …) is very often one of those,
+ * so a list's term is posted to `…/term-search`. Only a box that searches a catalogue of things
+ * (drugs, tests, order sets, facilities) is allowlisted below, each with its reason.
+ *
  * And every telemetry item is scrubbed before it leaves the browser: main.ts wires the
  * sanitizer as Faro's beforeSend.
  */
@@ -41,6 +45,15 @@ const NAMES = [
   'username',
   'userName',
   'patientUsername',
+  // QA D3750: a search box's free text is whatever was typed, very often one of the above.
+  'search',
+  'q',
+  'query',
+  'term',
+  'searchTerm',
+  'keyword',
+  'keywords',
+  'filter',
 ].join('|');
 
 /** What builds a URL with one of those names, and how to recognise it. */
@@ -85,7 +98,36 @@ function code(source) {
  * Where a match is not a request URL, and why. A new entry needs a reason.
  * `file` is relative to hospital-portal/, `text` must occur in the matched source.
  */
-const ALLOWED = [];
+const CATALOGUE =
+  "searches a catalogue of things, where a person's identifier has nothing to match";
+const ALLOWED = [
+  {
+    file: 'src/app/audit-logs/audit-description-patterns.ts',
+    text: '?q=',
+    reason:
+      'a pattern that reads a stored audit description (a hospital-name search), not a request URL',
+  },
+  {
+    file: 'src/app/services/hospital.service.ts',
+    text: "new HttpParams().set('q'",
+    reason: `hospital names for the super-admin scope chip: ${CATALOGUE}`,
+  },
+  {
+    file: 'src/app/services/lab.service.ts',
+    text: "httpParams.set('keyword'",
+    reason: `lab test definitions: ${CATALOGUE}`,
+  },
+  {
+    file: 'src/app/services/order-set.service.ts',
+    text: "params.set('search'",
+    reason: `admission order-set names: ${CATALOGUE}`,
+  },
+  {
+    file: 'src/app/services/pharmacy.service.ts',
+    text: "new HttpParams().set('q'",
+    reason: `the drug catalogue and the pharmacy registry (facilities): ${CATALOGUE}`,
+  },
+];
 
 function files(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -108,18 +150,31 @@ export function findIdentifierUrls(source) {
 
 test('the portal never puts a personal identifier in a request URL', () => {
   const violations = [];
+  const used = new Set();
   for (const path of files(resolve(portal, 'src'))) {
     const name = relative(portal, path).split('\\').join('/');
     for (const hit of findIdentifierUrls(readFileSync(path, 'utf8'))) {
-      if (ALLOWED.some((a) => a.file === name && hit.text.includes(a.text))) continue;
+      const allowed = ALLOWED.find((a) => a.file === name && hit.text.includes(a.text));
+      if (allowed) {
+        used.add(allowed);
+        continue;
+      }
       violations.push(`${name}:${hit.line} ${hit.shape}: ${hit.text}`);
     }
   }
   assert.deepEqual(
     violations,
     [],
-    'POST the identifier in the body (compactBody), never in the URL',
+    'POST the identifier or the typed term in the body (compactBody, …/term-search), never in the URL',
   );
+  // A stale entry could hide a new offender in the same file.
+  assert.deepEqual(
+    ALLOWED.filter((a) => !used.has(a)).map((a) => `${a.file}: ${a.text}`),
+    [],
+    'remove the allowlist entries that no longer match anything',
+  );
+  for (const a of ALLOWED)
+    assert.ok(a.reason?.trim(), `${a.file}: an allowlist entry needs a reason`);
 });
 
 test('the guard recognises each shape it forbids', () => {
@@ -133,6 +188,11 @@ test('the guard recognises each shape it forbids', () => {
     'this.http.get(`${this.baseUrl}/doctor/${identifier}`)',
     "this.http\n      .get<{ ok: boolean }>('/auth/verify-email', {\n        params: { email, token },\n      })",
     'const params = buildParams({ page: 0, userName: filter.userName });',
+    // QA D3750: a search box's typed term.
+    "if (search) params = params.set('search', search);",
+    "let httpParams = new HttpParams().set('q', query).set('page', page);",
+    "this.http.get('/patients', { params: { hospitalId, search } })",
+    'this.http.get(`/appointments?search=${term}`)',
   ]) {
     assert.equal(findIdentifierUrls(source).length > 0, true, source);
   }
@@ -142,6 +202,7 @@ test('the guard recognises each shape it forbids', () => {
     "await this.confirm.ask({ titleKey: 'X', params: { name: ward.name } });",
     '// the link is /verify?email=…&token=…',
     "this.http.post('/patients/search', { name: typed }, { params: httpParams });",
+    "this.http.post('/patients/term-search', { search: term }, { params });",
   ]) {
     assert.deepEqual(findIdentifierUrls(source), [], source);
   }

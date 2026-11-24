@@ -106,7 +106,17 @@ class ReadOnlyPostGuardTest {
         "SuperAdminAuditSearchController#exportCsv",
         "SuperAdminAuditSearchController#search",
         "UserController#searchUsers",
-        "SuperAdminSecurityRuleController#simulatePolicyImpact");
+        "SuperAdminSecurityRuleController#simulatePolicyImpact",
+        // QA D3750: a list's typed term left its query string for the body.
+        "AppointmentController#termSearchAppointments",
+        "AuditEventLogController#termSearchAuditLogs",
+        "ChatController#searchChatHistory",
+        "NotificationController#termSearchNotifications",
+        "PatientController#termSearchPatients",
+        "PatientPortalController#termSearchMyNotifications",
+        "PrescriptionController#search",
+        "SuperAdminOrganizationController#termSearchOrganizationHierarchy",
+        "UserRoleHospitalAssignmentController#termSearchAssignments");
 
     private record Post(RequestMappingInfo info, HandlerMethod handler) {
         String name() {

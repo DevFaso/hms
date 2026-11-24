@@ -120,6 +120,37 @@ class UserRoleHospitalAssignmentControllerTest {
     }
 
     @Test
+    void theTypedTermTravelsInTheBody_D3750() throws Exception {
+        UUID hospitalId = UUID.randomUUID();
+        when(assignmentService.getAllAssignments(any(), any()))
+            .thenReturn(org.springframework.data.domain.Page.empty());
+
+        mockMvc.perform(post("/assignments/term-search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"search\":\" Awa Kabore \"}")
+                .param("hospitalId", hospitalId.toString())
+                .param("page", "0").param("size", "20"))
+            .andExpect(status().isOk());
+
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.assignment.AssignmentSearchCriteria> criteria =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.assignment.AssignmentSearchCriteria.class);
+        org.mockito.Mockito.verify(assignmentService).getAllAssignments(any(), criteria.capture());
+        org.assertj.core.api.Assertions.assertThat(criteria.getValue().getSearch()).isEqualTo("Awa Kabore");
+        org.assertj.core.api.Assertions.assertThat(criteria.getValue().getHospitalId()).isEqualTo(hospitalId.toString());
+    }
+
+    @Test
+    void aMisspeltTermFieldIsRefused_D3753() throws Exception {
+        mockMvc.perform(post("/assignments/term-search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"query\":\"Awa\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.field").value("query"));
+
+        org.mockito.Mockito.verify(assignmentService, org.mockito.Mockito.never()).getAllAssignments(any(), any());
+    }
+
+    @Test
     void resendNotificationReturnsTheDeliveryReport() throws Exception {
         // The endpoint used to return 204 while every delivery failure
         // vanished into a WARN log; the report is now the response body, so
