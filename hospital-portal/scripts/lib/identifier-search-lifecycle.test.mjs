@@ -24,7 +24,7 @@ function tokens(node) {
   return text;
 }
 
-test('every protected exact-identifier search rejects stale terms and lost permissions before displaying rows', () => {
+test('exact-identifier searches reject stale context; permission-aware directories also recheck access', () => {
   let calls = 0;
   for (const file of sources(ROOT)) {
     const source = ts.createSourceFile(
