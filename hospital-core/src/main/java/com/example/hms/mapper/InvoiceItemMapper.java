@@ -66,6 +66,7 @@ public class InvoiceItemMapper {
         dto.setUnitPrice(item.getUnitPrice());
         dto.setTotalPrice(item.getTotalPrice());
         dto.setItemCategory(String.valueOf(item.getItemCategory()));
+        dto.setCoverageCategory(item.getCoverageCategory() != null ? item.getCoverageCategory().name() : null);
 
         if (item.getAssignment() != null) {
             dto.setAssignmentId(item.getAssignment().getId());
