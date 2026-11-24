@@ -20,9 +20,6 @@ on:
 
 permissions:
   contents: read
-  checks: read
-  statuses: read
-  pull-requests: read
 
 jobs:
   test:
