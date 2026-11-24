@@ -79,14 +79,10 @@ public class UserRoleHospitalAssignment extends BaseEntity {
     @Column(name = "confirmation_verified_at")
     private LocalDateTime confirmationVerifiedAt;
 
-    /**
-     * One-time plaintext temporary password stored until the onboarding email is sent.
-     * Cleared (set to {@code null}) immediately after the email is dispatched so it is
-     * never persisted long-term.  Only populated for brand-new users who did not supply
-     * their own credentials.
-     */
-    @Column(name = "temp_plain_password", length = 255)
-    private String tempPlainPassword;
+    // No password is kept here in any form. The legacy temp_plain_password
+    // column is no longer mapped; V366 emptied it and V367 keeps it empty.
+    // A first password is issued, hashed, when the code is confirmed
+    // (UserRoleHospitalAssignmentServiceImpl#verifyAssignmentByCode).
 
     @PrePersist
     protected void onAssign() {

@@ -270,6 +270,7 @@ class UserServiceImplTest {
     @Test
     void changeOwnPassword_success_clearsForcePasswordChangeFlag() {
         user.setForcePasswordChange(true);
+        user.setTemporaryPasswordExpiresAt(java.time.LocalDateTime.now().plusHours(5));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(passwordEncoder.encode("NewPass99!")).thenReturn("$2a$hashed");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -277,6 +278,7 @@ class UserServiceImplTest {
         userService.changeOwnPassword(userId, "NewPass99!");
 
         assertThat(user.isForcePasswordChange()).isFalse();
+        assertThat(user.getTemporaryPasswordExpiresAt()).as("the holder's own password does not expire").isNull();
         assertThat(user.getPasswordHash()).isEqualTo("$2a$hashed");
         assertThat(user.getPasswordRotationWarningAt()).isNull();
         assertThat(user.getPasswordRotationForcedAt()).isNull();
@@ -391,6 +393,9 @@ class UserServiceImplTest {
             assertThat(userCaptor.getValue().isForcePasswordChange())
                 .as("an admin-chosen password must be replaced at first sign-in")
                 .isTrue();
+            assertThat(userCaptor.getValue().getTemporaryPasswordExpiresAt())
+                .as("and, chosen by someone else, it is temporary: it expires 72 hours after it was set")
+                .isEqualTo(userCaptor.getValue().getPasswordChangedAt().plusHours(72));
             assertThat(userCaptor.getValue().isForceUsernameChange())
                 .as("the username the admin chose is kept")
                 .isFalse();
@@ -1658,6 +1663,8 @@ class UserServiceImplTest {
             assertThat(saved.getPasswordHash()).isEqualTo("$2a$10$newHash");
             assertThat(saved.getPasswordChangedAt()).isNotNull();
             assertThat(saved.isForcePasswordChange()).as("D38: an admin-chosen password must be replaced at next sign-in").isTrue();
+            assertThat(saved.getTemporaryPasswordExpiresAt()).as("and expires 72 hours after it was set")
+                .isEqualTo(saved.getPasswordChangedAt().plusHours(72));
         }
 
         @Test
@@ -2761,6 +2768,8 @@ class UserServiceImplTest {
             User saved = savedUser();
             assertThat(saved.getUsername()).matches("aicha\\.ouedraogo\\d{4}");
             assertThat(saved.isForcePasswordChange()).isTrue();
+            assertThat(saved.getTemporaryPasswordExpiresAt()).isEqualTo(saved.getPasswordChangedAt().plusHours(72));
+            assertThat(saved.getPasswordHash()).as("only the hash is kept").isNotEqualTo(req.getPassword());
             assertThat(saved.isForceUsernameChange()).isTrue();
             assertThat(saved.getPhoneNumber()).isEqualTo("+22670202020");
             assertThat(req.getPassword()).hasSize(14);

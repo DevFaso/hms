@@ -288,6 +288,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return false;
         }
 
+        // ── Password change first (PasswordChangeGate) ──────────────────
+        // An account on a temporary password, or due a rotation, sets its own
+        // password before anything else: every other request is refused here,
+        // whatever the client does. The challenge token is no session and
+        // is already confined to the MFA step.
+        if (!challenge && PasswordChangeGate.applies(authentication) && !PasswordChangeGate.admits(request)) {
+            log.debug("[JWT] Refusing request on path={} until the account sets its own password", path);
+            SecurityContextHolder.clearContext();
+            HospitalContextHolder.clear();
+            ImpersonationContextHolder.clear();
+            PasswordChangeGate.writeRefusal(response);
+            return false;
+        }
+
         // ── Tenant lifecycle gate (MVP-2) ────────────────────────────────
         // After authentication has populated the HospitalContext, refuse
         // requests whose user is attached to an org in a non-active state

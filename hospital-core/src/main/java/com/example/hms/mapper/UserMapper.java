@@ -137,16 +137,17 @@ public class UserMapper {
                 .build();
     }
 
-    /** Partial update without forcing active flag unless provided. */
-    public void updateEntityFromDTO(User user, UserRequestDTO dto,
-            String encodedPasswordHashOrNull, Boolean activeOrNull) {
+    /**
+     * Partial update without forcing active flag unless provided. Never the
+     * password: one set for someone else is temporary and goes through
+     * {@link com.example.hms.utility.TemporaryPasswords#assign}.
+     */
+    public void updateEntityFromDTO(User user, UserRequestDTO dto, Boolean activeOrNull) {
         if (dto == null || user == null)
             return;
 
         if (dto.getUsername() != null)
             user.setUsername(trim(dto.getUsername()));
-        if (encodedPasswordHashOrNull != null)
-            user.setPasswordHash(encodedPasswordHashOrNull);
         if (dto.getEmail() != null)
             user.setEmail(normalizeEmail(dto.getEmail()));
         if (dto.getFirstName() != null)

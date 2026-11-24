@@ -109,6 +109,14 @@ public interface EmailService {
     // language yet; these render in DEFAULT_RECIPIENT_LOCALE.
     // ---------------------------------------------------------------------
 
+    /**
+     * The confirmation code of a role assignment, and the link to confirm it.
+     * Never a password.
+     *
+     * @param firstSignIn the account has never been used: the mail says that
+     *                    its sign-in details are shown once the code is
+     *                    confirmed
+     */
     void sendRoleAssignmentConfirmationEmail(
         String to,
         String userName,
@@ -117,8 +125,7 @@ public interface EmailService {
         String confirmationCode,
         String assignmentCode,
         String profileCompletionUrl,
-        String tempUsername,
-        String tempPassword
+        boolean firstSignIn
     );
 
     /**
@@ -172,8 +179,11 @@ public interface EmailService {
     void sendPasswordRotationForceChangeEmail(String to, String displayName, LocalDate dueOn, long daysOverdue);
 
     /**
-     * Sent to a newly admin-created staff/admin user with their temporary
-     * credentials.
+     * Sent to a newly admin-created staff/admin user: their username and how
+     * to activate. It never carries a password: the first password is shown
+     * once on the activation page after the code is confirmed
+     * ({@code TemporaryPasswordGuardTest} keeps password parameters off this
+     * interface).
      *
      * <p>The account is created INACTIVE (option A, 2026-09-02): the holder
      * must first confirm the role assignment with the code delivered in the
@@ -185,7 +195,6 @@ public interface EmailService {
      * @param to            recipient email address
      * @param displayName   first + last name (or username as fallback)
      * @param username      the account username
-     * @param tempPassword  the plain-text temporary password (shown once)
      * @param roleName      role code (e.g. "ROLE_DOCTOR"); rendered as its label in the mail's language
      * @param hospitalName  hospital the user was assigned to (may be null for global roles)
      * @param activationUrl where to enter the confirmation code; null falls back
@@ -198,7 +207,6 @@ public interface EmailService {
         String to,
         String displayName,
         String username,
-        String tempPassword,
         String roleName,
         String hospitalName,
         String activationUrl,
@@ -224,13 +232,12 @@ public interface EmailService {
      * role it was registered with, each with its own code and link, so no
      * separate role-assignment mail is sent. With a single role this renders
      * exactly as
-     * {@link #sendAdminWelcomeEmail(String, String, String, String, String, String, String, String)}.
+     * {@link #sendAdminWelcomeEmail(String, String, String, String, String, String, String)}.
      */
     void sendAdminWelcomeEmail(
         String to,
         String displayName,
         String username,
-        String tempPassword,
         java.util.List<WelcomeRole> roles
     );
 

@@ -507,6 +507,27 @@ class AuthControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    /**
+     * A temporary password past its 72 hours: refused with its own code and a sentence that names the way back
+     * (a reset link), and not counted toward the lockout (the provider raises it only after the password matched).
+     */
+    @Test
+    void login_withAnExpiredTemporaryPassword_isRefusedWithItsCode() throws Exception {
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(new org.springframework.security.authentication.CredentialsExpiredException("expired"));
+
+        mockMvc.perform(post("/auth/login")
+                        .header("Accept-Language", "fr")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new LoginRequest("awa.t", "Temp@Expired1", null))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(AuthController.TEMPORARY_PASSWORD_EXPIRED_CODE))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString(
+                        "Votre mot de passe temporaire a expiré")));
+        verify(loginAttemptService, never()).recordFailure(org.mockito.ArgumentMatchers.anyString());
+    }
+
     /** D64: a French sign-in screen got "Invalid username or password." in English. */
     @Test
     void login_withInvalidCredentials_isTranslated() throws Exception {
