@@ -43,17 +43,17 @@
     }
   },
   "ADT_INTAKE": {
-    "TITLE": "Configuración ADT: médico de ingreso predeterminado",
-    "SUBTITLE": "Valores predeterminados por hospital usados cuando llega un mensaje ADT^A01/A04 sin una visita coincidente. La creación automática solo se activa cuando la fila está habilitada Y el indicador global app.hl7.adt.visit-sync.auto-create.enabled está activado.",
-    "LOADING": "Cargando configuraciones…",
-    "ERROR": "No se pudieron cargar las configuraciones.",
-    "EMPTY": "Aún no hay configuraciones. Use el formulario de abajo para crear una para un hospital.",
+    "TITLE": "Ingresos automáticos desde otro sistema",
+    "SUBTITLE": "Defina los valores utilizados cuando otro sistema envía un ingreso o una visita sin un registro de visita coincidente. La creación requiere activar tanto este hospital como el servicio de ingresos automáticos de la plataforma.",
+    "LOADING": "Cargando los ajustes de ingresos automáticos…",
+    "ERROR": "No se pudieron cargar los ajustes de ingresos automáticos.",
+    "EMPTY": "Ningún hospital tiene ajustes de ingresos automáticos. Use el formulario de abajo para configurar uno.",
     "SAVING": "Guardando…",
     "SAVE": "Guardar",
     "STATE_ENABLED": "Habilitada",
     "STATE_DISABLED": "Deshabilitada",
-    "FORM_CREATE_TITLE": "Crear o actualizar una configuración",
-    "FORM_EDIT_TITLE": "Editar configuración",
+    "FORM_CREATE_TITLE": "Configurar un hospital",
+    "FORM_EDIT_TITLE": "Editar ajustes de ingresos automáticos",
     "COL_HOSPITAL": "Hospital",
     "COL_ADMISSION_TYPE": "Tipo de admisión",
     "COL_ACUITY": "Nivel de gravedad",
@@ -65,17 +65,17 @@
       "PROVIDER_PLACEHOLDER": "— Seleccione un médico —",
       "DEPARTMENT": "Departamento (opcional)",
       "DEPARTMENT_PLACEHOLDER": "— Seleccione un departamento —",
-      "ASSIGNMENT_ID": "Identificador de asignación por defecto (requerido para A04)",
-      "ASSIGNMENT_HINT": "Necesaria solo si este hospital crea automáticamente los encuentros ADT^A04: la asignación propia del médico que admite, bajo la que se registran.",
+      "ASSIGNMENT_ID": "Asignación médica para visitas automáticas",
+      "ASSIGNMENT_HINT": "Para crear visitas automáticamente, seleccione la asignación del médico de ingreso. Sin asignación, solo están disponibles los ingresos automáticos.",
       "ADMISSION_TYPE": "Tipo de admisión predeterminado",
       "ACUITY": "Nivel de gravedad predeterminado",
       "ENCOUNTER_TYPE": "Tipo de encuentro predeterminado",
       "CHIEF_COMPLAINT": "Motivo de consulta predeterminado",
       "ENABLED": "Habilitar la creación automática para este hospital",
-      "ASSIGNMENT": "Asignación por defecto (requerida para A04)",
-      "ASSIGNMENT_NONE": "— Ninguna (solo A01) —"
+      "ASSIGNMENT": "Asignación médica para visitas automáticas",
+      "ASSIGNMENT_NONE": "— Ninguna: solo ingresos —"
     },
-    "CONFIRM_DELETE": "¿Eliminar la configuración ADT para {{hospital}}?",
+    "CONFIRM_DELETE": "¿Eliminar la configuración de ingresos automáticos de {{hospital}}?",
     "SELECTED_HOSPITAL": "Hospital seleccionado:",
     "HOSPITAL_SEARCHING": "Buscando hospitales…",
     "HOSPITAL_NO_MATCH": "Ningún hospital coincide con esta búsqueda.",
@@ -83,17 +83,19 @@
     "DEPARTMENT_NO_OPTIONS": "No hay departamentos en este hospital.",
     "PLACEHOLDER": {
       "HOSPITAL_SEARCH": "Escriba al menos 2 caracteres del nombre o código del hospital…",
-      "CHIEF_COMPLAINT": "Dejar vacío para «Ingreso creado automáticamente desde un mensaje ADT»"
+      "CHIEF_COMPLAINT": "Deje vacío para usar el motivo automático"
     },
     "VALIDATION": {
       "REQUIRED": "El hospital y el médico de ingreso son obligatorios."
     },
     "TOAST": {
-      "SAVED": "Configuración guardada.",
-      "SAVE_FAILED": "No se pudo guardar la configuración.",
-      "DELETED": "Configuración eliminada.",
-      "DELETE_FAILED": "No se pudo eliminar la configuración."
-    }
+      "SAVED": "Ajustes de ingresos automáticos guardados.",
+      "SAVE_FAILED": "No se pudieron guardar los ajustes de ingresos automáticos.",
+      "DELETED": "Ajustes de ingresos automáticos eliminados.",
+      "DELETE_FAILED": "No se pudieron eliminar los ajustes de ingresos automáticos."
+    },
+    "HOSPITAL_LOCKED": "No puede cambiar el hospital durante la edición. Cancele para configurar otro hospital.",
+    "CHOOSE_HOSPITAL_FIRST": "Seleccione primero un hospital para acceder a sus médicos, departamentos y asignaciones."
   },
   "BEDS": {
     "DELETE_BED_CONFIRM": "¿Eliminar la cama {{name}}?",
@@ -5371,7 +5373,7 @@
     "PROVIDER_STAFF": "Personal",
     "PROVIDER_AUDIT": "Registro de auditoría",
     "DHIS2": "Exportación DHIS2",
-    "ADT_INTAKE": "Ingresos ADT automáticos",
+    "ADT_INTAKE": "Ingresos automáticos",
     "UNSIGNED_NOTES": "Notas sin firmar",
     "PRICE_LIST": "Lista de precios",
     "PATIENT_NOTIFICATIONS": "Notificaciones a pacientes",

@@ -30,6 +30,8 @@ class AssignmentEndpointRolesTest {
         "createAssignment",
         "getAssignment",
         "getAllAssignments",
+        // QA D3750: the same list, its typed term in the body.
+        "termSearchAssignments",
         "regenerateAssignmentCode",
         "resendNotification",
         "revealActivationCode",

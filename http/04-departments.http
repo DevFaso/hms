@@ -7,10 +7,13 @@ GET {{baseUrl}}/departments
 Authorization: Bearer {{accessToken}}
 Accept: application/json
 
-### Search departments
-GET {{baseUrl}}/departments/search?query=cardio
+### Search departments (the term in the body)
+POST {{baseUrl}}/departments/search
 Authorization: Bearer {{accessToken}}
+Content-Type: application/json
 Accept: application/json
+
+{ "search": "cardio" }
 
 ### Filter departments (POST body)
 POST {{baseUrl}}/departments/filter

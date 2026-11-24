@@ -26,6 +26,7 @@ public class PatientNationalUniqueIdController {
 
     /** No generated toString: request bodies must never print identity data. */
     @Getter @Setter
+    @com.example.hms.validation.RejectsUnknownFields(com.example.hms.validation.RejectsUnknownFields.Kind.SEARCH)
     public static class Lookup {
         @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
         private String nationalUniqueId;

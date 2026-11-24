@@ -141,7 +141,7 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
             SEARCH_FILTER),
         // Identifier searches and lookups: the identifiers travel in the body, never in the URL;
         // every criterion stays optional, as the query parameters were.
-        Map.entry("POST /patients/search", SEARCH_FILTER),
+        // QA D3753: POST /patients/search is not here: with no criterion at all it is refused on "name".
         Map.entry("POST /patients/lookup", SEARCH_FILTER),
         Map.entry("POST /patients/registration-match", SEARCH_FILTER),
         Map.entry("POST /reception/patients/duplicate-candidates", SEARCH_FILTER),

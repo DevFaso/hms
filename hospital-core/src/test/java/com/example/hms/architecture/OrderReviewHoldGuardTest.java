@@ -68,6 +68,7 @@ class OrderReviewHoldGuardTest {
         Transfusion#recordAntibodyWorkup | the biologist's record of an antibody (QA D3351): no unit leaves on it, and issuing stays gated
         Prescription#create | a new order written after the dispute follows the normal workflow
         Prescription#pediatricDoseReview,allergyReview,requestClarification,resolveClarification | a review note: nothing leaves, signing and dispensing are refused
+        Prescription#search | a read over POST (the list's search box, QA D3750): nothing leaves
         Prescription#update,delete | an edit holds the order again (reviewAgainAfterChange, pinned below); a withdrawal stops the order
         Dispense#claimQueueRow,takeOverQueueRow,releaseQueueRow | the work queue: nothing leaves the pharmacy
         Dispense#cancelReady,cancelDispense | hands stock back

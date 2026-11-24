@@ -97,11 +97,19 @@ export class AppointmentService {
       if (filters.patientId) params = params.set('patientId', filters.patientId);
       if (filters.staffId) params = params.set('staffId', filters.staffId);
       if (filters.hospitalId) params = params.set('hospitalId', filters.hospitalId);
-      if (filters.search) params = params.set('search', filters.search);
       if (filters.fromDate) params = params.set('fromDate', filters.fromDate);
       if (filters.toDate) params = params.set('toDate', filters.toDate);
     }
-    return this.http.get<AppointmentResponse[]>(this.baseUrl, { params });
+    // QA D3750: the typed term (a patient's or a clinician's name, a phone number) is posted in
+    // the body, never put in the URL; the other filters stay in the query.
+    const term = filters?.search?.trim();
+    return term
+      ? this.http.post<AppointmentResponse[]>(
+          `${this.baseUrl}/term-search`,
+          { search: term },
+          { params },
+        )
+      : this.http.get<AppointmentResponse[]>(this.baseUrl, { params });
   }
 
   getById(id: string): Observable<AppointmentResponse> {

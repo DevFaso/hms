@@ -62,6 +62,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 interface NavItem {
+  wrapLabel?: boolean;
   icon: string;
   label: string;
   translationKey?: string;
@@ -1784,6 +1785,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       icon: 'input',
       label: 'ADT intake',
       translationKey: 'NAV.ADT_INTAKE',
+      wrapLabel: true,
       route: '/admin/adt-intake-configs',
     });
     items.push({

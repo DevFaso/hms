@@ -19,6 +19,26 @@ describe('AdtIntakeConfigComponent', () => {
   let staff: jasmine.SpyObj<StaffService>;
   let referrals: jasmine.SpyObj<ReferralService>;
 
+  it('renders the house-style card and full-height native fields with a reason for unavailable hospital choices', async () => {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const form = fixture.nativeElement.querySelector(
+      '[data-testid="adt-intake-form"]',
+    ) as HTMLFormElement;
+    expect(form.classList.contains('form-card')).toBeTrue();
+    for (const control of form.querySelectorAll('input:not([type="checkbox"]), select, textarea')) {
+      const style = getComputedStyle(control);
+      expect(control.classList.contains('keneya-form-control')).toBeTrue();
+      expect(parseFloat(style.minHeight)).toBeGreaterThanOrEqual(44);
+      expect(parseFloat(style.borderRadius)).toBeGreaterThanOrEqual(8);
+    }
+    const provider = form.querySelector('#adt-provider') as HTMLSelectElement;
+    expect(provider.disabled).toBeTrue();
+    expect(provider.getAttribute('aria-describedby')).toBe('adt-dependent-help');
+    expect(form.querySelector('#adt-dependent-help')?.textContent?.trim()).toBeTruthy();
+  });
+
   const sample: AdtIntakeConfig = {
     id: 'cfg-1',
     hospitalId: 'h1',

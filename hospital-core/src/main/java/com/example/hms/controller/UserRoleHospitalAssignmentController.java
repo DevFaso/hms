@@ -184,12 +184,37 @@ public class UserRoleHospitalAssignmentController {
             @Parameter(description = "Filter by active state")
             @RequestParam(required = false) Boolean active,
 
-            @Parameter(description = "Free text search across user, role, hospital and assignment code")
-            @RequestParam(required = false) String search,
-
             @Parameter(description = "Filter by assignment code")
             @RequestParam(required = false) String assignmentCode
     ) {
+        return assignmentPage(page, size, hospitalId, active, null, assignmentCode);
+    }
+
+    /**
+     * The same list narrowed to a free-text term across the user, the role, the hospital and the
+     * assignment code. The term is often a colleague's name, phone number or e-mail address, so it
+     * travels in the body, never in the URL; the other filters and the paging stay in the query.
+     */
+    @Operation(summary = "Search role assignments by a typed term (in the body), with pagination")
+    @PreAuthorize(ASSIGNMENT_ADMIN)
+    @com.example.hms.security.ReadsOnly("the assignments page's search box, under POST so the typed term stays out"
+        + " of the URL")
+    @PostMapping("/term-search")
+    @com.example.hms.security.tenant.OrganisationScopedHospitalId(reason = "termSearchAssignments lists a named "
+        + "hospital only inside the caller's assignment scope (scopedListing), else its own reach")
+    public ResponseEntity<Page<UserRoleHospitalAssignmentResponseDTO>> termSearchAssignments(
+            @Valid @RequestBody com.example.hms.payload.dto.identifiersearch.SearchTermRequestDTO body,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) UUID hospitalId,
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String assignmentCode
+    ) {
+        return assignmentPage(page, size, hospitalId, active, body.term(), assignmentCode);
+    }
+
+    private ResponseEntity<Page<UserRoleHospitalAssignmentResponseDTO>> assignmentPage(
+            int page, int size, UUID hospitalId, Boolean active, String search, String assignmentCode) {
         // QA D1295 class: pages of an unordered query repeat or skip rows; newest assignment first.
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "assignedAt", "id"));
         AssignmentSearchCriteria criteria = AssignmentSearchCriteria.builder()
@@ -199,8 +224,10 @@ public class UserRoleHospitalAssignmentController {
             .assignmentCode(StringUtils.hasText(assignmentCode) ? assignmentCode.trim() : null)
             .build();
 
-        log.info("📄 Fetching assignments (page {}, size {}, hospitalId={}, active={}, search='{}', assignmentCode='{}')",
-            page, size, hospitalId, active, search, assignmentCode);
+        // The typed term is not logged: it often names a person.
+        log.info("📄 Fetching assignments (page {}, size {}, hospitalId={}, active={}, term={}, assignmentCode={})",
+            page, size, hospitalId, active, StringUtils.hasText(search) ? "given" : "none",
+            StringUtils.hasText(assignmentCode) ? "given" : "none");
         Page<UserRoleHospitalAssignmentResponseDTO> resultPage =
                 assignmentService.getAllAssignments(pageable, criteria);
         return ResponseEntity.ok(resultPage);

@@ -47,6 +47,20 @@ describe('PatientPickerComponent', () => {
     }, 400);
   });
 
+  it('QA D3753: switching the search mode clears the box and asks the server nothing', (done) => {
+    component.ngOnInit();
+    component.setNationalUniqueIdMode(false);
+    component.onQueryChange('   ');
+    setTimeout(() => {
+      expect(patientSpy.search).not.toHaveBeenCalled();
+      expect(patientSpy.lookup).not.toHaveBeenCalled();
+      expect(component.noMatch()).toBeFalse();
+      expect(component.searchLoading()).toBeFalse();
+      component.ngOnDestroy();
+      done();
+    }, 400);
+  });
+
   it('should create', () => {
     expect(component).toBeTruthy();
   });
