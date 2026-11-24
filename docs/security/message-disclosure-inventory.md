@@ -4,8 +4,10 @@ Every message the platform sends out of the building (SMS, e-mail and its attach
 inside them), what each one carries, and whether that is the minimum. Reviewed 2026-11-23.
 
 `MessageDisclosureGuardTest` reads this file: every outgoing template key in every bundle and
-locale must be covered by an entry below (a key, or a message family written `prefix.*`), and every
-entry must still name a template. A new message fails the build until somebody reviews it against
+locale must be covered by an entry below (a key, or one message family such as `email.invoice.*`;
+a wildcard on a whole namespace, the root alone followed by a star, is refused), and every entry must still name a template. Staff
+role labels (`email.role.label.*`, a staff member's own role) are the only outgoing text the
+sensitive-word scan skips. A new message fails the build until somebody reviews it against
 the rule and lists it here.
 
 ## The rule
@@ -20,14 +22,16 @@ carry:
 - the patient's first name or initials.
 
 They never carry a diagnosis, a test name, a result value, a medicine, words that reveal HIV, an
-STI, viral hepatitis, pregnancy or reproductive care, mental health, substance use or sexual
-violence (`SensitiveWording`), or the patient's full name in an SMS.
+STI, viral hepatitis, pregnancy, maternity or reproductive care, mental health, substance use,
+sexual violence, a genetic or paternity test, sickle cell disease or tuberculosis
+(`SensitiveWording`), or the patient's full name in an SMS.
 
 An e-mail attachment that holds clinical data is not sent: the message links to the portal. The
-invoice is the one attachment, and its mailed copy names no test and no medicine.
+invoice is the one attachment, and its mailed copy names no test and no medicine, and prints no
+line, payer reason or cancellation reason whose words reveal one of those categories. Its amounts,
+shares and balance are the desk copy's.
 
-Links point at the portal and require sign-in, except the account links listed under « Account and
-security », which must open without an account by their nature (see « Links »).
+Links point at the portal and require sign-in (see « Links »).
 
 The in-app bell and the in-app message thread are read inside the signed-in portal and app, so they
 may name the test or the clinician; they are not on this list. The server sends no push
@@ -95,7 +99,7 @@ something critical is waiting and for whom (initials).
 | `sms.activation.registrar.platform` | person, role, code | **Fixed (K4)**: as above |
 | `sms.activation.hospital` | person, role, code | **Fixed (K4)**: as above, to the hospital's number |
 | `sms.username.reminder` | username | OK |
-| `sms.passwordReset.link` | reset link | Accepted exception (see « Links ») |
+| `sms.passwordReset.link` | reset link | Account link (see « Links ») |
 | `sms.passwordReset.changed` | none | OK |
 | `sms.phoneVerification.code` | code, minutes | OK |
 | `recipientVerification.code` | code | OK (SMS or e-mail body) |
@@ -124,16 +128,16 @@ The SMS gateway's own outcome texts are shown to staff on screen, never sent:
 | `email.appointment.label.*` | n/a (labels) | n/a | n/a | OK |
 | `email.appointment.links.*` | n/a (link labels) | n/a | n/a | OK |
 | `email.appointment.contact` | n/a | hospital e-mail and phone | n/a | OK |
-| `encounter.visitSummary.email.*` | « Votre résumé de visite est disponible » | greeting by name, hospital, clinician, « connectez-vous » | none: the summary itself stays in the portal | OK |
+| `encounter.visitSummary.email.subject`, `encounter.visitSummary.email.title`, `encounter.visitSummary.email.greeting`, `encounter.visitSummary.email.body`, `encounter.visitSummary.email.provider`, `encounter.visitSummary.email.closing`, `encounter.visitSummary.email.patientFallback`, `encounter.visitSummary.email.careTeamFallback` | « Votre résumé de visite est disponible » | greeting by name, hospital, clinician, « connectez-vous » | none: the summary itself stays in the portal | OK |
 | `email.invoice.*` | « Facture N – hospital » | number, dates, total, balance, the clerk's optional note | invoice PDF | **Fixed (K4)**: the attached PDF listed every test and medicine by name (« Sérologie VIH », an antiretroviral). The mailed copy (`PdfInvoiceService.generateMailedInvoicePdf`) prints a test or a medicine by its category only, and any other line or payer reason whose words reveal a protected category by its category or not at all. The desk copy and the portal are unchanged. The clerk's free-text note is the clerk's responsibility |
 | `email.patient.welcome.*` | « Bienvenue à hospital » | hospital, code, activation button | none | OK |
-| `email.activation.*` | neutral | activation link | none | Accepted exception (see « Links ») |
+| `email.activation.*` | neutral | activation link | none | Account link (see « Links ») |
 
 ## E-mail to staff
 
 | Message | Verdict |
 |---|---|
-| `refill.request.email.*` | OK: the patient's name to the prescriber, never the medicine (QA D3301) |
+| `refill.request.email.subject`, `refill.request.email.body` | OK: the patient's name to the prescriber, never the medicine (QA D3301) |
 | `email.role.assignment.*` | OK: role, hospital, code, verification link |
 | `email.role.label.*` | n/a: role labels used inside the account e-mails |
 | `email.admin.welcome.*` | OK: account e-mail to the new staff member |
@@ -146,7 +150,7 @@ from a template: « Aggregate counts only — no patient data ».
 | Message | Verdict |
 |---|---|
 | `email.common.*` | n/a: greeting, button, footer shared by every e-mail |
-| `email.password.reset.*` | Accepted exception (see « Links ») |
+| `email.password.reset.*` | Account link (see « Links ») |
 | `email.password.changed.*` | OK |
 | `email.password.rotation.reminder.*` | OK |
 | `email.password.rotation.force.*` | OK |
@@ -163,13 +167,7 @@ from a template: « Aggregate counts only — no patient data ».
   route through `AuthGuard` to the patient's own appointments, where the server checks ownership. No
   patient id, no token, no query string.
 - « Connectez-vous à votre espace patient »: the portal's sign-in, no parameter.
-- Account links (activation `/verify?email=…&token=…`, password reset `/reset-password?token=…`,
-  role confirmation by assignment code) cannot require sign-in: they are how a person gets one.
-  The token is single-use and expires (2 h for a reset, 24 h for an activation). Accepted, with a
-  follow-up: move the token and the address into the URL fragment so they never reach a server log
-  or a `Referer` header. That changes the link shape the portal and both patient apps parse
-  (`reset-password.ts`, `verify-email.ts`, `AccountLinks.swift`, `AccountRepository.kt`), so it is
-  its own change, coordinated with the apps.
+- Account links: out of scope for this change; tracked separately.
 
 ## Residual risks
 

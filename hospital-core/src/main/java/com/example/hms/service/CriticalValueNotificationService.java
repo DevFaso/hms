@@ -788,6 +788,16 @@ public class CriticalValueNotificationService {
      * sweep's {@link #noLongerCritical} exit), so a result the sweep still
      * pages can always be read back.
      */
+    /**
+     * Scorecard K4: whether a paged critical result still waits for its read-back, the acknowledgement that ends
+     * its chain: paged, not read back, and a read-back still applies ({@link #readBackApplies}). An amended result
+     * whose read-back is on record, or one positively graded as no longer critical, waits for nothing.
+     */
+    public boolean readBackDue(LabResult result) {
+        return result != null && result.getCriticalNotifiedAt() != null && result.getCriticalReadBackAt() == null
+            && readBackApplies(result);
+    }
+
     private boolean readBackApplies(LabResult result) {
         if (isCritical(result, null)) {
             return true;

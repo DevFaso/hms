@@ -452,6 +452,29 @@ class CriticalValueNotificationServiceTest {
     }
 
     @Test
+    void k4_aReadBackIsDueOnlyOnAPagedCriticalResultNotYetReadBack() {
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+        assertThat(service.readBackDue(result)).as("never paged").isFalse();
+
+        result.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(5));
+        assertThat(service.readBackDue(result)).as("paged, no read-back").isTrue();
+
+        // Amended after its read-back: the read-back stays on record, nothing is due.
+        result.setCriticalReadBackAt(LocalDateTime.now());
+        assertThat(service.readBackDue(result)).as("read back").isFalse();
+    }
+
+    @Test
+    void k4_noReadBackIsDueOnAResultNoLongerCritical() {
+        result.setResultValue("5.0");
+        result.setAbnormalFlag(AbnormalFlag.NORMAL);
+        result.setCriticalNotifiedAt(LocalDateTime.now().minusDays(1));
+        when(labResultMapper.severityFlagOf(result)).thenReturn("NORMAL");
+
+        assertThat(service.readBackDue(result)).isFalse();
+    }
+
+    @Test
     void escalateOverdueStopsChasingAResultThatIsNoLongerCritical() {
         // QA D305: glucose 5.0 (range 3.9-6.1, NORMAL) still carried an old
         // critical stamp and was paged as critical every 30 min, up to level 84.

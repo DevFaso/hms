@@ -132,7 +132,7 @@ public class PdfInvoiceService {
             w.text(BODY, 11, MARGIN, t.get("pdf.invoice.status", statusLabel(t, invoice)));
             w.qr(buildQrPng("hms://invoice/" + invoice.getId()));
             w.down(80);
-            cancellationBlock(w, t, invoice);
+            cancellationBlock(w, t, invoice, mailed);
 
             w.rule();
             w.down(14);
@@ -263,11 +263,15 @@ public class PdfInvoiceService {
      * The PDF said "Annulée" and then "Reste à payer" the full amount, with no
      * reason and nothing about the carry-over.
      */
-    private static void cancellationBlock(Writer w, PdfLabels t, BillingInvoice invoice) throws IOException {
+    private static void cancellationBlock(Writer w, PdfLabels t, BillingInvoice invoice, boolean mailed)
+            throws IOException {
         boolean printed = false;
         // QA D1901: a reason the server wrote, in the paper's language; a typed one as typed.
         String reason = t.billingText(invoice.getCancelReasonCode(), invoice.getCancelReasonArgs(),
             invoice.getCancelReason());
+        if (mailed && com.example.hms.service.notification.SensitiveWording.reveals(reason)) {
+            reason = null; // K4: the clerk's words can name the condition; the desk explains it
+        }
         if (invoice.getStatus() == com.example.hms.enums.InvoiceStatus.CANCELLED
                 && reason != null && !reason.isBlank()) {
             w.paragraph(BODY, 11, MARGIN, t.get("pdf.invoice.cancelReason", reason.strip()));

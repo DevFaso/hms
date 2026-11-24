@@ -7,8 +7,9 @@ import java.util.regex.Pattern;
 /**
  * Scorecard K4 (minimum disclosure): the words that reveal one of the protected categories of
  * {@link com.example.hms.enums.SensitivityCategory} (HIV, sexually transmitted infections, viral
- * hepatitis, pregnancy and reproductive health, mental health, substance use, sexual violence) in
- * French, English and Spanish.
+ * hepatitis, pregnancy, maternity and reproductive health, mental health, substance use, sexual
+ * violence), or a test or condition the patient would not want read off a shared screen (genetic
+ * and paternity tests, sickle cell disease, tuberculosis), in French, English and Spanish.
  *
  * <p>Two readers: the mailed copy of an invoice, which prints the category of a line whose words
  * match instead of the words; and {@code MessageDisclosureGuardTest}, which fails the build when a
@@ -25,7 +26,9 @@ public final class SensitiveWording {
     /** Abbreviations and short words: whole words only. */
     private static final String WHOLE_WORDS = String.join("|",
         "vih", "hiv", "sida", "aids", "ist", "mst", "sti", "sts", "std", "ivg", "ive", "arv", "tarv",
-        "prep", "hcg", "bhcg", "hbsag", "vhb", "vhc", "hbv", "hcv", "viol", "rape", "cpn");
+        "prep", "hcg", "bhcg", "hbsag", "vhb", "vhc", "hbv", "hcv", "viol", "rape", "cpn",
+        // tuberculosis
+        "tb", "bk", "tpm", "genexpert", "xpert");
 
     /** Stems: anywhere in a word. */
     private static final String STEMS = String.join("|",
@@ -37,7 +40,15 @@ public final class SensitiveWording {
         // pregnancy and reproductive health
         "grossesse", "enceinte", "pregnan", "embaraz", "prenat", "antenat", "postnat", "postpartum", "obstetri",
         "accouchement", "cesarien", "cesarean", "cesarea", "avortement", "abortion", "aborto", "contracept",
-        "anticoncep", "fertilit",
+        "anticoncep", "fertilit", "matern", "sage femme", "midwife", "partera", "matrona", "gyneco", "gynaeco",
+        "ginecolog", "pelvien", "pelvic", "pelvica", "planning familial", "family planning", "planificacion familiar",
+        "neonat", "perinat",
+        // genetic tests and paternity
+        "caryotyp", "karyotyp", "cariotip", "paternit", "paternidad", "genetiq", "genetic",
+        // sickle cell disease
+        "drepanocyt", "sickle", "falciform", "electrophores", "electroforesis", "hemoglobinopath",
+        // tuberculosis
+        "tubercul",
         // mental health
         "psychiatr", "psycholog", "psicolog", "psiquiatr", "psychos", "schizophr", "depress", "suicid",
         "sante mentale", "mental health", "salud mental", "bipolar", "bipolaire",

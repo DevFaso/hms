@@ -487,14 +487,69 @@ class PdfInvoiceServiceTest {
             categorised("Sérologie VIH", ItemCategory.LAB_TEST),
             categorised("Ténofovir 300 mg", ItemCategory.MEDICATION),
             categorised("Échographie obstétricale", ItemCategory.SERVICE),
+            categorised("Consultation sage-femme", ItemCategory.SERVICE),
             categorised("Pansement simple", ItemCategory.SERVICE));
 
         String mailed = textOf(real.generateMailedInvoicePdf(invoice, lines, List.of(), List.of(), Locale.FRENCH));
         String desk = textOf(real.generateInvoicePdf(invoice, lines, List.of(), List.of(), Locale.FRENCH));
 
-        assertThat(mailed).doesNotContain("VIH", "Ténofovir", "obstétricale")
+        assertThat(mailed).doesNotContain("VIH", "Ténofovir", "obstétricale", "sage-femme")
             .contains("Analyse labo", "Médicament", "Pansement simple");
-        assertThat(desk).contains("Sérologie VIH", "Ténofovir 300 mg", "Échographie obstétricale");
+        assertThat(desk).contains("Sérologie VIH", "Ténofovir 300 mg", "Échographie obstétricale",
+            "Consultation sage-femme");
+    }
+
+    /** K4: the mailed copy withholds words, never money: every amount, share and balance is the desk copy's. */
+    @Test
+    void theMailedCopyPrintsTheSameAmountsAsTheDeskCopy_K4() throws Exception {
+        PdfInvoiceService real = new PdfInvoiceService(com.example.hms.i18n.TestMessageSources.bundles());
+        invoice.setTotalAmount(new BigDecimal("27500.00"));
+        invoice.setAmountPaid(new BigDecimal("4000.00"));
+        invoice.setPayerShareTotal(new BigDecimal("15000.00"));
+        List<InvoiceItem> lines = List.of(
+            priced("Sérologie VIH", ItemCategory.LAB_TEST, 2, "6000.00", "12000.00", "9000.00"),
+            priced("Ténofovir 300 mg", ItemCategory.MEDICATION, 1, "7500.00", "7500.00", "6000.00"),
+            priced("Consultation", ItemCategory.SERVICE, 1, "8000.00", "8000.00", "0.00"));
+        List<com.example.hms.payload.dto.billing.InvoicePayerShareDTO> shares = List.of(
+            new com.example.hms.payload.dto.billing.InvoicePayerShareDTO(UUID.randomUUID(), "RAMU", "Formule Base",
+                new BigDecimal("2500"), 2026, "REJECTED", "Acte VIH hors convention", null, null));
+
+        String mailed = textOf(real.generateMailedInvoicePdf(invoice, lines, List.of(), shares, Locale.FRENCH));
+        String desk = textOf(real.generateInvoicePdf(invoice, lines, List.of(), List.of(), shares, Locale.FRENCH));
+
+        java.util.regex.Pattern money = java.util.regex.Pattern.compile("\\d[\\d\\u00a0\\u202f ]*F CFA");
+        assertThat(amounts(money, mailed)).isNotEmpty().isEqualTo(amounts(money, desk));
+        assertThat(mailed).doesNotContain("VIH");
+        assertThat(desk).contains("Acte VIH hors convention");
+    }
+
+    /** K4: a cancelled invoice's typed reason that names a condition is not printed on the mailed copy. */
+    @Test
+    void theMailedCopyWithholdsARevealingCancellationReason_K4() throws Exception {
+        PdfInvoiceService real = new PdfInvoiceService(com.example.hms.i18n.TestMessageSources.bundles());
+        invoice.setStatus(InvoiceStatus.CANCELLED);
+        invoice.setCancelReason("Dépistage VIH facturé deux fois");
+
+        assertThat(textOf(real.generateMailedInvoicePdf(invoice, items, List.of(), List.of(), Locale.FRENCH)))
+            .doesNotContain("VIH");
+        assertThat(textOf(real.generateInvoicePdf(invoice, items, List.of(), List.of(), Locale.FRENCH)))
+            .contains("Dépistage VIH");
+    }
+
+    private static List<String> amounts(java.util.regex.Pattern money, String text) {
+        List<String> found = new java.util.ArrayList<>();
+        java.util.regex.Matcher m = money.matcher(text);
+        while (m.find()) {
+            found.add(m.group());
+        }
+        return found;
+    }
+
+    private static InvoiceItem priced(String description, ItemCategory category, int quantity, String unit,
+                                      String total, String payerShare) {
+        return InvoiceItem.builder().itemDescription(description).itemCategory(category).quantity(quantity)
+            .unitPrice(new BigDecimal(unit)).totalPrice(new BigDecimal(total))
+            .payerShareAmount(new BigDecimal(payerShare)).build();
     }
 
     private static InvoiceItem categorised(String description, ItemCategory category) {

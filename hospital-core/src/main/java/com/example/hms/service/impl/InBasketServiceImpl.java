@@ -42,9 +42,14 @@ public class InBasketServiceImpl implements InBasketService {
     /**
      * Scorecard K4: the roles that may acknowledge an urgent clinical item, held on the caller's own (never only
      * through the super-admin inheritance, never during a support session: {@link
-     * com.example.hms.security.ClinicalActor#holdsOwnRole}). PHYSICIAN and SURGEON count as DOCTOR there.
+     * com.example.hms.security.ClinicalActor#holdsOwnRole}). Every role an urgent clinical item is filed to is
+     * here, so a recipient can always close its own item ({@code InBasketAcknowledgerGuardTest}): the ordering
+     * clinician of a lab result, the obstetric alert's circle, the requester and the bedside nurse of a
+     * transfusion, and the lab directors told of an incompatible crossmatch on a request with no requester.
      */
-    private static final String[] CLINICAL_ACKNOWLEDGERS = {"DOCTOR", "NURSE", "MIDWIFE", "RADIOLOGIST", "ANESTHESIOLOGIST"};
+    static final java.util.Set<String> CLINICAL_ACKNOWLEDGERS = java.util.Set.of(
+            "ROLE_DOCTOR", "ROLE_PHYSICIAN", "ROLE_SURGEON", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_RADIOLOGIST",
+            "ROLE_ANESTHESIOLOGIST", "ROLE_LAB_DIRECTOR");
 
     private final InBasketItemRepository inBasketItemRepository;
     private final UserRepository userRepository;
@@ -54,6 +59,9 @@ public class InBasketServiceImpl implements InBasketService {
     private final InBasketMapper inBasketMapper;
     /** K4: a critical lab result is acknowledged by its read-back, not by closing its in-basket item. */
     private final com.example.hms.repository.LabResultRepository labResultRepository;
+    /** K4: whether that read-back is still due; a provider, so the in-basket never builds the alert service. */
+    private final org.springframework.beans.factory.ObjectProvider<com.example.hms.service.CriticalValueNotificationService>
+            criticalValues;
 
     @Override
     public Page<InBasketItemDTO> getItems(UUID userId, UUID hospitalId,
@@ -243,7 +251,7 @@ public class InBasketServiceImpl implements InBasketService {
         }
         org.springframework.security.core.Authentication auth =
                 org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        if (!com.example.hms.security.ClinicalActor.holdsOwnRole(auth, CLINICAL_ACKNOWLEDGERS)) {
+        if (!com.example.hms.security.ClinicalActor.holdsOwnRole(auth, CLINICAL_ACKNOWLEDGERS.toArray(String[]::new))) {
             throw new BusinessException("inBasket.acknowledge.clinicalRoleRequired");
         }
     }
@@ -262,12 +270,17 @@ public class InBasketServiceImpl implements InBasketService {
      * record the item stays open.
      */
     private void requireReadBackOfCriticalResult(InBasketItem item) {
-        if (labResultRepository == null || item.getReferenceId() == null
+        if (labResultRepository == null || criticalValues == null || item.getReferenceId() == null
                 || !LAB_RESULT_REFERENCE_TYPE.equals(item.getReferenceType())) {
             return;
         }
+        com.example.hms.service.CriticalValueNotificationService critical = criticalValues.getIfAvailable();
+        if (critical == null) {
+            return;
+        }
+        // The acknowledge path's own rule: paged, no read-back yet, and a read-back still applies.
         labResultRepository.findById(item.getReferenceId())
-                .filter(result -> result.getCriticalNotifiedAt() != null && !result.isAcknowledged())
+                .filter(critical::readBackDue)
                 .ifPresent(result -> {
                     throw new BusinessException("lab.result.criticalNeedsReadBack");
                 });

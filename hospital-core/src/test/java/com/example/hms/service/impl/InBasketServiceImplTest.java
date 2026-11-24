@@ -51,6 +51,9 @@ class InBasketServiceImplTest {
     @Mock private EncounterRepository encounterRepository;
     @Mock private InBasketMapper inBasketMapper;
     @Mock private com.example.hms.repository.LabResultRepository labResultRepository;
+    @Mock private org.springframework.beans.factory.ObjectProvider<com.example.hms.service.CriticalValueNotificationService>
+        criticalValues;
+    @Mock private com.example.hms.service.CriticalValueNotificationService criticalValueService;
 
     @InjectMocks
     private InBasketServiceImpl service;
@@ -272,16 +275,37 @@ class InBasketServiceImplTest {
             result.setCriticalNotifiedAt(java.time.LocalDateTime.now());
             when(inBasketItemRepository.findById(itemId)).thenReturn(Optional.of(item));
             when(labResultRepository.findById(resultId)).thenReturn(Optional.of(result));
+            when(criticalValues.getIfAvailable()).thenReturn(criticalValueService);
+            when(criticalValueService.readBackDue(result)).thenReturn(true);
 
             assertThatThrownBy(() -> service.acknowledge(itemId, userId))
                     .isInstanceOfSatisfying(BusinessException.class, e -> assertThat(e.getMessageKey())
                         .isEqualTo("lab.result.criticalNeedsReadBack"));
             verify(inBasketItemRepository, never()).save(any());
 
-            result.setAcknowledged(true);
+            // Read back (or amended after its read-back, or no longer critical): the item can be closed.
+            when(criticalValueService.readBackDue(result)).thenReturn(false);
             when(inBasketItemRepository.save(any(InBasketItem.class))).thenAnswer(inv -> inv.getArgument(0));
             when(inBasketMapper.toDto(any(InBasketItem.class))).thenReturn(dto);
             service.acknowledge(itemId, userId);
+            assertThat(item.getStatus()).isEqualTo(InBasketItemStatus.ACKNOWLEDGED);
+            assertThat(item.getAcknowledgedBy()).isEqualTo(userId);
+        }
+
+        @Test
+        void k4_aLabDirectorClosesTheIncompatibleCrossmatchItemFiledToThem() {
+            // TransfusionServiceImpl files an URGENT RESULT to the lab directors when the emergency
+            // request has no requester: they must be able to close it.
+            signInAs("ROLE_LAB_DIRECTOR");
+            item.setPriority(InBasketPriority.URGENT);
+            item.setReferenceType("TRANSFUSION_CROSSMATCH");
+            item.setReferenceId(UUID.randomUUID());
+            when(inBasketItemRepository.findById(itemId)).thenReturn(Optional.of(item));
+            when(inBasketItemRepository.save(any(InBasketItem.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(inBasketMapper.toDto(any(InBasketItem.class))).thenReturn(dto);
+
+            service.acknowledge(itemId, userId);
+
             assertThat(item.getStatus()).isEqualTo(InBasketItemStatus.ACKNOWLEDGED);
             assertThat(item.getAcknowledgedBy()).isEqualTo(userId);
         }

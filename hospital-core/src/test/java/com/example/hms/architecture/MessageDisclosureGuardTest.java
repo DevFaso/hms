@@ -110,6 +110,12 @@ class MessageDisclosureGuardTest {
         Map.entry("sms.waitlist.offer", 3),
         Map.entry("recipientVerification.code", 0)));
 
+    /**
+     * A staff member's own role, named in their account e-mails (« Sage-femme »): not patient information, so the
+     * only outgoing text the sensitive-word scan does not read.
+     */
+    private static final String STAFF_ROLE_LABELS = "email.role.label.";
+
     /** What an SMS-writing method must not read: a clinical value or the full name. */
     private static final Pattern CLINICAL_READ = Pattern.compile("\\.(?:getFullName|getMedicationName|"
         + "getLabTestDefinition|getResultValue|getStudyType|getReportTitle|getInstrument|getImpression|getDiagnosis)"
@@ -139,6 +145,10 @@ class MessageDisclosureGuardTest {
         assertThat(missing).as("an outgoing message template that is not in docs/security/message-disclosure-"
             + "inventory.md: review what it discloses (the K4 rule there) and list it with its fields and verdict")
             .isEmpty();
+        List<String> broad = entries.stream().filter(e -> e.endsWith(".*") && !familyWildcard(e)).toList();
+        assertThat(broad).as("a wildcard entry must name one message family under its root (`email.invoice.*`), "
+            + "never a whole namespace (`email.*`, `encounter.visitSummary.email.*`): list those keys one by one")
+            .isEmpty();
         List<String> stale = entries.stream().filter(e -> keys.stream().noneMatch(key -> covers(e, key))).toList();
         assertThat(stale).as("an inventory entry that names no template any more: remove it").isEmpty();
     }
@@ -150,7 +160,7 @@ class MessageDisclosureGuardTest {
         for (Path bundle : bundles()) {
             Properties properties = load(bundle);
             for (String key : properties.stringPropertyNames()) {
-                if (!OUTGOING.matcher(key).find()) {
+                if (!OUTGOING.matcher(key).find() || key.startsWith(STAFF_ROLE_LABELS)) {
                     continue;
                 }
                 String hit = SensitiveWording.firstMatch(properties.getProperty(key));
@@ -241,10 +251,28 @@ class MessageDisclosureGuardTest {
         assertThat(SensitiveWording.reveals("Échographie obstétricale")).isTrue();
         assertThat(SensitiveWording.reveals("Consultation psychiatrique")).isTrue();
         assertThat(SensitiveWording.reveals("Dépistage IST")).isTrue();
+        assertThat(SensitiveWording.reveals("Consultation sage-femme")).isTrue();
+        assertThat(SensitiveWording.reveals("Caryotype")).isTrue();
+        assertThat(SensitiveWording.reveals("Test de paternité")).isTrue();
+        assertThat(SensitiveWording.reveals("Électrophorèse de l'hémoglobine")).isTrue();
+        assertThat(SensitiveWording.reveals("Drépanocytose")).isTrue();
+        assertThat(SensitiveWording.reveals("GeneXpert")).isTrue();
+        assertThat(SensitiveWording.reveals("Recherche de BK")).isTrue();
+        assertThat(SensitiveWording.reveals("Planning familial")).isTrue();
+        assertThat(SensitiveWording.reveals("Gynécologie")).isTrue();
+        assertThat(SensitiveWording.reveals("Échographie pelvienne")).isTrue();
+        assertThat(SensitiveWording.reveals("Soins néonatals")).isTrue();
         assertThat(SensitiveWording.reveals("Liste des rendez-vous")).isFalse();
         assertThat(SensitiveWording.reveals("Pansement violet")).isFalse();
         assertThat(SensitiveWording.reveals("Consultation")).isFalse();
         assertThat(SensitiveWording.reveals(null)).isFalse();
+    }
+
+    /** A wildcard that names a family under one of the {@link #OUTGOING} roots, not the root itself. */
+    private static boolean familyWildcard(String entry) {
+        String prefix = entry.substring(0, entry.length() - 1); // keeps the trailing dot
+        Matcher root = OUTGOING.matcher(prefix);
+        return root.find() && prefix.length() > root.end() + 1;
     }
 
     private static boolean covers(String entry, String key) {

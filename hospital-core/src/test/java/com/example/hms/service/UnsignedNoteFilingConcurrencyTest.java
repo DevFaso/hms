@@ -80,7 +80,7 @@ class UnsignedNoteFilingConcurrencyTest {
     void setUp() {
         tx = new TransactionTemplate(transactionManager);
         InBasketService realBasket = new InBasketServiceImpl(items, users, hospitals, patients, encounters,
-            new InBasketMapper(), null);
+            new InBasketMapper(), null, null);
         basket = mock(InBasketService.class, delegatesTo(realBasket));
         followUp = new UnsignedNoteFollowUp(notes, basket, items, mock(RoleValidator.class),
             transactionManager, Clock.systemUTC());
@@ -96,7 +96,7 @@ class UnsignedNoteFilingConcurrencyTest {
             filingRead.countDown();
             await(releaseFiling);
             var filed = new InBasketServiceImpl(items, users, hospitals, patients, encounters,
-                new InBasketMapper(), null).createItem(invocation.getArgument(0));
+                new InBasketMapper(), null, null).createItem(invocation.getArgument(0));
             assertThat(filed).isNotNull();
             return filed;
         }).when(basket).createItem(any());
