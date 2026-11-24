@@ -9,6 +9,7 @@ import {
   effect,
 } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { RoleContextService } from '../core/role-context.service';
@@ -16,18 +17,27 @@ import { actionRoles } from '../core/action-permissions';
 import { refusalReason, refusedFieldReasons } from './refusal-reason';
 import { refuseFields } from './forms/invalid-fields';
 import { SubmitGuardDirective } from './forms/submit-guard.directive';
+import { ServerTimePipe } from './pipes/server-time.pipe';
 
 interface VerificationStatus {
   channel: 'SMS' | 'EMAIL';
   verified: boolean;
   expiresAt?: string | null;
+  maskedRecipient?: string | null;
 }
 
-/** The server chooses the existing recipient. Never accept or display an address or a code from it. */
+/** The server chooses the contact; show only its mask, never accept a recipient or code from a response. */
 @Component({
   selector: 'app-patient-recipient-verification',
   standalone: true,
-  imports: [FormControlStyleDirective, FormsModule, TranslateModule, SubmitGuardDirective],
+  imports: [
+    FormControlStyleDirective,
+    FormsModule,
+    TranslateModule,
+    SubmitGuardDirective,
+    DatePipe,
+    ServerTimePipe,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (allowed()) {
@@ -45,6 +55,11 @@ interface VerificationStatus {
         @for (row of statuses(); track row.channel) {
           <div class="verification-channel" [attr.data-testid]="'verify-' + row.channel">
             <h3>{{ 'NOTIFICATIONS.CHANNEL_' + row.channel | translate }}</h3>
+            @if (row.maskedRecipient) {
+              <p data-testid="verification-contact">
+                {{ 'RECIPIENT_VERIFICATION.CONTACT' | translate: { contact: row.maskedRecipient } }}
+              </p>
+            }
             @if (row.verified) {
               <p role="status">{{ 'RECIPIENT_VERIFICATION.VERIFIED' | translate }}</p>
             } @else {
@@ -53,6 +68,28 @@ interface VerificationStatus {
                 {{ 'RECIPIENT_VERIFICATION.SEND' | translate }}
               </button>
               @if (pending() === row.channel) {
+                <p role="status" data-testid="verification-code-sent">
+                  @if (sentTo()?.maskedRecipient) {
+                    {{
+                      'RECIPIENT_VERIFICATION.CODE_SENT'
+                        | translate: { contact: sentTo()?.maskedRecipient }
+                    }}
+                  } @else {
+                    {{ 'RECIPIENT_VERIFICATION.CODE_SENT_GENERIC' | translate }}
+                  }
+                  @if (sentTo()?.expiresAt) {
+                    {{
+                      'RECIPIENT_VERIFICATION.EXPIRES'
+                        | translate
+                          : {
+                              time:
+                                (sentTo()?.expiresAt
+                                | serverTime
+                                | date: 'shortTime' : undefined : uiLocale()),
+                            }
+                    }}
+                  }
+                </p>
                 <form (ngSubmit)="confirm(row.channel)">
                   <label [for]="'recipient-code-' + row.channel"
                     >{{ 'RECIPIENT_VERIFICATION.CODE' | translate }} *</label
@@ -89,7 +126,15 @@ interface VerificationStatus {
   `,
   styles: [
     `
+      :host {
+        display: block;
+        min-width: 0;
+        max-width: 100%;
+      }
       .verification {
+        box-sizing: border-box;
+        min-width: 0;
+        max-width: 100%;
         margin-block: 1.5rem;
         padding: 1rem;
         border: 1px solid var(--color-border, #cbd5e1);
@@ -99,6 +144,9 @@ interface VerificationStatus {
         padding-block: 0.75rem;
       }
       form {
+        box-sizing: border-box;
+        min-width: 0;
+        width: 100%;
         display: flex;
         flex-wrap: wrap;
         align-items: center;
@@ -106,6 +154,8 @@ interface VerificationStatus {
         margin-block: 0.75rem;
       }
       input {
+        box-sizing: border-box;
+        min-width: 0;
         width: 9rem;
         max-width: 100%;
       }
@@ -136,11 +186,14 @@ export class PatientRecipientVerificationComponent {
   readonly busy = signal(false);
   readonly error = signal('');
   readonly pending = signal<'SMS' | 'EMAIL' | null>(null);
+  readonly sentTo = signal<VerificationStatus | null>(null);
+  private contextVersion = 0;
   code = '';
 
   constructor() {
     effect(() => {
       if (this.allowed()) this.load();
+      else this.clearContext();
     });
   }
   allowed(): boolean {
@@ -154,30 +207,42 @@ export class PatientRecipientVerificationComponent {
       : '/me/patient/recipient-verification';
   }
   load(): void {
+    this.clearContext();
+    if (!this.allowed()) return;
+    const version = this.contextVersion;
+    const patientId = this.patientId();
     this.loading.set(true);
     this.error.set('');
     this.http.get<VerificationStatus[]>(this.endpoint()).subscribe({
       next: (rows) => {
+        if (!this.current(version, patientId)) return;
         this.statuses.set(rows);
         this.loading.set(false);
       },
       error: (err) => {
+        if (!this.current(version, patientId)) return;
         this.loading.set(false);
         this.fail(err);
       },
     });
   }
   request(channel: 'SMS' | 'EMAIL'): void {
-    if (this.busy()) return;
+    if (this.busy() || !this.allowed()) return;
+    const version = this.contextVersion;
+    const patientId = this.patientId();
     this.busy.set(true);
     this.error.set('');
     this.code = '';
     this.http.post<VerificationStatus>(`${this.endpoint()}/${channel}/request`, {}).subscribe({
-      next: () => {
+      next: (status) => {
+        if (!this.current(version, patientId)) return;
+        this.statuses.update((rows) => rows.map((row) => (row.channel === channel ? status : row)));
+        this.sentTo.set(status);
         this.pending.set(channel);
         this.busy.set(false);
       },
       error: (err) => {
+        if (!this.current(version, patientId)) return;
         this.busy.set(false);
         this.fail(err);
       },
@@ -187,21 +252,26 @@ export class PatientRecipientVerificationComponent {
     return /^[0-9]{6}$/.test(this.code);
   }
   confirm(channel: 'SMS' | 'EMAIL'): void {
-    if (this.busy() || !this.validCode()) return;
+    if (this.busy() || !this.validCode() || !this.allowed()) return;
+    const version = this.contextVersion;
+    const patientId = this.patientId();
     this.busy.set(true);
     this.error.set('');
     this.http
       .post<VerificationStatus>(`${this.endpoint()}/${channel}/confirm`, { code: this.code })
       .subscribe({
         next: (confirmed) => {
+          if (!this.current(version, patientId)) return;
           this.statuses.update((rows) =>
             rows.map((row) => (row.channel === channel ? confirmed : row)),
           );
           this.pending.set(null);
+          this.sentTo.set(null);
           this.code = '';
           this.busy.set(false);
         },
         error: (err) => {
+          if (!this.current(version, patientId)) return;
           this.busy.set(false);
           const id = 'recipient-code-' + channel;
           refuseFields(
@@ -218,5 +288,22 @@ export class PatientRecipientVerificationComponent {
   }
   private fail(err: unknown): void {
     this.error.set(refusalReason(err) ?? this.translate.instant('RECIPIENT_VERIFICATION.ERROR'));
+  }
+  uiLocale(): string {
+    const language = this.translate.getCurrentLang()?.toLowerCase().split('-')[0];
+    return language === 'en' || language === 'es' ? language : 'fr';
+  }
+  private current(version: number, patientId: string | undefined): boolean {
+    return version === this.contextVersion && patientId === this.patientId() && this.allowed();
+  }
+  private clearContext(): void {
+    this.contextVersion++;
+    this.statuses.set([]);
+    this.pending.set(null);
+    this.sentTo.set(null);
+    this.code = '';
+    this.busy.set(false);
+    this.loading.set(false);
+    this.error.set('');
   }
 }

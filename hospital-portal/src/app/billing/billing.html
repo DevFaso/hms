@@ -543,7 +543,11 @@
                         <td>
                           {{ it.itemDescription }}
                           <div class="cell-secondary">
-                            {{ it.itemCategory | enumLabel: 'invoiceItemCategory' }}
+                            {{
+                              it.coverageCategory
+                                ? (it.coverageCategory | enumLabel: 'priceListCategory')
+                                : (it.itemCategory | enumLabel: 'invoiceItemCategory')
+                            }}
                           </div>
                         </td>
                         <td>
@@ -652,7 +656,11 @@
                         <td>
                           {{ it.itemDescription }}
                           <div class="cell-secondary">
-                            {{ it.itemCategory | enumLabel: 'invoiceItemCategory' }}
+                            {{
+                              it.coverageCategory
+                                ? (it.coverageCategory | enumLabel: 'priceListCategory')
+                                : (it.itemCategory | enumLabel: 'invoiceItemCategory')
+                            }}
                           </div>
                         </td>
                         <td>{{ it.quantity }}</td>

@@ -153,11 +153,16 @@ jobs:
       - name: Install Playwright browsers
         run: ./node_modules/.bin/playwright install --with-deps chromium
 
-      - name: Run axe-core smoke
-        run: npm run e2e:a11y
-
       - name: Build production SPA once for production-browser checks
         run: npm run build
+
+      - name: Production presentation and recipient feedback regressions
+        env:
+          PLAYWRIGHT_PREBUILT: "1"
+        run: npm run e2e:r73-presentation
+
+      - name: Run axe-core smoke
+        run: npm run e2e:a11y
 
       - name: Production startup under Slow 3G
         env:
