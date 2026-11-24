@@ -319,10 +319,16 @@ Import for this: the export's `hms-backend` secret is a placeholder.
   is their control. Set the *Configure OTP* required action on the account
   when creating it, or the user sets OTP up in the account console; the next
   login carries `otp`.
-- The max age (172800 s) equals `ssoSessionMaxLifespan`. A reference older
-  than its max age drops out of `amr`, so a refreshed token would lose `otp`
-  and the backend would refuse the session: change the three max ages with
-  the session lifespan.
+- The max age (172800 s) is longer than `ssoSessionMaxLifespan` (43200 s,
+  12 h). A reference older than its max age drops out of `amr`, so a
+  refreshed token would lose `otp` and the backend would refuse the session:
+  if the session lifespan is ever raised above the max age, raise the three
+  max ages with it.
+- `ssoSessionMaxLifespan` is a realm setting, which a partial import does not
+  change. On an existing realm set it by hand: *Realm settings → Sessions →
+  SSO Session Max* = 12 hours (or `kcadm.sh update realms/hms -s
+  ssoSessionMaxLifespan=43200`). It matches the backend's
+  `AUTH_SESSION_MAX_LIFETIME` (12 h by default).
 
 **Rollback.** Rebind `browser` as the browser flow (step 6 with `browser`).
 The `hms browser` flow and the `amr` mapper are inert without the binding.

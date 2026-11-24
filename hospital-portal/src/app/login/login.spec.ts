@@ -564,6 +564,10 @@ describe('Login — the lock-screen lockout notice (D2001)', () => {
     expect(createWith('locked').error).toBe('LOGIN.LOCKED_FROM_LOCK_SCREEN');
   });
 
+  it('says the session reached its maximum length when it ended after sign-in', () => {
+    expect(createWith('session-ended').error).toBe('LOGIN.SESSION_LIFETIME_REACHED');
+  });
+
   it('shows nothing on an ordinary visit', () => {
     expect(createWith(null).error).toBe('');
   });

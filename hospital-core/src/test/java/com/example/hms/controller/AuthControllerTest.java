@@ -80,6 +80,10 @@ class AuthControllerTest {
             org.springframework.test.util.ReflectionTestUtils.getField(com.example.hms.utility.MessageUtil.class, "messageSource");
         com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
         checkPasswordRunsTheComparison();
+        // Every token was issued a moment ago unless a test says otherwise:
+        // its session is well within the absolute lifetime.
+        when(jwtTokenProvider.getIssuedAt(org.mockito.ArgumentMatchers.anyString()))
+                .thenAnswer(invocation -> new java.util.Date());
     }
     @Autowired private ObjectMapper objectMapper;
 
@@ -1216,7 +1220,7 @@ class AuthControllerTest {
         when(jwtTokenProvider.generateRefreshToken(
                 org.mockito.ArgumentMatchers.any(
                         com.example.hms.security.TokenUserDescriptor.class),
-                org.mockito.ArgumentMatchers.isNull(), any()))
+                org.mockito.ArgumentMatchers.isNull(), any(), any(com.example.hms.security.SessionLifetime.Live.class)))
                 .thenReturn("new.refresh.token");
         when(jwtTokenProvider.getExpiration("new.access.token"))
                 .thenReturn(new java.util.Date(accessExp));
@@ -1343,7 +1347,8 @@ class AuthControllerTest {
         when(jwtTokenProvider.generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any()))
                 .thenReturn("new.access.token");
         when(jwtTokenProvider.generateRefreshToken(any(
-                com.example.hms.security.TokenUserDescriptor.class), any(), any()))
+                com.example.hms.security.TokenUserDescriptor.class), any(), any(),
+                any(com.example.hms.security.SessionLifetime.Live.class)))
                 .thenReturn("new.refresh.token");
         when(jwtTokenProvider.getExpiration("new.access.token"))
                 .thenReturn(new java.util.Date(System.currentTimeMillis() + 60_000L));
@@ -1451,7 +1456,7 @@ class AuthControllerTest {
         when(jwtTokenProvider.generateRefreshToken(
                 org.mockito.ArgumentMatchers.any(
                         com.example.hms.security.TokenUserDescriptor.class),
-                org.mockito.ArgumentMatchers.isNull(), any()))
+                org.mockito.ArgumentMatchers.isNull(), any(), any(com.example.hms.security.SessionLifetime.Live.class)))
                 .thenReturn("new.refresh.token");
         when(jwtTokenProvider.getExpiration("new.access.token"))
                 .thenReturn(new java.util.Date(nowMs + 86_400_000L));
@@ -1690,7 +1695,8 @@ class AuthControllerTest {
         when(userRepository.findByUsername(username)).thenReturn(java.util.Optional.of(user));
         when(jwtTokenProvider.generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any()))
                 .thenReturn("session.new.access");
-        when(jwtTokenProvider.generateRefreshToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any()))
+        when(jwtTokenProvider.generateRefreshToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any(),
+                any(com.example.hms.security.SessionLifetime.Live.class)))
                 .thenReturn("session.new.refresh");
         when(jwtTokenProvider.getExpiration("session.new.access"))
                 .thenReturn(new java.util.Date(System.currentTimeMillis() + 60_000L));
@@ -1728,7 +1734,8 @@ class AuthControllerTest {
         var access = org.mockito.ArgumentCaptor.forClass(com.example.hms.security.TokenUserDescriptor.class);
         var refresh = org.mockito.ArgumentCaptor.forClass(com.example.hms.security.TokenUserDescriptor.class);
         verify(jwtTokenProvider).generateAccessToken(access.capture(), any(), any());
-        verify(jwtTokenProvider).generateRefreshToken(refresh.capture(), any(), any());
+        verify(jwtTokenProvider).generateRefreshToken(refresh.capture(), any(), any(),
+                any(com.example.hms.security.SessionLifetime.Live.class));
         org.assertj.core.api.Assertions.assertThat(access.getValue().roles()).containsExactly(roles);
         org.assertj.core.api.Assertions.assertThat(refresh.getValue().roles()).containsExactly(roles);
     }
@@ -1736,6 +1743,8 @@ class AuthControllerTest {
     private void assertNothingMinted() {
         verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any());
         verify(jwtTokenProvider, never()).generateRefreshToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any());
+        verify(jwtTokenProvider, never()).generateRefreshToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any(),
+                any(com.example.hms.security.SessionLifetime.Live.class));
         verify(refreshTokenCookieService, never()).write(any(), any(), org.mockito.ArgumentMatchers.anyLong());
     }
 
@@ -1881,6 +1890,153 @@ class AuthControllerTest {
         withRefreshCutoff(cutoff, () -> refreshSession().andExpect(status().isOk()));
 
         assertMintedRoles("ROLE_NURSE");
+    }
+
+    // ── Absolute session lifetime (app.auth.session-max-lifetime, 12 h) ──────
+
+    private static final java.time.Duration LIFETIME = java.time.Duration.ofHours(12);
+
+    /** The sign-in time the rotated refresh token was minted with. */
+    private java.time.Instant carriedSignInTime() {
+        var live = org.mockito.ArgumentCaptor.forClass(com.example.hms.security.SessionLifetime.Live.class);
+        verify(jwtTokenProvider).generateRefreshToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any(),
+                live.capture());
+        return live.getValue().signedInAt();
+    }
+
+    private void assertRefusedForLifetime(com.example.hms.model.User user) throws Exception {
+        refreshSession().andExpect(status().isUnauthorized())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("WWW-Authenticate", AuthController.SESSION_LIFETIME_CHALLENGE))
+                .andExpect(jsonPath("$.message").value("Your session has reached its maximum length. Please sign in again."));
+        assertNothingMinted();
+        verify(refreshTokenCookieService).clear(any());
+        verify(tokenBlacklistService, never()).claim(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyLong());
+        verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+                e.getEventType() == com.example.hms.enums.AuditEventType.TOKEN_REFRESH
+                        && e.getStatus() == com.example.hms.enums.AuditStatus.FAILURE
+                        && user.getId().equals(e.getUserId())
+                        && "Refresh refused — the session reached its maximum lifetime".equals(e.getEventDescription())));
+    }
+
+    @Test
+    void sessionLifetime_justUnderTwelveHoursAfterSignIn_refreshesAndCarriesTheSignInTimeOn() throws Exception {
+        com.example.hms.model.User user = refreshableUser("lifetime.under");
+        holds(user, "ROLE_NURSE");
+        carries("session.refresh", "ROLE_NURSE");
+        java.time.Instant signedIn = java.time.Instant.now().minus(LIFETIME).plusSeconds(60)
+                .truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        when(jwtTokenProvider.signedInAt("session.refresh")).thenReturn(signedIn);
+
+        refreshSession().andExpect(status().isOk());
+
+        // The rotated token keeps the ORIGINAL sign-in time, not the refresh's.
+        org.assertj.core.api.Assertions.assertThat(carriedSignInTime()).isEqualTo(signedIn);
+    }
+
+    @Test
+    void sessionLifetime_justOverTwelveHoursAfterSignIn_isRefusedAndTheCookieDropped() throws Exception {
+        com.example.hms.model.User user = refreshableUser("lifetime.over");
+        holds(user, "ROLE_NURSE");
+        carries("session.refresh", "ROLE_NURSE");
+        // The token itself was issued a moment ago by a refresh: only the carried sign-in counts.
+        when(jwtTokenProvider.signedInAt("session.refresh"))
+                .thenReturn(java.time.Instant.now().minus(LIFETIME).minusSeconds(1));
+
+        assertRefusedForLifetime(user);
+    }
+
+    @Test
+    void sessionLifetime_aLegacyTokenWithoutTheSignInTime_countsFromItsIssueTime() throws Exception {
+        com.example.hms.model.User user = refreshableUser("lifetime.legacy");
+        holds(user, "ROLE_NURSE");
+        carries("session.refresh", "ROLE_NURSE");
+        when(jwtTokenProvider.signedInAt("session.refresh")).thenReturn(null);
+        java.util.Date issued = new java.util.Date(
+                (System.currentTimeMillis() - java.time.Duration.ofHours(11).toMillis()) / 1000 * 1000);
+        when(jwtTokenProvider.getIssuedAt("session.refresh")).thenReturn(issued);
+
+        refreshSession().andExpect(status().isOk());
+
+        // Its issue time becomes the session's sign-in time from now on: never "no limit".
+        org.assertj.core.api.Assertions.assertThat(carriedSignInTime()).isEqualTo(issued.toInstant());
+    }
+
+    @Test
+    void sessionLifetime_aLegacyTokenIssuedOverTwelveHoursAgo_isRefused() throws Exception {
+        com.example.hms.model.User user = refreshableUser("lifetime.legacy.old");
+        holds(user, "ROLE_NURSE");
+        carries("session.refresh", "ROLE_NURSE");
+        when(jwtTokenProvider.signedInAt("session.refresh")).thenReturn(null);
+        when(jwtTokenProvider.getIssuedAt("session.refresh"))
+                .thenReturn(java.util.Date.from(java.time.Instant.now().minus(LIFETIME).minusSeconds(1)));
+
+        assertRefusedForLifetime(user);
+    }
+
+    @Test
+    void sessionLifetime_theSignInCutoffStillRefusesATokenWithinItsLifetime() throws Throwable {
+        com.example.hms.model.User user = refreshableUser("lifetime.cutoff");
+        holds(user, "ROLE_NURSE");
+        carries("session.refresh", "ROLE_NURSE");
+        java.time.Instant cutoff = java.time.Instant.now().plusSeconds(3600)
+                .truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        when(jwtTokenProvider.signedInAt("session.refresh")).thenReturn(java.time.Instant.now().minusSeconds(60));
+
+        withRefreshCutoff(cutoff, () -> refreshSession().andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Refresh token is invalid or has expired. Please log in again.")));
+
+        assertNothingMinted();
+        verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+                "Refresh refused — issued before the sign-in cutoff".equals(e.getEventDescription())));
+    }
+
+    // ── A reused refresh token ends its session ─────────────────────────────
+
+    @Test
+    void refreshReuse_afterTheGrace_endsTheWholeSession() throws Exception {
+        when(jwtTokenProvider.isRefreshToken("old.refresh.token")).thenReturn(true);
+        when(jwtTokenProvider.getJtiFromToken("old.refresh.token")).thenReturn("jti-old");
+        when(jwtTokenProvider.getSessionId("old.refresh.token")).thenReturn("sid-stolen");
+        when(jwtTokenProvider.getUsernameFromJWT("old.refresh.token")).thenReturn("nurse.reuse");
+        when(jwtTokenProvider.getRefreshTokenExpirationMs()).thenReturn(172_800_000L);
+        when(tokenBlacklistService.isBlacklisted("jti-old")).thenReturn(true);
+        when(tokenBlacklistService.wasRecentlyRotated("jti-old")).thenReturn(false);
+
+        mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", "en")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"old.refresh.token\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Refresh token has already been used. Please log in again."));
+
+        // The session, so the newest pair of it is refused too (filter and refresh).
+        verify(tokenBlacklistService).revokeSession(eq("sid-stolen"), org.mockito.ArgumentMatchers.anyLong());
+        verify(refreshTokenCookieService).clear(any());
+        verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+                e.getEventType() == com.example.hms.enums.AuditEventType.TOKEN_REVOKED
+                        && e.getEventDescription().contains("sid=sid-stolen")));
+        verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+                e.getEventType() == com.example.hms.enums.AuditEventType.TOKEN_REFRESH
+                        && e.getStatus() == com.example.hms.enums.AuditStatus.FAILURE
+                        && "nurse.reuse".equals(e.getUserName())));
+        verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), any(), any());
+    }
+
+    @Test
+    void refreshReuse_withinTheGrace_isSupersededAndTheSessionLivesOn() throws Exception {
+        when(jwtTokenProvider.isRefreshToken("old.refresh.token")).thenReturn(true);
+        when(jwtTokenProvider.getJtiFromToken("old.refresh.token")).thenReturn("jti-old");
+        when(jwtTokenProvider.getSessionId("old.refresh.token")).thenReturn("sid-tabs");
+        when(tokenBlacklistService.isBlacklisted("jti-old")).thenReturn(true);
+        when(tokenBlacklistService.wasRecentlyRotated("jti-old")).thenReturn(true);
+
+        mockMvc.perform(post("/auth/token/refresh").header("Accept-Language", "en")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"old.refresh.token\"}"))
+                .andExpect(status().isConflict());
+
+        verify(tokenBlacklistService, never()).revokeSession(any(), org.mockito.ArgumentMatchers.anyLong());
+        verify(refreshTokenCookieService, never()).clear(any());
     }
 
     @Test

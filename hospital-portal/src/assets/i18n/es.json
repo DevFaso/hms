@@ -5230,6 +5230,7 @@
     "TOKEN_MISSING": "Falta el token en la respuesta.",
     "LOGIN_FAILED": "Error al iniciar sesión. Inténtelo de nuevo.",
     "LOCKED_FROM_LOCK_SCREEN": "Demasiadas contraseñas incorrectas: se ha cerrado su sesión y la cuenta está bloqueada temporalmente. Vuelva a intentarlo más tarde.",
+    "SESSION_LIFETIME_REACHED": "Su sesión ha alcanzado su duración máxima. Por su seguridad, vuelva a iniciar sesión.",
     "ENTER_EMAIL": "Introduzca su dirección de correo electrónico.",
     "RESEND_ACTIVATION": "Reenviar el correo de activación",
     "RA_TITLE": "Activar su cuenta",

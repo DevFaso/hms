@@ -151,8 +151,11 @@ class IdleSessionRefreshIntegrationTest {
         when(tokenBlacklistService.claim(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyLong())).thenReturn(true);
         when(jwtTokenProvider.generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), org.mockito.ArgumentMatchers.isNull(), any()))
             .thenReturn("cdx-new-access");
-        when(jwtTokenProvider.generateRefreshToken(any(com.example.hms.security.TokenUserDescriptor.class), org.mockito.ArgumentMatchers.isNull(), any()))
+        when(jwtTokenProvider.generateRefreshToken(any(com.example.hms.security.TokenUserDescriptor.class), org.mockito.ArgumentMatchers.isNull(), any(),
+                any(SessionLifetime.Live.class)))
             .thenReturn("cdx-new-refresh");
+        // Signed in a moment ago: well within the absolute session lifetime.
+        when(jwtTokenProvider.getIssuedAt("cdx-refresh")).thenAnswer(invocation -> new java.util.Date());
         idleSessionGate.touchIfHuman(user.getId(), AuthorityUtils.createAuthorityList("ROLE_NURSE"));
     }
 
@@ -190,6 +193,8 @@ class IdleSessionRefreshIntegrationTest {
         verify(tokenBlacklistService, never()).claim(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyLong());
         verify(jwtTokenProvider, never()).generateAccessToken(any(com.example.hms.security.TokenUserDescriptor.class), org.mockito.ArgumentMatchers.any(), any());
         verify(jwtTokenProvider, never()).generateRefreshToken(any(com.example.hms.security.TokenUserDescriptor.class), org.mockito.ArgumentMatchers.any(), any());
+        verify(jwtTokenProvider, never()).generateRefreshToken(any(com.example.hms.security.TokenUserDescriptor.class), org.mockito.ArgumentMatchers.any(), any(),
+                any(SessionLifetime.Live.class));
         verify(refreshTokenCookieService, never()).write(any(), any(), org.mockito.ArgumentMatchers.anyLong());
         var events = org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
         verify(auditEventLogService, times(2)).logEvent(events.capture());
