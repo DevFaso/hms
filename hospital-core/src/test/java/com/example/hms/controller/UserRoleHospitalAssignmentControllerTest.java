@@ -25,6 +25,8 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -134,7 +136,7 @@ class UserRoleHospitalAssignmentControllerTest {
 
         org.mockito.ArgumentCaptor<com.example.hms.payload.dto.assignment.AssignmentSearchCriteria> criteria =
             org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.assignment.AssignmentSearchCriteria.class);
-        org.mockito.Mockito.verify(assignmentService).getAllAssignments(any(), criteria.capture());
+        verify(assignmentService).getAllAssignments(any(), criteria.capture());
         org.assertj.core.api.Assertions.assertThat(criteria.getValue().getSearch()).isEqualTo("Awa Kabore");
         org.assertj.core.api.Assertions.assertThat(criteria.getValue().getHospitalId()).isEqualTo(hospitalId.toString());
     }
@@ -147,7 +149,7 @@ class UserRoleHospitalAssignmentControllerTest {
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.field").value("query"));
 
-        org.mockito.Mockito.verify(assignmentService, org.mockito.Mockito.never()).getAllAssignments(any(), any());
+        verify(assignmentService, never()).getAllAssignments(any(), any());
     }
 
     @Test

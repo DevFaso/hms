@@ -384,9 +384,7 @@ public class GlobalExceptionHandler {
         String acceptedCriteria = acceptedSearchCriteria(ex.getBodyType());
         for (String path : ex.getNotAcceptedPaths()) {
             fieldErrors.putIfAbsent(path, acceptedCriteria != null
-                ? localized("error.request.searchFieldNotAccepted",
-                    "\"{0}\" is not a criterion of this search. Accepted fields: {1}.",
-                    path.length() > 64 ? path.substring(0, 64) : path, acceptedCriteria)
+                ? searchFieldNotAcceptedReason(path, acceptedCriteria)
                 : notAcceptedReason(path));
         }
         java.util.List<String> globalReasons = new java.util.ArrayList<>();
@@ -459,23 +457,13 @@ public class GlobalExceptionHandler {
         return label == null || label.isBlank() ? null : label;
     }
 
-    /**
-     * QA D1312 (round 28): "La valeur saisie pour « copayMethod » n'est pas
-     * valide" - a field with no label put its raw property in the sentence.
-     * It is named by its label; a field with none gets the sentence without a
-     * name (the form still marks it from {@code fieldErrors}). Every parsed
-     * request field has a label ({@code FieldLabelCoverageTest}); this keeps a
-     * new one from ever printing its property.
-     *
-     * <p>QA D1313 (round 29): the D1312 test was {@code label.equals(field)},
-     * which also dropped every real label that spells its key (EN
-     * "relationship", "date", "amount"). The test is now whether the label
-     * message exists.
-     */
-    /**
-     * QA D1672: a property the request does not take, named by its label: the
-     * change it carried would otherwise have been dropped behind a 200.
-     */
+    /** QA D3753: a search's criterion it does not take, named with the criteria it accepts. */
+    private String searchFieldNotAcceptedReason(String path, String acceptedCriteria) {
+        String field = path.length() > 64 ? path.substring(0, 64) : path;
+        return localized("error.request.searchFieldNotAccepted",
+            "\"{0}\" is not a criterion of this search. Accepted fields: {1}.", field, acceptedCriteria);
+    }
+
     /**
      * The fields a {@code @RejectsUnknownFields(SEARCH)} body takes, comma-separated, or null when
      * the body is not a search's criteria.
@@ -500,6 +488,23 @@ public class GlobalExceptionHandler {
             .collect(java.util.stream.Collectors.joining(", "));
     }
 
+    /**
+     * QA D1312 (round 28): "La valeur saisie pour « copayMethod » n'est pas
+     * valide" - a field with no label put its raw property in the sentence.
+     * It is named by its label; a field with none gets the sentence without a
+     * name (the form still marks it from {@code fieldErrors}). Every parsed
+     * request field has a label ({@code FieldLabelCoverageTest}); this keeps a
+     * new one from ever printing its property.
+     *
+     * <p>QA D1313 (round 29): the D1312 test was {@code label.equals(field)},
+     * which also dropped every real label that spells its key (EN
+     * "relationship", "date", "amount"). The test is now whether the label
+     * message exists.
+     */
+    /**
+     * QA D1672: a property the request does not take, named by its label: the
+     * change it carried would otherwise have been dropped behind a 200.
+     */
     private String notAcceptedReason(String field) {
         String label = labelOrNull(field);
         if (label == null) {

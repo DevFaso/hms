@@ -55,7 +55,9 @@ class PrescriptionControllerSearchTest {
         UUID staffId = staff ? UUID.randomUUID() : null;
         UUID encounterId = encounter ? UUID.randomUUID() : null;
 
-        assertThatThrownBy(() -> controller.search(term("morph"), patientId, staffId, encounterId, null, PAGE, Locale.FRENCH))
+        SearchTermRequestDTO morph = term("morph");
+
+        assertThatThrownBy(() -> controller.search(morph, patientId, staffId, encounterId, null, PAGE, Locale.FRENCH))
             .isInstanceOf(FieldBusinessException.class);
 
         verifyNoInteractions(service);

@@ -60,8 +60,7 @@ public class RetiredUrlSearchController {
         "/chat/messages/by-sender-email",
         "/chat/messages/by-sender-username",
         "/chat/messages/by-recipient-email",
-        "/chat/messages/by-recipient-username",
-        "/chat/history/{user1Id}/{user2Id}/search"
+        "/chat/messages/by-recipient-username"
     })
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> searchMovedToBody(HttpServletRequest request) {
