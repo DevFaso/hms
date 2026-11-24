@@ -181,6 +181,10 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Login failed: account not active$/,
   },
   {
+    key: 'AUDIT.DESC.LOGIN_REFUSED_NO_ROLE',
+    re: /^Login refused: no active role$/,
+  },
+  {
     key: 'AUDIT.DESC.LOGIN_REJECTED_LOCKED',
     re: /^Login rejected — account locked$/,
   },
@@ -266,7 +270,16 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
   },
   {
     key: 'AUDIT.DESC.REFRESH_REFUSED_SECOND_FACTOR',
-    re: /^Refresh refused — provider second factor missing or expired$/,
+    // Rows written before the rule covered every MFA-required role say "provider".
+    re: /^Refresh refused — (?:provider )?second factor missing or expired$/,
+  },
+  {
+    key: 'AUDIT.DESC.REFRESH_REFUSED_ROLES_GONE',
+    re: /^Refresh refused — the session's roles are no longer held$/,
+  },
+  {
+    key: 'AUDIT.DESC.REFRESH_REFUSED_CUTOFF',
+    re: /^Refresh refused — issued before the sign-in cutoff$/,
   },
   {
     key: 'AUDIT.DESC.PASSWORD_REUSE_REJECTED',
@@ -297,6 +310,10 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
   {
     key: 'AUDIT.DESC.MFA_SIGNIN_ROLE_LOST',
     re: /^MFA sign-in refused: the role picked at login is no longer held$/,
+  },
+  {
+    key: 'AUDIT.DESC.MFA_SIGNIN_NO_ROLE',
+    re: /^MFA sign-in refused: no active role$/,
   },
   {
     key: 'AUDIT.DESC.TOTP_ENROLLMENT_STARTED',
