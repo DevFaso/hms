@@ -3,6 +3,7 @@ package com.example.hms.controller;
 import com.example.hms.payload.dto.identifiersearch.PatientLookupRequestDTO;
 import com.example.hms.payload.dto.identifiersearch.PatientSearchRequestDTO;
 import com.example.hms.payload.dto.identifiersearch.RegistrationMatchRequestDTO;
+import com.example.hms.payload.dto.identifiersearch.SearchTermRequestDTO;
 import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
@@ -179,7 +180,6 @@ public class PatientController {
         @RequestParam(required = false) UUID hospitalId,
         @RequestParam(name = "assignedTo", required = false) String assignedTo,
         @RequestParam(name = "inhouse", required = false) String inhouse,
-        @RequestParam(name = "search", required = false) String search,
         @RequestHeader(name = "Accept-Language", required = false) String lang,
         Authentication auth
     ) {
@@ -198,26 +198,49 @@ public class PatientController {
             return ResponseEntity.ok(patients);
         }
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, true);
-        if (search != null && !search.isBlank()) {
-            // The admission, encounter, consultation, lab and appointment
-            // typeaheads send ?search= (QA D79). It used to be dropped, so the
-            // first patients of the hospital were offered whatever was typed and
-            // the wrong patient was admitted. Same matching as /patients/search
-            // (name or MRN), and, like the unfiltered list, inactive records too.
-            // QA D1019: a typed phone number ("65112233", "65 11 22 33",
-            // "+226 65 11 22 33") is searched as a number, folded like the
-            // duplicate check; it used to be matched against names only, so
-            // the appointment and walk-in pickers never found a patient by phone.
-            // QA D1274: the service reads the typed term (a phone number, a
-            // birth date, an e-mail or the start of one, else a name or MRN).
-            PatientSearchCriteria criteria = PatientSearchCriteria.builder()
-                .name(search.trim())
-                .hospitalId(resolvedHospitalId)
-                .includeInactive(true)
-                .build();
-            return ResponseEntity.ok(patientService.searchPatients(criteria, 0, LIST_SEARCH_LIMIT, locale));
-        }
         return ResponseEntity.ok(patientService.getAllPatients(resolvedHospitalId, locale));
+    }
+
+    /**
+     * The list narrowed to a typed term: the shared patient typeahead (admission, encounter,
+     * consultation, lab, appointment and walk-in pickers). The term travels in the body, never in
+     * the URL (proxy and access logs, browser history, front-end tracing); the hospital scope stays
+     * in the query. Same roles and scope as the list.
+     */
+    @Operation(
+        summary = "Search the patient list by a typed term (staff only)",
+        description = "The term (a name, an MRN, a phone number, a birth date or an e-mail) is in the body.",
+        security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @com.example.hms.security.ReadsOnly("the patient typeahead, under POST so the typed term stays out of the URL")
+    @PostMapping("/term-search")
+    @PreAuthorize(PATIENT_READ_ROLES)
+    public ResponseEntity<List<PatientResponseDTO>> termSearchPatients(
+        @jakarta.validation.Valid @RequestBody SearchTermRequestDTO body,
+        @RequestParam(required = false) UUID hospitalId,
+        @RequestHeader(name = "Accept-Language", required = false) String lang,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        Locale locale = parseLocale(lang);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, true);
+        // The admission, encounter, consultation, lab and appointment
+        // typeaheads search the list (QA D79). The term used to be dropped, so the
+        // first patients of the hospital were offered whatever was typed and
+        // the wrong patient was admitted. Same matching as /patients/search
+        // (name or MRN), and, like the unfiltered list, inactive records too.
+        // QA D1019: a typed phone number ("65112233", "65 11 22 33",
+        // "+226 65 11 22 33") is searched as a number, folded like the
+        // duplicate check; it used to be matched against names only, so
+        // the appointment and walk-in pickers never found a patient by phone.
+        // QA D1274: the service reads the typed term (a phone number, a
+        // birth date, an e-mail or the start of one, else a name or MRN).
+        PatientSearchCriteria criteria = PatientSearchCriteria.builder()
+            .name(body.term())
+            .hospitalId(resolvedHospitalId)
+            .includeInactive(true)
+            .build();
+        return ResponseEntity.ok(patientService.searchPatients(criteria, 0, LIST_SEARCH_LIMIT, locale));
     }
 
     // ----------------------------------------------------------
@@ -403,6 +426,12 @@ public class PatientController {
         // name box is searched as such by the service (each only when its own
         // filter is not given); dob accepts yyyy-mm-dd, dd/mm/yyyy, dd-mm-yyyy.
         PatientSearchRequestDTO terms = body != null ? body : new PatientSearchRequestDTO(null, null, null, null, null);
+        // QA D3753: no criterion at all is refused, never answered with the hospital's first
+        // patients; the search box (the name) is the field the form marks.
+        if (java.util.stream.Stream.of(terms.mrn(), terms.name(), terms.dob(), terms.phone(), terms.email())
+                .allMatch(value -> value == null || value.isBlank())) {
+            throw new com.example.hms.exception.FieldBusinessException("name", "patient.search.criterionRequired");
+        }
         PatientSearchCriteria criteria = PatientSearchCriteria.builder()
             .mrn(terms.mrn())
             .name(terms.name())

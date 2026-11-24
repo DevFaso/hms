@@ -227,7 +227,15 @@ class AuditEventTypeParamsReplayTest {
             asHospitalAdminA();
             mvc.perform(get("/audit-logs").param("page", "0").param("size", "20").param("sort", "eventTimestamp,desc")
                     .param("fromDate", "2026-10-01T00:00:00").param("toDate", "2026-10-25T23:59:59")
-                    .param("eventType", "USER_CREATE").param("search", "Multi91064"))
+                    .param("eventType", "USER_CREATE"))
+                .andExpect(status().isOk());
+            // QA D3750: with a typed term, the same query parameters and the term in the body.
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/audit-logs/term-search")
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .content("{\"search\":\"Multi91064\"}")
+                    .param("page", "0").param("size", "20").param("sort", "eventTimestamp,desc")
+                    .param("fromDate", "2026-10-01T00:00:00").param("toDate", "2026-10-25T23:59:59")
+                    .param("eventType", "USER_CREATE"))
                 .andExpect(status().isOk());
         }
     }

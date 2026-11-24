@@ -65,7 +65,8 @@ public class MalformedRequestBodyAdvice extends RequestBodyAdviceAdapter {
         if (malformed.isEmpty() && notAccepted.isEmpty()) {
             return body;
         }
-        throw new MalformedRequestBodyException(malformed, notAccepted, violations(body, parameter));
+        throw new MalformedRequestBodyException(malformed, notAccepted, violations(body, parameter),
+            body != null ? body.getClass() : parameter.getParameterType());
     }
 
     @Override

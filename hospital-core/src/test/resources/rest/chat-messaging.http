@@ -31,10 +31,13 @@ Accept: application/json
 
 ###
 
-### Search messages in chat history (keyword: "review")
-GET http://localhost:8081/api/chat/history/f0bf57a2-fa04-40bf-ad72-f0b4cb610d90/10d65215-0721-40f1-8af3-6102171417cb/search?keyword=review&page=0&size=10
+### Search messages in chat history (term "review", in the body)
+POST http://localhost:8081/api/chat/history/f0bf57a2-fa04-40bf-ad72-f0b4cb610d90/10d65215-0721-40f1-8af3-6102171417cb/search?page=0&size=10
 Authorization: Bearer {{token}}
+Content-Type: application/json
 Accept: application/json
+
+{ "search": "review" }
 
 ###
 
