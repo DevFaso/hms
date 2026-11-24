@@ -518,6 +518,17 @@ class RoiRequestServiceTest {
     }
 
     @Test
+    @DisplayName("QA r73 D3700: the patient sees who decided by name, never the decider's account id")
+    void requestsForSelfNeverCarryTheDecidersAccountId() {
+        RoiRequest decided = pendingRequest();
+        decided.setDecisionActorUserId(UUID.randomUUID());
+        when(roiRepository.findByPatientIdOrderByCreatedAtDesc(patientId)).thenReturn(List.of(decided));
+
+        assertThat(service.requestsForSelf(patient)).singleElement()
+            .satisfies(dto -> assertThat(dto.getDecisionActorUserId()).isNull());
+    }
+
+    @Test
     @DisplayName("no active hospital context refuses the staff entry points")
     void noHospitalContextRefuses() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);

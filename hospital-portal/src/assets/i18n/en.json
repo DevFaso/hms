@@ -15295,7 +15295,9 @@
     "SAVED": "The patient's choices are saved.",
     "SAVE_FAILED": "The patient's choices could not be saved.",
     "LOAD_FAILED": "The patient's choices could not be loaded.",
-    "RECORDED_BY": "Last recorded by:"
+    "RECORDED_BY": "Last recorded by:",
+    "RECORDER_PATIENT": "The patient",
+    "RECORDER_OTHER_FACILITY": "Another facility"
   },
   "PAYMENT_OUTCOME": {
     "UNKNOWN": "The server's answer did not arrive. The payment may already be recorded: press the button again (it will not be counted twice) or check the payment list.",

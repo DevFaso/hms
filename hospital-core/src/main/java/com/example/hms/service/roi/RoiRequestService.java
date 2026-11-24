@@ -230,7 +230,7 @@ public class RoiRequestService {
             return List.of();
         }
         return roiRepository.findByPatientIdOrderByCreatedAtDesc(patient.getId()).stream()
-            .map(mapper::toDto)
+            .map(mapper::toPatientDto)
             .toList();
     }
 

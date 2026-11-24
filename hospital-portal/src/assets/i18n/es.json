@@ -15295,7 +15295,9 @@
     "SAVED": "Las opciones del paciente se guardaron.",
     "SAVE_FAILED": "No se pudieron guardar las opciones del paciente.",
     "LOAD_FAILED": "No se pudieron cargar las opciones del paciente.",
-    "RECORDED_BY": "Último registro por:"
+    "RECORDED_BY": "Último registro por:",
+    "RECORDER_PATIENT": "El paciente",
+    "RECORDER_OTHER_FACILITY": "Otro establecimiento"
   },
   "PAYMENT_OUTCOME": {
     "UNKNOWN": "The server's answer did not arrive. The payment may already be recorded: press the button again (it will not be counted twice) or check the payment list.",
