@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadTemplates, PORTAL_DIR } from './lib/template-gate.mjs';
-import { controlStyleSources } from './lib/form-control-styles.mjs';
+import { controlStyleSources, controlTemplates } from './lib/form-control-styles.mjs';
 import { bareControlFindings } from './lib/form-control-design.mjs';
 import { componentSources } from './lib/component-sources.mjs';
 
@@ -32,14 +32,18 @@ export function checkClinicalFormControls(ctx = {}) {
   const exceptions = JSON.parse(
     readFileSync(resolve(PORTAL_DIR, 'scripts/clinical-form-control-exceptions.json'), 'utf8'),
   );
-  const templates = ctx.templates ?? loadTemplates();
+  const allTemplates = ctx.templates ?? loadTemplates();
+  const templates = controlTemplates(
+    allTemplates.filter((t) => inScope(t.rel)),
+    ctx.components,
+  );
   const findings = bareControlFindings(
     templates,
     exceptions,
     inScope,
-    ctx.controlStyles ?? controlStyleSources(templates),
+    ctx.controlStyles ?? controlStyleSources(templates, { exceptions, inScope }),
   );
-  findings.push(...legacyMountFindings(templates, ctx.components ?? componentSources()));
+  findings.push(...legacyMountFindings(allTemplates, ctx.components ?? componentSources()));
   for (const finding of findings) console.error(finding);
   return findings.length === 0;
 }
