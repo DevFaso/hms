@@ -17,6 +17,7 @@
  *
  * The gates and what each catches: docs/qa/regression-guards.md.
  */
+import { checkPresentation } from './check-presentation-regressions.mjs';
 import { checkFormControls } from './check-form-controls.mjs';
 import { evaluateGate } from './lib/baseline.mjs';
 import { loadTemplates } from './lib/template-gate.mjs';
@@ -65,6 +66,7 @@ for (const gate of [
 ]) {
   if (!evaluateGate(gate, argv, ctx)) failed++;
 }
+if (!checkPresentation(ctx)) failed++;
 if (!checkFormControls(ctx)) failed++;
 if (failed > 0) {
   console.error(`\n${failed} regression gate(s) failed — see docs/qa/regression-guards.md`);

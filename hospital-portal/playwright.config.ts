@@ -61,6 +61,8 @@ export default defineConfig({
         /form-display\.spec\.ts/,
         /global-setup\.ts/,
         /auth\.spec\.ts/,
+        /go-live-record-rights\.spec\.ts/,
+        /go-live-recipient-verification\.spec\.ts/,
         /keycloak-login\.spec\.ts/,
         /smoke\.spec\.ts/,
         /mobile\.spec\.ts/,
