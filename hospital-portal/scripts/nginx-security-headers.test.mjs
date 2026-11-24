@@ -117,8 +117,10 @@ test('every external origin the portal talks to is allowed by the CSP', () => {
     }
   }
   // The font stylesheets in index.html.
-  assert.ok(directive(csp, 'style-src').includes('https://fonts.googleapis.com'));
-  assert.ok(directive(csp, 'font-src').includes('https://fonts.gstatic.com'));
+  // (exact source-list entries, compared one by one, never a substring)
+  const listed = (name, source) => directive(csp, name).some((entry) => entry === source);
+  assert.ok(listed('style-src', 'https://fonts.googleapis.com'));
+  assert.ok(listed('font-src', 'https://fonts.gstatic.com'));
   // Blob previews: PDF in an iframe, photos and scans as images, voice notes.
   assert.ok(frames.includes('blob:'));
   assert.ok(directive(csp, 'img-src').includes('blob:'));
@@ -128,7 +130,7 @@ test('every external origin the portal talks to is allowed by the CSP', () => {
 test('inline scripts are hashed exactly as the browser hashes them', () => {
   const html =
     '<script>a()</script><script src="main.js" type="module"></script>' +
-    '<script type="text/javascript">\r\n  b();\r\n</script><script>a()</script>';
+    '<script type="text/javascript">\r\n  b();\r\n</script><script>a()</script >';
   assert.deepEqual(inlineScriptHashes(html), [
     // printf 'a()' | openssl dgst -sha256 -binary | base64
     "'sha256-qVpDBgj7bpq5hMAcGp3AOc79J3Y1Z4HvySTwKrWDoy4='",

@@ -16,7 +16,8 @@ export const HASHES_PLACEHOLDER = '__CSP_SCRIPT_HASHES__';
 /** The CSP source expression of every inline (no src) script in the page, in document order. */
 export function inlineScriptHashes(html) {
   const hashes = [];
-  for (const match of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+  // `</script >` and `</script foo>` close a script too (HTML end-tag syntax).
+  for (const match of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\b[^>]*>/gi)) {
     const attributes = match[1];
     if (/\bsrc\s*=/i.test(attributes)) continue;
     // The HTML parser turns CRLF and lone CR into LF before a script runs, and
