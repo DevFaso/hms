@@ -85,8 +85,10 @@ def review(client, pr, meta, diff) -> str:
 
 
 def default_client():
-    # Reads OPENAI_API_KEY from the environment.
-    return openai.OpenAI()
+    # Reads OPENAI_API_KEY from the environment. One 15-minute attempt and no
+    # SDK retries (the defaults allow 3 x 10 min): the Claude fallback is the
+    # retry, and it must still fit in the job's timeout after a slow failure.
+    return openai.OpenAI(timeout=900.0, max_retries=0)
 
 
 def provider(client_factory=default_client) -> Provider:

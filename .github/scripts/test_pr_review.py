@@ -266,3 +266,19 @@ def test_openai_diff_is_trimmed_to_the_token_budget():
     kept, over = orv.fit(FakeOpenAI(), files, lambda fs: "".join(c for _, c in fs), budget=4500)
     assert len(kept) == 4
     assert over == [f"f{i}" for i in range(4, 10)]
+
+
+def test_default_openai_client_has_one_attempt_inside_the_job_timeout(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-not-a-key")
+    client = orv.default_client()
+    assert client.max_retries == 0
+    assert client.timeout == 900.0
+
+
+@pytest.mark.parametrize("text", [
+    "api_key_sk-proj-abcdef123",
+    "token:sk-ant-api03-xyz",
+    "x sk-svcacct-abc_def x",
+])
+def test_redaction_catches_keys_glued_to_a_word(text):
+    assert "sk-" not in rc.redact(text)

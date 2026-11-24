@@ -24,7 +24,7 @@ GENERATED = ("package-lock.json", "*.lock", "*.min.js", "*.map")
 FAILURE_SEP = "\n\n---\n\n"
 HEAD_RE = re.compile(r"<!-- claude-review-head: \S+ -->\n?")
 # API error messages can quote a (masked) key; never put one on a public PR.
-KEY_RE = re.compile(r"\b(sk|sk-ant|sk-proj)-[A-Za-z0-9_*\-]+")
+KEY_RE = re.compile(r"(?<![A-Za-z0-9])(sk|sk-ant|sk-proj)-[A-Za-z0-9_*\-]+")
 
 PROMPT = """You review pull requests for e-Keneya, a multi-hospital health system:
 Spring Boot 4 backend in hospital-core, Angular portal in hospital-portal, EN/FR/ES.

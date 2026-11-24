@@ -41,7 +41,8 @@ jobs:
       && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     # Two providers may run back to back.
-    timeout-minutes: 30
+    # OpenAI <= 15 min (one attempt), then Claude <= 30 min (SDK default 3 x 10).
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
