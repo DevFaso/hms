@@ -58,12 +58,12 @@ export default defineConfig({
       },
       dependencies: ['setup'],
       testIgnore: [
-        /identity-decisions\.spec\.ts/,
         /global-setup\.ts/,
         /auth\.spec\.ts/,
         /keycloak-login\.spec\.ts/,
         /smoke\.spec\.ts/,
         /mobile\.spec\.ts/,
+        /identity-decisions\.spec\.ts/,
       ],
     },
 
