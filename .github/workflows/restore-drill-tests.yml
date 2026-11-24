@@ -1,0 +1,30 @@
+name: Offline restore drill tests
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/restore/**'
+      - 'docs/runbooks/dr-drill-log.md'
+      - '.github/workflows/restore-drill-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seeded-restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HMS_DRILL_POSTGRES_IMAGE: postgres@sha256:edb0c08dc33befd0262ab3b5cf1c4f3f8cfd8b09e88c05b45adee29d6761ddb6
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.14'
+      - name: Prepare reviewed immutable test image
+        run: docker pull "$HMS_DRILL_POSTGRES_IMAGE"
+      - name: Restore synthetic backup and prove failure cases
+        run: python -m unittest discover -s scripts/restore -p 'test_*.py' -v
