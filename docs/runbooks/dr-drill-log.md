@@ -59,16 +59,29 @@ imports that same snapshot for every table digest/reference read, and passes
 a new row after snapshot export and proves it is absent from both dump and digest.
 The producer and consumer therefore share the actual serialization implementation.
 
-`scripts/restore/capture_manifest.py` exposes that producer only for a tool-owned,
-labelled, network-isolated scratch source (`--owned-container`, `--owner-token`,
-`--bundle`, `--objects-index`). It accepts no DSN and does not remove the source.
-The objects index is the `objects` array above; object bytes must already be
-copied into the local bundle and are checked before capture completes. Existing
-dump/manifest files are never overwritten. Interrupted captures must be inspected
-and a fresh bundle used. This is executable engineering tooling, **not an approved
-production backup integration**. The backup owner must integrate/approve the same
-snapshot contract in their trusted source process; that operational drill remains
-manual and out of this PR's scope.
+For **local engineering only**, `scripts/restore/capture_manifest.py` reconstructs
+an offline dump in a **new** tool-created scratch source and then invokes the
+canonical producer. It accepts `--source-dump`, `--postgres-image`, `--bundle`
+and `--objects-index`; no caller-chosen container name, ownership token or DSN is
+accepted. It removes that source on exit. For example, prepare an empty local
+bundle directory containing its object files and run:
+
+```powershell
+python scripts/restore/capture_manifest.py --source-dump C:/offline/source.dump --postgres-image postgres:18 --bundle C:/offline/scratch-bundle --objects-index C:/offline/objects-index.json
+```
+
+The objects index is the `objects` array above. Existing dump/manifest files are
+never overwritten. Interrupted captures must be inspected and a fresh bundle
+used. These manifests carry `sourceKind: isolated-scratch-capture`. Their two
+timestamps are read from the **same PostgreSQL clock** on the snapshot-holder
+connection; the second is observed immediately before rollback. The host clock
+is not compared with them. The reported `snapshotObservationLagSeconds` measures
+that local capture interval; `rpoSeconds` is **null** for scratch captures.
+
+A manifest reconstructed from a dump is not an independent production baseline
+and must never substitute for the backup owner's source-side evidence. The backup
+owner must integrate/approve the same snapshot contract in the trusted source
+process. Production backup integration and its operational drill remain manual.
 
 File references are discovered from `storage_key`, `*_storage_key`, `file_path`,
 `photo_file_path` and `letter_storage_path` columns in every non-system schema.
@@ -126,7 +139,8 @@ No dev or production DB is involved.
 - Per-schema tables checked / rows / checksum differences:
 - Document/image references checked / unreachable / mismatched:
 - Restore-and-validation elapsed seconds (reported `rtoSeconds`):
-- Data exposure window seconds (reported `rpoSeconds`):
+- Owner-verified backup exposure/RPO and source-clock/cutoff evidence:
+- Scratch snapshot observation lag (`snapshotObservationLagSeconds`, not production RPO):
 - Agreed RTO/RPO targets / met or not met:
 - Application startup, login and representative reads after restore:
 - Extension, role/grant, sequence and object-store checks by operator:
@@ -136,7 +150,9 @@ No dev or production DB is involved.
 
 `rtoSeconds` measures scratch startup, restore, reconciliation and cleanup. It is
 **not** production service restoration time; measure application readiness and
-operational steps separately. `rpoSeconds` is the supplied source-observed cutoff
-minus the backup snapshot time. It does not query live production or prove the
-last durable clinical transaction; record the backup process's cutoff evidence.
+operational steps separately. For an independently supplied backup manifest,
+`rpoSeconds` is its supplied source-observed cutoff minus its supplied backup time;
+the owner must verify both clocks and provenance. Scratch manifests return null.
+Neither value queries live production or proves the last durable clinical
+transaction; record the backup process’s cutoff evidence.
 No clinical acceptance, go-live decision or production rollback is automated.

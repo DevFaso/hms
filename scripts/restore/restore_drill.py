@@ -13,6 +13,7 @@ from contextlib import contextmanager
 
 LABEL = 'com.devfaso.hms.restore-drill'
 PREFIX = 'hms-restore-drill-'
+SCRATCH_CAPTURE_KIND = 'isolated-scratch-capture'
 CANONICAL = "SET TIME ZONE 'UTC'; SET extra_float_digits=3; SET IntervalStyle='postgres'; SET bytea_output='hex'; SET lc_monetary='C'; SET DateStyle='ISO, YMD'; "
 PHYSICAL = "c.relkind='r' AND n.nspname NOT IN ('pg_catalog','information_schema') AND n.nspname NOT LIKE 'pg\\_%' ESCAPE '\\'"
 
@@ -41,22 +42,21 @@ class Scratch:
 
     def owned(self):
         item = json.loads(text('container', 'inspect', self.name))[0]
+        host = item['HostConfig']
+        mounts = item.get('Mounts') or []
+        unsafe_volume = any(
+            mount.get('Type') != 'volume' or mount.get('Driver') != 'local'
+            or not re.fullmatch(r'[0-9a-f]{64}', mount.get('Name', ''))
+            or mount.get('Destination') not in (item.get('Config', {}).get('Volumes') or {})
+            for mount in mounts)
         if (item.get('Config', {}).get('Labels', {}).get(LABEL) != self.token
                 or item['Name'] != '/' + self.name
-                or item['HostConfig']['NetworkMode'] != 'none'
-                or item['HostConfig'].get('PortBindings')
-                or item['HostConfig'].get('Binds')):
+                or host['NetworkMode'] != 'none'
+                or any(host.get(key) for key in ['PortBindings', 'Binds', 'Mounts', 'VolumesFrom',
+                                                'Privileged', 'Devices', 'DeviceRequests', 'CapAdd'])
+                or any(host.get(key) == 'host' for key in ['PidMode', 'IpcMode', 'UTSMode', 'UsernsMode'])
+                or unsafe_volume):
             raise ValueError('Refusing a container outside this isolated drill')
-
-    @classmethod
-    def attach_owned(cls, name, token):
-        if not re.fullmatch(r'[0-9a-f]{32}', token) or name != PREFIX + token:
-            raise ValueError('Only a tool-created scratch source may be captured')
-        db = cls.__new__(cls)
-        db.name, db.token = name, token
-        db.owned()
-        db.image = json.loads(text('container', 'inspect', name))[0]['Image']
-        return db
 
     def sql(self, sql, snapshot=None):
         self.owned()
@@ -107,6 +107,10 @@ class Scratch:
                 process.stdin.close()
                 if process.wait() != 0:
                     raise RuntimeError('Scratch archive restore failed; no record data is logged')
+            except OSError:
+                process.kill()
+                process.wait()
+                raise RuntimeError('Scratch archive restore failed; no record data is logged') from None
             except BaseException:
                 process.kill()
                 process.wait()
@@ -151,12 +155,16 @@ class Scratch:
         with subprocess.Popen(['docker', 'exec', '-i', self.name, 'psql', '-U', 'postgres', '-d', 'hms_drill', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1'],
                               stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding='utf-8') as holder:
             try:
-                holder.stdin.write("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; SELECT json_build_object('snapshot', pg_export_snapshot(), 'at', transaction_timestamp());\n")
+                holder.stdin.write(CANONICAL + "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; SELECT json_build_object('snapshot', pg_export_snapshot(), 'at', transaction_timestamp());\n")
                 holder.stdin.flush()
                 info = json.loads(holder.stdout.readline())
                 snapshot_sql(info['snapshot'])
                 yield info
-                holder.stdin.write('ROLLBACK;\n')
+                # Both timestamps come from the same PostgreSQL clock. A host/VM
+                # clock comparison cannot measure the capture interval reliably.
+                holder.stdin.write("SELECT json_build_object('observedAt', clock_timestamp()); ROLLBACK;\n")
+                holder.stdin.flush()
+                info['observedAt'] = json.loads(holder.stdout.readline())['observedAt']
                 holder.stdin.close()
                 if holder.wait(timeout=30) != 0:
                     raise RuntimeError('Snapshot holder failed')
@@ -190,7 +198,8 @@ def capture_bundle(db, bundle, objects):
         with archive.open('xb') as stream:
             docker('exec', db.name, 'pg_dump', '-U', 'postgres', '-d', 'hms_drill', '-Fc', '--snapshot=' + snapshot['snapshot'],
                    stdout=stream, stderr=subprocess.DEVNULL)
-    metadata = {'snapshotAt': snapshot['at'], 'sourceObservedAt': datetime.now(timezone.utc).isoformat(),
+    metadata = {'snapshotAt': snapshot['at'], 'sourceObservedAt': snapshot['observedAt'],
+                'sourceKind': SCRATCH_CAPTURE_KIND,
                 'tables': tables, 'objects': objects, 'archiveSha256': sha256(archive)}
     with manifest.open('x', encoding='utf-8', newline='\n') as stream:
         stream.write(json.dumps(metadata, indent=2) + '\n')
@@ -261,7 +270,7 @@ def drill(bundle, image, report):
         raise ValueError('Database backup checksum did not match')
     backup_at = timestamp(metadata['snapshotAt'])
     observed_at = timestamp(metadata['sourceObservedAt'])
-    if backup_at > observed_at or observed_at > datetime.now(timezone.utc):
+    if backup_at > observed_at:
         raise ValueError('Invalid backup observation timestamps')
     with Scratch(image) as db:
         db.restore(archive, metadata['archiveSha256'])
@@ -276,8 +285,12 @@ def drill(bundle, image, report):
               'sourceObservedAt': metadata['sourceObservedAt'], 'bundle': bundle.name,
               'tables': actual, 'fileReferencesChecked': files,
               'rtoSeconds': round(time.monotonic() - start, 3),
-              'rpoSeconds': (observed_at - backup_at).total_seconds(),
-              'rpoBasis': 'Source-observed time minus backup snapshot time; not a live production observation'}
+              'sourceKind': metadata.get('sourceKind', 'supplied-backup'),
+              'snapshotObservationLagSeconds': (observed_at - backup_at).total_seconds(),
+              'rpoSeconds': None if metadata.get('sourceKind') == SCRATCH_CAPTURE_KIND else (observed_at - backup_at).total_seconds(),
+              'rpoBasis': ('Scratch capture interval only; not production exposure or RPO evidence'
+                           if metadata.get('sourceKind') == SCRATCH_CAPTURE_KIND else
+                           'Supplied source cutoff minus supplied backup time; owner must verify clocks and provenance')}
     if report.exists():
         raise ValueError('Refusing to overwrite a drill report')
     report.parent.mkdir(parents=True, exist_ok=True)
