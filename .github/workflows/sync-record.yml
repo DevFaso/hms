@@ -1,0 +1,99 @@
+name: Sync evidence record
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/release/**'
+      - '.github/workflows/sync-record.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sync_commit:
+        description: Existing main sync commit hash
+        required: true
+        type: string
+      sync_number:
+        description: Sync number recorded in that commit
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  checks: read
+  statuses: read
+  pull-requests: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.14'
+      - run: python -m unittest discover -s scripts/release -p 'test_*.py' -v
+  record:
+    if: github.event_name != 'pull_request'
+    needs: test
+    permissions:
+      contents: write
+      pull-requests: write
+      checks: read
+      statuses: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.14'
+      - name: Generate existing-sync evidence
+        id: generate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SYNC_COMMIT: ${{ inputs.sync_commit || github.sha }}
+          SYNC_NUMBER: ${{ inputs.sync_number }}
+        shell: python
+        run: |
+          import os, re, subprocess
+          sha = os.environ['SYNC_COMMIT']
+          if not re.fullmatch(r'[0-9a-f]{7,40}', sha):
+              raise SystemExit('A commit hash is required')
+          subject = subprocess.check_output(['git', 'show', '-s', '--format=%s', sha], text=True).strip()
+          match = re.fullmatch(r'Sync develop [0-9a-f]{7,40} into main \(sync #(\d+)\)', subject)
+          if not match and os.environ['GITHUB_EVENT_NAME'] == 'push':
+              print('Not a main sync; no release record is created.')
+          else:
+              number = os.environ['SYNC_NUMBER'] or (match[1] if match else '')
+              if not re.fullmatch(r'[1-9][0-9]*', number):
+                  raise SystemExit('A positive sync number is required')
+              subprocess.run(['python', 'scripts/release/sync_record.py', '--sync-commit', sha, '--sync-number', number, '--output-dir', 'sync-record/docs/releases'], check=True)
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+                  output.write('created=true\n')
+                  output.write(f'number={number}\n')
+      - name: Persist through a draft record PR
+        if: steps.generate.outputs.created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SYNC_COMMIT: ${{ inputs.sync_commit || github.sha }}
+          SYNC_NUMBER: ${{ steps.generate.outputs.number }}
+        shell: python
+        run: |
+          import os, subprocess
+          subprocess.run(['gh', 'auth', 'setup-git'], check=True)
+          subprocess.run(['python', 'scripts/release/publish_sync_record.py', '--sync-commit', os.environ['SYNC_COMMIT'], '--sync-number', os.environ['SYNC_NUMBER']], check=True)
+      - name: Retain generated record
+        if: always() && steps.generate.outputs.created == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: sync-evidence-${{ github.run_id }}
+          path: sync-record/
+          if-no-files-found: error
+          retention-days: 90
