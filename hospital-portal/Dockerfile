@@ -28,6 +28,11 @@ ARG BUILD_CONFIG=production
 RUN echo ">>> Building hospital-portal with --configuration=${BUILD_CONFIG}" \
  && npm run build -- --configuration ${BUILD_CONFIG}
 
+# The CSP allows the built index.html's inline scripts by hash, so the hashes
+# are taken from THIS build's output (see nginx/security-headers.conf).
+RUN node scripts/write-csp-script-hashes.mjs dist/hospital-portal/browser/index.html \
+      nginx/security-headers.conf /app/security-headers.conf
+
 # Runtime stage — nginx to serve static files
 FROM nginx:alpine
 
@@ -36,6 +41,9 @@ RUN rm /etc/nginx/conf.d/default.conf
 
 # Copy custom nginx config as a template
 COPY nginx.conf /etc/nginx/nginx.conf.template
+
+# Security headers shared by every nginx location (CSP hashes filled in above)
+COPY --from=build /app/security-headers.conf /etc/nginx/security-headers.conf
 
 # Copy built Angular app
 COPY --from=build /app/dist/hospital-portal/browser /usr/share/nginx/html

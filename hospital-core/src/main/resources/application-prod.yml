@@ -39,6 +39,15 @@ logging:
     '[org.hibernate]': WARN
     '[com.example.hms]': INFO
 
+# API documentation (Swagger UI and the OpenAPI JSON) is for development
+# only: it maps every endpoint and parameter of the API. Dev and local keep it
+# (application.properties); production serves neither (both answer 404).
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
 management:
   endpoints:
     web:
