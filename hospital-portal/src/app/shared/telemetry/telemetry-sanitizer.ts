@@ -10,9 +10,26 @@
  * - Request and response headers and bodies are never exported: any field or span attribute
  *   named like one is dropped.
  *
+ * - A string longer than {@link MAX_STRING_LENGTH} is cut before any pattern runs on it, a
+ *   cycle in the item is replaced instead of followed, and a failure anywhere still returns the
+ *   item, with every string in it replaced: the hook never throws and never lets raw text out.
+ *
  * Wired as Faro's `beforeSend` in `main.ts`. Pure and dependency-free, so it is unit-tested
  * without Faro.
  */
+
+/** Longer strings are cut to this length before they are scrubbed, so scrubbing stays fast. */
+export const MAX_STRING_LENGTH = 2_000;
+/** What a cut string ends with. */
+export const TRUNCATED = '…[truncated]';
+/** What a reference back to an enclosing object becomes. */
+export const CIRCULAR = '[circular]';
+/** What every string becomes when the item could not be scrubbed. */
+export const UNSANITIZED = '[unsanitized]';
+
+function capped(value: string): string {
+  return value.length > MAX_STRING_LENGTH ? value.slice(0, MAX_STRING_LENGTH) + TRUNCATED : value;
+}
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
@@ -43,7 +60,7 @@ function placeholderFor(segment: string): string {
 
 /** A URL, absolute or relative, without its query or fragment and with its ids replaced. */
 export function sanitizeUrl(raw: string): string {
-  const match = /^([a-z][a-z0-9+.-]*:\/\/[^/?#]*)?([^?#]*)/i.exec(raw);
+  const match = /^([a-z][a-z0-9+.-]*:\/\/[^/?#]*)?([^?#]*)/i.exec(capped(raw));
   const origin = match?.[1] ?? '';
   const path = match?.[2] ?? '';
   const scrubbed = path
@@ -67,7 +84,8 @@ function withoutTrailingPunctuation(url: string): string {
 }
 
 /** Free text with the URLs inside it scrubbed, and any UUID or e-mail address replaced. */
-export function sanitizeText(value: string): string {
+export function sanitizeText(raw: string): string {
+  const value = capped(raw);
   if (looksLikeUrl(value) && !/\s/.test(value)) {
     return sanitizeUrl(value);
   }
@@ -95,31 +113,80 @@ function isHeaderOrBodyAttribute(value: unknown): boolean {
   return typeof key === 'string' && 'value' in value && isHeaderOrBody(key);
 }
 
-function sanitizeValue(value: unknown): unknown {
+function sanitizeValue(value: unknown, enclosing: WeakSet<object>): unknown {
   if (typeof value === 'string') {
     return sanitizeText(value);
   }
-  if (Array.isArray(value)) {
-    return value
-      .filter((entry) => !isHeaderOrBodyAttribute(entry))
-      .map((entry) => sanitizeValue(entry));
+  if (value === null || typeof value !== 'object') {
+    return value;
   }
-  if (value !== null && typeof value === 'object') {
+  if (enclosing.has(value)) {
+    return CIRCULAR;
+  }
+  enclosing.add(value);
+  try {
+    if (Array.isArray(value)) {
+      return value
+        .filter((entry) => !isHeaderOrBodyAttribute(entry))
+        .map((entry) => sanitizeValue(entry, enclosing));
+    }
     // Errors and other class instances are read through their own enumerable fields only.
     const out: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
       if (isHeaderOrBody(key)) continue;
-      out[key] = sanitizeValue(entry);
+      out[key] = sanitizeValue(entry, enclosing);
     }
     return out;
+  } finally {
+    // Only the objects above this one count as a cycle; a value shared by two siblings is kept.
+    enclosing.delete(value);
   }
-  return value;
+}
+
+/**
+ * The item's shape with every string replaced, the `type` fields aside (Faro routes on them).
+ * Used only when scrubbing failed, so nothing in it is read as text.
+ */
+function redactAll(value: unknown, key: string, enclosing: WeakSet<object>): unknown {
+  if (typeof value === 'string') {
+    return key === 'type' ? value : UNSANITIZED;
+  }
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+  if (enclosing.has(value)) {
+    return CIRCULAR;
+  }
+  enclosing.add(value);
+  try {
+    if (Array.isArray(value)) {
+      return value.map((entry) => redactAll(entry, '', enclosing));
+    }
+    const out: Record<string, unknown> = {};
+    for (const [field, entry] of Object.entries(value as Record<string, unknown>)) {
+      if (isHeaderOrBody(field)) continue;
+      out[field] = redactAll(entry, field, enclosing);
+    }
+    return out;
+  } finally {
+    enclosing.delete(value);
+  }
 }
 
 /**
  * The item as it may leave the browser. Faro's `beforeSend` hook: never returns null, so no
- * telemetry is lost, only what identifies a person or a record.
+ * telemetry is lost, only what identifies a person or a record; and never throws, so a
+ * malformed item cannot break the page or leak unscrubbed.
  */
 export function sanitizeTelemetryItem<T>(item: T): T {
-  return sanitizeValue(item) as T;
+  try {
+    return sanitizeValue(item, new WeakSet<object>()) as T;
+  } catch {
+    try {
+      return redactAll(item, '', new WeakSet<object>()) as T;
+    } catch {
+      const type = (item as { type?: unknown } | null)?.type;
+      return { type, payload: {}, meta: {} } as T;
+    }
+  }
 }

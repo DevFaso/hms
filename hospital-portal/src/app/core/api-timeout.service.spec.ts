@@ -21,4 +21,14 @@ describe('API timeout notices belong to one session', () => {
     notice.noteTimeout('GET');
     expect(notice.failure()).toBe('write');
   });
+
+  it('reads a search whose terms travel in the body as a read, not an uncertain write', () => {
+    const notice = new ApiTimeoutService();
+    notice.noteTimeout('POST', notice.sessionEpoch, '/api/reception/patients/duplicate-candidates');
+    expect(notice.failure()).toBe('read');
+    notice.noteTimeout('POST', notice.sessionEpoch, '/api/patients/search?hospitalId=h1');
+    expect(notice.failure()).toBe('read');
+    notice.noteTimeout('POST', notice.sessionEpoch, '/api/patients');
+    expect(notice.failure()).toBe('write');
+  });
 });

@@ -48,7 +48,7 @@ export const apiTimeoutInterceptor: HttpInterceptorFn = (req, next) => {
       timer(deadline).pipe(
         mergeMap(() => {
           const method = timeoutNoticeMethod(request);
-          if (method) notice.noteTimeout(method, sessionEpoch);
+          if (method) notice.noteTimeout(method, sessionEpoch, request.url);
           return throwError(
             () =>
               new HttpErrorResponse({

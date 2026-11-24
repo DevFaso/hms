@@ -6,19 +6,14 @@
 ### NOTIFICATIONS
 ### ----------------------------------------
 
-### Create notification
+### Create notification (an administrator's message to one user; both fields in the body)
 POST {{baseUrl}}/notifications
 Authorization: Bearer {{adminToken}}
 Content-Type: application/json
 
 {
-  "recipientId": "{{userId}}",
-  "hospitalId": "{{hospitalId}}",
-  "title": "New Lab Results Available",
   "message": "Your lab results from Feb 14 are now available for review.",
-  "type": "LAB_RESULT",
-  "priority": "NORMAL",
-  "actionUrl": "/lab-results/{{labResultId}}"
+  "recipientUsername": "superadmin"
 }
 
 ### List notifications for current user

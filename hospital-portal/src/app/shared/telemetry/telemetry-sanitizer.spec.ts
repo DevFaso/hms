@@ -1,4 +1,12 @@
-import { sanitizeTelemetryItem, sanitizeText, sanitizeUrl } from './telemetry-sanitizer';
+import {
+  CIRCULAR,
+  MAX_STRING_LENGTH,
+  TRUNCATED,
+  UNSANITIZED,
+  sanitizeTelemetryItem,
+  sanitizeText,
+  sanitizeUrl,
+} from './telemetry-sanitizer';
 
 const PATIENT = '3f2c1a9e-8b7d-4c6e-9f10-a1b2c3d4e5f6';
 
@@ -134,6 +142,69 @@ describe('telemetry sanitizer', () => {
           decodedBodySize: '512',
         },
       });
+    });
+  });
+
+  describe('robustness', () => {
+    it('cuts a very long string before scrubbing it, and stays fast', () => {
+      const long = 'a@'.repeat(100_000);
+      const started = performance.now();
+      const out = sanitizeText(long);
+      expect(performance.now() - started).toBeLessThan(50);
+      expect(out.length).toBeLessThanOrEqual(MAX_STRING_LENGTH + TRUNCATED.length);
+      expect(out.endsWith(TRUNCATED)).toBeTrue();
+    });
+
+    it('cuts a very long string inside an item, and stays fast', () => {
+      const started = performance.now();
+      const out = sanitizeTelemetryItem({ type: 'log', payload: { message: 'x'.repeat(200_000) } });
+      expect(performance.now() - started).toBeLessThan(50);
+      expect((out.payload.message as string).length).toBe(MAX_STRING_LENGTH + TRUNCATED.length);
+    });
+
+    it('replaces a cycle instead of following it, and keeps a value shared by siblings', () => {
+      const shared = { url: '/api/patients?name=Awa' };
+      const payload: Record<string, unknown> = { a: shared, b: shared };
+      payload['self'] = payload;
+      let out: { payload: Record<string, unknown> } | undefined;
+      expect(() => (out = sanitizeTelemetryItem({ type: 'event', payload }))).not.toThrow();
+      expect(out!.payload['self']).toBe(CIRCULAR);
+      expect(out!.payload['a']).toEqual({ url: '/api/patients' });
+      expect(out!.payload['b']).toEqual({ url: '/api/patients' });
+    });
+
+    it('never throws: a field that cannot be read leaves every string replaced', () => {
+      const payload = { message: 'Awa at /api/patients?name=Awa', url: '/x?phone=70161099' };
+      Object.defineProperty(payload, 'broken', {
+        enumerable: true,
+        get() {
+          throw new Error('unreadable');
+        },
+      });
+      // Reading the throwing getter once more in the fallback must not escape either.
+      let out: { type: string; payload: Record<string, unknown> } | undefined;
+      expect(() => (out = sanitizeTelemetryItem({ type: 'log', payload }))).not.toThrow();
+      expect(out!.type).toBe('log');
+      expect(JSON.stringify(out)).not.toContain('Awa');
+      expect(JSON.stringify(out)).not.toContain('70161099');
+    });
+
+    it('a field that cannot be read on the first pass only replaces its strings', () => {
+      let reads = 0;
+      const payload = { message: 'see /api/patients?name=Awa', url: '/x?phone=70161099' };
+      Object.defineProperty(payload, 'flaky', {
+        enumerable: true,
+        get() {
+          reads++;
+          if (reads === 1) throw new Error('first read fails');
+          return 'second read';
+        },
+      });
+      const out = sanitizeTelemetryItem({ type: 'log', payload }) as {
+        payload: Record<string, unknown>;
+      };
+      expect(out.payload['message']).toBe(UNSANITIZED);
+      expect(out.payload['url']).toBe(UNSANITIZED);
     });
   });
 });

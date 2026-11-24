@@ -312,10 +312,17 @@ Inbound channels
     │                              (shared/telemetry/telemetry-sanitizer.ts): every URL without
     │                              its query string and fragment, path ids replaced by
     │                              placeholders (:uuid, :email, :id), UUIDs and e-mail addresses
-    │                              removed from messages, no request or response header or body.
-    │                              Patient identifiers never travel in a request URL: searches
-    │                              and lookups send them in a POST body
-    │                              (PersonalIdentifierUrlGuardTest, scripts/identifier-url.test.mjs)
+    │                              removed from messages, no request or response header or body;
+    │                              long strings are cut before scrubbing and a failure exports
+    │                              the item with every string replaced.
+    │                              The portal puts no personal identifier in a request URL:
+    │                              searches and lookups send them in a POST body
+    │                              (scripts/identifier-url.test.mjs). On the server every handler
+    │                              that binds one from its URL is listed with a reason
+    │                              (PersonalIdentifierUrlGuardTest): the pre-session activation
+    │                              and password-reset routes still accept query parameters from
+    │                              installed mobile app builds, and the deprecated e-mail
+    │                              verification link carries the address.
     ├─ Email + SMS notifications — via vendor APIs (BAA / sub-BAA required)
 ```
 
