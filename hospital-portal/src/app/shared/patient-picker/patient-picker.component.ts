@@ -13,8 +13,8 @@ import {
 } from '@angular/core';
 
 import { TranslateModule } from '@ngx-translate/core';
-import { forkJoin, of, Subject, Subscription } from 'rxjs';
-import { catchError, debounceTime, switchMap } from 'rxjs/operators';
+import { EMPTY, forkJoin, of, Subject, Subscription } from 'rxjs';
+import { catchError, debounceTime, map, switchMap } from 'rxjs/operators';
 import {
   PatientService,
   PatientResponse,
@@ -64,6 +64,8 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
    */
   @Input() hospitalId: string | null = null;
   @Input() set selected(value: PatientResponse | null) {
+    this.searchRevision++;
+    this.searchLoading.set(false);
     this.selectedPatient.set(value);
     if (!value) {
       this.query.set('');
@@ -82,7 +84,8 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
   readonly searchLoading = signal(false);
   /** The last finished search found nothing (QA D68): say so, not an empty box. */
   readonly noMatch = signal(false);
-  private readonly search$ = new Subject<string>();
+  private searchRevision = 0;
+  private readonly search$ = new Subject<{ q: string; revision: number; iuMode: boolean }>();
   private searchSub?: Subscription;
 
   ngOnInit(): void {
@@ -94,10 +97,14 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
         // scope, /patients/lookup matches exact identifiers (phone/email/MRN)
         // across hospitals — the previous /patients?search call was silently
         // unfiltered because the backend never implemented that param.
-        switchMap((q) => {
+        switchMap(({ q, revision, iuMode }) => {
+          if (q.length < 2) {
+            this.searchLoading.set(false);
+            return EMPTY;
+          }
           this.searchLoading.set(true);
           this.noMatch.set(false);
-          if (this.nationalUniqueIdMode()) {
+          if (iuMode) {
             const canonical = normalizedNationalUniqueId(q);
             const exact =
               canonical?.length === 12
@@ -105,7 +112,9 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
                     .searchNationalUniqueId(canonical)
                     .pipe(catchError(() => of([] as PatientResponse[])))
                 : of([] as PatientResponse[]);
-            return forkJoin([of([] as PatientResponse[]), exact]);
+            return forkJoin([of([] as PatientResponse[]), exact]).pipe(
+              map(([scoped, exact]) => ({ scoped, exact, q, revision, iuMode })),
+            );
           }
           // QA D1274: a birth date or an e-mail is searched by that field too.
           const scoped = searchPatientsByTerm(this.patientService, q, {
@@ -124,10 +133,18 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
                 .lookup({ identifier: q, hospitalId: this.hospitalId ?? undefined })
                 .pipe(catchError(() => of([] as PatientResponse[])))
             : of([] as PatientResponse[]);
-          return forkJoin([scoped, exact]);
+          return forkJoin([scoped, exact]).pipe(
+            map(([scoped, exact]) => ({ scoped, exact, q, revision, iuMode })),
+          );
         }),
       )
-      .subscribe(([scoped, exact]) => {
+      .subscribe(({ scoped, exact, q, revision, iuMode }) => {
+        if (
+          revision !== this.searchRevision ||
+          q !== this.query() ||
+          iuMode !== this.nationalUniqueIdMode()
+        )
+          return;
         const merged: PatientResponse[] = [];
         for (const p of [...(exact ?? []), ...(scoped ?? [])]) {
           const kept = merged.findIndex((m) => m.id === p.id);
@@ -150,6 +167,7 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.searchRevision++;
     this.searchSub?.unsubscribe();
   }
 
@@ -171,14 +189,13 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
   }
 
   onQueryChange(q: string): void {
+    const revision = ++this.searchRevision;
     this.query.set(q);
-    if (q.length >= 2) {
-      this.search$.next(q);
-    } else {
-      this.suggestions.set([]);
-      this.dropdownOpen.set(false);
-      this.noMatch.set(false);
-    }
+    this.suggestions.set([]);
+    this.dropdownOpen.set(false);
+    this.noMatch.set(false);
+    this.searchLoading.set(q.length >= 2);
+    this.search$.next({ q, revision, iuMode: this.nationalUniqueIdMode() });
   }
 
   setNationalUniqueIdMode(enabled: boolean): void {
@@ -187,10 +204,14 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
     this.suggestions.set([]);
     this.dropdownOpen.set(false);
     this.noMatch.set(false);
-    this.search$.next('');
+    this.searchRevision++;
+    this.searchLoading.set(false);
+    this.search$.next({ q: '', revision: this.searchRevision, iuMode: enabled });
   }
 
   select(p: PatientResponse): void {
+    this.searchRevision++;
+    this.searchLoading.set(false);
     this.selectedPatient.set(p);
     this.dropdownOpen.set(false);
     this.query.set('');
@@ -198,6 +219,8 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
   }
 
   clear(): void {
+    this.searchRevision++;
+    this.searchLoading.set(false);
     this.noMatch.set(false);
     this.selectedPatient.set(null);
     this.query.set('');

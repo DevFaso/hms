@@ -1,6 +1,6 @@
-import { TestBed } from '@angular/core/testing';
+import { fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { PatientPickerComponent } from './patient-picker.component';
 import { PatientService, PatientResponse } from '../../services/patient.service';
@@ -14,7 +14,11 @@ describe('PatientPickerComponent', () => {
   let patientSpy: jasmine.SpyObj<PatientService>;
 
   beforeEach(async () => {
-    patientSpy = jasmine.createSpyObj('PatientService', ['search', 'lookup']);
+    patientSpy = jasmine.createSpyObj('PatientService', [
+      'search',
+      'lookup',
+      'searchNationalUniqueId',
+    ]);
     patientSpy.search.and.returnValue(of([]));
     patientSpy.lookup.and.returnValue(of([]));
 
@@ -46,6 +50,72 @@ describe('PatientPickerComponent', () => {
       done();
     }, 400);
   });
+
+  it('ignores an exact identifier response as soon as a new term is typed, before debounce', fakeAsync(() => {
+    const delayed = new Subject<PatientResponse[]>();
+    patientSpy.searchNationalUniqueId.and.returnValue(delayed);
+    component.ngOnInit();
+    component.setNationalUniqueIdMode(true);
+    component.onQueryChange('001234567890');
+    tick(220);
+    expect(patientSpy.searchNationalUniqueId).toHaveBeenCalledOnceWith('001234567890');
+    component.onQueryChange('009876543210');
+    delayed.next([mockPatient('old', 'Old')]);
+    delayed.complete();
+    expect(component.suggestions()).toEqual([]);
+    expect(component.dropdownOpen()).toBeFalse();
+    component.ngOnDestroy();
+  }));
+
+  it('ignores an old identifier when switching mode and never searches an empty query', fakeAsync(() => {
+    const delayed = new Subject<PatientResponse[]>();
+    patientSpy.searchNationalUniqueId.and.returnValue(delayed);
+    component.ngOnInit();
+    component.setNationalUniqueIdMode(true);
+    component.onQueryChange('001234567890');
+    tick(220);
+    component.setNationalUniqueIdMode(false);
+    delayed.next([mockPatient('old', 'Old')]);
+    delayed.complete();
+    tick(220);
+    expect(component.suggestions()).toEqual([]);
+    expect(component.dropdownOpen()).toBeFalse();
+    expect(component.noMatch()).toBeFalse();
+    expect(patientSpy.search).not.toHaveBeenCalled();
+    expect(patientSpy.lookup).not.toHaveBeenCalled();
+    component.ngOnDestroy();
+  }));
+
+  for (const action of ['clear', 'select', 'external selection'] as const) {
+    it(`never reopens an old search after ${action}`, fakeAsync(() => {
+      const delayed = new Subject<PatientResponse[]>();
+      patientSpy.search.and.returnValue(delayed);
+      component.ngOnInit();
+      component.onQueryChange('Awa');
+      tick(220);
+      if (action === 'clear') component.clear();
+      else if (action === 'select') component.select(mockPatient('picked', 'Picked'));
+      else component.selected = mockPatient('picked', 'Picked');
+      delayed.next([mockPatient('old', 'Old')]);
+      delayed.complete();
+      expect(component.suggestions()).toEqual([]);
+      expect(component.dropdownOpen()).toBeFalse();
+      component.ngOnDestroy();
+    }));
+  }
+
+  it('still shows the current exact identifier result without a name or general identifier search', fakeAsync(() => {
+    patientSpy.searchNationalUniqueId.and.returnValue(of([mockPatient('current', 'Current')]));
+    component.ngOnInit();
+    component.setNationalUniqueIdMode(true);
+    component.onQueryChange('001234567890');
+    tick(220);
+    expect(component.suggestions().map((patient) => patient.id)).toEqual(['current']);
+    expect(component.searchLoading()).toBeFalse();
+    expect(patientSpy.search).not.toHaveBeenCalled();
+    expect(patientSpy.lookup).not.toHaveBeenCalled();
+    component.ngOnDestroy();
+  }));
 
   it('should create', () => {
     expect(component).toBeTruthy();
