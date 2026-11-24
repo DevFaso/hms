@@ -145,9 +145,17 @@ export class AssignmentAdminService {
     let params = new HttpParams().set('page', page).set('size', size);
     if (f.hospitalId) params = params.set('hospitalId', f.hospitalId);
     if (f.active !== undefined) params = params.set('active', f.active);
-    if (f.search) params = params.set('search', f.search);
     if (f.assignmentCode) params = params.set('assignmentCode', f.assignmentCode);
-    return this.http.get<PageResponse<AssignmentResponse>>(this.baseUrl, { params });
+    // QA D3750: the typed term (a colleague's name, phone number or e-mail) is posted in the
+    // body, never put in the URL; the other filters and the paging stay in the query.
+    const search = f.search?.trim();
+    return search
+      ? this.http.post<PageResponse<AssignmentResponse>>(
+          `${this.baseUrl}/term-search`,
+          { search },
+          { params },
+        )
+      : this.http.get<PageResponse<AssignmentResponse>>(this.baseUrl, { params });
   }
 
   create(req: AssignmentRequest): Observable<AssignmentResponse> {

@@ -876,8 +876,28 @@ public class PatientPortalController {
     public ResponseEntity<ApiResponseWrapper<Page<Notification>>> getMyNotifications(
             Authentication auth,
             @RequestParam(required = false) Boolean read,
-            @RequestParam(required = false) String search,
             @PageableDefault(size = 20) Pageable pageable) {
+        return myNotificationPage(auth, read, null, pageable);
+    }
+
+    @Operation(summary = "Search my notifications",
+            description = "The patient's notifications narrowed to the body's term; the read filter and the paging"
+                + " stay in the query. The term never travels in the URL.")
+    @com.example.hms.security.ReadsOnly("a search of the patient's own notifications, under POST so the typed term"
+        + " stays out of the URL")
+    @PostMapping("/notifications/term-search")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<Page<Notification>>> termSearchMyNotifications(
+            Authentication auth,
+            @jakarta.validation.Valid @RequestBody
+            com.example.hms.payload.dto.identifiersearch.SearchTermRequestDTO body,
+            @RequestParam(required = false) Boolean read,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return myNotificationPage(auth, read, body.term(), pageable);
+    }
+
+    private ResponseEntity<ApiResponseWrapper<Page<Notification>>> myNotificationPage(
+            Authentication auth, Boolean read, String search, Pageable pageable) {
         String username = auth.getName();
         Page<Notification> page = notificationService.getNotificationsForUser(username, read, search, pageable);
         // In the reader's language, from Accept-Language (QA D665).

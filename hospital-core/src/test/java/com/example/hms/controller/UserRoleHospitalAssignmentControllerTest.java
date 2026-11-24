@@ -25,6 +25,8 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -117,6 +119,37 @@ class UserRoleHospitalAssignmentControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.createdAssignments").value(1))
             .andExpect(jsonPath("$.failures").isEmpty());
+    }
+
+    @Test
+    void theTypedTermTravelsInTheBody_D3750() throws Exception {
+        UUID hospitalId = UUID.randomUUID();
+        when(assignmentService.getAllAssignments(any(), any()))
+            .thenReturn(org.springframework.data.domain.Page.empty());
+
+        mockMvc.perform(post("/assignments/term-search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"search\":\" Awa Kabore \"}")
+                .param("hospitalId", hospitalId.toString())
+                .param("page", "0").param("size", "20"))
+            .andExpect(status().isOk());
+
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.assignment.AssignmentSearchCriteria> criteria =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.assignment.AssignmentSearchCriteria.class);
+        verify(assignmentService).getAllAssignments(any(), criteria.capture());
+        org.assertj.core.api.Assertions.assertThat(criteria.getValue().getSearch()).isEqualTo("Awa Kabore");
+        org.assertj.core.api.Assertions.assertThat(criteria.getValue().getHospitalId()).isEqualTo(hospitalId.toString());
+    }
+
+    @Test
+    void aMisspeltTermFieldIsRefused_D3753() throws Exception {
+        mockMvc.perform(post("/assignments/term-search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"query\":\"Awa\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.field").value("query"));
+
+        verify(assignmentService, never()).getAllAssignments(any(), any());
     }
 
     @Test

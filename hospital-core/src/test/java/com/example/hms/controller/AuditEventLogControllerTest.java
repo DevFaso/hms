@@ -95,7 +95,7 @@ class AuditEventLogControllerTest {
                 .thenReturn(new PageImpl<>(List.of(entity)));
             when(auditMapper.toDto(entity)).thenReturn(responseDTO);
 
-            ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(null, null, null, null, null, pageable);
+            ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(null, null, null, null, pageable);
 
             assertThat(result.getBody().getContent()).containsExactly(responseDTO);
             verify(auditRepository, never()).findAll(any(Pageable.class));
@@ -105,7 +105,7 @@ class AuditEventLogControllerTest {
         /**
          * QA D794, the exact round-12 call: HOSPITAL_ADMIN_A searches
          * "Multi91064". The term and the event type now reach the server
-         * (GET /audit-logs?search=...&eventType=...), which filters inside the
+         * (POST /audit-logs/term-search?eventType=..., the term in the body, QA D3750), which filters inside the
          * caller's hospital scope rather than the 20 rows on screen.
          */
         @Test
@@ -119,8 +119,9 @@ class AuditEventLogControllerTest {
                 .setCustomArgumentResolvers(new org.springframework.data.web.PageableHandlerMethodArgumentResolver())
                 .build();
 
-            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/audit-logs")
-                    .param("search", "Multi91064").param("eventType", "USER_CREATE").param("page", "0").param("size", "20"))
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/audit-logs/term-search")
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON).content("{\"search\":\"Multi91064\"}")
+                    .param("eventType", "USER_CREATE").param("page", "0").param("size", "20"))
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk());
 
             org.mockito.ArgumentCaptor<Pageable> page = org.mockito.ArgumentCaptor.forClass(Pageable.class);
@@ -132,7 +133,7 @@ class AuditEventLogControllerTest {
 
         @Test
         void anUnknownEventTypeIsABadRequestNotEveryRow_D794() {
-            assertThatThrownBy(() -> controller.getAllAuditLogs(null, null, List.of("NOT_A_TYPE"), null, null, pageable))
+            assertThatThrownBy(() -> controller.getAllAuditLogs(null, null, List.of("NOT_A_TYPE"), null, pageable))
                 .isInstanceOf(com.example.hms.exception.BusinessException.class)
                 .satisfies(e -> assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey())
                     .isEqualTo("audit.eventType.invalid"));
@@ -195,7 +196,7 @@ class AuditEventLogControllerTest {
         when(auditRepository.findAll(pageable)).thenReturn(page);
         when(auditMapper.toDto(entity)).thenReturn(responseDTO);
 
-        ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(null, null, null, null, null, pageable);
+        ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(null, null, null, null, pageable);
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(result.getBody()).isNotNull();
@@ -208,7 +209,7 @@ class AuditEventLogControllerTest {
         Page<AuditEventLog> page = Page.empty(pageable);
         when(auditRepository.findAll(pageable)).thenReturn(page);
 
-        ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(null, null, null, null, null, pageable);
+        ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(null, null, null, null, pageable);
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(result.getBody().getContent()).isEmpty();
@@ -223,7 +224,9 @@ class AuditEventLogControllerTest {
         when(auditMapper.toDto(entity)).thenReturn(responseDTO);
 
         ResponseEntity<Page<AuditEventLogResponseDTO>> result =
-            controller.getAllAuditLogs(null, null, null, null, "Multi91064", pageable);
+            controller.termSearchAuditLogs(
+                new com.example.hms.payload.dto.identifiersearch.SearchTermRequestDTO("Multi91064"),
+                null, null, null, null, pageable);
 
         assertThat(result.getBody().getContent()).containsExactly(responseDTO);
         verify(auditRepository, never()).findAll(any(Pageable.class));
@@ -231,10 +234,10 @@ class AuditEventLogControllerTest {
     }
 
     @Test
-    void aBlankSearchKeepsTheUnfilteredPlatformRead_D794() {
+    void blankEventTypesKeepTheUnfilteredPlatformRead_D794() {
         when(auditRepository.findAll(pageable)).thenReturn(Page.empty(pageable));
 
-        controller.getAllAuditLogs(null, null, List.of(" "), List.of(""), "  ", pageable);
+        controller.getAllAuditLogs(null, null, List.of(" "), List.of(""), pageable);
 
         verify(auditRepository).findAll(pageable);
     }

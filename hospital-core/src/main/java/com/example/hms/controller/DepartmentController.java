@@ -99,14 +99,17 @@ public class DepartmentController {
         return ResponseEntity.ok(departmentService.getDepartmentsByHospital(hospitalId, pageable, locale));
     }
 
-    @GetMapping("/search")
+    // QA D3750: the term also matches the head of department's name and e-mail and the department's
+    // phone and e-mail, so it travels in the body, never in the URL; the paging stays in the query.
+    @com.example.hms.security.ReadsOnly("a search of departments, under POST so the typed term stays out of the URL")
+    @PostMapping("/search")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','RECEPTIONIST','DOCTOR','NURSE','MIDWIFE','LAB_DIRECTOR','LAB_MANAGER','LAB_SCIENTIST','LAB_TECHNICIAN','QUALITY_MANAGER')")
     public ResponseEntity<Page<DepartmentResponseDTO>> searchDepartments(
-        @RequestParam String query,
+        @Valid @RequestBody com.example.hms.payload.dto.identifiersearch.SearchTermRequestDTO body,
         @ParameterObject Pageable pageable,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
 
-        return ResponseEntity.ok(departmentService.searchDepartments(query, pageable, locale));
+        return ResponseEntity.ok(departmentService.searchDepartments(body.term(), pageable, locale));
     }
 
     @com.example.hms.security.ReadsOnly("a filtered search of departments, under POST for its body")
